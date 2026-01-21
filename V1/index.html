@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProJED | 專案管理系統</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Day.js -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
+    <script>dayjs.extend(window.dayjs_plugin_customParseFormat)</script>
+    <!-- FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <!-- Frappe Gantt (使用更加穩定的備用來源) -->
+    <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+    <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <!-- Google API Client -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <style>
+        /* 強制鎖定外層，防止任何意外的捲軸 */
+        html,
+        body {
+            overflow: hidden !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .content-area,
+        .view-section {
+            overflow: hidden !important;
+        }
+    </style>
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="style.css?v=2.7">
+</head>
+
+<body class="dark-mode">
+    <div class="app-container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <i data-lucide="layout" class="logo-icon"></i>
+                <span class="brand-name">ProJED</span>
+                <div class="brand-divider"></div>
+                <h1 id="board-title" contenteditable="true" onblur="app.updateBoardName(this.innerText)"
+                    title="點選即可修改標題">專案看板</h1>
+            </div>
+            <div class="nav-actions">
+                <div class="nav-links">
+                    <button class="nav-btn active" data-view="board">
+                        <i data-lucide="columns"></i>
+                        <span>看板</span>
+                    </button>
+                    <button class="nav-btn" data-view="calendar">
+                        <i data-lucide="calendar"></i>
+                        <span>行事曆</span>
+                    </button>
+                    <button class="nav-btn" data-view="gantt">
+                        <i data-lucide="line-chart"></i>
+                        <span>甘特圖</span>
+                    </button>
+                </div>
+                <button class="action-btn-outline" onclick="app.exportData()" title="備份資料到本地">
+                    <i data-lucide="download"></i>
+                    <span>備份</span>
+                </button>
+                <button class="action-btn-outline" onclick="document.getElementById('import-input').click()"
+                    title="從備份檔案還原">
+                    <i data-lucide="upload"></i>
+                    <span>還原</span>
+                </button>
+                <input type="file" id="import-input" style="display:none" accept=".json"
+                    onchange="app.importData(this)">
+                <button class="sync-btn" id="google-sync" onclick="app.syncWithGoogleCalendar()">
+                    <i data-lucide="refresh-cw"></i>
+                    <span>同步 Google 日曆</span>
+                </button>
+                <button class="action-btn-outline" title="清理日曆並重置" onclick="app.cleanupGoogleCalendar()"
+                    style="padding: 6px; border-radius: 50%; min-width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                </button>
+                <span id="sync-account-label" class="sync-account-info" style="display:none"></span>
+                <button id="auth-btn" class="sync-btn" onclick="app.toggleAuth()" style="background: var(--primary)">
+                    <i data-lucide="log-in"></i>
+                    <span>Google 登入</span>
+                </button>
+                <div class="user-profile" id="user-profile" style="display:none">
+                    <img id="user-avatar" src="" alt="User">
+                </div>
+            </div>
+        </nav>
+
+        <!-- Global Status Legend (Shared across all views) -->
+        <div class="global-legend" id="global-status-legend">
+            <div class="legend-item">
+                <input type="checkbox" checked class="legend-checkbox" data-status="todo"
+                    onchange="app.toggleStatusFilter(this)">
+                <div class="legend-color-box todo"></div>
+                <span>進行中</span>
+            </div>
+            <div class="legend-item">
+                <input type="checkbox" checked class="legend-checkbox" data-status="delayed"
+                    onchange="app.toggleStatusFilter(this)">
+                <div class="legend-color-box delayed"></div>
+                <span>延遲</span>
+            </div>
+            <div class="legend-item">
+                <input type="checkbox" checked class="legend-checkbox" data-status="completed"
+                    onchange="app.toggleStatusFilter(this)">
+                <div class="legend-color-box completed"></div>
+                <span>完成</span>
+            </div>
+            <div class="legend-item">
+                <input type="checkbox" checked class="legend-checkbox" data-status="unsure"
+                    onchange="app.toggleStatusFilter(this)">
+                <div class="legend-color-box unsure"></div>
+                <span>不確定</span>
+            </div>
+            <div class="legend-item">
+                <input type="checkbox" checked class="legend-checkbox" data-status="onhold"
+                    onchange="app.toggleStatusFilter(this)">
+                <div class="legend-color-box onhold"></div>
+                <span>暫緩</span>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <main class="content-area">
+            <!-- Board View -->
+            <section id="board-view" class="view-section active">
+                <div class="board-canvas" id="list-container">
+                    <!-- Lists will be rendered here -->
+                </div>
+            </section>
+
+            <!-- Calendar View -->
+            <section id="calendar-view" class="view-section">
+                <div class="calendar-container" id="calendar-el"></div>
+            </section>
+
+            <!-- Gantt View -->
+            <section id="gantt-view" class="view-section">
+                <div class="gantt-header">
+                    <div class="filter-controls">
+                        <span class="filter-label">顯示層級:</span>
+                        <label class="checkbox-container">
+                            <input type="checkbox" checked data-level="list"> 列表
+                            <span class="checkmark"></span>
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" checked data-level="card"> 卡片
+                            <span class="checkmark"></span>
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" checked data-level="checklist"> 待辦
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <!-- 狀態圖例區 (已移除，改由全域管理) -->
+                    <div class="gantt-view-modes">
+                        <button onclick="app.setGanttMode('Month')" class="active">月</button>
+                        <button onclick="app.setGanttMode('Quarter')">季</button>
+                        <button onclick="app.setGanttMode('Year')">年</button>
+                    </div>
+                </div>
+                <!-- 遮罩層：用來物理切割掉右側的垂直捲軸 -->
+                <div class="gantt-mask" style="flex:1; overflow:hidden; position:relative; width:100%;">
+                    <div class="gantt-container">
+                        <svg id="gantt-el"></svg>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for Editing/Adding Dates & Details -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">項目詳情</h2>
+                <button class="close-btn" onclick="app.closeModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>名稱</label>
+                    <input type="text" id="item-title">
+                </div>
+                <div class="input-group">
+                    <label>狀態 (請點選之一)</label>
+                    <div class="status-picker" id="item-status-picker">
+                        <div class="status-option" data-value="todo" onclick="app.selectStatusUI(this)">
+                            <div class="status-dot todo"></div> 進行中
+                        </div>
+                        <div class="status-option" data-value="delayed" onclick="app.selectStatusUI(this)">
+                            <div class="status-dot delayed"></div> 延遲
+                        </div>
+                        <div class="status-option" data-value="completed" onclick="app.selectStatusUI(this)">
+                            <div class="status-dot completed"></div> 完成
+                        </div>
+                        <div class="status-option" data-value="unsure" onclick="app.selectStatusUI(this)">
+                            <div class="status-dot unsure"></div> 不確定
+                        </div>
+                        <div class="status-option" data-value="onhold" onclick="app.selectStatusUI(this)">
+                            <div class="status-dot onhold"></div> 暫緩
+                        </div>
+                        <input type="hidden" id="item-status" value="todo">
+                    </div>
+                </div>
+                <div class="date-row" style="display:flex; gap:1rem;">
+                    <div class="input-group" style="flex:1;">
+                        <label>起始日 (不選即為無)</label>
+                        <div class="split-date-input" id="start-date-wrapper">
+                            <input type="text" class="date-part year" placeholder="YYYY" maxlength="4" target="start">
+                            <span class="sep">/</span>
+                            <input type="text" class="date-part month" placeholder="MM" maxlength="2" target="start">
+                            <span class="sep">/</span>
+                            <input type="text" class="date-part day" placeholder="DD" maxlength="2" target="start">
+                        </div>
+                        <!-- 隱藏原本的 input 以保持相容性或作為資料暫存 -->
+                        <input type="hidden" id="item-start">
+                    </div>
+                    <div class="input-group" style="flex:1;">
+                        <label>到期日</label>
+                        <div class="split-date-input" id="end-date-wrapper">
+                            <input type="text" class="date-part year" placeholder="YYYY" maxlength="4" target="end">
+                            <span class="sep">/</span>
+                            <input type="text" class="date-part month" placeholder="MM" maxlength="2" target="end">
+                            <span class="sep">/</span>
+                            <input type="text" class="date-part day" placeholder="DD" maxlength="2" target="end">
+                        </div>
+                        <input type="hidden" id="item-end">
+                    </div>
+                </div>
+                <!-- 待辦清單管理區 -->
+                <div id="checklist-manager-section" class="checklist-manager-section" style="display:none">
+                    <div class="checklist-header">
+                        <label>待辦清單</label>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="display:flex; align-items:center;">
+                                <input type="checkbox" id="show-cl-completed" onchange="app.toggleShowCompletedCL() "
+                                    style="margin-right:4px; width:auto;">
+                                <label for="show-cl-completed"
+                                    style="font-weight:400; font-size:12px; margin:0; cursor:pointer; color:var(--text-muted);">顯示已完成</label>
+                            </div>
+                            <button type="button" class="add-cl-item-btn" onclick="app.addChecklistItemUI()">+
+                                新增項目</button>
+                        </div>
+                    </div>
+                    <div id="checklist-items-container" class="checklist-items-container">
+                        <!-- Checklist items will be rendered here -->
+                    </div>
+                </div>
+                <!-- 備註區 -->
+                <div id="card-notes-section" class="input-group"
+                    style="margin-top:2rem; border-top:1px dashed var(--border); padding-top:1.5rem;">
+                    <label>備註</label>
+                    <textarea id="item-notes" placeholder="輸入備註..."
+                        style="width:100%; border:1px solid var(--border); border-radius:8px; padding:0.75rem; min-height:80px; font-family:inherit; resize:vertical;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="delete-btn" id="modal-delete">刪除</button>
+                <button class="save-btn" id="modal-save">儲存設定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js?v=202601211035"></script>
+</body>
+
+</html>
