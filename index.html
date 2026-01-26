@@ -17,8 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
     <script>dayjs.extend(window.dayjs_plugin_customParseFormat)</script>
-    <!-- FullCalendar -->
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+
     <!-- Frappe Gantt (使用更加穩定的備用來源) -->
     <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css">
     <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
@@ -67,10 +66,7 @@
                         <i data-lucide="columns"></i>
                         <span>看板</span>
                     </button>
-                    <button class="nav-btn" data-view="calendar">
-                        <i data-lucide="calendar"></i>
-                        <span>行事曆</span>
-                    </button>
+
                     <button class="nav-btn" data-view="gantt">
                         <i data-lucide="line-chart"></i>
                         <span>甘特圖</span>
@@ -150,10 +146,7 @@
                 </div>
             </section>
 
-            <!-- Calendar View -->
-            <section id="calendar-view" class="view-section">
-                <div class="calendar-container" id="calendar-el"></div>
-            </section>
+
 
             <!-- Gantt View -->
             <section id="gantt-view" class="view-section">

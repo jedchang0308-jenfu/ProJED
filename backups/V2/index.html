@@ -17,8 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
     <script>dayjs.extend(window.dayjs_plugin_customParseFormat)</script>
-    <!-- FullCalendar -->
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+
     <!-- Frappe Gantt (使用更加穩定的備用來源) -->
     <link rel="stylesheet" href="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.css">
     <script src="https://unpkg.com/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
@@ -67,10 +66,7 @@
                         <i data-lucide="columns"></i>
                         <span>看板</span>
                     </button>
-                    <button class="nav-btn" data-view="calendar">
-                        <i data-lucide="calendar"></i>
-                        <span>行事曆</span>
-                    </button>
+
                     <button class="nav-btn" data-view="gantt">
                         <i data-lucide="line-chart"></i>
                         <span>甘特圖</span>
@@ -100,8 +96,9 @@
                     <i data-lucide="log-in"></i>
                     <span>Google 登入</span>
                 </button>
-                <div class="user-profile" id="user-profile" style="display:none">
-                    <img id="user-avatar" src="" alt="User">
+                <div class="user-profile" id="user-profile" style="display:none" onclick="app.toggleAuth()">
+                    <img id="user-avatar" src="" alt="User" style="display:none">
+                    <div id="user-initials" class="user-initials"></div>
                 </div>
             </div>
         </nav>
@@ -149,10 +146,7 @@
                 </div>
             </section>
 
-            <!-- Calendar View -->
-            <section id="calendar-view" class="view-section">
-                <div class="calendar-container" id="calendar-el"></div>
-            </section>
+
 
             <!-- Gantt View -->
             <section id="gantt-view" class="view-section">
@@ -224,29 +218,88 @@
                         <input type="hidden" id="item-status" value="todo">
                     </div>
                 </div>
-                <div class="date-row" style="display:flex; gap:1rem;">
-                    <div class="input-group" style="flex:1;">
-                        <label>起始日 (不選即為無)</label>
-                        <div class="split-date-input" id="start-date-wrapper">
-                            <input type="text" class="date-part year" placeholder="YYYY" maxlength="4" target="start">
-                            <span class="sep">/</span>
-                            <input type="text" class="date-part month" placeholder="MM" maxlength="2" target="start">
-                            <span class="sep">/</span>
-                            <input type="text" class="date-part day" placeholder="DD" maxlength="2" target="start">
+                <div class="date-row" style="display:flex; flex-direction:column; gap:1rem;">
+                    <div style="display:flex; gap:1rem;">
+                        <div class="input-group" style="flex:1;">
+                            <label>起始日 (不選即為無)</label>
+                            <div class="date-input-with-dep">
+                                <div class="split-date-input" id="start-date-wrapper">
+                                    <input type="text" class="date-part year" placeholder="YYYY" maxlength="4"
+                                        target="start">
+                                    <span class="sep">/</span>
+                                    <input type="text" class="date-part month" placeholder="MM" maxlength="2"
+                                        target="start">
+                                    <span class="sep">/</span>
+                                    <input type="text" class="date-part day" placeholder="DD" maxlength="2"
+                                        target="start">
+                                </div>
+                                <button type="button" class="dep-toggle-btn" onclick="app.toggleDepUI('start')"
+                                    title="設定時間依存">
+                                    <i data-lucide="link"></i>
+                                </button>
+                            </div>
+                            <input type="hidden" id="item-start">
+                            <!-- Start Dependency UI -->
+                            <div id="start-dep-ui" class="dependency-settings" style="display:none;">
+                                <div class="dep-row">
+                                    <button type="button" class="action-btn-outline"
+                                        onclick="app.startPicking('start-dep-target')" title="從看板選擇"
+                                        style="padding:4px; margin-right:5px; height:32px;">
+                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
+                                    </button>
+                                    <select id="start-dep-target" class="dep-select">
+                                        <option value="">(無依存)</option>
+                                    </select>
+                                    <select id="start-dep-type" class="dep-type-select">
+                                        <option value="start">的起始</option>
+                                        <option value="end">的結束</option>
+                                    </select>
+                                    <span class="dep-plus">+</span>
+                                    <input type="number" id="start-dep-offset" class="dep-offset-input" value="0">
+                                    <span class="dep-days">天</span>
+                                </div>
+                            </div>
                         </div>
-                        <!-- 隱藏原本的 input 以保持相容性或作為資料暫存 -->
-                        <input type="hidden" id="item-start">
-                    </div>
-                    <div class="input-group" style="flex:1;">
-                        <label>到期日</label>
-                        <div class="split-date-input" id="end-date-wrapper">
-                            <input type="text" class="date-part year" placeholder="YYYY" maxlength="4" target="end">
-                            <span class="sep">/</span>
-                            <input type="text" class="date-part month" placeholder="MM" maxlength="2" target="end">
-                            <span class="sep">/</span>
-                            <input type="text" class="date-part day" placeholder="DD" maxlength="2" target="end">
+                        <div class="input-group" style="flex:1;">
+                            <label>到期日</label>
+                            <div class="date-input-with-dep">
+                                <div class="split-date-input" id="end-date-wrapper">
+                                    <input type="text" class="date-part year" placeholder="YYYY" maxlength="4"
+                                        target="end">
+                                    <span class="sep">/</span>
+                                    <input type="text" class="date-part month" placeholder="MM" maxlength="2"
+                                        target="end">
+                                    <span class="sep">/</span>
+                                    <input type="text" class="date-part day" placeholder="DD" maxlength="2"
+                                        target="end">
+                                </div>
+                                <button type="button" class="dep-toggle-btn" onclick="app.toggleDepUI('end')"
+                                    title="設定時間依存">
+                                    <i data-lucide="link"></i>
+                                </button>
+                            </div>
+                            <input type="hidden" id="item-end">
+                            <!-- End Dependency UI -->
+                            <div id="end-dep-ui" class="dependency-settings" style="display:none;">
+                                <div class="dep-row">
+                                    <button type="button" class="action-btn-outline"
+                                        onclick="app.startPicking('end-dep-target')" title="從看板選擇"
+                                        style="padding:4px; margin-right:5px; height:32px;">
+                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
+                                    </button>
+                                    <select id="end-dep-target" class="dep-select">
+                                        <option value="">(無依存)</option>
+                                    </select>
+                                    <select id="end-dep-type" class="dep-type-select">
+                                        <option value="start">的起始</option>
+                                        <option value="end">的結束</option>
+                                    </select>
+                                    <span class="dep-plus">+</span>
+                                    <input type="number" id="end-dep-offset" class="dep-offset-input" value="0">
+                                    <span class="dep-days">天</span>
+                                </div>
+                            </div>
                         </div>
-                        <input type="hidden" id="item-end">
                     </div>
                 </div>
                 <!-- 待辦清單管理區 -->
@@ -286,7 +339,7 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <script src="app.js?v=202601211035"></script>
+    <script src="app.js?v=202601261240"></script>
 </body>
 
 </html>

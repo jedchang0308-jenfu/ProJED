@@ -809,6 +809,48 @@ body {
     gap: 1rem;
 }
 
+.user-profile {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid var(--border);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.user-profile:hover {
+    border-color: var(--primary);
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-initials {
+    width: 100%;
+    height: 100%;
+    background: #0ea5e9;
+    /* Google-like Blue */
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
 .action-btn-outline {
     background: transparent;
     border: 1px solid var(--border);
@@ -1487,4 +1529,284 @@ body {
     pointer-events: none !important;
     /* Ensure cursor is grabbing for visual feedback */
     cursor: grabbing !important;
+}
+
+/* Gantt Bar Resize Handles */
+.gantt-task-bar {
+    position: absolute;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.gantt-task-bar:hover {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+    z-index: 50;
+}
+
+.gantt-task-bar.is-dragging {
+    opacity: 0.8;
+    z-index: 100 !important;
+    cursor: grabbing;
+}
+
+/* Milestone Styles */
+.gantt-task-bar.is-milestone {
+    width: 14px !important;
+    height: 14px !important;
+    border-radius: 50% !important;
+    transform: translate(-7px, 0);
+    /* Center the dot on the end date */
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 1), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.gantt-task-bar.is-milestone .handle,
+.gantt-task-bar.is-milestone .gantt-close-btn {
+    display: none !important;
+}
+
+.gantt-task-bar.is-milestone:hover {
+    transform: translate(-7px, 0) scale(1.3);
+}
+
+.handle {
+    position: absolute;
+    top: 0;
+    width: 12px;
+    /* 增加感應區域 */
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    opacity: 0;
+    transition: background 0.2s, opacity 0.2s;
+    z-index: 20;
+    /* 確保在 label 之上 */
+}
+
+.gantt-task-bar:hover .handle {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.gantt-task-bar:hover .handle {
+    opacity: 1;
+}
+
+.handle-left {
+    left: -4px;
+    border-radius: 4px 0 0 4px;
+}
+
+.handle-right {
+    right: -4px;
+    border-radius: 0 4px 4px 0;
+}
+
+.handle:hover {
+    background: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Snap Guide Line */
+.snap-guide {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: var(--primary);
+    border-left: 1px dashed white;
+    box-shadow: 0 0 4px var(--primary);
+    pointer-events: none;
+    z-index: 200;
+}
+
+/* Gantt Dependency Lines */
+.gantt-dep-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.gantt-dep-path {
+    fill: none;
+    stroke: #475569;
+    /* Slate 600 */
+    stroke-width: 1.5;
+    stroke-dasharray: 4 2;
+    transition: stroke 0.2s;
+}
+
+.gantt-dep-path:hover {
+    stroke: var(--primary);
+    stroke-width: 2;
+}
+
+/* Dependency Settings UI */
+.date-input-with-dep {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dep-toggle-btn {
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.dep-toggle-btn:hover {
+    background: #eef2ff;
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.dep-toggle-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.dependency-settings {
+    margin-top: 8px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.dep-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.dep-select {
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.dep-type-select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.dep-offset-input {
+    width: 60px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: center;
+}
+
+.dep-plus,
+.dep-days {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Checklist Item Popover Dependency UI */
+.cl-item-dep-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+}
+
+.cl-dep-toggle-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 12px;
+}
+
+/* Selection Mode Styles */
+.is-picking-dependency {
+    cursor: default;
+}
+
+.is-picking-dependency .navbar,
+.is-picking-dependency .view-section,
+.is-picking-dependency .modal-overlay {
+    /* Dim everything */
+    filter: grayscale(100%) opacity(0.5);
+    pointer-events: none;
+    /* Block interaction with non-pickable items */
+    transition: filter 0.3s, opacity 0.3s;
+}
+
+.is-picking-dependency .selection-mode-banner {
+    filter: none;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.is-picking-dependency .selection-candidate {
+    filter: none !important;
+    opacity: 1 !important;
+    cursor: crosshair !important;
+    pointer-events: auto !important;
+    box-shadow: 0 0 0 3px var(--primary);
+    z-index: 9999;
+    /* Ensure it's on top */
+    position: relative;
+    /* Needed for z-index */
+    background: #fff;
+    /* Ensure it's not transparent */
+}
+
+/* Ensure Gantt bars are pickable */
+.is-picking-dependency .gantt-task-bar.selection-candidate {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary);
+    z-index: 10000;
+}
+
+/* Selection Mode Banner */
+.selection-mode-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    font-weight: 600;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
 }

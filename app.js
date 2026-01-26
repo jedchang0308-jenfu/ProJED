@@ -653,7 +653,7 @@ const ProJED = {
             ProJED.state.currentView = view;
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
             document.getElementById('board-view').style.display = view === 'board' ? 'flex' : 'none';
-            document.getElementById('calendar-view').style.display = view === 'calendar' ? 'block' : 'none';
+
             document.getElementById('gantt-view').style.display = view === 'gantt' ? 'flex' : 'none';
             ProJED.renderActiveView();
         },
@@ -1813,34 +1813,7 @@ const ProJED = {
 
     renderActiveView() {
         if (this.state.currentView === 'board') this.Board.render();
-        if (this.state.currentView === 'calendar') {
-            const el = document.getElementById('calendar-el');
-            if (el) {
-                const evs = [];
-                ProJED.state.lists.forEach(l => {
-                    const lStatus = l.status || 'todo';
-                    if (!ProJED.state.statusFilters[lStatus]) return;
 
-                    const lDisplayStatus = (l.title && l.title.includes('答辯') && lStatus === 'todo') ? 'unsure' : lStatus;
-                    evs.push({ title: l.title || '項目', start: l.startDate, end: dayjs(l.endDate).add(1, 'day').format('YYYY-MM-DD'), color: ProJED.UI.getStatusColor(lDisplayStatus) });
-                    (l.cards || []).forEach(c => {
-                        const cStatus = c.status || 'todo';
-                        if (!ProJED.state.statusFilters[cStatus]) return;
-
-                        const cDisplayStatus = (c.title && c.title.includes('答辯') && cStatus === 'todo') ? 'unsure' : cStatus;
-                        evs.push({ title: c.title || '卡片', start: c.startDate, end: dayjs(c.endDate).add(1, 'day').format('YYYY-MM-DD'), color: ProJED.UI.getStatusColor(cDisplayStatus) });
-                        (c.checklists || []).forEach(cl => {
-                            const clStatus = cl.status || 'todo';
-                            if (!ProJED.state.statusFilters[clStatus]) return;
-
-                            const clDisplayStatus = ((cl.title || cl.name || '').includes('答辯') && clStatus === 'todo') ? 'unsure' : clStatus;
-                            if (cl.endDate) evs.push({ title: cl.title || '待辦', start: cl.startDate || cl.endDate, end: dayjs(cl.endDate).add(1, 'day').format('YYYY-MM-DD'), color: ProJED.UI.getStatusColor(clDisplayStatus) });
-                        });
-                    });
-                });
-                new FullCalendar.Calendar(el, { initialView: 'dayGridMonth', locale: 'zh-tw', events: evs }).render();
-            }
-        }
         if (this.state.currentView === 'gantt') this.Gantt.render();
     },
 
