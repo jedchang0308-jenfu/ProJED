@@ -809,6 +809,48 @@ body {
     gap: 1rem;
 }
 
+.user-profile {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid var(--border);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.user-profile:hover {
+    border-color: var(--primary);
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-initials {
+    width: 100%;
+    height: 100%;
+    background: #0ea5e9;
+    /* Google-like Blue */
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
 .action-btn-outline {
     background: transparent;
     border: 1px solid var(--border);
@@ -1697,4 +1739,74 @@ body {
     width: 100%;
     justify-content: center;
     font-size: 12px;
+}
+
+/* Selection Mode Styles */
+.is-picking-dependency {
+    cursor: default;
+}
+
+.is-picking-dependency .navbar,
+.is-picking-dependency .view-section,
+.is-picking-dependency .modal-overlay {
+    /* Dim everything */
+    filter: grayscale(100%) opacity(0.5);
+    pointer-events: none;
+    /* Block interaction with non-pickable items */
+    transition: filter 0.3s, opacity 0.3s;
+}
+
+.is-picking-dependency .selection-mode-banner {
+    filter: none;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.is-picking-dependency .selection-candidate {
+    filter: none !important;
+    opacity: 1 !important;
+    cursor: crosshair !important;
+    pointer-events: auto !important;
+    box-shadow: 0 0 0 3px var(--primary);
+    z-index: 9999;
+    /* Ensure it's on top */
+    position: relative;
+    /* Needed for z-index */
+    background: #fff;
+    /* Ensure it's not transparent */
+}
+
+/* Ensure Gantt bars are pickable */
+.is-picking-dependency .gantt-task-bar.selection-candidate {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary);
+    z-index: 10000;
+}
+
+/* Selection Mode Banner */
+.selection-mode-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    font-weight: 600;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
 }

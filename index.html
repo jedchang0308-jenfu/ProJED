@@ -100,8 +100,9 @@
                     <i data-lucide="log-in"></i>
                     <span>Google 登入</span>
                 </button>
-                <div class="user-profile" id="user-profile" style="display:none">
-                    <img id="user-avatar" src="" alt="User">
+                <div class="user-profile" id="user-profile" style="display:none" onclick="app.toggleAuth()">
+                    <img id="user-avatar" src="" alt="User" style="display:none">
+                    <div id="user-initials" class="user-initials"></div>
                 </div>
             </div>
         </nav>
@@ -248,6 +249,11 @@
                             <!-- Start Dependency UI -->
                             <div id="start-dep-ui" class="dependency-settings" style="display:none;">
                                 <div class="dep-row">
+                                    <button type="button" class="action-btn-outline"
+                                        onclick="app.startPicking('start-dep-target')" title="從看板選擇"
+                                        style="padding:4px; margin-right:5px; height:32px;">
+                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
+                                    </button>
                                     <select id="start-dep-target" class="dep-select">
                                         <option value="">(無依存)</option>
                                     </select>
@@ -283,6 +289,11 @@
                             <!-- End Dependency UI -->
                             <div id="end-dep-ui" class="dependency-settings" style="display:none;">
                                 <div class="dep-row">
+                                    <button type="button" class="action-btn-outline"
+                                        onclick="app.startPicking('end-dep-target')" title="從看板選擇"
+                                        style="padding:4px; margin-right:5px; height:32px;">
+                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
+                                    </button>
                                     <select id="end-dep-target" class="dep-select">
                                         <option value="">(無依存)</option>
                                     </select>
@@ -335,7 +346,7 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <script src="app.js?v=202601211035"></script>
+    <script src="app.js?v=202601261240"></script>
 </body>
 
 </html>

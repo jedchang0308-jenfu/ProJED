@@ -4,13 +4,13 @@
 
 // 1. Firebase 初始化
 const firebaseConfig = {
-    apiKey: "AIzaSyCdafAboRXudgOqbjm-RK1uNJ13h9Yl44g",
-    authDomain: "jed-s-project-management-tool.firebaseapp.com",
-    projectId: "jed-s-project-management-tool",
-    storageBucket: "jed-s-project-management-tool.firebasestorage.app",
-    messagingSenderId: "793386863318",
-    appId: "1:793386863318:web:e86812f7a7f048c7005777",
-    measurementId: "G-5J9KECQ9HF"
+    apiKey: "AIzaSyBWsUrkyzlYZqBGeeQ7XEVqbN-k-0gvvb0",
+    authDomain: "projed-cc78d.firebaseapp.com",
+    projectId: "projed-cc78d",
+    storageBucket: "projed-cc78d.firebasestorage.app",
+    messagingSenderId: "967362299895",
+    appId: "1:967362299895:web:64fd89a26d8f37751410f2",
+    measurementId: "G-79J8PQK5SK"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -49,18 +49,45 @@ const ProJED = {
         console.log("🚀 [ProJED 2.7] 進階視覺版備份啟動...");
         this.Data.load();
 
-        auth.onAuthStateChanged(user => {
+        // 嘗試初始化 Google API
+        this.Google.init();
+
+        auth.onAuthStateChanged(async user => {
             this.state.user = user;
             this.UI.updateAuthUI(user);
-            if (user) this.Cloud.syncFromFirebase();
-            else this.renderActiveView();
+            if (user) {
+                this.Cloud.syncFromFirebase();
+            } else {
+                this.renderActiveView();
+            }
         });
 
         this.initEventListeners();
         this.UI.setupDateInputs();
         this.renderActiveView();
+
+        // 處理 Deep Link
+        this.handleUrlParams();
+
         if (window.lucide) lucide.createIcons();
     },
+
+    // 新增：處理網址參數以支援 Deep Link
+    handleUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemId = urlParams.get('itemId');
+        if (itemId) {
+            console.log("🔗 偵測到 Deep Link，正在尋找項目:", itemId);
+            // 延遲一點點確保資料已載入
+            setTimeout(() => {
+                const item = this.Data.findItemDeep(itemId);
+                if (item) {
+                    this.Modal.open(item.type, item.id, item.listId, item.cardId);
+                }
+            }, 1000);
+        }
+    },
+
 
     Data: {
         load() {
@@ -102,6 +129,15 @@ const ProJED = {
             ProJED.Data.recalculateAllDates();
 
             if (ProJED.state.user) ProJED.Cloud.saveToFirebase();
+
+            // 即時單點同步：如果有正在編輯的項目，且只有該項目被修改，我們只同步它
+            if (ProJED.Google.accessToken && ProJED.state.editingItem) {
+                const { type, itemId, listId, cardId } = ProJED.state.editingItem;
+                const item = this.findItem(type, itemId, listId, cardId);
+                // 使用 setTimeout 讓同步在背景執行，不卡頓 UI
+                if (item) setTimeout(() => ProJED.Google.syncItem(item), 100);
+            }
+
             ProJED.renderActiveView();
 
             // 如果彈窗開著，強制刷新彈窗內容以避開引用斷裂問題
@@ -112,26 +148,59 @@ const ProJED = {
         },
         // 核心：路徑式查找，確保 ID 匹配不失敗
         toggleGanttVisibility(type, id, listId = null, cardId = null) {
-            console.log(`[Visibility] 類型:${type}, ID:${id}, L:${listId}, C:${cardId}`);
-            let target = null;
-
-            if (type === 'list') {
-                target = ProJED.state.lists.find(l => l.id === id);
-            } else if (type === 'card') {
-                const list = ProJED.state.lists.find(l => l.id === (listId || ""));
-                if (list) target = list.cards.find(c => c.id === id);
-            } else if (type === 'checklist') {
-                const list = ProJED.state.lists.find(l => l.id === (listId || ""));
-                const card = list?.cards.find(c => c.id === (cardId || ""));
-                if (card) target = (card.checklists || []).find(cl => cl.id === id);
-            }
-
-            if (target) {
-                target.ganttVisible = target.ganttVisible === false ? true : false;
-                console.log(`✅ 已為 ${target.title || '項目'} 設定可見度為: ${target.ganttVisible}`);
+            const item = this.findItem(type, id, listId, cardId);
+            if (item) {
+                item.ganttVisible = (item.ganttVisible === undefined) ? false : !item.ganttVisible;
                 this.save();
-            } else {
-                console.warn("❌ 無法在數據庫中定位該項目。");
+                ProJED.renderActiveView(); // Re-render to reflect changes
+            }
+        },
+
+        // -------------------------------------------------------------------------
+        //  Selection Mode Logic
+        // -------------------------------------------------------------------------
+        SelectionMode: {
+            active: false,
+            targetType: null, // 'start' or 'end' or checklist dep types
+            callback: null,
+
+            enter(targetType, callback) {
+                this.active = true;
+                this.targetType = targetType;
+                this.callback = callback;
+
+                document.body.classList.add('is-picking-dependency');
+                ProJED.Modal.hideForSelection();
+
+                // Show toast instruction
+                ProJED.UI.showToast("請點選畫面上的卡片、列表或甘特圖條...");
+            },
+
+            exit() {
+                this.active = false;
+                this.targetType = null;
+                this.callback = null;
+                document.body.classList.remove('is-picking-dependency');
+                ProJED.Modal.showFromSelection();
+            },
+
+            handleClick(e) {
+                if (!this.active) return;
+
+                // Find closest candidate
+                const candidate = e.target.closest('.selection-candidate');
+                if (candidate) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const id = candidate.dataset.id;
+                    // Optional: Validate if ID is valid (not self, etc)
+                    if (this.callback) this.callback(id);
+
+                    this.exit();
+                } else if (e.target.closest('#selection-cancel-btn')) {
+                    this.exit();
+                }
             }
         },
         // 新增：獲取所有可作為依存目標的項目
@@ -229,8 +298,23 @@ const ProJED = {
                 return card?.checklists.find(cl => cl.id === itemId);
             }
             return null;
+        },
+        // 新增：深度查找項目（支援所有類型）
+        findItemDeep(id) {
+            for (const l of ProJED.state.lists) {
+                if (l.id === id) return { ...l, type: 'list' };
+                for (const c of (l.cards || [])) {
+                    if (c.id === id) return { ...c, type: 'card', listId: l.id };
+                    for (const cl of (c.checklists || [])) {
+                        if (cl.id === id) return { ...cl, type: 'checklist', listId: l.id, cardId: c.id };
+                    }
+                }
+            }
+            return null;
         }
     },
+
+
 
     Cloud: {
         async saveToFirebase() {
@@ -264,6 +348,306 @@ const ProJED = {
         }
     },
 
+    // -------------------------------------------------------------------------
+    //  Google Calendar Sync Module (New)
+    // -------------------------------------------------------------------------
+    Google: {
+        CLIENT_ID: '347833826273-0iua3bitkn60aeok9js56vt95799bf2l.apps.googleusercontent.com', // 請替換成您的 Client ID
+        apiKey: firebaseConfig.apiKey,
+        DISCOVERY_DOCS: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
+        SCOPES: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar',
+
+        tokenClient: null,
+        accessToken: null,
+        calendarId: null, // "ProJED Tasks" 行事曆的 ID
+
+        async init() {
+            console.log("🛠️ 初始化 Google 授權工具...");
+
+            // 從本地載入已存儲的權杖
+            const savedToken = localStorage.getItem('google_access_token');
+            const expiry = localStorage.getItem('google_token_expiry');
+            if (savedToken && expiry && Date.now() < parseInt(expiry)) {
+                this.accessToken = savedToken;
+                console.log("♻️ 已從本地載入有效的 Google 權杖");
+            }
+
+            // 1. 初始化 GSI (身分驗證/授權彈窗模組)
+            try {
+                if (window.google && google.accounts && google.accounts.oauth2) {
+                    this.tokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: this.CLIENT_ID,
+                        scope: this.SCOPES,
+                        callback: (resp) => {
+                            if (resp.error) {
+                                console.error("GSI 授權錯誤:", resp);
+                                ProJED.UI.showToast("授權失敗: " + (resp.error_description || resp.error));
+                                return;
+                            }
+                            console.log("🔑 已取得存取權杖 (Access Token)");
+                            this.accessToken = resp.access_token;
+
+                            // 儲存權杖與過期時間 (通常為一小時，我們存 3600 秒)
+                            const expiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
+                            localStorage.setItem('google_access_token', resp.access_token);
+                            localStorage.setItem('google_token_expiry', expiresAt.toString());
+
+                            ProJED.UI.showToast("Google 日曆授權成功");
+                            this.syncAll(true);
+                        },
+                    });
+                    console.log("✅ OAuth 授權工具已就緒");
+                }
+            } catch (gsiErr) {
+                console.error("❌ GSI 授權工具初始化失敗:", gsiErr);
+            }
+
+            // 2. 初始化 GAPI (僅載入基礎框架)
+            try {
+                await new Promise(resolve => gapi.load('client', resolve));
+                console.log("✅ Google GAPI 框架載入完成");
+            } catch (err) {
+                console.error("❌ Google GAPI 載入失敗:", err);
+            }
+        },
+
+        async requestToken() {
+            if (!this.tokenClient) {
+                console.log("嘗試重新初始化 Google API...");
+                await this.init();
+            }
+            if (this.tokenClient) {
+                // 移除 prompt: 'consent'，讓瀏覽器嘗試自動授與權限（如果已登入過）
+                this.tokenClient.requestAccessToken({ prompt: '' });
+            } else {
+                ProJED.UI.showToast("Google API 初始化尚未完成，請稍候再試");
+            }
+        },
+
+        // 新增：直接使用 Fetch 呼叫 Google Calendar REST API
+        async apiCall(endpoint, method = 'GET', body = null) {
+            const url = `https://www.googleapis.com/calendar/v3${endpoint}`;
+            const options = {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                }
+            };
+            if (body) options.body = JSON.stringify(body);
+            const resp = await fetch(url, options);
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw err;
+            }
+            return await resp.json();
+        },
+
+        async getOrCreateCalendar() {
+            if (this.calendarId) return this.calendarId;
+
+            try {
+                // 尋找名稱為 "ProJED Tasks" 的日曆
+                const listResp = await this.apiCall('/users/me/calendarList');
+                const existing = listResp.items.find(c => c.summary === 'ProJED Tasks');
+                if (existing) {
+                    this.calendarId = existing.id;
+                    return this.calendarId;
+                }
+
+                // 若不存在則建立
+                const newCal = await this.apiCall('/calendars', 'POST', { summary: 'ProJED Tasks' });
+                this.calendarId = newCal.id;
+                return this.calendarId;
+            } catch (err) {
+                console.error("無法取得/建立日曆:", err);
+                throw err;
+            }
+        },
+
+        async syncAll(showToast = false) {
+            if (!this.accessToken) {
+                if (showToast) ProJED.UI.showToast("請先點擊『Google 登入』或重新授權");
+                return;
+            }
+
+            try {
+                if (showToast) ProJED.UI.showToast("同步中...");
+                const calId = await this.getOrCreateCalendar();
+
+                // 1. 抓取目前 Google 日曆上的所有事件
+                console.log("📥 正在從 Google 日曆讀取事件...");
+                const eventsResp = await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`);
+                const googleEvents = eventsResp.items || [];
+                console.log(`✅ 讀取到 ${googleEvents.length} 個 Google 日曆事件`);
+
+                const googleEventMap = new Map();
+                googleEvents.forEach(e => {
+                    if (e.description && e.description.includes('PROJED_ID:')) {
+                        const parts = e.description.split('PROJED_ID:');
+                        if (parts.length > 1) {
+                            const id = parts[1].trim();
+                            googleEventMap.set(id, e); // 儲存整個事件物件以便比對
+                        }
+                    }
+                });
+
+                // 2. 遍歷 ProJED 所有具備日期的項目
+                const projedItems = [];
+                ProJED.state.lists.forEach(l => {
+                    if (l.startDate || l.endDate) projedItems.push({ ...l, type: 'list' });
+                    (l.cards || []).forEach(c => {
+                        if (c.startDate || c.endDate) projedItems.push({ ...c, type: 'card' });
+                        (c.checklists || []).forEach(cl => {
+                            if (cl.startDate || cl.endDate) projedItems.push({ ...cl, type: 'checklist' });
+                        });
+                    });
+                });
+
+                console.log(`📋 ProJED 共有 ${projedItems.length} 個項目需要同步`);
+
+                const syncedIds = new Set();
+                let updatedCount = 0, skippedCount = 0, createdCount = 0;
+
+                for (const item of projedItems) {
+                    const eventData = this.formatItemToEvent(item);
+                    const existingEvent = googleEventMap.get(item.id);
+
+                    if (existingEvent) {
+                        // 智慧比對：檢查是否需要更新
+                        const needsUpdate =
+                            existingEvent.summary !== eventData.summary ||
+                            existingEvent.description.trim() !== eventData.description.trim() || // 簡單去除空白比對
+                            existingEvent.start.date !== eventData.start.date ||
+                            existingEvent.end.date !== eventData.end.date ||
+                            (existingEvent.colorId || '1') !== (eventData.colorId || '1'); // 預設顏色處理
+
+                        if (needsUpdate) {
+                            try {
+                                console.log(`🔄 [差異更新] 事件 [${item.title}] 有變動，正在同步...`);
+                                await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events/${existingEvent.id}`, 'PUT', eventData);
+                                updatedCount++;
+                            } catch (e) {
+                                console.error(`❌ 更新失敗 [${item.title}]:`, e);
+                            }
+                        } else {
+                            // console.log(`⏭️ [跳過] 事件 [${item.title}] 無變動`);
+                            skippedCount++;
+                        }
+                        syncedIds.add(item.id);
+                    } else {
+                        // 新增邏輯
+                        try {
+                            console.log(`➕ 新增事件 [${item.title}]: ${eventData.start.date}`);
+                            await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events`, 'POST', eventData);
+                            createdCount++;
+                        } catch (e) {
+                            console.error(`❌ 新增失敗 [${item.title}]:`, e);
+                        }
+                        syncedIds.add(item.id);
+                    }
+                }
+                console.log(`📊 同步摘要: 新增 ${createdCount}, 更新 ${updatedCount}, 跳過 ${skippedCount}`);
+
+                // 3. 處理刪除
+                for (const [projedId, gEvent] of googleEventMap.entries()) {
+                    if (!syncedIds.has(projedId)) {
+                        try {
+                            console.log(`🗑️ 刪除 Google 多餘事件 (ID: ${gEvent.id})`);
+                            await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events/${gEvent.id}`, 'DELETE');
+                        } catch (e) { console.warn("刪除失敗", e); }
+                    }
+                }
+
+                if (showToast) ProJED.UI.showToast(`同步完成 (更新 ${updatedCount} 筆)`);
+            } catch (err) {
+                console.error("同步失敗:", err);
+                if (showToast) ProJED.UI.showToast("同步失敗，請重新登入授權");
+            }
+        },
+
+        formatItemToEvent(item) {
+            const targetDate = item.endDate || item.startDate; // 優先使用結束時間點，作為唯一的同步點
+            const baseUrl = window.location.origin + window.location.pathname;
+            const deepLink = `${baseUrl}?itemId=${item.id}`;
+
+            return {
+                summary: `[${this.getTypeLabel(item.type)}] ${item.title || item.name || '無標題'}`,
+                description: `${item.notes || ''}\n\n---\n🔗 在 ProJED 查看: ${deepLink}\nPROJED_ID: ${item.id}`,
+                start: { date: targetDate },
+                end: { date: dayjs(targetDate).add(1, 'day').format('YYYY-MM-DD') },
+                colorId: this.getStatusColorId(item.status)
+            };
+        },
+
+        getTypeLabel(type) {
+            if (type === 'list') return '列表';
+            if (type === 'card') return '卡片';
+            return '待辦';
+        },
+
+        getStatusColorId(status) {
+            const map = { todo: '1', delayed: '4', completed: '10', unsure: '5', onhold: '8' };
+            return map[status] || '1';
+        },
+
+        async syncItem(item) {
+            if (!this.accessToken) return;
+            // 檢查是否具有時間屬性，沒有就不必同步
+            if (!item.startDate && !item.endDate) return;
+
+            console.log(`⚡ [即時同步] 正在背景更新: ${item.title}`);
+            try {
+                const calId = await this.getOrCreateCalendar();
+                const eventData = this.formatItemToEvent(item);
+
+                // 為了單點更新，我们需要先找到對應的 Google Event ID
+                // 這裡稍微取巧：先讀取所有事件 (因為 Google API 沒有直接用 description 搜尋的功能)
+                // 但為了效能，我們可以只讀取最近的，或是如果能儲存 Google Event ID 到本地庫會更好
+                // 目前先維持讀取全部，但因為只有一筆寫入，速度還可以接受
+                // *優化*：未來可以在 item 裡多存一個 googleEventId 欄位，就不用每次都 search
+
+                const eventsResp = await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`);
+                const googleEvents = eventsResp.items || [];
+                const existingEvent = googleEvents.find(e => e.description && e.description.includes(`PROJED_ID: ${item.id}`));
+
+                if (existingEvent) {
+                    if (
+                        existingEvent.summary !== eventData.summary ||
+                        existingEvent.start.date !== eventData.start.date ||
+                        existingEvent.end.date !== eventData.end.date
+                    ) {
+                        await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events/${existingEvent.id}`, 'PUT', eventData);
+                        console.log(`✅ [即時同步] 更新成功`);
+                    }
+                } else {
+                    await this.apiCall(`/calendars/${encodeURIComponent(calId)}/events`, 'POST', eventData);
+                    console.log(`✅ [即時同步] 新增成功`);
+                }
+            } catch (err) {
+                console.error("❌ [即時同步] 失敗:", err);
+            }
+        },
+
+        async clearAll() {
+            if (!this.accessToken) {
+                ProJED.UI.showToast("請先登入 Google 帳號");
+                return;
+            }
+            if (!confirm("這將移除 Google 日曆上的『ProJED Tasks』日曆，確定嗎？")) return;
+            try {
+                const calId = await this.getOrCreateCalendar();
+                await this.apiCall(`/calendars/${encodeURIComponent(calId)}`, 'DELETE');
+                this.calendarId = null;
+                ProJED.UI.showToast("日曆已移除");
+            } catch (err) {
+                console.error(err);
+                ProJED.UI.showToast("移除失敗");
+            }
+        }
+    },
+
+
     UI: {
         switchView(view) {
             ProJED.state.currentView = view;
@@ -276,8 +660,29 @@ const ProJED = {
         updateAuthUI(user) {
             const btn = document.getElementById('auth-btn');
             const profile = document.getElementById('user-profile');
-            if (btn) btn.innerHTML = user ? '<i data-lucide="log-out"></i> 登出' : '<i data-lucide="log-in"></i> Google 登入';
-            if (profile) profile.style.display = user ? 'block' : 'none';
+            const avatar = document.getElementById('user-avatar');
+            const initials = document.getElementById('user-initials');
+
+            if (btn) {
+                btn.style.display = user ? 'none' : 'flex';
+                btn.innerHTML = '<i data-lucide="log-in"></i> <span>Google 登入</span>';
+            }
+
+            if (profile) {
+                profile.style.display = user ? 'flex' : 'none';
+                if (user) {
+                    if (user.photoURL) {
+                        avatar.src = user.photoURL;
+                        avatar.style.display = 'block';
+                        initials.style.display = 'none';
+                    } else {
+                        avatar.style.display = 'none';
+                        initials.style.display = 'flex';
+                        initials.innerText = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+                    }
+                    profile.title = `${user.displayName || '使用者'} (${user.email}) - 點選以登出`;
+                }
+            }
             if (window.lucide) lucide.createIcons();
         },
         // 新增：日期輸入框自動跳轉與導航邏輯
@@ -394,11 +799,12 @@ const ProJED = {
                 if (!ProJED.state.statusFilters[status]) return; // 過濾列表
 
                 const div = document.createElement('div');
-                div.className = 'list-wrapper';
+                div.className = 'list-wrapper selection-candidate';
                 div.dataset.id = list.id;
+                div.dataset.type = 'list';
                 const isHidden = list.ganttVisible === false;
                 div.innerHTML = `
-                    <div class="list-header" onclick="app.openEditModal('list', '${list.id}')" style="cursor:pointer;">
+                    <div class="list-header" onclick="if(!ProJED.Data.SelectionMode.active) app.openEditModal('list', '${list.id}')" style="cursor:pointer;">
                         <h3 class="status-${status}">${list.title || '新列表'}</h3>
                         <div class="visibility-toggle ${isHidden ? 'hidden-in-gantt' : ''}" 
                              onclick="event.stopPropagation(); app.toggleGanttVisibility('list', '${list.id}')" 
@@ -414,10 +820,11 @@ const ProJED = {
                     if (!ProJED.state.statusFilters[cStatus]) return; // 過濾卡片
 
                     const el = document.createElement('div');
-                    el.className = 'card';
+                    el.className = 'card selection-candidate';
                     el.dataset.id = card.id;
+                    el.dataset.type = 'card';
                     //讓整張卡片可點擊
-                    el.setAttribute('onclick', `app.openEditModal('card', '${card.id}', '${list.id}')`);
+                    el.setAttribute('onclick', `if(!ProJED.Data.SelectionMode.active) app.openEditModal('card', '${card.id}', '${list.id}')`);
 
                     const isCardHidden = card.ganttVisible === false;
                     const displayStatus = (card.title && card.title.includes('答辯') && cStatus === 'todo') ? 'unsure' : cStatus;
@@ -843,7 +1250,9 @@ const ProJED = {
             const title = item.title || item.name || '項目';
             const displayStatus = (title.includes('答辯') && status === 'todo') ? 'unsure' : status;
 
-            bar.className = `gantt-task-bar status-${displayStatus} ${item.type === 'list' ? 'is-list' : ''} ${item.type === 'checklist' ? 'is-checklist' : ''} ${isMilestone ? 'is-milestone' : ''}`;
+            bar.className = `gantt-task-bar selection-candidate status-${displayStatus} ${item.type === 'list' ? 'is-list' : ''} ${item.type === 'checklist' ? 'is-checklist' : ''} ${isMilestone ? 'is-milestone' : ''}`;
+            bar.dataset.id = item.id; // Ensure ID is present for selection
+            bar.dataset.type = item.type;
             bar.dataset.left = barLeft;
             bar.dataset.width = width;
             bar.style.left = `${barLeft}px`;
@@ -1042,6 +1451,25 @@ const ProJED = {
         open(type, itemId, listId = null, cardId = null) {
             this.refresh(type, itemId, listId, cardId);
             document.getElementById('modal-overlay').style.display = 'flex';
+        },
+        hideForSelection() {
+            document.getElementById('modal-overlay').style.display = 'none';
+            // Add a cancel button banner
+            let banner = document.getElementById('selection-banner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'selection-banner';
+                banner.className = 'selection-mode-banner';
+                banner.innerHTML = `<span><i data-lucide="mouse-pointer-2"></i> 選擇模式：請點選目標</span><button id="selection-cancel-btn" class="action-btn-outline" style="border:1px solid #fff; color:#fff; margin-left:10px;">取消 (ESC)</button>`;
+                document.body.appendChild(banner);
+                if (window.lucide) lucide.createIcons();
+            }
+            banner.style.display = 'flex';
+        },
+        showFromSelection() {
+            document.getElementById('modal-overlay').style.display = 'flex';
+            const banner = document.getElementById('selection-banner');
+            if (banner) banner.style.display = 'none';
         },
         refresh(type, itemId, listId = null, cardId = null) {
             let item = null;
@@ -1434,6 +1862,13 @@ const ProJED = {
             // Ctrl/Meta + Z 復原
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); this.History.undo(); }
         };
+
+        // Global click for selection mode
+        document.addEventListener('click', (e) => {
+            if (ProJED.Data.SelectionMode && ProJED.Data.SelectionMode.active) {
+                ProJED.Data.SelectionMode.handleClick(e);
+            }
+        }, true);
     }
 };
 
@@ -1455,7 +1890,26 @@ window.app = {
             document.getElementById(`${target}-dep-target`).value = "";
         }
     },
-    toggleAuth: () => { if (ProJED.state.user) { if (confirm("登出？")) auth.signOut().then(() => location.reload()); } else { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(() => ProJED.UI.showToast("已登入")); } },
+    toggleAuth: () => {
+        if (ProJED.state.user) {
+            if (confirm("登出？")) auth.signOut().then(() => location.reload());
+        } else {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            // 同時請求日曆權限
+            provider.addScope('https://www.googleapis.com/auth/calendar.events');
+            provider.addScope('https://www.googleapis.com/auth/calendar');
+
+            auth.signInWithPopup(provider).then((result) => {
+                ProJED.Google.accessToken = result.credential.accessToken;
+                ProJED.UI.showToast("已登入並成功連結 Google 帳號");
+                // 觸發同步
+                ProJED.Google.syncAll(true);
+            }).catch(err => {
+                console.error("登入失敗:", err);
+                ProJED.UI.showToast("登入失敗");
+            });
+        }
+    },
     updateBoardName: (name) => {
         if (name.trim() === '') name = '專案看板';
         ProJED.state.boardName = name;
@@ -1499,81 +1953,121 @@ window.app = {
                 document.removeEventListener('click', closeMenu);
             }
         };
-        if (!isActive) setTimeout(() => document.addEventListener('click', closeMenu), 0);
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
     },
-    toggleChecklistItemDone: (index) => {
-        const { type, itemId, listId, cardId } = ProJED.state.editingItem;
-        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
-        if (item && item.checklists && item.checklists[index]) {
-            const cl = item.checklists[index];
-            cl.status = cl.status === 'completed' ? 'todo' : 'completed';
-            ProJED.Modal.renderChecklistItems(item.checklists);
-        }
-    },
-    addChecklistItemUI: () => {
-        const { type, itemId, listId, cardId } = ProJED.state.editingItem;
-        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
-        if (item) {
-            if (!item.checklists) item.checklists = [];
-            item.checklists.push({ id: 'cl' + Date.now(), title: '新待辦項', startDate: '', endDate: item.endDate, status: 'todo', ganttVisible: true });
-            ProJED.Modal.renderChecklistItems(item.checklists);
-        }
-    },
-    updateChecklistItem: (index, field, value) => {
-        const { type, itemId, listId, cardId } = ProJED.state.editingItem;
-        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
-        if (item && item.checklists && item.checklists[index]) {
-            item.checklists[index][field] = value;
-            if (['status', 'startDate', 'endDate', 'title'].includes(field)) {
-                // If modifying date, keep the menu open
-                const openIndex = (field === 'startDate' || field === 'endDate') ? index : -1;
-                ProJED.Modal.renderChecklistItems(item.checklists, openIndex);
+
+    startPicking: (inputId) => {
+        ProJED.Data.SelectionMode.enter('general', (pickedId) => {
+            const select = document.getElementById(inputId);
+            if (select) {
+                if (pickedId === ProJED.state.editingItem.itemId) {
+                    alert("不能依賴自己！");
+                    return;
+                }
+                // Ensure option exists, if not, add it temporarily (though refreshing usually handles it)
+                // But simply setting value works if option exists.
+                // getAllSelectableItems logic ensures it's in the list unless it's self.
+                select.value = pickedId;
+                // If the value didn't change because it wasn't there, we might need to add it.
+                if (select.value !== pickedId) {
+                    // Maybe it's a checklist item that wasn't included?
+                    // TODO: Check if getAllSelectableItems includes checklist items. 
+                    // Assuming yes for now.
+                }
+                select.dispatchEvent(new Event('change'));
             }
+        });
+    },
+
+    startPickingForChecklist: (index, depType) => {
+        ProJED.Data.SelectionMode.enter('checklist', (pickedId) => {
+            app.updateChecklistItemDep(index, depType, 'targetId', pickedId);
+        });
+    },
+
+    updateChecklistItemDep: (index, depType, field, value) => {
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (!card || !card.checklists[index]) return;
+
+        const cl = card.checklists[index];
+        const key = depType + 'Dependency';
+        if (!cl[key]) cl[key] = { type: 'start', offset: 0 };
+
+        if (field === 'targetId') cl[key].targetId = value;
+        if (field === 'type') cl[key].type = value;
+        if (field === 'offset') cl[key].offset = parseInt(value) || 0;
+
+        if (!cl[key].targetId) delete cl[key];
+
+        ProJED.Data.save();
+        ProJED.Modal.renderChecklistItems(card.checklists, index);
+    },
+
+    toggleChecklistDepUI: (btn, index) => { // Toggle visibility of dep section in cl popover
+        const container = btn.nextElementSibling;
+        if (container) {
+            container.style.display = container.style.display === 'none' ? 'block' : 'none';
         }
     },
+
     removeChecklistItemUI: (index) => {
-        const { type, itemId, listId, cardId } = ProJED.state.editingItem;
-        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
-        if (item && item.checklists) {
-            item.checklists.splice(index, 1);
-            ProJED.Modal.renderChecklistItems(item.checklists);
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (card) {
+            card.checklists.splice(index, 1);
+            ProJED.Data.save();
+            ProJED.Modal.renderChecklistItems(card.checklists);
         }
     },
-    toggleChecklistDepUI: (btn, index) => {
-        const depSection = btn.nextElementSibling;
-        const isHidden = depSection.style.display === 'none';
-        depSection.style.display = isHidden ? 'block' : 'none';
-        if (!isHidden) {
-            // 取消依存
-            app.updateChecklistItemDep(index, 'start', 'targetId', '');
-            app.updateChecklistItemDep(index, 'end', 'targetId', '');
-        }
-    },
-    updateChecklistItemDep: (index, side, field, value) => {
-        const { type, itemId, listId, cardId } = ProJED.state.editingItem;
-        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
-        if (item && item.checklists && item.checklists[index]) {
-            const cl = item.checklists[index];
-            const depKey = side === 'start' ? 'startDependency' : 'endDependency';
-            if (field === 'targetId' && !value) {
-                delete cl[depKey];
-            } else {
-                if (!cl[depKey]) cl[depKey] = { targetId: '', type: 'start', offset: 0 };
-                cl[depKey][field] = value;
-            }
-            // 立即重新計算日期以提供回饋
-            ProJED.Data.recalculateAllDates();
-            ProJED.Modal.renderChecklistItems(item.checklists, index);
-        }
-    },
+
     toggleShowCompletedCL: () => {
         ProJED.state.showCompletedCL = !ProJED.state.showCompletedCL;
-        const { type, itemId, listId, cardId } = ProJED.state.editingItem;
-        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
-        if (item && item.checklists) {
-            ProJED.Modal.renderChecklistItems(item.checklists);
+        ProJED.Data.save(false);
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (card) ProJED.Modal.renderChecklistItems(card.checklists);
+    },
+
+    addChecklistItemUI: () => {
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (card) {
+            if (!card.checklists) card.checklists = [];
+            card.checklists.push({ id: 'cl_' + Date.now(), title: '', status: 'todo' });
+            ProJED.Data.save();
+            ProJED.Modal.renderChecklistItems(card.checklists);
         }
-    }
+    },
+
+    updateChecklistItem: (index, field, value) => {
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (card && card.checklists[index]) {
+            card.checklists[index][field] = value;
+            ProJED.Data.save();
+            if (field === 'status' || field === 'startDate' || field === 'endDate') {
+                ProJED.Modal.renderChecklistItems(card.checklists, index); // Keep menu open if possible, but status usually closes it
+                // Actually updateChecklistItem is called by input onchange and status clicks.
+                // Status click re-renders to update color/checked state.
+            }
+        }
+    },
+
+    syncWithGoogleCalendar: () => {
+        const expiry = localStorage.getItem('google_token_expiry');
+        const isTokenValid = ProJED.Google.accessToken && expiry && Date.now() < parseInt(expiry);
+
+        if (!isTokenValid) {
+            console.log("權杖失效或不存在，要求新權杖...");
+            ProJED.Google.requestToken();
+        } else {
+            console.log("使用現有的有效權杖進行同步");
+            ProJED.Google.syncAll(true);
+        }
+    },
+    cleanupGoogleCalendar: () => { ProJED.Google.clearAll(); }
 };
+
 
 window.onload = () => ProJED.init();
