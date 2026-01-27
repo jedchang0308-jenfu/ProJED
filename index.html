@@ -72,6 +72,17 @@
                         <span>甘特圖</span>
                     </button>
                 </div>
+                <!-- Undo/Redo Buttons -->
+                <div class="history-controls">
+                    <button class="action-btn-outline" onclick="app.undo()" title="上一步 (Ctrl+Z)">
+                        <i data-lucide="undo-2"></i>
+                        <span>上一步</span>
+                    </button>
+                    <button class="action-btn-outline" onclick="app.redo()" title="下一步 (Ctrl+Y)">
+                        <i data-lucide="redo-2"></i>
+                        <span>下一步</span>
+                    </button>
+                </div>
                 <button class="action-btn-outline" onclick="app.exportData()" title="備份資料到本地">
                     <i data-lucide="download"></i>
                     <span>備份</span>
@@ -240,22 +251,24 @@
                             </div>
                             <input type="hidden" id="item-start">
                             <!-- Start Dependency UI -->
-                            <div id="start-dep-ui" class="dependency-settings" style="display:none;">
-                                <div class="dep-row">
-                                    <button type="button" class="action-btn-outline"
-                                        onclick="app.startPicking('start-dep-target')" title="從看板選擇"
-                                        style="padding:4px; margin-right:5px; height:32px;">
-                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
-                                    </button>
-                                    <select id="start-dep-target" class="dep-select">
+                            <div id="start-dep-ui" class="dependency-settings" style="display:none">
+                                <div style="margin-bottom: 8px;">
+                                    <select id="start-dep-target" class="dep-select" style="width: 100%;">
                                         <option value="">(無依存)</option>
                                     </select>
-                                    <select id="start-dep-type" class="dep-type-select">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button type="button" class="action-btn-outline"
+                                        style="padding:4px; min-width:32px; height: 32px;"
+                                        onclick="app.startPicking('start-dep-target')" title="從看板中選取">
+                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
+                                    </button>
+                                    <select id="start-dep-type" class="dep-type-select" style="height: 32px;">
                                         <option value="start">的起始</option>
                                         <option value="end">的結束</option>
                                     </select>
-                                    <span class="dep-plus">+</span>
-                                    <input type="number" id="start-dep-offset" class="dep-offset-input" value="0">
+                                    <input type="number" id="start-dep-offset" class="dep-offset-input" value="0"
+                                        style="width: 60px; height: 32px;">
                                     <span class="dep-days">天</span>
                                 </div>
                             </div>
@@ -280,22 +293,24 @@
                             </div>
                             <input type="hidden" id="item-end">
                             <!-- End Dependency UI -->
-                            <div id="end-dep-ui" class="dependency-settings" style="display:none;">
-                                <div class="dep-row">
-                                    <button type="button" class="action-btn-outline"
-                                        onclick="app.startPicking('end-dep-target')" title="從看板選擇"
-                                        style="padding:4px; margin-right:5px; height:32px;">
-                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
-                                    </button>
-                                    <select id="end-dep-target" class="dep-select">
+                            <div id="end-dep-ui" class="dependency-settings" style="display:none">
+                                <div style="margin-bottom: 8px;">
+                                    <select id="end-dep-target" class="dep-select" style="width: 100%;">
                                         <option value="">(無依存)</option>
                                     </select>
-                                    <select id="end-dep-type" class="dep-type-select">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button type="button" class="action-btn-outline"
+                                        style="padding:4px; min-width:32px; height: 32px;"
+                                        onclick="app.startPicking('end-dep-target')" title="從看板中選取">
+                                        <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
+                                    </button>
+                                    <select id="end-dep-type" class="dep-type-select" style="height: 32px;">
                                         <option value="start">的起始</option>
                                         <option value="end">的結束</option>
                                     </select>
-                                    <span class="dep-plus">+</span>
-                                    <input type="number" id="end-dep-offset" class="dep-offset-input" value="0">
+                                    <input type="number" id="end-dep-offset" class="dep-offset-input" value="0"
+                                        style="width: 60px; height: 32px;">
                                     <span class="dep-days">天</span>
                                 </div>
                             </div>

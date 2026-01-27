@@ -810,6 +810,11 @@ body {
     gap: 1rem;
 }
 
+.history-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
 .user-profile {
     width: 38px;
     height: 38px;
@@ -1325,7 +1330,7 @@ body {
     position: absolute;
     top: calc(100% + 10px);
     right: 0;
-    width: 260px;
+    width: 520px;
     background: #fff;
     border-radius: 14px;
     box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12), 0 5px 10px rgba(0, 0, 0, 0.05);
@@ -1367,18 +1372,29 @@ body {
 
 .cl-dates {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: row;
+    gap: 12px;
 }
 
-.cl-dates input[type="date"] {
+.cl-date-field {
     flex: 1;
-    padding: 8px;
-    border: 1px solid #e2e8f0;
+}
+
+/* 待辦專用的分離輸入框 (更小一點) */
+.cl-dates .split-date-input {
+    padding: 0.5rem 0.75rem;
     border-radius: 8px;
-    font-size: 0.8rem;
-    color: #1e293b;
-    font-family: inherit;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.cl-dates .split-date-input:focus-within {
+    border-color: var(--primary);
+    background: #fff;
+}
+
+.cl-dates .split-date-input input.date-part {
+    font-size: 0.85rem;
 }
 
 /* Delete Full Button in Popover */
@@ -1398,6 +1414,75 @@ body {
     gap: 8px;
     cursor: pointer;
     transition: all 0.2s;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.save-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.delete-btn {
+    background: #fff;
+    color: #ef4444;
+    border: 1px solid #fee2e2;
+    padding: 0.75rem 2.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+.cl-popover-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border);
+}
+
+.cl-popover-footer .save-btn {
+    padding: 8px 20px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    flex: 1.5;
+}
+
+.cl-popover-footer .delete-btn {
+    padding: 8px 15px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
 
 .cl-delete-full-btn:hover {

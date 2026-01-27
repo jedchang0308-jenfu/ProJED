@@ -41,7 +41,9 @@ const ProJED = {
         boardName: '專案看板',
         showCompletedCL: false,
         activeChecklistIndex: -1,
-        activeChecklistDepIndex: -1
+        activeChecklistStartDepIdx: -1,
+        activeChecklistEndDepIdx: -1,
+        redoStack: []
     },
 
     GRID_START: dayjs('2024-01-01'),
@@ -688,8 +690,11 @@ const ProJED = {
             if (window.lucide) lucide.createIcons();
         },
         // 新增：日期輸入框自動跳轉與導航邏輯
-        setupDateInputs() {
-            document.querySelectorAll('.split-date-input').forEach(wrapper => {
+        setupDateInputs(container = document) {
+            container.querySelectorAll('.split-date-input').forEach(wrapper => {
+                if (wrapper.dataset.dateInputsInitialized) return; // 避免重複綁定
+                wrapper.dataset.dateInputsInitialized = "true";
+
                 const inputs = wrapper.querySelectorAll('input.date-part');
                 inputs.forEach((input, index) => {
                     // 輸入時自動跳轉
@@ -1450,6 +1455,7 @@ const ProJED = {
     },
 
     Modal: {
+        saved: false,
         open(type, itemId, listId = null, cardId = null) {
             this.refresh(type, itemId, listId, cardId);
             document.getElementById('modal-overlay').style.display = 'flex';
@@ -1522,7 +1528,7 @@ const ProJED = {
             if (type === 'card') {
                 clSection.style.display = 'block';
                 if (notesSection) notesSection.style.display = 'block';
-                this.renderChecklistItems(item.checklists || [], ProJED.state.activeChecklistIndex, ProJED.state.activeChecklistDepIndex);
+                this.renderChecklistItems(item.checklists || [], ProJED.state.activeChecklistIndex);
             } else {
                 clSection.style.display = 'none';
                 if (notesSection) notesSection.style.display = 'none';
@@ -1573,10 +1579,12 @@ const ProJED = {
                 if (endToggle) endToggle.classList.remove('active');
             }
         },
-        renderChecklistItems(cls, openMenuIndex = -1, openDepIndex = -1) {
+        renderChecklistItems(cls, openMenuIndex = -1) {
             const container = document.getElementById('checklist-items-container');
             container.innerHTML = '';
             const { listId, cardId } = ProJED.state.editingItem;
+            const openStartIdx = ProJED.state.activeChecklistStartDepIdx;
+            const openEndIdx = ProJED.state.activeChecklistEndDepIdx;
 
             cls.forEach((cl, index) => {
                 const isCompleted = cl.status === 'completed';
@@ -1616,6 +1624,9 @@ const ProJED = {
                 const isHidden = cl.ganttVisible === false;
                 const isMenuOpen = index === openMenuIndex;
 
+                const startDepVisible = (cl.startDependency?.targetId || index === openStartIdx);
+                const endDepVisible = (cl.endDependency?.targetId || index === openEndIdx);
+
                 row.innerHTML = `
                     <div class="cl-checkbox ${displayStatus === 'completed' ? 'checked' : ''}" onclick="app.toggleChecklistItemDone(${index})">
                         ${displayStatus === 'completed' ? '<i data-lucide="check" style="width:14px; height:14px;"></i>' : ''}
@@ -1643,85 +1654,138 @@ const ProJED = {
                                 <div class="popover-section">
                                     <label>時間範圍</label>
                                     <div class="cl-dates">
-                                        <input type="date" value="${cl.startDate || ''}" min="1000-01-01" max="9999-12-31" onchange="app.updateChecklistItem(${index}, 'startDate', this.value)">
-                                        <span style="color:#94a3b8">→</span>
-                                        <input type="date" value="${cl.endDate || ''}" min="1000-01-01" max="9999-12-31" onchange="app.updateChecklistItem(${index}, 'endDate', this.value)">
-                                    </div>
-                                    <button class="action-btn-outline cl-dep-toggle-btn" 
-                                            style="margin-top:8px; width:100%; border-style:dashed;"
-                                            onclick="app.toggleChecklistDepUI(this, ${index})">
-                                        <i data-lucide="link" style="width:14px; height:14px;"></i>
-                                        <span>設定依存</span>
-                                    </button>
-                                    <div class="cl-item-dep-section" style="display: ${(cl.startDependency?.targetId || cl.endDependency?.targetId || index === openDepIndex) ? 'block' : 'none'};">
-                                        <div class="input-group" style="margin-bottom:8px;">
-                                            <label style="font-size:11px;">起始依存於</label>
-                                            <select style="width:100%; font-size:12px; padding:4px;" onchange="app.updateChecklistItemDep(${index}, 'start', 'targetId', this.value)">
-                                                <option value="">(無)</option>
-                                                ${ProJED.Data.getAllSelectableItems(cl.id).map(si => `<option value="${si.id}" ${si.id === cl.startDependency?.targetId ? 'selected' : ''}>${si.title}</option>`).join('')}
-                                            </select>
-                                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
-                                                <select style="font-size:11px; padding:2px;" onchange="app.updateChecklistItemDep(${index}, 'start', 'type', this.value)">
-                                                    <option value="start" ${cl.startDependency?.type === 'start' ? 'selected' : ''}>起始</option>
-                                                    <option value="end" ${cl.startDependency?.type === 'end' ? 'selected' : ''}>結束</option>
-                                                </select>
-                                                <span style="font-size:11px;">+</span>
-                                                <input type="number" style="width:40px; font-size:11px; padding:2px;" value="${cl.startDependency?.offset || 0}" onchange="app.updateChecklistItemDep(${index}, 'start', 'offset', parseInt(this.value))">
-                                                <span style="font-size:11px;">天</span>
+                                        <div class="cl-date-field">
+                                            <div style="font-size:11px; color:#64748b; margin-bottom:4px;">起始日</div>
+                                            <div class="date-input-with-dep">
+                                                ${(() => {
+                        const d = (cl.startDate && dayjs(cl.startDate).isValid()) ? dayjs(cl.startDate) : null;
+                        return `
+                                                    <div class="split-date-input" data-cl-idx="${index}" data-cl-target="start" style="flex:1;">
+                                                        <input type="text" class="date-part year" placeholder="YYYY" maxlength="4" value="${d ? d.format('YYYY') : ''}">
+                                                        <span class="sep">/</span>
+                                                        <input type="text" class="date-part month" placeholder="MM" maxlength="2" value="${d ? d.format('MM') : ''}">
+                                                        <span class="sep">/</span>
+                                                        <input type="text" class="date-part day" placeholder="DD" maxlength="2" value="${d ? d.format('DD') : ''}">
+                                                    </div>
+                                                `;
+                    })()}
+                                                <button type="button" class="dep-toggle-btn ${startDepVisible ? 'active' : ''}" 
+                                                        onclick="app.toggleChecklistDepUI('start', ${index}, event)" 
+                                                        title="設定時間依存">
+                                                    <i data-lucide="link" style="width:14px; height:14px;"></i>
+                                                </button>
+                                            </div>
+                                            <!-- Start Dep UI -->
+                                            <div class="dependency-settings" style="display: ${startDepVisible ? 'block' : 'none'}; margin-top:8px;">
+                                                <div style="margin-bottom:6px;">
+                                                    <select style="width:100%; font-size:12px; height:30px; border-radius:6px; border:1px solid #e2e8f0;" onchange="app.updateChecklistItemDep(${index}, 'start', 'targetId', this.value)">
+                                                        <option value="">(無)</option>
+                                                        ${ProJED.Data.getAllSelectableItems(cl.id).map(si => `<option value="${si.id}" ${si.id === cl.startDependency?.targetId ? 'selected' : ''}>${si.title}</option>`).join('')}
+                                                    </select>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:6px;">
+                                                    <button type="button" class="action-btn-outline" 
+                                                            style="padding:0; width:30px; height:30px; display:flex; align-items:center; justify-content:center; flex-shrink:0;"
+                                                            onclick="app.startPickingForChecklist(${index}, 'start')" title="從看板中選取">
+                                                        <i data-lucide="mouse-pointer-2" style="width:12px; height:12px;"></i>
+                                                    </button>
+                                                    <select style="font-size:11px; height:30px; border-radius:6px; border:1px solid #e2e8f0; flex:1; min-width:0;" onchange="app.updateChecklistItemDep(${index}, 'start', 'type', this.value)">
+                                                        <option value="start" ${cl.startDependency?.type === 'start' ? 'selected' : ''}>起始</option>
+                                                        <option value="end" ${cl.startDependency?.type === 'end' ? 'selected' : ''}>結束</option>
+                                                    </select>
+                                                    <input type="number" style="width:45px; font-size:11px; height:30px; border-radius:6px; border:1px solid #e2e8f0; text-align:center;" value="${cl.startDependency?.offset || 0}" onchange="app.updateChecklistItemDep(${index}, 'start', 'offset', parseInt(this.value))">
+                                                    <span style="font-size:11px; color:#64748b;">天</span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="input-group">
-                                            <label style="font-size:11px;">到期依存於</label>
-                                            <select style="width:100%; font-size:12px; padding:4px;" onchange="app.updateChecklistItemDep(${index}, 'end', 'targetId', this.value)">
-                                                <option value="">(無)</option>
-                                                ${ProJED.Data.getAllSelectableItems(cl.id).map(si => `<option value="${si.id}" ${si.id === cl.endDependency?.targetId ? 'selected' : ''}>${si.title}</option>`).join('')}
-                                            </select>
-                                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
-                                                <select style="font-size:11px; padding:2px;" onchange="app.updateChecklistItemDep(${index}, 'end', 'type', this.value)">
-                                                    <option value="start" ${cl.endDependency?.type === 'start' ? 'selected' : ''}>起始</option>
-                                                    <option value="end" ${cl.endDependency?.type === 'end' ? 'selected' : ''}>結束</option>
-                                                </select>
-                                                <span style="font-size:11px;">+</span>
-                                                <input type="number" style="width:40px; font-size:11px; padding:2px;" value="${cl.endDependency?.offset || 0}" onchange="app.updateChecklistItemDep(${index}, 'end', 'offset', parseInt(this.value))">
-                                                <span style="font-size:11px;">天</span>
+                                        <div class="cl-date-field">
+                                            <div style="font-size:11px; color:#64748b; margin-bottom:4px;">到期日</div>
+                                            <div class="date-input-with-dep">
+                                                ${(() => {
+                        const d = (cl.endDate && dayjs(cl.endDate).isValid()) ? dayjs(cl.endDate) : null;
+                        return `
+                                                    <div class="split-date-input" data-cl-idx="${index}" data-cl-target="end" style="flex:1;">
+                                                        <input type="text" class="date-part year" placeholder="YYYY" maxlength="4" value="${d ? d.format('YYYY') : ''}">
+                                                        <span class="sep">/</span>
+                                                        <input type="text" class="date-part month" placeholder="MM" maxlength="2" value="${d ? d.format('MM') : ''}">
+                                                        <span class="sep">/</span>
+                                                        <input type="text" class="date-part day" placeholder="DD" maxlength="2" value="${d ? d.format('DD') : ''}">
+                                                    </div>
+                                                `;
+                    })()}
+                                                <button type="button" class="dep-toggle-btn ${endDepVisible ? 'active' : ''}" 
+                                                        onclick="app.toggleChecklistDepUI('end', ${index}, event)" 
+                                                        title="設定時間依存">
+                                                    <i data-lucide="link" style="width:14px; height:14px;"></i>
+                                                </button>
+                                            </div>
+                                            <!-- End Dep UI -->
+                                            <div class="dependency-settings" style="display: ${endDepVisible ? 'block' : 'none'}; margin-top:8px;">
+                                                <div style="margin-bottom:6px;">
+                                                    <select style="width:100%; font-size:12px; height:30px; border-radius:6px; border:1px solid #e2e8f0;" onchange="app.updateChecklistItemDep(${index}, 'end', 'targetId', this.value)">
+                                                        <option value="">(無)</option>
+                                                        ${ProJED.Data.getAllSelectableItems(cl.id).map(si => `<option value="${si.id}" ${si.id === cl.endDependency?.targetId ? 'selected' : ''}>${si.title}</option>`).join('')}
+                                                    </select>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:6px;">
+                                                    <button type="button" class="action-btn-outline" 
+                                                            style="padding:0; width:30px; height:30px; display:flex; align-items:center; justify-content:center; flex-shrink:0;"
+                                                            onclick="app.startPickingForChecklist(${index}, 'end')" title="從看板中選取">
+                                                        <i data-lucide="mouse-pointer-2" style="width:12px; height:12px;"></i>
+                                                    </button>
+                                                    <select style="font-size:11px; height:30px; border-radius:6px; border:1px solid #e2e8f0; flex:1; min-width:0;" onchange="app.updateChecklistItemDep(${index}, 'end', 'type', this.value)">
+                                                        <option value="start" ${cl.endDependency?.type === 'start' ? 'selected' : ''}>起始</option>
+                                                        <option value="end" ${cl.endDependency?.type === 'end' ? 'selected' : ''}>結束</option>
+                                                    </select>
+                                                    <input type="number" style="width:45px; font-size:11px; height:30px; border-radius:6px; border:1px solid #e2e8f0; text-align:center;" value="${cl.endDependency?.offset || 0}" onchange="app.updateChecklistItemDep(${index}, 'end', 'offset', parseInt(this.value))">
+                                                    <span style="font-size:11px; color:#64748b;">天</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="popover-section">
                                      <button class="action-btn-outline" 
-                                             style="width:100%; justify-content:center; margin-bottom:8px;"
-                                             onclick="app.toggleGanttVisibility('checklist', '${cl.id}', '${listId}', '${cardId}')">
-                                        <i data-lucide="${isHidden ? 'eye-off' : 'eye'}"></i>
-                                        <span>${isHidden ? '在庫存中顯示' : '在庫存中隱藏'}</span>
+                                              style="width:100%; justify-content:center; margin-bottom:8px;"
+                                              onclick="app.toggleGanttVisibility('checklist', '${cl.id}', '${listId}', '${cardId}')">
+                                         <i data-lucide="${isHidden ? 'eye-off' : 'eye'}"></i>
+                                         <span>${isHidden ? '在庫存中顯示' : '在庫存中隱藏'}</span>
+                                      </button>
+                                 </div>
+                                 <div class="cl-popover-footer">
+                                     <button class="delete-btn" onclick="app.removeChecklistItemUI(${index}, event)">
+                                         <i data-lucide="trash-2"></i> 刪除
                                      </button>
-                                </div>
-                                <button class="cl-delete-full-btn" onclick="app.removeChecklistItemUI(${index})">
-                                    <i data-lucide="trash-2" style="width:14px; height:14px;"></i> 刪除此項目
-                                </button>
-                            </div>
-                        </div>
-                    </div>`;
+                                     <button class="save-btn" onclick="app.closeChecklistMenu(this, ${index}, event)">
+                                         儲存
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>`;
                 container.appendChild(row);
             });
             if (window.lucide) lucide.createIcons();
+            ProJED.UI.setupDateInputs(container); // 為新生成的輸入框綁定事件
 
             // Re-attach listener if menu is open
             if (openMenuIndex !== -1) {
-                const rows = container.getElementsByClassName('checklist-item-row');
-                if (rows[openMenuIndex]) {
-                    const btn = rows[openMenuIndex].querySelector('.cl-more-btn');
-                    const popover = rows[openMenuIndex].querySelector('.cl-item-popover');
-                    if (btn && popover) {
-                        const closeMenu = (e) => {
-                            if (!popover.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
-                                popover.classList.remove('active');
-                                document.removeEventListener('click', closeMenu);
-                            }
-                        };
-                        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+                if (this.currentClCloseMenu) document.removeEventListener('click', this.currentClCloseMenu);
+                this.currentClCloseMenu = (e) => {
+                    const popover = container.querySelector('.cl-item-popover.active');
+                    // 更強健的檢查：只要點擊目標在 popover 內、或是在更多按鈕內，就不關閉
+                    if (popover && !e.target.closest('.cl-item-popover') && !e.target.closest('.cl-more-btn')) {
+                        popover.classList.remove('active');
+                        if (ProJED.state.activeChecklistIndex === openMenuIndex) {
+                            ProJED.state.activeChecklistIndex = -1;
+                            ProJED.state.activeChecklistStartDepIdx = -1;
+                            ProJED.state.activeChecklistEndDepIdx = -1;
+                        }
+                        document.removeEventListener('click', this.currentClCloseMenu);
+                        this.currentClCloseMenu = null;
                     }
-                }
+                };
+                setTimeout(() => document.addEventListener('click', this.currentClCloseMenu), 0);
             }
         },
 
@@ -1786,7 +1850,46 @@ const ProJED = {
                     delete item.endDependency;
                 }
 
+                // 統整讀取待辦清單 (因改為手動儲存)
+                if (type === 'card' && item.checklists) {
+                    const rows = document.querySelectorAll('.checklist-item-row');
+                    rows.forEach((row, idx) => {
+                        const cl = item.checklists[idx];
+                        if (cl) {
+                            cl.title = row.querySelector('.cl-title-input').value;
+
+                            const getClDate = (target) => {
+                                const w = row.querySelector(`.split-date-input[data-cl-target="${target}"]`);
+                                if (!w) return "";
+                                const y = w.querySelector('.year').value.trim();
+                                const m = w.querySelector('.month').value.trim();
+                                const d = w.querySelector('.day').value.trim();
+                                if (!y && !m && !d) return "";
+                                return `${y}-${m}-${d}`;
+                            };
+
+                            const clStart = getClDate('start');
+                            const clEnd = getClDate('end');
+
+                            if (clStart) {
+                                const vStart = ProJED.UI.validateAndFixDate(clStart, `待辦「${cl.title}」起始日`);
+                                if (vStart !== false) cl.startDate = vStart;
+                            } else {
+                                cl.startDate = "";
+                            }
+
+                            if (clEnd) {
+                                const vEnd = ProJED.UI.validateAndFixDate(clEnd, `待辦「${cl.title}」到期日`);
+                                if (vEnd !== false) cl.endDate = vEnd;
+                            } else {
+                                cl.endDate = "";
+                            }
+                        }
+                    });
+                }
+
                 ProJED.Data.save();
+                this.saved = true;
                 this.close();
             } else {
                 console.error("❌ 儲存失敗：找不到項目。");
@@ -1803,19 +1906,48 @@ const ProJED = {
                 if (card) card.checklists = card.checklists.filter(cl => cl.id !== itemId);
             }
             ProJED.Data.save();
+            this.saved = true;
             this.close();
         },
         close() {
+            if (!this.saved && ProJED.state.editingItem) {
+                // 捨棄修改：從 LocalStorage 重新載入最後一次存檔的內容
+                ProJED.Data.load();
+                ProJED.renderActiveView();
+                ProJED.UI.showToast("已捨棄未儲存的變更");
+            }
+            this.saved = false;
             ProJED.state.editingItem = null;
             ProJED.state.activeChecklistIndex = -1;
-            ProJED.state.activeChecklistDepIndex = -1;
+            ProJED.state.activeChecklistStartDepIdx = -1;
+            ProJED.state.activeChecklistEndDepIdx = -1;
+            // 通知使用者變更已捨棄 (如果是手動關閉的話)
             document.getElementById('modal-overlay').style.display = 'none';
         }
     },
 
     History: {
-        push() { const s = JSON.parse(JSON.stringify(ProJED.state.lists)); ProJED.state.history.push(s); if (ProJED.state.history.length > 50) ProJED.state.history.shift(); },
-        undo() { if (ProJED.state.history.length === 0) return; ProJED.state.lists = ProJED.state.history.pop(); ProJED.Data.save(false); }
+        push() {
+            const s = JSON.parse(JSON.stringify(ProJED.state.lists));
+            ProJED.state.history.push(s);
+            if (ProJED.state.history.length > 50) ProJED.state.history.shift();
+            ProJED.state.redoStack = [];
+        },
+        undo() {
+            if (ProJED.state.history.length === 0) return;
+            const currentState = JSON.parse(JSON.stringify(ProJED.state.lists));
+            ProJED.state.redoStack.push(currentState);
+            ProJED.state.lists = ProJED.state.history.pop();
+            ProJED.Data.save(false);
+        },
+        redo() {
+            if (ProJED.state.redoStack.length === 0) return;
+            const nextState = ProJED.state.redoStack.pop();
+            const currentState = JSON.parse(JSON.stringify(ProJED.state.lists));
+            ProJED.state.history.push(currentState);
+            ProJED.state.lists = nextState;
+            ProJED.Data.save(false);
+        }
     },
 
     renderActiveView() {
@@ -1829,7 +1961,8 @@ const ProJED = {
         const s = document.getElementById('modal-save'), d = document.getElementById('modal-delete'), o = document.getElementById('modal-overlay');
         if (s) s.onclick = () => this.Modal.save();
         if (d) d.onclick = () => this.Modal.delete();
-        if (o) o.onmousedown = (e) => { if (e.target === o) this.Modal.close(); };
+        // 移除點擊外部關閉的功能，防止誤觸導致資料遺失 (配合手動儲存邏輯)
+        // if (o) o.onmousedown = (e) => { if (e.target === o) this.Modal.close(); };
 
         document.querySelectorAll('.filter-controls input').forEach(input => input.onchange = (e) => { ProJED.state.ganttFilters[e.target.dataset.level] = e.target.checked; if (ProJED.state.currentView === 'gantt') ProJED.Gantt.render(); });
 
@@ -1841,6 +1974,8 @@ const ProJED = {
             }
             // Ctrl/Meta + Z 復原
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); this.History.undo(); }
+            // Ctrl/Meta + Y 取消復原
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); this.History.redo(); }
         };
 
         // Global click for selection mode
@@ -1944,11 +2079,13 @@ window.app = {
 
         // 點擊外部關閉選單
         const closeMenu = (e) => {
-            if (!popover.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+            // 使用 closest 檢查，避免 re-render 導致的 DOM 節點失效問題
+            if (!e.target.closest('.cl-item-popover') && !e.target.closest('.cl-more-btn')) {
                 popover.classList.remove('active');
                 if (ProJED.state.activeChecklistIndex === index) {
                     ProJED.state.activeChecklistIndex = -1;
-                    ProJED.state.activeChecklistDepIndex = -1;
+                    ProJED.state.activeChecklistStartDepIdx = -1;
+                    ProJED.state.activeChecklistEndDepIdx = -1;
                 }
                 document.removeEventListener('click', closeMenu);
             }
@@ -2000,38 +2137,49 @@ window.app = {
 
         if (!cl[key].targetId) delete cl[key];
 
-        ProJED.Data.save();
         ProJED.Modal.renderChecklistItems(card.checklists, index);
     },
 
-    toggleChecklistDepUI: (btn, index) => { // Toggle visibility of dep section in cl popover
-        if (ProJED.state.activeChecklistDepIndex === index) {
-            ProJED.state.activeChecklistDepIndex = -1;
+    toggleChecklistDepUI: (target, index, event) => { // Toggle visibility of dep section in cl popover
+        if (event) event.stopPropagation();
+        const key = target === 'start' ? 'activeChecklistStartDepIdx' : 'activeChecklistEndDepIdx';
+        if (ProJED.state[key] === index) {
+            ProJED.state[key] = -1;
         } else {
-            ProJED.state.activeChecklistDepIndex = index;
+            ProJED.state[key] = index;
         }
 
         // 為了即時反應 UI，我們直接重新渲染一次 Checklist 而不呼叫 save (避免存檔卡頓)
         const { listId, cardId } = ProJED.state.editingItem;
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (card) {
-            ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex, ProJED.state.activeChecklistDepIndex);
+            ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex);
         }
     },
 
-    removeChecklistItemUI: (index) => {
+    toggleChecklistItemDone: (index) => {
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (card && card.checklists[index]) {
+            const current = card.checklists[index].status;
+            card.checklists[index].status = current === 'completed' ? 'todo' : 'completed';
+            ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex);
+        }
+    },
+
+    removeChecklistItemUI: (index, event) => {
+        if (event) event.stopPropagation();
         const { listId, cardId } = ProJED.state.editingItem;
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (card) {
             card.checklists.splice(index, 1);
-            ProJED.Data.save();
             ProJED.Modal.renderChecklistItems(card.checklists);
         }
     },
 
     toggleShowCompletedCL: () => {
         ProJED.state.showCompletedCL = !ProJED.state.showCompletedCL;
-        ProJED.Data.save(false);
+        // 改為即時 UI 反饋但不存檔 (由 Modal Save 統一處理)
         const { listId, cardId } = ProJED.state.editingItem;
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (card) ProJED.Modal.renderChecklistItems(card.checklists);
@@ -2043,8 +2191,18 @@ window.app = {
         if (card) {
             if (!card.checklists) card.checklists = [];
             card.checklists.push({ id: 'cl_' + Date.now(), title: '', status: 'todo' });
-            ProJED.Data.save();
             ProJED.Modal.renderChecklistItems(card.checklists);
+        }
+    },
+
+    closeChecklistMenu: (btn, index, event) => {
+        if (event) event.stopPropagation();
+        const popover = btn.closest('.cl-item-popover');
+        if (popover) {
+            popover.classList.remove('active');
+            ProJED.state.activeChecklistIndex = -1;
+            ProJED.state.activeChecklistStartDepIdx = -1;
+            ProJED.state.activeChecklistEndDepIdx = -1;
         }
     },
 
@@ -2053,11 +2211,8 @@ window.app = {
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (card && card.checklists[index]) {
             card.checklists[index][field] = value;
-            ProJED.Data.save();
-            if (field === 'status' || field === 'startDate' || field === 'endDate') {
-                ProJED.Modal.renderChecklistItems(card.checklists, index); // Keep menu open if possible, but status usually closes it
-                // Actually updateChecklistItem is called by input onchange and status clicks.
-                // Status click re-renders to update color/checked state.
+            if (field === 'status') {
+                ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex);
             }
         }
     },
@@ -2074,7 +2229,9 @@ window.app = {
             ProJED.Google.syncAll(true);
         }
     },
-    cleanupGoogleCalendar: () => { ProJED.Google.clearAll(); }
+    cleanupGoogleCalendar: () => { ProJED.Google.clearAll(); },
+    undo: () => ProJED.History.undo(),
+    redo: () => ProJED.History.redo()
 };
 
 
