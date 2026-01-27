@@ -39,7 +39,9 @@ const ProJED = {
         },
         ganttInitialized: false,
         boardName: '專案看板',
-        showCompletedCL: false
+        showCompletedCL: false,
+        activeChecklistIndex: -1,
+        activeChecklistDepIndex: -1
     },
 
     GRID_START: dayjs('2024-01-01'),
@@ -1520,7 +1522,7 @@ const ProJED = {
             if (type === 'card') {
                 clSection.style.display = 'block';
                 if (notesSection) notesSection.style.display = 'block';
-                this.renderChecklistItems(item.checklists || []);
+                this.renderChecklistItems(item.checklists || [], ProJED.state.activeChecklistIndex, ProJED.state.activeChecklistDepIndex);
             } else {
                 clSection.style.display = 'none';
                 if (notesSection) notesSection.style.display = 'none';
@@ -1571,7 +1573,7 @@ const ProJED = {
                 if (endToggle) endToggle.classList.remove('active');
             }
         },
-        renderChecklistItems(cls, openMenuIndex = -1) {
+        renderChecklistItems(cls, openMenuIndex = -1, openDepIndex = -1) {
             const container = document.getElementById('checklist-items-container');
             container.innerHTML = '';
             const { listId, cardId } = ProJED.state.editingItem;
@@ -1651,7 +1653,7 @@ const ProJED = {
                                         <i data-lucide="link" style="width:14px; height:14px;"></i>
                                         <span>設定依存</span>
                                     </button>
-                                    <div class="cl-item-dep-section" style="display: ${(cl.startDependency?.targetId || cl.endDependency?.targetId) ? 'block' : 'none'};">
+                                    <div class="cl-item-dep-section" style="display: ${(cl.startDependency?.targetId || cl.endDependency?.targetId || index === openDepIndex) ? 'block' : 'none'};">
                                         <div class="input-group" style="margin-bottom:8px;">
                                             <label style="font-size:11px;">起始依存於</label>
                                             <select style="width:100%; font-size:12px; padding:4px;" onchange="app.updateChecklistItemDep(${index}, 'start', 'targetId', this.value)">
@@ -1803,7 +1805,12 @@ const ProJED = {
             ProJED.Data.save();
             this.close();
         },
-        close() { ProJED.state.editingItem = null; document.getElementById('modal-overlay').style.display = 'none'; }
+        close() {
+            ProJED.state.editingItem = null;
+            ProJED.state.activeChecklistIndex = -1;
+            ProJED.state.activeChecklistDepIndex = -1;
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
     },
 
     History: {
@@ -1914,15 +1921,35 @@ window.app = {
         });
     },
     toggleChecklistMenu: (btn) => {
+        // 從 DOM 結構向上查找 index (在 renderChecklistItems 裡，這裡是放在 checklist-items-container 的子層)
+        const row = btn.closest('.checklist-item-row');
+        if (!row) return;
+
+        // 取得該列在容器中的索引
+        const container = document.getElementById('checklist-items-container');
+        const rows = Array.from(container.getElementsByClassName('checklist-item-row'));
+        const index = rows.indexOf(row);
+
         const popover = btn.nextElementSibling;
         const isActive = popover.classList.contains('active');
+
         document.querySelectorAll('.cl-item-popover').forEach(p => p.classList.remove('active'));
-        if (!isActive) popover.classList.add('active');
+
+        if (!isActive) {
+            popover.classList.add('active');
+            ProJED.state.activeChecklistIndex = index;
+        } else {
+            ProJED.state.activeChecklistIndex = -1;
+        }
 
         // 點擊外部關閉選單
         const closeMenu = (e) => {
             if (!popover.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
                 popover.classList.remove('active');
+                if (ProJED.state.activeChecklistIndex === index) {
+                    ProJED.state.activeChecklistIndex = -1;
+                    ProJED.state.activeChecklistDepIndex = -1;
+                }
                 document.removeEventListener('click', closeMenu);
             }
         };
@@ -1978,9 +2005,17 @@ window.app = {
     },
 
     toggleChecklistDepUI: (btn, index) => { // Toggle visibility of dep section in cl popover
-        const container = btn.nextElementSibling;
-        if (container) {
-            container.style.display = container.style.display === 'none' ? 'block' : 'none';
+        if (ProJED.state.activeChecklistDepIndex === index) {
+            ProJED.state.activeChecklistDepIndex = -1;
+        } else {
+            ProJED.state.activeChecklistDepIndex = index;
+        }
+
+        // 為了即時反應 UI，我們直接重新渲染一次 Checklist 而不呼叫 save (避免存檔卡頓)
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (card) {
+            ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex, ProJED.state.activeChecklistDepIndex);
         }
     },
 

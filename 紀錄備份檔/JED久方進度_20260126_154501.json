@@ -1,0 +1,561 @@
+[
+  {
+    "endDate": "2027-03-09",
+    "startDate": "2025-03-09",
+    "cards": [
+      {
+        "endDate": "2026-09-09",
+        "title": "具音頻Bipolar專利",
+        "notes": "",
+        "id": "c1768815829499",
+        "checklists": [
+          {
+            "title": "申請送件",
+            "startDate": "",
+            "id": "cl1768815890564",
+            "endDate": "2025-07-31",
+            "status": "completed",
+            "ganttVisible": true
+          },
+          {
+            "endDate": "2026-07-01",
+            "title": "審查等待(約1年)",
+            "ganttVisible": true,
+            "id": "cl1768815910260",
+            "startDate": "2025-07-01",
+            "status": "todo"
+          },
+          {
+            "ganttVisible": true,
+            "endDependency": {
+              "targetId": "cl1768980961848",
+              "offset": 60,
+              "type": "start"
+            },
+            "startDependency": {
+              "type": "end",
+              "offset": 1,
+              "targetId": "cl1768815910260"
+            },
+            "startDate": "2026-07-02",
+            "title": "答辯(不一定發生)",
+            "endDate": "2026-08-31",
+            "id": "cl1768980961848",
+            "status": "todo"
+          },
+          {
+            "status": "todo",
+            "endDate": "2026-09-01",
+            "endDependency": {
+              "type": "end",
+              "offset": 1,
+              "targetId": "cl1768980961848"
+            },
+            "startDate": "2026-09-01",
+            "title": "取證",
+            "id": "cl_1769408309382"
+          }
+        ],
+        "ganttVisible": true,
+        "status": "todo",
+        "startDate": "2025-04-01"
+      },
+      {
+        "startDate": "2025-03-09",
+        "checklists": [
+          {
+            "title": "重新撰寫發明資料",
+            "text": "重新撰寫發明資料",
+            "status": "completed",
+            "endDate": "2025-07-31",
+            "ganttVisible": false,
+            "startDate": "",
+            "id": "cl-1",
+            "completed": true,
+            "showInGantt": true
+          },
+          {
+            "text": "取得說明書初稿",
+            "startDate": "",
+            "title": "取得說明書初稿",
+            "endDate": "2025-11-01",
+            "id": "cl-2",
+            "status": "completed",
+            "completed": true,
+            "ganttVisible": false
+          },
+          {
+            "id": "cl-1768184256637",
+            "title": "申請送件",
+            "completed": true,
+            "text": "專利申請送件",
+            "startDate": "",
+            "endDate": "2025-12-15",
+            "status": "completed",
+            "ganttVisible": true
+          },
+          {
+            "ganttVisible": true,
+            "startDate": "2025-12-17",
+            "id": "cl1768815650565",
+            "endDate": "2026-12-17",
+            "status": "todo",
+            "title": "審查等待(約1年)"
+          },
+          {
+            "startDate": "2026-12-18",
+            "ganttVisible": true,
+            "notes": "",
+            "id": "cl1768962289262",
+            "endDate": "2027-02-16",
+            "status": "unsure",
+            "title": "答辯(不一定發生)",
+            "startDependency": {
+              "targetId": "cl1768815650565",
+              "offset": 1,
+              "type": "end"
+            }
+          },
+          {
+            "status": "todo",
+            "endDate": "2027-02-17",
+            "title": "取證",
+            "endDependency": {
+              "offset": 1,
+              "type": "end",
+              "targetId": "cl1768962289262"
+            },
+            "startDate": "",
+            "ganttVisible": true,
+            "id": "cl1768980231876"
+          }
+        ],
+        "ganttVisible": true,
+        "status": "todo",
+        "notes": "",
+        "endDate": "2027-03-09",
+        "title": "可選擇能量供應方式的手術刀",
+        "id": "card-1"
+      },
+      {
+        "id": "card-1768185244118",
+        "startDate": "2025-06-09",
+        "status": "todo",
+        "endDate": "2027-03-09",
+        "ganttVisible": true,
+        "title": "手術器械及其振幅控制方法",
+        "notes": "",
+        "checklists": [
+          {
+            "id": "cl-1768185290759",
+            "endDate": "2025-08-31",
+            "completed": true,
+            "status": "completed",
+            "startDate": "",
+            "text": "完成專利提案單",
+            "title": "完成提案單"
+          },
+          {
+            "status": "completed",
+            "title": "內部核准",
+            "endDate": "",
+            "text": "內部核准",
+            "completed": true,
+            "startDate": "",
+            "ganttVisible": false,
+            "id": "cl-1768185323564"
+          },
+          {
+            "id": "cl-1768185353407",
+            "title": "取得說明書初稿",
+            "text": "取得說明書初稿",
+            "completed": true,
+            "startDate": "",
+            "endDate": "2025-11-15",
+            "ganttVisible": false,
+            "status": "completed"
+          },
+          {
+            "status": "completed",
+            "ganttVisible": false,
+            "endDate": "2025-12-25",
+            "id": "cl-1768185386265",
+            "completed": true,
+            "title": "申請送件",
+            "startDate": "",
+            "text": "專利申請送件"
+          },
+          {
+            "status": "todo",
+            "startDate": "2025-12-25",
+            "title": "審查等待(約1年)",
+            "ganttVisible": true,
+            "endDate": "2026-12-25",
+            "id": "cl1768815785654"
+          },
+          {
+            "endDate": "2027-02-24",
+            "id": "cl_1769408487979",
+            "status": "todo",
+            "startDependency": {
+              "type": "end",
+              "targetId": "cl1768815785654",
+              "offset": 1
+            },
+            "startDate": "2026-12-26",
+            "title": "答辯(不一定發生)",
+            "endDependency": {
+              "offset": 60,
+              "targetId": "cl_1769408487979",
+              "type": "start"
+            }
+          },
+          {
+            "endDependency": {
+              "offset": 1,
+              "type": "end",
+              "targetId": "cl_1769408487979"
+            },
+            "startDate": "2026-12-26",
+            "title": "取證",
+            "id": "cl_1769408578031",
+            "status": "todo",
+            "endDate": "2027-02-25"
+          }
+        ]
+      }
+    ],
+    "title": "專利申請(跨研究案)",
+    "lastSyncedData": {
+      "date": "2026-01-01",
+      "title": "專利申請(跨研究案)"
+    },
+    "googleEventId": "c16mmjfieu7o44gn7t8tp69pk4",
+    "id": "list-1",
+    "status": "todo",
+    "ganttVisible": true
+  },
+  {
+    "title": "超音波內芯技術研究(久方)",
+    "id": "l1768814456358",
+    "ganttVisible": true,
+    "endDate": "2026-07-31",
+    "status": "todo",
+    "startDate": "2025-01-01",
+    "cards": [
+      {
+        "endDate": "2026-07-31",
+        "title": "G2內芯優化",
+        "startDate": "2025-04-01",
+        "status": "todo",
+        "notes": "",
+        "id": "c1768814457828",
+        "ganttVisible": true,
+        "checklists": [
+          {
+            "startDate": "",
+            "notes": "",
+            "status": "todo",
+            "endDate": "2026-01-30",
+            "ganttVisible": true,
+            "id": "cl1768814481537",
+            "title": "優化版V3版內芯打樣完成"
+          },
+          {
+            "notes": "",
+            "endDate": "2026-03-01",
+            "startDate": "2025-12-31",
+            "ganttVisible": true,
+            "status": "todo",
+            "id": "cl1768814547312",
+            "title": "所有內芯測試完成"
+          },
+          {
+            "status": "todo",
+            "endDate": "2026-04-01",
+            "notes": "",
+            "startDate": "2026-03-02",
+            "id": "cl_1769409020660",
+            "startDependency": {
+              "type": "end",
+              "targetId": "cl1768814547312",
+              "offset": 1
+            },
+            "title": "導入方式評估完成",
+            "endDependency": {
+              "targetId": "cl_1769409020660",
+              "type": "start",
+              "offset": 30
+            }
+          }
+        ]
+      },
+      {
+        "ganttVisible": true,
+        "checklists": [
+          {
+            "endDate": "2025-04-30",
+            "startDate": "",
+            "ganttVisible": true,
+            "id": "cl1768814923220",
+            "status": "unsure",
+            "title": "化拋第二階段計畫"
+          },
+          {
+            "endDate": "2025-06-30",
+            "title": "化拋第二階段測試完成",
+            "startDate": "",
+            "id": "cl1768814939060",
+            "ganttVisible": true,
+            "status": "unsure"
+          },
+          {
+            "startDate": "",
+            "id": "cl1768814985448",
+            "title": "結案",
+            "status": "unsure",
+            "ganttVisible": true,
+            "endDate": "2025-07-04"
+          }
+        ],
+        "id": "c1768814873615",
+        "title": "斷刀率優化",
+        "status": "unsure",
+        "startDate": "2025-01-01",
+        "endDate": "2025-07-04"
+      },
+      {
+        "startDate": "2025-01-01",
+        "notes": "",
+        "id": "c1769411073877",
+        "endDate": "2025-12-31",
+        "checklists": [
+          {
+            "startDate": "2025-06-01",
+            "endDate": "2025-12-31",
+            "status": "completed",
+            "id": "cl_1769411102625",
+            "title": "技轉成專利申請案"
+          }
+        ],
+        "title": "組合式刀頭研究",
+        "ganttVisible": true,
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "status": "todo",
+    "endDate": "2026-12-01",
+    "startDate": "2024-11-30",
+    "id": "list-1768794035310",
+    "title": "超音波內芯技術研究(台科大)",
+    "cards": [
+      {
+        "startDate": "2024-11-30",
+        "checklists": [
+          {
+            "notes": "",
+            "endDate": "2025-11-30",
+            "startDate": "2024-12-01",
+            "status": "completed",
+            "title": "震動穩定性研究",
+            "id": "cl_1769412093129"
+          },
+          {
+            "startDate": "2024-11-30",
+            "notes": "",
+            "title": "組合式刀頭研究",
+            "endDate": "2025-12-01",
+            "id": "cl_1769412094073",
+            "status": "completed"
+          }
+        ],
+        "ganttVisible": true,
+        "notes": "",
+        "title": "2025產學合作",
+        "status": "completed",
+        "endDate": "2025-12-01",
+        "id": "c1768813595948"
+      },
+      {
+        "notes": "",
+        "checklists": [
+          {
+            "endDependency": {
+              "offset": 0,
+              "targetId": "c1769411477475",
+              "type": "end"
+            },
+            "id": "cl_1769412468947",
+            "title": "震動穩定性研究",
+            "startDependency": {
+              "type": "start",
+              "targetId": "c1769411477475",
+              "offset": 0
+            },
+            "status": "todo",
+            "endDate": "2026-11-30",
+            "startDate": "2025-12-01"
+          },
+          {
+            "startDate": "2025-12-01",
+            "id": "cl_1769412509327",
+            "title": "組合式刀頭研究",
+            "endDate": "2026-11-30",
+            "endDependency": {
+              "type": "end",
+              "targetId": "c1769411477475",
+              "offset": 0
+            },
+            "status": "todo",
+            "startDependency": {
+              "type": "start",
+              "targetId": "c1769411477475",
+              "offset": 0
+            }
+          },
+          {
+            "startDate": "2025-09-01",
+            "title": "震盪子模擬",
+            "id": "cl_1769412555572",
+            "status": "todo",
+            "endDependency": {
+              "offset": 0,
+              "type": "end",
+              "targetId": "c1769411477475"
+            },
+            "endDate": "2026-11-30"
+          },
+          {
+            "endDate": "2026-11-30",
+            "startDependency": {
+              "type": "start",
+              "targetId": "c1769411477475",
+              "offset": 0
+            },
+            "title": "48長超音波刀打樣",
+            "status": "todo",
+            "endDependency": {
+              "offset": 0,
+              "targetId": "c1769411477475",
+              "type": "end"
+            },
+            "id": "cl_1769412593177",
+            "startDate": "2025-12-01"
+          }
+        ],
+        "status": "todo",
+        "endDate": "2026-11-30",
+        "startDate": "2025-12-01",
+        "ganttVisible": true,
+        "id": "c1769411477475",
+        "title": "2026產學合作"
+      }
+    ]
+  },
+  {
+    "startDate": "2023-07-01",
+    "endDate": "2026-07-31",
+    "ganttVisible": true,
+    "status": "todo",
+    "cards": [
+      {
+        "ganttVisible": true,
+        "title": "追頻技術文獻資料庫建立",
+        "id": "card-1768358419537",
+        "endDate": "2026-07-01",
+        "checklists": [
+          {
+            "status": "completed",
+            "endDate": "2026-01-01",
+            "id": "cl1768812734076",
+            "notes": "",
+            "ganttVisible": true,
+            "title": "論文文獻閱讀",
+            "startDate": "2024-01-01"
+          },
+          {
+            "endDependency": {
+              "offset": 100,
+              "targetId": "cl1768812735538",
+              "type": "start"
+            },
+            "ganttVisible": true,
+            "endDate": "2026-04-12",
+            "startDate": "2026-01-02",
+            "notes": "",
+            "title": "AI文獻資料庫建立",
+            "startDependency": {
+              "targetId": "cl1768812734076",
+              "type": "end",
+              "offset": 1
+            },
+            "id": "cl1768812735538",
+            "status": "todo"
+          },
+          {
+            "ganttVisible": true,
+            "status": "todo",
+            "id": "cl1768961791133",
+            "title": "資料庫使用教學",
+            "startDate": "2026-04-12",
+            "endDate": "2026-07-01",
+            "endDependency": {
+              "type": "end",
+              "offset": 0,
+              "targetId": "card-1768358419537"
+            },
+            "startDependency": {
+              "type": "end",
+              "offset": 0,
+              "targetId": "cl1768812735538"
+            },
+            "notes": ""
+          }
+        ],
+        "startDate": "2023-07-01",
+        "status": "todo"
+      },
+      {
+        "id": "card-1768358678065",
+        "ganttVisible": true,
+        "status": "completed",
+        "startDate": "2024-12-31",
+        "title": "紅燈保護機制放寬",
+        "checklists": [
+          {
+            "id": "cl1768813230872",
+            "startDate": "",
+            "ganttVisible": true,
+            "status": "completed",
+            "endDate": "2025-03-06",
+            "title": "測試記錄完成"
+          }
+        ],
+        "endDate": "2025-12-31"
+      },
+      {
+        "ganttVisible": true,
+        "endDate": "2025-12-31",
+        "id": "card-1768358731592",
+        "status": "completed",
+        "checklists": [
+          {
+            "id": "cl-1768358807269",
+            "endDate": "2025-12-04",
+            "status": "completed",
+            "completed": true,
+            "text": "內芯+震盪子模擬",
+            "startDate": "",
+            "title": "內芯震盪子模擬技術"
+          }
+        ],
+        "startDate": "2024-07-15",
+        "title": "CAE模擬技術提升"
+      }
+    ],
+    "id": "list-1768183660242",
+    "title": "主機電池研究案"
+  }
+]
