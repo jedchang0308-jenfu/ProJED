@@ -1896,3 +1896,33 @@ body {
         transform: translateY(0);
     }
 }
+
+/* Checklist Sortable Styles */
+.cl-drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    margin-right: 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.checklist-item-row:hover .cl-drag-handle {
+    opacity: 1;
+}
+
+.checklist-item-row.sortable-ghost {
+    background: var(--bg-main);
+    opacity: 0.5;
+    border: 1px dashed var(--border);
+}
+
+.checklist-item-row.sortable-drag {
+    background: var(--bg-surface);
+    opacity: 1;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--primary);
+}

@@ -905,6 +905,31 @@ const ProJED = {
                 });
                 this.cardSortables.push(s);
             });
+
+            // 3. 待辦清單拖拽
+            const clContainer = document.getElementById('checklist-items-container');
+            if (clContainer) {
+                if (this.checklistSortable) this.checklistSortable.destroy();
+                this.checklistSortable = Sortable.create(clContainer, {
+                    group: 'shared-checklists', // 支援跨容器 (雖然目前主要在 Modal)
+                    animation: 150,
+                    handle: '.cl-drag-handle', // 透過標題旁的把手拖動
+                    forceFallback: true,
+                    fallbackOnBody: true,
+                    fallbackTolerance: 5,
+                    onEnd: () => {
+                        const { listId, cardId } = ProJED.state.editingItem || {};
+                        if (!listId || !cardId) return;
+                        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+                        if (card) {
+                            const newOrderIds = Array.from(clContainer.children).map(el => el.dataset.id);
+                            const itemMap = new Map(card.checklists.map(cl => [cl.id, cl]));
+                            card.checklists = newOrderIds.map(id => itemMap.get(id)).filter(Boolean);
+                            ProJED.Data.save(true);
+                        }
+                    }
+                });
+            }
         },
         syncStateFromDOM() {
             const cardMap = new Map();
@@ -1628,8 +1653,12 @@ const ProJED = {
                     }
                 }
 
+
                 const row = document.createElement('div');
                 row.className = `checklist-item-row ${isCompleted ? 'is-completed' : ''}`;
+                // 設為 selection-candidate 讓它也支援選擇模式 (雖然目前主要用於 delete/edit，這邊加強識別)
+                row.dataset.id = cl.id; // 用於 Sortable 識別
+
                 const finalDisplayStatus = ((cl.title || cl.name || '').includes('答辯') && displayStatus === 'todo') ? 'unsure' : displayStatus;
                 const isHidden = cl.ganttVisible === false;
                 const isMenuOpen = index === openMenuIndex;
@@ -1642,6 +1671,9 @@ const ProJED = {
                         ${displayStatus === 'completed' ? '<i data-lucide="check" style="width:14px; height:14px;"></i>' : ''}
                     </div>
                     <div class="cl-main-row" style="display:flex; align-items:center; gap:8px; flex:1;">
+                        <div class="cl-drag-handle" title="拖動排序">
+                            <i data-lucide="grip-vertical" style="width:14px; height:14px;"></i>
+                        </div>
                         <input type="text" class="cl-title-input status-${finalDisplayStatus}" value="${cl.title || cl.name || ''}" placeholder="待辦名稱" onchange="app.updateChecklistItem(${index}, 'title', this.value)">
                         
                         ${dateBadgeHtml}
