@@ -710,6 +710,16 @@ const ProJED = {
                         }
                     });
 
+                    // 新增：失去焦點時嘗試同步日期並儲存
+                    input.addEventListener('blur', () => {
+                        if (wrapper.id === 'start-date-wrapper' || wrapper.id === 'end-date-wrapper') {
+                            app.syncModalDates();
+                        } else if (wrapper.dataset.clIdx !== undefined) {
+                            // 待辦項目的日期
+                            app.syncChecklistDates(parseInt(wrapper.dataset.clIdx));
+                        }
+                    });
+
                     // 鍵盤導航 (方向鍵與 Backspace)
                     input.addEventListener('keydown', (e) => {
                         if (e.key === 'ArrowRight') {
@@ -1756,8 +1766,8 @@ const ProJED = {
                                      <button class="delete-btn" onclick="app.removeChecklistItemUI(${index}, event)">
                                          <i data-lucide="trash-2"></i> 刪除
                                      </button>
-                                     <button class="save-btn" onclick="app.closeChecklistMenu(this, ${index}, event)">
-                                         儲存
+                                     <button class="save-btn" style="background: var(--primary); color: white;" onclick="app.closeChecklistMenu(this, ${index}, event)">
+                                         關閉
                                      </button>
                                  </div>
                              </div>
@@ -1849,52 +1859,51 @@ const ProJED = {
                 } else {
                     delete item.endDependency;
                 }
-
-                // 統整讀取待辦清單 (因改為手動儲存)
-                if (type === 'card' && item.checklists) {
-                    const rows = document.querySelectorAll('.checklist-item-row');
-                    rows.forEach((row, idx) => {
-                        const cl = item.checklists[idx];
-                        if (cl) {
-                            cl.title = row.querySelector('.cl-title-input').value;
-
-                            const getClDate = (target) => {
-                                const w = row.querySelector(`.split-date-input[data-cl-target="${target}"]`);
-                                if (!w) return "";
-                                const y = w.querySelector('.year').value.trim();
-                                const m = w.querySelector('.month').value.trim();
-                                const d = w.querySelector('.day').value.trim();
-                                if (!y && !m && !d) return "";
-                                return `${y}-${m}-${d}`;
-                            };
-
-                            const clStart = getClDate('start');
-                            const clEnd = getClDate('end');
-
-                            if (clStart) {
-                                const vStart = ProJED.UI.validateAndFixDate(clStart, `待辦「${cl.title}」起始日`);
-                                if (vStart !== false) cl.startDate = vStart;
-                            } else {
-                                cl.startDate = "";
-                            }
-
-                            if (clEnd) {
-                                const vEnd = ProJED.UI.validateAndFixDate(clEnd, `待辦「${cl.title}」到期日`);
-                                if (vEnd !== false) cl.endDate = vEnd;
-                            } else {
-                                cl.endDate = "";
-                            }
-                        }
-                    });
-                }
-
                 ProJED.Data.save();
-                this.saved = true;
-                this.close();
-            } else {
-                console.error("❌ 儲存失敗：找不到項目。");
-                ProJED.UI.showToast("儲存失敗，請重試");
             }
+        },
+
+        syncModalDates() {
+            const { type, itemId, listId, cardId } = ProJED.state.editingItem;
+            const item = ProJED.Data.findItem(type, itemId, listId, cardId);
+            if (!item) return;
+
+            const getDateStr = (wrapperId) => {
+                const w = document.getElementById(wrapperId);
+                if (!w) return "";
+                const y = w.querySelector('.year').value.trim();
+                const m = w.querySelector('.month').value.trim();
+                const d = w.querySelector('.day').value.trim();
+                if (!y && !m && !d) return "";
+                return `${y}-${m}-${d}`;
+            };
+
+            const rawStart = getDateStr('start-date-wrapper');
+            const rawEnd = getDateStr('end-date-wrapper');
+
+            if (rawStart) {
+                const vStart = ProJED.UI.validateAndFixDate(rawStart, "起始日");
+                if (vStart !== false) item.startDate = vStart;
+            } else {
+                item.startDate = "";
+            }
+
+            if (rawEnd) {
+                const vEnd = ProJED.UI.validateAndFixDate(rawEnd, "到期日");
+                if (vEnd !== false) item.endDate = vEnd;
+            } else {
+                item.endDate = "";
+            }
+
+            ProJED.Data.save();
+            // 同時重新渲染，確保日期顯示正確 (例如自動修正後的日期)
+            this.refresh(type, itemId, listId, cardId);
+        },
+
+        save() {
+            // 這個 function 已經不再由按鈕觸發，但保留邏輯或直接移除
+            // 在「方案一」中，我們改用即時同步
+            this.close();
         },
         delete() {
             if (!confirm('確定刪除？')) return;
@@ -1910,18 +1919,11 @@ const ProJED = {
             this.close();
         },
         close() {
-            if (!this.saved && ProJED.state.editingItem) {
-                // 捨棄修改：從 LocalStorage 重新載入最後一次存檔的內容
-                ProJED.Data.load();
-                ProJED.renderActiveView();
-                ProJED.UI.showToast("已捨棄未儲存的變更");
-            }
             this.saved = false;
             ProJED.state.editingItem = null;
             ProJED.state.activeChecklistIndex = -1;
             ProJED.state.activeChecklistStartDepIdx = -1;
             ProJED.state.activeChecklistEndDepIdx = -1;
-            // 通知使用者變更已捨棄 (如果是手動關閉的話)
             document.getElementById('modal-overlay').style.display = 'none';
         }
     },
@@ -1958,8 +1960,7 @@ const ProJED = {
 
     initEventListeners() {
         document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => { if (btn.dataset.view === 'gantt') ProJED.state.ganttInitialized = false; this.UI.switchView(btn.dataset.view); });
-        const s = document.getElementById('modal-save'), d = document.getElementById('modal-delete'), o = document.getElementById('modal-overlay');
-        if (s) s.onclick = () => this.Modal.save();
+        const d = document.getElementById('modal-delete');
         if (d) d.onclick = () => this.Modal.delete();
         // 移除點擊外部關閉的功能，防止誤觸導致資料遺失 (配合手動儲存邏輯)
         // if (o) o.onmousedown = (e) => { if (e.target === o) this.Modal.close(); };
@@ -2041,7 +2042,68 @@ window.app = {
         a.click();
     },
     importData: (input) => { const f = input.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = (e) => { try { ProJED.state.lists = JSON.parse(e.target.result); ProJED.Data.save(); } catch (err) { alert('格式錯誤'); } }; reader.readAsText(f); },
-    selectStatusUI: (el) => { document.querySelectorAll('.status-option').forEach(o => o.classList.remove('selected')); el.classList.add('selected'); document.getElementById('item-status').value = el.dataset.value; },
+    updateItemField: (field, value) => {
+        const { type, itemId, listId, cardId } = ProJED.state.editingItem || {};
+        if (!type) return;
+        const item = ProJED.Data.findItem(type, itemId, listId, cardId);
+        if (!item) return;
+
+        if (field === 'startDependency' || field === 'endDependency') {
+            if (!item[field]) item[field] = { type: 'start', offset: 0 };
+            Object.assign(item[field], value);
+            if (!item[field].targetId) delete item[field];
+        } else {
+            item[field] = value;
+        }
+        ProJED.Data.save();
+    },
+    syncModalDates: () => ProJED.Modal.syncModalDates(),
+    syncChecklistDates: (index) => {
+        const { listId, cardId } = ProJED.state.editingItem;
+        const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
+        if (!card || !card.checklists[index]) return;
+
+        const cl = card.checklists[index];
+        const row = document.querySelectorAll('.checklist-item-row')[index];
+        if (!row) return;
+
+        const getClDate = (target) => {
+            const w = row.querySelector(`.split-date-input[data-cl-target="${target}"]`);
+            if (!w) return "";
+            const y = w.querySelector('.year').value.trim();
+            const m = w.querySelector('.month').value.trim();
+            const d = w.querySelector('.day').value.trim();
+            if (!y && !m && !d) return "";
+            return `${y}-${m}-${d}`;
+        };
+
+        const clStart = getClDate('start');
+        const clEnd = getClDate('end');
+
+        if (clStart) {
+            const vStart = ProJED.UI.validateAndFixDate(clStart, `待辦起始日`);
+            if (vStart !== false) cl.startDate = vStart;
+        } else {
+            cl.startDate = "";
+        }
+
+        if (clEnd) {
+            const vEnd = ProJED.UI.validateAndFixDate(clEnd, `待辦到期日`);
+            if (vEnd !== false) cl.endDate = vEnd;
+        } else {
+            cl.endDate = "";
+        }
+        ProJED.Data.save();
+        // 重新渲染以更新過期狀態或自動修正的日期
+        ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex);
+    },
+    selectStatusUI: (el) => {
+        document.querySelectorAll('.status-option').forEach(o => o.classList.remove('selected'));
+        el.classList.add('selected');
+        const status = el.dataset.value;
+        document.getElementById('item-status').value = status;
+        app.updateItemField('status', status);
+    },
     toggleGanttVisibility: (t, id, lId, cId) => ProJED.Data.toggleGanttVisibility(t, id, lId, cId),
     toggleStatusFilter: (el) => { ProJED.state.statusFilters[el.dataset.status] = el.checked; ProJED.renderActiveView(); },
     setGanttMode: (mode) => {
@@ -2137,6 +2199,7 @@ window.app = {
 
         if (!cl[key].targetId) delete cl[key];
 
+        ProJED.Data.save();
         ProJED.Modal.renderChecklistItems(card.checklists, index);
     },
 
@@ -2163,26 +2226,31 @@ window.app = {
         if (card && card.checklists[index]) {
             const current = card.checklists[index].status;
             card.checklists[index].status = current === 'completed' ? 'todo' : 'completed';
+            ProJED.Data.save();
             ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex);
         }
     },
 
     removeChecklistItemUI: (index, event) => {
         if (event) event.stopPropagation();
+        if (!confirm('確定刪除此待辦項目？')) return;
         const { listId, cardId } = ProJED.state.editingItem;
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (card) {
             card.checklists.splice(index, 1);
+            ProJED.Data.save();
             ProJED.Modal.renderChecklistItems(card.checklists);
         }
     },
 
     toggleShowCompletedCL: () => {
         ProJED.state.showCompletedCL = !ProJED.state.showCompletedCL;
-        // 改為即時 UI 反饋但不存檔 (由 Modal Save 統一處理)
         const { listId, cardId } = ProJED.state.editingItem;
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
-        if (card) ProJED.Modal.renderChecklistItems(card.checklists);
+        if (card) {
+            ProJED.Data.save(); // 儲存顯示偏好
+            ProJED.Modal.renderChecklistItems(card.checklists);
+        }
     },
 
     addChecklistItemUI: () => {
@@ -2191,6 +2259,7 @@ window.app = {
         if (card) {
             if (!card.checklists) card.checklists = [];
             card.checklists.push({ id: 'cl_' + Date.now(), title: '', status: 'todo' });
+            ProJED.Data.save();
             ProJED.Modal.renderChecklistItems(card.checklists);
         }
     },
@@ -2211,6 +2280,7 @@ window.app = {
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (card && card.checklists[index]) {
             card.checklists[index][field] = value;
+            ProJED.Data.save();
             if (field === 'status') {
                 ProJED.Modal.renderChecklistItems(card.checklists, ProJED.state.activeChecklistIndex);
             }

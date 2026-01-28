@@ -206,7 +206,7 @@
             <div class="modal-body">
                 <div class="input-group">
                     <label>名稱</label>
-                    <input type="text" id="item-title">
+                    <input type="text" id="item-title" onblur="app.updateItemField('title', this.value)">
                 </div>
                 <div class="input-group">
                     <label>狀態 (請點選之一)</label>
@@ -253,7 +253,8 @@
                             <!-- Start Dependency UI -->
                             <div id="start-dep-ui" class="dependency-settings" style="display:none">
                                 <div style="margin-bottom: 8px;">
-                                    <select id="start-dep-target" class="dep-select" style="width: 100%;">
+                                    <select id="start-dep-target" class="dep-select" style="width: 100%"
+                                        onchange="app.updateItemField('startDependency', {targetId: this.value})">
                                         <option value="">(無依存)</option>
                                     </select>
                                 </div>
@@ -263,12 +264,14 @@
                                         onclick="app.startPicking('start-dep-target')" title="從看板中選取">
                                         <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
                                     </button>
-                                    <select id="start-dep-type" class="dep-type-select" style="height: 32px;">
+                                    <select id="start-dep-type" class="dep-type-select" style="height: 32px;"
+                                        onchange="app.updateItemField('startDependency', {type: this.value})">
                                         <option value="start">的起始</option>
                                         <option value="end">的結束</option>
                                     </select>
                                     <input type="number" id="start-dep-offset" class="dep-offset-input" value="0"
-                                        style="width: 60px; height: 32px;">
+                                        style="width: 60px; height: 32px;"
+                                        onchange="app.updateItemField('startDependency', {offset: parseInt(this.value)})">
                                     <span class="dep-days">天</span>
                                 </div>
                             </div>
@@ -295,7 +298,8 @@
                             <!-- End Dependency UI -->
                             <div id="end-dep-ui" class="dependency-settings" style="display:none">
                                 <div style="margin-bottom: 8px;">
-                                    <select id="end-dep-target" class="dep-select" style="width: 100%;">
+                                    <select id="end-dep-target" class="dep-select" style="width: 100%"
+                                        onchange="app.updateItemField('endDependency', {targetId: this.value})">
                                         <option value="">(無依存)</option>
                                     </select>
                                 </div>
@@ -305,12 +309,14 @@
                                         onclick="app.startPicking('end-dep-target')" title="從看板中選取">
                                         <i data-lucide="mouse-pointer-2" style="width:14px; height:14px;"></i>
                                     </button>
-                                    <select id="end-dep-type" class="dep-type-select" style="height: 32px;">
+                                    <select id="end-dep-type" class="dep-type-select" style="height: 32px;"
+                                        onchange="app.updateItemField('endDependency', {type: this.value})">
                                         <option value="start">的起始</option>
                                         <option value="end">的結束</option>
                                     </select>
                                     <input type="number" id="end-dep-offset" class="dep-offset-input" value="0"
-                                        style="width: 60px; height: 32px;">
+                                        style="width: 60px; height: 32px;"
+                                        onchange="app.updateItemField('endDependency', {offset: parseInt(this.value)})">
                                     <span class="dep-days">天</span>
                                 </div>
                             </div>
@@ -341,12 +347,14 @@
                     style="margin-top:2rem; border-top:1px dashed var(--border); padding-top:1.5rem;">
                     <label>備註</label>
                     <textarea id="item-notes" placeholder="輸入備註..."
-                        style="width:100%; border:1px solid var(--border); border-radius:8px; padding:0.75rem; min-height:80px; font-family:inherit; resize:vertical;"></textarea>
+                        style="width:100%; border:1px solid var(--border); border-radius:8px; padding:0.75rem; min-height:80px; font-family:inherit; resize:vertical;"
+                        onblur="app.updateItemField('notes', this.value)"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="delete-btn" id="modal-delete">刪除</button>
-                <button class="save-btn" id="modal-save">儲存設定</button>
+                <button class="action-btn" onclick="app.closeModal()"
+                    style="background: var(--primary); color: white; padding: 10px 24px; border-radius: 8px; font-weight: 600;">完成</button>
             </div>
         </div>
     </div>
