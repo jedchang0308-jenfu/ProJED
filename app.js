@@ -118,26 +118,33 @@ const ProJED = {
                         ProJED.state.boardName = parsed.boardName || '專案看板';
                     }
 
-                    // 數據遷移：將 card.checklists 遷移至 card.checklistContainers
-                    lists.forEach(l => {
-                        (l.cards || []).forEach(c => {
-                            if (c.checklists && !c.checklistContainers) {
-                                console.log(`📦 正在遷移卡片 [${c.title}] 的待辦清單...`);
-                                c.checklistContainers = [{
-                                    id: 'cc_' + Date.now() + Math.random().toString(36).substr(2, 5),
-                                    title: '待辦清單',
-                                    items: c.checklists
-                                }];
-                                delete c.checklists;
-                            }
-                        });
-                    });
+                    lists = this.migrate(lists);
                     ProJED.state.lists = lists;
                 } catch (e) { }
             }
             if (!ProJED.state.lists || ProJED.state.lists.length === 0) {
                 ProJED.state.lists = [{ id: 'l1', title: '預設計畫', startDate: '2026-01-01', endDate: '2026-02-01', cards: [], status: 'todo', ganttVisible: true }];
             }
+        },
+        migrate(lists) {
+            if (!Array.isArray(lists)) return lists;
+            lists.forEach(l => {
+                (l.cards || []).forEach(c => {
+                    const hasOld = Array.isArray(c.checklists) && c.checklists.length > 0;
+                    const hasNew = Array.isArray(c.checklistContainers) && c.checklistContainers.length > 0;
+
+                    if (hasOld && !hasNew) {
+                        console.log(`📦 [Data.migrate] 正在遷移卡片 [${c.title || c.name || '未命名'}] 的待辦項目...`);
+                        c.checklistContainers = [{
+                            id: 'cc_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                            title: '待辦清單',
+                            items: [...c.checklists]
+                        }];
+                        delete c.checklists;
+                    }
+                });
+            });
+            return lists;
         },
         save(pushHistory = true) {
             const dataToSave = {
@@ -370,7 +377,7 @@ const ProJED = {
                     const incomingData = { lists: data.lists, boardName: data.boardName || '專案看板' };
 
                     if (JSON.stringify(currentData) !== JSON.stringify(incomingData)) {
-                        ProJED.state.lists = data.lists;
+                        ProJED.state.lists = ProJED.Data.migrate(data.lists);
                         ProJED.state.boardName = data.boardName || '專案看板';
                         ProJED.renderActiveView();
                         // 同時刷新彈窗
@@ -1559,10 +1566,25 @@ const ProJED = {
                 cardId = itemId;
             } else if (type === 'checklist') {
                 const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
-                // 待辦項目可能在任何容器內
                 for (const cc of (card?.checklistContainers || [])) {
                     item = cc.items.find(cl => cl.id === itemId);
                     if (item) break;
+                }
+            }
+
+            if (!item) return;
+
+            // 即時補強測試：如果開啟卡片時發現有舊待辦但沒新容器，現場遷移
+            if (type === 'card' && Array.isArray(item.checklists) && item.checklists.length > 0) {
+                if (!Array.isArray(item.checklistContainers) || item.checklistContainers.length === 0) {
+                    console.log("🛠️ [Modal.refresh] 偵測到未遷移項目，執行即時修復...");
+                    item.checklistContainers = [{
+                        id: 'cc_hotfix_' + Date.now(),
+                        title: '待辦清單',
+                        items: [...item.checklists]
+                    }];
+                    delete item.checklists;
+                    ProJED.Data.save(false); // 靜默存檔不進歷史
                 }
             }
 
