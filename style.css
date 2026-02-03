@@ -1,6 +1,7 @@
 :root {
     --primary: #6366f1;
     --primary-hover: #4f46e5;
+    --primary-light: #eef2ff;
     --bg-dark: #f8fafc;
     /* ?峕艶?寧�瘛箇�??*/
     --bg-card: #ffffff;
@@ -1397,23 +1398,26 @@ body {
     font-size: 0.85rem;
 }
 
-/* Delete Full Button in Popover */
-.cl-delete-full-btn {
-    margin-top: 10px;
-    width: 100%;
-    padding: 12px;
-    background: #fef2f2;
-    border: 1px solid #fee2e2;
-    color: #ef4444;
-    border-radius: 10px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
+.checklist-container {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: #fff;
+    transition: box-shadow 0.2s;
+    margin-bottom: 24px;
+}
+
+.checklist-container:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.cl-container-title-input:focus {
+    outline: none;
+    background: #f8fafc !important;
+}
+
+.checklist-items-container {
+    padding: 0 4px;
 }
 
 .modal-footer {

@@ -323,23 +323,30 @@
                         </div>
                     </div>
                 </div>
-                <!-- 待辦清單管理區 -->
+                <!-- 待辦清單管理區 (多容器版) -->
                 <div id="checklist-manager-section" class="checklist-manager-section" style="display:none">
-                    <div class="checklist-header">
-                        <label>待辦清單</label>
-                        <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="checklist-global-header"
+                        style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+                        <div style="display:flex; align-items:center; gap: 12px;">
+                            <i data-lucide="check-square" style="width: 20px; height: 20px; color: var(--primary);"></i>
+                            <h3 style="margin:0; font-size: 1.1rem; font-weight: 600;">待辦清單</h3>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px;">
                             <div style="display:flex; align-items:center;">
                                 <input type="checkbox" id="show-cl-completed" onchange="app.toggleShowCompletedCL() "
                                     style="margin-right:4px; width:auto;">
                                 <label for="show-cl-completed"
                                     style="font-weight:400; font-size:12px; margin:0; cursor:pointer; color:var(--text-muted);">顯示已完成</label>
                             </div>
-                            <button type="button" class="add-cl-item-btn" onclick="app.addChecklistItemUI()">+
-                                新增項目</button>
+                            <button type="button" class="add-cl-container-btn" onclick="app.addChecklistContainerUI()"
+                                style="background: var(--primary-light); color: var(--primary); border: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="plus" style="width:14px; height:14px;"></i>
+                                新增清單
+                            </button>
                         </div>
                     </div>
-                    <div id="checklist-items-container" class="checklist-items-container">
-                        <!-- Checklist items will be rendered here -->
+                    <div id="checklist-containers-wrapper" class="checklist-containers-wrapper">
+                        <!-- Checklist Containers (Trello style) will be rendered here -->
                     </div>
                 </div>
                 <!-- 備註區 -->
