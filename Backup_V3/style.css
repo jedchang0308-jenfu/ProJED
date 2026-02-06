@@ -1,0 +1,2211 @@
+:root {
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --primary-light: #eef2ff;
+    --bg-dark: #f8fafc;
+    /* ?峕艶?寧�瘛箇�??*/
+    --bg-card: #ffffff;
+    /* ?∠??寧�蝝𠉛蒾 */
+    --bg-surface: #ffffff;
+    --text-main: #1e293b;
+    /* ?�??寧�瘛梯𠧧 */
+    --text-muted: #64748b;
+    --accent: #10b981;
+    --danger: #f97316;
+    /* 延遲改為橘色 */
+    --status-todo: #64748b;
+    /* 進行中：藍灰色 */
+    --status-delayed: #f97316;
+    /* 延遲：橘色 */
+    --status-completed: #10b981;
+    /* 完成：綠色 */
+    --status-unsure: #a855f7;
+    /* 不確定：紫色 */
+    --status-onhold: #cbd5e1;
+    /* 暫緩：淺灰色 */
+    --border: #e2e8f0;
+    /* ?𦠜??寧�瘛箇� */
+    --glass: rgba(255, 255, 255, 0.8);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --radius: 8px;
+    /* 縮小圓角讓版面更俐落 */
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', 'Outfit', sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    overflow: hidden;
+    height: 100vh;
+    font-size: 14px;
+    /* 調小基準字體大小 */
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* App Container - 主應用容器 */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    /* ?脫迫憭硋惜皛曉? */
+}
+
+/* Main Body Wrapper - Nav以下的主體區域 (包含側邊欄與內容) */
+.main-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    height: calc(100vh - 40px);
+    /* 扣除 Nav 高度 (50px -> 40px) */
+    position: relative;
+}
+
+/* Navbar */
+.navbar {
+    height: 40px;
+    /* 50px -> 40px */
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    /* 2rem -> 1rem */
+    backdrop-filter: blur(10px);
+    z-index: 100;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.brand-name {
+    font-size: 1.2rem;
+    /* 1.5rem -> 1.2rem */
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--text-main), #64748b);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    flex-shrink: 0;
+}
+
+.brand-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 0.5rem;
+}
+
+#board-title {
+    font-size: 1rem;
+    /* 1.25rem -> 1rem */
+    font-weight: 600;
+    color: var(--text-main);
+    padding: 2px 6px;
+    /* 4px 8px -> 2px 6px */
+    border-radius: 4px;
+    transition: background 0.2s;
+    outline: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    /* 300px -> 200px */
+}
+
+#board-title:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+#board-title:focus {
+    background: #fff;
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.nav-links {
+    display: flex;
+    gap: 0.5rem;
+    /* 1rem -> 0.5rem */
+    background: #f1f5f9;
+    padding: 0.2rem;
+    /* 0.4rem -> 0.2rem */
+    border-radius: 50px;
+}
+
+.nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 0.4rem 0.8rem;
+    /* 0.6rem 1.2rem -> 0.4rem 0.8rem */
+    border-radius: 50px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    /* 0.5rem -> 0.4rem */
+    transition: all 0.3s ease;
+    font-weight: 500;
+    font-size: 0.85rem;
+    /* 新增字體大小調整 */
+}
+
+.nav-btn.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+/* Content Area - 主要內容區 */
+.content-area {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    padding: 0;
+    /* 移除 padding，由內部 view 控制 */
+    height: 100%;
+    background: var(--bg-dark);
+    display: flex;
+    flex-direction: column;
+}
+
+/* View Section 通用設定 */
+.view-section {
+    display: none;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    padding: 0.75rem;
+    /* 2rem -> 0.75rem (Y 軸多塞資訊的核心) */
+}
+
+.view-section {
+    display: none;
+    animation: fadeIn 0.4s ease-out;
+    height: 100%;
+    overflow: hidden;
+    /* ?鞱身?梯?嚗��见ê̌閬硋??航???*/
+}
+
+.view-section#board-view {
+    overflow-y: auto;
+    /* ?𧢲踎璅∪??�迂皛曉? */
+}
+
+.view-section#gantt-view {
+    overflow: hidden;
+    /* ?条鸌?𡝗芋撘誩𠂔蝳�?撅斗遝??*/
+    display: flex;
+    flex-direction: column;
+}
+
+.view-section.active {
+    display: block;
+}
+
+.board-canvas {
+    display: flex;
+    gap: 0.75rem;
+    /* 1.5rem -> 0.75rem (X 軸多塞資訊的核心) */
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    /* 2rem -> 1rem */
+    height: 100%;
+}
+
+.add-list-wrapper {
+    min-width: 220px;
+    /* 280px -> 220px */
+    flex-shrink: 0;
+}
+
+.add-list-btn-main {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.03);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    /* 1.25rem -> 0.75rem */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    /* 0.75rem -> 0.5rem */
+    color: var(--text-muted);
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.add-list-btn-main:hover {
+    background: rgba(99, 102, 241, 0.05);
+    border-color: var(--primary);
+    color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.add-list-btn-main i {
+    width: 20px;
+    height: 20px;
+}
+
+.list-wrapper {
+    width: 250px;
+    /* 320px -> 250px (X 軸多塞資訊的核心) */
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 0.5rem;
+    /* 1rem -> 0.5rem */
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+}
+
+.card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    /* 8px -> 6px */
+    padding: 0.6rem;
+    /* 1rem -> 0.6rem (Y 軸多塞資訊的核心) */
+    margin-bottom: 0.5rem;
+    /* 0.75rem -> 0.5rem */
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+/* Status Colors - Applying to Titles */
+.card-title.status-todo,
+.list-header h3.status-todo {
+    color: var(--status-todo) !important;
+}
+
+.card-title.status-delayed,
+.list-header h3.status-delayed {
+    color: var(--status-delayed) !important;
+}
+
+.card-title.status-completed,
+.list-header h3.status-completed {
+    color: var(--status-completed) !important;
+}
+
+.card-title.status-unsure,
+.list-header h3.status-unsure {
+    color: var(--status-unsure) !important;
+}
+
+.card-title.status-onhold,
+.list-header h3.status-onhold {
+    color: var(--status-onhold) !important;
+}
+
+/* Global Legend */
+.global-legend {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    /* 1.5rem -> 1rem */
+    padding: 6px 1rem;
+    /* 10px 2rem -> 6px 1rem */
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.legend-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    position: relative;
+    transition: all 0.2s;
+    background-color: #e2e8f0;
+    /* 預設灰底 (未選中) */
+}
+
+/* 勾選時的背景顏色 */
+.legend-checkbox[data-status="todo"]:checked {
+    background-color: var(--status-todo);
+    border-color: var(--status-todo);
+}
+
+.legend-checkbox[data-status="delayed"]:checked {
+    background-color: var(--status-delayed);
+    border-color: var(--status-delayed);
+}
+
+.legend-checkbox[data-status="completed"]:checked {
+    background-color: var(--status-completed);
+    border-color: var(--status-completed);
+}
+
+.legend-checkbox[data-status="unsure"]:checked {
+    background-color: var(--status-unsure);
+    border-color: var(--status-unsure);
+}
+
+.legend-checkbox[data-status="onhold"]:checked {
+    background-color: var(--status-onhold);
+    border-color: var(--status-onhold);
+}
+
+/* 自定義勾選符號 (V) */
+.legend-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* 未勾選時的樣式 (淡化) */
+.legend-checkbox:not(:checked) {
+    opacity: 0.4;
+    border: 2px solid #cbd5e1;
+    background-color: transparent;
+}
+
+/* Gantt Chart Customization */
+.gantt-container {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 1rem;
+    border: 1px solid var(--border);
+    /* Flex ?芷�?厰?摨?*/
+    flex: 1;
+    width: 100% !important;
+    overflow-x: auto !important;
+    /* 蝣箔? X 頠豢㬢頠豢偶?𣳇＊蝷?*/
+    overflow-y: scroll !important;
+    /* 瘞游像?脰遘?𣬚? */
+
+    position: relative;
+    display: block;
+    scrollbar-width: auto;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+#gantt-el {
+    /* 霈?SVG 擃睃漲??JS ?批�嚗䔶?銝滩??鞱身?鞾? */
+    height: auto;
+    display: block;
+}
+
+/* 蝣箔? HTML ??Body 銝齿?皛曉? (蝘駁膄憭硋惜?脰遘) */
+html,
+body {
+    overflow: hidden !important;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+}
+
+/* ?芸?蝢拇㬢頠豢見撘?*/
+/* ?芸?蝢拇㬢頠豢見撘?- 撘瑕�?梯??�凒?脰遘 */
+.gantt-container::-webkit-scrollbar {
+    /* ?箇?閮剖? */
+    background: transparent;
+}
+
+/* ?�凒?脰遘嚗朞身?粹�𤩺?銝𠉛�撖砍漲嚗䔶蒂撘瑕�?梯? */
+.gantt-container::-webkit-scrollbar:vertical {
+    width: 0px !important;
+    display: none !important;
+    background: transparent;
+}
+
+.gantt-mask {
+    width: 100%;
+    height: calc(100vh - 150px);
+    /* ?硋?擃睃漲嚗屸俈甇Ｘ㬢頠豢??啣??函?銝滩? */
+    overflow: hidden;
+    border-radius: 8px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.gantt-container {
+    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: scroll !important;
+    padding-bottom: 20px;
+    /* ?坔枂蝛粹?蝯?X 頠豢㬢頠?*/
+    flex: 1;
+    position: relative;
+}
+
+/* 撠�平?圈黸??Y 頠豢㬢頠訾?靽萘??脣??蠘� */
+.gantt-container::-webkit-scrollbar:vertical {
+    width: 0px;
+    background: transparent;
+}
+
+.gantt-container::-webkit-scrollbar:horizontal {
+    height: 12px;
+}
+
+.gantt-container::-webkit-scrollbar-thumb:horizontal {
+    background: #cbd5e1;
+    border-radius: 6px;
+    background-clip: content-box;
+}
+
+.gantt-container::-webkit-scrollbar-thumb:horizontal:hover {
+    background-color: #94a3b8;
+}
+
+
+#gantt-el {
+    min-width: 100%;
+    height: 100%;
+}
+
+/* ?Ｗ儔蝛拙??�𧋦嚗𡁻?摨虫??湛?蝣箔????蝎曄Ⅱ */
+.gantt-list-item .bar,
+.gantt-list-item .bar-progress {
+    fill: #1e293b;
+}
+
+.gantt-card-item .bar,
+.gantt-card-item .bar-progress {
+    fill: #312e81;
+    opacity: 0.95;
+}
+
+.gantt-checklist-item .bar,
+.gantt-checklist-item .bar-progress {
+    opacity: 0.9;
+}
+
+.gantt-status-todo .bar {
+    fill: #1e293b !important;
+}
+
+.status-todo .bar,
+.status-todo .bar-progress {
+    fill: #1e293b !important;
+}
+
+.status-delayed .bar,
+.status-delayed .bar-progress {
+    fill: #f97316 !important;
+}
+
+.status-completed .bar,
+.status-completed .bar-progress {
+    fill: #10b981 !important;
+}
+
+.status-unsure .bar,
+.status-unsure .bar-progress {
+    fill: #a855f7 !important;
+}
+
+.gantt .bar-label {
+    fill: #fff;
+    /* ?鞱身?質𠧧嚗𣬚鍂?潮＊蝷箏銁?脣漲璇嘥�??*/
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.gantt .bar-label.big {
+    fill: #334155;
+    /* ?嗆?摮堒銁?脣漲璇嘥??�?憿舐內瘛梯𠧧 */
+}
+
+.gantt-list-item .bar-label {
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.gantt-card-item .bar-label {
+    font-size: 13px;
+}
+
+.gantt-checklist-item .bar-label {
+    font-size: 10px;
+    font-weight: 600;
+    transform: translateY(-2px);
+    /* 蝮桀?敺𣬚??�??睲?敺株矽蝵桐葉 */
+}
+
+/* 蝣箔??�?钅??交??典�?�?銝?(憒��霈𤘪?摮𦯀??臬蔗?莎??臬?瘨�??寧?閮餉圾嚗𣬚𤌍?滚㨃?�絞銝�?質𠧧) */
+/*
+.status-delayed .bar-label { fill: #f97316 !important; }
+.status-completed .bar-label { fill: #10b981 !important; }
+.status-unsure .bar-label { fill: #a855f7 !important; }
+*/
+
+
+.gantt-milestone .bar {
+    rx: 20;
+    ry: 20;
+    width: 15px !important;
+}
+
+.gantt-milestone .bar-label {
+    transform: translateX(25px);
+    fill: var(--text-main) !important;
+}
+
+.gantt .grid-header {
+    fill: #f8fafc;
+    stroke: var(--border);
+}
+
+.gantt .grid-row {
+    fill: transparent !important;
+    stroke: var(--border) !important;
+}
+
+.gantt .arrow {
+    display: none !important;
+}
+
+/* ?条鸌?𣇉征?賡??磰? (Spacer) */
+.gantt-spacer-row .bar,
+.gantt-spacer-row .bar-progress,
+.gantt-spacer-row .bar-label {
+    display: none !important;
+}
+
+.gantt-spacer-row:hover {
+    cursor: default;
+}
+
+/* ?条鸌?硋?蝯�?獢?(Grouping Frames) */
+.gantt-group-frame {
+    pointer-events: none;
+    /* ?脫迫撟脫曎皛煾?暺墧?隞餃? */
+    animation: fadeIn 0.5s ease;
+}
+
+.list-frame {
+    fill: rgba(241, 245, 249, 0.8) !important;
+    /* Slate 50 ?亥?瘛箇� */
+    stroke: #e2e8f0;
+    stroke-width: 1;
+    rx: 8;
+    ry: 8;
+}
+
+.card-frame {
+    fill: rgba(226, 232, 240, 0.5) !important;
+    /* Slate 200 ?交楛??*/
+    stroke: #cbd5e1;
+    stroke-width: 0.5;
+    rx: 6;
+    ry: 6;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Status Picker & UI Components */
+.status-picker,
+.cl-status-picker {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    margin-top: 5px;
+    flex-wrap: nowrap;
+    /* 強制橫向不換行 */
+}
+
+.status-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    background: #fff;
+    transition: all 0.2s;
+}
+
+.status-option:hover {
+    background: #f8fafc;
+}
+
+.status-option.selected {
+    border-color: var(--primary);
+    background: #eef2ff;
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.status-dot.todo {
+    background: #000;
+}
+
+.status-dot.delayed {
+    background: #f97316;
+}
+
+.status-dot.completed {
+    background: #10b981;
+}
+
+.status-dot.unsure {
+    background: #a855f7;
+}
+
+.cl-status-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid #e2e8f0;
+    transition: transform 0.1s;
+}
+
+.cl-status-dot.selected {
+    border: 2px solid #6366f1;
+    transform: scale(1.25);
+}
+
+.cl-status-dot.todo {
+    background: var(--status-todo);
+}
+
+.cl-status-dot.delayed {
+    background: var(--status-delayed);
+}
+
+.cl-status-dot.completed {
+    background: var(--status-completed);
+}
+
+.cl-status-dot.unsure {
+    background: var(--status-unsure);
+}
+
+.cl-status-dot.onhold {
+    background: var(--status-onhold);
+}
+
+/* Global Add Button */
+.add-list-btn,
+.add-card-btn {
+    border: 1px dashed var(--border);
+    background: transparent;
+    padding: 0.75rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.add-list-btn:hover,
+.add-card-btn:hover {
+    background: #f1f5f9;
+    color: var(--text-main);
+    border-style: solid;
+}
+
+/* Modal & Layout */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #fff;
+    width: 600px;
+    /* 900px -> 600px */
+    max-width: 95vw;
+    max-height: 94vh;
+    padding: 1.5rem 2rem;
+    /* 2.5rem 3rem -> 1.5rem 2rem */
+    border-radius: var(--radius);
+    /* 使用全域變數 (8px) */
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow-y: auto;
+}
+
+.modal-header {
+    margin-bottom: 2rem;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-main);
+}
+
+.close-btn {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    background: #f1f5f9;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    background: #fee2e2;
+    color: var(--danger);
+    transform: rotate(90deg);
+}
+
+.input-group {
+    margin-bottom: 1.25rem;
+}
+
+.input-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.gantt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.gantt-view-modes button {
+    border: 1px solid var(--border);
+    background: #fff;
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+}
+
+.gantt-view-modes button.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+.toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--accent);
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    width: 180px;
+    /* 260px -> 180px (騰出更多空間給主要內容) */
+    background: #1e293b;
+    /* Slate 800 */
+    color: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #334155;
+    transition: width 0.3s ease;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+    width: 60px;
+}
+
+.sidebar-header {
+    padding: 0.6rem;
+    /* 1rem -> 0.6rem */
+    border-bottom: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-title {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    /* 1rem -> 0.5rem */
+}
+
+.ws-item {
+    margin-bottom: 1rem;
+}
+
+.ws-header {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ws-header:hover .add-board-btn-xs {
+    opacity: 1;
+}
+
+.sidebar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* 10px -> 8px */
+    width: 100%;
+    padding: 0.4rem 0.75rem;
+    /* 0.6rem 1rem -> 0.4rem 0.75rem */
+    color: #cbd5e1;
+    text-decoration: none;
+    transition: all 0.2s;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    /* 0.95rem -> 0.85rem */
+    text-align: left;
+}
+
+.sidebar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.sidebar-btn.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border-right: 3px solid #6366f1;
+}
+
+.add-board-btn-xs {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.add-board-btn-xs:hover {
+    color: #fff;
+}
+
+/* Home View (Dashboard) */
+.home-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+    width: 100%;
+}
+
+.home-section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.boards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.board-card {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-weight: 600;
+    font-size: 1.1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.board-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+}
+
+.board-card.create-new {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    border: 2px dashed var(--border);
+    align-items: center;
+    justify-content: center;
+}
+
+.board-card.create-new:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #f8fafc;
+}
+
+.board-card-overlay {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.board-card:hover .board-card-overlay {
+    opacity: 1;
+}
+
+/* Navigation Actions */
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.history-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.user-profile {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid var(--border);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.user-profile:hover {
+    border-color: var(--primary);
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-initials {
+    width: 100%;
+    height: 100%;
+    background: #0ea5e9;
+    /* Google-like Blue */
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.action-btn-outline:hover {
+    background: #f1f5f9;
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}
+
+.action-btn-outline i {
+    width: 14px;
+    height: 14px;
+}
+
+.sync-account-info {
+    font-size: 0.75rem;
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+/* Gantt Now Line */
+.today-line-group {
+    pointer-events: none;
+    z-index: 10;
+}
+
+.gantt-now-line {
+    stroke: #ef4444;
+    stroke-width: 1.5;
+    stroke-dasharray: 4;
+}
+
+.gantt-now-label-rect {
+    fill: #ef4444;
+    rx: 15;
+    ry: 15;
+    filter: drop-shadow(0 2px 4px rgba(239, 68, 68, 0.3));
+}
+
+.gantt-now-label-text {
+    fill: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: central;
+    font-family: 'Outfit', sans-serif;
+}
+
+/* --- Custom Pure Grid Gantt --- */
+.gantt-scroll-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background: #fff;
+}
+
+.gantt-grid-layer {
+    position: relative;
+    min-height: 100%;
+    background-image: linear-gradient(to right, #f1f5f9 1px, transparent 1px);
+    background-size: var(--col-width) 100%;
+}
+
+.gantt-task-row {
+    height: 30px;
+    /* 45px -> 30px (Y 軸多塞資訊) */
+    border-bottom: 1px solid #f8fafc;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.gantt-task-bar {
+    position: absolute;
+    height: 20px;
+    /* 30px -> 20px */
+    border-radius: 3px;
+    /* 4px -> 3px */
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    /* 0 10px -> 0 6px */
+    color: #fff;
+    font-size: 12px;
+    /* 14px -> 12px */
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    z-index: 5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gantt-task-bar:hover {
+    z-index: 20;
+    transform: scaleY(1.05);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.gantt-task-bar.is-list {
+    height: 24px;
+    /* 36px -> 24px */
+    font-weight: 700;
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
+    opacity: 0.9;
+}
+
+.gantt-now-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #ef4444;
+    border-left: 1px dashed white;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.gantt-now-bubble {
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    background: #ef4444;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 51;
+    white-space: nowrap;
+}
+
+/* Gantt Status Colors */
+.gantt-task-bar.status-todo {
+    background-color: var(--status-todo) !important;
+}
+
+.gantt-task-bar.status-delayed {
+    background-color: var(--status-delayed) !important;
+}
+
+.gantt-task-bar.status-completed {
+    background-color: var(--status-completed) !important;
+}
+
+.gantt-task-bar.status-unsure {
+    background-color: var(--status-unsure) !important;
+}
+
+.gantt-task-bar.status-onhold {
+    background-color: var(--status-onhold) !important;
+}
+
+.gantt-task-bar.outside-label {
+    overflow: visible !important;
+}
+
+.gantt-task-label-outside {
+    position: absolute;
+    left: 100%;
+    margin-left: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.gantt-now-bubble {
+    top: -20px !important;
+    z-index: 200 !important;
+    cursor: default;
+}
+
+.gantt-task-bar {
+    color: #ffffff !important;
+}
+
+.gantt-task-label-outside {
+    color: inherit !important;
+}
+
+/* Gantt Legend */
+.gantt-legend {
+    display: flex;
+    gap: 1.5rem;
+    margin: 0 2rem;
+    align-items: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.legend-dot.todo {
+    background: #64748b;
+}
+
+.legend-dot.delayed {
+    background: #f97316;
+}
+
+.legend-dot.completed {
+    background: #10b981;
+}
+
+.legend-dot.unsure {
+    background: #a855f7;
+}
+
+/* Gantt Visibility Controls */
+.visibility-toggle {
+    cursor: pointer;
+    margin-left: 8px;
+    color: var(--text-muted);
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.visibility-toggle:hover {
+    color: var(--primary);
+}
+
+.visibility-toggle.hidden-in-gantt {
+    color: #cbd5e1;
+    opacity: 0.5;
+}
+
+.list-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    cursor: grab;
+    padding: 0 4px;
+    user-select: none;
+}
+
+.list-header:active {
+    cursor: grabbing;
+}
+
+.card-title-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.gantt-close-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    border-radius: 50%;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 10px;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s;
+    cursor: pointer;
+    z-index: 10;
+    line-height: 1;
+}
+
+.gantt-task-bar:hover .gantt-close-btn {
+    opacity: 1;
+}
+
+.gantt-close-btn:hover {
+    background: rgba(239, 68, 68, 0.9);
+}
+
+/* Checklist Manager in Modal */
+.checklist-manager-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed var(--border);
+}
+
+.checklist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.checklist-header label {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.add-cl-item-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+/* Checklist Quick Toggle Checkbox */
+.cl-checkbox {
+    width: 18px;
+    /* Reduced from 20px */
+    height: 18px;
+    /* Reduced from 20px */
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.cl-checkbox.checked {
+    background: var(--status-completed);
+    border-color: var(--status-completed);
+    color: #fff;
+}
+
+.cl-checkbox:hover {
+    border-color: var(--primary);
+}
+
+.checklist-item-row.is-completed .cl-title-input {
+    text-decoration: line-through;
+    opacity: 0.9;
+}
+
+.checklist-item-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    /* Reduced from 6px */
+    background: #f8fafc;
+    padding: 3px 8px;
+    /* Reduced from 6px 10px */
+    border-radius: 6px;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    gap: 6px;
+}
+
+.checklist-item-row:hover {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+}
+
+/* New Date Badge Styles */
+.cl-date-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.cl-date-badge.overdue {
+    background: #fef08a;
+    /* Yellow-200 */
+    color: #854d0e;
+    /* Yellow-800 */
+    font-weight: 600;
+}
+
+.cl-date-badge.overdue i {
+    color: #854d0e;
+}
+
+/* Checklist Title Input */
+.cl-title-input {
+    flex: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 4px 6px;
+    /* Reduced from 6px 10px */
+    font-size: 0.9rem;
+    /* Slightly smaller font if needed, or keep 0.95 */
+    color: var(--text-main);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.cl-title-input:focus {
+    background: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    outline: none;
+}
+
+/* Checklist Title Status Colors */
+.cl-title-input.status-todo {
+    color: var(--status-todo) !important;
+}
+
+.cl-title-input.status-delayed {
+    color: var(--status-delayed) !important;
+}
+
+.cl-title-input.status-completed {
+    color: var(--status-completed) !important;
+}
+
+.cl-title-input.status-unsure {
+    color: var(--status-unsure) !important;
+}
+
+.cl-title-input.status-onhold {
+    color: var(--status-onhold) !important;
+}
+
+/* Checklist More Menu Button */
+.cl-more-btn {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #94a3b8;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.cl-more-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+/* Checklist Popover */
+.cl-item-popover {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 520px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12), 0 5px 10px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    z-index: 1000;
+    padding: 20px;
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cl-item-popover.active {
+    display: flex;
+}
+
+.cl-item-popover::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 12px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-left: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0;
+    transform: rotate(45deg);
+}
+
+.popover-section label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cl-dates {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+}
+
+.cl-date-field {
+    flex: 1;
+}
+
+/* 待辦專用的分離輸入框 (更小一點) */
+.cl-dates .split-date-input {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.cl-dates .split-date-input:focus-within {
+    border-color: var(--primary);
+    background: #fff;
+}
+
+.cl-dates .split-date-input input.date-part {
+    font-size: 0.85rem;
+}
+
+.checklist-container {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    /* 12px -> 8px */
+    padding: 10px;
+    /* 16px -> 10px */
+    background: #fff;
+    transition: box-shadow 0.2s;
+    margin-bottom: 12px;
+    /* 24px -> 12px */
+}
+
+.checklist-container:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.cl-container-title-input:focus {
+    outline: none;
+    background: #f8fafc !important;
+}
+
+.checklist-items-container {
+    padding: 0 4px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.save-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.5rem 1.5rem;
+    /* 0.75rem 2rem -> 0.5rem 1.5rem */
+    border-radius: 8px;
+    /* 12px -> 8px */
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.delete-btn {
+    background: #fff;
+    color: #ef4444;
+    border: 1px solid #fee2e2;
+    padding: 0.5rem 1.5rem;
+    /* 0.75rem 2.5rem -> 0.5rem 1.5rem */
+    border-radius: 8px;
+    /* 12px -> 8px */
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+.cl-popover-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border);
+}
+
+.cl-popover-footer .save-btn {
+    padding: 8px 20px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    flex: 1.5;
+}
+
+.cl-popover-footer .delete-btn {
+    padding: 8px 15px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.cl-delete-full-btn:hover {
+    background: #ef4444;
+    color: #fff;
+    border-color: #ef4444;
+}
+
+
+
+/* Gantt Grouping Backgrounds */
+.gantt-list-group-bg {
+    position: absolute;
+    background: rgba(226, 232, 240, 0.6);
+    /* 加深色調 */
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    /* 加深邊框 */
+    border-radius: 12px;
+    z-index: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.gantt-card-group-bg {
+    position: absolute;
+    background: rgba(99, 102, 241, 0.08);
+    /* 稍微增加透明度以區隔 */
+    border: 1px dashed rgba(99, 102, 241, 0.2);
+    border-radius: 8px;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Date Input Split Styles */
+.split-date-input {
+    display: flex;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 0.4rem 0.6rem;
+    /* 0.75rem 1rem -> 0.4rem 0.6rem */
+    border-radius: 6px;
+    /* 12px -> 6px */
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.split-date-input:focus-within {
+    background: white;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+.split-date-input input.date-part {
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-size: 0.95rem;
+    color: #334155;
+    text-align: center;
+    width: auto;
+    font-family: inherit;
+    outline: none;
+}
+
+.split-date-input input.date-part::placeholder {
+    color: #cbd5e1;
+}
+
+.split-date-input input.date-part.year {
+    width: 3.5em;
+    /* 剛好放4個數字 */
+}
+
+.split-date-input input.date-part.month,
+.split-date-input input.date-part.day {
+    width: 2em;
+    /* 剛好放2個數字 */
+}
+
+.split-date-input .sep {
+    color: #94a3b8;
+    margin: 0 4px;
+    font-weight: 500;
+}
+
+/* Sortable JS Visual Feedback */
+.sortable-ghost {
+    background: rgba(203, 213, 225, 0.6) !important;
+    /* 較明顯的灰色佔位 */
+    border: none;
+    opacity: 1 !important;
+    box-shadow: none;
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+/* 隱藏 Ghost 內的所有內容，確保它看起來只是一個空位 */
+.sortable-ghost * {
+    opacity: 0 !important;
+    visibility: hidden;
+}
+
+.sortable-drag {
+    cursor: grabbing;
+    opacity: 1 !important;
+    background: white;
+    /* 增加更明顯的浮起陰影 */
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* 列表的樣式也同步調整 (或保持使用者喜歡的樣子) */
+/* 由於您說喜歡列表的效果，如果列表原本有虛線，可能是因為列表較大看起來不突兀。
+   但為了視覺一致性，這裡我讓列表的 ghost 也變成乾淨的佔位塊，通常這樣質感更好。 */
+.list-wrapper.sortable-ghost {
+    background: rgba(226, 232, 240, 0.4);
+    border: none;
+    border-radius: 12px;
+}
+
+.list-wrapper.sortable-drag {
+    opacity: 1 !important;
+}
+
+/* Fix for SortableJS forceFallback: true */
+.sortable-fallback {
+    /* Important: Disable transition to prevent "laggy" movement where the card chases the cursor */
+    transition: none !important;
+    /* Ensure the dragged element is on top of everything */
+    z-index: 9999 !important;
+    /* Prevent the dragged element from interfering with mouse events (so we can detect drop targets) */
+    pointer-events: none !important;
+    /* Ensure cursor is grabbing for visual feedback */
+    cursor: grabbing !important;
+}
+
+/* Gantt Bar Resize Handles */
+.gantt-task-bar {
+    position: absolute;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.gantt-task-bar:hover {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+    z-index: 50;
+}
+
+.gantt-task-bar.is-dragging {
+    opacity: 0.8;
+    z-index: 100 !important;
+    cursor: grabbing;
+}
+
+/* Milestone Styles */
+.gantt-task-bar.is-milestone {
+    width: 14px !important;
+    height: 14px !important;
+    border-radius: 50% !important;
+    transform: translate(-7px, 0);
+    /* Center the dot on the end date */
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 1), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.gantt-task-bar.is-milestone .handle,
+.gantt-task-bar.is-milestone .gantt-close-btn {
+    display: none !important;
+}
+
+.gantt-task-bar.is-milestone:hover {
+    transform: translate(-7px, 0) scale(1.3);
+}
+
+.handle {
+    position: absolute;
+    top: 0;
+    width: 12px;
+    /* 增加感應區域 */
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    opacity: 0;
+    transition: background 0.2s, opacity 0.2s;
+    z-index: 20;
+    /* 確保在 label 之上 */
+}
+
+.gantt-task-bar:hover .handle {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.gantt-task-bar:hover .handle {
+    opacity: 1;
+}
+
+.handle-left {
+    left: -4px;
+    border-radius: 4px 0 0 4px;
+}
+
+.handle-right {
+    right: -4px;
+    border-radius: 0 4px 4px 0;
+}
+
+.handle:hover {
+    background: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Snap Guide Line */
+.snap-guide {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: var(--primary);
+    border-left: 1px dashed white;
+    box-shadow: 0 0 4px var(--primary);
+    pointer-events: none;
+    z-index: 200;
+}
+
+/* Gantt Dependency Lines */
+.gantt-dep-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.gantt-dep-path {
+    fill: none;
+    stroke: #475569;
+    /* Slate 600 */
+    stroke-width: 1.5;
+    stroke-dasharray: 4 2;
+    transition: stroke 0.2s;
+}
+
+.gantt-dep-path:hover {
+    stroke: var(--primary);
+    stroke-width: 2;
+}
+
+/* Dependency Settings UI */
+.date-input-with-dep {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dep-toggle-btn {
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.dep-toggle-btn:hover {
+    background: #eef2ff;
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.dep-toggle-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+.dependency-settings {
+    margin-top: 8px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.dep-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.dep-select {
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.dep-type-select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.dep-offset-input {
+    width: 60px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: center;
+}
+
+.dep-plus,
+.dep-days {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Checklist Item Popover Dependency UI */
+.cl-item-dep-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+}
+
+.cl-dep-toggle-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 12px;
+}
+
+/* Selection Mode Styles */
+.is-picking-dependency {
+    cursor: default;
+}
+
+.is-picking-dependency .navbar,
+.is-picking-dependency .view-section,
+.is-picking-dependency .modal-overlay {
+    /* Dim everything */
+    filter: grayscale(100%) opacity(0.5);
+    pointer-events: none;
+    /* Block interaction with non-pickable items */
+    transition: filter 0.3s, opacity 0.3s;
+}
+
+.is-picking-dependency .selection-mode-banner {
+    filter: none;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.is-picking-dependency .selection-candidate {
+    filter: none !important;
+    opacity: 1 !important;
+    cursor: crosshair !important;
+    pointer-events: auto !important;
+    box-shadow: 0 0 0 3px var(--primary);
+    z-index: 9999;
+    /* Ensure it's on top */
+    position: relative;
+    /* Needed for z-index */
+    background: #fff;
+    /* Ensure it's not transparent */
+}
+
+/* Ensure Gantt bars are pickable */
+.is-picking-dependency .gantt-task-bar.selection-candidate {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary);
+    z-index: 10000;
+}
+
+/* Selection Mode Banner */
+.selection-mode-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    font-weight: 600;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* Checklist Sortable Styles */
+.cl-drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    margin-right: 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.checklist-item-row:hover .cl-drag-handle {
+    opacity: 1;
+}
+
+.checklist-item-row.sortable-ghost {
+    background: var(--bg-main);
+    opacity: 0.5;
+    border: 1px dashed var(--border);
+}
+
+.checklist-item-row.sortable-drag {
+    background: var(--bg-surface);
+    opacity: 1;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--primary);
+}
