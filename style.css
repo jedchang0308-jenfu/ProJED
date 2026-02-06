@@ -27,7 +27,8 @@
     /* ?𦠜??寧�瘛箇� */
     --glass: rgba(255, 255, 255, 0.8);
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --radius: 12px;
+    --radius: 8px;
+    /* 縮小圓角讓版面更俐落 */
 }
 
 * {
@@ -42,6 +43,8 @@ body {
     color: var(--text-main);
     overflow: hidden;
     height: 100vh;
+    font-size: 14px;
+    /* 調小基準字體大小 */
 }
 
 /* Animations */
@@ -57,7 +60,7 @@ body {
     }
 }
 
-/* App Container - ?硋?擃睃漲嚗䔶??�迂皛曉? */
+/* App Container - 主應用容器 */
 .app-container {
     display: flex;
     flex-direction: column;
@@ -66,20 +69,31 @@ body {
     /* ?脫迫憭硋惜皛曉? */
 }
 
+/* Main Body Wrapper - Nav以下的主體區域 (包含側邊欄與內容) */
+.main-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    height: calc(100vh - 40px);
+    /* 扣除 Nav 高度 (50px -> 40px) */
+    position: relative;
+}
+
 /* Navbar */
 .navbar {
-    height: 70px;
+    height: 40px;
+    /* 50px -> 40px */
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 2rem;
+    padding: 0 1rem;
+    /* 2rem -> 1rem */
     backdrop-filter: blur(10px);
     z-index: 100;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
-    /* ?脫迫鋡怠?蝮?*/
 }
 
 .nav-brand {
@@ -89,7 +103,8 @@ body {
 }
 
 .brand-name {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
+    /* 1.5rem -> 1.2rem */
     font-weight: 700;
     background: linear-gradient(135deg, var(--text-main), #64748b);
     background-clip: text;
@@ -106,17 +121,20 @@ body {
 }
 
 #board-title {
-    font-size: 1.25rem;
+    font-size: 1rem;
+    /* 1.25rem -> 1rem */
     font-weight: 600;
     color: var(--text-main);
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 2px 6px;
+    /* 4px 8px -> 2px 6px */
+    border-radius: 4px;
     transition: background 0.2s;
     outline: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 300px;
+    max-width: 200px;
+    /* 300px -> 200px */
 }
 
 #board-title:hover {
@@ -130,9 +148,11 @@ body {
 
 .nav-links {
     display: flex;
-    gap: 1rem;
+    gap: 0.5rem;
+    /* 1rem -> 0.5rem */
     background: #f1f5f9;
-    padding: 0.4rem;
+    padding: 0.2rem;
+    /* 0.4rem -> 0.2rem */
     border-radius: 50px;
 }
 
@@ -140,14 +160,18 @@ body {
     background: transparent;
     border: none;
     color: var(--text-muted);
-    padding: 0.6rem 1.2rem;
+    padding: 0.4rem 0.8rem;
+    /* 0.6rem 1.2rem -> 0.4rem 0.8rem */
     border-radius: 50px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
+    /* 0.5rem -> 0.4rem */
     transition: all 0.3s ease;
     font-weight: 500;
+    font-size: 0.85rem;
+    /* 新增字體大小調整 */
 }
 
 .nav-btn.active {
@@ -156,15 +180,27 @@ body {
     box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
 }
 
-/* Content Area - ?硋?憭硋惜皛曉? */
+/* Content Area - 主要內容區 */
 .content-area {
     flex: 1;
     overflow: hidden;
-    /* 蝣箔??批捆銝齿滯??*/
     position: relative;
-    padding: 2rem;
-    height: calc(100vh - 70px);
-    /* ?𡒊Ⅱ擃睃漲 */
+    padding: 0;
+    /* 移除 padding，由內部 view 控制 */
+    height: 100%;
+    background: var(--bg-dark);
+    display: flex;
+    flex-direction: column;
+}
+
+/* View Section 通用設定 */
+.view-section {
+    display: none;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    padding: 0.75rem;
+    /* 2rem -> 0.75rem (Y 軸多塞資訊的核心) */
 }
 
 .view-section {
@@ -191,18 +227,20 @@ body {
     display: block;
 }
 
-/* Board View */
 .board-canvas {
     display: flex;
-    gap: 1.5rem;
+    gap: 0.75rem;
+    /* 1.5rem -> 0.75rem (X 軸多塞資訊的核心) */
     align-items: flex-start;
     overflow-x: auto;
-    padding: 0.5rem 0.5rem 2rem 0.5rem;
-    height: calc(100vh - 150px);
+    padding-bottom: 1rem;
+    /* 2rem -> 1rem */
+    height: 100%;
 }
 
 .add-list-wrapper {
-    min-width: 280px;
+    min-width: 220px;
+    /* 280px -> 220px */
     flex-shrink: 0;
 }
 
@@ -211,12 +249,14 @@ body {
     background: rgba(0, 0, 0, 0.03);
     border: 2px dashed var(--border);
     border-radius: var(--radius);
-    padding: 1.25rem;
+    padding: 0.75rem;
+    /* 1.25rem -> 0.75rem */
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
+    /* 0.75rem -> 0.5rem */
     color: var(--text-muted);
     font-weight: 600;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -235,10 +275,12 @@ body {
 }
 
 .list-wrapper {
-    width: 320px;
+    width: 250px;
+    /* 320px -> 250px (X 軸多塞資訊的核心) */
     background: var(--bg-card);
     border-radius: var(--radius);
-    padding: 1rem;
+    padding: 0.5rem;
+    /* 1rem -> 0.5rem */
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
     display: flex;
@@ -249,9 +291,12 @@ body {
 .card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
+    border-radius: 6px;
+    /* 8px -> 6px */
+    padding: 0.6rem;
+    /* 1rem -> 0.6rem (Y 軸多塞資訊的核心) */
+    margin-bottom: 0.5rem;
+    /* 0.75rem -> 0.5rem */
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -291,8 +336,10 @@ body {
 .global-legend {
     display: flex;
     justify-content: center;
-    gap: 1.5rem;
-    padding: 10px 2rem;
+    gap: 1rem;
+    /* 1.5rem -> 1rem */
+    padding: 6px 1rem;
+    /* 10px 2rem -> 6px 1rem */
     background: #fff;
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
@@ -307,35 +354,63 @@ body {
 }
 
 .legend-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
     cursor: pointer;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    position: relative;
+    transition: all 0.2s;
+    background-color: #e2e8f0;
+    /* 預設灰底 (未選中) */
 }
 
-.legend-color-box {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
+/* 勾選時的背景顏色 */
+.legend-checkbox[data-status="todo"]:checked {
+    background-color: var(--status-todo);
+    border-color: var(--status-todo);
 }
 
-.legend-color-box.todo {
-    background: var(--status-todo);
+.legend-checkbox[data-status="delayed"]:checked {
+    background-color: var(--status-delayed);
+    border-color: var(--status-delayed);
 }
 
-.legend-color-box.delayed {
-    background: var(--status-delayed);
+.legend-checkbox[data-status="completed"]:checked {
+    background-color: var(--status-completed);
+    border-color: var(--status-completed);
 }
 
-.legend-color-box.completed {
-    background: var(--status-completed);
+.legend-checkbox[data-status="unsure"]:checked {
+    background-color: var(--status-unsure);
+    border-color: var(--status-unsure);
 }
 
-.legend-color-box.unsure {
-    background: var(--status-unsure);
+.legend-checkbox[data-status="onhold"]:checked {
+    background-color: var(--status-onhold);
+    border-color: var(--status-onhold);
 }
 
-.legend-color-box.onhold {
-    background: var(--status-onhold);
+/* 自定義勾選符號 (V) */
+.legend-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* 未勾選時的樣式 (淡化) */
+.legend-checkbox:not(:checked) {
+    opacity: 0.4;
+    border: 2px solid #cbd5e1;
+    background-color: transparent;
 }
 
 /* Gantt Chart Customization */
@@ -711,16 +786,18 @@ body {
 
 .modal-content {
     background: #fff;
-    width: 900px;
+    width: 600px;
+    /* 900px -> 600px */
     max-width: 95vw;
     max-height: 94vh;
-    padding: 2.5rem 3rem;
-    border-radius: 24px;
+    padding: 1.5rem 2rem;
+    /* 2.5rem 3rem -> 1.5rem 2rem */
+    border-radius: var(--radius);
+    /* 使用全域變數 (8px) */
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
     overflow-y: auto;
-    /* 啟用滾動條 */
 }
 
 .modal-header {
@@ -798,12 +875,200 @@ body {
     bottom: 2rem;
     right: 2rem;
     background: var(--accent);
-    color: #fff;
+    color: white;
     padding: 1rem 2rem;
-    border-radius: 8px;
-    display: none;
+    border-radius: 5px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
+
+.toast.show {
+    opacity: 1;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    width: 180px;
+    /* 260px -> 180px (騰出更多空間給主要內容) */
+    background: #1e293b;
+    /* Slate 800 */
+    color: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #334155;
+    transition: width 0.3s ease;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+    width: 60px;
+}
+
+.sidebar-header {
+    padding: 0.6rem;
+    /* 1rem -> 0.6rem */
+    border-bottom: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-title {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    /* 1rem -> 0.5rem */
+}
+
+.ws-item {
+    margin-bottom: 1rem;
+}
+
+.ws-header {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ws-header:hover .add-board-btn-xs {
+    opacity: 1;
+}
+
+.sidebar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* 10px -> 8px */
+    width: 100%;
+    padding: 0.4rem 0.75rem;
+    /* 0.6rem 1rem -> 0.4rem 0.75rem */
+    color: #cbd5e1;
+    text-decoration: none;
+    transition: all 0.2s;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    /* 0.95rem -> 0.85rem */
+    text-align: left;
+}
+
+.sidebar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.sidebar-btn.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border-right: 3px solid #6366f1;
+}
+
+.add-board-btn-xs {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.add-board-btn-xs:hover {
+    color: #fff;
+}
+
+/* Home View (Dashboard) */
+.home-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+    width: 100%;
+}
+
+.home-section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.boards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.board-card {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-weight: 600;
+    font-size: 1.1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.board-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+}
+
+.board-card.create-new {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    border: 2px dashed var(--border);
+    align-items: center;
+    justify-content: center;
+}
+
+.board-card.create-new:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #f8fafc;
+}
+
+.board-card-overlay {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.board-card:hover .board-card-overlay {
+    opacity: 1;
+}
+
+/* Navigation Actions */
 
 .nav-actions {
     display: flex;
@@ -938,7 +1203,8 @@ body {
 }
 
 .gantt-task-row {
-    height: 45px;
+    height: 30px;
+    /* 45px -> 30px (Y 軸多塞資訊) */
     border-bottom: 1px solid #f8fafc;
     position: relative;
     display: flex;
@@ -947,13 +1213,17 @@ body {
 
 .gantt-task-bar {
     position: absolute;
-    height: 30px;
-    border-radius: 4px;
+    height: 20px;
+    /* 30px -> 20px */
+    border-radius: 3px;
+    /* 4px -> 3px */
     display: flex;
     align-items: center;
-    padding: 0 10px;
+    padding: 0 6px;
+    /* 0 10px -> 0 6px */
     color: #fff;
-    font-size: 14px;
+    font-size: 12px;
+    /* 14px -> 12px */
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -970,9 +1240,10 @@ body {
 }
 
 .gantt-task-bar.is-list {
-    height: 36px;
+    height: 24px;
+    /* 36px -> 24px */
     font-weight: 700;
-    border-left: 4px solid rgba(0, 0, 0, 0.2);
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
     opacity: 0.9;
 }
 
@@ -1400,11 +1671,14 @@ body {
 
 .checklist-container {
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 8px;
+    /* 12px -> 8px */
+    padding: 10px;
+    /* 16px -> 10px */
     background: #fff;
     transition: box-shadow 0.2s;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
+    /* 24px -> 12px */
 }
 
 .checklist-container:hover {
@@ -1433,8 +1707,10 @@ body {
     background: var(--primary);
     color: white;
     border: none;
-    padding: 0.75rem 2rem;
-    border-radius: 12px;
+    padding: 0.5rem 1.5rem;
+    /* 0.75rem 2rem -> 0.5rem 1.5rem */
+    border-radius: 8px;
+    /* 12px -> 8px */
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -1450,8 +1726,10 @@ body {
     background: #fff;
     color: #ef4444;
     border: 1px solid #fee2e2;
-    padding: 0.75rem 2.5rem;
-    border-radius: 12px;
+    padding: 0.5rem 1.5rem;
+    /* 0.75rem 2.5rem -> 0.5rem 1.5rem */
+    border-radius: 8px;
+    /* 12px -> 8px */
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -1525,10 +1803,11 @@ body {
     display: flex;
     align-items: center;
     background: #f1f5f9;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
+    padding: 0.4rem 0.6rem;
+    /* 0.75rem 1rem -> 0.4rem 0.6rem */
+    border-radius: 6px;
+    /* 12px -> 6px */
     border: 2px solid transparent;
-    /* 預留邊框位置 */
     transition: all 0.3s ease;
 }
 

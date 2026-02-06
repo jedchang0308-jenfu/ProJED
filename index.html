@@ -54,11 +54,21 @@
         <!-- Navigation -->
         <nav class="navbar">
             <div class="nav-brand">
-                <i data-lucide="layout" class="logo-icon"></i>
-                <span class="brand-name">ProJED</span>
+                <button class="action-btn-outline" onclick="app.toggleSidebar()"
+                    style="margin-right: 8px; border:none; padding: 4px;">
+                    <i data-lucide="menu"></i>
+                </button>
+                <i data-lucide="layout" class="logo-icon" onclick="app.showHome()" style="cursor:pointer"></i>
+                <span class="brand-name" onclick="app.showHome()" style="cursor:pointer">ProJED</span>
                 <div class="brand-divider"></div>
-                <h1 id="board-title" contenteditable="true" onblur="app.updateBoardName(this.innerText)"
-                    title="點選即可修改標題">專案看板</h1>
+                <!-- Breadcrumbs -->
+                <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px;">
+                    <span id="nav-ws-name"
+                        style="font-weight: 500; font-size: 0.9rem; color: var(--text-muted);">工作區</span>
+                    <i data-lucide="chevron-right" style="width: 16px; height: 16px; color: var(--text-muted)"></i>
+                    <h1 id="board-title" contenteditable="true" onblur="app.updateBoardName(this.innerText)"
+                        title="點選即可修改標題" style="font-size: 1.1rem; margin:0;">專案看板</h1>
+                </div>
             </div>
             <div class="nav-actions">
                 <div class="nav-links">
@@ -119,79 +129,104 @@
             <div class="legend-item">
                 <input type="checkbox" checked class="legend-checkbox" data-status="todo"
                     onchange="app.toggleStatusFilter(this)">
-                <div class="legend-color-box todo"></div>
                 <span>進行中</span>
             </div>
             <div class="legend-item">
                 <input type="checkbox" checked class="legend-checkbox" data-status="delayed"
                     onchange="app.toggleStatusFilter(this)">
-                <div class="legend-color-box delayed"></div>
                 <span>延遲</span>
             </div>
             <div class="legend-item">
                 <input type="checkbox" checked class="legend-checkbox" data-status="completed"
                     onchange="app.toggleStatusFilter(this)">
-                <div class="legend-color-box completed"></div>
                 <span>完成</span>
             </div>
             <div class="legend-item">
                 <input type="checkbox" checked class="legend-checkbox" data-status="unsure"
                     onchange="app.toggleStatusFilter(this)">
-                <div class="legend-color-box unsure"></div>
                 <span>不確定</span>
             </div>
             <div class="legend-item">
                 <input type="checkbox" checked class="legend-checkbox" data-status="onhold"
                     onchange="app.toggleStatusFilter(this)">
-                <div class="legend-color-box onhold"></div>
                 <span>暫緩</span>
             </div>
         </div>
 
-        <!-- Main Content Area -->
-        <main class="content-area">
-            <!-- Board View -->
-            <section id="board-view" class="view-section active">
-                <div class="board-canvas" id="list-container">
-                    <!-- Lists will be rendered here -->
+        <!-- Main Body Wrapper -->
+        <div class="main-wrapper">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="app-sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">工作區選單</div>
                 </div>
-            </section>
+                <div class="sidebar-nav" id="sidebar-nav-container">
+                    <!-- Sidebar Items Rendering Here -->
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="content-area">
+                <!-- Home View (Dashboard) -->
+                <section id="home-view" class="view-section">
+                    <div class="home-container">
+                        <div class="home-section-title">
+                            <i data-lucide="trello"></i>
+                            <span>我的工作區</span>
+                        </div>
+                        <div class="boards-grid" id="home-boards-grid">
+                            <!-- Boards will be rendered here -->
+                            <div class="board-card create-new" onclick="app.createBoardUI()">
+                                <i data-lucide="plus" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
+                                建立新看板
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Board View -->
+                <section id="board-view" class="view-section active">
+                    <div class="board-canvas" id="list-container">
+                        <!-- Lists will be rendered here -->
+                    </div>
+                </section>
 
 
 
-            <!-- Gantt View -->
-            <section id="gantt-view" class="view-section">
-                <div class="gantt-header">
-                    <div class="filter-controls">
-                        <span class="filter-label">顯示層級:</span>
-                        <label class="checkbox-container">
-                            <input type="checkbox" checked data-level="list"> 列表
-                            <span class="checkmark"></span>
-                        </label>
-                        <label class="checkbox-container">
-                            <input type="checkbox" checked data-level="card"> 卡片
-                            <span class="checkmark"></span>
-                        </label>
-                        <label class="checkbox-container">
-                            <input type="checkbox" checked data-level="checklist"> 待辦
-                            <span class="checkmark"></span>
-                        </label>
+                <!-- Gantt View -->
+                <section id="gantt-view" class="view-section">
+                    <div class="gantt-header">
+                        <div class="filter-controls">
+                            <span class="filter-label">顯示層級:</span>
+                            <label class="checkbox-container">
+                                <input type="checkbox" checked data-level="list"> 列表
+                                <span class="checkmark"></span>
+                            </label>
+                            <label class="checkbox-container">
+                                <input type="checkbox" checked data-level="card"> 卡片
+                                <span class="checkmark"></span>
+                            </label>
+                            <label class="checkbox-container">
+                                <input type="checkbox" checked data-level="checklist"> 待辦
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
+                        <!-- 狀態圖例區 (已移除，改由全域管理) -->
+                        <div class="gantt-view-modes">
+                            <button onclick="app.setGanttMode('Month')" class="active">月</button>
+                            <button onclick="app.setGanttMode('Quarter')">季</button>
+                            <button onclick="app.setGanttMode('Year')">年</button>
+                        </div>
                     </div>
-                    <!-- 狀態圖例區 (已移除，改由全域管理) -->
-                    <div class="gantt-view-modes">
-                        <button onclick="app.setGanttMode('Month')" class="active">月</button>
-                        <button onclick="app.setGanttMode('Quarter')">季</button>
-                        <button onclick="app.setGanttMode('Year')">年</button>
+                    <!-- 遮罩層：用來物理切割掉右側的垂直捲軸 -->
+                    <div class="gantt-mask" style="flex:1; overflow:hidden; position:relative; width:100%;">
+                        <div class="gantt-container">
+                            <svg id="gantt-el"></svg>
+                        </div>
                     </div>
-                </div>
-                <!-- 遮罩層：用來物理切割掉右側的垂直捲軸 -->
-                <div class="gantt-mask" style="flex:1; overflow:hidden; position:relative; width:100%;">
-                    <div class="gantt-container">
-                        <svg id="gantt-el"></svg>
-                    </div>
-                </div>
-            </section>
-        </main>
+                </section>
+            </main>
+        </div>
     </div>
 
     <!-- Modal for Editing/Adding Dates & Details -->
@@ -324,29 +359,20 @@
                     </div>
                 </div>
                 <!-- 待辦清單管理區 (多容器版) -->
-                <div id="checklist-manager-section" class="checklist-manager-section" style="display:none">
-                    <div class="checklist-global-header"
-                        style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
-                        <div style="display:flex; align-items:center; gap: 12px;">
-                            <i data-lucide="check-square" style="width: 20px; height: 20px; color: var(--primary);"></i>
-                            <h3 style="margin:0; font-size: 1.1rem; font-weight: 600;">待辦清單</h3>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:12px;">
-                            <div style="display:flex; align-items:center;">
-                                <input type="checkbox" id="show-cl-completed" onchange="app.toggleShowCompletedCL() "
-                                    style="margin-right:4px; width:auto;">
-                                <label for="show-cl-completed"
-                                    style="font-weight:400; font-size:12px; margin:0; cursor:pointer; color:var(--text-muted);">顯示已完成</label>
-                            </div>
-                            <button type="button" class="add-cl-container-btn" onclick="app.addChecklistContainerUI()"
-                                style="background: var(--primary-light); color: var(--primary); border: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                <i data-lucide="plus" style="width:14px; height:14px;"></i>
-                                新增清單
-                            </button>
-                        </div>
+                <div id="checklist-manager-section" class="checklist-manager-section"
+                    style="display:none; margin-bottom: 24px;">
+                    <div id="checklists-wrapper" class="checklists-wrapper">
+                        <!-- Checklists will be rendered here -->
                     </div>
-                    <div id="checklist-containers-wrapper" class="checklist-containers-wrapper">
-                        <!-- Checklist Containers (Trello style) will be rendered here -->
+
+                    <!-- 底部操作列 (依照使用者最新圖片調整) -->
+                    <div class="checklist-footer"
+                        style="display: flex; justify-content: flex-end; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border);">
+                        <button type="button" class="add-cl-container-btn" onclick="app.addChecklistUI()"
+                            style="background: var(--primary-light); color: var(--primary); border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                            <i data-lucide="plus" style="width:16px; height:16px;"></i>
+                            新增清單
+                        </button>
                     </div>
                 </div>
                 <!-- 備註區 -->
