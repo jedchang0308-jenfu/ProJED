@@ -292,10 +292,11 @@ body {
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 0.35rem 0.6rem;
-    /* 縮小垂直內距 (0.6rem -> 0.35rem) */
-    margin-bottom: 0.4rem;
-    /* 縮小卡片間距 (0.5rem -> 0.4rem) */
+    /* 8px -> 6px */
+    padding: 0.6rem;
+    /* 1rem -> 0.6rem (Y 軸多塞資訊的核心) */
+    margin-bottom: 0.5rem;
+    /* 0.75rem -> 0.5rem */
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -1383,8 +1384,7 @@ body {
     align-items: center !important;
     justify-content: space-between !important;
     cursor: grab;
-    padding: 10px 4px;
-    /* 加大標題垂直空間 (0 -> 10px) */
+    padding: 0 4px;
     user-select: none;
 }
 
@@ -2203,77 +2203,9 @@ body {
     border: 1px dashed var(--border);
 }
 
-
-/* Date Input Utilities */
-.date-input-with-dep {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #f8fafc;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 4px 8px;
-}
-
-.split-date-input {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.date-part {
-    width: 45px;
-    border: none !important;
-    background: transparent !important;
-    padding: 4px 0 !important;
-    text-align: center;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 500;
-    color: var(--text-main);
-    outline: none;
-}
-
-.date-part.year {
-    width: 45px;
-}
-
-.date-part.month,
-.date-part.day {
-    width: 30px;
-}
-
-.split-date-input .sep {
-    color: var(--text-muted);
-    font-weight: 300;
-}
-
-.calendar-btn,
-.clear-btn,
-.dep-toggle-btn {
-    background: transparent;
-    border: none;
-    padding: 6px;
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.calendar-btn:hover,
-.clear-btn:hover,
-.dep-toggle-btn:hover {
-    background: #e2e8f0;
-    color: var(--primary);
-}
-
-.clear-btn:hover {
-    color: var(--danger, #ef4444);
-}
-
-.dep-toggle-btn.active {
-    background: var(--primary);
-    color: white;
+.checklist-item-row.sortable-drag {
+    background: var(--bg-surface);
+    opacity: 1;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--primary);
 }

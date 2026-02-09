@@ -158,7 +158,7 @@ const ProJED = {
             const defaultBoardId = 'b_' + Date.now();
             const defaultWorkspaceId = 'ws_' + Date.now();
 
-            const defaultLists = [{ id: 'l1', title: '預設計畫', startDate: '', endDate: '', cards: [], status: 'todo', ganttVisible: true }];
+            const defaultLists = [{ id: 'l1', title: '預設計畫', startDate: dayjs().format('YYYY-MM-DD'), endDate: dayjs().add(1, 'month').format('YYYY-MM-DD'), cards: [], status: 'todo', ganttVisible: true }];
 
             ProJED.state.workspaces = [{
                 id: defaultWorkspaceId,
@@ -900,11 +900,6 @@ const ProJED = {
 
                 const inputs = wrapper.querySelectorAll('input.date-part');
                 inputs.forEach((input, index) => {
-                    // 新增：點選時自動全選
-                    input.addEventListener('focus', () => {
-                        input.select();
-                    });
-
                     // 輸入時自動跳轉
                     input.addEventListener('input', (e) => {
                         const val = e.target.value.replace(/\D/g, ''); // 只允許數字
@@ -913,56 +908,43 @@ const ProJED = {
                         // 當輸入長度達到限制，且不是最後一個欄位時，跳到下一個
                         if (val.length === input.maxLength) {
                             if (index < inputs.length - 1) {
-                                setTimeout(() => {
-                                    inputs[index + 1].focus();
-                                }, 0);
+                                inputs[index + 1].focus();
                             }
                         }
                     });
 
-                    // 新增：失去焦點時補零 (如果需要)
-                    const padZero = () => {
-                        let val = input.value.trim();
-                        if (val && val.length === 1 && (input.classList.contains('month') || input.classList.contains('day'))) {
-                            input.value = '0' + val;
-                        }
-                    };
-
+                    // 新增：失去焦點時嘗試同步日期並儲存
                     input.addEventListener('blur', () => {
-                        padZero();
                         if (wrapper.id === 'start-date-wrapper' || wrapper.id === 'end-date-wrapper') {
                             app.syncModalDates();
                         } else if (wrapper.dataset.clIdx !== undefined) {
-                            app.syncChecklistDates(parseInt(wrapper.dataset.clCidx), parseInt(wrapper.dataset.clIdx));
+                            // 待辦項目的日期
+                            app.syncChecklistDates(parseInt(wrapper.dataset.clIdx));
                         }
                     });
 
                     // 鍵盤導航 (方向鍵與 Backspace)
                     input.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' || e.key === 'Tab') {
-                            padZero();
-                            if (index < inputs.length - 1) {
-                                e.preventDefault();
-                                inputs[index + 1].focus();
-                            } else if (e.key === 'Enter') {
-                                // 最後一格按 Enter，觸發同步並收起
-                                input.blur();
-                            }
-                        } else if (e.key === 'ArrowRight') {
+                        if (e.key === 'ArrowRight') {
+                            // 如果游標在最後或是空值，且不是最後一個欄位，跳到下一個
                             if ((input.selectionStart === input.value.length || input.value === '') && index < inputs.length - 1) {
                                 e.preventDefault();
                                 inputs[index + 1].focus();
                             }
                         } else if (e.key === 'ArrowLeft') {
+                            // 如果游標在最前或是空值，且不是第一個欄位，跳到上一個
                             if ((input.selectionStart === 0 || input.value === '') && index > 0) {
                                 e.preventDefault();
                                 inputs[index - 1].focus();
                             }
                         } else if (e.key === 'Backspace') {
+                            // 如果欄位為空，按 Backspace 跳回上一個並刪除最後一個字
                             if (input.value === '' && index > 0) {
                                 e.preventDefault();
                                 const prev = inputs[index - 1];
                                 prev.focus();
+                                // 可選：是否刪除上一個欄位的最後一個字？通常這是順暢體驗的一部分
+                                // prev.value = prev.value.slice(0, -1); 
                             }
                         }
                     });
@@ -978,8 +960,11 @@ const ProJED = {
             // 先檢查是否所有部分都有填寫 (簡單檢查長度)
             const parts = val.split('-');
             if (parts.length !== 3 || parts.some(p => !p)) {
-                // 不完整時，不報錯也不更新 (回傳 false)，除非全空 (回傳 "")
-                return false;
+                if (val.length > 2) {
+                    alert(`${label}：格式不完整，請填寫完整 YYYY/MM/DD`);
+                    return false;
+                }
+                return "";
             }
 
             // 先檢查日期是否超出該月天數（在 dayjs 驗證之前）
@@ -1175,14 +1160,14 @@ const ProJED = {
         },
         addList() {
             const id = 'l' + Date.now();
-            ProJED.state.lists.push({ id, title: '新列表', startDate: '', endDate: '', cards: [], status: 'todo', ganttVisible: true });
+            ProJED.state.lists.push({ id, title: '新列表', startDate: dayjs().format('YYYY-MM-DD'), endDate: dayjs().add(1, 'month').format('YYYY-MM-DD'), cards: [], status: 'todo', ganttVisible: true });
             ProJED.Data.save();
         },
         addCard(listId) {
             const list = ProJED.state.lists.find(l => l.id === listId);
             if (!list) return;
             const id = 'c' + Date.now();
-            list.cards.push({ id, title: '新卡片', startDate: '', endDate: '', status: 'todo', ganttVisible: true, checklists: [] });
+            list.cards.push({ id, title: '新卡片', startDate: dayjs().format('YYYY-MM-DD'), endDate: dayjs().add(1, 'week').format('YYYY-MM-DD'), status: 'todo', ganttVisible: true, checklists: [] });
             ProJED.Data.save();
         }
     },
@@ -1789,18 +1774,6 @@ const ProJED = {
             populateDate('start-date-wrapper', item.startDate);
             populateDate('end-date-wrapper', item.endDate);
 
-            // 同步隱藏的日曆選擇器數值
-            const sdPicker = document.getElementById('start-date-picker');
-            const edPicker = document.getElementById('end-date-picker');
-            if (sdPicker) sdPicker.value = item.startDate || "";
-            if (edPicker) edPicker.value = item.endDate || "";
-
-            // 更新依存按鈕狀態
-            const sdBtn = document.querySelector(`.dep-toggle-btn[onclick*="start"]`);
-            const edBtn = document.querySelector(`.dep-toggle-btn[onclick*="end"]`);
-            if (sdBtn) sdBtn.classList.toggle('active', !!(item.startDependency && item.startDependency.targetId));
-            if (edBtn) edBtn.classList.toggle('active', !!(item.endDependency && item.endDependency.targetId));
-
             document.getElementById('item-status').value = item.status || 'todo';
             document.querySelectorAll('.status-option').forEach(opt => opt.classList.toggle('selected', opt.dataset.value === (item.status || 'todo')));
 
@@ -1915,7 +1888,6 @@ const ProJED = {
                 });
             });
             if (window.lucide) lucide.createIcons();
-            ProJED.UI.setupDateInputs(wrapper);
         },
         renderChecklistItem(parentEl, cIdx, index, cl, containerId) {
             const { listId, cardId } = ProJED.state.editingItem;
@@ -1950,7 +1922,6 @@ const ProJED = {
             const itemRow = document.createElement('div');
             itemRow.className = `checklist-item-row ${isCompleted ? 'is-completed' : ''}`;
             itemRow.dataset.id = cl.id;
-            itemRow.dataset.idx = index; // 新增：用於精確同步
 
             const finalDisplayStatus = ((cl.title || cl.name || '').includes('答辯') && displayStatus === 'todo') ? 'unsure' : displayStatus;
             const isHidden = cl.ganttVisible === false;
@@ -1998,9 +1969,6 @@ const ProJED = {
                                                     </div>
                                                 `;
                 })()}
-                                            <button type="button" class="calendar-btn" onclick="app.openCalendarPicker('start', ${cIdx}, ${index})" title="日曆選擇">
-                                                <i data-lucide="calendar" style="width:14px; height:14px;"></i>
-                                            </button>
                                             <button type="button" class="dep-toggle-btn ${startDepVisible ? 'active' : ''}" 
                                                     onclick="app.toggleChecklistDepUI('start', ${cIdx}, ${index}, event)" 
                                                     title="設定時間依存">
@@ -2044,9 +2012,6 @@ const ProJED = {
                                                     </div>
                                                 `;
                 })()}
-                                            <button type="button" class="calendar-btn" onclick="app.openCalendarPicker('end', ${cIdx}, ${index})" title="日曆選擇">
-                                                <i data-lucide="calendar" style="width:14px; height:14px;"></i>
-                                            </button>
                                             <button type="button" class="dep-toggle-btn ${endDepVisible ? 'active' : ''}" 
                                                     onclick="app.toggleChecklistDepUI('end', ${cIdx}, ${index}, event)" 
                                                     title="設定時間依存">
@@ -2180,41 +2145,23 @@ const ProJED = {
             const rawStart = getDateStr('start-date-wrapper');
             const rawEnd = getDateStr('end-date-wrapper');
 
-            let changed = false;
-
-            // 起始日
-            if (rawStart === "") {
-                if (item.startDate !== "") {
-                    item.startDate = "";
-                    changed = true;
-                }
-            } else {
+            if (rawStart) {
                 const vStart = ProJED.UI.validateAndFixDate(rawStart, "起始日");
-                if (vStart !== false && vStart !== item.startDate) {
-                    item.startDate = vStart;
-                    changed = true;
-                }
-            }
-
-            // 到期日
-            if (rawEnd === "") {
-                if (item.endDate !== "") {
-                    item.endDate = "";
-                    changed = true;
-                }
+                if (vStart !== false) item.startDate = vStart;
             } else {
-                const vEnd = ProJED.UI.validateAndFixDate(rawEnd, "到期日");
-                if (vEnd !== false && vEnd !== item.endDate) {
-                    item.endDate = vEnd;
-                    changed = true;
-                }
+                item.startDate = "";
             }
 
-            if (changed) {
-                ProJED.Data.save();
-                // 只有在真正存入資料後才刷掉使用者的輸入（例如自動補零或校正）
-                ProJED.Modal.refresh(type, itemId, listId, cardId);
+            if (rawEnd) {
+                const vEnd = ProJED.UI.validateAndFixDate(rawEnd, "到期日");
+                if (vEnd !== false) item.endDate = vEnd;
+            } else {
+                item.endDate = "";
             }
+
+            ProJED.Data.save();
+            // 同時重新渲染，確保日期顯示正確 (例如自動修正後的日期)
+            this.refresh(type, itemId, listId, cardId);
         },
 
         save() {
@@ -2409,120 +2356,15 @@ const appFunctions = {
         ProJED.Data.save();
     },
     syncModalDates: () => ProJED.Modal.syncModalDates(),
-    openCalendarPicker: (target, cIdx = null, index = null) => {
-        let picker;
-        if (cIdx !== null && index !== null) {
-            // Checklist item picker
-            picker = document.getElementById(`cl-picker-${cIdx}-${index}-${target}`);
-            if (!picker) {
-                // If dynamic picker doesn't exist, create it on the fly
-                picker = document.createElement('input');
-                picker.type = 'date';
-                picker.id = `cl-picker-${cIdx}-${index}-${target}`;
-                picker.style.display = 'none';
-                picker.onchange = (e) => app.handleCalendarChange(target, e.target.value, cIdx, index);
-                document.body.appendChild(picker);
-            }
-        } else {
-            picker = document.getElementById(`${target}-date-picker`);
-        }
-        if (picker) picker.showPicker();
-    },
-    handleCalendarChange: (target, value, cIdx = null, index = null) => {
-        console.log(`📅 日曆變更: ${target}, 值: "${value}"`);
-        if (!value) {
-            // 如果日曆選擇器傳回空值（即點選了內建的「清除」按鈕）
-            app.clearDate(target, cIdx, index);
-            return;
-        }
-        const d = dayjs(value);
-        if (!d.isValid()) return;
-
-        let wrapper;
-        if (cIdx !== null && index !== null) {
-            const { listId, cardId } = ProJED.state.editingItem;
-            const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
-            const clId = card?.checklists[cIdx]?.id;
-            const containerItemsEl = document.getElementById(`cl-items-${clId}`);
-            const row = containerItemsEl?.querySelector(`.checklist-item-row[data-idx="${index}"]`);
-            wrapper = row?.querySelector(`.split-date-input[data-cl-target="${target}"]`);
-        } else {
-            wrapper = document.getElementById(`${target}-date-wrapper`);
-        }
-
-        if (wrapper) {
-            wrapper.querySelector('.year').value = d.format('YYYY');
-            wrapper.querySelector('.month').value = d.format('MM');
-            wrapper.querySelector('.day').value = d.format('DD');
-            // Trigger sync
-            if (cIdx !== null && index !== null) {
-                app.syncChecklistDates(cIdx, index);
-            } else {
-                app.syncModalDates();
-            }
-        }
-    },
-    clearDate: (target, cIdx = null, index = null) => {
-        let wrapper;
-        let item;
-        if (cIdx !== null && index !== null) {
-            const { listId, cardId } = ProJED.state.editingItem;
-            const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
-            item = card?.checklists[cIdx]?.items[index];
-            const clId = card?.checklists[cIdx]?.id;
-            const containerItemsEl = document.getElementById(`cl-items-${clId}`);
-            const row = containerItemsEl?.querySelector(`.checklist-item-row[data-idx="${index}"]`);
-            wrapper = row?.querySelector(`.split-date-input[data-cl-target="${target}"]`);
-        } else {
-            const { type, itemId, listId, cardId } = ProJED.state.editingItem || {};
-            item = ProJED.Data.findItem(type, itemId, listId, cardId);
-            wrapper = document.getElementById(`${target}-date-wrapper`);
-        }
-
-        if (wrapper && item) {
-            console.log(`🧹 執行清除: ${target}`);
-            // 重要：清除日期時同步清除依存關係，否則重算時會被填回
-            const depField = target === 'start' ? 'startDependency' : 'endDependency';
-            delete item[depField];
-
-            // 同時設定項目的日期欄位為空
-            const dateField = target === 'start' ? 'startDate' : 'endDate';
-            item[dateField] = "";
-
-            // 清空 DOM 中的分離格
-            wrapper.querySelectorAll('input').forEach(i => i.value = "");
-
-            // 清空隱藏的日曆選擇器 (如果有)
-            let picker;
-            if (cIdx !== null && index !== null) {
-                picker = document.getElementById(`cl-picker-${cIdx}-${index}-${target}`);
-            } else {
-                picker = document.getElementById(`${target}-date-picker`);
-            }
-            if (picker) picker.value = "";
-
-            // 存檔並重整 UI
-            ProJED.Data.save();
-
-            if (cIdx !== null && index !== null) {
-                const { listId, cardId } = ProJED.state.editingItem;
-                const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
-                ProJED.Modal.renderChecklists(card?.checklists || []);
-            } else {
-                const { type, itemId, listId, cardId } = ProJED.state.editingItem || {};
-                ProJED.Modal.refresh(type, itemId, listId, cardId);
-            }
-        }
-    },
     syncChecklistDates: (cIdx, index) => {
         const { listId, cardId } = ProJED.state.editingItem;
         const card = ProJED.state.lists.find(l => l.id === listId)?.cards.find(c => c.id === cardId);
         if (!card || !card.checklists[cIdx]?.items[index]) return;
 
         const cl = card.checklists[cIdx].items[index];
-        // 修正：從 DOM 中根據 data-idx 找到正確的行，避免過濾(顯示隱藏)導致 index 偏移
+        // 查找對應的 row。因為現在有多個容器，我們需要精確查找
         const containerItemsEl = document.getElementById(`cl-items-${card.checklists[cIdx].id}`);
-        const row = containerItemsEl?.querySelector(`.checklist-item-row[data-idx="${index}"]`);
+        const row = containerItemsEl?.querySelectorAll('.checklist-item-row')[index];
         if (!row) return;
 
         const getClDate = (target) => {
@@ -2537,40 +2379,22 @@ const appFunctions = {
 
         const clStart = getClDate('start');
         const clEnd = getClDate('end');
-        let changed = false;
 
-        // 起始
-        if (clStart === "") {
-            if (cl.startDate !== "") {
-                cl.startDate = "";
-                changed = true;
-            }
-        } else {
+        if (clStart) {
             const vStart = ProJED.UI.validateAndFixDate(clStart, `待辦起始日`);
-            if (vStart !== false && vStart !== cl.startDate) {
-                cl.startDate = vStart;
-                changed = true;
-            }
-        }
-
-        // 結束
-        if (clEnd === "") {
-            if (cl.endDate !== "") {
-                cl.endDate = "";
-                changed = true;
-            }
+            if (vStart !== false) cl.startDate = vStart;
         } else {
-            const vEnd = ProJED.UI.validateAndFixDate(clEnd, `待辦到期日`);
-            if (vEnd !== false && vEnd !== cl.endDate) {
-                cl.endDate = vEnd;
-                changed = true;
-            }
+            cl.startDate = "";
         }
 
-        if (changed) {
-            ProJED.Data.save();
-            ProJED.Modal.renderChecklists(card.checklists);
+        if (clEnd) {
+            const vEnd = ProJED.UI.validateAndFixDate(clEnd, `待辦到期日`);
+            if (vEnd !== false) cl.endDate = vEnd;
+        } else {
+            cl.endDate = "";
         }
+        ProJED.Data.save();
+        ProJED.Modal.renderChecklists(card.checklists);
     },
     selectStatusUI: (el) => {
         document.querySelectorAll('.status-option').forEach(o => o.classList.remove('selected'));

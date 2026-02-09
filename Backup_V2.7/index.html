@@ -46,7 +46,7 @@
         }
     </style>
     <!-- Custom Style -->
-    <link rel="stylesheet" href="style.css?v=202602061730">
+    <link rel="stylesheet" href="style.css?v=2.7">
 </head>
 
 <body class="dark-mode">
@@ -279,17 +279,11 @@
                                     <input type="text" class="date-part day" placeholder="DD" maxlength="2"
                                         target="start">
                                 </div>
-                                <button type="button" class="calendar-btn" onclick="app.openCalendarPicker('start')"
-                                    title="日曆選擇">
-                                    <i data-lucide="calendar"></i>
-                                </button>
                                 <button type="button" class="dep-toggle-btn" onclick="app.toggleDepUI('start')"
                                     title="設定時間依存">
                                     <i data-lucide="link"></i>
                                 </button>
                             </div>
-                            <input type="date" id="start-date-picker" style="display:none"
-                                onchange="app.handleCalendarChange('start', this.value)">
                             <input type="hidden" id="item-start">
                             <!-- Start Dependency UI -->
                             <div id="start-dep-ui" class="dependency-settings" style="display:none">
@@ -330,17 +324,11 @@
                                     <input type="text" class="date-part day" placeholder="DD" maxlength="2"
                                         target="end">
                                 </div>
-                                <button type="button" class="calendar-btn" onclick="app.openCalendarPicker('end')"
-                                    title="日曆選擇">
-                                    <i data-lucide="calendar"></i>
-                                </button>
                                 <button type="button" class="dep-toggle-btn" onclick="app.toggleDepUI('end')"
                                     title="設定時間依存">
                                     <i data-lucide="link"></i>
                                 </button>
                             </div>
-                            <input type="date" id="end-date-picker" style="display:none"
-                                onchange="app.handleCalendarChange('end', this.value)">
                             <input type="hidden" id="item-end">
                             <!-- End Dependency UI -->
                             <div id="end-dep-ui" class="dependency-settings" style="display:none">
@@ -407,7 +395,7 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <script src="app.js?v=202602061730"></script>
+    <script src="app.js?v=202601261240"></script>
 </body>
 
 </html>

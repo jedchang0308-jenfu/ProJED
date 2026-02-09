@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ProJED 診斷</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .pass {
+            color: green;
+        }
+
+        .fail {
+            color: red;
+        }
+
+        .info {
+            color: blue;
+        }
+
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>ProJED 系統診斷</h1>
+    <div id="results"></div>
+
+    <!-- 載入依賴 -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+
+    <script>
+        const results = document.getElementById('results');
+        const log = (msg, type = 'info') => {
+            results.innerHTML += `<p class="${type}">${msg}</p>`;
+        };
+
+        log('1. 檢查 dayjs 是否載入...', 'info');
+        if (typeof dayjs !== 'undefined') {
+            log('✓ dayjs 已載入', 'pass');
+        } else {
+            log('✗ dayjs 未載入', 'fail');
+        }
+
+        log('2. 開始載入 app.js...', 'info');
+        const script = document.createElement('script');
+        script.src = 'app.js';
+
+        script.onload = () => {
+            log('✓ app.js 載入成功', 'pass');
+
+            setTimeout(() => {
+                log('3. 檢查 ProJED 物件...', 'info');
+
+                if (typeof ProJED === 'undefined') {
+                    log('✗ ProJED 物件不存在！', 'fail');
+                    log('這表示 app.js 中的 ProJED 定義有問題', 'fail');
+                    return;
+                }
+
+                log('✓ ProJED 物件存在', 'pass');
+
+                // 檢查關鍵函數
+                const functions = [
+                    'renderActiveView',
+                    'switchBoard',
+                    'showHome',
+                    'renderSidebar',
+                    'renderHomeView',
+                    'init'
+                ];
+
+                log('4. 檢查關鍵函數...', 'info');
+                functions.forEach(fn => {
+                    if (typeof ProJED[fn] === 'function') {
+                        log(`✓ ProJED.${fn} 存在`, 'pass');
+                    } else {
+                        log(`✗ ProJED.${fn} 不存在`, 'fail');
+                    }
+                });
+
+                // 檢查 state
+                log('5. 檢查 state...', 'info');
+                if (ProJED.state) {
+                    log('✓ ProJED.state 存在', 'pass');
+                    log(`workspaces: ${Array.isArray(ProJED.state.workspaces) ? ProJED.state.workspaces.length + ' 個' : '不是陣列'}`, 'info');
+                    log(`activeWorkspaceId: ${ProJED.state.activeWorkspaceId || '(null)'}`, 'info');
+                    log(`activeBoardId: ${ProJED.state.activeBoardId || '(null)'}`, 'info');
+                } else {
+                    log('✗ ProJED.state 不存在', 'fail');
+                }
+
+                // 顯示完整的 ProJED 結構
+                log('6. ProJED 物件結構:', 'info');
+                results.innerHTML += '<pre>' + JSON.stringify(Object.keys(ProJED), null, 2) + '</pre>';
+
+                log('<hr><strong>診斷完成</strong>', 'info');
+
+            }, 500);
+        };
+
+        script.onerror = (e) => {
+            log('✗ app.js 載入失敗', 'fail');
+            log('錯誤: ' + e, 'fail');
+        };
+
+        document.head.appendChild(script);
+    </script>
+</body>
+
+</html>
