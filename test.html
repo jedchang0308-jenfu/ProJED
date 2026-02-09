@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ProJED Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+</head>
+
+<body>
+    <h1>ProJED 系統測試</h1>
+    <div id="test-results"></div>
+
+    <script>
+        // 簡單的測試腳本
+        const results = document.getElementById('test-results');
+
+        function test(name, fn) {
+            try {
+                fn();
+                results.innerHTML += `<p style="color:green">✓ ${name}</p>`;
+                return true;
+            } catch (e) {
+                results.innerHTML += `<p style="color:red">✗ ${name}: ${e.message}</p>`;
+                console.error(name, e);
+                return false;
+            }
+        }
+
+        // 載入主應用
+        const script = document.createElement('script');
+        script.src = 'app.js';
+        script.onload = () => {
+            setTimeout(() => {
+                results.innerHTML = '<h2>開始測試...</h2>';
+
+                const allPassed = [
+                    test('ProJED 物件存在', () => {
+                        if (!window.ProJED) throw new Error('ProJED not found');
+                    }),
+
+                    test('renderActiveView 函數存在', () => {
+                        if (typeof ProJED.renderActiveView !== 'function')
+                            throw new Error('renderActiveView not found');
+                    }),
+
+                    test('switchBoard 函數存在', () => {
+                        if (typeof ProJED.switchBoard !== 'function')
+                            throw new Error('switchBoard not found');
+                    }),
+
+                    test('showHome 函數存在', () => {
+                        if (typeof ProJED.showHome !== 'function')
+                            throw new Error('showHome not found');
+                    }),
+
+                    test('renderSidebar 函數存在', () => {
+                        if (typeof ProJED.renderSidebar !== 'function')
+                            throw new Error('renderSidebar not found');
+                    }),
+
+                    test('renderHomeView 函數存在', () => {
+                        if (typeof ProJED.renderHomeView !== 'function')
+                            throw new Error('renderHomeView not found');
+                    }),
+
+                    test('State 包含 workspaces', () => {
+                        if (!Array.isArray(ProJED.state.workspaces))
+                            throw new Error('workspaces not array');
+                    }),
+
+                    test('Data.load 函數存在', () => {
+                        if (typeof ProJED.Data.load !== 'function')
+                            throw new Error('Data.load not found');
+                    }),
+
+                    test('Board.render 函數存在', () => {
+                        if (typeof ProJED.Board.render !== 'function')
+                            throw new Error('Board.render not found');
+                    })
+                ].every(x => x);
+
+                results.innerHTML += '<hr>';
+                if (allPassed) {
+                    results.innerHTML += '<p style="color:green; font-size:20px; font-weight:bold">✓ 所有測試通過!</p>';
+                    results.innerHTML += '<p><a href="index.html">前往主應用 →</a></p>';
+                } else {
+                    results.innerHTML += '<p style="color:red; font-size:20px; font-weight:bold">✗ 有測試失敗，請查看控制台</p>';
+                }
+            }, 500);
+        };
+        script.onerror = () => {
+            results.innerHTML = '<p style="color:red">✗ 無法載入 app.js - 可能有語法錯誤</p>';
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+
+</html>
