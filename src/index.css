@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-primary-light: #eef2ff;
+
+  --color-status-todo: #64748b;
+  --color-status-delayed: #f97316;
+  --color-status-completed: #10b981;
+  --color-status-unsure: #a855f7;
+  --color-status-onhold: #cbd5e1;
+}
+
+@layer base {
+  :root {
+    --bg-dark: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-surface: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --accent: #10b981;
+    --danger: #f97316;
+    --border: #e2e8f0;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --radius: 8px;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden h-screen;
+    font-family: 'Inter', 'Outfit', sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition-all shadow-sm active:scale-95 flex items-center gap-2;
+  }
+
+  .btn-outline {
+    @apply px-4 py-2 border border-slate-200 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-all flex items-center gap-2;
+  }
+
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl rounded-xl;
+  }
+}
+
+/* ========================================
+   拖動功能樣式（dnd-kit）
+   ======================================== */
+
+/* 拖動手柄基礎樣式 */
+.cursor-grab {
+  cursor: grab;
+  touch-action: none;
+  /* 防止瀏覽器手勢干擾 */
+}
+
+.cursor-grab:active {
+  cursor: grabbing;
+}
+
+/* 拖動中的視覺效果 */
+.dragging {
+  opacity: 0.5;
+  transform: scale(1.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* 無滾動條樣式（保持原有） */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 自定義滾動條樣式 */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ========================================
+   手機觸控優化（預留 Capacitor APP 擴充性）
+   ======================================== */
+
+/* 觸控裝置專用樣式 */
+@media (hover: none) and (pointer: coarse) {
+
+  /* 拖動手柄放大（符合 Apple/Google 觸控標準 44x44px） */
+  .cursor-grab {
+    padding: 12px !important;
+    margin: -8px !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* 防止文字選取干擾拖動 */
+  .draggable,
+  [draggable="true"] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* 卡片觸控優化 */
+  .card-touchable {
+    min-height: 60px;
+    padding: 16px;
+  }
+
+  /* 按鈕觸控區域放大 */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 滾動容器觸控優化 */
+  .scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* ========================================
+   動畫效果
+   ======================================== */
+
+/* 淡入動畫 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* 滑入動畫 */
+@keyframes slideIn {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 應用動畫類別 */
+.animate-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.slide-in-from-top-1 {
+  animation: slideIn 0.2s ease-out;
+}
