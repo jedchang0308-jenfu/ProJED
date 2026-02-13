@@ -45,7 +45,10 @@ const Sidebar = ({ isOpen, toggle }) => {
                                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{ws.title}</span>
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                         <button
-                                            onClick={() => switchBoard(ws.id, ws.boards[0]?.id)}
+                                            onClick={() => {
+                                                const name = prompt("請輸入看板名稱：");
+                                                if (name) useBoardStore.getState().addBoard(ws.id, name);
+                                            }}
                                             className="p-1 hover:bg-primary-light hover:text-primary rounded text-slate-400"
                                             title="新增看板"
                                         >
@@ -53,7 +56,7 @@ const Sidebar = ({ isOpen, toggle }) => {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                if (confirm(`確定要刪除工作區「${ws.title}」及其所有看板嗎？`)) {
+                                                if (confirm(`確定要刪除工作區「${ws.title}」及其所有看板嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
                                                     removeWorkspace(ws.id);
                                                     showHome();
                                                 }
@@ -71,7 +74,7 @@ const Sidebar = ({ isOpen, toggle }) => {
                                         <button
                                             key={board.id}
                                             onClick={() => switchBoard(ws.id, board.id)}
-                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors ${activeBoardId === board.id
+                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors group/item ${activeBoardId === board.id
                                                 ? 'bg-primary text-white shadow-md'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                                 }`}
@@ -81,12 +84,12 @@ const Sidebar = ({ isOpen, toggle }) => {
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (confirm(`確定要刪除看板「${board.title}」嗎？`)) {
+                                                    if (confirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
                                                         removeBoard(ws.id, board.id);
                                                         if (activeBoardId === board.id) showHome();
                                                     }
                                                 }}
-                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/20 rounded text-inherit transition-all"
+                                                className={`p-1 rounded transition-all opacity-0 group-hover/item:opacity-100 ${activeBoardId === board.id ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-400'}`}
                                                 title="刪除看板"
                                             >
                                                 <Trash2 size={12} />

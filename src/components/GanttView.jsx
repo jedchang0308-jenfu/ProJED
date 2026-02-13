@@ -16,8 +16,7 @@ const GanttView = () => {
         updateCard,
         updateList,
         updateChecklistItem,
-        addDependency,
-        removeDependency,
+        updateTaskDate,
         isSidebarOpen,
         setSidebarOpen
     } = useBoardStore();
@@ -26,10 +25,9 @@ const GanttView = () => {
 
     const [mode, setMode] = useState('Month'); // Month, Quarter, Year
     const [ganttFilters, setGanttFilters] = useState({ list: true, card: true, checklist: true });
-    const [dragState, setDragState] = useState(null); // { type: 'move'|'left'|'right'|'connect', item, ... }
+    const [dragState, setDragState] = useState(null); // { type: 'move'|'left'|'right', item, ... }
     const [viewport, setViewport] = useState({ scrollLeft: 0, width: 0 });
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-    const [hoveredItemId, setHoveredItemId] = useState(null); // { id, type: 'task'|'dependency' }
+    const [hoveredItemId, setHoveredItemId] = useState(null); // { id, type: 'task' }
     const scrollAreaRef = useRef(null);
     const taskListRef = useRef(null);
 
@@ -162,23 +160,15 @@ const GanttView = () => {
         const start = item.startDate || (isMilestone ? item.endDate : dayjs(item.endDate).subtract(3, 'day').format('YYYY-MM-DD'));
         const end = item.endDate || dayjs(start).add(3, 'day').format('YYYY-MM-DD');
 
-        const rect = e.currentTarget.getBoundingClientRect();
-        const scrollLeft = scrollAreaRef.current?.scrollLeft || 0;
-        const scrollTop = scrollAreaRef.current?.scrollTop || 0;
-
         setDragState({
-            type, // 'move', 'left', 'right', 'connect'
+            type, // 'move', 'left', 'right'
             item,
             startX: e.clientX,
             startY: e.clientY,
             originalStart: start,
             originalEnd: end,
             originalStartX: getX(start, colWidth),
-            originalEndX: getX(end, colWidth),
-            connectorPoint: type === 'connect' ? {
-                x: getX(end, colWidth),
-                y: item.row * BAR_HEIGHT + BAR_HEIGHT / 2
-            } : null
+            originalEndX: getX(end, colWidth)
         });
     };
 
@@ -186,8 +176,6 @@ const GanttView = () => {
         if (!dragState) return;
 
         const handleMouseMove = (e) => {
-            setMousePos({ x: e.clientX, y: e.clientY });
-
             // Auto-scroll on drag
             if (scrollAreaRef.current) {
                 const rect = scrollAreaRef.current.getBoundingClientRect();
@@ -199,8 +187,6 @@ const GanttView = () => {
                     scrollAreaRef.current.scrollLeft += scrollSpeed;
                 }
             }
-
-            if (dragState.type === 'connect') return;
 
             const deltaX = e.clientX - dragState.startX;
             const item = dragState.item;
@@ -229,88 +215,22 @@ const GanttView = () => {
 
             // Update store SILENTLY (no history during movement)
             const updates = { startDate: newStart, endDate: newEnd };
-            if (item.type === 'list') {
-                updateList(activeWorkspaceId, activeBoardId, item.id, updates, true);
-            } else if (item.type === 'card') {
-                updateCard(activeWorkspaceId, activeBoardId, item.listId, item.id, updates, true);
-            } else if (item.type === 'checklist') {
-                updateChecklistItem(activeWorkspaceId, activeBoardId, item.listId, item.cardId, item.checklistId, item.id, updates, true);
-            }
 
-            // Auto-scheduling: Push successors
-            if (activeBoard?.dependencies) {
-                const pushSuccessors = (targetId, currentStart, currentEnd) => {
-                    activeBoard.dependencies.forEach(dep => {
-                        if (dep.fromId === targetId) {
-                            const successor = flattenedItems.find(i => i.id === dep.toId);
-                            if (!successor) return;
-
-                            const sStart = successor.startDate || dayjs().format('YYYY-MM-DD');
-                            const sEnd = successor.endDate || dayjs(sStart).add(1, 'day').format('YYYY-MM-DD');
-                            const sGap = dayjs(sEnd).diff(dayjs(sStart), 'day');
-
-                            let nextStart = sStart;
-                            let nextEnd = sEnd;
-                            let needsUpdate = false;
-
-                            // Logic Based on Connectors
-                            if (dep.fromSide === 'end' && dep.toSide === 'start') { // FS
-                                if (dayjs(sStart).isBefore(dayjs(currentEnd).add(1, 'day'))) {
-                                    nextStart = dayjs(currentEnd).add(1, 'day').format('YYYY-MM-DD');
-                                    nextEnd = dayjs(nextStart).add(sGap, 'day').format('YYYY-MM-DD');
-                                    needsUpdate = true;
-                                }
-                            } else if (dep.fromSide === 'start' && dep.toSide === 'start') { // SS
-                                if (dayjs(sStart).isBefore(dayjs(currentStart))) {
-                                    nextStart = currentStart;
-                                    nextEnd = dayjs(nextStart).add(sGap, 'day').format('YYYY-MM-DD');
-                                    needsUpdate = true;
-                                }
-                            } else if (dep.fromSide === 'end' && dep.toSide === 'end') { // FF
-                                if (dayjs(sEnd).isBefore(dayjs(currentEnd))) {
-                                    nextEnd = currentEnd;
-                                    nextStart = dayjs(nextEnd).subtract(sGap, 'day').format('YYYY-MM-DD');
-                                    needsUpdate = true;
-                                }
-                            } else if (dep.fromSide === 'start' && dep.toSide === 'end') { // SF
-                                if (dayjs(sEnd).isBefore(dayjs(currentStart))) {
-                                    nextEnd = currentStart;
-                                    nextStart = dayjs(nextEnd).subtract(sGap, 'day').format('YYYY-MM-DD');
-                                    needsUpdate = true;
-                                }
-                            }
-
-                            if (needsUpdate) {
-                                const sUpdates = { startDate: nextStart, endDate: nextEnd };
-                                if (successor.type === 'list') updateList(activeWorkspaceId, activeBoardId, successor.id, sUpdates, true);
-                                else if (successor.type === 'card') updateCard(activeWorkspaceId, activeBoardId, successor.listId, successor.id, sUpdates, true);
-                                else if (successor.type === 'checklist') updateChecklistItem(activeWorkspaceId, activeBoardId, successor.listId, successor.cardId, successor.checklistId, successor.id, sUpdates, true);
-
-                                pushSuccessors(successor.id, nextStart, nextEnd);
-                            }
-                        }
-                    });
-                };
-                pushSuccessors(item.id, newStart, newEnd);
-            }
+            // 使用新的 Action 統一處理更新與依賴排程
+            updateTaskDate(
+                activeWorkspaceId,
+                activeBoardId,
+                item.type,
+                item.id,
+                updates,
+                item.listId,
+                item.cardId,
+                item.checklistId,
+                true // noHistory during draft drag? actually we might want history on drop only? Or just noHistory as drafted
+            );
         };
 
         const handleMouseUp = (e) => {
-            if (dragState.type === 'connect') {
-                // Find if we dropped on a task bar
-                const target = document.elementFromPoint(e.clientX, e.clientY);
-                const taskBar = target?.closest('[data-task-id]');
-                if (taskBar) {
-                    const toId = taskBar.getAttribute('data-task-id');
-                    if (toId !== dragState.item.id) {
-                        addDependency(activeWorkspaceId, activeBoardId, {
-                            fromId: dragState.item.id,
-                            toId: toId,
-                            type: 'fs'
-                        });
-                    }
-                }
-            }
             setDragState(null);
         };
 
@@ -436,14 +356,6 @@ const GanttView = () => {
         } else if (item.type === 'checklist') {
             openModal('card', item.cardId, item.listId);
         }
-    };
-
-    // Determine if a dependency is highlighted
-    const isDependencyHighlighted = (dep) => {
-        if (!hoveredItemId) return false;
-        if (hoveredItemId.type === 'dependency' && hoveredItemId.id === dep.id) return true;
-        if (hoveredItemId.type === 'task' && (dep.fromId === hoveredItemId.id || dep.toId === hoveredItemId.id)) return true;
-        return false;
     };
 
     return (
@@ -615,89 +527,7 @@ const GanttView = () => {
                                 })}
                             </div>
 
-                            {/* SVG Layer for Connections */}
-                            <svg className="absolute inset-0 pointer-events-none z-10 overflow-visible">
-                                <defs>
-                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orientation="auto">
-                                        <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
-                                    </marker>
-                                </defs>
 
-                                {activeBoard?.dependencies?.map(dep => {
-                                    const from = flattenedItems.find(i => i.id === dep.fromId);
-                                    const to = flattenedItems.find(i => i.id === dep.toId);
-                                    if (!from || !to) return null;
-
-                                    // Precise coordinates based on fromSide and toSide
-                                    const x1 = dep.fromSide === 'end'
-                                        ? getX(from.endDate || dayjs(from.startDate).add(3, 'day').format('YYYY-MM-DD'), colWidth)
-                                        : getX(from.startDate || dayjs(from.endDate).subtract(3, 'day').format('YYYY-MM-DD'), colWidth);
-                                    const y1 = from.row * BAR_HEIGHT + BAR_HEIGHT / 2;
-
-                                    const x2 = dep.toSide === 'start'
-                                        ? getX(to.startDate || dayjs(to.endDate).subtract(3, 'day').format('YYYY-MM-DD'), colWidth)
-                                        : getX(to.endDate || dayjs(to.startDate).add(3, 'day').format('YYYY-MM-DD'), colWidth);
-                                    const y2 = to.row * BAR_HEIGHT + BAR_HEIGHT / 2;
-
-                                    // Orthogonal Path Logic to avoid overlapping with bars
-                                    const offset = 16;
-                                    let path = "";
-                                    let deletePoint = { x: 0, y: 0 };
-
-                                    if (x2 >= x1 + offset * 2) {
-                                        // Forward connection: simple 3-segment orthogonal
-                                        const midX = (x1 + x2) / 2;
-                                        path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
-                                        deletePoint = { x: midX, y: (y1 + y2) / 2 };
-                                    } else {
-                                        // Backward or tight connection: 5-segment wrap-around
-                                        // Use the row gap (multiples of BAR_HEIGHT) to avoid bars
-                                        const yGap = y2 > y1 ? y1 + BAR_HEIGHT / 2 : y1 - BAR_HEIGHT / 2;
-                                        path = `M ${x1} ${y1} L ${x1 + offset} ${y1} L ${x1 + offset} ${yGap} L ${x2 - offset} ${yGap} L ${x2 - offset} ${y2} L ${x2} ${y2}`;
-                                        deletePoint = { x: (x1 + x2) / 2, y: yGap };
-                                    }
-
-                                    const isHighlighted = isDependencyHighlighted(dep);
-
-                                    return (
-                                        <g
-                                            key={dep.id}
-                                            className="group"
-                                            onMouseEnter={() => setHoveredItemId({ id: dep.id, type: 'dependency' })}
-                                            onMouseLeave={() => setHoveredItemId(null)}
-                                        >
-                                            <path
-                                                d={path}
-                                                stroke={isHighlighted ? "#6366f1" : "#94a3b8"}
-                                                strokeWidth={isHighlighted ? "2.5" : "1.5"}
-                                                fill="none"
-                                                markerEnd="url(#arrowhead)"
-                                                strokeLinejoin="round"
-                                                className="transition-all duration-200"
-                                            />
-                                            {/* Deletion Zone */}
-                                            <circle
-                                                cx={deletePoint.x} cy={deletePoint.y} r="5"
-                                                fill="white" stroke="#ef4444" strokeWidth="1.5"
-                                                className="opacity-0 group-hover:opacity-100 cursor-pointer pointer-events-auto transition-opacity"
-                                                onClick={(e) => { e.stopPropagation(); removeDependency(activeWorkspaceId, activeBoardId, dep.id); }}
-                                            />
-                                        </g>
-                                    );
-                                })}
-
-                                {dragState?.type === 'connect' && (
-                                    <line
-                                        x1={dragState.connectorPoint.x}
-                                        y1={dragState.connectorPoint.y}
-                                        x2={getX(getDateFromX(dragState.connectorPoint.x + (mousePos.x - dragState.startX), colWidth), colWidth)}
-                                        y2={dragState.connectorPoint.y + (mousePos.y - dragState.startY)}
-                                        stroke="#3b82f6"
-                                        strokeWidth="2"
-                                        strokeDasharray="4 2"
-                                    />
-                                )}
-                            </svg>
 
                             {/* Grid Lines */}
                             <div className="absolute inset-0 pointer-events-none" style={{ backgroundSize: `${colWidth}px 100%`, backgroundImage: 'linear-gradient(to right, #f1f5f9 1px, transparent 1px)' }}></div>
@@ -733,16 +563,8 @@ const GanttView = () => {
                                         ? 'brightness-100'        // 中間階層：標準
                                         : 'brightness-125 opacity-80'; // 最低階層：最淺
 
-                                // Chain Highlighting Logic
-                                const isRelated = hoveredItemId && (
-                                    (hoveredItemId.type === 'task' && (
-                                        item.id === hoveredItemId.id ||
-                                        activeBoard?.dependencies?.some(d => (d.fromId === item.id && d.toId === hoveredItemId.id) || (d.toId === item.id && d.fromId === hoveredItemId.id))
-                                    )) ||
-                                    (hoveredItemId.type === 'dependency' && (
-                                        activeBoard?.dependencies?.some(d => d.id === hoveredItemId.id && (d.fromId === item.id || d.toId === item.id))
-                                    ))
-                                );
+                                // Highlighting Logic
+                                const isRelated = hoveredItemId && hoveredItemId.type === 'task' && item.id === hoveredItemId.id;
 
                                 return (
                                     <div
@@ -762,12 +584,6 @@ const GanttView = () => {
                                             top: item.row * BAR_HEIGHT + (BAR_HEIGHT - barHeight) / 2
                                         }}
                                     >
-                                        {/* Dependency Connector */}
-                                        <div
-                                            className="absolute -right-1.5 w-3 h-3 bg-white border-2 border-slate-300 rounded-full cursor-crosshair opacity-0 group-hover:opacity-100 z-50 hover:border-primary hover:scale-125 transition-all"
-                                            onMouseDown={(e) => handleDragStart(e, item, 'connect')}
-                                        />
-
                                         {/* Resize Handles */}
                                         {!isMilestone && !isUsingFallback && (
                                             <>

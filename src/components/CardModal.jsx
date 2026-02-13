@@ -13,6 +13,7 @@ const CardModal = () => {
         editingItem,
         closeModal,
         workspaces,
+        currentView,
         updateList,
         updateCard,
         addChecklist,
@@ -26,7 +27,8 @@ const CardModal = () => {
         openModal,
         addDependency,
         removeDependency,
-        updateDependency
+        updateDependency,
+        updateTaskDate // Add this
     } = useBoardStore();
 
     const sensors = useDragSensors();
@@ -99,8 +101,8 @@ const CardModal = () => {
 
     const DependencyTags = ({ targetId, side, onAdd, small = false }) => {
         const deps = (board?.dependencies || []).filter(d =>
-            (d.toId === targetId && d.toSide === side) ||
-            (d.fromId === targetId && d.fromSide === side)
+            (d.toId === targetId && (d.toSide === side || !d.toSide)) ||
+            (d.fromId === targetId && (d.fromSide === side || !d.fromSide))
         );
 
         if (deps.length === 0) {
@@ -173,12 +175,27 @@ const CardModal = () => {
     };
 
     const handleUpdate = (updates) => {
-        if (type === 'card') {
-            updateCard(workspaceId, boardId, listId, itemId, updates);
-        } else if (type === 'list') {
-            updateList(workspaceId, boardId, itemId, updates);
-        } else if (type === 'checklistitem') {
-            updateChecklistItem(workspaceId, boardId, listId, cardId, checklistId, itemId, updates);
+        // 如果是更新日期，使用帶有自動排程的 action
+        if (updates.startDate || updates.endDate) {
+            updateTaskDate(
+                workspaceId,
+                boardId,
+                type,
+                itemId,
+                updates,
+                listId,
+                cardId,
+                checklistId
+            );
+        } else {
+            // 其他更新照舊
+            if (type === 'card') {
+                updateCard(workspaceId, boardId, listId, itemId, updates);
+            } else if (type === 'list') {
+                updateList(workspaceId, boardId, itemId, updates);
+            } else if (type === 'checklistitem') {
+                updateChecklistItem(workspaceId, boardId, listId, cardId, checklistId, itemId, updates);
+            }
         }
     };
 
@@ -276,11 +293,13 @@ const CardModal = () => {
                                         onChange={(e) => handleUpdate({ startDate: e.target.value })}
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                                     />
-                                    <DependencyTags
-                                        targetId={itemId}
-                                        side="start"
-                                        onAdd={() => setConnectingSide({ side: 'start' })}
-                                    />
+                                    {currentView === 'board' && (
+                                        <DependencyTags
+                                            targetId={itemId}
+                                            side="start"
+                                            onAdd={() => setConnectingSide({ side: 'start' })}
+                                        />
+                                    )}
                                 </div>
                                 <div className="pt-2 text-slate-300">→</div>
                                 <div className="flex-1 space-y-1.5">
@@ -291,11 +310,13 @@ const CardModal = () => {
                                         onChange={(e) => handleUpdate({ endDate: e.target.value })}
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                                     />
-                                    <DependencyTags
-                                        targetId={itemId}
-                                        side="end"
-                                        onAdd={() => setConnectingSide({ side: 'end' })}
-                                    />
+                                    {currentView === 'board' && (
+                                        <DependencyTags
+                                            targetId={itemId}
+                                            side="end"
+                                            onAdd={() => setConnectingSide({ side: 'end' })}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </section>
@@ -493,7 +514,7 @@ const CardModal = () => {
                 <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <button
                         onClick={() => {
-                            if (confirm(`確定要刪除這${type === 'list' ? '個列表' : (type === 'card' ? '張卡片' : '個待辦事項')}嗎？此動作無法復原。`)) {
+                            if (confirm(`確定要刪除這${type === 'list' ? '個列表' : (type === 'card' ? '張卡片' : '個待辦事項')}嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
                                 if (type === 'list') {
                                     removeList(workspaceId, boardId, itemId);
                                 } else if (type === 'card') {
@@ -515,8 +536,8 @@ const CardModal = () => {
                 </div>
             </div>
 
-            {/* Dependency Selection Modal */}
-            {connectingSide && (
+            {/* Dependency Selection Modal - 只在看板模式下顯示 */}
+            {currentView === 'board' && connectingSide && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-primary/20">
                         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -572,10 +593,12 @@ const CardModal = () => {
                                     <div className="flex gap-2 shrink-0">
                                         <button
                                             onClick={() => {
+                                                const newType = 'ss'; // start-to-start
                                                 addDependency(workspaceId, boardId, {
                                                     fromId: connectingSide.itemId || itemId, fromSide: 'start',
                                                     toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                    offset: tempOffset
+                                                    offset: tempOffset,
+                                                    type: newType
                                                 });
                                                 setConnectingSide(null);
                                                 setSearchTerm('');
@@ -585,10 +608,12 @@ const CardModal = () => {
                                         >依賴其「起始」</button>
                                         <button
                                             onClick={() => {
+                                                const newType = connectingSide.side === 'start' ? 'fs' : 'ff';
                                                 addDependency(workspaceId, boardId, {
                                                     fromId: connectingSide.itemId || itemId, fromSide: 'end',
                                                     toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                    offset: tempOffset
+                                                    offset: tempOffset,
+                                                    type: newType
                                                 });
                                                 setConnectingSide(null);
                                                 setSearchTerm('');
@@ -609,10 +634,12 @@ const CardModal = () => {
                                             <div className="flex gap-2 shrink-0">
                                                 <button
                                                     onClick={() => {
+                                                        const newType = connectingSide.side === 'start' ? 'ss' : 'sf';
                                                         addDependency(workspaceId, boardId, {
                                                             fromId: t.id, fromSide: 'start',
                                                             toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                            offset: tempOffset
+                                                            offset: tempOffset,
+                                                            type: newType
                                                         });
                                                         setConnectingSide(null);
                                                         setSearchTerm('');
@@ -622,10 +649,12 @@ const CardModal = () => {
                                                 >依賴其「起始」</button>
                                                 <button
                                                     onClick={() => {
+                                                        const newType = connectingSide.side === 'start' ? 'fs' : 'ff';
                                                         addDependency(workspaceId, boardId, {
                                                             fromId: t.id, fromSide: 'end',
                                                             toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                            offset: tempOffset
+                                                            offset: tempOffset,
+                                                            type: newType
                                                         });
                                                         setConnectingSide(null);
                                                         setSearchTerm('');

@@ -52,7 +52,7 @@ const HomeView = () => {
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm(`確定要刪除看板「${board.title}」嗎？`)) {
+                                    if (confirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
                                         useBoardStore.getState().removeBoard(ws.id, board.id);
                                     }
                                 }}

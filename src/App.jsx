@@ -8,7 +8,7 @@ import GanttView from './components/GanttView';
 import CardModal from './components/CardModal';
 
 function App() {
-  const { currentView, workspaces, setWorkspaces } = useBoardStore();
+  const { currentView, workspaces, activeWorkspaceId, activeBoardId } = useBoardStore();
 
   useEffect(() => {
     // Run migration if no data exists in the new store
@@ -22,7 +22,14 @@ function App() {
         useBoardStore.getState().addWorkspace("我的工作區");
       }
     }
-  }, [workspaces]);
+  }, [workspaces.length]); // Only run when workspace count changes (init)
+
+  useEffect(() => {
+    // 只有在看板 ID 切換時才執行一次性清理，避免死循環
+    if (activeWorkspaceId && activeBoardId) {
+      useBoardStore.getState().cleanBoardDependencies(activeWorkspaceId, activeBoardId);
+    }
+  }, [activeBoardId]); // 關鍵：只監聽看板 ID 變動
 
   const renderContent = () => {
     switch (currentView) {
