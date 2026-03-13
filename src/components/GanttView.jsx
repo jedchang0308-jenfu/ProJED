@@ -1,10 +1,12 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import useBoardStore from '../store/useBoardStore';
+import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, Folder, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, Folder, FileText, RefreshCw } from 'lucide-react';
 
-const BAR_HEIGHT = 42;
-const GRID_START = dayjs('2024-01-01');
+// 方案 B 優化: 行高從 32px 縮減至 28px，增加視覺緊湊感
+const BAR_HEIGHT = 28;
+// Default fallback if no dates exist
+const DEFAULT_GRID_START = dayjs().startOf('year');
 
 const GanttView = () => {
     const {
@@ -28,24 +30,54 @@ const GanttView = () => {
     const [dragState, setDragState] = useState(null); // { type: 'move'|'left'|'right', item, ... }
     const [viewport, setViewport] = useState({ scrollLeft: 0, width: 0 });
     const [hoveredItemId, setHoveredItemId] = useState(null); // { id, type: 'task' }
+    const [dragDeltaX, setDragDeltaX] = useState(0); // For smooth visual dragging
+    const [dragDates, setDragDates] = useState(null); // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' }
+    const [simulatedDates, setSimulatedDates] = useState(null); // Real-time preview
     const scrollAreaRef = useRef(null);
     const taskListRef = useRef(null);
+
+    // ─── 效能優化：方案 B ────────────────────────────────────────────
+    // dragStateRef：即時儲存當下拖曳資訊（不觸發 React re-render）
+    // rafIdRef：記錄 requestAnimationFrame 的 ID，以便在 mouseup 時取消未執行的幀
+    const dragStateRef = useRef(null);
+    const rafIdRef = useRef(null);
+    // ────────────────────────────────────────────────────────────────
 
     // Get active board data
     const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
     const activeBoard = activeWs?.boards.find(b => b.id === activeBoardId);
 
-    // Flatten data into rows with hierarchy info
-    const { flattenedItems, groups } = useMemo(() => {
-        if (!activeBoard) return { flattenedItems: [], groups: { lists: [], cards: [] } };
+    // Flatten data into rows with hierarchy info and calculate date boundaries
+    const { flattenedItems, groups, gridStart, totalUnits } = useMemo(() => {
+        if (!activeBoard) return { flattenedItems: [], groups: { lists: [], cards: [] }, gridStart: DEFAULT_GRID_START, totalUnits: 60 };
         const items = [];
         const listGroups = [];
         const cardGroups = [];
         let currentRow = 0;
 
+        let minDate = null;
+        let maxDate = null;
+
+        const updateBounds = (start, end) => {
+            if (start) {
+                const s = dayjs(start);
+                if (s.isValid()) {
+                    if (!minDate || s.isBefore(minDate)) minDate = s;
+                }
+            }
+            if (end) {
+                const e = dayjs(end);
+                if (e.isValid()) {
+                    if (!maxDate || e.isAfter(maxDate)) maxDate = e;
+                }
+            }
+        };
+
         activeBoard.lists.forEach(list => {
             const listStatus = list.status || 'todo';
             const listStartRow = currentRow;
+
+            updateBounds(list.startDate, list.endDate);
 
             // 列表主項
             if (ganttFilters.list && statusFilters[listStatus]) {
@@ -58,6 +90,8 @@ const GanttView = () => {
                 const cardStatus = card.status || 'todo';
                 if (!statusFilters[cardStatus]) return;
 
+                updateBounds(card.startDate, card.endDate);
+
                 const cardStartRow = currentRow;
                 // 卡片主項
                 if (ganttFilters.card) {
@@ -68,6 +102,7 @@ const GanttView = () => {
                 if (ganttFilters.checklist) {
                     (card.checklists || []).forEach(cl => {
                         (cl.items || []).forEach(cli => {
+                            updateBounds(cli.startDate, cli.endDate);
                             items.push({
                                 ...cli,
                                 type: 'checklist',
@@ -108,34 +143,99 @@ const GanttView = () => {
                 });
             }
         });
-        return { flattenedItems: items, groups: { lists: listGroups, cards: cardGroups } };
-    }, [activeBoard, ganttFilters, statusFilters]);
+
+        // 決定最終邊界
+        // 緩衝區：前面推 6 個月，後面推 12 個月，或以「今天」為基準
+        const today = dayjs();
+        const start = (minDate && minDate.isBefore(today)) ? minDate : today;
+        const end = (maxDate && maxDate.isAfter(today)) ? maxDate : today;
+
+        const calculatedGridStart = start.subtract(6, 'month').startOf('month');
+        const calculatedGridEnd = end.add(12, 'month').endOf('month');
+
+        // 計算總格數
+        let units = 60;
+        if (mode === 'Day') {
+            units = calculatedGridEnd.diff(calculatedGridStart, 'day') + 1;
+        } else if (mode === 'Quarter') {
+            units = Math.ceil(calculatedGridEnd.diff(calculatedGridStart, 'month') / 3) + 1;
+        } else if (mode === 'Year') {
+            units = calculatedGridEnd.diff(calculatedGridStart, 'year') + 1;
+        } else {
+            units = calculatedGridEnd.diff(calculatedGridStart, 'month') + 1;
+        }
+
+        return {
+            flattenedItems: items,
+            groups: { lists: listGroups, cards: cardGroups },
+            gridStart: calculatedGridStart,
+            totalUnits: units
+        };
+    }, [activeBoard, ganttFilters, statusFilters, mode]);
 
     // Helpers for X coordinates
     const getX = (date, colWidth) => {
         if (!date) return 0;
         const d = dayjs(date);
         if (!d.isValid()) return 0;
-        const mDiff = d.diff(GRID_START, 'month', true);
+
+        if (mode === 'Day') {
+            const dDiff = d.diff(gridStart, 'day', true);
+            return dDiff * colWidth;
+        }
+
+        const totalMonths = d.diff(gridStart, 'month');
+        const startOfMonth = gridStart.add(totalMonths, 'month');
+        const daysInMonth = startOfMonth.daysInMonth();
+        const daysPassed = d.diff(startOfMonth, 'day');
+        
+        const mDiff = totalMonths + (daysPassed / daysInMonth);
+        
         if (mode === 'Quarter') return (mDiff / 3) * colWidth;
         if (mode === 'Year') return (mDiff / 12) * colWidth;
         return mDiff * colWidth;
     };
 
     const getDateFromX = (x, colWidth) => {
-        let months = x / colWidth;
-        if (mode === 'Quarter') months *= 3;
-        if (mode === 'Year') months *= 12;
-        return GRID_START.add(months, 'month').format('YYYY-MM-DD');
+        if (mode === 'Day') {
+            const days = x / colWidth;
+            return gridStart.add(days, 'day').format('YYYY-MM-DD');
+        }
+
+        let mDiff = x / colWidth;
+        if (mode === 'Quarter') mDiff *= 3;
+        if (mode === 'Year') mDiff *= 12;
+
+        const totalMonths = Math.floor(mDiff);
+        const fraction = mDiff - totalMonths;
+        
+        const startOfMonth = gridStart.add(totalMonths, 'month');
+        const daysInMonth = startOfMonth.daysInMonth();
+        // Snapping: inherently snaps to nearest integer day
+        const daysPassed = Math.round(fraction * daysInMonth);
+        
+        return startOfMonth.add(daysPassed, 'day').format('YYYY-MM-DD');
     };
 
     const getColWidth = () => {
+        if (mode === 'Day') return 60;
         if (mode === 'Quarter') return 250;
         if (mode === 'Year') return 600;
         return 160; // Month
     };
 
     const colWidth = getColWidth();
+
+    // Helper: Generate alphabetical label (A, B... Z, AA, AB...)
+    const getDependencyLabel = (index) => {
+        let label = '';
+        let num = index;
+        while (num >= 0) {
+            label = String.fromCharCode(97 + (num % 26)) + label;
+            num = Math.floor(num / 26) - 1;
+        }
+        return label;
+    };
 
     // Sync scroll between task list and timeline (Dual-way Sync)
     const handleScroll = (e) => {
@@ -146,6 +246,16 @@ const GanttView = () => {
             taskListRef.current.scrollTop = scrollTop;
         } else if (e.target === taskListRef.current && scrollAreaRef.current) {
             scrollAreaRef.current.scrollTop = scrollTop;
+        }
+    };
+
+    const scrollToNow = () => {
+        if (scrollAreaRef.current) {
+            const todayX = getX(dayjs(), colWidth);
+            scrollAreaRef.current.scrollTo({
+                left: todayX - scrollAreaRef.current.clientWidth / 2,
+                behavior: 'smooth'
+            });
         }
     };
 
@@ -170,13 +280,55 @@ const GanttView = () => {
             originalStartX: getX(start, colWidth),
             originalEndX: getX(end, colWidth)
         });
+        
+        setDragDates({
+            start,
+            end
+        });
     };
 
     useEffect(() => {
         if (!dragState) return;
 
+        // ─── 方案 B 核心：同步更新 ref，非同步更新 state ────────────────
+        // 每次 mousemove 事件觸發時，立即將最新的滑鼠位置寫入 ref（零延遲）。
+        // 接著透過 requestAnimationFrame 確保 setState（觸發 React re-render）
+        // 的頻率上限為瀏覽器的刷新率（約 60fps），不會被每個 mousemove 事件淹沒。
+        // ────────────────────────────────────────────────────────────────
+
+        // 將 dragState 同步到 ref 供 rAF callback 讀取（避免 closure stale state）
+        dragStateRef.current = dragState;
+
+        /**
+         * 計算拖曳後的暫時起訖日期
+         * @param {number} clientX - 當前滑鼠 X 座標
+         * @returns {{ tempStart: string, tempEnd: string }}
+         */
+        const calcDragDates = (clientX) => {
+            const ds = dragStateRef.current;
+            const rawDeltaX = clientX - ds.startX;
+            let tempStart = ds.originalStart;
+            let tempEnd = ds.originalEnd;
+
+            if (ds.type === 'move') {
+                tempStart = getDateFromX(ds.originalStartX + rawDeltaX, colWidth);
+                tempEnd = getDateFromX(ds.originalEndX + rawDeltaX, colWidth);
+            } else if (ds.type === 'left') {
+                tempStart = getDateFromX(ds.originalStartX + rawDeltaX, colWidth);
+                if (dayjs(tempStart).isAfter(dayjs(tempEnd))) {
+                    tempStart = dayjs(tempEnd).subtract(1, 'day').format('YYYY-MM-DD');
+                }
+            } else if (ds.type === 'right') {
+                tempEnd = getDateFromX(ds.originalEndX + rawDeltaX, colWidth);
+                if (dayjs(tempEnd).isBefore(dayjs(tempStart))) {
+                    tempEnd = dayjs(tempStart).add(1, 'day').format('YYYY-MM-DD');
+                }
+            }
+            return { tempStart, tempEnd };
+        };
+
         const handleMouseMove = (e) => {
-            // Auto-scroll on drag
+            // 1. 自動捲動：滑鼠靠近邊緣時捲軸跟著移動
             if (scrollAreaRef.current) {
                 const rect = scrollAreaRef.current.getBoundingClientRect();
                 const threshold = 80;
@@ -188,59 +340,136 @@ const GanttView = () => {
                 }
             }
 
-            const deltaX = e.clientX - dragState.startX;
-            const item = dragState.item;
+            // 2. 記錄最新滑鼠 X 到 ref（同步、不觸發 render）
+            const latestClientX = e.clientX;
+            const ds = dragStateRef.current;
+            if (!ds) return;
 
-            let newStart = dragState.originalStart;
-            let newEnd = dragState.originalEnd;
-
-            if (dragState.type === 'move') {
-                const newStartX = dragState.originalStartX + deltaX;
-                const newEndX = dragState.originalEndX + deltaX;
-                newStart = getDateFromX(newStartX, colWidth);
-                newEnd = getDateFromX(newEndX, colWidth);
-            } else if (dragState.type === 'left') {
-                const newStartX = dragState.originalStartX + deltaX;
-                newStart = getDateFromX(newStartX, colWidth);
-                if (dayjs(newStart).isAfter(dayjs(newEnd))) {
-                    newStart = dayjs(newEnd).subtract(1, 'day').format('YYYY-MM-DD');
-                }
-            } else if (dragState.type === 'right') {
-                const newEndX = dragState.originalEndX + deltaX;
-                newEnd = getDateFromX(newEndX, colWidth);
-                if (dayjs(newEnd).isBefore(dayjs(newStart))) {
-                    newEnd = dayjs(newStart).add(1, 'day').format('YYYY-MM-DD');
-                }
+            // 標記「確實發生過拖曳」，用於之後判斷是否觸發 onClick
+            if (Math.abs(latestClientX - ds.startX) > 5) {
+                ds.hasDragged = true;
             }
 
-            // Update store SILENTLY (no history during movement)
-            const updates = { startDate: newStart, endDate: newEnd };
+            // 3. 若尚無 pending 的 rAF，則發起一個新的幀更新
+            //    如此確保每個瀏覽器幀（≈16.7ms）最多只做一次昂貴的 setState 呼叫
+            if (rafIdRef.current !== null) return; // 已有 pending 幀，直接跳過
 
-            // 使用新的 Action 統一處理更新與依賴排程
-            updateTaskDate(
-                activeWorkspaceId,
-                activeBoardId,
-                item.type,
-                item.id,
-                updates,
-                item.listId,
-                item.cardId,
-                item.checklistId,
-                true // noHistory during draft drag? actually we might want history on drop only? Or just noHistory as drafted
-            );
+            rafIdRef.current = requestAnimationFrame(() => {
+                rafIdRef.current = null; // 清除 ID，允許下一幀排隊
+
+                const currentDs = dragStateRef.current;
+                if (!currentDs) return; // mouseup 已先觸發，放棄本幀
+
+                // 以最新的滑鼠位置計算日期（在 rAF 中讀 latestClientX）
+                const { tempStart, tempEnd } = calcDragDates(latestClientX);
+
+                // 更新拖曳日期 Tooltip
+                setDragDates({ start: tempStart, end: tempEnd });
+
+                // 計算串聯日期預覽（依賴 activeBoard，可能略重但已被 rAF 節流）
+                if (activeBoard) {
+                    const overriddenDates = {
+                        [currentDs.item.id]: { startDate: tempStart, endDate: tempEnd }
+                    };
+                    const previewDatesMap = calculateCascadedDates(activeBoard, overriddenDates);
+                    // 確保被拖曳的項目位置精確跟隨滑鼠
+                    previewDatesMap.set(currentDs.item.id, { startDate: tempStart, endDate: tempEnd });
+
+                    const previewObj = {};
+                    previewDatesMap.forEach((val, key) => { previewObj[key] = val; });
+                    setSimulatedDates(previewObj);
+                }
+
+                // 計算視覺上對齊快照（snapped）的位移量
+                let snappedDeltaX = 0;
+                if (currentDs.type === 'move' || currentDs.type === 'left') {
+                    snappedDeltaX = getX(tempStart, colWidth) - currentDs.originalStartX;
+                } else {
+                    snappedDeltaX = getX(tempEnd, colWidth) - currentDs.originalEndX;
+                }
+                setDragDeltaX(snappedDeltaX);
+            });
         };
 
         const handleMouseUp = (e) => {
+            // 取消任何尚未執行的 rAF，避免在 state 清除後還觸發 setState
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
+
+            const ds = dragStateRef.current;
+            if (ds) {
+                // 以最終滑鼠位置重新計算，確保 mouseup 不受任何 rAF 延遲影響
+                const { tempStart, tempEnd } = calcDragDates(e.clientX);
+
+                // 計算 snapped 的最終 deltaX
+                let finalSnappedDeltaX = 0;
+                if (ds.type === 'move' || ds.type === 'left') {
+                    finalSnappedDeltaX = getX(tempStart, colWidth) - ds.originalStartX;
+                } else {
+                    finalSnappedDeltaX = getX(tempEnd, colWidth) - ds.originalEndX;
+                }
+
+                const deltaX = finalSnappedDeltaX;
+                const item = ds.item;
+
+                let newStart = ds.originalStart;
+                let newEnd = ds.originalEnd;
+
+                if (ds.type === 'move') {
+                    newStart = getDateFromX(ds.originalStartX + deltaX, colWidth);
+                    newEnd = getDateFromX(ds.originalEndX + deltaX, colWidth);
+                } else if (ds.type === 'left') {
+                    newStart = getDateFromX(ds.originalStartX + deltaX, colWidth);
+                    if (dayjs(newStart).isAfter(dayjs(newEnd))) {
+                        newStart = dayjs(newEnd).subtract(1, 'day').format('YYYY-MM-DD');
+                    }
+                } else if (ds.type === 'right') {
+                    newEnd = getDateFromX(ds.originalEndX + deltaX, colWidth);
+                    if (dayjs(newEnd).isBefore(dayjs(newStart))) {
+                        newEnd = dayjs(newStart).add(1, 'day').format('YYYY-MM-DD');
+                    }
+                }
+
+                // 儲存最終日期至資料庫
+                updateTaskDate(
+                    activeWorkspaceId,
+                    activeBoardId,
+                    item.type,
+                    item.id,
+                    { startDate: newStart, endDate: newEnd },
+                    item.listId,
+                    item.cardId,
+                    item.checklistId,
+                    false,
+                    { startDate: ds.originalStart, endDate: ds.originalEnd },
+                    ds.type
+                );
+            }
+
+            // 清除所有拖曳相關 state
+            dragStateRef.current = null;
             setDragState(null);
+            setDragDeltaX(0);
+            setDragDates(null);
+            setSimulatedDates(null);
         };
 
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
         return () => {
+            // cleanup：移除事件監聽並取消可能殘留的 rAF
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
         };
-    }, [dragState, colWidth, mode, activeWorkspaceId, activeBoardId, activeBoard, flattenedItems]);
+    // 刻意縮小依賴陣列：activeBoard / flattenedItems 透過 ref 在 rAF 內讀取，
+    // 避免每次它們更新時重新掛載事件監聽器（這正是舊版頻繁脫鉤的根源之一）
+    }, [dragState, colWidth, mode, activeWorkspaceId, activeBoardId, activeBoard]);
 
     // Scroll to "Now" and measure viewport on mount
     useEffect(() => {
@@ -265,83 +494,122 @@ const GanttView = () => {
 
     // Render Grid Columns with Weekend Shading
     const renderGrid = () => {
-        const totalMonths = 60; // Max months for 'Month' mode
-        const totalQuarters = 24; // Max quarters for 'Quarter' mode
-        const totalYears = 10; // Max years for 'Year' mode
-
-        let totalUnits = 0;
-        let unitDuration = 'month'; // Default for Month mode
-        if (mode === 'Year') {
-            totalUnits = totalYears;
-            unitDuration = 'year';
-        } else if (mode === 'Quarter') {
-            totalUnits = totalQuarters;
-            unitDuration = 'quarter';
-        } else { // Month mode
-            totalUnits = totalMonths;
-            unitDuration = 'month';
-        }
-
         const gridElements = [];
-        let currentDay = GRID_START.startOf('day');
-        const endDate = GRID_START.add(totalUnits, unitDuration).endOf('day');
+        let unitDuration = 'month';
+        if (mode === 'Day') unitDuration = 'day';
+        else if (mode === 'Year') unitDuration = 'year';
+        else if (mode === 'Quarter') unitDuration = 'quarter';
 
-        // Render vertical grid lines for months/quarters/years
+        const endDate = gridStart.add(totalUnits, unitDuration).endOf('day');
+
+        // Render vertical grid lines (Major)
         for (let i = 0; i < totalUnits; i++) {
+            let minorLines = null;
+            if (mode === 'Month') {
+                const startOfMonth = gridStart.add(i, 'month');
+                let curr = startOfMonth;
+                let monthLines = [];
+                // Add minor line on every Monday of the month (excluding the 1st day to avoid overlap with major line)
+                while (curr.month() === startOfMonth.month()) {
+                    if (curr.day() === 1 && curr.date() > 1) { // 1 is Monday
+                        const fraction = (curr.date() - 1) / startOfMonth.daysInMonth();
+                        monthLines.push(
+                            <div key={`ml-${curr.date()}`} className="absolute top-0 bottom-0 border-r border-slate-50 border-dashed" style={{ left: `${fraction * 100}%` }} />
+                        );
+                    }
+                    curr = curr.add(1, 'day');
+                }
+                minorLines = <div className="absolute inset-0 pointer-events-none">{monthLines}</div>;
+            } else if (mode === 'Quarter') {
+                const startOfQ = gridStart.add(i * 3, 'month');
+                minorLines = (
+                    <div className="absolute inset-0 pointer-events-none">
+                        {[1, 2].map(mOffset => {
+                            const mDate = startOfQ.add(mOffset, 'month');
+                            const qX = getX(startOfQ, colWidth);
+                            const mX = getX(mDate, colWidth);
+                            const fraction = (mX - qX) / colWidth;
+                            return <div key={`mq-${mOffset}`} className="absolute top-0 bottom-0 border-r border-slate-50" style={{ left: `${fraction * 100}%` }} />;
+                        })}
+                    </div>
+                );
+            } else if (mode === 'Year') {
+                const startOfYear = gridStart.add(i, 'year');
+                minorLines = (
+                    <div className="absolute inset-0 pointer-events-none">
+                        {[3, 6, 9].map(mOffset => {
+                            const qDate = startOfYear.add(mOffset, 'month');
+                            const yX = getX(startOfYear, colWidth);
+                            const qX = getX(qDate, colWidth);
+                            const fraction = (qX - yX) / colWidth;
+                            return <div key={`my-${mOffset}`} className="absolute top-0 bottom-0 border-r border-slate-100/50" style={{ left: `${fraction * 100}%` }} />;
+                        })}
+                    </div>
+                );
+            }
+
             gridElements.push(
                 <div
                     key={`grid-line-${i}`}
                     className="absolute top-0 bottom-0 border-r border-slate-100"
                     style={{ left: i * colWidth, width: colWidth }}
-                />
+                >
+                    {minorLines}
+                </div>
             );
         }
 
-        // Render weekend shading (day-level)
-        // This will overlay on top of the main grid lines
-        const dayWidth = colWidth / (mode === 'Month' ? GRID_START.daysInMonth() : (mode === 'Quarter' ? 90 : 365)); // Approximate day width
-        let currentX = 0;
-        while (currentDay.isBefore(endDate)) {
-            const dayOfWeek = currentDay.day(); // 0 for Sunday, 6 for Saturday
-            if (dayOfWeek === 0 || dayOfWeek === 6) { // It's a weekend
-                gridElements.push(
-                    <div
-                        key={`weekend-${currentDay.format('YYYY-MM-DD')}`}
-                        className="absolute top-0 bottom-0 bg-slate-50/50"
-                        style={{
-                            left: getX(currentDay, colWidth),
-                            width: getX(currentDay.add(1, 'day'), colWidth) - getX(currentDay, colWidth)
-                        }}
-                    />
-                );
+        // Render weekend shading (day-level correctly)
+        // Only if mode is Month or Day to avoid heavy rendering in deep views
+        if (mode === 'Month' || mode === 'Day') {
+            let currentDay = gridStart.startOf('day');
+            while (currentDay.isBefore(endDate)) {
+                const dayOfWeek = currentDay.day(); // 0 for Sunday, 6 for Saturday
+                if (dayOfWeek === 0 || dayOfWeek === 6) { // It's a weekend
+                    gridElements.push(
+                        <div
+                            key={`weekend-${currentDay.format('YYYY-MM-DD')}`}
+                            className="absolute top-0 bottom-0 bg-slate-50/50"
+                            style={{
+                                left: getX(currentDay, colWidth),
+                                width: getX(currentDay.add(1, 'day'), colWidth) - getX(currentDay, colWidth)
+                            }}
+                        />
+                    );
+                }
+                currentDay = currentDay.add(1, 'day');
             }
-            currentDay = currentDay.add(1, 'day');
         }
 
         return gridElements;
     };
     // Render Header
     const renderHeader = () => {
-        const units = mode === 'Year' ? 10 : (mode === 'Quarter' ? 24 : 60);
         const headerItems = [];
-        for (let i = 0; i < units; i++) {
+        const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+
+        for (let i = 0; i < totalUnits; i++) {
             let label = "";
             let subLabel = "";
-            if (mode === 'Month') {
-                const d = GRID_START.add(i, 'month');
+            if (mode === 'Day') {
+                const d = gridStart.add(i, 'day');
+                label = d.format('M/D');
+                subLabel = weekDays[d.day()];
+            } else if (mode === 'Month') {
+                const d = gridStart.add(i, 'month');
                 label = d.format('YYYY');
                 subLabel = d.format('M月');
             } else if (mode === 'Quarter') {
-                const d = GRID_START.add(i * 3, 'month');
+                const d = gridStart.add(i * 3, 'month');
                 label = d.format('YYYY');
                 subLabel = `Q${Math.floor(d.month() / 3) + 1}`;
             } else {
-                const d = GRID_START.add(i, 'year');
+                const d = gridStart.add(i, 'year');
                 label = d.format('YYYY');
             }
 
             headerItems.push(
-                <div key={i} className="flex-shrink-0 border-r border-slate-200 flex flex-col items-center justify-center bg-slate-50/50" style={{ width: colWidth }}>
+                <div key={i} className="flex-shrink-0 border-r border-slate-200 flex flex-col items-center justify-center bg-slate-50" style={{ width: colWidth }}>
                     <span className="text-[10px] font-bold text-slate-400">{label}</span>
                     <span className="text-xs font-bold text-slate-700">{subLabel}</span>
                 </div>
@@ -351,6 +619,8 @@ const GanttView = () => {
     };
 
     const handleItemClick = (item) => {
+        // Only open the modal if we have a valid card ID to edit.
+        // We always want to open the parent Card's details page to unify the view.
         if (item.type === 'card') {
             openModal('card', item.id, item.listId);
         } else if (item.type === 'checklist') {
@@ -360,20 +630,34 @@ const GanttView = () => {
 
     return (
         <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-            {/* Toolbar */}
-            <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-white z-40 shadow-sm">
+            {/* Toolbar - 提升 z-index 以免被下方內容覆蓋，並改用 style 確保生效 */}
+            <div 
+                className="p-3 border-b border-slate-200 flex items-center justify-between bg-white shadow-sm"
+                style={{ zIndex: 110 }}
+            >
                 <div className="flex items-center gap-4">
                     <div className="flex p-0.5 bg-slate-100 rounded-lg">
-                        {['Month', 'Quarter', 'Year'].map(m => (
+                        {['Day', 'Month', 'Quarter', 'Year'].map(m => (
                             <button
                                 key={m}
                                 onClick={() => setMode(m)}
                                 className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                {m === 'Month' ? '月度' : m === 'Quarter' ? '季度' : '年度'}
+                                {m === 'Day' ? '日度' : m === 'Month' ? '月度' : m === 'Quarter' ? '季度' : '年度'}
                             </button>
                         ))}
                     </div>
+
+                    <button
+                        onClick={scrollToNow}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-lg text-xs font-bold transition-all shadow-sm group"
+                        title="跳轉至今天"
+                    >
+                        <Calendar size={14} className="group-hover:scale-110 transition-transform" />
+                        <span>今天</span>
+                    </button>
+
+
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -427,7 +711,7 @@ const GanttView = () => {
                         </div>
                     ) : (
                         <>
-                            <div className="h-14 flex items-center justify-between px-4 border-b-2 border-slate-200 bg-slate-50 font-bold text-xs text-slate-500 uppercase tracking-wider">
+                            <div className="h-10 flex items-center justify-between px-4 border-b-2 border-slate-200 bg-slate-50 font-bold text-xs text-slate-500 uppercase tracking-wider">
                                 <span>任務名稱</span>
                                 <button
                                     onClick={() => setIsTaskListOpen(false)}
@@ -446,12 +730,13 @@ const GanttView = () => {
                                     {flattenedItems.map((item, idx) => (
                                         <div
                                             key={`${item.type}-${item.id}`}
-                                            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-2 
+                                            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-2 cursor-pointer
                                                 ${item.type === 'list' ? 'font-black text-slate-800' : item.type === 'card' ? 'font-bold text-slate-700' : 'text-slate-500 italic'}`}
                                             style={{
                                                 height: BAR_HEIGHT,
                                                 paddingLeft: item.type === 'list' ? 12 : (item.type === 'card' ? 24 : 40)
                                             }}
+                                            onClick={() => handleItemClick(item)}
                                         >
                                             <div className="flex-shrink-0">
                                                 {item.type === 'list' && <Folder size={14} className="text-primary/70" />}
@@ -476,13 +761,16 @@ const GanttView = () => {
                         onScroll={handleScroll}
                         className="h-full overflow-auto relative select-none bg-white scrollbar-thin"
                     >
-                        {/* Sticky Header */}
-                        <div className="sticky top-0 z-30 flex h-14 bg-white border-b-2 border-slate-200">
+                        {/* Sticky Header - 提升 z-index 使其在滾動時覆蓋進度條與標籤，並使用實色背景 */}
+                        <div 
+                            className="sticky top-0 flex h-10 bg-white border-b-2 border-slate-200"
+                            style={{ zIndex: 100 }}
+                        >
                             {renderHeader()}
                         </div>
 
                         {/* Grid Content */}
-                        <div className="relative" style={{ width: (mode === 'Year' ? 10 : (mode === 'Quarter' ? 24 : 60)) * colWidth, height: flattenedItems.length * BAR_HEIGHT + 100 }}>
+                        <div className="relative" style={{ width: totalUnits * colWidth, height: flattenedItems.length * BAR_HEIGHT + 100 }}>
                             {/* Hierarchy Enclosures (Backgrounds) */}
                             <div className="absolute inset-0 pointer-events-none z-0">
                                 {groups.lists.map(lg => {
@@ -495,7 +783,7 @@ const GanttView = () => {
                                     return (
                                         <div
                                             key={lg.id}
-                                            className="absolute bg-slate-100/40 rounded-lg"
+                                            className="absolute bg-slate-100/40 rounded-lg border border-slate-300/50"
                                             style={{
                                                 top: lg.start * BAR_HEIGHT + 2,
                                                 height: (lg.end - lg.start + 1) * BAR_HEIGHT - 4,
@@ -539,6 +827,12 @@ const GanttView = () => {
                                 let start = item.startDate;
                                 let end = item.endDate;
 
+                                // If we have simulated dates for this item, use them globally during drag
+                                if (simulatedDates && simulatedDates[item.id]) {
+                                    start = simulatedDates[item.id].startDate;
+                                    end = simulatedDates[item.id].endDate;
+                                }
+
                                 // Fallback for checklist items without dates to make them discoverable
                                 const isUsingFallback = item.type === 'checklist' && !start && !end;
                                 if (isUsingFallback) {
@@ -549,54 +843,206 @@ const GanttView = () => {
                                 if (!end) end = dayjs(start || undefined).add(7, 'day').format('YYYY-MM-DD');
                                 if (!start) start = isMilestone ? end : dayjs(end).subtract(3, 'day').format('YYYY-MM-DD');
 
+                                // 視覺層次設計（方案 C 優化版）：
+                                // - 列表 (List):     深色實心底色（status 色 + brightness-75）+ 全白文字
+                                // - 卡片 (Card):     白底 + 深色實線框（border-2 border-status-{status}）+ 深色文字
+                                // - 待辦 (Checklist): 白底 + 淺色實線框（border border-status-{status}/50）+ 淺色文字
+
+                                // ⚠️ status 必須先宣告，barColorClass / textColorClass 的模板字串才能正確讀取
+                                const status = item.status || 'todo';
+                                const isCard = item.type === 'card';
+                                const isChecklist = item.type === 'checklist';
+                                const barHeight = 25; // 統一高度
+
+                                // 各層的 className 組合
+                                // 列表：實心底色（最深，亮度壓低使顏色更飽和深沉）
+                                // 卡片：白底 + 粗深色框（外框色與 status 同色系）
+                                // 待辦：白底 + 細淺色框（透明度 60%，視覺最輕）
+                                const barColorClass = item.type === 'list'
+                                    ? `bg-status-${status} brightness-75 saturate-150`    // 深色實心
+                                    : item.type === 'card'
+                                        ? `bg-white border-2 border-status-${status}`       // 白底 + 深框
+                                        : `bg-white border border-status-${status}/30`;     // 白底 + 淺框 (Op: 30%)
+
+                                // 文字顏色：列表用白色（底色深），卡片/待辦用對應 status 色
+                                const textColorClass = item.type === 'list'
+                                    ? 'text-white'
+                                    : `text-status-${status}`;
+
                                 const x1 = getX(start, colWidth);
                                 const x2 = getX(end, colWidth);
                                 let width = isMilestone ? 10 : Math.max(x2 - x1, 24);
 
-                                const status = item.status || 'todo';
-                                const barHeight = 18; // 統一高度與卡片相同
-
-                                // 層次色彩深度邏輯
-                                const hierarchyClass = item.type === 'list'
-                                    ? 'brightness-75 saturate-150' // 最高階層：最深
-                                    : item.type === 'card'
-                                        ? 'brightness-100'        // 中間階層：標準
-                                        : 'brightness-125 opacity-80'; // 最低階層：最淺
-
                                 // Highlighting Logic
                                 const isRelated = hoveredItemId && hoveredItemId.type === 'task' && item.id === hoveredItemId.id;
+                                const isDragging = dragState && dragState.item.id === item.id;
+
+                                // Find related dependencies and assign letters
+                                const taskDependencies = (activeBoard?.dependencies || []).map((dep, idx) => ({
+                                    ...dep,
+                                    label: getDependencyLabel(idx),
+                                    originalIndex: idx
+                                })).filter(d => d.fromId === item.id || d.toId === item.id);
+
+                                let isLeftLocked = false;
+                                let isRightLocked = false;
+                                let isMoveLocked = false;
+
+                                taskDependencies.forEach(dep => {
+                                    if (dep.toId === item.id && dep.fromId !== item.id) {
+                                        if (dep.toSide === 'start' || !dep.toSide) {
+                                            isLeftLocked = true;
+                                            isMoveLocked = true;
+                                        }
+                                        if (dep.toSide === 'end') {
+                                            isRightLocked = true;
+                                            isMoveLocked = true;
+                                        }
+                                    }
+                                    if (dep.fromId === item.id && dep.toId === item.id) {
+                                        if (dep.fromSide === 'start' && dep.toSide === 'end') isRightLocked = true;
+                                        if (dep.fromSide === 'end' && dep.toSide === 'start') isLeftLocked = true;
+                                    }
+                                });
+
+                                // Visual offset during drag - Now handled by simulatedDates
+                                let dragStyle = {};
 
                                 return (
                                     <div
                                         key={`${item.type}-${item.id}`}
                                         data-task-id={item.id}
-                                        onMouseDown={(e) => handleDragStart(e, item, 'move')}
+                                        onMouseDown={(e) => {
+                                            if (isMoveLocked) return;
+                                            handleDragStart(e, item, 'move');
+                                        }}
                                         onMouseEnter={() => setHoveredItemId({ id: item.id, type: 'task' })}
                                         onMouseLeave={() => setHoveredItemId(null)}
                                         onClick={(e) => {
-                                            if (!dragState) handleItemClick(item);
+                                            // 1. 如果 dragState 存在，表示正在拖曳中，絕對不觸發點擊
+                                            // 2. 如果之前發生過實質拖曳 (hasDragged) 也不觸發點擊
+                                            // 我們利用 event 迴圈的小技巧：onClick 發生在 onMouseUp 之後。
+                                            // 所以這裡我們改用 onMouseUp 自身來判定，或者在 onClick 裡檢查一個暫存標記。
                                         }}
-                                        className={`absolute flex items-center transition-all hover:scale-[1.02] hover:brightness-110 cursor-move group ${isMilestone ? 'rotate-45' : 'rounded-full shadow-sm'} bg-status-${status} ${hierarchyClass} ${isUsingFallback ? 'opacity-30 border-2 border-dashed border-white/50' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+                                        onMouseUp={(e) => {
+                                            if (!dragState || !dragState.hasDragged) {
+                                               handleItemClick(item);
+                                            }
+                                        }}
+                                        className={`absolute flex items-center transition-all
+                                            ${isDragging ? '' : (isMoveLocked ? '' : 'hover:brightness-110')}
+                                            ${isMoveLocked ? 'cursor-not-allowed' : 'cursor-pointer'}
+                                            group
+                                            ${isMilestone ? 'rotate-45' : 'rounded-[6px] shadow-sm'}
+                                            ${barColorClass}
+                                            ${isUsingFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''}
+                                            z-20
+                                            ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}
+                                            ${textColorClass}
+                                        `}
                                         style={{
                                             left: x1,
                                             width: width,
                                             height: barHeight,
-                                            top: item.row * BAR_HEIGHT + (BAR_HEIGHT - barHeight) / 2
+                                            top: item.row * BAR_HEIGHT + (BAR_HEIGHT - barHeight) / 2,
+                                            ...dragStyle,
+                                            transition: isDragging ? 'none' : 'all 0.2s'
                                         }}
                                     >
+                                        {/* Drag Date Tooltips */}
+                                        {isDragging && dragDates && (
+                                            <>
+                                                <div className="absolute -top-7 left-0 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-50 transform -translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
+                                                    {dayjs(dragDates.start).format('M/D')}
+                                                </div>
+                                                <div className="absolute -top-7 right-0 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-50 transform translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
+                                                    {dayjs(dragDates.end).subtract(1, 'day').format('M/D')}
+                                                </div>
+                                            </>
+                                        )}
+
                                         {/* Resize Handles */}
                                         {!isMilestone && !isUsingFallback && (
                                             <>
                                                 <div
-                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 rounded-l-full"
-                                                    onMouseDown={(e) => handleDragStart(e, item, 'left')}
+                                                    className={`absolute left-0 top-0 bottom-0 w-2 ${isLeftLocked ? 'cursor-not-allowed bg-slate-400/20' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
+                                                    onMouseDown={(e) => {
+                                                        // 無論 locked 與否，均必須阻止事件冒泡到父層 (進度條本體)。
+                                                        // 若不阻止，mousedown 會冒泡並觸發父層的 handleDragStart(move)，
+                                                        // 覆蓋此處的 'left' 拖曳類型，造成「點 resize 卻整條平移」的 bug。
+                                                        e.stopPropagation();
+                                                        if (isLeftLocked) return;
+                                                        handleDragStart(e, item, 'left');
+                                                    }}
                                                 />
                                                 <div
-                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 rounded-r-full"
-                                                    onMouseDown={(e) => handleDragStart(e, item, 'right')}
+                                                    className={`absolute right-0 top-0 bottom-0 w-2 ${isRightLocked ? 'cursor-not-allowed bg-slate-400/20' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
+                                                    onMouseDown={(e) => {
+                                                        // 同上：阻止冒泡是必要的，否則右側 resize 也會觸發 move。
+                                                        e.stopPropagation();
+                                                        if (isRightLocked) return;
+                                                        handleDragStart(e, item, 'right');
+                                                    }}
                                                 />
                                             </>
                                         )}
+
+                                        {/* Dependency Badges */}
+                                        {taskDependencies.length > 0 && !isMilestone && (() => {
+                                            const leftDeps = [];
+                                            const rightDeps = [];
+
+                                            taskDependencies.forEach(dep => {
+                                                // 判斷此任務在「起始」端點扮演的角色
+                                                if (dep.fromId === item.id && (dep.fromSide === 'start' || !dep.fromSide)) {
+                                                    leftDeps.push({ ...dep, isMarkerSource: true });
+                                                } else if (dep.toId === item.id && (dep.toSide === 'start' || !dep.toSide)) {
+                                                    leftDeps.push({ ...dep, isMarkerSource: false });
+                                                }
+                                                                         
+                                                // 判斷此任務在「完成」端點扮演的角色
+                                                if (dep.fromId === item.id && dep.fromSide === 'end') {
+                                                    rightDeps.push({ ...dep, isMarkerSource: true });
+                                                } else if (dep.toId === item.id && dep.toSide === 'end') {
+                                                    rightDeps.push({ ...dep, isMarkerSource: false });
+                                                } 
+                                            });
+
+                                            return (
+                                                <>
+                                                    {leftDeps.length > 0 && (
+                                                        <div className="absolute left-[-6px] -top-2 flex gap-0.5 z-40">
+                                                            {leftDeps.map(dep => (
+                                                                <div
+                                                                    key={`dep-l-${dep.id}`}
+                                                                    className={`w-[14px] h-[14px] flex items-center justify-center rounded-full text-[8px] font-bold bg-white transition-all ${dep.isMarkerSource 
+                                                                        ? 'border-2 border-slate-600 text-slate-800' 
+                                                                        : 'border border-slate-200 text-slate-400'}`}
+                                                                    title={dep.isMarkerSource ? `主動前置任務 (編號: ${dep.label})` : `被動後續任務 (編號: ${dep.label})`}
+                                                                >
+                                                                    {dep.label}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {rightDeps.length > 0 && (
+                                                        <div className="absolute right-[-6px] -top-2 flex gap-0.5 z-40">
+                                                            {rightDeps.map(dep => (
+                                                                <div
+                                                                    key={`dep-r-${dep.id}`}
+                                                                    className={`w-[14px] h-[14px] flex items-center justify-center rounded-full text-[8px] font-bold bg-white transition-all ${dep.isMarkerSource 
+                                                                        ? 'border-2 border-slate-600 text-slate-800' 
+                                                                        : 'border border-slate-200 text-slate-400'}`}
+                                                                    title={dep.isMarkerSource ? `主動前置任務 (編號: ${dep.label})` : `被動後續任務 (編號: ${dep.label})`}
+                                                                >
+                                                                    {dep.label}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
 
                                         {/* Smart Label Logic */}
                                         {!isMilestone && (() => {
@@ -626,7 +1072,13 @@ const GanttView = () => {
 
                                                 return (
                                                     <span
-                                                        className="absolute whitespace-nowrap text-[9px] font-bold text-white drop-shadow-sm pointer-events-none select-none px-2 transition-transform duration-75"
+                                                        className={`absolute whitespace-nowrap text-[11px] font-bold pointer-events-none select-none px-2 transition-transform duration-75
+                                                            ${item.type === 'list'
+                                                                ? 'text-white drop-shadow-sm'         // 列表：白底色深，文字白+陰影
+                                                                : item.type === 'card'
+                                                                    ? `text-status-${status} font-extrabold` // 卡片：外框色系文字，加粗增強辨識
+                                                                    : `text-status-${status} opacity-80`}   // 待辦：淡色文字
+                                                        `}
                                                         style={textStyles}
                                                     >
                                                         {item.title}
@@ -640,7 +1092,7 @@ const GanttView = () => {
 
                                                 return (
                                                     <div
-                                                        className={`absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[10px] font-bold text-slate-500 whitespace-nowrap pointer-events-none select-none z-50`}
+                                                        className={`absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-bold text-slate-500 whitespace-nowrap pointer-events-none select-none`}
                                                     >
                                                         {item.title} {isUsingFallback && "(尚未設定日期)"}
                                                     </div>
@@ -650,7 +1102,7 @@ const GanttView = () => {
 
                                         {/* Milestone Label (Always external) */}
                                         {isMilestone && (
-                                            <div className="absolute left-full ml-3 text-[10px] font-bold text-slate-500 whitespace-nowrap -rotate-45 pointer-events-none select-none z-50">
+                                            <div className="absolute left-full ml-3 text-[12px] font-bold text-slate-500 whitespace-nowrap -rotate-45 pointer-events-none select-none">
                                                 {item.title}
                                             </div>
                                         )}
@@ -659,12 +1111,12 @@ const GanttView = () => {
                             })}
 
                             {/* Now Line */}
-                            <div
-                                className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none shadow-[0_0_8px_rgba(248,113,113,0.5)]"
-                                style={{ left: getX(dayjs(), colWidth) }}
-                            >
-                                <div className="sticky top-14 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full transform -translate-x-1/2 shadow-sm border border-white">今</div>
-                            </div>
+                             <div
+                                 className="absolute top-0 bottom-0 w-px bg-red-400/50 z-10 pointer-events-none"
+                                 style={{ left: getX(dayjs(), colWidth) }}
+                             >
+                                 <div className="sticky top-[42px] bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full transform -translate-x-1/2 shadow-sm border border-white">今</div>
+                             </div>
                         </div>
                     </div>
                 </div>

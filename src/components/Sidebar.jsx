@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2 } from 'lucide-react';
+import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2, Download, Upload } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 
 const Sidebar = ({ isOpen, toggle }) => {
@@ -71,10 +71,18 @@ const Sidebar = ({ isOpen, toggle }) => {
 
                                 <div className="space-y-1">
                                     {ws.boards.map((board) => (
-                                        <button
+                                        <div
                                             key={board.id}
+                                            role="button"
+                                            tabIndex={0}
                                             onClick={() => switchBoard(ws.id, board.id)}
-                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors group/item ${activeBoardId === board.id
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    switchBoard(ws.id, board.id);
+                                                }
+                                            }}
+                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors group/item cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 ${activeBoardId === board.id
                                                 ? 'bg-primary text-white shadow-md'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                                 }`}
@@ -94,7 +102,7 @@ const Sidebar = ({ isOpen, toggle }) => {
                                             >
                                                 <Trash2 size={12} />
                                             </button>
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -103,7 +111,7 @@ const Sidebar = ({ isOpen, toggle }) => {
 
                     {/* Footer */}
                     <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 mb-3">
                             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs shadow-sm">
                                 P
                             </div>
@@ -111,6 +119,35 @@ const Sidebar = ({ isOpen, toggle }) => {
                                 <div className="text-sm font-semibold text-slate-700 truncate">ProJED User</div>
                                 <div className="text-xs text-slate-400 truncate">pro@example.com</div>
                             </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => useBoardStore.getState().exportData()}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
+                            >
+                                <Download size={14} />
+                                匯出
+                            </button>
+                            <label className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors cursor-pointer">
+                                <Upload size={14} />
+                                匯入
+                                <input 
+                                    type="file" 
+                                    accept=".json" 
+                                    className="hidden" 
+                                    onChange={(e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+                                        const reader = new FileReader();
+                                        reader.onload = (event) => {
+                                            useBoardStore.getState().importData(event.target.result);
+                                        };
+                                        reader.readAsText(file);
+                                        // Reset input so the same file can be selected again
+                                        e.target.value = null;
+                                    }}
+                                />
+                            </label>
                         </div>
                     </div>
                 </div>

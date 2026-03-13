@@ -129,22 +129,20 @@ const CardModal = () => {
                         <div
                             key={d.id}
                             onClick={onAdd}
-                            className={`flex items-center justify-between px-2 py-0.5 rounded border shadow-sm group/dep animate-in fade-in slide-in-from-top-1 duration-150 cursor-pointer hover:border-primary/40 transition-colors ${isIncoming ? 'bg-blue-50/50 border-blue-100' : 'bg-slate-50/50 border-slate-100'
-                                }`}
+                            className="flex items-center justify-between px-2 py-0.5 rounded border border-slate-200 bg-slate-50 shadow-sm group/dep animate-in fade-in slide-in-from-top-1 duration-150 cursor-pointer hover:border-slate-300 transition-colors"
                         >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                <span className={`text-[10px] font-bold ${isIncoming ? 'text-primary' : 'text-slate-400'}`}>
-                                    {isIncoming ? '←' : '→'}
+                                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                                    {isIncoming ? '被動' : '主動'}
                                 </span>
                                 <span className="truncate text-[9px] font-bold text-slate-600 max-w-[80px]">
-                                    {otherId === (connectingSide?.itemId || itemId || targetId) ? '✨ 自己' : (otherTask?.title.replace(/📁 |📄 |• /, '') || '未知')}
+                                    {otherId === (connectingSide?.itemId || itemId || targetId) ? '自己' : (otherTask?.title.replace(/📁 |📄 |• /, '') || '未知')}
                                 </span>
-                                <span className={`text-[8px] font-black px-1 rounded ${otherSide === 'start' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-                                    }`}>
+                                <span className="text-[8px] font-black px-1 rounded bg-slate-200 text-slate-600">
                                     {otherSide === 'start' ? '起' : '止'}
                                 </span>
                                 {d.offset !== 0 && d.offset !== undefined && (
-                                    <span className="text-[8px] font-bold text-primary bg-primary/5 px-1 rounded border border-primary/10">
+                                    <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-1 rounded border border-slate-200">
                                         {d.offset > 0 ? `+${d.offset}` : d.offset}d
                                     </span>
                                 )}
@@ -153,11 +151,11 @@ const CardModal = () => {
                                 <div className="flex flex-col opacity-0 group-hover/dep:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => updateDependency(workspaceId, boardId, d.id, { offset: (d.offset || 0) + 1 })}
-                                        className="text-[8px] hover:text-primary leading-none"
+                                        className="text-[8px] hover:text-slate-600 leading-none"
                                     >▲</button>
                                     <button
                                         onClick={() => updateDependency(workspaceId, boardId, d.id, { offset: (d.offset || 0) - 1 })}
-                                        className="text-[8px] hover:text-primary leading-none"
+                                        className="text-[8px] hover:text-slate-600 leading-none"
                                     >▼</button>
                                 </div>
                                 <button
@@ -293,7 +291,7 @@ const CardModal = () => {
                                         onChange={(e) => handleUpdate({ startDate: e.target.value })}
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                                     />
-                                    {currentView === 'board' && (
+                                    {(currentView === 'board' || currentView === 'gantt') && (
                                         <DependencyTags
                                             targetId={itemId}
                                             side="start"
@@ -310,7 +308,7 @@ const CardModal = () => {
                                         onChange={(e) => handleUpdate({ endDate: e.target.value })}
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                                     />
-                                    {currentView === 'board' && (
+                                    {(currentView === 'board' || currentView === 'gantt') && (
                                         <DependencyTags
                                             targetId={itemId}
                                             side="end"
@@ -536,8 +534,8 @@ const CardModal = () => {
                 </div>
             </div>
 
-            {/* Dependency Selection Modal - 只在看板模式下顯示 */}
-            {currentView === 'board' && connectingSide && (
+            {/* Dependency Selection Modal - 支援看板與甘特圖模式 */}
+            {(currentView === 'board' || currentView === 'gantt') && connectingSide && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-primary/20">
                         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -586,9 +584,9 @@ const CardModal = () => {
 
                             <div className="max-h-[300px] overflow-y-auto bg-white border border-slate-100 rounded-xl divide-y divide-slate-50 no-scrollbar">
                                 {/* Special "Self" Option */}
-                                <div className="p-2 px-3 flex items-center justify-between gap-4 bg-primary/5 hover:bg-primary/10 transition-colors border-b border-primary/10 group sticky top-0 z-10 backdrop-blur-sm">
+                                <div className="p-2 px-3 flex items-center justify-between gap-4 bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-200 group sticky top-0 z-10 backdrop-blur-sm">
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                                        <span className="text-xs font-black text-primary">✨ 依賴當前任務 (自己)</span>
+                                        <span className="text-xs font-black text-slate-600">依賴當前任務 (自己)</span>
                                     </div>
                                     <div className="flex gap-2 shrink-0">
                                         <button
@@ -604,7 +602,7 @@ const CardModal = () => {
                                                 setSearchTerm('');
                                                 setTempOffset(0);
                                             }}
-                                            className="px-3 py-1.5 bg-white hover:bg-primary/5 text-[10px] font-black text-primary rounded-lg border border-primary/20 hover:border-primary/40 transition-all shadow-sm whitespace-nowrap"
+                                            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[10px] font-black text-slate-600 rounded-lg border border-slate-200 hover:border-slate-300 transition-all shadow-sm whitespace-nowrap"
                                         >依賴其「起始」</button>
                                         <button
                                             onClick={() => {
@@ -619,7 +617,7 @@ const CardModal = () => {
                                                 setSearchTerm('');
                                                 setTempOffset(0);
                                             }}
-                                            className="px-3 py-1.5 bg-white hover:bg-primary/5 text-[10px] font-black text-primary rounded-lg border border-primary/20 hover:border-primary/40 transition-all shadow-sm whitespace-nowrap"
+                                            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[10px] font-black text-slate-600 rounded-lg border border-slate-200 hover:border-slate-300 transition-all shadow-sm whitespace-nowrap"
                                         >依賴其「完成」</button>
                                     </div>
                                 </div>
