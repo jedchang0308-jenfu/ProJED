@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vite
+check_nesting.js
+main_app.js
+out.txt
+temp_app.js
+紀錄備份檔/
