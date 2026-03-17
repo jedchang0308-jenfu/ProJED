@@ -20,7 +20,8 @@ const GanttView = () => {
         updateChecklistItem,
         updateTaskDate,
         isSidebarOpen,
-        setSidebarOpen
+        setSidebarOpen,
+        toggleStatusFilter // 加入 toggleStatusFilter
     } = useBoardStore();
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
@@ -46,6 +47,15 @@ const GanttView = () => {
     // Get active board data
     const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
     const activeBoard = activeWs?.boards.find(b => b.id === activeBoardId);
+
+    // 狀態設定（與 BoardView 相同）
+    const statuses = [
+        { key: 'todo', label: '進行中', color: 'bg-status-todo' },
+        { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
+        { key: 'completed', label: '完成', color: 'bg-status-completed' },
+        { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },
+        { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
+    ];
 
     // Flatten data into rows with hierarchy info and calculate date boundaries
     const { flattenedItems, groups, gridStart, totalUnits } = useMemo(() => {
@@ -150,15 +160,25 @@ const GanttView = () => {
         const start = (minDate && minDate.isBefore(today)) ? minDate : today;
         const end = (maxDate && maxDate.isAfter(today)) ? maxDate : today;
 
-        const calculatedGridStart = start.subtract(6, 'month').startOf('month');
-        const calculatedGridEnd = end.add(12, 'month').endOf('month');
+        let calculatedGridStart = start.subtract(6, 'month').startOf('month');
+        let calculatedGridEnd = end.add(12, 'month').endOf('month');
+
+        // 對齊 Quarter 與 Year 邊界，確保表頭不會涵蓋錯誤的年份
+        if (mode === 'Quarter') {
+            calculatedGridStart = calculatedGridStart.startOf('month').subtract(calculatedGridStart.month() % 3, 'month');
+            const endMonthDiff = 2 - (calculatedGridEnd.month() % 3);
+            calculatedGridEnd = calculatedGridEnd.add(endMonthDiff, 'month').endOf('month');
+        } else if (mode === 'Year') {
+            calculatedGridStart = calculatedGridStart.startOf('year');
+            calculatedGridEnd = calculatedGridEnd.endOf('year');
+        }
 
         // 計算總格數
         let units = 60;
         if (mode === 'Day') {
             units = calculatedGridEnd.diff(calculatedGridStart, 'day') + 1;
         } else if (mode === 'Quarter') {
-            units = Math.ceil(calculatedGridEnd.diff(calculatedGridStart, 'month') / 3) + 1;
+            units = Math.ceil(calculatedGridEnd.diff(calculatedGridStart, 'month') / 3);
         } else if (mode === 'Year') {
             units = calculatedGridEnd.diff(calculatedGridStart, 'year') + 1;
         } else {
@@ -278,7 +298,7 @@ const GanttView = () => {
             originalStart: start,
             originalEnd: end,
             originalStartX: getX(start, colWidth),
-            originalEndX: getX(end, colWidth)
+            originalEndX: getX(dayjs(end).add(1, 'day'), colWidth)
         });
         
         setDragDates({
@@ -312,16 +332,18 @@ const GanttView = () => {
 
             if (ds.type === 'move') {
                 tempStart = getDateFromX(ds.originalStartX + rawDeltaX, colWidth);
-                tempEnd = getDateFromX(ds.originalEndX + rawDeltaX, colWidth);
+                const rawTempEnd = getDateFromX(ds.originalEndX + rawDeltaX, colWidth);
+                tempEnd = dayjs(rawTempEnd).subtract(1, 'day').format('YYYY-MM-DD');
             } else if (ds.type === 'left') {
                 tempStart = getDateFromX(ds.originalStartX + rawDeltaX, colWidth);
                 if (dayjs(tempStart).isAfter(dayjs(tempEnd))) {
-                    tempStart = dayjs(tempEnd).subtract(1, 'day').format('YYYY-MM-DD');
+                    tempStart = dayjs(tempEnd).format('YYYY-MM-DD');
                 }
             } else if (ds.type === 'right') {
-                tempEnd = getDateFromX(ds.originalEndX + rawDeltaX, colWidth);
+                const rawTempEnd = getDateFromX(ds.originalEndX + rawDeltaX, colWidth);
+                tempEnd = dayjs(rawTempEnd).subtract(1, 'day').format('YYYY-MM-DD');
                 if (dayjs(tempEnd).isBefore(dayjs(tempStart))) {
-                    tempEnd = dayjs(tempStart).add(1, 'day').format('YYYY-MM-DD');
+                    tempEnd = dayjs(tempStart).format('YYYY-MM-DD');
                 }
             }
             return { tempStart, tempEnd };
@@ -385,7 +407,7 @@ const GanttView = () => {
                 if (currentDs.type === 'move' || currentDs.type === 'left') {
                     snappedDeltaX = getX(tempStart, colWidth) - currentDs.originalStartX;
                 } else {
-                    snappedDeltaX = getX(tempEnd, colWidth) - currentDs.originalEndX;
+                    snappedDeltaX = getX(dayjs(tempEnd).add(1, 'day'), colWidth) - currentDs.originalEndX;
                 }
                 setDragDeltaX(snappedDeltaX);
             });
@@ -408,7 +430,7 @@ const GanttView = () => {
                 if (ds.type === 'move' || ds.type === 'left') {
                     finalSnappedDeltaX = getX(tempStart, colWidth) - ds.originalStartX;
                 } else {
-                    finalSnappedDeltaX = getX(tempEnd, colWidth) - ds.originalEndX;
+                    finalSnappedDeltaX = getX(dayjs(tempEnd).add(1, 'day'), colWidth) - ds.originalEndX;
                 }
 
                 const deltaX = finalSnappedDeltaX;
@@ -419,16 +441,18 @@ const GanttView = () => {
 
                 if (ds.type === 'move') {
                     newStart = getDateFromX(ds.originalStartX + deltaX, colWidth);
-                    newEnd = getDateFromX(ds.originalEndX + deltaX, colWidth);
+                    const rawNewEnd = getDateFromX(ds.originalEndX + deltaX, colWidth);
+                    newEnd = dayjs(rawNewEnd).subtract(1, 'day').format('YYYY-MM-DD');
                 } else if (ds.type === 'left') {
                     newStart = getDateFromX(ds.originalStartX + deltaX, colWidth);
                     if (dayjs(newStart).isAfter(dayjs(newEnd))) {
-                        newStart = dayjs(newEnd).subtract(1, 'day').format('YYYY-MM-DD');
+                        newStart = dayjs(newEnd).format('YYYY-MM-DD');
                     }
                 } else if (ds.type === 'right') {
-                    newEnd = getDateFromX(ds.originalEndX + deltaX, colWidth);
+                    const rawNewEnd = getDateFromX(ds.originalEndX + deltaX, colWidth);
+                    newEnd = dayjs(rawNewEnd).subtract(1, 'day').format('YYYY-MM-DD');
                     if (dayjs(newEnd).isBefore(dayjs(newStart))) {
-                        newEnd = dayjs(newStart).add(1, 'day').format('YYYY-MM-DD');
+                        newEnd = dayjs(newStart).format('YYYY-MM-DD');
                     }
                 }
 
@@ -621,7 +645,9 @@ const GanttView = () => {
     const handleItemClick = (item) => {
         // Only open the modal if we have a valid card ID to edit.
         // We always want to open the parent Card's details page to unify the view.
-        if (item.type === 'card') {
+        if (item.type === 'list') {
+            openModal('list', item.id);
+        } else if (item.type === 'card') {
             openModal('card', item.id, item.listId);
         } else if (item.type === 'checklist') {
             openModal('card', item.cardId, item.listId);
@@ -632,36 +658,53 @@ const GanttView = () => {
         <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
             {/* Toolbar - 提升 z-index 以免被下方內容覆蓋，並改用 style 確保生效 */}
             <div 
-                className="p-3 border-b border-slate-200 flex items-center justify-between bg-white shadow-sm"
+                className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0"
                 style={{ zIndex: 110 }}
             >
-                <div className="flex items-center gap-4">
-                    <div className="flex p-0.5 bg-slate-100 rounded-lg">
-                        {['Day', 'Month', 'Quarter', 'Year'].map(m => (
-                            <button
-                                key={m}
-                                onClick={() => setMode(m)}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {m === 'Day' ? '日度' : m === 'Month' ? '月度' : m === 'Quarter' ? '季度' : '年度'}
-                            </button>
-                        ))}
-                    </div>
-
-                    <button
-                        onClick={scrollToNow}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-lg text-xs font-bold transition-all shadow-sm group"
-                        title="跳轉至今天"
-                    >
-                        <Calendar size={14} className="group-hover:scale-110 transition-transform" />
-                        <span>今天</span>
-                    </button>
-
-
+                {/* 左側：狀態篩選器 (從 BoardView 移植) */}
+                <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2 mr-4 flex-1">
+                    {statuses.map(s => (
+                        <button
+                            key={s.key}
+                            onClick={() => toggleStatusFilter(s.key)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${statusFilters[s.key]
+                                ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                                : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'
+                                }`}
+                        >
+                            <div className={`w-2 h-2 rounded-full ${s.color}`}></div>
+                            <span className="text-[10px] sm:text-xs font-bold">{s.label}</span>
+                        </button>
+                    ))}
                 </div>
 
-                <div className="flex items-center gap-3">
-                    {/* View Controls */}
+                {/* 右側所有控制按鈕：視圖、時間軸、展開收合、篩選器 */}
+                <div className="flex items-center gap-4 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="flex p-0.5 bg-slate-100 rounded-lg">
+                            {['Day', 'Month', 'Quarter', 'Year'].map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setMode(m)}
+                                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {m === 'Day' ? '日度' : m === 'Month' ? '月度' : m === 'Quarter' ? '季度' : '年度'}
+                                </button>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={scrollToNow}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-lg text-xs font-bold transition-all shadow-sm group"
+                            title="跳轉至今天"
+                        >
+                            <Calendar size={14} className="group-hover:scale-110 transition-transform" />
+                            <span>今天</span>
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
+                        {/* View Controls */}
                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg mr-2">
                         <button
                             onClick={() => setSidebarOpen(!isSidebarOpen)}
@@ -679,16 +722,17 @@ const GanttView = () => {
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                        {Object.keys(ganttFilters).map(key => (
-                            <button
-                                key={key}
-                                onClick={() => setGanttFilters(prev => ({ ...prev, [key]: !prev[key] }))}
-                                className={`px-2 py-1 text-[10px] font-bold rounded ${ganttFilters[key] ? 'bg-white text-slate-700 shadow-xs' : 'text-slate-400'}`}
-                            >
-                                {key === 'list' ? '列表' : key === 'card' ? '卡片' : '待辦'}
-                            </button>
-                        ))}
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                            {Object.keys(ganttFilters).map(key => (
+                                <button
+                                    key={key}
+                                    onClick={() => setGanttFilters(prev => ({ ...prev, [key]: !prev[key] }))}
+                                    className={`px-2 py-1 text-[10px] font-bold rounded ${ganttFilters[key] ? 'bg-white text-slate-700 shadow-xs' : 'text-slate-400'}`}
+                                >
+                                    {key === 'list' ? '列表' : key === 'card' ? '卡片' : '待辦'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -724,7 +768,7 @@ const GanttView = () => {
                             <div
                                 ref={taskListRef}
                                 onScroll={handleScroll}
-                                className="flex-1 overflow-y-auto scrollbar-thin"
+                                className="flex-1 overflow-y-auto scrollbar-gantt"
                             >
                                 <div style={{ height: flattenedItems.length * BAR_HEIGHT + 100 }}>
                                     {flattenedItems.map((item, idx) => (
@@ -759,7 +803,7 @@ const GanttView = () => {
                     <div
                         ref={scrollAreaRef}
                         onScroll={handleScroll}
-                        className="h-full overflow-auto relative select-none bg-white scrollbar-thin"
+                        className="h-full overflow-auto relative select-none bg-white scrollbar-gantt"
                     >
                         {/* Sticky Header - 提升 z-index 使其在滾動時覆蓋進度條與標籤，並使用實色背景 */}
                         <div 
@@ -777,7 +821,7 @@ const GanttView = () => {
                                     const start = lg.startDate || lg.endDate || dayjs().format('YYYY-MM-DD');
                                     const end = lg.endDate || dayjs(start).add(7, 'day').format('YYYY-MM-DD');
                                     const x1 = getX(start, colWidth);
-                                    const x2 = getX(end, colWidth);
+                                    const x2 = getX(dayjs(end).add(1, 'day'), colWidth);
                                     const width = Math.max(x2 - x1, 24) + 20; // Extra padding
 
                                     return (
@@ -797,7 +841,7 @@ const GanttView = () => {
                                     const start = cg.startDate || cg.endDate || dayjs().format('YYYY-MM-DD');
                                     const end = cg.endDate || dayjs(start).add(7, 'day').format('YYYY-MM-DD');
                                     const x1 = getX(start, colWidth);
-                                    const x2 = getX(end, colWidth);
+                                    const x2 = getX(dayjs(end).add(1, 'day'), colWidth);
                                     const width = Math.max(x2 - x1, 24) + 12; // Extra padding
 
                                     return (
@@ -848,29 +892,45 @@ const GanttView = () => {
                                 // - 卡片 (Card):     白底 + 深色實線框（border-2 border-status-{status}）+ 深色文字
                                 // - 待辦 (Checklist): 白底 + 淺色實線框（border border-status-{status}/50）+ 淺色文字
 
-                                // ⚠️ status 必須先宣告，barColorClass / textColorClass 的模板字串才能正確讀取
                                 const status = item.status || 'todo';
                                 const isCard = item.type === 'card';
                                 const isChecklist = item.type === 'checklist';
                                 const barHeight = 25; // 統一高度
 
-                                // 各層的 className 組合
-                                // 列表：實心底色（最深，亮度壓低使顏色更飽和深沉）
-                                // 卡片：白底 + 粗深色框（外框色與 status 同色系）
-                                // 待辦：白底 + 細淺色框（透明度 60%，視覺最輕）
-                                const barColorClass = item.type === 'list'
-                                    ? `bg-status-${status} brightness-75 saturate-150`    // 深色實心
-                                    : item.type === 'card'
-                                        ? `bg-white border-2 border-status-${status}`       // 白底 + 深框
-                                        : `bg-white border border-status-${status}/30`;     // 白底 + 淺框 (Op: 30%)
+                                // 使用靜態字典映射以避免 Tailwind CSS 掃描不到動態組成的 class name
+                                const colorMap = {
+                                    todo: {
+                                        list: 'bg-status-todo brightness-75 saturate-150 text-white',
+                                        card: 'bg-white border-2 border-status-todo text-status-todo font-extrabold',
+                                        checklist: 'bg-white border border-status-todo/30 text-status-todo'
+                                    },
+                                    delayed: {
+                                        list: 'bg-status-delayed brightness-75 saturate-150 text-white',
+                                        card: 'bg-white border-2 border-status-delayed text-status-delayed font-extrabold',
+                                        checklist: 'bg-white border border-status-delayed/30 text-status-delayed'
+                                    },
+                                    completed: {
+                                        list: 'bg-status-completed brightness-75 saturate-150 text-white',
+                                        card: 'bg-white border-2 border-status-completed text-status-completed font-extrabold',
+                                        checklist: 'bg-white border border-status-completed/30 text-status-completed'
+                                    },
+                                    unsure: {
+                                        list: 'bg-status-unsure brightness-75 saturate-150 text-white',
+                                        card: 'bg-white border-2 border-status-unsure text-status-unsure font-extrabold',
+                                        checklist: 'bg-white border border-status-unsure/30 text-status-unsure'
+                                    },
+                                    onhold: {
+                                        list: 'bg-status-onhold brightness-75 saturate-150 text-white',
+                                        card: 'bg-white border-2 border-status-onhold text-status-onhold font-extrabold',
+                                        checklist: 'bg-white border border-status-onhold/30 text-status-onhold'
+                                    }
+                                };
 
-                                // 文字顏色：列表用白色（底色深），卡片/待辦用對應 status 色
-                                const textColorClass = item.type === 'list'
-                                    ? 'text-white'
-                                    : `text-status-${status}`;
+                                // 取得該類型與狀態對應的基礎類別
+                                const baseStyleClass = colorMap[status]?.[item.type] || colorMap.todo[item.type];
 
                                 const x1 = getX(start, colWidth);
-                                const x2 = getX(end, colWidth);
+                                const x2 = getX(dayjs(end).add(1, 'day'), colWidth);
                                 let width = isMilestone ? 10 : Math.max(x2 - x1, 24);
 
                                 // Highlighting Logic
@@ -934,11 +994,10 @@ const GanttView = () => {
                                             ${isMoveLocked ? 'cursor-not-allowed' : 'cursor-pointer'}
                                             group
                                             ${isMilestone ? 'rotate-45' : 'rounded-[6px] shadow-sm'}
-                                            ${barColorClass}
+                                            ${baseStyleClass}
                                             ${isUsingFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''}
                                             z-20
                                             ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}
-                                            ${textColorClass}
                                         `}
                                         style={{
                                             left: x1,
@@ -1074,10 +1133,10 @@ const GanttView = () => {
                                                     <span
                                                         className={`absolute whitespace-nowrap text-[11px] font-bold pointer-events-none select-none px-2 transition-transform duration-75
                                                             ${item.type === 'list'
-                                                                ? 'text-white drop-shadow-sm'         // 列表：白底色深，文字白+陰影
+                                                                ? 'text-white drop-shadow-sm'         // 列表：白底色深，文字白+阴影
                                                                 : item.type === 'card'
-                                                                    ? `text-status-${status} font-extrabold` // 卡片：外框色系文字，加粗增強辨識
-                                                                    : `text-status-${status} opacity-80`}   // 待辦：淡色文字
+                                                                    ? `${colorMap[status]?.card.match(/text-status-\w+/)?.[0] || 'text-status-todo'} font-extrabold` // 卡片：外框色系文字，加粗增强辨识
+                                                                    : `${colorMap[status]?.checklist.match(/text-status-\w+/)?.[0] || 'text-status-todo'} opacity-80`}   // 待办：淡色文字
                                                         `}
                                                         style={textStyles}
                                                     >
@@ -1092,7 +1151,13 @@ const GanttView = () => {
 
                                                 return (
                                                     <div
-                                                        className={`absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-bold text-slate-500 whitespace-nowrap pointer-events-none select-none`}
+                                                        className={`absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-bold whitespace-nowrap pointer-events-none select-none
+                                                            ${item.type === 'list'
+                                                                ? `${colorMap[status]?.list.match(/bg-status-\w+/)?.[0].replace('bg-', 'text-') || 'text-status-todo'} brightness-75` // 列表借用深底色
+                                                                : item.type === 'card'
+                                                                    ? `${colorMap[status]?.card.match(/text-status-\w+/)?.[0] || 'text-status-todo'} font-extrabold` // 卡片原色
+                                                                    : `${colorMap[status]?.checklist.match(/text-status-\w+/)?.[0] || 'text-status-todo'} opacity-80`}   // 待办淡色
+                                                        `}
                                                     >
                                                         {item.title} {isUsingFallback && "(尚未設定日期)"}
                                                     </div>
