@@ -454,8 +454,18 @@ const useBoardStore = create(
                 intermediateDates.forEach((dates, id) => {
                     const task = getCurrentTask(id);
                     if (!task) return;
-                    const rawStart = task.startDate || dayjs().format('YYYY-MM-DD');
-                    const rawEnd = task.endDate || dayjs(rawStart).add(1, 'day').format('YYYY-MM-DD');
+
+                    // 設計意圖：若任務本身完全沒有日期資訊，跳過 cascade 更新。
+                    // 舊邏輯的 BUG：以「今天/明天」填補空日期再比對，
+                    // 導致只設了單邊日期（或完全無日期）的任務被錯誤覆蓋。
+                    const hasStart = !!task.startDate;
+                    const hasEnd   = !!task.endDate;
+                    if (!hasStart && !hasEnd) return; // 完全無日期，跳過
+
+                    // 若只有單邊日期，用 cascade 值本身當比對基準，避免假性差異
+                    const rawStart = task.startDate || dates.startDate;
+                    const rawEnd   = task.endDate   || dates.endDate;
+
                     if (rawStart !== dates.startDate || rawEnd !== dates.endDate) {
                         updatesQueue.push({ type: task.type, id: task.id, listId: task.listId, cardId: task.cardId, checklistId: task.checklistId, updates: dates });
                     }
