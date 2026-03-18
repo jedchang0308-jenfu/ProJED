@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { DndContext, DragOverlay, closestCenter, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -37,6 +37,17 @@ const CardModal = () => {
     const [tempOffset, setTempOffset] = useState(0);
     const [activeChecklistItem, setActiveChecklistItem] = useState(null); // 拖動中的待辦清單項目
 
+    // ─── 日期輸入緩衝層 ───────────────────────────────────────────────
+    // 設計意圖：日期 input 是「受控輸入」，若直接綁定 store 的值，
+    // 則每次 onChange → store 更新 → 元件重渲染 → 輸入框失焦（跳掉）。
+    // 解法：用 local state 作為緩衝，onChange 只更新 local state（不觸發 re-render 來源的 store 寫入），
+    // onBlur 時才寫入 store，同時用 useEffect 監聽外部日期變化（如依賴排程自動調整）並同步回來。
+    const [localStartDate, setLocalStartDate] = useState('');
+    const [localEndDate, setLocalEndDate] = useState('');
+    // 用 ref 追蹤目前 itemId，確保切換不同任務時能重置 local state
+    const currentItemIdRef = useRef(null);
+    // ─────────────────────────────────────────────────────────────────
+
     // ESC key handler for closing modals
     useEffect(() => {
         const handleEsc = (e) => {
@@ -53,6 +64,44 @@ const CardModal = () => {
         window.addEventListener('keydown', handleEsc);
         return () => window.removeEventListener('keydown', handleEsc);
     }, [connectingSide, closeModal]);
+
+    // ESC key handler 之前就要完成 local state 初始化
+    // 切換任務（itemId 變動）時重置 local date state；
+    // 當 store 中的日期被外部更新（如依賴排程自動調整）且使用者沒有在 focus 中時也同步
+    const editingItemId = editingItem?.itemId;
+    useEffect(() => {
+        if (!editingItemId) return;
+        // 跨 itemId 切換時，必定重設
+        currentItemIdRef.current = editingItemId;
+        // 從 workspaces 中重新找日期（而非 currentItem，因為此時 currentItem 可能尚未算好）
+        const ws = workspaces.find(w => w.id === editingItem?.workspaceId);
+        const board = ws?.boards.find(b => b.id === editingItem?.boardId);
+        const { type, listId, cardId, checklistId } = editingItem || {};
+        let foundStart = '', foundEnd = '';
+        if (board) {
+            if (type === 'list') {
+                const l = board.lists.find(l => l.id === editingItemId);
+                foundStart = l?.startDate || '';
+                foundEnd   = l?.endDate   || '';
+            } else if (type === 'card') {
+                const l = board.lists.find(l => l.id === listId);
+                const c = l?.cards.find(c => c.id === editingItemId);
+                foundStart = c?.startDate || '';
+                foundEnd   = c?.endDate   || '';
+            } else if (type === 'checklistitem') {
+                const l  = board.lists.find(l => l.id === listId);
+                const c  = l?.cards.find(c => c.id === cardId);
+                const cl = c?.checklists?.find(cl => cl.id === checklistId);
+                const cli = cl?.items?.find(i => i.id === editingItemId);
+                foundStart = cli?.startDate || '';
+                foundEnd   = cli?.endDate   || '';
+            }
+        }
+        setLocalStartDate(foundStart);
+        setLocalEndDate(foundEnd);
+    // 只監聽 itemId 變動；外部日期重排時刻意不同步（避免覆蓋使用者正在輸入的值）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingItemId]);
 
     if (!editingItem) return null;
 
@@ -287,8 +336,16 @@ const CardModal = () => {
                                     <input
                                         type="date"
                                         max="9999-12-31"
-                                        value={currentItem.startDate || ''}
-                                        onChange={(e) => handleUpdate({ startDate: e.target.value })}
+                                        // 設計意圖：value 綁定 local state（非 store），
+                                        // 避免每次 onChange -> store 寫入 -> 重新渲染 -> 輸入框失焦的問題
+                                        value={localStartDate}
+                                        onChange={(e) => setLocalStartDate(e.target.value)}
+                                        onBlur={(e) => {
+                                            // 離開輸入框時才將日期寫入 store
+                                            if (e.target.value !== (currentItem.startDate || '')) {
+                                                handleUpdate({ startDate: e.target.value });
+                                            }
+                                        }}
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                                     />
                                     {(currentView === 'board' || currentView === 'gantt') && (
@@ -304,8 +361,14 @@ const CardModal = () => {
                                     <input
                                         type="date"
                                         max="9999-12-31"
-                                        value={currentItem.endDate || ''}
-                                        onChange={(e) => handleUpdate({ endDate: e.target.value })}
+                                        // 同上：value 綁定 local state，onBlur 才寫入 store
+                                        value={localEndDate}
+                                        onChange={(e) => setLocalEndDate(e.target.value)}
+                                        onBlur={(e) => {
+                                            if (e.target.value !== (currentItem.endDate || '')) {
+                                                handleUpdate({ endDate: e.target.value });
+                                            }
+                                        }}
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                                     />
                                     {(currentView === 'board' || currentView === 'gantt') && (
