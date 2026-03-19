@@ -63,5 +63,12 @@
     - **類型統一**：使 `updateTaskDate` 同時支援 `checklist` 與 `checklistitem` 類型標籤，確保不同 UI 組件（卡片與甘特圖）的更新行為一致。
     - **強制校準機制**：移除 `deltaDays === 0` 的跳過限制。即使位移量為 0，只要日期欄位有變動（例如：縮短工時），即強制執行 `fixBoardDependencies` 以鎖定全域依賴關係。
 
+## 5. 全域非同步對話框系統 (Global Async Dialog System)
+- **設計意圖**：原生 `window.prompt` 與 `window.confirm` 為阻斷式 (Blocking) 調用，會鎖死瀏覽器執行緒並導致自動化測試工具（如 Playwright/Agent）無法與頁面互動。
+- **實現方式**：
+    - **狀態管理**：建立 `useDialogStore` (Zustand)，利用 Promise 的 `resolve` 機制將對話框操作轉化為非同步 (Async/Await) 流程。
+    - **全域組件**：在 `App.jsx` 最外層掛載 `GlobalDialog.jsx`，確保對話框能覆蓋所有 UI 層級。
+    - **互動優化**：支援 `Enter` 確認與 `Esc` 取消，並在顯示時自動聚焦輸入框，維持與原生對話框一致的操作習慣，同時提供更佳的視覺整合感。
+
 ---
-*更新日期：2026-03-19 (修正時間連動 BUG)*
+*更新日期：2026-03-19 (修正時間連動 BUG 與 替換原生對話框)*
