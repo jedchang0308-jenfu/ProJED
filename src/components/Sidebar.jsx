@@ -1,6 +1,7 @@
 import React from 'react';
 import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2, Download, Upload } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import useDialogStore from '../store/useDialogStore';
 
 const Sidebar = ({ isOpen, toggle }) => {
     const { workspaces, activeBoardId, switchBoard, showHome, isSidebarOpen, setSidebarOpen, removeBoard, removeWorkspace } = useBoardStore();
@@ -45,9 +46,9 @@ const Sidebar = ({ isOpen, toggle }) => {
                                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{ws.title}</span>
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                         <button
-                                            onClick={() => {
-                                                const name = prompt("請輸入看板名稱：");
-                                                if (name) useBoardStore.getState().addBoard(ws.id, name);
+                                            onClick={async () => {
+                                                const name = await useDialogStore.getState().showPrompt("請輸入看板名稱：");
+                                                if (name && name.trim()) useBoardStore.getState().addBoard(ws.id, name);
                                             }}
                                             className="p-1 hover:bg-primary-light hover:text-primary rounded text-slate-400"
                                             title="新增看板"
@@ -55,8 +56,9 @@ const Sidebar = ({ isOpen, toggle }) => {
                                             <Plus size={14} />
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                if (confirm(`確定要刪除工作區「${ws.title}」及其所有看板嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
+                                            onClick={async () => {
+                                                const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${ws.title}」及其所有看板嗎？您可以隨時使用 Ctrl+Z 復原。`);
+                                                if (confirmed) {
                                                     removeWorkspace(ws.id);
                                                     showHome();
                                                 }
@@ -90,9 +92,10 @@ const Sidebar = ({ isOpen, toggle }) => {
                                             <LayoutDashboard size={16} className={activeBoardId === board.id ? 'text-white' : 'text-slate-400'} />
                                             <span className="text-sm font-medium truncate flex-1">{board.title}</span>
                                             <button
-                                                onClick={(e) => {
+                                                onClick={async (e) => {
                                                     e.stopPropagation();
-                                                    if (confirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
+                                                    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
+                                                    if (confirmed) {
                                                         removeBoard(ws.id, board.id);
                                                         if (activeBoardId === board.id) showHome();
                                                     }

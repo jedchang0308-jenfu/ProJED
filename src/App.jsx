@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import { migrateLegacyData } from './utils/migration';
 import MainLayout from './components/MainLayout';
@@ -6,20 +6,28 @@ import HomeView from './components/HomeView';
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CardModal from './components/CardModal';
+import GlobalDialog from './components/GlobalDialog';
 
 function App() {
   const { currentView, workspaces, activeWorkspaceId, activeBoardId } = useBoardStore();
+  const initAttempted = useRef(false);
 
   useEffect(() => {
+    if (initAttempted.current) return;
+    
     // Run migration if no data exists in the new store
     if (workspaces.length === 0) {
+      initAttempted.current = true;
       console.log("Checking for legacy data...");
       const migrated = migrateLegacyData();
       if (migrated) {
         window.location.reload();
       } else {
         // If truly fresh user, add a default workspace
-        useBoardStore.getState().addWorkspace("我的工作區");
+        // setTimeout ensures Zustand has finished its current render cycle
+        setTimeout(() => {
+          useBoardStore.getState().addWorkspace("我的工作區");
+        }, 0);
       }
     }
   }, [workspaces.length]); // Only run when workspace count changes (init)
@@ -48,6 +56,7 @@ function App() {
     <MainLayout>
       {renderContent()}
       <CardModal />
+      <GlobalDialog />
     </MainLayout>
   );
 }

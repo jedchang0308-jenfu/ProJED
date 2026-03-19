@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import dayjs from 'dayjs';
+import useDialogStore from './useDialogStore';
 
 export const calculateCascadedDates = (board, overriddenDates = {}) => {
     const intermediateDates = new Map();
@@ -57,6 +58,14 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
         const currentTask = getCurrentTask(currentId);
         if (!currentTask) continue;
         
+        // BUG #3 修正：如果任務完全沒有日期資料，且沒有被 overriddenDates 覆寫，
+        // 則跨過此節點的傳播計算。
+        // 設計意圖：避免用「今天」作為 fallback 注入依賴鏈，
+        // 導致完全無日期的任務意外影響其他任務的排程。
+        const hasAnyDate = currentTask.startDate || currentTask.endDate
+                        || overriddenDates[currentId]?.startDate || overriddenDates[currentId]?.endDate
+                        || intermediateDates.has(currentId);
+
         let currentStartStr = intermediateDates.get(currentId)?.startDate 
                               || overriddenDates[currentId]?.startDate 
                               || currentTask.startDate 
@@ -66,6 +75,17 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
                             || overriddenDates[currentId]?.endDate 
                             || currentTask.endDate 
                             || dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+
+        // 當此節點完全無日期且不是被覆節點，跨過依賴傳播。
+        // 但仍需處理 edges 當中的 inDegree，確保下游節點最終能被加入 queue。
+        if (!hasAnyDate) {
+            edges.forEach(dep => {
+                const newDegree = inDegree.get(dep.toId) - 1;
+                inDegree.set(dep.toId, newDegree);
+                if (newDegree === 0) queue.push(dep.toId);
+            });
+            continue;
+        }
 
         // 1. Process Self-Dependencies
         const selfDeps = board.dependencies.filter(d => d.fromId === currentId && d.toId === currentId);
@@ -455,12 +475,14 @@ const useBoardStore = create(
                     const task = getCurrentTask(id);
                     if (!task) return;
 
-                    // 設計意圖：若任務本身完全沒有日期資訊，跳過 cascade 更新。
-                    // 舊邏輯的 BUG：以「今天/明天」填補空日期再比對，
-                    // 導致只設了單邊日期（或完全無日期）的任務被錯誤覆蓋。
+                    // BUG #4 修正：
+                    // 設計意圖：將 cascade update 应用到任務時，必須確認任務原本就有日期。
+                    // 若任務沒有任何日期️就跨過，避免系統用「今天」自動填入日期格位。
+                    // 舊逻輯的 BUG：即使任務完全沒有日期，cascade 仜然會用
+                    // 今天日期直接覆寫空白日期欄位。
                     const hasStart = !!task.startDate;
                     const hasEnd   = !!task.endDate;
-                    if (!hasStart && !hasEnd) return; // 完全無日期，跳過
+                    if (!hasStart && !hasEnd) return; // 完全無日期，跨過
 
                     // 若只有單邊日期，用 cascade 值本身當比對基準，避免假性差異
                     const rawStart = task.startDate || dates.startDate;
@@ -886,12 +908,13 @@ const useBoardStore = create(
                 }
                 console.log("[updateTaskDate] Task:", taskId, "dragType:", dragType, "deltaDays:", deltaDays, "originalDates passed:", originalDates);
 
-                // 1. Update the target task first
+                // 1. Update the target task first (Supporting both 'checklist' and 'checklistitem' naming from different UI components)
                 if (taskType === 'list') state.updateList(wsId, bId, taskId, updates, true);
                 else if (taskType === 'card') state.updateCard(wsId, bId, listId, taskId, updates, true);
-                else if (taskType === 'checklist') state.updateChecklistItem(wsId, bId, listId, cardId, checklistId, taskId, updates, true);
+                else if (taskType === 'checklist' || taskType === 'checklistitem') state.updateChecklistItem(wsId, bId, listId, cardId, checklistId, taskId, updates, true);
 
-                if (deltaDays === 0) return; // No shift needed
+                // 設計意圖：不論 deltaDays 是否為 0，只要進入此函式，代表日期「可能」已有變動。
+                // 必須執行 fixBoardDependencies 以確保串聯關係（例如：縮短工時導致後續任務提前）被正確執行。
                 console.log("[updateTaskDate] Triggering fixBoardDependencies to strictly enforce all dependencies.");
                 
                 // Option A: Strictly enforce dependencies across the board 
@@ -1041,7 +1064,7 @@ const useBoardStore = create(
             },
 
             // 匯入資料 (安全模式)
-            importData: (jsonData) => {
+            importData: async (jsonData) => {
                 try {
                     const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
                     get().recordHistory();
@@ -1100,8 +1123,10 @@ const useBoardStore = create(
                     } 
                     // 判斷是否為新版格式
                     else if (parsed.version === "2.0" && Array.isArray(parsed.workspaces)) {
-                        if (confirm("偵測到新版完全備份檔，匯入將會「覆蓋」目前所有工作區的資料。確定要繼續嗎？")) {
+                        const confirmed = await useDialogStore.getState().showConfirm("偵測到新版完全備份檔，匯入將會「覆蓋」目前所有工作區的資料。確定要繼續嗎？");
+                        if (confirmed) {
                             set({ workspaces: parsed.workspaces, activeWorkspaceId: null, activeBoardId: null });
+                            // The native alert is kept because it's just a notification, not a blocking decision
                             alert("新版資料匯入成功！");
                         }
                     } else {

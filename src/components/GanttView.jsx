@@ -1014,8 +1014,10 @@ const GanttView = () => {
                                                 <div className="absolute -top-7 left-0 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-50 transform -translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
                                                     {dayjs(dragDates.start).format('M/D')}
                                                 </div>
+                                                {/* 設計意圖：dragDates.end 在 calcDragDates 內已透過 subtract(1,'day') 轉為
+                                                    「真實結束日」而非「下一天邊界」，此處直接格式化即可，不應再減一天。 */}
                                                 <div className="absolute -top-7 right-0 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-50 transform translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
-                                                    {dayjs(dragDates.end).subtract(1, 'day').format('M/D')}
+                                                    {dayjs(dragDates.end).format('M/D')}
                                                 </div>
                                             </>
                                         )}

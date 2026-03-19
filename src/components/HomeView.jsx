@@ -1,25 +1,16 @@
 import React from 'react';
-import { Plus, Layout as LayoutIcon, Trello, Trash2 } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Trello, Layout as LayoutIcon } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import useDialogStore from '../store/useDialogStore';
 
 const HomeView = () => {
-    const { workspaces, switchBoard, addBoard } = useBoardStore();
+    const { workspaces, activeWorkspaceId, addBoard, removeBoard, switchBoard } = useBoardStore();
 
-    const handleCreateBoard = () => {
-        const name = prompt("請輸入新看板名稱：", "新專案");
-        if (name) {
-            const currentWorkspaces = useBoardStore.getState().workspaces;
-            if (currentWorkspaces.length > 0) {
-                addBoard(currentWorkspaces[0].id, name);
-            } else {
-                // Fallback (though App.jsx should handle this)
-                const wsId = 'ws_' + Date.now();
-                useBoardStore.getState().addWorkspace("我的工作區");
-                setTimeout(() => {
-                    const ws = useBoardStore.getState().workspaces;
-                    if (ws.length > 0) addBoard(ws[0].id, name);
-                }, 0);
-            }
+    const handleCreateBoard = async (e) => {
+        e.preventDefault();
+        const name = await useDialogStore.getState().showPrompt("請輸入新看板名稱：", "新專案");
+        if (name && name.trim()) {
+            addBoard(activeWorkspaceId, name);
         }
     };
 
@@ -50,10 +41,11 @@ const HomeView = () => {
                                 <div className="absolute inset-x-0 bottom-0 h-1 bg-primary transform translate-y-full group-hover:translate-y-0 transition-transform"></div>
                             </button>
                             <button
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                     e.stopPropagation();
-                                    if (confirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
-                                        useBoardStore.getState().removeBoard(ws.id, board.id);
+                                    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
+                                    if (confirmed) {
+                                        removeBoard(ws.id, board.id);
                                     }
                                 }}
                                 className="absolute top-2 right-2 p-1.5 bg-white shadow-sm border border-slate-100 rounded-lg text-slate-300 hover:text-red-500 hover:border-red-100 opacity-0 group-hover:opacity-100 transition-all z-20"

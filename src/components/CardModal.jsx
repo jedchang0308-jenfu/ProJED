@@ -7,6 +7,7 @@ import { useDragSensors } from '../hooks/useDragSensors';
 import useBoardStore from '../store/useBoardStore';
 import dayjs from 'dayjs';
 import SortableChecklistItem from './SortableChecklistItem';
+import useDialogStore from '../store/useDialogStore';
 
 const CardModal = () => {
     const {
@@ -222,8 +223,10 @@ const CardModal = () => {
     };
 
     const handleUpdate = (updates) => {
-        // 如果是更新日期，使用帶有自動排程的 action
-        if (updates.startDate || updates.endDate) {
+        // 設計意圖：使用 'in' 運算子而非 truthy 檢查。
+        // 因為空字串 ('') 在 truthy 條件下為 false，導致清除日期時（startDate: ''）
+        // 無法觸發 updateTaskDate，日期無法從 store 中被清空。
+        if ('startDate' in updates || 'endDate' in updates) {
             updateTaskDate(
                 workspaceId,
                 boardId,
@@ -342,6 +345,7 @@ const CardModal = () => {
                                         onChange={(e) => setLocalStartDate(e.target.value)}
                                         onBlur={(e) => {
                                             // 離開輸入框時才將日期寫入 store
+                                            // 使用 !== 比對：空字串 !== undefined，確保清除日期也能觸發
                                             if (e.target.value !== (currentItem.startDate || '')) {
                                                 handleUpdate({ startDate: e.target.value });
                                             }
@@ -365,6 +369,7 @@ const CardModal = () => {
                                         value={localEndDate}
                                         onChange={(e) => setLocalEndDate(e.target.value)}
                                         onBlur={(e) => {
+                                            // 同上：空字串 !== undefined，確保清除日期也能觸發
                                             if (e.target.value !== (currentItem.endDate || '')) {
                                                 handleUpdate({ endDate: e.target.value });
                                             }
@@ -574,8 +579,9 @@ const CardModal = () => {
                 {/* Footer Actions */}
                 <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <button
-                        onClick={() => {
-                            if (confirm(`確定要刪除這${type === 'list' ? '個列表' : (type === 'card' ? '張卡片' : '個待辦事項')}嗎？您可以隨時使用 Ctrl+Z 復原。`)) {
+                        onClick={async () => {
+                            const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除這${type === 'list' ? '個列表' : (type === 'card' ? '張卡片' : '個待辦事項')}嗎？您可以隨時使用 Ctrl+Z 復原。`);
+                            if (confirmed) {
                                 if (type === 'list') {
                                     removeList(workspaceId, boardId, itemId);
                                 } else if (type === 'card') {
@@ -735,8 +741,9 @@ const CardModal = () => {
                         {/* Dependency Modal Footer */}
                         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                             <button
-                                onClick={() => {
-                                    if (confirm('確定要清除此端點的所有依賴連結嗎？')) {
+                                onClick={async () => {
+                                    const confirmed = await useDialogStore.getState().showConfirm('確定要清除此端點的所有依賴連結嗎？');
+                                    if (confirmed) {
                                         const sideToClear = connectingSide.side;
                                         const idToClear = connectingSide.itemId || itemId;
                                         const relatedDeps = (board?.dependencies || []).filter(d =>

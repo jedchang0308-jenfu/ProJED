@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
+import useDialogStore from '../store/useDialogStore';
 import useBoardStore from '../store/useBoardStore';
 import List from './List';
 import Card from './Card';
@@ -216,9 +217,9 @@ const BoardView = () => {
                     {/* Add List Button Container */}
                     <div className="flex-shrink-0 w-[260px]">
                         <button
-                            onClick={() => {
-                                const title = prompt("請輸入列表名稱：", "新列表");
-                                if (title) {
+                            onClick={async () => {
+                                const title = await useDialogStore.getState().showPrompt("請輸入列表名稱：", "新列表");
+                                if (title && title.trim()) {
                                     useBoardStore.getState().addList(board.workspaceId || activeWorkspaceId, board.id, title);
                                 }
                             }}
