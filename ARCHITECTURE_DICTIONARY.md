@@ -70,5 +70,15 @@
     - **全域組件**：在 `App.jsx` 最外層掛載 `GlobalDialog.jsx`，確保對話框能覆蓋所有 UI 層級。
     - **互動優化**：支援 `Enter` 確認與 `Esc` 取消，並在顯示時自動聚焦輸入框，維持與原生對話框一致的操作習慣，同時提供更佳的視覺整合感。
 
+## 6. UX 與導覽優化 (UX & Navigation Enhancements)
+
+### 6.1 日期輸入預設邏輯 (Default Date Selection)
+- **設計意圖**：減少使用者在設定新任務日期時的點擊與輸入次數。
+- **實現方式**：在 `CardModal.jsx` 的日期輸入框中加入 `onClick` 事件。若欄位為空，點擊時自動填入並儲存「今日」日期。
+
+### 6.2 甘特圖導覽精確化 (Precise Gantt Navigation)
+- **設計意圖**：修正甘特圖中 Checklist 項目點擊後導向錯誤 Modal 的邏輯錯誤。
+- **實現方式**：在 `GanttView.jsx` 的 `handleItemClick` 中，針對 `checklist` 類型明確調用 `openModal('checklistitem', ...)`，而非導向一般的卡片 Modal。
+
 ---
-*更新日期：2026-03-19 (修正時間連動 BUG 與 替換原生對話框)*
+*更新日期：2026-03-20 (日期輸入優化與甘特圖導覽修正)*

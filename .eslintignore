@@ -1,0 +1,5 @@
+# 以下為舊版備份檔或臨時檔案，非 React/Vite 架構的一部分，排除在 Lint 之外
+temp_app.js
+app.js
+main_app.js
+check_nesting.js

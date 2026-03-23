@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // 排除 dist 建置產物，以及根目錄中非 React 架構的舊版備份檔
+  globalIgnores(['dist', 'temp_app.js', 'app.js', 'main_app.js', 'check_nesting.js']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

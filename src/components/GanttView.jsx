@@ -112,6 +112,9 @@ const GanttView = () => {
                 if (ganttFilters.checklist) {
                     (card.checklists || []).forEach(cl => {
                         (cl.items || []).forEach(cli => {
+                            const cliStatus = cli.status || 'todo';
+                            if (!statusFilters[cliStatus]) return;
+                            
                             updateBounds(cli.startDate, cli.endDate);
                             items.push({
                                 ...cli,
