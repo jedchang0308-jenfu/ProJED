@@ -650,7 +650,7 @@ const GanttView = () => {
         } else if (item.type === 'card') {
             openModal('card', item.id, item.listId);
         } else if (item.type === 'checklist') {
-            openModal('card', item.cardId, item.listId);
+            openModal('checklistitem', item.id, item.listId, { cardId: item.cardId, checklistId: item.checklistId });
         }
     };
 

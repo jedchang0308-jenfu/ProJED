@@ -343,6 +343,13 @@ const CardModal = () => {
                                         // 避免每次 onChange -> store 寫入 -> 重新渲染 -> 輸入框失焦的問題
                                         value={localStartDate}
                                         onChange={(e) => setLocalStartDate(e.target.value)}
+                                        onClick={() => {
+                                            if (!localStartDate) {
+                                                const today = dayjs().format('YYYY-MM-DD');
+                                                setLocalStartDate(today);
+                                                handleUpdate({ startDate: today });
+                                            }
+                                        }}
                                         onBlur={(e) => {
                                             // 離開輸入框時才將日期寫入 store
                                             // 使用 !== 比對：空字串 !== undefined，確保清除日期也能觸發
@@ -368,6 +375,13 @@ const CardModal = () => {
                                         // 同上：value 綁定 local state，onBlur 才寫入 store
                                         value={localEndDate}
                                         onChange={(e) => setLocalEndDate(e.target.value)}
+                                        onClick={() => {
+                                            if (!localEndDate) {
+                                                const today = dayjs().format('YYYY-MM-DD');
+                                                setLocalEndDate(today);
+                                                handleUpdate({ endDate: today });
+                                            }
+                                        }}
                                         onBlur={(e) => {
                                             // 同上：空字串 !== undefined，確保清除日期也能觸發
                                             if (e.target.value !== (currentItem.endDate || '')) {
