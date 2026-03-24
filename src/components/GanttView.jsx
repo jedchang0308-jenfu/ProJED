@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, Folder, FileText, RefreshCw, GripVertical, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, Folder, FileText, RefreshCw, GripVertical, Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -13,7 +13,7 @@ const BAR_HEIGHT = 28;
 // Default fallback if no dates exist
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
-const SortableGanttRow = ({ item, onClick, BAR_HEIGHT, onAddChild }) => {
+const SortableGanttRow = ({ item, onClick, BAR_HEIGHT, onAddChild, onToggleCollapse, isCollapsed }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
         data: { type: item.type, item }
@@ -28,11 +28,14 @@ const SortableGanttRow = ({ item, onClick, BAR_HEIGHT, onAddChild }) => {
         zIndex: isDragging ? 50 : 1,
     };
 
+    // 是否有子項目可以新增（並需顕示收疊按鈕）
+    const hasChildren = item.type === 'list' || item.type === 'card';
+
     return (
         <div
             ref={setNodeRef}
             style={style}
-            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-2 cursor-pointer group
+            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-1 cursor-pointer group
                 ${item.type === 'list' ? 'font-black text-slate-800' : item.type === 'card' ? 'font-bold text-slate-700' : 'text-slate-500 italic'}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => onClick(item)}
@@ -42,7 +45,24 @@ const SortableGanttRow = ({ item, onClick, BAR_HEIGHT, onAddChild }) => {
             <div className="flex-shrink-0 absolute left-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <GripVertical size={12} className="text-slate-400" />
             </div>
-            <div className="flex-shrink-0 ml-1">
+            {/* 收疊展開按鈕：對 list 和 card 顯示 */}
+            {hasChildren && onToggleCollapse ? (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleCollapse(item.id);
+                    }}
+                    className="flex-shrink-0 p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-all"
+                    title={isCollapsed ? '展開' : '收疊'}
+                >
+                    {isCollapsed
+                        ? <ChevronRight size={12} />
+                        : <ChevronDown size={12} />}
+                </button>
+            ) : (
+                <div className="flex-shrink-0 w-[18px]" />
+            )}
+            <div className="flex-shrink-0">
                 {item.type === 'list' && <Folder size={14} className="text-primary/70" />}
                 {item.type === 'card' && <FileText size={12} className="text-slate-400" />}
                 {item.type === 'checklist' && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
@@ -92,8 +112,23 @@ const GanttView = () => {
     } = useBoardStore();
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
+    // 記錄被收疊的列表/卡片 ID
+    const [collapsedIds, setCollapsedIds] = useState(new Set());
     const sensors = useDragSensors();
     const [activeSortableItem, setActiveSortableItem] = useState(null);
+
+    // 切換收疊/展開狀態
+    const toggleCollapse = (id) => {
+        setCollapsedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    };
 
     const [mode, setMode] = useState('Month'); // Month, Quarter, Year
     const [ganttFilters, setGanttFilters] = useState({ list: true, card: true, checklist: true });
@@ -223,6 +258,7 @@ const GanttView = () => {
     ];
 
     // Flatten data into rows with hierarchy info and calculate date boundaries
+    // collapsedIds 作為依賴，收疊的層級將被隙过
     const { flattenedItems, groups, gridStart, totalUnits } = useMemo(() => {
         if (!activeBoard) return { flattenedItems: [], groups: { lists: [], cards: [] }, gridStart: DEFAULT_GRID_START, totalUnits: 60 };
         const items = [];
@@ -251,6 +287,7 @@ const GanttView = () => {
         activeBoard.lists.forEach(list => {
             const listStatus = list.status || 'todo';
             const listStartRow = currentRow;
+            const isListCollapsed = collapsedIds.has(list.id);
 
             updateBounds(list.startDate, list.endDate);
 
@@ -258,6 +295,9 @@ const GanttView = () => {
             if (ganttFilters.list && statusFilters[listStatus]) {
                 items.push({ ...list, type: 'list', row: currentRow++ });
             }
+
+            // 列表收疊時，跳過其下剀所有子項
+            if (isListCollapsed) return;
 
             // 處理卡片與待辦
             const cards = list.cards || [];
@@ -268,34 +308,38 @@ const GanttView = () => {
                 updateBounds(card.startDate, card.endDate);
 
                 const cardStartRow = currentRow;
+                const isCardCollapsed = collapsedIds.has(card.id);
                 // 卡片主項
                 if (ganttFilters.card) {
                     items.push({ ...card, type: 'card', row: currentRow++, listId: list.id });
                 }
 
-                // 待辦清單項
-                if (ganttFilters.checklist) {
-                    (card.checklists || []).forEach(cl => {
-                        (cl.items || []).forEach(cli => {
-                            const cliStatus = cli.status || 'todo';
-                            if (!statusFilters[cliStatus]) return;
-                            
-                            updateBounds(cli.startDate, cli.endDate);
-                            items.push({
-                                ...cli,
-                                type: 'checklist',
-                                row: currentRow++,
-                                listId: list.id,
-                                cardId: card.id,
-                                checklistId: cl.id,
-                                title: cli.title || '未命名項目',
-                                parentCardDates: {
-                                    startDate: card.startDate,
-                                    endDate: card.endDate
-                                }
+                // 卡片收疊時，跳過待辦清單
+                if (!isCardCollapsed) {
+                    // 待辦清單項
+                    if (ganttFilters.checklist) {
+                        (card.checklists || []).forEach(cl => {
+                            (cl.items || []).forEach(cli => {
+                                const cliStatus = cli.status || 'todo';
+                                if (!statusFilters[cliStatus]) return;
+
+                                updateBounds(cli.startDate, cli.endDate);
+                                items.push({
+                                    ...cli,
+                                    type: 'checklist',
+                                    row: currentRow++,
+                                    listId: list.id,
+                                    cardId: card.id,
+                                    checklistId: cl.id,
+                                    title: cli.title || '未命名項目',
+                                    parentCardDates: {
+                                        startDate: card.startDate,
+                                        endDate: card.endDate
+                                    }
+                                });
                             });
                         });
-                    });
+                    }
                 }
 
                 const cardEndRow = currentRow - 1;
@@ -359,7 +403,7 @@ const GanttView = () => {
             gridStart: calculatedGridStart,
             totalUnits: units
         };
-    }, [activeBoard, ganttFilters, statusFilters, mode]);
+    }, [activeBoard, ganttFilters, statusFilters, mode, collapsedIds]);
 
     // Helpers for X coordinates
     const getX = (date, colWidth) => {
@@ -947,7 +991,15 @@ const GanttView = () => {
                                     >
                                         <SortableContext items={flattenedItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
                                             {flattenedItems.map((item) => (
-                                                <SortableGanttRow key={`${item.type}-${item.id}`} item={item} onClick={handleItemClick} onAddChild={handleAddChild} BAR_HEIGHT={BAR_HEIGHT} />
+                                                <SortableGanttRow
+                                                    key={`${item.type}-${item.id}`}
+                                                    item={item}
+                                                    onClick={handleItemClick}
+                                                    onAddChild={handleAddChild}
+                                                    onToggleCollapse={toggleCollapse}
+                                                    isCollapsed={collapsedIds.has(item.id)}
+                                                    BAR_HEIGHT={BAR_HEIGHT}
+                                                />
                                             ))}
                                         </SortableContext>
                                         <div className="px-4 py-3">
