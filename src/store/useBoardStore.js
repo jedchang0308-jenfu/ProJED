@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import dayjs from 'dayjs';
+import { arrayMove } from '@dnd-kit/sortable';
 import useDialogStore from './useDialogStore';
 
 export const calculateCascadedDates = (board, overriddenDates = {}) => {
@@ -228,6 +229,204 @@ const useBoardStore = create(
                     [status]: !state.statusFilters[status]
                 }
             })),
+
+            // --- Drag & Drop Reordering ---
+            reorderLists: (wsId, bId, activeId, overId) => {
+                get().recordHistory();
+                set((state) => ({
+                    workspaces: state.workspaces.map(ws => {
+                        if (ws.id !== wsId) return ws;
+                        return {
+                            ...ws,
+                            boards: ws.boards.map(b => {
+                                if (b.id !== bId) return b;
+                                const oldIndex = b.lists.findIndex(l => l.id === activeId);
+                                const newIndex = b.lists.findIndex(l => l.id === overId);
+                                return { ...b, lists: arrayMove(b.lists, oldIndex, newIndex) };
+                            })
+                        };
+                    })
+                }));
+            },
+
+            moveCardToList: (wsId, bId, cardId, sourceListId, targetListId, targetIndex = null) => {
+                get().recordHistory();
+                set((state) => ({
+                    workspaces: state.workspaces.map(ws => {
+                        if (ws.id !== wsId) return ws;
+                        return {
+                            ...ws,
+                            boards: ws.boards.map(b => {
+                                if (b.id !== bId) return b;
+                                const sourceList = b.lists.find(l => l.id === sourceListId);
+                                const card = sourceList?.cards.find(c => c.id === cardId);
+                                if (!card) return b;
+
+                                return {
+                                    ...b,
+                                    lists: b.lists.map(l => {
+                                        if (l.id === sourceListId) {
+                                            return { ...l, cards: l.cards.filter(c => c.id !== cardId) };
+                                        }
+                                        if (l.id === targetListId) {
+                                            const newCards = [...(l.cards || [])];
+                                            if (targetIndex !== null && targetIndex >= 0 && targetIndex <= newCards.length) {
+                                                newCards.splice(targetIndex, 0, card);
+                                            } else {
+                                                newCards.push(card);
+                                            }
+                                            return { ...l, cards: newCards };
+                                        }
+                                        return l;
+                                    })
+                                };
+                            })
+                        };
+                    })
+                }));
+            },
+
+            reorderCardsInList: (wsId, bId, listId, activeId, overId) => {
+                get().recordHistory();
+                set((state) => ({
+                    workspaces: state.workspaces.map(ws => {
+                        if (ws.id !== wsId) return ws;
+                        return {
+                            ...ws,
+                            boards: ws.boards.map(b => {
+                                if (b.id !== bId) return b;
+                                return {
+                                    ...b,
+                                    lists: b.lists.map(l => {
+                                        if (l.id !== listId) return l;
+                                        const oldIndex = l.cards.findIndex(c => c.id === activeId);
+                                        const newIndex = l.cards.findIndex(c => c.id === overId);
+                                        return { ...l, cards: arrayMove(l.cards, oldIndex, newIndex) };
+                                    })
+                                };
+                            })
+                        };
+                    })
+                }));
+            },
+
+            moveChecklistItemToCard: (wsId, bId, itemId, sourceListId, sourceCardId, sourceChecklistId, targetListId, targetCardId, targetIndex = null) => {
+                get().recordHistory();
+                set((state) => ({
+                    workspaces: state.workspaces.map(ws => {
+                        if (ws.id !== wsId) return ws;
+                        return {
+                            ...ws,
+                            boards: ws.boards.map(b => {
+                                if (b.id !== bId) return b;
+                                
+                                const sourceList = b.lists.find(l => l.id === sourceListId);
+                                const sourceCard = sourceList?.cards.find(c => c.id === sourceCardId);
+                                const sourceChecklist = sourceCard?.checklists?.find(cl => cl.id === sourceChecklistId);
+                                const item = sourceChecklist?.items?.find(i => i.id === itemId);
+                                
+                                if (!item) return b;
+
+                                return {
+                                    ...b,
+                                    lists: b.lists.map(l => {
+                                        let updatedCards = l.cards || [];
+                                        
+                                        // 移除來源
+                                        if (l.id === sourceListId) {
+                                            updatedCards = updatedCards.map(c => {
+                                                if (c.id === sourceCardId) {
+                                                    return {
+                                                        ...c,
+                                                        checklists: (c.checklists || []).map(cl => {
+                                                            if (cl.id === sourceChecklistId) {
+                                                                return { ...cl, items: cl.items.filter(i => i.id !== itemId) };
+                                                            }
+                                                            return cl;
+                                                        })
+                                                    };
+                                                }
+                                                return c;
+                                            });
+                                        }
+                                        
+                                        // 加入目標
+                                        if (l.id === targetListId) {
+                                            updatedCards = updatedCards.map(c => {
+                                                if (c.id === targetCardId) {
+                                                    let targetChecklists = c.checklists || [];
+                                                    if (targetChecklists.length === 0) {
+                                                        targetChecklists = [{
+                                                            id: 'cl_' + Date.now(),
+                                                            title: '待辦清單',
+                                                            showCompleted: true,
+                                                            items: []
+                                                        }];
+                                                    }
+                                                    return {
+                                                        ...c,
+                                                        checklists: targetChecklists.map((cl, idx) => {
+                                                            if (idx === 0) {
+                                                                const newItems = [...(cl.items || [])];
+                                                                if (targetIndex !== null && targetIndex >= 0 && targetIndex <= newItems.length) {
+                                                                    newItems.splice(targetIndex, 0, item);
+                                                                } else {
+                                                                    newItems.push(item);
+                                                                }
+                                                                return { ...cl, items: newItems };
+                                                            }
+                                                            return cl;
+                                                        })
+                                                    };
+                                                }
+                                                return c;
+                                            });
+                                        }
+                                        
+                                        return { ...l, cards: updatedCards };
+                                    })
+                                };
+                            })
+                        };
+                    })
+                }));
+            },
+            
+            reorderChecklistItems: (wsId, bId, listId, cardId, checklistId, activeId, overId) => {
+                get().recordHistory();
+                set((state) => ({
+                    workspaces: state.workspaces.map(ws => {
+                        if (ws.id !== wsId) return ws;
+                        return {
+                            ...ws,
+                            boards: ws.boards.map(b => {
+                                if (b.id !== bId) return b;
+                                return {
+                                    ...b,
+                                    lists: b.lists.map(l => {
+                                        if (l.id !== listId) return l;
+                                        return {
+                                            ...l,
+                                            cards: l.cards.map(c => {
+                                                if (c.id !== cardId) return c;
+                                                return {
+                                                    ...c,
+                                                    checklists: (c.checklists || []).map(cl => {
+                                                        if (cl.id !== checklistId) return cl;
+                                                        const oldIndex = (cl.items || []).findIndex(i => i.id === activeId);
+                                                        const newIndex = (cl.items || []).findIndex(i => i.id === overId);
+                                                        return { ...cl, items: arrayMove(cl.items || [], oldIndex, newIndex) };
+                                                    })
+                                                };
+                                            })
+                                        };
+                                    })
+                                };
+                            })
+                        };
+                    })
+                }));
+            },
 
             showHome: () => set({
                 activeBoardId: null,

@@ -10,7 +10,7 @@ import Card from './Card';
 
 
 const BoardView = () => {
-    const { getActiveBoard, setView, toggleStatusFilter, statusFilters, workspaces, activeWorkspaceId, activeBoardId, setWorkspaces } = useBoardStore();
+    const { getActiveBoard, toggleStatusFilter, statusFilters, activeWorkspaceId, activeBoardId, reorderLists, moveCardToList, reorderCardsInList } = useBoardStore();
     const board = getActiveBoard();
     const sensors = useDragSensors();
     const [activeCard, setActiveCard] = useState(null);
@@ -56,7 +56,7 @@ const BoardView = () => {
         // 列表拖動邏輯
         if (activeData?.type === 'list' && overData?.type === 'list') {
             if (active.id !== over.id) {
-                reorderLists(active.id, over.id);
+                reorderLists(activeWorkspaceId, activeBoardId, active.id, over.id);
             }
         }
         // 卡片拖動邏輯
@@ -77,106 +77,18 @@ const BoardView = () => {
 
             if (sourceListId !== targetListId) {
                 // 跨列表移動
-                moveCardToList(activeData.card.id, sourceListId, targetListId);
+                const targetIndex = overData?.type === 'card' && overData.sortable ? overData.sortable.index : null;
+                moveCardToList(activeWorkspaceId, activeBoardId, activeData.card.id, sourceListId, targetListId, targetIndex);
             } else {
                 // 同列表內重新排序
                 if (overData?.type === 'card') {
-                    reorderCardsInList(sourceListId, active.id, over.id);
+                    reorderCardsInList(activeWorkspaceId, activeBoardId, sourceListId, active.id, over.id);
                 }
             }
         }
 
         setActiveCard(null);
         setActiveList(null);
-    };
-
-    // 跨列表移動卡片
-    const moveCardToList = (cardId, sourceListId, targetListId) => {
-        const newWorkspaces = workspaces.map(ws => {
-            if (ws.id !== activeWorkspaceId) return ws;
-
-            return {
-                ...ws,
-                boards: ws.boards.map(b => {
-                    if (b.id !== activeBoardId) return b;
-
-                    const sourceList = b.lists.find(l => l.id === sourceListId);
-                    const card = sourceList?.cards.find(c => c.id === cardId);
-
-                    if (!card) return b;
-
-                    return {
-                        ...b,
-                        lists: b.lists.map(l => {
-                            if (l.id === sourceListId) {
-                                return { ...l, cards: l.cards.filter(c => c.id !== cardId) };
-                            }
-                            if (l.id === targetListId) {
-                                return { ...l, cards: [...l.cards, card] };
-                            }
-                            return l;
-                        })
-                    };
-                })
-            };
-        });
-
-        setWorkspaces(newWorkspaces);
-    };
-
-    // 同列表內重新排序
-    const reorderCardsInList = (listId, activeId, overId) => {
-        const newWorkspaces = workspaces.map(ws => {
-            if (ws.id !== activeWorkspaceId) return ws;
-
-            return {
-                ...ws,
-                boards: ws.boards.map(b => {
-                    if (b.id !== activeBoardId) return b;
-
-                    return {
-                        ...b,
-                        lists: b.lists.map(l => {
-                            if (l.id !== listId) return l;
-
-                            const oldIndex = l.cards.findIndex(c => c.id === activeId);
-                            const newIndex = l.cards.findIndex(c => c.id === overId);
-
-                            return {
-                                ...l,
-                                cards: arrayMove(l.cards, oldIndex, newIndex)
-                            };
-                        })
-                    };
-                })
-            };
-        });
-
-        setWorkspaces(newWorkspaces);
-    };
-
-    // 列表重新排序
-    const reorderLists = (activeId, overId) => {
-        const newWorkspaces = workspaces.map(ws => {
-            if (ws.id !== activeWorkspaceId) return ws;
-
-            return {
-                ...ws,
-                boards: ws.boards.map(b => {
-                    if (b.id !== activeBoardId) return b;
-
-                    const oldIndex = b.lists.findIndex(l => l.id === activeId);
-                    const newIndex = b.lists.findIndex(l => l.id === overId);
-
-                    return {
-                        ...b,
-                        lists: arrayMove(b.lists, oldIndex, newIndex)
-                    };
-                })
-            };
-        });
-
-        setWorkspaces(newWorkspaces);
     };
 
     return (

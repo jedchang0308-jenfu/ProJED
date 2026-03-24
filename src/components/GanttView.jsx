@@ -1,12 +1,70 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
+import useDialogStore from '../store/useDialogStore';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, Folder, FileText, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, Folder, FileText, RefreshCw, GripVertical, Plus } from 'lucide-react';
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useDragSensors } from '../hooks/useDragSensors';
 
 // 方案 B 優化: 行高從 32px 縮減至 28px，增加視覺緊湊感
 const BAR_HEIGHT = 28;
 // Default fallback if no dates exist
 const DEFAULT_GRID_START = dayjs().startOf('year');
+
+const SortableGanttRow = ({ item, onClick, BAR_HEIGHT, onAddChild }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+        id: item.id,
+        data: { type: item.type, item }
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        height: BAR_HEIGHT,
+        paddingLeft: item.type === 'list' ? 12 : (item.type === 'card' ? 24 : 40),
+        position: 'relative',
+        zIndex: isDragging ? 50 : 1,
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-2 cursor-pointer group
+                ${item.type === 'list' ? 'font-black text-slate-800' : item.type === 'card' ? 'font-bold text-slate-700' : 'text-slate-500 italic'}
+                ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
+            onClick={() => onClick(item)}
+            {...attributes}
+            {...listeners}
+        >
+            <div className="flex-shrink-0 absolute left-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <GripVertical size={12} className="text-slate-400" />
+            </div>
+            <div className="flex-shrink-0 ml-1">
+                {item.type === 'list' && <Folder size={14} className="text-primary/70" />}
+                {item.type === 'card' && <FileText size={12} className="text-slate-400" />}
+                {item.type === 'checklist' && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
+            </div>
+            <span className={`truncate ${item.type === 'list' ? 'text-[13px]' : item.type === 'card' ? 'text-[11px]' : 'text-[10px]'}`}>
+                {item.title}
+            </span>
+            {(item.type === 'list' || item.type === 'card') && onAddChild && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onAddChild(item);
+                    }}
+                    className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
+                    title={item.type === 'list' ? "新增卡片" : "新增待辦項目"}
+                >
+                    <Plus size={12} />
+                </button>
+            )}
+        </div>
+    );
+};
 
 const GanttView = () => {
     const {
@@ -21,10 +79,21 @@ const GanttView = () => {
         updateTaskDate,
         isSidebarOpen,
         setSidebarOpen,
-        toggleStatusFilter // 加入 toggleStatusFilter
+        toggleStatusFilter, // 加入 toggleStatusFilter
+        reorderLists,
+        moveCardToList,
+        reorderCardsInList,
+        moveChecklistItemToCard,
+        reorderChecklistItems,
+        addList,
+        addCard,
+        addChecklist,
+        addChecklistItem
     } = useBoardStore();
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
+    const sensors = useDragSensors();
+    const [activeSortableItem, setActiveSortableItem] = useState(null);
 
     const [mode, setMode] = useState('Month'); // Month, Quarter, Year
     const [ganttFilters, setGanttFilters] = useState({ list: true, card: true, checklist: true });
@@ -43,6 +112,102 @@ const GanttView = () => {
     const dragStateRef = useRef(null);
     const rafIdRef = useRef(null);
     // ────────────────────────────────────────────────────────────────
+
+    const handleSortableDragEnd = (event) => {
+        const { active, over } = event;
+        setActiveSortableItem(null);
+        if (!over || active.id === over.id) return;
+
+        const activeItem = active.data.current?.item;
+        const overItem = over.data.current?.item;
+        if (!activeItem || !overItem) return;
+
+        if (activeItem.type === 'list') {
+            const targetListId = overItem.type === 'list' ? overItem.id : overItem.listId;
+            reorderLists(activeWorkspaceId, activeBoardId, activeItem.id, targetListId);
+        } else if (activeItem.type === 'card') {
+            const targetListId = overItem.type === 'list' ? overItem.id : overItem.listId;
+            if (activeItem.listId === targetListId) {
+                const targetCardId = overItem.type === 'card' ? overItem.id : (overItem.type === 'checklist' ? overItem.cardId : null);
+                if (targetCardId) {
+                    reorderCardsInList(activeWorkspaceId, activeBoardId, activeItem.listId, activeItem.id, targetCardId);
+                } else {
+                    moveCardToList(activeWorkspaceId, activeBoardId, activeItem.id, activeItem.listId, targetListId, 0);
+                }
+            } else {
+                let targetIndex = null;
+                const targetListCards = flattenedItems.filter(i => i.listId === targetListId && i.type === 'card');
+                if (overItem.type === 'card') {
+                    targetIndex = targetListCards.findIndex(c => c.id === overItem.id);
+                } else if (overItem.type === 'checklist') {
+                    targetIndex = targetListCards.findIndex(c => c.id === overItem.cardId) + 1;
+                }
+                moveCardToList(activeWorkspaceId, activeBoardId, activeItem.id, activeItem.listId, targetListId, targetIndex !== -1 ? targetIndex : 0);
+            }
+        } else if (activeItem.type === 'checklist') {
+            const targetListId = overItem.type === 'list' ? overItem.id : overItem.listId;
+            const targetCardId = overItem.type === 'list' ? null : (overItem.type === 'card' ? overItem.id : overItem.cardId);
+            
+            if (!targetCardId) return;
+
+            if (activeItem.cardId === targetCardId) {
+                const targetChecklistItemId = overItem.type === 'checklist' ? overItem.id : null;
+                if (targetChecklistItemId) {
+                    reorderChecklistItems(activeWorkspaceId, activeBoardId, activeItem.listId, activeItem.cardId, activeItem.checklistId, activeItem.id, targetChecklistItemId);
+                }
+            } else {
+                let targetIndex = null;
+                if (overItem.type === 'checklist') {
+                    const targetItems = flattenedItems.filter(i => i.cardId === targetCardId && i.type === 'checklist');
+                    targetIndex = targetItems.findIndex(i => i.id === overItem.id);
+                }
+                moveChecklistItemToCard(activeWorkspaceId, activeBoardId, activeItem.id, activeItem.listId, activeItem.cardId, activeItem.checklistId, targetListId, targetCardId, targetIndex !== -1 ? targetIndex : null);
+            }
+        }
+    };
+    
+    const handleAddList = async () => {
+        const title = await useDialogStore.getState().showPrompt("請輸入列表名稱：", "新列表");
+        if (title && title.trim()) {
+            addList(activeWorkspaceId, activeBoardId, title.trim());
+        }
+    };
+
+    const handleAddChild = async (item) => {
+        const { showPrompt } = useDialogStore.getState();
+        
+        if (item.type === 'list') {
+            const title = await showPrompt("請輸入卡片名稱：", "新卡片");
+            if (title && title.trim()) {
+                addCard(activeWorkspaceId, activeBoardId, item.id, title.trim());
+            }
+        } else if (item.type === 'card') {
+            const title = await showPrompt("請輸入待辦項目名稱：", "新項目");
+            if (title !== null) {
+                let clId = item.checklists?.[0]?.id;
+                if (!clId) {
+                    addChecklist(activeWorkspaceId, activeBoardId, item.listId, item.id);
+                    // 重新獲取最新的 board 狀態以取得新建立的清單 ID
+                    const latestBoard = useBoardStore.getState().getActiveBoard();
+                    const latestCard = latestBoard?.lists.find(l => l.id === item.listId)?.cards.find(c => c.id === item.id);
+                    clId = latestCard?.checklists?.[0]?.id;
+                }
+                
+                if (clId) {
+                    addChecklistItem(activeWorkspaceId, activeBoardId, item.listId, item.id, clId);
+                    if (title.trim()) {
+                        // 取得剛才新增的項目並更新其名稱
+                        const updatedBoard = useBoardStore.getState().getActiveBoard();
+                        const updatedCard = updatedBoard?.lists.find(l => l.id === item.listId)?.cards.find(c => c.id === item.id);
+                        const newestItem = updatedCard?.checklists?.[0]?.items?.slice(-1)[0];
+                        if (newestItem) {
+                            updateChecklistItem(activeWorkspaceId, activeBoardId, item.listId, item.id, clId, newestItem.id, { title: title.trim() });
+                        }
+                    }
+                }
+            }
+        }
+    };
 
     // Get active board data
     const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
@@ -774,27 +939,48 @@ const GanttView = () => {
                                 className="flex-1 overflow-y-auto scrollbar-gantt"
                             >
                                 <div style={{ height: flattenedItems.length * BAR_HEIGHT + 100 }}>
-                                    {flattenedItems.map((item, idx) => (
-                                        <div
-                                            key={`${item.type}-${item.id}`}
-                                            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-2 cursor-pointer
-                                                ${item.type === 'list' ? 'font-black text-slate-800' : item.type === 'card' ? 'font-bold text-slate-700' : 'text-slate-500 italic'}`}
-                                            style={{
-                                                height: BAR_HEIGHT,
-                                                paddingLeft: item.type === 'list' ? 12 : (item.type === 'card' ? 24 : 40)
-                                            }}
-                                            onClick={() => handleItemClick(item)}
-                                        >
-                                            <div className="flex-shrink-0">
-                                                {item.type === 'list' && <Folder size={14} className="text-primary/70" />}
-                                                {item.type === 'card' && <FileText size={12} className="text-slate-400" />}
-                                                {item.type === 'checklist' && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
-                                            </div>
-                                            <span className={`truncate ${item.type === 'list' ? 'text-[13px]' : item.type === 'card' ? 'text-[11px]' : 'text-[10px]'}`}>
-                                                {item.title}
-                                            </span>
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={closestCorners}
+                                        onDragStart={(e) => setActiveSortableItem(e.active.data.current?.item)}
+                                        onDragEnd={handleSortableDragEnd}
+                                    >
+                                        <SortableContext items={flattenedItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                                            {flattenedItems.map((item) => (
+                                                <SortableGanttRow key={`${item.type}-${item.id}`} item={item} onClick={handleItemClick} onAddChild={handleAddChild} BAR_HEIGHT={BAR_HEIGHT} />
+                                            ))}
+                                        </SortableContext>
+                                        <div className="px-4 py-3">
+                                            <button
+                                                onClick={handleAddList}
+                                                className="w-full py-2 flex items-center justify-center gap-2 text-[11px] font-bold text-slate-400 hover:text-primary hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 rounded-lg transition-all"
+                                            >
+                                                <Plus size={14} />
+                                                <span>新增列表</span>
+                                            </button>
                                         </div>
-                                    ))}
+                                        <DragOverlay>
+                                            {activeSortableItem ? (
+                                                <div
+                                                    className={`flex items-center px-4 border border-slate-200 gap-2 cursor-grabbing bg-white/90 shadow-2xl scale-105 rotate-2 rounded
+                                                        ${activeSortableItem.type === 'list' ? 'font-black text-slate-800' : activeSortableItem.type === 'card' ? 'font-bold text-slate-700' : 'text-slate-500 italic'}`}
+                                                    style={{
+                                                        height: BAR_HEIGHT,
+                                                        paddingLeft: activeSortableItem.type === 'list' ? 12 : (activeSortableItem.type === 'card' ? 24 : 40)
+                                                    }}
+                                                >
+                                                    <div className="flex-shrink-0 ml-1">
+                                                        {activeSortableItem.type === 'list' && <Folder size={14} className="text-primary/70" />}
+                                                        {activeSortableItem.type === 'card' && <FileText size={12} className="text-slate-400" />}
+                                                        {activeSortableItem.type === 'checklist' && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
+                                                    </div>
+                                                    <span className={`truncate ${activeSortableItem.type === 'list' ? 'text-[13px]' : activeSortableItem.type === 'card' ? 'text-[11px]' : 'text-[10px]'}`}>
+                                                        {activeSortableItem.title}
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                        </DragOverlay>
+                                    </DndContext>
                                 </div>
                             </div>
                         </>
