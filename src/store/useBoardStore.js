@@ -154,7 +154,7 @@ const useBoardStore = create(
             workspaces: [],
             activeWorkspaceId: null,
             activeBoardId: null,
-            currentView: 'home', // 'home', 'board', 'gantt'
+            currentView: 'home', // 'home', 'board', 'gantt', 'calendar'
             isSidebarOpen: true,
             editingItem: null, // { type, itemId, listId, boardId, workspaceId }
             statusFilters: {
@@ -265,19 +265,34 @@ const useBoardStore = create(
                                 return {
                                     ...b,
                                     lists: b.lists.map(l => {
-                                        if (l.id === sourceListId) {
-                                            return { ...l, cards: l.cards.filter(c => c.id !== cardId) };
-                                        }
-                                        if (l.id === targetListId) {
-                                            const newCards = [...(l.cards || [])];
-                                            if (targetIndex !== null && targetIndex >= 0 && targetIndex <= newCards.length) {
-                                                newCards.splice(targetIndex, 0, card);
-                                            } else {
-                                                newCards.push(card);
+                                        if (sourceListId === targetListId) {
+                                            if (l.id === sourceListId) {
+                                                const newCards = l.cards.filter(c => c.id !== cardId);
+                                                const updatedCard = { ...card, listId: targetListId };
+                                                if (targetIndex !== null && targetIndex >= 0 && targetIndex <= newCards.length) {
+                                                    newCards.splice(targetIndex, 0, updatedCard);
+                                                } else {
+                                                    newCards.push(updatedCard);
+                                                }
+                                                return { ...l, cards: newCards };
                                             }
-                                            return { ...l, cards: newCards };
+                                            return l;
+                                        } else {
+                                            if (l.id === sourceListId) {
+                                                return { ...l, cards: l.cards.filter(c => c.id !== cardId) };
+                                            }
+                                            if (l.id === targetListId) {
+                                                const newCards = [...(l.cards || [])];
+                                                const updatedCard = { ...card, listId: targetListId };
+                                                if (targetIndex !== null && targetIndex >= 0 && targetIndex <= newCards.length) {
+                                                    newCards.splice(targetIndex, 0, updatedCard);
+                                                } else {
+                                                    newCards.push(updatedCard);
+                                                }
+                                                return { ...l, cards: newCards };
+                                            }
+                                            return l;
                                         }
-                                        return l;
                                     })
                                 };
                             })

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Layout, Undo2, Redo2, Download, Upload, RefreshCw, LogIn, ChevronRight, Columns, LineChart } from 'lucide-react';
+import { Menu, Layout, Undo2, Redo2, Download, Upload, RefreshCw, LogIn, ChevronRight, Columns, LineChart, CalendarDays } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import Sidebar from './Sidebar';
 
@@ -78,6 +78,13 @@ const MainLayout = ({ children }) => {
                                         >
                                             <LineChart size={13} />
                                             <span className="hidden md:inline">甘特圖</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setView('calendar')}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'calendar' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            <CalendarDays size={13} />
+                                            <span className="hidden md:inline">月曆</span>
                                         </button>
                                     </div>
                                 </div>

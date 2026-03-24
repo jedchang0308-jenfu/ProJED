@@ -5,6 +5,7 @@ import MainLayout from './components/MainLayout';
 import HomeView from './components/HomeView';
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
+import CalendarView from './components/CalendarView';
 import CardModal from './components/CardModal';
 import GlobalDialog from './components/GlobalDialog';
 
@@ -47,6 +48,8 @@ function App() {
         return <BoardView />;
       case 'gantt':
         return <GanttView />;
+      case 'calendar':
+        return <CalendarView />;
       default:
         return <HomeView />;
     }
