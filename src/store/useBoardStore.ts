@@ -3,13 +3,17 @@ import { persist } from 'zustand/middleware';
 import dayjs from 'dayjs';
 import { arrayMove } from '@dnd-kit/sortable';
 import useDialogStore from './useDialogStore';
+import type {
+    Board, BoardStore, TaskStatus,
+    OverriddenDates
+} from '../types';
 
-export const calculateCascadedDates = (board, overriddenDates = {}) => {
+export const calculateCascadedDates = (board: Board, overriddenDates: OverriddenDates = {}): Map<string, { startDate: string; endDate: string }> => {
     const intermediateDates = new Map();
     if (!board.dependencies || board.dependencies.length === 0) return intermediateDates;
 
     // Helper to get task by id
-    const getCurrentTask = (id) => {
+    const getCurrentTask = (id: string) => {
         for (const l of board.lists) {
             if (l.id === id) return { ...l, type: 'list' };
             for (const c of l.cards) {
@@ -26,8 +30,8 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
         return null;
     };
 
-    const inDegree = new Map();
-    const adjList = new Map();
+    const inDegree = new Map<string, number>();
+    const adjList = new Map<string, typeof board.dependencies>();
     
     // Initialize nodes
     board.dependencies.forEach(dep => {
@@ -40,8 +44,9 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
         if (!inDegree.has(dep.toId)) inDegree.set(dep.toId, 0);
         
         if (!adjList.has(dep.fromId)) adjList.set(dep.fromId, []);
-        adjList.get(dep.fromId).push(dep);
-        inDegree.set(dep.toId, inDegree.get(dep.toId) + 1);
+        const edges = adjList.get(dep.fromId);
+        if (edges) edges.push(dep);
+        inDegree.set(dep.toId, (inDegree.get(dep.toId) ?? 0) + 1);
     });
 
     let queue = Array.from(inDegree.entries())
@@ -53,7 +58,7 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
     }
 
     while (queue.length > 0) {
-        const currentId = queue.shift();
+        const currentId = queue.shift()!;
         const edges = adjList.get(currentId) || [];
         
         const currentTask = getCurrentTask(currentId);
@@ -80,7 +85,7 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
         // 當此節點完全無日期且不是被覆節點，跨過依賴傳播。
         // 但仍需處理 edges 當中的 inDegree，確保下游節點最終能被加入 queue。
         if (!hasAnyDate) {
-            edges.forEach(dep => {
+            (edges as typeof board.dependencies).forEach(dep => {
                 const newDegree = inDegree.get(dep.toId) - 1;
                 inDegree.set(dep.toId, newDegree);
                 if (newDegree === 0) queue.push(dep.toId);
@@ -139,7 +144,7 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
                 intermediateDates.set(successor.id, { startDate: idealStart, endDate: idealEnd });
             }
 
-            const newDegree = inDegree.get(dep.toId) - 1;
+            const newDegree = (inDegree.get(dep.toId) ?? 0) - 1;
             inDegree.set(dep.toId, newDegree);
             if (newDegree === 0) queue.push(dep.toId);
         });
@@ -148,7 +153,7 @@ export const calculateCascadedDates = (board, overriddenDates = {}) => {
     return intermediateDates;
 };
 
-const useBoardStore = create(
+const useBoardStore = create<BoardStore>()(
     persist(
         (set, get) => ({
             workspaces: [],
@@ -456,8 +461,8 @@ const useBoardStore = create(
                         type,
                         itemId,
                         listId,
-                        boardId: activeBoardId,
-                        workspaceId: activeWorkspaceId,
+                        boardId: activeBoardId || '',
+                        workspaceId: activeWorkspaceId || '',
                         ...extra
                     }
                 });
@@ -669,8 +674,8 @@ const useBoardStore = create(
 
                 const intermediateDates = calculateCascadedDates(board, {});
 
-                const updatesQueue = [];
-                const getCurrentTask = (id) => {
+                const updatesQueue: Array<{ type: string; id: string; listId?: string; cardId?: string; checklistId?: string; updates: { startDate: string; endDate: string } }> = [];
+                const getCurrentTask = (id: string) => {
                     for (const l of board.lists) {
                         if (l.id === id) return { ...l, type: 'list' };
                         for (const c of l.cards) {
@@ -703,7 +708,8 @@ const useBoardStore = create(
                     const rawEnd   = task.endDate   || dates.endDate;
 
                     if (rawStart !== dates.startDate || rawEnd !== dates.endDate) {
-                        updatesQueue.push({ type: task.type, id: task.id, listId: task.listId, cardId: task.cardId, checklistId: task.checklistId, updates: dates });
+                        const taskAny = task as Record<string, unknown>;
+                        updatesQueue.push({ type: task.type, id: task.id, listId: taskAny.listId as string | undefined, cardId: taskAny.cardId as string | undefined, checklistId: taskAny.checklistId as string | undefined, updates: dates });
                     }
                 });
 
@@ -711,8 +717,8 @@ const useBoardStore = create(
 
                 updatesQueue.forEach(u => {
                     if (u.type === 'list') state.updateList(wsId, bId, u.id, u.updates, true);
-                    else if (u.type === 'card') state.updateCard(wsId, bId, u.listId, u.id, u.updates, true);
-                    else if (u.type === 'checklist') state.updateChecklistItem(wsId, bId, u.listId, u.cardId, u.checklistId, u.id, u.updates, true);
+                    else if (u.type === 'card') state.updateCard(wsId, bId, u.listId || '', u.id, u.updates, true);
+                    else if (u.type === 'checklist') state.updateChecklistItem(wsId, bId, u.listId || '', u.cardId || '', u.checklistId || '', u.id, u.updates, true);
                 });
             },
 
@@ -794,7 +800,7 @@ const useBoardStore = create(
                                             lists: [...(b.lists || []), {
                                                 id: 'l_' + Date.now(),
                                                 title: title || '新列表',
-                                                status: 'todo',
+                                                status: 'todo' as TaskStatus,
                                                 cards: [],
                                                 ganttVisible: true
                                             }]
@@ -828,7 +834,7 @@ const useBoardStore = create(
                                                         cards: [...(l.cards || []), {
                                                             id: 'c_' + Date.now(),
                                                             title: title || '新卡片',
-                                                            status: 'todo',
+                                                            status: 'todo' as TaskStatus,
                                                             checklists: [],
                                                             ganttVisible: true
                                                         }]
@@ -996,7 +1002,7 @@ const useBoardStore = create(
                                                                                 items: [...(cl.items || []), {
                                                                                     id: 'cli_' + Date.now(),
                                                                                     title: '',
-                                                                                    status: 'todo',
+                                                                                    status: 'todo' as TaskStatus,
                                                                                     startDate: '',
                                                                                     endDate: ''
                                                                                 }]
@@ -1084,7 +1090,7 @@ const useBoardStore = create(
                 if (!board) return;
 
                 // Create helper to find old task details to calculate deltaDays
-                const findTask = (id) => {
+                const findTask = (id: string) => {
                     for (const l of board.lists) {
                         if (l.id === id) return { ...l, type: 'list' };
                         for (const c of l.cards) {
@@ -1124,8 +1130,8 @@ const useBoardStore = create(
 
                 // 1. Update the target task first (Supporting both 'checklist' and 'checklistitem' naming from different UI components)
                 if (taskType === 'list') state.updateList(wsId, bId, taskId, updates, true);
-                else if (taskType === 'card') state.updateCard(wsId, bId, listId, taskId, updates, true);
-                else if (taskType === 'checklist' || taskType === 'checklistitem') state.updateChecklistItem(wsId, bId, listId, cardId, checklistId, taskId, updates, true);
+                else if (taskType === 'card') state.updateCard(wsId, bId, listId || '', taskId, updates, true);
+                else if (taskType === 'checklist' || taskType === 'checklistitem') state.updateChecklistItem(wsId, bId, listId || '', cardId || '', checklistId || '', taskId, updates, true);
 
                 // 設計意圖：不論 deltaDays 是否為 0，只要進入此函式，代表日期「可能」已有變動。
                 // 必須執行 fixBoardDependencies 以確保串聯關係（例如：縮短工時導致後續任務提前）被正確執行。
@@ -1278,9 +1284,9 @@ const useBoardStore = create(
             },
 
             // 匯入資料 (安全模式)
-            importData: async (jsonData) => {
+            importData: async (jsonData: string | object) => {
                 try {
-                    const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+                    const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData as Record<string, unknown>;
                     get().recordHistory();
                     
                     // 判斷是否為舊版陣列格式 (Legacy List[])
@@ -1293,32 +1299,32 @@ const useBoardStore = create(
                         
                         // 轉換邏輯
                         const newBoardId = 'b_' + Date.now();
-                        const newBoard = {
+                        const newBoard: import('../types').Board = {
                             id: newBoardId,
                             title: `復原的看板 (舊版) - ${dayjs().format('MM/DD HH:mm')}`,
-                            lists: parsed.map(oldList => ({
-                                id: oldList.id || 'l_' + Date.now() + Math.random(),
-                                title: oldList.title || '無標題列表',
-                                status: oldList.status || 'todo',
+                            lists: (parsed as Record<string, unknown>[]).map((oldList: Record<string, unknown>) => ({
+                                id: (oldList.id as string) || 'l_' + Date.now() + Math.random(),
+                                title: (oldList.title as string) || '無標題列表',
+                                status: ((oldList.status as string) || 'todo') as TaskStatus,
                                 ganttVisible: oldList.ganttVisible !== false,
-                                cards: (oldList.cards || []).map(oldCard => ({
-                                    id: oldCard.id || 'c_' + Date.now() + Math.random(),
-                                    title: oldCard.title || '無標題卡片',
-                                    status: oldCard.status || 'todo',
+                                cards: ((oldList.cards as Record<string, unknown>[]) || []).map((oldCard: Record<string, unknown>) => ({
+                                    id: (oldCard.id as string) || 'c_' + Date.now() + Math.random(),
+                                    title: (oldCard.title as string) || '無標題卡片',
+                                    status: ((oldCard.status as string) || 'todo') as TaskStatus,
                                     ganttVisible: oldCard.ganttVisible !== false,
-                                    startDate: oldCard.startDate || '',
-                                    endDate: oldCard.endDate || '',
-                                    notes: oldCard.notes || '',
-                                    checklists: (oldCard.checklists || []).length > 0 ? [{
+                                    startDate: (oldCard.startDate as string) || '',
+                                    endDate: (oldCard.endDate as string) || '',
+                                    notes: (oldCard.notes as string) || '',
+                                    checklists: ((oldCard.checklists as Record<string, unknown>[]) || []).length > 0 ? [{
                                         id: 'cl_' + Date.now() + Math.random(),
                                         title: '舊版待辦事項',
                                         showCompleted: true,
-                                        items: oldCard.checklists.map(oldItem => ({
-                                            id: oldItem.id || 'cli_' + Date.now() + Math.random(),
-                                            title: oldItem.title || oldItem.text || '',
-                                            status: oldItem.status || (oldItem.completed ? 'completed' : 'todo'),
-                                            startDate: oldItem.startDate || '',
-                                            endDate: oldItem.endDate || ''
+                                        items: (oldCard.checklists as Record<string, unknown>[]).map((oldItem: Record<string, unknown>) => ({
+                                            id: (oldItem.id as string) || 'cli_' + Date.now() + Math.random(),
+                                            title: (oldItem.title as string) || (oldItem.text as string) || '',
+                                            status: ((oldItem.status as string) || ((oldItem.completed as boolean) ? 'completed' : 'todo')) as TaskStatus,
+                                            startDate: (oldItem.startDate as string) || '',
+                                            endDate: (oldItem.endDate as string) || ''
                                         }))
                                     }] : []
                                 }))

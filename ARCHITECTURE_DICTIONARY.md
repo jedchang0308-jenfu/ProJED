@@ -116,4 +116,18 @@
 - **解決方案**：
   - **精確索引計算**：在 `SharedTaskSidebar` 中，目標索引不再依靠 DOM 或過濾後的 `flattenedItems` 陣列，而是直接從 `activeBoard.lists` 原始資料中獲取正確的插入位置。
   - **原子化操作保護**：修正 `useBoardStore` 中的 `moveCardToList` 邏輯，明確區分「相同列表內移動」與「跨列表移動」，防止在相同列表操作時卡片被意外 filter 掉後未補回。
-  - **清單 ID 強制同步**：每次移動卡片時強制重設 `listId`，確保 React 渲染樹與 Store 狀態完全同步。
+  - **強制校準機制**：每次移動卡片時強制重設 `listId`，確保 React 渲染樹與 Store 狀態完全同步。
+
+---
+
+## 9. TypeScript 基礎設施與型別安全 (TypeScript Infrastructure)
+
+### 9.1 設計意圖
+- 打破純 JavaScript 專案中長期的「型別盲區」，降低執行時期的 Runtime 錯誤發生率（如 `undefined` 存取、屬性拼字錯誤）。
+- 大幅提升開發者體驗 (DX) 與編輯器的自動補全能力，確保未來新增功能時的穩定性。
+
+### 9.2 架構決策
+- **漸進式遷移 (Incremental Migration)**：在 `tsconfig.json` 開啟 `allowJs: true`，允許 `.js` 與 `.ts` 檔案共存，分階段把底層模組、全域狀態到 UI 元件順序過渡。
+- **單一型別來源 (Single Source of Truth for Types)**：建立 `src/types/index.ts` 集中管理所有業務模型，包含 `Workspace`, `Board`, `List`, `Card` 等，所有介面必須依賴此來源。
+- **嚴格模式 (Strict Mode)**：為保證型別品質，不妥協地開啟 `strict: true`。禁止任何隱式的 `any` 綁定，並修復了原先 `useBoardStore` 中多處潛在的 Nullable 與未定義參數錯誤。
+- **Zustand 泛型約束**：在 `useBoardStore` 與 `useDialogStore` 中，全面改用泛型寫法 `create<BoardStore>()(...)`，使得所有 Actions 的參數與回傳值受到編譯器保護。

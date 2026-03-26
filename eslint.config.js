@@ -8,7 +8,7 @@ export default defineConfig([
   // 排除 dist 建置產物，以及根目錄中非 React 架構的舊版備份檔
   globalIgnores(['dist', 'temp_app.js', 'app.js', 'main_app.js', 'check_nesting.js']),
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{js,jsx,ts,tsx}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,

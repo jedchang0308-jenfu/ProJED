@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    /* --- 語言與環境 --- */
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+
+    /* --- 模組系統 --- */
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* --- 型別檢查 --- */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowJs": true,
+
+    /* --- 輸出控制 (Vite 負責打包，TS 只做型別檢查) --- */
+    "noEmit": true,
+
+    /* --- 路徑 --- */
+    "baseUrl": ".",
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "_legacy_v2"]
+}

@@ -1,11 +1,12 @@
-import { useSensor, useSensors, PointerSensor, TouchSensor, KeyboardSensor } from '@dnd-kit/core';
-
 /**
  * 拖動感應器配置
- * 支援桌面（滑鼠）、觸控裝置（手機/平板）和鍵盤無障礙操作
- * 預留未來 Capacitor APP 化的擴充性
+ * 設計意圖：支援桌面（滑鼠）、觸控裝置（手機/平板）和鍵盤無障礙操作。
+ * 預留未來 Capacitor APP 化的擴充性。
  */
-export function useDragSensors() {
+import { useSensor, useSensors, PointerSensor, TouchSensor, KeyboardSensor } from '@dnd-kit/core';
+import type { SensorDescriptor, SensorOptions } from '@dnd-kit/core';
+
+export function useDragSensors(): SensorDescriptor<SensorOptions>[] {
     return useSensors(
         // 桌面滑鼠/觸控板支援
         useSensor(PointerSensor, {

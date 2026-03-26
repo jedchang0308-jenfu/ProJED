@@ -4,7 +4,7 @@
 
 ---
 
-## 1. 甘特圖組件 (`GanttView.jsx`)
+## 1. 甘特圖組件 (`GanttView.tsx`)
 
 ### 1.1 組件 Props
 | 參數 | 類型 | 描述 |
@@ -33,17 +33,17 @@
 
 ## 2. 數據結構 (Data Structures)
 
-### 2.1 扁平化項目 (Flattened Item)
+扁平化項目 (Flattened Item)
 甘特圖中用來渲染的標準對象：
-```javascript
-{
-  id: "...",
-  type: "list" | "card" | "checklist",
-  title: "...",
-  startDate: "YYYY-MM-DD",
-  endDate: "YYYY-MM-DD",
-  status: "todo" | "delayed" | ...,
-  row: Number // 垂直對齊行號
+```typescript
+interface FlattenedItem {
+  id: string;
+  type: 'list' | 'card' | 'checklist' | 'checklistitem';
+  title: string;
+  startDate?: string;
+  endDate?: string;
+  status: TaskStatus; // 'todo' | 'delayed' | 'completed' | 'unsure' | 'onhold'
+  row: number; // 垂直對齊行號
 }
 ```
 
