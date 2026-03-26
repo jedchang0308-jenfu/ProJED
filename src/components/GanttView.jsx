@@ -666,9 +666,9 @@ const GanttView = () => {
             }
 
             headerItems.push(
-                <div key={i} className="flex-shrink-0 border-r border-slate-200 flex flex-col items-center justify-center bg-slate-50" style={{ width: colWidth }}>
-                    <span className="text-[10px] font-bold text-slate-400">{label}</span>
-                    <span className="text-xs font-bold text-slate-700">{subLabel}</span>
+                <div key={i} className="flex-shrink-0 border-r border-slate-700 flex flex-col items-center justify-center bg-slate-800" style={{ width: colWidth }}>
+                    <span className="text-[10px] font-bold text-slate-200">{label}</span>
+                    <span className="text-xs font-bold text-slate-100">{subLabel}</span>
                 </div>
             );
         }
@@ -787,18 +787,18 @@ const GanttView = () => {
                     <div
                         ref={scrollAreaRef}
                         onScroll={handleScroll}
-                        className="h-full overflow-auto relative select-none bg-white scrollbar-gantt"
+                        className="h-full overflow-scroll relative select-none bg-white scrollbar-gantt"
                     >
                         {/* Sticky Header - 提升 z-index 使其在滾動時覆蓋進度條與標籤，並使用實色背景 */}
                         <div 
-                            className="sticky top-0 flex h-10 bg-white border-b-2 border-slate-200"
+                            className="sticky top-0 flex h-10 bg-slate-800 border-b-2 border-slate-900"
                             style={{ zIndex: 100 }}
                         >
                             {renderHeader()}
                         </div>
 
                         {/* Grid Content */}
-                        <div className="relative" style={{ width: totalUnits * colWidth, height: flattenedItems.length * BAR_HEIGHT + 100 }}>
+                        <div className="relative" style={{ width: totalUnits * colWidth, minHeight: '100%', height: `calc(${Math.max(flattenedItems.length * BAR_HEIGHT, 100)}px + 65vh)` }}>
                             {/* Hierarchy Enclosures (Backgrounds) */}
                             <div className="absolute inset-0 pointer-events-none z-0">
                                 {groups.lists.map(lg => {
