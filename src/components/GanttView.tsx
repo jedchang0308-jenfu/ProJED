@@ -320,8 +320,8 @@ const GanttView = () => {
     const handleDragStart = (e, item, type) => {
         e.stopPropagation();
 
-        // Record history ONCE at start of drag
-        useBoardStore.getState().recordHistory();
+        // Record history ONCE at start of drag (Removed: deprecated in Firestore version)
+        // useBoardStore.getState().recordHistory();
 
         const isMilestone = !item.startDate && item.endDate;
         const start = item.startDate || (isMilestone ? item.endDate : dayjs(item.endDate).subtract(3, 'day').format('YYYY-MM-DD'));
