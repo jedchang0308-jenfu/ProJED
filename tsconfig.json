@@ -21,9 +21,7 @@
     /* --- 輸出控制 (Vite 負責打包，TS 只做型別檢查) --- */
     "noEmit": true,
 
-    /* --- 路徑 --- */
-    "baseUrl": ".",
-    "skipLibCheck": true
+
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "_legacy_v2"]

@@ -202,6 +202,7 @@ const CalendarView = () => {
         if (!activeBoard) return [];
         const items = [];
         activeBoard.lists.forEach(list => {
+            if (list.isArchived) return;
             const listStatus = list.status || 'todo';
             const isListCollapsed = collapsedIds.has(list.id);
             if (ganttFilters.list && statusFilters[listStatus]) {
@@ -209,6 +210,7 @@ const CalendarView = () => {
             }
             if (isListCollapsed) return;
             (list.cards || []).forEach(card => {
+                if (card.isArchived) return;
                 const cardStatus = card.status || 'todo';
                 if (!statusFilters[cardStatus]) return;
                 const isCardCollapsed = collapsedIds.has(card.id);
@@ -217,7 +219,9 @@ const CalendarView = () => {
                 }
                 if (!isCardCollapsed && ganttFilters.checklist) {
                     (card.checklists || []).forEach(cl => {
+                        if (cl.isArchived) return;
                         (cl.items || []).forEach(cli => {
+                            if (cli.isArchived) return;
                             const cliStatus = cli.status || 'todo';
                             if (!statusFilters[cliStatus]) return;
                             items.push({

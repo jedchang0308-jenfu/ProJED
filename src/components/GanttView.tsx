@@ -106,6 +106,7 @@ const GanttView = () => {
         };
 
         activeBoard.lists.forEach(list => {
+            if (list.isArchived) return;
             const listStatus = list.status || 'todo';
             const listStartRow = currentRow;
             const isListCollapsed = collapsedIds.has(list.id);
@@ -123,6 +124,7 @@ const GanttView = () => {
             // 處理卡片與待辦
             const cards = list.cards || [];
             cards.forEach(card => {
+                if (card.isArchived) return;
                 const cardStatus = card.status || 'todo';
                 if (!statusFilters[cardStatus]) return;
 
@@ -140,7 +142,9 @@ const GanttView = () => {
                     // 待辦清單項
                     if (ganttFilters.checklist) {
                         (card.checklists || []).forEach(cl => {
+                            if (cl.isArchived) return;
                             (cl.items || []).forEach(cli => {
+                                if (cli.isArchived) return;
                                 const cliStatus = cli.status || 'todo';
                                 if (!statusFilters[cliStatus]) return;
 
@@ -316,8 +320,8 @@ const GanttView = () => {
     const handleDragStart = (e, item, type) => {
         e.stopPropagation();
 
-        // Record history ONCE at start of drag
-        useBoardStore.getState().recordHistory();
+        // Record history ONCE at start of drag (Removed: deprecated in Firestore version)
+        // useBoardStore.getState().recordHistory();
 
         const isMilestone = !item.startDate && item.endDate;
         const start = item.startDate || (isMilestone ? item.endDate : dayjs(item.endDate).subtract(3, 'day').format('YYYY-MM-DD'));
