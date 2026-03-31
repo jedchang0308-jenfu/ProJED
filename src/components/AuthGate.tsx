@@ -4,8 +4,21 @@
  * 登入成功後渲染 children（主應用程式）。
  * 確保所有 Firestore 操作都有有效的 userId。
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
+
+// 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
+const detectInAppBrowser = (): boolean => {
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+  return (
+    ua.indexOf('FBAN') > -1 || 
+    ua.indexOf('FBAV') > -1 || 
+    ua.indexOf('Instagram') > -1 || 
+    ua.indexOf('Line') > -1 || 
+    ua.indexOf('MicroMessenger') > -1 ||
+    ua.indexOf('Threads') > -1
+  );
+};
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -13,6 +26,11 @@ interface AuthGateProps {
 
 export default function AuthGate({ children }: AuthGateProps) {
   const { user, loading, error, signInWithGoogle } = useAuthStore();
+  const [isInApp, setIsInApp] = useState(false);
+
+  useEffect(() => {
+    setIsInApp(detectInAppBrowser());
+  }, []);
 
   // 載入中：顯示 spinner
   if (loading) {
@@ -44,6 +62,26 @@ export default function AuthGate({ children }: AuthGateProps) {
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6">
               <p className="text-red-400 text-sm text-center">{error}</p>
+            </div>
+          )}
+
+          {/* 內建瀏覽器警告 */}
+          {isInApp && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-6 relative overflow-hidden text-left shadow-lg shadow-yellow-500/10">
+              <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400"></div>
+              <h3 className="text-yellow-400 font-bold mb-2 flex items-center gap-2">
+                ⚠️ 必須使用外部瀏覽器
+              </h3>
+              <p className="text-slate-300 text-sm mb-3">
+                Google 基於安全考量，禁止在 Line/FB 等 App 中直接登入 (會出現 403 disallowed_useragent 錯誤)。
+              </p>
+              <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
+                <p className="text-white text-sm font-medium leading-relaxed">
+                  💡 解法：<br/>
+                  請點擊右上角或右下角的<span className="text-slate-300 mx-1 bg-slate-700 px-1 py-0.5 rounded">選單 (⋮ 或 ⋯)</span>，選擇
+                  <span className="text-blue-400 font-bold mx-1">以預設瀏覽器開啟</span> (Chrome 或 Safari) 即可正常登入。
+                </p>
+              </div>
             </div>
           )}
 

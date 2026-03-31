@@ -1,4 +1,11 @@
+# ProJED
+
+> [!IMPORTANT]
+> 此專案已標記為 **Jed 的個人受控專案**。
+> 本專案的所有開發流程、技術選型與 DevOps 實踐皆受到 `.jed` 規範之保護與約束。
+
 # React + Vite
+
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
