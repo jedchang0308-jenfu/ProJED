@@ -22,6 +22,8 @@ const BoardView = () => {
         </div>
     );
 
+    const activeLists = (board.lists || []).filter(l => !l.isArchived);
+
     const statuses = [
         { key: 'todo', label: '進行中', color: 'bg-status-todo' },
         { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
@@ -120,8 +122,8 @@ const BoardView = () => {
 
                 {/* Lists Canvas */}
                 <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-                    <SortableContext items={(board.lists || []).map(l => l.id)} strategy={horizontalListSortingStrategy}>
-                        {(board.lists || []).map(list => (
+                    <SortableContext items={activeLists.map(l => l.id)} strategy={horizontalListSortingStrategy}>
+                        {activeLists.map(list => (
                             <List key={list.id} list={list} />
                         ))}
                     </SortableContext>

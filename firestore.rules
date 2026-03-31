@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 使用者文件：只能讀寫自己的資料
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 工作區：只有成員可以存取
+    match /workspaces/{wsId} {
+      // 建立時任何登入使用者都可以
+      allow create: if request.auth != null;
+      // 讀取/更新/刪除：必須是成員
+      allow read, update, delete: if request.auth != null 
+        && request.auth.uid in resource.data.members;
+      
+      // 子集合（boards, lists, cards, dependencies）繼承 workspace 權限
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null 
+          && get(/databases/$(database)/documents/workspaces/$(wsId)).data.members.hasAny([request.auth.uid]);
+      }
+    }
+  }
+}

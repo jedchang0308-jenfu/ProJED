@@ -6,32 +6,13 @@ import Sidebar from './Sidebar';
 const MainLayout = ({ children }) => {
     const {
         currentView, getActiveBoard, getActiveWorkspace, updateBoardTitle,
-        setView, isSidebarOpen, setSidebarOpen,
-        undo, redo, past, future
+        setView, isSidebarOpen, setSidebarOpen
     } = useBoardStore();
 
     const activeBoard = getActiveBoard();
     const activeWorkspace = getActiveWorkspace();
 
-    // Keyboard Shortcuts for Undo/Redo
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                if (e.key === 'z') {
-                    if (e.shiftKey) {
-                        redo();
-                    } else {
-                        undo();
-                    }
-                } else if (e.key === 'y') {
-                    redo();
-                }
-            }
-        };
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo]);
 
     return (
         <div className="flex flex-col h-screen bg-slate-50 text-slate-800">
@@ -100,25 +81,7 @@ const MainLayout = ({ children }) => {
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-2">
-                    {/* History Controls */}
-                    <div className="hidden md:flex items-center gap-1 mr-2 pr-2 border-r border-slate-200">
-                        <button
-                            onClick={undo}
-                            disabled={past.length === 0}
-                            className={`p-1.5 rounded transition-colors ${past.length === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100'}`}
-                            title="復原 (Ctrl+Z)"
-                        >
-                            <Undo2 size={16} />
-                        </button>
-                        <button
-                            onClick={redo}
-                            disabled={future.length === 0}
-                            className={`p-1.5 rounded transition-colors ${future.length === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100'}`}
-                            title="重做 (Ctrl+Y / Ctrl+Shift+Z)"
-                        >
-                            <Redo2 size={16} />
-                        </button>
-                    </div>
+
 
                     <button className="btn-outline px-2 h-7 text-xs sm:text-sm sm:h-8 sm:px-3 hidden sm:flex">
                         <RefreshCw size={14} />

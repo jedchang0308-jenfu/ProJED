@@ -44,6 +44,7 @@ const List = ({ list }) => {
     };
 
     const filteredCards = (list.cards || []).filter(card => {
+        if (card.isArchived) return false;
         const cStatus = card.status || 'todo';
         return statusFilters[cStatus];
     });

@@ -250,9 +250,10 @@ const CardModal = () => {
     };
 
     const getProgress = (items = []) => {
-        if (items.length === 0) return 0;
-        const completed = items.filter(i => i.status === 'completed').length;
-        return Math.round((completed / items.length) * 100);
+        const activeItems = items.filter(i => !i.isArchived);
+        if (activeItems.length === 0) return 0;
+        const completed = activeItems.filter(i => i.status === 'completed').length;
+        return Math.round((completed / activeItems.length) * 100);
     };
 
     return (
@@ -512,7 +513,8 @@ const CardModal = () => {
                                     }}
                                 >
                                     <div className="space-y-4">
-                                        {(card.checklists || []).map((cl) => {
+                                        {(card.checklists || []).filter(cl => !cl.isArchived).map((cl) => {
+                                            const activeItems = (cl.items || []).filter(i => !i.isArchived);
                                             const progress = getProgress(cl.items);
                                             return (
                                                 <div key={cl.id} className="space-y-2">
@@ -538,8 +540,8 @@ const CardModal = () => {
                                                         </div>
                                                     </div>
                                                     <div className="ml-7 space-y-0.5">
-                                                        <SortableContext items={(cl.items || []).map(i => i.id)} strategy={verticalListSortingStrategy}>
-                                                            {(cl.items || []).map((cli) => (
+                                                        <SortableContext items={activeItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                                                            {activeItems.map((cli) => (
                                                                 <SortableChecklistItem
                                                                     key={cli.id}
                                                                     item={cli}
@@ -579,7 +581,7 @@ const CardModal = () => {
                                     </DragOverlay>
                                 </DndContext>
 
-                                {(card.checklists || []).length === 0 && (
+                                {(card.checklists || []).filter(cl => !cl.isArchived).length === 0 && (
                                     <div className="p-8 border-2 border-dashed border-slate-100 rounded-2xl flex flex-col items-center justify-center text-slate-300 text-sm gap-2">
                                         <CheckSquare size={32} className="opacity-20" />
                                         這裡還沒有待辦清單，點擊上方新增一個。
