@@ -131,3 +131,55 @@
 - **單一型別來源 (Single Source of Truth for Types)**：建立 `src/types/index.ts` 集中管理所有業務模型，包含 `Workspace`, `Board`, `List`, `Card` 等，所有介面必須依賴此來源。
 - **嚴格模式 (Strict Mode)**：為保證型別品質，不妥協地開啟 `strict: true`。禁止任何隱式的 `any` 綁定，並修復了原先 `useBoardStore` 中多處潛在的 Nullable 與未定義參數錯誤。
 - **Zustand 泛型約束**：在 `useBoardStore` 與 `useDialogStore` 中，全面改用泛型寫法 `create<BoardStore>()(...)`，使得所有 Actions 的參數與回傳值受到編譯器保護。
+
+---
+
+## 10. Google Calendar 同步模組 (`googleCalendarService.ts`)
+
+### 10.1 設計意圖
+- 將 ProJED 中所有具備日期的任務（列表、卡片、待辦項目）**單向同步**至用戶的 Google Calendar，
+  在獨立的「ProJED Tasks」日曆中呈現，不污染用戶的個人行事曆。
+- 同步範圍為**所有工作區、所有看板**的任務。
+
+### 10.2 架構決策
+- **從 Legacy v2 移植並改良**：原始邏輯位於 `_legacy_v2/app.js` L557-855，遷移至 TypeScript 模組化架構。
+- **職責分離**：
+  - `googleCalendarService.ts` — 純邏輯層，處理 API 呼叫與資料轉換
+  - `useCalendarSyncStore.ts` — Zustand 狀態管理，管理連接狀態與 Event ID 快取
+  - `useCalendarSync.ts` — React Hook，負責 App mount 時初始化
+  - `MainLayout.tsx` — UI 層，三態按鈕（未連接 / 已連接 / 同步中）
+- **REST API 直接呼叫**：捨棄 GAPI client library，改用 `fetch` 呼叫 Google Calendar REST API v3，
+  避免 GAPI 初始化延遲與版本相依問題。
+- **Client ID 環境隔離**：存於 `.env.development` / `.env.production` 的 `VITE_GOOGLE_CLIENT_ID`，
+  遵守 `devops_policy` 禁止金鑰寫死在程式碼中的規範。
+
+### 10.3 相較舊版的改良
+
+| 項目 | 舊版 (v2) | 新版 (v3) |
+|:---|:---|:---|
+| Token 管理 | localStorage 手動操作散落各處 | `TokenManager` class 封裝，過期自動偵測 |
+| Event ID 關聯 | 每次從 description 搜尋 | 本地快取 `eventIdCache` (localStorage 持久化) |
+| 日期格式 | 只取 endDate 作為單日事件 | 支援 start~end 跨日事件（修正 BUG-5） |
+| 同步範圍 | 僅當前看板 | 所有工作區所有看板 |
+| 錯誤處理 | console.error | 統一型別 + UI toast + 自動重置連接狀態 |
+| Client ID | 寫死在 JS 中 | 環境變數 (`import.meta.env`) |
+| 型別安全 | 無 | 完整 TypeScript 支援 |
+
+### 10.4 同步流程
+
+```
+用戶點擊「連接 Google 日曆」
+  → GSI requestAccessToken (OAuth 彈窗)
+  → 取得 access_token → TokenManager.save()
+  → set({ isConnected: true })
+  → 自動觸發 syncAll()
+    → flattenAllItems(所有工作區)
+    → getOrCreateCalendar("ProJED Tasks")
+    → 讀取 Google 上全部事件
+    → 逐項比對 → 新增 / 更新 / 刪除 / 跳過
+    → 更新 eventIdCache (localStorage)
+    → set({ lastSyncAt, isSyncing: false })
+```
+
+---
+*更新日期：2026-04-01 (Google Calendar 同步模組移植)*

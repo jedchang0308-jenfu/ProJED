@@ -15,6 +15,7 @@ import React, { useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
+import { useCalendarSync } from './hooks/useCalendarSync';
 import { migrateLocalStorageToFirestore } from './utils/migration';
 import AuthGate from './components/AuthGate';
 import MainLayout from './components/MainLayout';
@@ -39,6 +40,9 @@ function AppContent() {
 
   // 啟動 Firestore 即時同步監聽
   useFirestoreSync();
+
+  // 啟動 Google Calendar 同步初始化（準備 OAuth 工具，不會自動彈窗）
+  useCalendarSync();
 
   // ===== 舊版資料遷移 =====
   // 設計意圖：在登入後立即執行（不等 onSnapshot 結果），

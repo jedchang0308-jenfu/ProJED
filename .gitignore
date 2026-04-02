@@ -28,3 +28,7 @@ main_app.js
 out.txt
 temp_app.js
 紀錄備份檔/
+# Environment files
+.env
+.env.*
+!.env.example

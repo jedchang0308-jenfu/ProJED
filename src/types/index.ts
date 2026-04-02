@@ -286,3 +286,46 @@ export interface TaskWithType {
 
 /** Cascade 計算的日期覆寫 Map */
 export type OverriddenDates = Record<string, { startDate?: string; endDate?: string }>;
+
+// ===== Google Calendar 同步 =====
+
+/** Google Calendar 同步狀態 */
+export interface CalendarSyncState {
+  /** 是否已連接 Google Calendar（有有效 token） */
+  isConnected: boolean;
+  /** 是否正在同步中 */
+  isSyncing: boolean;
+  /** 最後成功同步的時間戳 */
+  lastSyncAt: number | null;
+  /** 最近一次錯誤訊息 */
+  error: string | null;
+}
+
+/** 可同步至 Google Calendar 的扁平化項目 */
+export interface SyncableItem {
+  id: string;
+  title: string;
+  type: 'list' | 'card' | 'checklist';
+  status: TaskStatus;
+  startDate?: string;
+  endDate?: string;
+  notes?: string;
+}
+
+/** Google Calendar 事件格式（對應 Google Calendar API v3） */
+export interface GoogleCalendarEvent {
+  summary: string;
+  description: string;
+  start: { date: string };
+  end: { date: string };
+  colorId?: string;
+  visibility?: 'default' | 'public' | 'private' | 'confidential';
+}
+
+/** 同步結果統計 */
+export interface SyncResult {
+  created: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+}
