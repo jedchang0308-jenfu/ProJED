@@ -147,17 +147,33 @@ const CardModal = () => {
      */
     const DependencyBadges = ({ side }: { side: 'start' | 'end' }) => {
         const sideDeps = getDepsForSide(side);
-        if (sideDeps.length === 0) return null;
+        // 過濾掉自我任務綁定的主動端 (通常是起始日)，只在被動端 (截止日) 標示
+        const filteredDeps = sideDeps.filter(d => !(d.fromId === d.toId && d.fromId === itemId && d.fromSide === side));
+        if (filteredDeps.length === 0) return null;
         return (
             <div className="flex items-center gap-0.5 flex-shrink-0">
-                {sideDeps.map(d => {
-                    const char = depCharMap.get(d.id) || '?';
+                {filteredDeps.map(d => {
+                    const isSelf = d.fromId === d.toId;
                     const isPassive = d.toId === itemId && d.toSide === side;
+                    
+                    if (isSelf) {
+                        return (
+                            <span
+                                key={d.id}
+                                title="執行天數"
+                                className="bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap px-1.5 py-0.5 shadow-sm cursor-help"
+                            >
+                                {d.offset || 0} 工作天
+                            </span>
+                        );
+                    }
+
+                    const char = depCharMap.get(d.id) || '?';
                     return (
                         <span
                             key={d.id}
-                            title={isPassive ? `被動跨隨 (${char})` : `主動影響 (${char})`}
-                            className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-black text-white
+                            title={isPassive ? `被動跟隨 (${char})` : `主動影響 (${char})`}
+                            className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-black text-white shadow-sm
                                 ${isPassive ? 'bg-slate-400' : 'bg-slate-700'}`}
                         >
                             {char}

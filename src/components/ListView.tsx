@@ -53,7 +53,7 @@ const SortableListRow = ({
     isCollapsed?: boolean;
     dependencySelection?: { id: string; side: 'start' | 'end'; title: string } | null;
     onDependencySelect?: (id: string, side: 'start' | 'end', title: string) => void;
-    dependencyMarkers?: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive' }>>;
+    dependencyMarkers?: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive', isSelf?: boolean, offset?: number }>>;
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
@@ -164,12 +164,18 @@ const SortableListRow = ({
                     ) : (
                         <span className="text-[10px] text-slate-200">—</span>
                     )}
-                    {(dependencyMarkers?.[`${item.id}_start`] || []).length > 0 && (
+                    {(dependencyMarkers?.[`${item.id}_start`] || []).filter(m => !m.isSelf || m.role === 'passive').length > 0 && (
                         <div className="flex items-center gap-0.5 flex-shrink-0">
-                            {dependencyMarkers![`${item.id}_start`].map(m => (
-                                <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
-                                    {m.label}
-                                </span>
+                            {dependencyMarkers![`${item.id}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
+                                m.isSelf ? (
+                                    <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                        {m.offset || 0} 工作天
+                                    </span>
+                                ) : (
+                                    <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
+                                        {m.label}
+                                    </span>
+                                )
                             ))}
                         </div>
                     )}
@@ -209,12 +215,18 @@ const SortableListRow = ({
                     ) : (
                         <span className="text-[10px] text-slate-200">—</span>
                     )}
-                    {(dependencyMarkers?.[`${item.id}_end`] || []).length > 0 && (
+                    {(dependencyMarkers?.[`${item.id}_end`] || []).filter(m => !m.isSelf || m.role === 'passive').length > 0 && (
                         <div className="flex items-center gap-0.5 flex-shrink-0">
-                            {dependencyMarkers![`${item.id}_end`].map(m => (
-                                <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
-                                    {m.label}
-                                </span>
+                            {dependencyMarkers![`${item.id}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
+                                m.isSelf ? (
+                                    <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                        {m.offset || 0} 工作天
+                                    </span>
+                                ) : (
+                                    <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
+                                        {m.label}
+                                    </span>
+                                )
                             ))}
                         </div>
                     )}
@@ -312,21 +324,22 @@ const ListView = () => {
             return label;
         };
 
-        const markers: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive' }>> = {};
+        const markers: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive', isSelf?: boolean, offset?: number }>> = {};
 
         // 固定排序確保字母不會亂跳
         const sortedDeps = [...(activeBoard.dependencies || [])].sort((a, b) => a.id.localeCompare(b.id));
 
         sortedDeps.forEach((dep, index) => {
             const label = getLabel(index);
+            const isSelf = dep.fromId === dep.toId;
             
             const fromKey = `${dep.fromId}_${dep.fromSide}`;
             if (!markers[fromKey]) markers[fromKey] = [];
-            markers[fromKey].push({ id: dep.id, label, role: 'active' });
+            markers[fromKey].push({ id: dep.id, label, role: 'active', isSelf, offset: dep.offset });
 
             const toKey = `${dep.toId}_${dep.toSide}`;
             if (!markers[toKey]) markers[toKey] = [];
-            markers[toKey].push({ id: dep.id, label, role: 'passive' });
+            markers[toKey].push({ id: dep.id, label, role: 'passive', isSelf, offset: dep.offset });
         });
 
         return markers;
