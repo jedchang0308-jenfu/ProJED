@@ -19,7 +19,10 @@ import { useCalendarSync } from './hooks/useCalendarSync';
 import { migrateLocalStorageToFirestore } from './utils/migration';
 import AuthGate from './components/AuthGate';
 import MainLayout from './components/MainLayout';
+import { useCalendarStore } from './store/useCalendarStore';
+import dayjs from 'dayjs';
 import HomeView from './components/HomeView';
+import ListView from './components/ListView';
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CalendarView from './components/CalendarView';
@@ -43,6 +46,12 @@ function AppContent() {
 
   // 啟動 Google Calendar 同步初始化（準備 OAuth 工具，不會自動彈窗）
   useCalendarSync();
+
+  // 載入行政院人事日曆 (當年度與下年度)
+  useEffect(() => {
+    const currentYear = dayjs().year();
+    useCalendarStore.getState().fetchYears([currentYear, currentYear + 1]);
+  }, []);
 
   // ===== 舊版資料遷移 =====
   // 設計意圖：在登入後立即執行（不等 onSnapshot 結果），
@@ -97,12 +106,13 @@ function AppContent() {
 
   const renderContent = () => {
     switch (currentView) {
-      case 'home':   return <HomeView />;
-      case 'board':  return <BoardView />;
-      case 'gantt':  return <GanttView />;
-      case 'calendar': return <CalendarView />;
+      case 'home':        return <HomeView />;
+      case 'list':        return <ListView />;   // 清單模式：底層資料展示入口
+      case 'board':       return <BoardView />;
+      case 'gantt':       return <GanttView />;
+      case 'calendar':    return <CalendarView />;
       case 'recycle_bin': return <RecycleBinView />;
-      default:       return <HomeView />;
+      default:            return <HomeView />;
     }
   };
 

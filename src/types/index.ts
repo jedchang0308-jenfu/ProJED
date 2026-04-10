@@ -16,7 +16,7 @@ export type TaskStatus = 'todo' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
 
 /** 檢視模式 */
-export type ViewMode = 'home' | 'board' | 'gantt' | 'calendar' | 'recycle_bin';
+export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'recycle_bin';
 
 /** 對話框類型 */
 export type DialogType = 'confirm' | 'prompt';

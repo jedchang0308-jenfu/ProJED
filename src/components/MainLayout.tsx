@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, Layout, RefreshCw, ChevronRight, Columns, LineChart, CalendarDays, Loader2, Unplug } from 'lucide-react';
+import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useCalendarSyncStore from '../store/useCalendarSyncStore';
 import Sidebar from './Sidebar';
@@ -91,6 +91,14 @@ const MainLayout = ({ children }) => {
 
                                 <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200">
                                     <div className="bg-slate-100 p-0.5 rounded-lg flex gap-0.5 shadow-inner">
+                                        {/* 清單模式 — 排在所有視圖之前，作為底層資料展示入口 */}
+                                        <button
+                                            onClick={() => setView('list')}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            <ListChecks size={13} />
+                                            <span className="hidden md:inline">清單</span>
+                                        </button>
                                         <button
                                             onClick={() => setView('board')}
                                             className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'board' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}

@@ -22,6 +22,51 @@ import type {
     Board, BoardStore, TaskStatus,
     OverriddenDates, Card, List
 } from '../types';
+import { useCalendarStore } from './useCalendarStore';
+
+// === 工作天推算工具函式 ===
+const addWorkingDays = (startDateStr: string, offsetDays: number): string => {
+    let current = dayjs(startDateStr);
+    let remaining = offsetDays;
+    const isHolidayFn = useCalendarStore.getState().isHoliday;
+
+    if (remaining > 0) {
+        while (remaining > 0) {
+            current = current.add(1, 'day');
+            if (!isHolidayFn(current.format('YYYYMMDD'))) {
+                remaining -= 1;
+            }
+        }
+    } else if (remaining < 0) {
+        while (remaining < 0) {
+            current = current.subtract(1, 'day');
+            if (!isHolidayFn(current.format('YYYYMMDD'))) {
+                remaining += 1;
+            }
+        }
+    }
+    return current.format('YYYY-MM-DD');
+};
+
+const getWorkingDaysDiff = (startStr: string, endStr: string): number => {
+    let current = dayjs(startStr);
+    const end = dayjs(endStr);
+    let diff = 0;
+    const isHolidayFn = useCalendarStore.getState().isHoliday;
+    
+    if (end.isBefore(current)) {
+        while (current.isAfter(endStr, 'day')) {
+            current = current.subtract(1, 'day');
+            if (!isHolidayFn(current.format('YYYYMMDD'))) diff -= 1;
+        }
+    } else {
+        while (current.isBefore(endStr, 'day')) {
+            current = current.add(1, 'day');
+            if (!isHolidayFn(current.format('YYYYMMDD'))) diff += 1;
+        }
+    }
+    return diff;
+};
 
 // ===== 依賴排程計算（保持不變）=====
 export const calculateCascadedDates = (board: Board, overriddenDates: OverriddenDates = {}): Map<string, { startDate: string; endDate: string }> => {
@@ -98,14 +143,14 @@ export const calculateCascadedDates = (board: Board, overriddenDates: Overridden
             continue;
         }
 
-        // Self-Dependencies
+        // Self-Dependencies (設定執行工作天)
         const selfDeps = board.dependencies.filter(d => d.fromId === currentId && d.toId === currentId);
         selfDeps.forEach(dep => {
             const offsetDays = dep.offset || 0;
             if (dep.fromSide === 'start' && dep.toSide === 'end') {
-                currentEndStr = dayjs(currentStartStr).add(offsetDays, 'day').format('YYYY-MM-DD');
+                currentEndStr = addWorkingDays(currentStartStr, offsetDays);
             } else if (dep.fromSide === 'end' && dep.toSide === 'start') {
-                currentStartStr = dayjs(currentEndStr).add(1 + offsetDays, 'day').format('YYYY-MM-DD');
+                currentStartStr = addWorkingDays(currentEndStr, 1 + offsetDays);
             }
         });
 
@@ -122,27 +167,30 @@ export const calculateCascadedDates = (board: Board, overriddenDates: Overridden
             const sEndStr = intermediateDates.get(successor.id)?.endDate
                 || overriddenDates[successor.id]?.endDate
                 || successor.endDate
-                || dayjs(sStartStr).add(1, 'day').format('YYYY-MM-DD');
-            const duration = dayjs(sEndStr).diff(dayjs(sStartStr), 'day');
+                || addWorkingDays(sStartStr, 1);
+            
+            // 計算原先排定的「工作天天數」，以便後續推擠時能維持相同的執行工作天
+            const durationWd = getWorkingDaysDiff(sStartStr, sEndStr);
 
             let idealStart = sStartStr;
             const offsetDays = dep.offset || 0;
             if (dep.fromSide === 'end' && dep.toSide === 'start') {
-                idealStart = dayjs(currentEndStr).add(1 + offsetDays, 'day').format('YYYY-MM-DD');
+                idealStart = addWorkingDays(currentEndStr, 1 + offsetDays);
             } else if (dep.fromSide === 'start' && dep.toSide === 'start') {
-                idealStart = dayjs(currentStartStr).add(offsetDays, 'day').format('YYYY-MM-DD');
+                idealStart = addWorkingDays(currentStartStr, offsetDays);
             } else if (dep.fromSide === 'end' && dep.toSide === 'end') {
-                const idealEnd = dayjs(currentEndStr).add(offsetDays, 'day').format('YYYY-MM-DD');
-                idealStart = dayjs(idealEnd).subtract(duration, 'day').format('YYYY-MM-DD');
+                const idealEnd = addWorkingDays(currentEndStr, offsetDays);
+                idealStart = addWorkingDays(idealEnd, -durationWd);
             } else if (dep.fromSide === 'start' && dep.toSide === 'end') {
-                const idealEnd = dayjs(currentStartStr).add(offsetDays, 'day').format('YYYY-MM-DD');
-                idealStart = dayjs(idealEnd).subtract(duration, 'day').format('YYYY-MM-DD');
+                const idealEnd = addWorkingDays(currentStartStr, offsetDays);
+                idealStart = addWorkingDays(idealEnd, -durationWd);
             }
-            const idealEnd = dayjs(idealStart).add(duration, 'day').format('YYYY-MM-DD');
+            
+            overriddenDates[successor.id] = { startDate: idealStart, endDate: addWorkingDays(idealStart, durationWd) };
 
             const prevIdeal = intermediateDates.get(successor.id);
             if (!prevIdeal || dayjs(idealStart).isAfter(dayjs(prevIdeal.startDate))) {
-                intermediateDates.set(successor.id, { startDate: idealStart, endDate: idealEnd });
+                intermediateDates.set(successor.id, { startDate: idealStart, endDate: addWorkingDays(idealStart, durationWd) });
             }
 
             const newDegree = (inDegree.get(dep.toId) ?? 0) - 1;
@@ -163,12 +211,27 @@ const getUserId = (): string => {
 
 
 
+// ===== 本機視圖持久化輔助函式 =====
+// 設計意圖：記住用戶上次的視圖位置，頁面重載時自動恢復
+const VIEW_STORAGE_KEY = 'projed-last-view';
+const getStoredView = () => {
+    try {
+        const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+        // home / recycle_bin 不視為「可恢復的工作視圖」，重載後回到 home
+        if (stored && ['list', 'board', 'gantt', 'calendar'].includes(stored)) {
+            return stored as import('../types').ViewMode;
+        }
+    } catch { /* ignore */ }
+    return 'home' as import('../types').ViewMode;
+};
+
 const useBoardStore = create<BoardStore>()(
     (set, get) => ({
         workspaces: [],
         activeWorkspaceId: null,
         activeBoardId: null,
-        currentView: 'home',
+        // 初始化時從 localStorage 讀取上次的視圖（僅工作視圖，首次或非工作視圖則為 home）
+        currentView: getStoredView(),
         isSidebarOpen: true,
         editingItem: null,
         statusFilters: {
@@ -184,7 +247,11 @@ const useBoardStore = create<BoardStore>()(
         setWorkspaces: (workspaces) => set({ workspaces }),
         setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
         setActiveBoard: (id) => set({ activeBoardId: id }),
-        setView: (view) => set({ currentView: view }),
+        setView: (view) => {
+            // 設計意圖：切換視圖時同步寫入 localStorage，記住工作位置
+            try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
+            set({ currentView: view });
+        },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
 
         // ===== Workspace CRUD =====

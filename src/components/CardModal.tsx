@@ -1,8 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
-import { DndContext, DragOverlay, closestCenter, pointerWithin } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+/**
+ * CardModal.tsx — 任務詳情彈出視窗
+ *
+ * 設計意圖：
+ * 1. 顯示任務的名稱、狀態、日期範圍、清單待辦等詳情。
+ * 2. 日期若被「依賴關係」鎖定（被動端點），則輸入框不可編輯。
+ * 3. 依賴關係的符號（a, b, c...）在日期下方唯讀顯示，修改請至清單模式。
+ * 4. 不再包含「設定依賴」功能，此功能已移至 ListView 清單模式。
+ */
+import { useState, useEffect, useRef } from 'react';
+import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, Lock } from 'lucide-react';
+import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
 import useBoardStore from '../store/useBoardStore';
 import dayjs from 'dayjs';
@@ -14,7 +22,6 @@ const CardModal = () => {
         editingItem,
         closeModal,
         workspaces,
-        currentView,
         updateList,
         updateCard,
         addChecklist,
@@ -24,57 +31,37 @@ const CardModal = () => {
         updateChecklistItem,
         removeChecklistItem,
         removeCard,
-        removeList, // 加入 removeList
+        removeList,
         openModal,
-        addDependency,
-        removeDependency,
-        updateDependency,
-        updateTaskDate // Add this
+        updateTaskDate
     } = useBoardStore();
 
     const sensors = useDragSensors();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [connectingSide, setConnectingSide] = useState(null); // { itemId?: string, side: 'start' | 'end', title?: string }
-    const [tempOffset, setTempOffset] = useState(0);
-    const [activeChecklistItem, setActiveChecklistItem] = useState(null); // 拖動中的待辦清單項目
+    const [activeChecklistItem, setActiveChecklistItem] = useState<any>(null);
 
-    // ─── 日期輸入緩衝層 ───────────────────────────────────────────────
+    // ─── 日期輸入緩衝層 ────────────────────────────────────────────────
     // 設計意圖：日期 input 是「受控輸入」，若直接綁定 store 的值，
     // 則每次 onChange → store 更新 → 元件重渲染 → 輸入框失焦（跳掉）。
-    // 解法：用 local state 作為緩衝，onChange 只更新 local state（不觸發 re-render 來源的 store 寫入），
-    // onBlur 時才寫入 store，同時用 useEffect 監聽外部日期變化（如依賴排程自動調整）並同步回來。
+    // 解法：用 local state 作為緩衝，onBlur 時才寫入 store。
     const [localStartDate, setLocalStartDate] = useState('');
     const [localEndDate, setLocalEndDate] = useState('');
-    // 用 ref 追蹤目前 itemId，確保切換不同任務時能重置 local state
-    const currentItemIdRef = useRef(null);
+    const currentItemIdRef = useRef<string | null>(null);
     // ─────────────────────────────────────────────────────────────────
 
-    // ESC key handler for closing modals
+    // ESC 關閉 Modal
     useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') {
-                if (connectingSide) {
-                    setConnectingSide(null);
-                    setSearchTerm('');
-                    setTempOffset(0);
-                } else {
-                    closeModal();
-                }
-            }
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') closeModal();
         };
         window.addEventListener('keydown', handleEsc);
         return () => window.removeEventListener('keydown', handleEsc);
-    }, [connectingSide, closeModal]);
+    }, [closeModal]);
 
-    // ESC key handler 之前就要完成 local state 初始化
-    // 切換任務（itemId 變動）時重置 local date state；
-    // 當 store 中的日期被外部更新（如依賴排程自動調整）且使用者沒有在 focus 中時也同步
+    // 切換任務（itemId 變動）時重置 local date state
     const editingItemId = editingItem?.itemId;
     useEffect(() => {
         if (!editingItemId) return;
-        // 跨 itemId 切換時，必定重設
         currentItemIdRef.current = editingItemId;
-        // 從 workspaces 中重新找日期（而非 currentItem，因為此時 currentItem 可能尚未算好）
         const ws = workspaces.find(w => w.id === editingItem?.workspaceId);
         const board = ws?.boards.find(b => b.id === editingItem?.boardId);
         const { type, listId, cardId, checklistId } = editingItem || {};
@@ -100,17 +87,19 @@ const CardModal = () => {
         }
         setLocalStartDate(foundStart);
         setLocalEndDate(foundEnd);
-    // 只監聽 itemId 變動；外部日期重排時刻意不同步（避免覆蓋使用者正在輸入的值）
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editingItemId]);
 
     if (!editingItem) return null;
 
-    const { type, itemId, listId, boardId, workspaceId, cardId, checklistId } = editingItem;
+    const { type, itemId, boardId, workspaceId } = editingItem;
+    // 明確轉型：listId/cardId/checklistId 可能為 undefined，以 '' 額外處理
+    const listId = (editingItem.listId as string | undefined) ?? '';
+    const cardId = (editingItem.cardId as string | undefined) ?? '';
+    const checklistId = (editingItem.checklistId as string | undefined) ?? '';
     const ws = workspaces.find(w => w.id === workspaceId);
     const board = ws?.boards.find(b => b.id === boardId);
 
-    // Fetch data based on type
     const list = (type === 'list')
         ? board?.lists.find(l => l.id === itemId)
         : board?.lists.find(l => l.id === listId);
@@ -131,125 +120,80 @@ const CardModal = () => {
 
     if (!currentItem) return null;
 
-    // Get all potential tasks to link
-    const allAvailableTasks = [];
-    if (board) {
-        (board.lists || []).forEach(l => {
-            allAvailableTasks.push({ id: l.id, title: `📁 ${l.title}`, type: 'list' });
-            (l.cards || []).forEach(c => {
-                if (c.id !== itemId) {
-                    allAvailableTasks.push({ id: c.id, title: `📄 ${c.title}`, type: 'card' });
-                }
-                (c.checklists || []).forEach(cl => {
-                    (cl.items || []).forEach(cli => {
-                        allAvailableTasks.push({ id: cli.id, title: `• ${cli.title}`, type: 'checklist' });
-                    });
-                });
-            });
-        });
-    }
+    // ─── 依賴關係 & 鎖定邏輯 ──────────────────────────────────────────
+    const deps = board?.dependencies || [];
 
-    const DependencyTags = ({ targetId, side, onAdd, small = false }) => {
-        const deps = (board?.dependencies || []).filter(d =>
-            (d.toId === targetId && (d.toSide === side || !d.toSide)) ||
-            (d.fromId === targetId && (d.fromSide === side || !d.fromSide))
+    // 「被動端點」：此任務是依賴關係的「目標端」→ 日期由系統控制，鎖定
+    const isStartLocked = deps.some(d => d.toId === itemId && d.toSide === 'start');
+    const isEndLocked   = deps.some(d => d.toId === itemId && d.toSide === 'end');
+
+    // 依賴字母符號與 ListView 同步：依照 dep.id 排序，a, b, c...
+    const allDepsSorted = [...deps].sort((a, b) => a.id.localeCompare(b.id));
+    const depCharMap = new Map<string, string>();
+    allDepsSorted.forEach((d, i) => {
+        depCharMap.set(d.id, String.fromCharCode(97 + i)); // 'a', 'b', 'c'...
+    });
+
+    // 取得與這個任務某個 side 有關的所有依賴
+    const getDepsForSide = (side: 'start' | 'end') =>
+        deps.filter(d =>
+            (d.fromId === itemId && d.fromSide === side) ||
+            (d.toId   === itemId && d.toSide   === side)
         );
 
-        if (deps.length === 0) {
-            return (
-                <button
-                    onClick={onAdd}
-                    className={`w-full font-bold text-slate-400 border border-dashed border-slate-200 rounded hover:bg-slate-100 hover:text-primary transition-colors flex items-center justify-center gap-1 ${small ? 'py-0.5 text-[7px]' : 'py-1 text-[9px]'
-                        }`}
-                >
-                    <Plus size={small ? 6 : 8} /> 設定依賴
-                </button>
-            );
-        }
-
+    /**
+     * DependencyBadges — 內嵌式字母圓圈得录
+     * 設計意圖：小巧房字母圓圈，勇展依賴關係數量與類別，不占版位。
+     */
+    const DependencyBadges = ({ side }: { side: 'start' | 'end' }) => {
+        const sideDeps = getDepsForSide(side);
+        if (sideDeps.length === 0) return null;
         return (
-            <div className="flex flex-col gap-1 mt-1">
-                {deps.map(d => {
-                    const isIncoming = d.toId === targetId && d.toSide === side;
-                    const otherId = isIncoming ? d.fromId : d.toId;
-                    const otherSide = isIncoming ? d.fromSide : d.toSide;
-                    const otherTask = allAvailableTasks.find(t => t.id === otherId);
-
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+                {sideDeps.map(d => {
+                    const char = depCharMap.get(d.id) || '?';
+                    const isPassive = d.toId === itemId && d.toSide === side;
                     return (
-                        <div
+                        <span
                             key={d.id}
-                            onClick={onAdd}
-                            className="flex items-center justify-between px-2 py-0.5 rounded border border-slate-200 bg-slate-50 shadow-sm group/dep animate-in fade-in slide-in-from-top-1 duration-150 cursor-pointer hover:border-slate-300 transition-colors"
+                            title={isPassive ? `被動跨隨 (${char})` : `主動影響 (${char})`}
+                            className={`w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-black text-white
+                                ${isPassive ? 'bg-slate-400' : 'bg-slate-700'}`}
                         >
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                                    {isIncoming ? '被動' : '主動'}
-                                </span>
-                                <span className="truncate text-[9px] font-bold text-slate-600 max-w-[80px]">
-                                    {otherId === (connectingSide?.itemId || itemId || targetId) ? '自己' : (otherTask?.title.replace(/📁 |📄 |• /, '') || '未知')}
-                                </span>
-                                <span className="text-[8px] font-black px-1 rounded bg-slate-200 text-slate-600">
-                                    {otherSide === 'start' ? '起' : '止'}
-                                </span>
-                                {d.offset !== 0 && d.offset !== undefined && (
-                                    <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-1 rounded border border-slate-200">
-                                        {d.offset > 0 ? `+${d.offset}` : d.offset}d
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                <div className="flex flex-col opacity-0 group-hover/dep:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={() => updateDependency(workspaceId, boardId, d.id, { offset: (d.offset || 0) + 1 })}
-                                        className="text-[8px] hover:text-slate-600 leading-none"
-                                    >▲</button>
-                                    <button
-                                        onClick={() => updateDependency(workspaceId, boardId, d.id, { offset: (d.offset || 0) - 1 })}
-                                        className="text-[8px] hover:text-slate-600 leading-none"
-                                    >▼</button>
-                                </div>
-                                <button
-                                    onClick={() => removeDependency(workspaceId, boardId, d.id)}
-                                    className="opacity-0 group-hover/dep:opacity-100 text-slate-300 hover:text-red-400 ml-1 transition-all"
-                                >
-                                    <X size={10} />
-                                </button>
-                            </div>
-                        </div>
+                            {char}
+                        </span>
                     );
                 })}
             </div>
         );
     };
 
-    const handleUpdate = (updates) => {
-        // 設計意圖：使用 'in' 運算子而非 truthy 檢查。
-        // 因為空字串 ('') 在 truthy 條件下為 false，導致清除日期時（startDate: ''）
-        // 無法觸發 updateTaskDate，日期無法從 store 中被清空。
+    const handleUpdate = (updates: Record<string, any>) => {
         if ('startDate' in updates || 'endDate' in updates) {
+            // 設計意圖：updateTaskDate 的 taskType 不含 'checklistitem'，需轉換
+            const taskType = type === 'checklistitem' ? 'checklist' : type as 'list' | 'card' | 'checklist';
             updateTaskDate(
                 workspaceId,
                 boardId,
-                type,
+                taskType,
                 itemId,
                 updates,
-                listId,
-                cardId,
-                checklistId
+                listId || null,
+                cardId || null,
+                checklistId || null
             );
         } else {
-            // 其他更新照舊
             if (type === 'card') {
-                updateCard(workspaceId, boardId, listId, itemId, updates);
+                updateCard(workspaceId, boardId, listId as string, itemId, updates);
             } else if (type === 'list') {
                 updateList(workspaceId, boardId, itemId, updates);
             } else if (type === 'checklistitem') {
-                updateChecklistItem(workspaceId, boardId, listId, cardId, checklistId, itemId, updates);
+                updateChecklistItem(workspaceId, boardId, listId as string, cardId as string, checklistId as string, itemId, updates);
             }
         }
     };
 
-    const getProgress = (items = []) => {
+    const getProgress = (items: any[] = []) => {
         const activeItems = items.filter(i => !i.isArchived);
         if (activeItems.length === 0) return 0;
         const completed = activeItems.filter(i => i.status === 'completed').length;
@@ -265,7 +209,7 @@ const CardModal = () => {
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full bg-status-${currentItem.status || 'todo'}`}></div>
+                        <div className={`w-3 h-3 rounded-full bg-status-${(currentItem as any).status || 'todo'}`}></div>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                             {type === 'list' ? '列表設定' : (type === 'card' ? '卡片詳情' : '待辦事項詳情')}
                         </span>
@@ -284,10 +228,10 @@ const CardModal = () => {
                         </label>
                         <input
                             type="text"
-                            value={currentItem.title}
+                            value={(currentItem as any).title}
                             onChange={(e) => handleUpdate({ title: e.target.value })}
                             className="w-full text-2xl font-bold text-slate-800 bg-transparent border-none focus:ring-2 focus:ring-primary/20 rounded-lg px-2 -ml-2"
-                            placeholder={type === 'list' ? "輸入列表名稱..." : (type === 'card' ? "輸入卡片名稱..." : "輸入事項名稱...")}
+                            placeholder={type === 'list' ? '輸入列表名稱...' : (type === 'card' ? '輸入卡片名稱...' : '輸入事項名稱...')}
                         />
                         {type === 'card' && (
                             <div className="flex items-center gap-2 text-xs text-slate-400 ml-1">
@@ -298,9 +242,9 @@ const CardModal = () => {
                         )}
                         {type === 'checklistitem' && (
                             <div className="flex flex-wrap items-center gap-1 text-xs text-slate-400 ml-1">
-                                <button onClick={() => openModal('list', list.id)} className="underline decoration-slate-200 hover:text-primary transition-colors">{list?.title}</button>
+                                <button onClick={() => openModal('list', list!.id, '')} className="underline decoration-slate-200 hover:text-primary transition-colors">{list?.title}</button>
                                 <span>/</span>
-                                <button onClick={() => openModal('card', card.id, list.id)} className="underline decoration-slate-200 hover:text-primary transition-colors">{card?.title}</button>
+                                <button onClick={() => openModal('card', card!.id, list!.id)} className="underline decoration-slate-200 hover:text-primary transition-colors">{card?.title}</button>
                                 <span>/</span>
                                 <span className="text-slate-500 font-medium">{checklist?.title}</span>
                             </div>
@@ -319,7 +263,7 @@ const CardModal = () => {
                                     <button
                                         key={s}
                                         onClick={() => handleUpdate({ status: s })}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${currentItem.status === s
+                                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${(currentItem as any).status === s
                                             ? `bg-status-${s} text-white border-transparent shadow-sm scale-105`
                                             : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
                                             }`}
@@ -336,68 +280,82 @@ const CardModal = () => {
                                 <Calendar size={12} /> 日期範圍
                             </label>
                             <div className="flex gap-4">
-                                <div className="flex-1 space-y-1.5">
-                                    <input
-                                        type="date"
-                                        max="9999-12-31"
-                                        // 設計意圖：value 綁定 local state（非 store），
-                                        // 避免每次 onChange -> store 寫入 -> 重新渲染 -> 輸入框失焦的問題
-                                        value={localStartDate}
-                                        onChange={(e) => setLocalStartDate(e.target.value)}
-                                        onClick={() => {
-                                            if (!localStartDate) {
-                                                const today = dayjs().format('YYYY-MM-DD');
-                                                setLocalStartDate(today);
-                                                handleUpdate({ startDate: today });
-                                            }
-                                        }}
-                                        onBlur={(e) => {
-                                            // 離開輸入框時才將日期寫入 store
-                                            // 使用 !== 比對：空字串 !== undefined，確保清除日期也能觸發
-                                            if (e.target.value !== (currentItem.startDate || '')) {
-                                                handleUpdate({ startDate: e.target.value });
-                                            }
-                                        }}
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                                    />
-                                    {(currentView === 'board' || currentView === 'gantt') && (
-                                        <DependencyTags
-                                            targetId={itemId}
-                                            side="start"
-                                            onAdd={() => setConnectingSide({ side: 'start' })}
+                                {/* 起始日 */}
+                                <div className="flex-1">
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            max="9999-12-31"
+                                            value={localStartDate}
+                                            disabled={isStartLocked}
+                                            onChange={(e) => setLocalStartDate(e.target.value)}
+                                            onClick={() => {
+                                                if (!localStartDate && !isStartLocked) {
+                                                    const today = dayjs().format('YYYY-MM-DD');
+                                                    setLocalStartDate(today);
+                                                    handleUpdate({ startDate: today });
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                if (!isStartLocked && e.target.value !== ((currentItem as any).startDate || '')) {
+                                                    handleUpdate({ startDate: e.target.value });
+                                                }
+                                            }}
+                                            title={isStartLocked ? '起始日受依賴關係鎖定，請至清單模式解除依賴後再修改' : ''}
+                                            className={`w-full px-3 py-2 border rounded-lg text-sm font-medium transition-all outline-none
+                                                ${isStartLocked
+                                                    ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-70 pr-7'
+                                                    : 'bg-slate-50 border-slate-200 text-slate-700 focus:ring-2 focus:ring-primary/20'
+                                                }`}
                                         />
-                                    )}
+                                        {isStartLocked && (
+                                            <Lock size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                        )}
+                                        {/* 字母圓圈—懸浮於輸入框右上角 */}
+                                        <div className="absolute -top-2.5 right-0 flex gap-0.5">
+                                            <DependencyBadges side="start" />
+                                        </div>
+                                    </div>
                                 </div>
+
                                 <div className="pt-2 text-slate-300">→</div>
-                                <div className="flex-1 space-y-1.5">
-                                    <input
-                                        type="date"
-                                        max="9999-12-31"
-                                        // 同上：value 綁定 local state，onBlur 才寫入 store
-                                        value={localEndDate}
-                                        onChange={(e) => setLocalEndDate(e.target.value)}
-                                        onClick={() => {
-                                            if (!localEndDate) {
-                                                const today = dayjs().format('YYYY-MM-DD');
-                                                setLocalEndDate(today);
-                                                handleUpdate({ endDate: today });
-                                            }
-                                        }}
-                                        onBlur={(e) => {
-                                            // 同上：空字串 !== undefined，確保清除日期也能觸發
-                                            if (e.target.value !== (currentItem.endDate || '')) {
-                                                handleUpdate({ endDate: e.target.value });
-                                            }
-                                        }}
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                                    />
-                                    {(currentView === 'board' || currentView === 'gantt') && (
-                                        <DependencyTags
-                                            targetId={itemId}
-                                            side="end"
-                                            onAdd={() => setConnectingSide({ side: 'end' })}
+
+                                {/* 截止日 */}
+                                <div className="flex-1">
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            max="9999-12-31"
+                                            value={localEndDate}
+                                            disabled={isEndLocked}
+                                            onChange={(e) => setLocalEndDate(e.target.value)}
+                                            onClick={() => {
+                                                if (!localEndDate && !isEndLocked) {
+                                                    const today = dayjs().format('YYYY-MM-DD');
+                                                    setLocalEndDate(today);
+                                                    handleUpdate({ endDate: today });
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                if (!isEndLocked && e.target.value !== ((currentItem as any).endDate || '')) {
+                                                    handleUpdate({ endDate: e.target.value });
+                                                }
+                                            }}
+                                            title={isEndLocked ? '截止日受依賴關係鎖定，請至清單模式解除依賴後再修改' : ''}
+                                            className={`w-full px-3 py-2 border rounded-lg text-sm font-medium transition-all outline-none
+                                                ${isEndLocked
+                                                    ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-70 pr-7'
+                                                    : 'bg-slate-50 border-slate-200 text-slate-700 focus:ring-2 focus:ring-primary/20'
+                                                }`}
                                         />
-                                    )}
+                                        {isEndLocked && (
+                                            <Lock size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                        )}
+                                        {/* 字母圓圈—懸浮於輸入框右上角 */}
+                                        <div className="absolute -top-2.5 right-0 flex gap-0.5">
+                                            <DependencyBadges side="end" />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -410,7 +368,7 @@ const CardModal = () => {
                             <section className="space-y-2">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">內容描述</label>
                                 <textarea
-                                    value={card.description || ''}
+                                    value={(card as any)?.description || ''}
                                     onChange={(e) => handleUpdate({ description: e.target.value })}
                                     className="w-full h-24 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-primary focus:bg-white transition-all resize-none"
                                     placeholder="輸入更多詳細資訊..."
@@ -429,7 +387,6 @@ const CardModal = () => {
                                     >+ 新增清單</button>
                                 </div>
 
-                                {/* 統一的拖動上下文 - 支援跨清單拖動 */}
                                 <DndContext
                                     sensors={sensors}
                                     collisionDetection={pointerWithin}
@@ -442,40 +399,26 @@ const CardModal = () => {
                                     onDragOver={(event) => {
                                         const { active, over } = event;
                                         if (!over) return;
-
                                         const activeData = active.data.current;
                                         const overData = over.data.current;
-
                                         if (!activeData || !overData) return;
-
                                         const sourceChecklistId = activeData.checklistId;
                                         const targetChecklistId = overData.checklistId;
-
-                                        // 只在跨清單時處理
                                         if (sourceChecklistId !== targetChecklistId) {
-                                            const sourceChecklist = card.checklists.find(cl => cl.id === sourceChecklistId);
-                                            const targetChecklist = card.checklists.find(cl => cl.id === targetChecklistId);
-
+                                            const sourceChecklist = card?.checklists.find(cl => cl.id === sourceChecklistId);
+                                            const targetChecklist = card?.checklists.find(cl => cl.id === targetChecklistId);
                                             if (!sourceChecklist || !targetChecklist) return;
-
                                             const itemToMove = sourceChecklist.items.find(i => i.id === active.id);
                                             if (!itemToMove) return;
-
-                                            // 檢查項目是否已經在目標清單中
                                             const isAlreadyInTarget = targetChecklist.items.some(i => i.id === active.id);
-
                                             if (!isAlreadyInTarget) {
-                                                // 從來源清單移除
                                                 const newSourceItems = sourceChecklist.items.filter(i => i.id !== active.id);
                                                 updateChecklist(workspaceId, boardId, listId, itemId, sourceChecklistId, { items: newSourceItems });
-
-                                                // 加入目標清單（插入到 over 項目之前）
                                                 const targetIndex = targetChecklist.items.findIndex(i => i.id === over.id);
                                                 const newTargetItems = [...targetChecklist.items];
                                                 newTargetItems.splice(targetIndex >= 0 ? targetIndex : newTargetItems.length, 0, itemToMove);
                                                 updateChecklist(workspaceId, boardId, listId, itemId, targetChecklistId, { items: newTargetItems });
                                             } else {
-                                                // 已在目標清單中，只需重新排序
                                                 const oldIndex = targetChecklist.items.findIndex(i => i.id === active.id);
                                                 const newIndex = targetChecklist.items.findIndex(i => i.id === over.id);
                                                 if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
@@ -487,33 +430,26 @@ const CardModal = () => {
                                     }}
                                     onDragEnd={(event) => {
                                         const { active, over } = event;
-
-                                        // 清除拖動狀態
                                         setActiveChecklistItem(null);
-
                                         if (!over || active.id === over.id) return;
-
                                         const activeData = active.data.current;
                                         const overData = over.data.current;
-
-                                        const sourceChecklistId = activeData.checklistId;
-                                        const targetChecklistId = overData.checklistId;
-
+                                        const sourceChecklistId = activeData?.checklistId;
+                                        const targetChecklistId = overData?.checklistId;
                                         if (sourceChecklistId === targetChecklistId) {
-                                            // 同清單內排序
-                                            const checklist = card.checklists.find(cl => cl.id === sourceChecklistId);
-                                            const oldIndex = checklist.items.findIndex(i => i.id === active.id);
-                                            const newIndex = checklist.items.findIndex(i => i.id === over.id);
+                                            const cl = card?.checklists.find(cl => cl.id === sourceChecklistId);
+                                            if (!cl) return;
+                                            const oldIndex = cl.items.findIndex(i => i.id === active.id);
+                                            const newIndex = cl.items.findIndex(i => i.id === over.id);
                                             if (oldIndex !== newIndex) {
-                                                const newItems = arrayMove(checklist.items, oldIndex, newIndex);
+                                                const newItems = arrayMove(cl.items, oldIndex, newIndex);
                                                 updateChecklist(workspaceId, boardId, listId, itemId, sourceChecklistId, { items: newItems });
                                             }
                                         }
-                                        // 跨清單移動已在 onDragOver 中處理
                                     }}
                                 >
                                     <div className="space-y-4">
-                                        {(card.checklists || []).filter(cl => !cl.isArchived).map((cl) => {
+                                        {(card?.checklists || []).filter(cl => !cl.isArchived).map((cl) => {
                                             const activeItems = (cl.items || []).filter(i => !i.isArchived);
                                             const progress = getProgress(cl.items);
                                             return (
@@ -581,7 +517,7 @@ const CardModal = () => {
                                     </DragOverlay>
                                 </DndContext>
 
-                                {(card.checklists || []).filter(cl => !cl.isArchived).length === 0 && (
+                                {(card?.checklists || []).filter(cl => !cl.isArchived).length === 0 && (
                                     <div className="p-8 border-2 border-dashed border-slate-100 rounded-2xl flex flex-col items-center justify-center text-slate-300 text-sm gap-2">
                                         <CheckSquare size={32} className="opacity-20" />
                                         這裡還沒有待辦清單，點擊上方新增一個。
@@ -603,7 +539,7 @@ const CardModal = () => {
                                 } else if (type === 'card') {
                                     removeCard(workspaceId, boardId, listId, itemId);
                                 } else if (type === 'checklistitem') {
-                                    removeChecklistItem(workspaceId, boardId, listId, cardId, checklistId, itemId);
+                                    removeChecklistItem(workspaceId, boardId, listId, cardId!, checklistId!, itemId);
                                 }
                                 closeModal();
                             }
@@ -618,178 +554,6 @@ const CardModal = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Dependency Selection Modal - 支援看板與甘特圖模式 */}
-            {(currentView === 'board' || currentView === 'gantt') && connectingSide && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-200">
-                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-primary/20">
-                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <span className="text-xs font-bold text-slate-600 truncate max-w-[80%] uppercase tracking-wider">
-                                🔗 依賴設定：{connectingSide.title || currentItem.title}
-                            </span>
-                            <button
-                                onClick={() => { setConnectingSide(null); setSearchTerm(''); setTempOffset(0); }}
-                                className="p-2 hover:bg-slate-200 rounded-lg text-slate-400 transition-all hover:text-slate-600"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="p-4 space-y-4">
-                            <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">依賴位移 (天)</span>
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => setTempOffset(prev => prev - 1)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:text-primary transition-colors text-xs font-bold w-8 h-8 flex items-center justify-center shadow-sm">-</button>
-                                    <input
-                                        type="number"
-                                        value={tempOffset}
-                                        onChange={(e) => setTempOffset(parseInt(e.target.value) || 0)}
-                                        className="w-12 text-center bg-transparent border-none font-bold text-sm focus:ring-0"
-                                    />
-                                    <button onClick={() => setTempOffset(prev => prev + 1)} className="p-1.5 bg-white border border-slate-200 rounded-lg hover:text-primary transition-colors text-xs font-bold w-8 h-8 flex items-center justify-center shadow-sm">+</button>
-                                </div>
-                                <span className="text-[9px] text-slate-400 flex-1 italic text-right">
-                                    {tempOffset === 0 ? '無位移' : `${tempOffset > 0 ? '晚' : '早'} ${Math.abs(tempOffset)} 天`}
-                                </span>
-                            </div>
-
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="搜尋要指定的列表、卡片或待辦項目..."
-                                    className="w-full text-sm border border-slate-200 rounded-xl p-3 pl-10 focus:ring-2 focus:ring-primary/20 outline-none transition-all bg-slate-50 focus:bg-white"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    autoFocus
-                                />
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <Plus size={16} />
-                                </div>
-                            </div>
-
-                            <div className="max-h-[300px] overflow-y-auto bg-white border border-slate-100 rounded-xl divide-y divide-slate-50 no-scrollbar">
-                                {/* Special "Self" Option */}
-                                <div className="p-2 px-3 flex items-center justify-between gap-4 bg-slate-50 hover:bg-slate-100 transition-colors border-b border-slate-200 group sticky top-0 z-10 backdrop-blur-sm">
-                                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                                        <span className="text-xs font-black text-slate-600">依賴當前任務 (自己)</span>
-                                    </div>
-                                    <div className="flex gap-2 shrink-0">
-                                        <button
-                                            onClick={() => {
-                                                const newType = 'ss'; // start-to-start
-                                                addDependency(workspaceId, boardId, {
-                                                    fromId: connectingSide.itemId || itemId, fromSide: 'start',
-                                                    toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                    offset: tempOffset,
-                                                    type: newType
-                                                });
-                                                setConnectingSide(null);
-                                                setSearchTerm('');
-                                                setTempOffset(0);
-                                            }}
-                                            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[10px] font-black text-slate-600 rounded-lg border border-slate-200 hover:border-slate-300 transition-all shadow-sm whitespace-nowrap"
-                                        >依賴其「起始」</button>
-                                        <button
-                                            onClick={() => {
-                                                const newType = connectingSide.side === 'start' ? 'fs' : 'ff';
-                                                addDependency(workspaceId, boardId, {
-                                                    fromId: connectingSide.itemId || itemId, fromSide: 'end',
-                                                    toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                    offset: tempOffset,
-                                                    type: newType
-                                                });
-                                                setConnectingSide(null);
-                                                setSearchTerm('');
-                                                setTempOffset(0);
-                                            }}
-                                            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-[10px] font-black text-slate-600 rounded-lg border border-slate-200 hover:border-slate-300 transition-all shadow-sm whitespace-nowrap"
-                                        >依賴其「完成」</button>
-                                    </div>
-                                </div>
-
-                                {allAvailableTasks
-                                    .filter(t => t.id !== (connectingSide.itemId || itemId) && t.title.toLowerCase().includes(searchTerm.toLowerCase()))
-                                    .map(t => (
-                                        <div key={t.id} className="p-2 px-3 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors group">
-                                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                <span className="text-xs font-bold text-slate-700 truncate">{t.title}</span>
-                                            </div>
-                                            <div className="flex gap-2 shrink-0">
-                                                <button
-                                                    onClick={() => {
-                                                        const newType = connectingSide.side === 'start' ? 'ss' : 'sf';
-                                                        addDependency(workspaceId, boardId, {
-                                                            fromId: t.id, fromSide: 'start',
-                                                            toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                            offset: tempOffset,
-                                                            type: newType
-                                                        });
-                                                        setConnectingSide(null);
-                                                        setSearchTerm('');
-                                                        setTempOffset(0);
-                                                    }}
-                                                    className="px-3 py-1.5 bg-white hover:bg-primary/5 text-[10px] font-black text-slate-500 hover:text-primary rounded-lg border border-slate-200 hover:border-primary/20 transition-all shadow-sm whitespace-nowrap"
-                                                >依賴其「起始」</button>
-                                                <button
-                                                    onClick={() => {
-                                                        const newType = connectingSide.side === 'start' ? 'fs' : 'ff';
-                                                        addDependency(workspaceId, boardId, {
-                                                            fromId: t.id, fromSide: 'end',
-                                                            toId: connectingSide.itemId || itemId, toSide: connectingSide.side,
-                                                            offset: tempOffset,
-                                                            type: newType
-                                                        });
-                                                        setConnectingSide(null);
-                                                        setSearchTerm('');
-                                                        setTempOffset(0);
-                                                    }}
-                                                    className="px-3 py-1.5 bg-white hover:bg-primary/5 text-[10px] font-black text-slate-500 hover:text-primary rounded-lg border border-slate-200 hover:border-primary/20 transition-all shadow-sm whitespace-nowrap"
-                                                >依賴其「完成」</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                {allAvailableTasks.filter(t => t.id !== (connectingSide.itemId || itemId) && t.title.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                                    <div className="p-8 text-center text-slate-400 text-xs italic">找不到符合的任務...</div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Dependency Modal Footer */}
-                        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                            <button
-                                onClick={async () => {
-                                    const confirmed = await useDialogStore.getState().showConfirm('確定要清除此端點的所有依賴連結嗎？');
-                                    if (confirmed) {
-                                        const sideToClear = connectingSide.side;
-                                        const idToClear = connectingSide.itemId || itemId;
-                                        const relatedDeps = (board?.dependencies || []).filter(d =>
-                                            (d.toId === idToClear && d.toSide === sideToClear) ||
-                                            (d.fromId === idToClear && d.fromSide === sideToClear)
-                                        );
-                                        relatedDeps.forEach(d => removeDependency(workspaceId, boardId, d.id));
-                                        setConnectingSide(null);
-                                        setSearchTerm('');
-                                        setTempOffset(0);
-                                    }
-                                }}
-                                className="flex items-center gap-2 text-red-500 hover:bg-red-50 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-transparent hover:border-red-100"
-                            >
-                                <Trash2 size={16} /> 清除此端所有依賴
-                            </button>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => { setConnectingSide(null); setSearchTerm(''); setTempOffset(0); }}
-                                    className="btn-outline text-xs px-5 py-2 rounded-xl"
-                                >取消</button>
-                                <button
-                                    onClick={() => { setConnectingSide(null); setSearchTerm(''); setTempOffset(0); }}
-                                    className="btn-primary text-xs px-6 py-2 rounded-xl shadow-md font-bold"
-                                >儲存並關閉</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

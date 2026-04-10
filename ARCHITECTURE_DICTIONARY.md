@@ -137,9 +137,10 @@
 ## 10. Google Calendar 同步模組 (`googleCalendarService.ts`)
 
 ### 10.1 設計意圖
-- 將 ProJED 中所有具備日期的任務（列表、卡片、待辦項目）**單向同步**至用戶的 Google Calendar，
-  在獨立的「ProJED Tasks」日曆中呈現，不污染用戶的個人行事曆。
+- 將 ProJED 中所有具備日期的任務（列表、卡片、待辦項目）**單向同步**至用戶的 Google **主日曆 (Primary Calendar)**，
+  確保訂閱者能直接查看，無需額外設定子日曆權限。
 - 同步範圍為**所有工作區、所有看板**的任務。
+- **僅同步結束日期**：為了保持日曆清爽，所有任務均以其「結束日期」作為單日全天事件呈現。
 
 ### 10.2 架構決策
 - **從 Legacy v2 移植並改良**：原始邏輯位於 `_legacy_v2/app.js` L557-855，遷移至 TypeScript 模組化架構。
@@ -159,27 +160,69 @@
 |:---|:---|:---|
 | Token 管理 | localStorage 手動操作散落各處 | `TokenManager` class 封裝，過期自動偵測 |
 | Event ID 關聯 | 每次從 description 搜尋 | 本地快取 `eventIdCache` (localStorage 持久化) |
-| 日期格式 | 只取 endDate 作為單日事件 | 支援 start~end 跨日事件（修正 BUG-5） |
+| 日期格式 | 只取 endDate 作為單日事件 | 固定僅同步結束日期 (End-date only)，保持版面清爽 |
 | 同步範圍 | 僅當前看板 | 所有工作區所有看板 |
 | 錯誤處理 | console.error | 統一型別 + UI toast + 自動重置連接狀態 |
 | Client ID | 寫死在 JS 中 | 環境變數 (`import.meta.env`) |
 | 型別安全 | 無 | 完整 TypeScript 支援 |
+| 隱私權限 | 預設 | 強制 `visibility: public` 確保訂閱者可見 |
+| 寫入目標 | 獨立子日曆 | 直接寫入 **主日曆 (Primary)**，免除共用設定債 |
 
 ### 10.4 同步流程
 
 ```
 用戶點擊「連接 Google 日曆」
-  → GSI requestAccessToken (OAuth 彈窗)
-  → 取得 access_token → TokenManager.save()
-  → set({ isConnected: true })
-  → 自動觸發 syncAll()
-    → flattenAllItems(所有工作區)
-    → getOrCreateCalendar("ProJED Tasks")
-    → 讀取 Google 上全部事件
-    → 逐項比對 → 新增 / 更新 / 刪除 / 跳過
-    → 更新 eventIdCache (localStorage)
-    → set({ lastSyncAt, isSyncing: false })
+    → requestAccessToken (OAuth) → TokenManager.save()
+    → 自動觸發 syncAll()
+      → getOrCreateCalendar("primary")
+      → 讀取 Google 主日曆事件
+      → 逐項比對 → 新增 / 更新 / 刪除 / 跳過
+      → 設定 visibility: 'public'
+    → 更新 lastSyncAt / eventIdCache
 ```
 
 ---
 *更新日期：2026-04-01 (Google Calendar 同步模組移植)*
+
+---
+
+## 11. 清單模式 (`ListView.tsx`) 與視圖持久化
+
+### 11.1 設計意圖
+- **底層資料展示**：清單模式作為所有任務的「底層資料來源視圖」，以全版面表格清單呈現三層結構（列表 → 卡片 → 待辦項目）。其他模式（看板、甘特、月曆）皆從同一份 `useBoardStore` 資料抓取，用不同 UI 呈現。
+- **完整欄位資訊**：清單模式顯示狀態標籤、起始日、截止日、備註四個附加欄位，提供比其他模式更高的資訊密度。
+- **功能完整性**：支援與甘特圖/月曆側邊欄等效的全部互動操作（拖曳排序、展開收疊、新增子項、點擊開啟 Modal）。
+
+### 11.2 視圖順序
+導航列按鈕由左至右排列為：**清單 → 看板 → 甘特圖 → 月曆**。
+清單模式排在最前，語意上代表「最原始的資料結構入口」。
+
+### 11.3 架構決策
+
+#### 資料流（不變）
+```
+useBoardStore (Zustand + Firestore)
+    ↓
+    ├── ListView   — 全版面表格清單（資料底層展示）
+    ├── BoardView  — 看板（水平卡片排列）
+    ├── GanttView  — 甘特圖（時間軸）
+    └── CalendarView — 月曆（日曆格線）
+```
+
+- **不涉及資料模型變更**：清單模式直接讀取 `activeBoard.lists`，與其他模式共享同一份 Store 狀態。
+- **複用資料扁平化邏輯**：`flattenedItems` 演算法與 GanttView / CalendarView 完全一致，確保三者在相同過濾條件下顯示相同任務。
+- **拖曳邏輯複用**：dnd-kit 的排序與跨層移動邏輯直接從 `SharedTaskSidebar` 提取，確保行為一致性。
+
+#### 超出截止日高亮
+- **設計意圖**：若任務未完成且截止日早於今日，截止日欄位自動以紅色（`text-status-delayed`）顯示，提醒使用者注意。
+
+### 11.4 視圖位置持久化 (`useBoardStore.ts`)
+- **設計意圖**：記住使用者離開前的視圖位置，頁面重新載入後自動恢復，提升連貫性。
+- **實現方式**：
+  - 常數 `VIEW_STORAGE_KEY = 'projed-last-view'`，使用 `localStorage` 儲存。
+  - `getStoredView()`：初始化時讀取，只恢復「工作視圖」（list / board / gantt / calendar）；若無記錄或為 home/recycle_bin，則預設回到 `home`。
+  - `setView()`：每次切換視圖時同步寫入 localStorage。
+  - `switchBoard()`：切換看板時固定回到 `'board'`（維持原有行為），不套用記憶視圖。
+
+---
+*更新日期：2026-04-08 (清單模式 + 視圖位置持久化)*
