@@ -104,6 +104,42 @@ function AppContent() {
     }
   }, [activeBoardId]);
 
+  // ===== 網址參數解析 (Deep Linking 建立捷徑用) =====
+  const hasProcessedDeepLink = useRef(false);
+
+  useEffect(() => {
+    if (!user || hasProcessedDeepLink.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const modalType = params.get('modal');
+    if (!modalType) {
+        hasProcessedDeepLink.current = true;
+        return;
+    }
+
+    const wsId = params.get('wsId');
+    const bId = params.get('boardId');
+    const lId = params.get('listId');
+    const iId = params.get('itemId');
+
+    if (wsId && bId && iId) {
+        // 必須等待 Firestore 第 1、2 層將工作區與看板確實載入完畢，才進行後續
+        const ws = workspaces.find(w => w.id === wsId);
+        const board = ws?.boards.find(b => b.id === bId);
+        
+        if (board) {
+            hasProcessedDeepLink.current = true; // 標記已成功處理，不再重複執行
+
+            // 1. 強制切換看板 (此舉會觸發 Firestore 第 3 層監聽器，開始下載此看板的清單/卡片)
+            useBoardStore.getState().switchBoard(wsId, bId);
+            
+            // 2. 開啟 Modal (若卡片還沒抓到，畫面會短暫隱藏，等第 3 層資料到齊後無縫開窗)
+            if (!useBoardStore.getState().editingItem) {
+                useBoardStore.getState().openModal(modalType as any, iId, lId || '');
+            }
+        }
+    }
+  }, [user?.uid, workspaces]);
+
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;

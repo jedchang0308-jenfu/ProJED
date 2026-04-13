@@ -8,7 +8,7 @@
  * 4. 不再包含「設定依賴」功能，此功能已移至 ListView 清單模式。
  */
 import { useState, useEffect, useRef } from 'react';
-import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, Lock } from 'lucide-react';
+import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, Lock, MoreHorizontal, Share } from 'lucide-react';
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -46,7 +46,50 @@ const CardModal = () => {
     const [localStartDate, setLocalStartDate] = useState('');
     const [localEndDate, setLocalEndDate] = useState('');
     const currentItemIdRef = useRef<string | null>(null);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    const handlePinToHome = () => {
+        if (!editingItem) return;
+        setIsMenuOpen(false);
+
+        useDialogStore.getState().showConfirm(
+            '【建立桌面捷徑】\n\n' +
+            '專屬捷徑連結已準備好！（目前網址列已自動更新為此任務）\n請點擊您瀏覽器的「分享」圖示或「系統選單 (三個點)」，然後選擇「加到主畫面」，即可像原生 App 一樣將此任務放在您的手機桌面上快速開啟。'
+        );
+    };
     // ─────────────────────────────────────────────────────────────────
+
+    // 同步 URL 狀態：不管點開哪個任務，網址列都即時跟隨變動 (和 Trello 一樣)
+    const hasOpenedRef = useRef(false);
+    
+    useEffect(() => {
+        if (editingItem) {
+            hasOpenedRef.current = true;
+            const { type, itemId, boardId, workspaceId, listId } = editingItem;
+            const url = new URL(window.location.href);
+            url.searchParams.set('modal', type);
+            url.searchParams.set('itemId', itemId);
+            if (listId) {
+                url.searchParams.set('listId', listId as string);
+            } else {
+                url.searchParams.delete('listId');
+            }
+            url.searchParams.set('boardId', boardId);
+            url.searchParams.set('wsId', workspaceId);
+            window.history.replaceState(null, '', url.toString());
+        } else {
+            // Modal 關閉時，清空捷徑參數（僅限曾經打開過的狀況，避免初次載入就洗掉外部捷徑參數）
+            if (hasOpenedRef.current) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('modal');
+                url.searchParams.delete('itemId');
+                url.searchParams.delete('listId');
+                url.searchParams.delete('boardId');
+                url.searchParams.delete('wsId');
+                window.history.replaceState(null, '', url.pathname);
+            }
+        }
+    }, [editingItem]);
 
     // ESC 關閉 Modal
     useEffect(() => {
@@ -224,15 +267,48 @@ const CardModal = () => {
             >
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full bg-status-${(currentItem as any).status || 'todo'}`}></div>
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                            {type === 'list' ? '列表設定' : (type === 'card' ? '卡片詳情' : '待辦事項詳情')}
-                        </span>
+                    <div className="flex items-center gap-2 md:gap-3">
+                        {/* 手機版：左側關閉按鈕 */}
+                        <button onClick={closeModal} className="md:hidden p-2 -ml-2 hover:bg-slate-200 rounded-lg text-slate-400 transition-all hover:text-slate-600">
+                            <X size={20} />
+                        </button>
+                        <div className="flex items-center gap-3 ml-1 md:ml-0">
+                            <div className={`w-3 h-3 rounded-full bg-status-${(currentItem as any).status || 'todo'}`}></div>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                {type === 'list' ? '列表設定' : (type === 'card' ? '卡片詳情' : '待辦事項詳情')}
+                            </span>
+                        </div>
                     </div>
-                    <button onClick={closeModal} className="p-2 hover:bg-slate-200 rounded-lg text-slate-400 transition-all hover:text-slate-600">
-                        <X size={20} />
-                    </button>
+                    {/* 右側按鈕區 */}
+                    <div className="flex items-center gap-1">
+                        {/* 設定鈕 (三個點) - 電腦及手機版共用 */}
+                        <div className="relative">
+                            <button 
+                                title="設定" 
+                                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                                className="p-2 hover:bg-slate-200 rounded-lg text-slate-400 transition-all hover:text-slate-600"
+                            >
+                                <MoreHorizontal size={20} />
+                            </button>
+                            {isMenuOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)}></div>
+                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                        <button 
+                                            className="w-full text-left px-4 py-3 text-sm font-bold text-slate-600 hover:text-primary hover:bg-primary/5 flex items-center gap-3 transition-colors"
+                                            onClick={handlePinToHome}
+                                        >
+                                            <Share size={16} /> 釘選到手機桌面
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        {/* 電腦版：右側關閉按鈕 */}
+                        <button onClick={closeModal} className="hidden md:block p-2 hover:bg-slate-200 rounded-lg text-slate-400 transition-all hover:text-slate-600">
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content Scroll Area */}

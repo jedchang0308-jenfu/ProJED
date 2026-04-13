@@ -233,7 +233,7 @@ const useBoardStore = create<BoardStore>()(
         activeBoardId: null,
         // 初始化時從 localStorage 讀取上次的視圖（僅工作視圖，首次或非工作視圖則為 home）
         currentView: getStoredView(),
-        isSidebarOpen: true,
+        isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
         editingItem: null,
         statusFilters: {
             todo: true,
