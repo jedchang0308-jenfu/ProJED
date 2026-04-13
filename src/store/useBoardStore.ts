@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { arrayMove } from '@dnd-kit/sortable';
 import useDialogStore from './useDialogStore';
 import useAuthStore from './useAuthStore';
+import useUndoStore from './useUndoStore';
 import {
     workspaceService, boardService, listService, cardService, dependencyService
 } from '../services/firestoreService';
@@ -290,6 +291,36 @@ const useBoardStore = create<BoardStore>()(
 
         // ===== Drag & Drop Reordering =====
         reorderLists: (wsId, bId, activeId, overId) => {
+            // 記錄排序前的舊順序，供 undo 還原
+            const snapState = get();
+            const snapWs = snapState.workspaces.find(w => w.id === wsId);
+            const snapBoard = snapWs?.boards.find(b => b.id === bId);
+            const oldListIds = (snapBoard?.lists || []).map(l => l.id);
+            useUndoStore.getState().pushUndo({
+                label: '重新排列列表',
+                undo: () => {
+                    // 直接用舊 ID 順序覆蓋，不從新執行 reorderLists
+                    set((st) => ({
+                        workspaces: st.workspaces.map(w => {
+                            if (w.id !== wsId) return w;
+                            return {
+                                ...w,
+                                boards: w.boards.map(b => {
+                                    if (b.id !== bId) return b;
+                                    const sorted = [...b.lists].sort(
+                                        (a, b2) => oldListIds.indexOf(a.id) - oldListIds.indexOf(b2.id)
+                                    );
+                                    listService.batchUpdateOrder(wsId, bId,
+                                        sorted.map((l, i) => ({ id: l.id, order: i }))
+                                    ).catch(console.error);
+                                    return { ...b, lists: sorted };
+                                })
+                            };
+                        })
+                    }));
+                },
+                redo: () => get().reorderLists(wsId, bId, activeId, overId),
+            });
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -314,6 +345,16 @@ const useBoardStore = create<BoardStore>()(
         },
 
         moveCardToList: (wsId, bId, cardId, sourceListId, targetListId, targetIndex = null) => {
+            // 記錄移動前的來源列表與位置，供 undo 還原
+            const snapWs2 = get().workspaces.find(w => w.id === wsId);
+            const snapBoard2 = snapWs2?.boards.find(b => b.id === bId);
+            const sourceListSnap = snapBoard2?.lists.find(l => l.id === sourceListId);
+            const originalIndex = (sourceListSnap?.cards || []).findIndex(c => c.id === cardId);
+            useUndoStore.getState().pushUndo({
+                label: '移動卡片',
+                undo: () => get().moveCardToList(wsId, bId, cardId, targetListId, sourceListId, originalIndex),
+                redo: () => get().moveCardToList(wsId, bId, cardId, sourceListId, targetListId, targetIndex),
+            });
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -373,6 +414,42 @@ const useBoardStore = create<BoardStore>()(
         },
 
         reorderCardsInList: (wsId, bId, listId, activeId, overId) => {
+            // 記錄排序前的舊卡片順序，供 undo 還原
+            const snapWs3 = get().workspaces.find(w => w.id === wsId);
+            const snapBoard3 = snapWs3?.boards.find(b => b.id === bId);
+            const listSnap = snapBoard3?.lists.find(l => l.id === listId);
+            const oldCardIds = (listSnap?.cards || []).map(c => c.id);
+            useUndoStore.getState().pushUndo({
+                label: '重新排列卡片',
+                undo: () => {
+                    // 直接用舊 ID 順序覆蓋，不從新執行 reorderCardsInList
+                    set((st) => ({
+                        workspaces: st.workspaces.map(w => {
+                            if (w.id !== wsId) return w;
+                            return {
+                                ...w,
+                                boards: w.boards.map(b => {
+                                    if (b.id !== bId) return b;
+                                    return {
+                                        ...b,
+                                        lists: b.lists.map(l => {
+                                            if (l.id !== listId) return l;
+                                            const sorted = [...l.cards].sort(
+                                                (a, b2) => oldCardIds.indexOf(a.id) - oldCardIds.indexOf(b2.id)
+                                            );
+                                            cardService.batchUpdateOrder(wsId, bId,
+                                                sorted.map((c, i) => ({ id: c.id, order: i }))
+                                            ).catch(console.error);
+                                            return { ...l, cards: sorted };
+                                        })
+                                    };
+                                })
+                            };
+                        })
+                    }));
+                },
+                redo: () => get().reorderCardsInList(wsId, bId, listId, activeId, overId),
+            });
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -543,6 +620,24 @@ const useBoardStore = create<BoardStore>()(
 
         // ===== Card CRUD =====
         updateCard: (wsId, bId, lId, cId, updates) => {
+            // 取得操作前的舊值，供 undo 使用
+            const state = get();
+            const ws = state.workspaces.find(w => w.id === wsId);
+            const board = ws?.boards.find(b => b.id === bId);
+            const list = board?.lists.find(l => l.id === lId);
+            const oldCard = list?.cards.find(c => c.id === cId);
+            if (oldCard) {
+                // 只擷取被更新欄位的舊值，供 undo 精確還原
+                const oldCardAsAny = oldCard as unknown as Record<string, unknown>;
+                const oldValues = Object.fromEntries(
+                    Object.keys(updates).map(k => [k, oldCardAsAny[k]])
+                ) as Partial<Card>;
+                useUndoStore.getState().pushUndo({
+                    label: '修改卡片',
+                    undo: () => get().updateCard(wsId, bId, lId, cId, oldValues),
+                    redo: () => get().updateCard(wsId, bId, lId, cId, updates),
+                });
+            }
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -571,6 +666,22 @@ const useBoardStore = create<BoardStore>()(
         },
 
         updateList: (wsId, bId, lId, updates) => {
+            // 取得操作前的舊值，供 undo 使用
+            const state = get();
+            const ws = state.workspaces.find(w => w.id === wsId);
+            const board = ws?.boards.find(b => b.id === bId);
+            const oldList = board?.lists.find(l => l.id === lId);
+            if (oldList) {
+                const oldListAsAny = oldList as unknown as Record<string, unknown>;
+                const oldValues = Object.fromEntries(
+                    Object.keys(updates).map(k => [k, oldListAsAny[k]])
+                ) as Partial<List>;
+                useUndoStore.getState().pushUndo({
+                    label: '修改列表',
+                    undo: () => get().updateList(wsId, bId, lId, oldValues),
+                    redo: () => get().updateList(wsId, bId, lId, updates),
+                });
+            }
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -596,6 +707,8 @@ const useBoardStore = create<BoardStore>()(
             const ws = workspaces.find(w => w.id === workspaceId);
             const board = ws?.boards.find(b => b.id === boardId);
             if (board) {
+                // 切換看板時清空 Undo/Redo 堆疊，避免跨看板的操作紀錄混用
+                useUndoStore.getState().clear();
                 set({
                     activeWorkspaceId: workspaceId,
                     activeBoardId: boardId,
@@ -650,10 +763,21 @@ const useBoardStore = create<BoardStore>()(
             if (added) {
                 dependencyService.create(wsId, bId, dependency).catch(console.error);
                 get().fixBoardDependencies(wsId, bId);
+                // 記錄可撤銷指令：undo = 刪除剛新增的依賴
+                useUndoStore.getState().pushUndo({
+                    label: '新增依賴關係',
+                    undo: () => get().removeDependency(wsId, bId, tempId),
+                    redo: () => get().addDependency(wsId, bId, dependency),
+                });
             }
         },
 
         removeDependency: (wsId, bId, depId) => {
+            // 先取得被刪除的依賴資料，供 undo 重建
+            const state = get();
+            const ws = state.workspaces.find(w => w.id === wsId);
+            const board = ws?.boards.find(b => b.id === bId);
+            const dep = (board?.dependencies || []).find(d => d.id === depId);
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -668,9 +792,34 @@ const useBoardStore = create<BoardStore>()(
             }));
             dependencyService.delete(wsId, bId, depId).catch(console.error);
             get().fixBoardDependencies(wsId, bId);
+            // 記錄可撤銷指令：undo = 重新新增被刪除的依賴
+            if (dep) {
+                const { id, ...depWithoutId } = dep;
+                useUndoStore.getState().pushUndo({
+                    label: '刪除依賴關係',
+                    undo: () => get().addDependency(wsId, bId, depWithoutId),
+                    redo: () => get().removeDependency(wsId, bId, depId),
+                });
+            }
         },
 
         updateDependency: (wsId, bId, depId, updates) => {
+            // 取得舊的依賴值供 undo 使用
+            const state = get();
+            const ws = state.workspaces.find(w => w.id === wsId);
+            const board = ws?.boards.find(b => b.id === bId);
+            const oldDep = (board?.dependencies || []).find(d => d.id === depId);
+            if (oldDep) {
+                const oldDepAsAny = oldDep as unknown as Record<string, unknown>;
+                const oldValues = Object.fromEntries(
+                    Object.keys(updates).map(k => [k, oldDepAsAny[k]])
+                );
+                useUndoStore.getState().pushUndo({
+                    label: '修改依賴關係',
+                    undo: () => get().updateDependency(wsId, bId, depId, oldValues),
+                    redo: () => get().updateDependency(wsId, bId, depId, updates),
+                });
+            }
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -840,7 +989,15 @@ const useBoardStore = create<BoardStore>()(
                     };
                 })
             }));
-            listService.create(workspaceId, boardId, title).catch(console.error);
+            listService.create(workspaceId, boardId, title).catch((err) => {
+                console.error(err);
+            });
+            // 記錄可撤銷指令：undo = 軟刪除剛新增的列表、redo = 還原它
+            useUndoStore.getState().pushUndo({
+                label: '新增列表',
+                undo: () => get().removeList(workspaceId, boardId, tempId),
+                redo: () => get().restoreList(workspaceId, boardId, tempId),
+            });
         },
 
         addCard: (workspaceId, boardId, listId, title) => {
@@ -876,6 +1033,12 @@ const useBoardStore = create<BoardStore>()(
                 })
             }));
             cardService.create(workspaceId, boardId, listId, title).catch(console.error);
+            // 記錄可撤銷指令：undo = 軟刪除剛新增的卡片、redo = 還原它
+            useUndoStore.getState().pushUndo({
+                label: '新增卡片',
+                undo: () => get().removeCard(workspaceId, boardId, listId, tempId),
+                redo: () => get().restoreCard(workspaceId, boardId, listId, tempId),
+            });
         },
 
         // ===== Checklist CRUD（嵌入式，更新整個 Card 文件）=====
@@ -1018,6 +1181,25 @@ const useBoardStore = create<BoardStore>()(
             }));
         },
         updateChecklistItem: (wsId, bId, lId, cId, clId, cliId, updates) => {
+            // 取得操作前的舊值，供 undo 使用
+            const snapState2 = get();
+            const snapWs4 = snapState2.workspaces.find(w => w.id === wsId);
+            const snapBoard4 = snapWs4?.boards.find(b => b.id === bId);
+            const snapList4 = snapBoard4?.lists.find(l => l.id === lId);
+            const snapCard4 = snapList4?.cards.find(c => c.id === cId);
+            const snapCl4 = snapCard4?.checklists?.find(cl => cl.id === clId);
+            const oldItem = snapCl4?.items?.find(cli => cli.id === cliId);
+            if (oldItem) {
+                const oldItemAsAny = oldItem as unknown as Record<string, unknown>;
+                const oldValues = Object.fromEntries(
+                    Object.keys(updates).map(k => [k, oldItemAsAny[k]])
+                );
+                useUndoStore.getState().pushUndo({
+                    label: '修改待辦項目',
+                    undo: () => get().updateChecklistItem(wsId, bId, lId, cId, clId, cliId, oldValues),
+                    redo: () => get().updateChecklistItem(wsId, bId, lId, cId, clId, cliId, updates),
+                });
+            }
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
@@ -1054,28 +1236,11 @@ const useBoardStore = create<BoardStore>()(
             }));
         },
 
-        updateTaskDate: (wsId, bId, taskType, taskId, updates, listId = null, cardId = null, checklistId = null, dragType = 'move') => {
+        updateTaskDate: (wsId, bId, taskType, taskId, updates, listId = null, cardId = null, checklistId = null) => {
             const state = get();
             const ws = state.workspaces.find(w => w.id === wsId);
             const board = ws?.boards.find(b => b.id === bId);
             if (!board) return;
-
-            const findTask = (id: string) => {
-                for (const l of board.lists) {
-                    if (l.id === id) return { ...l, type: 'list' };
-                    for (const c of l.cards) {
-                        if (c.id === id) return { ...c, type: 'card', listId: l.id };
-                        for (const cl of c.checklists || []) {
-                            for (const cli of cl.items || []) {
-                                if (cli.id === id) return {
-                                    ...cli, type: 'checklist', listId: l.id, cardId: c.id, checklistId: cl.id
-                                };
-                            }
-                        }
-                    }
-                }
-                return null;
-            };
 
             // 更新目標任務
             if (taskType === 'list') state.updateList(wsId, bId, taskId, updates);

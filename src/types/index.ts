@@ -253,6 +253,43 @@ export interface BoardActions {
 /** Board Store 完整型別（State + Actions） */
 export type BoardStore = BoardState & BoardActions;
 
+// ===== Undo / Redo Store 型別 =====
+
+/**
+ * 可復原指令（Command Pattern）
+ * 設計意圖：每次使用者執行可逆操作時建立一筆 UndoCommand，
+ * 分別存放「如何撤銷」與「如何重做」的函式，
+ * 由 useUndoStore 的堆疊統一管理。
+ */
+export interface UndoCommand {
+  /** 顯示在 Tooltip 的操作描述，例如「修改卡片標題」 */
+  label: string;
+  /** 執行撤銷（上一步）的函式 */
+  undo: () => void;
+  /** 執行重做（下一步）的函式 */
+  redo: () => void;
+}
+
+/** Undo Store 完整型別 */
+export interface UndoStore {
+  /** 可撤銷的操作堆疊（最新在尾端） */
+  undoStack: UndoCommand[];
+  /** 可重做的操作堆疊（最新在尾端） */
+  redoStack: UndoCommand[];
+  /** 推入一筆可復原指令（自動清空 redoStack） */
+  pushUndo: (command: UndoCommand) => void;
+  /** 執行上一步 */
+  undo: () => void;
+  /** 執行下一步 */
+  redo: () => void;
+  /** 清空所有堆疊（切換看板時呼叫） */
+  clear: () => void;
+  /** 是否可執行上一步 */
+  canUndo: () => boolean;
+  /** 是否可執行下一步 */
+  canRedo: () => boolean;
+}
+
 // ===== Dialog Store 型別 =====
 
 /** Dialog Store 的完整型別 */

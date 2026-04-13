@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug } from 'lucide-react';
+import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useCalendarSyncStore from '../store/useCalendarSyncStore';
+import useUndoStore from '../store/useUndoStore';
 import Sidebar from './Sidebar';
 
 /**
@@ -28,6 +29,33 @@ const MainLayout = ({ children }) => {
         isConnected, isSyncing, lastSyncAt, error,
         connect, disconnect, syncAll
     } = useCalendarSyncStore();
+
+    // ── Undo / Redo 狀態 ──
+    const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndoStore();
+    const lastUndoLabel = undoStack.length > 0 ? undoStack[undoStack.length - 1].label : '';
+    const lastRedoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : '';
+
+    // 全域鍵盤快捷鍵：Ctrl+Z (上一步) / Ctrl+Shift+Z 或 Ctrl+Y (下一步)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMac = navigator.platform.toLowerCase().includes('mac');
+            const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+            // 如果用戶正在輸入框內輸入，不觸發快捷鍵
+            const target = e.target as HTMLElement;
+            const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            if (isEditable) return;
+
+            if (ctrlOrCmd && !e.shiftKey && e.key === 'z') {
+                e.preventDefault();
+                if (canUndo()) undo();
+            } else if (ctrlOrCmd && (e.shiftKey && e.key === 'z' || e.key === 'y')) {
+                e.preventDefault();
+                if (canRedo()) redo();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo, canUndo, canRedo]);
 
     // 同步相對時間（每 30 秒更新）
     const [relativeTime, setRelativeTime] = useState(getRelativeTime(lastSyncAt));
@@ -119,6 +147,38 @@ const MainLayout = ({ children }) => {
                                         >
                                             <CalendarDays size={13} />
                                             <span className="hidden md:inline">月曆</span>
+                                        </button>
+                                    </div>
+
+                                    {/* ── Undo / Redo 按鈕組 ── */}
+                                    <div className="flex items-center gap-0.5 ml-1 pl-3 border-l border-slate-200">
+                                        {/* 上一步按鈕 */}
+                                        <button
+                                            id="btn-undo"
+                                            onClick={undo}
+                                            disabled={!canUndo()}
+                                            title={canUndo() ? `上一步：${lastUndoLabel}\u000aCtrl+Z` : '沒有可撤銷的操作'}
+                                            className={`p-1 rounded transition-all ${
+                                                canUndo()
+                                                    ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 cursor-pointer'
+                                                    : 'text-slate-300 cursor-not-allowed'
+                                            }`}
+                                        >
+                                            <Undo2 size={15} />
+                                        </button>
+                                        {/* 下一步按鈕 */}
+                                        <button
+                                            id="btn-redo"
+                                            onClick={redo}
+                                            disabled={!canRedo()}
+                                            title={canRedo() ? `下一步：${lastRedoLabel}\u000aCtrl+Shift+Z` : '沒有可重做的操作'}
+                                            className={`p-1 rounded transition-all ${
+                                                canRedo()
+                                                    ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 cursor-pointer'
+                                                    : 'text-slate-300 cursor-not-allowed'
+                                            }`}
+                                        >
+                                            <Redo2 size={15} />
                                         </button>
                                     </div>
                                 </div>
