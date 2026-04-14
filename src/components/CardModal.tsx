@@ -48,14 +48,56 @@ const CardModal = () => {
     const currentItemIdRef = useRef<string | null>(null);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-    const handlePinToHome = () => {
+    const handlePinToHome = async () => {
         if (!editingItem) return;
         setIsMenuOpen(false);
 
-        useDialogStore.getState().showConfirm(
-            '【建立桌面捷徑】\n\n' +
-            '專屬捷徑連結已準備好！（目前網址列已自動更新為此任務）\n請點擊您瀏覽器的「分享」圖示或「系統選單 (三個點)」，然後選擇「加到主畫面」，即可像原生 App 一樣將此任務放在您的手機桌面上快速開啟。'
-        );
+        // 此時 URL 已由 useEffect 自動更新為含此任務的 deep link 網址
+        const shareUrl = window.location.href;
+
+        // 取得任務名稱（用於分享標題）
+        const ws = useBoardStore.getState().workspaces.find(w => w.id === editingItem.workspaceId);
+        const board = ws?.boards.find(b => b.id === editingItem.boardId);
+        const { type, itemId, listId } = editingItem;
+        let taskTitle = 'ProJED 任務';
+        if (type === 'card') {
+            const list = board?.lists.find(l => l.id === listId);
+            const card = list?.cards.find(c => c.id === itemId);
+            if (card?.title) taskTitle = card.title;
+        } else if (type === 'list') {
+            const list = board?.lists.find(l => l.id === itemId);
+            if (list?.title) taskTitle = list.title;
+        }
+
+        // ① 優先使用 Web Share API（手機原生介面，包含「加到主畫面」選項）
+        //    在 PWA 獨立模式下，這是唯一能呼叫系統分享的方式
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `ProJED - ${taskTitle}`,
+                    text: `快速開啟任務：${taskTitle}`,
+                    url: shareUrl,
+                });
+            } catch (err) {
+                // 使用者取消分享屬於正常操作，不需提示錯誤
+                if ((err as Error).name !== 'AbortError') {
+                    console.error('[PWA] 分享失敗:', err);
+                }
+            }
+        } else {
+            // ② 桌面 / 不支援 Web Share API 的環境：自動複製網址到剪貼板並提示
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                useDialogStore.getState().showConfirm(
+                    '【建立桌面捷徑】\n\n' +
+                    '✅ 此任務的專屬連結已複製到剪貼板！\n\n在手機上，請用瀏覽器開啟該連結，再點擊「分享」→「加到主畫面」即可建立捷徑。'
+                );
+            } catch {
+                useDialogStore.getState().showConfirm(
+                    '【建立桌面捷徑】\n\n請複製網址列的網址，在手機上用瀏覽器開啟後，點擊「分享」→「加到主畫面」建立捷徑。'
+                );
+            }
+        }
     };
     // ─────────────────────────────────────────────────────────────────
 
