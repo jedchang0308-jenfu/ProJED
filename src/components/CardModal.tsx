@@ -40,8 +40,9 @@ const CardModal = () => {
     const [activeChecklistItem, setActiveChecklistItem] = useState<any>(null);
 
     // ─── 日期輸入緩衝層 ────────────────────────────────────────────────
-    // 設計意圖：日期 input 是「受控輸入」，若直接綁定 store 的值，
-    // 則每次 onChange → store 更新 → 元件重渲染 → 輸入框失焦（跳掉）。
+    // ─── 日期輸入緩衝層 ──────────────────────────────────────────────────
+    // 設計意圖：日期 input 是「受控輸入」，若直接綁定 store 的値，
+    // 則每次 onChange → store 更新 → 元件重渲染 → 輸入框失焦（跳掌）。
     // 解法：用 local state 作為緩衝，onBlur 時才寫入 store。
     const [localStartDate, setLocalStartDate] = useState('');
     const [localEndDate, setLocalEndDate] = useState('');
@@ -52,14 +53,14 @@ const CardModal = () => {
         if (!editingItem) return;
         setIsMenuOpen(false);
 
-        // 此時 URL 已由 useEffect 自動更新為含此任務的 deep link 網址
+        // URL is already updated to deep-link by the useEffect above
         const shareUrl = window.location.href;
 
-        // 取得任務名稱（用於分享標題）
+        // Get task name for share title
         const ws = useBoardStore.getState().workspaces.find(w => w.id === editingItem.workspaceId);
         const board = ws?.boards.find(b => b.id === editingItem.boardId);
         const { type, itemId, listId } = editingItem;
-        let taskTitle = 'ProJED 任務';
+        let taskTitle = 'ProJED';
         if (type === 'card') {
             const list = board?.lists.find(l => l.id === listId);
             const card = list?.cards.find(c => c.id === itemId);
@@ -69,32 +70,50 @@ const CardModal = () => {
             if (list?.title) taskTitle = list.title;
         }
 
-        // ① 優先使用 Web Share API（手機原生介面，包含「加到主畫面」選項）
-        //    在 PWA 獨立模式下，這是唯一能呼叫系統分享的方式
-        if (navigator.share) {
+        // Detect environment
+        const isAndroid = /android/i.test(navigator.userAgent);
+        const isStandalone =
+            window.matchMedia('(display-mode: standalone)').matches ||
+            (navigator as any).standalone === true;
+
+        if (isAndroid && isStandalone) {
+            // Android PWA standalone mode:
+            // Android Share Sheet does NOT include "Add to Home Screen".
+            // Solution: open URL in Chrome browser tab so user can use Chrome menu.
+            window.open(shareUrl, '_blank');
+            useDialogStore.getState().showConfirm(
+                '【建立桌面捷徑 Android】\n\n' +
+                '已在 Chrome 中開啟此任務！\n\n請依以下步驟建立捷徑：\n' +
+                '1️⃣ 切換到剛開啟的 Chrome 標籤\n' +
+                '2️⃣ 點右上角「‹：›」選單\n' +
+                '3️⃣ 選「加到主畫面」→「新增」\n\n' +
+                '完成！之後就能從桌面直接開啟此任務。'
+            );
+        } else if (navigator.share) {
+            // iOS PWA (share sheet includes "Add to Home Screen")
+            // or any browser supporting Web Share API
             try {
                 await navigator.share({
-                    title: `ProJED - ${taskTitle}`,
-                    text: `快速開啟任務：${taskTitle}`,
+                    title: 'ProJED — ' + taskTitle,
                     url: shareUrl,
                 });
             } catch (err) {
-                // 使用者取消分享屬於正常操作，不需提示錯誤
                 if ((err as Error).name !== 'AbortError') {
-                    console.error('[PWA] 分享失敗:', err);
+                    console.error('[PWA] share failed:', err);
                 }
             }
         } else {
-            // ② 桌面 / 不支援 Web Share API 的環境：自動複製網址到剪貼板並提示
+            // Desktop browser: copy link to clipboard
             try {
                 await navigator.clipboard.writeText(shareUrl);
                 useDialogStore.getState().showConfirm(
                     '【建立桌面捷徑】\n\n' +
-                    '✅ 此任務的專屬連結已複製到剪貼板！\n\n在手機上，請用瀏覽器開啟該連結，再點擊「分享」→「加到主畫面」即可建立捷徑。'
+                    '✅ 此任務的連結已複製！\n' +
+                    '在手機上用 Chrome 貼上開啟，再點「‹：›」→「加到主畫面」即可。'
                 );
             } catch {
                 useDialogStore.getState().showConfirm(
-                    '【建立桌面捷徑】\n\n請複製網址列的網址，在手機上用瀏覽器開啟後，點擊「分享」→「加到主畫面」建立捷徑。'
+                    '【建立桌面捷徑】\n\n請複製網址列的網址，在手機 Chrome 開啟後點「加到主畫面」建立捷徑。'
                 );
             }
         }
