@@ -21,8 +21,11 @@
     /* --- 輸出控制 (Vite 負責打包，TS 只做型別檢查) --- */
     "noEmit": true,
 
+    /* --- vite-plugin-pwa 虛擬模組型別支援 --- */
+    "types": ["vite-plugin-pwa/client"]
 
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "_legacy_v2"]
 }
+

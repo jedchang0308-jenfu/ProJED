@@ -11,7 +11,7 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
@@ -29,6 +29,7 @@ import CalendarView from './components/CalendarView';
 import RecycleBinView from './components/RecycleBinView';
 import CardModal from './components/CardModal';
 import GlobalDialog from './components/GlobalDialog';
+import UpdateToast from './components/UpdateToast';
 
 /**
  * AppContent — 主應用內容（已通過 AuthGate 認證）
@@ -163,9 +164,13 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthGate>
-      <AppContent />
-    </AuthGate>
+    <>
+      <AuthGate>
+        <AppContent />
+      </AuthGate>
+      {/* PWA 更新通知：放在最外層，確保永遠可見 */}
+      <UpdateToast />
+    </>
   );
 }
 
