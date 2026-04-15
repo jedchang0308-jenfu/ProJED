@@ -22,20 +22,7 @@ export default defineConfig({
         clientsClaim: true,
       },
       // PWA manifest：讓 App 在手機桌面上看起來像原生 App
-      manifest: {
-        name: 'ProJED 專案管理系統',
-        short_name: 'ProJED',
-        description: '個人專案管理：看板、甘特圖、月曆視圖整合系統',
-        theme_color: '#6366f1',
-        background_color: '#1e293b',
-        display: 'standalone',
-        start_url: '/',
-        icons: [
-          {
-            src: '/icons/icon-512.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
+      manifest: false,
           {
             src: '/icons/icon-512.png',
             sizes: '512x512',
