@@ -77,18 +77,36 @@ const CardModal = () => {
             (navigator as any).standalone === true;
 
         if (isAndroid && isStandalone) {
-            // Android PWA standalone mode:
-            // Android Share Sheet does NOT include "Add to Home Screen".
-            // Solution: open URL in Chrome browser tab so user can use Chrome menu.
-            window.open(shareUrl, '_blank');
+            // Android Chrome PWA 安裝後，無法再透過選單將不同網址新增為桌面捷徑
+            // 因此改為自動呼叫分享選單，並告知使用者此限制
             useDialogStore.getState().showConfirm(
-                '【建立桌面捷徑 Android】\n\n' +
-                '已在 Chrome 中開啟此任務！\n\n請依以下步驟建立捷徑：\n' +
-                '1️⃣ 切換到剛開啟的 Chrome 標籤\n' +
-                '2️⃣ 點右上角「‹：›」選單\n' +
-                '3️⃣ 選「加到主畫面」→「新增」\n\n' +
-                '完成！之後就能從桌面直接開啟此任務。'
+                '【Android PWA 系統限制】\n\n' +
+                '因為您的手機已安裝 ProJED App，Android 系統無法重複將特定的任務建立為桌面捷徑（圖示）。\n\n' +
+                '您可以點擊下方的系統「分享」按鈕，將任務連結傳送到 LINE 或儲存至 Keep 備忘錄中！'
             );
+            if (navigator.share) {
+                setTimeout(async () => {
+                    try {
+                        await navigator.share({
+                            title: 'ProJED — ' + taskTitle,
+                            url: shareUrl,
+                        });
+                    } catch (err) {
+                        if ((err as Error).name !== 'AbortError') {
+                            console.error('[PWA] share failed:', err);
+                        }
+                    }
+                }, 500); // 讓 Alert 彈窗先出現，再呼叫分享
+            } else {
+                 try {
+                     await navigator.clipboard.writeText(shareUrl);
+                     setTimeout(() => {
+                         useDialogStore.getState().showConfirm('✅ 任務連結已複製到剪貼板！');
+                     }, 500);
+                 } catch {
+                     // ignore
+                 }
+            }
         } else if (navigator.share) {
             // iOS PWA (share sheet includes "Add to Home Screen")
             // or any browser supporting Web Share API
