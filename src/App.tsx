@@ -98,6 +98,29 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, [user?.uid]);
 
+  // ===== 快取狀態安全檢查 (Hydration Validation) =====
+  useEffect(() => {
+    if (workspaces.length === 0 || !activeWorkspaceId) return;
+
+    const wsExists = workspaces.find(w => w.id === activeWorkspaceId);
+    if (!wsExists) {
+        console.warn('[Cache] Active workspace not found, resetting...');
+        useBoardStore.getState().setActiveWorkspace(null);
+        useBoardStore.getState().setActiveBoard(null);
+        useBoardStore.getState().setView('home');
+        return;
+    }
+
+    if (activeBoardId) {
+        const boardExists = wsExists.boards.find(b => b.id === activeBoardId);
+        if (!boardExists) {
+            console.warn('[Cache] Active board not found, resetting...');
+            useBoardStore.getState().setActiveBoard(null);
+            useBoardStore.getState().setView('home');
+        }
+    }
+  }, [workspaces, activeWorkspaceId, activeBoardId]);
+
   // ===== 看板切換時清理無效依賴 =====
   useEffect(() => {
     if (activeWorkspaceId && activeBoardId) {

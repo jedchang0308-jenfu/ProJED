@@ -212,13 +212,22 @@ const getUserId = (): string => {
 
 
 
-// ===== 本機視圖持久化輔助函式 =====
-// 設計意圖：記住用戶上次的視圖位置，頁面重載時自動恢復
+// ===== 本機視圖與狀態持久化輔助函式 =====
 const VIEW_STORAGE_KEY = 'projed-last-view';
+const WS_STORAGE_KEY = 'projed-last-ws';
+const BOARD_STORAGE_KEY = 'projed-last-board';
+const MODAL_STORAGE_KEY = 'projed-last-modal';
+
+const safeSetItem = (key, value) => {
+    try {
+        if (value === null || value === undefined) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+    } catch { /* ignore */ }
+};
+
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        // home / recycle_bin 不視為「可恢復的工作視圖」，重載後回到 home
         if (stored && ['list', 'board', 'gantt', 'calendar'].includes(stored)) {
             return stored as import('../types').ViewMode;
         }
@@ -226,15 +235,31 @@ const getStoredView = () => {
     return 'home' as import('../types').ViewMode;
 };
 
+const getStoredId = (key) => {
+    try { return localStorage.getItem(key) || null; } catch { return null; }
+};
+
+const getStoredModal = () => {
+    try {
+        if (typeof window !== 'undefined' && window.location.search.includes('modal=')) {
+            // 如果網址有 Deep link，優先從網址讀取（放行給 App.tsx 處理），不要讀取快取的 modal
+            return null;
+        }
+        const stored = localStorage.getItem(MODAL_STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return null;
+};
+
 const useBoardStore = create<BoardStore>()(
     (set, get) => ({
         workspaces: [],
-        activeWorkspaceId: null,
-        activeBoardId: null,
+        activeWorkspaceId: getStoredId(WS_STORAGE_KEY),
+        activeBoardId: getStoredId(BOARD_STORAGE_KEY),
         // 初始化時從 localStorage 讀取上次的視圖（僅工作視圖，首次或非工作視圖則為 home）
         currentView: getStoredView(),
         isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
-        editingItem: null,
+        editingItem: getStoredModal(),
         statusFilters: {
             todo: true,
             delayed: true,
@@ -246,8 +271,14 @@ const useBoardStore = create<BoardStore>()(
 
         // ===== 基本 setters =====
         setWorkspaces: (workspaces) => set({ workspaces }),
-        setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
-        setActiveBoard: (id) => set({ activeBoardId: id }),
+        setActiveWorkspace: (id) => {
+            safeSetItem(WS_STORAGE_KEY, id);
+            set({ activeWorkspaceId: id });
+        },
+        setActiveBoard: (id) => {
+            safeSetItem(BOARD_STORAGE_KEY, id);
+            set({ activeBoardId: id });
+        },
         setView: (view) => {
             // 設計意圖：切換視圖時同步寫入 localStorage，記住工作位置
             try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
