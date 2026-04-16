@@ -51,8 +51,8 @@ export default function AuthGate({ children }: AuthGateProps) {
         <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-10 max-w-md w-full mx-4 shadow-2xl">
           {/* Logo 與標題 */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-500/25">
-              <span className="text-2xl font-bold text-white">P</span>
+            <div className="w-16 h-16 rounded-2xl mx-auto mb-4 overflow-hidden shadow-lg shadow-blue-500/25 border border-slate-700/50">
+              <img src="/icons/icon-512.png" alt="ProJED Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">ProJED</h1>
             <p className="text-slate-400 text-sm">專案管理，從登入開始</p>
