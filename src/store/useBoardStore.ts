@@ -627,27 +627,35 @@ const useBoardStore = create<BoardStore>()(
         },
 
         // ===== Navigation =====
-        showHome: () => set({
-            activeBoardId: null,
-            currentView: 'home',
-            editingItem: null
-        }),
-
-        openModal: (type, itemId, listId, extra = {}) => {
-            const { activeWorkspaceId, activeBoardId } = get();
+        showHome: () => {
+            safeSetItem(BOARD_STORAGE_KEY, null);
+            safeSetItem(VIEW_STORAGE_KEY, 'home');
+            safeSetItem(MODAL_STORAGE_KEY, null);
             set({
-                editingItem: {
-                    type,
-                    itemId,
-                    listId,
-                    boardId: activeBoardId || '',
-                    workspaceId: activeWorkspaceId || '',
-                    ...extra
-                }
+                activeBoardId: null,
+                currentView: 'home',
+                editingItem: null
             });
         },
 
-        closeModal: () => set({ editingItem: null }),
+        openModal: (type, itemId, listId, extra = {}) => {
+            const { activeWorkspaceId, activeBoardId } = get();
+            const newItem = {
+                type,
+                itemId,
+                listId,
+                boardId: activeBoardId || '',
+                workspaceId: activeWorkspaceId || '',
+                ...extra
+            };
+            safeSetItem(MODAL_STORAGE_KEY, JSON.stringify(newItem));
+            set({ editingItem: newItem });
+        },
+
+        closeModal: () => {
+            safeSetItem(MODAL_STORAGE_KEY, null);
+            set({ editingItem: null });
+        },
 
         // ===== Card CRUD =====
         updateCard: (wsId, bId, lId, cId, updates) => {
@@ -740,6 +748,9 @@ const useBoardStore = create<BoardStore>()(
             if (board) {
                 // 切換看板時清空 Undo/Redo 堆疊，避免跨看板的操作紀錄混用
                 useUndoStore.getState().clear();
+                safeSetItem(WS_STORAGE_KEY, workspaceId);
+                safeSetItem(BOARD_STORAGE_KEY, boardId);
+                safeSetItem(VIEW_STORAGE_KEY, 'board');
                 set({
                     activeWorkspaceId: workspaceId,
                     activeBoardId: boardId,
