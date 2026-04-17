@@ -22,20 +22,8 @@ export default defineConfig({
         clientsClaim: true,
       },
       // PWA manifest：讓 App 在手機桌面上看起來像原生 App
+      // PWA manifest：已關閉，退回 ServiceWorker 模式以支援 Android 多捷徑
       manifest: false,
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
     }),
   ],
 })
