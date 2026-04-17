@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
 import useDialogStore from '../store/useDialogStore';
-import useBoardStore from '../store/useBoardStore';
+import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import List from './List';
 import Card from './Card';
 
@@ -22,7 +22,27 @@ const BoardView = () => {
         </div>
     );
 
-    const activeLists = (board.lists || []).filter(l => !l.isArchived);
+    const activeLists = useMemo(() => {
+        const cascadedDates = calculateCascadedDates(board);
+        return (board.lists || [])
+            .filter(l => !l.isArchived)
+            .map(list => {
+                const computedList = cascadedDates.get(list.id);
+                return {
+                    ...list,
+                    startDate: computedList?.startDate || list.startDate,
+                    endDate: computedList?.endDate || list.endDate,
+                    cards: (list.cards || []).map(card => {
+                        const computedCard = cascadedDates.get(card.id);
+                        return {
+                            ...card,
+                            startDate: computedCard?.startDate || card.startDate,
+                            endDate: computedCard?.endDate || card.endDate,
+                        };
+                    })
+                };
+            });
+    }, [board]);
 
     const statuses = [
         { key: 'todo', label: '進行中', color: 'bg-status-todo' },

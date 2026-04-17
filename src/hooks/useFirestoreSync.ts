@@ -161,6 +161,7 @@ export function useFirestoreSync() {
     const activeWs = useBoardStore.getState().workspaces.find(ws =>
       ws.boards.some(b => b.id === activeBoardId)
     );
+    // 需要等待 workspaces 載入完成才能正確組出 Firestore 路徑
     if (!activeWs) return;
 
     const boardPath = `workspaces/${activeWs.id}/boards/${activeBoardId}`;
@@ -238,7 +239,7 @@ export function useFirestoreSync() {
       unsubCards.current?.();
       unsubDeps.current?.();
     };
-  }, [activeBoardId]);
+  }, [activeBoardId, workspaces.map(ws => ws.id).join(','), workspaces.some(ws => ws.boards.some(b => b.id === activeBoardId))]);
 }
 
 /**

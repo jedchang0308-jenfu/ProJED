@@ -49,7 +49,7 @@ const addWorkingDays = (startDateStr: string, offsetDays: number): string => {
     return current.format('YYYY-MM-DD');
 };
 
-const getWorkingDaysDiff = (startStr: string, endStr: string): number => {
+export const getWorkingDaysDiff = (startStr: string, endStr: string): number => {
     let current = dayjs(startStr);
     const end = dayjs(endStr);
     let diff = 0;
@@ -127,15 +127,41 @@ export const calculateCascadedDates = (board: Board, overriddenDates: Overridden
 
         let currentStartStr = intermediateDates.get(currentId)?.startDate
             || overriddenDates[currentId]?.startDate
-            || currentTask.startDate
-            || dayjs().format('YYYY-MM-DD');
+            || currentTask.startDate;
 
         let currentEndStr = intermediateDates.get(currentId)?.endDate
             || overriddenDates[currentId]?.endDate
-            || currentTask.endDate
-            || dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+            || currentTask.endDate;
 
-        if (!hasAnyDate) {
+        // 判定這項任務在處理自我依賴「之前」，是否擁有任何外力或原本賦予的日期
+        const hadAnyDateInitially = !!(currentStartStr || currentEndStr);
+
+        // Self-Dependencies (設定執行工作天)
+        const selfDeps = board.dependencies.filter(d => d.fromId === currentId && d.toId === currentId);
+        selfDeps.forEach(dep => {
+            const offsetDays = dep.offset || 0;
+            if (dep.fromSide === 'start' && dep.toSide === 'end') {
+                if (currentStartStr && !currentEndStr) {
+                    currentEndStr = addWorkingDays(currentStartStr, offsetDays);
+                } else if (!currentStartStr && currentEndStr) {
+                    currentStartStr = addWorkingDays(currentEndStr, -offsetDays);
+                } else if (currentStartStr && currentEndStr) {
+                    currentEndStr = addWorkingDays(currentStartStr, offsetDays);
+                }
+            } else if (dep.fromSide === 'end' && dep.toSide === 'start') {
+                if (currentEndStr && !currentStartStr) {
+                    currentStartStr = addWorkingDays(currentEndStr, -offsetDays);
+                } else if (!currentEndStr && currentStartStr) {
+                    currentEndStr = addWorkingDays(currentStartStr, offsetDays);
+                } else if (currentStartStr && currentEndStr) {
+                    currentStartStr = addWorkingDays(currentEndStr, -offsetDays);
+                }
+            }
+        });
+
+        // 倘若皆沒有日期或單邊缺失 (且無自我依賴幫忙推算)，則使用安全預設值填補
+        // 但若是該任務從頭到尾都沒有被任何日期機制牽涉到 (hadAnyDateInitially 為假，且依舊沒有被賦予)，則跳過傳播，保持「未排程」
+        if (!currentStartStr && !currentEndStr && !hadAnyDateInitially && selfDeps.length === 0) {
             (edges as typeof board.dependencies).forEach(dep => {
                 const newDegree = inDegree.get(dep.toId)! - 1;
                 inDegree.set(dep.toId, newDegree);
@@ -144,18 +170,16 @@ export const calculateCascadedDates = (board: Board, overriddenDates: Overridden
             continue;
         }
 
-        // Self-Dependencies (設定執行工作天)
-        const selfDeps = board.dependencies.filter(d => d.fromId === currentId && d.toId === currentId);
-        selfDeps.forEach(dep => {
-            const offsetDays = dep.offset || 0;
-            if (dep.fromSide === 'start' && dep.toSide === 'end') {
-                currentEndStr = addWorkingDays(currentStartStr, offsetDays);
-            } else if (dep.fromSide === 'end' && dep.toSide === 'start') {
-                currentStartStr = addWorkingDays(currentEndStr, 1 + offsetDays);
-            }
-        });
+        if (!currentStartStr && !currentEndStr) {
+            currentStartStr = dayjs().format('YYYY-MM-DD');
+            currentEndStr = dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+        } else if (!currentStartStr && currentEndStr) {
+            currentStartStr = dayjs(currentEndStr).subtract(1, 'day').format('YYYY-MM-DD');
+        } else if (currentStartStr && !currentEndStr) {
+            currentEndStr = dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+        }
 
-        intermediateDates.set(currentId, { startDate: currentStartStr, endDate: currentEndStr });
+        intermediateDates.set(currentId, { startDate: currentStartStr!, endDate: currentEndStr! });
 
         // Propagate to successors
         edges.forEach(dep => {
@@ -212,13 +236,22 @@ const getUserId = (): string => {
 
 
 
-// ===== 本機視圖持久化輔助函式 =====
-// 設計意圖：記住用戶上次的視圖位置，頁面重載時自動恢復
+// ===== 本機視圖與狀態持久化輔助函式 =====
 const VIEW_STORAGE_KEY = 'projed-last-view';
+const WS_STORAGE_KEY = 'projed-last-ws';
+const BOARD_STORAGE_KEY = 'projed-last-board';
+const MODAL_STORAGE_KEY = 'projed-last-modal';
+
+const safeSetItem = (key, value) => {
+    try {
+        if (value === null || value === undefined) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+    } catch { /* ignore */ }
+};
+
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        // home / recycle_bin 不視為「可恢復的工作視圖」，重載後回到 home
         if (stored && ['list', 'board', 'gantt', 'calendar'].includes(stored)) {
             return stored as import('../types').ViewMode;
         }
@@ -226,15 +259,31 @@ const getStoredView = () => {
     return 'home' as import('../types').ViewMode;
 };
 
+const getStoredId = (key) => {
+    try { return localStorage.getItem(key) || null; } catch { return null; }
+};
+
+const getStoredModal = () => {
+    try {
+        if (typeof window !== 'undefined' && window.location.search.includes('modal=')) {
+            // 如果網址有 Deep link，優先從網址讀取（放行給 App.tsx 處理），不要讀取快取的 modal
+            return null;
+        }
+        const stored = localStorage.getItem(MODAL_STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return null;
+};
+
 const useBoardStore = create<BoardStore>()(
     (set, get) => ({
         workspaces: [],
-        activeWorkspaceId: null,
-        activeBoardId: null,
+        activeWorkspaceId: getStoredId(WS_STORAGE_KEY),
+        activeBoardId: getStoredId(BOARD_STORAGE_KEY),
         // 初始化時從 localStorage 讀取上次的視圖（僅工作視圖，首次或非工作視圖則為 home）
         currentView: getStoredView(),
         isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
-        editingItem: null,
+        editingItem: getStoredModal(),
         statusFilters: {
             todo: true,
             delayed: true,
@@ -246,8 +295,14 @@ const useBoardStore = create<BoardStore>()(
 
         // ===== 基本 setters =====
         setWorkspaces: (workspaces) => set({ workspaces }),
-        setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
-        setActiveBoard: (id) => set({ activeBoardId: id }),
+        setActiveWorkspace: (id) => {
+            safeSetItem(WS_STORAGE_KEY, id);
+            set({ activeWorkspaceId: id });
+        },
+        setActiveBoard: (id) => {
+            safeSetItem(BOARD_STORAGE_KEY, id);
+            set({ activeBoardId: id });
+        },
         setView: (view) => {
             // 設計意圖：切換視圖時同步寫入 localStorage，記住工作位置
             try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
@@ -596,27 +651,35 @@ const useBoardStore = create<BoardStore>()(
         },
 
         // ===== Navigation =====
-        showHome: () => set({
-            activeBoardId: null,
-            currentView: 'home',
-            editingItem: null
-        }),
-
-        openModal: (type, itemId, listId, extra = {}) => {
-            const { activeWorkspaceId, activeBoardId } = get();
+        showHome: () => {
+            safeSetItem(BOARD_STORAGE_KEY, null);
+            safeSetItem(VIEW_STORAGE_KEY, 'home');
+            safeSetItem(MODAL_STORAGE_KEY, null);
             set({
-                editingItem: {
-                    type,
-                    itemId,
-                    listId,
-                    boardId: activeBoardId || '',
-                    workspaceId: activeWorkspaceId || '',
-                    ...extra
-                }
+                activeBoardId: null,
+                currentView: 'home',
+                editingItem: null
             });
         },
 
-        closeModal: () => set({ editingItem: null }),
+        openModal: (type, itemId, listId, extra = {}) => {
+            const { activeWorkspaceId, activeBoardId } = get();
+            const newItem = {
+                type,
+                itemId,
+                listId,
+                boardId: activeBoardId || '',
+                workspaceId: activeWorkspaceId || '',
+                ...extra
+            };
+            safeSetItem(MODAL_STORAGE_KEY, JSON.stringify(newItem));
+            set({ editingItem: newItem });
+        },
+
+        closeModal: () => {
+            safeSetItem(MODAL_STORAGE_KEY, null);
+            set({ editingItem: null });
+        },
 
         // ===== Card CRUD =====
         updateCard: (wsId, bId, lId, cId, updates) => {
@@ -709,6 +772,9 @@ const useBoardStore = create<BoardStore>()(
             if (board) {
                 // 切換看板時清空 Undo/Redo 堆疊，避免跨看板的操作紀錄混用
                 useUndoStore.getState().clear();
+                safeSetItem(WS_STORAGE_KEY, workspaceId);
+                safeSetItem(BOARD_STORAGE_KEY, boardId);
+                safeSetItem(VIEW_STORAGE_KEY, 'board');
                 set({
                     activeWorkspaceId: workspaceId,
                     activeBoardId: boardId,

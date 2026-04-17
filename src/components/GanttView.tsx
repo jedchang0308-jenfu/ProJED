@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
 import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Filter, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, LayoutList, RefreshCw, GitBranch, Link } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 
 // 方案 B 優化: 行高從 32px 縮減至 28px，增加視覺緊湊感
@@ -47,6 +47,8 @@ const GanttView = () => {
 
     const [mode, setMode] = useState('Month'); // Month, Quarter, Year
     const [ganttFilters, setGanttFilters] = useState({ list: true, card: true, checklist: true });
+    // 依賴關係顯示模式：true = 完整圖方圆點，false = 簡易鏈結符號
+    const [showDependencies, setShowDependencies] = useState(true);
     const [dragState, setDragState] = useState(null); // { type: 'move'|'left'|'right', item, ... }
     const [viewport, setViewport] = useState({ scrollLeft: 0, width: 0 });
     const [hoveredItemId, setHoveredItemId] = useState(null); // { id, type: 'task' }
@@ -80,12 +82,14 @@ const GanttView = () => {
 
     // Flatten data into rows with hierarchy info and calculate date boundaries
     // collapsedIds 作為依賴，收疊的層級將被隙过
-    const { flattenedItems, groups, gridStart, totalUnits } = useMemo(() => {
-        if (!activeBoard) return { flattenedItems: [], groups: { lists: [], cards: [] }, gridStart: DEFAULT_GRID_START, totalUnits: 60 };
+    const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
+        if (!activeBoard) return { flattenedItems: [], groups: { lists: [], cards: [] }, gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
         const items = [];
         const listGroups = [];
         const cardGroups = [];
         let currentRow = 0;
+
+        const cascadedDates = calculateCascadedDates(activeBoard);
 
         let minDate = null;
         let maxDate = null;
@@ -111,11 +115,15 @@ const GanttView = () => {
             const listStartRow = currentRow;
             const isListCollapsed = collapsedIds.has(list.id);
 
-            updateBounds(list.startDate, list.endDate);
+            const computedList = cascadedDates.get(list.id);
+            const listStartDate = computedList?.startDate || list.startDate;
+            const listEndDate = computedList?.endDate || list.endDate;
+
+            updateBounds(listStartDate, listEndDate);
 
             // 列表主項
             if (ganttFilters.list && statusFilters[listStatus]) {
-                items.push({ ...list, type: 'list', row: currentRow++ });
+                items.push({ ...list, type: 'list', row: currentRow++, startDate: listStartDate, endDate: listEndDate });
             }
 
             // 列表收疊時，跳過其下剀所有子項
@@ -128,13 +136,17 @@ const GanttView = () => {
                 const cardStatus = card.status || 'todo';
                 if (!statusFilters[cardStatus]) return;
 
-                updateBounds(card.startDate, card.endDate);
+                const computedCard = cascadedDates.get(card.id);
+                const cardStartDate = computedCard?.startDate || card.startDate;
+                const cardEndDate = computedCard?.endDate || card.endDate;
+
+                updateBounds(cardStartDate, cardEndDate);
 
                 const cardStartRow = currentRow;
                 const isCardCollapsed = collapsedIds.has(card.id);
                 // 卡片主項
                 if (ganttFilters.card) {
-                    items.push({ ...card, type: 'card', row: currentRow++, listId: list.id });
+                    items.push({ ...card, type: 'card', row: currentRow++, listId: list.id, startDate: cardStartDate, endDate: cardEndDate });
                 }
 
                 // 卡片收疊時，跳過待辦清單
@@ -148,7 +160,11 @@ const GanttView = () => {
                                 const cliStatus = cli.status || 'todo';
                                 if (!statusFilters[cliStatus]) return;
 
-                                updateBounds(cli.startDate, cli.endDate);
+                                const computedCli = cascadedDates.get(cli.id);
+                                const cliStartDate = computedCli?.startDate || cli.startDate;
+                                const cliEndDate = computedCli?.endDate || cli.endDate;
+
+                                updateBounds(cliStartDate, cliEndDate);
                                 items.push({
                                     ...cli,
                                     type: 'checklist',
@@ -157,9 +173,11 @@ const GanttView = () => {
                                     cardId: card.id,
                                     checklistId: cl.id,
                                     title: cli.title || '未命名項目',
+                                    startDate: cliStartDate,
+                                    endDate: cliEndDate,
                                     parentCardDates: {
-                                        startDate: card.startDate,
-                                        endDate: card.endDate
+                                        startDate: cardStartDate,
+                                        endDate: cardEndDate
                                     }
                                 });
                             });
@@ -173,8 +191,8 @@ const GanttView = () => {
                         start: cardStartRow,
                         end: cardEndRow,
                         id: card.id,
-                        startDate: card.startDate,
-                        endDate: card.endDate
+                        startDate: cardStartDate,
+                        endDate: cardEndDate
                     });
                 }
             });
@@ -185,8 +203,8 @@ const GanttView = () => {
                     start: listStartRow,
                     end: listEndRow,
                     id: list.id,
-                    startDate: list.startDate,
-                    endDate: list.endDate
+                    startDate: listStartDate,
+                    endDate: listEndDate
                 });
             }
         });
@@ -226,6 +244,7 @@ const GanttView = () => {
             flattenedItems: items,
             groups: { lists: listGroups, cards: cardGroups },
             gridStart: calculatedGridStart,
+            gridEnd: calculatedGridEnd,
             totalUnits: units
         };
     }, [activeBoard, ganttFilters, statusFilters, mode, collapsedIds]);
@@ -770,6 +789,20 @@ const GanttView = () => {
                                 </button>
                             ))}
                         </div>
+
+                        {/* 依賴關係顯示切換 */}
+                        <button
+                            onClick={() => setShowDependencies(prev => !prev)}
+                            title={showDependencies ? '切換為簡易符號模式' : '切換為完整依賴顯示'}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex-shrink-0 ${
+                                showDependencies
+                                    ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm'
+                                    : 'bg-slate-100 border-transparent text-slate-400 hover:text-slate-600'
+                            }`}
+                        >
+                            <GitBranch size={11} />
+                            <span>依賴關係</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -855,7 +888,9 @@ const GanttView = () => {
 
                             {/* Task Bars */}
                             {flattenedItems.map(item => {
-                                const isMilestone = !item.startDate && item.endDate;
+                                // 將 isMilestone 固定為 false，停用菱形里程碑樣式。
+                                // 解決：任務剛建立或僅有截止日時，會變成難以閱讀的 45 度傾斜與 10px 寬度的破圖感。
+                                const isMilestone = false;
                                 let start = item.startDate;
                                 let end = item.endDate;
 
@@ -865,15 +900,26 @@ const GanttView = () => {
                                     end = simulatedDates[item.id].endDate;
                                 }
 
-                                // Fallback for checklist items without dates to make them discoverable
-                                const isUsingFallback = item.type === 'checklist' && !start && !end;
-                                if (isUsingFallback) {
-                                    start = item.parentCardDates?.startDate || dayjs().format('YYYY-MM-DD');
-                                    end = item.parentCardDates?.endDate || dayjs(start).add(1, 'day').format('YYYY-MM-DD');
-                                }
+                                // 當任務完全沒有設定起訖日，也沒有從父層繼承到日期時（真正的未排序狀態）
+                                // 改為「全時段進度條」：充滿整個畫面的進度條
+                                const hasNoDates = !start && !end;
+                                let isInfiniteFallback = false;
 
-                                if (!end) end = dayjs(start || undefined).add(7, 'day').format('YYYY-MM-DD');
-                                if (!start) start = isMilestone ? end : dayjs(end).subtract(3, 'day').format('YYYY-MM-DD');
+                                if (hasNoDates) {
+                                    if (item.type === 'checklist' && item.parentCardDates?.startDate && item.parentCardDates?.endDate) {
+                                        start = item.parentCardDates.startDate;
+                                        end = item.parentCardDates.endDate;
+                                    } else {
+                                        // 擴展到全時段視圖 (從視圖起點到終點)
+                                        start = dayjs(gridStart).format('YYYY-MM-DD');
+                                        end = dayjs(gridEnd).format('YYYY-MM-DD');
+                                        isInfiniteFallback = true;
+                                    }
+                                } else {
+                                    // 只有單邊日期時的安全防呆填補
+                                    if (!end) end = dayjs(start).add(7, 'day').format('YYYY-MM-DD');
+                                    if (!start) start = dayjs(end).subtract(3, 'day').format('YYYY-MM-DD');
+                                }
 
                                 // 視覺層次設計（方案 C 優化版）：
                                 // - 列表 (List):     深色實心底色（status 色 + brightness-75）+ 全白文字
@@ -983,7 +1029,7 @@ const GanttView = () => {
                                             group
                                             ${isMilestone ? 'rotate-45' : 'rounded-[6px] shadow-sm'}
                                             ${baseStyleClass}
-                                            ${isUsingFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''}
+                                            ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''}
                                             z-20
                                             ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}
                                         `}
@@ -1011,7 +1057,7 @@ const GanttView = () => {
                                         )}
 
                                         {/* Resize Handles */}
-                                        {!isMilestone && !isUsingFallback && (
+                                        {!isMilestone && !isInfiniteFallback && (
                                             <>
                                                 <div
                                                     className={`absolute left-0 top-0 bottom-0 w-2 ${isLeftLocked ? 'cursor-not-allowed bg-slate-400/20' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
@@ -1040,16 +1086,24 @@ const GanttView = () => {
                                         {taskDependencies.length > 0 && !isMilestone && (() => {
                                             const leftDeps = [];
                                             const rightDeps = [];
+                                            // 自我依賴（起始日→截止日）的工作天數
+                                            const selfWorkDays = taskDependencies
+                                                .filter(d => d.fromId === item.id && d.toId === item.id && d.fromSide === 'start' && d.toSide === 'end')
+                                                .map(d => d.offset ?? 0);
 
                                             taskDependencies.forEach(dep => {
-                                                // 判斷此任務在「起始」端點扮演的角色
+                                                const isSelf = dep.fromId === dep.toId;
+                                                // 自我依賴的工作天數在 bar 內直接顯示，不需要圧標圓點
+                                                if (isSelf) return;
+
+                                                // 判斷此任務在「起始」端點扉演的角色
                                                 if (dep.fromId === item.id && (dep.fromSide === 'start' || !dep.fromSide)) {
                                                     leftDeps.push({ ...dep, isMarkerSource: true });
                                                 } else if (dep.toId === item.id && (dep.toSide === 'start' || !dep.toSide)) {
                                                     leftDeps.push({ ...dep, isMarkerSource: false });
                                                 }
                                                                          
-                                                // 判斷此任務在「完成」端點扮演的角色
+                                                // 判斷此任務在「完成」端點扉演的角色
                                                 if (dep.fromId === item.id && dep.fromSide === 'end') {
                                                     rightDeps.push({ ...dep, isMarkerSource: true });
                                                 } else if (dep.toId === item.id && dep.toSide === 'end') {
@@ -1059,35 +1113,59 @@ const GanttView = () => {
 
                                             return (
                                                 <>
-                                                    {leftDeps.length > 0 && (
-                                                        <div className="absolute left-[-6px] -top-2 flex gap-0.5 z-40">
-                                                            {leftDeps.map(dep => (
-                                                                <div
-                                                                    key={`dep-l-${dep.id}`}
-                                                                    className={`w-[14px] h-[14px] flex items-center justify-center rounded-full text-[8px] font-bold bg-white transition-all ${dep.isMarkerSource 
-                                                                        ? 'border-2 border-slate-600 text-slate-800' 
-                                                                        : 'border border-slate-200 text-slate-400'}`}
-                                                                    title={dep.isMarkerSource ? `主動前置任務 (編號: ${dep.label})` : `被動後續任務 (編號: ${dep.label})`}
-                                                                >
-                                                                    {dep.label}
-                                                                </div>
-                                                            ))}
+                                                    {/* 自我依賴工作天數標簽：顯示在 bar 內/旁 */}
+                                                    {showDependencies && selfWorkDays.length > 0 && (
+                                                        <div
+                                                            className="absolute right-1 top-1/2 -translate-y-1/2 z-30 pointer-events-none"
+                                                            title={`執行天數：${selfWorkDays[0]} 工作天`}
+                                                        >
+                                                            <span className="px-1 py-0.5 bg-black/20 text-white text-[8px] font-bold rounded whitespace-nowrap truncate">
+                                                                {selfWorkDays[0]} 工作天
+                                                            </span>
                                                         </div>
                                                     )}
-                                                    {rightDeps.length > 0 && (
-                                                        <div className="absolute right-[-6px] -top-2 flex gap-0.5 z-40">
-                                                            {rightDeps.map(dep => (
-                                                                <div
-                                                                    key={`dep-r-${dep.id}`}
-                                                                    className={`w-[14px] h-[14px] flex items-center justify-center rounded-full text-[8px] font-bold bg-white transition-all ${dep.isMarkerSource 
-                                                                        ? 'border-2 border-slate-600 text-slate-800' 
-                                                                        : 'border border-slate-200 text-slate-400'}`}
-                                                                    title={dep.isMarkerSource ? `主動前置任務 (編號: ${dep.label})` : `被動後續任務 (編號: ${dep.label})`}
-                                                                >
-                                                                    {dep.label}
+
+                                                    {showDependencies ? (
+                                                        // 完整顯示：字母圓點
+                                                        <>
+                                                            {leftDeps.length > 0 && (
+                                                                <div className="absolute left-[-6px] -top-2 flex gap-0.5 z-40">
+                                                                    {leftDeps.map(dep => (
+                                                                        <div
+                                                                            key={`dep-l-${dep.id}`}
+                                                                            className={`w-[14px] h-[14px] flex items-center justify-center rounded-full text-[8px] font-bold bg-white transition-all ${dep.isMarkerSource 
+                                                                                ? 'border-2 border-slate-600 text-slate-800' 
+                                                                                : 'border border-slate-200 text-slate-400'}`}
+                                                                            title={dep.isMarkerSource ? `前置任務 (編號: ${dep.label})` : `後置任務 (編號: ${dep.label})`}
+                                                                        >
+                                                                            {dep.label}
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
-                                                            ))}
-                                                        </div>
+                                                            )}
+                                                            {rightDeps.length > 0 && (
+                                                                <div className="absolute right-[-6px] -top-2 flex gap-0.5 z-40">
+                                                                    {rightDeps.map(dep => (
+                                                                        <div
+                                                                            key={`dep-r-${dep.id}`}
+                                                                            className={`w-[14px] h-[14px] flex items-center justify-center rounded-full text-[8px] font-bold bg-white transition-all ${dep.isMarkerSource 
+                                                                                ? 'border-2 border-slate-600 text-slate-800' 
+                                                                                : 'border border-slate-200 text-slate-400'}`}
+                                                                            title={dep.isMarkerSource ? `前置任務 (編號: ${dep.label})` : `後置任務 (編號: ${dep.label})`}
+                                                                        >
+                                                                            {dep.label}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        // 簡易模式：有任何外部依賴就顯示一個小鏈結圖示
+                                                        (leftDeps.length > 0 || rightDeps.length > 0) && (
+                                                            <div className="absolute left-[-6px] -top-2 z-40 text-amber-400/80" title="此任務具有依賴關係">
+                                                                <Link size={10} />
+                                                            </div>
+                                                        )
                                                     )}
                                                 </>
                                             );
@@ -1149,7 +1227,7 @@ const GanttView = () => {
                                                                     : `${colorMap[status]?.checklist.match(/text-status-\w+/)?.[0] || 'text-status-todo'} opacity-80`}   // 待办淡色
                                                         `}
                                                     >
-                                                        {item.title} {isUsingFallback && "(尚未設定日期)"}
+                                                        {item.title} {isInfiniteFallback && "(尚未設定日期)"}
                                                     </div>
                                                 );
                                             }

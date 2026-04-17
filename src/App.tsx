@@ -98,7 +98,7 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, [user?.uid]);
 
-  // ===== 看板切換時清理無效依賴 =====
+    // ===== 看板切換時清理無效依賴 =====
   useEffect(() => {
     if (activeWorkspaceId && activeBoardId) {
       useBoardStore.getState().cleanBoardDependencies(activeWorkspaceId, activeBoardId);

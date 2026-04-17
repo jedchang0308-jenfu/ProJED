@@ -12,7 +12,7 @@ import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, Lock, MoreHor
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
-import useBoardStore from '../store/useBoardStore';
+import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import dayjs from 'dayjs';
 import SortableChecklistItem from './SortableChecklistItem';
 import useDialogStore from '../store/useDialogStore';
@@ -40,8 +40,9 @@ const CardModal = () => {
     const [activeChecklistItem, setActiveChecklistItem] = useState<any>(null);
 
     // ─── 日期輸入緩衝層 ────────────────────────────────────────────────
-    // 設計意圖：日期 input 是「受控輸入」，若直接綁定 store 的值，
-    // 則每次 onChange → store 更新 → 元件重渲染 → 輸入框失焦（跳掉）。
+    // ─── 日期輸入緩衝層 ──────────────────────────────────────────────────
+    // 設計意圖：日期 input 是「受控輸入」，若直接綁定 store 的値，
+    // 則每次 onChange → store 更新 → 元件重渲染 → 輸入框失焦（跳掌）。
     // 解法：用 local state 作為緩衝，onBlur 時才寫入 store。
     const [localStartDate, setLocalStartDate] = useState('');
     const [localEndDate, setLocalEndDate] = useState('');
@@ -52,14 +53,14 @@ const CardModal = () => {
         if (!editingItem) return;
         setIsMenuOpen(false);
 
-        // 此時 URL 已由 useEffect 自動更新為含此任務的 deep link 網址
+        // URL is already updated to deep-link by the useEffect above
         const shareUrl = window.location.href;
 
-        // 取得任務名稱（用於分享標題）
+        // Get task name for share title
         const ws = useBoardStore.getState().workspaces.find(w => w.id === editingItem.workspaceId);
         const board = ws?.boards.find(b => b.id === editingItem.boardId);
         const { type, itemId, listId } = editingItem;
-        let taskTitle = 'ProJED 任務';
+        let taskTitle = 'ProJED';
         if (type === 'card') {
             const list = board?.lists.find(l => l.id === listId);
             const card = list?.cards.find(c => c.id === itemId);
@@ -69,32 +70,68 @@ const CardModal = () => {
             if (list?.title) taskTitle = list.title;
         }
 
-        // ① 優先使用 Web Share API（手機原生介面，包含「加到主畫面」選項）
-        //    在 PWA 獨立模式下，這是唯一能呼叫系統分享的方式
-        if (navigator.share) {
+        // Detect environment
+        const isAndroid = /android/i.test(navigator.userAgent);
+        const isStandalone =
+            window.matchMedia('(display-mode: standalone)').matches ||
+            (navigator as any).standalone === true;
+
+        if (isAndroid && isStandalone) {
+            // Android Chrome PWA 安裝後，無法再透過選單將不同網址新增為桌面捷徑
+            // 因此改為自動呼叫分享選單，並告知使用者此限制
+            useDialogStore.getState().showConfirm(
+                '【Android PWA 系統限制】\n\n' +
+                '因為您的手機已安裝 ProJED App，Android 系統無法重複將特定的任務建立為桌面捷徑（圖示）。\n\n' +
+                '您可以點擊下方的系統「分享」按鈕，將任務連結傳送到 LINE 或儲存至 Keep 備忘錄中！'
+            );
+            if (navigator.share) {
+                setTimeout(async () => {
+                    try {
+                        await navigator.share({
+                            title: 'ProJED — ' + taskTitle,
+                            url: shareUrl,
+                        });
+                    } catch (err) {
+                        if ((err as Error).name !== 'AbortError') {
+                            console.error('[PWA] share failed:', err);
+                        }
+                    }
+                }, 500); // 讓 Alert 彈窗先出現，再呼叫分享
+            } else {
+                 try {
+                     await navigator.clipboard.writeText(shareUrl);
+                     setTimeout(() => {
+                         useDialogStore.getState().showConfirm('✅ 任務連結已複製到剪貼板！');
+                     }, 500);
+                 } catch {
+                     // ignore
+                 }
+            }
+        } else if (navigator.share) {
+            // iOS PWA (share sheet includes "Add to Home Screen")
+            // or any browser supporting Web Share API
             try {
                 await navigator.share({
-                    title: `ProJED - ${taskTitle}`,
-                    text: `快速開啟任務：${taskTitle}`,
+                    title: 'ProJED — ' + taskTitle,
                     url: shareUrl,
                 });
             } catch (err) {
-                // 使用者取消分享屬於正常操作，不需提示錯誤
                 if ((err as Error).name !== 'AbortError') {
-                    console.error('[PWA] 分享失敗:', err);
+                    console.error('[PWA] share failed:', err);
                 }
             }
         } else {
-            // ② 桌面 / 不支援 Web Share API 的環境：自動複製網址到剪貼板並提示
+            // Desktop browser: copy link to clipboard
             try {
                 await navigator.clipboard.writeText(shareUrl);
                 useDialogStore.getState().showConfirm(
                     '【建立桌面捷徑】\n\n' +
-                    '✅ 此任務的專屬連結已複製到剪貼板！\n\n在手機上，請用瀏覽器開啟該連結，再點擊「分享」→「加到主畫面」即可建立捷徑。'
+                    '✅ 此任務的連結已複製！\n' +
+                    '在手機上用 Chrome 貼上開啟，再點「‹：›」→「加到主畫面」即可。'
                 );
             } catch {
                 useDialogStore.getState().showConfirm(
-                    '【建立桌面捷徑】\n\n請複製網址列的網址，在手機上用瀏覽器開啟後，點擊「分享」→「加到主畫面」建立捷徑。'
+                    '【建立桌面捷徑】\n\n請複製網址列的網址，在手機 Chrome 開啟後點「加到主畫面」建立捷徑。'
                 );
             }
         }
@@ -152,28 +189,32 @@ const CardModal = () => {
         const { type, listId, cardId, checklistId } = editingItem || {};
         let foundStart = '', foundEnd = '';
         if (board) {
+            // 動態拉取依賴引擎算出的實際預測排程
+            const cascadedDates = calculateCascadedDates(board);
+            const computed = cascadedDates.get(editingItemId);
+
             if (type === 'list') {
                 const l = board.lists.find(l => l.id === editingItemId);
-                foundStart = l?.startDate || '';
-                foundEnd   = l?.endDate   || '';
+                foundStart = computed?.startDate || l?.startDate || '';
+                foundEnd   = computed?.endDate   || l?.endDate   || '';
             } else if (type === 'card') {
                 const l = board.lists.find(l => l.id === listId);
                 const c = l?.cards.find(c => c.id === editingItemId);
-                foundStart = c?.startDate || '';
-                foundEnd   = c?.endDate   || '';
+                foundStart = computed?.startDate || c?.startDate || '';
+                foundEnd   = computed?.endDate   || c?.endDate   || '';
             } else if (type === 'checklistitem') {
                 const l  = board.lists.find(l => l.id === listId);
                 const c  = l?.cards.find(c => c.id === cardId);
                 const cl = c?.checklists?.find(cl => cl.id === checklistId);
                 const cli = cl?.items?.find(i => i.id === editingItemId);
-                foundStart = cli?.startDate || '';
-                foundEnd   = cli?.endDate   || '';
+                foundStart = computed?.startDate || cli?.startDate || '';
+                foundEnd   = computed?.endDate   || cli?.endDate   || '';
             }
         }
         setLocalStartDate(foundStart);
         setLocalEndDate(foundEnd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editingItemId]);
+    }, [editingItemId, workspaces]);
 
     if (!editingItem) return null;
 
