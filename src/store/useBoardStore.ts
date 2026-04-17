@@ -49,7 +49,7 @@ const addWorkingDays = (startDateStr: string, offsetDays: number): string => {
     return current.format('YYYY-MM-DD');
 };
 
-const getWorkingDaysDiff = (startStr: string, endStr: string): number => {
+export const getWorkingDaysDiff = (startStr: string, endStr: string): number => {
     let current = dayjs(startStr);
     const end = dayjs(endStr);
     let diff = 0;
@@ -127,15 +127,41 @@ export const calculateCascadedDates = (board: Board, overriddenDates: Overridden
 
         let currentStartStr = intermediateDates.get(currentId)?.startDate
             || overriddenDates[currentId]?.startDate
-            || currentTask.startDate
-            || dayjs().format('YYYY-MM-DD');
+            || currentTask.startDate;
 
         let currentEndStr = intermediateDates.get(currentId)?.endDate
             || overriddenDates[currentId]?.endDate
-            || currentTask.endDate
-            || dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+            || currentTask.endDate;
 
-        if (!hasAnyDate) {
+        // 判定這項任務在處理自我依賴「之前」，是否擁有任何外力或原本賦予的日期
+        const hadAnyDateInitially = !!(currentStartStr || currentEndStr);
+
+        // Self-Dependencies (設定執行工作天)
+        const selfDeps = board.dependencies.filter(d => d.fromId === currentId && d.toId === currentId);
+        selfDeps.forEach(dep => {
+            const offsetDays = dep.offset || 0;
+            if (dep.fromSide === 'start' && dep.toSide === 'end') {
+                if (currentStartStr && !currentEndStr) {
+                    currentEndStr = addWorkingDays(currentStartStr, offsetDays);
+                } else if (!currentStartStr && currentEndStr) {
+                    currentStartStr = addWorkingDays(currentEndStr, -offsetDays);
+                } else if (currentStartStr && currentEndStr) {
+                    currentEndStr = addWorkingDays(currentStartStr, offsetDays);
+                }
+            } else if (dep.fromSide === 'end' && dep.toSide === 'start') {
+                if (currentEndStr && !currentStartStr) {
+                    currentStartStr = addWorkingDays(currentEndStr, -offsetDays);
+                } else if (!currentEndStr && currentStartStr) {
+                    currentEndStr = addWorkingDays(currentStartStr, offsetDays);
+                } else if (currentStartStr && currentEndStr) {
+                    currentStartStr = addWorkingDays(currentEndStr, -offsetDays);
+                }
+            }
+        });
+
+        // 倘若皆沒有日期或單邊缺失 (且無自我依賴幫忙推算)，則使用安全預設值填補
+        // 但若是該任務從頭到尾都沒有被任何日期機制牽涉到 (hadAnyDateInitially 為假，且依舊沒有被賦予)，則跳過傳播，保持「未排程」
+        if (!currentStartStr && !currentEndStr && !hadAnyDateInitially && selfDeps.length === 0) {
             (edges as typeof board.dependencies).forEach(dep => {
                 const newDegree = inDegree.get(dep.toId)! - 1;
                 inDegree.set(dep.toId, newDegree);
@@ -144,18 +170,16 @@ export const calculateCascadedDates = (board: Board, overriddenDates: Overridden
             continue;
         }
 
-        // Self-Dependencies (設定執行工作天)
-        const selfDeps = board.dependencies.filter(d => d.fromId === currentId && d.toId === currentId);
-        selfDeps.forEach(dep => {
-            const offsetDays = dep.offset || 0;
-            if (dep.fromSide === 'start' && dep.toSide === 'end') {
-                currentEndStr = addWorkingDays(currentStartStr, offsetDays);
-            } else if (dep.fromSide === 'end' && dep.toSide === 'start') {
-                currentStartStr = addWorkingDays(currentEndStr, 1 + offsetDays);
-            }
-        });
+        if (!currentStartStr && !currentEndStr) {
+            currentStartStr = dayjs().format('YYYY-MM-DD');
+            currentEndStr = dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+        } else if (!currentStartStr && currentEndStr) {
+            currentStartStr = dayjs(currentEndStr).subtract(1, 'day').format('YYYY-MM-DD');
+        } else if (currentStartStr && !currentEndStr) {
+            currentEndStr = dayjs(currentStartStr).add(1, 'day').format('YYYY-MM-DD');
+        }
 
-        intermediateDates.set(currentId, { startDate: currentStartStr, endDate: currentEndStr });
+        intermediateDates.set(currentId, { startDate: currentStartStr!, endDate: currentEndStr! });
 
         // Propagate to successors
         edges.forEach(dep => {

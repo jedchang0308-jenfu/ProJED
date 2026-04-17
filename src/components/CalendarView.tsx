@@ -19,7 +19,7 @@
  *   - 同一天可能有多條任務，用 `lane` (行道) 做垂直堆疊
  */
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import useBoardStore from '../store/useBoardStore';
+import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
 import dayjs from 'dayjs';
 import {
@@ -200,13 +200,20 @@ const CalendarView = () => {
     // ── 資料扁平化（與 GanttView 一致）──────────────────
     const flattenedItems = useMemo(() => {
         if (!activeBoard) return [];
+        const cascadedDates = calculateCascadedDates(activeBoard);
         const items = [];
         activeBoard.lists.forEach(list => {
             if (list.isArchived) return;
             const listStatus = list.status || 'todo';
             const isListCollapsed = collapsedIds.has(list.id);
             if (ganttFilters.list && statusFilters[listStatus]) {
-                items.push({ ...list, type: 'list' });
+                const computed = cascadedDates.get(list.id);
+                items.push({ 
+                    ...list, 
+                    type: 'list',
+                    startDate: computed?.startDate || list.startDate,
+                    endDate: computed?.endDate || list.endDate
+                });
             }
             if (isListCollapsed) return;
             (list.cards || []).forEach(card => {
@@ -215,7 +222,14 @@ const CalendarView = () => {
                 if (!statusFilters[cardStatus]) return;
                 const isCardCollapsed = collapsedIds.has(card.id);
                 if (ganttFilters.card) {
-                    items.push({ ...card, type: 'card', listId: list.id });
+                    const computed = cascadedDates.get(card.id);
+                    items.push({ 
+                        ...card, 
+                        type: 'card', 
+                        listId: list.id,
+                        startDate: computed?.startDate || card.startDate,
+                        endDate: computed?.endDate || card.endDate
+                    });
                 }
                 if (!isCardCollapsed && ganttFilters.checklist) {
                     (card.checklists || []).forEach(cl => {
@@ -224,10 +238,13 @@ const CalendarView = () => {
                             if (cli.isArchived) return;
                             const cliStatus = cli.status || 'todo';
                             if (!statusFilters[cliStatus]) return;
+                            const computed = cascadedDates.get(cli.id);
                             items.push({
                                 ...cli, type: 'checklist',
                                 listId: list.id, cardId: card.id, checklistId: cl.id,
                                 title: cli.title || '未命名項目',
+                                startDate: computed?.startDate || cli.startDate,
+                                endDate: computed?.endDate || cli.endDate
                             });
                         });
                     });

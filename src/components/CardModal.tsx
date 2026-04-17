@@ -12,7 +12,7 @@ import { X, Calendar, CheckSquare, List as ListIcon, Trash2, Plus, Lock, MoreHor
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
-import useBoardStore from '../store/useBoardStore';
+import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
 import dayjs from 'dayjs';
 import SortableChecklistItem from './SortableChecklistItem';
 import useDialogStore from '../store/useDialogStore';
@@ -189,28 +189,32 @@ const CardModal = () => {
         const { type, listId, cardId, checklistId } = editingItem || {};
         let foundStart = '', foundEnd = '';
         if (board) {
+            // 動態拉取依賴引擎算出的實際預測排程
+            const cascadedDates = calculateCascadedDates(board);
+            const computed = cascadedDates.get(editingItemId);
+
             if (type === 'list') {
                 const l = board.lists.find(l => l.id === editingItemId);
-                foundStart = l?.startDate || '';
-                foundEnd   = l?.endDate   || '';
+                foundStart = computed?.startDate || l?.startDate || '';
+                foundEnd   = computed?.endDate   || l?.endDate   || '';
             } else if (type === 'card') {
                 const l = board.lists.find(l => l.id === listId);
                 const c = l?.cards.find(c => c.id === editingItemId);
-                foundStart = c?.startDate || '';
-                foundEnd   = c?.endDate   || '';
+                foundStart = computed?.startDate || c?.startDate || '';
+                foundEnd   = computed?.endDate   || c?.endDate   || '';
             } else if (type === 'checklistitem') {
                 const l  = board.lists.find(l => l.id === listId);
                 const c  = l?.cards.find(c => c.id === cardId);
                 const cl = c?.checklists?.find(cl => cl.id === checklistId);
                 const cli = cl?.items?.find(i => i.id === editingItemId);
-                foundStart = cli?.startDate || '';
-                foundEnd   = cli?.endDate   || '';
+                foundStart = computed?.startDate || cli?.startDate || '';
+                foundEnd   = computed?.endDate   || cli?.endDate   || '';
             }
         }
         setLocalStartDate(foundStart);
         setLocalEndDate(foundEnd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editingItemId]);
+    }, [editingItemId, workspaces]);
 
     if (!editingItem) return null;
 

@@ -14,12 +14,12 @@
  * 4. 狀態篩選器 + 層級篩選器（複用現有邏輯）
  */
 import React, { useState, useMemo, useEffect } from 'react';
-import useBoardStore from '../store/useBoardStore';
+import useBoardStore, { getWorkingDaysDiff, calculateCascadedDates } from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
 import {
     ChevronDown, ChevronRight, Folder, FileText, Plus,
     GripVertical, AlignLeft, Calendar, Tag, StickyNote, Link,
-    X, Trash2, Edit2, ArrowRight
+    X, Trash2, Edit2, ArrowRight, GitBranch
 } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -45,6 +45,7 @@ const SortableListRow = ({
     dependencySelection,
     onDependencySelect,
     dependencyMarkers,
+    showDependencies,
 }: {
     item: any;
     onClick: (item: any) => void;
@@ -54,6 +55,7 @@ const SortableListRow = ({
     dependencySelection?: { id: string; side: 'start' | 'end'; title: string } | null;
     onDependencySelect?: (id: string, side: 'start' | 'end', title: string) => void;
     dependencyMarkers?: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive', isSelf?: boolean, offset?: number }>>;
+    showDependencies?: boolean;
 }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
@@ -164,20 +166,28 @@ const SortableListRow = ({
                     ) : (
                         <span className="text-[10px] text-slate-200">—</span>
                     )}
+                    {/* 依賴關係顯示：完整模式 vs 簡易符號 */}
                     {(dependencyMarkers?.[`${item.id}_start`] || []).filter(m => !m.isSelf || m.role === 'passive').length > 0 && (
-                        <div className="flex items-center gap-0.5 flex-shrink-0">
-                            {dependencyMarkers![`${item.id}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
-                                m.isSelf ? (
-                                    <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
-                                        {m.offset || 0} 工作天
-                                    </span>
-                                ) : (
-                                    <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
-                                        {m.label}
-                                    </span>
-                                )
-                            ))}
-                        </div>
+                        showDependencies ? (
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                                {dependencyMarkers![`${item.id}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
+                                    m.isSelf ? (
+                                        <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                            {m.offset || 0} 工作天
+                                        </span>
+                                    ) : (
+                                        <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
+                                            {m.label}
+                                        </span>
+                                    )
+                                ))}
+                            </div>
+                        ) : (
+                            /* 簡易符號：一個小鏈結圖示表示此日期由依賴計算 */
+                            <span title="此日期由依賴關係推算" className="flex-shrink-0 text-amber-400/70">
+                                <Link size={9} />
+                            </span>
+                        )
                     )}
                 </div>
                 
@@ -215,20 +225,28 @@ const SortableListRow = ({
                     ) : (
                         <span className="text-[10px] text-slate-200">—</span>
                     )}
+                    {/* 依賴關係顯示：完整模式 vs 簡易符號 */}
                     {(dependencyMarkers?.[`${item.id}_end`] || []).filter(m => !m.isSelf || m.role === 'passive').length > 0 && (
-                        <div className="flex items-center gap-0.5 flex-shrink-0">
-                            {dependencyMarkers![`${item.id}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
-                                m.isSelf ? (
-                                    <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
-                                        {m.offset || 0} 工作天
-                                    </span>
-                                ) : (
-                                    <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
-                                        {m.label}
-                                    </span>
-                                )
-                            ))}
-                        </div>
+                        showDependencies ? (
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                                {dependencyMarkers![`${item.id}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
+                                    m.isSelf ? (
+                                        <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                            {m.offset || 0} 工作天
+                                        </span>
+                                    ) : (
+                                        <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
+                                            {m.label}
+                                        </span>
+                                    )
+                                ))}
+                            </div>
+                        ) : (
+                            /* 簡易符號：一個小鏈結圖示表示此日期由依賴計算 */
+                            <span title="此日期由依賴關係推算" className="flex-shrink-0 text-amber-400/70">
+                                <Link size={9} />
+                            </span>
+                        )
                     )}
                 </div>
                 
@@ -290,6 +308,8 @@ const ListView = () => {
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
     const [activeSortableItem, setActiveSortableItem] = useState<any>(null);
     const [layerFilters, setLayerFilters] = useState({ list: true, card: true, checklist: true });
+    // 依賴關係顯示模式：true = 完整顯示，false = 簡易符號
+    const [showDependencies, setShowDependencies] = useState(true);
     
     // 依賴選取狀態
     const [dependencySelection, setDependencySelection] = useState<{ id: string; side: 'start' | 'end'; title: string } | null>(null);
@@ -345,20 +365,25 @@ const ListView = () => {
         return markers;
     }, [activeBoard?.dependencies]);
 
-    const getTaskTitleFromBoard = (id: string) => {
-        if (!activeBoard) return '未知項目';
+    const getTaskFromBoard = (id: string) => {
+        if (!activeBoard) return null;
         for (const l of activeBoard.lists) {
-            if (l.id === id) return l.title;
+            if (l.id === id) return l;
             for (const c of l.cards) {
-                if (c.id === id) return c.title;
+                if (c.id === id) return c;
                 for (const cl of c.checklists || []) {
                     for (const cli of cl.items || []) {
-                        if (cli.id === id) return (cli as any).title || (cli as any).content || '子項目';
+                        if (cli.id === id) return cli;
                     }
                 }
             }
         }
-        return '未知項目';
+        return null;
+    };
+
+    const getTaskTitleFromBoard = (id: string) => {
+        const t = getTaskFromBoard(id);
+        return t ? ((t as any).title || (t as any).content || '子項目') : '未知項目';
     };
 
     // 狀態列表（供篩選器按鈕使用）
@@ -370,9 +395,9 @@ const ListView = () => {
         { key: 'onhold',    label: '暫緩',   color: 'bg-status-onhold' },
     ] as const;
 
-    // ── 資料扁平化（與 GanttView / CalendarView 邏輯一致）──────────
     const flattenedItems = useMemo(() => {
         if (!activeBoard) return [];
+        const cascadedDates = calculateCascadedDates(activeBoard);
         const items: any[] = [];
         (activeBoard.lists || []).forEach(list => {
             if (list.isArchived) return;
@@ -380,7 +405,13 @@ const ListView = () => {
             const isListCollapsed = collapsedIds.has(list.id);
 
             if (layerFilters.list && statusFilters[listStatus as keyof typeof statusFilters]) {
-                items.push({ ...list, type: 'list' });
+                const computed = cascadedDates.get(list.id);
+                items.push({ 
+                    ...list, 
+                    type: 'list',
+                    startDate: computed?.startDate || list.startDate,
+                    endDate: computed?.endDate || list.endDate
+                });
             }
             if (isListCollapsed) return;
 
@@ -391,7 +422,14 @@ const ListView = () => {
 
                 const isCardCollapsed = collapsedIds.has(card.id);
                 if (layerFilters.card) {
-                    items.push({ ...card, type: 'card', listId: list.id });
+                    const computed = cascadedDates.get(card.id);
+                    items.push({ 
+                        ...card, 
+                        type: 'card', 
+                        listId: list.id,
+                        startDate: computed?.startDate || card.startDate,
+                        endDate: computed?.endDate || card.endDate
+                    });
                 }
                 if (!isCardCollapsed && layerFilters.checklist) {
                     (card.checklists || []).forEach(cl => {
@@ -400,10 +438,13 @@ const ListView = () => {
                             if (cli.isArchived) return;
                             const cliStatus = cli.status || 'todo';
                             if (!statusFilters[cliStatus as keyof typeof statusFilters]) return;
+                            const computed = cascadedDates.get(cli.id);
                             items.push({
                                 ...cli, type: 'checklist',
                                 listId: list.id, cardId: card.id, checklistId: cl.id,
                                 title: cli.title || '未命名項目',
+                                startDate: computed?.startDate || cli.startDate,
+                                endDate: computed?.endDate || cli.endDate
                             });
                         });
                     });
@@ -545,13 +586,40 @@ const ListView = () => {
             }
 
             const isSelfDependency = dependencySelection.id === targetId;
+
+            // 防呆：自我依賴時，只允許設定「執行天數（截止日跟隨起始日）」，無法逆向設定（起始日依賴截止日）
+            if (isSelfDependency && targetSide === 'end' && dependencySelection.side === 'start') {
+                useDialogStore.getState().showConfirm('系統提示：單一任務無法建立由「截止日」逆向推算「起始日」的自我依賴。\n請由「起始日」拉到「截止日」來設定執行天數。');
+                setDependencySelection(null);
+                return;
+            }
+
+            let defaultOffsetStr = '0';
+            const targetTask = getTaskFromBoard(targetId);
+            const selectionTask = getTaskFromBoard(dependencySelection.id);
+            if (targetTask && selectionTask) {
+                const fromDate = targetSide === 'start' ? (targetTask as any).startDate : (targetTask as any).endDate;
+                const toDate = dependencySelection.side === 'start' ? (selectionTask as any).startDate : (selectionTask as any).endDate;
+                
+                if (fromDate && toDate) {
+                    const diff = getWorkingDaysDiff(fromDate, toDate);
+                    if (!isNaN(diff)) {
+                        if (targetSide === 'end' && dependencySelection.side === 'start') {
+                            defaultOffsetStr = String(diff - 1);
+                        } else {
+                            defaultOffsetStr = String(diff);
+                        }
+                    }
+                }
+            }
+
             const promptMessage = isSelfDependency
                 ? `請設定任務 [${dependencySelection.title}] 的執行天數 (將綁定起始與截止日)：\n(注意：單位為「工作天」，偏移 0 代表 1 個工作天，依此類推)`
                 : `請設定 [${dependencySelection.title}] 依賴於 [${targetTitle}] 的偏移工作天：\n(正數代表延後，負數代表提前，將自動跳過假日)`;
 
             const offsetStr = await useDialogStore.getState().showPrompt(
                 promptMessage,
-                '0'
+                defaultOffsetStr
             );
             
             if (offsetStr !== null && offsetStr.trim() !== '') {
@@ -706,6 +774,20 @@ const ListView = () => {
                         </button>
                     ))}
                 </div>
+
+                {/* 依賴關係顯示切換 */}
+                <button
+                    onClick={() => setShowDependencies(prev => !prev)}
+                    title={showDependencies ? '切換為簡易符號模式' : '切換為完整依賴顯示'}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex-shrink-0 ${
+                        showDependencies
+                            ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm'
+                            : 'bg-slate-100 border-transparent text-slate-400 hover:text-slate-600'
+                    }`}
+                >
+                    <GitBranch size={11} />
+                    <span>依賴關係</span>
+                </button>
             </div>
 
             {/* ── 表頭 ── */}
@@ -759,6 +841,7 @@ const ListView = () => {
                                     dependencySelection={dependencySelection}
                                     onDependencySelect={handleDependencySelect}
                                     dependencyMarkers={dependencyMarkers}
+                                    showDependencies={showDependencies}
                                 />
                             ))}
 
