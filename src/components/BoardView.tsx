@@ -16,13 +16,12 @@ const BoardView = () => {
     const [activeCard, setActiveCard] = useState(null);
     const [activeList, setActiveList] = useState(null);
 
-    if (!board) return (
-        <div className="flex-1 flex items-center justify-center text-slate-400">
-            請選擇一個看板
-        </div>
-    );
-
+    // ⚠️ 設計意圖：useMemo 必須在 early return 之前呼叫！
+    // React 規定 Hook 在每次 render 都必須以相同數量與順序被呼叫。
+    // 若將 useMemo 放在 (!board) early return 之後，
+    // 當 board 從有值變成 null 時，Hook 計數會不一致，引發 Error #310。
     const activeLists = useMemo(() => {
+        if (!board) return []; // null 檢查移入 useMemo 內部
         const cascadedDates = calculateCascadedDates(board);
         return (board.lists || [])
             .filter(l => !l.isArchived)
@@ -43,6 +42,14 @@ const BoardView = () => {
                 };
             });
     }, [board]);
+
+    // early return 移到所有 Hook 之後
+    if (!board) return (
+        <div className="flex-1 flex items-center justify-center text-slate-400">
+            請選擇一個看板
+        </div>
+    );
+
 
     const statuses = [
         { key: 'todo', label: '進行中', color: 'bg-status-todo' },

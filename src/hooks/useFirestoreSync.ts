@@ -11,7 +11,7 @@
  *
  * 重要：查詢不使用 orderBy（避免 Composite Index），改在 client 端排序。
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { 
   collection, query, where, onSnapshot, Unsubscribe
 } from 'firebase/firestore';
@@ -29,6 +29,19 @@ export function useFirestoreSync() {
   const user = useAuthStore(s => s.user);
   const activeBoardId = useBoardStore(s => s.activeBoardId);
   const workspaces = useBoardStore(s => s.workspaces);
+
+  // 設計意圖：先將計算式提升到頂層，得到穩定的 primitive 值，
+  // 避免在 useEffect dependency array 內做 .some()/.map() 等即時計算，
+  // 那會讓 React (特別是 StrictMode) 偵測到 Hook 計數不一致，引發 Error #310。
+  const workspaceIds = useMemo(
+    () => workspaces.map(ws => ws.id).join(','),
+    [workspaces]
+  );
+  // 穩定的 boolean：當前 activeBoardId 是否已存在於任何 workspace 的 boards 中
+  const isBoardReady = useMemo(
+    () => workspaces.some(ws => ws.boards.some(b => b.id === activeBoardId)),
+    [workspaces, activeBoardId]
+  );
   
   // 用 ref 儲存取消訂閱函式
   const unsubWorkspaces = useRef<Unsubscribe | null>(null);
@@ -143,7 +156,7 @@ export function useFirestoreSync() {
       unsubBoardsMap.current.forEach(unsub => unsub());
       unsubBoardsMap.current.clear();
     };
-  }, [workspaces.map(ws => ws.id).join(',')]); // 只在 workspace ID 清單變動時重新評估
+  }, [workspaceIds]); // 只在 workspace ID 清單變動時重新評估（改用穩定 useMemo 變數）
 
   // =============================
   // 3. 監聯 Lists / Cards / Dependencies（進入看板時）
@@ -239,7 +252,7 @@ export function useFirestoreSync() {
       unsubCards.current?.();
       unsubDeps.current?.();
     };
-  }, [activeBoardId, workspaces.map(ws => ws.id).join(','), workspaces.some(ws => ws.boards.some(b => b.id === activeBoardId))]);
+  }, [activeBoardId, workspaceIds, isBoardReady]); // 使用頂層穩定變數，避免 dependency array 內即時計算觸發 Error #310
 }
 
 /**
