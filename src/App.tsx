@@ -46,7 +46,7 @@ function AppContent() {
   useFirestoreSync();
 
   // 啟動 Google Calendar 同步初始化（準備 OAuth 工具，不會自動彈窗）
-  useCalendarSync();
+  useCalendarSync({ autoInit: true });
 
   // 載入行政院人事日曆 (當年度與下年度)
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
-import useCalendarSyncStore from '../store/useCalendarSyncStore';
+import useCalendarSync from '../hooks/useCalendarSync';
 import useUndoStore from '../store/useUndoStore';
 import Sidebar from './Sidebar';
 
@@ -28,7 +28,7 @@ const MainLayout = ({ children }) => {
     const {
         isConnected, isSyncing, lastSyncAt, error,
         connect, disconnect, syncAll
-    } = useCalendarSyncStore();
+    } = useCalendarSync();
 
     // ── Undo / Redo 狀態 ──
     const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndoStore();

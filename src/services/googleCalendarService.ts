@@ -6,6 +6,7 @@
  * 1. OAuth Token 管理（取得、持久化、過期偵測）
  * 2. 日曆 CRUD（自動建立 "ProJED Tasks" 日曆）
  * 3. 事件同步（全量差異同步 + 單筆即時同步）
+ * 4. EVENT_ID_CACHE 狀態維護與資料扁平化。
  *
  * 架構決策：
  * - 使用 REST API (fetch) 而非 GAPI client library 呼叫，
@@ -23,12 +24,14 @@ import type {
   GoogleCalendarEvent,
   SyncResult,
   TaskStatus,
+  Workspace
 } from '../types';
 
 // ── 常數 ─────────────────────────────────────────────────
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+const EVENT_ID_CACHE_KEY = 'google_calendar_event_id_cache';
 
 // ── Token 管理 ───────────────────────────────────────────
 
@@ -38,10 +41,6 @@ const EXPIRY_KEY = 'google_token_expiry';
 
 /**
  * TokenManager — 管理 OAuth Access Token 的生命週期
- *
- * 設計意圖：
- * 將 token 的存取與過期偵測封裝為單一職責的管理器，
- * 避免散落在各處的 localStorage 操作。
  */
 class TokenManager {
   private _token: string | null = null;
@@ -92,16 +91,86 @@ class TokenManager {
 // ── 單例實例 ─────────────────────────────────────────────
 const tokenManager = new TokenManager();
 // tokenClient 由 GSI SDK 建立（window.google.accounts.oauth2.initTokenClient）
-// 型別宣告在 src/types/google.d.ts，此處用條件型別安全推斷
 let tokenClient: { requestAccessToken: (config?: { prompt?: string }) => void } | null = null;
 
 // ── 內部輔助函式 ─────────────────────────────────────────
 
+function loadEventIdCache(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(EVENT_ID_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveEventIdCache(cache: Record<string, string>): void {
+  localStorage.setItem(EVENT_ID_CACHE_KEY, JSON.stringify(cache));
+}
+
+function clearEventIdCache(): void {
+  localStorage.removeItem(EVENT_ID_CACHE_KEY);
+}
+
+function flattenAllItems(workspaces: Workspace[]): SyncableItem[] {
+  const items: SyncableItem[] = [];
+
+  workspaces.forEach(ws => {
+    (ws.boards || []).forEach(board => {
+      (board.lists || []).forEach(list => {
+        if (list.isArchived) return;
+
+        if (list.startDate || list.endDate) {
+          items.push({
+            id: list.id,
+            title: list.title,
+            type: 'list',
+            status: list.status || 'todo',
+            startDate: list.startDate,
+            endDate: list.endDate,
+          });
+        }
+
+        (list.cards || []).forEach(card => {
+          if (card.isArchived) return;
+          if (card.startDate || card.endDate) {
+            items.push({
+              id: card.id,
+              title: card.title,
+              type: 'card',
+              status: card.status || 'todo',
+              startDate: card.startDate,
+              endDate: card.endDate,
+              notes: card.notes,
+            });
+          }
+
+          (card.checklists || []).forEach(cl => {
+            if (cl.isArchived) return;
+            (cl.items || []).forEach(cli => {
+              if (cli.isArchived) return;
+              if (cli.startDate || cli.endDate) {
+                items.push({
+                  id: cli.id,
+                  title: cli.title || '未命名項目',
+                  type: 'checklist',
+                  status: cli.status || 'todo',
+                  startDate: cli.startDate,
+                  endDate: cli.endDate,
+                });
+              }
+            });
+          });
+        });
+      });
+    });
+  });
+
+  return items;
+}
+
 /**
  * apiCall — 通用的 Google Calendar REST API 呼叫器
- *
- * 設計意圖：封裝 fetch + 認證 header + 錯誤處理，
- * 避免每個方法都重複撰寫 fetch 邏輯。
  */
 async function apiCall<T = unknown>(
   endpoint: string,
@@ -136,10 +205,6 @@ async function apiCall<T = unknown>(
   return resp.json() as Promise<T>;
 }
 
-/**
- * getTypeLabel — 將項目類型轉為中文標籤
- * 用於 Google Calendar 事件標題前綴
- */
 function getTypeLabel(type: SyncableItem['type']): string {
   const labels: Record<SyncableItem['type'], string> = {
     list: '列表',
@@ -149,38 +214,19 @@ function getTypeLabel(type: SyncableItem['type']): string {
   return labels[type] || '項目';
 }
 
-/**
- * getStatusColorId — 將任務狀態對應至 Google Calendar 顏色 ID
- *
- * Google Calendar Event Colors:
- * 1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana,
- * 6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato
- */
 function getStatusColorId(status: TaskStatus): string {
   const map: Record<TaskStatus, string> = {
-    todo: '7',       // Peacock (藍) — 進行中
-    delayed: '11',   // Tomato (紅) — 延遲
-    completed: '10', // Basil (綠) — 完成
-    unsure: '3',     // Grape (紫) — 不確定
-    onhold: '8',     // Graphite (灰) — 暫緩
+    todo: '7',
+    delayed: '11',
+    completed: '10',
+    unsure: '3',
+    onhold: '8',
   };
   return map[status] || '7';
 }
 
-/**
- * formatItemToEvent — 將 ProJED 項目轉換為 Google Calendar 事件格式
- *
- * 改良自舊版：
- * - 舊版只取 endDate 作為單日事件 → 新版支援 start~end 跨日事件
- * - 新增深度連結回 ProJED
- * - 使用 PROJED_ID 嵌入 description 做雙向關聯
- */
 function formatItemToEvent(item: SyncableItem): GoogleCalendarEvent {
-  // 需求變更：只在 Google 行事曆上顯示「結束日期」。
-  // 我們將事件的發生日（targetDate）指定為任務的 endDate（若無則拿 startDate 墊檔）
   const targetDate = item.endDate || item.startDate || dayjs().format('YYYY-MM-DD');
-
-  // Google Calendar 的全天事件 end.date 是「排除日」(exclusive)，所以必須加 1 天
   const targetDateExclusive = dayjs(targetDate).add(1, 'day').format('YYYY-MM-DD');
 
   const baseUrl = typeof window !== 'undefined'
@@ -200,33 +246,20 @@ function formatItemToEvent(item: SyncableItem): GoogleCalendarEvent {
     start: { date: targetDate },
     end: { date: targetDateExclusive },
     colorId: getStatusColorId(item.status),
-    visibility: 'public', // ✅ 強制設為公開，確保行事曆訂閱者能看見該事件
+    visibility: 'public',
   };
 }
 
 // ── 公開 API ─────────────────────────────────────────────
 
 export const googleCalendarService = {
-
   // ===== 授權管理 =====
-
-  /**
-   * init — 初始化 Google Identity Services (GSI)
-   *
-   * 設計意圖：
-   * 在 App mount 時呼叫一次，建立 tokenClient 實例。
-   * 不會觸發授權彈窗，僅準備好授權工具。
-   *
-   * @returns Promise<void> — 等同步回傳時 GSI 工具已就緒
-   * @param onTokenReceived — token 成功取得時的 callback（用於更新 UI 狀態）
-   */
   init(onTokenReceived?: (token: string) => void): void {
     if (!CLIENT_ID) {
       console.warn('⚠️ 未設定 VITE_GOOGLE_CLIENT_ID，Google Calendar 同步功能將停用');
       return;
     }
 
-    // 等待 GSI SDK 載入完成（async defer script）
     const tryInit = () => {
       if (window.google?.accounts?.oauth2) {
         tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -244,7 +277,6 @@ export const googleCalendarService = {
         });
         console.log('✅ Google Calendar OAuth 工具已就緒');
       } else {
-        // SDK 尚未載入，100ms 後重試（最多等 5 秒）
         setTimeout(tryInit, 100);
       }
     };
@@ -252,24 +284,14 @@ export const googleCalendarService = {
     tryInit();
   },
 
-  /**
-   * requestToken — 觸發 OAuth 授權彈窗，向用戶請求日曆權限
-   *
-   * 設計意圖：用戶首次使用「同步 Google 日曆」功能時呼叫。
-   * 若用戶曾授權過，瀏覽器會嘗試靜默授權（無彈窗）。
-   */
   requestToken(): void {
     if (!tokenClient) {
       console.warn('⚠️ Google Calendar OAuth 工具尚未初始化');
       return;
     }
-    // prompt: '' → 讓瀏覽器嘗試靜默授權；若不行才彈窗
     tokenClient.requestAccessToken({ prompt: '' });
   },
 
-  /**
-   * revokeToken — 撤銷 Google Calendar 權限並清除本地 token
-   */
   revokeToken(): void {
     const token = tokenManager.token;
     if (token && window.google?.accounts?.oauth2) {
@@ -278,60 +300,36 @@ export const googleCalendarService = {
       });
     }
     tokenManager.clear();
+    clearEventIdCache();
   },
 
-  /**
-   * isTokenValid — 檢查目前 token 是否有效
-   */
   isTokenValid(): boolean {
     return tokenManager.isValid();
   },
 
-  /**
-   * getToken — 取得目前的 access token（給外部使用）
-   */
   getToken(): string | null {
     return tokenManager.token;
   },
 
   // ===== 日曆管理 =====
-
-  /**
-   * getOrCreateCalendar — 取得日曆 ID
-   *
-   * 設計意圖：
-   * 根據您的需求，直接將任務寫入您的「主日曆 (primary)」。
-   * 這樣只要有訂閱您主日曆的同事或成員，就能立刻看到自動同步出來的事件，
-   * 徹底免除每次都要去檢查與設定子日曆權限的麻煩！
-   */
   async getOrCreateCalendar(): Promise<string> {
-    return 'primary'; // 強制使用 Google 帳號的主日曆
+    return 'primary'; 
   },
 
   // ===== 同步核心 =====
 
   /**
    * syncAll — 全量差異同步
-   *
-   * 設計意圖 (Design Intent)：
-   * 遍歷所有具備日期的 ProJED 項目，與 Google Calendar 上的事件做比對：
-   * 1. 新增：ProJED 有、Google 沒有 → 建立事件
-   * 2. 更新：雙方都有但內容不同 → 更新事件
-   * 3. 刪除：Google 有、ProJED 沒有 → 移除事件
-   * 4. 跳過：內容一致 → 不操作
-   *
-   * 改良自舊版 syncAll (L673-774)：
-   * - 回傳 SyncResult 統計，而非僅 console.log
-   * - Event ID 快取支援（透過 eventIdCache 參數）
-   *
-   * @param items     — 所有待同步的 ProJED 項目（來自所有工作區）
-   * @param eventIdCache — 本地快取的 { projedId → googleEventId } 對照表
-   * @returns SyncResult — 同步結果統計
    */
-  async syncAll(
-    items: SyncableItem[],
-    eventIdCache: Record<string, string> = {}
-  ): Promise<{ result: SyncResult; updatedCache: Record<string, string> }> {
+  async syncAll(workspaces: Workspace[]): Promise<SyncResult | null> {
+    if (!this.isTokenValid()) {
+      throw new Error('未授權：請先連接 Google Calendar');
+    }
+
+    const items = flattenAllItems(workspaces);
+    console.log(`📋 共有 ${items.length} 個項目需要同步`);
+    
+    let eventIdCache = loadEventIdCache();
     const calId = await this.getOrCreateCalendar();
     const encodedCalId = encodeURIComponent(calId);
 
@@ -364,7 +362,6 @@ export const googleCalendarService = {
       const existingEvent = googleEventMap.get(item.id);
 
       if (existingEvent) {
-        // 智慧比對：檢查是否需要更新
         const needsUpdate =
           existingEvent.summary !== eventData.summary ||
           existingEvent.start?.date !== eventData.start.date ||
@@ -387,21 +384,20 @@ export const googleCalendarService = {
         }
         syncedIds.add(item.id);
       } else {
-        // 新增事件
         try {
           const created = await apiCall<{ id: string }>(
             `/calendars/${encodedCalId}/events`, 'POST', eventData
           );
-          result.created++;
-          updatedCache[item.id] = created.id;
-        } catch (e) {
-          console.error(`❌ 新增失敗 [${item.title}]:`, e);
-        }
-        syncedIds.add(item.id);
+            result.created++;
+            updatedCache[item.id] = created.id;
+          } catch (e) {
+            console.error(`❌ 新增失敗 [${item.title}]:`, e);
+          }
+          syncedIds.add(item.id);
       }
     }
 
-    // 3. 刪除 Google Calendar 上多餘的事件（ProJED 已不存在的項目）
+    // 3. 刪除多餘的事件
     for (const [projedId, gEvent] of googleEventMap.entries()) {
       if (!syncedIds.has(projedId)) {
         try {
@@ -417,47 +413,36 @@ export const googleCalendarService = {
     }
 
     console.log(`📊 同步完成: 新增 ${result.created}, 更新 ${result.updated}, 刪除 ${result.deleted}, 跳過 ${result.skipped}`);
-    return { result, updatedCache };
+    saveEventIdCache(updatedCache);
+    return result;
   },
 
   /**
    * syncItem — 單筆即時同步
-   *
-   * 改良自舊版 syncItem (L801-837)：
-   * - 優先使用 eventIdCache 直接定位 Google Event，避免讀取全部事件
-   * - 若 cache miss 才 fallback 到全量搜尋
-   *
-   * @param item         — 要同步的單一項目
-   * @param googleEventId — 已知的 Google Event ID（來自快取）
-   * @returns 更新後的 googleEventId
    */
-  async syncItem(
-    item: SyncableItem,
-    googleEventId?: string
-  ): Promise<string | null> {
-    if (!tokenManager.isValid()) return null;
-    if (!item.startDate && !item.endDate) return null;
+  async syncItem(item: SyncableItem): Promise<void> {
+    if (!this.isTokenValid()) return;
+    if (!item.startDate && !item.endDate) return;
 
+    const eventIdCache = loadEventIdCache();
+    const googleEventId = eventIdCache[item.id];
     const calId = await this.getOrCreateCalendar();
     const encodedCalId = encodeURIComponent(calId);
     const eventData = formatItemToEvent(item);
 
     try {
-      // 優先使用快取的 Event ID 直接更新
       if (googleEventId) {
         try {
           await apiCall(
             `/calendars/${encodedCalId}/events/${googleEventId}`, 'PUT', eventData
           );
           console.log(`✅ [即時同步] 更新成功: ${item.title}`);
-          return googleEventId;
+          return;
         } catch {
-          // Event ID 失效（可能被用戶手動刪除），fallback 到搜尋
           console.log('⚠️ 快取 Event ID 失效，嘗試搜尋...');
         }
       }
 
-      // Fallback：搜尋現有事件
       const eventsResp = await apiCall<{ items?: Array<{ id: string; description?: string; summary: string; start?: { date?: string }; end?: { date?: string } }> }>(
         `/calendars/${encodedCalId}/events?maxResults=2500&singleEvents=true`
       );
@@ -466,7 +451,6 @@ export const googleCalendarService = {
       );
 
       if (existingEvent) {
-        // 比對是否有變動
         if (
           existingEvent.summary !== eventData.summary ||
           existingEvent.start?.date !== eventData.start.date ||
@@ -477,36 +461,31 @@ export const googleCalendarService = {
           );
           console.log(`✅ [即時同步] 更新成功: ${item.title}`);
         }
-        return existingEvent.id;
+        eventIdCache[item.id] = existingEvent.id;
+        saveEventIdCache(eventIdCache);
+        return;
       } else {
-        // 新增
         const created = await apiCall<{ id: string }>(
           `/calendars/${encodedCalId}/events`, 'POST', eventData
         );
         console.log(`✅ [即時同步] 新增成功: ${item.title}`);
-        return created.id;
+        eventIdCache[item.id] = created.id;
+        saveEventIdCache(eventIdCache);
+        return;
       }
     } catch (err) {
       console.error(`❌ [即時同步] 失敗 [${item.title}]:`, err);
-      return googleEventId || null;
     }
   },
 
-  /**
-   * clearAll — 刪除整個 "ProJED Tasks" 日曆
-   *
-   * 設計意圖：提供完全重置的功能，讓用戶可以清除所有同步資料
-   */
   async clearAll(): Promise<void> {
-    if (!tokenManager.isValid()) {
+    if (!this.isTokenValid()) {
       throw new Error('請先連接 Google Calendar');
     }
     console.warn('⚠️ clearAll 功能已停用，因為目前直接使用主日曆，為保護使用者個人行程不被誤刪。');
+    clearEventIdCache();
   },
 
-  // ===== 輔助方法（公開供外部使用） =====
-
-  /** 將項目轉為事件格式（公開供測試或預覽用） */
   formatItemToEvent,
 };
 
