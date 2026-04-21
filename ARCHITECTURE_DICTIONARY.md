@@ -226,3 +226,21 @@ useBoardStore (Zustand + Firestore)
 
 ---
 *更新日期：2026-04-08 (清單模式 + 視圖位置持久化)*
+
+## 12. 共用 UI 模組庫 (Shared UI Library / Design System)
+
+### 12.1 設計意圖
+- **解決樣式冗餘 (DRY Principles)**：針對系統中大量重複的 Tailwind CSS 類名進行抽象化，降低維護成本。
+- **提升一致性 (UI Consistency)**：確保所有按鈕 (Button)、標籤 (Badge) 與輸入框 (Input) 在全系統中具備 100% 統一的視覺與互動邏輯。
+- **強化型別安全**：利用 TypeScript 的 `ComponentProps` 繼承原生屬性，確保開發者在使用自定義組件時仍能保有完整的 HTML 原生功能與編輯器自動補全。
+
+### 12.2 架構核心
+- **`src/utils/cn.ts`**：核心工具函式。整合 `clsx` (條件類名) 與 `tailwind-merge` (樣式覆蓋保護)。解決傳入 `className` 時常見的樣式衝突問題（例如：外部 margin 覆蓋組件內部 margin）。
+- **底層元件封裝 (`src/components/ui/`)**：
+    - **`<Button>`**：封裝了 `primary`, `secondary`, `ghost`, `dashed`, `danger` 五種變體與多種尺寸，支援 `isLoading` 與 `fullWidth` 狀態。
+    - **`<Badge>`**：統一了狀態標籤（如 todo, delayed, completed）的配色與圓角規範。
+    - **`<Input>`**：統一處理 Focus Ring、Error Message 提示與 Icon 嵌入佈局。
+- **重構驗證 (PoC)**：首波針對 `Card.tsx` 與 `List.tsx` 進行重構，將寫死的 HTML 標籤全數替換為共用組件，驗證了組件在複雜 React 渲染環境（如 DnD 排序、Modal 觸發）下的穩定性。
+
+---
+*更新日期：2026-04-21 (共用 UI 模組庫建立與首波重構完成)*
