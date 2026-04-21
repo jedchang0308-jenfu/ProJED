@@ -4,6 +4,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import useBoardStore from '../store/useBoardStore';
 import dayjs from 'dayjs';
+import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
 
 const Card = ({ card, listId }) => {
     const { openModal, updateCard, activeWorkspaceId, activeBoardId } = useBoardStore();
@@ -85,36 +87,37 @@ const Card = ({ card, listId }) => {
                         <h4 className={`text-sm font-semibold leading-tight flex-1 ${getStatusColorClass(displayStatus)}`}>
                             {card.title || '無標題卡片'}
                         </h4>
-                        <button
-                            className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-100 rounded transition-all ${isHidden ? 'text-slate-300 opacity-100' : 'text-slate-400'}`}
+                        <Button
+                            variant="ghost"
+                            size="none"
+                            className={`opacity-0 group-hover:opacity-100 p-0.5 ${isHidden ? 'text-slate-300 opacity-100' : 'text-slate-400'}`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 updateCard(activeWorkspaceId, activeBoardId, listId, card.id, { ganttVisible: !card.ganttVisible });
                             }}
                         >
                             {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
+                        </Button>
                     </div>
 
                     {/* 日期與待辦清單資訊 */}
                     {(card.startDate || card.endDate || checklistProgress) && (
                         <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] text-slate-400">
                             {(card.startDate || card.endDate) && (
-                                <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                                    <Calendar size={10} />
+                                <Badge variant="default" size="sm" icon={<Calendar size={10} />}>
                                     <span>{card.startDate ? dayjs(card.startDate).format('MM/DD') : '...'}</span>
                                     <span className="opacity-50">→</span>
                                     <span>{card.endDate ? dayjs(card.endDate).format('MM/DD') : '...'}</span>
-                                </div>
+                                </Badge>
                             )}
                             {checklistProgress && checklistProgress.total > 0 && (
-                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${checklistProgress.completed === checklistProgress.total
-                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                                        : 'bg-slate-50 border-slate-100'
-                                    }`}>
-                                    <CheckSquare size={10} />
+                                <Badge 
+                                    variant={checklistProgress.completed === checklistProgress.total ? 'success' : 'default'} 
+                                    size="sm" 
+                                    icon={<CheckSquare size={10} />}
+                                >
                                     <span className="font-bold">{checklistProgress.completed}/{checklistProgress.total}</span>
-                                </div>
+                                </Badge>
                             )}
                         </div>
                     )}

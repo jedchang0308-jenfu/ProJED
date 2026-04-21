@@ -7,6 +7,7 @@ import Card from './Card';
 import useBoardStore from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore'; // Added import
 import dayjs from 'dayjs';
+import { Button } from './ui/Button';
 
 const List = ({ list }) => {
     const { statusFilters, activeWorkspaceId, activeBoardId, updateList, openModal } = useBoardStore();
@@ -91,15 +92,17 @@ const List = ({ list }) => {
                             </h3>
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
+                            <Button
+                                variant="ghost"
+                                size="none"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     updateList(activeWorkspaceId, activeBoardId, list.id, { ganttVisible: !list.ganttVisible });
                                 }}
-                                className={`p-1.5 hover:bg-white rounded-lg text-slate-400 transition-colors ${isHidden ? 'text-slate-300 opacity-100' : ''}`}
+                                className={`p-1.5 hover:bg-white ${isHidden ? 'text-slate-300 opacity-100' : 'text-slate-400'}`}
                             >
                                 {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -132,18 +135,21 @@ const List = ({ list }) => {
                     ))}
                 </SortableContext>
 
-                <button
+                <Button
+                    variant="dashed"
+                    size="none"
+                    fullWidth
                     onClick={async () => {
                         const title = await useDialogStore.getState().showPrompt("請輸入卡片名稱：", "新卡片");
                         if (title && title.trim()) {
                             useBoardStore.getState().addCard(activeWorkspaceId, activeBoardId, list.id, title);
                         }
                     }}
-                    className="w-full py-2 px-3 border border-dashed border-slate-300 rounded-lg text-slate-400 text-xs font-bold flex items-center justify-center gap-2 hover:bg-white hover:border-primary hover:text-primary transition-all group mt-2"
+                    className="py-2 px-3 text-xs font-bold gap-2 group mt-2"
                 >
                     <Plus size={14} className="group-hover:scale-110 transition-transform" />
                     新增卡片
-                </button>
+                </Button>
             </div>
         </div>
     );
