@@ -50,6 +50,7 @@ export function useFirestoreSync() {
   const unsubLists = useRef<Unsubscribe | null>(null);
   const unsubCards = useRef<Unsubscribe | null>(null);
   const unsubDeps = useRef<Unsubscribe | null>(null);
+  const unsubNodes = useRef<Unsubscribe | null>(null);
 
   // =============================
   // 1. 監聽 Workspaces
@@ -228,7 +229,7 @@ export function useFirestoreSync() {
       }
     );
 
-    // 3c. 監聽 Dependencies
+    // 3c. 監聽 Dependencies (保留舊版及混用機制，此處僅從 dependencies 取出，未來在 WBS 架構可考慮用 dependencyService 或由 nodes 決定，但目前 WbsStore 也有 dependencies 陣列)
     unsubDeps.current = onSnapshot(
       collection(db, boardPath, 'dependencies'),
       (snapshot) => {
@@ -241,16 +242,40 @@ export function useFirestoreSync() {
           ...board,
           dependencies
         }));
+
+        // 也傳遞給新的 WBS store
+        import('../store/useWbsStore').then(({ useWbsStore }) => {
+            // WbsStore 也暫時覆蓋 dependencies
+            useWbsStore.setState({ dependencies });
+        });
       },
       (error) => {
         console.error('[useFirestoreSync] Dependencies snapshot error:', error);
       }
     );
 
+    // 3d. 監聽全新 WBS Nodes 集合 (Phase A 引入)
+    unsubNodes.current = onSnapshot(
+        collection(db, boardPath, 'nodes'),
+        (snapshot) => {
+            const nodes = snapshot.docs.map(doc => ({
+                ...(doc.data() as import('../types').TaskNode)
+                // doc.id already written in data from create() usually
+            }));
+            import('../store/useWbsStore').then(({ useWbsStore }) => {
+                useWbsStore.getState().setNodes(nodes);
+            });
+        },
+        (error) => {
+            console.error('[useFirestoreSync] Nodes snapshot error:', error);
+        }
+    );
+
     return () => {
       unsubLists.current?.();
       unsubCards.current?.();
       unsubDeps.current?.();
+      unsubNodes.current?.();
     };
   }, [activeBoardId, workspaceIds, isBoardReady]); // 使用頂層穩定變數，避免 dependency array 內即時計算觸發 Error #310
 }

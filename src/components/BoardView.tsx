@@ -1,55 +1,51 @@
+/**
+ * BoardView — Kanban 看板視圖（WBS 版本）
+ * 設計意圖：將資料來源從 useBoardStore (List/Card) 切換至 useWbsStore (TaskNode)。
+ * 
+ * 階層映射規則：
+ * - Level 1 (根節點, parentId === null) → 列表欄 (KanbanColumn)
+ * - Level 2 (根節點的子節點)            → 卡片 (KanbanCard)
+ * - Level 3+ (更深子節點)               → 待辦清單 (KanbanChecklist)
+ */
 import React, { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
-import { SortableContext, arrayMove, verticalListSortingStrategy, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
-import useDialogStore from '../store/useDialogStore';
-import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
-import List from './List';
-import Card from './Card';
-
+import useBoardStore from '../store/useBoardStore';
+import { useWbsStore } from '../store/useWbsStore';
+import { KanbanColumn } from './Wbs/KanbanColumn';
+import type { TaskNode, TaskStatus } from '../types';
 
 const BoardView = () => {
-    const { getActiveBoard, toggleStatusFilter, statusFilters, activeWorkspaceId, activeBoardId, reorderLists, moveCardToList, reorderCardsInList } = useBoardStore();
-    const board = getActiveBoard();
+    const { activeBoardId, activeWorkspaceId, toggleStatusFilter, statusFilters } = useBoardStore();
+    const addNode = useWbsStore(s => s.addNode);
+    const updateNode = useWbsStore(s => s.updateNode);
+    const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const sensors = useDragSensors();
-    const [activeCard, setActiveCard] = useState(null);
-    const [activeList, setActiveList] = useState(null);
 
-    // ⚠️ 設計意圖：useMemo 必須在 early return 之前呼叫！
-    // React 規定 Hook 在每次 render 都必須以相同數量與順序被呼叫。
-    // 若將 useMemo 放在 (!board) early return 之後，
-    // 當 board 從有值變成 null 時，Hook 計數會不一致，引發 Error #310。
-    const activeLists = useMemo(() => {
-        if (!board) return []; // null 檢查移入 useMemo 內部
-        const cascadedDates = calculateCascadedDates(board);
-        return (board.lists || [])
-            .filter(l => !l.isArchived)
-            .map(list => {
-                const computedList = cascadedDates.get(list.id);
-                return {
-                    ...list,
-                    startDate: computedList?.startDate || list.startDate,
-                    endDate: computedList?.endDate || list.endDate,
-                    cards: (list.cards || []).map(card => {
-                        const computedCard = cascadedDates.get(card.id);
-                        return {
-                            ...card,
-                            startDate: computedCard?.startDate || card.startDate,
-                            endDate: computedCard?.endDate || card.endDate,
-                        };
-                    })
-                };
-            });
-    }, [board]);
+    // 訂閱 root index 與 boardId index 以取得此看板的 Level 1 根節點
+    const rootIds = useWbsStore(s => s.parentNodesIndex['root']);
+    const boardRootIds = useWbsStore(s => s.parentNodesIndex[activeBoardId || '']);
 
-    // early return 移到所有 Hook 之後
-    if (!board) return (
-        <div className="flex-1 flex items-center justify-center text-slate-400">
-            請選擇一個看板
-        </div>
-    );
-
+    // 合併並排序根節點 (Level 1 = 列表欄)
+    const rootNodes = useMemo(() => {
+        const state = useWbsStore.getState();
+        const ids1 = (rootIds || []).filter(id => {
+            const n = state.nodes[id];
+            return n && n.boardId === activeBoardId && !n.isArchived;
+        });
+        const ids2 = (boardRootIds || []).filter(id => {
+            const n = state.nodes[id];
+            return n && !n.isArchived;
+        });
+        // 合併去重
+        const allIds = Array.from(new Set([...ids1, ...ids2]));
+        return allIds
+            .map(id => state.nodes[id])
+            .filter(Boolean)
+            .sort((a, b) => a.order - b.order);
+    }, [rootIds, boardRootIds, activeBoardId]);
 
     const statuses = [
         { key: 'todo', label: '進行中', color: 'bg-status-todo' },
@@ -59,86 +55,109 @@ const BoardView = () => {
         { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
     ];
 
-    // 拖動開始
-    const handleDragStart = (event) => {
-        const { active } = event;
-        if (active.data.current?.type === 'card') {
-            setActiveCard(active.data.current.card);
-        } else if (active.data.current?.type === 'list') {
-            setActiveList(active.data.current.list);
-        }
-    };
-
-    // 拖動結束
-    const handleDragEnd = (event) => {
+    /**
+     * 拖曳結束處理
+     * 設計意圖：
+     * - 卡片 (wbs-card) 跨列拖曳 → 改變 parentId（移到另一個 Level 1 群組下）
+     * - 列表 (wbs-column) 拖曳 → 重新排序（交換 order 值）
+     */
+    const handleDragEnd = (event: any) => {
         const { active, over } = event;
-
-        if (!over) {
-            setActiveCard(null);
-            setActiveList(null);
-            return;
-        }
+        if (!over) return;
 
         const activeData = active.data.current;
         const overData = over.data.current;
 
-        // 列表拖動邏輯
-        if (activeData?.type === 'list' && overData?.type === 'list') {
-            if (active.id !== over.id) {
-                reorderLists(activeWorkspaceId, activeBoardId, active.id, over.id);
-            }
-        }
-        // 卡片拖動邏輯
-        else if (activeData?.type === 'card') {
-            const sourceListId = activeData.listId;
-            let targetListId;
+        // 卡片跨列拖曳
+        if (activeData?.type === 'wbs-card') {
+            const draggedNodeId = activeData.nodeId;
+            const sourceColumnId = activeData.columnId;
 
             // 判斷目標是列表還是卡片
-            if (overData?.type === 'list') {
-                targetListId = overData.list.id;
-            } else if (overData?.type === 'card') {
-                targetListId = overData.listId;
-            } else {
-                setActiveCard(null);
-                setActiveList(null);
-                return;
+            let targetColumnId: string | null = null;
+            if (overData?.type === 'wbs-column') {
+                targetColumnId = overData.nodeId;
+            } else if (overData?.type === 'wbs-card') {
+                targetColumnId = overData.columnId;
             }
 
-            if (sourceListId !== targetListId) {
-                // 跨列表移動
-                const targetIndex = overData?.type === 'card' && overData.sortable ? overData.sortable.index : null;
-                moveCardToList(activeWorkspaceId, activeBoardId, activeData.card.id, sourceListId, targetListId, targetIndex);
-            } else {
-                // 同列表內重新排序
-                if (overData?.type === 'card') {
-                    reorderCardsInList(activeWorkspaceId, activeBoardId, sourceListId, active.id, over.id);
+            if (targetColumnId && sourceColumnId !== targetColumnId) {
+                // 跨列移動：改變此卡片的 parentId
+                updateNode(draggedNodeId, { parentId: targetColumnId, updatedAt: Date.now() });
+                // 觸發新舊父節點的 Roll-up 重新計算
+                recalculateAncestorStatus(draggedNodeId);
+            } else if (targetColumnId && sourceColumnId === targetColumnId && overData?.type === 'wbs-card') {
+                // 同列內重新排序：交換 order
+                const state = useWbsStore.getState();
+                const draggedNode = state.nodes[draggedNodeId];
+                const targetNode = state.nodes[overData.nodeId];
+                if (draggedNode && targetNode && draggedNode.id !== targetNode.id) {
+                    const tempOrder = draggedNode.order;
+                    updateNode(draggedNodeId, { order: targetNode.order });
+                    updateNode(overData.nodeId, { order: tempOrder });
                 }
             }
         }
 
-        setActiveCard(null);
-        setActiveList(null);
+        // 列表排序
+        if (activeData?.type === 'wbs-column' && overData?.type === 'wbs-column') {
+            if (active.id !== over.id) {
+                const state = useWbsStore.getState();
+                const draggedNode = state.nodes[activeData.nodeId];
+                const targetNode = state.nodes[overData.nodeId];
+                if (draggedNode && targetNode) {
+                    const tempOrder = draggedNode.order;
+                    updateNode(activeData.nodeId, { order: targetNode.order });
+                    updateNode(overData.nodeId, { order: tempOrder });
+                }
+            }
+        }
     };
+
+    /** 新增頂層群組 (Level 1 → 新列表) */
+    const handleAddColumn = () => {
+        const newNode: TaskNode = {
+            id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
+            workspaceId: activeWorkspaceId || '',
+            boardId: activeBoardId || '',
+            parentId: null,
+            title: '新群組',
+            status: 'todo',
+            nodeType: 'group',
+            order: rootNodes.length,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+        addNode(newNode);
+    };
+
+    if (!activeBoardId) {
+        return (
+            <div className="flex-1 flex items-center justify-center text-slate-400">
+                請選擇一個看板
+            </div>
+        );
+    }
 
     return (
         <DndContext
             sensors={sensors}
             collisionDetection={pointerWithin}
-            onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
-                {/* Subheader / Toolbar */}
+                {/* 工具列 (Toolbar) — 狀態篩選器 */}
                 <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
                     <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2">
                         {statuses.map(s => (
                             <button
                                 key={s.key}
                                 onClick={() => toggleStatusFilter(s.key)}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${statusFilters[s.key]
-                                    ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
-                                    : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'
-                                    }`}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${
+                                    statusFilters[s.key]
+                                        ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                                        : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'
+                                }`}
                             >
                                 <div className={`w-2 h-2 rounded-full ${s.color}`}></div>
                                 <span className="text-[10px] sm:text-xs font-bold">{s.label}</span>
@@ -147,44 +166,26 @@ const BoardView = () => {
                     </div>
                 </div>
 
-                {/* Lists Canvas */}
+                {/* 列表畫布 (Lists Canvas) */}
                 <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-                    <SortableContext items={activeLists.map(l => l.id)} strategy={horizontalListSortingStrategy}>
-                        {activeLists.map(list => (
-                            <List key={list.id} list={list} />
+                    <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
+                        {rootNodes.map(node => (
+                            <KanbanColumn key={node.id} nodeId={node.id} />
                         ))}
                     </SortableContext>
 
-                    {/* Add List Button Container */}
+                    {/* 新增列表按鈕 */}
                     <div className="flex-shrink-0 w-[260px]">
                         <button
-                            onClick={async () => {
-                                const title = await useDialogStore.getState().showPrompt("請輸入列表名稱：", "新列表");
-                                if (title && title.trim()) {
-                                    useBoardStore.getState().addList(board.workspaceId || activeWorkspaceId, board.id, title);
-                                }
-                            }}
+                            onClick={handleAddColumn}
                             className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 font-bold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group"
                         >
                             <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-                            <span>新增列表</span>
+                            <span>新增群組</span>
                         </button>
                     </div>
                 </div>
             </div>
-
-            {/* 拖動預覽層 */}
-            <DragOverlay>
-                {activeCard ? (
-                    <div className="opacity-90 rotate-3 scale-105">
-                        <Card card={activeCard} listId="" />
-                    </div>
-                ) : activeList ? (
-                    <div className="opacity-90 rotate-2 scale-105">
-                        <List list={activeList} />
-                    </div>
-                ) : null}
-            </DragOverlay>
         </DndContext>
     );
 };

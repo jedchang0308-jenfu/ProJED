@@ -159,3 +159,27 @@ export const dependencyService = {
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId));
   }
 };
+
+// ==========================
+// Node (WBS) Service
+// ==========================
+export const nodeService = {
+  create: async (wsId: string, bId: string, node: import('../types').TaskNode): Promise<void> => {
+    const nodeRef = doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', node.id);
+    await setDoc(nodeRef, node);
+  },
+  update: async (wsId: string, bId: string, nId: string, updates: Partial<import('../types').TaskNode>) => {
+    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), updates as any);
+  },
+  delete: async (wsId: string, bId: string, nId: string) => {
+    await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId));
+  },
+  batchUpdate: async (wsId: string, bId: string, updates: { id: string, data: Partial<import('../types').TaskNode> }[]) => {
+    const batch = writeBatch(db);
+    updates.forEach(u => {
+      const ref = doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', u.id);
+      batch.update(ref, u.data as any);
+    });
+    await batch.commit();
+  }
+};

@@ -3,6 +3,7 @@ import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2,
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import useDialogStore from '../store/useDialogStore';
+import { useWbsStore } from '../store/useWbsStore';
 
 const Sidebar = ({ isOpen, toggle }) => {
     const { workspaces, activeBoardId, switchBoard, showHome, isSidebarOpen, setSidebarOpen, removeBoard, removeWorkspace, currentView, setView } = useBoardStore();
@@ -147,28 +148,28 @@ const Sidebar = ({ isOpen, toggle }) => {
                         </div>
                         <div className="flex gap-2">
                             <button 
-                                onClick={() => useBoardStore.getState().exportData()}
+                                onClick={() => useWbsStore.getState().exportData()}
                                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
                             >
                                 <Download size={14} />
-                                匯出
+                                匯出 WBS
                             </button>
                             <label className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors cursor-pointer">
                                 <Upload size={14} />
-                                匯入
+                                匯入 JSON
                                 <input 
                                     type="file" 
                                     accept=".json" 
                                     className="hidden" 
                                     onChange={(e) => {
-                                        const file = e.target.files[0];
+                                        const file = e.target.files?.[0];
                                         if (!file) return;
                                         const reader = new FileReader();
                                         reader.onload = (event) => {
-                                            useBoardStore.getState().importData(event.target.result);
+                                            useWbsStore.getState().importData(event.target?.result as string);
                                         };
                                         reader.readAsText(file);
-                                        e.target.value = null;
+                                        e.target.value = '';
                                     }}
                                 />
                             </label>

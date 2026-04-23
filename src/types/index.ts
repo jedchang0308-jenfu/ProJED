@@ -9,8 +9,8 @@
 
 // ===== 狀態枚舉 =====
 
-/** 任務狀態 — 適用於 List、Card、ChecklistItem */
-export type TaskStatus = 'todo' | 'delayed' | 'completed' | 'unsure' | 'onhold';
+/** 任務狀態 — 簡化為核心流程 */
+export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 
 /** 依賴連接點 — 任務的起始端或結束端 */
 export type DependencySide = 'start' | 'end';
@@ -24,23 +24,76 @@ export type DialogType = 'confirm' | 'prompt';
 /** 甘特圖拖曳類型 */
 export type DragType = 'move' | 'left' | 'right';
 
-/** 可編輯項目的類型標識 */
-export type EditableItemType = 'list' | 'card' | 'checklist' | 'checklistitem';
+/** 可編輯項目的類型標識 (相容舊版，逐漸淘汰) */
+export type EditableItemType = 'list' | 'card' | 'checklist' | 'checklistitem' | 'tasknode';
 
-// ===== 資料模型 =====
+// ===== 新版 WBS 資料模型 (Adjacency List) =====
 
-/** 待辦清單項目（最底層任務單元） */
+/**
+ * 統一的任務節點 (WBS 結構基礎)
+ * 設計意圖：廢除原本 List/Card 剛性結構，改為無限層級的樹狀結構。
+ */
+export interface TaskNode {
+  id: string;              // 唯一識別碼
+  workspaceId: string;     // 所屬工作區
+  boardId: string;         // 所屬專案(看板) - 保留 Board 作為最大容器
+
+  /**
+   * 核心：Adjacency List 父節點參考
+   * 若為最頂層節點（原先的 List/Group），parentId 為 null 或對應的 boardId。
+   */
+  parentId: string | null;  
+
+  title: string;
+  description?: string;     // 取代舊的 notes
+  status: TaskStatus;
+  
+  // 日期排程 (可選)
+  startDate?: string;
+  endDate?: string;
+
+  // 用於展示層的自訂屬性 (群組/里程碑/一般任務)
+  nodeType?: 'group' | 'milestone' | 'task';
+
+  // Kanban 視圖專用的動態屬性 (分離資料與視圖)
+  // 此屬性記錄該任務在 Kanban 視圖下屬於哪個直行
+  kanbanStageId?: string; 
+  
+  order: number;            // 同級兄弟節點間的排序權重
+  
+  createdAt?: number;
+  updatedAt?: number;
+  isArchived?: boolean;
+}
+
+/** 
+ * Kanban 視圖定義
+ * 將視圖設定獨立於任務資料之外，使得同一個任務樹可以有多種 Kanban 投影
+ */
+export interface KanbanViewConfig {
+    id: string;
+    boardId: string;
+    stages: Array<{
+        id: string;
+        name: string;
+        order: number;
+    }>;
+}
+
+// ===== 棄用警告: 舊版資料模型 (用於遷移期過渡) =====
+
+/** @deprecated 等待轉換至 TaskNode */
 export interface ChecklistItem {
   id: string;
   title: string;
   status: TaskStatus;
-  startDate: string; // 'YYYY-MM-DD' 或空字串
-  endDate: string;   // 'YYYY-MM-DD' 或空字串
+  startDate: string;
+  endDate: string;
   isArchived?: boolean;
   archivedAt?: number;
 }
 
-/** 待辦清單（屬於 Card 的子集合） */
+/** @deprecated 等待轉換至 TaskNode */
 export interface Checklist {
   id: string;
   title: string;
@@ -50,7 +103,7 @@ export interface Checklist {
   archivedAt?: number;
 }
 
-/** 卡片（任務單元，屬於 List 的子集合） */
+/** @deprecated 等待轉換至 TaskNode */
 export interface Card {
   id: string;
   title: string;
@@ -60,14 +113,14 @@ export interface Card {
   notes?: string;
   checklists: Checklist[];
   ganttVisible: boolean;
-  listId?: string; // 拖曳時用於標記所屬列表
+  listId?: string;
   order?: number;
   createdAt?: number;
   isArchived?: boolean;
   archivedAt?: number;
 }
 
-/** 列表（任務群組，屬於 Board 的子集合） */
+/** @deprecated 等待轉換至 TaskNode */
 export interface List {
   id: string;
   title: string;

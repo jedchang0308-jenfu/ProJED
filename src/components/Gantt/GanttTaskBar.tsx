@@ -1,21 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'lucide-react';
 import dayjs from 'dayjs';
-import useBoardStore, { calculateCascadedDates } from '../../store/useBoardStore';
+import { useWbsStore } from '../../store/useWbsStore';
 import { getX, getDateFromX, getDependencyLabel, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 
 interface TaskItem {
     id: string;
-    type: string;
+    type: string; // pseudoType generated in GanttView mapping
+    nodeType: string;
+    level: number;
     status?: string | null;
     title: string;
     startDate?: string | null;
     endDate?: string | null;
-    listId?: string;
-    cardId?: string;
-    checklistId?: string;
     row: number;
-    parentCardDates?: { startDate: string | null; endDate: string | null };
 }
 
 interface GanttTaskBarProps {
@@ -38,7 +36,8 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     item, colWidth, mode, gridStart, gridEnd, activeBoard, activeWorkspaceId,
     setSimulatedDates, simulatedDates, showDependencies, viewport, scrollAreaRef, onItemClick
 }) => {
-    const { updateTaskDate } = useBoardStore();
+    const updateNode = useWbsStore(s => s.updateNode);
+    const wbsDependencies = useWbsStore(s => s.dependencies);
 
     // Hover state
     const [isHovered, setIsHovered] = useState(false);
@@ -64,9 +63,13 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     let isInfiniteFallback = false;
 
     if (hasNoDates) {
-        if (item.type === 'checklist' && item.parentCardDates?.startDate && item.parentCardDates?.endDate) {
-            start = item.parentCardDates.startDate;
-            end = item.parentCardDates.endDate;
+        // Find ancestor dates recursively or fallback to full grid
+        const state = useWbsStore.getState();
+        const parent = state.nodes[state.nodes[item.id]?.parentId || ''];
+        
+        if (parent && parent.startDate && parent.endDate) {
+            start = parent.startDate;
+            end = parent.endDate;
         } else {
             start = dayjs(gridStart).format('YYYY-MM-DD');
             end = dayjs(gridEnd).format('YYYY-MM-DD');
@@ -90,7 +93,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const isRelated = isHovered;
 
     // Dependencies Logic
-    const taskDependencies = (activeBoard?.dependencies || []).map((dep: any, idx: number) => ({
+    const taskDependencies = (wbsDependencies || []).map((dep: any, idx: number) => ({
         ...dep,
         label: getDependencyLabel(idx),
         originalIndex: idx
@@ -201,14 +204,10 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 setDragDates({ start: tempStart, end: tempEnd });
 
                 if (activeBoard) {
-                    const overriddenDates = {
+                    // For now, simulate locally in Gantt only by setSimulatedDates
+                    const previewObj: any = {
                         [currentDs.item.id]: { startDate: tempStart, endDate: tempEnd }
                     };
-                    const previewDatesMap = calculateCascadedDates(activeBoard, overriddenDates);
-                    previewDatesMap.set(currentDs.item.id, { startDate: tempStart, endDate: tempEnd });
-
-                    const previewObj: any = {};
-                    previewDatesMap.forEach((val: any, key: string) => { previewObj[key] = val; });
                     setSimulatedDates(previewObj);
                 }
 
@@ -261,19 +260,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     }
                 }
 
-                updateTaskDate(
-                    activeWorkspaceId,
-                    activeBoard?.id,
-                    itm.type,
-                    itm.id,
-                    { startDate: newStart, endDate: newEnd },
-                    itm.listId,
-                    itm.cardId,
-                    itm.checklistId,
-                    false,
-                    { startDate: ds.originalStart, endDate: ds.originalEnd },
-                    ds.type
-                );
+                updateNode(itm.id, { startDate: newStart, endDate: newEnd });
             }
 
             dragStateRef.current = null;
@@ -293,7 +280,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 rafIdRef.current = null;
             }
         };
-    }, [dragState, colWidth, mode, activeWorkspaceId, activeBoard, setSimulatedDates, updateTaskDate, gridStart, scrollAreaRef]);
+    }, [dragState, colWidth, mode, activeWorkspaceId, activeBoard, setSimulatedDates, updateNode, gridStart, scrollAreaRef]);
 
 
     const renderDependencies = () => {

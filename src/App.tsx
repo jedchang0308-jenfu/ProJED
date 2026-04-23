@@ -30,6 +30,7 @@ import RecycleBinView from './components/RecycleBinView';
 import CardModal from './components/CardModal';
 import GlobalDialog from './components/GlobalDialog';
 import UpdateToast from './components/UpdateToast';
+import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
 
 /**
  * AppContent — 主應用內容（已通過 AuthGate 認證）
@@ -144,7 +145,7 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;
-      case 'list':        return <ListView />;   // 清單模式：底層資料展示入口
+      case 'list':        return <WbsListView boardId={activeBoardId || ''} />; // 攔截原本的 ListView
       case 'board':       return <BoardView />;
       case 'gantt':       return <GanttView />;
       case 'calendar':    return <CalendarView />;

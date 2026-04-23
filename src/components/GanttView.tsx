@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
+import useBoardStore from '../store/useBoardStore';
+import { useWbsStore } from '../store/useWbsStore';
 import dayjs from 'dayjs';
 import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
@@ -45,6 +46,9 @@ const GanttView = () => {
     const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
     const activeBoard = activeWs?.boards.find(b => b.id === activeBoardId);
 
+    // Subscribe to nodes so GanttView re-renders when task dates or orders change
+    const nodes = useWbsStore(s => s.nodes);
+
     const statuses = [
         { key: 'todo', label: '進行中', color: 'bg-status-todo' },
         { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
@@ -54,13 +58,12 @@ const GanttView = () => {
     ];
 
     const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
-        if (!activeBoard) return { flattenedItems: [], groups: { lists: [], cards: [] }, gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
+        if (!activeBoardId) return { flattenedItems: [], groups: [], gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
+        
+        const state = useWbsStore.getState();
         const items: any[] = [];
-        const listGroups: any[] = [];
-        const cardGroups: any[] = [];
+        const allGroups: any[] = [];
         let currentRow = 0;
-
-        const cascadedDates = calculateCascadedDates(activeBoard);
 
         let minDate: dayjs.Dayjs | null = null;
         let maxDate: dayjs.Dayjs | null = null;
@@ -68,112 +71,73 @@ const GanttView = () => {
         const updateBounds = (start: string | null, end: string | null) => {
             if (start) {
                 const s = dayjs(start);
-                if (s.isValid()) {
-                    if (!minDate || s.isBefore(minDate)) minDate = s;
-                }
+                if (s.isValid() && (!minDate || s.isBefore(minDate))) minDate = s;
             }
             if (end) {
                 const e = dayjs(end);
-                if (e.isValid()) {
-                    if (!maxDate || e.isAfter(maxDate)) maxDate = e;
-                }
+                if (e.isValid() && (!maxDate || e.isAfter(maxDate))) maxDate = e;
             }
         };
 
-        (activeBoard.lists || []).forEach(list => {
-            if (list.isArchived) return;
-            const listStatus = list.status || 'todo';
-            const listStartRow = currentRow;
-            const isListCollapsed = collapsedIds.has(list.id);
+        const traverse = (nodeId: string, level: number) => {
+            const node = state.nodes[nodeId];
+            if (!node || node.isArchived) return -1;
+            if (!statusFilters[node.status]) return -1;
 
-            const computedList = cascadedDates.get(list.id);
-            const listStartDate = computedList?.startDate || list.startDate;
-            const listEndDate = computedList?.endDate || list.endDate;
+            // Map level to legacy types for gantt filters temporarily
+            let pseudoType = 'checklist';
+            if (level === 0) pseudoType = 'list';
+            else if (level === 1) pseudoType = 'card';
+            
+            if (pseudoType === 'list' && !ganttFilters.list) return -1;
+            if (pseudoType === 'card' && !ganttFilters.card) return -1;
+            if (pseudoType === 'checklist' && !ganttFilters.checklist) return -1;
 
-            updateBounds(listStartDate, listEndDate);
+            const startRow = currentRow;
+            updateBounds(node.startDate || null, node.endDate || null);
 
-            if (ganttFilters.list && statusFilters[listStatus]) {
-                items.push({ ...list, type: 'list', row: currentRow++, startDate: listStartDate, endDate: listEndDate });
-            }
-
-            if (isListCollapsed) return;
-
-            const cards = list.cards || [];
-            cards.forEach(card => {
-                if (card.isArchived) return;
-                const cardStatus = card.status || 'todo';
-                if (!statusFilters[cardStatus]) return;
-
-                const computedCard = cascadedDates.get(card.id);
-                const cardStartDate = computedCard?.startDate || card.startDate;
-                const cardEndDate = computedCard?.endDate || card.endDate;
-
-                updateBounds(cardStartDate, cardEndDate);
-
-                const cardStartRow = currentRow;
-                const isCardCollapsed = collapsedIds.has(card.id);
-                
-                if (ganttFilters.card) {
-                    items.push({ ...card, type: 'card', row: currentRow++, listId: list.id, startDate: cardStartDate, endDate: cardEndDate });
-                }
-
-                if (!isCardCollapsed) {
-                    if (ganttFilters.checklist) {
-                        (card.checklists || []).forEach(cl => {
-                            if (cl.isArchived) return;
-                            (cl.items || []).forEach(cli => {
-                                if (cli.isArchived) return;
-                                const cliStatus = cli.status || 'todo';
-                                if (!statusFilters[cliStatus]) return;
-
-                                const computedCli = cascadedDates.get(cli.id);
-                                const cliStartDate = computedCli?.startDate || cli.startDate;
-                                const cliEndDate = computedCli?.endDate || cli.endDate;
-
-                                updateBounds(cliStartDate, cliEndDate);
-                                items.push({
-                                    ...cli,
-                                    type: 'checklist',
-                                    row: currentRow++,
-                                    listId: list.id,
-                                    cardId: card.id,
-                                    checklistId: cl.id,
-                                    title: cli.title || '未命名項目',
-                                    startDate: cliStartDate,
-                                    endDate: cliEndDate,
-                                    parentCardDates: {
-                                        startDate: cardStartDate,
-                                        endDate: cardEndDate
-                                    }
-                                });
-                            });
-                        });
-                    }
-                }
-
-                const cardEndRow = currentRow - 1;
-                if (cardEndRow >= cardStartRow && (ganttFilters.card || ganttFilters.checklist)) {
-                    cardGroups.push({
-                        start: cardStartRow,
-                        end: cardEndRow,
-                        id: card.id,
-                        startDate: cardStartDate,
-                        endDate: cardEndDate
-                    });
-                }
+            items.push({ 
+                ...node, 
+                type: pseudoType, 
+                row: currentRow++, 
+                level,
+                startDate: node.startDate, 
+                endDate: node.endDate 
             });
 
-            const listEndRow = currentRow - 1;
-            if (listEndRow >= listStartRow && (ganttFilters.list || ganttFilters.card || ganttFilters.checklist)) {
-                listGroups.push({
-                    start: listStartRow,
-                    end: listEndRow,
-                    id: list.id,
-                    startDate: listStartDate,
-                    endDate: listEndDate
-                });
+            const isCollapsed = collapsedIds.has(nodeId);
+            const childIds = state.parentNodesIndex[nodeId] || [];
+            
+            if (!isCollapsed && childIds.length > 0) {
+                 const children = childIds.map(id => state.nodes[id]).filter(Boolean).sort((a,b) => a.order - b.order);
+                 children.forEach(child => traverse(child.id, level + 1));
             }
-        });
+
+            const endRow = currentRow - 1;
+            if (endRow > startRow && (!isCollapsed || childIds.length > 0)) {
+                 allGroups.push({
+                     start: startRow,
+                     end: endRow,
+                     id: node.id,
+                     level: level,
+                     startDate: node.startDate,
+                     endDate: node.endDate
+                 });
+            }
+            
+            return startRow;
+        };
+
+        // start from root nodes
+        const rootIds = state.parentNodesIndex[activeBoardId] || [];
+        const orphanRootIds = state.parentNodesIndex['root'] || [];
+        
+        const allRootIds = Array.from(new Set([...rootIds, ...orphanRootIds]));
+        const rootNodes = allRootIds.map(id => state.nodes[id])
+            .filter(n => n && n.boardId === activeBoardId && !n.isArchived)
+            .sort((a,b) => a.order - b.order);
+        
+        rootNodes.forEach(rn => traverse(rn.id, 0));
 
         const today = dayjs();
         const start = (minDate && minDate.isBefore(today)) ? minDate : today;
@@ -204,12 +168,12 @@ const GanttView = () => {
 
         return {
             flattenedItems: items,
-            groups: { lists: listGroups, cards: cardGroups },
+            groups: allGroups,
             gridStart: calculatedGridStart,
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoard, ganttFilters, statusFilters, mode, collapsedIds]);
+    }, [activeBoardId, ganttFilters, statusFilters, mode, collapsedIds, nodes]);
 
     const colWidth = getColWidth(mode);
 
@@ -249,12 +213,15 @@ const GanttView = () => {
     }, [mode, colWidth, gridStart]);
 
     const handleItemClick = (item: any) => {
-        if (item.type === 'list') {
+        // Fallback for legacy Modal opening
+        const state = useWbsStore.getState();
+        if (item.level === 0) {
             openModal('list', item.id);
-        } else if (item.type === 'card') {
-            openModal('card', item.id, item.listId);
-        } else if (item.type === 'checklist') {
-            openModal('checklistitem', item.id, item.listId, { cardId: item.cardId, checklistId: item.checklistId });
+        } else if (item.level === 1) {
+            openModal('card', item.id, item.parentId);
+        } else {
+            const parent = state.nodes[item.parentId];
+            openModal('checklistitem', item.id, parent?.parentId, { cardId: parent?.id, checklistId: item.parentId });
         }
     };
 
