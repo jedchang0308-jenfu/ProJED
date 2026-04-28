@@ -3,9 +3,16 @@
  * 設計意圖：在使用者未登入時顯示登入畫面，
  * 登入成功後渲染 children（主應用程式）。
  * 確保所有 Firestore 操作都有有效的 userId。
+ *
+ * 【自動遷移機制】
+ * 使用者首次登入後，會自動執行 runAutoMigration，
+ * 將舊版 localStorage 或 Firestore 舊格式資料升級至新版 WBS 架構。
+ * 遷移完成後寫入 Firestore users/{uid}.migrationVersion = 2，
+ * 確保後續登入不再重複執行（Idempotent 設計）。
  */
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
+import { runAutoMigration } from '../utils/autoMigration';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -27,10 +34,37 @@ interface AuthGateProps {
 export default function AuthGate({ children }: AuthGateProps) {
   const { user, loading, error, signInWithGoogle } = useAuthStore();
   const [isInApp, setIsInApp] = useState(false);
+  // 遷移狀態：'idle' | 'migrating' | 'done'
+  const [migrationState, setMigrationState] = useState<'idle' | 'migrating' | 'done'>('idle');
 
   useEffect(() => {
     setIsInApp(detectInAppBrowser());
   }, []);
+
+  // 登入後自動觸發遷移（只有 user 從 null 變成非 null 時執行一次）
+  useEffect(() => {
+    if (!user) {
+      // 登出時重置，確保下次登入可以重新檢查
+      setMigrationState('idle');
+      return;
+    }
+
+    if (migrationState !== 'idle') return;
+
+    setMigrationState('migrating');
+    runAutoMigration(user.uid)
+      .then((result) => {
+        if (result === 'migrated') {
+          console.log('[AuthGate] 資料遷移完成！');
+        } else if (result === 'skipped') {
+          console.log('[AuthGate] 已是最新版，無需遷移。');
+        } else {
+          console.warn('[AuthGate] 遷移過程發生問題，但不影響主應用程式運作。');
+        }
+      })
+      .catch(e => console.error('[AuthGate] 遷移例外:', e))
+      .finally(() => setMigrationState('done'));
+  }, [user?.uid]);
 
   // 載入中：顯示 spinner
   if (loading) {
@@ -109,6 +143,41 @@ export default function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  // 已登入：渲染主應用程式
+  // 遷移中：顯示升級畫面（防止使用者在遷移期間誤操作）
+  if (migrationState === 'migrating') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+        <div className="flex flex-col items-center gap-6 text-center px-8">
+          {/* 動畫圖示 */}
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full" />
+            <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin absolute inset-0" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-2xl">⚡</span>
+            </div>
+          </div>
+
+          {/* 說明文字 */}
+          <div>
+            <h2 className="text-white text-lg font-bold mb-2">資料升級中...</h2>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
+              正在將您的資料升級至最新的 WBS 架構，<br/>
+              這只需要幾秒鐘，請勿關閉視窗。
+            </p>
+          </div>
+
+          {/* 進度提示 */}
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 已登入且遷移完成（或跳過）：渲染主應用程式
   return <>{children}</>;
 }
+

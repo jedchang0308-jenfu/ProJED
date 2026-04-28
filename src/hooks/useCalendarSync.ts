@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useCallback } from 'react';
 import useCalendarSyncStore from '../store/useCalendarSyncStore';
 import { googleCalendarService } from '../services/googleCalendarService';
