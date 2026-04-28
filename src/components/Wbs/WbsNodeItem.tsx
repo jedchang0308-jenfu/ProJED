@@ -3,8 +3,11 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import type { TaskNode, TaskStatus } from '../../types';
 import { Button } from '../ui/Button';
-import { ChevronRight, ChevronDown, Plus, Trash2, Link } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Trash2, Link, GripVertical } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -21,6 +24,19 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const [localTitle, setLocalTitle] = useState(node.title);
   const [localStartDate, setLocalStartDate] = useState(node.startDate || '');
   const [localEndDate, setLocalEndDate] = useState(node.endDate || '');
+
+  // DnD Sortable Hook
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id: nodeId,
+      data: { item: node }
+  });
+
+  const dndStyle = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      position: 'relative' as any,
+      zIndex: isDragging ? 50 : 1,
+  };
 
   // ✅ 同步 Store 狀態到 Local State (確保 Undo/Redo 發生時畫面能正確更新)
   React.useEffect(() => {
@@ -211,6 +227,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   return (
     <>
       <div 
+        ref={setNodeRef}
+        style={dndStyle}
         onContextMenu={(e) => {
             e.preventDefault();
             setContextMenuState({
@@ -221,11 +239,22 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                 title: node.title
             });
         }}
-        className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] items-center py-1 px-4 border-b border-gray-200 dark:border-gray-800/50 group hover:bg-white dark:hover:bg-gray-800 transition-colors bg-gray-50/50 dark:bg-transparent text-sm active:bg-gray-100"
+        className={`grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] items-center py-1 px-4 border-b border-gray-200 dark:border-gray-800/50 group hover:bg-white dark:hover:bg-gray-800 transition-colors bg-gray-50/50 dark:bg-transparent text-sm active:bg-gray-100 ${isDragging ? 'opacity-50 bg-blue-50 dark:bg-gray-800' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
-        <div className="flex items-center gap-1.5 overflow-hidden pr-4" style={{ paddingLeft: `${indentPadding}rem` }}>
+        <div className="flex items-center gap-1.5 overflow-hidden pr-4 relative" style={{ paddingLeft: `${indentPadding}rem` }}>
+          {/* 拖曳手把 */}
+          <div 
+              {...attributes} 
+              {...listeners} 
+              className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors p-1 -ml-2 opacity-0 group-hover:opacity-100 touch-none flex-shrink-0"
+              onClick={e => e.stopPropagation()}
+              title="拖曳以排序或移動"
+          >
+              <GripVertical size={14} />
+          </div>
+
           <button 
             onClick={handleToggle}
             className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-400 ${!hasChildren && 'invisible'}`}
@@ -395,9 +424,11 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
       {/* 遞迴渲染子節點 */}
       {isExpanded && hasChildren && (
         <div className="flex flex-col w-full">
-          {children.map(child => (
-            <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} />
-          ))}
+          <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
+            {children.map(child => (
+              <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} />
+            ))}
+          </SortableContext>
         </div>
       )}
     </>

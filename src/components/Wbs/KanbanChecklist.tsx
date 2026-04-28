@@ -2,11 +2,13 @@
  * KanbanChecklist — 遞迴渲染 WBS Level 3+ 子節點為待辦清單
  * 設計意圖：在 KanbanCard 內部呈現深層子節點，保留 WBS 階層關係。
  * 每一層透過 depth 增加縮排，點擊勾選方塊直接觸發 useWbsStore 狀態更新。
+ * 
+ * 【編輯功能】點擊待辦事項標題可行內編輯，Enter 或失焦即儲存，ESC 取消。
  */
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
-import type { TaskStatus } from '../../types';
+import type { TaskStatus, TaskNode } from '../../types';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -39,6 +41,45 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const updateNode = useWbsStore(s => s.updateNode);
   const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
   const statusFilters = useBoardStore(s => s.statusFilters);
+
+  // 行內編輯狀態管理
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 進入編輯模式時自動聚焦並全選文字
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingId]);
+
+  /** 開始編輯 */
+  const handleStartEdit = (e: React.MouseEvent, child: TaskNode) => {
+    e.stopPropagation();
+    setEditingId(child.id);
+    setEditValue(child.title || '');
+  };
+
+  /** 儲存變更 */
+  const handleSave = (child: TaskNode) => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== child.title) {
+      updateNode(child.id, { title: trimmed, updatedAt: Date.now() });
+    }
+    setEditingId(null);
+  };
+
+  /** 鍵盤事件 */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, child: TaskNode) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave(child);
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+    }
+  };
 
   // 取得子節點的完整資料，按 order 排序
   const children = React.useMemo(() => {
@@ -107,10 +148,26 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
                 )}
               </button>
 
-              {/* 項目標題 */}
-              <span className={`text-xs leading-tight flex-1 truncate ${statusTextMap[status]}`}>
-                {child.title || '未命名項目'}
-              </span>
+              {/* 項目標題 — 行內編輯支援 */}
+              {editingId === child.id ? (
+                <input
+                  ref={inputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => handleSave(child)}
+                  onKeyDown={(e) => handleKeyDown(e, child)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 text-xs bg-white border border-primary rounded px-1 py-0.5 outline-none ring-1 ring-primary/30 text-slate-700 min-w-0"
+                />
+              ) : (
+                <span
+                  className={`text-xs leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
+                  onClick={(e) => handleStartEdit(e, child)}
+                  title="點擊以編輯待辦事項"
+                >
+                  {child.title || '未命名項目'}
+                </span>
+              )}
 
               {/* 子項目數量指示器 (僅在有更深子節點時顯示) */}
               {hasGrandchildren && (

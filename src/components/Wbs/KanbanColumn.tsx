@@ -2,8 +2,10 @@
  * KanbanColumn — 渲染 WBS Level 1 (根節點) 為 Kanban 列表直行
  * 設計意圖：取代舊版 List.tsx 在看板中的角色。
  * 每個列表欄對應一個 WBS 根群組，欄內的卡片為該群組的 Level 2 子節點。
+ * 
+ * 【編輯功能】點擊群組標題可行內編輯，Enter 或失焦即儲存，ESC 取消。
  */
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus, GripVertical } from 'lucide-react';
@@ -23,9 +25,49 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
   const node = useWbsStore(s => s.nodes[nodeId]);
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
   const addNode = useWbsStore(s => s.addNode);
+  const updateNode = useWbsStore(s => s.updateNode);
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+
+  // 群組標題行內編輯狀態
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 進入編輯模式時自動聚焦並全選文字
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  /** 開始編輯群組標題 */
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditValue(node?.title || '');
+    setIsEditing(true);
+  };
+
+  /** 儲存群組標題變更 */
+  const handleSave = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== node?.title) {
+      updateNode(nodeId, { title: trimmed, updatedAt: Date.now() });
+    }
+    setIsEditing(false);
+  };
+
+  /** 鍵盤事件：Enter 儲存，ESC 取消 */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
 
   // 訂閱 Level 2 子節點 ID 陣列
   const childIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
@@ -107,26 +149,49 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
         }}
       >
         <div className="flex items-center gap-2">
-          {/* 列表拖動手柄 */}
+          {/* 拖動手柄 — 編輯模式下停用，避免衝突 */}
           <div
-            {...columnAttributes}
-            {...columnListeners}
-            className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors p-1 -ml-1 touch-none"
+            {...(isEditing ? {} : columnAttributes)}
+            {...(isEditing ? {} : columnListeners)}
+            className={`transition-colors p-1 -ml-1 touch-none ${
+              isEditing
+                ? 'cursor-default text-slate-200 opacity-30'
+                : 'cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500'
+            }`}
             onClick={(e) => e.stopPropagation()}
-            title="拖動列表"
+            title={isEditing ? '' : '拖動列表'}
           >
             <GripVertical size={16} />
           </div>
 
-          {/* 列表標題 */}
+          {/* 列表標題 — 點擊可行內編輯 */}
           <div className="flex items-center justify-between flex-1">
             <div className="flex items-center gap-2 overflow-hidden flex-1">
               <div className={`w-2.5 h-2.5 rounded-full bg-status-${status} shrink-0`} />
-              <h3 className={`font-bold text-sm truncate ${
-                status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
-              }`}>
-                {node.title || '未命名群組'}
-              </h3>
+
+              {isEditing ? (
+                /* 編輯模式：第入圖層的 input */
+                <input
+                  ref={inputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleSave}
+                  onKeyDown={handleKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 font-bold text-sm bg-white border border-primary rounded px-1.5 py-0.5 outline-none ring-2 ring-primary/30 text-slate-700 min-w-0"
+                />
+              ) : (
+                /* 一般模式：點擊觸發編輯 */
+                <h3
+                  className={`font-bold text-sm truncate cursor-text hover:text-primary transition-colors ${
+                    status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
+                  }`}
+                  onClick={handleStartEdit}
+                  title="點擊以編輯群組名稱"
+                >
+                  {node.title || '未命名群組'}
+                </h3>
+              )}
             </div>
           </div>
         </div>
