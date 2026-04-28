@@ -244,3 +244,24 @@ useBoardStore (Zustand + Firestore)
 
 ---
 *更新日期：2026-04-21 (共用 UI 模組庫建立與首波重構完成)*
+
+## 13. 看板與清單模式優化 (Kanban & List Mode Optimizations)
+
+### 13.1 看板行內編輯 (Kanban Inline Editing)
+- **設計意圖**：減少頻繁開啟右鍵選單或側邊欄的需求，讓使用者能直覺地在視覺介面上直接修改任務名稱。
+- **實現方式**：
+    - 在 `KanbanCard`, `KanbanColumn` 與 `KanbanChecklist` 中實作 `isEditing` 狀態切換。
+    - **UI 切換**：標題文字 (`h4`/`h3`/`span`) 與 `<input>` 欄位動態切換，點擊時自動 `focus` 並 `select()` 文字。
+    - **操作防護**：
+        - 進入編輯模式時，自動停用 `dnd-kit` 的拖曳手把 (`attributes`/`listeners`)，並將手把設為半透明，防止選取文字時觸發卡片位移。
+        - 支援 `Enter` 儲存、`Esc` 取消，以及失焦 (`onBlur`) 自動儲存，維持與傳統試算表一致的操作邏輯。
+
+### 13.2 清單模式拖曳排序 (List View Drag-and-Drop)
+- **設計意圖**：補足 `WbsListView` 遺漏的排序能力，使其與甘特圖側邊欄具備同等的層級管理體驗。
+- **實現方式**：
+    - **巢狀 SortableContext (Nested Sortables)**：由於 `WbsListView` 採用遞迴渲染，我們在 `WbsListView` 建立 `DndContext`，並在每一層 `WbsNodeItem` 的子節點渲染區包裹獨立的 `SortableContext`。
+    - **跨層級移動邏輯**：在 `handleDragEnd` 中，透過判斷 `active` 與 `over` 節點的 `parentId`。若父節點不同，則執行跨層級移動並重新計算 `order`。
+    - **視覺一致性**：引入 `GripVertical` 圖示作為拖曳手把，與甘特圖模式維持統一的 UI 規範。
+
+---
+*更新日期：2026-04-28 (看板行內編輯與清單拖曳功能發布)*

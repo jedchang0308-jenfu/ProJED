@@ -206,6 +206,13 @@ export type StatusFilters = Record<TaskStatus, boolean>;
 
 // ===== Store 型別 =====
 
+/** 甘特圖層級顯示過濾器 */
+export interface GanttFilters {
+  list: boolean;       // 群組層級
+  card: boolean;       // 任務層級
+  checklist: boolean;  // 子項層級
+}
+
 /** Board Store 的狀態部分（不含 actions） */
 export interface BoardState {
   workspaces: Workspace[];
@@ -215,8 +222,12 @@ export interface BoardState {
   isSidebarOpen: boolean;
   editingItem: EditingItem | null;
   statusFilters: StatusFilters;
-  
-  // 依賴關係 UI 狀態
+
+  // UI 顯示狀態（全域共用）
+  showDependencies: boolean;   // 是否顯示依賴連線
+  ganttFilters: GanttFilters;  // 甘特圖層級顯示控制
+
+  // 依賴關係互動狀態
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   dependencyMenuState: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
@@ -250,6 +261,8 @@ export interface BoardActions {
   openModal: (type: EditableItemType, itemId: string, listId: string, extra?: Record<string, unknown>) => void;
   closeModal: () => void;
   toggleStatusFilter: (status: TaskStatus) => void;
+  toggleDependencies: () => void;
+  toggleGanttFilter: (key: keyof GanttFilters) => void;
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setDependencyMenuState: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;

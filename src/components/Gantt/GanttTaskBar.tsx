@@ -460,10 +460,10 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             {isDragging && dragDates && (
                 <>
                     <div className="absolute -top-7 left-0 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-50 transform -translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
-                        {dayjs(dragDates.start).format('M/D')}
+                        {dayjs(dragDates.start).year() !== dayjs().year() ? dayjs(dragDates.start).format('YY/M/D') : dayjs(dragDates.start).format('M/D')}
                     </div>
                     <div className="absolute -top-7 right-0 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-50 transform translate-x-1/2 before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
-                        {dayjs(dragDates.end).format('M/D')}
+                        {dayjs(dragDates.end).year() !== dayjs().year() ? dayjs(dragDates.end).format('YY/M/D') : dayjs(dragDates.end).format('M/D')}
                     </div>
                 </>
             )}

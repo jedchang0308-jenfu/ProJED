@@ -62,6 +62,7 @@ const STATUS_STYLES = {
 };
 
 import SharedTaskSidebar from './SharedTaskSidebar';
+import { StatusFilterBar } from './ui/StatusFilterBar';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -311,18 +312,7 @@ const CalendarView = () => {
             >
                 {/* 狀態篩選器 */}
                 <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2 mr-4 flex-1">
-                    {statuses.map(s => (
-                        <button
-                            key={s.key}
-                            onClick={() => toggleStatusFilter(s.key)}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${statusFilters[s.key]
-                                ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
-                                : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'}`}
-                        >
-                            <div className={`w-2 h-2 rounded-full ${s.color}`}></div>
-                            <span className="text-[10px] sm:text-xs font-bold">{s.label}</span>
-                        </button>
-                    ))}
+                    <StatusFilterBar />
                 </div>
 
                 {/* 月份導覽 + 控制 */}

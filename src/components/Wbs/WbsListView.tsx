@@ -10,6 +10,7 @@ import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../../hooks/useDragSensors';
+import { StatusFilterBar } from '../ui/StatusFilterBar';
 
 interface WbsListViewProps {
   boardId: string;
@@ -18,14 +19,13 @@ interface WbsListViewProps {
 export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
-  const toggleStatusFilter = useBoardStore(s => s.toggleStatusFilter);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   const dependencyMenuState = useBoardStore(s => s.dependencyMenuState);
   const setDependencyMenuState = useBoardStore(s => s.setDependencyMenuState);
+  // 從全域 Store 取出依賴線顯示狀態（已從局部升格為全域）
+  const showDependencies = useBoardStore(s => s.showDependencies);
   const { dependencies, addDependency, removeDependency, updateDependency, addNode, updateNode } = useWbsStore();
-
-  const [showDependencies, setShowDependencies] = React.useState(true);
 
   // DnD 狀態
   const sensors = useDragSensors();
@@ -194,7 +194,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
 
   return (
     <WbsDependencyContext.Provider value={dependencyContextValue}>
-      <div className="flex flex-col w-full h-full bg-white dark:bg-gray-900 overflow-hidden pt-4 px-6 md:px-8 relative">
+      <div className="flex flex-col w-full h-full bg-white overflow-hidden pt-4 px-6 md:px-8 relative">
         
 
         {/* 依賴選單 Modal (行內) */}
@@ -267,45 +267,10 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         )}
 
       {/* 狀態篩選器 + 操作區 */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
-        <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto no-scrollbar py-1">
-          {[
-            { key: 'todo', label: '待辦', color: 'bg-status-todo' },
-            { key: 'in_progress', label: '進行中', color: 'bg-blue-500' },
-            { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
-            { key: 'completed', label: '完成', color: 'bg-status-completed' },
-            { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },
-            { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
-          ].map(s => (
-            <button
-              key={s.key}
-              onClick={() => toggleStatusFilter(s.key as TaskStatus)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${
-                statusFilters[s.key as TaskStatus]
-                  ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
-                  : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'
-              }`}
-            >
-              <div className={`w-2 h-2 rounded-full ${s.color}`} />
-              <span className="text-[10px] sm:text-xs font-bold">{s.label}</span>
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 shrink-0">
+        <StatusFilterBar />
         
         <div className="flex items-center gap-2 ml-4 shrink-0">
-          <button
-              onClick={() => setShowDependencies(prev => !prev)}
-              title={showDependencies ? '隱藏日期的關聯線標記' : '顯示日期的關聯線標記'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${
-                  showDependencies
-                      ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm'
-                      : 'bg-gray-50 border-transparent text-gray-400 hover:text-gray-600 dark:bg-gray-800'
-              }`}
-          >
-              <GitBranch size={14} />
-              <span>依賴線</span>
-          </button>
-          
           <Button onClick={handleCreateRootNode} className="flex items-center gap-2 shrink-0">
             <Plus size={18} />
             <span>建立頂層群組</span>
@@ -316,16 +281,16 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       {/* 清單容器 */}
       <div className="flex-1 overflow-y-auto w-full pb-20 pr-2 custom-scrollbar">
         {rootNodes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-lg text-gray-400">
+          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
             <p className="mb-4">此專案目前沒有任何任務或群組</p>
             <Button variant="outline" as any onClick={handleCreateRootNode}>
               開始建立第一個節點
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm relative">
+          <div className="flex flex-col bg-white border border-slate-200 rounded-lg shadow-sm relative">
             {/* Header Column Titles (Tree Grid) */}
-            <div className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] py-2 px-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 rounded-t-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider sticky top-0 z-10">
+            <div className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] py-2 px-4 bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
                 <div className="flex items-center pl-[28px]">任務名稱</div>
                 <div className="flex items-center">狀態</div>
                 <div className="flex items-center">開始日期</div>
@@ -347,7 +312,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                 
                 <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                     {activeSortableItem ? (
-                        <div className="opacity-95 shadow-2xl border border-blue-200 bg-white dark:bg-gray-800 rounded overflow-hidden ring-2 ring-blue-400 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
+                        <div className="opacity-95 shadow-2xl border border-slate-200 bg-white rounded overflow-hidden ring-2 ring-primary/30 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
                             <WbsNodeItem nodeId={activeSortableItem.id} level={0} />
                         </div>
                     ) : null}

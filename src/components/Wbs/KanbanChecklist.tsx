@@ -8,6 +8,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
+import dayjs from 'dayjs';
+import { Input } from '../ui/Input';
 import type { TaskStatus, TaskNode } from '../../types';
 
 interface KanbanChecklistProps {
@@ -150,14 +152,16 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
 
               {/* 項目標題 — 行內編輯支援 */}
               {editingId === child.id ? (
-                <input
+                <Input
                   ref={inputRef}
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
+                  onVoiceResult={setEditValue}
                   onBlur={() => handleSave(child)}
                   onKeyDown={(e) => handleKeyDown(e, child)}
                   onClick={(e) => e.stopPropagation()}
-                  className="flex-1 text-xs bg-white border border-primary rounded px-1 py-0.5 outline-none ring-1 ring-primary/30 text-slate-700 min-w-0"
+                  voiceEnabled
+                  className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0.5 text-xs text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
                 />
               ) : (
                 <span
@@ -166,6 +170,13 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
                   title="點擊以編輯待辦事項"
                 >
                   {child.title || '未命名項目'}
+                </span>
+              )}
+
+              {/* 到期日標籤 */}
+              {!editingId && child.endDate && (
+                <span className="text-[9px] text-slate-400 border border-slate-200 rounded px-1 py-0.5 flex-shrink-0 bg-white ml-1">
+                  {dayjs(child.endDate).year() !== dayjs().year() ? dayjs(child.endDate).format('YY/MM/DD') : dayjs(child.endDate).format('MM/DD')}
                 </span>
               )}
 

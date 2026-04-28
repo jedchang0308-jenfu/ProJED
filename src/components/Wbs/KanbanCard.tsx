@@ -13,6 +13,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { KanbanChecklist } from './KanbanChecklist';
 import { Badge } from '../ui/Badge';
+import { Input } from '../ui/Input';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 
@@ -154,14 +155,16 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
 
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
               {isEditing ? (
-                <input
+                <Input
                   ref={inputRef}
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
+                  onVoiceResult={setEditValue}
                   onBlur={handleSave}
                   onKeyDown={handleKeyDown}
                   onClick={(e) => e.stopPropagation()}
-                  className="flex-1 text-sm font-semibold bg-white border border-primary rounded px-1.5 py-0.5 outline-none ring-2 ring-primary/30 text-slate-700 min-w-0"
+                  voiceEnabled
+                  className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-700 outline-none ring-2 ring-primary/30 focus:ring-2 focus:ring-primary/30 focus:ring-offset-0"
                 />
               ) : (
                 <h4
@@ -183,9 +186,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
               {/* 日期區間 */}
               {(node.startDate || node.endDate) && (
                 <Badge variant="default" size="sm" icon={<Calendar size={10} />}>
-                  <span>{node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
+                  <span>{node.startDate ? (dayjs(node.startDate).year() !== dayjs().year() ? dayjs(node.startDate).format('YY/MM/DD') : dayjs(node.startDate).format('MM/DD')) : '...'}</span>
                   <span className="opacity-50">→</span>
-                  <span>{node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
+                  <span>{node.endDate ? (dayjs(node.endDate).year() !== dayjs().year() ? dayjs(node.endDate).format('YY/MM/DD') : dayjs(node.endDate).format('MM/DD')) : '...'}</span>
                 </Badge>
               )}
 

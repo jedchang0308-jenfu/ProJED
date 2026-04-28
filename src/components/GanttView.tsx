@@ -5,6 +5,7 @@ import { useWbsStore } from '../store/useWbsStore';
 import dayjs from 'dayjs';
 import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
+import { StatusFilterBar } from './ui/StatusFilterBar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
@@ -16,8 +17,9 @@ const GanttView = () => {
         statusFilters,
         isSidebarOpen,
         setSidebarOpen,
-        toggleStatusFilter,
         setView,
+        showDependencies,
+        ganttFilters,
     } = useBoardStore();
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
@@ -36,8 +38,6 @@ const GanttView = () => {
     };
 
     const [mode, setMode] = useState('Month');
-    const [ganttFilters, setGanttFilters] = useState<any>({ list: true, card: true, checklist: true });
-    const [showDependencies, setShowDependencies] = useState(true);
     const [viewport, setViewport] = useState({ scrollLeft: 0, width: 0 });
     const [simulatedDates, setSimulatedDates] = useState(null);
 
@@ -48,13 +48,6 @@ const GanttView = () => {
     // Subscribe to nodes so GanttView re-renders when task dates or orders change
     const nodes = useWbsStore(s => s.nodes);
 
-    const statuses = [
-        { key: 'todo', label: '待辦', color: 'bg-status-todo' },
-        { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
-        { key: 'completed', label: '完成', color: 'bg-status-completed' },
-        { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },
-        { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
-    ];
 
     const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
         if (!activeBoardId) return { flattenedItems: [], groups: [], gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
@@ -222,16 +215,7 @@ const GanttView = () => {
             <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0" style={{ zIndex: 110 }}>
                 {/* Left: Status Filters */}
                 <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2 mr-4 flex-1">
-                    {statuses.map(s => (
-                        <button
-                            key={s.key}
-                            onClick={() => toggleStatusFilter(s.key)}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${statusFilters[s.key as TaskStatus] ? 'bg-white border-slate-200 text-slate-700 shadow-sm' : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'}`}
-                        >
-                            <div className={`w-2 h-2 rounded-full ${s.color}`}></div>
-                            <span className="text-[10px] sm:text-xs font-bold">{s.label}</span>
-                        </button>
-                    ))}
+                    <StatusFilterBar />
                 </div>
 
                 {/* Right: Controls */}
@@ -255,7 +239,7 @@ const GanttView = () => {
                     </div>
 
                     <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
-                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg mr-2">
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                             <button onClick={() => setSidebarOpen(!isSidebarOpen)} className={`p-1.5 rounded transition-all ${!isSidebarOpen ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`} title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}>
                                 {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                             </button>
@@ -263,23 +247,6 @@ const GanttView = () => {
                                 <LayoutList size={16} />
                             </button>
                         </div>
-
-                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                            {['list', 'card', 'checklist'].map((key) => (
-                                <button
-                                    key={key}
-                                    onClick={() => setGanttFilters((prev: any) => ({ ...prev, [key]: !prev[key] }))}
-                                    className={`px-2 py-1 text-[10px] font-bold rounded ${ganttFilters[key] ? 'bg-white text-slate-700 shadow-xs' : 'text-slate-400'}`}
-                                >
-                                    {key === 'list' ? '群組' : key === 'card' ? '任務' : '子項'}
-                                </button>
-                            ))}
-                        </div>
-
-                        <button onClick={() => setShowDependencies(prev => !prev)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex-shrink-0 ${showDependencies ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' : 'bg-slate-100 border-transparent text-slate-400 hover:text-slate-600'}`}>
-                            <GitBranch size={11} />
-                            <span>依賴關係</span>
-                        </button>
                     </div>
                 </div>
             </div>

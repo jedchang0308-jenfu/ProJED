@@ -65,6 +65,9 @@ const useBoardStore = create<BoardStore>()(
             unsure: true,
             onhold: true,
         },
+        // UI 顯示狀態（全域共用）
+        showDependencies: true,
+        ganttFilters: { list: true, card: true, checklist: true },
         dependencySelection: null,
         dependencyMenuState: null,
         contextMenuState: null,
@@ -118,6 +121,14 @@ const useBoardStore = create<BoardStore>()(
                 ...state.statusFilters,
                 [status]: !state.statusFilters[status]
             }
+        })),
+
+        // 切換依賴連線顯示
+        toggleDependencies: () => set((state) => ({ showDependencies: !state.showDependencies })),
+
+        // 切換甘特圖層級顯示
+        toggleGanttFilter: (key) => set((state) => ({
+            ganttFilters: { ...state.ganttFilters, [key]: !state.ganttFilters[key] }
         })),
 
         // ===== Navigation =====

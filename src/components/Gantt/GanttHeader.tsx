@@ -19,7 +19,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({ mode, gridStart, total
             let subLabel = "";
             if (mode === 'Day') {
                 const d = gridStart.add(i, 'day');
-                label = d.format('M/D');
+                label = d.year() !== dayjs().year() ? d.format('YY/M/D') : d.format('M/D');
                 subLabel = weekDays[d.day()];
             } else if (mode === 'Month') {
                 const d = gridStart.add(i, 'month');

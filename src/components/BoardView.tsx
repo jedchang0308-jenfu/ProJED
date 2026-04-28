@@ -13,6 +13,8 @@ import { Plus } from 'lucide-react';
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
+import { GlobalContextMenu } from './GlobalContextMenu';
+import { StatusFilterBar } from './ui/StatusFilterBar';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
@@ -149,22 +151,7 @@ const BoardView = () => {
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
                 {/* 工具列 (Toolbar) — 狀態篩選器 */}
                 <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
-                    <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2">
-                        {statuses.map(s => (
-                            <button
-                                key={s.key}
-                                onClick={() => toggleStatusFilter(s.key)}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all whitespace-nowrap ${
-                                    statusFilters[s.key]
-                                        ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
-                                        : 'bg-slate-50 border-transparent text-slate-300 scale-95 opacity-50'
-                                }`}
-                            >
-                                <div className={`w-2 h-2 rounded-full ${s.color}`}></div>
-                                <span className="text-[10px] sm:text-xs font-bold">{s.label}</span>
-                            </button>
-                        ))}
-                    </div>
+                    <StatusFilterBar />
                 </div>
 
                 {/* 列表畫布 (Lists Canvas) */}

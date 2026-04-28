@@ -3,6 +3,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import type { TaskNode, TaskStatus } from '../../types';
 import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 import { ChevronRight, ChevronDown, Plus, Trash2, Link, GripVertical } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
@@ -17,6 +18,7 @@ interface WbsNodeItemProps {
 export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isTitleEditing, setIsTitleEditing] = useState(false);
   
   // 安全檢查，避免節點已被砍除仍在渲染導致 crash
   if (!node) return null;
@@ -50,7 +52,12 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
 
   // 取得全域依賴狀態
   const dependencyContext = React.useContext(WbsDependencyContext);
-  const { showDependencies, handleDependencySelect, dependencySelection, dependencyMarkers } = dependencyContext || { showDependencies: false, dependencySelection: null, dependencyMarkers: {} };
+  const showDependencies = dependencyContext?.showDependencies ?? false;
+  const handleDependencySelect = dependencyContext?.handleDependencySelect;
+  const dependencySelection = dependencyContext?.dependencySelection ?? null;
+  const dependencyMarkers =
+    dependencyContext?.dependencyMarkers ??
+    ({} as NonNullable<React.ContextType<typeof WbsDependencyContext>>['dependencyMarkers']);
 
   // 確認選取狀態
   const isSelectingMode = !!dependencySelection;
@@ -113,6 +120,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
 
   // ----- 行內編輯處理 -----
   const handleTitleBlur = () => {
+    setIsTitleEditing(false);
     if (localTitle.trim() !== node.title) {
         updateNode(node.id, { title: localTitle.trim() || '未命名任務' });
     }
@@ -239,7 +247,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                 title: node.title
             });
         }}
-        className={`grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] items-center py-1 px-4 border-b border-gray-200 dark:border-gray-800/50 group hover:bg-white dark:hover:bg-gray-800 transition-colors bg-gray-50/50 dark:bg-transparent text-sm active:bg-gray-100 ${isDragging ? 'opacity-50 bg-blue-50 dark:bg-gray-800' : ''}`}
+        className={`grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] items-center py-1 px-4 border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white text-sm active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
@@ -257,7 +265,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
 
           <button 
             onClick={handleToggle}
-            className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-400 ${!hasChildren && 'invisible'}`}
+            className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors text-slate-400 ${!hasChildren && 'invisible'}`}
             title={isExpanded ? '收合' : '展開'}
           >
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -270,24 +278,27 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
           ) : null}
 
           {/* 表格感 Input：透明背景、無邊框、focus時顯示底線或底色 */}
-          <input
+          <Input
              type="text"
              value={localTitle}
              onChange={(e) => setLocalTitle(e.target.value)}
+             onVoiceResult={setLocalTitle}
+             onFocus={() => setIsTitleEditing(true)}
              onBlur={handleTitleBlur}
              onKeyDown={handleTitleKeyDown}
-             className={`flex-1 min-w-0 bg-transparent border-b border-transparent focus:border-blue-400 focus:outline-none focus:bg-white dark:focus:bg-gray-900 px-1 py-0.5 transition-all truncate text-sm ${node.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-gray-200'}`}
+             voiceEnabled={isTitleEditing}
+             className={`flex-1 min-w-0 h-auto border-0 border-b border-transparent bg-transparent px-1 py-0.5 text-sm transition-all focus:bg-white focus:border-blue-400 focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}
              placeholder="任務名稱"
           />
 
           <div className="flex items-center gap-1.5 flex-shrink-0 w-24">
-              <div className={`w-full bg-gray-200 dark:bg-gray-700 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
+              <div className={`w-full bg-slate-200 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
                   <div 
                   className={`h-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'} transition-all`} 
                   style={{ width: `${progress}%` }} 
                   />
               </div>
-              <span className={`text-[10px] min-w-[2.5ch] text-right font-medium ${progress === 100 ? 'text-green-600 dark:text-green-500' : 'text-gray-500'}`}>
+              <span className={`text-[10px] min-w-[2.5ch] text-right font-medium ${progress === 100 ? 'text-green-600' : 'text-slate-500'}`}>
                   {progress}%
               </span>
           </div>
@@ -324,7 +335,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                     type="date" 
                     value={localStartDate}
                     onChange={handleStartDateChange}
-                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}
+                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-slate-400' : 'text-slate-600'}`}
                 />
                 {showDependencies && dependencyMarkers?.[`${nodeId}_start`]?.length > 0 && (
                     <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -378,7 +389,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                     type="date" 
                     value={localEndDate}
                     onChange={handleEndDateChange}
-                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}
+                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-slate-400' : 'text-slate-600'}`}
                 />
                 {showDependencies && dependencyMarkers?.[`${nodeId}_end`]?.length > 0 && (
                     <div className="flex items-center gap-0.5 flex-shrink-0">
