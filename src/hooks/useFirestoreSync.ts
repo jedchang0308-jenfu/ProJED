@@ -18,7 +18,7 @@ import {
 import { db } from '../services/firebase';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
-import type { Workspace, Board, List, Card, Dependency } from '../types';
+import type { Workspace, Board, Dependency } from '../types';
 
 /** 依 order 欄位升冪排序的輔助函式 */
 function sortByOrder<T extends { order?: number }>(arr: T[]): T[] {
@@ -47,8 +47,6 @@ export function useFirestoreSync() {
   const unsubWorkspaces = useRef<Unsubscribe | null>(null);
   // boards 監聽器：每個 workspace 一個
   const unsubBoardsMap = useRef<Map<string, Unsubscribe>>(new Map());
-  const unsubLists = useRef<Unsubscribe | null>(null);
-  const unsubCards = useRef<Unsubscribe | null>(null);
   const unsubDeps = useRef<Unsubscribe | null>(null);
   const unsubNodes = useRef<Unsubscribe | null>(null);
 
@@ -134,7 +132,7 @@ export function useFirestoreSync() {
           const mergedBoards = boards.map(b => {
             const existing = currentWs?.boards.find(eb => eb.id === b.id);
             return existing 
-              ? { ...b, lists: existing.lists, dependencies: existing.dependencies } 
+              ? { ...b, dependencies: existing.dependencies } 
               : b;
           });
 
@@ -165,8 +163,6 @@ export function useFirestoreSync() {
   //    避免不必要的 Firestore 讀取。
   // =============================
   useEffect(() => {
-    unsubLists.current?.();
-    unsubCards.current?.();
     unsubDeps.current?.();
 
     if (!activeBoardId) return;
@@ -179,55 +175,6 @@ export function useFirestoreSync() {
     if (!activeWs) return;
 
     const boardPath = `workspaces/${activeWs.id}/boards/${activeBoardId}`;
-
-    // 3a. 監聽 Lists
-    unsubLists.current = onSnapshot(
-      collection(db, boardPath, 'lists'),
-      (snapshot) => {
-        const lists: List[] = sortByOrder(
-          snapshot.docs.map(doc => ({
-            ...(doc.data() as List),
-            id: doc.id,
-            cards: []
-          }))
-        );
-
-        updateBoardInStore(activeWs.id, activeBoardId, (board) => {
-          const mergedLists = lists.map(l => {
-            const existing = board.lists.find(el => el.id === l.id);
-            return existing ? { ...l, cards: existing.cards } : l;
-          });
-          return { ...board, lists: mergedLists };
-        });
-      },
-      (error) => {
-        console.error('[useFirestoreSync] Lists snapshot error:', error);
-      }
-    );
-
-    // 3b. 監聽 Cards（扁平集合，用 listId 分組）
-    unsubCards.current = onSnapshot(
-      collection(db, boardPath, 'cards'),
-      (snapshot) => {
-        const allCards: Card[] = sortByOrder(
-          snapshot.docs.map(doc => ({
-            ...(doc.data() as Card),
-            id: doc.id
-          }))
-        );
-
-        updateBoardInStore(activeWs.id, activeBoardId, (board) => ({
-          ...board,
-          lists: board.lists.map(l => ({
-            ...l,
-            cards: allCards.filter(c => c.listId === l.id)
-          }))
-        }));
-      },
-      (error) => {
-        console.error('[useFirestoreSync] Cards snapshot error:', error);
-      }
-    );
 
     // 3c. 監聽 Dependencies (保留舊版及混用機制，此處僅從 dependencies 取出，未來在 WBS 架構可考慮用 dependencyService 或由 nodes 決定，但目前 WbsStore 也有 dependencies 陣列)
     unsubDeps.current = onSnapshot(
@@ -272,8 +219,6 @@ export function useFirestoreSync() {
     );
 
     return () => {
-      unsubLists.current?.();
-      unsubCards.current?.();
       unsubDeps.current?.();
       unsubNodes.current?.();
     };

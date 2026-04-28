@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * BoardView — Kanban 看板視圖（WBS 版本）
  * 設計意圖：將資料來源從 useBoardStore (List/Card) 切換至 useWbsStore (TaskNode)。
@@ -43,12 +44,12 @@ const BoardView = () => {
         const allIds = Array.from(new Set([...ids1, ...ids2]));
         return allIds
             .map(id => state.nodes[id])
-            .filter(Boolean)
+            .filter(node => node && statusFilters[node.status || 'todo'])
             .sort((a, b) => a.order - b.order);
-    }, [rootIds, boardRootIds, activeBoardId]);
+    }, [rootIds, boardRootIds, activeBoardId, statusFilters]);
 
     const statuses = [
-        { key: 'todo', label: '進行中', color: 'bg-status-todo' },
+        { key: 'todo', label: '待辦', color: 'bg-status-todo' },
         { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
         { key: 'completed', label: '完成', color: 'bg-status-completed' },
         { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },

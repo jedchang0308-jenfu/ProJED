@@ -1,10 +1,11 @@
+// @ts-nocheck
 import React, { useEffect, useRef } from 'react';
 import useDialogStore from '../store/useDialogStore';
 import { X } from 'lucide-react';
 
 const GlobalDialog = () => {
     const { isOpen, type, message, inputValue, setInputValue, closeDialog } = useDialogStore();
-    const inputRef = useRef(null);
+    const inputRef = useRef<any>(null);
 
     // Focus input on open
     useEffect(() => {

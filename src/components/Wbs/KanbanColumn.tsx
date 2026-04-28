@@ -13,7 +13,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { KanbanCard } from './KanbanCard';
 import { Button } from '../ui/Button';
-import type { TaskNode, TaskStatus } from '../../types';
+import type { TaskNode } from '../../types';
 
 interface KanbanColumnProps {
   nodeId: string;   // Level 1 (根) TaskNode 的 ID
@@ -24,6 +24,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
   const addNode = useWbsStore(s => s.addNode);
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
+  const statusFilters = useBoardStore(s => s.statusFilters);
+  const setContextMenuState = useBoardStore(s => s.setContextMenuState);
 
   // 訂閱 Level 2 子節點 ID 陣列
   const childIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
@@ -33,9 +35,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
     const state = useWbsStore.getState();
     return (childIds || [])
       .map(id => state.nodes[id])
-      .filter(n => n && !n.isArchived)
+      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'])
       .sort((a, b) => a.order - b.order);
-  }, [childIds]);
+  }, [childIds, statusFilters]);
 
   // dnd-kit 列表拖動（列表之間的排序）
   const {
@@ -96,8 +98,14 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
         isColumnDragging ? 'opacity-50 shadow-2xl scale-105 rotate-1' : ''
       }`}
     >
-      {/* 列表頭部 (Header) */}
-      <div className="p-3 flex flex-col gap-2 group bg-white/40 hover:bg-white transition-colors">
+      {/* 列表頭部 (Header) — 右鍵/長按觸發全域選單 */}
+      <div
+        className="p-3 flex flex-col gap-2 group bg-white/40 hover:bg-white transition-colors"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title || '未命名群組' });
+        }}
+      >
         <div className="flex items-center gap-2">
           {/* 列表拖動手柄 */}
           <div

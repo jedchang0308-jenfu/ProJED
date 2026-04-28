@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
+import useBoardStore from '../../store/useBoardStore';
 import type { TaskStatus } from '../../types';
 
 interface KanbanChecklistProps {
@@ -37,15 +38,16 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const childIds = useWbsStore(s => s.parentNodesIndex[parentId]);
   const updateNode = useWbsStore(s => s.updateNode);
   const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
+  const statusFilters = useBoardStore(s => s.statusFilters);
 
   // 取得子節點的完整資料，按 order 排序
   const children = React.useMemo(() => {
     const state = useWbsStore.getState();
     return (childIds || [])
       .map(id => state.nodes[id])
-      .filter(n => n && !n.isArchived)
+      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'])
       .sort((a, b) => a.order - b.order);
-  }, [childIds]);
+  }, [childIds, statusFilters]);
 
   // 無子節點則不渲染
   if (children.length === 0) return null;
@@ -73,10 +75,21 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
 
         return (
           <div key={child.id}>
-            {/* 單一待辦項目列 */}
+            {/* 單一待辦項目列 — 右鍵/長按觸發全域選單 */}
             <div
               className="flex items-center gap-2 py-1 group hover:bg-slate-50 rounded transition-colors"
               style={{ paddingLeft: `${depth * 16 + 4}px` }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                useBoardStore.getState().setContextMenuState({
+                  isOpen: true,
+                  x: e.clientX,
+                  y: e.clientY,
+                  nodeId: child.id,
+                  title: child.title || '未命名項目'
+                });
+              }}
             >
               {/* 勾選方塊 */}
               <button

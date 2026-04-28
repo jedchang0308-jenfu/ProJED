@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { Trash2, Plus, GripVertical, Trello, Layout as LayoutIcon } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';

@@ -8,6 +8,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Calendar, CheckSquare, ChevronDown, ChevronRight } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
+import useBoardStore from '../../store/useBoardStore';
 import { KanbanChecklist } from './KanbanChecklist';
 import { Badge } from '../ui/Badge';
 import dayjs from 'dayjs';
@@ -32,6 +33,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
   const node = useWbsStore(s => s.nodes[nodeId]);
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
+  const setContextMenuState = useBoardStore(s => s.setContextMenuState);
 
   // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
   const childIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
@@ -79,6 +81,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
     <div
       ref={setNodeRef}
       style={style}
+      onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
+      }}
       className={`bg-white border border-slate-200 rounded-lg shadow-sm hover:border-primary hover:shadow-md transition-all group mb-2 ${
         isDragging ? 'opacity-50 shadow-2xl scale-105 rotate-2' : ''
       }`}

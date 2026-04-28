@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useDialogStore from '../store/useDialogStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
@@ -8,7 +8,8 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
 
-const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }) => {
+interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
+const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
         data: { item }
@@ -30,10 +31,17 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     const childIds = useWbsStore(s => s.parentNodesIndex[item.id]);
     const hasChildren = childIds && childIds.length > 0;
 
+    // 全域 Context Menu
+    const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+
     return (
         <div
             ref={setNodeRef}
             style={style}
+            onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
+            }}
             className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-1 cursor-pointer group
                 ${isGroup ? 'font-black text-slate-800' : isTask && item.level === 1 ? 'font-bold text-slate-700' : 'text-slate-500'}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
@@ -82,6 +90,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     );
 };
 
+interface SharedTaskSidebarProps { flattenedItems: any[]; collapsedIds: any; toggleCollapse: (id: string) => void; onItemClick: (item: any) => void; isTaskListOpen: boolean; setIsTaskListOpen: (isOpen: boolean) => void; rowHeight?: number; }
 const SharedTaskSidebar = ({
     flattenedItems,
     collapsedIds,
@@ -90,7 +99,7 @@ const SharedTaskSidebar = ({
     isTaskListOpen,
     setIsTaskListOpen,
     rowHeight = 28
-}) => {
+}: SharedTaskSidebarProps) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);

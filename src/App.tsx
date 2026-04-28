@@ -22,12 +22,12 @@ import MainLayout from './components/MainLayout';
 import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
 import HomeView from './components/HomeView';
-import ListView from './components/ListView';
+// ListView 已由 WbsListView 取代，import 移除
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CalendarView from './components/CalendarView';
 import RecycleBinView from './components/RecycleBinView';
-import CardModal from './components/CardModal';
+// CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
 import UpdateToast from './components/UpdateToast';
 import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
@@ -99,12 +99,7 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, [user?.uid]);
 
-    // ===== 看板切換時清理無效依賴 =====
-  useEffect(() => {
-    if (activeWorkspaceId && activeBoardId) {
-      useBoardStore.getState().cleanBoardDependencies(activeWorkspaceId, activeBoardId);
-    }
-  }, [activeBoardId]);
+  // (Phase B 已移除 cleanBoardDependencies，無需空殼 useEffect)
 
   // ===== 網址參數解析 (Deep Linking 建立捷徑用) =====
   const hasProcessedDeepLink = useRef(false);
@@ -157,7 +152,6 @@ function AppContent() {
   return (
     <MainLayout>
       {renderContent()}
-      <CardModal />
       <GlobalDialog />
     </MainLayout>
   );

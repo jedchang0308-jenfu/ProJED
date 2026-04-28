@@ -149,7 +149,6 @@ export interface Dependency {
 export interface Board {
   id: string;
   title: string;
-  lists: List[];
   dependencies: Dependency[];
   order?: number;
   createdAt?: number;
@@ -216,6 +215,11 @@ export interface BoardState {
   isSidebarOpen: boolean;
   editingItem: EditingItem | null;
   statusFilters: StatusFilters;
+  
+  // 依賴關係 UI 狀態
+  dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
+  dependencyMenuState: { id: string; side: 'start' | 'end'; title: string } | null;
+  contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
 }
 
 /** Board Store 的 Action 方法 */
@@ -237,57 +241,6 @@ export interface BoardActions {
   updateBoardTitle: (workspaceId: string, boardId: string, newTitle: string) => void;
   switchBoard: (workspaceId: string, boardId: string) => void;
 
-  // 列表/卡片 CRUD
-  addList: (wsId: string, bId: string, title: string) => void;
-  updateList: (wsId: string, bId: string, lId: string, updates: Partial<List>) => void;
-  removeList: (wsId: string, bId: string, lId: string) => void; // 改為移至垃圾桶 (軟刪除)
-  restoreList: (wsId: string, bId: string, lId: string) => void;
-  permanentDeleteList: (wsId: string, bId: string, lId: string) => void;
-
-  addCard: (wsId: string, bId: string, lId: string, title: string) => void;
-  updateCard: (wsId: string, bId: string, lId: string, cId: string, updates: Partial<Card>) => void;
-  removeCard: (wsId: string, bId: string, lId: string, cId: string) => void; // 改為移至垃圾桶 (軟刪除)
-  restoreCard: (wsId: string, bId: string, lId: string, cId: string) => void;
-  permanentDeleteCard: (wsId: string, bId: string, lId: string, cId: string) => void;
-
-  // Checklist CRUD
-  addChecklist: (wsId: string, bId: string, lId: string, cId: string) => void;
-  removeChecklist: (wsId: string, bId: string, lId: string, cId: string, clId: string) => void;
-  updateChecklist: (wsId: string, bId: string, lId: string, cId: string, clId: string, updates: Partial<Checklist>) => void;
-  restoreChecklist: (wsId: string, bId: string, lId: string, cId: string, clId: string) => void;
-  permanentDeleteChecklist: (wsId: string, bId: string, lId: string, cId: string, clId: string) => void;
-
-  // ChecklistItem CRUD
-  addChecklistItem: (wsId: string, bId: string, lId: string, cId: string, clId: string) => void;
-  removeChecklistItem: (wsId: string, bId: string, lId: string, cId: string, clId: string, cliId: string) => void;
-  updateChecklistItem: (wsId: string, bId: string, lId: string, cId: string, clId: string, cliId: string, updates: Partial<ChecklistItem>) => void;
-  restoreChecklistItem: (wsId: string, bId: string, lId: string, cId: string, clId: string, cliId: string) => void;
-  permanentDeleteChecklistItem: (wsId: string, bId: string, lId: string, cId: string, clId: string, cliId: string) => void;
-
-  // 拖曳排序
-  reorderLists: (workspaceId: string, boardId: string, activeId: string, overId: string) => void;
-  reorderChecklistItems: (wsId: string, bId: string, listId: string, cardId: string, checklistId: string, activeId: string, overId: string) => void;
-  moveCardToList: (wsId: string, bId: string, cardId: string, sourceListId: string, targetListId: string, targetIndex?: number | null) => void;
-  moveChecklistItemToCard: (wsId: string, bId: string, itemId: string, sourceListId: string, sourceCardId: string, sourceChecklistId: string, targetListId: string, targetCardId: string, targetIndex?: number | null) => void;
-  reorderCardsInList: (wsId: string, bId: string, listId: string, activeId: string, overId: string) => void;
-
-  // 依賴管理
-  addDependency: (wsId: string, bId: string, dependency: Omit<Dependency, 'id'>) => void;
-  removeDependency: (wsId: string, bId: string, depId: string) => void;
-  updateDependency: (wsId: string, bId: string, depId: string, updates: Partial<Dependency>) => void;
-  fixBoardDependencies: (wsId: string, bId: string) => void;
-  cleanBoardDependencies: (wsId: string, bId: string) => void;
-
-  // 時間與篩選操作
-  updateTaskDate: (
-    wsId: string, bId: string,
-    taskType: 'list' | 'card' | 'checklist',
-    taskId: string,
-    updates: { startDate?: string; endDate?: string },
-    listId?: string | null, cardId?: string | null, checklistId?: string | null,
-    dragType?: 'move' | 'resize'
-  ) => void;
-
   // Derived getters
   getActiveBoard: () => Board | undefined;
   getActiveWorkspace: () => Workspace | undefined;
@@ -297,6 +250,9 @@ export interface BoardActions {
   openModal: (type: EditableItemType, itemId: string, listId: string, extra?: Record<string, unknown>) => void;
   closeModal: () => void;
   toggleStatusFilter: (status: TaskStatus) => void;
+  setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
+  setDependencyMenuState: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
+  setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;
 
   // 資料匯出/匯入
   exportData: () => void;
