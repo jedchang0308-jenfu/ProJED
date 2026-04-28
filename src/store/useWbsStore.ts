@@ -1,6 +1,9 @@
 import { create } from 'zustand';
+import dayjs from 'dayjs';
 import type { TaskNode, KanbanViewConfig, TaskStatus, Dependency } from '../types';
-import { nodeService, dependencyService } from '../services/firestoreService';
+import { nodeService, dependencyService, workspaceService, boardService } from '../services/firestoreService';
+import useUndoStore from './useUndoStore';
+import useBoardStore from './useBoardStore';
 
 /**
  * WbsStore 狀態定義
@@ -80,6 +83,8 @@ export interface WbsBoardActions {
 
   // ===== 依賴關係排程 =====
   addDependency: (dep: Dependency) => void;
+  removeDependency: (depId: string) => void;
+  updateDependency: (depId: string, updates: Partial<Dependency>) => void;
   _hasCycle: (newDependency: Dependency) => boolean;
 
   // ===== Import / Export =====
@@ -155,6 +160,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (node.workspaceId && node.boardId) {
         nodeService.create(node.workspaceId, node.boardId, node).catch(console.error);
     }
+
+    // 紀錄上一步
+    useUndoStore.getState().pushUndo({
+        label: '新增任務',
+        undo: () => get().removeNode(node.id),
+        redo: () => get().addNode(node),
+    });
   },
 
   updateNode: (id, updates) => {
@@ -162,6 +174,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (!state.nodes[id]) return;
 
     const oldNode = state.nodes[id];
+
+    // 比對實質變更，供 undo 使用
+    const oldValues: Partial<TaskNode> = {};
+    let hasChanges = false;
+    for (const key of Object.keys(updates) as Array<keyof TaskNode>) {
+        if (updates[key] !== oldNode[key]) {
+            (oldValues as any)[key] = oldNode[key];
+            hasChanges = true;
+        }
+    }
+    if (!hasChanges) return;
+
     const newNode = { ...oldNode, ...updates, updatedAt: Date.now() };
     const updatedNodes = { ...state.nodes, [id]: newNode };
     
@@ -186,6 +210,15 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (newNode.workspaceId && newNode.boardId) {
         nodeService.update(newNode.workspaceId, newNode.boardId, id, updates).catch(console.error);
     }
+
+    // 紀錄上一步
+    const label = updates.isArchived === true ? '刪除任務' :
+                  updates.isArchived === false ? '復原任務' : '修改任務';
+    useUndoStore.getState().pushUndo({
+        label,
+        undo: () => get().updateNode(id, oldValues),
+        redo: () => get().updateNode(id, updates),
+    });
   },
 
   removeNode: (id) => {
@@ -326,27 +359,90 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   },
 
   addDependency: (dep) => {
-      if (get()._hasCycle(dep)) {
+      // 確保有 id
+      const finalDep = { ...dep, id: dep.id || `dep_${Date.now()}` };
+      if (get()._hasCycle(finalDep)) {
           alert('排程防呆機制：此依賴關係將造成「邏輯死結（循環依賴）」，系統已攔截此操作。');
           return;
       }
-      set(state => ({ dependencies: [...state.dependencies, dep] }));
+      set(state => ({ dependencies: [...state.dependencies, finalDep] }));
 
       // 非同步寫入 Firestore 
       const state = get();
+      const node = state.nodes[finalDep.fromId];
+      if (node && node.workspaceId && node.boardId) {
+          dependencyService.create(node.workspaceId, node.boardId, finalDep).catch(console.error);
+      }
+
+      useUndoStore.getState().pushUndo({
+          label: '新增連線',
+          undo: () => get().removeDependency(finalDep.id),
+          redo: () => get().addDependency(finalDep),
+      });
+  },
+
+  removeDependency: (depId) => {
+      const state = get();
+      const dep = state.dependencies.find(d => d.id === depId);
+      if (!dep) return;
+
+      set(s => ({ dependencies: s.dependencies.filter(d => d.id !== depId) }));
+
       const node = state.nodes[dep.fromId];
       if (node && node.workspaceId && node.boardId) {
-          dependencyService.create(node.workspaceId, node.boardId, dep).catch(console.error);
+          dependencyService.delete(node.workspaceId, node.boardId, depId).catch(console.error);
       }
+
+      useUndoStore.getState().pushUndo({
+          label: '刪除連線',
+          undo: () => get().addDependency(dep),
+          redo: () => get().removeDependency(depId),
+      });
+  },
+
+  updateDependency: (depId, updates) => {
+      const state = get();
+      const dep = state.dependencies.find(d => d.id === depId);
+      if (!dep) return;
+
+      const newDep = { ...dep, ...updates };
+
+      if (get()._hasCycle(newDep)) {
+          alert('排程防呆機制：變更此依賴關係將造成「邏輯死結（循環依賴）」，系統已攔截此操作。');
+          return;
+      }
+
+      set(s => ({
+          dependencies: s.dependencies.map(d => d.id === depId ? newDep : d)
+      }));
+
+      const node = state.nodes[newDep.fromId];
+      if (node && node.workspaceId && node.boardId) {
+          dependencyService.update(node.workspaceId, node.boardId, depId, updates).catch(console.error);
+      }
+
+      // 計算 oldValues
+      const oldValues: Partial<Dependency> = {};
+      for (const k of Object.keys(updates) as Array<keyof Dependency>) {
+          (oldValues as any)[k] = dep[k];
+      }
+
+      useUndoStore.getState().pushUndo({
+          label: '修改連線',
+          undo: () => get().updateDependency(depId, oldValues),
+          redo: () => get().updateDependency(depId, updates),
+      });
   },
 
   // ===== Import / Export =====
   exportData: () => {
       const { nodes, dependencies } = get();
+      const workspaces = useBoardStore.getState().workspaces;
       const exportObj = {
-          version: 'wbs-1.0',
+          version: 'wbs-1.1',
           nodes,
           dependencies,
+          workspaces,
           timestamp: Date.now()
       };
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
@@ -362,94 +458,128 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       try {
           const parsed = JSON.parse(jsonDataStr);
           
-          if (parsed.version === 'wbs-1.0' && parsed.nodes) {
-              // 最新版 WBS 直接匯入
-              const nodesArray = Object.values(parsed.nodes) as TaskNode[];
-              get().setNodes(nodesArray);
-              
-              if (parsed.dependencies && Array.isArray(parsed.dependencies)) {
-                  set({ dependencies: parsed.dependencies });
-              }
-              alert('ProJED WBS 資料已成功匯入！');
-              return;
-          }
+          // 支援各種舊版與新版格式
+          const oldWorkspaces = parsed.workspaces || parsed?.state?.workspaces;
 
-          if (parsed.version === '2.0' && parsed.workspaces) {
-              // 舊版 BoardStore 巢狀結構自動升級轉移
-              const newNodes: TaskNode[] = [];
-              parsed.workspaces.forEach((ws: any) => {
-                  const wsId = ws.id;
-                  (ws.boards || []).forEach((board: any) => {
-                      const bId = board.id;
+          if ((parsed.version === 'wbs-1.1' || parsed.version === 'wbs-1.0' || parsed.version === '2.0' || !parsed.version) && (parsed.nodes || oldWorkspaces)) {
+              
+              // 1. 如果包含 workspaces，覆寫 useBoardStore 並同步至雲端
+              if (oldWorkspaces && Array.isArray(oldWorkspaces)) {
+                  // 乾淨的 workspaces (不含 lists/cards/dependencies)
+                  const cleanWorkspaces = oldWorkspaces.map((ws: any) => ({
+                      ...ws,
+                      boards: (ws.boards || []).map((b: any) => {
+                          const { lists, dependencies, ...cleanBoard } = b;
+                          return cleanBoard;
+                      })
+                  }));
+                  
+                  // 寫入到本地端 Store
+                  useBoardStore.setState({ workspaces: cleanWorkspaces });
+                  
+                  // 同步到 Firestore
+                  cleanWorkspaces.forEach(ws => {
+                      if (!ws.id) return;
+                      workspaceService.restore(ws).catch(console.error);
                       
-                      (board.lists || []).forEach((list: any, listIndex: number) => {
-                          const listNodeId = `list_${list.id}`;
-                          newNodes.push({
-                              id: listNodeId,
-                              workspaceId: wsId,
-                              boardId: bId,
-                              parentId: null,
-                              title: list.title || '無標題列表',
-                              status: list.status || 'todo',
-                              nodeType: 'group',
-                              order: list.order !== undefined ? list.order : listIndex,
-                              createdAt: list.createdAt || Date.now(),
-                              updatedAt: Date.now()
-                          } as TaskNode);
+                      (ws.boards || []).forEach((b: any) => {
+                          if (!b.id) return;
+                          boardService.restore(ws.id, b).catch(console.error);
+                      });
+                  });
+              }
+
+              // 2. 如果包含 WBS nodes (wbs-1.0 或 wbs-1.1 格式)，直接匯入
+              if (parsed.nodes) {
+                  const nodesArray = Object.values(parsed.nodes) as TaskNode[];
+                  get().setNodes(nodesArray);
+                  nodesArray.forEach(n => {
+                      if (n.workspaceId && n.boardId) {
+                          nodeService.create(n.workspaceId, n.boardId, n).catch(console.error);
+                      }
+                  });
+              }
+
+              // 3. 如果只有舊版格式 (未搬遷至 wbs 節點)，需要自動升級轉移
+              if (!parsed.nodes && oldWorkspaces) {
+                  const newNodes: TaskNode[] = [];
+                  oldWorkspaces.forEach((ws: any) => {
+                      const wsId = ws.id;
+                      (ws.boards || []).forEach((board: any) => {
+                          const bId = board.id;
                           
-                          (list.cards || []).forEach((card: any, cardIndex: number) => {
-                              const cardNodeId = `card_${card.id}`;
+                          (board.lists || []).forEach((list: any, listIndex: number) => {
+                              const listNodeId = `list_${list.id}`;
                               newNodes.push({
-                                  id: cardNodeId,
+                                  id: listNodeId,
                                   workspaceId: wsId,
                                   boardId: bId,
-                                  parentId: listNodeId,
-                                  title: card.title || '無標題卡片',
-                                  description: card.notes || '',
-                                  status: card.status || 'todo',
-                                  startDate: card.startDate || '',
-                                  endDate: card.endDate || '',
-                                  nodeType: 'task',
-                                  kanbanStageId: list.id,
-                                  order: card.order !== undefined ? card.order : cardIndex,
-                                  createdAt: card.createdAt || Date.now(),
+                                  parentId: null,
+                                  title: list.title || '無標題列表',
+                                  status: list.status || 'todo',
+                                  nodeType: 'group',
+                                  order: list.order !== undefined ? list.order : listIndex,
+                                  createdAt: list.createdAt || Date.now(),
                                   updatedAt: Date.now()
                               } as TaskNode);
+                              
+                              (list.cards || []).forEach((card: any, cardIndex: number) => {
+                                  const cardNodeId = `card_${card.id}`;
+                                  newNodes.push({
+                                      id: cardNodeId,
+                                      workspaceId: wsId,
+                                      boardId: bId,
+                                      parentId: listNodeId,
+                                      title: card.title || '無標題卡片',
+                                      description: card.notes || '',
+                                      status: card.status || 'todo',
+                                      startDate: card.startDate || '',
+                                      endDate: card.endDate || '',
+                                      nodeType: 'task',
+                                      kanbanStageId: list.id,
+                                      order: card.order !== undefined ? card.order : cardIndex,
+                                      createdAt: card.createdAt || Date.now(),
+                                      updatedAt: Date.now()
+                                  } as TaskNode);
 
-                              (card.checklists || []).forEach((cl: any) => {
-                                  (cl.items || []).forEach((cli: any, cliIndex: number) => {
-                                      newNodes.push({
-                                          id: `cli_${card.id}_${cli.id}`, // Enforce absolute uniqueness
-                                          workspaceId: wsId,
-                                          boardId: bId,
-                                          parentId: cardNodeId,
-                                          title: cli.title || cli.text || '',
-                                          status: (cli.status || (cli.completed ? 'completed' : 'todo')),
-                                          startDate: cli.startDate || '',
-                                          endDate: cli.endDate || '',
-                                          nodeType: 'task',
-                                          order: cliIndex,
-                                          createdAt: Date.now(),
-                                          updatedAt: Date.now()
-                                      } as TaskNode);
+                                  (card.checklists || []).forEach((cl: any) => {
+                                      (cl.items || []).forEach((cli: any, cliIndex: number) => {
+                                          newNodes.push({
+                                              id: `cli_${card.id}_${cli.id}`,
+                                              workspaceId: wsId,
+                                              boardId: bId,
+                                              parentId: cardNodeId,
+                                              title: cli.title || cli.text || '',
+                                              status: (cli.status || (cli.completed ? 'completed' : 'todo')),
+                                              startDate: cli.startDate || '',
+                                              endDate: cli.endDate || '',
+                                              nodeType: 'task',
+                                              order: cliIndex,
+                                              createdAt: Date.now(),
+                                              updatedAt: Date.now()
+                                          } as TaskNode);
+                                      });
                                   });
                               });
                           });
                       });
                   });
-              });
 
-              // 將解析出的舊資料洗成全新的節點並塞入 WBS store，藉由 addNode API 將其寫入 Firestore
-              get().setNodes(newNodes);
-              
-              // 遍歷所有新節點，強制把它們打到 Firebase，徹底完成搬遷！
-              newNodes.forEach(n => {
-                 if (n.workspaceId && n.boardId) {
-                     nodeService.create(n.workspaceId, n.boardId, n).catch(console.error);
-                 }
-              });
+                  get().setNodes(newNodes);
+                  newNodes.forEach(n => {
+                     if (n.workspaceId && n.boardId) {
+                         nodeService.create(n.workspaceId, n.boardId, n).catch(console.error);
+                     }
+                  });
+              }
 
-              alert('偵測到舊版備份檔，已成功為您「無痛轉移」為全新 WBS 架構並同步至雲端！');
+              // 4. Dependencies
+              if (parsed.dependencies && Array.isArray(parsed.dependencies)) {
+                  set({ dependencies: parsed.dependencies });
+                  // Firestore write for dependencies? Usually handled dynamically or kept locally
+              }
+
+              alert('ProJED 資料已成功匯入並同步至雲端！');
               return;
           }
 

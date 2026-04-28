@@ -1,8 +1,21 @@
 import { db } from './firebase';
 import { 
-  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch
+  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField
 } from 'firebase/firestore';
-import type { Workspace, Board, List, Card, Dependency } from '../types';
+import type { Workspace, Board, Dependency } from '../types';
+
+// ==========================
+// Helper: 處理 undefined 轉 deleteField()
+// Firestore 不允許 updateDoc 傳入 undefined，
+// 當 Undo 將日期改回原本不存在的狀態時，必須轉換為 deleteField()
+// ==========================
+const sanitizeUpdates = (updates: any) => {
+  const safeUpdates: any = {};
+  for (const [k, v] of Object.entries(updates)) {
+    safeUpdates[k] = v === undefined ? deleteField() : v;
+  }
+  return safeUpdates;
+};
 
 // ==========================
 // Workspace Service
@@ -22,13 +35,16 @@ export const workspaceService = {
     await setDoc(wsRef, ws);
     return ws;
   },
+  restore: async (ws: Workspace) => {
+    await setDoc(doc(db, 'workspaces', ws.id), ws);
+  },
   update: async (wsId: string, updates: Partial<Workspace>) => {
     // Cannot update lists/boards arrays directly if they are not in the document,
     // but Workspace type includes boards: Board[]. Wait, if we use flatten subcollections,
     // we should strip boards before saving.
     const { boards, ...docData } = updates as any;
     if (Object.keys(docData).length > 0) {
-      await updateDoc(doc(db, 'workspaces', wsId), docData);
+      await updateDoc(doc(db, 'workspaces', wsId), sanitizeUpdates(docData));
     }
   },
   delete: async (wsId: string) => {
@@ -46,99 +62,27 @@ export const boardService = {
     const board: Board = {
       id: boardRef.id,
       title: title || '新看板',
-      lists: [],
       dependencies: [],
       order: Date.now(),
       createdAt: Date.now()
     };
     // Strip nested arrays before saving
-    const { lists, dependencies, ...docData } = board as any;
+    const { dependencies, ...docData } = board as any;
     await setDoc(boardRef, docData);
     return board;
   },
+  restore: async (wsId: string, board: Board) => {
+    const { dependencies, ...docData } = board as any;
+    await setDoc(doc(db, 'workspaces', wsId, 'boards', board.id), docData);
+  },
   update: async (wsId: string, bId: string, updates: Partial<Board>) => {
-    const { lists, dependencies, ...docData } = updates as any;
+    const { dependencies, ...docData } = updates as any;
     if (Object.keys(docData).length > 0) {
-      await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId), docData);
+      await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId), sanitizeUpdates(docData));
     }
   },
   delete: async (wsId: string, bId: string) => {
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId));
-  }
-};
-
-// ==========================
-// List Service
-// ==========================
-export const listService = {
-  create: async (wsId: string, bId: string, title?: string): Promise<List> => {
-    const listRef = doc(collection(db, 'workspaces', wsId, 'boards', bId, 'lists'));
-    const list: List = {
-      id: listRef.id,
-      title: title || '新列表',
-      status: 'todo',
-      cards: [],
-      ganttVisible: true,
-      order: Date.now(),
-      createdAt: Date.now()
-    };
-    const { cards, ...docData } = list as any;
-    await setDoc(listRef, docData);
-    return list;
-  },
-  update: async (wsId: string, bId: string, lId: string, updates: Partial<List>) => {
-    const { cards, ...docData } = updates as any;
-    if (Object.keys(docData).length > 0) {
-      await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'lists', lId), docData);
-    }
-  },
-  delete: async (wsId: string, bId: string, lId: string) => {
-    await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'lists', lId));
-  },
-  batchUpdateOrder: async (wsId: string, bId: string, items: { id: string, order: number }[]) => {
-    const batch = writeBatch(db);
-    items.forEach(item => {
-      const ref = doc(db, 'workspaces', wsId, 'boards', bId, 'lists', item.id);
-      batch.update(ref, { order: item.order });
-    });
-    await batch.commit();
-  }
-};
-
-// ==========================
-// Card Service
-// ==========================
-export const cardService = {
-  create: async (wsId: string, bId: string, lId: string, title?: string): Promise<Card> => {
-    const cardRef = doc(collection(db, 'workspaces', wsId, 'boards', bId, 'cards'));
-    const card: Card = {
-      id: cardRef.id,
-      title: title || '新卡片',
-      status: 'todo',
-      checklists: [],
-      ganttVisible: true,
-      listId: lId,
-      order: Date.now(),
-      createdAt: Date.now()
-    };
-    await setDoc(cardRef, card);
-    return card;
-  },
-  update: async (wsId: string, bId: string, cId: string, updates: Partial<Card>) => {
-    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'cards', cId), updates as any);
-  },
-  delete: async (wsId: string, bId: string, cId: string) => {
-    await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'cards', cId));
-  },
-  batchUpdateOrder: async (wsId: string, bId: string, items: { id: string, order: number, listId?: string }[]) => {
-    const batch = writeBatch(db);
-    items.forEach(item => {
-      const ref = doc(db, 'workspaces', wsId, 'boards', bId, 'cards', item.id);
-      const updates: any = { order: item.order };
-      if (item.listId) updates.listId = item.listId;
-      batch.update(ref, updates);
-    });
-    await batch.commit();
   }
 };
 
@@ -153,7 +97,7 @@ export const dependencyService = {
     return dep;
   },
   update: async (wsId: string, bId: string, depId: string, updates: Partial<Dependency>) => {
-    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId), updates as any);
+    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId), sanitizeUpdates(updates));
   },
   delete: async (wsId: string, bId: string, depId: string) => {
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId));
@@ -169,7 +113,7 @@ export const nodeService = {
     await setDoc(nodeRef, node);
   },
   update: async (wsId: string, bId: string, nId: string, updates: Partial<import('../types').TaskNode>) => {
-    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), updates as any);
+    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), sanitizeUpdates(updates));
   },
   delete: async (wsId: string, bId: string, nId: string) => {
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId));

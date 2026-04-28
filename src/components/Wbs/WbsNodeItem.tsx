@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
-import useBoardStore from '../../store/useBoardStore'; // 引入舊 store
+import useBoardStore from '../../store/useBoardStore';
 import type { TaskNode, TaskStatus } from '../../types';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
-import { ChevronRight, ChevronDown, Plus, Trash2 } from 'lucide-react';
-import useAuthStore from '../../store/useAuthStore'; // Optional if needed for new tasks
+import { ChevronRight, ChevronDown, Plus, Trash2, Link } from 'lucide-react';
+import { WbsDependencyContext } from './WbsListView';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -23,10 +22,32 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const [localStartDate, setLocalStartDate] = useState(node.startDate || '');
   const [localEndDate, setLocalEndDate] = useState(node.endDate || '');
 
+  // ✅ 同步 Store 狀態到 Local State (確保 Undo/Redo 發生時畫面能正確更新)
+  React.useEffect(() => {
+      setLocalTitle(node.title);
+  }, [node.title]);
+
+  React.useEffect(() => {
+      setLocalStartDate(node.startDate || '');
+      setLocalEndDate(node.endDate || '');
+  }, [node.startDate, node.endDate]);
+
+  // 取得全域依賴狀態
+  const dependencyContext = React.useContext(WbsDependencyContext);
+  const { showDependencies, handleDependencySelect, dependencySelection, dependencyMarkers } = dependencyContext || { showDependencies: false, dependencySelection: null, dependencyMarkers: {} };
+
+  // 確認選取狀態
+  const isSelectingMode = !!dependencySelection;
+  const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
+  const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
+  
+  const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+
   const updateNode = useWbsStore(s => s.updateNode);
   const addNode = useWbsStore(s => s.addNode);
   const removeNode = useWbsStore(s => s.removeNode);
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
+  const statusFilters = useBoardStore(s => s.statusFilters);
   
   // ✅ 使用 Stable Selector 訂閱「子節點 ID 陣列」，避免 Zustand 無限 Render Loop
   const childrenIds = useWbsStore(s => s.parentNodesIndex[nodeId]); 
@@ -34,8 +55,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   // ✅ 只有當 childrenIds 陣列變更時，才重新抓取最新的 node references
   const children = React.useMemo(() => {
       const state = useWbsStore.getState();
-      return (childrenIds || []).map(id => state.nodes[id]).filter(Boolean).sort((a,b) => a.order - b.order);
-  }, [childrenIds]);
+      return (childrenIds || []).map(id => state.nodes[id]).filter(n => n && !n.isArchived && statusFilters[n.status || 'todo']).sort((a,b) => a.order - b.order);
+  }, [childrenIds, statusFilters]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
@@ -168,28 +189,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
       updateNode(node.id, { endDate: val });
   };
 
-  // 渲染狀態與 Badge 色系
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'in_progress': return 'primary';
-      case 'delayed': return 'danger';
-      case 'onhold': return 'warning';
-      default: return 'secondary';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-        case 'completed': return '完成';
-        case 'in_progress': return '進行中';
-        case 'delayed': return '延遲';
-        case 'todo': return '待辦';
-        case 'unsure': return '未定';
-        case 'onhold': return '暫停';
-        default: return status;
-    }
-  };
+  
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       e.stopPropagation();
@@ -210,7 +210,19 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
 
   return (
     <>
-      <div className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px_80px] items-center py-1 px-4 border-b border-gray-200 dark:border-gray-800/50 group hover:bg-white dark:hover:bg-gray-800 transition-colors bg-gray-50/50 dark:bg-transparent text-sm">
+      <div 
+        onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenuState({
+                isOpen: true,
+                x: e.clientX,
+                y: e.clientY,
+                nodeId: node.id,
+                title: node.title
+            });
+        }}
+        className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] items-center py-1 px-4 border-b border-gray-200 dark:border-gray-800/50 group hover:bg-white dark:hover:bg-gray-800 transition-colors bg-gray-50/50 dark:bg-transparent text-sm active:bg-gray-100"
+      >
         
         {/* Col 1: 任務名稱與階層結構 */}
         <div className="flex items-center gap-1.5 overflow-hidden pr-4" style={{ paddingLeft: `${indentPadding}rem` }}>
@@ -271,33 +283,111 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
         </div>
 
         {/* Col 3: 開始日期 */}
-        <div className="flex items-center">
-            <input 
-                type="date" 
-                value={localStartDate}
-                onChange={handleStartDateChange}
-                className="w-28 text-xs bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 min-h-[24px] text-gray-600 dark:text-gray-400 cursor-pointer"
-            />
+        <div 
+            className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
+                ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
+                ${isSelectingMode && !isSelfStart ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
+            `}
+            onClick={isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); } : undefined}
+        >
+            <div className="flex items-center gap-1.5 flex-1 pr-4 whitespace-nowrap overflow-hidden">
+                <input 
+                    type="date" 
+                    value={localStartDate}
+                    onChange={handleStartDateChange}
+                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}
+                />
+                {showDependencies && dependencyMarkers?.[`${nodeId}_start`]?.length > 0 && (
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                        {dependencyMarkers[`${nodeId}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
+                            m.isSelf ? (
+                                <span key={m.id} title="間隔天數" className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                    {m.offset || 0} 工作天
+                                </span>
+                            ) : (
+                                <span key={m.id} title={m.role === 'active' ? '主動驅動' : '被動跟隨'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-gray-800' : 'bg-gray-400'}`}>
+                                    {m.label}
+                                </span>
+                            )
+                        ))}
+                    </div>
+                )}
+                {/* 簡單符號：若沒有顯示依賴，但有被依賴計算則提示 */}
+                {!showDependencies && dependencyMarkers?.[`${nodeId}_start`]?.length > 0 && (
+                    <span title="此日期由依賴排程管理" className="flex-shrink-0 text-amber-400/70">
+                        <Link size={9} />
+                    </span>
+                )}
+            </div>
+            {/* 設定依賴按鈕 */}
+            {!isSelectingMode && handleDependencySelect && (
+                 <button
+                    onClick={(e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); }}
+                    className="absolute right-1 p-1 rounded-sm text-gray-400 hover:text-amber-600 hover:bg-amber-100 transition-all opacity-0 group-hover/date:opacity-100"
+                    title="設定開始日期的依賴"
+                 >
+                    <Link size={11} />
+                 </button>
+            )}
+            {isSelectingMode && !isSelfStart && (
+                <div className="absolute right-1 p-1 text-amber-500 opacity-0 group-hover/date:opacity-100 transition-opacity">
+                    <Link size={11} />
+                </div>
+            )}
         </div>
 
         {/* Col 4: 結束日期 */}
-        <div className="flex items-center">
-            <input 
-                type="date" 
-                value={localEndDate}
-                onChange={handleEndDateChange}
-                className="w-28 text-xs bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 min-h-[24px] text-gray-600 dark:text-gray-400 cursor-pointer"
-            />
-        </div>
-
-        {/* Col 5: 動作按鈕 */}
-        <div className="flex items-center justify-end pr-2 gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-           <Button variant="ghost" size="sm" onClick={handleAddChild} className="h-6 w-6 p-0 text-gray-400 hover:text-blue-600" title="新增子任務">
-             <Plus size={14} />
-           </Button>
-           <Button variant="ghost" size="sm" onClick={handleDelete} className="h-6 w-6 p-0 text-gray-400 hover:text-red-600" title="刪除">
-             <Trash2 size={14} />
-           </Button>
+        <div 
+            className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
+                ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
+                ${isSelectingMode && !isSelfEnd ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
+            `}
+            onClick={isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); } : undefined}
+        >
+            <div className="flex items-center gap-1.5 flex-1 pr-4 whitespace-nowrap overflow-hidden">
+                <input 
+                    type="date" 
+                    value={localEndDate}
+                    onChange={handleEndDateChange}
+                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}
+                />
+                {showDependencies && dependencyMarkers?.[`${nodeId}_end`]?.length > 0 && (
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                        {dependencyMarkers[`${nodeId}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
+                            m.isSelf ? (
+                                <span key={m.id} title="間隔天數" className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                    {m.offset || 0} 工作天
+                                </span>
+                            ) : (
+                                <span key={m.id} title={m.role === 'active' ? '主動驅動' : '被動跟隨'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-gray-800' : 'bg-gray-400'}`}>
+                                    {m.label}
+                                </span>
+                            )
+                        ))}
+                    </div>
+                )}
+                {/* 簡單符號：若沒有顯示依賴，但有被依賴計算則提示 */}
+                {!showDependencies && dependencyMarkers?.[`${nodeId}_end`]?.length > 0 && (
+                    <span title="此日期由依賴排程管理" className="flex-shrink-0 text-amber-400/70">
+                        <Link size={9} />
+                    </span>
+                )}
+            </div>
+            {/* 設定依賴按鈕 */}
+            {!isSelectingMode && handleDependencySelect && (
+                 <button
+                    onClick={(e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); }}
+                    className="absolute right-1 p-1 rounded-sm text-gray-400 hover:text-amber-600 hover:bg-amber-100 transition-all opacity-0 group-hover/date:opacity-100"
+                    title="設定結束日期的依賴"
+                 >
+                    <Link size={11} />
+                 </button>
+            )}
+            {isSelectingMode && !isSelfEnd && (
+                <div className="absolute right-1 p-1 text-amber-500 opacity-0 group-hover/date:opacity-100 transition-opacity">
+                    <Link size={11} />
+                </div>
+            )}
         </div>
 
       </div>
