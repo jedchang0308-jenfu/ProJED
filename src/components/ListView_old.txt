@@ -1,18 +1,13 @@
-/**
- * ListView.tsx — 清單模式視圖
+﻿/**
+ * ListView.tsx ??皜璅∪?閬?
  *
- * 設計意圖：
- * 作為所有任務的「底層資料展示位置」，以全版面表格清單呈現
- * 三層任務結構（列表 → 卡片 → 待辦項目），並顯示完整的
- * 狀態、日期與備註欄位。其他視圖（看板/甘特/月曆）皆以
- * 此模式的資料為來源，用不同 UI 呈現。
- *
- * 架構決策：
- * 1. 複用 SharedTaskSidebar 的 dnd-kit 邏輯（拖曳排序）
- * 2. 全版面表格佈局，帶有欄位標頭（名稱、狀態、起始日、截止日、備註）
- * 3. 點擊任務開啟 CardModal（維持現有行為）
- * 4. 狀態篩選器 + 層級篩選器（複用現有邏輯）
- */
+ * 閮剛???嚗? * 雿??遙????撅方???蝷箔?蝵柴?隞亙?銵冽皜?
+ * 銝惜隞餃?蝯?嚗?銵????∠? ??敺齒?嚗?銝阡＊蝷箏??渡?
+ * ?????酉甈??隞????/?/??嚗?隞? * 甇斗芋撘?鞈??箔?皞??其???UI ??? *
+ * ?嗆?瘙箇?嚗? * 1. 銴 SharedTaskSidebar ??dnd-kit ?摩嚗??單?摨?
+ * 2. ?函??Ｚ”?潔?撅嚗葆??雿??哨??迂???絲憪?甇Ｘ??閮鳴?
+ * 3. 暺?隞餃??? CardModal嚗雁????綽?
+ * 4. ??祟?詨 + 撅斤?蝭拚?剁?銴?暹??摩嚗? */
 import React, { useState, useMemo, useEffect } from 'react';
 import useBoardStore, { getWorkingDaysDiff, calculateCascadedDates } from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
@@ -26,16 +21,16 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
 
-// ── 狀態樣式對照表 ──────────────────────────────────────────────
+// ?? ??見撘??扯” ??????????????????????????????????????????????
 const STATUS_CONFIG = {
-    todo:      { label: '進行中', dot: 'bg-status-todo',      badge: 'bg-status-todo/10 text-status-todo border-status-todo/30' },
-    delayed:   { label: '延遲',   dot: 'bg-status-delayed',   badge: 'bg-status-delayed/10 text-status-delayed border-status-delayed/30' },
-    completed: { label: '完成',   dot: 'bg-status-completed', badge: 'bg-status-completed/10 text-status-completed border-status-completed/30' },
-    unsure:    { label: '不確定', dot: 'bg-status-unsure',    badge: 'bg-status-unsure/10 text-status-unsure border-status-unsure/30' },
-    onhold:    { label: '暫緩',   dot: 'bg-status-onhold',    badge: 'bg-status-onhold/10 text-status-onhold border-status-onhold/30' },
+    todo:      { label: '?脰?銝?, dot: 'bg-status-todo',      badge: 'bg-status-todo/10 text-status-todo border-status-todo/30' },
+    delayed:   { label: '撱園',   dot: 'bg-status-delayed',   badge: 'bg-status-delayed/10 text-status-delayed border-status-delayed/30' },
+    completed: { label: '摰?',   dot: 'bg-status-completed', badge: 'bg-status-completed/10 text-status-completed border-status-completed/30' },
+    unsure:    { label: '銝Ⅱ摰?, dot: 'bg-status-unsure',    badge: 'bg-status-unsure/10 text-status-unsure border-status-unsure/30' },
+    onhold:    { label: '?怎楨',   dot: 'bg-status-onhold',    badge: 'bg-status-onhold/10 text-status-onhold border-status-onhold/30' },
 } as const;
 
-// ── 單列可拖曳元件 ────────────────────────────────────────────────
+// ?? ?桀??舀??喳?隞?????????????????????????????????????????????????
 const SortableListRow = ({
     item,
     onClick,
@@ -68,8 +63,7 @@ const SortableListRow = ({
         zIndex: isDragging ? 50 : 1,
     };
 
-    // 各層縮排量
-    const indentPx = item.type === 'list' ? 0 : item.type === 'card' ? 24 : 48;
+    // ?惜蝮格???    const indentPx = item.type === 'list' ? 0 : item.type === 'card' ? 24 : 48;
     const statusCfg = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.todo;
     const hasChildren = item.type === 'list' || item.type === 'card';
 
@@ -87,13 +81,13 @@ const SortableListRow = ({
                 ${isSelectingMode ? 'hover:bg-transparent' : ''}
             `}
         >
-            {/* ── 名稱欄（左固定，帶縮排、展開、拖曳把手）── */}
+            {/* ?? ?迂甈?撌血摰?撣嗥葬?????單????? */}
             <div
                 className={`flex items-center gap-1 w-[350px] flex-shrink-0 py-1.5 pr-3 cursor-pointer select-none transition-opacity ${isSelectingMode ? 'opacity-50 pointer-events-none' : ''}`}
                 style={{ paddingLeft: `${12 + indentPx}px` }}
                 onClick={() => onClick(item)}
             >
-                {/* 拖曳把手 */}
+                {/* ??? */}
                 <div
                     className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500"
                     {...attributes}
@@ -102,7 +96,7 @@ const SortableListRow = ({
                     <GripVertical size={13} />
                 </div>
 
-                {/* 展開/收疊按鈕 */}
+                {/* 撅?/?嗥??? */}
                 {hasChildren && onToggleCollapse ? (
                     <button
                         onClick={(e) => { e.stopPropagation(); onToggleCollapse(item.id); }}
@@ -114,14 +108,14 @@ const SortableListRow = ({
                     <div className="flex-shrink-0 w-[21px]" />
                 )}
 
-                {/* 類型圖示 */}
+                {/* 憿??內 */}
                 <div className="flex-shrink-0 mr-1">
                     {item.type === 'list'      && <Folder   size={13} className="text-primary/60" />}
                     {item.type === 'card'      && <FileText size={12} className="text-slate-400" />}
                     {item.type === 'checklist' && <div className="w-2 h-2 rounded-full border-2 border-slate-300 mt-0.5" />}
                 </div>
 
-                {/* 任務名稱 */}
+                {/* 隞餃??迂 */}
                 <span className={`truncate
                     ${item.type === 'list'      ? 'text-[13px] font-black text-slate-800' : ''}
                     ${item.type === 'card'      ? 'text-[12px] font-semibold text-slate-700' : ''}
@@ -130,19 +124,19 @@ const SortableListRow = ({
                     {item.title}
                 </span>
 
-                {/* 新增子項按鈕 */}
+                {/* ?啣?摮??? */}
                 {hasChildren && onAddChild && (
                     <button
                         onClick={(e) => { e.stopPropagation(); onAddChild(item); }}
                         className="ml-1 opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-primary transition-all flex-shrink-0"
-                        title={item.type === 'list' ? '新增卡片' : '新增待辦項目'}
+                        title={item.type === 'list' ? '?啣??∠?' : '?啣?敺齒?'}
                     >
                         <Plus size={11} />
                     </button>
                 )}
             </div>
 
-            {/* ── 狀態欄 ── */}
+            {/* ?? ??? ?? */}
             <div className={`flex items-center justify-center w-24 flex-shrink-0 border-l border-slate-100 px-2 transition-opacity ${isSelectingMode ? 'opacity-50' : ''}`}>
                 {item.status && (
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.badge}`}>
@@ -152,7 +146,7 @@ const SortableListRow = ({
                 )}
             </div>
 
-            {/* ── 起始日欄 ── */}
+            {/* ?? 韏瑕??交? ?? */}
             <div 
                 className={`flex items-center group/date relative w-36 flex-shrink-0 border-l border-slate-100 px-3 transition-all
                     ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
@@ -164,39 +158,38 @@ const SortableListRow = ({
                     {item.startDate ? (
                         <span className="text-[11px] text-slate-500 font-medium">{item.startDate}</span>
                     ) : (
-                        <span className="text-[10px] text-slate-200">—</span>
+                        <span className="text-[10px] text-slate-200">??/span>
                     )}
-                    {/* 依賴關係顯示：完整模式 vs 簡易符號 */}
+                    {/* 靘陷??憿舐內嚗??湔芋撘?vs 蝪⊥?蝚西? */}
                     {(dependencyMarkers?.[`${item.id}_start`] || []).filter(m => !m.isSelf || m.role === 'passive').length > 0 && (
                         showDependencies ? (
                             <div className="flex items-center gap-0.5 flex-shrink-0">
                                 {dependencyMarkers![`${item.id}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
                                     m.isSelf ? (
-                                        <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
-                                            {m.offset || 0} 工作天
-                                        </span>
+                                        <span key={m.id} title="?瑁?憭拇" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                            {m.offset || 0} 撌乩?憭?                                        </span>
                                     ) : (
-                                        <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
+                                        <span key={m.id} title={m.role === 'active' ? '?蔭隞餃? (銝餃?撽?)' : '敺蔭隞餃? (鋡怠?頝)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
                                             {m.label}
                                         </span>
                                     )
                                 ))}
                             </div>
                         ) : (
-                            /* 簡易符號：一個小鏈結圖示表示此日期由依賴計算 */
-                            <span title="此日期由依賴關係推算" className="flex-shrink-0 text-amber-400/70">
+                            /* 蝪⊥?蝚西?嚗??????內銵函內甇斗?靘陷閮? */
+                            <span title="甇斗?靘陷???函?" className="flex-shrink-0 text-amber-400/70">
                                 <Link size={9} />
                             </span>
                         )
                     )}
                 </div>
                 
-                {/* 建立依賴按鈕 */}
+                {/* 撱箇?靘陷?? */}
                 {!isDragging && onDependencySelect && !isSelectingMode && (
                      <button
                         onClick={(e) => { e.stopPropagation(); onDependencySelect(item.id, 'start', item.title); }}
                         className="absolute right-1 p-1 rounded-sm text-slate-400 hover:text-amber-600 hover:bg-amber-100 transition-all opacity-0 group-hover/date:opacity-100"
-                        title="設定起始日依賴"
+                        title="閮剖?韏瑕??乩?鞈?
                      >
                         <Link size={11} />
                      </button>
@@ -208,7 +201,7 @@ const SortableListRow = ({
                 )}
             </div>
 
-            {/* ── 截止日欄 ── */}
+            {/* ?? ?芣迫?交? ?? */}
             <div 
                 className={`flex items-center group/date relative w-36 flex-shrink-0 border-l border-slate-100 px-3 transition-all
                     ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
@@ -223,39 +216,38 @@ const SortableListRow = ({
                                 ? 'text-status-delayed' : 'text-slate-500'
                         }`}>{item.endDate}</span>
                     ) : (
-                        <span className="text-[10px] text-slate-200">—</span>
+                        <span className="text-[10px] text-slate-200">??/span>
                     )}
-                    {/* 依賴關係顯示：完整模式 vs 簡易符號 */}
+                    {/* 靘陷??憿舐內嚗??湔芋撘?vs 蝪⊥?蝚西? */}
                     {(dependencyMarkers?.[`${item.id}_end`] || []).filter(m => !m.isSelf || m.role === 'passive').length > 0 && (
                         showDependencies ? (
                             <div className="flex items-center gap-0.5 flex-shrink-0">
                                 {dependencyMarkers![`${item.id}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
                                     m.isSelf ? (
-                                        <span key={m.id} title="執行天數" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
-                                            {m.offset || 0} 工作天
-                                        </span>
+                                        <span key={m.id} title="?瑁?憭拇" className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                            {m.offset || 0} 撌乩?憭?                                        </span>
                                     ) : (
-                                        <span key={m.id} title={m.role === 'active' ? '前置任務 (主動驅動)' : '後置任務 (被動跟隨)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
+                                        <span key={m.id} title={m.role === 'active' ? '?蔭隞餃? (銝餃?撽?)' : '敺蔭隞餃? (鋡怠?頝)'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-slate-800' : 'bg-slate-400'}`}>
                                             {m.label}
                                         </span>
                                     )
                                 ))}
                             </div>
                         ) : (
-                            /* 簡易符號：一個小鏈結圖示表示此日期由依賴計算 */
-                            <span title="此日期由依賴關係推算" className="flex-shrink-0 text-amber-400/70">
+                            /* 蝪⊥?蝚西?嚗??????內銵函內甇斗?靘陷閮? */
+                            <span title="甇斗?靘陷???函?" className="flex-shrink-0 text-amber-400/70">
                                 <Link size={9} />
                             </span>
                         )
                     )}
                 </div>
                 
-                {/* 建立依賴按鈕 */}
+                {/* 撱箇?靘陷?? */}
                 {!isDragging && onDependencySelect && !isSelectingMode && (
                      <button
                         onClick={(e) => { e.stopPropagation(); onDependencySelect(item.id, 'end', item.title); }}
                         className="absolute right-1 p-1 rounded-sm text-slate-400 hover:text-amber-600 hover:bg-amber-100 transition-all opacity-0 group-hover/date:opacity-100"
-                        title="設定截止日依賴"
+                        title="閮剖??芣迫?乩?鞈?
                      >
                         <Link size={11} />
                      </button>
@@ -267,12 +259,12 @@ const SortableListRow = ({
                 )}
             </div>
 
-            {/* ── 備註欄 ── */}
+            {/* ?? ?酉甈??? */}
             <div className={`flex items-center flex-1 min-w-[200px] border-l border-slate-100 px-3 overflow-hidden transition-opacity ${isSelectingMode ? 'opacity-50' : ''}`}>
                 {item.notes ? (
                     <span className="text-[11px] text-slate-400 truncate italic">{item.notes}</span>
                 ) : (
-                    <span className="text-[10px] text-slate-200">—</span>
+                    <span className="text-[10px] text-slate-200">??/span>
                 )}
             </div>
         </div>
@@ -280,7 +272,7 @@ const SortableListRow = ({
 };
 
 
-// ── 主元件 ───────────────────────────────────────────────────────
+// ?? 銝餃?隞????????????????????????????????????????????????????????
 const ListView = () => {
     const {
         activeWorkspaceId,
@@ -308,14 +300,13 @@ const ListView = () => {
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
     const [activeSortableItem, setActiveSortableItem] = useState<any>(null);
     const [layerFilters, setLayerFilters] = useState({ list: true, card: true, checklist: true });
-    // 依賴關係顯示模式：true = 完整顯示，false = 簡易符號
+    // 靘陷??憿舐內璅∪?嚗rue = 摰憿舐內嚗alse = 蝪⊥?蝚西?
     const [showDependencies, setShowDependencies] = useState(true);
     
-    // 依賴選取狀態
-    const [dependencySelection, setDependencySelection] = useState<{ id: string; side: 'start' | 'end'; title: string } | null>(null);
+    // 靘陷?詨????    const [dependencySelection, setDependencySelection] = useState<{ id: string; side: 'start' | 'end'; title: string } | null>(null);
     const [dependencyMenuState, setDependencyMenuState] = useState<{ id: string; side: 'start' | 'end'; title: string } | null>(null);
 
-    // 監聽 ESC 鍵取消選取模式或視窗
+    // ?? ESC ?萄?瘨?芋撘?閬?
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -330,7 +321,7 @@ const ListView = () => {
     const activeWs    = workspaces.find(w => w.id === activeWorkspaceId);
     const activeBoard = activeWs?.boards.find(b => b.id === activeBoardId);
 
-    // 依賴關係標註邏輯 (將所有依賴關係轉換為標籤與角色)
+    // 靘陷??璅酉?摩 (撠???鞈湧?靽??璅惜????
     const dependencyMarkers = useMemo(() => {
         if (!activeBoard) return {};
         
@@ -346,7 +337,7 @@ const ListView = () => {
 
         const markers: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive', isSelf?: boolean, offset?: number }>> = {};
 
-        // 固定排序確保字母不會亂跳
+        // ?箏???蝣箔?摮?銝?鈭歲
         const sortedDeps = [...(activeBoard.dependencies || [])].sort((a, b) => a.id.localeCompare(b.id));
 
         sortedDeps.forEach((dep, index) => {
@@ -383,16 +374,15 @@ const ListView = () => {
 
     const getTaskTitleFromBoard = (id: string) => {
         const t = getTaskFromBoard(id);
-        return t ? ((t as any).title || (t as any).content || '子項目') : '未知項目';
+        return t ? ((t as any).title || (t as any).content || '摮???) : '?芰?';
     };
 
-    // 狀態列表（供篩選器按鈕使用）
-    const statuses = [
-        { key: 'todo',      label: '進行中', color: 'bg-status-todo' },
-        { key: 'delayed',   label: '延遲',   color: 'bg-status-delayed' },
-        { key: 'completed', label: '完成',   color: 'bg-status-completed' },
-        { key: 'unsure',    label: '不確定', color: 'bg-status-unsure' },
-        { key: 'onhold',    label: '暫緩',   color: 'bg-status-onhold' },
+    // ???銵剁?靘祟?詨??雿輻嚗?    const statuses = [
+        { key: 'todo',      label: '?脰?銝?, color: 'bg-status-todo' },
+        { key: 'delayed',   label: '撱園',   color: 'bg-status-delayed' },
+        { key: 'completed', label: '摰?',   color: 'bg-status-completed' },
+        { key: 'unsure',    label: '銝Ⅱ摰?, color: 'bg-status-unsure' },
+        { key: 'onhold',    label: '?怎楨',   color: 'bg-status-onhold' },
     ] as const;
 
     const flattenedItems = useMemo(() => {
@@ -442,7 +432,7 @@ const ListView = () => {
                             items.push({
                                 ...cli, type: 'checklist',
                                 listId: list.id, cardId: card.id, checklistId: cl.id,
-                                title: cli.title || '未命名項目',
+                                title: cli.title || '?芸????,
                                 startDate: computed?.startDate || cli.startDate,
                                 endDate: computed?.endDate || cli.endDate
                             });
@@ -454,7 +444,7 @@ const ListView = () => {
         return items;
     }, [activeBoard, layerFilters, statusFilters, collapsedIds]);
 
-    // ── 展開/收疊 ────────────────────────────────────────────────
+    // ?? 撅?/?嗥? ????????????????????????????????????????????????
     const toggleCollapse = (id: string) => {
         setCollapsedIds(prev => {
             const next = new Set(prev);
@@ -463,16 +453,16 @@ const ListView = () => {
         });
     };
 
-    // ── 點擊開啟 Modal ────────────────────────────────────────────
+    // ?? 暺??? Modal ????????????????????????????????????????????
     const handleItemClick = (item: any) => {
         if (item.type === 'list') openModal('list', item.id, item.id);
         else if (item.type === 'card') openModal('card', item.id, item.listId);
         else if (item.type === 'checklist') openModal('checklistitem', item.id, item.listId, { cardId: item.cardId, checklistId: item.checklistId });
     };
 
-    // ── 新增子項目 ────────────────────────────────────────────────
+    // ?? ?啣?摮???????????????????????????????????????????????????
     const handleAddList = async () => {
-        const title = await useDialogStore.getState().showPrompt('請輸入列表名稱：', '新列表');
+        const title = await useDialogStore.getState().showPrompt('隢撓?亙?銵典?蝔梧?', '?啣?銵?);
         if (title && title.trim()) {
             addList(activeWorkspaceId!, activeBoardId!, title.trim());
         }
@@ -481,12 +471,12 @@ const ListView = () => {
     const handleAddChild = async (item: any) => {
         const { showPrompt } = useDialogStore.getState();
         if (item.type === 'list') {
-            const title = await showPrompt('請輸入卡片名稱：', '新卡片');
+            const title = await showPrompt('隢撓?亙??蝔梧?', '?啣??);
             if (title && title.trim()) {
                 addCard(activeWorkspaceId!, activeBoardId!, item.id, title.trim());
             }
         } else if (item.type === 'card') {
-            const title = await showPrompt('請輸入待辦項目名稱：', '新項目');
+            const title = await showPrompt('隢撓?亙?颲阡??桀?蝔梧?', '?圈???);
             if (title !== null) {
                 let clId = item.checklists?.[0]?.id;
                 if (!clId) {
@@ -510,7 +500,7 @@ const ListView = () => {
         }
     };
 
-    // ── 拖曳結束處理（與 SharedTaskSidebar 相同邏輯）───────────────
+    // ?? ?蝯???嚗? SharedTaskSidebar ?詨??摩嚗???????????????
     const handleSortableDragEnd = (event: any) => {
         const { active, over } = event;
         setActiveSortableItem(null);
@@ -562,7 +552,7 @@ const ListView = () => {
         }
     };
 
-    // ── 依賴關係設定 ────────────────────────────────────────────────
+    // ?? 靘陷??閮剖? ????????????????????????????????????????????????
     const handleDependencySelect = async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
         if (!dependencySelection) {
             // Check if there are dependencies connected to this specific date field
@@ -571,25 +561,25 @@ const ListView = () => {
                        (dep.toId === targetId && dep.toSide === targetSide)
             );
             if (hasExisting) {
-                // 如果已經有關聯，開啟管理選單
+                // 憒?撌脩????荔???蝞∠??詨
                 setDependencyMenuState({ id: targetId, side: targetSide, title: targetTitle });
             } else {
-                // 如果完全沒有關聯，直接進入選取模式
+                // 憒?摰瘝??嚗?仿脣?詨?璅∪?
                 setDependencySelection({ id: targetId, side: targetSide, title: targetTitle });
             }
         } else {
-            // 完成選取
+            // 摰??詨?
             if (dependencySelection.id === targetId && dependencySelection.side === targetSide) {
-                // 不得完全相同 (同任務同端點)
+                // 銝?摰?詨? (?遙??蝡舫?)
                 setDependencySelection(null);
                 return;
             }
 
             const isSelfDependency = dependencySelection.id === targetId;
 
-            // 防呆：自我依賴時，只允許設定「執行天數（截止日跟隨起始日）」，無法逆向設定（起始日依賴截止日）
+            // ?脣?嚗??鞈湔?嚗?迂閮剖??銵予?賂??芣迫?亥??刻絲憪嚗??⊥???閮剖?嚗絲憪靘陷?芣迫?伐?
             if (isSelfDependency && targetSide === 'end' && dependencySelection.side === 'start') {
-                useDialogStore.getState().showConfirm('系統提示：單一任務無法建立由「截止日」逆向推算「起始日」的自我依賴。\n請由「起始日」拉到「截止日」來設定執行天數。');
+                useDialogStore.getState().showConfirm('蝟餌絞?內嚗銝隞餃??⊥?撱箇??晞甇Ｘ???函??絲憪???芣?靘陷?n隢?絲憪???啜甇Ｘ??閮剖??瑁?憭拇??);
                 setDependencySelection(null);
                 return;
             }
@@ -614,8 +604,8 @@ const ListView = () => {
             }
 
             const promptMessage = isSelfDependency
-                ? `請設定任務 [${dependencySelection.title}] 的執行天數 (將綁定起始與截止日)：\n(注意：單位為「工作天」，偏移 0 代表 1 個工作天，依此類推)`
-                : `請設定 [${dependencySelection.title}] 依賴於 [${targetTitle}] 的偏移工作天：\n(正數代表延後，負數代表提前，將自動跳過假日)`;
+                ? `隢身摰遙??[${dependencySelection.title}] ?銵予??(撠?摰絲憪??芣迫??嚗n(瘜冽?嚗雿?極雿予???宏 0 隞?” 1 ?極雿予嚗?甇日???`
+                : `隢身摰?[${dependencySelection.title}] 靘陷??[${targetTitle}] ??蝘餃極雿予嚗n(甇?隞?”撱嗅?嚗??訾誨銵冽???撠?歲????`;
 
             const offsetStr = await useDialogStore.getState().showPrompt(
                 promptMessage,
@@ -625,8 +615,8 @@ const ListView = () => {
             if (offsetStr !== null && offsetStr.trim() !== '') {
                 const offset = parseInt(offsetStr, 10);
                 if (!isNaN(offset)) {
-                    // dependencySelection 代表要被賦予依賴的任務 (Successor / toId)
-                    // target 代表所參考的目標任務 (Predecessor / fromId)
+                    // dependencySelection 隞?”閬◤鞈虫?靘陷?遙??(Successor / toId)
+                    // target 隞?”????格?隞餃? (Predecessor / fromId)
                     addDependency(activeWorkspaceId!, activeBoardId!, {
                         fromId: targetId,
                         fromSide: targetSide,
@@ -640,20 +630,19 @@ const ListView = () => {
         }
     };
 
-    // ── 空狀態畫面 ────────────────────────────────────────────────
+    // ?? 蝛箇????????????????????????????????????????????????????
     if (!activeBoard) {
         return (
             <div className="flex-1 flex items-center justify-center text-slate-400">
-                請選擇一個看板
-            </div>
+                隢??????            </div>
         );
     }
 
-    // ── 渲染 ──────────────────────────────────────────────────────
+    // ?? 皜脫? ??????????????????????????????????????????????????????
     return (
         <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
             
-            {/* ── 依賴管理對話窗 ── */}
+            {/* ?? 靘陷蝞∠?撠店蝒??? */}
             {dependencyMenuState && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setDependencyMenuState(null)}>
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col m-4" onClick={e => e.stopPropagation()}>
@@ -661,7 +650,7 @@ const ListView = () => {
                         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2">
                                 <Link size={16} className="text-primary" />
-                                <span>{dependencyMenuState.title} ({dependencyMenuState.side === 'start' ? '起始日' : '截止日'}) 依賴關係設定</span>
+                                <span>{dependencyMenuState.title} ({dependencyMenuState.side === 'start' ? '韏瑕??? : '?芣迫??}) 靘陷??閮剖?</span>
                             </h3>
                             <button onClick={() => setDependencyMenuState(null)} className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
                                 <X size={18} />
@@ -684,22 +673,21 @@ const ListView = () => {
                                         <div className="flex items-center gap-3">
                                             <div className="flex flex-col gap-1">
                                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm w-fit ${isSelfPassive ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white'}`}>
-                                                    {isSelfPassive ? '被動跟隨' : '主動影響'}
+                                                    {isSelfPassive ? '鋡怠?頝' : '銝餃?敶梢'}
                                                 </span>
                                                 <div className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                                                     <ArrowRight size={14} className={isSelfPassive ? "text-slate-400" : "text-slate-800"} />
-                                                    <span>{otherTitle} ({otherSide === 'start' ? '起始日' : '截止日'})</span>
+                                                    <span>{otherTitle} ({otherSide === 'start' ? '韏瑕??? : '?芣迫??})</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-semibold text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 min-w-[60px] text-center">
-                                                偏移 {dep.offset || 0} 工作天
-                                            </span>
+                                                ?宏 {dep.offset || 0} 撌乩?憭?                                            </span>
                                             <button 
-                                                title="修改天數"
+                                                title="靽格憭拇"
                                                 onClick={async () => {
-                                                    const res = await useDialogStore.getState().showPrompt(`修改與 [${otherTitle}] 的關聯偏移工作天 (正數延後，負數提前)：`, String(dep.offset || 0));
+                                                    const res = await useDialogStore.getState().showPrompt(`靽格??[${otherTitle}] ???臬?蝘餃極雿予 (甇?撱嗅?嚗??豢???嚗, String(dep.offset || 0));
                                                     if (res !== null && res.trim() !== '') {
                                                         const offset = parseInt(res, 10);
                                                         if (!isNaN(offset)) updateDependency(activeWorkspaceId!, activeBoardId!, dep.id, { offset });
@@ -710,7 +698,7 @@ const ListView = () => {
                                                 <Edit2 size={15} />
                                             </button>
                                             <button 
-                                                title="解除關聯"
+                                                title="閫??"
                                                 onClick={() => removeDependency(activeWorkspaceId!, activeBoardId!, dep.id)}
                                                 className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                                             >
@@ -732,7 +720,7 @@ const ListView = () => {
                                 className="w-full flex items-center justify-center gap-2 py-2 bg-slate-50 border border-slate-200 text-slate-600 font-bold text-sm rounded-lg hover:bg-slate-100 transition-colors"
                             >
                                 <Plus size={16} />
-                                <span>在此日期新增另一筆關聯...</span>
+                                <span>?冽迨?交??啣??虫?蝑???..</span>
                             </button>
                         </div>
                     </div>
@@ -740,9 +728,9 @@ const ListView = () => {
             )}
 
 
-            {/* ── Toolbar ── */}
+            {/* ?? Toolbar ?? */}
             <div className="h-12 border-b border-slate-200 bg-white/60 backdrop-blur-sm flex items-center justify-between px-4 shrink-0 gap-4">
-                {/* 狀態篩選器 */}
+                {/* ??祟?詨 */}
                 <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto no-scrollbar py-2 flex-1">
                     {statuses.map(s => (
                         <button
@@ -760,7 +748,7 @@ const ListView = () => {
                     ))}
                 </div>
 
-                {/* 層級篩選器 */}
+                {/* 撅斤?蝭拚??*/}
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg flex-shrink-0">
                     {(['list', 'card', 'checklist'] as const).map(key => (
                         <button
@@ -770,15 +758,15 @@ const ListView = () => {
                                 layerFilters[key] ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400'
                             }`}
                         >
-                            {key === 'list' ? '列表' : key === 'card' ? '卡片' : '待辦'}
+                            {key === 'list' ? '?”' : key === 'card' ? '?∠?' : '敺齒'}
                         </button>
                     ))}
                 </div>
 
-                {/* 依賴關係顯示切換 */}
+                {/* 靘陷??憿舐內?? */}
                 <button
                     onClick={() => setShowDependencies(prev => !prev)}
-                    title={showDependencies ? '切換為簡易符號模式' : '切換為完整依賴顯示'}
+                    title={showDependencies ? '???箇陛?泵?芋撘? : '???箏??港?鞈湧＊蝷?}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex-shrink-0 ${
                         showDependencies
                             ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm'
@@ -786,37 +774,37 @@ const ListView = () => {
                     }`}
                 >
                     <GitBranch size={11} />
-                    <span>依賴關係</span>
+                    <span>靘陷??</span>
                 </button>
             </div>
 
-            {/* ── 表頭 ── */}
+            {/* ?? 銵券 ?? */}
             <div className="flex items-center border-b-2 border-slate-200 bg-slate-50 shrink-0 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                {/* 名稱欄 — 固定寬度留空間給備註 */}
+                {/* ?迂甈????箏?撖砍漲?征?策?酉 */}
                 <div className="flex items-center gap-1.5 w-[350px] flex-shrink-0 px-4 py-2">
                     <AlignLeft size={11} />
-                    <span>任務名稱</span>
+                    <span>隞餃??迂</span>
                 </div>
-                {/* 固定寬欄 */}
+                {/* ?箏?撖祆? */}
                 <div className="flex items-center gap-1.5 w-24 flex-shrink-0 border-l border-slate-200 px-2 py-2 justify-center">
                     <Tag size={11} />
-                    <span>狀態</span>
+                    <span>???/span>
                 </div>
                 <div className="flex items-center gap-1.5 w-36 flex-shrink-0 border-l border-slate-200 px-3 py-2">
                     <Calendar size={11} />
-                    <span>起始日</span>
+                    <span>韏瑕???/span>
                 </div>
                 <div className="flex items-center gap-1.5 w-36 flex-shrink-0 border-l border-slate-200 px-3 py-2">
                     <Calendar size={11} />
-                    <span>截止日</span>
+                    <span>?芣迫??/span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-1 min-w-[200px] border-l border-slate-200 px-3 py-2">
                     <StickyNote size={11} />
-                    <span>備註</span>
+                    <span>?酉</span>
                 </div>
             </div>
 
-            {/* ── 主體（可捲動的任務清單）── */}
+            {/* ?? 銝駁?嚗?脣??遙???殷??? */}
             <div className="flex-1 overflow-y-auto overflow-x-auto scrollbar-thin">
                 <DndContext
                     sensors={sensors}
@@ -828,7 +816,7 @@ const ListView = () => {
                         items={flattenedItems.map(i => i.id)}
                         strategy={verticalListSortingStrategy}
                     >
-                        {/* 最小寬度確保欄位在小螢幕不跑版 */}
+                        {/* ?撠祝摨衣Ⅱ靽?雿撠撟?頝? */}
                         <div className="min-w-[850px]">
                             {flattenedItems.map(item => (
                                 <SortableListRow
@@ -845,18 +833,18 @@ const ListView = () => {
                                 />
                             ))}
 
-                            {/* 空白狀態提示 */}
+                            {/* 蝛箇???蝷?*/}
                             {flattenedItems.length === 0 && (
                                 <div className="flex flex-col items-center justify-center py-16 text-slate-300">
                                     <AlignLeft size={36} className="mb-3 opacity-50" />
-                                    <p className="text-sm font-medium">目前沒有任務</p>
-                                    <p className="text-xs mt-1 opacity-70">請新增列表或調整篩選條件</p>
+                                    <p className="text-sm font-medium">?桀?瘝?隞餃?</p>
+                                    <p className="text-xs mt-1 opacity-70">隢憓?銵冽?隤踵蝭拚璇辣</p>
                                 </div>
                             )}
                         </div>
                     </SortableContext>
 
-                    {/* 拖曳預覽層 */}
+                    {/* ??汗撅?*/}
                     <DragOverlay dropAnimation={{ duration: 150, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                         {activeSortableItem ? (
                             <div className="opacity-95 shadow-xl ring-2 ring-primary/20 bg-white rounded-md overflow-hidden cursor-grabbing min-w-[400px]">
@@ -872,14 +860,14 @@ const ListView = () => {
                     </DragOverlay>
                 </DndContext>
 
-                {/* ── 新增列表按鈕 ── */}
+                {/* ?? ?啣??”?? ?? */}
                 <div className="px-4 py-3 min-w-[850px]">
                     <button
                         onClick={handleAddList}
                         className="w-full py-2 flex items-center justify-center gap-2 text-[11px] font-bold text-slate-400 hover:text-primary hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 rounded-lg transition-all"
                     >
                         <Plus size={14} />
-                        <span>新增列表</span>
+                        <span>?啣??”</span>
                     </button>
                 </div>
             </div>

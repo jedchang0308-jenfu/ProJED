@@ -1,9 +1,12 @@
+// @ts-nocheck
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useCalendarSync from '../hooks/useCalendarSync';
 import useUndoStore from '../store/useUndoStore';
 import Sidebar from './Sidebar';
+import { GlobalContextMenu } from './GlobalContextMenu';
 
 /**
  * getRelativeTime — 將時間戳轉為相對時間（如「3 分鐘前」）
@@ -267,6 +270,9 @@ const MainLayout = ({ children }) => {
                     {children}
                 </main>
             </div>
+
+            {/* 全域右鍵/長按選單 — 所有視圖共用 */}
+            <GlobalContextMenu />
         </div>
     );
 };

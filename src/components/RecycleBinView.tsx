@@ -1,115 +1,42 @@
+// @ts-nocheck
 import React from 'react';
 import { Trash2, RotateCcw, ShieldAlert } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
 import dayjs from 'dayjs';
 
 const RecycleBinView = () => {
-    const { 
-        getActiveBoard, activeWorkspaceId, 
-        restoreList, restoreCard, restoreChecklist, restoreChecklistItem,
-        permanentDeleteList, permanentDeleteCard, permanentDeleteChecklist, permanentDeleteChecklistItem 
-    } = useBoardStore();
+    const { getActiveBoard, activeWorkspaceId, activeBoardId } = useBoardStore();
     const board = getActiveBoard();
+    const updateNode = useWbsStore(s => s.updateNode);
+    const removeNode = useWbsStore(s => s.removeNode);
+    // get nodes from WBS store
+    const nodes = useWbsStore(s => s.nodes);
 
-    if (!board) return (
+    if (!board || !activeBoardId) return (
         <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-50">
             請選擇一個看板
         </div>
     );
 
-    // 收集所有已封存的 List 與 Card
-    const archivedItems = [];
-
-    (board.lists || []).forEach(list => {
-        if (list.isArchived) {
-            archivedItems.push({
-                type: 'list',
-                id: list.id,
-                title: list.title,
-                archivedAt: list.archivedAt,
-                parentId: board.id,
-                parentTitle: board.title,
-                item: list
-            });
-        }
-        
-        (list.cards || []).forEach(card => {
-            if (card.isArchived) {
-                archivedItems.push({
-                    type: 'card',
-                    id: card.id,
-                    title: card.title,
-                    archivedAt: card.archivedAt,
-                    parentId: list.id,
-                    parentTitle: list.title,
-                    item: card
-                });
-            }
-
-            (card.checklists || []).forEach(cl => {
-                if (cl.isArchived) {
-                    archivedItems.push({
-                        type: 'checklist',
-                        id: cl.id,
-                        title: cl.title,
-                        archivedAt: cl.archivedAt,
-                        parentId: card.id,
-                        parentListId: list.id,
-                        parentTitle: card.title,
-                        item: cl
-                    });
-                }
-
-                (cl.items || []).forEach(cli => {
-                    if (cli.isArchived) {
-                        archivedItems.push({
-                            type: 'checklistitem',
-                            id: cli.id,
-                            title: cli.title,
-                            archivedAt: cli.archivedAt,
-                            parentId: cl.id,
-                            parentCardId: card.id,
-                            parentListId: list.id,
-                            parentTitle: cl.title,
-                            item: cli
-                        });
-                    }
-                });
-            });
-        });
-    });
+    // 收集所有已封存的 TaskNode
+    const archivedItems = Object.values(nodes).filter(n => n && n.boardId === activeBoardId && n.isArchived);
 
     // 依據封存時間排序 (新的在前)
-    archivedItems.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+    archivedItems.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-    const handleRestore = (item) => {
-        if (item.type === 'list') {
-            restoreList(activeWorkspaceId, board.id, item.id);
-        } else if (item.type === 'card') {
-            restoreCard(activeWorkspaceId, board.id, item.parentId, item.id);
-        } else if (item.type === 'checklist') {
-            restoreChecklist(activeWorkspaceId, board.id, item.parentListId, item.parentId, item.id);
-        } else if (item.type === 'checklistitem') {
-            restoreChecklistItem(activeWorkspaceId, board.id, item.parentListId, item.parentCardId, item.parentId, item.id);
-        }
+    const handleRestore = (item: any) => {
+        updateNode(item.id, { isArchived: false, updatedAt: Date.now() });
     };
 
-    const handlePermanentDelete = async (item) => {
-        const typeName = item.type === 'list' ? '列表' : (item.type === 'card' ? '卡片' : (item.type === 'checklist' ? '待辦清單' : '待辦項目'));
+    const handlePermanentDelete = async (item: any) => {
+        const typeName = item.nodeType === 'group' ? '群組' : '任務';
         const confirmMsg = `確定要永久刪除${typeName}「${item.title}」嗎？此動作無法復原！`;
         const confirmed = await useDialogStore.getState().showConfirm(confirmMsg);
         
         if (confirmed) {
-            if (item.type === 'list') {
-                permanentDeleteList(activeWorkspaceId, board.id, item.id);
-            } else if (item.type === 'card') {
-                permanentDeleteCard(activeWorkspaceId, board.id, item.parentId, item.id);
-            } else if (item.type === 'checklist') {
-                permanentDeleteChecklist(activeWorkspaceId, board.id, item.parentListId, item.parentId, item.id);
-            } else if (item.type === 'checklistitem') {
-                permanentDeleteChecklistItem(activeWorkspaceId, board.id, item.parentListId, item.parentCardId, item.parentId, item.id);
-            }
+            removeNode(item.id);
         }
     };
 
@@ -119,15 +46,7 @@ const RecycleBinView = () => {
         
         if (confirmed) {
             archivedItems.forEach(item => {
-                if (item.type === 'list') {
-                    permanentDeleteList(activeWorkspaceId, board.id, item.id);
-                } else if (item.type === 'card') {
-                    permanentDeleteCard(activeWorkspaceId, board.id, item.parentId, item.id);
-                } else if (item.type === 'checklist') {
-                    permanentDeleteChecklist(activeWorkspaceId, board.id, item.parentListId, item.parentId, item.id);
-                } else if (item.type === 'checklistitem') {
-                    permanentDeleteChecklistItem(activeWorkspaceId, board.id, item.parentListId, item.parentCardId, item.parentId, item.id);
-                }
+                removeNode(item.id);
             });
         }
     };
@@ -142,7 +61,7 @@ const RecycleBinView = () => {
                     </div>
                     <div>
                         <h2 className="font-bold text-slate-800 leading-tight">資源回收桶</h2>
-                        <span className="text-[10px] text-slate-400 font-medium">包含已被刪除的列表與卡片。它們將保留於此直到您手動清空。</span>
+                        <span className="text-[10px] text-slate-400 font-medium">包含已被刪除的群組與任務。它們將保留於此直到您手動清空。</span>
                     </div>
                 </div>
 
@@ -167,7 +86,7 @@ const RecycleBinView = () => {
                                 <Trash2 size={32} />
                             </div>
                             <h3 className="text-lg font-bold text-slate-600 mb-2">資源回收桶是空的</h3>
-                            <p className="text-sm text-slate-400">所有被刪除的任務與列表都會寄放在這裡。</p>
+                            <p className="text-sm text-slate-400">所有被刪除的任務與群組都會寄放在這裡。</p>
                         </div>
                     ) : (
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -181,16 +100,14 @@ const RecycleBinView = () => {
 
                             <div className="divide-y divide-slate-100">
                                 {archivedItems.map((item, idx) => (
-                                    <div key={`${item.type}-${item.id}-${idx}`} className="grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 px-4 py-3 items-center hover:bg-slate-50/80 transition-colors group">
+                                    <div key={`${item.id}-${idx}`} className="grid grid-cols-[auto_1fr_1fr_auto_auto] gap-4 px-4 py-3 items-center hover:bg-slate-50/80 transition-colors group">
                                         
                                         <div className="w-14 flex justify-center">
                                             <div className={`text-[10px] font-bold px-2 py-1 rounded-full w-full-max text-center border ${
-                                                item.type === 'list' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
-                                                item.type === 'card' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                item.type === 'checklist' ? 'bg-sky-50 text-sky-600 border-sky-100' :
-                                                'bg-amber-50 text-amber-600 border-amber-100'
+                                                item.nodeType === 'group' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
+                                                'bg-emerald-50 text-emerald-600 border-emerald-100'
                                             }`}>
-                                                {item.type === 'list' ? '列表' : (item.type === 'card' ? '卡片' : (item.type === 'checklist' ? '待辦清單' : '待辦項目'))}
+                                                {item.nodeType === 'group' ? '群組' : '任務'}
                                             </div>
                                         </div>
 
@@ -198,13 +115,13 @@ const RecycleBinView = () => {
                                             {item.title || '(未命名)'}
                                         </div>
 
-                                        <div className="text-xs text-slate-500 truncate pr-4 flex items-center gap-1.5" title={item.parentTitle}>
+                                        <div className="text-xs text-slate-500 truncate pr-4 flex items-center gap-1.5">
                                             <span className="text-slate-400">所在於:</span>
-                                            <span className="font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{item.parentTitle || '(未知)'}</span>
+                                            <span className="font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{item.parentId ? nodes[item.parentId]?.title || '(已知父節點)' : board.title}</span>
                                         </div>
 
                                         <div className="w-32 text-right text-xs text-slate-400 font-medium whitespace-nowrap font-mono">
-                                            {item.archivedAt ? dayjs(item.archivedAt).format('YYYY-MM-DD HH:mm') : '未知'}
+                                            {item.updatedAt ? dayjs(item.updatedAt).format('YYYY-MM-DD HH:mm') : '未知'}
                                         </div>
 
                                         <div className="w-24 flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">

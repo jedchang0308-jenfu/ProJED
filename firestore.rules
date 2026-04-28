@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 使用者文件：只能讀寫自己的資料
+    // 使用者文件：只能讀寫自己的資料（含 migrationVersion 遷移旗標）
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
@@ -14,7 +14,7 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null 
         && request.auth.uid in resource.data.members;
       
-      // 子集合（boards, lists, cards, dependencies）繼承 workspace 權限
+      // 子集合（boards, lists, cards, nodes, dependencies）繼承 workspace 權限
       match /{subcollection=**} {
         allow read, write: if request.auth != null 
           && get(/databases/$(database)/documents/workspaces/$(wsId)).data.members.hasAny([request.auth.uid]);
@@ -22,3 +22,4 @@ service cloud.firestore {
     }
   }
 }
+

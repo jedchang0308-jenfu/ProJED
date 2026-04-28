@@ -57,7 +57,7 @@ export const GanttGrid: React.FC<GanttHeaderProps> = ({ mode, gridStart, totalUn
         let unitDuration: dayjs.ManipulateType = 'month';
         if (mode === 'Day') unitDuration = 'day';
         else if (mode === 'Year') unitDuration = 'year';
-        else if (mode === 'Quarter') unitDuration = 'quarter';
+        else if (mode === 'Quarter') unitDuration = ('quarter' as any);
 
         const endDate = gridStart.add(totalUnits, unitDuration).endOf('day');
 

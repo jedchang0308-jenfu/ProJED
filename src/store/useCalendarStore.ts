@@ -35,9 +35,28 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
                     data.forEach(d => {
                         newHolidays[d.date] = d.isHoliday;
                     });
+                } else {
+                    throw new Error("HTTP 404");
                 }
             } catch (error) {
-                console.error(`Failed to fetch Taiwan calendar for ${year}`, error);
+                console.warn(`[Calendar] 尚未取得 ${year} 年人事局行事曆資料，啟用前一年度預估模式 (Fallback)。`);
+                // Fallback 預估模式：參考 year-1 的國定假日來推算
+                Object.entries(newHolidays).forEach(([dateStr, isHol]) => {
+                    if (dateStr.startsWith(String(year - 1))) {
+                        const d = dayjs(dateStr); // dateStr: "YYYYMMDD"
+                        const dayOfWeek = d.day();
+                        const nextYearDateStr = String(year) + dateStr.slice(4);
+                        
+                        // 1. 若去年此日是「平日」但放假 (即國定假日、連假)
+                        if (isHol && dayOfWeek !== 0 && dayOfWeek !== 6) {
+                            newHolidays[nextYearDateStr] = true;
+                        }
+                        // 2. 若去年此日是「假日」但不放假 (即補班日)
+                        else if (!isHol && (dayOfWeek === 0 || dayOfWeek === 6)) {
+                            newHolidays[nextYearDateStr] = false;
+                        }
+                    }
+                });
             }
         }));
 

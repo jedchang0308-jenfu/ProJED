@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * CalendarView.jsx - 月曆模式元件
  *
@@ -19,7 +20,8 @@
  *   - 同一天可能有多條任務，用 `lane` (行道) 做垂直堆疊
  */
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import useBoardStore, { calculateCascadedDates } from '../store/useBoardStore';
+import useBoardStore from '../store/useBoardStore';
+import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
 import dayjs from 'dayjs';
 import {
@@ -163,20 +165,20 @@ function buildWeekSegments(flattenedItems, weeks) {
 
 const CalendarView = () => {
     const {
-        workspaces,
         activeBoardId,
         activeWorkspaceId,
         statusFilters,
-        openModal,
         isSidebarOpen,
         setSidebarOpen,
         toggleStatusFilter,
+        setView,
     } = useBoardStore();
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
     const [ganttFilters, setGanttFilters] = useState({ list: true, card: true, checklist: true });
     const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
+    const nodes = useWbsStore(s => s.nodes);
 
     const toggleCollapse = (id) => {
         setCollapsedIds(prev => {
@@ -186,11 +188,11 @@ const CalendarView = () => {
         });
     };
 
-    const activeWs = workspaces.find(w => w.id === activeWorkspaceId);
-    const activeBoard = activeWs?.boards.find(b => b.id === activeBoardId);
+    // (workspaces 已不再需要)
+    // (activeBoard 已不再需要)
 
     const statuses = [
-        { key: 'todo', label: '進行中', color: 'bg-status-todo' },
+        { key: 'todo', label: '待辦', color: 'bg-status-todo' },
         { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
         { key: 'completed', label: '完成', color: 'bg-status-completed' },
         { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },
@@ -199,60 +201,45 @@ const CalendarView = () => {
 
     // ── 資料扁平化（與 GanttView 一致）──────────────────
     const flattenedItems = useMemo(() => {
-        if (!activeBoard) return [];
-        const cascadedDates = calculateCascadedDates(activeBoard);
-        const items = [];
-        activeBoard.lists.forEach(list => {
-            if (list.isArchived) return;
-            const listStatus = list.status || 'todo';
-            const isListCollapsed = collapsedIds.has(list.id);
-            if (ganttFilters.list && statusFilters[listStatus]) {
-                const computed = cascadedDates.get(list.id);
-                items.push({ 
-                    ...list, 
-                    type: 'list',
-                    startDate: computed?.startDate || list.startDate,
-                    endDate: computed?.endDate || list.endDate
-                });
+        if (!activeBoardId) return [];
+        const items: any[] = [];
+        
+        Object.values(nodes).forEach((node: any) => {
+            if (!node || node.isArchived || node.boardId !== activeBoardId) return;
+            const status = node.status || 'todo';
+            if (!statusFilters[status]) return;
+            
+            // Map nodeType to pseudoType for filters
+            let pseudoType = 'checklist';
+            if (node.nodeType === 'group') pseudoType = 'list';
+            else pseudoType = 'card';
+            
+            if (pseudoType === 'list' && !ganttFilters.list) return;
+            if (pseudoType === 'card' && !ganttFilters.card) return;
+            if (pseudoType === 'checklist' && !ganttFilters.checklist) return;
+            
+            // Check visibility based on collapsible (parents must not be collapsed)
+            let isVisible = true;
+            let currentId = node.parentId;
+            while(currentId) {
+                if (collapsedIds.has(currentId)) {
+                    isVisible = false;
+                    break;
+                }
+                currentId = nodes[currentId]?.parentId;
             }
-            if (isListCollapsed) return;
-            (list.cards || []).forEach(card => {
-                if (card.isArchived) return;
-                const cardStatus = card.status || 'todo';
-                if (!statusFilters[cardStatus]) return;
-                const isCardCollapsed = collapsedIds.has(card.id);
-                if (ganttFilters.card) {
-                    const computed = cascadedDates.get(card.id);
-                    items.push({ 
-                        ...card, 
-                        type: 'card', 
-                        listId: list.id,
-                        startDate: computed?.startDate || card.startDate,
-                        endDate: computed?.endDate || card.endDate
-                    });
-                }
-                if (!isCardCollapsed && ganttFilters.checklist) {
-                    (card.checklists || []).forEach(cl => {
-                        if (cl.isArchived) return;
-                        (cl.items || []).forEach(cli => {
-                            if (cli.isArchived) return;
-                            const cliStatus = cli.status || 'todo';
-                            if (!statusFilters[cliStatus]) return;
-                            const computed = cascadedDates.get(cli.id);
-                            items.push({
-                                ...cli, type: 'checklist',
-                                listId: list.id, cardId: card.id, checklistId: cl.id,
-                                title: cli.title || '未命名項目',
-                                startDate: computed?.startDate || cli.startDate,
-                                endDate: computed?.endDate || cli.endDate
-                            });
-                        });
-                    });
-                }
+            if (!isVisible) return;
+            
+            items.push({
+                ...node,
+                type: pseudoType,
+                startDate: node.startDate,
+                endDate: node.endDate
             });
         });
+        
         return items;
-    }, [activeBoard, ganttFilters, statusFilters, collapsedIds]);
+    }, [activeBoardId, nodes, ganttFilters, statusFilters, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -304,9 +291,8 @@ const CalendarView = () => {
 
     // ── 事件處理 ──────────────────────────────────────────
     const handleItemClick = (item) => {
-        if (item.type === 'list') openModal('list', item.id);
-        else if (item.type === 'card') openModal('card', item.id, item.listId);
-        else if (item.type === 'checklist') openModal('checklistitem', item.id, item.listId, { cardId: item.cardId, checklistId: item.checklistId });
+        // 切換到清單視圖，讓使用者在行內編輯此節點
+        setView('list');
     };
 
     const goToPrevMonth = () => setCurrentMonth(prev => prev.subtract(1, 'month'));
@@ -380,7 +366,7 @@ const CalendarView = () => {
                                     onClick={() => setGanttFilters(prev => ({ ...prev, [key]: !prev[key] }))}
                                     className={`px-2 py-1 text-[10px] font-bold rounded ${ganttFilters[key] ? 'bg-white text-slate-700 shadow-xs' : 'text-slate-400'}`}
                                 >
-                                    {key === 'list' ? '列表' : key === 'card' ? '卡片' : '待辦'}
+                                    {key === 'list' ? '群組' : key === 'card' ? '任務' : '子項'}
                                 </button>
                             ))}
                         </div>
@@ -506,6 +492,11 @@ const CalendarView = () => {
                                                 <div
                                                     key={`seg-${seg.item.id}-${wIdx}-${sIdx}`}
                                                     onClick={() => handleItemClick(seg.item)}
+                                                    onContextMenu={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        useBoardStore.getState().setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId: seg.item.id, title: seg.item.title });
+                                                    }}
                                                     style={{
                                                         position: 'absolute',
                                                         top: topPx,

@@ -22,14 +22,15 @@ import MainLayout from './components/MainLayout';
 import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
 import HomeView from './components/HomeView';
-import ListView from './components/ListView';
+// ListView 已由 WbsListView 取代，import 移除
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CalendarView from './components/CalendarView';
 import RecycleBinView from './components/RecycleBinView';
-import CardModal from './components/CardModal';
+// CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
 import UpdateToast from './components/UpdateToast';
+import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
 
 /**
  * AppContent — 主應用內容（已通過 AuthGate 認證）
@@ -98,12 +99,7 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, [user?.uid]);
 
-    // ===== 看板切換時清理無效依賴 =====
-  useEffect(() => {
-    if (activeWorkspaceId && activeBoardId) {
-      useBoardStore.getState().cleanBoardDependencies(activeWorkspaceId, activeBoardId);
-    }
-  }, [activeBoardId]);
+  // (Phase B 已移除 cleanBoardDependencies，無需空殼 useEffect)
 
   // ===== 網址參數解析 (Deep Linking 建立捷徑用) =====
   const hasProcessedDeepLink = useRef(false);
@@ -144,7 +140,7 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;
-      case 'list':        return <ListView />;   // 清單模式：底層資料展示入口
+      case 'list':        return <WbsListView boardId={activeBoardId || ''} />; // 攔截原本的 ListView
       case 'board':       return <BoardView />;
       case 'gantt':       return <GanttView />;
       case 'calendar':    return <CalendarView />;
@@ -156,7 +152,6 @@ function AppContent() {
   return (
     <MainLayout>
       {renderContent()}
-      <CardModal />
       <GlobalDialog />
     </MainLayout>
   );
