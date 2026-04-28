@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React from 'react';
+import React, { useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { WbsNodeItem } from './WbsNodeItem';
@@ -7,6 +7,9 @@ import { Button } from '../ui/Button';
 import { Plus, GitBranch, Link, X, Edit2, ArrowRight } from 'lucide-react';
 import type { TaskNode, TaskStatus } from '../../types';
 import useDialogStore from '../../store/useDialogStore';
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useDragSensors } from '../../hooks/useDragSensors';
 
 interface WbsListViewProps {
   boardId: string;
@@ -20,9 +23,33 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   const dependencyMenuState = useBoardStore(s => s.dependencyMenuState);
   const setDependencyMenuState = useBoardStore(s => s.setDependencyMenuState);
-  const { dependencies, addDependency, removeDependency, updateDependency, addNode } = useWbsStore();
+  const { dependencies, addDependency, removeDependency, updateDependency, addNode, updateNode } = useWbsStore();
 
   const [showDependencies, setShowDependencies] = React.useState(true);
+
+  // DnD 狀態
+  const sensors = useDragSensors();
+  const [activeSortableItem, setActiveSortableItem] = useState<TaskNode | null>(null);
+
+  const handleDragEnd = (event: any) => {
+      const { active, over } = event;
+      setActiveSortableItem(null);
+      if (!over || active.id === over.id) return;
+
+      const activeItem = active.data.current?.item;
+      const overItem = over.data.current?.item;
+      if (!activeItem || !overItem) return;
+
+      if (activeItem.parentId === overItem.parentId) {
+          // 同層級交換順序
+          const tempOrder = activeItem.order;
+          updateNode(activeItem.id, { order: overItem.order });
+          updateNode(overItem.id, { order: tempOrder });
+      } else {
+          // 跨層級移動
+          updateNode(activeItem.id, { parentId: overItem.parentId, order: overItem.order + 0.5 });
+      }
+  };
 
   // 監聽 ESC 取消依賴選取 / 依賴選單
   React.useEffect(() => {
@@ -296,19 +323,36 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm">
+          <div className="flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm relative">
             {/* Header Column Titles (Tree Grid) */}
             <div className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] py-2 px-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 rounded-t-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider sticky top-0 z-10">
-                <div className="flex items-center">任務名稱</div>
+                <div className="flex items-center pl-[28px]">任務名稱</div>
                 <div className="flex items-center">狀態</div>
                 <div className="flex items-center">開始日期</div>
                 <div className="flex items-center">結束日期</div>
             </div>
             
-            {/* 遞迴列表本體 */}
-            {rootNodes.map(node => (
-              <WbsNodeItem key={node.id} nodeId={node.id} level={0} />
-            ))}
+            {/* 遞迴列表本體包裝 DnD */}
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={(e) => setActiveSortableItem(e.active.data.current?.item)}
+                onDragEnd={handleDragEnd}
+            >
+                <SortableContext items={rootNodes.map(n => n.id)} strategy={verticalListSortingStrategy}>
+                    {rootNodes.map(node => (
+                        <WbsNodeItem key={node.id} nodeId={node.id} level={0} />
+                    ))}
+                </SortableContext>
+                
+                <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+                    {activeSortableItem ? (
+                        <div className="opacity-95 shadow-2xl border border-blue-200 bg-white dark:bg-gray-800 rounded overflow-hidden ring-2 ring-blue-400 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
+                            <WbsNodeItem nodeId={activeSortableItem.id} level={0} />
+                        </div>
+                    ) : null}
+                </DragOverlay>
+            </DndContext>
           </div>
         )}
       </div>

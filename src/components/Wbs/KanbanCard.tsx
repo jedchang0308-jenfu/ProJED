@@ -2,8 +2,10 @@
  * KanbanCard — 渲染 WBS Level 2 節點為可拖曳的 Kanban 任務卡
  * 設計意圖：取代舊版 Card.tsx，資料來源改為 useWbsStore 的 TaskNode。
  * 卡片內部嵌入 KanbanChecklist 以遞迴呈現 Level 3+ 的待辦清單。
+ * 
+ * 【編輯功能】點擊卡片標題可行內編輯任務名稱，Enter 或失焦即儲存，ESC 取消。
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Calendar, CheckSquare, ChevronDown, ChevronRight } from 'lucide-react';
@@ -32,8 +34,47 @@ const statusTextColorMap: Record<TaskStatus, string> = {
 export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
   const node = useWbsStore(s => s.nodes[nodeId]);
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
+  const updateNode = useWbsStore(s => s.updateNode);
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
+  // 行內編輯狀態
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+
+  // 進入編輯模式時自動聚焦並全選文字
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  /** 開始編輯：儲存目前標題做為初始值 */
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditValue(node?.title || '');
+    setIsEditing(true);
+  };
+
+  /** 儲存變更：trimmed 後若有內容才更新，空字串不儲存 */
+  const handleSave = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== node?.title) {
+      updateNode(nodeId, { title: trimmed, updatedAt: Date.now() });
+    }
+    setIsEditing(false);
+  };
+
+  /** 鍵盤事件：Enter 儲存，ESC 取消 */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
 
   // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
   const childIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
@@ -90,13 +131,15 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
       }`}
     >
       <div className="flex items-start gap-2 p-2.5">
-        {/* 拖動手柄 */}
+        {/* 拖動手柄 — 編輯模式下停用拖動，避免衝突 */}
         <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors p-1 -ml-1 -mt-1 touch-none"
+          {...(isEditing ? {} : attributes)}
+          {...(isEditing ? {} : listeners)}
+          className={`text-slate-300 hover:text-slate-500 transition-colors p-1 -ml-1 -mt-1 touch-none ${
+            isEditing ? 'cursor-default opacity-30' : 'cursor-grab active:cursor-grabbing'
+          }`}
           onClick={(e) => e.stopPropagation()}
-          title="拖動卡片"
+          title={isEditing ? '' : '拖動卡片'}
         >
           <GripVertical size={16} />
         </div>
@@ -108,9 +151,29 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               {/* 狀態圓點 */}
               <div className={`w-2 h-2 rounded-full bg-status-${status} flex-shrink-0`} />
-              <h4 className={`text-sm font-semibold leading-tight flex-1 truncate ${statusTextColorMap[status]}`}>
-                {node.title || '未命名任務'}
-              </h4>
+
+              {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleSave}
+                  onKeyDown={handleKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 text-sm font-semibold bg-white border border-primary rounded px-1.5 py-0.5 outline-none ring-2 ring-primary/30 text-slate-700 min-w-0"
+                />
+              ) : (
+                <h4
+                  className={`text-sm font-semibold leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${
+                    statusTextColorMap[status]
+                  }`}
+                  onClick={handleStartEdit}
+                  title="點擊以編輯任務名稱"
+                >
+                  {node.title || '未命名任務'}
+                </h4>
+              )}
             </div>
           </div>
 
