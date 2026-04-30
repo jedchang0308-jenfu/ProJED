@@ -9,6 +9,7 @@ import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import dayjs from 'dayjs';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -83,6 +84,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
+  const isDueToday = node.status !== 'completed' && !!localEndDate && dayjs(localEndDate).isSame(dayjs(), 'day');
 
   // 緊湊的縮排 (使用 1.25rem 取代原本的 1.5rem 以節省空間)
   const indentPadding = level * 1.25;
@@ -379,6 +381,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
         {/* Col 4: 結束日期 */}
         <div 
             className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
+                ${isDueToday ? 'border-orange-300 bg-orange-50/80 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]' : ''}
                 ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfEnd ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}

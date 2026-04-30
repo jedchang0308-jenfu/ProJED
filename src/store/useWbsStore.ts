@@ -107,6 +107,25 @@ const getStatusProgress = (status: TaskStatus): number => {
   }
 };
 
+const shouldMarkDelayed = (node: TaskNode): boolean => {
+  if (node.isArchived || !node.endDate || node.status === 'completed' || node.status === 'unsure') return false;
+  return dayjs(node.endDate).isValid() && dayjs(node.endDate).isBefore(dayjs(), 'day');
+};
+
+const applySmartStatus = (node: TaskNode): TaskNode => {
+  if (!shouldMarkDelayed(node)) return node;
+  return { ...node, status: 'delayed' };
+};
+
+const normalizeSmartStatusUpdates = (
+  oldNode: TaskNode,
+  updates: Partial<TaskNode>
+): Partial<TaskNode> => {
+  const candidate = { ...oldNode, ...updates };
+  if (!shouldMarkDelayed(candidate)) return updates;
+  return { ...updates, status: 'delayed' };
+};
+
 export const useWbsStore = create<WbsStore>((set, get) => ({
   nodes: {},
   boardNodesIndex: {},
@@ -141,7 +160,15 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   setNodes: (nodes) => {
     const nodesRecord = nodes.reduce((acc, node) => {
-      acc[node.id] = node;
+      const normalizedNode = applySmartStatus(node);
+      acc[normalizedNode.id] = normalizedNode;
+
+      if (normalizedNode.status !== node.status && normalizedNode.workspaceId && normalizedNode.boardId) {
+        nodeService.update(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode.id, {
+          status: normalizedNode.status,
+        }).catch(console.error);
+      }
+
       return acc;
     }, {} as Record<string, TaskNode>);
 
@@ -151,21 +178,22 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   addNode: (node) => {
     const state = get();
+    const normalizedNode = applySmartStatus(node);
     // 使用 Immutable 更新 nodes
-    const updatedNodes = { ...state.nodes, [node.id]: node };
+    const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
     set({ nodes: updatedNodes });
     get()._buildIndices(updatedNodes);
 
     // 同步寫入 Firestore
-    if (node.workspaceId && node.boardId) {
-        nodeService.create(node.workspaceId, node.boardId, node).catch(console.error);
+    if (normalizedNode.workspaceId && normalizedNode.boardId) {
+        nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).catch(console.error);
     }
 
     // 紀錄上一步
     useUndoStore.getState().pushUndo({
         label: '新增任務',
-        undo: () => get().removeNode(node.id),
-        redo: () => get().addNode(node),
+        undo: () => get().removeNode(normalizedNode.id),
+        redo: () => get().addNode(normalizedNode),
     });
   },
 
@@ -174,51 +202,52 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (!state.nodes[id]) return;
 
     const oldNode = state.nodes[id];
+    const normalizedUpdates = normalizeSmartStatusUpdates(oldNode, updates);
 
     // 比對實質變更，供 undo 使用
     const oldValues: Partial<TaskNode> = {};
     let hasChanges = false;
-    for (const key of Object.keys(updates) as Array<keyof TaskNode>) {
-        if (updates[key] !== oldNode[key]) {
+    for (const key of Object.keys(normalizedUpdates) as Array<keyof TaskNode>) {
+        if (normalizedUpdates[key] !== oldNode[key]) {
             (oldValues as any)[key] = oldNode[key];
             hasChanges = true;
         }
     }
     if (!hasChanges) return;
 
-    const newNode = { ...oldNode, ...updates, updatedAt: Date.now() };
+    const newNode = { ...oldNode, ...normalizedUpdates, updatedAt: Date.now() };
     const updatedNodes = { ...state.nodes, [id]: newNode };
     
     set({ nodes: updatedNodes });
 
     // 同步更新索引
     if (
-        ('parentId' in updates && updates.parentId !== oldNode.parentId) || 
-        ('isArchived' in updates && updates.isArchived !== oldNode.isArchived) ||
-        ('boardId' in updates && updates.boardId !== oldNode.boardId) ||
-        ('order' in updates && updates.order !== oldNode.order)
+        ('parentId' in normalizedUpdates && normalizedUpdates.parentId !== oldNode.parentId) || 
+        ('isArchived' in normalizedUpdates && normalizedUpdates.isArchived !== oldNode.isArchived) ||
+        ('boardId' in normalizedUpdates && normalizedUpdates.boardId !== oldNode.boardId) ||
+        ('order' in normalizedUpdates && normalizedUpdates.order !== oldNode.order)
     ) {
         get()._buildIndices(updatedNodes);
     }
 
     // 若狀態改變，觸發 Roll-up
-    if ('status' in updates && updates.status !== oldNode.status) {
+    if ('status' in normalizedUpdates && normalizedUpdates.status !== oldNode.status) {
         // 同步執行，確保父節點狀態可以立即在目前的 Render Cycle 被更新
         get().recalculateAncestorStatus(id);
     }
 
     // 非同步寫入 Firestore
     if (newNode.workspaceId && newNode.boardId) {
-        nodeService.update(newNode.workspaceId, newNode.boardId, id, updates).catch(console.error);
+        nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
     }
 
     // 紀錄上一步
-    const label = updates.isArchived === true ? '刪除任務' :
-                  updates.isArchived === false ? '復原任務' : '修改任務';
+    const label = normalizedUpdates.isArchived === true ? '刪除任務' :
+                  normalizedUpdates.isArchived === false ? '復原任務' : '修改任務';
     useUndoStore.getState().pushUndo({
         label,
         undo: () => get().updateNode(id, oldValues),
-        redo: () => get().updateNode(id, updates),
+        redo: () => get().updateNode(id, normalizedUpdates),
     });
   },
 
@@ -309,8 +338,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         newStatus = 'todo';
       }
 
-      if (newStatus !== parentNode.status) {
-        updatedNodes[currentParentId] = { ...parentNode, status: newStatus, updatedAt: Date.now() };
+      const normalizedParent = applySmartStatus({ ...parentNode, status: newStatus });
+
+      if (normalizedParent.status !== parentNode.status) {
+        updatedNodes[currentParentId] = { ...parentNode, status: normalizedParent.status, updatedAt: Date.now() };
         hasChanges = true;
       }
       

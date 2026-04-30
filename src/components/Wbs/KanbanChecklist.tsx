@@ -85,6 +85,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 
   const status = child.status || 'todo';
   const isCompleted = status === 'completed';
+  const isDueToday = status !== 'completed' && !!child.endDate && dayjs(child.endDate).isSame(dayjs(), 'day');
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
   const isEditing = editingId === child.id;
 
@@ -188,7 +189,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 
         {/* 到期日標籤 */}
         {!isEditing && child.endDate && (
-          <span className="text-[9px] text-slate-400 border border-slate-200 rounded px-1 py-0.5 flex-shrink-0 bg-white ml-1">
+          <span className={`text-[9px] rounded px-1 py-0.5 flex-shrink-0 ml-1 ${
+            isDueToday
+              ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
+              : 'border border-slate-200 bg-white text-slate-400'
+          }`}>
             {dayjs(child.endDate).year() !== dayjs().year()
               ? dayjs(child.endDate).format('YY/MM/DD')
               : dayjs(child.endDate).format('MM/DD')}

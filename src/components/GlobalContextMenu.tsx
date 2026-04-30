@@ -1,125 +1,137 @@
-// @ts-nocheck
-/**
- * GlobalContextMenu — 全域任務右鍵/長按漂浮選單
- *
- * 設計意圖：
- *   統一管理所有視圖（清單、看板、甘特、月曆）的任務操作快捷選單。
- *   任何元件只需呼叫 useBoardStore.setContextMenuState 即可觸發此選單，
- *   無需在各視圖內重複建立 UI。
- *
- * 關閉機制：
- *   - 點擊選單外的任意區域
- *   - 按下 Escape 鍵
- *   - 視窗滾動時 (capture phase)
- */
-import React, { useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { FileText, Plus, Trash2 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import type { TaskNode } from '../types';
+import { TaskDetailsModal } from './TaskDetailsModal';
 
 export const GlobalContextMenu: React.FC = () => {
-    const contextMenuState = useBoardStore(s => s.contextMenuState);
-    const setContextMenuState = useBoardStore(s => s.setContextMenuState);
-    const addNode = useWbsStore(s => s.addNode);
-    const removeNode = useWbsStore(s => s.removeNode);
+  const contextMenuState = useBoardStore((state) => state.contextMenuState);
+  const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
+  const addNode = useWbsStore((state) => state.addNode);
+  const removeNode = useWbsStore((state) => state.removeNode);
+  const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
 
-    // 監聽全域點擊與滾動以關閉選單
-    useEffect(() => {
-        if (!contextMenuState) return;
+  useEffect(() => {
+    if (!contextMenuState) return;
 
-        const close = () => setContextMenuState(null);
-        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-
-        // capture phase 捕獲 scroll 事件（包含所有子容器內的滾動）
-        window.addEventListener('scroll', close, true);
-        window.addEventListener('click', close);
-        window.addEventListener('keydown', handleKey);
-
-        return () => {
-            window.removeEventListener('scroll', close, true);
-            window.removeEventListener('click', close);
-            window.removeEventListener('keydown', handleKey);
-        };
-    }, [contextMenuState]);
-
-    if (!contextMenuState || !contextMenuState.isOpen) return null;
-
-    // 防止選單超出視窗邊界
-    const menuX = Math.min(contextMenuState.x, window.innerWidth - 200);
-    const menuY = Math.min(contextMenuState.y, window.innerHeight - 160);
-
-    /** 新增子任務 */
-    const handleAddChild = () => {
-        const state = useWbsStore.getState();
-        const node = state.nodes[contextMenuState.nodeId];
-        if (!node) return;
-
-        if (node.status === 'completed') {
-            alert('防呆機制：此群組已結案。如需新增任務，請先將此群組的狀態退回「進行中」或「待辦」。');
-            setContextMenuState(null);
-            return;
-        }
-
-        const childrenIds = state.parentNodesIndex[contextMenuState.nodeId] || [];
-        const newNode: TaskNode = {
-            id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
-            workspaceId: node.workspaceId,
-            boardId: node.boardId,
-            parentId: node.id,
-            title: '新任務',
-            status: 'todo',
-            nodeType: 'task',
-            order: childrenIds.length,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
-        addNode(newNode);
-        setContextMenuState(null);
+    const close = () => setContextMenuState(null);
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
     };
 
-    /** 刪除任務 */
-    const handleDelete = () => {
-        if (confirm(`確定要刪除「${contextMenuState.title}」嗎？`)) {
-            removeNode(contextMenuState.nodeId);
-        }
-        setContextMenuState(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', handleKey);
+
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [contextMenuState, setContextMenuState]);
+
+  const handleAddChild = () => {
+    if (!contextMenuState) return;
+
+    const state = useWbsStore.getState();
+    const node = state.nodes[contextMenuState.nodeId];
+    if (!node) return;
+
+    if (node.status === 'completed') {
+      window.alert('已完成的任務不能新增子任務。');
+      setContextMenuState(null);
+      return;
+    }
+
+    const childrenIds = state.parentNodesIndex[contextMenuState.nodeId] || [];
+    const newNode: TaskNode = {
+      id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+      workspaceId: node.workspaceId,
+      boardId: node.boardId,
+      parentId: node.id,
+      title: '新任務',
+      status: 'todo',
+      nodeType: 'task',
+      order: childrenIds.length,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
-    return (
+    addNode(newNode);
+    setContextMenuState(null);
+  };
+
+  const handleOpenDetails = () => {
+    if (!contextMenuState) return;
+
+    setDetailsNodeId(contextMenuState.nodeId);
+    setContextMenuState(null);
+  };
+
+  const handleDelete = () => {
+    if (!contextMenuState) return;
+
+    if (window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`)) {
+      removeNode(contextMenuState.nodeId);
+    }
+    setContextMenuState(null);
+  };
+
+  const menuX =
+    contextMenuState?.isOpen
+      ? Math.min(contextMenuState.x, Math.max(12, window.innerWidth - 220))
+      : 0;
+  const menuY =
+    contextMenuState?.isOpen
+      ? Math.min(contextMenuState.y, Math.max(12, window.innerHeight - 210))
+      : 0;
+
+  return (
+    <>
+      {contextMenuState?.isOpen && (
         <div
-            // 阻止點擊選單本身時關閉（讓 window click 事件不向上冒泡）
-            onClick={(e) => e.stopPropagation()}
-            className="fixed z-[9999] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1.5 w-52 text-sm flex flex-col"
-            style={{ top: menuY, left: menuX }}
+          onClick={(event) => event.stopPropagation()}
+          className="fixed z-[9999] flex w-52 flex-col rounded-lg border border-gray-200 bg-white py-1.5 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
+          style={{ top: menuY, left: menuX }}
         >
-            {/* 標題 */}
-            <div className="px-3 py-1.5 border-b border-gray-100 dark:border-gray-700/50 mb-1">
-                <p className="text-xs font-semibold text-gray-500 truncate" title={contextMenuState.title}>
-                    {contextMenuState.title}
-                </p>
-            </div>
+          <div className="mb-1 border-b border-gray-100 px-3 py-1.5 dark:border-gray-700/50">
+            <p className="truncate text-xs font-semibold text-gray-500" title={contextMenuState.title}>
+              {contextMenuState.title}
+            </p>
+          </div>
 
-            {/* 新增子任務 */}
-            <button
-                onClick={handleAddChild}
-                className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2.5"
-            >
-                <Plus size={14} className="text-blue-500 flex-shrink-0" />
-                <span>新增子任務</span>
-            </button>
+          <button
+            onClick={handleOpenDetails}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <FileText size={14} className="flex-shrink-0 text-indigo-500" />
+            <span>更多詳情選項</span>
+          </button>
 
-            {/* 分隔線 */}
-            <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+          <button
+            onClick={handleAddChild}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <Plus size={14} className="flex-shrink-0 text-blue-500" />
+            <span>新增子任務</span>
+          </button>
 
-            {/* 刪除 */}
-            <button
-                onClick={handleDelete}
-                className="w-full text-left px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2.5"
-            >
-                <Trash2 size={14} className="text-red-500 flex-shrink-0" />
-                <span>刪除任務</span>
-            </button>
+          <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+
+          <button
+            onClick={handleDelete}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            <Trash2 size={14} className="flex-shrink-0 text-red-500" />
+            <span>刪除任務</span>
+          </button>
         </div>
-    );
+      )}
+
+      {detailsNodeId && (
+        <TaskDetailsModal nodeId={detailsNodeId} onClose={() => setDetailsNodeId(null)} />
+      )}
+    </>
+  );
 };

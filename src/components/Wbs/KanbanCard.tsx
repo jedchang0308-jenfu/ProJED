@@ -159,6 +159,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   if (!node) return null;
 
   const status = node.status || 'todo';
+  const isDueToday = status !== 'completed' && !!node.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const canDropIntoChecklist = ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
@@ -255,7 +256,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] text-slate-400">
               {/* 日期區間 */}
               {(node.startDate || node.endDate) && (
-                <Badge variant="default" size="sm" icon={<Calendar size={10} />}>
+                <Badge variant={isDueToday ? 'warning' : 'default'} size="sm" icon={<Calendar size={10} />}>
                   <span>{node.startDate ? (dayjs(node.startDate).year() !== dayjs().year() ? dayjs(node.startDate).format('YY/MM/DD') : dayjs(node.startDate).format('MM/DD')) : '...'}</span>
                   <span className="opacity-50">→</span>
                   <span>{node.endDate ? (dayjs(node.endDate).year() !== dayjs().year() ? dayjs(node.endDate).format('YY/MM/DD') : dayjs(node.endDate).format('MM/DD')) : '...'}</span>

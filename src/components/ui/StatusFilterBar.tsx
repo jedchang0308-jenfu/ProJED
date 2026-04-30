@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SlidersHorizontal, ChevronDown, GitBranch } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
-import type { TaskStatus, GanttFilters } from '../../types';
+import type { TaskStatus } from '../../types';
 
 // ── 任務狀態定義（單一真相來源）────────────────────────────
 const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
@@ -9,15 +9,8 @@ const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
     { key: 'in_progress', label: '進行中', color: 'bg-blue-500' },
     { key: 'delayed',     label: '延遲',   color: 'bg-status-delayed' },
     { key: 'completed',   label: '完成',   color: 'bg-status-completed' },
-    { key: 'unsure',      label: '不確定', color: 'bg-status-unsure' },
+    { key: 'unsure',      label: '未定', color: 'bg-status-unsure' },
     { key: 'onhold',      label: '暫緩',   color: 'bg-status-onhold' },
-];
-
-// ── 甘特圖層級定義 ─────────────────────────────────────────
-const GANTT_LEVEL_CONFIG: { key: keyof GanttFilters; label: string }[] = [
-    { key: 'list',      label: '群組' },
-    { key: 'card',      label: '任務' },
-    { key: 'checklist', label: '子項' },
 ];
 
 // ── 主元件 ─────────────────────────────────────────────────
@@ -31,8 +24,6 @@ export const StatusFilterBar: React.FC = () => {
     const toggleStatusFilter = useBoardStore(s => s.toggleStatusFilter);
     const showDependencies  = useBoardStore(s => s.showDependencies);
     const toggleDependencies = useBoardStore(s => s.toggleDependencies);
-    const ganttFilters      = useBoardStore(s => s.ganttFilters);
-    const toggleGanttFilter = useBoardStore(s => s.toggleGanttFilter);
 
     // 點選面板外部時自動關閉
     useEffect(() => {
@@ -50,8 +41,7 @@ export const StatusFilterBar: React.FC = () => {
 
     // 計算目前有多少過濾項目被「關閉」（作為 badge 數量提示）
     const hiddenStatusCount = STATUS_CONFIG.filter(s => !statusFilters[s.key]).length;
-    const hasActiveFilter = hiddenStatusCount > 0 || !showDependencies ||
-        !ganttFilters.list || !ganttFilters.card || !ganttFilters.checklist;
+    const hasActiveFilter = hiddenStatusCount > 0 || !showDependencies;
 
     return (
         <div className="relative">
@@ -132,27 +122,6 @@ export const StatusFilterBar: React.FC = () => {
                                 <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${showDependencies ? 'left-3.5' : 'left-0.5'}`} />
                             </div>
                         </button>
-
-                        {/* 甘特圖層級過濾 */}
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-1 pl-0.5">甘特圖層級</p>
-                        <div className="flex gap-1">
-                            {GANTT_LEVEL_CONFIG.map(({ key, label }) => {
-                                const isActive = ganttFilters[key];
-                                return (
-                                    <button
-                                        key={key}
-                                        onClick={() => toggleGanttFilter(key)}
-                                        className={`flex-1 py-1 rounded-md text-[11px] font-bold border transition-all ${
-                                            isActive
-                                                ? 'bg-white border-slate-200 text-slate-700 shadow-sm'
-                                                : 'bg-slate-50 border-transparent text-slate-300 line-through'
-                                        }`}
-                                    >
-                                        {label}
-                                    </button>
-                                );
-                            })}
-                        </div>
                     </div>
                 </div>
             )}

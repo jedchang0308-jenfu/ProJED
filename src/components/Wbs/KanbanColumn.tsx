@@ -112,6 +112,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   }
 
   const status = node.status || 'todo';
+  const isDueToday = status !== 'completed' && !!node.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
   const nodes = previewNodes || useWbsStore.getState().nodes;
@@ -236,7 +237,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           </div>
 
           {(node.startDate || node.endDate) && (
-            <div className="flex items-center gap-1 rounded-sm bg-slate-200/50 px-1.5 py-0.5 font-medium text-slate-500">
+            <div className={`flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium ${
+              isDueToday
+                ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
+                : 'bg-slate-200/50 text-slate-500'
+            }`}>
               <span>
                 {node.startDate
                   ? dayjs(node.startDate).year() !== dayjs().year()

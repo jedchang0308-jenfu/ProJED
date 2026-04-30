@@ -85,7 +85,7 @@ const BoardView = () => {
         { key: 'todo', label: '待辦', color: 'bg-status-todo' },
         { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
         { key: 'completed', label: '完成', color: 'bg-status-completed' },
-        { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },
+        { key: 'unsure', label: '未定', color: 'bg-status-unsure' },
         { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
     ];
 

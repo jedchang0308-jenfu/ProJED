@@ -177,7 +177,6 @@ const CalendarView = () => {
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
-    const [ganttFilters, setGanttFilters] = useState({ list: true, card: true, checklist: true });
     const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
     const nodes = useWbsStore(s => s.nodes);
 
@@ -196,7 +195,7 @@ const CalendarView = () => {
         { key: 'todo', label: '待辦', color: 'bg-status-todo' },
         { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
         { key: 'completed', label: '完成', color: 'bg-status-completed' },
-        { key: 'unsure', label: '不確定', color: 'bg-status-unsure' },
+        { key: 'unsure', label: '未定', color: 'bg-status-unsure' },
         { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
     ];
 
@@ -214,10 +213,6 @@ const CalendarView = () => {
             let pseudoType = 'checklist';
             if (node.nodeType === 'group') pseudoType = 'list';
             else pseudoType = 'card';
-            
-            if (pseudoType === 'list' && !ganttFilters.list) return;
-            if (pseudoType === 'card' && !ganttFilters.card) return;
-            if (pseudoType === 'checklist' && !ganttFilters.checklist) return;
             
             // Check visibility based on collapsible (parents must not be collapsed)
             let isVisible = true;
@@ -240,7 +235,7 @@ const CalendarView = () => {
         });
         
         return items;
-    }, [activeBoardId, nodes, ganttFilters, statusFilters, collapsedIds]);
+    }, [activeBoardId, nodes, statusFilters, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -311,7 +306,7 @@ const CalendarView = () => {
                 style={{ zIndex: 110 }}
             >
                 {/* 狀態篩選器 */}
-                <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2 mr-4 flex-1">
+                <div className="flex items-center gap-1 sm:gap-4 py-2 mr-4 flex-1">
                     <StatusFilterBar />
                 </div>
 
@@ -348,17 +343,6 @@ const CalendarView = () => {
                             >
                                 <LayoutList size={16} />
                             </button>
-                        </div>
-                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                            {Object.keys(ganttFilters).map(key => (
-                                <button
-                                    key={key}
-                                    onClick={() => setGanttFilters(prev => ({ ...prev, [key]: !prev[key] }))}
-                                    className={`px-2 py-1 text-[10px] font-bold rounded ${ganttFilters[key] ? 'bg-white text-slate-700 shadow-xs' : 'text-slate-400'}`}
-                                >
-                                    {key === 'list' ? '群組' : key === 'card' ? '任務' : '子項'}
-                                </button>
-                            ))}
                         </div>
                     </div>
                 </div>

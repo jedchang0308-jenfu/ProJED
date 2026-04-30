@@ -19,7 +19,6 @@ const GanttView = () => {
         setSidebarOpen,
         setView,
         showDependencies,
-        ganttFilters,
     } = useBoardStore();
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
@@ -80,10 +79,6 @@ const GanttView = () => {
             let pseudoType = 'checklist';
             if (level === 0) pseudoType = 'list';
             else if (level === 1) pseudoType = 'card';
-            
-            if (pseudoType === 'list' && !ganttFilters.list) return -1;
-            if (pseudoType === 'card' && !ganttFilters.card) return -1;
-            if (pseudoType === 'checklist' && !ganttFilters.checklist) return -1;
 
             const startRow = currentRow;
             updateBounds(node.startDate || null, node.endDate || null);
@@ -165,7 +160,7 @@ const GanttView = () => {
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, ganttFilters, statusFilters, mode, collapsedIds, nodes]);
+    }, [activeBoardId, statusFilters, mode, collapsedIds, nodes]);
 
     const colWidth = getColWidth(mode);
 
@@ -214,7 +209,7 @@ const GanttView = () => {
             {/* Toolbar */}
             <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0" style={{ zIndex: 110 }}>
                 {/* Left: Status Filters */}
-                <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto no-scrollbar py-2 mr-4 flex-1">
+                <div className="flex items-center gap-1 sm:gap-4 py-2 mr-4 flex-1">
                     <StatusFilterBar />
                 </div>
 
