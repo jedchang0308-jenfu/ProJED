@@ -104,7 +104,7 @@
 
 ### 7.3 狀態色彩映射
 - 與甘特圖共享同一份 `statusFilters`（全域 Zustand 狀態），5 種狀態色彩一致：
-  - 進行中 (`todo`)、延遲 (`delayed`)、完成 (`completed`)、不確定 (`unsure`)、暫緩 (`onhold`)。
+  - 進行中 (`todo`)、延遲 (`delayed`)、完成 (`completed`)、未定 (`unsure`)、暫緩 (`onhold`)。
 
 ---
 *更新日期：2026-03-24 (優化跨日任務顯示、引入共用側邊欄與 Dnd 修復)*
@@ -275,7 +275,7 @@ useBoardStore (Zustand + Firestore)
 ### 14.2 架構決策
 - **元件封裝 (`StatusFilterBar.tsx`)**：建立高度整合的下拉選單元件，將過濾功能分類為「任務狀態」與「UI 顯示」兩大區塊。
 - **狀態提升 (State Hoisting)**：
-    - 將原本屬於局部狀態的 `showDependencies` (依賴線開關) 與 `ganttFilters` (層級顯示) 從各視圖中提取，提升至全域 `useBoardStore`。
+    - 將原本屬於局部狀態的 `showDependencies` (依賴線開關) 從各視圖中提取，提升至全域 `useBoardStore`。
     - **效益**：實現了「跨模式狀態持久化」。當使用者在甘特圖隱藏了依賴線，切換回清單模式時，該設定會自動保持。
 - **介面優化**：
     - **提示機制**：在過濾器按鈕上加入 Badge 提示（如已隱藏 3 個狀態），讓使用者即使在選單關閉時也能感知目前的過濾狀態。
@@ -283,3 +283,22 @@ useBoardStore (Zustand + Firestore)
 
 ---
 *更新日期：2026-04-28 (過濾器下拉選單重構與全域狀態提升)*
+
+## 15. 過濾介面簡化與術語正名 (Filter UI Simplification & Term Unification)
+
+### 15.1 移除甘特圖層級過濾 (Removal of Gantt Level Filters)
+- **設計意圖**：因應 WBS 扁平化架構趨於成熟，過往針對「群組/任務/子項」的切換開關在實務操作中產生多餘的認知負擔且容易與「狀態過濾」混淆。
+- **架構決策**：
+    - 徹底從全域 Store 與 `StatusFilterBar` 中移除 `ganttFilters` 狀態。
+    - 簡化 `GanttView` 與 `CalendarView` 的渲染邏輯，不再進行層級過濾，僅保留狀態與摺疊邏輯。
+    - **效益**：使 UI 工具列更清爽，減少系統狀態複雜度。
+
+### 15.2 術語正名：不確定 → 未定 (Term Unification)
+- **設計意圖**：確保全系統在任務狀態上的語義一致性，將原本散落於各處的「不確定」統一正名為「未定」。
+- **實現方式**：
+    - 全面盤點並更新 `StatusFilterBar`, `BoardView`, `CalendarView` 中的標籤定義。
+    - 統一 `TaskDetailsModal` 與 `WbsNodeItem` 中的選項文字。
+    - **效益**：提升專業感，消除使用者對狀態名稱不一致的疑慮。
+
+---
+*更新日期：2026-04-30 (過濾介面簡化、術語正名與 UI Bug 修復)*
