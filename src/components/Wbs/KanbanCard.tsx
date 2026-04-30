@@ -5,10 +5,11 @@
  * 
  * 【編輯功能】點擊卡片標題可行內編輯任務名稱，Enter 或失焦即儲存，ESC 取消。
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
+import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Calendar, CheckSquare, ChevronDown, ChevronRight } from 'lucide-react';
+import { GripVertical, Calendar, CheckSquare, ChevronDown, ChevronRight, ListPlus } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { KanbanChecklist } from './KanbanChecklist';
@@ -20,6 +21,8 @@ import type { TaskStatus } from '../../types';
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
   columnId: string;     // 所屬的 Level 1 列表 ID（用於 DnD 跨列識別）
+  previewNodes?: Record<string, any> | null;
+  previewParentIndex?: Record<string, string[]> | null;
 }
 
 /** 狀態色彩對應 */
@@ -32,8 +35,9 @@ const statusTextColorMap: Record<TaskStatus, string> = {
   onhold: 'text-slate-400',
 };
 
-export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
-  const node = useWbsStore(s => s.nodes[nodeId]);
+export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previewNodes, previewParentIndex }) => {
+  const storeNode = useWbsStore(s => s.nodes[nodeId]);
+  const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
   const updateNode = useWbsStore(s => s.updateNode);
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
@@ -42,6 +46,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+  const { active, over } = useDndContext();
+  const activeType = active?.data.current?.type;
+  const activeNodeId = active?.data.current?.nodeId;
 
   // 進入編輯模式時自動聚焦並全選文字
   useEffect(() => {
@@ -78,20 +85,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
   };
 
   // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
-  const childIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
+  const storeChildIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
+  const childIds = previewParentIndex?.[nodeId] || storeChildIds;
 
   // 計算子節點的完成數量
   const childStats = React.useMemo(() => {
     const state = useWbsStore.getState();
+    const nodes = previewNodes || state.nodes;
     const children = (childIds || [])
-      .map(id => state.nodes[id])
+      .map(id => nodes[id])
       .filter(n => n && !n.isArchived);
     const total = children.length;
     const completed = children.filter(c => c.status === 'completed').length;
     return { total, completed };
-  }, [childIds]);
+  }, [childIds, previewNodes]);
+  const hasChildren = childStats.total > 0;
 
-  // dnd-kit 拖動邏輯
+  // dnd-kit 拖動邏輯（此卡片可被拖動）
   const {
     attributes,
     listeners,
@@ -108,6 +118,38 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
     }
   });
 
+  // 此卡片同時是放置區：可接收 wbs-checklist 或 wbs-card 的拖入（降級操作）
+  // 使用獨立 id `${nodeId}-card-drop` 區分「被拖動中的卡片」和「作為放置區的卡片」
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: `${nodeId}-card-drop`,
+    disabled: activeType === 'wbs-card',
+    data: {
+      type: 'wbs-card-drop',
+      nodeId,
+      columnId,
+    },
+  });
+
+  const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
+    id: `${nodeId}-checklist-drop`,
+    disabled: !['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeNodeId === nodeId,
+    data: {
+      type: 'wbs-checklist-drop',
+      nodeId,
+      columnId,
+    },
+  });
+
+  const { setNodeRef: setChecklistAreaDropRef, isOver: isChecklistAreaDropOver } = useDroppable({
+    id: `${nodeId}-checklist-area-drop`,
+    disabled: !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
+    data: {
+      type: 'wbs-checklist-drop',
+      nodeId,
+      columnId,
+    },
+  });
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -117,18 +159,46 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
   if (!node) return null;
 
   const status = node.status || 'todo';
-  const hasChildren = childStats.total > 0;
+  const canDropIntoChecklist = ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
+  const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
+  const overData = over?.data.current;
+  const overNodeId = overData?.nodeId;
+  const isOverChecklistDescendant = (() => {
+
+    if (activeType !== 'wbs-checklist' || overData?.type !== 'wbs-checklist' || !overNodeId) {
+      return false;
+    }
+
+    const nodes = previewNodes || useWbsStore.getState().nodes;
+    let current = nodes[overNodeId]?.parentId;
+
+    while (current) {
+      if (current === nodeId) return true;
+      current = nodes[current]?.parentId || null;
+    }
+
+    return false;
+  })();
+  const isChecklistTargeted = isChecklistAreaDropOver || isChecklistDropOver || isOverChecklistDescendant;
+
+  // 合併兩個 ref：讓同一個 DOM 元素同時具備「可拖動」和「可放置」的能力
+  const mergedRef = useCallback((el: HTMLDivElement | null) => {
+    setNodeRef(el);
+    setDropRef(el);
+  }, [setNodeRef, setDropRef]);
 
   return (
     <div
-      ref={setNodeRef}
+      ref={mergedRef}
       style={style}
       onContextMenu={(e) => {
           e.preventDefault();
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
-      className={`bg-white border border-slate-200 rounded-lg shadow-sm hover:border-primary hover:shadow-md transition-all group mb-2 ${
-        isDragging ? 'opacity-50 shadow-2xl scale-105 rotate-2' : ''
+      className={`bg-white border rounded-lg shadow-sm transition-all group mb-2 ${
+        isDragging
+          ? 'opacity-60 shadow-md border-slate-200'
+          : 'border-slate-200 hover:border-primary hover:shadow-md'
       }`}
     >
       <div className="flex items-start gap-2 p-2.5">
@@ -169,7 +239,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
               ) : (
                 <h4
                   className={`text-sm font-semibold leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${
-                    statusTextColorMap[status]
+                    statusTextColorMap[status as TaskStatus]
                   }`}
                   onClick={handleStartEdit}
                   title="點擊以編輯任務名稱"
@@ -221,23 +291,46 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId }) => {
 
           {/* Level 3+ 待辦清單展開區 */}
           {hasChildren && (
-            <div>
+            <div
+              ref={setChecklistAreaDropRef}
+              className={`mt-2 rounded-md border transition-[background-color,border-color,box-shadow] duration-100 ${
+                isChecklistTargeted
+                  ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]'
+                  : 'border-transparent'
+              }`}
+            >
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsChecklistExpanded(!isChecklistExpanded);
                 }}
-                className="flex items-center gap-1 mt-1.5 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
+                className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
               >
                 {isChecklistExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 <span>{isChecklistExpanded ? '收合' : '展開'}待辦清單</span>
               </button>
 
               {isChecklistExpanded && (
-                <KanbanChecklist parentId={nodeId} depth={0} />
+                <div className="px-1 pb-1">
+                  <KanbanChecklist
+                    parentId={nodeId}
+                    depth={0}
+                    previewNodes={previewNodes}
+                    previewParentIndex={previewParentIndex}
+                  />
+                </div>
               )}
             </div>
           )}
+
+          <div
+            ref={setChecklistDropRef}
+            className={`mt-2 flex items-center justify-center rounded-md border border-dashed transition-[height,opacity,background-color,border-color,color] duration-100 ${
+              showChecklistDropZone ? 'h-12 opacity-100' : 'h-0 overflow-hidden border-transparent opacity-0'
+            } border-slate-300 bg-slate-50 text-slate-400`}
+          >
+            <ListPlus size={14} />
+          </div>
         </div>
       </div>
     </div>

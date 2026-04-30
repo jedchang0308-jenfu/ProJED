@@ -195,7 +195,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (
         ('parentId' in updates && updates.parentId !== oldNode.parentId) || 
         ('isArchived' in updates && updates.isArchived !== oldNode.isArchived) ||
-        ('boardId' in updates && updates.boardId !== oldNode.boardId)
+        ('boardId' in updates && updates.boardId !== oldNode.boardId) ||
+        ('order' in updates && updates.order !== oldNode.order)
     ) {
         get()._buildIndices(updatedNodes);
     }

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useDroppable } from '@dnd-kit/core';
+import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus } from 'lucide-react';
@@ -13,16 +13,22 @@ import type { TaskNode } from '../../types';
 
 interface KanbanColumnProps {
   nodeId: string;
+  previewNodes?: Record<string, TaskNode> | null;
+  previewParentIndex?: Record<string, string[]> | null;
 }
 
-export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
-  const node = useWbsStore((state) => state.nodes[nodeId]);
+export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes, previewParentIndex }) => {
+  const storeNode = useWbsStore((state) => state.nodes[nodeId]);
+  const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore((state) => state.getNodeProgress(nodeId));
   const addNode = useWbsStore((state) => state.addNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const statusFilters = useBoardStore((state) => state.statusFilters);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
+  const { active, over } = useDndContext();
+  const activeType = active?.data.current?.type;
+  const activeNodeId = active?.data.current?.nodeId;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -60,16 +66,18 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
     }
   };
 
-  const childIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
+  const storeChildIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
+  const childIds = previewParentIndex?.[nodeId] || storeChildIds;
 
   const children = React.useMemo(() => {
     const state = useWbsStore.getState();
+    const nodes = previewNodes || state.nodes;
 
     return (childIds || [])
-      .map((id) => state.nodes[id])
+      .map((id) => nodes[id])
       .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'])
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters]);
+  }, [childIds, statusFilters, previewNodes]);
 
   const {
     attributes: columnAttributes,
@@ -104,6 +112,32 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
   }
 
   const status = node.status || 'todo';
+  const overData = over?.data.current;
+  const overNodeId = overData?.nodeId;
+  const nodes = previewNodes || useWbsStore.getState().nodes;
+  const isOverColumnDescendant = (() => {
+    if (!overNodeId) return false;
+    if (overNodeId === nodeId) return true;
+
+    let current = nodes[overNodeId]?.parentId;
+    while (current) {
+      if (current === nodeId) return true;
+      current = nodes[current]?.parentId || null;
+    }
+
+    return false;
+  })();
+  const isChecklistLayerTargeted = Boolean(
+    overData?.type === 'wbs-checklist-drop' ||
+    (activeType === 'wbs-checklist' && overData?.type === 'wbs-checklist')
+  );
+  const isCardLayerTargeted = Boolean(
+    active &&
+    activeNodeId !== nodeId &&
+    ['wbs-card', 'wbs-checklist'].includes(activeType || '') &&
+    !isChecklistLayerTargeted &&
+    (isOver || overData?.nodeId === nodeId || isOverColumnDescendant)
+  );
 
   const handleAddCard = (title?: string) => {
     const trimmedTitle = title?.trim();
@@ -238,13 +272,19 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId }) => {
 
       <div
         ref={setDropNodeRef}
-        className={`flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin scrollbar-thumb-slate-200 transition-colors ${
-          isOver ? 'bg-primary/5 ring-2 ring-inset ring-primary/20' : ''
+        className={`flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-1 mb-1 ${
+          isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
         }`}
       >
         <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
           {children.map((child) => (
-            <KanbanCard key={child.id} nodeId={child.id} columnId={nodeId} />
+            <KanbanCard
+              key={child.id}
+              nodeId={child.id}
+              columnId={nodeId}
+              previewNodes={previewNodes}
+              previewParentIndex={previewParentIndex}
+            />
           ))}
         </SortableContext>
 
