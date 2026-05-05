@@ -16,6 +16,30 @@ const VIEW_STORAGE_KEY = 'projed-last-view';
 const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
+const FILTER_STORAGE_KEY = 'projed-filters';
+
+const getDefaultFilters = () => ({
+    statusFilters: {
+        todo: true,
+        in_progress: true,
+        delayed: true,
+        completed: true,
+        unsure: true,
+        onhold: true,
+    },
+    showDependencies: true,
+    showStartDate: true,
+});
+
+const getStoredFilters = () => {
+    try {
+        const stored = localStorage.getItem(FILTER_STORAGE_KEY);
+        if (stored) {
+            return { ...getDefaultFilters(), ...JSON.parse(stored) };
+        }
+    } catch { /* ignore */ }
+    return getDefaultFilters();
+};
 
 const safeSetItem = (key: string, value: string | null) => {
     try {
@@ -57,17 +81,7 @@ const useBoardStore = create<BoardStore>()(
         currentView: getStoredView(),
         isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
         editingItem: getStoredModal(),
-        statusFilters: {
-            todo: true,
-            in_progress: true,
-            delayed: true,
-            completed: true,
-            unsure: true,
-            onhold: true,
-        },
-        // UI 顯示狀態（全域共用）
-        showDependencies: true,
-        showStartDate: true,
+        ...getStoredFilters(),
         dependencySelection: null,
         contextMenuState: null,
 
@@ -114,16 +128,38 @@ const useBoardStore = create<BoardStore>()(
             workspaceService.delete(wsId).catch(console.error);
         },
 
-        toggleStatusFilter: (status) => set((state) => ({
-            statusFilters: {
+        toggleStatusFilter: (status) => set((state) => {
+            const newFilters = {
                 ...state.statusFilters,
                 [status]: !state.statusFilters[status]
-            }
-        })),
+            };
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: newFilters,
+                showDependencies: state.showDependencies,
+                showStartDate: state.showStartDate
+            }));
+            return { statusFilters: newFilters };
+        }),
 
         // 切換 UI 顯示
-        toggleDependencies: () => set((state) => ({ showDependencies: !state.showDependencies })),
-        toggleStartDate: () => set((state) => ({ showStartDate: !state.showStartDate })),
+        toggleDependencies: () => set((state) => {
+            const newDeps = !state.showDependencies;
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: state.statusFilters,
+                showDependencies: newDeps,
+                showStartDate: state.showStartDate
+            }));
+            return { showDependencies: newDeps };
+        }),
+        toggleStartDate: () => set((state) => {
+            const newStart = !state.showStartDate;
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: state.statusFilters,
+                showDependencies: state.showDependencies,
+                showStartDate: newStart
+            }));
+            return { showStartDate: newStart };
+        }),
 
         // ===== Navigation =====
         showHome: () => {
