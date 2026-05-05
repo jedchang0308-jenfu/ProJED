@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Plus } from 'lucide-react';
+import { Plus, Link } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
+import { KanbanDependencyContext } from '../BoardView';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { KanbanCard } from './KanbanCard';
@@ -25,7 +26,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const updateNode = useWbsStore((state) => state.updateNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const statusFilters = useBoardStore((state) => state.statusFilters);
+  const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
+
+  // 看板依賴選取 Context
+  const kanbanDepCtx = React.useContext(KanbanDependencyContext);
+  const dependencySelection = kanbanDepCtx?.dependencySelection || null;
+  const isSelectingMode = !!dependencySelection;
+  const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
+  const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
+  const isSelfNode = isSelfStart || isSelfEnd;
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
@@ -174,7 +184,15 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       }`}
     >
       <div
-        className="group flex flex-col gap-2 bg-white/40 p-3 transition-colors hover:bg-white"
+        {...(isEditing || isSelectingMode ? {} : columnAttributes)}
+        {...(isEditing || isSelectingMode ? {} : columnListeners)}
+        className={`group flex flex-col gap-2 bg-white/40 p-3 transition-colors hover:bg-white ${
+            isSelectingMode
+                ? isSelfNode
+                    ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
+                    : 'cursor-crosshair hover:bg-amber-50/30'
+                : isEditing ? '' : 'cursor-grab active:cursor-grabbing touch-none'
+        }`}
         onContextMenu={(event) => {
           event.preventDefault();
           setContextMenuState({
@@ -187,20 +205,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         }}
       >
         <div className="flex items-center gap-2">
-          <div
-            {...(isEditing ? {} : columnAttributes)}
-            {...(isEditing ? {} : columnListeners)}
-            className={`-ml-1 p-1 transition-colors touch-none ${
-              isEditing
-                ? 'cursor-default text-slate-200 opacity-30'
-                : 'cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing'
-            }`}
-            onClick={(event) => event.stopPropagation()}
-            title={isEditing ? '' : '拖曳群組'}
-          >
-            <GripVertical size={16} />
-          </div>
-
           <div className="flex flex-1 items-center justify-between">
             <div className="flex flex-1 items-center gap-2 overflow-hidden">
               <div className={`h-2.5 w-2.5 shrink-0 rounded-full bg-status-${status}`} />
@@ -212,6 +216,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   onChange={(event) => setEditValue(event.target.value)}
                   onBlur={handleSave}
                   onKeyDown={handleKeyDown}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
                   className="min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-bold text-slate-700 outline-none ring-2 ring-primary/30"
                 />
@@ -220,6 +225,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   className={`truncate text-sm font-bold transition-colors hover:text-primary ${
                     status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
                   }`}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={handleStartEdit}
                   title="點擊以編輯群組名稱"
                 >
@@ -230,26 +236,61 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           </div>
         </div>
 
-        <div className="ml-7 flex flex-wrap items-center gap-3 text-[10px] text-slate-400">
+        <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-400">
           <div className="flex items-center gap-1">
             <span className="font-bold">{children.length}</span>
             <span>任務</span>
           </div>
 
-          {(node.startDate || node.endDate) && (
+          {/* 日期區 — 選取模式顯示可點擊按鈕，一般模式顯示原始日期標籤 */}
+          {isSelectingMode ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* 開始日按鈕 */}
+              <button
+                onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all ${
+                  isSelfStart
+                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                    : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 cursor-crosshair'
+                }`}
+                title="點擊選取此列表的開始日為依賴目標"
+              >
+                <Link size={9} />
+                <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
+              </button>
+              {/* 結束日按鈕 */}
+              <button
+                onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all ${
+                  isSelfEnd
+                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                    : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 cursor-crosshair'
+                }`}
+                title="點擊選取此列表的結束日為依賴目標"
+              >
+                <Link size={9} />
+                <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
+              </button>
+            </div>
+          ) : (
+          <>{( (showStartDate && node.startDate) || node.endDate) && (
             <div className={`flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium ${
               isDueToday
                 ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
                 : 'bg-slate-200/50 text-slate-500'
             }`}>
-              <span>
-                {node.startDate
-                  ? dayjs(node.startDate).year() !== dayjs().year()
-                    ? dayjs(node.startDate).format('YY/MM/DD')
-                    : dayjs(node.startDate).format('MM/DD')
-                  : '...'}
-              </span>
-              <span className="opacity-50">至</span>
+              {showStartDate && (
+                  <>
+                      <span>
+                        {node.startDate
+                          ? dayjs(node.startDate).year() !== dayjs().year()
+                            ? dayjs(node.startDate).format('YY/MM/DD')
+                            : dayjs(node.startDate).format('MM/DD')
+                          : '...'}
+                      </span>
+                      <span className="opacity-50">至</span>
+                  </>
+              )}
               <span>
                 {node.endDate
                   ? dayjs(node.endDate).year() !== dayjs().year()
@@ -258,6 +299,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   : '...'}
               </span>
             </div>
+          )}</>
           )}
 
           <div className="flex items-center gap-1">

@@ -52,6 +52,7 @@ export interface TaskNode {
   // 日期排程 (可選)
   startDate?: string;
   endDate?: string;
+  isDurationLocked?: boolean; // 是否鎖定工期（自動計算時會強制維持時長）
 
   // 用於展示層的自訂屬性 (群組/里程碑/一般任務)
   nodeType?: 'group' | 'milestone' | 'task';
@@ -156,6 +157,7 @@ export interface Dependency {
 export interface Board {
   id: string;
   title: string;
+  /** @deprecated 依賴關係已全面移至 WBS 節點層級管理 (useWbsStore)，此欄位僅供舊版遷移相容 */
   dependencies: Dependency[];
   order?: number;
   createdAt?: number;
@@ -232,11 +234,10 @@ export interface BoardState {
 
   // UI 顯示狀態（全域共用）
   showDependencies: boolean;   // 是否顯示依賴連線
-
+  showStartDate: boolean;      // 是否顯示開始日期
 
   // 依賴關係互動狀態
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
-  dependencyMenuState: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
 }
 
@@ -269,9 +270,9 @@ export interface BoardActions {
   closeModal: () => void;
   toggleStatusFilter: (status: TaskStatus) => void;
   toggleDependencies: () => void;
+  toggleStartDate: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
-  setDependencyMenuState: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;
 
   // 資料匯出/匯入

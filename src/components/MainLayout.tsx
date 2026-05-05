@@ -24,8 +24,10 @@ function getRelativeTime(timestamp: number | null): string {
 const MainLayout = ({ children }) => {
     const {
         currentView, getActiveBoard, getActiveWorkspace, updateBoardTitle,
-        setView, isSidebarOpen, setSidebarOpen
+        setView, isSidebarOpen, setSidebarOpen, dependencySelection
     } = useBoardStore();
+    
+    const isSelectingMode = !!dependencySelection;
 
     // ── Google Calendar 同步狀態 ──
     const {
@@ -125,28 +127,36 @@ const MainLayout = ({ children }) => {
                                         {/* 清單模式 — 排在所有視圖之前，作為底層資料展示入口 */}
                                         <button
                                             onClick={() => setView('list')}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            disabled={isSelectingMode}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
                                         >
                                             <ListChecks size={13} />
                                             <span className="hidden md:inline">清單</span>
                                         </button>
                                         <button
                                             onClick={() => setView('board')}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'board' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            disabled={isSelectingMode}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'board' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
                                         >
                                             <Columns size={13} />
                                             <span className="hidden md:inline">看板</span>
                                         </button>
                                         <button
                                             onClick={() => setView('gantt')}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'gantt' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            disabled={isSelectingMode}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'gantt' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
                                         >
                                             <LineChart size={13} />
                                             <span className="hidden md:inline">甘特圖</span>
                                         </button>
                                         <button
                                             onClick={() => setView('calendar')}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'calendar' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                            disabled={isSelectingMode}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'calendar' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
                                         >
                                             <CalendarDays size={13} />
                                             <span className="hidden md:inline">月曆</span>

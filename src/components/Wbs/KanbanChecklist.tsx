@@ -9,9 +9,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
+import { KanbanDependencyContext } from '../BoardView';
 import dayjs from 'dayjs';
 import { Input } from '../ui/Input';
 import type { TaskStatus, TaskNode } from '../../types';
@@ -88,6 +89,20 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const isDueToday = status !== 'completed' && !!child.endDate && dayjs(child.endDate).isSame(dayjs(), 'day');
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
   const isEditing = editingId === child.id;
+  const showStartDate = useBoardStore(s => s.showStartDate);
+
+  // 看板依賴選取 Context
+  const kanbanDepCtx = React.useContext(KanbanDependencyContext);
+  const dependencySelection = kanbanDepCtx?.dependencySelection || null;
+  const isSelectingMode = !!dependencySelection;
+  const isSelfStart = isSelectingMode && dependencySelection?.id === child.id && dependencySelection?.side === 'start';
+  const isSelfEnd = isSelectingMode && dependencySelection?.id === child.id && dependencySelection?.side === 'end';
+  const isSelfNode = isSelfStart || isSelfEnd;
+
+  const wbsDependencies = useWbsStore(s => s.dependencies);
+  const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
+  const lockStatus = getNodeLockStatus(child.id, wbsDependencies);
+  const isEndDateEffectivelyLocked = lockStatus.endLocked || child.isDurationLocked;
 
   // 每個待辦事項都是可拖曳元素
   // data.type = 'wbs-checklist' 供 handleDragEnd 辨識
@@ -115,10 +130,18 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 
   return (
     <div ref={setNodeRef} style={style}>
-      {/* 單一待辦項目列 — 右鍵/長按觸發全域選單 */}
+      {/* 單一待辦項目列 — 整行均可拖曳，僅勾選方塊與標題需要阻止事件冒泡 */}
       <div
-        className={`flex items-center gap-1.5 py-1 group rounded transition-colors ${
-          isDragging ? 'opacity-40 bg-primary/5' : 'hover:bg-slate-50'
+        {...(!isEditing && !isSelectingMode ? attributes : {})}
+        {...(!isEditing && !isSelectingMode ? listeners : {})}
+        className={`flex items-center gap-1.5 py-1 group rounded transition-colors touch-none ${
+          isDragging
+            ? 'opacity-40 bg-primary/5'
+            : isSelectingMode
+              ? isSelfNode
+                ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
+                : 'hover:bg-amber-50/60 cursor-crosshair'
+              : `hover:bg-slate-50 ${isEditing ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`
         }`}
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
         onContextMenu={(e) => {
@@ -133,23 +156,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           });
         }}
       >
-        {/* 拖曳手柄 — 編輯模式下停用 */}
-        <div
-          {...(isEditing ? {} : attributes)}
-          {...(isEditing ? {} : listeners)}
-          className={`flex-shrink-0 touch-none transition-colors ${
-            isEditing
-              ? 'cursor-default text-slate-200 opacity-30'
-              : 'cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing opacity-0 group-hover:opacity-100'
-          }`}
-          onClick={(e) => e.stopPropagation()}
-          title={isEditing ? '' : '拖曳待辦項目'}
-        >
-          <GripVertical size={12} />
-        </div>
 
         {/* 勾選方塊 */}
         <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onToggle(child.id, status);
@@ -173,6 +183,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             onVoiceResult={onEditValueChange}
             onBlur={() => onSave(child)}
             onKeyDown={(e) => onKeyDown(e, child)}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             voiceEnabled
             className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0.5 text-xs text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
@@ -180,6 +191,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         ) : (
           <span
             className={`text-xs leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => onStartEdit(e, child)}
             title="點擊以編輯待辦事項"
           >
@@ -187,17 +199,66 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           </span>
         )}
 
-        {/* 到期日標籤 */}
-        {!isEditing && child.endDate && (
-          <span className={`text-[9px] rounded px-1 py-0.5 flex-shrink-0 ml-1 ${
-            isDueToday
-              ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
-              : 'border border-slate-200 bg-white text-slate-400'
-          }`}>
-            {dayjs(child.endDate).year() !== dayjs().year()
-              ? dayjs(child.endDate).format('YY/MM/DD')
-              : dayjs(child.endDate).format('MM/DD')}
+        {/* 日期標籤區 — 選取模式：顯示可點擊按鈕；一般模式：顯示日期 */}
+        {isSelectingMode ? (
+          <div className="flex items-center gap-1 ml-1">
+            {/* 開始日按鈕 */}
+            <button
+              onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'start', child.title); }}
+              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-bold transition-all ${
+                isSelfStart
+                  ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
+                  : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 cursor-crosshair'
+              }`}
+            >
+              <Link size={8} />
+              <span>開始 {child.startDate ? dayjs(child.startDate).format('MM/DD') : '...'}</span>
+            </button>
+            {/* 結束日按鈕 */}
+            <button
+              onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'end', child.title); }}
+              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-bold transition-all ${
+                isSelfEnd
+                  ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
+                  : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 cursor-crosshair'
+              }`}
+            >
+              <Link size={8} />
+              <span>結束 {child.endDate ? dayjs(child.endDate).format('MM/DD') : '...'}</span>
+            </button>
+          </div>
+        ) : (
+          <>
+          {/* 日期區間標籤 */}
+          {!isEditing && ((showStartDate && child.startDate) || child.endDate) && (
+          <span 
+            className={`text-[9px] rounded px-1.5 py-0.5 flex-shrink-0 ml-1 flex items-center gap-0.5 ${
+              isDueToday
+                ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
+                : `border ${isEndDateEffectivelyLocked ? 'border-dashed border-slate-400 opacity-80 bg-slate-50 text-slate-500' : 'border-slate-200 bg-white text-slate-400'}`
+            }`}
+            title={isEndDateEffectivelyLocked ? (child.isDurationLocked ? '因工期鎖定，由開始日期推算' : '此日期由依賴關係計算') : ''}
+          >
+            {showStartDate && (
+                <>
+                    <span className={lockStatus.startLocked ? 'underline decoration-dashed decoration-slate-400 opacity-70' : ''}>
+                        {child.startDate
+                          ? dayjs(child.startDate).year() !== dayjs().year()
+                            ? dayjs(child.startDate).format('YY/MM/DD')
+                            : dayjs(child.startDate).format('MM/DD')
+                          : '...'}
+                    </span>
+                    <span className="opacity-50">→</span>
+                </>
+            )}
+            <span className={isEndDateEffectivelyLocked ? 'underline decoration-dashed decoration-slate-400 opacity-70' : ''}>
+                {child.endDate ? (dayjs(child.endDate).year() !== dayjs().year()
+                  ? dayjs(child.endDate).format('YY/MM/DD')
+                  : dayjs(child.endDate).format('MM/DD')) : '...'}
+            </span>
           </span>
+          )}
+          </>
         )}
 
         {/* 子項目數量指示器 (僅在有更深子節點時顯示) */}

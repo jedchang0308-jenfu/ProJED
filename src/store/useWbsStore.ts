@@ -85,7 +85,20 @@ export interface WbsBoardActions {
   addDependency: (dep: Dependency) => void;
   removeDependency: (depId: string) => void;
   updateDependency: (depId: string, updates: Partial<Dependency>) => void;
-  _hasCycle: (newDependency: Dependency) => boolean;
+  _hasCycle: (newDependency: Dependency, ignoreDepId?: string) => boolean;
+  _applyDependencySchedule: (changedNodeId: string, source?: 'node' | 'dependency') => void;
+
+  /**
+   * 計算所有依賴的標籤 Map（排序穩定）
+   * 設計意圖：統一標籤算法，確保 ListView 與 GanttView 顯示一致的字母標籤
+   */
+  getDependencyMarkers: () => Record<string, Array<{ id: string; label: string; role: 'active' | 'passive'; isSelf?: boolean; offset?: number }>>;
+
+  /**
+   * 取得節點的日期鎖定狀態（是否被依賴關係鎖定）
+   * 設計意圖：只有「被動跟隨端」(toId) 的日期才被鎖定，主動驅動端不鎖定
+   */
+  getNodeLockStatus: (nodeId: string, customDeps?: Dependency[]) => { startLocked: boolean; endLocked: boolean; moveLocked: boolean };
 
   // ===== Import / Export =====
   exportData: () => void;
@@ -107,6 +120,7 @@ const getStatusProgress = (status: TaskStatus): number => {
   }
 };
 
+
 const shouldMarkDelayed = (node: TaskNode): boolean => {
   if (node.isArchived || !node.endDate || node.status === 'completed' || node.status === 'unsure') return false;
   return dayjs(node.endDate).isValid() && dayjs(node.endDate).isBefore(dayjs(), 'day');
@@ -125,6 +139,43 @@ const normalizeSmartStatusUpdates = (
   if (!shouldMarkDelayed(candidate)) return updates;
   return { ...updates, status: 'delayed' };
 };
+
+const createDependencyId = () =>
+  `dep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+/**
+ * 依賴標籤生成器（a, b, c, ..., aa, ab...）
+ * 設計意圖：提供穩定、一致的字母標籤，作為模組級共用函式
+ */
+const getDependencyLabelHelper = (index: number): string => {
+  let label = '';
+  let i = index;
+  while (i >= 0) {
+    label = String.fromCharCode(97 + (i % 26)) + label;
+    i = Math.floor(i / 26) - 1;
+  }
+  return label;
+};
+
+const getNodeDate = (node: TaskNode | undefined, side: Dependency['fromSide']) =>
+  side === 'start' ? node?.startDate : node?.endDate;
+
+const getDateShift = (fromDate: string | undefined, toDate: string | undefined) => {
+  if (!fromDate || !toDate || !dayjs(fromDate).isValid() || !dayjs(toDate).isValid()) return 0;
+  return dayjs(toDate).diff(dayjs(fromDate), 'day');
+};
+
+const hasIncomingDateDependency = (
+  dependencies: Dependency[],
+  nodeId: string,
+  side: Dependency['toSide'],
+  exceptDepId?: string
+) =>
+  dependencies.some(dep =>
+    dep.id !== exceptDepId &&
+    dep.toId === nodeId &&
+    dep.toSide === side
+  );
 
 export const useWbsStore = create<WbsStore>((set, get) => ({
   nodes: {},
@@ -241,6 +292,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
     }
 
+    if (
+        ('startDate' in normalizedUpdates && normalizedUpdates.startDate !== oldNode.startDate) ||
+        ('endDate' in normalizedUpdates && normalizedUpdates.endDate !== oldNode.endDate)
+    ) {
+        get()._applyDependencySchedule(id, 'node');
+    }
+
     // 紀錄上一步
     const label = normalizedUpdates.isArchived === true ? '刪除任務' :
                   normalizedUpdates.isArchived === false ? '復原任務' : '修改任務';
@@ -252,7 +310,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   },
 
   removeNode: (id) => {
-    // 實作軟刪除
+    // B3 修復：先清理所有關聯的孤兒依賴，再軟刪除
+    // 設計意圖：避免被刪除節點的依賴殘留，導致 _applyDependencySchedule 嘗試推動已封存節點
+    const state = get();
+    const orphanDeps = state.dependencies.filter(
+      dep => dep.fromId === id || dep.toId === id
+    );
+    orphanDeps.forEach(dep => get().removeDependency(dep.id));
     get().updateNode(id, { isArchived: true });
   },
 
@@ -355,9 +419,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   // ===== 依賴關係排程 (Dependencies & Cycle Detection) =====
 
-  _hasCycle: (newDependency) => {
+  _hasCycle: (newDependency, ignoreDepId) => {
       const state = get();
-      const allDeps = [...state.dependencies, newDependency];
+      const allDeps = [
+          ...state.dependencies.filter(dep => dep.id !== ignoreDepId && dep.id !== newDependency.id),
+          newDependency
+      ];
       
       // 構建目前圖的 Adjacency List (有向圖: from -> to)
       const adjList: Record<string, string[]> = {};
@@ -392,18 +459,19 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   addDependency: (dep) => {
       // 確保有 id
-      const finalDep = { ...dep, id: dep.id || `dep_${Date.now()}` };
+      const finalDep = { ...dep, id: dep.id || createDependencyId() };
       if (get()._hasCycle(finalDep)) {
           alert('排程防呆機制：此依賴關係將造成「邏輯死結（循環依賴）」，系統已攔截此操作。');
           return;
       }
       set(state => ({ dependencies: [...state.dependencies, finalDep] }));
+      get()._applyDependencySchedule(finalDep.fromId, 'dependency');
 
       // 非同步寫入 Firestore 
       const state = get();
       const node = state.nodes[finalDep.fromId];
       if (node && node.workspaceId && node.boardId) {
-          dependencyService.create(node.workspaceId, node.boardId, finalDep).catch(console.error);
+          dependencyService.set(node.workspaceId, node.boardId, finalDep).catch(console.error);
       }
 
       useUndoStore.getState().pushUndo({
@@ -439,7 +507,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
       const newDep = { ...dep, ...updates };
 
-      if (get()._hasCycle(newDep)) {
+      if (get()._hasCycle(newDep, depId)) {
           alert('排程防呆機制：變更此依賴關係將造成「邏輯死結（循環依賴）」，系統已攔截此操作。');
           return;
       }
@@ -447,6 +515,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       set(s => ({
           dependencies: s.dependencies.map(d => d.id === depId ? newDep : d)
       }));
+      get()._applyDependencySchedule(newDep.fromId, 'dependency');
 
       const node = state.nodes[newDep.fromId];
       if (node && node.workspaceId && node.boardId) {
@@ -464,6 +533,178 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           undo: () => get().updateDependency(depId, oldValues),
           redo: () => get().updateDependency(depId, updates),
       });
+  },
+
+  _applyDependencySchedule: (changedNodeId, _source = 'node') => {
+      const state = get();
+
+      // B1 修復：改用 BFS 展開，只收集真正涉及 changedNodeId 的依賴鏈
+      // 設計意圖：從 changedNodeId 出發，沿「fromId → toId」方向 BFS 展開，
+      // 確保只重算受影響的下游任務，避免舊版條件 (|| state.nodes[...]) 幾乎恆為 truthy 的效能問題
+      const visitedNodes = new Set<string>();
+      const queue = [changedNodeId];
+      const relevantDeps: Dependency[] = [];
+
+      while (queue.length > 0) {
+          const currentId = queue.shift()!;
+          if (visitedNodes.has(currentId)) continue;
+          visitedNodes.add(currentId);
+
+          for (const dep of state.dependencies) {
+              if (dep.fromId === currentId && !relevantDeps.includes(dep)) {
+                  relevantDeps.push(dep);
+                  queue.push(dep.toId); // 繼續向下展開
+              }
+          }
+      }
+
+      if (relevantDeps.length === 0) return;
+
+      let nextNodes = { ...state.nodes };
+      const changed: Record<string, Partial<TaskNode>> = {};
+      const maxPasses = Math.max(relevantDeps.length * 2, 1);
+
+      for (let pass = 0; pass < maxPasses; pass++) {
+          let changedInPass = false;
+
+          for (const dep of relevantDeps) {
+              const fromNode = nextNodes[dep.fromId];
+              const toNode = nextNodes[dep.toId];
+              const fromDate = getNodeDate(fromNode, dep.fromSide);
+
+              if (!fromNode || !toNode || !fromDate || !dayjs(fromDate).isValid()) continue;
+
+              const nextDate = dayjs(fromDate).add(dep.offset ?? 0, 'day').format('YYYY-MM-DD');
+              const currentDate = getNodeDate(toNode, dep.toSide);
+              if (currentDate === nextDate) continue;
+
+              const nodeUpdates: Partial<TaskNode> = {
+                  [dep.toSide === 'start' ? 'startDate' : 'endDate']: nextDate,
+                  updatedAt: Date.now(),
+              };
+
+              if (currentDate && dayjs(currentDate).isValid()) {
+                  const deltaDays = getDateShift(currentDate, nextDate);
+
+                  // 只有當工期被鎖定時，才同步平移另一側的日期（維持工期長度）
+                  if (toNode.isDurationLocked) {
+                      if (
+                          dep.toSide === 'start' &&
+                          toNode.endDate &&
+                          !hasIncomingDateDependency(state.dependencies, toNode.id, 'end', dep.id)
+                      ) {
+                          nodeUpdates.endDate = dayjs(toNode.endDate).add(deltaDays, 'day').format('YYYY-MM-DD');
+                      }
+
+                      if (
+                          dep.toSide === 'end' &&
+                          toNode.startDate &&
+                          !hasIncomingDateDependency(state.dependencies, toNode.id, 'start', dep.id)
+                      ) {
+                          nodeUpdates.startDate = dayjs(toNode.startDate).add(deltaDays, 'day').format('YYYY-MM-DD');
+                      }
+                  }
+              }
+
+              const finalStart = nodeUpdates.startDate ?? toNode.startDate;
+              const finalEnd = nodeUpdates.endDate ?? toNode.endDate;
+              if (finalStart && finalEnd && dayjs(finalStart).isAfter(dayjs(finalEnd), 'day')) {
+                  if (dep.toSide === 'start') {
+                      nodeUpdates.endDate = finalStart;
+                  } else {
+                      nodeUpdates.startDate = finalEnd;
+                  }
+              }
+
+              const scheduledNode = applySmartStatus({ ...toNode, ...nodeUpdates });
+              const persistedUpdates: Partial<TaskNode> = { ...nodeUpdates };
+              if (scheduledNode.status !== toNode.status) {
+                  persistedUpdates.status = scheduledNode.status;
+              }
+
+              nextNodes = { ...nextNodes, [toNode.id]: scheduledNode };
+              changed[toNode.id] = {
+                  ...(changed[toNode.id] || {}),
+                  ...persistedUpdates,
+              };
+              changedInPass = true;
+          }
+
+          if (!changedInPass) break;
+      }
+
+      const updates = Object.entries(changed)
+          .map(([id, data]) => ({ id, data }))
+          .filter(({ data }) => Object.keys(data).some(key => (data as any)[key] !== undefined));
+
+      if (updates.length === 0) return;
+
+      set({ nodes: nextNodes });
+
+      // B2 修復：按 (workspaceId, boardId) 分組後各別 batchUpdate
+      // 設計意圖：避免跨板依賴時，只用第一個節點的座標而導致其他板的 Firestore 更新靜默失敗
+      const groups: Record<string, typeof updates> = {};
+      for (const u of updates) {
+          const n = nextNodes[u.id];
+          if (!n?.workspaceId || !n?.boardId) continue;
+          const key = `${n.workspaceId}|${n.boardId}`;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(u);
+      }
+      for (const [key, batch] of Object.entries(groups)) {
+          const [wsId, bId] = key.split('|');
+          nodeService.batchUpdate(wsId, bId, batch).catch(console.error);
+      }
+  },
+
+  // ===== 共用 Getter（跨視圖一致性） =====
+
+  getDependencyMarkers: () => {
+      const { dependencies } = get();
+      const markers: Record<string, Array<{ id: string; label: string; role: 'active' | 'passive'; isSelf?: boolean; offset?: number }>> = {};
+
+      // 設計意圖：按 id 字典序排序，確保 ListView 與 GanttView 顯示的字母標籤完全一致
+      const sortedDeps = [...dependencies].sort((a, b) => a.id.localeCompare(b.id));
+
+      sortedDeps.forEach((dep, index) => {
+          const label = getDependencyLabelHelper(index);
+          const isSelf = dep.fromId === dep.toId;
+
+          const fromKey = `${dep.fromId}_${dep.fromSide}`;
+          if (!markers[fromKey]) markers[fromKey] = [];
+          markers[fromKey].push({ id: dep.id, label, role: 'active', isSelf, offset: dep.offset });
+
+          const toKey = `${dep.toId}_${dep.toSide}`;
+          if (!markers[toKey]) markers[toKey] = [];
+          markers[toKey].push({ id: dep.id, label, role: 'passive', isSelf, offset: dep.offset });
+      });
+
+      return markers;
+  },
+
+  getNodeLockStatus: (nodeId, customDeps) => {
+      const dependencies = customDeps || get().dependencies;
+      let startLocked = false;
+      let endLocked = false;
+
+      // 設計意圖：只有當節點是「被動跟隨端」(toId) 時，其日期才被鎖定；
+      // 主動驅動端 (fromId) 不應鎖定，使用者可主動調整驅動日期
+      for (const dep of dependencies) {
+          if (dep.toId === nodeId && dep.fromId !== nodeId) {
+              if (dep.toSide === 'start' || !dep.toSide) startLocked = true;
+              if (dep.toSide === 'end') endLocked = true;
+          }
+          if (dep.toId === nodeId && dep.fromId === nodeId) {
+              if (dep.fromSide === 'start' && dep.toSide === 'end') endLocked = true;
+              if (dep.fromSide === 'end' && dep.toSide === 'start') startLocked = true;
+          }
+      }
+
+      return {
+          startLocked,
+          endLocked,
+          moveLocked: startLocked || endLocked,
+      };
   },
 
   // ===== Import / Export =====

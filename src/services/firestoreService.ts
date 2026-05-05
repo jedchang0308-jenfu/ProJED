@@ -96,6 +96,10 @@ export const dependencyService = {
     await setDoc(depRef, dep);
     return dep;
   },
+  set: async (wsId: string, bId: string, dependency: Dependency): Promise<Dependency> => {
+    await setDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', dependency.id), dependency);
+    return dependency;
+  },
   update: async (wsId: string, bId: string, depId: string, updates: Partial<Dependency>) => {
     await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId), sanitizeUpdates(updates));
   },

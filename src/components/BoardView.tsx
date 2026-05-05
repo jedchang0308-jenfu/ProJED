@@ -9,7 +9,7 @@
  * - Level 3+ (更深子節點)               → 待辦清單 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, GitBranch } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -17,11 +17,27 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
+import useDialogStore from '../store/useDialogStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import type { TaskNode, TaskStatus } from '../types';
 
+/**
+ * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
+ * 設計意圖：複用 WbsListView 的依賴模块，但適用於看板的 UI 互動模式。
+ */
+export const KanbanDependencyContext = React.createContext<{
+    dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
+    handleKanbanDependencySelect: (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => void;
+    dependencies: import('../types').Dependency[];
+} | null>(null);
+
 const BoardView = () => {
     const { activeBoardId, activeWorkspaceId, toggleStatusFilter, statusFilters } = useBoardStore();
+    const dependencySelection = useBoardStore(s => s.dependencySelection);
+    const setDependencySelection = useBoardStore(s => s.setDependencySelection);
+    const toggleStartDate = useBoardStore(s => s.toggleStartDate);
+    const showStartDate = useBoardStore(s => s.showStartDate);
+    const { addDependency, dependencies } = useWbsStore();
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
@@ -30,6 +46,45 @@ const BoardView = () => {
     const [previewNodes, setPreviewNodes] = useState<Record<string, TaskNode> | null>(null);
     const [previewParentIndex, setPreviewParentIndex] = useState<Record<string, string[]> | null>(null);
     const previewIntentRef = useRef<string | null>(null);
+
+    // ===== 依賴關係選取邏輯 =====
+    const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
+        if (!dependencySelection) {
+            // 進入選取模式，並自動開啟開始日期顯示
+            if (!showStartDate) toggleStartDate();
+            setDependencySelection({ id: targetId, side: targetSide, title: targetTitle });
+        } else {
+            // 已在選取模式，配對目標
+            if (dependencySelection.id === targetId && dependencySelection.side === targetSide) {
+                setDependencySelection(null);
+                return;
+            }
+            const isSelf = dependencySelection.id === targetId;
+            if (isSelf && targetSide === 'end' && dependencySelection.side === 'start') {
+                useDialogStore.getState().showConfirm('請由「結束日」的方向來設定工期，不要從開始日連到結束日。');
+                setDependencySelection(null);
+                return;
+            }
+            const promptMsg = isSelf
+                ? `請設定任務 [${dependencySelection.title}] 的工作天數：`
+                : `[${dependencySelection.title}] 依賴於 [${targetTitle}] 的間隔工作天數：\n(零天銜接，負數重疊，正數延遲)`;
+            const offsetStr = await useDialogStore.getState().showPrompt(promptMsg, '0');
+            if (offsetStr !== null && offsetStr.trim() !== '') {
+                const offset = parseInt(offsetStr, 10);
+                if (!isNaN(offset)) {
+                    addDependency({ fromId: targetId, fromSide: targetSide, toId: dependencySelection.id, toSide: dependencySelection.side, offset });
+                }
+            }
+            setDependencySelection(null);
+        }
+    }, [dependencySelection, dependencies, addDependency, setDependencySelection, showStartDate, toggleStartDate]);
+
+    // ESC 取消選取模式
+    React.useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDependencySelection(null); };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [setDependencySelection]);
 
     const collisionDetection = useCallback((args: any) => {
         const pointerCollisions = pointerWithin(args);
@@ -410,6 +465,7 @@ const BoardView = () => {
     }
 
     return (
+        <KanbanDependencyContext.Provider value={{ dependencySelection, handleKanbanDependencySelect, dependencies }}>
         <DndContext
             sensors={sensors}
             collisionDetection={collisionDetection}
@@ -422,6 +478,28 @@ const BoardView = () => {
                 <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
                     <StatusFilterBar />
                 </div>
+
+                {/* 依賴關係選取模式橫幅 */}
+                {dependencySelection && (
+                    <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-amber-700 text-sm font-semibold">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+                            <span>
+                                選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
+                                <span className={`mx-1 px-1.5 py-0.5 rounded text-[11px] font-black ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                    {dependencySelection.side === 'start' ? '開始日' : '結束日'}
+                                </span>
+                                — 請點擊另一張卡片的日期標籤作為依賴目標
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => setDependencySelection(null)}
+                            className="text-amber-500 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded hover:bg-amber-100 transition-colors flex-shrink-0"
+                        >
+                            取消 (ESC)
+                        </button>
+                    </div>
+                )}
 
                 {/* 列表畫布 (Lists Canvas) */}
                 <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
@@ -458,6 +536,7 @@ const BoardView = () => {
                 ) : null}
             </DragOverlay>
         </DndContext>
+        </KanbanDependencyContext.Provider>
     );
 };
 

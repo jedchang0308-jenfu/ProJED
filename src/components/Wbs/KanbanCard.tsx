@@ -9,10 +9,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Calendar, CheckSquare, ChevronDown, ChevronRight, ListPlus } from 'lucide-react';
+import { Calendar, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { KanbanChecklist } from './KanbanChecklist';
+import { KanbanDependencyContext } from '../BoardView';
 import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
 import dayjs from 'dayjs';
@@ -40,7 +41,20 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
   const updateNode = useWbsStore(s => s.updateNode);
+  const wbsDependencies = useWbsStore(s => s.dependencies);
+  const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
+  const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
+  const isEndDateEffectivelyLocked = lockStatus.endLocked || node?.isDurationLocked;
+  const showStartDate = useBoardStore(s => s.showStartDate);
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
+
+  // 看板依賴選取 Context
+  const kanbanDepCtx = React.useContext(KanbanDependencyContext);
+  const dependencySelection = kanbanDepCtx?.dependencySelection || null;
+  const isSelectingMode = !!dependencySelection;
+  const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
+  const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
+  const isSelfNode = isSelfStart || isSelfEnd;
   // 行內編輯狀態
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -192,31 +206,24 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     <div
       ref={mergedRef}
       style={style}
+      {...(!isEditing && !isSelectingMode ? attributes : {})}
+      {...(!isEditing && !isSelectingMode ? listeners : {})}
       onContextMenu={(e) => {
           e.preventDefault();
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
-      className={`bg-white border rounded-lg shadow-sm transition-all group mb-2 ${
+      className={`bg-white border rounded-lg shadow-sm transition-all group mb-2 touch-none ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
-          : 'border-slate-200 hover:border-primary hover:shadow-md'
+          : isSelectingMode
+            ? isSelfNode
+              ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
+              : 'border-slate-200 hover:border-amber-300 hover:shadow-md cursor-crosshair'
+            : `border-slate-200 hover:border-primary hover:shadow-md ${isEditing ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`
       }`}
     >
-      <div className="flex items-start gap-2 p-2.5">
-        {/* 拖動手柄 — 編輯模式下停用拖動，避免衝突 */}
-        <div
-          {...(isEditing ? {} : attributes)}
-          {...(isEditing ? {} : listeners)}
-          className={`text-slate-300 hover:text-slate-500 transition-colors p-1 -ml-1 -mt-1 touch-none ${
-            isEditing ? 'cursor-default opacity-30' : 'cursor-grab active:cursor-grabbing'
-          }`}
-          onClick={(e) => e.stopPropagation()}
-          title={isEditing ? '' : '拖動卡片'}
-        >
-          <GripVertical size={16} />
-        </div>
-
-        {/* 卡片內容 */}
+      <div className="flex items-start p-2.5">
+        {/* 卡片內容 — 全卡片均可拖曳，僅標題與按鈕需要阻止事件冒泡 */}
         <div className="flex-1 min-w-0">
           {/* 標題列 */}
           <div className="flex items-start justify-between gap-2">
@@ -233,6 +240,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   onVoiceResult={setEditValue}
                   onBlur={handleSave}
                   onKeyDown={handleKeyDown}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                   voiceEnabled
                   className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-700 outline-none ring-2 ring-primary/30 focus:ring-2 focus:ring-primary/30 focus:ring-offset-0"
@@ -242,6 +250,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   className={`text-sm font-semibold leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${
                     statusTextColorMap[status as TaskStatus]
                   }`}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={handleStartEdit}
                   title="點擊以編輯任務名稱"
                 >
@@ -252,14 +261,56 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           </div>
 
           {/* 日期與進度指標 */}
-          {(node.startDate || node.endDate || hasChildren) && (
-            <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] text-slate-400">
+          {(isSelectingMode || node.startDate || node.endDate || hasChildren) && (
+            <div onPointerDown={(e) => e.stopPropagation()} className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px] text-slate-400">
+
+              {/* 選取模式：始終顯示兩顆日期按鈕（無日期時顯示 "..."） */}
+              {isSelectingMode ? (
+                <>
+                  {/* 開始日按鈕 — 始終顯示 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold transition-all ${
+                      isSelfStart
+                        ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                        : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 hover:border-blue-400 hover:shadow-sm cursor-crosshair'
+                    }`}
+                    title="點擊選取此開始日作為依賴目標"
+                  >
+                    <Link size={9} />
+                    <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
+                  </button>
+                  {/* 結束日按鈕 — 始終顯示 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold transition-all ${
+                      isSelfEnd
+                        ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                        : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 hover:border-purple-400 hover:shadow-sm cursor-crosshair'
+                    }`}
+                    title="點擊選取此結束日作為依賴目標"
+                  >
+                    <Link size={9} />
+                    <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
+                  </button>
+                </>
+              ) : (
+                // 一般模式：原始日期 Badge 顯示
+                <>
               {/* 日期區間 */}
-              {(node.startDate || node.endDate) && (
+              {( (showStartDate && node.startDate) || node.endDate) && (
                 <Badge variant={isDueToday ? 'warning' : 'default'} size="sm" icon={<Calendar size={10} />}>
-                  <span>{node.startDate ? (dayjs(node.startDate).year() !== dayjs().year() ? dayjs(node.startDate).format('YY/MM/DD') : dayjs(node.startDate).format('MM/DD')) : '...'}</span>
-                  <span className="opacity-50">→</span>
-                  <span>{node.endDate ? (dayjs(node.endDate).year() !== dayjs().year() ? dayjs(node.endDate).format('YY/MM/DD') : dayjs(node.endDate).format('MM/DD')) : '...'}</span>
+                  {showStartDate && (
+                      <>
+                          <span className={lockStatus.startLocked ? 'underline decoration-dashed decoration-slate-400 underline-offset-[3px] opacity-70' : ''} title={lockStatus.startLocked ? '此日期由依賴推算' : ''}>
+                            {node.startDate ? (dayjs(node.startDate).year() !== dayjs().year() ? dayjs(node.startDate).format('YY/MM/DD') : dayjs(node.startDate).format('MM/DD')) : '...'}
+                          </span>
+                          <span className="opacity-50">→</span>
+                      </>
+                  )}
+                  <span className={isEndDateEffectivelyLocked ? 'underline decoration-dashed decoration-slate-400 underline-offset-[3px] opacity-70' : ''} title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，由開始日期推算' : '此日期由依賴推算') : ''}>
+                    {node.endDate ? (dayjs(node.endDate).year() !== dayjs().year() ? dayjs(node.endDate).format('YY/MM/DD') : dayjs(node.endDate).format('MM/DD')) : '...'}
+                  </span>
                 </Badge>
               )}
 
@@ -272,6 +323,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 >
                   <span className="font-bold">{childStats.completed}/{childStats.total}</span>
                 </Badge>
+              )}
+              </> /* end normal mode */
               )}
             </div>
           )}
@@ -301,6 +354,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               }`}
             >
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsChecklistExpanded(!isChecklistExpanded);

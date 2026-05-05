@@ -4,7 +4,7 @@ import useBoardStore from '../../store/useBoardStore';
 import type { TaskNode, TaskStatus } from '../../types';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { ChevronRight, ChevronDown, Plus, Trash2, Link, GripVertical } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Trash2, Link, GripVertical, Lock, Unlock } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -21,8 +21,14 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const [isExpanded, setIsExpanded] = useState(true);
   const [isTitleEditing, setIsTitleEditing] = useState(false);
   
+  const wbsDependencies = useWbsStore(s => s.dependencies);
+  const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
+
   // 安全檢查，避免節點已被砍除仍在渲染導致 crash
   if (!node) return null;
+
+  const lockStatus = getNodeLockStatus(node.id, wbsDependencies);
+  const isEndDateEffectivelyLocked = lockStatus.endLocked || node.isDurationLocked;
 
   const [localTitle, setLocalTitle] = useState(node.title);
   const [localStartDate, setLocalStartDate] = useState(node.startDate || '');
@@ -51,7 +57,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
       setLocalEndDate(node.endDate || '');
   }, [node.startDate, node.endDate]);
 
-  // 取得全域依賴狀態
+  // 取得全域顯示設定
   const dependencyContext = React.useContext(WbsDependencyContext);
   const showDependencies = dependencyContext?.showDependencies ?? false;
   const handleDependencySelect = dependencyContext?.handleDependencySelect;
@@ -59,6 +65,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const dependencyMarkers =
     dependencyContext?.dependencyMarkers ??
     ({} as NonNullable<React.ContextType<typeof WbsDependencyContext>>['dependencyMarkers']);
+
+  const showStartDate = useBoardStore(s => s.showStartDate);
 
   // 確認選取狀態
   const isSelectingMode = !!dependencySelection;
@@ -201,6 +209,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
       }
 
       setLocalStartDate(val);
+      
+      // 如果鎖定工期，連動推移結束日期
+      if (node.isDurationLocked && durationDays !== '') {
+          const newEndDate = dayjs(val).add(durationDays as number, 'day').format('YYYY-MM-DD');
+          if (validateDateBoundary('endDate', newEndDate)) {
+              setLocalEndDate(newEndDate);
+              updateNode(node.id, { startDate: val, endDate: newEndDate });
+              return;
+          }
+      }
+      
       updateNode(node.id, { startDate: val });
   };
 
@@ -214,6 +233,37 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
       setLocalEndDate(val);
       updateNode(node.id, { endDate: val });
   };
+
+  // 工期變更處理
+  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const strVal = e.target.value;
+      if (strVal === '') return; // 允許清空但不做計算
+      const val = parseInt(strVal, 10);
+      if (isNaN(val) || val < 0) return;
+
+      if (!localStartDate) {
+          alert('防呆機制：請先設定開始日期，才能計算工期');
+          e.target.value = '';
+          return;
+      }
+      
+      const newEndDate = dayjs(localStartDate).add(val, 'day').format('YYYY-MM-DD');
+      if (!validateDateBoundary('endDate', newEndDate)) {
+          // 若防呆擋下，不更新 UI
+          e.target.value = durationDays.toString();
+          return;
+      }
+      setLocalEndDate(newEndDate);
+      updateNode(node.id, { endDate: newEndDate });
+  };
+
+  const handleToggleDurationLock = () => {
+      updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
+  };
+
+  const durationDays = (localStartDate && localEndDate && dayjs(localStartDate).isValid() && dayjs(localEndDate).isValid())
+      ? dayjs(localEndDate).diff(dayjs(localStartDate), 'day')
+      : '';
 
   
 
@@ -249,7 +299,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                 title: node.title
             });
         }}
-        className={`grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] items-center py-1 px-4 border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white text-sm active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_130px_80px]'} items-center py-1 px-4 border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white text-sm active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
@@ -325,7 +375,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
         </div>
 
         {/* Col 3: 開始日期 */}
-        <div 
+        {showStartDate && (<div 
             className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
                 ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfStart ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
@@ -337,8 +387,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                     type="date" 
                     value={localStartDate}
                     onChange={handleStartDateChange}
-                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-slate-400' : 'text-slate-600'}`}
+                    readOnly={lockStatus.startLocked}
+                    className={`w-28 text-xs rounded px-1 min-h-[24px] cursor-pointer transition-all
+                        ${lockStatus.startLocked ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
+                        ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
+                    title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
                 />
+                {lockStatus.startLocked && (
+                    <span className="text-slate-400 absolute right-8 flex items-center bg-slate-50/50 pr-1 pl-0.5">
+                        <Link size={12} className="opacity-60" />
+                    </span>
+                )}
                 {showDependencies && dependencyMarkers?.[`${nodeId}_start`]?.length > 0 && (
                     <div className="flex items-center gap-0.5 flex-shrink-0">
                         {dependencyMarkers[`${nodeId}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
@@ -361,22 +420,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                     </span>
                 )}
             </div>
-            {/* 設定依賴按鈕 */}
-            {!isSelectingMode && handleDependencySelect && (
-                 <button
-                    onClick={(e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); }}
-                    className="absolute right-1 p-1 rounded-sm text-gray-400 hover:text-amber-600 hover:bg-amber-100 transition-all opacity-0 group-hover/date:opacity-100"
-                    title="設定開始日期的依賴"
-                 >
-                    <Link size={11} />
-                 </button>
-            )}
+
             {isSelectingMode && !isSelfStart && (
                 <div className="absolute right-1 p-1 text-amber-500 opacity-0 group-hover/date:opacity-100 transition-opacity">
                     <Link size={11} />
                 </div>
             )}
-        </div>
+        </div>)}
 
         {/* Col 4: 結束日期 */}
         <div 
@@ -392,8 +442,21 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                     type="date" 
                     value={localEndDate}
                     onChange={handleEndDateChange}
-                    className={`w-28 text-xs bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none rounded px-1 min-h-[24px] cursor-pointer ${isSelectingMode ? 'pointer-events-none text-slate-400' : 'text-slate-600'}`}
+                    readOnly={isEndDateEffectivelyLocked}
+                    className={`w-28 text-xs rounded px-1 min-h-[24px] cursor-pointer transition-all
+                        ${isEndDateEffectivelyLocked ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
+                        ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
+                    title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
                 />
+                {isEndDateEffectivelyLocked && (
+                    <span className="text-slate-400 absolute right-8 flex items-center bg-slate-50/50 pr-1 pl-0.5">
+                        {node.isDurationLocked && !lockStatus.endLocked ? (
+                            <span className="opacity-60 text-[10px] font-bold">L</span>
+                        ) : (
+                            <Link size={12} className="opacity-60" />
+                        )}
+                    </span>
+                )}
                 {showDependencies && dependencyMarkers?.[`${nodeId}_end`]?.length > 0 && (
                     <div className="flex items-center gap-0.5 flex-shrink-0">
                         {dependencyMarkers[`${nodeId}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
@@ -416,21 +479,36 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                     </span>
                 )}
             </div>
-            {/* 設定依賴按鈕 */}
-            {!isSelectingMode && handleDependencySelect && (
-                 <button
-                    onClick={(e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); }}
-                    className="absolute right-1 p-1 rounded-sm text-gray-400 hover:text-amber-600 hover:bg-amber-100 transition-all opacity-0 group-hover/date:opacity-100"
-                    title="設定結束日期的依賴"
-                 >
-                    <Link size={11} />
-                 </button>
-            )}
+
             {isSelectingMode && !isSelfEnd && (
                 <div className="absolute right-1 p-1 text-amber-500 opacity-0 group-hover/date:opacity-100 transition-opacity">
                     <Link size={11} />
                 </div>
             )}
+        </div>
+
+
+
+        {/* Col 5: 工期(天) */}
+        <div className="flex items-center px-2 gap-1">
+             <button
+                 type="button"
+                 onClick={handleToggleDurationLock}
+                 className={`p-1 rounded flex-shrink-0 transition-colors ${node.isDurationLocked ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                 title={node.isDurationLocked ? '鎖定工期：開始日期變動時同步推動結束日期' : '非鎖定工期：日期各自獨立，自動計算天數'}
+             >
+                 {node.isDurationLocked ? <Lock size={12} /> : <Unlock size={12} />}
+             </button>
+             <input 
+                 type="number"
+                 min="0"
+                 value={durationDays}
+                 onChange={handleDurationChange}
+                 placeholder="-"
+                 disabled={!node.isDurationLocked}
+                 className={`w-10 text-center text-xs bg-transparent border border-transparent focus:outline-none rounded py-0.5 ${!node.isDurationLocked ? 'pointer-events-none text-slate-400 opacity-70' : 'hover:border-slate-300 focus:border-primary focus:bg-white text-slate-600'} ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
+                 title={node.isDurationLocked ? "輸入工期天數自動推算結束日期" : "請先點擊鎖頭以鎖定工期，才能手動修改"}
+             />
         </div>
 
       </div>

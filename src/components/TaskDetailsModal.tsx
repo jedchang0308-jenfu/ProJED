@@ -9,9 +9,6 @@ interface TaskDetailsModalProps {
   onClose: () => void;
 }
 
-const SIZE_STORAGE_KEY = 'projed.taskDetailsModal.size';
-const DEFAULT_SIZE = { width: 760, height: 620 };
-
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
   { value: 'todo', label: '待辦' },
   { value: 'in_progress', label: '進行中' },
@@ -27,7 +24,13 @@ const createNote = (index: number): TaskDetailNote => ({
   content: '',
 });
 
+const SIZE_STORAGE_KEY = 'projed.taskDetailsModal.size.v2';
+
 const readSavedSize = () => {
+  const defaultWidth = typeof window !== 'undefined' ? Math.max(window.innerWidth * 0.5, 760) : 760;
+  const defaultHeight = typeof window !== 'undefined' ? Math.max(window.innerHeight * 0.6, 620) : 620;
+  const DEFAULT_SIZE = { width: defaultWidth, height: defaultHeight };
+
   if (typeof window === 'undefined') return DEFAULT_SIZE;
 
   try {
@@ -35,6 +38,11 @@ const readSavedSize = () => {
     if (!saved) return DEFAULT_SIZE;
 
     const parsed = JSON.parse(saved);
+    // 如果因為之前的 bug 存到了過小的尺寸，就強制回歸預設值
+    if (Number(parsed.width) < 500 || Number(parsed.height) < 500) {
+        return DEFAULT_SIZE;
+    }
+
     return {
       width: Number(parsed.width) || DEFAULT_SIZE.width,
       height: Number(parsed.height) || DEFAULT_SIZE.height,
@@ -47,7 +55,6 @@ const readSavedSize = () => {
 export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const updateNode = useWbsStore((state) => state.updateNode);
-  const dependencies = useWbsStore((state) => state.dependencies);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
   const [size, setSize] = React.useState(readSavedSize);
   const [startDate, setStartDate] = React.useState('');
@@ -72,10 +79,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     const modal = modalRef.current;
     if (!modal || typeof ResizeObserver === 'undefined') return;
 
-    const observer = new ResizeObserver(([entry]) => {
+    const observer = new ResizeObserver(() => {
+      // 避免使用 entry.contentRect.width (content-box) 導致無限縮小迴圈
+      // 改用 offsetWidth / offsetHeight 以取得包含 border 的正確大小
       const nextSize = {
-        width: Math.round(entry.contentRect.width),
-        height: Math.round(entry.contentRect.height),
+        width: Math.round(modal.offsetWidth),
+        height: Math.round(modal.offsetHeight),
       };
       setSize(nextSize);
       window.localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(nextSize));
@@ -105,6 +114,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   if (!node) return null;
 
+  const durationDays = (startDate && endDate && dayjs(startDate).isValid() && dayjs(endDate).isValid())
+    ? dayjs(endDate).diff(dayjs(startDate), 'day')
+    : '';
+
   const updateDate = (field: 'startDate' | 'endDate', value: string) => {
     const nextStart = field === 'startDate' ? value : startDate;
     const nextEnd = field === 'endDate' ? value : endDate;
@@ -114,10 +127,25 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       return;
     }
 
-    if (field === 'startDate') setStartDate(value);
-    if (field === 'endDate') setEndDate(value);
-
     const updates = { [field]: value } as Partial<typeof node>;
+
+    if (field === 'startDate') {
+      setStartDate(value);
+      if (node.isDurationLocked && durationDays !== '') {
+        const newEndDate = dayjs(value).add(durationDays as number, 'day').format('YYYY-MM-DD');
+        setEndDate(newEndDate);
+        updates.endDate = newEndDate;
+        
+        // 如果連動更新結束日期後，發現違反結束日期的邊界（例如結束日期跑到了昨天以前），依然要觸發 delayed 邏輯
+        if (node.status !== 'completed' && node.status !== 'unsure' && dayjs(newEndDate).isValid() && dayjs(newEndDate).isBefore(dayjs(), 'day')) {
+          updates.status = 'delayed';
+        }
+      }
+    }
+    
+    if (field === 'endDate') {
+      setEndDate(value);
+    }
     const shouldAutoDelay =
       nextEnd &&
       node.status !== 'completed' &&
@@ -132,6 +160,28 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     updateNode(node.id, updates);
   };
 
+  const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const strVal = e.target.value;
+    if (strVal === '') return;
+    const val = parseInt(strVal, 10);
+    if (isNaN(val) || val < 0) return;
+
+    if (!startDate) {
+      alert('防呆機制：請先設定開始日期，才能計算工期');
+      e.target.value = '';
+      return;
+    }
+
+    const nextEnd = dayjs(startDate).add(val, 'day').format('YYYY-MM-DD');
+
+    // 呼叫原本的更新邏輯
+    updateDate('endDate', nextEnd);
+  };
+
+  const handleToggleDurationLock = () => {
+    updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
+  };
+
   const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
     setNotes((current) =>
       current.map((note) => (note.id === noteId ? { ...note, ...updates } : note))
@@ -142,15 +192,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     setNotes((current) => [...current, createNote(current.length + 1)]);
   };
 
-  const hasDependencyLock = (side: 'start' | 'end') =>
-    dependencies.some(
-      (dependency) =>
-        (dependency.fromId === node.id && dependency.fromSide === side) ||
-        (dependency.toId === node.id && dependency.toSide === side)
-    );
-
-  const startLocked = hasDependencyLock('start');
-  const endLocked = hasDependencyLock('end');
+  const dependencies = useWbsStore((state) => state.dependencies);
+  const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
+  const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
   const currentStatus = node.status || 'todo';
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
 
@@ -217,7 +261,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-xs font-medium text-slate-500">
                 開始日期
                 <div className="mt-1 flex items-center gap-2">
@@ -225,7 +269,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     type="date"
                     value={startDate}
                     onChange={(event) => updateDate('startDate', event.target.value)}
-                    className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    readOnly={startLocked}
+                    className={`h-9 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
+                      startLocked
+                        ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
+                        : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
+                    }`}
                   />
                   <span
                     className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border ${
@@ -246,22 +295,55 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     type="date"
                     value={endDate}
                     onChange={(event) => updateDate('endDate', event.target.value)}
-                    className={`h-9 min-w-0 flex-1 rounded-md border px-2 text-sm outline-none transition focus:ring-2 ${
-                      isDueToday
-                        ? 'border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
-                        : 'border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
+                    readOnly={endLocked || node.isDurationLocked}
+                    className={`h-9 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
+                      endLocked || node.isDurationLocked
+                        ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
+                        : isDueToday
+                        ? 'border border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
+                        : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
                     }`}
                   />
                   <span
                     className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border ${
-                      endLocked
+                      endLocked || node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50 text-amber-600'
                         : 'border-slate-200 bg-slate-50 text-slate-300'
                     }`}
-                    title={endLocked ? '結束日期已有依賴關係鎖定' : '結束日期沒有依賴關係鎖定'}
+                    title={endLocked ? '結束日期已有依賴關係鎖定' : (node.isDurationLocked ? '因工期鎖定，由開始日期推算' : '結束日期未鎖定')}
                   >
-                    {endLocked ? <Lock size={15} /> : <Unlock size={15} />}
+                    {endLocked || node.isDurationLocked ? <Lock size={15} /> : <Unlock size={15} />}
                   </span>
+                </div>
+              </label>
+              <label className="text-xs font-medium text-slate-500">
+                工期 (天)
+                <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleDurationLock}
+                    className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border transition-colors ${
+                      node.isDurationLocked
+                        ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
+                        : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100'
+                    }`}
+                    title={node.isDurationLocked ? '鎖定工期：自動推算結束日期' : '非鎖定：日期獨立計算'}
+                  >
+                    {node.isDurationLocked ? <Lock size={15} /> : <Unlock size={15} />}
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    value={durationDays}
+                    onChange={handleDurationChange}
+                    placeholder="-"
+                    disabled={!node.isDurationLocked}
+                    className={`h-9 w-full rounded-md border px-2 text-sm text-center outline-none transition ${
+                      !node.isDurationLocked
+                        ? 'border-transparent bg-slate-50 text-slate-400'
+                        : 'border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
+                    }`}
+                  />
                 </div>
               </label>
             </div>

@@ -67,8 +67,8 @@ const useBoardStore = create<BoardStore>()(
         },
         // UI 顯示狀態（全域共用）
         showDependencies: true,
+        showStartDate: true,
         dependencySelection: null,
-        dependencyMenuState: null,
         contextMenuState: null,
 
         // ===== 基本 setters =====
@@ -87,7 +87,6 @@ const useBoardStore = create<BoardStore>()(
         },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
-        setDependencyMenuState: (state) => set({ dependencyMenuState: state }),
         setContextMenuState: (state) => set({ contextMenuState: state }),
 
         // ===== Workspace CRUD =====
@@ -122,8 +121,9 @@ const useBoardStore = create<BoardStore>()(
             }
         })),
 
-        // 切換依賴連線顯示
+        // 切換 UI 顯示
         toggleDependencies: () => set((state) => ({ showDependencies: !state.showDependencies })),
+        toggleStartDate: () => set((state) => ({ showStartDate: !state.showStartDate })),
 
         // ===== Navigation =====
         showHome: () => {

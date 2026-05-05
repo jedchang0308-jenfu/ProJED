@@ -18,6 +18,7 @@ import {
 import { db } from '../services/firebase';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
+import { useWbsStore } from '../store/useWbsStore';
 import type { Workspace, Board, Dependency } from '../types';
 
 /** 依 order 欄位升冪排序的輔助函式 */
@@ -122,8 +123,7 @@ export function useFirestoreSync() {
             snapshot.docs.map(doc => ({
               ...(doc.data() as Board),
               id: doc.id,
-              lists: [],
-              dependencies: []
+              lists: []
             }))
           );
 
@@ -132,7 +132,7 @@ export function useFirestoreSync() {
           const mergedBoards = boards.map(b => {
             const existing = currentWs?.boards.find(eb => eb.id === b.id);
             return existing 
-              ? { ...b, dependencies: existing.dependencies } 
+              ? { ...b } 
               : b;
           });
 
@@ -176,7 +176,7 @@ export function useFirestoreSync() {
 
     const boardPath = `workspaces/${activeWs.id}/boards/${activeBoardId}`;
 
-    // 3c. 監聽 Dependencies (保留舊版及混用機制，此處僅從 dependencies 取出，未來在 WBS 架構可考慮用 dependencyService 或由 nodes 決定，但目前 WbsStore 也有 dependencies 陣列)
+    // 3c. 監聽 Dependencies
     unsubDeps.current = onSnapshot(
       collection(db, boardPath, 'dependencies'),
       (snapshot) => {
@@ -185,15 +185,15 @@ export function useFirestoreSync() {
           id: doc.id
         }));
 
-        updateBoardInStore(activeWs.id, activeBoardId, (board) => ({
-          ...board,
-          dependencies
-        }));
-
-        // 也傳遞給新的 WBS store
-        import('../store/useWbsStore').then(({ useWbsStore }) => {
-            // WbsStore 也暫時覆蓋 dependencies
-            useWbsStore.setState({ dependencies });
+        // D5 修復：合併而非覆蓋，避免丟失 optimistic update
+        const currentDeps = useWbsStore.getState().dependencies;
+        const remoteIds = new Set(dependencies.map(d => d.id));
+        const localOnly = currentDeps.filter(d =>
+            !remoteIds.has(d.id) && d.id.startsWith('dep_')
+        );
+        // 保留本地尚未同步完成的 optimistic 依賴
+        useWbsStore.setState({
+            dependencies: [...dependencies, ...localOnly]
         });
       },
       (error) => {
@@ -225,24 +225,3 @@ export function useFirestoreSync() {
   }, [activeBoardId, workspaceIds, isBoardReady]); // 使用頂層穩定變數，避免 dependency array 內即時計算觸發 Error #310
 }
 
-/**
- * 輔助函式：更新 Store 中特定 Board 的資料
- */
-function updateBoardInStore(
-  wsId: string,
-  bId: string,
-  updater: (board: Board) => Board
-) {
-  useBoardStore.setState(state => ({
-    workspaces: state.workspaces.map(ws => {
-      if (ws.id !== wsId) return ws;
-      return {
-        ...ws,
-        boards: ws.boards.map(b => {
-          if (b.id !== bId) return b;
-          return updater(b);
-        })
-      };
-    })
-  }));
-}

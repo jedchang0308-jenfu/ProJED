@@ -4,7 +4,7 @@ import { Link } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
-import { getX, getDateFromX, getDependencyLabel, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
+import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 
 interface TaskItem {
     id: string;
@@ -96,32 +96,12 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const isRelated = isHovered;
 
     // Dependencies Logic
-    const taskDependencies = (wbsDependencies || []).map((dep: any, idx: number) => ({
-        ...dep,
-        label: getDependencyLabel(idx),
-        originalIndex: idx
-    })).filter((d: any) => d.fromId === item.id || d.toId === item.id);
-
-    let isLeftLocked = false;
-    let isRightLocked = false;
-    let isMoveLocked = false;
-
-    taskDependencies.forEach((dep: any) => {
-        if (dep.toId === item.id && dep.fromId !== item.id) {
-            if (dep.toSide === 'start' || !dep.toSide) {
-                isLeftLocked = true;
-                isMoveLocked = true;
-            }
-            if (dep.toSide === 'end') {
-                isRightLocked = true;
-                isMoveLocked = true;
-            }
-        }
-        if (dep.fromId === item.id && dep.toId === item.id) {
-            if (dep.fromSide === 'start' && dep.toSide === 'end') isRightLocked = true;
-            if (dep.fromSide === 'end' && dep.toSide === 'start') isLeftLocked = true;
-        }
-    });
+    // D3, M2 修復：統一使用 useWbsStore 的鎖定邏輯與標籤
+    const getNodeLockStatus = useWbsStore((s) => s.getNodeLockStatus);
+    const lockStatus = getNodeLockStatus(item.id, wbsDependencies);
+    const isLeftLocked = lockStatus.startLocked || item.isDurationLocked;
+    const isRightLocked = lockStatus.endLocked || item.isDurationLocked;
+    const isMoveLocked = lockStatus.moveLocked;
 
     const handleDragStart = (e: React.MouseEvent, type: string) => {
         e.stopPropagation();
@@ -285,30 +265,15 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
 
     const renderDependencies = () => {
-        if (taskDependencies.length === 0 || isMilestone) return null;
-        
-        const leftDeps: any[] = [];
-        const rightDeps: any[] = [];
-        const selfWorkDays = taskDependencies
-            .filter((d: any) => d.fromId === item.id && d.toId === item.id && d.fromSide === 'start' && d.toSide === 'end')
-            .map((d: any) => d.offset ?? 0);
+        const dependencyMarkers = useWbsStore.getState().getDependencyMarkers();
+        const startMarkers = dependencyMarkers[`${item.id}_start`] || [];
+        const endMarkers = dependencyMarkers[`${item.id}_end`] || [];
 
-        taskDependencies.forEach((dep: any) => {
-            const isSelf = dep.fromId === dep.toId;
-            if (isSelf) return;
+        if (startMarkers.length === 0 && endMarkers.length === 0 && !isMilestone) return null;
 
-            if (dep.fromId === item.id && (dep.fromSide === 'start' || !dep.fromSide)) {
-                leftDeps.push({ ...dep, isMarkerSource: true });
-            } else if (dep.toId === item.id && (dep.toSide === 'start' || !dep.toSide)) {
-                leftDeps.push({ ...dep, isMarkerSource: false });
-            }
-                                        
-            if (dep.fromId === item.id && dep.fromSide === 'end') {
-                rightDeps.push({ ...dep, isMarkerSource: true });
-            } else if (dep.toId === item.id && dep.toSide === 'end') {
-                rightDeps.push({ ...dep, isMarkerSource: false });
-            } 
-        });
+        const leftDeps = startMarkers.filter(m => !m.isSelf).map(m => ({ ...m, isMarkerSource: m.role === 'active' }));
+        const rightDeps = endMarkers.filter(m => !m.isSelf).map(m => ({ ...m, isMarkerSource: m.role === 'active' }));
+        const selfWorkDays = startMarkers.filter(m => m.isSelf).map(m => m.offset ?? 0);
 
         return (
             <>
@@ -471,20 +436,22 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             {!isMilestone && !isInfiniteFallback && (
                 <>
                     <div
-                        className={`absolute left-0 top-0 bottom-0 w-2 ${isLeftLocked ? 'cursor-not-allowed bg-slate-400/20' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
+                        className={`absolute left-0 top-0 bottom-0 w-2.5 ${isLeftLocked ? 'cursor-not-allowed bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
                         onMouseDown={(e) => {
                             e.stopPropagation();
                             if (isLeftLocked) return;
                             handleDragStart(e, 'left');
                         }}
+                        title={isLeftLocked ? '此端受依賴推動或工期鎖定，不可手動拉伸' : ''}
                     />
                     <div
-                        className={`absolute right-0 top-0 bottom-0 w-2 ${isRightLocked ? 'cursor-not-allowed bg-slate-400/20' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
+                        className={`absolute right-0 top-0 bottom-0 w-2.5 ${isRightLocked ? 'cursor-not-allowed bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
                         onMouseDown={(e) => {
                             e.stopPropagation();
                             if (isRightLocked) return;
                             handleDragStart(e, 'right');
                         }}
+                        title={isRightLocked ? '此端受依賴推動或工期鎖定，不可手動拉伸' : ''}
                     />
                 </>
             )}

@@ -4,7 +4,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { WbsNodeItem } from './WbsNodeItem';
 import { Button } from '../ui/Button';
-import { Plus, GitBranch, Link, X, Edit2, ArrowRight } from 'lucide-react';
+import { Plus, GitBranch, Link, X, Edit2, ArrowRight, Trash2 } from 'lucide-react';
 import type { TaskNode, TaskStatus } from '../../types';
 import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
@@ -21,10 +21,9 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
-  const dependencyMenuState = useBoardStore(s => s.dependencyMenuState);
-  const setDependencyMenuState = useBoardStore(s => s.setDependencyMenuState);
-  // 從全域 Store 取出依賴線顯示狀態（已從局部升格為全域）
+  // 從全域 Store 取出顯示狀態
   const showDependencies = useBoardStore(s => s.showDependencies);
+  const showStartDate = useBoardStore(s => s.showStartDate);
   const { dependencies, addDependency, removeDependency, updateDependency, addNode, updateNode } = useWbsStore();
 
   // DnD 狀態
@@ -51,19 +50,18 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       }
   };
 
-  // 監聽 ESC 取消依賴選取 / 依賴選單
+  // 監聽 ESC 取消依賴選取
   React.useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
           if (e.key === 'Escape') {
-              if (dependencyMenuState) setDependencyMenuState(null);
-              else if (dependencySelection) setDependencySelection(null);
+              if (dependencySelection) setDependencySelection(null);
           }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => {
           window.removeEventListener('keydown', handleKeyDown);
       };
-  }, [dependencySelection, dependencyMenuState]);
+  }, [dependencySelection]);
 
   // 取得任意節點名稱
   const getTaskTitle = (id: string) => {
@@ -76,16 +74,8 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
    */
   const handleDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
       if (!dependencySelection) {
-          // 檢查這個端點是否已經有連線，有的話就開 Menu，沒有的話就進入選取模式
-          const hasExisting = dependencies.some(
-              dep => (dep.fromId === targetId && dep.fromSide === targetSide) || 
-                     (dep.toId === targetId && dep.toSide === targetSide)
-          );
-          if (hasExisting) {
-              setDependencyMenuState({ id: targetId, side: targetSide, title: targetTitle });
-          } else {
-              setDependencySelection({ id: targetId, side: targetSide, title: targetTitle });
-          }
+          // 選取模式外的點擊已被移除或忽略，這裡直接 return
+          return;
       } else {
           // 正在選取模式中，現在點擊的是目標
           if (dependencySelection.id === targetId && dependencySelection.side === targetSide) {
@@ -122,37 +112,11 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
           }
           setDependencySelection(null);
       }
-  }, [dependencySelection, dependencies, addDependency, setDependencySelection, setDependencyMenuState]);
+  }, [dependencySelection, dependencies, addDependency, setDependencySelection]);
 
   // 計算依賴關係圖示 (全域 a,b,c 編號)
   const dependencyMarkers = React.useMemo(() => {
-      const getLabel = (index: number) => {
-          let label = '';
-          let i = index;
-          while (i >= 0) {
-              label = String.fromCharCode(97 + (i % 26)) + label;
-              i = Math.floor(i / 26) - 1;
-          }
-          return label;
-      };
-
-      const markers: Record<string, Array<{ id: string, label: string, role: 'active' | 'passive', isSelf?: boolean, offset?: number }>> = {};
-      const sortedDeps = [...dependencies].sort((a, b) => a.id.localeCompare(b.id));
-
-      sortedDeps.forEach((dep, index) => {
-          const label = getLabel(index);
-          const isSelf = dep.fromId === dep.toId;
-          
-          const fromKey = `${dep.fromId}_${dep.fromSide}`;
-          if (!markers[fromKey]) markers[fromKey] = [];
-          markers[fromKey].push({ id: dep.id, label, role: 'active', isSelf, offset: dep.offset });
-
-          const toKey = `${dep.toId}_${dep.toSide}`;
-          if (!markers[toKey]) markers[toKey] = [];
-          markers[toKey].push({ id: dep.id, label, role: 'passive', isSelf, offset: dep.offset });
-      });
-
-      return markers;
+      return useWbsStore.getState().getDependencyMarkers();
   }, [dependencies]);
 
   // 利用 Context 提供遞迴子元件存取
@@ -197,74 +161,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       <div className="flex flex-col w-full h-full bg-white overflow-hidden pt-4 px-6 md:px-8 relative">
         
 
-        {/* 依賴選單 Modal (行內) */}
-        {dependencyMenuState && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setDependencyMenuState(null)}>
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col m-4" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-                        <h3 className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <Link size={16} className="text-blue-500" />
-                            <span>{dependencyMenuState.title} ({dependencyMenuState.side === 'start' ? '開始日期' : '結束日期'}) 依賴線設定</span>
-                        </h3>
-                        <button onClick={() => setDependencyMenuState(null)} className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-                            <X size={18} />
-                        </button>
-                    </div>
-                    <div className="p-3 max-h-[50vh] overflow-y-auto bg-gray-50 dark:bg-gray-900 space-y-2">
-                        {dependencies.filter(dep => 
-                            (dep.fromId === dependencyMenuState.id && dep.fromSide === dependencyMenuState.side) || 
-                            (dep.toId === dependencyMenuState.id && dep.toSide === dependencyMenuState.side)
-                        ).map(dep => {
-                            const isSelfPassive = dep.toId === dependencyMenuState.id;
-                            const otherId = isSelfPassive ? dep.fromId : dep.toId;
-                            const otherSide = isSelfPassive ? dep.fromSide : dep.toSide;
-                            const otherTitle = getTaskTitle(otherId);
-                            
-                            return (
-                                <div key={dep.id} className="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex flex-col gap-1">
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm w-fit ${isSelfPassive ? 'bg-gray-400 text-white' : 'bg-gray-800 text-white'}`}>
-                                                {isSelfPassive ? '被動跟隨' : '主動驅動'}
-                                            </span>
-                                            <div className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
-                                                <ArrowRight size={14} className={isSelfPassive ? "text-gray-400" : "text-gray-800 dark:text-gray-400"} />
-                                                <span>{otherTitle} ({otherSide === 'start' ? '開始日期' : '結束日期'})</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-semibold text-gray-500 bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded-md border border-gray-100 dark:border-gray-600 min-w-[60px] text-center">
-                                            間隔 {dep.offset || 0} 工作天
-                                        </span>
-                                        <button 
-                                            title="修改天數"
-                                            onClick={async () => {
-                                                const res = await useDialogStore.getState().showPrompt(`修改與 [${otherTitle}] 的間隔工作天數:\n(請輸入正或負整數)`, String(dep.offset || 0));
-                                                if (res !== null && res.trim() !== '') {
-                                                    const offset = parseInt(res, 10);
-                                                    if (!isNaN(offset)) updateDependency(dep.id, { offset });
-                                                }
-                                            }}
-                                            className="p-1.5 rounded-md text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
-                                        >
-                                            <Edit2 size={15} />
-                                        </button>
-                                        <button 
-                                            title="刪除連線"
-                                            onClick={() => removeDependency(dep.id)}
-                                            className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-        )}
+        {/* 依賴選單 Modal 已經移除，統一由右鍵選單進入選取模式 */}
 
       {/* 狀態篩選器 + 操作區 */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 shrink-0">
@@ -278,6 +175,30 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         </div>
       </div>
 
+      {/* 依賴關係選取模式橫幅 (與看板模式一致) */}
+      {dependencySelection && (
+          <div className="mb-4 shrink-0 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex items-center justify-between gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2.5 text-amber-700 text-sm font-semibold">
+                  <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+                  </div>
+                  <span>
+                      選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
+                      <span className={`mx-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
+                          {dependencySelection.side === 'start' ? '開始日期' : '結束日期'}
+                      </span>
+                      — 請點擊清單中任一任務的「日期」作為依賴目標
+                  </span>
+              </div>
+              <button
+                  onClick={() => setDependencySelection(null)}
+                  className="bg-white border border-amber-200 text-amber-600 hover:bg-amber-100 hover:text-amber-700 text-xs font-bold px-3 py-1.5 rounded-md transition-all flex-shrink-0 shadow-sm active:scale-95"
+              >
+                  取消 (ESC)
+              </button>
+          </div>
+      )}
+
       {/* 清單容器 */}
       <div className="flex-1 overflow-y-auto w-full pb-20 pr-2 custom-scrollbar">
         {rootNodes.length === 0 ? (
@@ -290,11 +211,12 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         ) : (
           <div className="flex flex-col bg-white border border-slate-200 rounded-lg shadow-sm relative">
             {/* Header Column Titles (Tree Grid) */}
-            <div className="grid grid-cols-[minmax(300px,1fr)_100px_130px_130px] py-2 px-4 bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10">
+            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_130px_80px]'} py-2 px-4 bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10`}>
                 <div className="flex items-center pl-[28px]">任務名稱</div>
                 <div className="flex items-center">狀態</div>
-                <div className="flex items-center">開始日期</div>
+                {showStartDate && <div className="flex items-center">開始日期</div>}
                 <div className="flex items-center">結束日期</div>
+                <div className="flex items-center">工期(天)</div>
             </div>
             
             {/* 遞迴列表本體包裝 DnD */}
