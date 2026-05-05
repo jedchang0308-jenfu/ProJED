@@ -324,4 +324,37 @@ useBoardStore (Zustand + Firestore)
 - 徹底移除專屬於清單模式的 `dependencyMenuState` 局部狀態，全面改用全域 `dependencySelection`。這簡化了狀態管理，並解決了過往在清單模式中選單殘留或重疊的 Bug。
 
 ---
+---
 *更新日期：2026-05-05 (全模式依賴關係選取優化、操作防護機制發布)*
+
+## 17. 功能優化與體驗提升 (Functional Optimizations & Enhanced UX)
+
+### 17.1 右鍵階層快速移動 (Task Hierarchy Rapid Movement)
+- **設計意圖**：在大規模 WBS 結構調整時，頻繁的滑鼠拖曳（Drag-and-Drop）會導致操作效率下降與疲勞。
+- **實現方式**：
+    - 在全域右鍵選單增加「往上一階」與「往下一階」動作。
+    - **邏輯實作**：透過修改 `parentId` 並輔以 `order` 偏移（如 `parentNode.order + 0.1`），實現精準的階層平移。
+    - **子任務自動連動**：基於 WBS 扁平化架構，只需更新父節點的 `parentId`，其子節點會自然跟隨移動，無需處理複雜的遞迴。
+
+### 17.2 手機端拖曳防誤觸 (Mobile Drag-and-Drop Anti-Misclick)
+- **設計意圖**：解決現代手機瀏覽器將觸控行為辨識為 `Pointer` 事件，導致滑動頁面時意外觸發卡片拖曳的問題。
+- **架構決策**：
+    - **感應器分離**：將 `PointerSensor` 拆分為獨立的 `MouseSensor`（電腦端）與 `TouchSensor`（行動端）。
+    - **行動端約束**：強制要求 `delay: 250ms` 的長按與 `tolerance: 5px` 的防震動，確保只有刻意的長按才會啟動拖曳，一般的快速滑動則維持頁面捲動。
+
+### 17.3 全域 UI 通知系統 (Global UI Toast Notification System)
+- **設計意圖**：原生 `window.alert` 具有阻塞性、視覺突兀，且容易被自動化測試環境或瀏覽器隱私設定攔截。
+- **實現方式**：
+    - **非同步狀態管理**：建立 `useToastStore` (Zustand) 管理通知隊列。
+    - **優雅降級**：將全系統的防呆提示（Guardrails）由 `alert` 轉向非阻塞式的 `toast`。
+    - **視覺反饋**：採用 `<ToastContainer />` 提供帶有圖示與進場動畫的浮動通知，提升 App 質感與使用者信心。
+
+### 17.4 右鍵選單邊界智慧偵測 (Context Menu Boundary Detection)
+- **設計意圖**：防止右鍵選單在視窗邊緣（尤其是底部）開啟時，選項超出可視範圍導致無法點選。
+- **實現方式**：
+    - **預估高度補償**：根據選單內部的動態內容（如是否顯示依賴關係選項）預估總高度。
+    - **反向彈出邏輯**：利用 `window.innerHeight` 進行邊界檢查，若剩餘空間不足則自動切換為向上偏移，確保選單始終完整呈現。
+
+---
+*更新日期：2026-05-05 (階層快速移動、手機拖曳優化與 Toast 系統實作)*
+
