@@ -31,6 +31,7 @@ import RecycleBinView from './components/RecycleBinView';
 import GlobalDialog from './components/GlobalDialog';
 import UpdateToast from './components/UpdateToast';
 import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
+import { ToastContainer } from './components/ui/ToastContainer';
 
 /**
  * AppContent — 主應用內容（已通過 AuthGate 認證）
@@ -163,6 +164,7 @@ function App() {
       <AuthGate>
         <AppContent />
       </AuthGate>
+      <ToastContainer />
       {/* PWA 更新通知：放在最外層，確保永遠可見 */}
       <UpdateToast />
     </>

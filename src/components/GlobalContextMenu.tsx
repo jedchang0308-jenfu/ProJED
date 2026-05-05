@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, Plus, Trash2, GitBranch } from 'lucide-react';
+import { FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import type { TaskNode } from '../types';
 import { TaskDetailsModal } from './TaskDetailsModal';
+import { toast } from '../store/useToastStore';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -14,6 +15,7 @@ export const GlobalContextMenu: React.FC = () => {
   const toggleStartDate = useBoardStore((state) => state.toggleStartDate);
   const addNode = useWbsStore((state) => state.addNode);
   const removeNode = useWbsStore((state) => state.removeNode);
+  const updateNode = useWbsStore((state) => state.updateNode);
   const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
 
   // 支援依賴關係選取的模式 (看板 & 清單)
@@ -54,7 +56,7 @@ export const GlobalContextMenu: React.FC = () => {
     if (!node) return;
 
     if (node.status === 'completed') {
-      window.alert('已完成的任務不能新增子任務。');
+      toast.warning('已完成的任務不能新增子任務。');
       setContextMenuState(null);
       return;
     }
@@ -77,6 +79,71 @@ export const GlobalContextMenu: React.FC = () => {
     setContextMenuState(null);
   };
 
+  const handleMoveUp = () => {
+    if (!contextMenuState) return;
+    const state = useWbsStore.getState();
+    const node = state.nodes[contextMenuState.nodeId];
+    
+    if (!node || !node.parentId) {
+      toast.warning('已經是最上層任務，無法再往上移動。');
+      setContextMenuState(null);
+      return;
+    }
+
+    const parentNode = state.nodes[node.parentId];
+    if (!parentNode) return;
+
+    const newParentId = parentNode.parentId;
+    
+    updateNode(node.id, { 
+      parentId: newParentId,
+      order: parentNode.order + 0.1
+    });
+    
+    setContextMenuState(null);
+  };
+
+  const handleMoveDown = () => {
+    if (!contextMenuState) return;
+    const state = useWbsStore.getState();
+    const node = state.nodes[contextMenuState.nodeId];
+    if (!node) return;
+
+    const siblings = (state.parentNodesIndex[node.parentId || 'root'] || [])
+      .map(id => state.nodes[id])
+      .filter(Boolean)
+      .sort((a, b) => a.order - b.order);
+      
+    const currentIndex = siblings.findIndex(s => s.id === node.id);
+    
+    if (currentIndex <= 0) {
+      toast.warning('沒有前一個相鄰的任務，無法往下移動成為其子任務。');
+      setContextMenuState(null);
+      return;
+    }
+    
+    const prevSibling = siblings[currentIndex - 1];
+    
+    if (prevSibling.status === 'completed') {
+      toast.warning('無法移動到已完成的任務之下。');
+      setContextMenuState(null);
+      return;
+    }
+    
+    const newParentId = prevSibling.id;
+    const newSiblings = state.parentNodesIndex[newParentId] || [];
+    const maxOrder = newSiblings.length > 0 
+      ? Math.max(...newSiblings.map(id => state.nodes[id]?.order || 0)) 
+      : 0;
+    
+    updateNode(node.id, { 
+      parentId: newParentId,
+      order: maxOrder + 1
+    });
+    
+    setContextMenuState(null);
+  };
+
   const handleOpenDetails = () => {
     if (!contextMenuState) return;
 
@@ -93,13 +160,16 @@ export const GlobalContextMenu: React.FC = () => {
     setContextMenuState(null);
   };
 
+  const MENU_WIDTH = 220;
+  const MENU_HEIGHT = isDependencySupportedView ? 320 : 250;
+
   const menuX =
     contextMenuState?.isOpen
-      ? Math.min(contextMenuState.x, Math.max(12, window.innerWidth - 220))
+      ? Math.min(contextMenuState.x, Math.max(12, window.innerWidth - MENU_WIDTH))
       : 0;
   const menuY =
     contextMenuState?.isOpen
-      ? Math.min(contextMenuState.y, Math.max(12, window.innerHeight - 210))
+      ? Math.min(contextMenuState.y, Math.max(12, window.innerHeight - MENU_HEIGHT))
       : 0;
 
   return (
@@ -151,6 +221,22 @@ export const GlobalContextMenu: React.FC = () => {
           >
             <Plus size={14} className="flex-shrink-0 text-blue-500" />
             <span>新增子任務</span>
+          </button>
+
+          <button
+            onClick={handleMoveUp}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />
+            <span>往上一階</span>
+          </button>
+
+          <button
+            onClick={handleMoveDown}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />
+            <span>往下一階</span>
           </button>
 
           <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
