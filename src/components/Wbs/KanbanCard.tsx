@@ -16,6 +16,7 @@ import { KanbanChecklist } from './KanbanChecklist';
 import { KanbanDependencyContext } from '../BoardView';
 import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
+import { useLongPress } from '../../hooks/useLongPress';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 
@@ -202,12 +203,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     setDropRef(el);
   }, [setNodeRef, setDropRef]);
 
+  // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
+  const longPressHandlers = useLongPress(
+    (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      setContextMenuState({ isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
+    },
+    { delay: 500, tolerance: 8 }
+  );
+
   return (
     <div
       ref={mergedRef}
       style={style}
       {...(!isEditing && !isSelectingMode ? attributes : {})}
       {...(!isEditing && !isSelectingMode ? listeners : {})}
+      {...longPressHandlers}
       onContextMenu={(e) => {
           e.preventDefault();
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });

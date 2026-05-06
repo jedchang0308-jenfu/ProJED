@@ -55,10 +55,28 @@
   cursor: grab;
   touch-action: none;
   /* 防止瀏覽器手勢干擾 */
+  -webkit-touch-callout: none; /* 永久阻止 iOS Safari 長按原生選單 */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cursor-grab:active {
   cursor: grabbing;
+}
+
+/*
+ * 永久觸控長按保護
+ * 設計意圖：Tailwind 的 touch-none（touch-action: none）標示所有可拖曳元素。
+ * 此規則為這些元素補上 -webkit-touch-callout: none，
+ * 永久阻止 iOS/Android 的原生長按行為（圖片下載氣泡、文字選取選單等）
+ * 干擾 dnd-kit 的拖曳感應器。
+ * 未來任何新增可拖曳元素只要套用 touch-none class 即自動受到保護，
+ * 無需逐一修改 component。
+ */
+.touch-none {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* 拖動中的視覺效果 */

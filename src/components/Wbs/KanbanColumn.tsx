@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
+import { useLongPress } from '../../hooks/useLongPress';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -175,6 +176,22 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     addTaskInputRef.current?.focus();
   };
 
+  // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
+  const longPressHandlers = useLongPress(
+    (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      setContextMenuState({
+        isOpen: true,
+        x: touch.clientX,
+        y: touch.clientY,
+        nodeId,
+        title: node.title || '未命名群組',
+      });
+    },
+    { delay: 500, tolerance: 8 }
+  );
+
   return (
     <div
       ref={setColumnNodeRef}
@@ -186,6 +203,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       <div
         {...(isEditing || isSelectingMode ? {} : columnAttributes)}
         {...(isEditing || isSelectingMode ? {} : columnListeners)}
+        {...longPressHandlers}
         className={`group flex flex-col gap-2 bg-white/40 p-3 transition-colors hover:bg-white ${
             isSelectingMode
                 ? isSelfNode

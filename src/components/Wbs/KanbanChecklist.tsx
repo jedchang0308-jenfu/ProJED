@@ -15,6 +15,7 @@ import useBoardStore from '../../store/useBoardStore';
 import { KanbanDependencyContext } from '../BoardView';
 import dayjs from 'dayjs';
 import { Input } from '../ui/Input';
+import { useLongPress } from '../../hooks/useLongPress';
 import type { TaskStatus, TaskNode } from '../../types';
 
 interface KanbanChecklistProps {
@@ -128,12 +129,30 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     transition,
   };
 
+  // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
+  const longPressHandlers = useLongPress(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const touch = e.touches[0];
+      useBoardStore.getState().setContextMenuState({
+        isOpen: true,
+        x: touch.clientX,
+        y: touch.clientY,
+        nodeId: child.id,
+        title: child.title || '未命名項目',
+      });
+    },
+    { delay: 500, tolerance: 8 }
+  );
+
   return (
     <div ref={setNodeRef} style={style}>
       {/* 單一待辦項目列 — 整行均可拖曳，僅勾選方塊與標題需要阻止事件冒泡 */}
       <div
         {...(!isEditing && !isSelectingMode ? attributes : {})}
         {...(!isEditing && !isSelectingMode ? listeners : {})}
+        {...longPressHandlers}
         className={`flex items-center gap-1.5 py-1 group rounded transition-colors touch-none ${
           isDragging
             ? 'opacity-40 bg-primary/5'
