@@ -15,7 +15,7 @@
  *   若使用者靜止長按 500ms，才會觸發 onLongPress 回調（開啟右鍵選單）。
  */
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 interface UseLongPressOptions {
   /** 長按觸發所需的靜止時間（ms），建議設為 dnd-kit TouchSensor delay 的兩倍 */
@@ -28,6 +28,8 @@ interface LongPressHandlers {
   onTouchStart: (e: React.TouchEvent) => void;
   onTouchMove: (e: React.TouchEvent) => void;
   onTouchEnd: (e: React.TouchEvent) => void;
+  onTouchCancel: (e: React.TouchEvent) => void;
+  onClickCapture: (e: React.MouseEvent) => void;
 }
 
 export function useLongPress(
@@ -35,8 +37,10 @@ export function useLongPress(
   { delay = 500, tolerance = 8 }: UseLongPressOptions = {}
 ): LongPressHandlers {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPositionRef = useRef<{ x: number; y: number } | null>(null);
   const triggeredRef = useRef(false);
+  const suppressNextClickRef = useRef(false);
 
   const cancel = useCallback(() => {
     if (timerRef.current) {
@@ -44,6 +48,17 @@ export function useLongPress(
       timerRef.current = null;
     }
     startPositionRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      if (suppressClickTimerRef.current) {
+        clearTimeout(suppressClickTimerRef.current);
+      }
+    };
   }, []);
 
   const onTouchStart = useCallback(
@@ -54,6 +69,14 @@ export function useLongPress(
 
       timerRef.current = setTimeout(() => {
         triggeredRef.current = true;
+        suppressNextClickRef.current = true;
+        if (suppressClickTimerRef.current) {
+          clearTimeout(suppressClickTimerRef.current);
+        }
+        suppressClickTimerRef.current = setTimeout(() => {
+          suppressNextClickRef.current = false;
+          suppressClickTimerRef.current = null;
+        }, 700);
         onLongPress(e);
       }, delay);
     },
@@ -77,11 +100,34 @@ export function useLongPress(
   );
 
   const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (triggeredRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      cancel();
+    },
+    [cancel]
+  );
+
+  const onTouchCancel = useCallback(
     (_e: React.TouchEvent) => {
       cancel();
     },
     [cancel]
   );
 
-  return { onTouchStart, onTouchMove, onTouchEnd };
+  const onClickCapture = useCallback((e: React.MouseEvent) => {
+    if (!suppressNextClickRef.current) return;
+
+    suppressNextClickRef.current = false;
+    if (suppressClickTimerRef.current) {
+      clearTimeout(suppressClickTimerRef.current);
+      suppressClickTimerRef.current = null;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  return { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel, onClickCapture };
 }

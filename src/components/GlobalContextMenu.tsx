@@ -38,12 +38,10 @@ export const GlobalContextMenu: React.FC = () => {
     };
 
     window.addEventListener('scroll', close, true);
-    window.addEventListener('click', close);
     window.addEventListener('keydown', handleKey);
 
     return () => {
       window.removeEventListener('scroll', close, true);
-      window.removeEventListener('click', close);
       window.removeEventListener('keydown', handleKey);
     };
   }, [contextMenuState, setContextMenuState]);
@@ -175,11 +173,20 @@ export const GlobalContextMenu: React.FC = () => {
   return (
     <>
       {contextMenuState?.isOpen && (
-        <div
-          onClick={(event) => event.stopPropagation()}
-          className="fixed z-[9999] flex w-52 flex-col rounded-lg border border-gray-200 bg-white py-1.5 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
-          style={{ top: menuY, left: menuX }}
-        >
+        <>
+          <div
+            className="fixed inset-0 z-[9998]"
+            onPointerDown={() => setContextMenuState(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setContextMenuState(null);
+            }}
+          />
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="fixed z-[9999] flex w-52 flex-col rounded-lg border border-gray-200 bg-white py-1.5 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            style={{ top: menuY, left: menuX }}
+          >
           <div className="mb-1 border-b border-gray-100 px-3 py-1.5 dark:border-gray-700/50">
             <p className="truncate text-xs font-semibold text-gray-500" title={contextMenuState.title}>
               {contextMenuState.title}
@@ -248,7 +255,8 @@ export const GlobalContextMenu: React.FC = () => {
             <Trash2 size={14} className="flex-shrink-0 text-red-500" />
             <span>刪除任務</span>
           </button>
-        </div>
+          </div>
+        </>
       )}
 
       {detailsNodeId && (
