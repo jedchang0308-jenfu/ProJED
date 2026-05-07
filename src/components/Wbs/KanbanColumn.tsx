@@ -69,6 +69,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    event.stopPropagation();
     if (event.key === 'Enter') {
       event.preventDefault();
       handleSave();

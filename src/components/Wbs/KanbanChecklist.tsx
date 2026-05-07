@@ -343,6 +343,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
 
   /** 鍵盤事件 */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, child: TaskNode) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSave(child);

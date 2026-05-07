@@ -24,6 +24,10 @@ const GlobalDialog = () => {
 
         const handleKeyDown = (e) => {
             // Do not stop propagation everywhere, just specific keys for dialog
+            const target = e.target;
+            const isFromDialog = target.closest?.('.global-dialog-content');
+            if (!isFromDialog) return;
+
             if (e.key === 'Escape') {
                 e.stopPropagation();
                 closeDialog(type === 'prompt' ? null : false);
@@ -41,7 +45,7 @@ const GlobalDialog = () => {
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm transform scale-100 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="global-dialog-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm transform scale-100 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-start justify-between mb-4">
                     <h3 className="text-lg font-bold text-slate-800 break-words leading-snug pr-4">
                         {message}
