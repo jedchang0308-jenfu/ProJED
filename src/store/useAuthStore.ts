@@ -29,6 +29,16 @@ const useAuthStore = create<AuthStore>((set) => ({
 }));
 
 // Initialize the global auth state listener once
+authService.handleRedirectResult()
+  .then((user) => {
+    if (user) {
+      useAuthStore.setState({ user, loading: false, error: null });
+    }
+  })
+  .catch((error: any) => {
+    useAuthStore.setState({ error: error.message, loading: false });
+  });
+
 authService.onAuthStateChanged((user) => {
   useAuthStore.setState({ user, loading: false });
 });
