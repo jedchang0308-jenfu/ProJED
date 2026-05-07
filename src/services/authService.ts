@@ -3,7 +3,6 @@ import {
   GoogleAuthProvider, 
   getRedirectResult,
   signInWithPopup, 
-  signInWithRedirect,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User 
@@ -11,16 +10,17 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { FirestoreUser } from '../types';
 
-const isMobileAuthRedirectPreferred = (): boolean => {
+export const isEmbeddedAuthBlocked = (): boolean => {
   if (typeof window === 'undefined') return false;
 
   const ua = navigator.userAgent || '';
-  const isCoarsePointer = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
   const isStandalone =
     window.matchMedia?.('(display-mode: standalone)').matches ||
     (navigator as any).standalone === true;
+  const isInAppBrowser =
+    /FBAN|FBAV|Instagram|Line|MicroMessenger|Threads/i.test(ua);
 
-  return /Android|iPhone|iPad|iPod/i.test(ua) || isCoarsePointer || isStandalone;
+  return isStandalone || isInAppBrowser;
 };
 
 const getGoogleProvider = () => {
@@ -49,13 +49,11 @@ const ensureFirestoreUser = async (user: User): Promise<FirestoreUser> => {
 
 export const authService = {
   signInWithGoogle: async (): Promise<FirestoreUser> => {
-    const provider = getGoogleProvider();
-
-    if (isMobileAuthRedirectPreferred()) {
-      await signInWithRedirect(auth, provider);
-      return new Promise(() => {});
+    if (isEmbeddedAuthBlocked()) {
+      throw new Error('Google 登入需要使用 Chrome 或 Safari 瀏覽器開啟，請不要從 PWA、LINE、FB 或 IG 內建瀏覽器登入。');
     }
 
+    const provider = getGoogleProvider();
     const result = await signInWithPopup(auth, provider);
     return ensureFirestoreUser(result.user);
   },

@@ -13,18 +13,11 @@
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import { runAutoMigration } from '../utils/autoMigration';
+import { isEmbeddedAuthBlocked } from '../services/authService';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
-  const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
-  return (
-    ua.indexOf('FBAN') > -1 || 
-    ua.indexOf('FBAV') > -1 || 
-    ua.indexOf('Instagram') > -1 || 
-    ua.indexOf('Line') > -1 || 
-    ua.indexOf('MicroMessenger') > -1 ||
-    ua.indexOf('Threads') > -1
-  );
+  return isEmbeddedAuthBlocked();
 };
 
 interface AuthGateProps {
