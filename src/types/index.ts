@@ -48,6 +48,8 @@ export interface TaskNode {
   detailNotes?: TaskDetailNote[];
   description?: string;     // 取代舊的 notes
   status: TaskStatus;
+  assigneeId?: string;      // 負責人
+  collaboratorIds?: string[]; // 協作者
   
   // 日期排程 (可選)
   startDate?: string;

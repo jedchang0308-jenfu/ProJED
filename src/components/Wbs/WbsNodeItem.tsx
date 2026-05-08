@@ -272,6 +272,11 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
       updateNode(nodeId, { status: e.target.value as TaskStatus });
   };
 
+  const handleAssigneeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      e.stopPropagation();
+      updateNode(nodeId, { assigneeId: e.target.value });
+  };
+
   // 生成 Native Select 專用 Tailwind Class
   const getStatusSelectClass = (status: string) => {
     const baseClass = "w-20 text-[11px] py-1 px-1 rounded border outline-none cursor-pointer appearance-none text-center font-medium transition-colors";
@@ -299,7 +304,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
                 title: node.title
             });
         }}
-        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_130px_80px]'} items-center py-1 px-4 border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white text-sm active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} items-center py-1 px-4 border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white text-sm active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
@@ -357,6 +362,20 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
         </div>
 
         {/* Col 2: 狀態 (原生 Select 偽裝 Badge) */}
+        <div className="flex items-center">
+            <select
+                value={node.assigneeId || ''}
+                onChange={handleAssigneeChange}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full rounded px-2 py-1 text-xs text-slate-600 bg-transparent border-0 outline-none appearance-none transition-colors hover:bg-slate-100 focus:bg-slate-100"
+                title="指派負責人"
+            >
+                <option value="">未指派</option>
+                <option value="user_jed">Jed (CTO)</option>
+                <option value="user_pm">PM_A</option>
+            </select>
+        </div>
+
         <div className="flex items-center">
             <select
                 value={node.status}
