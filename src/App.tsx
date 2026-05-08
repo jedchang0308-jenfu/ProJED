@@ -29,7 +29,6 @@ import CalendarView from './components/CalendarView';
 import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
-import UpdateToast from './components/UpdateToast';
 import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
 import { ToastContainer } from './components/ui/ToastContainer';
 
@@ -165,8 +164,6 @@ function App() {
         <AppContent />
       </AuthGate>
       <ToastContainer />
-      {/* PWA 更新通知：放在最外層，確保永遠可見 */}
-      <UpdateToast />
     </>
   );
 }
