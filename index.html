@@ -15,24 +15,7 @@
   <!-- Google Identity Services (OAuth 授權) + GAPI (Calendar API 呼叫) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
-  <!-- 強制註銷所有的 Service Worker，徹底杜絕舊快取導致的白畫面 -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-          registration.unregister().then(function(boolean) {
-            console.log('[PWA Kill Switch] Unregistered Service Worker:', boolean);
-          });
-        }
-      });
-      // 清除所有相關快取
-      if (window.caches) {
-        caches.keys().then(function(names) {
-          for (let name of names) caches.delete(name);
-        });
-      }
-    }
-  </script>
+  <script src="/sw-kill.js"></script>
 </head>
 
 <body>
