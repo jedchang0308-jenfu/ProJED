@@ -146,13 +146,33 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     { delay: 500, tolerance: 8 }
   );
 
+  const checklistLongPressHandlers = {
+    ...longPressHandlers,
+    onTouchStart: (e: React.TouchEvent) => {
+      e.stopPropagation();
+      longPressHandlers.onTouchStart(e);
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      e.stopPropagation();
+      longPressHandlers.onTouchMove(e);
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      e.stopPropagation();
+      longPressHandlers.onTouchEnd(e);
+    },
+    onTouchCancel: (e: React.TouchEvent) => {
+      e.stopPropagation();
+      longPressHandlers.onTouchCancel(e);
+    },
+  };
+
   return (
     <div ref={setNodeRef} style={style}>
       {/* 單一待辦項目列 — 整行均可拖曳，僅勾選方塊與標題需要阻止事件冒泡 */}
       <div
         {...(!isEditing && !isSelectingMode ? attributes : {})}
         {...(!isEditing && !isSelectingMode ? listeners : {})}
-        {...longPressHandlers}
+        {...checklistLongPressHandlers}
         className={`flex items-center gap-1.5 py-1 group rounded transition-colors touch-none ${
           isDragging
             ? 'opacity-40 bg-primary/5'
