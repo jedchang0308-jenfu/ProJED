@@ -1,23 +1,23 @@
 # ProJED
 
-> [!IMPORTANT]
-> 此專案已標記為 **Jed 的個人受控專案**。
-> 本專案的所有開發流程、技術選型與 DevOps 實踐皆受到 `.jed` 規範之保護與約束。
+ProJED 是以 WBS 樹狀任務為核心，整合清單、看板、甘特圖與日曆的跨平台專案管理工具。
 
-# React + Vite
+## 給 AI 助手的開發指令
 
+開發前必須先讀取 `.ai-docs/` 下所有文件，並遵守其中的系統脈絡、架構規則與驗證計畫：
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+- `.ai-docs/01_SYSTEM_CONTEXT.md`
+- `.ai-docs/02_ARCHITECTURE_RULES.md`
+- `.ai-docs/03_VALIDATION_PLAN.md`
 
-Currently, two official plugins are available:
+若程式碼現況與文件衝突，先回報衝突點，再採取最小風險修正。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 人類開發者啟動指南
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm install
+npm run dev
+npm run build
+npm run preview
+npm run lint
+```
