@@ -11,7 +11,7 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useFirestoreSync } from './hooks/useFirestoreSync';
@@ -23,14 +23,26 @@ import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
 import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
-import BoardView from './components/BoardView';
-import GanttView from './components/GanttView';
-import CalendarView from './components/CalendarView';
-import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
-import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
 import { ToastContainer } from './components/ui/ToastContainer';
+
+const BoardView = lazy(() => import('./components/BoardView'));
+const GanttView = lazy(() => import('./components/GanttView'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
+const RecycleBinView = lazy(() => import('./components/RecycleBinView'));
+const WbsListView = lazy(() =>
+  import('./components/Wbs/WbsListView').then((module) => ({ default: module.WbsListView }))
+);
+
+const ModuleLoadingFallback = () => (
+  <div className="flex h-full min-h-[240px] items-center justify-center bg-slate-50 text-slate-500">
+    <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-primary" />
+      <span>載入模組中...</span>
+    </div>
+  </div>
+);
 
 /**
  * AppContent — 主應用內容（已通過 AuthGate 認證）
@@ -151,7 +163,9 @@ function AppContent() {
 
   return (
     <MainLayout>
-      {renderContent()}
+      <Suspense fallback={<ModuleLoadingFallback />}>
+        {renderContent()}
+      </Suspense>
       <GlobalDialog />
     </MainLayout>
   );
