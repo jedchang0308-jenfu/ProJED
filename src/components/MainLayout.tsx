@@ -1,12 +1,14 @@
 // @ts-nocheck
 import React from 'react';
 import { useState, useEffect } from 'react';
-import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2 } from 'lucide-react';
+import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2, Sparkles } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useCalendarSync from '../hooks/useCalendarSync';
 import useUndoStore from '../store/useUndoStore';
+import useAiStore from '../store/useAiStore';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
+import AiAssistantDrawer from './AiAssistantDrawer';
 
 /**
  * getRelativeTime — 將時間戳轉為相對時間（如「3 分鐘前」）
@@ -72,6 +74,7 @@ const MainLayout = ({ children }) => {
 
     const activeBoard = getActiveBoard();
     const activeWorkspace = getActiveWorkspace();
+    const openAiDrawer = useAiStore((state) => state.openDrawer);
 
     /**
      * handleSyncClick — 同步按鈕點擊處理
@@ -208,6 +211,16 @@ const MainLayout = ({ children }) => {
 
                 {/* ── Google Calendar 同步控制區 ── */}
                 <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                        type="button"
+                        onClick={openAiDrawer}
+                        className="btn-outline px-2 h-7 text-xs sm:text-sm sm:h-8 sm:px-3 hidden sm:flex items-center gap-1.5 transition-all"
+                        title="開啟 AI 自然語言專案助理"
+                    >
+                        <Sparkles size={14} />
+                        <span className="hidden lg:inline">AI 助理</span>
+                    </button>
+
                     {/* 同步按鈕：三種狀態（未連接 / 已連接 / 同步中） */}
                     <button
                         onClick={handleSyncClick}
@@ -283,6 +296,7 @@ const MainLayout = ({ children }) => {
 
             {/* 全域右鍵/長按選單 — 所有視圖共用 */}
             <GlobalContextMenu />
+            <AiAssistantDrawer />
         </div>
     );
 };

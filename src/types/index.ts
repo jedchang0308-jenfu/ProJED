@@ -332,11 +332,14 @@ export interface DialogStore {
   defaultValue: string;
   inputValue: string;
   resolvePromise: ((value: boolean | string | null) => void) | null;
+  taskId: string | null;
 
   setInputValue: (val: string) => void;
   showConfirm: (message: string) => Promise<boolean>;
   showPrompt: (message: string, defaultValue?: string) => Promise<string | null>;
   closeDialog: (result: boolean | string | null) => void;
+  openTask: (taskId: string) => void;
+  closeTask: () => void;
 }
 
 // ===== Cascade 計算用的輔助型別 =====

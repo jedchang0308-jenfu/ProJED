@@ -12,6 +12,7 @@ const useDialogStore = create<DialogStore>((set) => ({
     message: '',
     defaultValue: '',
     inputValue: '',
+    taskId: null,
 
     // resolve 函式：當使用者按下確認/取消時被呼叫
     resolvePromise: null,
@@ -52,7 +53,11 @@ const useDialogStore = create<DialogStore>((set) => ({
                 inputValue: ''
             };
         });
-    }
-}));
+    },
+
+    openTask: (taskId: string) => set({ taskId }),
+
+    closeTask: () => set({ taskId: null }),
+})); 
 
 export default useDialogStore;

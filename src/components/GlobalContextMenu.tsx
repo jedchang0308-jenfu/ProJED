@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import useDialogStore from '../store/useDialogStore';
 import { useWbsStore } from '../store/useWbsStore';
 import type { TaskNode } from '../types';
 import { TaskDetailsModal } from './TaskDetailsModal';
@@ -16,7 +17,9 @@ export const GlobalContextMenu: React.FC = () => {
   const addNode = useWbsStore((state) => state.addNode);
   const removeNode = useWbsStore((state) => state.removeNode);
   const updateNode = useWbsStore((state) => state.updateNode);
-  const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
+  const taskId = useDialogStore((state) => state.taskId);
+  const openTask = useDialogStore((state) => state.openTask);
+  const closeTask = useDialogStore((state) => state.closeTask);
 
   // 支援依賴關係選取的模式 (看板 & 清單)
   const isDependencySupportedView = currentView === 'board' || currentView === 'list';
@@ -145,7 +148,7 @@ export const GlobalContextMenu: React.FC = () => {
   const handleOpenDetails = () => {
     if (!contextMenuState) return;
 
-    setDetailsNodeId(contextMenuState.nodeId);
+    openTask(contextMenuState.nodeId);
     setContextMenuState(null);
   };
 
@@ -259,8 +262,8 @@ export const GlobalContextMenu: React.FC = () => {
         </>
       )}
 
-      {detailsNodeId && (
-        <TaskDetailsModal nodeId={detailsNodeId} onClose={() => setDetailsNodeId(null)} />
+      {taskId && (
+        <TaskDetailsModal nodeId={taskId} onClose={closeTask} />
       )}
     </>
   );
