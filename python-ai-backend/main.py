@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from agent_logic import AgentPlan, QueryConstraints
+from agent_logic import plan_to_dict, run_agent
 
 app = FastAPI(title="ProJED AI Assistant Backend", version="0.1.0")
 
@@ -57,35 +57,17 @@ async def chat(request: ChatRequest) -> ChatResponse:
             raise HTTPException(status_code=422, detail="text is required")
 
         # TODO: Phase 2 - Implement strict user role validation (Technical Debt)
-        plan = AgentPlan(
-            original_prompt=prompt,
+        plan = run_agent(
+            natural_language=prompt,
             current_system_time=request.currentSystemTime or "",
-            constraints=QueryConstraints(
-                workspace_id=request.workspaceId,
-                board_id=request.boardId,
-            ),
-            retrieved_summary={
-                "note": "backend skeleton only",
-                "source": "python-ai-backend/main.py",
-                "model": request.model,
-            },
+            workspace_id=request.workspaceId,
+            board_id=request.boardId,
+            model=request.model,
         )
         return ChatResponse(
             status="ok",
-            message="AI assistant backend scaffold is ready. Retrieval and generation are not implemented yet.",
-            plan={
-                "original_prompt": plan.original_prompt,
-                "current_system_time": plan.current_system_time,
-                "model": request.model,
-                "constraints": {
-                    "date_range": plan.constraints.date_range,
-                    "statuses": plan.constraints.statuses,
-                    "workspace_id": plan.constraints.workspace_id,
-                    "board_id": plan.constraints.board_id,
-                    "keyword": plan.constraints.keyword,
-                },
-                "retrieved_summary": plan.retrieved_summary,
-            },
+            message=plan.final_report,
+            plan=plan_to_dict(plan),
         )
     except HTTPException as error:
         if error.status_code == 429:
