@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
@@ -21,6 +22,11 @@ from firebase_client import get_firestore_client
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 ALLOWED_MODELS = {"gemini-3.1-flash-lite", "gemini-3.1-flash"}
 MAX_TASKS_RETURNED = 80
+AI_REQUEST_TIMEOUT_SECONDS = 25.0
+DEFAULT_PROVIDER_MODEL_ALIASES = {
+    "gemini-3.1-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-3.1-flash": "gemini-2.5-flash",
+}
 
 SYSTEM_PROMPT = """
 You are ProJED's AI project assistant.
@@ -33,6 +39,10 @@ get_workspace_tasks with those ISO timestamps.
 Rules:
 - You must use tools for project/task facts. Do not invent project status.
 - Query only the active workspace scope supplied by the frontend.
+- When the user asks about changes, progress, "what changed", "recent updates",
+  or compares a past time window with now, call get_workspace_changes first.
+- If get_workspace_changes returns no events, say that no change history was
+  recorded for that period instead of pretending that current tasks are changes.
 - Prefer narrow status_filter values when the user asks about delayed,
   completed, active, paused, or uncertain tasks.
 - Return concise Traditional Chinese.
@@ -66,8 +76,13 @@ def _get_openai_client() -> OpenAI:
 
     base_url = os.getenv("AI_BASE_URL") or os.getenv("OPENAI_BASE_URL")
     if base_url:
-        return OpenAI(api_key=api_key, base_url=base_url)
-    return OpenAI(api_key=api_key)
+        return OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=AI_REQUEST_TIMEOUT_SECONDS,
+            max_retries=0,
+        )
+    return OpenAI(api_key=api_key, timeout=AI_REQUEST_TIMEOUT_SECONDS, max_retries=0)
 
 
 def _normalize_model(model: str | None) -> str:
@@ -76,10 +91,31 @@ def _normalize_model(model: str | None) -> str:
     return DEFAULT_MODEL
 
 
+def _provider_model_name(model: str) -> str:
+    env_key = f"AI_MODEL_{model.upper().replace('-', '_').replace('.', '_')}"
+    return os.getenv(env_key) or DEFAULT_PROVIDER_MODEL_ALIASES.get(model, model)
+
+
 def _date_part(value: str | None) -> str:
     if not value:
         return ""
     return value[:10]
+
+
+def _parse_time_ms(value: str | None, end_of_day: bool = False) -> int:
+    if not value:
+        return 0
+
+    normalized = value.strip()
+    if len(normalized) == 10:
+        normalized = f"{normalized}T23:59:59.999+00:00" if end_of_day else f"{normalized}T00:00:00+00:00"
+    elif normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp() * 1000)
 
 
 def _task_overlaps_range(task: dict[str, Any], start_date: str, end_date: str) -> bool:
@@ -105,6 +141,26 @@ def _compact_task(board_id: str, board_title: str, task: dict[str, Any]) -> dict
         "parentId": task.get("parentId"),
         "boardId": board_id,
         "boardTitle": board_title,
+    }
+
+
+def _compact_change_event(event: dict[str, Any]) -> dict[str, Any]:
+    before = event.get("before") or {}
+    after = event.get("after") or {}
+    task_title = event.get("taskTitle") or after.get("title") or before.get("title") or ""
+    return {
+        "id": event.get("id"),
+        "entityType": event.get("entityType"),
+        "action": event.get("action"),
+        "taskId": event.get("taskId"),
+        "taskTitle": task_title,
+        "boardId": event.get("boardId"),
+        "changedAt": event.get("changedAt"),
+        "changedAtIso": event.get("changedAtIso"),
+        "changedByEmail": event.get("changedByEmail"),
+        "changedFields": event.get("changedFields") or [],
+        "before": before,
+        "after": after,
     }
 
 
@@ -166,6 +222,59 @@ def _fetch_workspace_tasks(
     }
 
 
+def _fetch_workspace_changes(
+    workspace_id: str,
+    start_date: str,
+    end_date: str,
+    board_id: str | None = None,
+    limit: int = 120,
+) -> dict[str, Any]:
+    db = get_firestore_client()
+    start_ms = _parse_time_ms(start_date)
+    end_ms = _parse_time_ms(end_date, end_of_day=True)
+    if not start_ms or not end_ms:
+        raise ValueError("startDate and endDate are required for get_workspace_changes")
+
+    logs_ref = db.collection("workspaces").document(workspace_id).collection("activityLogs")
+    query = (
+        logs_ref.where("changedAt", ">=", start_ms)
+        .where("changedAt", "<=", end_ms)
+        .order_by("changedAt", direction="DESCENDING")
+        .limit(limit)
+    )
+
+    events: list[dict[str, Any]] = []
+    scanned = 0
+    for event_doc in query.stream():
+        scanned += 1
+        event = event_doc.to_dict() or {}
+        event.setdefault("id", event_doc.id)
+        if board_id and event.get("boardId") != board_id:
+            continue
+        events.append(_compact_change_event(event))
+
+    summary: dict[str, int] = {}
+    changed_fields: dict[str, int] = {}
+    for event in events:
+        action = event.get("action") or "unknown"
+        summary[action] = summary.get(action, 0) + 1
+        for field_name in event.get("changedFields") or []:
+            changed_fields[field_name] = changed_fields.get(field_name, 0) + 1
+
+    return {
+        "workspaceId": workspace_id,
+        "boardId": board_id,
+        "startDate": start_date,
+        "endDate": end_date,
+        "events": events,
+        "returned": len(events),
+        "scanned": scanned,
+        "summary": summary,
+        "changedFields": changed_fields,
+        "truncated": scanned >= limit,
+    }
+
+
 def get_workspace_tasks(
     workspaceId: str,
     status_filter: list[str],
@@ -184,6 +293,21 @@ def get_workspace_tasks(
         status_filter=status_filter,
         start_date=_date_part(startDate),
         end_date=_date_part(endDate),
+    )
+
+
+def get_workspace_changes(
+    workspaceId: str,
+    startDate: str,
+    endDate: str,
+) -> dict[str, Any]:
+    """
+    Tool callable by the agent for audit-style change questions.
+    """
+    return _fetch_workspace_changes(
+        workspace_id=workspaceId,
+        start_date=startDate,
+        end_date=endDate,
     )
 
 
@@ -223,6 +347,34 @@ GET_WORKSPACE_TASKS_TOOL: dict[str, Any] = {
 }
 
 
+GET_WORKSPACE_CHANGES_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "get_workspace_changes",
+        "description": "Fetch recorded task change events from a workspace for a date range. Use this for questions about what changed, progress, recent updates, or differences over time.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "workspaceId": {
+                    "type": "string",
+                    "description": "Workspace ID supplied by the frontend context.",
+                },
+                "startDate": {
+                    "type": "string",
+                    "description": "Inclusive ISO date or datetime lower bound.",
+                },
+                "endDate": {
+                    "type": "string",
+                    "description": "Inclusive ISO date or datetime upper bound.",
+                },
+            },
+            "required": ["workspaceId", "startDate", "endDate"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
 def _build_user_context_message(
     natural_language: str,
     workspace_id: str | None,
@@ -251,6 +403,7 @@ def run_agent(
     model: str | None,
 ) -> AgentPlan:
     selected_model = _normalize_model(model)
+    provider_model = _provider_model_name(selected_model)
     client = _get_openai_client()
 
     messages: list[dict[str, Any]] = [
@@ -267,9 +420,9 @@ def run_agent(
     ]
 
     first_response = client.chat.completions.create(
-        model=selected_model,
+        model=provider_model,
         messages=messages,
-        tools=[GET_WORKSPACE_TASKS_TOOL],
+        tools=[GET_WORKSPACE_TASKS_TOOL, GET_WORKSPACE_CHANGES_TOOL],
         tool_choice="auto",
         temperature=0.2,
     )
@@ -281,25 +434,33 @@ def run_agent(
     if tool_calls:
         messages.append(assistant_message.model_dump(exclude_none=True))
 
-        for tool_call in tool_calls[:1]:
-            if tool_call.function.name != "get_workspace_tasks":
-                continue
-
+        for tool_call in tool_calls[:2]:
             args = json.loads(tool_call.function.arguments or "{}")
             effective_workspace_id = workspace_id or args.get("workspaceId")
             if not effective_workspace_id:
-                raise ValueError("workspaceId is required for get_workspace_tasks")
+                raise ValueError("workspaceId is required for agent tools")
 
-            tool_result = _fetch_workspace_tasks(
-                workspace_id=effective_workspace_id,
-                status_filter=args.get("status_filter") or [],
-                start_date=_date_part(args.get("startDate")),
-                end_date=_date_part(args.get("endDate")),
-                board_id=board_id,
-            )
+            if tool_call.function.name == "get_workspace_tasks":
+                tool_result = _fetch_workspace_tasks(
+                    workspace_id=effective_workspace_id,
+                    status_filter=args.get("status_filter") or [],
+                    start_date=_date_part(args.get("startDate")),
+                    end_date=_date_part(args.get("endDate")),
+                    board_id=board_id,
+                )
+            elif tool_call.function.name == "get_workspace_changes":
+                tool_result = _fetch_workspace_changes(
+                    workspace_id=effective_workspace_id,
+                    start_date=args.get("startDate"),
+                    end_date=args.get("endDate"),
+                    board_id=board_id,
+                )
+            else:
+                continue
+
             retrieved_summary["tool_calls"].append(
                 {
-                    "name": "get_workspace_tasks",
+                    "name": tool_call.function.name,
                     "arguments": {
                         "workspaceId": effective_workspace_id,
                         "status_filter": args.get("status_filter") or [],
@@ -320,7 +481,7 @@ def run_agent(
             )
 
         final_response = client.chat.completions.create(
-            model=selected_model,
+            model=provider_model,
             messages=messages,
             temperature=0.2,
         )

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { auth } from '../services/firebase';
 import useBoardStore from './useBoardStore';
 import { toast } from './useToastStore';
 
@@ -40,13 +41,32 @@ const createMessage = (role: AiMessageRole, content: string): AiMessage => ({
 });
 
 const createInitialMessages = (): AiMessage[] => [
-  createMessage('assistant', '請輸入自然語言需求，例如「整理本週延遲任務」。'),
-  createMessage('system', 'AI 助理已就緒。對話記錄由 Zustand SSoT 保存。'),
+  createMessage('assistant', '我可以協助你整理任務、查詢進度與彙整風險。'),
+  createMessage('system', 'AI 助理狀態由 Zustand SSoT 管理。'),
 ];
 
 const formatErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
   return '未知錯誤';
+};
+
+const getErrorDetail = async (response: Response): Promise<string> => {
+  try {
+    const payload = await response.json();
+    if (typeof payload?.detail === 'string') return payload.detail;
+    if (typeof payload?.message === 'string') return payload.message;
+  } catch {
+    // Ignore invalid error payloads and fall back to status text.
+  }
+  return response.statusText || `HTTP ${response.status}`;
+};
+
+const getFirebaseIdToken = async (): Promise<string> => {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('請先登入後再使用 AI 助理');
+  }
+  return user.getIdToken();
 };
 
 const useAiStore = create<AiStore>((set, get) => ({
@@ -85,6 +105,15 @@ const useAiStore = create<AiStore>((set, get) => ({
     }
 
     const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
+    if (!activeWorkspaceId) {
+      const message = '請先選擇工作區後再使用 AI 助理';
+      toast.error(message);
+      set((state) => ({
+        messages: [...state.messages, createMessage('system', message)],
+      }));
+      return;
+    }
+
     const currentSystemTime = new Date().toISOString();
     const userMessage = createMessage('user', prompt);
 
@@ -94,9 +123,11 @@ const useAiStore = create<AiStore>((set, get) => ({
     }));
 
     try {
+      const idToken = await getFirebaseIdToken();
       const response = await fetch(DEFAULT_ENDPOINT, {
         method: 'POST',
         headers: {
+          Authorization: `Bearer ${idToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -119,14 +150,14 @@ const useAiStore = create<AiStore>((set, get) => ({
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(await getErrorDetail(response));
       }
 
       const payload = await response.json();
       const replyText =
         payload?.message ||
         payload?.plan?.report ||
-        '後端已收到請求，但尚未回傳可顯示的內容。';
+        '已收到回應，但目前無法顯示完整內容。';
 
       set((state) => ({
         isLoading: false,
