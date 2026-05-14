@@ -54,7 +54,7 @@ interface ChecklistItemProps {
   depth: number;
   editingId: string | null;
   editValue: string;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   onStartEdit: (e: React.MouseEvent, child: TaskNode) => void;
   onSave: (child: TaskNode) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, child: TaskNode) => void;

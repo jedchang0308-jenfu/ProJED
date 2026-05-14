@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
-import type { TaskNode, TaskStatus } from '../../types';
-import { Button } from '../ui/Button';
+import type { TaskStatus } from '../../types';
 import { Input } from '../ui/Input';
-import { ChevronRight, ChevronDown, Plus, Trash2, Link, GripVertical, Lock, Unlock } from 'lucide-react';
+import { ChevronRight, ChevronDown, Link, GripVertical, Lock, Unlock } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -76,9 +75,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
 
   const updateNode = useWbsStore(s => s.updateNode);
-  const addNode = useWbsStore(s => s.addNode);
-  const removeNode = useWbsStore(s => s.removeNode);
-  const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
   
   // ✅ 使用 Stable Selector 訂閱「子節點 ID 陣列」，避免 Zustand 無限 Render Loop
@@ -98,35 +94,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const indentPadding = level * 1.25;
 
   const handleToggle = () => setIsExpanded(!isExpanded);
-
-  const handleAddChild = () => {
-    // 防呆機制：結案不可新增偷渡
-    if (node.status === 'completed') {
-        alert('防呆機制：此群組已結案。如需新增任務，請先將此群組的狀態退回「進行中」或「待辦」。');
-        return;
-    }
-
-    const newNode: TaskNode = {
-      id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
-      workspaceId: activeWorkspaceId || '',
-      boardId: node.boardId,
-      parentId: node.id,
-      title: '新任務',
-      status: 'todo',
-      nodeType: 'task',
-      order: children.length,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    addNode(newNode);
-    setIsExpanded(true);
-  };
-
-  const handleDelete = () => {
-    if (confirm(`確定要刪除「${node.title}」嗎？`)) {
-        removeNode(node.id);
-    }
-  };
 
   // ----- 行內編輯處理 -----
   const handleTitleBlur = () => {

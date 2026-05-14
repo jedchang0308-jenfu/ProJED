@@ -38,7 +38,7 @@ import { ToastContainer } from './components/ui/ToastContainer';
  * 確保 user 一定存在。
  */
 function AppContent() {
-  const { currentView, workspaces, activeWorkspaceId, activeBoardId } = useBoardStore();
+  const { currentView, workspaces, activeBoardId } = useBoardStore();
   const user = useAuthStore(s => s.user);
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);

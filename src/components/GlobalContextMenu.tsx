@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
@@ -17,6 +17,9 @@ export const GlobalContextMenu: React.FC = () => {
   const removeNode = useWbsStore((state) => state.removeNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
+  const openedAtRef = useRef(0);
+
+  const IGNORE_OPENING_TOUCH_MS = 750;
 
   // 支援依賴關係選取的模式 (看板 & 清單)
   const isDependencySupportedView = currentView === 'board' || currentView === 'list';
@@ -45,6 +48,24 @@ export const GlobalContextMenu: React.FC = () => {
       window.removeEventListener('keydown', handleKey);
     };
   }, [contextMenuState, setContextMenuState]);
+
+  useLayoutEffect(() => {
+    if (contextMenuState?.isOpen) {
+      openedAtRef.current = performance.now();
+    }
+  }, [contextMenuState?.isOpen, contextMenuState?.nodeId, contextMenuState?.x, contextMenuState?.y]);
+
+  const closeFromOutsideEvent = (event: React.PointerEvent | React.MouseEvent) => {
+    const elapsed = performance.now() - openedAtRef.current;
+
+    if (elapsed < IGNORE_OPENING_TOUCH_MS) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    setContextMenuState(null);
+  };
 
   const handleAddChild = () => {
     if (!contextMenuState) return;
@@ -176,11 +197,8 @@ export const GlobalContextMenu: React.FC = () => {
         <>
           <div
             className="fixed inset-0 z-[9998]"
-            onPointerDown={() => setContextMenuState(null)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setContextMenuState(null);
-            }}
+            onPointerDown={closeFromOutsideEvent}
+            onContextMenu={closeFromOutsideEvent}
           />
           <div
             onClick={(event) => event.stopPropagation()}

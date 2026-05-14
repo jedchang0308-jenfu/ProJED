@@ -22,7 +22,7 @@
     "noEmit": true,
 
     /* --- vite-plugin-pwa 虛擬模組型別支援 --- */
-    "types": ["vite-plugin-pwa/client"]
+    "types": ["vite-plugin-pwa/client", "react", "react-dom"]
 
   },
   "include": ["src"],

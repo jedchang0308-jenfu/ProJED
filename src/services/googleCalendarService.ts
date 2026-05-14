@@ -128,7 +128,7 @@ function flattenAllItems(workspaces: Workspace[]): SyncableItem[] {
               items.push({
                   id: node.id,
                   title: node.title,
-                  type: node.nodeType === 'group' ? 'list' : 'card',
+                  type: node.nodeType || 'task',
                   status: node.status || 'todo',
                   startDate: node.startDate,
                   endDate: node.endDate,
@@ -179,11 +179,11 @@ async function apiCall<T = unknown>(
 
 function getTypeLabel(type: SyncableItem['type']): string {
   const labels: Record<SyncableItem['type'], string> = {
-    list: '列表',
-    card: '卡片',
-    checklist: '待辦',
+    group: 'Group',
+    task: 'Task',
+    milestone: 'Milestone',
   };
-  return labels[type] || '項目';
+  return labels[type] || 'Task';
 }
 
 function getStatusColorId(status: TaskStatus): string {

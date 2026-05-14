@@ -29,7 +29,9 @@ interface LongPressHandlers {
   onTouchMove: (e: React.TouchEvent) => void;
   onTouchEnd: (e: React.TouchEvent) => void;
   onTouchCancel: (e: React.TouchEvent) => void;
+  onMouseDownCapture: (e: React.MouseEvent) => void;
   onClickCapture: (e: React.MouseEvent) => void;
+  onContextMenuCapture: (e: React.MouseEvent) => void;
 }
 
 export function useLongPress(
@@ -117,17 +119,23 @@ export function useLongPress(
     [cancel]
   );
 
-  const onClickCapture = useCallback((e: React.MouseEvent) => {
+  const suppressCompatibilityEvent = useCallback((e: React.MouseEvent) => {
     if (!suppressNextClickRef.current) return;
-
-    suppressNextClickRef.current = false;
-    if (suppressClickTimerRef.current) {
-      clearTimeout(suppressClickTimerRef.current);
-      suppressClickTimerRef.current = null;
-    }
     e.preventDefault();
     e.stopPropagation();
   }, []);
 
-  return { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel, onClickCapture };
+  const onMouseDownCapture = suppressCompatibilityEvent;
+  const onClickCapture = suppressCompatibilityEvent;
+  const onContextMenuCapture = suppressCompatibilityEvent;
+
+  return {
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    onTouchCancel,
+    onMouseDownCapture,
+    onClickCapture,
+    onContextMenuCapture,
+  };
 }

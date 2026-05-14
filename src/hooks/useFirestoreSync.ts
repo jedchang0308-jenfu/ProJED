@@ -123,7 +123,7 @@ export function useFirestoreSync() {
             snapshot.docs.map(doc => ({
               ...(doc.data() as Board),
               id: doc.id,
-              lists: []
+              dependencies: []
             }))
           );
 
