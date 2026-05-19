@@ -727,7 +727,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       downloadAnchorNode.remove();
   },
 
-  importData: (jsonDataStr: string) => {
+  importData: async (jsonDataStr: string) => {
       try {
           const parsed = JSON.parse(jsonDataStr);
           
@@ -743,7 +743,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   alert('請先選擇一個看板，再進行匯入操作。');
                   return;
               }
-              // 跳過 workspace/board 建立，使用當前已存在的 Supabase workspace/board
+
+              alert('開始匯入並同步至雲端，請稍候...(資料量較大時可能需要數十秒，請勿關閉或重整網頁)');
+
               if (false) {
                   // 乾淨的 workspaces (不含 lists/cards/dependencies)
                   const cleanWorkspaces = oldWorkspaces.map((ws: any) => ({
@@ -777,7 +779,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                       boardId: currentBoardId,
                   }));
                   get().setNodes(nodesArray);
-                  nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray).catch(console.error);
+                  await nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray).catch(console.error);
               }
 
               // 3. 如果只有舊版格式 (未搬遷至 wbs 節點)，需要自動升級轉移
@@ -845,7 +847,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   });
 
                   get().setNodes(newNodes);
-                  nodeService.replaceAllByProject(currentWsId, currentBoardId, newNodes).catch(console.error);
+                  await nodeService.replaceAllByProject(currentWsId, currentBoardId, newNodes).catch(console.error);
               }
 
               // 4. Dependencies
