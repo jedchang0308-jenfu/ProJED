@@ -87,6 +87,24 @@ export const nodeService = {
     isSupabaseBackend
       ? supabaseNodeService.batchUpdate(workspaceId, boardId, updates)
       : firestoreNodeService.batchUpdate(workspaceId, boardId, updates),
+
+  /** Delete all nodes in a project, then create all provided nodes. For import/overwrite flows. */
+  replaceAllByProject: async (workspaceId: string, boardId: string, nodes: TaskNode[]): Promise<void> => {
+    if (isSupabaseBackend) {
+      // Delete existing dependencies first (FK constraint), then nodes
+      await supabaseDependencyService.deleteAllByProject(workspaceId, boardId);
+      await supabaseNodeService.deleteAllByProject(workspaceId, boardId);
+      // Insert new nodes sequentially to respect parent FK ordering
+      for (const node of nodes) {
+        await supabaseNodeService.upsert(workspaceId, boardId, node).catch(console.error);
+      }
+    } else {
+      // Firebase: create each node (Firestore uses set/merge semantics)
+      for (const node of nodes) {
+        await firestoreNodeService.create(workspaceId, boardId, node).catch(console.error);
+      }
+    }
+  },
 };
 
 export const dependencyService = {

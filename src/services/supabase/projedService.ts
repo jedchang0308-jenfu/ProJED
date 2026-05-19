@@ -380,6 +380,33 @@ export const supabaseNodeService = {
       )
     );
   },
+
+  deleteAllByProject: async (workspaceId: string, boardId: string): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { error } = await supabase
+      .from('wbs_items')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId);
+    assertNoError(error);
+  },
+
+  upsert: async (workspaceId: string, boardId: string, node: TaskNode): Promise<TaskNode> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const insert = await taskNodeToInsert(tenantId, projectId, node);
+    const { data, error } = await supabase
+      .from('wbs_items')
+      .upsert(insert)
+      .select()
+      .single();
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return the upserted WBS item.');
+    return mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId);
+  },
 };
 
 export const supabaseDependencyService = {
@@ -476,6 +503,18 @@ export const supabaseDependencyService = {
     const { error } = await (isUuid(dependencyId)
       ? query.eq('id', dependencyId)
       : query.eq('legacy_dependency_id', dependencyId));
+    assertNoError(error);
+  },
+
+  deleteAllByProject: async (workspaceId: string, boardId: string): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { error } = await supabase
+      .from('wbs_dependencies')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId);
     assertNoError(error);
   },
 };

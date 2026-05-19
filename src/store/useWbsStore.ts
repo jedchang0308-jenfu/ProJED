@@ -750,7 +750,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   // 寫入到本地端 Store
                   useBoardStore.setState({ workspaces: cleanWorkspaces });
                   
-                  // 同步到 Firestore
+                  // 同步到雲端 (restore = upsert)
                   cleanWorkspaces.forEach(ws => {
                       if (!ws.id) return;
                       workspaceService.restore(ws).catch(console.error);
@@ -762,14 +762,22 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   });
               }
 
-              // 2. 如果包含 WBS nodes (wbs-1.0 或 wbs-1.1 格式)，直接匯入
+              // 2. 如果包含 WBS nodes (wbs-1.0 或 wbs-1.1 格式)，以覆蓋方式匯入
               if (parsed.nodes) {
                   const nodesArray = Object.values(parsed.nodes) as TaskNode[];
                   get().setNodes(nodesArray);
+
+                  // 按 boardId 分組，對每個 board 進行完整替換（先刪後建）
+                  const nodesByBoard = new Map<string, { workspaceId: string; nodes: TaskNode[] }>();
                   nodesArray.forEach(n => {
-                      if (n.workspaceId && n.boardId) {
-                          nodeService.create(n.workspaceId, n.boardId, n).catch(console.error);
+                      if (!n.workspaceId || !n.boardId) return;
+                      if (!nodesByBoard.has(n.boardId)) {
+                          nodesByBoard.set(n.boardId, { workspaceId: n.workspaceId, nodes: [] });
                       }
+                      nodesByBoard.get(n.boardId)!.nodes.push(n);
+                  });
+                  nodesByBoard.forEach(({ workspaceId, nodes }, boardId) => {
+                      nodeService.replaceAllByProject(workspaceId, boardId, nodes).catch(console.error);
                   });
               }
 
@@ -839,10 +847,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   });
 
                   get().setNodes(newNodes);
+
+                  // 按 boardId 分組，對每個 board 進行完整替換
+                  const nodesByBoard = new Map<string, { workspaceId: string; nodes: TaskNode[] }>();
                   newNodes.forEach(n => {
-                     if (n.workspaceId && n.boardId) {
-                         nodeService.create(n.workspaceId, n.boardId, n).catch(console.error);
-                     }
+                      if (!n.workspaceId || !n.boardId) return;
+                      if (!nodesByBoard.has(n.boardId)) {
+                          nodesByBoard.set(n.boardId, { workspaceId: n.workspaceId, nodes: [] });
+                      }
+                      nodesByBoard.get(n.boardId)!.nodes.push(n);
+                  });
+                  nodesByBoard.forEach(({ workspaceId, nodes }, boardId) => {
+                      nodeService.replaceAllByProject(workspaceId, boardId, nodes).catch(console.error);
                   });
               }
 
