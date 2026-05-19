@@ -95,7 +95,26 @@ export const nodeService = {
       await supabaseDependencyService.deleteAllByProject(workspaceId, boardId);
       await supabaseNodeService.deleteAllByProject(workspaceId, boardId);
       // Insert new nodes sequentially to respect parent FK ordering
-      for (const node of nodes) {
+      // Sort nodes topologically (parents first)
+      const sortedNodes: TaskNode[] = [];
+      const visited = new Set<string>();
+      const nodeMap = new Map<string, TaskNode>();
+      nodes.forEach(n => nodeMap.set(n.id, n));
+
+      const visit = (nodeId: string) => {
+        if (visited.has(nodeId)) return;
+        const node = nodeMap.get(nodeId);
+        if (!node) return;
+        if (node.parentId) {
+          visit(node.parentId);
+        }
+        visited.add(nodeId);
+        sortedNodes.push(node);
+      };
+
+      nodes.forEach(n => visit(n.id));
+
+      for (const node of sortedNodes) {
         await supabaseNodeService.upsert(workspaceId, boardId, node).catch(console.error);
       }
     } else {
