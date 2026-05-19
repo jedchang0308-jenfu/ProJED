@@ -14,37 +14,21 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
   const user = useAuthStore(s => s.user);
   const userId = user?.uid;
   const activeBoardId = useBoardStore(s => s.activeBoardId);
+  const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const workspaces = useBoardStore(s => s.workspaces);
 
   const workspaceIds = useMemo(
     () => workspaces.map(ws => ws.id).join(','),
     [workspaces]
   );
-const activeWorkspace = useMemo(
+
+  const activeWorkspace = useMemo(
     () => workspaces.find(ws => ws.boards.some(board => board.id === activeBoardId)),
     [workspaces, activeBoardId]
   );
-  const activeWorkspaceId = activeWorkspace?.id;
+  const resolvedActiveWorkspaceId = activeWorkspace?.id ?? activeWorkspaceId;
 
-  const syncActiveSelection = (nextWorkspaces: typeof workspaces) => {
-    const boardStore = useBoardStore.getState();
-    const hasActiveWorkspace = nextWorkspaces.some(ws => ws.id === boardStore.activeWorkspaceId);
-    const nextActiveWorkspaceId = hasActiveWorkspace
-      ? boardStore.activeWorkspaceId
-      : nextWorkspaces[0]?.id ?? null;
-
-    const hasActiveBoard = nextWorkspaces.some(ws =>
-      ws.boards.some(board => board.id === boardStore.activeBoardId)
-    );
-    const nextActiveBoardId = hasActiveBoard ? boardStore.activeBoardId : null;
-
-    useBoardStore.setState({
-      workspaces: nextWorkspaces,
-      activeWorkspaceId: nextActiveWorkspaceId,
-      activeBoardId: nextActiveBoardId,
-    });
-  };
-
+  // ── Effect 1: Load workspaces ──────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
 
@@ -64,7 +48,29 @@ const activeWorkspace = useMemo(
     const loadWorkspaces = async () => {
       try {
         const nextWorkspaces = await supabaseWorkspaceService.list();
-        if (!cancelled) syncActiveSelection(nextWorkspaces);
+        if (cancelled) return;
+
+        const boardStore = useBoardStore.getState();
+        const storedWsId = boardStore.activeWorkspaceId;
+        const storedBoardId = boardStore.activeBoardId;
+
+        // Preserve the stored active workspace if it still exists
+        const matchedWorkspace = nextWorkspaces.find(ws => ws.id === storedWsId);
+        const nextActiveWorkspaceId = matchedWorkspace
+          ? storedWsId
+          : nextWorkspaces[0]?.id ?? null;
+
+        // Preserve the stored active board if it still exists in any workspace
+        const boardExists = nextWorkspaces.some(ws =>
+          ws.boards.some(board => board.id === storedBoardId)
+        );
+        const nextActiveBoardId = boardExists ? storedBoardId : null;
+
+        useBoardStore.setState({
+          workspaces: nextWorkspaces,
+          activeWorkspaceId: nextActiveWorkspaceId,
+          activeBoardId: nextActiveBoardId,
+        });
       } catch (error) {
         console.error('[useSupabaseSync] Workspace load error:', error);
       }
@@ -84,16 +90,17 @@ const activeWorkspace = useMemo(
     };
   }, [enabled, userId]);
 
+  // ── Effect 2: Load board data (nodes + dependencies) ───────────────
   useEffect(() => {
     if (!enabled || !isSupabaseConfigured || !userId || !activeBoardId) return;
-    if (!activeWorkspaceId) return;
+    if (!resolvedActiveWorkspaceId) return;
 
     let cancelled = false;
     const loadBoardData = async () => {
       try {
         const [nodes, dependencies] = await Promise.all([
-          supabaseNodeService.listByProject(activeWorkspaceId, activeBoardId),
-          supabaseDependencyService.listByProject(activeWorkspaceId, activeBoardId),
+          supabaseNodeService.listByProject(resolvedActiveWorkspaceId, activeBoardId),
+          supabaseDependencyService.listByProject(resolvedActiveWorkspaceId, activeBoardId),
         ]);
         if (cancelled) return;
         useWbsStore.getState().setNodes(nodes);
@@ -133,5 +140,5 @@ const activeWorkspace = useMemo(
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [enabled, userId, activeBoardId, activeWorkspaceId, workspaceIds]);
+  }, [enabled, userId, activeBoardId, resolvedActiveWorkspaceId, workspaceIds]);
 }
