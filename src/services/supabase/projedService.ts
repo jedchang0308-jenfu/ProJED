@@ -59,12 +59,12 @@ const mapProjectToBoard = (project: ProjectRow): Board => ({
   createdAt: toTimestamp(project.created_at),
 });
 
-const mapWbsItemToTaskNode = (item: WbsItemRow, nodeIdByDbId: Map<string, string> = new Map()): TaskNode => {
+const mapWbsItemToTaskNode = (item: WbsItemRow, nodeIdByDbId: Map<string, string> = new Map(), requestedWorkspaceId?: string, requestedBoardId?: string): TaskNode => {
   const metadata = item.metadata as Record<string, any> | null;
   return {
     id: legacyOrId(item.id, item.legacy_node_id),
-    workspaceId: metadata?.firebaseWorkspaceId || item.tenant_id,
-    boardId: metadata?.firebaseBoardId || item.project_id,
+    workspaceId: requestedWorkspaceId || metadata?.firebaseWorkspaceId || item.tenant_id,
+    boardId: requestedBoardId || metadata?.firebaseBoardId || item.project_id,
     parentId: item.parent_id ? nodeIdByDbId.get(item.parent_id) ?? item.parent_id : null,
     title: item.title,
   detailNotes: Array.isArray(item.detail_notes) ? (item.detail_notes as unknown as TaskNode['detailNotes']) : undefined,
@@ -307,7 +307,7 @@ export const supabaseNodeService = {
       .order('sort_order', { ascending: true });
     assertNoError(error);
     const nodeIdByDbId = new Map((data ?? []).map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
-    return (data ?? []).map(item => mapWbsItemToTaskNode(item, nodeIdByDbId));
+    return (data ?? []).map(item => mapWbsItemToTaskNode(item, nodeIdByDbId, workspaceId, boardId));
   },
 
   create: async (workspaceId: string, boardId: string, node: TaskNode): Promise<TaskNode> => {
@@ -322,7 +322,7 @@ export const supabaseNodeService = {
       .single();
     assertNoError(error);
     if (!data) throw new Error('Supabase did not return the created WBS item.');
-    return mapWbsItemToTaskNode(data);
+    return mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId);
   },
 
   update: async (workspaceId: string, boardId: string, nodeId: string, updates: Partial<TaskNode>): Promise<void> => {
@@ -479,4 +479,9 @@ export const supabaseDependencyService = {
     assertNoError(error);
   },
 };
+
+
+
+
+
 
