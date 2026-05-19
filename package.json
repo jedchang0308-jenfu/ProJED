@@ -7,12 +7,24 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "verify:source": "npm run lint && tsc --noEmit && npm run build && npm run verify:supabase:static",
+    "verify:supabase:static": "node scripts/verify-supabase-static.mjs",
+    "verify:supabase:p5-crud": "node scripts/p5-supabase-crud-smoke.mjs",
+    "verify:supabase:p6-readiness": "node scripts/p6-supabase-readiness.mjs",
+    "verify:supabase:p7-secret-hygiene": "node scripts/p7-secret-hygiene.mjs",
+    "verify:supabase:p7-release-gate": "node scripts/p7-release-gate.mjs",
+    "verify:supabase:p8-preflight": "node scripts/p8-preflight.mjs",
+    "verify:supabase:p8-browser-cleanup": "node scripts/p8-browser-smoke-cleanup.mjs",
+    "verify:supabase:p8-credential-rotation": "node scripts/p8-credential-rotation-check.mjs",
+    "verify:supabase:p8-production-readiness": "node scripts/p8-production-readiness.mjs",
+    "rehearse:supabase:import": "node scripts/rehearse-supabase-import.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/vite": "^4.1.18",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.19",
@@ -37,6 +49,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "^6.0.2",
+    "typescript-eslint": "^8.59.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0"
   }

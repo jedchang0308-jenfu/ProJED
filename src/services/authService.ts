@@ -1,14 +1,18 @@
 import { auth, db } from './firebase';
-import { 
-  GoogleAuthProvider, 
+import {
+  GoogleAuthProvider,
   getRedirectResult,
-  signInWithPopup, 
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User 
+  type User as FirebaseUser,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { FirestoreUser } from '../types';
+import { isSupabaseBackend } from './dataBackend';
+import { isSupabaseConfigured, supabase } from './supabase/client';
+
+type SupabaseUser = NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']>;
 
 export const isEmbeddedAuthBlocked = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -16,7 +20,7 @@ export const isEmbeddedAuthBlocked = (): boolean => {
   const ua = navigator.userAgent || '';
   const isStandalone =
     window.matchMedia?.('(display-mode: standalone)').matches ||
-    (navigator as any).standalone === true;
+    (navigator as { standalone?: boolean }).standalone === true;
   const isInAppBrowser =
     /FBAN|FBAV|Instagram|Line|MicroMessenger|Threads/i.test(ua);
 
@@ -29,7 +33,7 @@ const getGoogleProvider = () => {
   return provider;
 };
 
-const ensureFirestoreUser = async (user: User): Promise<FirestoreUser> => {
+const ensureFirestoreUser = async (user: FirebaseUser): Promise<FirestoreUser> => {
   const userRef = doc(db, 'users', user.uid);
   const docSnap = await getDoc(userRef);
 
@@ -37,7 +41,7 @@ const ensureFirestoreUser = async (user: User): Promise<FirestoreUser> => {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   };
 
   if (!docSnap.exists()) {
@@ -47,10 +51,66 @@ const ensureFirestoreUser = async (user: User): Promise<FirestoreUser> => {
   return firestoreUser;
 };
 
+const mapSupabaseUser = (user: SupabaseUser): FirestoreUser => ({
+  uid: user.id,
+  email: user.email ?? null,
+  displayName:
+    typeof user.user_metadata?.full_name === 'string'
+      ? user.user_metadata.full_name
+      : typeof user.user_metadata?.name === 'string'
+        ? user.user_metadata.name
+        : null,
+  createdAt: user.created_at ? new Date(user.created_at).getTime() : undefined,
+});
+
+const ensureSupabaseProfile = async (user: SupabaseUser): Promise<FirestoreUser> => {
+  const mappedUser = mapSupabaseUser(user);
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({
+      id: mappedUser.uid,
+      email: mappedUser.email,
+      display_name: mappedUser.displayName,
+    });
+  if (error) throw new Error(error.message);
+  return mappedUser;
+};
+
+const requireSupabaseAuth = () => {
+  if (!isSupabaseConfigured) {
+    throw new Error('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+  }
+};
+
+const getSupabaseAuthRedirectUrl = () => {
+  const configuredUrl = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL as string | undefined;
+  if (configuredUrl?.trim()) return configuredUrl;
+  return `${window.location.origin}${window.location.pathname}`;
+};
+
 export const authService = {
-  signInWithGoogle: async (): Promise<FirestoreUser> => {
+  signInWithGoogle: async (): Promise<FirestoreUser | null> => {
     if (isEmbeddedAuthBlocked()) {
-      throw new Error('Google 登入需要使用 Chrome 或 Safari 瀏覽器開啟，請不要從 PWA、LINE、FB 或 IG 內建瀏覽器登入。');
+      throw new Error('Google sign-in is blocked in this embedded browser. Open ProJED in Chrome or Safari.');
+    }
+
+    if (isSupabaseBackend) {
+      requireSupabaseAuth();
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.user) {
+        return ensureSupabaseProfile(sessionData.session.user);
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: getSupabaseAuthRedirectUrl(),
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (error) throw new Error(error.message);
+      return null;
     }
 
     const provider = getGoogleProvider();
@@ -59,17 +119,55 @@ export const authService = {
   },
 
   handleRedirectResult: async (): Promise<FirestoreUser | null> => {
+    if (isSupabaseBackend) {
+      if (!isSupabaseConfigured) return null;
+
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw new Error(error.message);
+      return data.session?.user ? ensureSupabaseProfile(data.session.user) : null;
+    }
+
     const result = await getRedirectResult(auth);
     if (!result?.user) return null;
     return ensureFirestoreUser(result.user);
   },
-  
+
   signOut: async (): Promise<void> => {
+    if (isSupabaseBackend) {
+      requireSupabaseAuth();
+
+      const { error } = await supabase.auth.signOut();
+      if (error) throw new Error(error.message);
+      return;
+    }
+
     await firebaseSignOut(auth);
   },
-  
+
   onAuthStateChanged: (callback: (user: FirestoreUser | null) => void) => {
-    return onAuthStateChanged(auth, async (firebaseUser: User | null) => {
+    if (isSupabaseBackend) {
+      if (!isSupabaseConfigured) {
+        callback(null);
+        return () => undefined;
+      }
+
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!session?.user) {
+          callback(null);
+          return;
+        }
+
+        ensureSupabaseProfile(session.user)
+          .then(callback)
+          .catch(error => {
+            console.error('[authService] Supabase profile sync failed:', error);
+            callback(mapSupabaseUser(session.user));
+          });
+      });
+      return () => data.subscription.unsubscribe();
+    }
+
+    return onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         callback({
           uid: firebaseUser.uid,
@@ -80,5 +178,5 @@ export const authService = {
         callback(null);
       }
     });
-  }
+  },
 };

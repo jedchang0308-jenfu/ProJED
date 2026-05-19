@@ -16,6 +16,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
     "allowJs": true,
 
     /* --- 輸出控制 (Vite 負責打包，TS 只做型別檢查) --- */

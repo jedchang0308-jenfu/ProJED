@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { create } from 'zustand';
 import useAuthStore from './useAuthStore';
-import { workspaceService, boardService } from '../services/firestoreService';
+import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
 
 // ===== Helper: 取得當前登入使用者的 uid =====
@@ -107,6 +107,7 @@ const useBoardStore = create<BoardStore>()(
         addWorkspace: (title) => {
             const userId = getUserId();
             const tempId = 'ws_' + Date.now();
+            safeSetItem(WS_STORAGE_KEY, tempId);
             set((state) => ({
                 workspaces: [...state.workspaces, {
                     id: tempId,
@@ -116,9 +117,22 @@ const useBoardStore = create<BoardStore>()(
                     members: [userId],
                     order: Date.now(),
                     createdAt: Date.now()
-                }]
+                }],
+                activeWorkspaceId: tempId,
             }));
-            workspaceService.create(userId, title).catch(console.error);
+            workspaceService.create(userId, title)
+                .then((createdWorkspace) => {
+                    set((state) => ({
+                        workspaces: state.workspaces.map(ws =>
+                            ws.id === tempId ? { ...createdWorkspace, boards: ws.boards } : ws
+                        ),
+                        activeWorkspaceId: state.activeWorkspaceId === tempId ? createdWorkspace.id : state.activeWorkspaceId,
+                    }));
+                    if (get().activeWorkspaceId === createdWorkspace.id) {
+                        safeSetItem(WS_STORAGE_KEY, createdWorkspace.id);
+                    }
+                })
+                .catch(console.error);
         },
 
         removeWorkspace: (wsId) => {
@@ -237,10 +251,19 @@ const useBoardStore = create<BoardStore>()(
 
         // ===== Board CRUD =====
         addBoard: (workspaceId, boardName) => {
+            const targetWorkspaceId = workspaceId || get().activeWorkspaceId || get().workspaces[0]?.id;
+            if (!targetWorkspaceId) {
+                console.error('[useBoardStore] Cannot add board: no active workspace.');
+                return;
+            }
+
             const tempId = 'b_' + Date.now();
+            safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
+            safeSetItem(BOARD_STORAGE_KEY, tempId);
+            safeSetItem(VIEW_STORAGE_KEY, 'board');
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
-                    if (ws.id !== workspaceId) return ws;
+                    if (ws.id !== targetWorkspaceId) return ws;
                     return {
                         ...ws,
                         boards: [...ws.boards, {
@@ -251,9 +274,30 @@ const useBoardStore = create<BoardStore>()(
                             createdAt: Date.now()
                         }]
                     };
-                })
+                }),
+                activeWorkspaceId: targetWorkspaceId,
+                activeBoardId: tempId,
+                currentView: 'board',
             }));
-            boardService.create(workspaceId, boardName).catch(console.error);
+            boardService.create(targetWorkspaceId, boardName)
+                .then((createdBoard) => {
+                    set((state) => ({
+                        workspaces: state.workspaces.map(ws => {
+                            if (ws.id !== targetWorkspaceId) return ws;
+                            return {
+                                ...ws,
+                                boards: ws.boards.map(board =>
+                                    board.id === tempId ? createdBoard : board
+                                ),
+                            };
+                        }),
+                        activeBoardId: state.activeBoardId === tempId ? createdBoard.id : state.activeBoardId,
+                    }));
+                    if (get().activeBoardId === createdBoard.id) {
+                        safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
+                    }
+                })
+                .catch(console.error);
         },
 
         removeBoard: (wsId, bId) => {

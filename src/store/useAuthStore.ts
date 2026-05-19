@@ -11,7 +11,7 @@ const useAuthStore = create<AuthStore>((set) => ({
     try {
       set({ loading: true, error: null });
       const user = await authService.signInWithGoogle();
-      set({ user, loading: false });
+      set({ user: user ?? null, loading: false });
     } catch (error: any) {
       set({ error: error.message, loading: false });
     }

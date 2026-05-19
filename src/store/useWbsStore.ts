@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { TaskNode, KanbanViewConfig, TaskStatus, Dependency } from '../types';
-import { nodeService, dependencyService, workspaceService, boardService } from '../services/firestoreService';
+import { nodeService, dependencyService, workspaceService, boardService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 

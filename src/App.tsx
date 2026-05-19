@@ -14,7 +14,8 @@
 import { useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
-import { useFirestoreSync } from './hooks/useFirestoreSync';
+import { useDataSync } from './hooks/useDataSync';
+import { dataBackend } from './services/dataBackend';
 import { useCalendarSync } from './hooks/useCalendarSync';
 import { migrateLocalStorageToFirestore } from './utils/migration';
 import AuthGate from './components/AuthGate';
@@ -43,8 +44,8 @@ function AppContent() {
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
 
-  // 啟動 Firestore 即時同步監聽
-  useFirestoreSync();
+  // 啟動目前資料後端的同步監聽
+  useDataSync();
 
   // 啟動 Google Calendar 同步初始化（準備 OAuth 工具，不會自動彈窗）
   useCalendarSync({ autoInit: true });
@@ -60,7 +61,7 @@ function AppContent() {
   // 若 localStorage 有舊資料就寫入 Firestore，
   // onSnapshot 會自動接收新寫入的文件並更新畫面。
   useEffect(() => {
-    if (!user || migrationDone.current) return;
+    if (!user || migrationDone.current || dataBackend !== 'firebase') return;
     migrationDone.current = true;
 
     const hasLegacyStorage = localStorage.getItem('projed-storage') || localStorage.getItem('projed_data');

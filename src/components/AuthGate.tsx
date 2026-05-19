@@ -14,6 +14,7 @@ import React, { useState, useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import { runAutoMigration } from '../utils/autoMigration';
 import { isEmbeddedAuthBlocked } from '../services/authService';
+import { isSupabaseBackend } from '../services/dataBackend';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -43,6 +44,11 @@ export default function AuthGate({ children }: AuthGateProps) {
     }
 
     if (migrationState !== 'idle') return;
+
+    if (isSupabaseBackend) {
+      setMigrationState('done');
+      return;
+    }
 
     setMigrationState('migrating');
     runAutoMigration(user.uid)

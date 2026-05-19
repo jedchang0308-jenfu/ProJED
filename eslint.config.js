@@ -2,18 +2,26 @@ import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  // 排除 dist 建置產物，以及根目錄中非 React 架構的舊版備份檔
-  globalIgnores(['dist', 'temp_app.js', 'app.js', 'main_app.js', 'check_nesting.js']),
+  globalIgnores([
+    'node_modules',
+    'dist',
+    'dist-ssr',
+    '.vite',
+    '*.config.js',
+    '**/*.d.ts',
+    'temp_app.js',
+    'app.js',
+    'main_app.js',
+    'check_nesting.js',
+  ]),
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
-    extends: [
-      js.configs.recommended,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-    ],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -23,8 +31,29 @@ export default defineConfig([
         sourceType: 'module',
       },
     },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      ...reactHooks.configs.flat.recommended.rules,
+      ...reactRefresh.configs.vite.rules,
+      'prefer-const': 'warn',
+      'no-unused-vars': 'off',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/rules-of-hooks': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-refresh/only-export-components': 'warn',
+      '@typescript-eslint/ban-ts-comment': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'warn',
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ])

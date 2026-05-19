@@ -1,18 +1,16 @@
 # ProJED
 
-ProJED 是以 WBS 樹狀任務為核心，整合清單、看板、甘特圖與日曆的跨平台專案管理工具。
+ProJED is a WBS/project planning application.
 
-## 給 AI 助手的開發指令
+AI-facing project context, architecture rules, validation plans, and Supabase/Gemini migration notes are consolidated in `.ai-docs/`.
 
-開發前必須先讀取 `.ai-docs/` 下所有文件，並遵守其中的系統脈絡、架構規則與驗證計畫：
+Start with:
 
-- `.ai-docs/01_SYSTEM_CONTEXT.md`
-- `.ai-docs/02_ARCHITECTURE_RULES.md`
-- `.ai-docs/03_VALIDATION_PLAN.md`
+- `.ai-docs/00_DOCS_INDEX.md`
+- `.ai-docs/11_SUPABASE_GEMINI_MIGRATION_TASK.md`
+- `.ai-docs/10_P8_PRODUCTION_CUTOVER_EXECUTION.md`
 
-若程式碼現況與文件衝突，先回報衝突點，再採取最小風險修正。
-
-## 人類開發者啟動指南
+## Development
 
 ```bash
 npm install
@@ -21,3 +19,25 @@ npm run build
 npm run preview
 npm run lint
 ```
+
+## Supabase Migration
+
+Current Supabase/PostgreSQL migration references:
+
+- `supabase/migrations/202605140001_initial_projed_schema.sql`
+- `.ai-docs/04_SUPABASE_MIGRATION_PLAN.md`
+- `.ai-docs/10_P8_PRODUCTION_CUTOVER_EXECUTION.md`
+- `.ai-docs/11_SUPABASE_GEMINI_MIGRATION_TASK.md`
+- `src/services/supabase/`
+
+Historical phase notes are archived under `.ai-docs/archive/`.
+
+Use `VITE_DATA_BACKEND=firebase` for the current safe default, or `VITE_DATA_BACKEND=supabase` to exercise the Supabase adapter. Supabase mode also requires `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_AUTH_REDIRECT_URL`, the P3 migration applied, and an auth path compatible with RLS.
+
+Browser diagnostics must stay disabled unless running the P8 manual OAuth smoke:
+
+```bash
+VITE_ENABLE_SUPABASE_DIAGNOSTICS=true
+```
+
+Production Supabase cutover remains blocked until P8 production readiness passes.

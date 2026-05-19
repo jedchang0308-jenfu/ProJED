@@ -26,7 +26,8 @@ function sortByOrder<T extends { order?: number }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
-export function useFirestoreSync() {
+export function useFirestoreSync(options: { enabled?: boolean } = {}) {
+  const enabled = options.enabled ?? true;
   const user = useAuthStore(s => s.user);
   const activeBoardId = useBoardStore(s => s.activeBoardId);
   const workspaces = useBoardStore(s => s.workspaces);
@@ -55,6 +56,14 @@ export function useFirestoreSync() {
   // 1. 監聽 Workspaces
   // =============================
   useEffect(() => {
+    if (!enabled) {
+      useBoardStore.setState({ workspaces: [] });
+      unsubWorkspaces.current?.();
+      unsubBoardsMap.current.forEach(unsub => unsub());
+      unsubBoardsMap.current.clear();
+      return;
+    }
+
     if (!user) {
       useBoardStore.setState({ workspaces: [] });
       // 清除所有 boards 監聽
@@ -92,7 +101,7 @@ export function useFirestoreSync() {
     return () => {
       unsubWorkspaces.current?.();
     };
-  }, [user?.uid]);
+  }, [enabled, user?.uid]);
 
   // =============================
   // 2. 監聽 Boards — 為每個 workspace 建立獨立監聽器
@@ -101,6 +110,12 @@ export function useFirestoreSync() {
   //    當 workspaces 陣列變動時（新增/刪除），動態建立/移除監聽器。
   // =============================
   useEffect(() => {
+    if (!enabled) {
+      unsubBoardsMap.current.forEach(unsub => unsub());
+      unsubBoardsMap.current.clear();
+      return;
+    }
+
     const currentWsIds = new Set(workspaces.map(ws => ws.id));
     const subscribedWsIds = new Set(unsubBoardsMap.current.keys());
 
@@ -155,7 +170,7 @@ export function useFirestoreSync() {
       unsubBoardsMap.current.forEach(unsub => unsub());
       unsubBoardsMap.current.clear();
     };
-  }, [workspaceIds]); // 只在 workspace ID 清單變動時重新評估（改用穩定 useMemo 變數）
+  }, [enabled, workspaceIds]); // 只在 workspace ID 清單變動時重新評估（改用穩定 useMemo 變數）
 
   // =============================
   // 3. 監聯 Lists / Cards / Dependencies（進入看板時）
@@ -164,6 +179,9 @@ export function useFirestoreSync() {
   // =============================
   useEffect(() => {
     unsubDeps.current?.();
+    unsubNodes.current?.();
+
+    if (!enabled) return;
 
     if (!activeBoardId) return;
 
@@ -222,6 +240,6 @@ export function useFirestoreSync() {
       unsubDeps.current?.();
       unsubNodes.current?.();
     };
-  }, [activeBoardId, workspaceIds, isBoardReady]); // 使用頂層穩定變數，避免 dependency array 內即時計算觸發 Error #310
+  }, [enabled, activeBoardId, workspaceIds, isBoardReady]); // 使用頂層穩定變數，避免 dependency array 內即時計算觸發 Error #310
 }
 
