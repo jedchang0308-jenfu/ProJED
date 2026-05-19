@@ -735,9 +735,16 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           const oldWorkspaces = parsed.workspaces || parsed?.state?.workspaces;
 
           if ((parsed.version === 'wbs-1.1' || parsed.version === 'wbs-1.0' || parsed.version === '2.0' || !parsed.version) && (parsed.nodes || oldWorkspaces)) {
-              
-              // 1. 如果包含 workspaces，覆寫 useBoardStore 並同步至雲端
-              if (oldWorkspaces && Array.isArray(oldWorkspaces)) {
+              // 取得目前 Supabase 中的 workspace/board 作為匯入目標
+              const boardStore = useBoardStore.getState();
+              const currentWsId = boardStore.activeWorkspaceId;
+              const currentBoardId = boardStore.activeBoardId;
+              if (!currentWsId || !currentBoardId) {
+                  alert('請先選擇一個看板，再進行匯入操作。');
+                  return;
+              }
+              // 跳過 workspace/board 建立，使用當前已存在的 Supabase workspace/board
+              if (false) {
                   // 乾淨的 workspaces (不含 lists/cards/dependencies)
                   const cleanWorkspaces = oldWorkspaces.map((ws: any) => ({
                       ...ws,
@@ -762,39 +769,30 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   });
               }
 
-              // 2. 如果包含 WBS nodes (wbs-1.0 或 wbs-1.1 格式)，以覆蓋方式匯入
+              // 2. 如果包含 WBS nodes (wbs-1.0 或 wbs-1.1 格式)，將所有節點重新指向當前看板
               if (parsed.nodes) {
-                  const nodesArray = Object.values(parsed.nodes) as TaskNode[];
+                  const nodesArray = (Object.values(parsed.nodes) as TaskNode[]).map(n => ({
+                      ...n,
+                      workspaceId: currentWsId,
+                      boardId: currentBoardId,
+                  }));
                   get().setNodes(nodesArray);
-
-                  // 按 boardId 分組，對每個 board 進行完整替換（先刪後建）
-                  const nodesByBoard = new Map<string, { workspaceId: string; nodes: TaskNode[] }>();
-                  nodesArray.forEach(n => {
-                      if (!n.workspaceId || !n.boardId) return;
-                      if (!nodesByBoard.has(n.boardId)) {
-                          nodesByBoard.set(n.boardId, { workspaceId: n.workspaceId, nodes: [] });
-                      }
-                      nodesByBoard.get(n.boardId)!.nodes.push(n);
-                  });
-                  nodesByBoard.forEach(({ workspaceId, nodes }, boardId) => {
-                      nodeService.replaceAllByProject(workspaceId, boardId, nodes).catch(console.error);
-                  });
+                  nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray).catch(console.error);
               }
 
               // 3. 如果只有舊版格式 (未搬遷至 wbs 節點)，需要自動升級轉移
               if (!parsed.nodes && oldWorkspaces) {
                   const newNodes: TaskNode[] = [];
                   oldWorkspaces.forEach((ws: any) => {
-                      const wsId = ws.id;
                       (ws.boards || []).forEach((board: any) => {
-                          const bId = board.id;
+
                           
                           (board.lists || []).forEach((list: any, listIndex: number) => {
                               const listNodeId = `list_${list.id}`;
                               newNodes.push({
                                   id: listNodeId,
-                                  workspaceId: wsId,
-                                  boardId: bId,
+                                  workspaceId: currentWsId,
+                                  boardId: currentBoardId,
                                   parentId: null,
                                   title: list.title || '無標題列表',
                                   status: list.status || 'todo',
@@ -808,8 +806,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                                   const cardNodeId = `card_${card.id}`;
                                   newNodes.push({
                                       id: cardNodeId,
-                                      workspaceId: wsId,
-                                      boardId: bId,
+                                      workspaceId: currentWsId,
+                                      boardId: currentBoardId,
                                       parentId: listNodeId,
                                       title: card.title || '無標題卡片',
                                       description: card.notes || '',
@@ -827,8 +825,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                                       (cl.items || []).forEach((cli: any, cliIndex: number) => {
                                           newNodes.push({
                                               id: `cli_${card.id}_${cli.id}`,
-                                              workspaceId: wsId,
-                                              boardId: bId,
+                                              workspaceId: currentWsId,
+                                              boardId: currentBoardId,
                                               parentId: cardNodeId,
                                               title: cli.title || cli.text || '',
                                               status: (cli.status || (cli.completed ? 'completed' : 'todo')),
@@ -847,25 +845,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   });
 
                   get().setNodes(newNodes);
-
-                  // 按 boardId 分組，對每個 board 進行完整替換
-                  const nodesByBoard = new Map<string, { workspaceId: string; nodes: TaskNode[] }>();
-                  newNodes.forEach(n => {
-                      if (!n.workspaceId || !n.boardId) return;
-                      if (!nodesByBoard.has(n.boardId)) {
-                          nodesByBoard.set(n.boardId, { workspaceId: n.workspaceId, nodes: [] });
-                      }
-                      nodesByBoard.get(n.boardId)!.nodes.push(n);
-                  });
-                  nodesByBoard.forEach(({ workspaceId, nodes }, boardId) => {
-                      nodeService.replaceAllByProject(workspaceId, boardId, nodes).catch(console.error);
-                  });
+                  nodeService.replaceAllByProject(currentWsId, currentBoardId, newNodes).catch(console.error);
               }
 
               // 4. Dependencies
               if (parsed.dependencies && Array.isArray(parsed.dependencies)) {
                   set({ dependencies: parsed.dependencies });
-                  // Firestore write for dependencies? Usually handled dynamically or kept locally
               }
 
               alert('ProJED 資料已成功匯入並同步至雲端！');
