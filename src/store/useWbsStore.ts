@@ -746,7 +746,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
               alert('開始匯入並同步至雲端，請稍候...(資料量較大時可能需要數十秒，請勿關閉或重整網頁)');
 
-              if (false) {
+              const shouldRestoreLegacyWorkspaces = false;
+              if (shouldRestoreLegacyWorkspaces) {
                   // 乾淨的 workspaces (不含 lists/cards/dependencies)
                   const cleanWorkspaces = oldWorkspaces.map((ws: any) => ({
                       ...ws,
@@ -760,7 +761,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   useBoardStore.setState({ workspaces: cleanWorkspaces });
                   
                   // 同步到雲端 (restore = upsert)
-                  cleanWorkspaces.forEach(ws => {
+                  cleanWorkspaces.forEach((ws: any) => {
                       if (!ws.id) return;
                       workspaceService.restore(ws).catch(console.error);
                       

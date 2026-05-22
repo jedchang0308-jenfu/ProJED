@@ -5,9 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:test": "vite --mode test --host 127.0.0.1 --port 4173",
+    "dev:p9": "vite --mode p9 --host 127.0.0.1 --port 4173",
     "build": "vite build",
+    "build:test": "vite build --mode test",
+    "build:p9": "vite build --mode p9",
     "lint": "eslint .",
-    "verify:source": "npm run lint && tsc --noEmit && npm run build && npm run verify:supabase:static",
+    "verify:test-env": "node scripts/test-environment-check.mjs",
+    "verify:source": "npm run lint && tsc --noEmit && npm run build && npm run verify:supabase:static && npm run verify:p9-edge-function",
+    "verify:p9-edge-function": "node scripts/verify-p9-edge-function.mjs",
+    "verify:p9-rag-local": "node scripts/verify-p9-rag-local.mjs",
     "verify:supabase:static": "node scripts/verify-supabase-static.mjs",
     "verify:supabase:p5-crud": "node scripts/p5-supabase-crud-smoke.mjs",
     "verify:supabase:p6-readiness": "node scripts/p6-supabase-readiness.mjs",
@@ -18,7 +25,10 @@
     "verify:supabase:p8-credential-rotation": "node scripts/p8-credential-rotation-check.mjs",
     "verify:supabase:p8-production-readiness": "node scripts/p8-production-readiness.mjs",
     "rehearse:supabase:import": "node scripts/rehearse-supabase-import.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:test": "vite preview --mode test --host 127.0.0.1 --port 4173",
+    "preview:p9": "vite preview --mode p9 --host 127.0.0.1 --port 4173",
+    "seed:p9-rag": "node scripts/seed-p9-rag.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

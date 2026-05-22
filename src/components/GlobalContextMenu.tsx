@@ -40,12 +40,21 @@ export const GlobalContextMenu: React.FC = () => {
       if (event.key === 'Escape') close();
     };
 
+    const handleOpenTaskDetails = (event: Event) => {
+      const customEvent = event as CustomEvent<{ taskId: string }>;
+      if (customEvent.detail?.taskId) {
+        setDetailsNodeId(customEvent.detail.taskId);
+      }
+    };
+
     window.addEventListener('scroll', close, true);
     window.addEventListener('keydown', handleKey);
+    document.addEventListener('open-task-details', handleOpenTaskDetails);
 
     return () => {
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('keydown', handleKey);
+      document.removeEventListener('open-task-details', handleOpenTaskDetails);
     };
   }, [contextMenuState, setContextMenuState]);
 

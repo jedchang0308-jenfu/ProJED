@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { requireFirebaseDb } from './firebase';
 import { 
   collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField
 } from 'firebase/firestore';
@@ -22,6 +22,7 @@ const sanitizeUpdates = (updates: any) => {
 // ==========================
 export const workspaceService = {
   create: async (userId: string, title?: string): Promise<Workspace> => {
+    const db = requireFirebaseDb();
     const wsRef = doc(collection(db, 'workspaces'));
     const ws: Workspace = {
       id: wsRef.id,
@@ -36,9 +37,11 @@ export const workspaceService = {
     return ws;
   },
   restore: async (ws: Workspace) => {
+    const db = requireFirebaseDb();
     await setDoc(doc(db, 'workspaces', ws.id), ws);
   },
   update: async (wsId: string, updates: Partial<Workspace>) => {
+    const db = requireFirebaseDb();
     // Cannot update lists/boards arrays directly if they are not in the document,
     // but Workspace type includes boards: Board[]. Wait, if we use flatten subcollections,
     // we should strip boards before saving.
@@ -48,6 +51,7 @@ export const workspaceService = {
     }
   },
   delete: async (wsId: string) => {
+    const db = requireFirebaseDb();
     // Note: This only deletes the parent doc. Subcollections must be handled via Cloud Functions or recursive delete in a real production app.
     await deleteDoc(doc(db, 'workspaces', wsId));
   }
@@ -58,6 +62,7 @@ export const workspaceService = {
 // ==========================
 export const boardService = {
   create: async (wsId: string, title?: string): Promise<Board> => {
+    const db = requireFirebaseDb();
     const boardRef = doc(collection(db, 'workspaces', wsId, 'boards'));
     const board: Board = {
       id: boardRef.id,
@@ -72,16 +77,19 @@ export const boardService = {
     return board;
   },
   restore: async (wsId: string, board: Board) => {
+    const db = requireFirebaseDb();
     const { dependencies, ...docData } = board as any;
     await setDoc(doc(db, 'workspaces', wsId, 'boards', board.id), docData);
   },
   update: async (wsId: string, bId: string, updates: Partial<Board>) => {
+    const db = requireFirebaseDb();
     const { dependencies, ...docData } = updates as any;
     if (Object.keys(docData).length > 0) {
       await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId), sanitizeUpdates(docData));
     }
   },
   delete: async (wsId: string, bId: string) => {
+    const db = requireFirebaseDb();
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId));
   }
 };
@@ -91,19 +99,23 @@ export const boardService = {
 // ==========================
 export const dependencyService = {
   create: async (wsId: string, bId: string, dependency: Omit<Dependency, 'id'>): Promise<Dependency> => {
+    const db = requireFirebaseDb();
     const depRef = doc(collection(db, 'workspaces', wsId, 'boards', bId, 'dependencies'));
     const dep = { ...dependency, id: depRef.id };
     await setDoc(depRef, dep);
     return dep;
   },
   set: async (wsId: string, bId: string, dependency: Dependency): Promise<Dependency> => {
+    const db = requireFirebaseDb();
     await setDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', dependency.id), dependency);
     return dependency;
   },
   update: async (wsId: string, bId: string, depId: string, updates: Partial<Dependency>) => {
+    const db = requireFirebaseDb();
     await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId), sanitizeUpdates(updates));
   },
   delete: async (wsId: string, bId: string, depId: string) => {
+    const db = requireFirebaseDb();
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'dependencies', depId));
   }
 };
@@ -113,16 +125,20 @@ export const dependencyService = {
 // ==========================
 export const nodeService = {
   create: async (wsId: string, bId: string, node: import('../types').TaskNode): Promise<void> => {
+    const db = requireFirebaseDb();
     const nodeRef = doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', node.id);
     await setDoc(nodeRef, node);
   },
   update: async (wsId: string, bId: string, nId: string, updates: Partial<import('../types').TaskNode>) => {
+    const db = requireFirebaseDb();
     await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), sanitizeUpdates(updates));
   },
   delete: async (wsId: string, bId: string, nId: string) => {
+    const db = requireFirebaseDb();
     await deleteDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId));
   },
   batchUpdate: async (wsId: string, bId: string, updates: { id: string, data: Partial<import('../types').TaskNode> }[]) => {
+    const db = requireFirebaseDb();
     const batch = writeBatch(db);
     updates.forEach(u => {
       const ref = doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', u.id);

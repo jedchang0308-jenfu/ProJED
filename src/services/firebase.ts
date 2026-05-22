@@ -17,7 +17,30 @@ const firebaseConfig = {
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-const app: FirebaseApp = initializeApp(firebaseConfig);
-export const db: Firestore = getFirestore(app);
-export const auth: Auth = getAuth(app);
+const isFirebaseConfigPresent = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.authDomain &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId
+);
+
+const app: FirebaseApp | null = isFirebaseConfigPresent ? initializeApp(firebaseConfig) : null;
+export const isFirebaseConfigured = Boolean(app);
+export const db: Firestore | null = app ? getFirestore(app) : null;
+export const auth: Auth | null = app ? getAuth(app) : null;
+
+export const requireFirebaseDb = (): Firestore => {
+  if (!db) {
+    throw new Error('Firebase is not configured. Set the VITE_FIREBASE_* variables before using the Firebase backend.');
+  }
+  return db;
+};
+
+export const requireFirebaseAuth = (): Auth => {
+  if (!auth) {
+    throw new Error('Firebase is not configured. Set the VITE_FIREBASE_* variables before using Firebase auth.');
+  }
+  return auth;
+};
+
 export default app;

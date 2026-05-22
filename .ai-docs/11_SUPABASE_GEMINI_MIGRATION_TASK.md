@@ -1,6 +1,6 @@
 # ProJED Supabase / Gemini Migration Task
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Document Role
 
@@ -50,10 +50,16 @@ The target architecture must support:
 - [x] P8: New Supabase key format validated (`sb_publishable` public key and `sb_secret` admin key).
 - [x] P9: Gemini/RAG retrieval integration design drafted for non-production development.
 - [x] P9: Local WBS-to-RAG prototype started without Gemini/Supabase runtime calls.
+- [x] P9: Local RAG indexing plan implemented for WBS documents, versions, chunks, embedding inputs, and sync jobs.
+- [x] P9: Trusted embedding worker scaffold implemented with Gemini REST provider and dry-run smoke coverage.
+- [x] P9: Retrieval Edge Function boundary implemented with tenant-scoped RPC citations, browser-facing RAG UI, no service-role/browser Gemini calls, and strengthened edge verification.
+- [x] P8: Firebase CLI reauthenticated and verified production build deployed to Firebase Hosting.
 
 ## Latest QC Result
 
 `npm.cmd run verify:supabase:p8-production-readiness` passes against the selected production Supabase project `knodlkxqpcqyrtgwpdst`.
+
+Firebase Hosting deployment completed for project `projed-cc78d`.
 
 Confirmed passing:
 
@@ -61,20 +67,17 @@ Confirmed passing:
 - `verify:supabase:static`
 - `verify:supabase:p7-secret-hygiene`
 - `verify:supabase:p8-production-readiness`
+- `verify:p9-rag-local`
+- `verify:p9-edge-function`
 
 Current blockers:
 
 - None for P8 production readiness.
-- Firebase Hosting deploy is pending because the local Firebase CLI credential is expired and requires browser reauthentication.
+- None for Firebase Hosting deployment.
 
 ## Immediate Next Step
 
-Reauthenticate Firebase CLI, then deploy the already verified production build to Firebase Hosting.
-
-```powershell
-npm.cmd exec -- firebase login --reauth
-npm.cmd exec -- firebase deploy --only hosting --project projed-cc78d
-```
+Continue P9 Gemini/RAG development with runtime smoke against the local Supabase Edge Function, then validate citation navigation from retrieved WBS sources back into the task detail modal.
 
 ## P8 Final Gate
 

@@ -133,6 +133,17 @@ export type DocumentRow = {
   updated_at: string;
 };
 
+export type DocumentVersionRow = {
+  id: string;
+  tenant_id: string;
+  document_id: string;
+  version: number;
+  content: string;
+  content_hash: string;
+  metadata: Json;
+  created_at: string;
+};
+
 export type DocumentChunkRow = {
   id: string;
   tenant_id: string;
@@ -145,6 +156,43 @@ export type DocumentChunkRow = {
   created_at: string;
 };
 
+export type DocumentEmbeddingRow = {
+  id: string;
+  tenant_id: string;
+  chunk_id: string;
+  provider: string;
+  model: string;
+  dimensions: number;
+  embedding: string;
+  content_hash: string | null;
+  created_at: string;
+};
+
+export type RagSyncJobRow = {
+  id: string;
+  tenant_id: string;
+  provider: string;
+  target_store_id: string | null;
+  source_document_id: string | null;
+  status: RagSyncStatus;
+  last_synced_at: string | null;
+  error: string | null;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExternalRagObjectRow = {
+  id: string;
+  tenant_id: string;
+  provider: string;
+  document_id: string;
+  external_object_id: string;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -155,7 +203,11 @@ export interface Database {
       wbs_items: Table<WbsItemRow>;
       wbs_dependencies: Table<WbsDependencyRow>;
       documents: Table<DocumentRow>;
+      document_versions: Table<DocumentVersionRow>;
       document_chunks: Table<DocumentChunkRow>;
+      document_embeddings: Table<DocumentEmbeddingRow>;
+      rag_sync_jobs: Table<RagSyncJobRow>;
+      external_rag_objects: Table<ExternalRagObjectRow>;
     };
     Views: Record<string, never>;
     Functions: {

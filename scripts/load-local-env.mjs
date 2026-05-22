@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+const requestedEnv =
+  process.env.PROJED_ENV ||
+  process.env.APP_ENV ||
+  (process.env.NODE_ENV === 'test' ? 'test' : undefined);
+
 const envFiles = [
+  ...(requestedEnv ? [`.env.${requestedEnv}.local`, `.env.${requestedEnv}`] : []),
   '.env.p8.local',
   '.env.local',
   '.env.development.local',

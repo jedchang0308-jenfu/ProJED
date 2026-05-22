@@ -1,4 +1,4 @@
-import { auth, db } from './firebase';
+import { requireFirebaseAuth, requireFirebaseDb } from './firebase';
 import {
   GoogleAuthProvider,
   getRedirectResult,
@@ -34,6 +34,7 @@ const getGoogleProvider = () => {
 };
 
 const ensureFirestoreUser = async (user: FirebaseUser): Promise<FirestoreUser> => {
+  const db = requireFirebaseDb();
   const userRef = doc(db, 'users', user.uid);
   const docSnap = await getDoc(userRef);
 
@@ -88,6 +89,37 @@ const getSupabaseAuthRedirectUrl = () => {
   return `${window.location.origin}${window.location.pathname}`;
 };
 
+const getSupabaseAuthMode = () => {
+  const mode = import.meta.env.VITE_SUPABASE_AUTH_MODE as string | undefined;
+  return mode?.trim().toLowerCase() || 'oauth-google';
+};
+
+const isLocalSupabaseUrl = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  return Boolean(url && /127\.0\.0\.1:54321|localhost:54321/.test(url));
+};
+
+const getSupabaseSeedCredentials = () => {
+  const email = import.meta.env.VITE_SUPABASE_TEST_EMAIL as string | undefined;
+  const password = import.meta.env.VITE_SUPABASE_TEST_PASSWORD as string | undefined;
+  return { email: email?.trim() || '', password: password?.trim() || '' };
+};
+
+export const isSupabaseLocalPasswordAuth = () =>
+  isSupabaseBackend && (getSupabaseAuthMode() === 'local-password' || isLocalSupabaseUrl());
+
+const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
+  const { email, password } = getSupabaseSeedCredentials();
+  if (!email || !password) {
+    throw new Error('Local Supabase password auth is enabled, but VITE_SUPABASE_TEST_EMAIL or VITE_SUPABASE_TEST_PASSWORD is missing.');
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+  if (!data.user) throw new Error('Local Supabase sign-in did not return a user.');
+  return ensureSupabaseProfile(data.user);
+};
+
 export const authService = {
   signInWithGoogle: async (): Promise<FirestoreUser | null> => {
     if (isEmbeddedAuthBlocked()) {
@@ -102,6 +134,10 @@ export const authService = {
         return ensureSupabaseProfile(sessionData.session.user);
       }
 
+      if (isSupabaseLocalPasswordAuth()) {
+        return signInWithLocalSupabasePassword();
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -109,12 +145,18 @@ export const authService = {
           queryParams: { prompt: 'select_account' },
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        const message = error.message || '';
+        if (message.includes('Unsupported provider')) {
+          return signInWithLocalSupabasePassword();
+        }
+        throw new Error(message);
+      }
       return null;
     }
 
     const provider = getGoogleProvider();
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(requireFirebaseAuth(), provider);
     return ensureFirestoreUser(result.user);
   },
 
@@ -127,7 +169,7 @@ export const authService = {
       return data.session?.user ? ensureSupabaseProfile(data.session.user) : null;
     }
 
-    const result = await getRedirectResult(auth);
+    const result = await getRedirectResult(requireFirebaseAuth());
     if (!result?.user) return null;
     return ensureFirestoreUser(result.user);
   },
@@ -141,7 +183,7 @@ export const authService = {
       return;
     }
 
-    await firebaseSignOut(auth);
+    await firebaseSignOut(requireFirebaseAuth());
   },
 
   onAuthStateChanged: (callback: (user: FirestoreUser | null) => void) => {
@@ -167,7 +209,7 @@ export const authService = {
       return () => data.subscription.unsubscribe();
     }
 
-    return onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+    return onAuthStateChanged(requireFirebaseAuth(), async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         callback({
           uid: firebaseUser.uid,

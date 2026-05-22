@@ -1,12 +1,14 @@
 // @ts-nocheck
 import React from 'react';
 import { useState, useEffect } from 'react';
-import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2 } from 'lucide-react';
+import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2, Sparkles } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useCalendarSync from '../hooks/useCalendarSync';
 import useUndoStore from '../store/useUndoStore';
+import useRagStore from '../store/useRagStore';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
+import RagSidebar from './Rag/RagSidebar';
 
 /**
  * getRelativeTime — 將時間戳轉為相對時間（如「3 分鐘前」）
@@ -39,6 +41,9 @@ const MainLayout = ({ children }) => {
     const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndoStore();
     const lastUndoLabel = undoStack.length > 0 ? undoStack[undoStack.length - 1].label : '';
     const lastRedoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : '';
+
+    // ── RAG UI 狀態 ──
+    const { isOpen: isRagOpen, togglePanel: toggleRagPanel } = useRagStore();
 
     // 全域鍵盤快捷鍵：Ctrl+Z (上一步) / Ctrl+Shift+Z 或 Ctrl+Y (下一步)
     useEffect(() => {
@@ -206,8 +211,20 @@ const MainLayout = ({ children }) => {
                     </div>
                 </div>
 
-                {/* ── Google Calendar 同步控制區 ── */}
+                {/* ── Google Calendar 同步與 AI 助手 控制區 ── */}
                 <div className="flex items-center gap-1 sm:gap-2">
+                    {/* AI 助手按鈕 */}
+                    <button
+                        onClick={toggleRagPanel}
+                        className={`btn-outline px-2 h-7 text-xs sm:text-sm sm:h-8 sm:px-3 hidden sm:flex items-center gap-1.5 transition-all ${
+                            isRagOpen ? 'border-blue-400 text-blue-600 bg-blue-50' : 'hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                        title="專案 AI 助手 (搜尋知識庫)"
+                    >
+                        <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
+                        <span className="hidden lg:inline">AI 助手</span>
+                    </button>
+
                     {/* 同步按鈕：三種狀態（未連接 / 已連接 / 同步中） */}
                     <button
                         onClick={handleSyncClick}
@@ -276,9 +293,11 @@ const MainLayout = ({ children }) => {
             <div className="flex flex-1 overflow-hidden">
                 <Sidebar isOpen={isSidebarOpen} toggle={() => setSidebarOpen(!isSidebarOpen)} />
 
-                <main className="flex-1 flex flex-col min-w-0 h-full">
+                <main className="flex-1 flex flex-col min-w-0 h-full relative">
                     {children}
                 </main>
+
+                <RagSidebar />
             </div>
 
             {/* 全域右鍵/長按選單 — 所有視圖共用 */}
