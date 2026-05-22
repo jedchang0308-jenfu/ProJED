@@ -36,7 +36,7 @@ const RagSidebar: React.FC = () => {
   if (!isOpen) return null;
 
   return (
-    <div className="flex h-full w-80 flex-shrink-0 flex-col border-l border-slate-200 bg-white shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] transition-all duration-300 md:w-96">
+    <div className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-white shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] transition-all duration-300 md:relative md:inset-auto md:z-auto md:h-full md:w-96 md:flex-shrink-0 md:border-l md:border-slate-200">
       <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-slate-50/50 px-4">
         <div className="flex items-center gap-2">
           <div className="rounded-md bg-blue-100 p-1.5 text-blue-600">
@@ -158,7 +158,7 @@ const RagSidebar: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-slate-200 bg-white p-4">
+      <div className="border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
         <form onSubmit={handleSubmit} className="relative flex items-end">
           <textarea
             value={input}

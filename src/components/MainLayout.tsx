@@ -216,7 +216,7 @@ const MainLayout = ({ children }) => {
                     {/* AI 助手按鈕 */}
                     <button
                         onClick={toggleRagPanel}
-                        className={`btn-outline px-2 h-7 text-xs sm:text-sm sm:h-8 sm:px-3 hidden sm:flex items-center gap-1.5 transition-all ${
+                        className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
                             isRagOpen ? 'border-blue-400 text-blue-600 bg-blue-50' : 'hover:border-blue-400 hover:text-blue-600'
                         }`}
                         title="專案 AI 助手 (搜尋知識庫)"
