@@ -50,6 +50,22 @@ function AppContent() {
   // 啟動 Google Calendar 同步初始化（準備 OAuth 工具，不會自動彈窗）
   useCalendarSync({ autoInit: true });
 
+  useEffect(() => {
+    const mobileAllowedViews = new Set(['home', 'list', 'board']);
+    const enforceMobileView = () => {
+      if (window.innerWidth >= 640) return;
+      const view = useBoardStore.getState().currentView;
+      const boardId = useBoardStore.getState().activeBoardId;
+      if (!mobileAllowedViews.has(view)) {
+        useBoardStore.getState().setView(boardId ? 'list' : 'home');
+      }
+    };
+
+    enforceMobileView();
+    window.addEventListener('resize', enforceMobileView);
+    return () => window.removeEventListener('resize', enforceMobileView);
+  }, [currentView, activeBoardId]);
+
   // 載入行政院人事日曆 (當年度與下年度)
   useEffect(() => {
     const currentYear = dayjs().year();
