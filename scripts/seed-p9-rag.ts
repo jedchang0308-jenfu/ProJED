@@ -8,8 +8,8 @@ import type { RagDocumentDraft } from '../src/services/rag/ragContract';
 import type { Database, Json } from '../src/services/supabase/database.types';
 import type { TaskDetailNote, TaskNode } from '../src/types';
 
-const tenantId = 'a1a1a1a1-b1b1-c1c1-d1d1-e1e1e1e1e1e1';
-const projectId = 'b2b2b2b2-c2c2-d2d2-e2e2-f2f2f2f2f2f2';
+const tenantId = process.env.P9_RAG_TENANT_ID || 'a1a1a1a1-b1b1-c1c1-d1d1-e1e1e1e1e1e1';
+const projectId = process.env.P9_RAG_PROJECT_ID || 'b2b2b2b2-c2c2-d2d2-e2e2-f2f2f2f2f2f2';
 const userId = 'e5e5e5e5-e5e5-e5e5-e5e5-e5e5e5e5e5e5';
 
 const requiredEnv = (key: string): string => {
@@ -24,6 +24,10 @@ const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
 const geminiApiKey = requiredEnv('GEMINI_API_KEY');
 const testEmail = process.env.VITE_SUPABASE_TEST_EMAIL || 'test@example.com';
 const testPassword = process.env.VITE_SUPABASE_TEST_PASSWORD || 'password123';
+const smokeMode = process.env.P9_RAG_SMOKE_MODE || 'auth';
+const embeddingDelayMs = Number(process.env.P9_RAG_EMBEDDING_DELAY_MS ?? 0);
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const serviceClient = createClient<Database>(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -209,7 +213,7 @@ const buildProjectSummaryRagInput = (nodes: TaskNode[]) => {
   }, {});
 
   const lines = [
-    'Project summary for P9 local RAG testing.',
+    'Project summary for P9 RAG indexing.',
     `Total active WBS items: ${activeNodes.length}`,
     `Total active tasks including groups and milestones: ${activeNodes.length}`,
     `Status counts: ${Object.entries(countsByStatus).map(([status, count]) => `${status}=${count}`).join(', ') || 'none'}`,
@@ -279,14 +283,18 @@ const runRetrievalSmoke = async (query: string) => {
     },
   });
 
-  const { data: login, error: loginError } = await authClient.auth.signInWithPassword({
-    email: testEmail,
-    password: testPassword,
-  });
-  assertNoError('auth signInWithPassword', loginError);
-  if (!login.session?.access_token) throw new Error('auth signInWithPassword returned no access token.');
+  const rpcClient = smokeMode === 'service' ? serviceClient : authClient;
 
-  const { data, error } = await authClient.rpc('match_project_knowledge', {
+  if (smokeMode !== 'service') {
+    const { data: login, error: loginError } = await authClient.auth.signInWithPassword({
+      email: testEmail,
+      password: testPassword,
+    });
+    assertNoError('auth signInWithPassword', loginError);
+    if (!login.session?.access_token) throw new Error('auth signInWithPassword returned no access token.');
+  }
+
+  const { data, error } = await rpcClient.rpc('match_project_knowledge', {
     target_tenant_id: tenantId,
     target_project_id: projectId,
     query_embedding: vectorLiteral(queryEmbedding),
@@ -326,7 +334,14 @@ if (!validation.ok) {
   throw new Error(`Invalid RAG index plan: ${JSON.stringify(validation.issues, null, 2)}`);
 }
 
-const provider = createGeminiEmbeddingProvider({ apiKey: geminiApiKey });
+const baseProvider = createGeminiEmbeddingProvider({ apiKey: geminiApiKey });
+const provider = {
+  ...baseProvider,
+  embed: async (input: Parameters<typeof baseProvider.embed>[0]) => {
+    if (embeddingDelayMs > 0) await sleep(embeddingDelayMs);
+    return baseProvider.embed(input);
+  },
+};
 const result = await runTrustedEmbeddingWorker(serviceClient, provider, plan, { dryRun: false });
 const smoke = await runRetrievalSmoke('How many WBS tasks are indexed and what does P9 need for AI assistant retrieval?');
 

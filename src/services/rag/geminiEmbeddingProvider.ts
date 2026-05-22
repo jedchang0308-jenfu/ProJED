@@ -23,6 +23,8 @@ interface GeminiEmbeddingResponse {
   };
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const createGeminiEmbeddingProvider = ({
   apiKey,
   endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${RAG_EMBEDDING_MODEL}:embedContent`,
@@ -36,21 +38,33 @@ export const createGeminiEmbeddingProvider = ({
     model: RAG_EMBEDDING_MODEL,
     dimensions: RAG_EMBEDDING_DIMENSIONS,
     embed: async input => {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          model: `models/${RAG_EMBEDDING_MODEL}`,
-          content: { parts: [{ text: input.content }] },
-          output_dimensionality: RAG_EMBEDDING_DIMENSIONS,
-        }),
-      });
+      let response: Response | null = null;
 
-      if (!response.ok) {
-        throw new Error(`Gemini embedding request failed with HTTP ${response.status}.`);
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            model: `models/${RAG_EMBEDDING_MODEL}`,
+            content: { parts: [{ text: input.content }] },
+            output_dimensionality: RAG_EMBEDDING_DIMENSIONS,
+          }),
+        });
+
+        if (response.ok || response.status !== 429 || attempt === 3) break;
+
+        const retryAfterSeconds = Number(response.headers.get('retry-after'));
+        const backoffMs = Number.isFinite(retryAfterSeconds)
+          ? retryAfterSeconds * 1000
+          : 1500 * (attempt + 1);
+        await sleep(backoffMs);
+      }
+
+      if (!response?.ok) {
+        throw new Error(`Gemini embedding request failed with HTTP ${response?.status ?? 'unknown'}.`);
       }
 
       const data = (await response.json()) as GeminiEmbeddingResponse;
