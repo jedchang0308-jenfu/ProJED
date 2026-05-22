@@ -1,22 +1,92 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Bot, User, Loader2, Sparkles, MessageSquare } from 'lucide-react';
+import { X, Send, Bot, User, Loader2, Sparkles, MessageSquare, Activity, AlertTriangle, ClipboardList, ChevronDown, CalendarDays } from 'lucide-react';
 import useRagStore from '../../store/useRagStore';
 import useBoardStore from '../../store/useBoardStore';
 import CitationCard from './CitationCard';
+
+const PM_QUICK_ACTIONS = [
+  {
+    id: 'project-health-check',
+    label: '專案健檢',
+    icon: Activity,
+    prompt:
+      '請根據目前 ProJED 專案資料進行專案健檢。請分析 WBS 階層、任務狀態、起訖日、依賴關係、逾期項目與可引用的專案知識。輸出格式請包含：1. 專案健康度總結 2. 目前最大風險 3. 已逾期或可能逾期的任務 4. 需要 PM 立刻處理的前三件事 5. 資料不足或需要補齊的欄位。請用繁體中文回答，並在可行時引用來源。',
+  },
+  {
+    id: 'project-risk-scan',
+    label: '找出專案風險',
+    icon: AlertTriangle,
+    prompt:
+      '請從目前 ProJED 專案資料中找出專案風險。請檢查時程風險、依賴風險、任務描述不清、負責人或協作者缺失、驗收標準不足、狀態與日期不一致等問題。輸出格式請用表格：風險等級、風險項目、證據或原因、可能影響、建議處理方式。請用繁體中文回答，並在可行時引用來源。',
+  },
+  {
+    id: 'weekly-progress-report',
+    label: '每週進度報告',
+    icon: ClipboardList,
+    prompt:
+      '請根據目前 ProJED 專案資料產生 PM 每週進度報告。請整理：1. 本週完成事項 2. 進行中事項 3. 延遲或卡住事項 4. 主要風險 5. 下週重點 6. 需要管理層或跨部門協助的事項。請用適合會議或管理層閱讀的繁體中文格式輸出，並在資料不足時明確標示假設與缺口。',
+  },
+  {
+    id: 'upcoming-week-todos',
+    label: '未來一周待辦',
+    icon: CalendarDays,
+    prompt:
+      '請整理我未來一周要做的事情。請根據目前 ProJED 專案資料中的任務、狀態、負責人、起訖日、依賴關係與可引用的專案知識，找出未來 7 天內需要處理或接近到期的事項，並從最接近到期日到最晚到期日依序排序。輸出格式請包含：到期日、任務名稱、目前狀態、所屬 WBS 或專案位置、為什麼需要處理、建議下一步。請排除已完成事項；若資料不足，請列出需要補齊的欄位。請用繁體中文回答，並在可行時引用來源。',
+  },
+];
 
 const RagSidebar: React.FC = () => {
   const { isOpen, setIsOpen, chatHistory, isLoading, submitQuery, error, clearHistory, generationModel, setGenerationModel } = useRagStore();
   const { getActiveBoard, getActiveWorkspace } = useBoardStore();
 
   const [input, setInput] = useState('');
+  const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const quickMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, isLoading]);
 
+  useEffect(() => {
+    if (!isQuickMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!quickMenuRef.current?.contains(event.target as Node)) {
+        setIsQuickMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsQuickMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isQuickMenuOpen]);
+
   const activeWorkspace = getActiveWorkspace();
   const activeBoard = getActiveBoard();
+
+  const buildScopedPrompt = (prompt: string) => {
+    const workspaceName = activeWorkspace?.title ? `工作區：${activeWorkspace.title}` : '工作區：未選取';
+    const boardName = activeBoard?.title ? `專案看板：${activeBoard.title}` : '專案看板：未選取';
+
+    return `${prompt}\n\n目前範圍：\n- ${workspaceName}\n- ${boardName}\n\n請優先根據目前範圍內的 ProJED 資料回答；如果找不到足夠資料，請不要猜測，改列出需要補齊的資料。`;
+  };
+
+  const handleQuickAction = (prompt: string) => {
+    if (isLoading || !activeWorkspace) return;
+
+    setIsQuickMenuOpen(false);
+    submitQuery(buildScopedPrompt(prompt), activeWorkspace.id, activeBoard?.id || null);
+    setInput('');
+  };
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -88,6 +158,50 @@ const RagSidebar: React.FC = () => {
           >
             🧠 深度 (3.5 Flash)
           </button>
+        </div>
+
+        <div ref={quickMenuRef} className="relative mt-3">
+          <button
+            onClick={() => setIsQuickMenuOpen((open) => !open)}
+            disabled={isLoading || !activeWorkspace}
+            className="flex min-h-10 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+            type="button"
+            aria-expanded={isQuickMenuOpen}
+            aria-haspopup="menu"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <ClipboardList size={16} className="shrink-0 text-blue-500" />
+              <span className="truncate">快捷問題</span>
+            </span>
+            <ChevronDown
+              size={16}
+              className={`shrink-0 text-slate-400 transition-transform ${isQuickMenuOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {isQuickMenuOpen && (
+            <div
+              className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+              role="menu"
+            >
+              {PM_QUICK_ACTIONS.map((action) => {
+                const Icon = action.icon;
+
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => handleQuickAction(action.prompt)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                    type="button"
+                    role="menuitem"
+                  >
+                    <Icon size={16} className="shrink-0 text-blue-500" />
+                    <span className="truncate">{action.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
