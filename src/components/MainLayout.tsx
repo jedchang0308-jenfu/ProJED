@@ -151,7 +151,7 @@ const MainLayout = ({ children }) => {
                                         <button
                                             onClick={() => setView('gantt')}
                                             disabled={isSelectingMode}
-                                            className={`hidden p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold sm:flex items-center gap-1.5 transition-all ${currentView === 'gantt' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'gantt' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
                                         >
                                             <LineChart size={13} />
@@ -160,7 +160,7 @@ const MainLayout = ({ children }) => {
                                         <button
                                             onClick={() => setView('calendar')}
                                             disabled={isSelectingMode}
-                                            className={`hidden p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold sm:flex items-center gap-1.5 transition-all ${currentView === 'calendar' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'calendar' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
                                         >
                                             <CalendarDays size={13} />

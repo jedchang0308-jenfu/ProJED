@@ -116,7 +116,7 @@ const Sidebar = ({ isOpen, toggle }) => {
                     </div>
 
                     {/* Recycle Bin Button */}
-                    <div className="hidden p-2 border-t border-slate-100 bg-slate-50/50 sm:block">
+                    <div className="p-2 border-t border-slate-100 bg-slate-50/50">
                         <button
                             onClick={() => setView('recycle_bin')}
                             className={`w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/50 ${currentView === 'recycle_bin'
