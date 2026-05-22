@@ -475,10 +475,8 @@ const BoardView = () => {
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
                 {/* 工具列 (Toolbar) — 狀態篩選器 */}
-                <div className="border-b border-slate-200 bg-white/50 px-3 py-2 backdrop-blur-sm shrink-0 sm:h-12 sm:px-4 sm:py-0 sm:flex sm:items-center sm:justify-between">
-                    <div className="overflow-x-auto pb-1 sm:pb-0">
-                        <StatusFilterBar />
-                    </div>
+                <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
+                    <StatusFilterBar />
                 </div>
 
                 {/* 依賴關係選取模式橫幅 */}
@@ -504,7 +502,7 @@ const BoardView = () => {
                 )}
 
                 {/* 列表畫布 (Lists Canvas) */}
-                <div className="flex-1 overflow-x-hidden overflow-y-auto p-3 flex flex-col gap-3 items-stretch scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent sm:overflow-x-auto sm:overflow-y-hidden sm:p-4 sm:flex-row sm:gap-4 sm:items-start">
+                <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                     <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                         {rootNodes.map(node => (
                             <KanbanColumn
@@ -517,7 +515,7 @@ const BoardView = () => {
                     </SortableContext>
 
                     {/* 新增列表按鈕 */}
-                    <div className="w-full flex-shrink-0 sm:w-[260px]">
+                    <div className="flex-shrink-0 w-[260px]">
                         <button
                             onClick={handleAddColumn}
                             className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 font-bold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group"
