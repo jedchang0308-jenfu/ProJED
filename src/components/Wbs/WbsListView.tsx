@@ -16,6 +16,118 @@ interface WbsListViewProps {
   boardId: string;
 }
 
+interface MobileWbsNodeCardProps {
+  nodeId: string;
+  statusFilters: Record<TaskStatus, boolean>;
+  updateNode: (nodeId: string, updates: Partial<TaskNode>) => void;
+  level?: number;
+}
+
+const MobileWbsNodeCard: React.FC<MobileWbsNodeCardProps> = ({ nodeId, statusFilters, updateNode, level = 0 }) => {
+  const node = useWbsStore(s => s.nodes[nodeId]);
+  const childIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
+  const progress = useWbsStore(s => s.getNodeProgress(nodeId));
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  if (!node || node.isArchived || !statusFilters[node.status || 'todo']) return null;
+
+  const children = (childIds || [])
+    .map(id => useWbsStore.getState().nodes[id])
+    .filter(child => child && !child.isArchived && statusFilters[child.status || 'todo'])
+    .sort((a, b) => a.order - b.order);
+  const hasChildren = children.length > 0;
+
+  return (
+    <div className="space-y-2" style={{ marginLeft: `${Math.min(level, 3) * 10}px` }}>
+      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 text-slate-500 ${hasChildren ? 'bg-slate-50' : 'invisible'}`}
+          >
+            {isExpanded ? '−' : '+'}
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <input
+              value={node.title}
+              onChange={(event) => updateNode(node.id, { title: event.target.value, updatedAt: Date.now() })}
+              className={`w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none focus:border-blue-300 focus:bg-white ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+              placeholder="任務名稱"
+            />
+
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <select
+                value={node.status}
+                onChange={(event) => updateNode(node.id, { status: event.target.value as TaskStatus, updatedAt: Date.now() })}
+                className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700"
+              >
+                <option value="todo">待辦</option>
+                <option value="in_progress">進行中</option>
+                <option value="delayed">延遲</option>
+                <option value="onhold">暫停</option>
+                <option value="completed">完成</option>
+                <option value="unsure">未定</option>
+              </select>
+
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">
+                {node.nodeType === 'group' ? '群組' : node.nodeType === 'milestone' ? '里程碑' : '任務'}
+              </span>
+
+              <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
+                {progress}%
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="text-[11px] font-medium text-slate-500">
+                開始
+                <input
+                  type="date"
+                  value={node.startDate || ''}
+                  onChange={(event) => updateNode(node.id, { startDate: event.target.value || undefined, updatedAt: Date.now() })}
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                />
+              </label>
+              <label className="text-[11px] font-medium text-slate-500">
+                結束
+                <input
+                  type="date"
+                  value={node.endDate || ''}
+                  onChange={(event) => updateNode(node.id, { endDate: event.target.value || undefined, updatedAt: Date.now() })}
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className={`h-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isExpanded && hasChildren && (
+        <div className="space-y-2">
+          {children.map(child => (
+            <MobileWbsNodeCard
+              key={child.id}
+              nodeId={child.id}
+              statusFilters={statusFilters}
+              updateNode={updateNode}
+              level={level + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
@@ -158,14 +270,16 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
 
   return (
     <WbsDependencyContext.Provider value={dependencyContextValue}>
-      <div className="flex flex-col w-full h-full bg-white overflow-hidden pt-4 px-6 md:px-8 relative">
+      <div className="flex flex-col w-full h-full bg-white overflow-hidden pt-3 px-3 sm:pt-4 sm:px-6 md:px-8 relative">
         
 
         {/* 依賴選單 Modal 已經移除，統一由右鍵選單進入選取模式 */}
 
       {/* 狀態篩選器 + 操作區 */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 shrink-0">
-        <StatusFilterBar />
+      <div className="flex items-center justify-between mb-3 gap-3 border-b border-slate-200 pb-3 sm:mb-6 sm:pb-4 shrink-0">
+        <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+          <StatusFilterBar />
+        </div>
         
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <Button onClick={handleCreateRootNode} className="flex items-center gap-2 shrink-0">
@@ -200,7 +314,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       )}
 
       {/* 清單容器 */}
-      <div className="flex-1 overflow-y-auto w-full pb-20 pr-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto w-full pb-20 sm:pr-2 custom-scrollbar">
         {rootNodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
             <p className="mb-4">此專案目前沒有任何任務或群組</p>
@@ -209,7 +323,19 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col bg-white border border-slate-200 rounded-lg shadow-sm relative">
+          <>
+          <div className="space-y-2 sm:hidden">
+            {rootNodes.map(node => (
+              <MobileWbsNodeCard
+                key={node.id}
+                nodeId={node.id}
+                statusFilters={statusFilters}
+                updateNode={updateNode}
+              />
+            ))}
+          </div>
+
+          <div className="hidden sm:flex flex-col bg-white border border-slate-200 rounded-lg shadow-sm relative">
             {/* Header Column Titles (Tree Grid) */}
             <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} py-2 px-4 bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10`}>
                 <div className="flex items-center pl-[28px]">任務名稱</div>
@@ -242,6 +368,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                 </DragOverlay>
             </DndContext>
           </div>
+          </>
         )}
       </div>
     </div>

@@ -197,7 +197,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     <div
       ref={setColumnNodeRef}
       style={columnStyle}
-      className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-100/50 shadow-sm transition-all ${
+      className={`flex max-h-none w-full flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-100/50 shadow-sm transition-all sm:max-h-full sm:w-[270px] ${
         isColumnDragging ? 'scale-105 rotate-1 opacity-50 shadow-2xl' : ''
       }`}
     >
