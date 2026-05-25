@@ -229,7 +229,7 @@ const MainLayout = ({ children }) => {
                     <button
                         onClick={handleSyncClick}
                         disabled={isSyncing}
-                        className={`btn-outline px-2 h-7 text-xs sm:text-sm sm:h-8 sm:px-3 hidden sm:flex items-center gap-1.5 transition-all ${
+                        className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
                             isSyncing
                                 ? 'opacity-60 cursor-not-allowed'
                                 : isConnected
@@ -273,7 +273,7 @@ const MainLayout = ({ children }) => {
                     {isConnected && (
                         <button
                             onClick={disconnect}
-                            className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded text-slate-400 transition-all hidden sm:block"
+                            className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded text-slate-400 transition-all"
                             title="斷開 Google Calendar 連接"
                         >
                             <Unplug size={14} />

@@ -30,6 +30,24 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const sensors = useDragSensors();
   const [activeSortableItem, setActiveSortableItem] = useState<TaskNode | null>(null);
 
+  const wouldCreateCycle = (draggedId: string, nextParentId: string | null) => {
+      if (!nextParentId) return false;
+      if (draggedId === nextParentId) return true;
+
+      const nodes = useWbsStore.getState().nodes;
+      const visited = new Set<string>([draggedId]);
+      let current: string | null = nextParentId;
+
+      while (current) {
+          if (current === draggedId) return true;
+          if (visited.has(current)) return true;
+          visited.add(current);
+          current = nodes[current]?.parentId || null;
+      }
+
+      return false;
+  };
+
   const handleDragEnd = (event: any) => {
       const { active, over } = event;
       setActiveSortableItem(null);
@@ -46,7 +64,9 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
           updateNode(overItem.id, { order: tempOrder });
       } else {
           // 跨層級移動
-          updateNode(activeItem.id, { parentId: overItem.parentId, order: overItem.order + 0.5 });
+          const nextParentId = overItem.parentId || null;
+          if (wouldCreateCycle(activeItem.id, nextParentId)) return;
+          updateNode(activeItem.id, { parentId: nextParentId, order: overItem.order + 0.5 });
       }
   };
 
@@ -146,7 +166,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       workspaceId: activeWorkspaceId || '', 
       boardId: boardId,
       parentId: null, // 頂層節點沒有 parentId
-      title: '新群組/任務',
+      title: '新任務',
       status: 'todo',
       nodeType: 'group', // 預設頂層可能為群組，若不要也可以設定為 task
       order: rootNodes.length,
@@ -170,7 +190,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <Button onClick={handleCreateRootNode} className="flex items-center gap-2 shrink-0">
             <Plus size={18} />
-            <span>建立頂層群組</span>
+            <span>新增頂層任務</span>
           </Button>
         </div>
       </div>
@@ -203,7 +223,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       <div className="flex-1 overflow-y-auto w-full pb-20 pr-2 custom-scrollbar">
         {rootNodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
-            <p className="mb-4">此專案目前沒有任何任務或群組</p>
+            <p className="mb-4">此專案目前沒有任何任務</p>
             <Button variant="outline" as any onClick={handleCreateRootNode}>
               開始建立第一個節點
             </Button>
@@ -235,8 +255,8 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                 
                 <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                     {activeSortableItem ? (
-                        <div className="opacity-95 shadow-2xl border border-slate-200 bg-white rounded overflow-hidden ring-2 ring-primary/30 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
-                            <WbsNodeItem nodeId={activeSortableItem.id} level={0} />
+                        <div className="max-w-[360px] truncate rounded-md border border-primary/30 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
+                            {activeSortableItem.title || '未命名任務'}
                         </div>
                     ) : null}
                 </DragOverlay>

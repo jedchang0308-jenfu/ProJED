@@ -12,6 +12,7 @@ import { Input } from '../ui/Input';
 import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
+import { TaskDragHandle } from './TaskDragHandle';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -119,12 +120,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     transition: columnTransition,
   };
 
-  if (!node) {
-    return null;
-  }
-
-  const status = node.status || 'todo';
-  const isDueToday = status !== 'completed' && !!node.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
+  const status = node?.status || 'todo';
+  const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
   const nodes = previewNodes || useWbsStore.getState().nodes;
@@ -133,8 +130,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     if (overNodeId === nodeId) return true;
 
     let current = nodes[overNodeId]?.parentId;
+    const visited = new Set<string>();
     while (current) {
       if (current === nodeId) return true;
+      if (visited.has(current)) return false;
+      visited.add(current);
       current = nodes[current]?.parentId || null;
     }
 
@@ -153,6 +153,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   );
 
   const handleAddCard = (title?: string) => {
+    if (!node) return;
     const trimmedTitle = title?.trim();
     const newNode: TaskNode = {
       id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
@@ -182,16 +183,22 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     (e) => {
       e.preventDefault();
       const touch = e.touches[0];
+      if (!node) return;
       setContextMenuState({
         isOpen: true,
         x: touch.clientX,
         y: touch.clientY,
         nodeId,
-        title: node.title || '未命名群組',
+        title: node.title || '未命名任務',
       });
     },
     { delay: 500, tolerance: 8 }
   );
+
+  // Keep all hooks above this guard so missing data never changes hook order.
+  if (!node) {
+    return null;
+  }
 
   return (
     <div
@@ -202,15 +209,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       }`}
     >
       <div
-        {...(isEditing || isSelectingMode ? {} : columnAttributes)}
-        {...(isEditing || isSelectingMode ? {} : columnListeners)}
         {...longPressHandlers}
         className={`group flex flex-col gap-2 bg-white/40 p-3 transition-colors hover:bg-white ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
                     : 'cursor-crosshair hover:bg-amber-50/30'
-                : isEditing ? '' : 'cursor-grab active:cursor-grabbing touch-none'
+                : ''
         }`}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -219,14 +224,19 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             x: event.clientX,
             y: event.clientY,
             nodeId,
-            title: node.title || '未命名群組',
+            title: node.title || '未命名任務',
           });
         }}
       >
         <div className="flex items-center gap-2">
           <div className="flex flex-1 items-center justify-between">
             <div className="flex flex-1 items-center gap-2 overflow-hidden">
-              <div className={`h-2.5 w-2.5 shrink-0 rounded-full bg-status-${status}`} />
+              <TaskDragHandle
+                attributes={columnAttributes}
+                listeners={columnListeners}
+                disabled={isEditing || isSelectingMode}
+                className="-ml-1"
+              />
 
               {isEditing ? (
                 <input
@@ -246,9 +256,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   }`}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={handleStartEdit}
-                  title="點擊以編輯群組名稱"
+                  title="點擊以編輯任務名稱"
                 >
-                  {node.title || '未命名群組'}
+                  {node.title || '未命名任務'}
                 </h3>
               )}
             </div>
@@ -338,7 +348,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
       <div
         ref={setDropNodeRef}
-        className={`flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-1 mb-1 ${
+        className={`scroll-container flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-1 mb-1 ${
           isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
         }`}
       >

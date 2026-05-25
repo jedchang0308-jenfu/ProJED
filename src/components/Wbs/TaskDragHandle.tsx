@@ -1,0 +1,75 @@
+import React from 'react';
+import { GripVertical } from 'lucide-react';
+
+interface TaskDragHandleProps {
+  attributes?: Record<string, any>;
+  listeners?: Record<string, any>;
+  disabled?: boolean;
+  size?: 'xs' | 'sm' | 'md';
+  className?: string;
+  title?: string;
+}
+
+const sizeClassMap = {
+  xs: 'h-6 w-5',
+  sm: 'h-7 w-5',
+  md: 'h-8 w-5',
+};
+
+const iconSizeMap = {
+  xs: 12,
+  sm: 14,
+  md: 15,
+};
+
+export const TaskDragHandle: React.FC<TaskDragHandleProps> = ({
+  attributes,
+  listeners,
+  disabled = false,
+  size = 'md',
+  className = '',
+  title = '拖曳任務',
+}) => {
+  const activeListeners = disabled ? {} : listeners || {};
+
+  const stopTouchPropagation = (event: React.TouchEvent<HTMLButtonElement>) => {
+    activeListeners.onTouchStart?.(event);
+    event.stopPropagation();
+  };
+
+  const stopTouchMovePropagation = (event: React.TouchEvent<HTMLButtonElement>) => {
+    activeListeners.onTouchMove?.(event);
+    event.stopPropagation();
+  };
+
+  const stopTouchEndPropagation = (event: React.TouchEvent<HTMLButtonElement>) => {
+    activeListeners.onTouchEnd?.(event);
+    event.stopPropagation();
+  };
+
+  return (
+    <button
+      type="button"
+      data-kanban-drag-handle="true"
+      data-task-drag-handle="true"
+      aria-label={title}
+      title={title}
+      disabled={disabled}
+      {...(!disabled ? attributes : {})}
+      {...activeListeners}
+      onTouchStart={stopTouchPropagation}
+      onTouchMove={stopTouchMovePropagation}
+      onTouchEnd={stopTouchEndPropagation}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onClick={(event) => event.stopPropagation()}
+      className={`task-drag-hitbox ${sizeClassMap[size]} flex shrink-0 cursor-grab items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        disabled ? 'pointer-events-none opacity-0' : ''
+      } ${className}`}
+    >
+      <GripVertical size={iconSizeMap[size]} strokeWidth={2.5} />
+    </button>
+  );
+};

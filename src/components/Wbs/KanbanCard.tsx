@@ -1,7 +1,7 @@
 /**
  * KanbanCard — 渲染 WBS Level 2 節點為可拖曳的 Kanban 任務卡
  * 設計意圖：取代舊版 Card.tsx，資料來源改為 useWbsStore 的 TaskNode。
- * 卡片內部嵌入 KanbanChecklist 以遞迴呈現 Level 3+ 的待辦清單。
+ * 卡片內部嵌入 KanbanChecklist 以遞迴呈現 Level 3+ 的下層任務。
  * 
  * 【編輯功能】點擊卡片標題可行內編輯任務名稱，Enter 或失焦即儲存，ESC 取消。
  */
@@ -19,6 +19,7 @@ import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
+import { TaskDragHandle } from './TaskDragHandle';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -36,6 +37,9 @@ const statusTextColorMap: Record<TaskStatus, string> = {
   unsure: 'text-purple-500',
   onhold: 'text-slate-400',
 };
+
+const isFromTaskDragHandle = (target: EventTarget | null) =>
+  target instanceof HTMLElement && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
 export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previewNodes, previewParentIndex }) => {
   const storeNode = useWbsStore(s => s.nodes[nodeId]);
@@ -171,11 +175,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     transition,
   };
 
-  // 安全檢查
-  if (!node) return null;
-
-  const status = node.status || 'todo';
-  const isDueToday = status !== 'completed' && !!node.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
+  const status = node?.status || 'todo';
+  const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const canDropIntoChecklist = ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
@@ -188,9 +189,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
     const nodes = previewNodes || useWbsStore.getState().nodes;
     let current = nodes[overNodeId]?.parentId;
+    const visited = new Set<string>();
 
     while (current) {
       if (current === nodeId) return true;
+      if (visited.has(current)) return false;
+      visited.add(current);
       current = nodes[current]?.parentId || null;
     }
 
@@ -209,42 +213,57 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     (e) => {
       e.preventDefault();
       const touch = e.touches[0];
+      if (!node) return;
       setContextMenuState({ isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
     },
     { delay: 500, tolerance: 8 }
   );
 
+  const cardLongPressHandlers = {
+    ...longPressHandlers,
+    onTouchStart: (e: React.TouchEvent) => {
+      if (isFromTaskDragHandle(e.target)) return;
+      longPressHandlers.onTouchStart(e);
+    },
+  };
+
+  // Keep all hooks above this guard so missing data never changes hook order.
+  if (!node) return null;
+
   return (
     <div
       ref={mergedRef}
       style={style}
-      {...(!isEditing && !isSelectingMode ? attributes : {})}
-      {...(!isEditing && !isSelectingMode ? listeners : {})}
-      {...longPressHandlers}
+      {...cardLongPressHandlers}
       onContextMenu={(e) => {
           e.preventDefault();
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
-      className={`bg-white border rounded-lg shadow-sm transition-all group mb-2 touch-none ${
+      className={`relative kanban-scroll-touch bg-white border rounded-lg shadow-sm transition-all group mb-2 ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
           : isSelectingMode
             ? isSelfNode
               ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
               : 'border-slate-200 hover:border-amber-300 hover:shadow-md cursor-crosshair'
-            : `border-slate-200 hover:border-primary hover:shadow-md ${isEditing ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`
+            : `border-slate-200 hover:border-primary hover:shadow-md ${isEditing ? 'cursor-default' : ''}`
       }`}
     >
       <div className="flex items-start p-2.5">
-        {/* 卡片內容 — 全卡片均可拖曳，僅標題與按鈕需要阻止事件冒泡 */}
+        {/* 卡片內容 — 只有左側把手可拖曳，避免手機滑動畫面時誤觸 */}
         <div className="flex-1 min-w-0">
           {/* 標題列 */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              {/* 狀態圓點 */}
-              <div className={`w-2 h-2 rounded-full bg-status-${status} flex-shrink-0`} />
-
+              {/* 拖曳把手 */}
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
+              <TaskDragHandle
+                attributes={attributes}
+                listeners={listeners}
+                disabled={isEditing || isSelectingMode}
+                className="-ml-1"
+              />
+
               {isEditing ? (
                 <Input
                   ref={inputRef}
@@ -356,7 +375,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             </div>
           )}
 
-          {/* Level 3+ 待辦清單展開區 */}
+          {/* Level 3+ 下層任務展開區 */}
           {hasChildren && (
             <div
               ref={setChecklistAreaDropRef}
@@ -375,7 +394,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
               >
                 {isChecklistExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <span>{isChecklistExpanded ? '收合' : '展開'}待辦清單</span>
+                <span>{isChecklistExpanded ? '收合' : '展開'}下層任務</span>
               </button>
 
               {isChecklistExpanded && (

@@ -13,8 +13,9 @@
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import { runAutoMigration } from '../utils/autoMigration';
-import { isEmbeddedAuthBlocked, isSupabaseLocalPasswordAuth } from '../services/authService';
-import { isSupabaseBackend } from '../services/dataBackend';
+import { isEmbeddedAuthBlocked, isLocalTestAuth, isSupabaseLocalPasswordAuth } from '../services/authService';
+import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
+import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -28,6 +29,7 @@ interface AuthGateProps {
 export default function AuthGate({ children }: AuthGateProps) {
   const { user, loading, error, signInWithGoogle } = useAuthStore();
   const [isInApp, setIsInApp] = useState(false);
+  const isLocalTestMode = isLocalTestAuth();
   const isLocalSupabasePasswordMode = isSupabaseLocalPasswordAuth();
   // 遷移狀態：'idle' | 'migrating' | 'done'
   const [migrationState, setMigrationState] = useState<'idle' | 'migrating' | 'done'>('idle');
@@ -45,6 +47,12 @@ export default function AuthGate({ children }: AuthGateProps) {
     }
 
     if (migrationState !== 'idle') return;
+
+    if (isLocalTestBackend) {
+      seedLocalTestEnvironment();
+      setMigrationState('done');
+      return;
+    }
 
     if (isSupabaseBackend) {
       setMigrationState('done');
@@ -124,7 +132,12 @@ export default function AuthGate({ children }: AuthGateProps) {
             onClick={signInWithGoogle}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98]"
           >
-            {isLocalSupabasePasswordMode ? (
+            {isLocalTestMode ? (
+              <>
+                <span className="text-lg">T</span>
+                使用固定測試環境
+              </>
+            ) : isLocalSupabasePasswordMode ? (
               <>
                 <span className="text-lg">S</span>
                 使用測試帳號登入

@@ -6,9 +6,9 @@
  * 階層映射規則：
  * - Level 1 (根節點, parentId === null) → 列表欄 (KanbanColumn)
  * - Level 2 (根節點的子節點)            → 卡片 (KanbanCard)
- * - Level 3+ (更深子節點)               → 待辦清單 (KanbanChecklist)
+ * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Plus, GitBranch } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
@@ -43,9 +43,6 @@ const BoardView = () => {
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
-    const [previewNodes, setPreviewNodes] = useState<Record<string, TaskNode> | null>(null);
-    const [previewParentIndex, setPreviewParentIndex] = useState<Record<string, string[]> | null>(null);
-    const previewIntentRef = useRef<string | null>(null);
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
@@ -114,27 +111,24 @@ const BoardView = () => {
     const rootIds = useWbsStore(s => s.parentNodesIndex['root']);
     const boardRootIds = useWbsStore(s => s.parentNodesIndex[activeBoardId || '']);
     const storeNodes = useWbsStore(s => s.nodes);
-    const storeParentIndex = useWbsStore(s => s.parentNodesIndex);
-    const effectiveNodes = previewNodes || storeNodes;
-    const effectiveParentIndex = previewParentIndex || storeParentIndex;
 
     // 合併並排序根節點 (Level 1 = 列表欄)
     const rootNodes = useMemo(() => {
-        const ids1 = ((previewParentIndex ? effectiveParentIndex['root'] : rootIds) || []).filter(id => {
-            const n = effectiveNodes[id];
+        const ids1 = (rootIds || []).filter(id => {
+            const n = storeNodes[id];
             return n && n.boardId === activeBoardId && !n.isArchived;
         });
-        const ids2 = ((previewParentIndex ? effectiveParentIndex[activeBoardId || ''] : boardRootIds) || []).filter(id => {
-            const n = effectiveNodes[id];
+        const ids2 = (boardRootIds || []).filter(id => {
+            const n = storeNodes[id];
             return n && !n.isArchived;
         });
         // 合併去重
         const allIds = Array.from(new Set([...ids1, ...ids2]));
         return allIds
-            .map(id => effectiveNodes[id])
+            .map(id => storeNodes[id])
             .filter(node => node && statusFilters[node.status || 'todo'])
             .sort((a, b) => a.order - b.order);
-    }, [rootIds, boardRootIds, activeBoardId, statusFilters, effectiveNodes, effectiveParentIndex, previewParentIndex]);
+    }, [rootIds, boardRootIds, activeBoardId, statusFilters, storeNodes]);
 
     const statuses = [
         { key: 'todo', label: '待辦', color: 'bg-status-todo' },
@@ -153,16 +147,13 @@ const BoardView = () => {
      * 2. wbs-card   → wbs-column (drop)  : 卡片跨列移動
      * 3. wbs-card   → wbs-card (sortable): 同列排序
      * 4. wbs-card   → wbs-card-drop      : 卡片降級為目標卡片的子節點 ✨新增
-     * 5. wbs-checklist → wbs-column (drop): 待辦升級為列表直接子節點（卡片級別）✨新增
-     * 6. wbs-checklist → wbs-card-drop    : 待辦跨卡片移動 ✨新增
-     * 7. wbs-checklist → wbs-checklist    : 同卡片內待辦排序 ✨新增
+     * 5. wbs-checklist → wbs-column (drop): 任務升級為列表直接子節點（卡片級別）✨新增
+     * 6. wbs-checklist → wbs-card-drop    : 任務跨卡片移動 ✨新增
+     * 7. wbs-checklist → wbs-checklist    : 同卡片內任務排序 ✨新增
      */
     const handleDragStart = (event: any) => {
         const { active } = event;
         const nodeId = active.data.current?.nodeId;
-        previewIntentRef.current = null;
-        setPreviewNodes(null);
-        setPreviewParentIndex(null);
         setActiveDrag({
             id: active.id,
             type: active.data.current?.type,
@@ -171,17 +162,7 @@ const BoardView = () => {
     };
 
     const handleDragCancel = () => {
-        previewIntentRef.current = null;
         setActiveDrag(null);
-        setPreviewNodes(null);
-        setPreviewParentIndex(null);
-    };
-
-    const clearDragPreview = () => {
-        if (previewIntentRef.current === null) return;
-        previewIntentRef.current = null;
-        setPreviewNodes(null);
-        setPreviewParentIndex(null);
     };
 
     const buildPreviewParentIndex = (nodesRecord: Record<string, TaskNode>) => {
@@ -211,8 +192,8 @@ const BoardView = () => {
         nodesOverride?: Record<string, TaskNode>,
         parentIndexOverride?: Record<string, string[]>,
     ) => {
-        const nodes = nodesOverride || previewNodes || useWbsStore.getState().nodes;
-        const parentIndex = parentIndexOverride || previewParentIndex || useWbsStore.getState().parentNodesIndex;
+        const nodes = nodesOverride || useWbsStore.getState().nodes;
+        const parentIndex = parentIndexOverride || useWbsStore.getState().parentNodesIndex;
         const siblings = parentIndex[parentId] || [];
 
         return siblings.reduce((max, id) => {
@@ -223,11 +204,14 @@ const BoardView = () => {
     };
 
     const isDescendantOf = (nodeId: string, possibleAncestorId: string, nodesRecord?: Record<string, TaskNode>) => {
-        const nodes = nodesRecord || previewNodes || useWbsStore.getState().nodes;
+        const nodes = nodesRecord || useWbsStore.getState().nodes;
         let current = nodes[nodeId]?.parentId;
+        const visited = new Set<string>();
 
         while (current) {
             if (current === possibleAncestorId) return true;
+            if (visited.has(current)) return false;
+            visited.add(current);
             current = nodes[current]?.parentId || null;
         }
 
@@ -370,58 +354,8 @@ const BoardView = () => {
         return true;
     };
 
-    const applyDragPreview = (activeData: any, overData: any) => {
-        const baseNodes = useWbsStore.getState().nodes;
-        const draggedNode = baseNodes[activeData?.nodeId];
-        if (!draggedNode || !overData || activeData.nodeId === overData.nodeId) {
-            clearDragPreview();
-            return;
-        }
-
-        const intent = getDropIntent(activeData, overData, baseNodes);
-        if (!isValidDropIntent(draggedNode.id, intent, baseNodes)) {
-            clearDragPreview();
-            return;
-        }
-
-        const intentKey = [
-            draggedNode.id,
-            overData.type,
-            overData.nodeId || '',
-            intent.parentId || 'root',
-            intent.order,
-            intent.nodeType || '',
-        ].join('|');
-
-        if (previewIntentRef.current === intentKey) return;
-        previewIntentRef.current = intentKey;
-
-        const nextNodes = buildNodesWithMove(
-            baseNodes,
-            draggedNode.id,
-            intent.parentId,
-            intent.order,
-            intent.nodeType,
-        );
-
-        setPreviewNodes(nextNodes);
-        setPreviewParentIndex(buildPreviewParentIndex(nextNodes));
-    };
-
-    const handleDragOver = (event: any) => {
-        const { active, over } = event;
-        if (!over || active.id === over.id) {
-            clearDragPreview();
-            return;
-        }
-        applyDragPreview(active.data.current, over.data.current);
-    };
-
     const handleDragEnd = (event: any) => {
-        previewIntentRef.current = null;
         setActiveDrag(null);
-        setPreviewNodes(null);
-        setPreviewParentIndex(null);
         const { active, over } = event;
         if (!over || active.id === over.id) return;
 
@@ -439,14 +373,14 @@ const BoardView = () => {
     };
 
 
-    /** 新增頂層群組 (Level 1 → 新列表) */
+    /** 新增頂層任務 (Level 1 → 新列表) */
     const handleAddColumn = () => {
         const newNode: TaskNode = {
             id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
             workspaceId: activeWorkspaceId || '',
             boardId: activeBoardId || '',
             parentId: null,
-            title: '新群組',
+            title: '新任務',
             status: 'todo',
             nodeType: 'group',
             order: rootNodes.length,
@@ -502,14 +436,12 @@ const BoardView = () => {
                 )}
 
                 {/* 列表畫布 (Lists Canvas) */}
-                <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                <div className="scroll-container flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                     <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                         {rootNodes.map(node => (
                             <KanbanColumn
                                 key={node.id}
                                 nodeId={node.id}
-                                previewNodes={previewNodes}
-                                previewParentIndex={previewParentIndex}
                             />
                         ))}
                     </SortableContext>
@@ -521,7 +453,7 @@ const BoardView = () => {
                             className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 font-bold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group"
                         >
                             <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-                            <span>新增群組</span>
+                            <span>新增任務</span>
                         </button>
                     </div>
                 </div>
@@ -531,7 +463,7 @@ const BoardView = () => {
                     <div className={`rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg will-change-transform ${
                         activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
                     }`}>
-                        {activeDrag.node.title || 'Untitled'}
+                        {activeDrag.node.title || '未命名任務'}
                     </div>
                 ) : null}
             </DragOverlay>

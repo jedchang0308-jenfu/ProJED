@@ -3,13 +3,14 @@ import {
   GoogleAuthProvider,
   getRedirectResult,
   signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { FirestoreUser } from '../types';
-import { isSupabaseBackend } from './dataBackend';
+import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 
 type SupabaseUser = NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']>;
@@ -108,6 +109,31 @@ const getSupabaseSeedCredentials = () => {
 export const isSupabaseLocalPasswordAuth = () =>
   isSupabaseBackend && (getSupabaseAuthMode() === 'local-password' || isLocalSupabaseUrl());
 
+export const isLocalTestAuth = () => isLocalTestBackend;
+
+const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
+
+const localTestUser: FirestoreUser = {
+  uid: 'local-test-user',
+  email: 'test@projed.local',
+  displayName: 'ProJED 固定測試帳號',
+  createdAt: 1704067200000,
+};
+
+const signInWithLocalTestUser = async (): Promise<FirestoreUser> => {
+  localStorage.setItem(LOCAL_TEST_SESSION_KEY, JSON.stringify(localTestUser));
+  return localTestUser;
+};
+
+const getLocalTestSession = (): FirestoreUser | null => {
+  try {
+    const stored = localStorage.getItem(LOCAL_TEST_SESSION_KEY);
+    return stored ? JSON.parse(stored) as FirestoreUser : null;
+  } catch {
+    return null;
+  }
+};
+
 const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
   const { email, password } = getSupabaseSeedCredentials();
   if (!email || !password) {
@@ -122,6 +148,10 @@ const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
 
 export const authService = {
   signInWithGoogle: async (): Promise<FirestoreUser | null> => {
+    if (isLocalTestAuth()) {
+      return signInWithLocalTestUser();
+    }
+
     if (isEmbeddedAuthBlocked()) {
       throw new Error('Google sign-in is blocked in this embedded browser. Open ProJED in Chrome or Safari.');
     }
@@ -156,11 +186,24 @@ export const authService = {
     }
 
     const provider = getGoogleProvider();
-    const result = await signInWithPopup(requireFirebaseAuth(), provider);
+    let result;
+    try {
+      result = await signInWithPopup(requireFirebaseAuth(), provider);
+    } catch (error: any) {
+      if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/popup-closed-by-user') {
+        await signInWithRedirect(requireFirebaseAuth(), provider);
+        return null;
+      }
+      throw error;
+    }
     return ensureFirestoreUser(result.user);
   },
 
   handleRedirectResult: async (): Promise<FirestoreUser | null> => {
+    if (isLocalTestAuth()) {
+      return getLocalTestSession();
+    }
+
     if (isSupabaseBackend) {
       if (!isSupabaseConfigured) return null;
 
@@ -175,6 +218,11 @@ export const authService = {
   },
 
   signOut: async (): Promise<void> => {
+    if (isLocalTestAuth()) {
+      localStorage.removeItem(LOCAL_TEST_SESSION_KEY);
+      return;
+    }
+
     if (isSupabaseBackend) {
       requireSupabaseAuth();
 
@@ -187,6 +235,11 @@ export const authService = {
   },
 
   onAuthStateChanged: (callback: (user: FirestoreUser | null) => void) => {
+    if (isLocalTestAuth()) {
+      callback(getLocalTestSession());
+      return () => undefined;
+    }
+
     if (isSupabaseBackend) {
       if (!isSupabaseConfigured) {
         callback(null);

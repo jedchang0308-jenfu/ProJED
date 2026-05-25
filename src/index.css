@@ -80,6 +80,18 @@
 }
 
 /* 拖動中的視覺效果 */
+.kanban-scroll-touch {
+  touch-action: pan-x pan-y;
+}
+
+.task-drag-hitbox,
+.kanban-drag-dot-hitbox {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .dragging {
   opacity: 0.5;
   transform: scale(1.05);
@@ -143,8 +155,9 @@
 /* 觸控裝置專用樣式 */
 @media (hover: none) and (pointer: coarse) {
 
-  /* 拖動手柄放大（符合 Apple/Google 觸控標準 44x44px） */
-  .cursor-grab {
+  /* 拖動小點放大點擊區，但不增加實際欄寬與列高 */
+  .task-drag-hitbox,
+  .kanban-drag-dot-hitbox {
     padding: 12px !important;
     margin: -8px !important;
     min-width: 44px;

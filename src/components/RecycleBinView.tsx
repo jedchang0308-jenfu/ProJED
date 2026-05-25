@@ -31,7 +31,7 @@ const RecycleBinView = () => {
     };
 
     const handlePermanentDelete = async (item: any) => {
-        const typeName = item.nodeType === 'group' ? '群組' : '任務';
+        const typeName = '任務';
         const confirmMsg = `確定要永久刪除${typeName}「${item.title}」嗎？此動作無法復原！`;
         const confirmed = await useDialogStore.getState().showConfirm(confirmMsg);
         
@@ -61,7 +61,7 @@ const RecycleBinView = () => {
                     </div>
                     <div>
                         <h2 className="font-bold text-slate-800 leading-tight">資源回收桶</h2>
-                        <span className="text-[10px] text-slate-400 font-medium">包含已被刪除的群組與任務。它們將保留於此直到您手動清空。</span>
+                        <span className="text-[10px] text-slate-400 font-medium">包含已被刪除的任務。它們將保留於此直到您手動清空。</span>
                     </div>
                 </div>
 
@@ -86,7 +86,7 @@ const RecycleBinView = () => {
                                 <Trash2 size={32} />
                             </div>
                             <h3 className="text-lg font-bold text-slate-600 mb-2">資源回收桶是空的</h3>
-                            <p className="text-sm text-slate-400">所有被刪除的任務與群組都會寄放在這裡。</p>
+                            <p className="text-sm text-slate-400">所有被刪除的任務都會寄放在這裡。</p>
                         </div>
                     ) : (
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -107,7 +107,7 @@ const RecycleBinView = () => {
                                                 item.nodeType === 'group' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 
                                                 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                             }`}>
-                                                {item.nodeType === 'group' ? '群組' : '任務'}
+                                                任務
                                             </div>
                                         </div>
 

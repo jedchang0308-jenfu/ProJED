@@ -34,6 +34,9 @@ interface LongPressHandlers {
   onContextMenuCapture: (e: React.MouseEvent) => void;
 }
 
+const isTaskDragHandleEvent = (target: EventTarget | null) =>
+  target instanceof HTMLElement && Boolean(target.closest('[data-task-drag-handle="true"]'));
+
 export function useLongPress(
   onLongPress: (e: React.TouchEvent) => void,
   { delay = 500, tolerance = 8 }: UseLongPressOptions = {}
@@ -65,6 +68,11 @@ export function useLongPress(
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
+      if (isTaskDragHandleEvent(e.target)) {
+        cancel();
+        return;
+      }
+
       triggeredRef.current = false;
       const touch = e.touches[0];
       startPositionRef.current = { x: touch.clientX, y: touch.clientY };
@@ -82,7 +90,7 @@ export function useLongPress(
         onLongPress(e);
       }, delay);
     },
-    [onLongPress, delay]
+    [cancel, onLongPress, delay]
   );
 
   const onTouchMove = useCallback(
@@ -113,7 +121,7 @@ export function useLongPress(
   );
 
   const onTouchCancel = useCallback(
-    (_e: React.TouchEvent) => {
+    () => {
       cancel();
     },
     [cancel]

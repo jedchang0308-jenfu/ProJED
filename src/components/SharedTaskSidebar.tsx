@@ -2,11 +2,12 @@ import { useState } from 'react';
 import useDialogStore from '../store/useDialogStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
-import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, GripVertical, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
+import { TaskDragHandle } from './Wbs/TaskDragHandle';
 
 interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
 const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
@@ -46,12 +47,13 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 ${isGroup ? 'font-black text-slate-800' : isTask && item.level === 1 ? 'font-bold text-slate-700' : 'text-slate-500'}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => onClick(item)}
-            {...attributes}
-            {...listeners}
         >
-            <div className="flex-shrink-0 absolute left-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <GripVertical size={12} className="text-slate-400" />
-            </div>
+            <TaskDragHandle
+                attributes={attributes}
+                listeners={listeners}
+                size="xs"
+                className="absolute left-1 opacity-0 group-hover:opacity-100"
+            />
             {hasChildren && onToggleCollapse ? (
                 <button
                     onClick={(e) => {
@@ -81,7 +83,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                         onAddChild(item);
                     }}
                     className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
-                    title="新增子項目"
+                    title="新增下層任務"
                 >
                     <Plus size={12} />
                 </button>
@@ -107,6 +109,24 @@ const SharedTaskSidebar = ({
     const sensors = useDragSensors();
     const [activeSortableItem, setActiveSortableItem] = useState(null);
 
+    const wouldCreateCycle = (draggedId: string, nextParentId: string | null) => {
+        if (!nextParentId) return false;
+        if (draggedId === nextParentId) return true;
+
+        const nodes = useWbsStore.getState().nodes;
+        const visited = new Set<string>([draggedId]);
+        let current: string | null = nextParentId;
+
+        while (current) {
+            if (current === draggedId) return true;
+            if (visited.has(current)) return true;
+            visited.add(current);
+            current = nodes[current]?.parentId || null;
+        }
+
+        return false;
+    };
+
     const handleSortableDragEnd = (event: any) => {
         const { active, over } = event;
         setActiveSortableItem(null);
@@ -123,12 +143,14 @@ const SharedTaskSidebar = ({
             updateNode(overItem.id, { order: tempOrder });
         } else {
             // 跨層級移動
-            updateNode(activeItem.id, { parentId: overItem.parentId, order: overItem.order + 0.5 });
+            const nextParentId = overItem.parentId || null;
+            if (wouldCreateCycle(activeItem.id, nextParentId)) return;
+            updateNode(activeItem.id, { parentId: nextParentId, order: overItem.order + 0.5 });
         }
     };
 
     const handleAddList = async () => {
-        const title = await useDialogStore.getState().showPrompt("請輸入群組名稱：", "新群組");
+        const title = await useDialogStore.getState().showPrompt("請輸入任務名稱：", "新任務");
         if (title && title.trim() && activeWorkspaceId && activeBoardId) {
             addNode({
                 id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
@@ -147,7 +169,7 @@ const SharedTaskSidebar = ({
 
     const handleAddChild = async (item: any) => {
         const { showPrompt } = useDialogStore.getState();
-        const title = await showPrompt("請輸入子項目名稱：", "新子項目");
+        const title = await showPrompt("請輸入任務名稱：", "新任務");
         if (title && title.trim() && activeWorkspaceId && activeBoardId) {
             addNode({
                 id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
@@ -156,7 +178,7 @@ const SharedTaskSidebar = ({
                 parentId: item.id,
                 title: title.trim(),
                 status: 'todo',
-                nodeType: item.level === 0 ? 'task' : 'task', // 預設新增子任務
+                nodeType: 'task',
                 order: 999, // default to end
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
@@ -216,15 +238,8 @@ const SharedTaskSidebar = ({
                             </SortableContext>
                             <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                                 {activeSortableItem ? (
-                                    <div className="opacity-90 shadow-xl border border-primary/20 bg-white rounded-md overflow-hidden ring-2 ring-primary/20 cursor-grabbing">
-                                        <SortableSidebarRow
-                                            item={activeSortableItem}
-                                            onClick={() => {}}
-                                            onAddChild={handleAddChild}
-                                            onToggleCollapse={toggleCollapse}
-                                            isCollapsed={collapsedIds.has((activeSortableItem as any).id)}
-                                            rowHeight={rowHeight}
-                                        />
+                                    <div className="max-w-[220px] truncate rounded-md border border-primary/20 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing">
+                                        {(activeSortableItem as any).title || '未命名任務'}
                                     </div>
                                 ) : null}
                             </DragOverlay>
@@ -236,7 +251,7 @@ const SharedTaskSidebar = ({
                                 className="w-full py-2 flex items-center justify-center gap-2 text-[11px] font-bold text-slate-400 hover:text-primary hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 rounded-lg transition-all"
                             >
                                 <Plus size={14} />
-                                <span>新增頂層群組</span>
+                                <span>新增頂層任務</span>
                             </button>
                         </div>
                     </div>

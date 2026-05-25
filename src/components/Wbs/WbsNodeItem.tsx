@@ -3,19 +3,21 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import type { TaskStatus } from '../../types';
 import { Input } from '../ui/Input';
-import { ChevronRight, ChevronDown, Link, GripVertical, Lock, Unlock } from 'lucide-react';
+import { ChevronRight, ChevronDown, Link, Lock, Unlock } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
+import { TaskDragHandle } from './TaskDragHandle';
 
 interface WbsNodeItemProps {
   nodeId: string;
   level?: number;
+  ancestorIds?: string[];
 }
 
-export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) => {
+export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [] }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
   const [isTitleEditing, setIsTitleEditing] = useState(false);
@@ -23,15 +25,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
 
-  // 安全檢查，避免節點已被砍除仍在渲染導致 crash
-  if (!node) return null;
+  const isRecursiveNode = ancestorIds.includes(nodeId);
 
-  const lockStatus = getNodeLockStatus(node.id, wbsDependencies);
-  const isEndDateEffectivelyLocked = lockStatus.endLocked || node.isDurationLocked;
+  const nextAncestorIds = [...ancestorIds, nodeId];
+  const nextAncestorKey = nextAncestorIds.join('|');
 
-  const [localTitle, setLocalTitle] = useState(node.title);
-  const [localStartDate, setLocalStartDate] = useState(node.startDate || '');
-  const [localEndDate, setLocalEndDate] = useState(node.endDate || '');
+  const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
+  const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
+
+  const [localTitle, setLocalTitle] = useState(node?.title || '');
+  const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
+  const [localEndDate, setLocalEndDate] = useState(node?.endDate || '');
 
   // DnD Sortable Hook
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -48,13 +52,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
 
   // ✅ 同步 Store 狀態到 Local State (確保 Undo/Redo 發生時畫面能正確更新)
   React.useEffect(() => {
-      setLocalTitle(node.title);
-  }, [node.title]);
+      setLocalTitle(node?.title || '');
+  }, [node?.title]);
 
   React.useEffect(() => {
-      setLocalStartDate(node.startDate || '');
-      setLocalEndDate(node.endDate || '');
-  }, [node.startDate, node.endDate]);
+      setLocalStartDate(node?.startDate || '');
+      setLocalEndDate(node?.endDate || '');
+  }, [node?.startDate, node?.endDate]);
 
   // 取得全域顯示設定
   const dependencyContext = React.useContext(WbsDependencyContext);
@@ -83,12 +87,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
   // ✅ 只有當 childrenIds 陣列變更時，才重新抓取最新的 node references
   const children = React.useMemo(() => {
       const state = useWbsStore.getState();
-      return (childrenIds || []).map(id => state.nodes[id]).filter(n => n && !n.isArchived && statusFilters[n.status || 'todo']).sort((a,b) => a.order - b.order);
-  }, [childrenIds, statusFilters]);
+      const nextAncestors = new Set(nextAncestorKey.split('|'));
+      return (childrenIds || [])
+        .filter(id => !nextAncestors.has(id))
+        .map(id => state.nodes[id])
+        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'])
+        .sort((a,b) => a.order - b.order);
+  }, [childrenIds, statusFilters, nextAncestorKey]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
-  const isDueToday = node.status !== 'completed' && !!localEndDate && dayjs(localEndDate).isSame(dayjs(), 'day');
+  const isDueToday = node?.status !== 'completed' && !!localEndDate && dayjs(localEndDate).isSame(dayjs(), 'day');
 
   // 緊湊的縮排 (使用 1.25rem 取代原本的 1.5rem 以節省空間)
   const indentPadding = level * 1.25;
@@ -132,11 +141,11 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
           const pEnd = parentNode.endDate;
 
           if (pStart && newValue < pStart) {
-              alert(`防呆機制：子任務的日期不得超出父層級的範圍\n(父層最早開始日期為 ${pStart})`);
+              alert(`防呆機制：下層任務的日期不得超出上層任務的範圍\n(上層任務最早開始日期為 ${pStart})`);
               return false;
           }
           if (pEnd && newValue > pEnd) {
-              alert(`防呆機制：子任務的日期不得超出父層級的範圍\n(父層最晚結束日期為 ${pEnd})`);
+              alert(`防呆機制：下層任務的日期不得超出上層任務的範圍\n(上層任務最晚結束日期為 ${pEnd})`);
               return false;
           }
       }
@@ -149,7 +158,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
           if (fieldType === 'startDate') {
               for (const child of childrenNodes) {
                   if (child.startDate && newValue > child.startDate) {
-                      alert(`防呆機制：父群組的開始日期不能晚於其子任務\n(子任務「${child.title}」已排定於 ${child.startDate} 開始)`);
+                      alert(`防呆機制：上層任務的開始日期不能晚於其下層任務\n(下層任務「${child.title}」已排定於 ${child.startDate} 開始)`);
                       return false;
                   }
               }
@@ -158,7 +167,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
           if (fieldType === 'endDate') {
               for (const child of childrenNodes) {
                   if (child.endDate && newValue < child.endDate) {
-                      alert(`防呆機制：父群組的結束日期不能早於其子任務\n(子任務「${child.title}」排定至 ${child.endDate} 才結束)`);
+                      alert(`防呆機制：上層任務的結束日期不能早於其下層任務\n(下層任務「${child.title}」排定至 ${child.endDate} 才結束)`);
                       return false;
                   }
               }
@@ -256,6 +265,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
     }
   };
 
+  // Keep all hooks above this guard so missing/cyclic data never changes hook order.
+  if (!node || isRecursiveNode) return null;
+
   return (
     <>
       <div 
@@ -277,15 +289,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
         {/* Col 1: 任務名稱與階層結構 */}
         <div className="flex items-center gap-1.5 overflow-hidden pr-4 relative" style={{ paddingLeft: `${indentPadding}rem` }}>
           {/* 拖曳手把 */}
-          <div 
-              {...attributes} 
-              {...listeners} 
-              className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors p-1 -ml-2 opacity-0 group-hover:opacity-100 touch-none flex-shrink-0"
-              onClick={e => e.stopPropagation()}
+          <TaskDragHandle
+              attributes={attributes}
+              listeners={listeners}
+              size="sm"
               title="拖曳以排序或移動"
-          >
-              <GripVertical size={14} />
-          </div>
+              className="-ml-2 opacity-0 group-hover:opacity-100"
+          />
 
           <button 
             onClick={handleToggle}
@@ -295,9 +305,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
 
-          {node.nodeType === 'group' ? (
-              <span className="flex-shrink-0 text-[10px] text-blue-600 border border-blue-300 bg-blue-50 px-1 py-0.5 rounded leading-none mr-1">Group</span>
-          ) : node.nodeType === 'milestone' ? (
+          {node.nodeType === 'milestone' ? (
               <span className="flex-shrink-0 text-[10px] text-amber-600 border border-amber-300 bg-amber-50 px-1 py-0.5 rounded leading-none mr-1">MS</span>
           ) : null}
 
@@ -504,7 +512,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0 }) =
         <div className="flex flex-col w-full">
           <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
             {children.map(child => (
-              <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} />
+              <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} ancestorIds={nextAncestorIds} />
             ))}
           </SortableContext>
         </div>

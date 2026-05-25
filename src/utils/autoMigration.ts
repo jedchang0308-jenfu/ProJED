@@ -268,7 +268,7 @@ const convertListsToNodes = (wsId: string, boardId: string, lists: any[]): TaskN
             workspaceId: wsId,
             boardId: boardId,
             parentId: cardNodeId,
-            title: cli.title || cli.text || '待辦事項',
+            title: cli.title || cli.text || '任務',
             status: cli.status || (cli.completed ? 'completed' : 'todo'),
             startDate: cli.startDate || undefined,
             endDate: cli.endDate || undefined,

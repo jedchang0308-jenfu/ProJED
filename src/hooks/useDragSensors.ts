@@ -2,8 +2,8 @@
  * 拖動感應器配置
  * 設計意圖：支援桌面（滑鼠）和鍵盤無障礙操作。
  *
- * 【手機端政策】觸控拖曳（TouchSensor）已停用。
- *   手機端排序請切換至桌面版操作。
+ * 【響應式政策】滑鼠與觸控拖曳都只由明確的拖曳把手啟動。
+ *   手機端與桌機端共用同一顆 TaskDragHandle，差異只交給 CSS 觸控熱區處理。
  *   手機端仍支援長按 500ms 開啟右鍵選單（useLongPress Hook）。
  *
  * 【行內編輯保護】SmartKeyboardSensor 集中式防禦：
@@ -11,7 +11,7 @@
  *   在 Sensor 層直接返回 false，不啟動拖曳行為。
  *   無需在任何元件內加 stopPropagation()，未來新增行內編輯自動安全。
  */
-import { useSensor, useSensors, MouseSensor, KeyboardSensor } from '@dnd-kit/core';
+import { useSensor, useSensors, MouseSensor, TouchSensor, KeyboardSensor } from '@dnd-kit/core';
 import type { SensorDescriptor, SensorOptions } from '@dnd-kit/core';
 
 /**
@@ -50,6 +50,13 @@ export function useDragSensors(): SensorDescriptor<SensorOptions>[] {
         }),
 
         // 鍵盤無障礙支援（已內建行內編輯保護）
+        useSensor(TouchSensor, {
+            activationConstraint: {
+                delay: 180,
+                tolerance: 8,
+            },
+        }),
+
         useSensor(SmartKeyboardSensor)
     );
 }

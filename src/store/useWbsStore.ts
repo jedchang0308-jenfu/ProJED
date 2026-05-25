@@ -344,23 +344,30 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   getNodeProgress: (id) => {
     const state = get();
-    const node = state.nodes[id];
-    if (!node) return 0;
+    const calculateProgress = (nodeId: string, visited: Set<string>): number => {
+      const node = state.nodes[nodeId];
+      if (!node) return 0;
+      if (visited.has(nodeId)) return getStatusProgress(node.status);
 
-    const childrenIds = state.parentNodesIndex[id] || [];
+      const nextVisited = new Set(visited);
+      nextVisited.add(nodeId);
+      const childrenIds = (state.parentNodesIndex[nodeId] || []).filter(childId => !nextVisited.has(childId));
 
-    // 無論是 Group 還是 Task，只要沒有子節點，進度就是依賴自身狀態
-    if (childrenIds.length === 0) {
-        return getStatusProgress(node.status);
-    }
+      // 無論是 Group 還是 Task，只要沒有子節點，進度就是依賴自身狀態
+      if (childrenIds.length === 0) {
+          return getStatusProgress(node.status);
+      }
 
-    // 只要有子節點，進度必須由下而上(Bottom-up) 遞迴彙總
-    let totalProgress = 0;
-    childrenIds.forEach(childId => {
-        totalProgress += get().getNodeProgress(childId);
-    });
+      // 只要有子節點，進度必須由下而上(Bottom-up) 遞迴彙總
+      let totalProgress = 0;
+      childrenIds.forEach(childId => {
+          totalProgress += calculateProgress(childId, nextVisited);
+      });
 
-    return Math.round(totalProgress / childrenIds.length);
+      return Math.round(totalProgress / childrenIds.length);
+    };
+
+    return calculateProgress(id, new Set<string>());
   },
 
   recalculateAncestorStatus: (nodeId) => {
@@ -370,10 +377,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     let currentParentId = node.parentId;
     const updatedNodes = { ...state.nodes };
+    const visitedParentIds = new Set<string>();
     let hasChanges = false;
 
     // 向上追溯所有的 parent
     while (currentParentId && currentParentId !== 'root' && updatedNodes[currentParentId]) {
+      if (visitedParentIds.has(currentParentId)) break;
+      visitedParentIds.add(currentParentId);
+
       const parentNode = updatedNodes[currentParentId];
       if (parentNode.nodeType === 'task' || parentNode.nodeType === 'milestone') {
           // 如果業務邏輯不允許 task 底下有 task，則跳出（依目前未限制，預防萬一）
