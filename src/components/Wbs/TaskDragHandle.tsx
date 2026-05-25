@@ -29,47 +29,25 @@ export const TaskDragHandle: React.FC<TaskDragHandleProps> = ({
   size = 'md',
   className = '',
   title = '拖曳任務',
-}) => {
-  const activeListeners = disabled ? {} : listeners || {};
-
-  const stopTouchPropagation = (event: React.TouchEvent<HTMLButtonElement>) => {
-    activeListeners.onTouchStart?.(event);
-    event.stopPropagation();
-  };
-
-  const stopTouchMovePropagation = (event: React.TouchEvent<HTMLButtonElement>) => {
-    activeListeners.onTouchMove?.(event);
-    event.stopPropagation();
-  };
-
-  const stopTouchEndPropagation = (event: React.TouchEvent<HTMLButtonElement>) => {
-    activeListeners.onTouchEnd?.(event);
-    event.stopPropagation();
-  };
-
-  return (
-    <button
-      type="button"
-      data-kanban-drag-handle="true"
-      data-task-drag-handle="true"
-      aria-label={title}
-      title={title}
-      disabled={disabled}
-      {...(!disabled ? attributes : {})}
-      {...activeListeners}
-      onTouchStart={stopTouchPropagation}
-      onTouchMove={stopTouchMovePropagation}
-      onTouchEnd={stopTouchEndPropagation}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onClick={(event) => event.stopPropagation()}
-      className={`task-drag-hitbox ${sizeClassMap[size]} flex shrink-0 cursor-grab items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-        disabled ? 'pointer-events-none opacity-0' : ''
-      } ${className}`}
-    >
-      <GripVertical size={iconSizeMap[size]} strokeWidth={2.5} />
-    </button>
-  );
-};
+}) => (
+  <button
+    type="button"
+    data-kanban-drag-handle="true"
+    data-task-drag-handle="true"
+    aria-label={title}
+    title={title}
+    disabled={disabled}
+    {...(!disabled ? attributes : {})}
+    {...(!disabled ? listeners : {})}
+    onContextMenu={(event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    }}
+    onClick={(event) => event.stopPropagation()}
+    className={`task-drag-hitbox ${sizeClassMap[size]} flex shrink-0 cursor-grab touch-none items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+      disabled ? 'pointer-events-none opacity-0' : ''
+    } ${className}`}
+  >
+    <GripVertical size={iconSizeMap[size]} strokeWidth={2.5} />
+  </button>
+);

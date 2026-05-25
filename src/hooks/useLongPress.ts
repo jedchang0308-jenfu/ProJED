@@ -35,7 +35,7 @@ interface LongPressHandlers {
 }
 
 const isTaskDragHandleEvent = (target: EventTarget | null) =>
-  target instanceof HTMLElement && Boolean(target.closest('[data-task-drag-handle="true"]'));
+  target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
 export function useLongPress(
   onLongPress: (e: React.TouchEvent) => void,

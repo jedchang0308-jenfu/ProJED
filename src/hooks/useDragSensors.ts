@@ -52,8 +52,8 @@ export function useDragSensors(): SensorDescriptor<SensorOptions>[] {
         // 鍵盤無障礙支援（已內建行內編輯保護）
         useSensor(TouchSensor, {
             activationConstraint: {
-                delay: 180,
-                tolerance: 8,
+                delay: 120,
+                tolerance: 14,
             },
         }),
 

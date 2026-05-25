@@ -38,7 +38,7 @@ const statusTextMap: Record<TaskStatus, string> = {
 };
 
 const isFromTaskDragHandle = (target: EventTarget | null) =>
-  target instanceof HTMLElement && Boolean(target.closest('[data-task-drag-handle="true"]'));
+  target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
 // =====================================================
 // ChecklistItem — 單一可拖曳任務（抽出為獨立元件，
@@ -79,7 +79,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const grandchildIds = previewParentIndex?.[initialChild.id] || storeGrandchildIds;
   const childId = child?.id || initialChild.id;
   const isInvalidChild = !child || child.isArchived || ancestorIds.includes(childId);
-  const nextAncestorIds = [...ancestorIds, childId];
 
   const status = child?.status || 'todo';
   const isDueToday = status !== 'completed' && !!child?.endDate && dayjs(child.endDate).isSame(dayjs(), 'day');
@@ -171,7 +170,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       {/* 單一待辦項目列 — 拖曳只由左側把手啟動，避免影響手機捲動 */}
       <div
         {...checklistLongPressHandlers}
-        className={`relative kanban-scroll-touch flex items-center gap-1.5 py-1 group rounded transition-colors ${
+        className={`kanban-checklist-item relative kanban-scroll-touch flex items-center gap-1.5 py-1 group rounded transition-colors ${
           isDragging
             ? 'opacity-40 bg-primary/5'
             : isSelectingMode
@@ -303,7 +302,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           depth={depth + 1}
           previewNodes={previewNodes}
           previewParentIndex={previewParentIndex}
-          ancestorIds={nextAncestorIds}
+          ancestorIds={ancestorIds}
         />
       )}
     </div>
@@ -379,7 +378,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   if (isRecursiveParent || children.length === 0) return null;
 
   return (
-    <div className={depth === 0 ? 'mt-2 pt-2 border-t border-slate-100' : ''}>
+    <div className={depth === 0 ? 'kanban-checklist-root mt-2 pt-2 border-t border-slate-100' : ''}>
       <SortableContext items={children.map(child => child.id)} strategy={verticalListSortingStrategy}>
         {children.map(child => (
           <ChecklistItem

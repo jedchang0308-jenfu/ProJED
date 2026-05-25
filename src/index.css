@@ -189,6 +189,65 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
+
+  /* 手機看板任務卡片 Y 軸間距：8px -> 5.6px，縮小 30%。 */
+  .kanban-task-card {
+    margin-bottom: 4px;
+  }
+
+  .kanban-task-card-body {
+    padding: 6px;
+  }
+
+  .kanban-task-title-row,
+  .kanban-task-title-content,
+  .kanban-task-meta {
+    gap: 4px;
+  }
+
+  .kanban-task-meta,
+  .kanban-task-progress,
+  .kanban-checklist-section,
+  .kanban-card-dropzone {
+    margin-top: 3px;
+  }
+
+  .kanban-task-meta > * {
+    min-height: 18px;
+  }
+
+  /* 手機下層任務區塊 Y 軸間距減半。 */
+  .kanban-checklist-section {
+    border-radius: 4px;
+  }
+
+  .kanban-checklist-toggle {
+    min-height: 22px;
+    min-width: 0;
+    padding-top: 1px;
+    padding-bottom: 1px;
+  }
+
+  .kanban-checklist-body {
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-bottom: 1px;
+  }
+
+  .kanban-checklist-root {
+    margin-top: 2px;
+    padding-top: 2px;
+  }
+
+  .kanban-checklist-item {
+    gap: 4px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+  }
+
+  .kanban-card-dropzone.h-12 {
+    height: 32px;
+  }
 }
 
 /* ========================================

@@ -39,7 +39,7 @@ const statusTextColorMap: Record<TaskStatus, string> = {
 };
 
 const isFromTaskDragHandle = (target: EventTarget | null) =>
-  target instanceof HTMLElement && Boolean(target.closest('[data-task-drag-handle="true"]'));
+  target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
 export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previewNodes, previewParentIndex }) => {
   const storeNode = useWbsStore(s => s.nodes[nodeId]);
@@ -239,7 +239,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           e.preventDefault();
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
-      className={`relative kanban-scroll-touch bg-white border rounded-lg shadow-sm transition-all group mb-2 ${
+      className={`kanban-task-card relative kanban-scroll-touch bg-white border rounded-lg shadow-sm transition-all group mb-2 ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
           : isSelectingMode
@@ -249,12 +249,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             : `border-slate-200 hover:border-primary hover:shadow-md ${isEditing ? 'cursor-default' : ''}`
       }`}
     >
-      <div className="flex items-start p-2.5">
+      <div className="kanban-task-card-body flex items-start p-2.5">
         {/* 卡片內容 — 只有左側把手可拖曳，避免手機滑動畫面時誤觸 */}
         <div className="flex-1 min-w-0">
           {/* 標題列 */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <div className="kanban-task-title-row flex items-start justify-between gap-2">
+            <div className="kanban-task-title-content flex items-center gap-1.5 flex-1 min-w-0">
               {/* 拖曳把手 */}
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
               <TaskDragHandle
@@ -294,7 +294,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
           {/* 日期與進度指標 */}
           {(isSelectingMode || node.startDate || node.endDate || hasChildren) && (
-            <div onPointerDown={(e) => e.stopPropagation()} className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px] text-slate-400">
+            <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta flex flex-wrap items-center gap-1.5 mt-2 text-[10px] text-slate-400">
 
               {/* 選取模式：始終顯示兩顆日期按鈕（無日期時顯示 "..."） */}
               {isSelectingMode ? (
@@ -363,7 +363,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
           {/* 進度條 (僅在有子節點時顯示) */}
           {hasChildren && (
-            <div className="mt-2">
+            <div className="kanban-task-progress mt-2">
               <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
@@ -379,7 +379,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           {hasChildren && (
             <div
               ref={setChecklistAreaDropRef}
-              className={`mt-2 rounded-md border transition-[background-color,border-color,box-shadow] duration-100 ${
+              className={`kanban-checklist-section mt-2 rounded-md border transition-[background-color,border-color,box-shadow] duration-100 ${
                 isChecklistTargeted
                   ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]'
                   : 'border-transparent'
@@ -391,14 +391,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   e.stopPropagation();
                   setIsChecklistExpanded(!isChecklistExpanded);
                 }}
-                className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
+                className="kanban-checklist-toggle flex items-center gap-1 px-1.5 py-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
               >
                 {isChecklistExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 <span>{isChecklistExpanded ? '收合' : '展開'}下層任務</span>
               </button>
 
               {isChecklistExpanded && (
-                <div className="px-1 pb-1">
+                <div className="kanban-checklist-body px-1 pb-1">
                   <KanbanChecklist
                     parentId={nodeId}
                     depth={0}
@@ -412,7 +412,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
           <div
             ref={setChecklistDropRef}
-            className={`mt-2 flex items-center justify-center rounded-md border border-dashed transition-[height,opacity,background-color,border-color,color] duration-100 ${
+            className={`kanban-card-dropzone mt-2 flex items-center justify-center rounded-md border border-dashed transition-[height,opacity,background-color,border-color,color] duration-100 ${
               showChecklistDropZone ? 'h-12 opacity-100' : 'h-0 overflow-hidden border-transparent opacity-0'
             } border-slate-300 bg-slate-50 text-slate-400`}
           >

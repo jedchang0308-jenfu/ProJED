@@ -154,6 +154,7 @@ const BoardView = () => {
     const handleDragStart = (event: any) => {
         const { active } = event;
         const nodeId = active.data.current?.nodeId;
+        lastValidOverRef.current = null;
         setActiveDrag({
             id: active.id,
             type: active.data.current?.type,
@@ -162,6 +163,7 @@ const BoardView = () => {
     };
 
     const handleDragCancel = () => {
+        lastValidOverRef.current = null;
         setActiveDrag(null);
     };
 
@@ -249,6 +251,12 @@ const BoardView = () => {
         },
     });
 
+    const getReorderOrder = (draggedNode: TaskNode, targetNode: TaskNode) => {
+        const sameParent = (draggedNode.parentId || null) === (targetNode.parentId || null);
+        const isMovingDown = sameParent && draggedNode.order < targetNode.order;
+        return targetNode.order + (isMovingDown ? 0.5 : -0.5);
+    };
+
     const normalizeMovedSiblingOrders = (
         draggedNodeId: string,
         intent: { parentId: string | null; order: number; nodeType?: TaskNode['nodeType'] },
@@ -312,7 +320,7 @@ const BoardView = () => {
             return {
                 parentId: targetParentId,
                 order: sourceType === 'wbs-column' && targetNode
-                    ? targetNode.order - 0.5
+                    ? getReorderOrder(draggedNode, targetNode)
                     : getAppendOrder(overData.nodeId, draggedNode.id, nodesRecord, parentIndex),
                 nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
             };
@@ -322,7 +330,7 @@ const BoardView = () => {
             if (!targetNode) return null;
             return {
                 parentId: targetNode.parentId,
-                order: targetNode.order - 0.5,
+                order: getReorderOrder(draggedNode, targetNode),
                 nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
             };
         }
@@ -339,7 +347,7 @@ const BoardView = () => {
             if (!targetNode?.parentId) return null;
             return {
                 parentId: targetNode.parentId,
-                order: targetNode.order - 0.5,
+                order: getReorderOrder(draggedNode, targetNode),
                 nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
             };
         }
@@ -354,13 +362,24 @@ const BoardView = () => {
         return true;
     };
 
+    const lastValidOverRef = React.useRef<any>(null);
+
+    const handleDragOver = (event: any) => {
+        const { active, over } = event;
+        if (over && active?.id !== over.id) {
+            lastValidOverRef.current = over;
+        }
+    };
+
     const handleDragEnd = (event: any) => {
         setActiveDrag(null);
         const { active, over } = event;
-        if (!over || active.id === over.id) return;
+        const effectiveOver = over && active.id !== over.id ? over : lastValidOverRef.current;
+        lastValidOverRef.current = null;
+        if (!effectiveOver || active.id === effectiveOver.id) return;
 
         const activeData = active.data.current;
-        const overData = over.data.current;
+        const overData = effectiveOver.data.current;
         const state = useWbsStore.getState();
         const draggedNode = state.nodes[activeData?.nodeId];
         const intent = getDropIntent(activeData, overData, state.nodes);
@@ -404,6 +423,7 @@ const BoardView = () => {
             sensors={sensors}
             collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
         >
