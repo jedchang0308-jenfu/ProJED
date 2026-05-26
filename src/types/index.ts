@@ -136,6 +136,7 @@ export interface BoardState {
   showDependencies: boolean;
   showStartDate: boolean;
   showTags: boolean;
+  dueWithinDays: number | null;
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
@@ -166,6 +167,7 @@ export interface BoardActions {
   toggleDependencies: () => void;
   toggleStartDate: () => void;
   toggleTags: () => void;
+  setDueWithinDays: (days: number | null) => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;

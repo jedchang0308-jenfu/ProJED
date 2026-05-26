@@ -30,6 +30,7 @@ const getDefaultFilters = () => ({
     showDependencies: true,
     showStartDate: true,
     showTags: true,
+    dueWithinDays: null,
 });
 
 const getStoredFilters = () => {
@@ -152,7 +153,8 @@ const useBoardStore = create<BoardStore>()(
                 statusFilters: newFilters,
                 showDependencies: state.showDependencies,
                 showStartDate: state.showStartDate,
-                showTags: state.showTags
+                showTags: state.showTags,
+                dueWithinDays: state.dueWithinDays
             }));
             return { statusFilters: newFilters };
         }),
@@ -164,7 +166,8 @@ const useBoardStore = create<BoardStore>()(
                 statusFilters: state.statusFilters,
                 showDependencies: newDeps,
                 showStartDate: state.showStartDate,
-                showTags: state.showTags
+                showTags: state.showTags,
+                dueWithinDays: state.dueWithinDays
             }));
             return { showDependencies: newDeps };
         }),
@@ -174,7 +177,8 @@ const useBoardStore = create<BoardStore>()(
                 statusFilters: state.statusFilters,
                 showDependencies: state.showDependencies,
                 showStartDate: newStart,
-                showTags: state.showTags
+                showTags: state.showTags,
+                dueWithinDays: state.dueWithinDays
             }));
             return { showStartDate: newStart };
         }),
@@ -184,9 +188,21 @@ const useBoardStore = create<BoardStore>()(
                 statusFilters: state.statusFilters,
                 showDependencies: state.showDependencies,
                 showStartDate: state.showStartDate,
-                showTags: newTags
+                showTags: newTags,
+                dueWithinDays: state.dueWithinDays
             }));
             return { showTags: newTags };
+        }),
+        setDueWithinDays: (days) => set((state) => {
+            const nextDays = days === null || days === undefined ? null : Math.max(0, Math.min(365, Math.floor(days)));
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: state.statusFilters,
+                showDependencies: state.showDependencies,
+                showStartDate: state.showStartDate,
+                showTags: state.showTags,
+                dueWithinDays: nextDays
+            }));
+            return { dueWithinDays: nextDays };
         }),
 
         // ===== Navigation =====

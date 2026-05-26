@@ -21,6 +21,7 @@ import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
+import { matchesDueDateFilter } from '../../utils/taskFilters';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -335,6 +336,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const childIds = previewParentIndex?.[parentId] || storeChildIds;
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
+  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
 
   // 行內編輯狀態管理（在容器層統一管理，避免多個 item 同時進入編輯模式）
@@ -385,9 +387,9 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
     return (childIds || [])
       .filter(id => !nextAncestors.has(id))
       .map(id => nodes[id])
-      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesTagFilters(n, selectedTagIds))
+      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesTagFilters(n, selectedTagIds))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, selectedTagIds, previewNodes, nextAncestorKey]);
+  }, [childIds, statusFilters, dueWithinDays, selectedTagIds, previewNodes, nextAncestorKey]);
 
   // 無子節點則不渲染
   if (isRecursiveParent || children.length === 0) return null;

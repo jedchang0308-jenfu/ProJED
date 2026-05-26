@@ -15,6 +15,7 @@ import { useLongPress } from '../../hooks/useLongPress';
 import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { matchesTagFilters } from '../../utils/tags';
+import { matchesDueDateFilter } from '../../utils/taskFilters';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -30,6 +31,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const updateNode = useWbsStore((state) => state.updateNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const statusFilters = useBoardStore((state) => state.statusFilters);
+  const dueWithinDays = useBoardStore((state) => state.dueWithinDays);
   const selectedTagIds = useTagStore((state) => state.selectedTagIds);
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
@@ -91,9 +93,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
     return (childIds || [])
       .map((id) => nodes[id])
-      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'] && matchesTagFilters(child, selectedTagIds))
+      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'] && matchesDueDateFilter(child, dueWithinDays) && matchesTagFilters(child, selectedTagIds))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, selectedTagIds, previewNodes]);
+  }, [childIds, statusFilters, dueWithinDays, selectedTagIds, previewNodes]);
 
   const {
     attributes: columnAttributes,

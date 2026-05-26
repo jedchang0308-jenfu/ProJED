@@ -13,6 +13,7 @@ import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
+import { matchesDueDateFilter } from '../../utils/taskFilters';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -84,6 +85,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
+  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
   const tags = useTagStore(s => s.tags);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   
@@ -97,9 +99,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       return (childrenIds || [])
         .filter(id => !nextAncestors.has(id))
         .map(id => state.nodes[id])
-        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesTagFilters(n, selectedTagIds))
+        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesTagFilters(n, selectedTagIds))
         .sort((a,b) => a.order - b.order);
-  }, [childrenIds, statusFilters, selectedTagIds, nextAncestorKey]);
+  }, [childrenIds, statusFilters, dueWithinDays, selectedTagIds, nextAncestorKey]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive

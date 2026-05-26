@@ -63,6 +63,7 @@ const STATUS_STYLES = {
 
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { StatusFilterBar } from './ui/StatusFilterBar';
+import { matchesDueDateFilter } from '../utils/taskFilters';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -169,6 +170,7 @@ const CalendarView = () => {
         activeBoardId,
         activeWorkspaceId,
         statusFilters,
+        dueWithinDays,
         isSidebarOpen,
         setSidebarOpen,
         toggleStatusFilter,
@@ -208,6 +210,7 @@ const CalendarView = () => {
             if (!node || node.isArchived || node.boardId !== activeBoardId) return;
             const status = node.status || 'todo';
             if (!statusFilters[status]) return;
+            if (!matchesDueDateFilter(node, dueWithinDays)) return;
             
             // Map nodeType to pseudoType for filters
             let pseudoType = 'checklist';
@@ -235,7 +238,7 @@ const CalendarView = () => {
         });
         
         return items;
-    }, [activeBoardId, nodes, statusFilters, collapsedIds]);
+    }, [activeBoardId, nodes, statusFilters, dueWithinDays, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {

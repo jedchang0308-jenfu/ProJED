@@ -35,6 +35,8 @@ export const StatusFilterBar: React.FC = () => {
   const toggleStartDate = useBoardStore(s => s.toggleStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const toggleTags = useBoardStore(s => s.toggleTags);
+  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+  const setDueWithinDays = useBoardStore(s => s.setDueWithinDays);
 
   const tags = useTagStore(s => s.tags);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
@@ -60,8 +62,21 @@ export const StatusFilterBar: React.FC = () => {
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
   const hiddenStatusCount = STATUS_CONFIG.filter(status => !statusFilters[status.key]).length;
   const activeTagCount = selectedTagIds.length;
-  const hasActiveFilter = hiddenStatusCount > 0 || activeTagCount > 0 || !showDependencies || !showTags;
-  const activeFilterCount = hiddenStatusCount + activeTagCount;
+  const hasDueFilter = dueWithinDays !== null && dueWithinDays !== undefined;
+  const hasActiveFilter = hiddenStatusCount > 0 || activeTagCount > 0 || hasDueFilter || !showDependencies || !showTags;
+  const activeFilterCount = hiddenStatusCount + activeTagCount + (hasDueFilter ? 1 : 0);
+
+  const handleDueDaysChange = (value: string) => {
+    if (value === '') {
+      setDueWithinDays(null);
+      return;
+    }
+
+    const nextDays = Number(value);
+    if (Number.isFinite(nextDays)) {
+      setDueWithinDays(nextDays);
+    }
+  };
 
   const handleCreateTag = async () => {
     if (!activeWorkspaceId) return;
@@ -122,6 +137,48 @@ export const StatusFilterBar: React.FC = () => {
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="mx-3 h-px bg-slate-100" />
+
+          <div className="px-3 pt-2 pb-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">到期日</p>
+              {hasDueFilter && (
+                <button
+                  type="button"
+                  onClick={() => setDueWithinDays(null)}
+                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDueWithinDays(dueWithinDays ?? 7)}
+                className={filterPillClass(hasDueFilter)}
+                aria-pressed={hasDueFilter}
+              >
+                <CalendarDays size={12} className="text-amber-600" />
+                到期日
+              </button>
+
+              <label className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm">
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={dueWithinDays ?? ''}
+                  onChange={event => handleDueDaysChange(event.target.value)}
+                  placeholder="天數"
+                  className="w-12 bg-transparent text-right text-[11px] font-bold text-slate-700 outline-none placeholder:text-slate-300"
+                  aria-label="到期天數"
+                />
+                <span>天內</span>
+              </label>
             </div>
           </div>
 
