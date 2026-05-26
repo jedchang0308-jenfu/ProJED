@@ -31,6 +31,27 @@ const assertNoError = (error: { message: string } | null) => {
   if (error) throw new Error(error.message);
 };
 
+const isMissingTagTableError = (error: unknown) => {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : String(error ?? '');
+  return message.includes("Could not find the table 'public.task_tags'")
+    || message.includes("Could not find the table 'public.wbs_item_tags'")
+    || message.includes('task_tags')
+    || message.includes('wbs_item_tags');
+};
+
+const assertNoTagTableError = (error: { message: string } | null) => {
+  if (!error) return false;
+  if (isMissingTagTableError(error)) {
+    console.warn('[supabaseTagService] Tag tables are not available; continuing without tags.');
+    return true;
+  }
+  throw new Error(error.message);
+};
+
 const legacyOrId = (id: string, legacyId?: string | null) => legacyId || id;
 const dependencySelect = `
   *,
@@ -343,23 +364,33 @@ export const supabaseNodeService = {
     assertNoError(error);
     const nodeIdByDbId = new Map((data ?? []).map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
 
-    const [{ data: tagRows, error: tagsError }, { data: assignmentRows, error: assignmentsError }] = await Promise.all([
-      supabase
-        .from('task_tags')
-        .select('*')
-        .eq('tenant_id', tenantId),
-      supabase
-        .from('wbs_item_tags')
-        .select('item_id,tag_id')
-        .eq('tenant_id', tenantId)
-        .eq('project_id', projectId),
-    ]);
-    assertNoError(tagsError);
-    assertNoError(assignmentsError);
+    let tagRows: TaskTagRow[] = [];
+    let assignmentRows: WbsItemTagAssignment[] = [];
+    try {
+      const [tagResult, assignmentResult] = await Promise.all([
+        supabase
+          .from('task_tags')
+          .select('*')
+          .eq('tenant_id', tenantId),
+        supabase
+          .from('wbs_item_tags')
+          .select('item_id,tag_id')
+          .eq('tenant_id', tenantId)
+          .eq('project_id', projectId),
+      ]);
+      const tagsUnavailable = assertNoTagTableError(tagResult.error) || assertNoTagTableError(assignmentResult.error);
+      if (!tagsUnavailable) {
+        tagRows = tagResult.data ?? [];
+        assignmentRows = (assignmentResult.data ?? []) as WbsItemTagAssignment[];
+      }
+    } catch (error) {
+      if (!isMissingTagTableError(error)) throw error;
+      console.warn('[supabaseNodeService] Tag tables are not available; loading tasks without tags.');
+    }
 
-    const tagIdByDbId = new Map((tagRows ?? []).map(tag => [tag.id, legacyOrId(tag.id, tag.legacy_tag_id)]));
+    const tagIdByDbId = new Map(tagRows.map(tag => [tag.id, legacyOrId(tag.id, tag.legacy_tag_id)]));
     const tagIdsByItemId = new Map<string, string[]>();
-    ((assignmentRows ?? []) as WbsItemTagAssignment[]).forEach(assignment => {
+    assignmentRows.forEach(assignment => {
       const tagId = tagIdByDbId.get(assignment.tag_id) || assignment.tag_id;
       tagIdsByItemId.set(assignment.item_id, [...(tagIdsByItemId.get(assignment.item_id) || []), tagId]);
     });
@@ -492,7 +523,7 @@ export const supabaseTagService = {
       .select('*')
       .eq('tenant_id', tenantId)
       .order('sort_order', { ascending: true });
-    assertNoError(error);
+    if (assertNoTagTableError(error)) return [];
     return (data ?? []).map(tag => mapTaskTag(tag, workspaceId));
   },
 
@@ -515,7 +546,7 @@ export const supabaseTagService = {
       .insert(payload)
       .select()
       .single();
-    assertNoError(error);
+    if (assertNoTagTableError(error)) return tag;
     if (!data) throw new Error('Supabase did not return the created task tag.');
     return mapTaskTag(data, workspaceId);
   },
@@ -534,7 +565,7 @@ export const supabaseTagService = {
     const { error } = await (isUuid(tagId)
       ? query.eq('id', tagId)
       : query.eq('legacy_tag_id', tagId));
-    assertNoError(error);
+    assertNoTagTableError(error);
   },
 
   delete: async (workspaceId: string, tagId: string): Promise<void> => {
@@ -547,7 +578,7 @@ export const supabaseTagService = {
     const { error } = await (isUuid(tagId)
       ? query.eq('id', tagId)
       : query.eq('legacy_tag_id', tagId));
-    assertNoError(error);
+    assertNoTagTableError(error);
   },
 
   setNodeTags: async (workspaceId: string, boardId: string, nodeId: string, tagIds: string[]): Promise<void> => {
@@ -561,7 +592,7 @@ export const supabaseTagService = {
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId)
       .eq('item_id', itemId);
-    assertNoError(deleteError);
+    if (assertNoTagTableError(deleteError)) return;
 
     const uniqueTagIds = Array.from(new Set(tagIds));
     if (uniqueTagIds.length === 0) return;
@@ -577,7 +608,7 @@ export const supabaseTagService = {
     const { error: insertError } = await supabase
       .from('wbs_item_tags')
       .insert(rows);
-    assertNoError(insertError);
+    assertNoTagTableError(insertError);
   },
 };
 
