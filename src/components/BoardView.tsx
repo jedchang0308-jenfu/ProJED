@@ -32,7 +32,7 @@ export const KanbanDependencyContext = React.createContext<{
 } | null>(null);
 
 const BoardView = () => {
-    const { activeBoardId, activeWorkspaceId, toggleStatusFilter, statusFilters } = useBoardStore();
+    const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
     const setDependencySelection = useBoardStore(s => s.setDependencySelection);
     const toggleStartDate = useBoardStore(s => s.toggleStartDate);
@@ -126,9 +126,9 @@ const BoardView = () => {
         const allIds = Array.from(new Set([...ids1, ...ids2]));
         return allIds
             .map(id => storeNodes[id])
-            .filter(node => node && statusFilters[node.status || 'todo'])
+            .filter(node => node)
             .sort((a, b) => a.order - b.order);
-    }, [rootIds, boardRootIds, activeBoardId, statusFilters, storeNodes]);
+    }, [rootIds, boardRootIds, activeBoardId, storeNodes]);
 
     const statuses = [
         { key: 'todo', label: '待辦', color: 'bg-status-todo' },
