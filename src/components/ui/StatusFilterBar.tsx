@@ -158,7 +158,7 @@ export const StatusFilterBar: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setDueWithinDays(dueWithinDays ?? 7)}
+                onClick={() => setDueWithinDays(hasDueFilter ? null : 7)}
                 className={filterPillClass(hasDueFilter)}
                 aria-pressed={hasDueFilter}
               >
