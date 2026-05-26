@@ -18,6 +18,9 @@ import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
 import type { TaskStatus, TaskNode } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
+import { useTagStore } from '../../store/useTagStore';
+import { getNodeTags, matchesTagFilters } from '../../utils/tags';
+import { TagChip } from '../Tags/TagChip';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -81,10 +84,13 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const isInvalidChild = !child || child.isArchived || ancestorIds.includes(childId);
 
   const status = child?.status || 'todo';
+  const tags = useTagStore(s => s.tags);
+  const nodeTags = getNodeTags(child, tags);
   const isDueToday = status !== 'completed' && !!child?.endDate && dayjs(child.endDate).isSame(dayjs(), 'day');
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
   const isEditing = editingId === childId;
   const showStartDate = useBoardStore(s => s.showStartDate);
+  const showTags = useBoardStore(s => s.showTags);
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
@@ -295,6 +301,14 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         )}
       </div>
 
+      {showTags && nodeTags.length > 0 && (
+        <div className="ml-8 mt-0.5 flex flex-wrap gap-1">
+          {nodeTags.slice(0, 3).map(tag => (
+            <TagChip key={tag.id} tag={tag} compact />
+          ))}
+        </div>
+      )}
+
       {/* 遞迴渲染更深層的子節點 */}
       {hasGrandchildren && (
         <KanbanChecklist
@@ -321,6 +335,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const childIds = previewParentIndex?.[parentId] || storeChildIds;
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
+  const selectedTagIds = useTagStore(s => s.selectedTagIds);
 
   // 行內編輯狀態管理（在容器層統一管理，避免多個 item 同時進入編輯模式）
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -370,9 +385,9 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
     return (childIds || [])
       .filter(id => !nextAncestors.has(id))
       .map(id => nodes[id])
-      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'])
+      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesTagFilters(n, selectedTagIds))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, previewNodes, nextAncestorKey]);
+  }, [childIds, statusFilters, selectedTagIds, previewNodes, nextAncestorKey]);
 
   // 無子節點則不渲染
   if (isRecursiveParent || children.length === 0) return null;

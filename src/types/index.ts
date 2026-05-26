@@ -4,6 +4,7 @@ export type DependencySide = 'start' | 'end';
 export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt';
 export type DragType = 'move' | 'left' | 'right';
+export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';
 
 // Kept for old deep links and modal state. New task editing should prefer TaskNode ids.
 export type EditableItemType = 'list' | 'card' | 'checklist' | 'checklistitem' | 'tasknode';
@@ -21,6 +22,7 @@ export interface TaskNode {
   status: TaskStatus;
   assigneeId?: string;
   collaboratorIds?: string[];
+  tagIds?: string[];
 
   startDate?: string;
   endDate?: string;
@@ -41,6 +43,16 @@ export interface TaskDetailNote {
   id: string;
   title: string;
   content: string;
+}
+
+export interface TaskTag {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: TagColor;
+  order: number;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface KanbanViewConfig {
@@ -123,6 +135,7 @@ export interface BoardState {
 
   showDependencies: boolean;
   showStartDate: boolean;
+  showTags: boolean;
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
@@ -152,6 +165,7 @@ export interface BoardActions {
   toggleStatusFilter: (status: TaskStatus) => void;
   toggleDependencies: () => void;
   toggleStartDate: () => void;
+  toggleTags: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;

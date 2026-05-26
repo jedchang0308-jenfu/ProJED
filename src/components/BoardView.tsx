@@ -429,7 +429,7 @@ const BoardView = () => {
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
                 {/* 工具列 (Toolbar) — 狀態篩選器 */}
-                <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
+                <div className="relative z-[10000] h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
                     <StatusFilterBar />
                 </div>
 

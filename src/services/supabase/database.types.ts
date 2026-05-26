@@ -101,6 +101,28 @@ export type WbsItemRow = {
   updated_at: string;
 };
 
+export type TaskTagRow = {
+  id: string;
+  tenant_id: string;
+  legacy_tag_id: string | null;
+  name: string;
+  color: string;
+  sort_order: number;
+  metadata: Json;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WbsItemTagRow = {
+  tenant_id: string;
+  project_id: string;
+  item_id: string;
+  tag_id: string;
+  created_at: string;
+};
+
 export type WbsDependencyRow = {
   id: string;
   tenant_id: string;
@@ -201,6 +223,8 @@ export interface Database {
       tenant_members: Table<TenantMemberRow>;
       projects: Table<ProjectRow>;
       wbs_items: Table<WbsItemRow>;
+      task_tags: Table<TaskTagRow>;
+      wbs_item_tags: Table<WbsItemTagRow>;
       wbs_dependencies: Table<WbsDependencyRow>;
       documents: Table<DocumentRow>;
       document_versions: Table<DocumentVersionRow>;

@@ -1,4 +1,4 @@
-import type { TaskDetailNote, TaskNode } from '../../types';
+import type { TaskDetailNote, TaskNode, TaskTag } from '../../types';
 import { chunkText } from './chunking';
 import type { RagChunkDraft, RagCitation, RagDocumentDraft } from './ragContract';
 
@@ -6,6 +6,7 @@ export interface WbsRagBuildInput {
   tenantId: string;
   projectId: string;
   nodes: TaskNode[];
+  tags?: TaskTag[];
 }
 
 export interface WbsRagBuildResult {
@@ -39,11 +40,19 @@ const formatDetailNotes = (detailNotes: TaskDetailNote[] | undefined): string[] 
     })
     .filter((note): note is string => Boolean(note));
 
-const buildNodeContent = (node: TaskNode): string => {
+const formatTags = (node: TaskNode, tagById: Map<string, TaskTag>): string | null => {
+  const names = (node.tagIds ?? [])
+    .map(tagId => tagById.get(tagId)?.name)
+    .filter((name): name is string => Boolean(name));
+  return names.length > 0 ? `Tags: ${names.join(', ')}` : null;
+};
+
+const buildNodeContent = (node: TaskNode, tagById: Map<string, TaskTag>): string => {
   const parts = [
     `Title: ${node.title}`,
     `Type: ${node.nodeType ?? 'task'}`,
     `Status: ${node.status}`,
+    formatTags(node, tagById),
     formatDateRange(node) ? `Schedule: ${formatDateRange(node)}` : null,
     node.description?.trim() ? `Description:\n${node.description.trim()}` : null,
     ...formatDetailNotes(node.detailNotes),
@@ -52,14 +61,15 @@ const buildNodeContent = (node: TaskNode): string => {
   return parts.filter((part): part is string => Boolean(part)).join('\n\n');
 };
 
-export const buildWbsRagDocuments = ({ tenantId, projectId, nodes }: WbsRagBuildInput): WbsRagBuildResult => {
+export const buildWbsRagDocuments = ({ tenantId, projectId, nodes, tags = [] }: WbsRagBuildInput): WbsRagBuildResult => {
   const documents: RagDocumentDraft[] = [];
   const chunks: RagChunkDraft[] = [];
+  const tagById = new Map(tags.map(tag => [tag.id, tag]));
 
   for (const node of nodes) {
     if (node.isArchived) continue;
 
-    const content = buildNodeContent(node);
+    const content = buildNodeContent(node, tagById);
     if (!content.trim()) continue;
 
     const contentHash = stableHash(content);
@@ -80,6 +90,8 @@ export const buildWbsRagDocuments = ({ tenantId, projectId, nodes }: WbsRagBuild
         parentId: node.parentId,
         status: node.status,
         nodeType: node.nodeType ?? 'task',
+        tagIds: node.tagIds ?? [],
+        tags: (node.tagIds ?? []).map(tagId => tagById.get(tagId)?.name).filter(Boolean),
         order: node.order,
       },
     };

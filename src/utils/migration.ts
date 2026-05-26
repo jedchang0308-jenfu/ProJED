@@ -1,4 +1,4 @@
-import { db } from '../services/firebase';
+import { requireFirebaseDb } from '../services/firebase';
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
 import type { Dependency, StatusFilters, TaskNode, Workspace } from '../types';
 import type { LegacyCard, LegacyChecklistItem, LegacyList } from '../types/legacy';
@@ -156,10 +156,11 @@ const convertLegacyListsToNodes = (wsId: string, boardId: string, lists: LegacyL
 };
 
 const writeNodes = async (wsId: string, boardId: string, nodes: TaskNode[]) => {
+  const firestoreDb = requireFirebaseDb();
   for (let start = 0; start < nodes.length; start += 450) {
-    const batch = writeBatch(db);
+    const batch = writeBatch(firestoreDb);
     nodes.slice(start, start + 450).forEach((node) => {
-      batch.set(doc(db, 'workspaces', wsId, 'boards', boardId, 'nodes', node.id), compact(node), { merge: true });
+      batch.set(doc(firestoreDb, 'workspaces', wsId, 'boards', boardId, 'nodes', node.id), compact(node), { merge: true });
     });
     await batch.commit();
   }
@@ -168,21 +169,23 @@ const writeNodes = async (wsId: string, boardId: string, nodes: TaskNode[]) => {
 const writeDependencies = async (wsId: string, boardId: string, dependencies: Dependency[] = []) => {
   if (dependencies.length === 0) return;
 
+  const firestoreDb = requireFirebaseDb();
   for (let start = 0; start < dependencies.length; start += 450) {
-    const batch = writeBatch(db);
+    const batch = writeBatch(firestoreDb);
     dependencies.slice(start, start + 450).forEach((dependency) => {
       if (!dependency.id) return;
-      batch.set(doc(db, 'workspaces', wsId, 'boards', boardId, 'dependencies', dependency.id), dependency, { merge: true });
+      batch.set(doc(firestoreDb, 'workspaces', wsId, 'boards', boardId, 'dependencies', dependency.id), dependency, { merge: true });
     });
     await batch.commit();
   }
 };
 
 const writeWorkspaceTreeToFirestore = async (userId: string, workspaces: Workspace[]) => {
+  const firestoreDb = requireFirebaseDb();
   for (const ws of workspaces) {
     if (!ws.id) continue;
 
-    await setDoc(doc(db, 'workspaces', ws.id), compact({
+    await setDoc(doc(firestoreDb, 'workspaces', ws.id), compact({
       id: ws.id,
       title: ws.title || 'Workspace',
       ownerId: ws.ownerId || userId,
@@ -194,7 +197,7 @@ const writeWorkspaceTreeToFirestore = async (userId: string, workspaces: Workspa
     for (const board of ws.boards || []) {
       if (!board.id) continue;
 
-      await setDoc(doc(db, 'workspaces', ws.id, 'boards', board.id), compact({
+      await setDoc(doc(firestoreDb, 'workspaces', ws.id, 'boards', board.id), compact({
         id: board.id,
         title: board.title || 'Board',
         order: board.order || Date.now(),

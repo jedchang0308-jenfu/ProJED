@@ -17,6 +17,9 @@ import { KanbanDependencyContext } from '../BoardView';
 import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
+import { useTagStore } from '../../store/useTagStore';
+import { getNodeTags } from '../../utils/tags';
+import { TagChip } from '../Tags/TagChip';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
@@ -51,6 +54,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const isEndDateEffectivelyLocked = lockStatus.endLocked || node?.isDurationLocked;
   const showStartDate = useBoardStore(s => s.showStartDate);
+  const showTags = useBoardStore(s => s.showTags);
+  const tags = useTagStore(s => s.tags);
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
 
   // 看板依賴選取 Context
@@ -176,6 +181,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   };
 
   const status = node?.status || 'todo';
+  const nodeTags = getNodeTags(node, tags);
   const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const canDropIntoChecklist = ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
@@ -293,6 +299,19 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           </div>
 
           {/* 日期與進度指標 */}
+          {showTags && nodeTags.length > 0 && (
+            <div className="mt-2 flex max-w-full flex-wrap gap-1">
+              {nodeTags.slice(0, 4).map(tag => (
+                <TagChip key={tag.id} tag={tag} compact />
+              ))}
+              {nodeTags.length > 4 && (
+                <span className="rounded-sm bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+                  +{nodeTags.length - 4}
+                </span>
+              )}
+            </div>
+          )}
+
           {(isSelectingMode || node.startDate || node.endDate || hasChildren) && (
             <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta flex flex-wrap items-center gap-1.5 mt-2 text-[10px] text-slate-400">
 

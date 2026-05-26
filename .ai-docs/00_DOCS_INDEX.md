@@ -1,6 +1,6 @@
 # ProJED AI Docs Index
 
-Last updated: 2026-05-18
+Last updated: 2026-05-25
 
 ## Canonical Documents
 
@@ -8,6 +8,7 @@ Use these as the current source of truth:
 
 - [11_SUPABASE_GEMINI_MIGRATION_TASK.md](./11_SUPABASE_GEMINI_MIGRATION_TASK.md): Master status, next steps, and P9 Gemini/RAG direction.
 - [12_P9_GEMINI_RAG_DESIGN.md](./12_P9_GEMINI_RAG_DESIGN.md): P9 retrieval contract, indexing flow, citation rules, and local prototype scope.
+- [13_TAG_PLAN.md](./13_TAG_PLAN.md): Workspace-shared tag feature implementation plan.
 - [10_P8_PRODUCTION_CUTOVER_EXECUTION.md](./10_P8_PRODUCTION_CUTOVER_EXECUTION.md): P8 execution runbook for OAuth smoke, cleanup, credential rotation, and final readiness gate.
 - [archive/09_P7_PRODUCTION_RELEASE_GATE.md](./archive/09_P7_PRODUCTION_RELEASE_GATE.md): P7 strict release gate definition. Historical, but still useful because P8 wraps P7 strict checks.
 - [04_SUPABASE_MIGRATION_PLAN.md](./04_SUPABASE_MIGRATION_PLAN.md): Supabase migration architecture and RAG guardrails.

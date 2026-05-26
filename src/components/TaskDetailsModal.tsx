@@ -2,6 +2,7 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { CalendarDays, CircleDot, Lock, Plus, Unlock, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
+import { TagPicker } from './Tags/TagPicker';
 import type { TaskDetailNote, TaskStatus } from '../types';
 
 interface TaskDetailsModalProps {
@@ -257,6 +258,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       </option>
                     ))}
                   </select>
+                </div>
+              </label>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-xs font-medium text-slate-500">
+                標籤
+                <div className="mt-1">
+                  <TagPicker
+                    workspaceId={node.workspaceId}
+                    selectedTagIds={node.tagIds || []}
+                    onChange={(tagIds) => updateNode(node.id, { tagIds, updatedAt: Date.now() })}
+                  />
                 </div>
               </label>
             </div>

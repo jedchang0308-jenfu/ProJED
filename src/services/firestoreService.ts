@@ -1,8 +1,8 @@
 import { requireFirebaseDb } from './firebase';
 import { 
-  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField
+  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDocs
 } from 'firebase/firestore';
-import type { Workspace, Board, Dependency } from '../types';
+import type { Workspace, Board, Dependency, TaskTag } from '../types';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -146,4 +146,54 @@ export const nodeService = {
     });
     await batch.commit();
   }
+};
+
+// ==========================
+// Workspace Tag Service
+// ==========================
+export const tagService = {
+  listByWorkspace: async (wsId: string): Promise<TaskTag[]> => {
+    const db = requireFirebaseDb();
+    const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'tags'));
+    return snapshot.docs
+      .map(docSnap => ({ ...(docSnap.data() as TaskTag), id: docSnap.id, workspaceId: wsId }))
+      .sort((a, b) => a.order - b.order);
+  },
+
+  create: async (wsId: string, tag: TaskTag): Promise<TaskTag> => {
+    const db = requireFirebaseDb();
+    const created = { ...tag, workspaceId: wsId };
+    await setDoc(doc(db, 'workspaces', wsId, 'tags', created.id), created);
+    return created;
+  },
+
+  update: async (wsId: string, tagId: string, updates: Partial<TaskTag>): Promise<void> => {
+    const db = requireFirebaseDb();
+    await updateDoc(doc(db, 'workspaces', wsId, 'tags', tagId), sanitizeUpdates(updates));
+  },
+
+  delete: async (wsId: string, tagId: string): Promise<void> => {
+    const db = requireFirebaseDb();
+    await deleteDoc(doc(db, 'workspaces', wsId, 'tags', tagId));
+
+    const boardsSnapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards'));
+    const batch = writeBatch(db);
+    for (const boardDoc of boardsSnapshot.docs) {
+      const nodesSnapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', boardDoc.id, 'nodes'));
+      nodesSnapshot.docs.forEach(nodeDoc => {
+        const data = nodeDoc.data() as import('../types').TaskNode;
+        if (!data.tagIds?.includes(tagId)) return;
+        batch.update(nodeDoc.ref, {
+          tagIds: data.tagIds.filter(id => id !== tagId),
+          updatedAt: Date.now(),
+        });
+      });
+    }
+    await batch.commit();
+  },
+
+  setNodeTags: async (wsId: string, bId: string, nId: string, tagIds: string[]): Promise<void> => {
+    const db = requireFirebaseDb();
+    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), { tagIds, updatedAt: Date.now() });
+  },
 };

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { TaskNode, KanbanViewConfig, TaskStatus, Dependency } from '../types';
-import { nodeService, dependencyService, workspaceService, boardService } from '../services/dataBackend';
+import { nodeService, dependencyService, workspaceService, boardService, tagService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
+import { useTagStore } from './useTagStore';
 
 /**
  * WbsStore 狀態定義
@@ -722,10 +723,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   exportData: () => {
       const { nodes, dependencies } = get();
       const workspaces = useBoardStore.getState().workspaces;
+      const tags = useTagStore.getState().tags;
       const exportObj = {
-          version: 'wbs-1.1',
+          version: 'wbs-1.2',
           nodes,
           dependencies,
+          tags,
           workspaces,
           timestamp: Date.now()
       };
@@ -745,7 +748,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           // 支援各種舊版與新版格式
           const oldWorkspaces = parsed.workspaces || parsed?.state?.workspaces;
 
-          if ((parsed.version === 'wbs-1.1' || parsed.version === 'wbs-1.0' || parsed.version === '2.0' || !parsed.version) && (parsed.nodes || oldWorkspaces)) {
+          if ((parsed.version === 'wbs-1.2' || parsed.version === 'wbs-1.1' || parsed.version === 'wbs-1.0' || parsed.version === '2.0' || !parsed.version) && (parsed.nodes || oldWorkspaces)) {
               // 取得目前 Supabase 中的 workspace/board 作為匯入目標
               const boardStore = useBoardStore.getState();
               const currentWsId = boardStore.activeWorkspaceId;
@@ -792,6 +795,19 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   }));
                   get().setNodes(nodesArray);
                   await nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray).catch(console.error);
+              }
+
+              if (Array.isArray(parsed.tags)) {
+                  const tags = parsed.tags.map((tag: any, index: number) => ({
+                      ...tag,
+                      workspaceId: currentWsId,
+                      order: tag.order ?? index,
+                      updatedAt: Date.now(),
+                  }));
+                  useTagStore.getState().setTags(tags);
+                  for (const tag of tags) {
+                      await tagService.create(currentWsId, tag).catch(console.error);
+                  }
               }
 
               // 3. 如果只有舊版格式 (未搬遷至 wbs 節點)，需要自動升級轉移

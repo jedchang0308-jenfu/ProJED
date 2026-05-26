@@ -13,6 +13,8 @@ import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
 import { TaskDragHandle } from './TaskDragHandle';
+import { useTagStore } from '../../store/useTagStore';
+import { matchesTagFilters } from '../../utils/tags';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -28,6 +30,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const updateNode = useWbsStore((state) => state.updateNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const statusFilters = useBoardStore((state) => state.statusFilters);
+  const selectedTagIds = useTagStore((state) => state.selectedTagIds);
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
 
@@ -88,9 +91,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
     return (childIds || [])
       .map((id) => nodes[id])
-      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'])
+      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'] && matchesTagFilters(child, selectedTagIds))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, previewNodes]);
+  }, [childIds, statusFilters, selectedTagIds, previewNodes]);
 
   const {
     attributes: columnAttributes,

@@ -1,8 +1,9 @@
-import type { Board, Dependency, TaskNode, Workspace } from '../types';
+import type { Board, Dependency, TaskNode, TaskTag, Workspace } from '../types';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
 const DEPENDENCIES_KEY = 'projed-local-test.dependencies';
+const TAGS_KEY = 'projed-local-test.tags';
 
 const readJson = <T>(key: string, fallback: T): T => {
   try {
@@ -65,6 +66,8 @@ const readNodes = () => {
 const writeNodes = (nodes: Record<string, TaskNode>) => writeJson(NODES_KEY, nodes);
 const readDependencies = () => readJson<Dependency[]>(DEPENDENCIES_KEY, []);
 const writeDependencies = (dependencies: Dependency[]) => writeJson(DEPENDENCIES_KEY, dependencies);
+const readTags = () => readJson<TaskTag[]>(TAGS_KEY, []);
+const writeTags = (tags: TaskTag[]) => writeJson(TAGS_KEY, tags);
 
 export const localTestWorkspaceService = {
   create: async (title?: string): Promise<Workspace> => {
@@ -218,6 +221,48 @@ export const localTestDependencyService = {
   },
 };
 
+export const localTestTagService = {
+  listByWorkspace: async (workspaceId: string): Promise<TaskTag[]> =>
+    readTags()
+      .filter(tag => tag.workspaceId === workspaceId)
+      .sort((a, b) => a.order - b.order),
+
+  create: async (workspaceId: string, tag: TaskTag): Promise<TaskTag> => {
+    const created = { ...tag, workspaceId };
+    writeTags([...readTags().filter(item => item.id !== created.id), created]);
+    return created;
+  },
+
+  update: async (workspaceId: string, tagId: string, updates: Partial<TaskTag>): Promise<void> => {
+    writeTags(readTags().map(tag =>
+      tag.workspaceId === workspaceId && tag.id === tagId ? { ...tag, ...updates, updatedAt: Date.now() } : tag
+    ));
+  },
+
+  delete: async (workspaceId: string, tagId: string): Promise<void> => {
+    writeTags(readTags().filter(tag => !(tag.workspaceId === workspaceId && tag.id === tagId)));
+    const nodes = readNodes();
+    const updatedNodes = Object.fromEntries(
+      Object.entries(nodes).map(([nodeId, node]) => [
+        nodeId,
+        node.workspaceId === workspaceId
+          ? { ...node, tagIds: (node.tagIds || []).filter(id => id !== tagId), updatedAt: Date.now() }
+          : node,
+      ])
+    ) as Record<string, TaskNode>;
+    writeNodes(updatedNodes);
+  },
+
+  setNodeTags: async (_workspaceId: string, _boardId: string, nodeId: string, tagIds: string[]): Promise<void> => {
+    const nodes = readNodes();
+    if (!nodes[nodeId]) return;
+    writeNodes({
+      ...nodes,
+      [nodeId]: { ...nodes[nodeId], tagIds, updatedAt: Date.now() },
+    });
+  },
+};
+
 export const localTestStorage = {
   readWorkspaces,
   writeWorkspaces,
@@ -225,4 +270,6 @@ export const localTestStorage = {
   writeNodes,
   readDependencies,
   writeDependencies,
+  readTags,
+  writeTags,
 };

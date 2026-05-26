@@ -10,6 +10,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { TaskDragHandle } from './TaskDragHandle';
+import { useTagStore } from '../../store/useTagStore';
+import { getNodeTags, matchesTagFilters } from '../../utils/tags';
+import { TagChip } from '../Tags/TagChip';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -70,6 +73,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
     ({} as NonNullable<React.ContextType<typeof WbsDependencyContext>>['dependencyMarkers']);
 
   const showStartDate = useBoardStore(s => s.showStartDate);
+  const showTags = useBoardStore(s => s.showTags);
 
   // 確認選取狀態
   const isSelectingMode = !!dependencySelection;
@@ -80,6 +84,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
+  const tags = useTagStore(s => s.tags);
+  const selectedTagIds = useTagStore(s => s.selectedTagIds);
   
   // ✅ 使用 Stable Selector 訂閱「子節點 ID 陣列」，避免 Zustand 無限 Render Loop
   const childrenIds = useWbsStore(s => s.parentNodesIndex[nodeId]); 
@@ -91,12 +97,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       return (childrenIds || [])
         .filter(id => !nextAncestors.has(id))
         .map(id => state.nodes[id])
-        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'])
+        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesTagFilters(n, selectedTagIds))
         .sort((a,b) => a.order - b.order);
-  }, [childrenIds, statusFilters, nextAncestorKey]);
+  }, [childrenIds, statusFilters, selectedTagIds, nextAncestorKey]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
+  const nodeTags = getNodeTags(node, tags);
   const isDueToday = node?.status !== 'completed' && !!localEndDate && dayjs(localEndDate).isSame(dayjs(), 'day');
 
   // 緊湊的縮排 (使用 1.25rem 取代原本的 1.5rem 以節省空間)
@@ -334,6 +341,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                   {progress}%
               </span>
           </div>
+          {showTags && nodeTags.length > 0 && (
+            <div className="hidden max-w-[180px] flex-shrink-0 gap-1 lg:flex">
+              {nodeTags.slice(0, 2).map(tag => (
+                <TagChip key={tag.id} tag={tag} compact />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Col 2: 狀態 (原生 Select 偽裝 Badge) */}

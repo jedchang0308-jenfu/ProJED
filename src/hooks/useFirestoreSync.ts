@@ -15,7 +15,7 @@ import { useEffect, useRef, useMemo } from 'react';
 import { 
   collection, query, where, onSnapshot, Unsubscribe
 } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { requireFirebaseDb } from '../services/firebase';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useWbsStore } from '../store/useWbsStore';
@@ -72,8 +72,9 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
       return;
     }
 
+    const firestoreDb = requireFirebaseDb();
     const q = query(
-      collection(db, 'workspaces'),
+      collection(firestoreDb, 'workspaces'),
       where('members', 'array-contains', user.uid)
     );
 
@@ -128,11 +129,12 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
     });
 
     // 為新的 workspace 建立監聽器
+    const firestoreDb = requireFirebaseDb();
     workspaces.forEach(ws => {
       if (unsubBoardsMap.current.has(ws.id)) return; // 已有監聽器
 
       const unsub = onSnapshot(
-        collection(db, 'workspaces', ws.id, 'boards'),
+        collection(firestoreDb, 'workspaces', ws.id, 'boards'),
         (snapshot) => {
           const boards: Board[] = sortByOrder(
             snapshot.docs.map(doc => ({
@@ -193,10 +195,11 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
     if (!activeWs) return;
 
     const boardPath = `workspaces/${activeWs.id}/boards/${activeBoardId}`;
+    const firestoreDb = requireFirebaseDb();
 
     // 3c. 監聽 Dependencies
     unsubDeps.current = onSnapshot(
-      collection(db, boardPath, 'dependencies'),
+      collection(firestoreDb, boardPath, 'dependencies'),
       (snapshot) => {
         const dependencies: Dependency[] = snapshot.docs.map(doc => ({
           ...(doc.data() as Dependency),
@@ -221,7 +224,7 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
 
     // 3d. 監聽全新 WBS Nodes 集合 (Phase A 引入)
     unsubNodes.current = onSnapshot(
-        collection(db, boardPath, 'nodes'),
+        collection(firestoreDb, boardPath, 'nodes'),
         (snapshot) => {
             const nodes = snapshot.docs.map(doc => ({
                 ...(doc.data() as import('../types').TaskNode)

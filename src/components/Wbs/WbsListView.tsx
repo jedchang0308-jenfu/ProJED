@@ -11,6 +11,8 @@ import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../../hooks/useDragSensors';
 import { StatusFilterBar } from '../ui/StatusFilterBar';
+import { useTagStore } from '../../store/useTagStore';
+import { matchesTagFilters } from '../../utils/tags';
 
 interface WbsListViewProps {
   boardId: string;
@@ -19,6 +21,7 @@ interface WbsListViewProps {
 export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
+  const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   // 從全域 Store 取出顯示狀態
@@ -155,10 +158,10 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // ✅ 只有當索引陣列變更時 (Add/Remove/Move)，才重新評估根節點集合
   const rootNodes = React.useMemo(() => {
       const state = useWbsStore.getState();
-      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && statusFilters[node.status || 'todo']);
-      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && statusFilters[node.status || 'todo']);
+      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && statusFilters[node.status || 'todo'] && matchesTagFilters(node, selectedTagIds));
+      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && statusFilters[node.status || 'todo'] && matchesTagFilters(node, selectedTagIds));
       return [...arr1, ...arr2].sort((a, b) => a.order - b.order);
-  }, [rootIds, altRootIds, boardId, statusFilters]);
+  }, [rootIds, altRootIds, boardId, statusFilters, selectedTagIds]);
 
   const handleCreateRootNode = () => {
     const newNode: TaskNode = {

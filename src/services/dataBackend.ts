@@ -1,20 +1,23 @@
-import type { Board, Dependency, TaskNode, Workspace } from '../types';
+import type { Board, Dependency, TaskNode, TaskTag, Workspace } from '../types';
 import {
   boardService as firestoreBoardService,
   dependencyService as firestoreDependencyService,
   nodeService as firestoreNodeService,
+  tagService as firestoreTagService,
   workspaceService as firestoreWorkspaceService,
 } from './firestoreService';
 import {
   supabaseBoardService,
   supabaseDependencyService,
   supabaseNodeService,
+  supabaseTagService,
   supabaseWorkspaceService,
 } from './supabase/projedService';
 import {
   localTestBoardService,
   localTestDependencyService,
   localTestNodeService,
+  localTestTagService,
   localTestWorkspaceService,
 } from './localTestService';
 
@@ -195,4 +198,41 @@ export const dependencyService = {
       : isSupabaseBackend
       ? supabaseDependencyService.delete(workspaceId, boardId, dependencyId)
       : firestoreDependencyService.delete(workspaceId, boardId, dependencyId),
+};
+
+export const tagService = {
+  listByWorkspace: (workspaceId: string): Promise<TaskTag[]> =>
+    isLocalTestBackend
+      ? localTestTagService.listByWorkspace(workspaceId)
+      : isSupabaseBackend
+      ? supabaseTagService.listByWorkspace(workspaceId)
+      : firestoreTagService.listByWorkspace(workspaceId),
+
+  create: (workspaceId: string, tag: TaskTag): Promise<TaskTag> =>
+    isLocalTestBackend
+      ? localTestTagService.create(workspaceId, tag)
+      : isSupabaseBackend
+      ? supabaseTagService.create(workspaceId, tag)
+      : firestoreTagService.create(workspaceId, tag),
+
+  update: (workspaceId: string, tagId: string, updates: Partial<TaskTag>): Promise<void> =>
+    isLocalTestBackend
+      ? localTestTagService.update(workspaceId, tagId, updates)
+      : isSupabaseBackend
+      ? supabaseTagService.update(workspaceId, tagId, updates)
+      : firestoreTagService.update(workspaceId, tagId, updates),
+
+  delete: (workspaceId: string, tagId: string): Promise<void> =>
+    isLocalTestBackend
+      ? localTestTagService.delete(workspaceId, tagId)
+      : isSupabaseBackend
+      ? supabaseTagService.delete(workspaceId, tagId)
+      : firestoreTagService.delete(workspaceId, tagId),
+
+  setNodeTags: (workspaceId: string, boardId: string, nodeId: string, tagIds: string[]): Promise<void> =>
+    isLocalTestBackend
+      ? localTestTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds)
+      : isSupabaseBackend
+      ? supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds)
+      : firestoreTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds),
 };

@@ -29,6 +29,7 @@ const getDefaultFilters = () => ({
     },
     showDependencies: true,
     showStartDate: true,
+    showTags: true,
 });
 
 const getStoredFilters = () => {
@@ -150,7 +151,8 @@ const useBoardStore = create<BoardStore>()(
             safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
                 statusFilters: newFilters,
                 showDependencies: state.showDependencies,
-                showStartDate: state.showStartDate
+                showStartDate: state.showStartDate,
+                showTags: state.showTags
             }));
             return { statusFilters: newFilters };
         }),
@@ -161,7 +163,8 @@ const useBoardStore = create<BoardStore>()(
             safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
                 statusFilters: state.statusFilters,
                 showDependencies: newDeps,
-                showStartDate: state.showStartDate
+                showStartDate: state.showStartDate,
+                showTags: state.showTags
             }));
             return { showDependencies: newDeps };
         }),
@@ -170,9 +173,20 @@ const useBoardStore = create<BoardStore>()(
             safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
                 statusFilters: state.statusFilters,
                 showDependencies: state.showDependencies,
-                showStartDate: newStart
+                showStartDate: newStart,
+                showTags: state.showTags
             }));
             return { showStartDate: newStart };
+        }),
+        toggleTags: () => set((state) => {
+            const newTags = !state.showTags;
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: state.statusFilters,
+                showDependencies: state.showDependencies,
+                showStartDate: state.showStartDate,
+                showTags: newTags
+            }));
+            return { showTags: newTags };
         }),
 
         // ===== Navigation =====

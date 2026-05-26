@@ -1,11 +1,16 @@
-import type { Board, Dependency, TaskNode, Workspace } from '../../types';
+import type { Board, Dependency, TagColor, TaskNode, TaskTag, Workspace } from '../../types';
 import { isSupabaseConfigured, supabase } from './client';
-import type { Json, ProjectRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
+import type { Json, ProjectRow, TaskTagRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 
 type WbsItemInsert = Partial<WbsItemRow>;
+type TaskTagInsert = Partial<TaskTagRow>;
 type WbsDependencyWithNodes = WbsDependencyRow & {
   from_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
   to_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
+};
+type WbsItemTagAssignment = {
+  item_id: string;
+  tag_id: string;
 };
 
 const requireSupabase = () => {
@@ -59,7 +64,13 @@ const mapProjectToBoard = (project: ProjectRow): Board => ({
   createdAt: toTimestamp(project.created_at),
 });
 
-const mapWbsItemToTaskNode = (item: WbsItemRow, nodeIdByDbId: Map<string, string> = new Map(), requestedWorkspaceId?: string, requestedBoardId?: string): TaskNode => {
+const mapWbsItemToTaskNode = (
+  item: WbsItemRow,
+  nodeIdByDbId: Map<string, string> = new Map(),
+  requestedWorkspaceId?: string,
+  requestedBoardId?: string,
+  tagIds: string[] = []
+): TaskNode => {
   const metadata = item.metadata as Record<string, any> | null;
   return {
     id: legacyOrId(item.id, item.legacy_node_id),
@@ -81,8 +92,19 @@ const mapWbsItemToTaskNode = (item: WbsItemRow, nodeIdByDbId: Map<string, string
   createdAt: toTimestamp(item.created_at),
   updatedAt: toTimestamp(item.updated_at),
   isArchived: item.is_archived,
+  tagIds,
   };
 };
+
+const mapTaskTag = (row: TaskTagRow, requestedWorkspaceId?: string): TaskTag => ({
+  id: legacyOrId(row.id, row.legacy_tag_id),
+  workspaceId: requestedWorkspaceId || row.tenant_id,
+  name: row.name,
+  color: row.color as TagColor,
+  order: row.sort_order,
+  createdAt: toTimestamp(row.created_at),
+  updatedAt: toTimestamp(row.updated_at),
+});
 
 const mapDependency = (dep: WbsDependencyWithNodes): Dependency => ({
   id: legacyOrId(dep.id, dep.legacy_dependency_id),
@@ -137,6 +159,19 @@ const requireNodeId = async (tenantId: string, projectId: string, nodeId: string
   const resolved = await resolveNodeId(tenantId, projectId, nodeId);
   if (!resolved) throw new Error('Supabase WBS item id is required.');
   return resolved;
+};
+
+const resolveTagId = async (tenantId: string, tagId: string): Promise<string> => {
+  if (isUuid(tagId)) return tagId;
+  const { data, error } = await supabase
+    .from('task_tags')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('legacy_tag_id', tagId)
+    .maybeSingle();
+  assertNoError(error);
+  if (!data?.id) throw new Error(`Supabase task tag not found for legacy tag id: ${tagId}`);
+  return data.id;
 };
 
 const taskNodeToInsert = async (tenantId: string, projectId: string, node: TaskNode): Promise<WbsItemInsert> => ({
@@ -307,7 +342,35 @@ export const supabaseNodeService = {
       .order('sort_order', { ascending: true });
     assertNoError(error);
     const nodeIdByDbId = new Map((data ?? []).map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
-    return (data ?? []).map(item => mapWbsItemToTaskNode(item, nodeIdByDbId, workspaceId, boardId));
+
+    const [{ data: tagRows, error: tagsError }, { data: assignmentRows, error: assignmentsError }] = await Promise.all([
+      supabase
+        .from('task_tags')
+        .select('*')
+        .eq('tenant_id', tenantId),
+      supabase
+        .from('wbs_item_tags')
+        .select('item_id,tag_id')
+        .eq('tenant_id', tenantId)
+        .eq('project_id', projectId),
+    ]);
+    assertNoError(tagsError);
+    assertNoError(assignmentsError);
+
+    const tagIdByDbId = new Map((tagRows ?? []).map(tag => [tag.id, legacyOrId(tag.id, tag.legacy_tag_id)]));
+    const tagIdsByItemId = new Map<string, string[]>();
+    ((assignmentRows ?? []) as WbsItemTagAssignment[]).forEach(assignment => {
+      const tagId = tagIdByDbId.get(assignment.tag_id) || assignment.tag_id;
+      tagIdsByItemId.set(assignment.item_id, [...(tagIdsByItemId.get(assignment.item_id) || []), tagId]);
+    });
+
+    return (data ?? []).map(item => mapWbsItemToTaskNode(
+      item,
+      nodeIdByDbId,
+      workspaceId,
+      boardId,
+      tagIdsByItemId.get(item.id) || []
+    ));
   },
 
   create: async (workspaceId: string, boardId: string, node: TaskNode): Promise<TaskNode> => {
@@ -322,6 +385,9 @@ export const supabaseNodeService = {
       .single();
     assertNoError(error);
     if (!data) throw new Error('Supabase did not return the created WBS item.');
+    if (node.tagIds?.length) {
+      await supabaseTagService.setNodeTags(workspaceId, boardId, mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId).id, node.tagIds);
+    }
     return mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId);
   },
 
@@ -342,15 +408,20 @@ export const supabaseNodeService = {
     if ('kanbanStageId' in updates) updatePayload.kanban_stage_id = updates.kanbanStageId ?? null;
     if ('order' in updates) updatePayload.sort_order = updates.order;
     if ('isArchived' in updates) updatePayload.is_archived = updates.isArchived;
-    const query = supabase
-      .from('wbs_items')
-      .update(updatePayload)
-      .eq('tenant_id', tenantId)
-      .eq('project_id', projectId);
-    const { error } = await (isUuid(nodeId)
-      ? query.eq('id', nodeId)
-      : query.eq('legacy_node_id', nodeId));
-    assertNoError(error);
+    if (Object.keys(updatePayload).length > 0) {
+      const query = supabase
+        .from('wbs_items')
+        .update(updatePayload)
+        .eq('tenant_id', tenantId)
+        .eq('project_id', projectId);
+      const { error } = await (isUuid(nodeId)
+        ? query.eq('id', nodeId)
+        : query.eq('legacy_node_id', nodeId));
+      assertNoError(error);
+    }
+    if ('tagIds' in updates) {
+      await supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, updates.tagIds ?? []);
+    }
   },
 
   delete: async (workspaceId: string, boardId: string, nodeId: string): Promise<void> => {
@@ -405,7 +476,108 @@ export const supabaseNodeService = {
       .single();
     assertNoError(error);
     if (!data) throw new Error('Supabase did not return the upserted WBS item.');
+    if (node.tagIds) {
+      await supabaseTagService.setNodeTags(workspaceId, boardId, mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId).id, node.tagIds);
+    }
     return mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId);
+  },
+};
+
+export const supabaseTagService = {
+  listByWorkspace: async (workspaceId: string): Promise<TaskTag[]> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const { data, error } = await supabase
+      .from('task_tags')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('sort_order', { ascending: true });
+    assertNoError(error);
+    return (data ?? []).map(tag => mapTaskTag(tag, workspaceId));
+  },
+
+  create: async (workspaceId: string, tag: TaskTag): Promise<TaskTag> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const payload: TaskTagInsert = {
+      id: isUuid(tag.id) ? tag.id : undefined,
+      tenant_id: tenantId,
+      legacy_tag_id: isUuid(tag.id) ? null : tag.id,
+      name: tag.name,
+      color: tag.color,
+      sort_order: tag.order,
+      metadata: {
+        legacyWorkspaceId: tag.workspaceId,
+      } satisfies Json,
+    };
+    const { data, error } = await supabase
+      .from('task_tags')
+      .insert(payload)
+      .select()
+      .single();
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return the created task tag.');
+    return mapTaskTag(data, workspaceId);
+  },
+
+  update: async (workspaceId: string, tagId: string, updates: Partial<TaskTag>): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const updatePayload: TaskTagInsert = {};
+    if ('name' in updates) updatePayload.name = updates.name;
+    if ('color' in updates) updatePayload.color = updates.color;
+    if ('order' in updates) updatePayload.sort_order = updates.order;
+    const query = supabase
+      .from('task_tags')
+      .update(updatePayload)
+      .eq('tenant_id', tenantId);
+    const { error } = await (isUuid(tagId)
+      ? query.eq('id', tagId)
+      : query.eq('legacy_tag_id', tagId));
+    assertNoError(error);
+  },
+
+  delete: async (workspaceId: string, tagId: string): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const query = supabase
+      .from('task_tags')
+      .delete()
+      .eq('tenant_id', tenantId);
+    const { error } = await (isUuid(tagId)
+      ? query.eq('id', tagId)
+      : query.eq('legacy_tag_id', tagId));
+    assertNoError(error);
+  },
+
+  setNodeTags: async (workspaceId: string, boardId: string, nodeId: string, tagIds: string[]): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const itemId = await requireNodeId(tenantId, projectId, nodeId);
+    const { error: deleteError } = await supabase
+      .from('wbs_item_tags')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('item_id', itemId);
+    assertNoError(deleteError);
+
+    const uniqueTagIds = Array.from(new Set(tagIds));
+    if (uniqueTagIds.length === 0) return;
+
+    const resolvedTagIds = await Promise.all(uniqueTagIds.map(tagId => resolveTagId(tenantId, tagId)));
+    const rows = resolvedTagIds.map(tagId => ({
+      tenant_id: tenantId,
+      project_id: projectId,
+      item_id: itemId,
+      tag_id: tagId,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('wbs_item_tags')
+      .insert(rows);
+    assertNoError(insertError);
   },
 };
 
