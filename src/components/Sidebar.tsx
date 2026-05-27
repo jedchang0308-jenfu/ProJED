@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2, Download, Upload, LogOut } from 'lucide-react';
+import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2, Download, Upload, LogOut, CalendarPlus } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import useDialogStore from '../store/useDialogStore';
@@ -115,8 +115,18 @@ const Sidebar = ({ isOpen, toggle }) => {
                         ))}
                     </div>
 
-                    {/* Recycle Bin Button */}
                     <div className="p-2 border-t border-slate-100 bg-slate-50/50">
+                        <button
+                            onClick={() => setView('calendar_subscriptions')}
+                            className={`mb-2 w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${currentView === 'calendar_subscriptions'
+                                ? 'bg-primary text-white shadow-md font-bold text-sm tracking-wide'
+                                : 'text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm font-medium text-sm'
+                                }`}
+                        >
+                            <CalendarPlus size={16} className={currentView === 'calendar_subscriptions' ? 'text-white/90' : 'text-slate-400'} />
+                            <span className="truncate flex-1 text-left">行事曆訂閱</span>
+                        </button>
+
                         <button
                             onClick={() => setView('recycle_bin')}
                             className={`w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/50 ${currentView === 'recycle_bin'

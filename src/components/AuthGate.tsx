@@ -10,7 +10,7 @@
  * 遷移完成後寫入 Firestore users/{uid}.migrationVersion = 2，
  * 確保後續登入不再重複執行（Idempotent 設計）。
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import { runAutoMigration } from '../utils/autoMigration';
 import { isEmbeddedAuthBlocked, isLocalTestAuth, isSupabaseLocalPasswordAuth } from '../services/authService';
@@ -31,12 +31,25 @@ export default function AuthGate({ children }: AuthGateProps) {
   const [isInApp, setIsInApp] = useState(false);
   const isLocalTestMode = isLocalTestAuth();
   const isLocalSupabasePasswordMode = isSupabaseLocalPasswordAuth();
+  const shouldAutoTestLogin =
+    isLocalSupabasePasswordMode && import.meta.env.VITE_SUPABASE_AUTO_TEST_LOGIN === 'true';
+  const autoTestLoginStartedRef = useRef(false);
   // 遷移狀態：'idle' | 'migrating' | 'done'
   const [migrationState, setMigrationState] = useState<'idle' | 'migrating' | 'done'>('idle');
 
   useEffect(() => {
     setIsInApp(detectInAppBrowser());
   }, []);
+
+  useEffect(() => {
+    if (!shouldAutoTestLogin || user || loading || autoTestLoginStartedRef.current) return;
+
+    autoTestLoginStartedRef.current = true;
+    signInWithGoogle().catch((signInError) => {
+      autoTestLoginStartedRef.current = false;
+      console.error('[AuthGate] 測試帳號自動登入失敗:', signInError);
+    });
+  }, [loading, shouldAutoTestLogin, signInWithGoogle, user]);
 
   // 登入後自動觸發遷移（只有 user 從 null 變成非 null 時執行一次）
   useEffect(() => {
@@ -130,6 +143,7 @@ export default function AuthGate({ children }: AuthGateProps) {
           {/* Login button */}
           <button
             onClick={signInWithGoogle}
+            disabled={shouldAutoTestLogin && loading}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98]"
           >
             {isLocalTestMode ? (
@@ -140,7 +154,7 @@ export default function AuthGate({ children }: AuthGateProps) {
             ) : isLocalSupabasePasswordMode ? (
               <>
                 <span className="text-lg">S</span>
-                使用測試帳號登入
+                {shouldAutoTestLogin ? '正在使用測試帳號登入...' : '使用測試帳號登入'}
               </>
             ) : (
               <>

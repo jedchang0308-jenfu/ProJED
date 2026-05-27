@@ -27,6 +27,7 @@ import HomeView from './components/HomeView';
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CalendarView from './components/CalendarView';
+import CalendarSubscriptionsView from './components/CalendarSubscriptionsView';
 import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
@@ -145,6 +146,7 @@ function AppContent() {
       case 'board':       return <BoardView />;
       case 'gantt':       return <GanttView />;
       case 'calendar':    return <CalendarView />;
+      case 'calendar_subscriptions': return <CalendarSubscriptionsView />;
       case 'recycle_bin': return <RecycleBinView />;
       default:            return <HomeView />;
     }

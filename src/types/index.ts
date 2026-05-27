@@ -1,7 +1,7 @@
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
-export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'recycle_bin';
+export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'calendar_subscriptions' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt';
 export type DragType = 'move' | 'left' | 'right';
 export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';

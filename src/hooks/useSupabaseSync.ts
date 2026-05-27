@@ -27,6 +27,10 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
     [workspaces, activeBoardId]
   );
   const resolvedActiveWorkspaceId = activeWorkspace?.id ?? activeWorkspaceId;
+  const activeBoardExists = useMemo(
+    () => workspaces.some(ws => ws.boards.some(board => board.id === activeBoardId)),
+    [workspaces, activeBoardId]
+  );
 
   // ── Effect 1: Load workspaces ──────────────────────────────────────
   useEffect(() => {
@@ -93,6 +97,7 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
   // ── Effect 2: Load board data (nodes + dependencies) ───────────────
   useEffect(() => {
     if (!enabled || !isSupabaseConfigured || !userId || !activeBoardId) return;
+    if (workspaces.length === 0 || !activeBoardExists) return;
     if (!resolvedActiveWorkspaceId) return;
 
     let cancelled = false;
@@ -140,5 +145,5 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [enabled, userId, activeBoardId, resolvedActiveWorkspaceId, workspaceIds]);
+  }, [enabled, userId, activeBoardId, activeBoardExists, resolvedActiveWorkspaceId, workspaceIds, workspaces.length]);
 }

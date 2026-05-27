@@ -11,6 +11,7 @@ import type { TaskTag } from '../types';
 export function useTagSync() {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const activeBoardId = useBoardStore(s => s.activeBoardId);
+  const workspaces = useBoardStore(s => s.workspaces);
   const setTags = useTagStore(s => s.setTags);
   const loadTags = useTagStore(s => s.loadTags);
 
@@ -43,6 +44,10 @@ export function useTagSync() {
         setTags([]);
         return;
       }
+      if (workspaces.length === 0 || !workspaces.some(workspace => workspace.id === activeWorkspaceId)) {
+        setTags([]);
+        return;
+      }
 
       let cancelled = false;
       const loadSupabaseTags = async () => {
@@ -68,5 +73,5 @@ export function useTagSync() {
     }
 
     void loadTags(activeWorkspaceId);
-  }, [activeWorkspaceId, activeBoardId, setTags, loadTags]);
+  }, [activeWorkspaceId, activeBoardId, workspaces, setTags, loadTags]);
 }

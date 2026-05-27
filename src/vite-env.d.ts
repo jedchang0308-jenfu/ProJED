@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_AUTH_MODE?: string;
   readonly VITE_SUPABASE_TEST_EMAIL?: string;
   readonly VITE_SUPABASE_TEST_PASSWORD?: string;
+  readonly VITE_SUPABASE_AUTO_TEST_LOGIN?: string;
   readonly VITE_ENABLE_SUPABASE_DIAGNOSTICS?: string;
   readonly VITE_FIREBASE_API_KEY: string;
   readonly VITE_FIREBASE_AUTH_DOMAIN: string;

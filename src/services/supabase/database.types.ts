@@ -23,6 +23,15 @@ export type DocumentSourceType =
   | 'manual';
 export type RagVisibility = 'tenant' | 'project' | 'private';
 export type RagSyncStatus = 'pending' | 'running' | 'synced' | 'failed' | 'deleted';
+export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
+export type CalendarSubscriptionAssigneeFilter =
+  | { type: 'me' }
+  | { type: 'user'; user_id: string };
+export type CalendarSubscriptionFilters = {
+  workspace_ids: string[];
+  assignee: CalendarSubscriptionAssigneeFilter;
+  date_types: CalendarSubscriptionDateType[];
+};
 
 type Table<Row> = {
   Row: Row;
@@ -215,6 +224,19 @@ export type ExternalRagObjectRow = {
   updated_at: string;
 };
 
+export type CalendarSubscriptionRow = {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  token_hash: string;
+  filters_json: Json;
+  is_active: boolean;
+  expires_at: string | null;
+  last_accessed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -232,6 +254,7 @@ export interface Database {
       document_embeddings: Table<DocumentEmbeddingRow>;
       rag_sync_jobs: Table<RagSyncJobRow>;
       external_rag_objects: Table<ExternalRagObjectRow>;
+      calendar_subscriptions: Table<CalendarSubscriptionRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -255,6 +278,10 @@ export interface Database {
           similarity: number;
           metadata: Json;
         }>;
+      };
+      calendar_subscription_filter_allowed: {
+        Args: { filters: Json };
+        Returns: boolean;
       };
     };
     Enums: {

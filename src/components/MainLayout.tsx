@@ -113,7 +113,14 @@ const MainLayout = ({ children }) => {
                         <Layout className="text-primary w-5 h-5" />
                         <span className="text-slate-700 font-bold hidden sm:inline">ProJED</span>
 
-                        {currentView !== 'home' && activeWorkspace && (
+                        {currentView === 'calendar_subscriptions' && (
+                            <>
+                                <ChevronRight size={14} className="text-slate-300" />
+                                <span className="text-slate-700 font-bold">自訂行事曆訂閱</span>
+                            </>
+                        )}
+
+                        {currentView !== 'home' && currentView !== 'calendar_subscriptions' && activeWorkspace && (
                             <>
                                 <ChevronRight size={14} className="text-slate-300" />
                                 <span className="text-slate-400 whitespace-nowrap">{activeWorkspace.title}</span>

@@ -383,6 +383,9 @@ deno_version = 2
 [functions.match_project_knowledge]
 verify_jwt = false
 
+[functions.calendar-feed]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
