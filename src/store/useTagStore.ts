@@ -46,7 +46,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
       }));
     } catch (error) {
       console.error('[useTagStore] loadTags failed:', error);
-      set({ loading: false, error: error instanceof Error ? error.message : 'Failed to load tags' });
+      set({ loading: false, error: error instanceof Error ? error.message : '無法載入標籤。' });
     }
   },
 
@@ -77,7 +77,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
       console.error('[useTagStore] createTag failed:', error);
       set((state) => ({
         tags: state.tags.filter(item => item.id !== tag.id),
-        error: error instanceof Error ? error.message : 'Failed to create tag',
+        error: error instanceof Error ? error.message : '無法建立標籤。',
       }));
       return null;
     }
@@ -103,7 +103,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
       await tagService.update(workspaceId, tagId, safeUpdates);
     } catch (error) {
       console.error('[useTagStore] updateTag failed:', error);
-      set({ tags: previous, error: error instanceof Error ? error.message : 'Failed to update tag' });
+      set({ tags: previous, error: error instanceof Error ? error.message : '無法更新標籤。' });
     }
   },
 
@@ -118,7 +118,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
       await tagService.delete(workspaceId, tagId);
     } catch (error) {
       console.error('[useTagStore] deleteTag failed:', error);
-      set({ tags: previous, error: error instanceof Error ? error.message : 'Failed to delete tag' });
+      set({ tags: previous, error: error instanceof Error ? error.message : '無法刪除標籤。' });
     }
   },
 

@@ -23,6 +23,7 @@ const GlobalDialog = () => {
         if (!isOpen) return;
 
         const handleKeyDown = (e) => {
+            if (e.isComposing) return;
             // Do not stop propagation everywhere, just specific keys for dialog
             const target = e.target;
             const isFromDialog = target.closest?.('.global-dialog-content');

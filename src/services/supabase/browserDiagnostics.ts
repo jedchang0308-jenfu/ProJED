@@ -148,7 +148,7 @@ const runSmoke = async (): Promise<BrowserSmokeSummary> => {
       .insert({
         tenant_id: tenant.id,
         project_id: project.id,
-        title: 'P8 Browser Parent',
+      title: 'P8 瀏覽器父任務',
         status: 'todo',
         item_type: 'group',
         sort_order: 1,
@@ -167,7 +167,7 @@ const runSmoke = async (): Promise<BrowserSmokeSummary> => {
         tenant_id: tenant.id,
         project_id: project.id,
         parent_id: parentItem.id,
-        title: 'P8 Browser Child',
+      title: 'P8 瀏覽器子任務',
         status: 'in_progress',
         item_type: 'task',
         sort_order: 2,

@@ -1,8 +1,8 @@
 import { requireFirebaseDb } from './firebase';
 import { 
-  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDocs
+  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs
 } from 'firebase/firestore';
-import type { Workspace, Board, Dependency, TaskTag } from '../types';
+import type { Workspace, Board, BoardMember, Dependency, TaskTag, WorkspaceMember } from '../types';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -55,6 +55,42 @@ export const workspaceService = {
     // Note: This only deletes the parent doc. Subcollections must be handled via Cloud Functions or recursive delete in a real production app.
     await deleteDoc(doc(db, 'workspaces', wsId));
   }
+};
+
+export const memberService = {
+  listWorkspaceMembers: async (wsId: string): Promise<WorkspaceMember[]> => {
+    const db = requireFirebaseDb();
+    const snapshot = await getDoc(doc(db, 'workspaces', wsId));
+    if (!snapshot.exists()) return [];
+
+    const workspace = { ...(snapshot.data() as Workspace), id: snapshot.id };
+    const memberIds = Array.from(new Set([...(workspace.members || []), workspace.ownerId].filter(Boolean) as string[]));
+    return memberIds.map(userId => ({
+      workspaceId: wsId,
+      userId,
+      role: userId === workspace.ownerId ? 'owner' : 'member',
+      status: 'active',
+      profile: {
+        id: userId,
+        email: null,
+        displayName: userId,
+      },
+      createdAt: workspace.createdAt,
+    }));
+  },
+
+  listBoardMembers: async (wsId: string, boardId: string): Promise<BoardMember[]> => {
+    const workspaceMembers = await memberService.listWorkspaceMembers(wsId);
+    return workspaceMembers.map(member => ({
+      workspaceId: wsId,
+      boardId,
+      userId: member.userId,
+      role: member.role === 'owner' ? 'owner' : 'member',
+      profile: member.profile,
+      createdAt: member.createdAt,
+      updatedAt: member.updatedAt,
+    }));
+  },
 };
 
 // ==========================

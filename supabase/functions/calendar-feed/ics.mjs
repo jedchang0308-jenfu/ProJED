@@ -1,6 +1,6 @@
 /* global TextEncoder, URLSearchParams */
 
-export const FEED_TASK_LIMIT = 1500;
+export const FEED_TASK_LIMIT = 1000;
 export const ICS_LINE_OCTET_LIMIT = 75;
 
 const encoder = new TextEncoder();
@@ -49,6 +49,8 @@ export const escapeIcsText = (value) =>
 
 export const icsLine = (name, value) => foldLine(`${name}:${escapeIcsText(value)}`);
 
+export const rawIcsLine = (name, value) => foldLine(`${name}:${value}`);
+
 export const buildTaskUrl = (item, appBaseUrl) => {
   const baseUrl = appBaseUrl?.replace(/\/+$/, "");
   if (!baseUrl) return "";
@@ -86,6 +88,7 @@ export const buildCalendarFeedIcs = ({
   dateTypes = [],
   tenantNameById = new Map(),
   projectNameById = new Map(),
+  assigneeProfileById = new Map(),
   assigneeProfile = null,
   assigneeUserId,
   appBaseUrl = "",
@@ -93,10 +96,16 @@ export const buildCalendarFeedIcs = ({
   now = new Date(),
 }) => {
   const activeDateTypes = new Set(dateTypes);
-  const assigneeLabel = assigneeProfile?.display_name
-    || assigneeProfile?.email
-    || assigneeUserId?.slice?.(0, 8)
-    || "";
+  const getAssigneeLabel = (item) => {
+    if (!item.assignee_id) return "未指派";
+    const itemProfile = assigneeProfileById.get(item.assignee_id);
+    return itemProfile?.display_name
+      || itemProfile?.email
+      || (item.assignee_id === assigneeUserId
+        ? assigneeProfile?.display_name || assigneeProfile?.email
+        : "")
+      || item.assignee_id.slice(0, 8);
+  };
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -116,6 +125,7 @@ export const buildCalendarFeedIcs = ({
     const workspaceName = tenantNameById.get(item.tenant_id) ?? "ProJED";
     const projectName = projectNameById.get(item.project_id) ?? "";
     const taskUrl = buildTaskUrl(item, appBaseUrl);
+    const assigneeLabel = getAssigneeLabel(item);
     const description = buildDescription(item, projectName, assigneeLabel, taskUrl);
     const eventSpecs = [
       activeDateTypes.has("start_date") && item.start_date
@@ -128,7 +138,7 @@ export const buildCalendarFeedIcs = ({
 
     for (const eventSpec of eventSpecs) {
       lines.push("BEGIN:VEVENT");
-      lines.push(`UID:${item.id}-${eventSpec.type}-${subscription.id}@projed`);
+      lines.push(rawIcsLine("UID", `${item.id}-${eventSpec.type}-${subscription.id}@projed`));
       lines.push(`DTSTAMP:${nowStamp}`);
       lines.push(`DTSTART;VALUE=DATE:${toIcsDate(eventSpec.date)}`);
       lines.push(`DTEND;VALUE=DATE:${toIcsDate(addDays(eventSpec.date, 1))}`);

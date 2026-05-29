@@ -1,9 +1,13 @@
-import type { Board, Dependency, TaskNode, TaskTag, Workspace } from '../types';
+import type { Board, BoardInvite, BoardInviteAcceptInput, BoardInviteCreateInput, BoardMember, Dependency, TaskNode, TaskTag, Workspace, WorkspaceMember } from '../types';
+import { hashBoardInviteToken } from '../utils/boardInviteToken';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
 const DEPENDENCIES_KEY = 'projed-local-test.dependencies';
 const TAGS_KEY = 'projed-local-test.tags';
+const BOARD_MEMBERS_KEY = 'projed-local-test.boardMembers';
+const BOARD_INVITES_KEY = 'projed-local-test.boardInvites';
+const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 
 const readJson = <T>(key: string, fallback: T): T => {
   try {
@@ -68,6 +72,289 @@ const readDependencies = () => readJson<Dependency[]>(DEPENDENCIES_KEY, []);
 const writeDependencies = (dependencies: Dependency[]) => writeJson(DEPENDENCIES_KEY, dependencies);
 const readTags = () => readJson<TaskTag[]>(TAGS_KEY, []);
 const writeTags = (tags: TaskTag[]) => writeJson(TAGS_KEY, tags);
+type LocalBoardMemberRecord = Pick<BoardMember, 'userId' | 'role' | 'createdAt' | 'updatedAt'>;
+type LocalBoardInviteRecord = BoardInvite & { tokenHash?: string };
+const readBoardMembers = () => readJson<Record<string, LocalBoardMemberRecord[]>>(BOARD_MEMBERS_KEY, {});
+const writeBoardMembers = (members: Record<string, LocalBoardMemberRecord[]>) => writeJson(BOARD_MEMBERS_KEY, members);
+const readBoardInvites = () => readJson<Record<string, LocalBoardInviteRecord[]>>(BOARD_INVITES_KEY, {});
+const writeBoardInvites = (invites: Record<string, LocalBoardInviteRecord[]>) => writeJson(BOARD_INVITES_KEY, invites);
+const getBoardMemberKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
+const readCurrentLocalUserId = () =>
+  readJson<{ uid?: string } | null>(LOCAL_TEST_SESSION_KEY, null)?.uid || 'local-test-user';
+const canManageBoard = (workspaceId: string, boardId: string, userId = readCurrentLocalUserId()) => {
+  const records = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
+  const role = records.find(member => member.userId === userId)?.role;
+  return role === 'owner' || role === 'admin' || role === 'project_manager';
+};
+const requireCanManageBoard = (workspaceId: string, boardId: string) => {
+  if (!canManageBoard(workspaceId, boardId)) {
+    throw new Error('需要看板管理權限。');
+  }
+};
+
+const localTestProfiles = {
+  'local-test-user': {
+    id: 'local-test-user',
+    email: 'test@projed.local',
+    displayName: 'ProJED 測試使用者',
+  },
+  'local-test-admin': {
+    id: 'local-test-admin',
+    email: 'admin@projed.local',
+    displayName: '本機測試管理員',
+  },
+  'local-test-pm': {
+    id: 'local-test-pm',
+    email: 'pm@projed.local',
+    displayName: '本機測試專案管理者',
+  },
+  'local-test-member': {
+    id: 'local-test-member',
+    email: 'member@projed.local',
+    displayName: '本機測試成員',
+  },
+  'local-test-viewer': {
+    id: 'local-test-viewer',
+    email: 'viewer@projed.local',
+    displayName: '本機測試檢視者',
+  },
+  'local-test-analyst': {
+    id: 'local-test-analyst',
+    email: 'analyst@projed.local',
+    displayName: '本機測試分析員',
+  },
+};
+
+const defaultBoardMemberRecords: LocalBoardMemberRecord[] = [
+  { userId: 'local-test-user', role: 'owner', createdAt: 1704067200000, updatedAt: 1704067200000 },
+  { userId: 'local-test-pm', role: 'project_manager', createdAt: 1704067200000, updatedAt: 1704067200000 },
+  { userId: 'local-test-admin', role: 'admin', createdAt: 1704067200000, updatedAt: 1704067200000 },
+  { userId: 'local-test-member', role: 'member', createdAt: 1704067200000, updatedAt: 1704067200000 },
+  { userId: 'local-test-viewer', role: 'viewer', createdAt: 1704067200000, updatedAt: 1704067200000 },
+];
+
+const getLocalProfile = (userId: string) =>
+  localTestProfiles[userId as keyof typeof localTestProfiles];
+
+const toBoardMember = (workspaceId: string, boardId: string, record: LocalBoardMemberRecord): BoardMember => ({
+  workspaceId,
+  boardId,
+  userId: record.userId,
+  role: record.role,
+  profile: getLocalProfile(record.userId),
+  createdAt: record.createdAt,
+  updatedAt: record.updatedAt,
+});
+
+const upsertBoardMemberRecord = (
+  workspaceId: string,
+  boardId: string,
+  userId: string,
+  role: BoardMember['role']
+) => {
+  const key = getBoardMemberKey(workspaceId, boardId);
+  const allMembers = readBoardMembers();
+  const currentRecords = allMembers[key] || defaultBoardMemberRecords;
+  const now = Date.now();
+  const existing = currentRecords.find(member => member.userId === userId);
+  const nextRecords = existing
+    ? currentRecords.map(member =>
+        member.userId === userId ? { ...member, role, updatedAt: now } : member
+      )
+    : [...currentRecords, { userId, role, createdAt: now, updatedAt: now }];
+
+  writeBoardMembers({ ...allMembers, [key]: nextRecords });
+};
+
+export const localTestMemberService = {
+  listWorkspaceMembers: async (workspaceId: string): Promise<WorkspaceMember[]> => [
+    {
+      workspaceId,
+      userId: 'local-test-user',
+      role: 'owner',
+      status: 'active',
+      profile: localTestProfiles['local-test-user'],
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    {
+      workspaceId,
+      userId: 'local-test-pm',
+      role: 'project_manager',
+      status: 'active',
+      profile: localTestProfiles['local-test-pm'],
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    {
+      workspaceId,
+      userId: 'local-test-admin',
+      role: 'admin',
+      status: 'active',
+      profile: localTestProfiles['local-test-admin'],
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    {
+      workspaceId,
+      userId: 'local-test-member',
+      role: 'member',
+      status: 'active',
+      profile: localTestProfiles['local-test-member'],
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    {
+      workspaceId,
+      userId: 'local-test-viewer',
+      role: 'viewer',
+      status: 'active',
+      profile: localTestProfiles['local-test-viewer'],
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    {
+      workspaceId,
+      userId: 'local-test-analyst',
+      role: 'member',
+      status: 'active',
+      profile: localTestProfiles['local-test-analyst'],
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+  ],
+
+  listBoardMembers: async (workspaceId: string, boardId: string): Promise<BoardMember[]> => {
+    const key = getBoardMemberKey(workspaceId, boardId);
+    const records = readBoardMembers()[key] || defaultBoardMemberRecords;
+    return records.map(record => toBoardMember(workspaceId, boardId, record));
+  },
+
+  upsertBoardMember: async (
+    workspaceId: string,
+    boardId: string,
+    userId: string,
+    role: BoardMember['role']
+  ): Promise<void> => {
+    requireCanManageBoard(workspaceId, boardId);
+    upsertBoardMemberRecord(workspaceId, boardId, userId, role);
+  },
+
+  removeBoardMember: async (workspaceId: string, boardId: string, userId: string): Promise<void> => {
+    requireCanManageBoard(workspaceId, boardId);
+    const key = getBoardMemberKey(workspaceId, boardId);
+    const allMembers = readBoardMembers();
+    const currentRecords = allMembers[key] || defaultBoardMemberRecords;
+    writeBoardMembers({
+      ...allMembers,
+      [key]: currentRecords.filter(member => member.userId !== userId),
+    });
+  },
+};
+
+export const localTestBoardInviteService = {
+  listPending: async (workspaceId: string, boardId: string): Promise<BoardInvite[]> => {
+    const key = getBoardMemberKey(workspaceId, boardId);
+    return (readBoardInvites()[key] || [])
+      .filter(invite => invite.status === 'pending')
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  },
+
+  create: async (workspaceId: string, boardId: string, input: BoardInviteCreateInput): Promise<BoardInvite> => {
+    requireCanManageBoard(workspaceId, boardId);
+    const key = getBoardMemberKey(workspaceId, boardId);
+    const allInvites = readBoardInvites();
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const currentInvites = allInvites[key] || [];
+    if (currentInvites.some(invite => invite.status === 'pending' && invite.email === normalizedEmail)) {
+      throw new Error('此看板已有同一個電子郵件地址的待處理邀請。');
+    }
+
+    const now = Date.now();
+    const invite: LocalBoardInviteRecord = {
+      id: createId('local_invite'),
+      workspaceId,
+      boardId,
+      email: normalizedEmail,
+      invitedBy: 'local-test-user',
+      status: 'pending',
+      defaultRole: input.defaultRole ?? 'member',
+      tokenHash: input.tokenHash,
+      expiresAt: input.expiresAt,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    writeBoardInvites({
+      ...allInvites,
+      [key]: [invite, ...currentInvites],
+    });
+    return invite;
+  },
+
+  revoke: async (workspaceId: string, boardId: string, inviteId: string): Promise<void> => {
+    requireCanManageBoard(workspaceId, boardId);
+    const key = getBoardMemberKey(workspaceId, boardId);
+    const allInvites = readBoardInvites();
+    const now = Date.now();
+    writeBoardInvites({
+      ...allInvites,
+      [key]: (allInvites[key] || []).map(invite =>
+        invite.id === inviteId && invite.status === 'pending'
+          ? { ...invite, status: 'revoked', revokedAt: now, updatedAt: now }
+          : invite
+      ),
+    });
+  },
+
+  accept: async (input: BoardInviteAcceptInput): Promise<BoardInvite> => {
+    const normalizedEmail = input.email?.trim().toLowerCase();
+    if (!normalizedEmail) throw new Error('接受邀請需要已登入且具有電子郵件地址的使用者。');
+
+    const tokenHash = await hashBoardInviteToken(input.token);
+    const allInvites = readBoardInvites();
+    const match = Object.entries(allInvites).flatMap(([key, invites]) =>
+      invites.map(invite => ({ key, invite }))
+    ).find(({ invite }) => invite.tokenHash === tokenHash);
+    if (!match) throw new Error('找不到看板邀請。');
+    if (match.invite.status !== 'pending') throw new Error('此看板邀請已不在待處理狀態。');
+    if (match.invite.expiresAt <= Date.now()) {
+      const now = Date.now();
+      writeBoardInvites({
+        ...allInvites,
+        [match.key]: allInvites[match.key].map(invite =>
+          invite.id === match.invite.id ? { ...invite, status: 'expired', updatedAt: now } : invite
+        ),
+      });
+      throw new Error('看板邀請已過期。');
+    }
+    if (match.invite.email !== normalizedEmail) {
+      throw new Error('此邀請屬於其他電子郵件地址。');
+    }
+
+    const now = Date.now();
+    const acceptedInvite = {
+      ...match.invite,
+      status: 'accepted' as const,
+      acceptedAt: now,
+      updatedAt: now,
+    };
+    writeBoardInvites({
+      ...allInvites,
+      [match.key]: allInvites[match.key].map(invite =>
+        invite.id === match.invite.id ? acceptedInvite : invite
+      ),
+    });
+
+    upsertBoardMemberRecord(
+      acceptedInvite.workspaceId,
+      acceptedInvite.boardId,
+      input.userId,
+      acceptedInvite.defaultRole
+    );
+    return acceptedInvite;
+  },
+};
 
 export const localTestWorkspaceService = {
   create: async (title?: string): Promise<Workspace> => {
@@ -272,4 +559,8 @@ export const localTestStorage = {
   writeDependencies,
   readTags,
   writeTags,
+  readBoardMembers,
+  writeBoardMembers,
+  readBoardInvites,
+  writeBoardInvites,
 };

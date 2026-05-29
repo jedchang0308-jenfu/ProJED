@@ -10,7 +10,7 @@ const PM_QUICK_ACTIONS = [
     label: '專案健檢',
     icon: Activity,
     prompt:
-      '請根據目前 ProJED 專案資料進行專案健檢。請分析 WBS 階層、任務狀態、起訖日、依賴關係、逾期項目與可引用的專案知識。輸出格式請包含：1. 專案健康度總結 2. 目前最大風險 3. 已逾期或可能逾期的任務 4. 需要 PM 立刻處理的前三件事 5. 資料不足或需要補齊的欄位。請用繁體中文回答，並在可行時引用來源。',
+      '請根據目前 ProJED 專案資料進行專案健檢。請分析工作分解結構階層、任務狀態、起訖日、依賴關係、逾期項目與可引用的專案知識。輸出格式請包含：1. 專案健康度總結 2. 目前最大風險 3. 已逾期或可能逾期的任務 4. 需要專案經理立刻處理的前三件事 5. 資料不足或需要補齊的欄位。請用繁體中文回答，並在可行時引用來源。',
   },
   {
     id: 'project-risk-scan',
@@ -24,14 +24,14 @@ const PM_QUICK_ACTIONS = [
     label: '每週進度報告',
     icon: ClipboardList,
     prompt:
-      '請根據目前 ProJED 專案資料產生 PM 每週進度報告。請整理：1. 本週完成事項 2. 進行中事項 3. 延遲或卡住事項 4. 主要風險 5. 下週重點 6. 需要管理層或跨部門協助的事項。請用適合會議或管理層閱讀的繁體中文格式輸出，並在資料不足時明確標示假設與缺口。',
+      '請根據目前 ProJED 專案資料產生專案經理每週進度報告。請整理：1. 本週完成事項 2. 進行中事項 3. 延遲或卡住事項 4. 主要風險 5. 下週重點 6. 需要管理層或跨部門協助的事項。請用適合會議或管理層閱讀的繁體中文格式輸出，並在資料不足時明確標示假設與缺口。',
   },
   {
     id: 'upcoming-week-todos',
     label: '未來一周待辦',
     icon: CalendarDays,
     prompt:
-      '請整理我未來一周要做的事情。請根據目前 ProJED 專案資料中的任務、狀態、負責人、起訖日、依賴關係與可引用的專案知識，找出未來 7 天內需要處理或接近到期的事項，並從最接近到期日到最晚到期日依序排序。輸出格式請包含：到期日、任務名稱、目前狀態、所屬 WBS 或專案位置、為什麼需要處理、建議下一步。請排除已完成事項；若資料不足，請列出需要補齊的欄位。請用繁體中文回答，並在可行時引用來源。',
+      '請整理我未來一周要做的事情。請根據目前 ProJED 專案資料中的任務、狀態、負責人、起訖日、依賴關係與可引用的專案知識，找出未來 7 天內需要處理或接近到期的事項，並從最接近到期日到最晚到期日依序排序。輸出格式請包含：到期日、任務名稱、目前狀態、所屬工作分解結構或專案位置、為什麼需要處理、建議下一步。請排除已完成事項；若資料不足，請列出需要補齊的欄位。請用繁體中文回答，並在可行時引用來源。',
   },
 ];
 
@@ -97,6 +97,7 @@ const RagSidebar: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -112,7 +113,7 @@ const RagSidebar: React.FC = () => {
           <div className="rounded-md bg-blue-100 p-1.5 text-blue-600">
             <Sparkles size={16} />
           </div>
-          <h2 className="text-sm font-bold text-slate-700">專案 AI 助手</h2>
+          <h2 className="text-sm font-bold text-slate-700">專案智慧助理</h2>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -145,7 +146,7 @@ const RagSidebar: React.FC = () => {
             }`}
             type="button"
           >
-            ⚡ 快速 (3.1 Lite)
+            快速模式（Gemini 3.1 輕量版）
           </button>
           <button
             onClick={() => setGenerationModel('gemini-3.5-flash')}
@@ -156,7 +157,7 @@ const RagSidebar: React.FC = () => {
             }`}
             type="button"
           >
-            🧠 深度 (3.5 Flash)
+            深度模式（Gemini 3.5）
           </button>
         </div>
 
@@ -294,7 +295,7 @@ const RagSidebar: React.FC = () => {
           </button>
         </form>
         <div className="mt-2 text-center text-[10px] text-slate-400">
-          AI 回答可能不完整，請以引用來源與專案資料為準。
+          智慧助理回覆可能不完整，請以引用來源與專案資料為準。
         </div>
       </div>
     </div>

@@ -103,7 +103,7 @@ export const validateRagIndexPlan = (plan: RagIndexPlan): RagIndexPlanValidation
     if (documentKeys.has(document.sourceDocumentKey)) {
       issues.push({
         severity: 'error',
-        message: 'Duplicate source document key.',
+        message: '來源文件鍵重複。',
         sourceDocumentKey: document.sourceDocumentKey,
       });
     }
@@ -112,7 +112,7 @@ export const validateRagIndexPlan = (plan: RagIndexPlan): RagIndexPlanValidation
     if (!document.contentHash) {
       issues.push({
         severity: 'error',
-        message: 'Document content hash is required.',
+        message: '文件內容雜湊為必填。',
         sourceDocumentKey: document.sourceDocumentKey,
       });
     }
@@ -122,7 +122,7 @@ export const validateRagIndexPlan = (plan: RagIndexPlan): RagIndexPlanValidation
     if (!documentKeys.has(chunk.sourceDocumentKey)) {
       issues.push({
         severity: 'error',
-        message: 'Chunk references a document that is not in the plan.',
+        message: '文字區塊參照的文件不在索引計畫中。',
         sourceDocumentKey: chunk.sourceDocumentKey,
       });
     }
@@ -132,7 +132,7 @@ export const validateRagIndexPlan = (plan: RagIndexPlan): RagIndexPlanValidation
     if (!citation.sourceTable || !citation.sourceId || !citation.sourceType || !citation.title) {
       issues.push({
         severity: 'error',
-        message: 'Chunk citation is missing required traceability fields.',
+        message: '文字區塊引用資料缺少必要的追溯欄位。',
         sourceDocumentKey: chunk.sourceDocumentKey,
       });
     }
@@ -142,7 +142,7 @@ export const validateRagIndexPlan = (plan: RagIndexPlan): RagIndexPlanValidation
     if (!chunkCountByDocument.has(documentKey)) {
       issues.push({
         severity: 'warning',
-        message: 'Document has no chunks and will not be embedded.',
+        message: '文件沒有文字區塊，因此不會建立嵌入。',
         sourceDocumentKey: documentKey,
       });
     }
@@ -151,14 +151,14 @@ export const validateRagIndexPlan = (plan: RagIndexPlan): RagIndexPlanValidation
   if (plan.embeddingInputs.length !== plan.chunks.length) {
     issues.push({
       severity: 'error',
-      message: 'Embedding input count must match chunk count.',
+      message: '嵌入輸入數量必須與文字區塊數量一致。',
     });
   }
 
   if (plan.syncJobs.length !== plan.documents.length) {
     issues.push({
       severity: 'error',
-      message: 'Sync job count must match document count.',
+      message: '同步工作數量必須與文件數量一致。',
     });
   }
 

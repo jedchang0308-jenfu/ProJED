@@ -7,7 +7,8 @@
  *   手機端仍支援長按 500ms 開啟右鍵選單（useLongPress Hook）。
  *
  * 【行內編輯保護】SmartKeyboardSensor 集中式防禦：
- *   當鍵盤事件來源是 input/textarea/select/button 等互動元素時，
+ *   當鍵盤事件來源是 input/textarea/select/button/contentEditable 等互動元素時，
+ *   或 IME 正在組字時，
  *   在 Sensor 層直接返回 false，不啟動拖曳行為。
  *   無需在任何元件內加 stopPropagation()，未來新增行內編輯自動安全。
  */
@@ -25,14 +26,20 @@ import type { SensorDescriptor, SensorOptions } from '@dnd-kit/core';
  */
 const INTERACTIVE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']);
 
+const isInteractiveEditingTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false;
+    return INTERACTIVE_TAGS.has(target.tagName) || target.isContentEditable || Boolean(target.closest('[contenteditable="true"]'));
+};
+
 class SmartKeyboardSensor extends KeyboardSensor {
     static activators = KeyboardSensor.activators.map((activator) => ({
         ...activator,
         handler: (...args: Parameters<typeof activator.handler>) => {
             const [event] = args;
             const target = (event as React.KeyboardEvent).target;
-            // 若事件來源為互動元素（表單欄位），不啟動拖曳
-            if (target instanceof HTMLElement && INTERACTIVE_TAGS.has(target.tagName)) {
+            const nativeEvent = (event as React.KeyboardEvent).nativeEvent as KeyboardEvent;
+            // 若事件來源為互動元素或 IME 組字中，不啟動拖曳
+            if (isInteractiveEditingTarget(target) || nativeEvent.isComposing) {
                 return false;
             }
             return activator.handler(...args);
@@ -52,8 +59,8 @@ export function useDragSensors(): SensorDescriptor<SensorOptions>[] {
         // 鍵盤無障礙支援（已內建行內編輯保護）
         useSensor(TouchSensor, {
             activationConstraint: {
-                delay: 120,
-                tolerance: 14,
+                delay: 250,
+                tolerance: 8,
             },
         }),
 

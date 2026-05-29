@@ -13,8 +13,10 @@ import { Plus, GitBranch } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import { StatusFilterBar } from './ui/StatusFilterBar';
+import { BoardMembersPanel } from './BoardMembersPanel';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
@@ -41,11 +43,16 @@ const BoardView = () => {
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
+    const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
+        if (!canCreateDependency) {
+            setDependencySelection(null);
+            return;
+        }
         if (!dependencySelection) {
             // 進入選取模式，並自動開啟開始日期顯示
             if (!showStartDate) toggleStartDate();
@@ -74,7 +81,7 @@ const BoardView = () => {
             }
             setDependencySelection(null);
         }
-    }, [dependencySelection, dependencies, addDependency, setDependencySelection, showStartDate, toggleStartDate]);
+    }, [canCreateDependency, dependencySelection, dependencies, addDependency, setDependencySelection, showStartDate, toggleStartDate]);
 
     // ESC 取消選取模式
     React.useEffect(() => {
@@ -152,6 +159,7 @@ const BoardView = () => {
      * 7. wbs-checklist → wbs-checklist    : 同卡片內任務排序 ✨新增
      */
     const handleDragStart = (event: any) => {
+        if (!canMoveTask) return;
         const { active } = event;
         const nodeId = active.data.current?.nodeId;
         lastValidOverRef.current = null;
@@ -365,6 +373,7 @@ const BoardView = () => {
     const lastValidOverRef = React.useRef<any>(null);
 
     const handleDragOver = (event: any) => {
+        if (!canMoveTask) return;
         const { active, over } = event;
         if (over && active?.id !== over.id) {
             lastValidOverRef.current = over;
@@ -373,6 +382,7 @@ const BoardView = () => {
 
     const handleDragEnd = (event: any) => {
         setActiveDrag(null);
+        if (!canMoveTask) return;
         const { active, over } = event;
         const effectiveOver = over && active.id !== over.id ? over : lastValidOverRef.current;
         lastValidOverRef.current = null;
@@ -394,6 +404,7 @@ const BoardView = () => {
 
     /** 新增頂層任務 (Level 1 → 新列表) */
     const handleAddColumn = () => {
+        if (!canCreateTask) return;
         const newNode: TaskNode = {
             id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
             workspaceId: activeWorkspaceId || '',
@@ -431,6 +442,7 @@ const BoardView = () => {
                 {/* 工具列 (Toolbar) — 狀態篩選器 */}
                 <div className="relative z-[10000] h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
                     <StatusFilterBar />
+                    <BoardMembersPanel />
                 </div>
 
                 {/* 依賴關係選取模式橫幅 */}
@@ -450,7 +462,7 @@ const BoardView = () => {
                             onClick={() => setDependencySelection(null)}
                             className="text-amber-500 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded hover:bg-amber-100 transition-colors flex-shrink-0"
                         >
-                            取消 (ESC)
+                            取消（退出鍵）
                         </button>
                     </div>
                 )}
@@ -470,7 +482,8 @@ const BoardView = () => {
                     <div className="flex-shrink-0 w-[260px]">
                         <button
                             onClick={handleAddColumn}
-                            className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 font-bold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group"
+                            disabled={!canCreateTask}
+                            className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 font-bold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
                         >
                             <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
                             <span>新增任務</span>

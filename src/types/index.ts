@@ -5,9 +5,230 @@ export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'calen
 export type DialogType = 'confirm' | 'prompt';
 export type DragType = 'move' | 'left' | 'right';
 export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';
+export type CollaborationRole = 'owner' | 'admin' | 'project_manager' | 'member' | 'viewer';
+export type MembershipStatus = 'active' | 'invited' | 'suspended';
+export type BoardInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+export type CollaborationScope = 'workspace' | 'board';
+export type PermissionCapability =
+  | 'read_workspace'
+  | 'manage_workspace_settings'
+  | 'manage_workspace_members'
+  | 'create_board'
+  | 'delete_workspace'
+  | 'read_board'
+  | 'edit_board_settings'
+  | 'manage_board_members'
+  | 'create_task'
+  | 'edit_task'
+  | 'move_task'
+  | 'delete_task'
+  | 'assign_task'
+  | 'create_dependency'
+  | 'delete_dependency'
+  | 'read_activity'
+  | 'write_activity'
+  | 'read_audit'
+  | 'write_audit';
+
+export const WORKSPACE_ROLE_CAPABILITIES = {
+  owner: [
+    'read_workspace',
+    'manage_workspace_settings',
+    'manage_workspace_members',
+    'create_board',
+    'delete_workspace',
+    'read_activity',
+    'read_audit',
+    'write_audit',
+  ],
+  admin: [
+    'read_workspace',
+    'manage_workspace_settings',
+    'manage_workspace_members',
+    'create_board',
+    'read_activity',
+    'read_audit',
+    'write_audit',
+  ],
+  project_manager: ['read_workspace', 'create_board', 'read_activity'],
+  member: ['read_workspace', 'read_activity'],
+  viewer: ['read_workspace', 'read_activity'],
+} as const satisfies Record<CollaborationRole, readonly PermissionCapability[]>;
+
+export const BOARD_ROLE_CAPABILITIES = {
+  owner: [
+    'read_board',
+    'edit_board_settings',
+    'manage_board_members',
+    'create_task',
+    'edit_task',
+    'move_task',
+    'delete_task',
+    'assign_task',
+    'create_dependency',
+    'delete_dependency',
+    'read_activity',
+    'write_activity',
+    'read_audit',
+    'write_audit',
+  ],
+  admin: [
+    'read_board',
+    'edit_board_settings',
+    'manage_board_members',
+    'create_task',
+    'edit_task',
+    'move_task',
+    'delete_task',
+    'assign_task',
+    'create_dependency',
+    'delete_dependency',
+    'read_activity',
+    'write_activity',
+    'read_audit',
+    'write_audit',
+  ],
+  project_manager: [
+    'read_board',
+    'edit_board_settings',
+    'manage_board_members',
+    'create_task',
+    'edit_task',
+    'move_task',
+    'delete_task',
+    'assign_task',
+    'create_dependency',
+    'delete_dependency',
+    'read_activity',
+    'write_activity',
+  ],
+  member: [
+    'read_board',
+    'create_task',
+    'edit_task',
+    'move_task',
+    'assign_task',
+    'create_dependency',
+    'read_activity',
+    'write_activity',
+  ],
+  viewer: ['read_board', 'read_activity'],
+} as const satisfies Record<CollaborationRole, readonly PermissionCapability[]>;
 
 // Kept for old deep links and modal state. New task editing should prefer TaskNode ids.
 export type EditableItemType = 'list' | 'card' | 'checklist' | 'checklistitem' | 'tasknode';
+
+export interface CollaborationMemberProfile {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+}
+
+export interface WorkspaceMember {
+  workspaceId: string;
+  userId: string;
+  role: CollaborationRole;
+  status: MembershipStatus;
+  profile?: CollaborationMemberProfile;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface BoardMember {
+  workspaceId: string;
+  boardId: string;
+  userId: string;
+  role: CollaborationRole;
+  profile?: CollaborationMemberProfile;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface BoardInvite {
+  id: string;
+  workspaceId: string;
+  boardId: string;
+  email: string;
+  invitedBy?: string | null;
+  status: BoardInviteStatus;
+  defaultRole: CollaborationRole;
+  expiresAt: number;
+  acceptedAt?: number;
+  revokedAt?: number;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface BoardInviteCreateInput {
+  email: string;
+  tokenHash: string;
+  expiresAt: number;
+  defaultRole?: CollaborationRole;
+}
+
+export interface BoardInviteAcceptInput {
+  token: string;
+  userId: string;
+  email: string | null;
+  displayName?: string | null;
+}
+
+export interface CurrentBoardAccess {
+  workspaceId: string;
+  boardId: string;
+  workspaceRole?: CollaborationRole;
+  boardRole?: CollaborationRole;
+  capabilities: PermissionCapability[];
+}
+
+export type ActivityEventType =
+  | 'task_created'
+  | 'task_assigned'
+  | 'task_collaborators_changed'
+  | 'task_status_changed'
+  | 'task_moved'
+  | 'task_dates_changed'
+  | 'task_archived'
+  | 'task_restored'
+  | 'task_tags_changed'
+  | 'dependency_created'
+  | 'dependency_updated'
+  | 'dependency_deleted';
+
+export type AuditAction =
+  | 'invite_created'
+  | 'invite_revoked'
+  | 'invite_accepted'
+  | 'member_invited'
+  | 'member_removed'
+  | 'member_role_changed'
+  | 'board_deleted'
+  | 'workspace_deleted';
+
+export interface ActivityEvent {
+  id?: string;
+  workspaceId: string;
+  boardId?: string | null;
+  actorId?: string | null;
+  eventType: ActivityEventType;
+  entityTable: string;
+  entityId?: string | null;
+  payload: Record<string, unknown>;
+  createdAt?: number;
+}
+
+export interface AuditLogEntry {
+  id?: string;
+  workspaceId: string;
+  boardId?: string | null;
+  actorId?: string | null;
+  action: AuditAction;
+  entityTable: string;
+  entityId?: string | null;
+  beforeData?: Record<string, unknown> | null;
+  afterData?: Record<string, unknown> | null;
+  createdAt?: number;
+}
 
 // WBS data model: adjacency-list tree scoped to a board.
 export interface TaskNode {
@@ -137,6 +358,7 @@ export interface BoardState {
   showStartDate: boolean;
   showTags: boolean;
   dueWithinDays: number | null;
+  selectedAssigneeIds: string[];
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
@@ -168,6 +390,8 @@ export interface BoardActions {
   toggleStartDate: () => void;
   toggleTags: () => void;
   setDueWithinDays: (days: number | null) => void;
+  toggleAssigneeFilter: (assigneeId: string) => void;
+  clearAssigneeFilters: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;

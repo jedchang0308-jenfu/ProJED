@@ -21,7 +21,8 @@ import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
-import { matchesDueDateFilter } from '../../utils/taskFilters';
+import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -92,6 +93,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const isEditing = editingId === childId;
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
+  const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
@@ -118,6 +120,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     isDragging,
   } = useSortable({
     id: childId,
+    disabled: !canMoveTask,
     data: {
       type: 'wbs-checklist',
       nodeId: childId,
@@ -204,7 +207,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         <TaskDragHandle
           attributes={attributes}
           listeners={listeners}
-          disabled={isEditing || isSelectingMode}
+          disabled={!canMoveTask || isEditing || isSelectingMode}
           size="sm"
         />
 
@@ -218,6 +221,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             onKeyDown={(e) => onKeyDown(e, child)}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
+            disabled={!canEditTask}
             voiceEnabled
             className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0.5 text-xs text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
           />
@@ -225,7 +229,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           <span
             className={`text-xs leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => onStartEdit(e, child)}
+            onClick={(e) => { if (canEditTask) onStartEdit(e, child); }}
             title="點擊以編輯任務名稱"
           >
             {child.title || '未命名任務'}
@@ -237,7 +241,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           <div className="flex items-center gap-1 ml-1">
             {/* 開始日按鈕 */}
             <button
-              onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'start', child.title); }}
+              disabled={!canCreateDependency}
+              onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'start', child.title); }}
               className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-bold transition-all ${
                 isSelfStart
                   ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
@@ -249,7 +254,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             </button>
             {/* 結束日按鈕 */}
             <button
-              onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'end', child.title); }}
+              disabled={!canCreateDependency}
+              onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'end', child.title); }}
               className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-bold transition-all ${
                 isSelfEnd
                   ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
@@ -337,7 +343,9 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
+  const { canEditTask } = useBoardPermissions();
 
   // 行內編輯狀態管理（在容器層統一管理，避免多個 item 同時進入編輯模式）
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -355,12 +363,17 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   /** 開始編輯 */
   const handleStartEdit = (e: React.MouseEvent, child: TaskNode) => {
     e.stopPropagation();
+    if (!canEditTask) return;
     setEditingId(child.id);
     setEditValue(child.title || '');
   };
 
   /** 儲存變更 */
   const handleSave = (child: TaskNode) => {
+    if (!canEditTask) {
+      setEditingId(null);
+      return;
+    }
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== child.title) {
       updateNode(child.id, { title: trimmed, updatedAt: Date.now() });
@@ -371,6 +384,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   /** 鍵盤事件 */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, child: TaskNode) => {
     e.stopPropagation();
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSave(child);
@@ -387,9 +401,9 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
     return (childIds || [])
       .filter(id => !nextAncestors.has(id))
       .map(id => nodes[id])
-      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesTagFilters(n, selectedTagIds))
+      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesAssigneeFilter(n, selectedAssigneeIds) && matchesTagFilters(n, selectedTagIds))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, dueWithinDays, selectedTagIds, previewNodes, nextAncestorKey]);
+  }, [childIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, previewNodes, nextAncestorKey]);
 
   // 無子節點則不渲染
   if (isRecursiveParent || children.length === 0) return null;

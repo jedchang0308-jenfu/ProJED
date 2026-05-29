@@ -7,7 +7,7 @@ import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from '
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
-import { matchesDueDateFilter } from '../utils/taskFilters';
+import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -17,6 +17,7 @@ const GanttView = () => {
         activeWorkspaceId,
         statusFilters,
         dueWithinDays,
+        selectedAssigneeIds,
         isSidebarOpen,
         setSidebarOpen,
         setView,
@@ -77,6 +78,7 @@ const GanttView = () => {
             if (!node || node.isArchived) return -1;
             if (!statusFilters[node.status]) return -1;
             if (!matchesDueDateFilter(node, dueWithinDays)) return -1;
+            if (!matchesAssigneeFilter(node, selectedAssigneeIds)) return -1;
 
             // Map level to legacy types for gantt filters temporarily
             let pseudoType = 'checklist';
@@ -163,7 +165,7 @@ const GanttView = () => {
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, statusFilters, dueWithinDays, mode, collapsedIds, nodes]);
+    }, [activeBoardId, statusFilters, dueWithinDays, selectedAssigneeIds, mode, collapsedIds, nodes]);
 
     const colWidth = getColWidth(mode);
 

@@ -1,10 +1,12 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { CheckCircle2, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown } from 'lucide-react';
+import { CheckCircle2, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
+import { useMemberStore } from '../store/useMemberStore';
 import type { TaskNode } from '../types';
 import { TaskDetailsModal } from './TaskDetailsModal';
 import { toast } from '../store/useToastStore';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -16,7 +18,11 @@ export const GlobalContextMenu: React.FC = () => {
   const addNode = useWbsStore((state) => state.addNode);
   const removeNode = useWbsStore((state) => state.removeNode);
   const updateNode = useWbsStore((state) => state.updateNode);
+  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency } = useBoardPermissions();
+  const boardMembers = useMemberStore((state) => state.boardMembers);
+  const membersLoading = useMemberStore((state) => state.loading);
   const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
+  const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12, maxHeight: 320 });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const openedAtRef = useRef(0);
@@ -25,8 +31,18 @@ export const GlobalContextMenu: React.FC = () => {
   const MENU_WIDTH = 220;
   const VIEWPORT_PADDING = 12;
   const isDependencySupportedView = currentView === 'board' || currentView === 'list';
+  const currentNode = contextMenuState ? useWbsStore.getState().nodes[contextMenuState.nodeId] : null;
+  const assigneeOptions = boardMembers.map(member => ({
+    id: member.userId,
+    label: member.profile?.displayName || member.profile?.email || member.userId,
+    role: member.role,
+  }));
+  const currentAssigneeLabel =
+    assigneeOptions.find(member => member.id === currentNode?.assigneeId)?.label ||
+    (currentNode?.assigneeId ? '已離開成員' : '未指派');
 
   const enterDependencyMode = (side: 'start' | 'end') => {
+    if (!canCreateDependency) return;
     if (!contextMenuState) return;
     if (!showStartDate) toggleStartDate();
     setDependencySelection({ id: contextMenuState.nodeId, side, title: contextMenuState.title });
@@ -62,6 +78,7 @@ export const GlobalContextMenu: React.FC = () => {
   useLayoutEffect(() => {
     if (contextMenuState?.isOpen) {
       openedAtRef.current = performance.now();
+      setIsAssigneeMenuOpen(false);
     }
   }, [contextMenuState?.isOpen, contextMenuState?.nodeId, contextMenuState?.x, contextMenuState?.y]);
 
@@ -115,6 +132,7 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const handleAddChild = () => {
+    if (!canCreateTask) return;
     if (!contextMenuState) return;
 
     const state = useWbsStore.getState();
@@ -146,6 +164,7 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const handleAddSibling = () => {
+    if (!canCreateTask) return;
     if (!contextMenuState) return;
 
     const state = useWbsStore.getState();
@@ -186,13 +205,26 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const handleMarkCompleted = () => {
+    if (!canEditTask) return;
     if (!contextMenuState) return;
 
     updateNode(contextMenuState.nodeId, { status: 'completed' });
     setContextMenuState(null);
   };
 
+  const handleAssign = (assigneeId?: string) => {
+    if (!canAssignTask) return;
+    if (!contextMenuState) return;
+
+    updateNode(contextMenuState.nodeId, {
+      assigneeId: assigneeId || undefined,
+      updatedAt: Date.now(),
+    });
+    setContextMenuState(null);
+  };
+
   const handleMoveUp = () => {
+    if (!canMoveTask) return;
     if (!contextMenuState) return;
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
@@ -215,6 +247,7 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const handleMoveDown = () => {
+    if (!canMoveTask) return;
     if (!contextMenuState) return;
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
@@ -263,6 +296,7 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const handleDelete = () => {
+    if (!canDeleteTask) return;
     if (!contextMenuState) return;
 
     if (window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`)) {
@@ -302,14 +336,69 @@ export const GlobalContextMenu: React.FC = () => {
 
             <button
               onClick={handleMarkCompleted}
+              disabled={!canEditTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <CheckCircle2 size={14} className="flex-shrink-0 text-emerald-500" />
               <span>標示為已完成</span>
             </button>
 
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsAssigneeMenuOpen(current => !current)}
+                disabled={!canAssignTask}
+                className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                <UserRound size={14} className="flex-shrink-0 text-blue-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block">指派人</span>
+                  <span className="block truncate text-[11px] text-gray-400">{currentAssigneeLabel}</span>
+                </span>
+                <ChevronRight size={14} className={`flex-shrink-0 text-gray-400 transition-transform ${isAssigneeMenuOpen ? 'rotate-90' : ''}`} />
+              </button>
+
+              {isAssigneeMenuOpen && (
+                <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
+                  <button
+                    type="button"
+                    onClick={() => handleAssign(undefined)}
+                    disabled={!canAssignTask}
+                    className={`flex min-h-8 w-full items-center gap-2 px-8 py-1.5 text-left text-xs transition-colors hover:bg-white dark:hover:bg-gray-700 ${
+                      !currentNode?.assigneeId ? 'font-semibold text-blue-600' : 'text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    未指派
+                  </button>
+                  {membersLoading && assigneeOptions.length === 0 && (
+                    <div className="px-8 py-1.5 text-xs text-gray-400">載入成員中...</div>
+                  )}
+                  {!membersLoading && assigneeOptions.length === 0 && (
+                    <div className="px-8 py-1.5 text-xs text-gray-400">沒有可指派成員</div>
+                  )}
+                  {assigneeOptions.map(member => (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => handleAssign(member.id)}
+                      disabled={!canAssignTask}
+                      className={`flex min-h-8 w-full items-center gap-2 px-8 py-1.5 text-left text-xs transition-colors hover:bg-white dark:hover:bg-gray-700 ${
+                        currentNode?.assigneeId === member.id ? 'font-semibold text-blue-600' : 'text-gray-600 dark:text-gray-300'
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{member.label}</span>
+                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                        {member.role}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleAddSibling}
+              disabled={!canCreateTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <Plus size={14} className="flex-shrink-0 text-sky-500" />
@@ -318,6 +407,7 @@ export const GlobalContextMenu: React.FC = () => {
 
             <button
               onClick={handleAddChild}
+              disabled={!canCreateTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <Plus size={14} className="flex-shrink-0 text-blue-500" />
@@ -329,6 +419,7 @@ export const GlobalContextMenu: React.FC = () => {
                 <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                 <button
                   onClick={() => enterDependencyMode('start')}
+                  disabled={!canCreateDependency}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-amber-50 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   <GitBranch size={14} className="flex-shrink-0 text-amber-500" />
@@ -336,6 +427,7 @@ export const GlobalContextMenu: React.FC = () => {
                 </button>
                 <button
                   onClick={() => enterDependencyMode('end')}
+                  disabled={!canCreateDependency}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-purple-50 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
                   <GitBranch size={14} className="flex-shrink-0 text-purple-500" />
@@ -346,6 +438,7 @@ export const GlobalContextMenu: React.FC = () => {
 
             <button
               onClick={handleMoveUp}
+              disabled={!canMoveTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />
@@ -354,6 +447,7 @@ export const GlobalContextMenu: React.FC = () => {
 
             <button
               onClick={handleMoveDown}
+              disabled={!canMoveTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />
@@ -364,6 +458,7 @@ export const GlobalContextMenu: React.FC = () => {
 
             <button
               onClick={handleDelete}
+              disabled={!canDeleteTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
             >
               <Trash2 size={14} className="flex-shrink-0 text-red-500" />

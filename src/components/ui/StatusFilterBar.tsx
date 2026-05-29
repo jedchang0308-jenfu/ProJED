@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronDown, GitBranch, Plus, SlidersHorizontal, Tag } from 'lucide-react';
+import { CalendarDays, ChevronDown, GitBranch, Plus, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
+import { useMemberStore } from '../../store/useMemberStore';
 import { useTagStore } from '../../store/useTagStore';
 import type { TaskStatus } from '../../types';
+import { UNASSIGNED_ASSIGNEE_FILTER } from '../../utils/taskFilters';
 import { getTagDotStyle } from '../../utils/tags';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 
 const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
   { key: 'todo', label: '待辦', color: 'bg-status-todo' },
@@ -37,6 +40,11 @@ export const StatusFilterBar: React.FC = () => {
   const toggleTags = useBoardStore(s => s.toggleTags);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
   const setDueWithinDays = useBoardStore(s => s.setDueWithinDays);
+  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
+  const toggleAssigneeFilter = useBoardStore(s => s.toggleAssigneeFilter);
+  const clearAssigneeFilters = useBoardStore(s => s.clearAssigneeFilters);
+  const { canEditTask } = useBoardPermissions();
+  const boardMembers = useMemberStore(s => s.boardMembers);
 
   const tags = useTagStore(s => s.tags);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
@@ -60,11 +68,22 @@ export const StatusFilterBar: React.FC = () => {
   }, [isOpen]);
 
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
+  const selectedAssigneeSet = useMemo(() => new Set(selectedAssigneeIds), [selectedAssigneeIds]);
+  const assigneeOptions = useMemo(
+    () => boardMembers
+      .map(member => ({
+        id: member.userId,
+        label: member.profile?.displayName || member.profile?.email || member.userId,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant')),
+    [boardMembers]
+  );
   const hiddenStatusCount = STATUS_CONFIG.filter(status => !statusFilters[status.key]).length;
   const activeTagCount = selectedTagIds.length;
+  const activeAssigneeCount = selectedAssigneeIds.length;
   const hasDueFilter = dueWithinDays !== null && dueWithinDays !== undefined;
-  const hasActiveFilter = hiddenStatusCount > 0 || activeTagCount > 0 || hasDueFilter || !showDependencies || !showTags;
-  const activeFilterCount = hiddenStatusCount + activeTagCount + (hasDueFilter ? 1 : 0);
+  const hasActiveFilter = hiddenStatusCount > 0 || activeTagCount > 0 || activeAssigneeCount > 0 || hasDueFilter || !showDependencies || !showTags;
+  const activeFilterCount = hiddenStatusCount + activeTagCount + activeAssigneeCount + (hasDueFilter ? 1 : 0);
 
   const handleDueDaysChange = (value: string) => {
     if (value === '') {
@@ -79,6 +98,7 @@ export const StatusFilterBar: React.FC = () => {
   };
 
   const handleCreateTag = async () => {
+    if (!canEditTask) return;
     if (!activeWorkspaceId) return;
     const name = window.prompt('請輸入新標籤名稱');
     const trimmed = name?.trim();
@@ -117,7 +137,7 @@ export const StatusFilterBar: React.FC = () => {
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
-          className="absolute left-0 top-[calc(100%+6px)] z-[10000] w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150"
+          className="absolute left-0 top-[calc(100%+6px)] z-[10000] max-h-[calc(100vh-6rem)] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150"
         >
           <div className="px-3 pt-3 pb-2">
             <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">任務狀態</p>
@@ -182,10 +202,8 @@ export const StatusFilterBar: React.FC = () => {
             </div>
           </div>
 
-          <div className="mx-3 h-px bg-slate-100" />
-
           <div className="px-3 pt-2 pb-3">
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">UI 顯示</p>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">介面顯示</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -228,7 +246,7 @@ export const StatusFilterBar: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCreateTag}
-                  disabled={!activeWorkspaceId}
+                  disabled={!activeWorkspaceId || !canEditTask}
                   className="inline-flex items-center gap-1 text-[10px] font-bold text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
                   <Plus size={11} />
@@ -270,6 +288,56 @@ export const StatusFilterBar: React.FC = () => {
                 })}
               </div>
             )}
+          </div>
+
+          <div className="mx-3 h-px bg-slate-100" />
+
+          <div className="px-3 pt-2 pb-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">負責人</p>
+              {activeAssigneeCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAssigneeFilters}
+                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => toggleAssigneeFilter(UNASSIGNED_ASSIGNEE_FILTER)}
+                className={filterPillClass(selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER))}
+                aria-pressed={selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER)}
+              >
+                <UserRound size={12} className="text-slate-500" />
+                未指派
+              </button>
+              {assigneeOptions.length === 0 ? (
+                <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-400 shadow-sm">
+                  <UserRound size={12} />
+                  尚無看板成員
+                </div>
+              ) : (
+                assigneeOptions.map(member => {
+                  const isActive = selectedAssigneeSet.has(member.id);
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => toggleAssigneeFilter(member.id)}
+                      className={filterPillClass(isActive)}
+                      aria-pressed={isActive}
+                    >
+                      <UserRound size={12} className="text-blue-600" />
+                      <span className="max-w-[7rem] truncate">{member.label}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

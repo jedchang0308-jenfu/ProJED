@@ -1,20 +1,27 @@
 # ProJED AI Docs Index
 
-Last updated: 2026-05-25
+Last updated: 2026-05-28
 
 ## Canonical Documents
 
 Use these as the current source of truth:
 
-- [11_SUPABASE_GEMINI_MIGRATION_TASK.md](./11_SUPABASE_GEMINI_MIGRATION_TASK.md): Master status, next steps, and P9 Gemini/RAG direction.
-- [12_P9_GEMINI_RAG_DESIGN.md](./12_P9_GEMINI_RAG_DESIGN.md): P9 retrieval contract, indexing flow, citation rules, and local prototype scope.
-- [13_TAG_PLAN.md](./13_TAG_PLAN.md): Workspace-shared tag feature implementation plan.
-- [10_P8_PRODUCTION_CUTOVER_EXECUTION.md](./10_P8_PRODUCTION_CUTOVER_EXECUTION.md): P8 execution runbook for OAuth smoke, cleanup, credential rotation, and final readiness gate.
-- [archive/09_P7_PRODUCTION_RELEASE_GATE.md](./archive/09_P7_PRODUCTION_RELEASE_GATE.md): P7 strict release gate definition. Historical, but still useful because P8 wraps P7 strict checks.
-- [04_SUPABASE_MIGRATION_PLAN.md](./04_SUPABASE_MIGRATION_PLAN.md): Supabase migration architecture and RAG guardrails.
+- [dev_task.md](./dev_task.md): Single active RD/QA/QC task entrypoint. All active unfinished task items must be tracked here.
+- [ontology-trello-collaboration-spec.md](./ontology-trello-collaboration-spec.md): Current Board-first collaboration, invite, role, RLS/RPC, and audit/activity specification.
+- [ontology-collaboration-model.md](./ontology-collaboration-model.md): Compact ontology collaboration model and pointer to the full spec.
 - [01_SYSTEM_CONTEXT.md](./01_SYSTEM_CONTEXT.md): Product/system context.
 - [02_ARCHITECTURE_RULES.md](./02_ARCHITECTURE_RULES.md): General architecture rules.
-- [03_VALIDATION_PLAN.md](./03_VALIDATION_PLAN.md): General app validation plan.
+
+Archived but still referenceable:
+
+- [archive/11_SUPABASE_GEMINI_MIGRATION_TASK.md](./archive/11_SUPABASE_GEMINI_MIGRATION_TASK.md): Historical Supabase/Gemini master task and risk register.
+- [archive/12_P9_GEMINI_RAG_DESIGN.md](./archive/12_P9_GEMINI_RAG_DESIGN.md): P9 retrieval contract, indexing flow, citation rules, and local prototype scope.
+- [archive/13_TAG_PLAN.md](./archive/13_TAG_PLAN.md): Workspace-shared tag feature implementation plan.
+- [archive/10_P8_PRODUCTION_CUTOVER_EXECUTION.md](./archive/10_P8_PRODUCTION_CUTOVER_EXECUTION.md): P8 execution runbook for OAuth smoke, cleanup, credential rotation, and final readiness gate.
+- [archive/09_P7_PRODUCTION_RELEASE_GATE.md](./archive/09_P7_PRODUCTION_RELEASE_GATE.md): P7 strict release gate definition. Historical, but still useful because P8 wraps P7 strict checks.
+- [archive/04_SUPABASE_MIGRATION_PLAN.md](./archive/04_SUPABASE_MIGRATION_PLAN.md): Supabase migration architecture and RAG guardrails.
+- [archive/03_VALIDATION_PLAN.md](./archive/03_VALIDATION_PLAN.md): General app validation plan.
+- [archive/dev_task_sources_2026-05-28/](./archive/dev_task_sources_2026-05-28/): Source task, QA plan, and QC result files consolidated into `dev_task.md`.
 
 ## Historical Phase Notes
 
@@ -30,6 +37,7 @@ These are retained as historical delivery records. Do not treat them as the late
 
 The folder had useful but overlapping content:
 
+- Active RD/QA/QC task tracking is consolidated in `dev_task.md`; old task and QA/QC plan files are archived under `archive/dev_task_sources_2026-05-28/`.
 - `05_QC_VERIFICATION_REPORT.md` and `06_SUPABASE_RUNTIME_GATE.md` both describe early runtime validation. Keep `05` as evidence and `06` as historical gate design; use P7/P8 for current execution.
 - `08_P6_SUPABASE_CUTOVER_READINESS.md`, `09_P7_PRODUCTION_RELEASE_GATE.md`, and `10_P8_PRODUCTION_CUTOVER_EXECUTION.md` all mention OAuth, linked DB checks, and production cutover. Use `10` as the current P8 runbook.
 - `04_SUPABASE_MIGRATION_PLAN.md` and `11_SUPABASE_GEMINI_MIGRATION_TASK.md` both discuss Gemini/RAG. Use `04` for architecture, and `11` for current task status and next decisions.
@@ -46,17 +54,15 @@ These files were found during the project-wide document scan but are not AI-faci
 
 ## Current State
 
-- P1-P7 engineering work is complete.
-- P8 production readiness has passed against the selected production Supabase project.
-- Runtime credentials and manual confirmations are available locally through ignored env files.
-- P9 Gemini/RAG design and local prototype may continue after P8 sign-off.
+- Active task tracking now lives in `dev_task.md`.
+- Invisible Workspace / Board-first invite work still has open DB/RLS smoke and audit verification items.
+- `ProJED_TEST` has prior collaboration DB smoke pass evidence, but the selected `ProJED` DB currently needs migration/RLS confirmation before the invite tasks can be fully checked.
+- Calendar subscription external Google/Outlook validation remains open.
 
 ## Current Next Command
 
-To revalidate the production Supabase cutover gate, run:
+To continue the active RD/QA/QC loop, open:
 
 ```powershell
-npm.cmd run verify:supabase:p8-production-readiness
+.ai-docs\dev_task.md
 ```
-
-P8 is complete. Future runs should continue returning `ok: true`.

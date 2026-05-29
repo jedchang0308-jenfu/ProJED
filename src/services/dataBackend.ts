@@ -1,21 +1,42 @@
-import type { Board, Dependency, TaskNode, TaskTag, Workspace } from '../types';
+import {
+  BOARD_ROLE_CAPABILITIES,
+  WORKSPACE_ROLE_CAPABILITIES,
+  type ActivityEvent,
+  type AuditLogEntry,
+  type BoardInviteAcceptInput,
+  type Board,
+  type BoardInviteCreateInput,
+  type BoardMember,
+  type CurrentBoardAccess,
+  type Dependency,
+  type TaskNode,
+  type TaskTag,
+  type Workspace,
+  type WorkspaceMember,
+} from '../types';
 import {
   boardService as firestoreBoardService,
   dependencyService as firestoreDependencyService,
+  memberService as firestoreMemberService,
   nodeService as firestoreNodeService,
   tagService as firestoreTagService,
   workspaceService as firestoreWorkspaceService,
 } from './firestoreService';
 import {
   supabaseBoardService,
+  supabaseBoardInviteService,
   supabaseDependencyService,
+  supabaseEventLogService,
+  supabaseMemberService,
   supabaseNodeService,
   supabaseTagService,
   supabaseWorkspaceService,
 } from './supabase/projedService';
 import {
   localTestBoardService,
+  localTestBoardInviteService,
   localTestDependencyService,
+  localTestMemberService,
   localTestNodeService,
   localTestTagService,
   localTestWorkspaceService,
@@ -33,6 +54,15 @@ export const dataBackend: DataBackend =
       : 'firebase';
 export const isSupabaseBackend = dataBackend === 'supabase';
 export const isLocalTestBackend = dataBackend === 'local-test';
+
+const logAuditBestEffort = async (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>) => {
+  if (!isSupabaseBackend) return;
+  try {
+    await supabaseEventLogService.logAudit(entry);
+  } catch (error) {
+    console.warn('[auditLog] Failed to write collaboration audit event:', error);
+  }
+};
 
 export const workspaceService = {
   create: (userId: string, title?: string): Promise<Workspace> =>
@@ -56,12 +86,22 @@ export const workspaceService = {
       ? supabaseWorkspaceService.update(workspaceId, updates)
       : firestoreWorkspaceService.update(workspaceId, updates),
 
-  delete: (workspaceId: string): Promise<void> =>
-    isLocalTestBackend
+  delete: async (workspaceId: string): Promise<void> => {
+    await logAuditBestEffort({
+      workspaceId,
+      action: 'workspace_deleted',
+      entityTable: 'tenants',
+      entityId: workspaceId,
+      beforeData: { workspaceId },
+      afterData: null,
+    });
+
+    return isLocalTestBackend
       ? localTestWorkspaceService.delete(workspaceId)
       : isSupabaseBackend
       ? supabaseWorkspaceService.delete(workspaceId)
-      : firestoreWorkspaceService.delete(workspaceId),
+      : firestoreWorkspaceService.delete(workspaceId);
+  },
 };
 
 export const boardService = {
@@ -86,12 +126,117 @@ export const boardService = {
       ? supabaseBoardService.update(workspaceId, boardId, updates)
       : firestoreBoardService.update(workspaceId, boardId, updates),
 
-  delete: (workspaceId: string, boardId: string): Promise<void> =>
-    isLocalTestBackend
+  delete: async (workspaceId: string, boardId: string): Promise<void> => {
+    await logAuditBestEffort({
+      workspaceId,
+      boardId,
+      action: 'board_deleted',
+      entityTable: 'projects',
+      entityId: boardId,
+      beforeData: { boardId },
+      afterData: null,
+    });
+
+    return isLocalTestBackend
       ? localTestBoardService.delete(workspaceId, boardId)
       : isSupabaseBackend
       ? supabaseBoardService.delete(workspaceId, boardId)
-      : firestoreBoardService.delete(workspaceId, boardId),
+      : firestoreBoardService.delete(workspaceId, boardId);
+  },
+};
+
+export const memberService = {
+  listWorkspaceMembers: (workspaceId: string): Promise<WorkspaceMember[]> =>
+    isLocalTestBackend
+      ? localTestMemberService.listWorkspaceMembers(workspaceId)
+      : isSupabaseBackend
+      ? supabaseMemberService.listWorkspaceMembers(workspaceId)
+      : firestoreMemberService.listWorkspaceMembers(workspaceId),
+
+  listBoardMembers: (workspaceId: string, boardId: string): Promise<BoardMember[]> =>
+    isLocalTestBackend
+      ? localTestMemberService.listBoardMembers(workspaceId, boardId)
+      : isSupabaseBackend
+      ? supabaseMemberService.listBoardMembers(workspaceId, boardId)
+      : firestoreMemberService.listBoardMembers(workspaceId, boardId),
+
+  getCurrentBoardAccess: async (
+    workspaceId: string,
+    boardId: string,
+    userId: string
+  ): Promise<CurrentBoardAccess> => {
+    if (isSupabaseBackend) {
+      return supabaseMemberService.getCurrentBoardAccess(workspaceId, boardId, userId);
+    }
+
+    const [workspaceMembers, boardMembers] = await Promise.all([
+      memberService.listWorkspaceMembers(workspaceId),
+      memberService.listBoardMembers(workspaceId, boardId),
+    ]);
+    const workspaceRole = workspaceMembers.find(member => member.userId === userId && member.status === 'active')?.role;
+    const boardRole = boardMembers.find(member => member.userId === userId)?.role;
+    const capabilities = new Set<CurrentBoardAccess['capabilities'][number]>();
+    if (workspaceRole) {
+      WORKSPACE_ROLE_CAPABILITIES[workspaceRole].forEach(capability => capabilities.add(capability));
+      if (workspaceRole === 'owner' || workspaceRole === 'admin') {
+        BOARD_ROLE_CAPABILITIES[workspaceRole].forEach(capability => capabilities.add(capability));
+      }
+    }
+    if (boardRole) {
+      BOARD_ROLE_CAPABILITIES[boardRole].forEach(capability => capabilities.add(capability));
+    }
+    return {
+      workspaceId,
+      boardId,
+      workspaceRole,
+      boardRole,
+      capabilities: Array.from(capabilities),
+    };
+  },
+
+  upsertBoardMember: (workspaceId: string, boardId: string, userId: string, role: BoardMember['role']): Promise<void> =>
+    isLocalTestBackend
+      ? localTestMemberService.upsertBoardMember(workspaceId, boardId, userId, role)
+      : isSupabaseBackend
+      ? supabaseMemberService.upsertBoardMember(workspaceId, boardId, userId, role)
+      : Promise.resolve(),
+
+  removeBoardMember: (workspaceId: string, boardId: string, userId: string): Promise<void> =>
+    isLocalTestBackend
+      ? localTestMemberService.removeBoardMember(workspaceId, boardId, userId)
+      : isSupabaseBackend
+      ? supabaseMemberService.removeBoardMember(workspaceId, boardId, userId)
+      : Promise.resolve(),
+};
+
+export const boardInviteService = {
+  listPending: (workspaceId: string, boardId: string) =>
+    isLocalTestBackend
+      ? localTestBoardInviteService.listPending(workspaceId, boardId)
+      : isSupabaseBackend
+      ? supabaseBoardInviteService.listPending(workspaceId, boardId)
+      : Promise.resolve([]),
+
+  create: (workspaceId: string, boardId: string, input: BoardInviteCreateInput) =>
+    isLocalTestBackend
+      ? localTestBoardInviteService.create(workspaceId, boardId, input)
+      : isSupabaseBackend
+      ? supabaseBoardInviteService.create(workspaceId, boardId, input)
+      : Promise.reject(new Error('Board email invites are only available with the Supabase backend.')),
+
+  revoke: (workspaceId: string, boardId: string, inviteId: string) =>
+    isLocalTestBackend
+      ? localTestBoardInviteService.revoke(workspaceId, boardId, inviteId)
+      : isSupabaseBackend
+      ? supabaseBoardInviteService.revoke(workspaceId, boardId, inviteId)
+      : Promise.reject(new Error('Board email invites are only available with the Supabase backend.')),
+
+  accept: (input: BoardInviteAcceptInput) =>
+    isLocalTestBackend
+      ? localTestBoardInviteService.accept(input)
+      : isSupabaseBackend
+      ? supabaseBoardInviteService.accept(input)
+      : Promise.reject(new Error('Board email invites are only available with the Supabase backend.')),
 };
 
 export const nodeService = {
@@ -235,4 +380,12 @@ export const tagService = {
       : isSupabaseBackend
       ? supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds)
       : firestoreTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds),
+};
+
+export const eventLogService = {
+  logActivity: (event: Omit<ActivityEvent, 'id' | 'actorId' | 'createdAt'>): Promise<void> =>
+    isSupabaseBackend ? supabaseEventLogService.logActivity(event) : Promise.resolve(),
+
+  logAudit: (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>): Promise<void> =>
+    isSupabaseBackend ? supabaseEventLogService.logAudit(entry) : Promise.resolve(),
 };

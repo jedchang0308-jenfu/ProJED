@@ -23,6 +23,7 @@ import { TagChip } from '../Tags/TagChip';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -56,6 +57,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const tags = useTagStore(s => s.tags);
+  const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
 
   // 看板依賴選取 Context
@@ -85,12 +87,17 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   /** 開始編輯：儲存目前標題做為初始值 */
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canEditTask) return;
     setEditValue(node?.title || '');
     setIsEditing(true);
   };
 
   /** 儲存變更：trimmed 後若有內容才更新，空字串不儲存 */
   const handleSave = () => {
+    if (!canEditTask) {
+      setIsEditing(false);
+      return;
+    }
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== node?.title) {
       updateNode(nodeId, { title: trimmed, updatedAt: Date.now() });
@@ -101,6 +108,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   /** 鍵盤事件：Enter 儲存，ESC 取消 */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.stopPropagation();
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSave();
@@ -136,6 +144,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     isDragging,
   } = useSortable({
     id: nodeId,
+    disabled: !canMoveTask,
     data: {
       type: 'wbs-card',
       nodeId,
@@ -147,7 +156,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   // 使用獨立 id `${nodeId}-card-drop` 區分「被拖動中的卡片」和「作為放置區的卡片」
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${nodeId}-card-drop`,
-    disabled: activeType === 'wbs-card',
+    disabled: !canMoveTask || activeType === 'wbs-card',
     data: {
       type: 'wbs-card-drop',
       nodeId,
@@ -157,7 +166,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
     id: `${nodeId}-checklist-drop`,
-    disabled: !['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeNodeId === nodeId,
+    disabled: !canMoveTask || !['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeNodeId === nodeId,
     data: {
       type: 'wbs-checklist-drop',
       nodeId,
@@ -167,7 +176,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const { setNodeRef: setChecklistAreaDropRef, isOver: isChecklistAreaDropOver } = useDroppable({
     id: `${nodeId}-checklist-area-drop`,
-    disabled: !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
+    disabled: !canMoveTask || !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
     data: {
       type: 'wbs-checklist-drop',
       nodeId,
@@ -183,7 +192,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
   const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
-  const canDropIntoChecklist = ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
+  const canDropIntoChecklist = canMoveTask && ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
@@ -266,7 +275,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               <TaskDragHandle
                 attributes={attributes}
                 listeners={listeners}
-                disabled={isEditing || isSelectingMode}
+                disabled={!canMoveTask || isEditing || isSelectingMode}
                 className="-ml-1"
               />
 
@@ -280,6 +289,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   onKeyDown={handleKeyDown}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
+                  disabled={!canEditTask}
                   voiceEnabled
                   className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-700 outline-none ring-2 ring-primary/30 focus:ring-2 focus:ring-primary/30 focus:ring-offset-0"
                 />
@@ -320,7 +330,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 <>
                   {/* 開始日按鈕 — 始終顯示 */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+                    disabled={!canCreateDependency}
+                    onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
                     className={`flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold transition-all ${
                       isSelfStart
                         ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
@@ -333,7 +344,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   </button>
                   {/* 結束日按鈕 — 始終顯示 */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+                    disabled={!canCreateDependency}
+                    onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
                     className={`flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold transition-all ${
                       isSelfEnd
                         ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'

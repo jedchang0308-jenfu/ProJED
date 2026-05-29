@@ -81,7 +81,7 @@ const convertChecklistItemToNode = (
   workspaceId: wsId,
   boardId,
   parentId,
-  title: item.title || item.text || 'Checklist item',
+  title: item.title || item.text || '未命名檢查項目',
   status: item.completed ? 'completed' : toTaskStatus(item.status),
   startDate: item.startDate || undefined,
   endDate: item.endDate || undefined,
@@ -104,7 +104,7 @@ const convertCardToNode = (
   workspaceId: wsId,
   boardId,
   parentId,
-  title: card.title || 'Untitled task',
+  title: card.title || '未命名任務',
   description: card.notes || card.description || undefined,
   status: toTaskStatus(card.status),
   startDate: card.startDate || undefined,
@@ -122,7 +122,7 @@ const convertListToNode = (wsId: string, boardId: string, list: LegacyList, list
   workspaceId: wsId,
   boardId,
   parentId: null,
-  title: list.title || 'Untitled group',
+  title: list.title || '未命名群組',
   status: toTaskStatus(list.status),
   startDate: list.startDate || undefined,
   endDate: list.endDate || undefined,
@@ -187,7 +187,7 @@ const writeWorkspaceTreeToFirestore = async (userId: string, workspaces: Workspa
 
     await setDoc(doc(firestoreDb, 'workspaces', ws.id), compact({
       id: ws.id,
-      title: ws.title || 'Workspace',
+      title: ws.title || '工作區',
       ownerId: ws.ownerId || userId,
       members: ws.members?.length ? ws.members : [userId],
       order: ws.order || Date.now(),
@@ -199,7 +199,7 @@ const writeWorkspaceTreeToFirestore = async (userId: string, workspaces: Workspa
 
       await setDoc(doc(firestoreDb, 'workspaces', ws.id, 'boards', board.id), compact({
         id: board.id,
-        title: board.title || 'Board',
+        title: board.title || '看板',
         order: board.order || Date.now(),
         createdAt: board.createdAt || Date.now(),
       }), { merge: true });
@@ -240,7 +240,7 @@ export const migrateLocalStorageToFirestore = async (userId: string): Promise<bo
     return true;
   } catch (error) {
     console.error('[Migration] Firestore migration failed:', error);
-    alert('資料遷移失敗，請查看 Console 錯誤訊息。');
+    alert('資料遷移失敗，請查看瀏覽器主控台錯誤訊息。');
     return false;
   }
 };

@@ -7,6 +7,7 @@ import {
   escapeIcsText,
   foldLine,
   icsLine,
+  rawIcsLine,
   toIcsDate,
   utf8Length,
 } from '../supabase/functions/calendar-feed/ics.mjs';
@@ -42,6 +43,16 @@ const asciiFolded = foldLine(`X-PROJED-WARNING:${'A'.repeat(200)}`);
 assertFoldedLineWithinLimit(asciiFolded);
 assert.equal(unfold(asciiFolded), `X-PROJED-WARNING:${'A'.repeat(200)}`);
 
+const uuidUid = rawIcsLine(
+  'UID',
+  '9d000000-0000-4000-8000-000000000001-due_date-9c000000-0000-4000-8000-000000000001@projed'
+);
+assertFoldedLineWithinLimit(uuidUid);
+assert.equal(
+  unfold(uuidUid),
+  'UID:9d000000-0000-4000-8000-000000000001-due_date-9c000000-0000-4000-8000-000000000001@projed'
+);
+
 assert.equal(addDays('2026-06-01', 1), '2026-06-02');
 assert.equal(addDays('2026-12-31', 1), '2027-01-01');
 assert.equal(toIcsDate('2026-06-01'), '20260601');
@@ -60,6 +71,7 @@ const feed = buildCalendarFeedIcs({
       title: '含開始日與到期日的長中文任務標題',
       description: '第一行描述\n第二行描述, 含分號; 與反斜線\\',
       status: 'doing',
+      assignee_id: 'user-1',
       start_date: '2026-06-01',
       end_date: '2026-06-03',
       metadata: {
@@ -75,6 +87,7 @@ const feed = buildCalendarFeedIcs({
       title: '只有到期日',
       description: null,
       status: 'todo',
+      assignee_id: 'user-1',
       start_date: null,
       end_date: '2026-07-01',
       metadata: {},
@@ -93,6 +106,9 @@ const feed = buildCalendarFeedIcs({
     display_name: '王小明',
     email: 'ming@example.com',
   },
+  assigneeProfileById: new Map([
+    ['user-1', { display_name: '王小明', email: 'ming@example.com' }],
+  ]),
   assigneeUserId: 'user-1',
   appBaseUrl: 'https://app.projed.test/',
   taskLimitReached: true,
@@ -120,6 +136,65 @@ assert.ok(unfoldedFeed.includes('負責人: 王小明'));
 assert.ok(unfoldedFeed.includes('URL:https://app.projed.test/?modal=tasknode&wsId=firebase-workspace-a&boardId=firebase-board-a&itemId=legacy-task-1'));
 feed.split('\r\n').forEach((line) => {
   assert.ok(utf8Length(line) <= ICS_LINE_OCTET_LIMIT, `feed line exceeds ${ICS_LINE_OCTET_LIMIT} octets: ${line}`);
+});
+
+const unassignedFeed = buildCalendarFeedIcs({
+  subscription: {
+    id: 'unassigned-subscription',
+    name: '未指派任務訂閱',
+  },
+  items: [
+    {
+      id: 'unassigned-task-1',
+      tenant_id: 'workspace-a',
+      project_id: 'project-a',
+      legacy_node_id: null,
+      title: '未指派任務',
+      description: null,
+      status: 'todo',
+      assignee_id: null,
+      start_date: null,
+      end_date: '2026-06-10',
+      metadata: {},
+    },
+  ],
+  dateTypes: ['due_date'],
+  tenantNameById: new Map([['workspace-a', 'A 工作區']]),
+  projectNameById: new Map([['project-a', 'A 看板']]),
+  now: new Date('2026-05-26T01:02:03.000Z'),
+});
+assert.ok(unfold(unassignedFeed).includes('負責人: 未指派'));
+unassignedFeed.split('\r\n').forEach((line) => {
+  assert.ok(utf8Length(line) <= ICS_LINE_OCTET_LIMIT, `unassigned feed line exceeds ${ICS_LINE_OCTET_LIMIT} octets: ${line}`);
+});
+
+const limitItems = Array.from({ length: FEED_TASK_LIMIT }, (_, index) => ({
+  id: `limit-task-${index + 1}`,
+  tenant_id: 'workspace-limit',
+  project_id: 'project-limit',
+  legacy_node_id: null,
+  title: `Limit task ${index + 1}`,
+  description: null,
+  status: 'todo',
+  start_date: null,
+  end_date: '2026-08-01',
+  metadata: {},
+}));
+const limitFeed = buildCalendarFeedIcs({
+  subscription: {
+    id: 'limit-subscription',
+    name: 'Limit feed',
+  },
+  items: limitItems,
+  dateTypes: ['due_date'],
+  assigneeUserId: 'user-1',
+  taskLimitReached: true,
+  now: new Date('2026-05-26T01:02:03.000Z'),
+});
+assert.equal(limitFeed.match(/BEGIN:VEVENT/g)?.length, FEED_TASK_LIMIT);
+assert.ok(unfold(limitFeed).includes(`X-PROJED-WARNING:Feed task limit reached: ${FEED_TASK_LIMIT}`));
+limitFeed.split('\r\n').forEach((line) => {
+  assert.ok(utf8Length(line) <= ICS_LINE_OCTET_LIMIT, `limit feed line exceeds ${ICS_LINE_OCTET_LIMIT} octets: ${line}`);
 });
 
 console.log('Calendar feed ICS verification passed.');

@@ -87,22 +87,22 @@ function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null 
 function getRecognitionErrorMessage(error: SpeechRecognitionErrorCode): string {
   switch (error) {
     case 'audio-capture':
-      return 'No microphone was detected.';
+      return '偵測不到麥克風。';
     case 'language-not-supported':
-      return 'This browser does not support the selected speech recognition language.';
+      return '此瀏覽器不支援目前選擇的語音辨識語言。';
     case 'network':
-      return 'A network error occurred while recognizing speech.';
+      return '語音辨識時發生網路錯誤。';
     case 'no-speech':
-      return 'No speech was detected. Please try again.';
+      return '沒有偵測到語音，請再試一次。';
     case 'not-allowed':
     case 'service-not-allowed':
-      return 'Microphone access is blocked. Please allow microphone permission and try again.';
+      return '麥克風存取已被封鎖，請允許麥克風權限後再試一次。';
     case 'aborted':
-      return 'Speech recognition was cancelled.';
+      return '語音辨識已取消。';
     case 'bad-grammar':
     case 'phrases-not-supported':
     default:
-      return 'Speech recognition failed. Please try again.';
+      return '語音辨識失敗，請再試一次。';
   }
 }
 
@@ -133,7 +133,7 @@ export function useVoiceInput({
 
     if (!speechRecognitionConstructor) {
       const message =
-        'Speech recognition is not supported in this browser. Please use a compatible browser.';
+        '此瀏覽器不支援語音辨識，請改用相容的瀏覽器。';
       setError(message);
       emitError(message);
       return;
@@ -183,7 +183,7 @@ export function useVoiceInput({
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : 'Unable to start speech recognition.';
+          : '無法啟動語音辨識。';
 
       setError(message);
       setIsListening(false);

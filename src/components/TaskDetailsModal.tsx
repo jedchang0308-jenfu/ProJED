@@ -1,9 +1,11 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CalendarDays, CircleDot, Lock, Plus, Unlock, X } from 'lucide-react';
+import { CalendarDays, CircleDot, Lock, Plus, Unlock, UserRound, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
+import { useMemberStore } from '../store/useMemberStore';
 import { TagPicker } from './Tags/TagPicker';
 import type { TaskDetailNote, TaskStatus } from '../types';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -56,12 +58,24 @@ const readSavedSize = () => {
 export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const updateNode = useWbsStore((state) => state.updateNode);
+  const boardMembers = useMemberStore((state) => state.boardMembers);
+  const membersLoading = useMemberStore((state) => state.loading);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const { canEditTask, canAssignTask } = useBoardPermissions();
   const [size, setSize] = React.useState(readSavedSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const skipNextNotesSave = React.useRef(true);
+  const assigneeOptions = React.useMemo(
+    () => boardMembers.map(member => ({
+      id: member.userId,
+      label: member.profile?.displayName || member.profile?.email || member.userId,
+      role: member.role,
+    })),
+    [boardMembers]
+  );
+  const hasCurrentAssignee = !node?.assigneeId || assigneeOptions.some(option => option.id === node.assigneeId);
 
   React.useEffect(() => {
     if (!node) return;
@@ -104,6 +118,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     }
 
     const timer = window.setTimeout(() => {
+      if (!canEditTask) return;
       updateNode(node.id, {
         detailNotes: notes,
         description: notes[0]?.content || '',
@@ -111,7 +126,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     }, 450);
 
     return () => window.clearTimeout(timer);
-  }, [notes, node, updateNode]);
+  }, [canEditTask, notes, node, updateNode]);
 
   if (!node) return null;
 
@@ -120,6 +135,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     : '';
 
   const updateDate = (field: 'startDate' | 'endDate', value: string) => {
+    if (!canEditTask) return;
     const nextStart = field === 'startDate' ? value : startDate;
     const nextEnd = field === 'endDate' ? value : endDate;
 
@@ -161,7 +177,16 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     updateNode(node.id, updates);
   };
 
+  const handleAssigneeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!canAssignTask) return;
+    updateNode(node.id, {
+      assigneeId: event.target.value || undefined,
+      updatedAt: Date.now(),
+    });
+  };
+
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditTask) return;
     const strVal = e.target.value;
     if (strVal === '') return;
     const val = parseInt(strVal, 10);
@@ -180,16 +205,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   };
 
   const handleToggleDurationLock = () => {
+    if (!canEditTask) return;
     updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
   };
 
   const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
+    if (!canEditTask) return;
     setNotes((current) =>
       current.map((note) => (note.id === noteId ? { ...note, ...updates } : note))
     );
   };
 
   const addNote = () => {
+    if (!canEditTask) return;
     setNotes((current) => [...current, createNote(current.length + 1)]);
   };
 
@@ -249,12 +277,46 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   </span>
                   <select
                     value={currentStatus}
-                    onChange={(event) => updateNode(node.id, { status: event.target.value as TaskStatus })}
+                    onChange={(event) => { if (canEditTask) updateNode(node.id, { status: event.target.value as TaskStatus }); }}
+                    disabled={!canEditTask}
                     className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   >
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <div className="mb-3">
+              <label className="text-xs font-medium text-slate-500">
+                指派人
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-500">
+                    <UserRound size={15} />
+                  </span>
+                  <select
+                    value={node.assigneeId || ''}
+                    onChange={handleAssigneeChange}
+                    disabled={!canAssignTask}
+                    className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="">未指派</option>
+                    {!hasCurrentAssignee && node.assigneeId && (
+                      <option value={node.assigneeId}>已離開成員 ({node.assigneeId})</option>
+                    )}
+                    {membersLoading && assigneeOptions.length === 0 && (
+                      <option value="" disabled>載入成員中...</option>
+                    )}
+                    {!membersLoading && assigneeOptions.length === 0 && (
+                      <option value="" disabled>沒有可指派成員</option>
+                    )}
+                    {assigneeOptions.map(member => (
+                      <option key={member.id} value={member.id}>
+                        {member.label} · {member.role}
                       </option>
                     ))}
                   </select>
@@ -270,6 +332,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     workspaceId={node.workspaceId}
                     selectedTagIds={node.tagIds || []}
                     onChange={(tagIds) => updateNode(node.id, { tagIds, updatedAt: Date.now() })}
+                    disabled={!canEditTask}
                   />
                 </div>
               </label>
@@ -283,9 +346,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     type="date"
                     value={startDate}
                     onChange={(event) => updateDate('startDate', event.target.value)}
-                    readOnly={startLocked}
+                    readOnly={!canEditTask || startLocked}
                     className={`h-9 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
-                      startLocked
+                      !canEditTask || startLocked
                         ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
                         : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
                     }`}
@@ -309,9 +372,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     type="date"
                     value={endDate}
                     onChange={(event) => updateDate('endDate', event.target.value)}
-                    readOnly={endLocked || node.isDurationLocked}
+                    readOnly={!canEditTask || endLocked || node.isDurationLocked}
                     className={`h-9 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
-                      endLocked || node.isDurationLocked
+                      !canEditTask || endLocked || node.isDurationLocked
                         ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
                         : isDueToday
                         ? 'border border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
@@ -336,6 +399,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   <button
                     type="button"
                     onClick={handleToggleDurationLock}
+                    disabled={!canEditTask}
                     className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border transition-colors ${
                       node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
@@ -351,7 +415,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     value={durationDays}
                     onChange={handleDurationChange}
                     placeholder="-"
-                    disabled={!node.isDurationLocked}
+                    disabled={!canEditTask || !node.isDurationLocked}
                     className={`h-9 w-full rounded-md border px-2 text-sm text-center outline-none transition ${
                       !node.isDurationLocked
                         ? 'border-transparent bg-slate-50 text-slate-400'
@@ -369,6 +433,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               <button
                 type="button"
                 onClick={addNote}
+                disabled={!canEditTask}
                 className="inline-flex h-8 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white transition hover:bg-slate-700"
               >
                 <Plus size={13} />
@@ -383,12 +448,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     type="text"
                     value={note.title}
                     onChange={(event) => updateNote(note.id, { title: event.target.value })}
+                    disabled={!canEditTask}
                     className="mb-2 h-8 w-full rounded-md border border-transparent bg-white px-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                     placeholder="備註標題"
                   />
                   <textarea
                     value={note.content}
                     onChange={(event) => updateNote(note.id, { content: event.target.value })}
+                    disabled={!canEditTask}
                     className="min-h-[120px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                     placeholder="輸入備註內容"
                   />

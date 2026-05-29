@@ -66,7 +66,7 @@ const makeNode = (
 
 const makeBoard = (): Board => ({
   id: LOCAL_TEST_BOARD_ID,
-  title: 'ProJED QC test board',
+  title: 'ProJED 品質驗證測試看板',
   dependencies: [],
   order: 1,
   createdAt: Date.now(),
@@ -74,7 +74,7 @@ const makeBoard = (): Board => ({
 
 const makeWorkspace = (board: Board): Workspace => ({
   id: LOCAL_TEST_WS_ID,
-  title: 'ProJED fixed QC account',
+  title: 'ProJED 固定品質驗證帳號',
   boards: [board],
   ownerId: 'local-test-user',
   members: ['local-test-user'],
@@ -87,9 +87,9 @@ export const createLocalTestNodes = (requestedTaskCount = 12): TaskNode[] => {
   const statuses: TaskNode['status'][] = ['todo', 'in_progress', 'completed', 'unsure', 'delayed', 'onhold'];
   const columnIds = ['local-col-todo', 'local-col-progress', 'local-col-done'];
   const nodes: TaskNode[] = [
-    makeNode(columnIds[0], 'Todo', null, 0, 'todo'),
-    makeNode(columnIds[1], 'In progress', null, 1, 'in_progress'),
-    makeNode(columnIds[2], 'Done', null, 2, 'completed'),
+    makeNode(columnIds[0], '待辦', null, 0, 'todo'),
+    makeNode(columnIds[1], '進行中', null, 1, 'in_progress'),
+    makeNode(columnIds[2], '已完成', null, 2, 'completed'),
   ];
 
   let createdTasks = 0;
@@ -98,18 +98,18 @@ export const createLocalTestNodes = (requestedTaskCount = 12): TaskNode[] => {
     const cardIndex = cardOrder;
     const columnId = columnIds[cardIndex % columnIds.length];
     const cardId = `qc-card-${cardIndex + 1}`;
-    nodes.push(makeNode(cardId, `QC task ${cardIndex + 1}`, columnId, cardOrder, statuses[cardIndex % statuses.length], (cardIndex % 18) - 6));
+    nodes.push(makeNode(cardId, `品質驗證測試任務 ${cardIndex + 1}`, columnId, cardOrder, statuses[cardIndex % statuses.length], (cardIndex % 18) - 6));
     createdTasks += 1;
 
     const childCount = Math.min(3, taskCount - createdTasks);
     for (let childIndex = 0; childIndex < childCount; childIndex += 1) {
       const childId = `qc-card-${cardIndex + 1}-child-${childIndex + 1}`;
-      nodes.push(makeNode(childId, `QC task ${cardIndex + 1}.${childIndex + 1}`, cardId, childIndex, statuses[(cardIndex + childIndex + 1) % statuses.length], (cardIndex % 18) - 5));
+      nodes.push(makeNode(childId, `品質驗證測試任務 ${cardIndex + 1}.${childIndex + 1}`, cardId, childIndex, statuses[(cardIndex + childIndex + 1) % statuses.length], (cardIndex % 18) - 5));
       createdTasks += 1;
 
       if (createdTasks < taskCount && childIndex === 0 && cardIndex % 2 === 0) {
         const grandchildId = `${childId}-deep-1`;
-        nodes.push(makeNode(grandchildId, `QC task ${cardIndex + 1}.${childIndex + 1}.1`, childId, 0, statuses[(cardIndex + 2) % statuses.length], (cardIndex % 18) - 4));
+        nodes.push(makeNode(grandchildId, `品質驗證測試任務 ${cardIndex + 1}.${childIndex + 1}.1`, childId, 0, statuses[(cardIndex + 2) % statuses.length], (cardIndex % 18) - 4));
         createdTasks += 1;
       }
     }
@@ -179,6 +179,8 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
   localTestStorage.writeWorkspaces(nextWorkspaces);
   localTestStorage.writeNodes(nextNodes);
   localTestStorage.writeDependencies(force ? [] : localTestStorage.readDependencies());
+  if (force) localTestStorage.writeBoardMembers({});
+  if (force) localTestStorage.writeBoardInvites({});
   localStorage.setItem(LOCAL_TEST_SEEDED_KEY, 'true');
   localStorage.setItem(LOCAL_TEST_SIZE_KEY, String(taskCount));
   localStorage.setItem('projed-last-ws', LOCAL_TEST_WS_ID);
@@ -204,6 +206,8 @@ export const resetLocalTestEnvironment = (taskCount?: number) => {
   localTestStorage.writeWorkspaces([]);
   localTestStorage.writeNodes({});
   localTestStorage.writeDependencies([]);
+  localTestStorage.writeBoardMembers({});
+  localTestStorage.writeBoardInvites({});
   return seedLocalTestEnvironment({ force: true, taskCount });
 };
 

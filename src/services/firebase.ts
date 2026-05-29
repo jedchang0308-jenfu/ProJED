@@ -31,14 +31,14 @@ export const auth: Auth | null = app ? getAuth(app) : null;
 
 export const requireFirebaseDb = (): Firestore => {
   if (!db) {
-    throw new Error('Firebase is not configured. Set the VITE_FIREBASE_* variables before using the Firebase backend.');
+    throw new Error('尚未設定 Firebase。使用 Firebase 後端前，請先設定 VITE_FIREBASE_* 環境變數。');
   }
   return db;
 };
 
 export const requireFirebaseAuth = (): Auth => {
   if (!auth) {
-    throw new Error('Firebase is not configured. Set the VITE_FIREBASE_* variables before using Firebase auth.');
+    throw new Error('尚未設定 Firebase。使用 Firebase 登入前，請先設定 VITE_FIREBASE_* 環境變數。');
   }
   return auth;
 };

@@ -2,7 +2,6 @@
 import { useEffect, useCallback } from 'react';
 import useCalendarSyncStore from '../store/useCalendarSyncStore';
 import { googleCalendarService } from '../services/googleCalendarService';
-import useBoardStore from '../store/useBoardStore';
 import type { SyncableItem, SyncResult } from '../types';
 
 /**
@@ -29,7 +28,7 @@ export function useCalendarSync(options: { autoInit?: boolean } = {}) {
 
   const syncAll = useCallback(async (): Promise<SyncResult | null> => {
     if (!googleCalendarService.isTokenValid()) {
-      setError('請先連接 Google Calendar');
+      setError('請先連接 Google 行事曆');
       return null;
     }
 
@@ -37,8 +36,7 @@ export function useCalendarSync(options: { autoInit?: boolean } = {}) {
     setError(null);
 
     try {
-      const workspaces = useBoardStore.getState().workspaces;
-      const result = await googleCalendarService.syncAll(workspaces);
+      const result = await googleCalendarService.syncAll();
       
       setIsSyncing(false);
       setLastSyncAt(Date.now());

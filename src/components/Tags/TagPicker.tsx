@@ -9,9 +9,10 @@ interface TagPickerProps {
   workspaceId: string;
   selectedTagIds: string[];
   onChange: (tagIds: string[]) => void;
+  disabled?: boolean;
 }
 
-export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagIds, onChange }) => {
+export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagIds, onChange, disabled = false }) => {
   const tags = useTagStore(s => s.tags);
   const createTag = useTagStore(s => s.createTag);
   const updateTag = useTagStore(s => s.updateTag);
@@ -37,6 +38,7 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
   }, [isOpen]);
 
   const toggleTag = (tagId: string) => {
+    if (disabled) return;
     onChange(
       selectedTagIds.includes(tagId)
         ? selectedTagIds.filter(id => id !== tagId)
@@ -45,6 +47,7 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
   };
 
   const handleCreate = async () => {
+    if (disabled) return;
     const created = await createTag(workspaceId, query, newColor);
     if (!created) return;
     onChange([...selectedTagIds, created.id]);
@@ -53,11 +56,13 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
   };
 
   const startEditing = (tag: TaskTag) => {
+    if (disabled) return;
     setEditingTagId(tag.id);
     setEditingName(tag.name);
   };
 
   const saveEditing = async (tag: TaskTag) => {
+    if (disabled) return;
     const nextName = editingName.trim();
     if (nextName && nextName !== tag.name) {
       await updateTag(workspaceId, tag.id, { name: nextName });
@@ -67,6 +72,7 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
   };
 
   const handleDeleteTag = async (tag: TaskTag) => {
+    if (disabled) return;
     const confirmed = window.confirm(`刪除標籤「${tag.name}」？這會從所有任務移除此標籤。`);
     if (!confirmed) return;
     await deleteTag(workspaceId, tag.id);
@@ -81,6 +87,7 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
         <button
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
+          disabled={disabled}
           className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
         >
           <Tag size={13} />
@@ -149,6 +156,7 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
                       onChange={(event) => setEditingName(event.target.value)}
                       onBlur={() => saveEditing(tag)}
                       onKeyDown={(event) => {
+                        if (event.nativeEvent.isComposing) return;
                         if (event.key === 'Enter') void saveEditing(tag);
                         if (event.key === 'Escape') setEditingTagId(null);
                       }}

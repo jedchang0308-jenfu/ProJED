@@ -3,7 +3,12 @@ import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
 
 type SubscriptionFilters = {
   workspace_ids?: string[];
-  assignee?: { type?: string; user_id?: string };
+  assignee?: {
+    type?: string;
+    user_id?: string;
+    user_ids?: string[];
+    include_unassigned?: boolean;
+  };
   date_types?: string[];
 };
 
@@ -47,6 +52,7 @@ const CORS_HEADERS = {
 
 const ADMIN_ROLES = new Set(["owner", "admin", "project_manager"]);
 const DATE_TYPES = new Set(["start_date", "due_date"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -88,9 +94,33 @@ const normalizeFilters = (filters: SubscriptionFilters) => ({
   dateTypes: Array.from(new Set((filters.date_types ?? []).filter((item) => DATE_TYPES.has(item)))),
 });
 
+const normalizeAssigneeSelection = (subscription: CalendarSubscription) => {
+  const { assignee } = normalizeFilters(subscription.filters_json);
+  if (assignee.type === "user" && assignee.user_id) {
+    return {
+      userIds: [assignee.user_id].filter((userId) => UUID_RE.test(userId)),
+      includeUnassigned: false,
+    };
+  }
+
+  if (assignee.type === "selected") {
+    return {
+      userIds: Array.from(new Set((assignee.user_ids ?? []).filter((userId) => UUID_RE.test(userId)))),
+      includeUnassigned: Boolean(assignee.include_unassigned),
+    };
+  }
+
+  return {
+    userIds: [subscription.owner_user_id],
+    includeUnassigned: false,
+  };
+};
+
 const getAllowedTenantIds = async (subscription: CalendarSubscription) => {
-  const { workspaceIds, assignee } = normalizeFilters(subscription.filters_json);
+  const { workspaceIds } = normalizeFilters(subscription.filters_json);
   if (workspaceIds.length === 0) return [];
+  const assigneeSelection = normalizeAssigneeSelection(subscription);
+  if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) return [];
 
   const { data: ownerMemberships, error: ownerMembershipsError } = await supabase
     .from("tenant_members")
@@ -103,54 +133,68 @@ const getAllowedTenantIds = async (subscription: CalendarSubscription) => {
   const memberships = (ownerMemberships ?? []) as TenantMember[];
   let allowedTenantIds = memberships.map((membership) => membership.tenant_id);
 
-  const assigneeUserId = assignee.type === "user" && assignee.user_id
-    ? assignee.user_id
-    : subscription.owner_user_id;
+  const requiresAdmin = assigneeSelection.includeUnassigned
+    || assigneeSelection.userIds.some((userId) => userId !== subscription.owner_user_id);
 
-  if (assigneeUserId !== subscription.owner_user_id) {
+  if (requiresAdmin) {
     const adminTenantIds = memberships
       .filter((membership) => ADMIN_ROLES.has(membership.role))
       .map((membership) => membership.tenant_id);
 
     if (adminTenantIds.length === 0) return [];
 
+    allowedTenantIds = adminTenantIds;
+  }
+
+  if (assigneeSelection.userIds.length > 0) {
     const { data: assigneeMemberships, error: assigneeMembershipsError } = await supabase
       .from("tenant_members")
       .select("tenant_id,user_id,role,status")
-      .eq("user_id", assigneeUserId)
+      .in("user_id", assigneeSelection.userIds)
       .eq("status", "active")
-      .in("tenant_id", adminTenantIds);
+      .in("tenant_id", allowedTenantIds);
     if (assigneeMembershipsError) throw assigneeMembershipsError;
 
-    const assigneeTenantIds = new Set(((assigneeMemberships ?? []) as TenantMember[]).map((item) => item.tenant_id));
-    allowedTenantIds = adminTenantIds.filter((tenantId) => assigneeTenantIds.has(tenantId));
+    const membershipKeys = new Set(
+      ((assigneeMemberships ?? []) as TenantMember[]).map((item) => `${item.tenant_id}:${item.user_id}`)
+    );
+    allowedTenantIds = allowedTenantIds.filter((tenantId) =>
+      assigneeSelection.userIds.every((userId) => membershipKeys.has(`${tenantId}:${userId}`))
+    );
   }
 
   return allowedTenantIds;
 };
 
 const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: string[]) => {
-  const { assignee, dateTypes } = normalizeFilters(subscription.filters_json);
-  const assigneeUserId = assignee.type === "user" && assignee.user_id
-    ? assignee.user_id
-    : subscription.owner_user_id;
+  const { dateTypes } = normalizeFilters(subscription.filters_json);
+  const assigneeSelection = normalizeAssigneeSelection(subscription);
 
   if (allowedTenantIds.length === 0 || dateTypes.length === 0) {
     return buildCalendarFeedIcs({
       subscription,
-      assigneeUserId,
+      assigneeUserId: assigneeSelection.userIds[0] ?? subscription.owner_user_id,
     });
   }
 
-  const { data: taskRows, error: taskError } = await supabase
+  let taskQuery = supabase
     .from("wbs_items")
     .select("id,tenant_id,project_id,legacy_node_id,title,description,status,assignee_id,start_date,end_date,item_type,updated_at,metadata")
-    .eq("assignee_id", assigneeUserId)
     .eq("is_archived", false)
     .neq("item_type", "group")
     .in("tenant_id", allowedTenantIds)
     .order("updated_at", { ascending: false })
     .limit(FEED_TASK_LIMIT);
+
+  if (assigneeSelection.userIds.length > 0 && assigneeSelection.includeUnassigned) {
+    taskQuery = taskQuery.or(`assignee_id.in.(${assigneeSelection.userIds.join(",")}),assignee_id.is.null`);
+  } else if (assigneeSelection.userIds.length > 0) {
+    taskQuery = taskQuery.in("assignee_id", assigneeSelection.userIds);
+  } else if (assigneeSelection.includeUnassigned) {
+    taskQuery = taskQuery.is("assignee_id", null);
+  }
+
+  const { data: taskRows, error: taskError } = await taskQuery;
   if (taskError) throw taskError;
 
   const taskLimitReached = (taskRows ?? []).length >= FEED_TASK_LIMIT;
@@ -169,7 +213,9 @@ const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: st
     projectIds.length
       ? supabase.from("projects").select("id,name").in("id", projectIds)
       : Promise.resolve({ data: [], error: null }),
-    supabase.from("profiles").select("id,email,display_name").eq("id", assigneeUserId).maybeSingle(),
+    assigneeSelection.userIds.length
+      ? supabase.from("profiles").select("id,email,display_name").in("id", assigneeSelection.userIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (tenantResult.error) throw tenantResult.error;
   if (projectResult.error) throw projectResult.error;
@@ -177,15 +223,18 @@ const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: st
 
   const tenantNameById = new Map((tenantResult.data ?? []).map((tenant: any) => [tenant.id, tenant.name]));
   const projectNameById = new Map((projectResult.data ?? []).map((project: any) => [project.id, project.name]));
-  const assigneeProfile = assigneeResult.data as { email: string | null; display_name: string | null } | null;
+  const assigneeProfileById = new Map(
+    ((assigneeResult.data ?? []) as Array<{ id: string; email: string | null; display_name: string | null }>)
+      .map((profile) => [profile.id, { email: profile.email, display_name: profile.display_name }])
+  );
   return buildCalendarFeedIcs({
     subscription,
     items,
     dateTypes,
     tenantNameById,
     projectNameById,
-    assigneeProfile,
-    assigneeUserId,
+    assigneeProfileById,
+    assigneeUserId: assigneeSelection.userIds[0] ?? subscription.owner_user_id,
     appBaseUrl: Deno.env.get("PROJED_APP_URL") ?? "",
     taskLimitReached,
   });

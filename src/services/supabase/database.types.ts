@@ -11,6 +11,7 @@ export type MemberStatus = 'active' | 'invited' | 'suspended';
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type WbsItemType = 'group' | 'milestone' | 'task';
 export type DependencySide = 'start' | 'end';
+export type BoardInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 export type DocumentSourceType =
   | 'wbs_item'
   | 'task'
@@ -26,7 +27,8 @@ export type RagSyncStatus = 'pending' | 'running' | 'synced' | 'failed' | 'delet
 export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
-  | { type: 'user'; user_id: string };
+  | { type: 'user'; user_id: string }
+  | { type: 'selected'; user_ids: string[]; include_unassigned?: boolean };
 export type CalendarSubscriptionFilters = {
   workspace_ids: string[];
   assignee: CalendarSubscriptionAssigneeFilter;
@@ -77,6 +79,31 @@ export type ProjectRow = {
   sort_order: number;
   metadata: Json;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectMemberRow = {
+  project_id: string;
+  tenant_id: string;
+  user_id: string;
+  role: TenantRole;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BoardInviteRow = {
+  id: string;
+  tenant_id: string;
+  project_id: string;
+  email: string;
+  invited_by: string | null;
+  status: BoardInviteStatus;
+  default_role: TenantRole;
+  token_hash: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -144,6 +171,30 @@ export type WbsDependencyRow = {
   legacy_dependency_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ActivityEventRow = {
+  id: string;
+  tenant_id: string;
+  project_id: string | null;
+  actor_id: string | null;
+  event_type: string;
+  entity_table: string | null;
+  entity_id: string | null;
+  payload: Json;
+  created_at: string;
+};
+
+export type AuditLogRow = {
+  id: string;
+  tenant_id: string | null;
+  actor_id: string | null;
+  action: string;
+  entity_table: string | null;
+  entity_id: string | null;
+  before_data: Json | null;
+  after_data: Json | null;
+  created_at: string;
 };
 
 export type DocumentRow = {
@@ -244,10 +295,14 @@ export interface Database {
       tenants: Table<TenantRow>;
       tenant_members: Table<TenantMemberRow>;
       projects: Table<ProjectRow>;
+      project_members: Table<ProjectMemberRow>;
+      board_invites: Table<BoardInviteRow>;
       wbs_items: Table<WbsItemRow>;
       task_tags: Table<TaskTagRow>;
       wbs_item_tags: Table<WbsItemTagRow>;
       wbs_dependencies: Table<WbsDependencyRow>;
+      activity_events: Table<ActivityEventRow>;
+      audit_logs: Table<AuditLogRow>;
       documents: Table<DocumentRow>;
       document_versions: Table<DocumentVersionRow>;
       document_chunks: Table<DocumentChunkRow>;
@@ -261,6 +316,10 @@ export interface Database {
       create_tenant_with_owner: {
         Args: { tenant_name: string };
         Returns: TenantRow;
+      };
+      accept_board_invite: {
+        Args: { invite_token_hash: string };
+        Returns: BoardInviteRow;
       };
       match_project_knowledge: {
         Args: {
@@ -283,6 +342,29 @@ export interface Database {
         Args: { filters: Json };
         Returns: boolean;
       };
+      log_activity_event: {
+        Args: {
+          target_tenant_id: string;
+          target_project_id: string | null;
+          activity_event_type: string;
+          activity_entity_table: string;
+          activity_entity_id: string | null;
+          activity_payload?: Json;
+        };
+        Returns: string;
+      };
+      log_audit_event: {
+        Args: {
+          target_tenant_id: string;
+          target_project_id: string | null;
+          audit_action: string;
+          audit_entity_table: string;
+          audit_entity_id: string | null;
+          audit_before_data?: Json | null;
+          audit_after_data?: Json | null;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       tenant_role: TenantRole;
@@ -290,6 +372,7 @@ export interface Database {
       task_status: TaskStatus;
       wbs_item_type: WbsItemType;
       dependency_side: DependencySide;
+      board_invite_status: BoardInviteStatus;
       document_source_type: DocumentSourceType;
       rag_visibility: RagVisibility;
       rag_sync_status: RagSyncStatus;

@@ -1,4 +1,5 @@
 import type {
+  CalendarSubscriptionAssigneeFilter,
   CalendarSubscriptionDateType,
   CalendarSubscriptionFilters,
   CalendarSubscriptionRow,
@@ -47,7 +48,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]
 
 const requireSupabase = () => {
   if (!isSupabaseConfigured) {
-    throw new Error('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+    throw new Error('尚未設定 Supabase。請設定 VITE_SUPABASE_URL 與 VITE_SUPABASE_ANON_KEY。');
   }
 };
 
@@ -94,9 +95,21 @@ const mapSubscription = (row: CalendarSubscriptionRow): CalendarSubscription => 
 const normalizeDateTypes = (dateTypes: CalendarSubscriptionDateType[]) =>
   Array.from(new Set(dateTypes));
 
+const normalizeAssigneeFilter = (
+  assignee: CalendarSubscriptionAssigneeFilter
+): CalendarSubscriptionAssigneeFilter => {
+  if (assignee.type !== 'selected') return assignee;
+
+  return {
+    type: 'selected',
+    user_ids: Array.from(new Set(assignee.user_ids.filter(isUuid))),
+    include_unassigned: Boolean(assignee.include_unassigned),
+  };
+};
+
 const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => ({
   workspace_ids: await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)),
-  assignee: filters.assignee,
+  assignee: normalizeAssigneeFilter(filters.assignee),
   date_types: normalizeDateTypes(filters.date_types),
 });
 
@@ -106,7 +119,7 @@ export const getCalendarFeedUrl = (token: string) => {
   const configuredBase = import.meta.env.VITE_CALENDAR_FEED_BASE_URL as string | undefined;
   const base = configuredBase?.trim()
     || (configuredSupabaseUrl ? `${configuredSupabaseUrl.replace(/\/+$/, '')}/functions/v1/calendar-feed` : '');
-  if (!base) throw new Error('Calendar feed base URL is not configured.');
+  if (!base) throw new Error('尚未設定行事曆訂閱網址。');
   return `${base.replace(/\/+$/, '')}/${encodeURIComponent(token)}.ics`;
 };
 
@@ -120,7 +133,7 @@ export const resolveWorkspaceId = async (workspaceId: string): Promise<string> =
     .eq('legacy_workspace_id', workspaceId)
     .maybeSingle();
   assertNoError(error);
-  if (!data?.id) throw new Error(`Workspace not found: ${workspaceId}`);
+  if (!data?.id) throw new Error(`找不到工作區：${workspaceId}`);
   return data.id;
 };
 
@@ -187,7 +200,7 @@ export const calendarSubscriptionService = {
       .select()
       .single();
     assertNoError(error);
-    if (!data) throw new Error('Calendar subscription was not created.');
+    if (!data) throw new Error('行事曆訂閱未建立成功。');
     return {
       subscription: mapSubscription(data),
       feedUrl: getCalendarFeedUrl(token),
@@ -207,7 +220,7 @@ export const calendarSubscriptionService = {
       .select()
       .single();
     assertNoError(error);
-    if (!data) throw new Error('Calendar subscription was not updated.');
+    if (!data) throw new Error('行事曆訂閱未更新成功。');
     return mapSubscription(data);
   },
 

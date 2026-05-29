@@ -5,9 +5,11 @@ import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import useDialogStore from '../store/useDialogStore';
 import { useWbsStore } from '../store/useWbsStore';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
 const Sidebar = ({ isOpen, toggle }) => {
     const { workspaces, activeBoardId, switchBoard, showHome, isSidebarOpen, setSidebarOpen, removeBoard, removeWorkspace, currentView, setView } = useBoardStore();
+    const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
 
     return (
         <aside className={`bg-white border-r border-slate-200 flex-shrink-0 transition-all duration-300 ease-in-out z-30 shadow-sm relative overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-10'}`}>
@@ -50,23 +52,27 @@ const Sidebar = ({ isOpen, toggle }) => {
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                         <button
                                             onClick={async () => {
+                                                if (!canCreateBoard) return;
                                                 const name = await useDialogStore.getState().showPrompt("請輸入看板名稱：");
                                                 if (name && name.trim()) useBoardStore.getState().addBoard(ws.id, name);
                                             }}
-                                            className="p-1 hover:bg-primary-light hover:text-primary rounded text-slate-400"
+                                            disabled={!canCreateBoard}
+                                            className={`p-1 rounded ${canCreateBoard ? 'hover:bg-primary-light hover:text-primary text-slate-400' : 'text-slate-300 cursor-not-allowed'}`}
                                             title="新增看板"
                                         >
                                             <Plus size={14} />
                                         </button>
                                         <button
                                             onClick={async () => {
+                                                if (!canDeleteWorkspace) return;
                                                 const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${ws.title}」及其所有看板嗎？您可以隨時使用 Ctrl+Z 復原。`);
                                                 if (confirmed) {
                                                     removeWorkspace(ws.id);
                                                     showHome();
                                                 }
                                             }}
-                                            className="p-1 hover:bg-red-50 hover:text-red-500 rounded text-slate-300"
+                                            disabled={!canDeleteWorkspace}
+                                            className={`p-1 rounded ${canDeleteWorkspace ? 'hover:bg-red-50 hover:text-red-500 text-slate-300' : 'text-slate-200 cursor-not-allowed'}`}
                                             title="刪除工作區"
                                         >
                                             <Trash2 size={14} />
@@ -97,13 +103,15 @@ const Sidebar = ({ isOpen, toggle }) => {
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation();
+                                                    if (!canEditBoardSettings) return;
                                                     const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
                                                     if (confirmed) {
                                                         removeBoard(ws.id, board.id);
                                                         if (activeBoardId === board.id) showHome();
                                                     }
                                                 }}
-                                                className={`p-1 rounded transition-all opacity-0 group-hover/item:opacity-100 ${activeBoardId === board.id ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-400'}`}
+                                                disabled={!canEditBoardSettings}
+                                                className={`p-1 rounded transition-all opacity-0 group-hover/item:opacity-100 ${!canEditBoardSettings ? 'cursor-not-allowed opacity-40' : activeBoardId === board.id ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-400'}`}
                                                 title="刪除看板"
                                             >
                                                 <Trash2 size={12} />
@@ -163,16 +171,18 @@ const Sidebar = ({ isOpen, toggle }) => {
                                 className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
                             >
                                 <Download size={14} />
-                                匯出 WBS
+                                匯出任務
                             </button>
-                            <label className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors cursor-pointer">
+                            <label className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium transition-colors ${canEditBoardSettings ? 'text-slate-600 hover:bg-slate-50 hover:text-primary cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`}>
                                 <Upload size={14} />
-                                匯入 JSON
+                                匯入備份
                                 <input 
                                     type="file" 
                                     accept=".json" 
                                     className="hidden" 
+                                    disabled={!canEditBoardSettings}
                                     onChange={(e) => {
+                                        if (!canEditBoardSettings) return;
                                         const file = e.target.files?.[0];
                                         if (!file) return;
                                         const reader = new FileReader();

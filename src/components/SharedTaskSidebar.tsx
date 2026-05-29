@@ -8,11 +8,15 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
 import { TaskDragHandle } from './Wbs/TaskDragHandle';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
 interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
 const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
+    const { canCreateTask, canMoveTask } = useBoardPermissions();
+    const level = Number.isFinite(item.level) ? item.level : 0;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
+        disabled: !canMoveTask,
         data: { item }
     });
 
@@ -20,7 +24,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
         transform: CSS.Transform.toString(transform),
         transition,
         height: rowHeight,
-        paddingLeft: Math.max(12, 12 + (item.level * 16)),
+        paddingLeft: Math.max(12, 12 + (level * 16)),
         position: 'relative' as any,
         zIndex: isDragging ? 50 : 1,
     };
@@ -44,13 +48,14 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
             }}
             className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-1 cursor-pointer group
-                ${isGroup ? 'font-black text-slate-800' : isTask && item.level === 1 ? 'font-bold text-slate-700' : 'text-slate-500'}
+                ${isGroup ? 'font-black text-slate-800' : isTask && level === 1 ? 'font-bold text-slate-700' : 'text-slate-500'}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => onClick(item)}
         >
             <TaskDragHandle
                 attributes={attributes}
                 listeners={listeners}
+                disabled={!canMoveTask}
                 size="xs"
                 className="absolute left-1 opacity-0 group-hover:opacity-100"
             />
@@ -70,16 +75,18 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
             )}
             <div className="flex-shrink-0">
                 {isGroup && <Folder size={14} className="text-primary/70" />}
-                {(isTask || isMilestone) && item.level <= 1 && <FileText size={12} className="text-slate-400" />}
-                {(isTask || isMilestone) && item.level > 1 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
+                {(isTask || isMilestone) && level <= 1 && <FileText size={12} className="text-slate-400" />}
+                {(isTask || isMilestone) && level > 1 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
             </div>
-            <span className={`truncate ${item.level === 0 ? 'text-[13px]' : item.level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
+            <span className={`truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
                 {item.title}
             </span>
             {onAddChild && (
                 <button
+                    disabled={!canCreateTask}
                     onClick={(e) => {
                         e.stopPropagation();
+                        if (!canCreateTask) return;
                         onAddChild(item);
                     }}
                     className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
@@ -105,6 +112,7 @@ const SharedTaskSidebar = ({
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
+    const { canCreateTask, canMoveTask } = useBoardPermissions();
 
     const sensors = useDragSensors();
     const [activeSortableItem, setActiveSortableItem] = useState(null);
@@ -130,6 +138,7 @@ const SharedTaskSidebar = ({
     const handleSortableDragEnd = (event: any) => {
         const { active, over } = event;
         setActiveSortableItem(null);
+        if (!canMoveTask) return;
         if (!over || active.id === over.id || !activeBoardId) return;
 
         const activeItem = active.data.current?.item;
@@ -150,6 +159,7 @@ const SharedTaskSidebar = ({
     };
 
     const handleAddList = async () => {
+        if (!canCreateTask) return;
         const title = await useDialogStore.getState().showPrompt("請輸入任務名稱：", "新任務");
         if (title && title.trim() && activeWorkspaceId && activeBoardId) {
             addNode({
@@ -168,6 +178,7 @@ const SharedTaskSidebar = ({
     };
 
     const handleAddChild = async (item: any) => {
+        if (!canCreateTask) return;
         const { showPrompt } = useDialogStore.getState();
         const title = await showPrompt("請輸入任務名稱：", "新任務");
         if (title && title.trim() && activeWorkspaceId && activeBoardId) {
@@ -215,7 +226,8 @@ const SharedTaskSidebar = ({
                         <DndContext
                             sensors={sensors}
                             collisionDetection={closestCorners}
-                            onDragStart={(e) => setActiveSortableItem(e.active.data.current?.item)}
+                            onDragStart={(e) => { if (canMoveTask) setActiveSortableItem(e.active.data.current?.item); }}
+                            onDragCancel={() => setActiveSortableItem(null)}
                             onDragEnd={handleSortableDragEnd}
                         >
                             <SortableContext
@@ -248,6 +260,7 @@ const SharedTaskSidebar = ({
                         <div className="px-4 py-3">
                             <button
                                 onClick={handleAddList}
+                                disabled={!canCreateTask}
                                 className="w-full py-2 flex items-center justify-center gap-2 text-[11px] font-bold text-slate-400 hover:text-primary hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 rounded-lg transition-all"
                             >
                                 <Plus size={14} />

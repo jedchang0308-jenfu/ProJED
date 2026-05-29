@@ -23,7 +23,7 @@ const CitationCard: React.FC<CitationCardProps> = ({ citation }) => {
   const getLabel = () => {
     switch (citation.sourceTable) {
       case 'wbs_items':
-        return 'WBS 任務';
+        return '工作分解任務';
       case 'projects':
         return '專案資料';
       case 'documents':

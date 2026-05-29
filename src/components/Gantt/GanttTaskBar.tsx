@@ -4,6 +4,7 @@ import { Link } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 
 interface TaskItem {
@@ -41,6 +42,18 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const updateNode = useWbsStore(s => s.updateNode);
     const wbsDependencies = useWbsStore(s => s.dependencies);
     const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+    const { canEditTask, canMoveTask } = useBoardPermissions();
+    const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+    const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer;
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return;
+        const query = window.matchMedia('(pointer: coarse)');
+        const updatePointerMode = () => setIsCoarsePointer(query.matches);
+        updatePointerMode();
+        query.addEventListener?.('change', updatePointerMode);
+        return () => query.removeEventListener?.('change', updatePointerMode);
+    }, []);
 
     // Hover state
     const [isHovered, setIsHovered] = useState(false);
@@ -105,6 +118,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
     const handleDragStart = (e: React.MouseEvent, type: string) => {
         e.stopPropagation();
+        if (!canEditSchedule) return;
 
         const s = item.startDate || (isMilestone ? item.endDate : dayjs(item.endDate).subtract(3, 'day').format('YYYY-MM-DD'));
         const eDate = item.endDate || dayjs(s).add(3, 'day').format('YYYY-MM-DD');
@@ -397,7 +411,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             onMouseDown={(e) => {
                 // 只允許左鍵觸發拖曳（防止右鍵誤觸跳轉）
                 if (e.button !== 0) return;
-                if (isMoveLocked) return;
+                if (!canEditSchedule || isMoveLocked) return;
                 handleDragStart(e, 'move');
             }}
             onMouseEnter={() => setIsHovered(true)}
@@ -413,7 +427,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     onItemClick(item);
                 }
             }}
-            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked ? '' : 'hover:brightness-110')} ${isMoveLocked ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-sm ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-sm ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}`}
             style={{
                 left: x1,
                 width: width,
@@ -436,19 +450,19 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             {!isMilestone && !isInfiniteFallback && (
                 <>
                     <div
-                        className={`absolute left-0 top-0 bottom-0 w-2.5 ${isLeftLocked ? 'cursor-not-allowed bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
+                        className={`absolute left-0 top-0 bottom-0 w-2.5 ${isLeftLocked || !canEditSchedule ? 'cursor-not-allowed bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
                         onMouseDown={(e) => {
                             e.stopPropagation();
-                            if (isLeftLocked) return;
+                            if (!canEditSchedule || isLeftLocked) return;
                             handleDragStart(e, 'left');
                         }}
                         title={isLeftLocked ? '此端受依賴推動或工期鎖定，不可手動拉伸' : ''}
                     />
                     <div
-                        className={`absolute right-0 top-0 bottom-0 w-2.5 ${isRightLocked ? 'cursor-not-allowed bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
+                        className={`absolute right-0 top-0 bottom-0 w-2.5 ${isRightLocked || !canEditSchedule ? 'cursor-not-allowed bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
                         onMouseDown={(e) => {
                             e.stopPropagation();
-                            if (isRightLocked) return;
+                            if (!canEditSchedule || isRightLocked) return;
                             handleDragStart(e, 'right');
                         }}
                         title={isRightLocked ? '此端受依賴推動或工期鎖定，不可手動拉伸' : ''}

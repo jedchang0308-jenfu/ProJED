@@ -25,7 +25,7 @@ const checkEdgeFunction = () => {
     process.cwd(),
     'supabase',
     'migrations',
-    '202605140003_p9_match_project_knowledge_v2.sql'
+    '20260528102131_p9_match_project_knowledge_v2.sql'
   );
 
   const functionContent = readRequiredFile(funcPath);
@@ -64,6 +64,9 @@ const checkEdgeFunction = () => {
       'd.rag_enabled = true',
       'public.current_user_is_tenant_member(target_tenant_id)',
       'limit least(match_count, 50)',
+      'revoke execute on function public.match_project_knowledge(uuid, uuid, extensions.vector, float, int) from public',
+      'revoke execute on function public.match_project_knowledge(uuid, uuid, extensions.vector, float, int) from anon',
+      'grant execute on function public.match_project_knowledge(uuid, uuid, extensions.vector, float, int) to authenticated',
     ],
     'RPC migration'
   );

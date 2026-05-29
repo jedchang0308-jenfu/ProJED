@@ -14,8 +14,9 @@ import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
 import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { matchesTagFilters } from '../../utils/tags';
-import { matchesDueDateFilter } from '../../utils/taskFilters';
+import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -32,9 +33,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const statusFilters = useBoardStore((state) => state.statusFilters);
   const dueWithinDays = useBoardStore((state) => state.dueWithinDays);
+  const selectedAssigneeIds = useBoardStore((state) => state.selectedAssigneeIds);
   const selectedTagIds = useTagStore((state) => state.selectedTagIds);
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
+  const { canCreateTask, canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
@@ -62,11 +65,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
   const handleStartEdit = (event: React.MouseEvent) => {
     event.stopPropagation();
+    if (!canEditTask) return;
     setEditValue(node?.title || '');
     setIsEditing(true);
   };
 
   const handleSave = () => {
+    if (!canEditTask) {
+      setIsEditing(false);
+      return;
+    }
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== node?.title) {
       updateNode(nodeId, { title: trimmed, updatedAt: Date.now() });
@@ -76,6 +84,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     event.stopPropagation();
+    if (event.nativeEvent.isComposing) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       handleSave();
@@ -93,9 +102,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
     return (childIds || [])
       .map((id) => nodes[id])
-      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'] && matchesDueDateFilter(child, dueWithinDays) && matchesTagFilters(child, selectedTagIds))
+      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'] && matchesDueDateFilter(child, dueWithinDays) && matchesAssigneeFilter(child, selectedAssigneeIds) && matchesTagFilters(child, selectedTagIds))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, dueWithinDays, selectedTagIds, previewNodes]);
+  }, [childIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, previewNodes]);
 
   const {
     attributes: columnAttributes,
@@ -106,6 +115,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     isDragging: isColumnDragging,
   } = useSortable({
     id: nodeId,
+    disabled: !canMoveTask,
     data: {
       type: 'wbs-column',
       nodeId,
@@ -114,6 +124,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
   const { setNodeRef: setDropNodeRef, isOver } = useDroppable({
     id: `${nodeId}-drop`,
+    disabled: !canMoveTask,
     data: {
       type: 'wbs-column',
       nodeId,
@@ -158,6 +169,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   );
 
   const handleAddCard = (title?: string) => {
+    if (!canCreateTask) return;
     if (!node) return;
     const trimmedTitle = title?.trim();
     const newNode: TaskNode = {
@@ -239,7 +251,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               <TaskDragHandle
                 attributes={columnAttributes}
                 listeners={columnListeners}
-                disabled={isEditing || isSelectingMode}
+                disabled={!canMoveTask || isEditing || isSelectingMode}
                 className="-ml-1"
               />
 
@@ -281,7 +293,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             <div className="flex items-center gap-1.5 flex-wrap">
               {/* 開始日按鈕 */}
               <button
-                onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+                disabled={!canCreateDependency}
+                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all ${
                   isSelfStart
                     ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
@@ -294,7 +307,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               </button>
               {/* 結束日按鈕 */}
               <button
-                onClick={(e) => { e.stopPropagation(); kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+                disabled={!canCreateDependency}
+                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all ${
                   isSelfEnd
                     ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
@@ -374,6 +388,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             ref={addTaskInputRef}
             value={newTaskTitle}
             onChange={(event) => setNewTaskTitle(event.target.value)}
+            disabled={!canCreateTask}
             placeholder="輸入任務名稱"
             className="h-9 bg-white text-xs"
           />
@@ -382,6 +397,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             variant="dashed"
             size="none"
             fullWidth
+            disabled={!canCreateTask}
             className="gap-2 py-2 px-3 text-xs font-bold group"
           >
             <Plus size={14} className="transition-transform group-hover:scale-110" />

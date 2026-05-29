@@ -24,9 +24,9 @@ const stableHash = (content: string): string => {
 };
 
 const formatDateRange = (node: TaskNode): string | null => {
-  if (node.startDate && node.endDate) return `${node.startDate} to ${node.endDate}`;
-  if (node.startDate) return `starts ${node.startDate}`;
-  if (node.endDate) return `ends ${node.endDate}`;
+  if (node.startDate && node.endDate) return `${node.startDate} 至 ${node.endDate}`;
+  if (node.startDate) return `開始：${node.startDate}`;
+  if (node.endDate) return `結束：${node.endDate}`;
   return null;
 };
 
@@ -36,7 +36,7 @@ const formatDetailNotes = (detailNotes: TaskDetailNote[] | undefined): string[] 
       const title = note.title.trim();
       const content = note.content.trim();
       if (!title && !content) return null;
-      return [`Note: ${title || 'Untitled'}`, content].filter(Boolean).join('\n');
+      return [`備註：${title || '未命名'}`, content].filter(Boolean).join('\n');
     })
     .filter((note): note is string => Boolean(note));
 
@@ -44,17 +44,17 @@ const formatTags = (node: TaskNode, tagById: Map<string, TaskTag>): string | nul
   const names = (node.tagIds ?? [])
     .map(tagId => tagById.get(tagId)?.name)
     .filter((name): name is string => Boolean(name));
-  return names.length > 0 ? `Tags: ${names.join(', ')}` : null;
+  return names.length > 0 ? `標籤：${names.join(', ')}` : null;
 };
 
 const buildNodeContent = (node: TaskNode, tagById: Map<string, TaskTag>): string => {
   const parts = [
-    `Title: ${node.title}`,
-    `Type: ${node.nodeType ?? 'task'}`,
-    `Status: ${node.status}`,
+    `標題：${node.title}`,
+    `類型：${node.nodeType ?? 'task'}`,
+    `狀態：${node.status}`,
     formatTags(node, tagById),
-    formatDateRange(node) ? `Schedule: ${formatDateRange(node)}` : null,
-    node.description?.trim() ? `Description:\n${node.description.trim()}` : null,
+    formatDateRange(node) ? `排程：${formatDateRange(node)}` : null,
+    node.description?.trim() ? `描述：\n${node.description.trim()}` : null,
     ...formatDetailNotes(node.detailNotes),
   ];
 
@@ -79,7 +79,7 @@ export const buildWbsRagDocuments = ({ tenantId, projectId, nodes, tags = [] }: 
       sourceType: 'wbs_item',
       sourceTable: 'wbs_items',
       sourceId: node.id,
-      title: node.title || 'Untitled WBS item',
+      title: node.title || '未命名 WBS 項目',
       content,
       contentHash,
       visibility: 'project',

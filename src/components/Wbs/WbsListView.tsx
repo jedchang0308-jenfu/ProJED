@@ -13,7 +13,8 @@ import { useDragSensors } from '../../hooks/useDragSensors';
 import { StatusFilterBar } from '../ui/StatusFilterBar';
 import { useTagStore } from '../../store/useTagStore';
 import { matchesTagFilters } from '../../utils/tags';
-import { matchesDueDateFilter } from '../../utils/taskFilters';
+import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 
 interface WbsListViewProps {
   boardId: string;
@@ -23,6 +24,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
@@ -30,6 +32,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const showDependencies = useBoardStore(s => s.showDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
   const { dependencies, addDependency, removeDependency, updateDependency, addNode, updateNode } = useWbsStore();
+  const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // DnD 狀態
   const sensors = useDragSensors();
@@ -56,6 +59,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const handleDragEnd = (event: any) => {
       const { active, over } = event;
       setActiveSortableItem(null);
+      if (!canMoveTask) return;
       if (!over || active.id === over.id) return;
 
       const activeItem = active.data.current?.item;
@@ -98,6 +102,10 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
    * 處理依賴關係的點擊選取（復刻舊版行內點選邏輯）
    */
   const handleDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
+      if (!canCreateDependency) {
+          setDependencySelection(null);
+          return;
+      }
       if (!dependencySelection) {
           // 選取模式外的點擊已被移除或忽略，這裡直接 return
           return;
@@ -137,7 +145,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
           }
           setDependencySelection(null);
       }
-  }, [dependencySelection, dependencies, addDependency, setDependencySelection]);
+  }, [canCreateDependency, dependencySelection, dependencies, addDependency, setDependencySelection]);
 
   // 計算依賴關係圖示 (全域 a,b,c 編號)
   const dependencyMarkers = React.useMemo(() => {
@@ -160,12 +168,13 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // ✅ 只有當索引陣列變更時 (Add/Remove/Move)，才重新評估根節點集合
   const rootNodes = React.useMemo(() => {
       const state = useWbsStore.getState();
-      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && statusFilters[node.status || 'todo'] && matchesDueDateFilter(node, dueWithinDays) && matchesTagFilters(node, selectedTagIds));
-      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && statusFilters[node.status || 'todo'] && matchesDueDateFilter(node, dueWithinDays) && matchesTagFilters(node, selectedTagIds));
+      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && statusFilters[node.status || 'todo'] && matchesDueDateFilter(node, dueWithinDays) && matchesAssigneeFilter(node, selectedAssigneeIds) && matchesTagFilters(node, selectedTagIds));
+      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && statusFilters[node.status || 'todo'] && matchesDueDateFilter(node, dueWithinDays) && matchesAssigneeFilter(node, selectedAssigneeIds) && matchesTagFilters(node, selectedTagIds));
       return [...arr1, ...arr2].sort((a, b) => a.order - b.order);
-  }, [rootIds, altRootIds, boardId, statusFilters, dueWithinDays, selectedTagIds]);
+  }, [rootIds, altRootIds, boardId, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds]);
 
   const handleCreateRootNode = () => {
+    if (!canCreateTask) return;
     const newNode: TaskNode = {
       id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
       workspaceId: activeWorkspaceId || '', 
@@ -193,7 +202,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         <StatusFilterBar />
         
         <div className="flex items-center gap-2 ml-4 shrink-0">
-          <Button onClick={handleCreateRootNode} className="flex items-center gap-2 shrink-0">
+          <Button onClick={handleCreateRootNode} disabled={!canCreateTask} className="flex items-center gap-2 shrink-0">
             <Plus size={18} />
             <span>新增頂層任務</span>
           </Button>
@@ -219,7 +228,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                   onClick={() => setDependencySelection(null)}
                   className="bg-white border border-amber-200 text-amber-600 hover:bg-amber-100 hover:text-amber-700 text-xs font-bold px-3 py-1.5 rounded-md transition-all flex-shrink-0 shadow-sm active:scale-95"
               >
-                  取消 (ESC)
+                  取消（退出鍵）
               </button>
           </div>
       )}
@@ -229,7 +238,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         {rootNodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
             <p className="mb-4">此專案目前沒有任何任務</p>
-            <Button variant="outline" as any onClick={handleCreateRootNode}>
+            <Button variant="outline" as any onClick={handleCreateRootNode} disabled={!canCreateTask}>
               開始建立第一個節點
             </Button>
           </div>
@@ -249,7 +258,8 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
-                onDragStart={(e) => setActiveSortableItem(e.active.data.current?.item)}
+                onDragStart={(e) => { if (canMoveTask) setActiveSortableItem(e.active.data.current?.item); }}
+                onDragCancel={() => setActiveSortableItem(null)}
                 onDragEnd={handleDragEnd}
             >
                 <SortableContext items={rootNodes.map(n => n.id)} strategy={verticalListSortingStrategy}>

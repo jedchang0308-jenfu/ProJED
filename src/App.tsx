@@ -14,8 +14,9 @@
 import { useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
+import { useMemberStore } from './store/useMemberStore';
 import { useDataSync } from './hooks/useDataSync';
-import { dataBackend } from './services/dataBackend';
+import { boardInviteService, dataBackend } from './services/dataBackend';
 import { useCalendarSync } from './hooks/useCalendarSync';
 import { migrateLocalStorageToFirestore } from './utils/migration';
 import AuthGate from './components/AuthGate';
@@ -33,6 +34,25 @@ import RecycleBinView from './components/RecycleBinView';
 import GlobalDialog from './components/GlobalDialog';
 import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
 import { ToastContainer } from './components/ui/ToastContainer';
+import { toast } from './store/useToastStore';
+import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
+
+const formatBoardInviteAcceptError = (inviteError: unknown): string => {
+  const message = inviteError instanceof Error ? inviteError.message : '';
+  if (
+    message.includes('此邀請屬於其他電子郵件地址') ||
+    message.includes('board invite email does not match authenticated user')
+  ) {
+    return '此邀請只能由受邀電子郵件帳號接受。請先登出目前帳號，改用受邀信箱登入後，再重新開啟邀請連結。';
+  }
+  if (message.includes('board invite has expired') || message.includes('看板邀請已過期')) {
+    return '此看板邀請已過期，請邀請人撤回後重新建立邀請連結。';
+  }
+  if (message.includes('board invite is no longer pending') || message.includes('已不在待處理狀態')) {
+    return '此看板邀請已被接受、撤回或失效，請邀請人確認待處理邀請狀態。';
+  }
+  return message || '無法接受看板邀請。';
+};
 
 /**
  * AppContent — 主應用內容（已通過 AuthGate 認證）
@@ -42,8 +62,12 @@ import { ToastContainer } from './components/ui/ToastContainer';
 function AppContent() {
   const { currentView, workspaces, activeBoardId } = useBoardStore();
   const user = useAuthStore(s => s.user);
+  const userId = user?.uid ?? null;
+  const userEmail = user?.email ?? null;
+  const userDisplayName = user?.displayName ?? null;
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
+  const processedInviteToken = useRef<string | null>(null);
 
   // 啟動目前資料後端的同步監聽
   useDataSync();
@@ -62,7 +86,7 @@ function AppContent() {
   // 若 localStorage 有舊資料就寫入 Firestore，
   // onSnapshot 會自動接收新寫入的文件並更新畫面。
   useEffect(() => {
-    if (!user || migrationDone.current || dataBackend !== 'firebase') return;
+    if (!userId || migrationDone.current || dataBackend !== 'firebase') return;
     migrationDone.current = true;
 
     const hasLegacyStorage = localStorage.getItem('projed-storage') || localStorage.getItem('projed_data');
@@ -72,19 +96,53 @@ function AppContent() {
     }
 
     console.log('[Migration] 偵測到 Local Storage 舊資料，開始遷移到 Firestore...');
-    migrateLocalStorageToFirestore(user.uid).then((success) => {
+    migrateLocalStorageToFirestore(userId).then((success) => {
       if (success) {
         console.log('[Migration] 遷移完成！onSnapshot 將自動更新畫面。');
         // 不需要 reload：onSnapshot 監聽到 Firestore 新資料後會自動更新 Store
       }
     });
-  }, [user?.uid]); // 只在 user 改變時重新評估
+  }, [userId]); // 只在 user 改變時重新評估
+
+  useEffect(() => {
+    if (!userId || processedInviteToken.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get(BOARD_INVITE_TOKEN_PARAM);
+    if (!token) return;
+
+    processedInviteToken.current = token;
+    boardInviteService.accept({
+      token,
+      userId,
+      email: userEmail,
+      displayName: userDisplayName,
+    }).then((invite) => {
+      const store = useBoardStore.getState();
+      store.setActiveWorkspace(invite.workspaceId);
+      store.setActiveBoard(invite.boardId);
+      store.setView('board');
+      useMemberStore.getState().loadMembers(invite.workspaceId, invite.boardId).catch(console.error);
+
+      params.delete(BOARD_INVITE_TOKEN_PARAM);
+      const nextQuery = params.toString();
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
+      );
+      toast.success('已接受看板邀請。');
+    }).catch((inviteError) => {
+      console.error('[BoardInvite] accept failed:', inviteError);
+      toast.error(formatBoardInviteAcceptError(inviteError));
+    });
+  }, [userDisplayName, userEmail, userId]);
 
   // ===== 自動建立預設工作區（全新使用者）=====
   // 設計意圖：等待 onSnapshot 結果 3 秒後，若仍無任何工作區，
   // 表示為全新使用者，自動建立一個預設工作區。
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     const hasLegacyData = localStorage.getItem('projed-storage') || localStorage.getItem('projed_data');
     // 若有遷移資料，等待遷移完成，不自動建立
@@ -99,7 +157,7 @@ function AppContent() {
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [user?.uid]);
+  }, [userId]);
 
   // (Phase B 已移除 cleanBoardDependencies，無需空殼 useEffect)
 
@@ -107,7 +165,7 @@ function AppContent() {
   const hasProcessedDeepLink = useRef(false);
 
   useEffect(() => {
-    if (!user || hasProcessedDeepLink.current) return;
+    if (!userId || hasProcessedDeepLink.current) return;
     const params = new URLSearchParams(window.location.search);
     const modalType = params.get('modal');
     if (!modalType) {
@@ -137,7 +195,7 @@ function AppContent() {
             }
         }
     }
-  }, [user?.uid, workspaces]);
+  }, [userId, workspaces]);
 
   const renderContent = () => {
     switch (currentView) {

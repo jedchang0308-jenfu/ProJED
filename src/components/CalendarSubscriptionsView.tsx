@@ -20,8 +20,13 @@ import {
   type CalendarWorkspaceRef,
   type CalendarWorkspaceMember,
 } from '../services/supabase/calendarSubscriptionService';
-import type { CalendarSubscriptionDateType, CalendarSubscriptionFilters } from '../services/supabase/database.types';
+import type {
+  CalendarSubscriptionAssigneeFilter,
+  CalendarSubscriptionDateType,
+  CalendarSubscriptionFilters,
+} from '../services/supabase/database.types';
 import { toast } from '../store/useToastStore';
+import { UNASSIGNED_ASSIGNEE_FILTER } from '../utils/taskFilters';
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
@@ -44,17 +49,66 @@ const formatDateTime = (value: string | null) => {
 const getMemberLabel = (member: CalendarWorkspaceMember) =>
   member.displayName || member.email || member.userId.slice(0, 8);
 
+type AssigneeSelection = {
+  userIds: string[];
+  includeUnassigned: boolean;
+};
+
+const getAssigneeSelection = (
+  assignee: CalendarSubscriptionAssigneeFilter,
+  currentUserId?: string
+): AssigneeSelection => {
+  if (assignee.type === 'selected') {
+    return {
+      userIds: Array.from(new Set(assignee.user_ids.filter(Boolean))),
+      includeUnassigned: Boolean(assignee.include_unassigned),
+    };
+  }
+
+  if (assignee.type === 'user') {
+    return {
+      userIds: assignee.user_id ? [assignee.user_id] : [],
+      includeUnassigned: false,
+    };
+  }
+
+  return {
+    userIds: currentUserId ? [currentUserId] : [],
+    includeUnassigned: false,
+  };
+};
+
+const toSelectedAssigneeFilter = (
+  selection: AssigneeSelection
+): CalendarSubscriptionAssigneeFilter => ({
+  type: 'selected',
+  user_ids: Array.from(new Set(selection.userIds.filter(Boolean))),
+  include_unassigned: selection.includeUnassigned,
+});
+
+const describeAssigneeFilter = (
+  assignee: CalendarSubscriptionAssigneeFilter,
+  memberNameById: Map<string, string>,
+  currentUserId?: string
+) => {
+  const selection = getAssigneeSelection(assignee, currentUserId);
+  const labels = [
+    ...selection.userIds.map((userId) => memberNameById.get(userId) ?? userId.slice(0, 8)),
+    ...(selection.includeUnassigned ? ['未指派'] : []),
+  ];
+  return labels.length > 0 ? labels.join('、') : '未指定';
+};
+
 const describeFilters = (
   subscription: CalendarSubscription,
   workspaceNameById: Map<string, string>,
   memberNameById: Map<string, string>,
+  currentUserId?: string,
 ) => {
   const workspaces = subscription.filters.workspace_ids
     .map((workspaceId) => workspaceNameById.get(workspaceId) ?? workspaceId.slice(0, 8))
     .join('、');
-  const assignee = subscription.filters.assignee.type === 'me'
-    ? '我'
-    : memberNameById.get(subscription.filters.assignee.user_id) ?? subscription.filters.assignee.user_id.slice(0, 8);
+  const assignee = describeAssigneeFilter(subscription.filters.assignee, memberNameById, currentUserId);
   const dateTypes = subscription.filters.date_types
     .map((type) => type === 'start_date' ? '開始日' : '到期日')
     .join('、');
@@ -79,6 +133,15 @@ const CalendarSubscriptionsView: React.FC = () => {
 
   const selectedWorkspaceCount = new Set(filters.workspace_ids).size;
   const selectedWorkspaceKey = filters.workspace_ids.join(',');
+  const assigneeSelection = useMemo(
+    () => getAssigneeSelection(filters.assignee, user?.uid),
+    [filters.assignee, user?.uid]
+  );
+  const selectedAssigneeSet = useMemo(() => {
+    const values = [...assigneeSelection.userIds];
+    if (assigneeSelection.includeUnassigned) values.push(UNASSIGNED_ASSIGNEE_FILTER);
+    return new Set(values);
+  }, [assigneeSelection]);
 
   const currentUserAdminWorkspaceCount = useMemo(() => {
     if (!user) return 0;
@@ -88,6 +151,18 @@ const CalendarSubscriptionsView: React.FC = () => {
         .map((member) => member.workspaceId)
     ).size;
   }, [members, user]);
+
+  const loadedSelectedWorkspaceMemberCount = useMemo(() => {
+    const selectedWorkspaceIds = new Set(filters.workspace_ids);
+    return new Set(
+      members
+        .filter((member) => selectedWorkspaceIds.has(member.workspaceId))
+        .map((member) => member.workspaceId)
+    ).size;
+  }, [filters.workspace_ids, members]);
+
+  const hasLoadedSelectedWorkspaceMembers = selectedWorkspaceCount > 0
+    && loadedSelectedWorkspaceMemberCount >= selectedWorkspaceCount;
 
   const canAssignOthers = selectedWorkspaceCount > 0 && currentUserAdminWorkspaceCount >= selectedWorkspaceCount;
 
@@ -158,6 +233,7 @@ const CalendarSubscriptionsView: React.FC = () => {
     }
 
     let cancelled = false;
+    setMembers([]);
     calendarSubscriptionService.listWorkspaceMembers(filters.workspace_ids)
       .then((nextMembers) => {
         if (!cancelled) setMembers(nextMembers);
@@ -169,10 +245,14 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [selectedWorkspaceKey, filters.workspace_ids]);
 
   useEffect(() => {
-    if (!canAssignOthers && filters.assignee.type === 'user') {
+    if (!user || canAssignOthers || !hasLoadedSelectedWorkspaceMembers) return;
+    const selection = getAssigneeSelection(filters.assignee, user.uid);
+    const hasRestrictedSelection = selection.includeUnassigned
+      || selection.userIds.some((userId) => userId !== user.uid);
+    if (hasRestrictedSelection) {
       setFilters((current) => ({ ...current, assignee: { type: 'me' } }));
     }
-  }, [canAssignOthers, filters.assignee.type]);
+  }, [canAssignOthers, filters.assignee, hasLoadedSelectedWorkspaceMembers, user]);
 
   const resetForm = () => {
     setName('我的工作行事曆');
@@ -185,13 +265,52 @@ const CalendarSubscriptionsView: React.FC = () => {
     toast.success('已複製訂閱連結');
   };
 
+  const setAssigneeSelection = (nextSelection: AssigneeSelection) => {
+    setFilters((current) => ({
+      ...current,
+      assignee: toSelectedAssigneeFilter(nextSelection),
+    }));
+  };
+
+  const toggleAssigneeOption = (optionId: string) => {
+    setFilters((current) => {
+      const currentSelection = getAssigneeSelection(current.assignee, user?.uid);
+      if (optionId === UNASSIGNED_ASSIGNEE_FILTER) {
+        return {
+          ...current,
+          assignee: toSelectedAssigneeFilter({
+            ...currentSelection,
+            includeUnassigned: !currentSelection.includeUnassigned,
+          }),
+        };
+      }
+
+      const userIds = currentSelection.userIds.includes(optionId)
+        ? currentSelection.userIds.filter((userId) => userId !== optionId)
+        : [...currentSelection.userIds, optionId];
+      return {
+        ...current,
+        assignee: toSelectedAssigneeFilter({
+          ...currentSelection,
+          userIds,
+        }),
+      };
+    });
+  };
+
   const validate = () => {
     if (!user) return '請先登入';
     if (!name.trim()) return '請輸入訂閱名稱';
     if (filters.workspace_ids.length === 0) return '請至少選擇一個工作區';
     if (filters.date_types.length === 0) return '請至少選擇一種日期類型';
-    if (filters.assignee.type === 'user' && !filters.assignee.user_id) return '請選擇指定負責人';
-    if (filters.assignee.type === 'user' && !canAssignOthers) return '只有管理角色可以訂閱他人的任務';
+    if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
+      return '請至少選擇一個負責人或未指派';
+    }
+    const hasRestrictedSelection = assigneeSelection.includeUnassigned
+      || assigneeSelection.userIds.some((userId) => userId !== user.uid);
+    if (hasRestrictedSelection && !canAssignOthers) {
+      return '只有管理角色可以訂閱未指派或他人的任務';
+    }
     return null;
   };
 
@@ -260,7 +379,7 @@ const CalendarSubscriptionsView: React.FC = () => {
       <div className="h-full overflow-auto bg-slate-50 p-6">
         <div className="mx-auto max-w-3xl">
           <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            自訂行事曆訂閱需要 Supabase 後端，因為 `.ics` 訂閱連結必須由 Edge Function 對外提供。
+            自訂行事曆訂閱需要 Supabase 後端，因為 `.ics` 訂閱連結必須由雲端函式對外提供。
           </div>
         </div>
       </div>
@@ -274,7 +393,7 @@ const CalendarSubscriptionsView: React.FC = () => {
           <div>
             <h2 className="text-xl font-bold text-slate-900">自訂行事曆訂閱</h2>
             <p className="mt-1 text-sm text-slate-500">
-              產生只讀 iCal 連結，依工作區、負責人與日期類型輸出任務事件。
+              產生只讀行事曆訂閱連結，依工作區、負責人與日期類型輸出任務事件；外部行事曆會依各自週期抓取，更新不會即時出現。
             </p>
           </div>
           <button
@@ -321,50 +440,68 @@ const CalendarSubscriptionsView: React.FC = () => {
             </div>
 
             <div className="mt-4">
-              <div className="mb-2 text-xs font-bold text-slate-500">負責人</div>
-              <div className="flex flex-col gap-2 text-sm text-slate-700">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={filters.assignee.type === 'me'}
-                    onChange={() => setFilters((current) => ({ ...current, assignee: { type: 'me' } }))}
-                  />
-                  <span>我</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    disabled={!canAssignOthers}
-                    checked={filters.assignee.type === 'user'}
-                    onChange={() => setFilters((current) => ({
-                      ...current,
-                      assignee: { type: 'user', user_id: assignableMembers[0]?.userId ?? '' },
-                    }))}
-                  />
-                  <span className={!canAssignOthers ? 'text-slate-400' : ''}>指定某人</span>
-                </label>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-xs font-bold text-slate-500">負責人</div>
+                {(assigneeSelection.userIds.length > 0 || assigneeSelection.includeUnassigned) && (
+                  <button
+                    type="button"
+                    onClick={() => setAssigneeSelection({ userIds: [], includeUnassigned: false })}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-700"
+                  >
+                    清除
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!canAssignOthers}
+                  onClick={() => toggleAssigneeOption(UNASSIGNED_ASSIGNEE_FILTER)}
+                  className={`inline-flex items-center gap-1.5 border bg-white px-2.5 py-1 text-xs font-bold shadow-sm transition-colors ${
+                    selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER)
+                      ? 'border-primary text-primary ring-2 ring-primary/20'
+                      : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                  } disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300`}
+                  aria-pressed={selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER)}
+                >
+                  <UserRound size={13} />
+                  未指派
+                </button>
+                {assignableMembers.length === 0 ? (
+                  <div className="inline-flex items-center gap-1.5 border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-400 shadow-sm">
+                    <UserRound size={13} />
+                    {selectedWorkspaceCount === 0 ? '請先選擇工作區' : '尚無可選負責人'}
+                  </div>
+                ) : (
+                  assignableMembers.map((member) => {
+                    const isCurrentUser = member.userId === user?.uid;
+                    const isDisabled = !isCurrentUser && !canAssignOthers;
+                    const isActive = selectedAssigneeSet.has(member.userId);
+                    return (
+                      <button
+                        key={member.userId}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => toggleAssigneeOption(member.userId)}
+                        className={`inline-flex max-w-full items-center gap-1.5 border bg-white px-2.5 py-1 text-xs font-bold shadow-sm transition-colors ${
+                          isActive
+                            ? 'border-primary text-primary ring-2 ring-primary/20'
+                            : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                        } disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300`}
+                        aria-pressed={isActive}
+                      >
+                        <UserRound size={13} />
+                        <span className="max-w-[10rem] truncate">{getMemberLabel(member)}</span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
               {!canAssignOthers && selectedWorkspaceCount > 0 && (
                 <div className="mt-2 flex gap-2 text-xs text-amber-700">
                   <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-                  指定某人需要在已選工作區具備 owner、admin 或 project_manager 權限。
+                  你目前只能訂閱自己的任務；未指派或他人任務需要在已選工作區具備擁有者、管理員或專案管理者權限。
                 </div>
-              )}
-              {filters.assignee.type === 'user' && (
-                <select
-                  value={filters.assignee.user_id}
-                  onChange={(event) => setFilters((current) => ({
-                    ...current,
-                    assignee: { type: 'user', user_id: event.target.value },
-                  }))}
-                  className="mt-2 h-10 w-full border border-slate-200 bg-white px-3 text-sm outline-none focus:border-primary"
-                >
-                  {assignableMembers.map((member) => (
-                    <option key={member.userId} value={member.userId}>
-                      {getMemberLabel(member)}
-                    </option>
-                  ))}
-                </select>
               )}
             </div>
 
@@ -443,7 +580,7 @@ const CalendarSubscriptionsView: React.FC = () => {
                             </span>
                           </div>
                           <div className="mt-1 text-sm text-slate-500">
-                            {describeFilters(subscription, workspaceNameById, memberNameById)}
+                            {describeFilters(subscription, workspaceNameById, memberNameById, user?.uid)}
                           </div>
                           <div className="mt-1 text-xs text-slate-400">
                             最後同步：{formatDateTime(subscription.lastAccessedAt)}

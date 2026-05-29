@@ -4,6 +4,7 @@ import { Trash2, RotateCcw, ShieldAlert } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import dayjs from 'dayjs';
 
 const RecycleBinView = () => {
@@ -11,6 +12,7 @@ const RecycleBinView = () => {
     const board = getActiveBoard();
     const updateNode = useWbsStore(s => s.updateNode);
     const removeNode = useWbsStore(s => s.removeNode);
+    const { canEditTask, canDeleteTask } = useBoardPermissions();
     // get nodes from WBS store
     const nodes = useWbsStore(s => s.nodes);
 
@@ -25,12 +27,15 @@ const RecycleBinView = () => {
 
     // 依據封存時間排序 (新的在前)
     archivedItems.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const canEmptyTrash = canDeleteTask && archivedItems.length > 0;
 
     const handleRestore = (item: any) => {
+        if (!canEditTask) return;
         updateNode(item.id, { isArchived: false, updatedAt: Date.now() });
     };
 
     const handlePermanentDelete = async (item: any) => {
+        if (!canDeleteTask) return;
         const typeName = '任務';
         const confirmMsg = `確定要永久刪除${typeName}「${item.title}」嗎？此動作無法復原！`;
         const confirmed = await useDialogStore.getState().showConfirm(confirmMsg);
@@ -41,7 +46,7 @@ const RecycleBinView = () => {
     };
 
     const handleEmptyTrash = async () => {
-        if (archivedItems.length === 0) return;
+        if (!canEmptyTrash) return;
         const confirmed = await useDialogStore.getState().showConfirm('您確定要「清空」資源回收桶嗎？所有項目都會被永久刪除且無法復原！');
         
         if (confirmed) {
@@ -68,8 +73,8 @@ const RecycleBinView = () => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={handleEmptyTrash}
-                        disabled={archivedItems.length === 0}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${archivedItems.length > 0 ? 'bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-transparent'}`}
+                        disabled={!canEmptyTrash}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${canEmptyTrash ? 'bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-transparent'}`}
                     >
                         <ShieldAlert size={16} />
                         清空回收桶
@@ -127,14 +132,16 @@ const RecycleBinView = () => {
                                         <div className="w-24 flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleRestore(item)}
-                                                className="p-1.5 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 text-slate-400 rounded transition-all shadow-sm"
+                                                disabled={!canEditTask}
+                                                className={`p-1.5 bg-white border border-slate-200 text-slate-400 rounded transition-all shadow-sm ${canEditTask ? 'hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600' : 'cursor-not-allowed opacity-50'}`}
                                                 title="還原至原處"
                                             >
                                                 <RotateCcw size={14} />
                                             </button>
                                             <button
                                                 onClick={() => handlePermanentDelete(item)}
-                                                className="p-1.5 bg-white border border-slate-200 hover:bg-rose-500 hover:border-rose-500 hover:text-white text-slate-400 rounded transition-all shadow-sm"
+                                                disabled={!canDeleteTask}
+                                                className={`p-1.5 bg-white border border-slate-200 text-slate-400 rounded transition-all shadow-sm ${canDeleteTask ? 'hover:bg-rose-500 hover:border-rose-500 hover:text-white' : 'cursor-not-allowed opacity-50'}`}
                                                 title="永久刪除"
                                             >
                                                 <Trash2 size={14} />

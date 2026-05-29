@@ -112,6 +112,70 @@ export const isSupabaseLocalPasswordAuth = () =>
 export const isLocalTestAuth = () => isLocalTestBackend;
 
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
+export const LOCAL_TEST_SELECTED_ACCOUNT_KEY = 'projed-local-test.selected-account';
+
+export type LocalTestAccount = FirestoreUser & {
+  id: string;
+  role: 'owner' | 'admin' | 'project_manager' | 'member' | 'viewer';
+  password: string;
+};
+
+export const LOCAL_TEST_ACCOUNTS: LocalTestAccount[] = [
+  {
+    id: 'local-test-user',
+    uid: 'local-test-user',
+    role: 'owner',
+    email: 'test@projed.local',
+    displayName: '本機測試擁有者',
+    password: 'local-test',
+    createdAt: 1704067200000,
+  },
+  {
+    id: 'local-test-admin',
+    uid: 'local-test-admin',
+    role: 'admin',
+    email: 'admin@projed.local',
+    displayName: '本機測試管理員',
+    password: 'local-test',
+    createdAt: 1704067200000,
+  },
+  {
+    id: 'local-test-pm',
+    uid: 'local-test-pm',
+    role: 'project_manager',
+    email: 'pm@projed.local',
+    displayName: '本機測試專案管理者',
+    password: 'local-test',
+    createdAt: 1704067200000,
+  },
+  {
+    id: 'local-test-member',
+    uid: 'local-test-member',
+    role: 'member',
+    email: 'member@projed.local',
+    displayName: '本機測試成員',
+    password: 'local-test',
+    createdAt: 1704067200000,
+  },
+  {
+    id: 'local-test-viewer',
+    uid: 'local-test-viewer',
+    role: 'viewer',
+    email: 'viewer@projed.local',
+    displayName: '本機測試檢視者',
+    password: 'local-test',
+    createdAt: 1704067200000,
+  },
+  {
+    id: 'local-test-analyst',
+    uid: 'local-test-analyst',
+    role: 'member',
+    email: 'analyst@projed.local',
+    displayName: '本機測試分析員',
+    password: 'local-test',
+    createdAt: 1704067200000,
+  },
+];
 
 const localTestUser: FirestoreUser = {
   uid: 'local-test-user',
@@ -120,9 +184,22 @@ const localTestUser: FirestoreUser = {
   createdAt: 1704067200000,
 };
 
+const getSelectedLocalTestUser = (): FirestoreUser => {
+  const selectedId = localStorage.getItem(LOCAL_TEST_SELECTED_ACCOUNT_KEY);
+  const selected = LOCAL_TEST_ACCOUNTS.find(account => account.id === selectedId);
+  if (!selected) return localTestUser;
+  return {
+    uid: selected.uid,
+    email: selected.email,
+    displayName: selected.displayName,
+    createdAt: selected.createdAt,
+  };
+};
+
 const signInWithLocalTestUser = async (): Promise<FirestoreUser> => {
-  localStorage.setItem(LOCAL_TEST_SESSION_KEY, JSON.stringify(localTestUser));
-  return localTestUser;
+  const selectedUser = getSelectedLocalTestUser();
+  localStorage.setItem(LOCAL_TEST_SESSION_KEY, JSON.stringify(selectedUser));
+  return selectedUser;
 };
 
 const getLocalTestSession = (): FirestoreUser | null => {
@@ -137,12 +214,12 @@ const getLocalTestSession = (): FirestoreUser | null => {
 const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
   const { email, password } = getSupabaseSeedCredentials();
   if (!email || !password) {
-    throw new Error('Local Supabase password auth is enabled, but VITE_SUPABASE_TEST_EMAIL or VITE_SUPABASE_TEST_PASSWORD is missing.');
+    throw new Error('本機 Supabase 密碼登入已啟用，但缺少 VITE_SUPABASE_TEST_EMAIL 或 VITE_SUPABASE_TEST_PASSWORD。');
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw new Error(error.message);
-  if (!data.user) throw new Error('Local Supabase sign-in did not return a user.');
+  if (!data.user) throw new Error('本機 Supabase 登入未回傳使用者。');
   return ensureSupabaseProfile(data.user);
 };
 
@@ -153,7 +230,7 @@ export const authService = {
     }
 
     if (isEmbeddedAuthBlocked()) {
-      throw new Error('Google sign-in is blocked in this embedded browser. Open ProJED in Chrome or Safari.');
+      throw new Error('此內嵌瀏覽器無法使用 Google 登入。請改用 Chrome 或 Safari 開啟 ProJED。');
     }
 
     if (isSupabaseBackend) {
@@ -255,7 +332,7 @@ export const authService = {
         ensureSupabaseProfile(session.user)
           .then(callback)
           .catch(error => {
-            console.error('[authService] Supabase profile sync failed:', error);
+            console.error('[authService] Supabase 個人資料同步失敗:', error);
             callback(mapSupabaseUser(session.user));
           });
       });

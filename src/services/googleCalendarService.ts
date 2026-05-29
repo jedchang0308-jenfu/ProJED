@@ -25,8 +25,7 @@ import type {
   SyncableItem,
   GoogleCalendarEvent,
   SyncResult,
-  TaskStatus,
-  Workspace
+  TaskStatus
 } from '../types';
 
 // ── 常數 ─────────────────────────────────────────────────
@@ -34,6 +33,15 @@ const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const EVENT_ID_CACHE_KEY = 'google_calendar_event_id_cache';
+
+type GoogleCalendarListItem = {
+  id: string;
+  summary?: string;
+  description?: string;
+  start?: { date?: string };
+  end?: { date?: string };
+  colorId?: string;
+};
 
 // ── Token 管理 ───────────────────────────────────────────
 
@@ -114,7 +122,17 @@ function clearEventIdCache(): void {
   localStorage.removeItem(EVENT_ID_CACHE_KEY);
 }
 
-function flattenAllItems(workspaces: Workspace[]): SyncableItem[] {
+function getProjedIdFromDescription(description?: string): string | null {
+  const match = description?.match(/(?:^|\n)PROJED_ID:\s*(\S+)/);
+  return match?.[1] || null;
+}
+
+function isCalendarNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('(404)') || message.includes('(410)') || /not found/i.test(message);
+}
+
+function flattenAllItems(): SyncableItem[] {
   const items: SyncableItem[] = [];
   try {
       // NOTE: useWbsStore is imported at the top of the file via TS setup
@@ -150,7 +168,7 @@ async function apiCall<T = unknown>(
   body?: object
 ): Promise<T> {
   const token = tokenManager.token;
-  if (!token) throw new Error('未授權：缺少 Google Calendar access token');
+  if (!token) throw new Error('未授權：缺少 Google 行事曆存取權杖');
 
   const url = `${CALENDAR_API_BASE}${endpoint}`;
   const options: RequestInit = {
@@ -170,7 +188,7 @@ async function apiCall<T = unknown>(
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
     throw new Error(
-      `Google Calendar API 錯誤 (${resp.status}): ${err?.error?.message || JSON.stringify(err)}`
+      `Google 行事曆 API 錯誤 (${resp.status}): ${err?.error?.message || JSON.stringify(err)}`
     );
   }
 
@@ -293,21 +311,21 @@ export const googleCalendarService = {
   /**
    * syncAll — 全量差異同步
    */
-  async syncAll(workspaces: Workspace[]): Promise<SyncResult | null> {
+  async syncAll(): Promise<SyncResult | null> {
     if (!this.isTokenValid()) {
-      throw new Error('未授權：請先連接 Google Calendar');
+      throw new Error('未授權：請先連接 Google 行事曆');
     }
 
-    const items = flattenAllItems(workspaces);
+    const items = flattenAllItems();
     console.log(`📋 共有 ${items.length} 個項目需要同步`);
     
-    let eventIdCache = loadEventIdCache();
+    const eventIdCache = loadEventIdCache();
     const calId = await this.getOrCreateCalendar();
     const encodedCalId = encodeURIComponent(calId);
 
     // 1. 讀取 Google Calendar 上的所有事件
     console.log('📥 正在從 Google Calendar 讀取事件...');
-    const eventsResp = await apiCall<{ items?: Array<{ id: string; summary: string; description?: string; start?: { date?: string }; end?: { date?: string }; colorId?: string }> }>(
+    const eventsResp = await apiCall<{ items?: GoogleCalendarListItem[] }>(
       `/calendars/${encodedCalId}/events?maxResults=2500&singleEvents=true`
     );
     const googleEvents = eventsResp.items || [];
@@ -316,11 +334,9 @@ export const googleCalendarService = {
     // 建立 ProJED ID → Google Event 的對照表
     const googleEventMap = new Map<string, typeof googleEvents[0]>();
     googleEvents.forEach(e => {
-      if (e.description?.includes('PROJED_ID:')) {
-        const match = e.description.match(/PROJED_ID:\s*(\S+)/);
-        if (match?.[1]) {
-          googleEventMap.set(match[1], e);
-        }
+      const projedId = getProjedIdFromDescription(e.description);
+      if (projedId) {
+        googleEventMap.set(projedId, e);
       }
     });
 
@@ -415,11 +431,11 @@ export const googleCalendarService = {
         }
       }
 
-      const eventsResp = await apiCall<{ items?: Array<{ id: string; description?: string; summary: string; start?: { date?: string }; end?: { date?: string } }> }>(
+      const eventsResp = await apiCall<{ items?: GoogleCalendarListItem[] }>(
         `/calendars/${encodedCalId}/events?maxResults=2500&singleEvents=true`
       );
       const existingEvent = (eventsResp.items || []).find(
-        e => e.description?.includes(`PROJED_ID: ${item.id}`)
+        e => getProjedIdFromDescription(e.description) === item.id
       );
 
       if (existingEvent) {
@@ -450,9 +466,58 @@ export const googleCalendarService = {
     }
   },
 
+  async deleteItem(itemId: string): Promise<boolean> {
+    if (!this.isTokenValid()) return false;
+
+    const eventIdCache = loadEventIdCache();
+    const cachedEventId = eventIdCache[itemId];
+    const calId = await this.getOrCreateCalendar();
+    const encodedCalId = encodeURIComponent(calId);
+
+    const deleteEventById = async (eventId: string): Promise<boolean> => {
+      try {
+        await apiCall(`/calendars/${encodedCalId}/events/${eventId}`, 'DELETE');
+        delete eventIdCache[itemId];
+        saveEventIdCache(eventIdCache);
+        return true;
+      } catch (error) {
+        if (isCalendarNotFoundError(error)) {
+          delete eventIdCache[itemId];
+          saveEventIdCache(eventIdCache);
+          return false;
+        }
+        throw error;
+      }
+    };
+
+    try {
+      if (cachedEventId && await deleteEventById(cachedEventId)) {
+        return true;
+      }
+
+      const eventsResp = await apiCall<{ items?: GoogleCalendarListItem[] }>(
+        `/calendars/${encodedCalId}/events?maxResults=2500&singleEvents=true`
+      );
+      const existingEvent = (eventsResp.items || []).find(
+        e => getProjedIdFromDescription(e.description) === itemId
+      );
+
+      if (!existingEvent) {
+        delete eventIdCache[itemId];
+        saveEventIdCache(eventIdCache);
+        return false;
+      }
+
+      return deleteEventById(existingEvent.id);
+    } catch (error) {
+      console.warn('[Google Calendar] Failed to delete synced ProJED event:', error);
+      return false;
+    }
+  },
+
   async clearAll(): Promise<void> {
     if (!this.isTokenValid()) {
-      throw new Error('請先連接 Google Calendar');
+      throw new Error('請先連接 Google 行事曆');
     }
     console.warn('⚠️ clearAll 功能已停用，因為目前直接使用主日曆，為保護使用者個人行程不被誤刪。');
     clearEventIdCache();

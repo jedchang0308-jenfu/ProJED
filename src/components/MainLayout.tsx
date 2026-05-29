@@ -31,7 +31,7 @@ const MainLayout = ({ children }) => {
     
     const isSelectingMode = !!dependencySelection;
 
-    // ── Google Calendar 同步狀態 ──
+    // ── Google 行事曆同步狀態 ──
     const {
         isConnected, isSyncing, lastSyncAt, error,
         connect, disconnect, syncAll
@@ -218,18 +218,18 @@ const MainLayout = ({ children }) => {
                     </div>
                 </div>
 
-                {/* ── Google Calendar 同步與 AI 助手 控制區 ── */}
+                {/* ── Google 行事曆同步與智慧助理控制區 ── */}
                 <div className="flex items-center gap-1 sm:gap-2">
-                    {/* AI 助手按鈕 */}
+                    {/* 智慧助理按鈕 */}
                     <button
                         onClick={toggleRagPanel}
                         className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
                             isRagOpen ? 'border-blue-400 text-blue-600 bg-blue-50' : 'hover:border-blue-400 hover:text-blue-600'
                         }`}
-                        title="專案 AI 助手 (搜尋知識庫)"
+                        title="專案智慧助理（搜尋知識庫）"
                     >
                         <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
-                        <span className="hidden lg:inline">AI 助手</span>
+                        <span className="hidden lg:inline">智慧助理</span>
                     </button>
 
                     {/* 同步按鈕：三種狀態（未連接 / 已連接 / 同步中） */}
@@ -248,7 +248,7 @@ const MainLayout = ({ children }) => {
                                 ? '同步中...'
                                 : isConnected
                                     ? `點擊同步 | 上次: ${relativeTime || '尚未同步'}`
-                                    : '點擊連接 Google Calendar'
+                                    : '點擊連接 Google 行事曆'
                         }
                     >
                         {/* 圖示：同步中旋轉、已連接勾勾、未連接一般 */}
@@ -281,7 +281,7 @@ const MainLayout = ({ children }) => {
                         <button
                             onClick={disconnect}
                             className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded text-slate-400 transition-all"
-                            title="斷開 Google Calendar 連接"
+                            title="斷開 Google 行事曆連接"
                         >
                             <Unplug size={14} />
                         </button>

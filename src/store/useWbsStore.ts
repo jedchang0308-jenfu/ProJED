@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import type { TaskNode, KanbanViewConfig, TaskStatus, Dependency } from '../types';
-import { nodeService, dependencyService, workspaceService, boardService, tagService } from '../services/dataBackend';
+import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
+import { nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import { useTagStore } from './useTagStore';
@@ -178,6 +178,166 @@ const hasIncomingDateDependency = (
     dep.toSide === side
   );
 
+type TaskActivityDescriptor = {
+  eventType: ActivityEventType;
+  payload: Record<string, unknown>;
+};
+
+const logActivityBestEffort = (event: Parameters<typeof eventLogService.logActivity>[0]) => {
+  eventLogService.logActivity(event).catch(error => {
+    console.warn('[activityLog] Failed to write collaboration activity event:', error);
+  });
+};
+
+const deleteCalendarEventBestEffort = (nodeId: string) => {
+  import('../services/googleCalendarService')
+    .then(({ googleCalendarService }) => googleCalendarService.deleteItem(nodeId))
+    .catch(error => {
+      console.warn('[calendarSync] Failed to delete synced task event:', error);
+    });
+};
+
+const logTaskActivity = (
+  node: TaskNode,
+  eventType: ActivityEventType,
+  payload: Record<string, unknown>
+) => {
+  if (!node.workspaceId || !node.boardId) return;
+  logActivityBestEffort({
+    workspaceId: node.workspaceId,
+    boardId: node.boardId,
+    eventType,
+    entityTable: 'wbs_items',
+    entityId: node.id,
+    payload: {
+      taskId: node.id,
+      taskTitle: node.title,
+      ...payload,
+    },
+  });
+};
+
+const logDependencyActivity = (
+  boardNode: TaskNode | undefined,
+  dependency: Dependency,
+  eventType: ActivityEventType,
+  payload: Record<string, unknown>
+) => {
+  if (!boardNode?.workspaceId || !boardNode.boardId) return;
+  logActivityBestEffort({
+    workspaceId: boardNode.workspaceId,
+    boardId: boardNode.boardId,
+    eventType,
+    entityTable: 'wbs_dependencies',
+    entityId: dependency.id,
+    payload: {
+      dependencyId: dependency.id,
+      fromId: dependency.fromId,
+      fromSide: dependency.fromSide,
+      toId: dependency.toId,
+      toSide: dependency.toSide,
+      offset: dependency.offset ?? 0,
+      ...payload,
+    },
+  });
+};
+
+const buildTaskUpdateActivities = (
+  oldNode: TaskNode,
+  newNode: TaskNode,
+  updates: Partial<TaskNode>
+): TaskActivityDescriptor[] => {
+  const events: TaskActivityDescriptor[] = [];
+
+  if ('assigneeId' in updates) {
+    events.push({
+      eventType: 'task_assigned',
+      payload: {
+        before: { assigneeId: oldNode.assigneeId ?? null },
+        after: { assigneeId: newNode.assigneeId ?? null },
+      },
+    });
+  }
+
+  if ('collaboratorIds' in updates) {
+    events.push({
+      eventType: 'task_collaborators_changed',
+      payload: {
+        before: { collaboratorIds: oldNode.collaboratorIds ?? [] },
+        after: { collaboratorIds: newNode.collaboratorIds ?? [] },
+      },
+    });
+  }
+
+  if ('status' in updates) {
+    events.push({
+      eventType: 'task_status_changed',
+      payload: {
+        before: { status: oldNode.status },
+        after: { status: newNode.status },
+      },
+    });
+  }
+
+  if ('parentId' in updates || 'order' in updates || 'kanbanStageId' in updates) {
+    events.push({
+      eventType: 'task_moved',
+      payload: {
+        before: {
+          parentId: oldNode.parentId,
+          order: oldNode.order,
+          kanbanStageId: oldNode.kanbanStageId ?? null,
+        },
+        after: {
+          parentId: newNode.parentId,
+          order: newNode.order,
+          kanbanStageId: newNode.kanbanStageId ?? null,
+        },
+      },
+    });
+  }
+
+  if ('startDate' in updates || 'endDate' in updates || 'isDurationLocked' in updates) {
+    events.push({
+      eventType: 'task_dates_changed',
+      payload: {
+        before: {
+          startDate: oldNode.startDate ?? null,
+          endDate: oldNode.endDate ?? null,
+          isDurationLocked: oldNode.isDurationLocked ?? false,
+        },
+        after: {
+          startDate: newNode.startDate ?? null,
+          endDate: newNode.endDate ?? null,
+          isDurationLocked: newNode.isDurationLocked ?? false,
+        },
+      },
+    });
+  }
+
+  if ('isArchived' in updates) {
+    events.push({
+      eventType: newNode.isArchived ? 'task_archived' : 'task_restored',
+      payload: {
+        before: { isArchived: oldNode.isArchived ?? false },
+        after: { isArchived: newNode.isArchived ?? false },
+      },
+    });
+  }
+
+  if ('tagIds' in updates) {
+    events.push({
+      eventType: 'task_tags_changed',
+      payload: {
+        before: { tagIds: oldNode.tagIds ?? [] },
+        after: { tagIds: newNode.tagIds ?? [] },
+      },
+    });
+  }
+
+  return events;
+};
+
 export const useWbsStore = create<WbsStore>((set, get) => ({
   nodes: {},
   boardNodesIndex: {},
@@ -241,6 +401,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).catch(console.error);
     }
 
+    logTaskActivity(normalizedNode, 'task_created', {
+        after: {
+            parentId: normalizedNode.parentId,
+            status: normalizedNode.status,
+            assigneeId: normalizedNode.assigneeId ?? null,
+            collaboratorIds: normalizedNode.collaboratorIds ?? [],
+            startDate: normalizedNode.startDate ?? null,
+            endDate: normalizedNode.endDate ?? null,
+            order: normalizedNode.order,
+        },
+    });
+
     // 紀錄上一步
     useUndoStore.getState().pushUndo({
         label: '新增任務',
@@ -291,6 +463,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     // 非同步寫入 Firestore
     if (newNode.workspaceId && newNode.boardId) {
         nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
+    }
+
+    buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
+        logTaskActivity(newNode, event.eventType, event.payload);
+    });
+
+    if (normalizedUpdates.isArchived === true && oldNode.isArchived !== true) {
+        deleteCalendarEventBestEffort(id);
     }
 
     if (
@@ -485,6 +665,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       if (node && node.workspaceId && node.boardId) {
           dependencyService.set(node.workspaceId, node.boardId, finalDep).catch(console.error);
       }
+      logDependencyActivity(node, finalDep, 'dependency_created', {
+          after: finalDep,
+      });
 
       useUndoStore.getState().pushUndo({
           label: '新增連線',
@@ -504,6 +687,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       if (node && node.workspaceId && node.boardId) {
           dependencyService.delete(node.workspaceId, node.boardId, depId).catch(console.error);
       }
+      logDependencyActivity(node, dep, 'dependency_deleted', {
+          before: dep,
+      });
 
       useUndoStore.getState().pushUndo({
           label: '刪除連線',
@@ -533,6 +719,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       if (node && node.workspaceId && node.boardId) {
           dependencyService.update(node.workspaceId, node.boardId, depId, updates).catch(console.error);
       }
+      logDependencyActivity(node, newDep, 'dependency_updated', {
+          before: dep,
+          after: newDep,
+      });
 
       // 計算 oldValues
       const oldValues: Partial<Dependency> = {};
@@ -666,6 +856,34 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       for (const [key, batch] of Object.entries(groups)) {
           const [wsId, bId] = key.split('|');
           nodeService.batchUpdate(wsId, bId, batch).catch(console.error);
+      }
+
+      for (const { id, data } of updates) {
+          const beforeNode = state.nodes[id];
+          const afterNode = nextNodes[id];
+          if (!beforeNode || !afterNode) continue;
+
+          if ('startDate' in data || 'endDate' in data) {
+              logTaskActivity(afterNode, 'task_dates_changed', {
+                  source: 'dependency_schedule',
+                  before: {
+                      startDate: beforeNode.startDate ?? null,
+                      endDate: beforeNode.endDate ?? null,
+                  },
+                  after: {
+                      startDate: afterNode.startDate ?? null,
+                      endDate: afterNode.endDate ?? null,
+                  },
+              });
+          }
+
+          if ('status' in data) {
+              logTaskActivity(afterNode, 'task_status_changed', {
+                  source: 'dependency_schedule',
+                  before: { status: beforeNode.status },
+                  after: { status: afterNode.status },
+              });
+          }
       }
   },
 
@@ -887,7 +1105,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
               return;
           }
 
-          alert('無效的備份檔案格式。只接受 wbs-1.0 或 2.0 JSON 格式。');
+          alert('無效的備份檔案格式。只接受 wbs-1.0 或 2.0 資料格式。');
       } catch (e) {
           console.error('Import error:', e);
           alert('解析備份檔案時發生錯誤。');

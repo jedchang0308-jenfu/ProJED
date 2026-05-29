@@ -31,6 +31,7 @@ const getDefaultFilters = () => ({
     showStartDate: true,
     showTags: true,
     dueWithinDays: null,
+    selectedAssigneeIds: [],
 });
 
 const getStoredFilters = () => {
@@ -154,7 +155,8 @@ const useBoardStore = create<BoardStore>()(
                 showDependencies: state.showDependencies,
                 showStartDate: state.showStartDate,
                 showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays
+                dueWithinDays: state.dueWithinDays,
+                selectedAssigneeIds: state.selectedAssigneeIds
             }));
             return { statusFilters: newFilters };
         }),
@@ -167,7 +169,8 @@ const useBoardStore = create<BoardStore>()(
                 showDependencies: newDeps,
                 showStartDate: state.showStartDate,
                 showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays
+                dueWithinDays: state.dueWithinDays,
+                selectedAssigneeIds: state.selectedAssigneeIds
             }));
             return { showDependencies: newDeps };
         }),
@@ -178,7 +181,8 @@ const useBoardStore = create<BoardStore>()(
                 showDependencies: state.showDependencies,
                 showStartDate: newStart,
                 showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays
+                dueWithinDays: state.dueWithinDays,
+                selectedAssigneeIds: state.selectedAssigneeIds
             }));
             return { showStartDate: newStart };
         }),
@@ -189,7 +193,8 @@ const useBoardStore = create<BoardStore>()(
                 showDependencies: state.showDependencies,
                 showStartDate: state.showStartDate,
                 showTags: newTags,
-                dueWithinDays: state.dueWithinDays
+                dueWithinDays: state.dueWithinDays,
+                selectedAssigneeIds: state.selectedAssigneeIds
             }));
             return { showTags: newTags };
         }),
@@ -200,9 +205,36 @@ const useBoardStore = create<BoardStore>()(
                 showDependencies: state.showDependencies,
                 showStartDate: state.showStartDate,
                 showTags: state.showTags,
-                dueWithinDays: nextDays
+                dueWithinDays: nextDays,
+                selectedAssigneeIds: state.selectedAssigneeIds
             }));
             return { dueWithinDays: nextDays };
+        }),
+        toggleAssigneeFilter: (assigneeId) => set((state) => {
+            const currentIds = Array.isArray(state.selectedAssigneeIds) ? state.selectedAssigneeIds : [];
+            const nextAssigneeIds = currentIds.includes(assigneeId)
+                ? currentIds.filter(id => id !== assigneeId)
+                : [...currentIds, assigneeId];
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: state.statusFilters,
+                showDependencies: state.showDependencies,
+                showStartDate: state.showStartDate,
+                showTags: state.showTags,
+                dueWithinDays: state.dueWithinDays,
+                selectedAssigneeIds: nextAssigneeIds
+            }));
+            return { selectedAssigneeIds: nextAssigneeIds };
+        }),
+        clearAssigneeFilters: () => set((state) => {
+            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
+                statusFilters: state.statusFilters,
+                showDependencies: state.showDependencies,
+                showStartDate: state.showStartDate,
+                showTags: state.showTags,
+                dueWithinDays: state.dueWithinDays,
+                selectedAssigneeIds: []
+            }));
+            return { selectedAssigneeIds: [] };
         }),
 
         // ===== Navigation =====

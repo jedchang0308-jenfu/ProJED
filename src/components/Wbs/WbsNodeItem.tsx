@@ -11,9 +11,11 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import dayjs from 'dayjs';
 import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
+import { useMemberStore } from '../../store/useMemberStore';
+import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
-import { matchesDueDateFilter } from '../../utils/taskFilters';
+import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -36,6 +38,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
+  const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   const [localTitle, setLocalTitle] = useState(node?.title || '');
   const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
@@ -44,6 +47,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   // DnD Sortable Hook
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id: nodeId,
+      disabled: !canMoveTask,
       data: { item: node }
   });
 
@@ -86,8 +90,20 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const tags = useTagStore(s => s.tags);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
+  const boardMembers = useMemberStore(s => s.boardMembers);
+  const membersLoading = useMemberStore(s => s.loading);
+  const assigneeOptions = React.useMemo(
+    () => boardMembers.map(member => ({
+      id: member.userId,
+      label: member.profile?.displayName || member.profile?.email || member.userId,
+      role: member.role,
+    })),
+    [boardMembers]
+  );
+  const hasCurrentAssignee = !node?.assigneeId || assigneeOptions.some(option => option.id === node.assigneeId);
   
   // ✅ 使用 Stable Selector 訂閱「子節點 ID 陣列」，避免 Zustand 無限 Render Loop
   const childrenIds = useWbsStore(s => s.parentNodesIndex[nodeId]); 
@@ -99,14 +115,16 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       return (childrenIds || [])
         .filter(id => !nextAncestors.has(id))
         .map(id => state.nodes[id])
-        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesTagFilters(n, selectedTagIds))
+        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesAssigneeFilter(n, selectedAssigneeIds) && matchesTagFilters(n, selectedTagIds))
         .sort((a,b) => a.order - b.order);
-  }, [childrenIds, statusFilters, dueWithinDays, selectedTagIds, nextAncestorKey]);
+  }, [childrenIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, nextAncestorKey]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
   const nodeTags = getNodeTags(node, tags);
   const isDueToday = node?.status !== 'completed' && !!localEndDate && dayjs(localEndDate).isSame(dayjs(), 'day');
+  const isStartDateReadOnly = !canEditTask || lockStatus.startLocked;
+  const isEndDateReadOnly = !canEditTask || isEndDateEffectivelyLocked;
 
   // 緊湊的縮排 (使用 1.25rem 取代原本的 1.5rem 以節省空間)
   const indentPadding = level * 1.25;
@@ -116,12 +134,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   // ----- 行內編輯處理 -----
   const handleTitleBlur = () => {
     setIsTitleEditing(false);
+    if (!canEditTask) {
+        setLocalTitle(node.title || '');
+        return;
+    }
     if (localTitle.trim() !== node.title) {
         updateNode(node.id, { title: localTitle.trim() || '未命名任務' });
     }
   };
 
   const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
         (e.target as HTMLInputElement).blur();
     }
@@ -187,6 +210,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   };
 
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!canEditTask) return;
       const val = e.target.value;
       if (!validateDateBoundary('startDate', val)) {
           e.target.value = localStartDate; // 拒絕變更，強制將這一次的前端 DOM 輸入復原
@@ -209,6 +233,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   };
 
   const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!canEditTask) return;
       const val = e.target.value;
       if (!validateDateBoundary('endDate', val)) {
           e.target.value = localEndDate; // 拒絕變更，強制將這一次的前端 DOM 輸入復原
@@ -221,6 +246,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   // 工期變更處理
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!canEditTask) return;
       const strVal = e.target.value;
       if (strVal === '') return; // 允許清空但不做計算
       const val = parseInt(strVal, 10);
@@ -243,6 +269,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   };
 
   const handleToggleDurationLock = () => {
+      if (!canEditTask) return;
       updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
   };
 
@@ -254,12 +281,14 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       e.stopPropagation();
+      if (!canEditTask) return;
       updateNode(nodeId, { status: e.target.value as TaskStatus });
   };
 
   const handleAssigneeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       e.stopPropagation();
-      updateNode(nodeId, { assigneeId: e.target.value });
+      if (!canAssignTask) return;
+      updateNode(nodeId, { assigneeId: e.target.value || undefined });
   };
 
   // 生成 Native Select 專用 Tailwind Class
@@ -301,6 +330,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
           <TaskDragHandle
               attributes={attributes}
               listeners={listeners}
+              disabled={!canMoveTask}
               size="sm"
               title="拖曳以排序或移動"
               className="-ml-2 opacity-0 group-hover:opacity-100"
@@ -315,7 +345,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
           </button>
 
           {node.nodeType === 'milestone' ? (
-              <span className="flex-shrink-0 text-[10px] text-amber-600 border border-amber-300 bg-amber-50 px-1 py-0.5 rounded leading-none mr-1">MS</span>
+              <span className="flex-shrink-0 text-[10px] text-amber-600 border border-amber-300 bg-amber-50 px-1 py-0.5 rounded leading-none mr-1">里程碑</span>
           ) : null}
 
           {/* 表格感 Input：透明背景、無邊框、focus時顯示底線或底色 */}
@@ -327,6 +357,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
              onFocus={() => setIsTitleEditing(true)}
              onBlur={handleTitleBlur}
              onKeyDown={handleTitleKeyDown}
+             disabled={!canEditTask}
              voiceEnabled={isTitleEditing}
              className={`flex-1 min-w-0 h-auto border-0 border-b border-transparent bg-transparent px-1 py-0.5 text-sm transition-all focus:bg-white focus:border-blue-400 focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}
              placeholder="任務名稱"
@@ -358,12 +389,25 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 value={node.assigneeId || ''}
                 onChange={handleAssigneeChange}
                 onClick={(e) => e.stopPropagation()}
+                disabled={!canAssignTask}
                 className="w-full rounded px-2 py-1 text-xs text-slate-600 bg-transparent border-0 outline-none appearance-none transition-colors hover:bg-slate-100 focus:bg-slate-100"
                 title="指派負責人"
             >
                 <option value="">未指派</option>
-                <option value="user_jed">Jed (CTO)</option>
-                <option value="user_pm">PM_A</option>
+                {!hasCurrentAssignee && node.assigneeId && (
+                  <option value={node.assigneeId}>已離開成員 ({node.assigneeId})</option>
+                )}
+                {membersLoading && assigneeOptions.length === 0 && (
+                  <option value="" disabled>載入成員中...</option>
+                )}
+                {!membersLoading && assigneeOptions.length === 0 && (
+                  <option value="" disabled>沒有可指派成員</option>
+                )}
+                {assigneeOptions.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.label} · {member.role}
+                  </option>
+                ))}
             </select>
         </div>
 
@@ -372,6 +416,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 value={node.status}
                 onChange={handleStatusChange}
                 onClick={(e) => e.stopPropagation()}
+                disabled={!canEditTask}
                 className={getStatusSelectClass(node.status)}
                 title="修改狀態"
             >
@@ -390,16 +435,16 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfStart ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}
-            onClick={isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); } : undefined}
+            onClick={canCreateDependency && isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); } : undefined}
         >
             <div className="flex items-center gap-1.5 flex-1 pr-4 whitespace-nowrap overflow-hidden">
                 <input 
                     type="date" 
                     value={localStartDate}
                     onChange={handleStartDateChange}
-                    readOnly={lockStatus.startLocked}
+                    readOnly={isStartDateReadOnly}
                     className={`w-28 text-xs rounded px-1 min-h-[24px] cursor-pointer transition-all
-                        ${lockStatus.startLocked ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
+                        ${isStartDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
                 />
@@ -445,16 +490,16 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfEnd ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}
-            onClick={isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); } : undefined}
+            onClick={canCreateDependency && isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); } : undefined}
         >
             <div className="flex items-center gap-1.5 flex-1 pr-4 whitespace-nowrap overflow-hidden">
                 <input 
                     type="date" 
                     value={localEndDate}
                     onChange={handleEndDateChange}
-                    readOnly={isEndDateEffectivelyLocked}
+                    readOnly={isEndDateReadOnly}
                     className={`w-28 text-xs rounded px-1 min-h-[24px] cursor-pointer transition-all
-                        ${isEndDateEffectivelyLocked ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
+                        ${isEndDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
                 />
@@ -504,6 +549,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
              <button
                  type="button"
                  onClick={handleToggleDurationLock}
+                 disabled={!canEditTask}
                  className={`p-1 rounded flex-shrink-0 transition-colors ${node.isDurationLocked ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
                  title={node.isDurationLocked ? '鎖定工期：開始日期變動時同步推動結束日期' : '非鎖定工期：日期各自獨立，自動計算天數'}
              >
@@ -515,7 +561,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                  value={durationDays}
                  onChange={handleDurationChange}
                  placeholder="-"
-                 disabled={!node.isDurationLocked}
+                 disabled={!canEditTask || !node.isDurationLocked}
                  className={`w-10 text-center text-xs bg-transparent border border-transparent focus:outline-none rounded py-0.5 ${!node.isDurationLocked ? 'pointer-events-none text-slate-400 opacity-70' : 'hover:border-slate-300 focus:border-primary focus:bg-white text-slate-600'} ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                  title={node.isDurationLocked ? "輸入工期天數自動推算結束日期" : "請先點擊鎖頭以鎖定工期，才能手動修改"}
              />

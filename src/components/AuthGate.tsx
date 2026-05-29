@@ -13,9 +13,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import { runAutoMigration } from '../utils/autoMigration';
-import { isEmbeddedAuthBlocked, isLocalTestAuth, isSupabaseLocalPasswordAuth } from '../services/authService';
+import {
+  isEmbeddedAuthBlocked,
+  isLocalTestAuth,
+  isSupabaseLocalPasswordAuth,
+  LOCAL_TEST_ACCOUNTS,
+  LOCAL_TEST_SELECTED_ACCOUNT_KEY,
+} from '../services/authService';
 import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
 import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
+import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -33,9 +40,33 @@ export default function AuthGate({ children }: AuthGateProps) {
   const isLocalSupabasePasswordMode = isSupabaseLocalPasswordAuth();
   const shouldAutoTestLogin =
     isLocalSupabasePasswordMode && import.meta.env.VITE_SUPABASE_AUTO_TEST_LOGIN === 'true';
+  const isInviteLinkFlow = new URLSearchParams(window.location.search).has(BOARD_INVITE_TOKEN_PARAM);
   const autoTestLoginStartedRef = useRef(false);
   // 遷移狀態：'idle' | 'migrating' | 'done'
   const [migrationState, setMigrationState] = useState<'idle' | 'migrating' | 'done'>('idle');
+  const initialLocalTestAccount =
+    LOCAL_TEST_ACCOUNTS.find(account => account.id === localStorage.getItem(LOCAL_TEST_SELECTED_ACCOUNT_KEY)) ??
+    LOCAL_TEST_ACCOUNTS[0];
+  const [selectedLocalTestAccountId, setSelectedLocalTestAccountId] = useState(initialLocalTestAccount.id);
+  const [localTestEmail, setLocalTestEmail] = useState(initialLocalTestAccount.email ?? '');
+  const [localTestPassword, setLocalTestPassword] = useState(initialLocalTestAccount.password);
+
+  const fillLocalTestAccount = (accountId: string) => {
+    const account = LOCAL_TEST_ACCOUNTS.find(item => item.id === accountId) ?? LOCAL_TEST_ACCOUNTS[0];
+    setSelectedLocalTestAccountId(account.id);
+    setLocalTestEmail(account.email ?? '');
+    setLocalTestPassword(account.password);
+    localStorage.setItem(LOCAL_TEST_SELECTED_ACCOUNT_KEY, account.id);
+  };
+
+  const handleLocalTestSignIn = async () => {
+    const matchedAccount =
+      LOCAL_TEST_ACCOUNTS.find(account => account.email === localTestEmail.trim()) ??
+      LOCAL_TEST_ACCOUNTS.find(account => account.id === selectedLocalTestAccountId) ??
+      LOCAL_TEST_ACCOUNTS[0];
+    localStorage.setItem(LOCAL_TEST_SELECTED_ACCOUNT_KEY, matchedAccount.id);
+    await signInWithGoogle();
+  };
 
   useEffect(() => {
     setIsInApp(detectInAppBrowser());
@@ -103,11 +134,12 @@ export default function AuthGate({ children }: AuthGateProps) {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-10 max-w-md w-full mx-4 shadow-2xl">
+        <div className={`bg-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-10 w-full mx-4 shadow-2xl ${isLocalTestMode ? 'max-w-5xl grid gap-8 lg:grid-cols-[1fr_380px]' : 'max-w-md'}`}>
+          <div>
           {/* Logo 與標題 */}
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl mx-auto mb-4 overflow-hidden shadow-lg shadow-blue-500/25 border border-slate-700/50">
-              <img src="/icons/icon-512.png" alt="ProJED Logo" className="w-full h-full object-cover" />
+              <img src="/icons/icon-512.png" alt="ProJED 標誌" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">ProJED</h1>
             <p className="text-slate-400 text-sm">專案管理，從登入開始</p>
@@ -128,21 +160,30 @@ export default function AuthGate({ children }: AuthGateProps) {
                 ⚠️ 必須使用外部瀏覽器
               </h3>
               <p className="text-slate-300 text-sm mb-3">
-                Google 基於安全考量，禁止在 Line/FB 等 App 中直接登入 (會出現 403 disallowed_useragent 錯誤)。
+                Google 基於安全考量，禁止在 LINE、Facebook 等內建瀏覽器中直接登入（會出現 403 不允許的瀏覽器錯誤）。
               </p>
               <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                 <p className="text-white text-sm font-medium leading-relaxed">
                   💡 解法：<br/>
-                  請點擊右上角或右下角的<span className="text-slate-300 mx-1 bg-slate-700 px-1 py-0.5 rounded">選單 (⋮ 或 ⋯)</span>，選擇
-                  <span className="text-blue-400 font-bold mx-1">以預設瀏覽器開啟</span> (Chrome 或 Safari) 即可正常登入。
+                  請點擊右上角或右下角的<span className="text-slate-300 mx-1 bg-slate-700 px-1 py-0.5 rounded">選單（⋮ 或 ⋯）</span>，選擇
+                  <span className="text-blue-400 font-bold mx-1">以預設瀏覽器開啟</span>即可正常登入。
                 </p>
               </div>
             </div>
           )}
 
+          {isInviteLinkFlow && isLocalTestMode && (
+            <div className="mb-6 rounded-lg border border-blue-400/30 bg-blue-500/10 p-4 text-left">
+              <h3 className="mb-2 text-sm font-bold text-blue-200">本機測試邀請連結</h3>
+              <p className="text-sm leading-relaxed text-slate-300">
+                目前網址是 127.0.0.1 本機測試環境，只適合用右側測試帳號驗證邀請流程。真實受邀者不應看到測試角色帳號，請使用正式站台產生的邀請連結，並用受邀電子郵件帳號登入。
+              </p>
+            </div>
+          )}
+
           {/* Login button */}
           <button
-            onClick={signInWithGoogle}
+            onClick={isLocalTestMode ? handleLocalTestSignIn : signInWithGoogle}
             disabled={shouldAutoTestLogin && loading}
             className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98]"
           >
@@ -173,6 +214,59 @@ export default function AuthGate({ children }: AuthGateProps) {
           <p className="text-slate-500 text-xs text-center mt-6">
             登入即表示您的資料將安全儲存於雲端，<br/>支援跨裝置即時同步。
           </p>
+          </div>
+
+          {isLocalTestMode && (
+            <div className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-bold text-white">測試角色帳號</h2>
+                <p className="mt-1 text-xs text-slate-400">點選角色會填入帳號密碼，再按登入。</p>
+              </div>
+
+              <div className="space-y-2">
+                {LOCAL_TEST_ACCOUNTS.map(account => (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() => fillLocalTestAccount(account.id)}
+                    className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                      selectedLocalTestAccountId === account.id
+                        ? 'border-blue-400 bg-blue-500/15 text-white'
+                        : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-500 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold">{account.displayName}</span>
+                      <span className="rounded bg-slate-950/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300">
+                        {account.role}
+                      </span>
+                    </div>
+                    <div className="mt-1 truncate text-xs text-slate-400">{account.email}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-400">帳號</span>
+                  <input
+                    value={localTestEmail}
+                    onChange={(event) => setLocalTestEmail(event.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-blue-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-400">密碼</span>
+                  <input
+                    value={localTestPassword}
+                    onChange={(event) => setLocalTestPassword(event.target.value)}
+                    type="password"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-blue-400"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -196,7 +290,7 @@ export default function AuthGate({ children }: AuthGateProps) {
           <div>
             <h2 className="text-white text-lg font-bold mb-2">資料升級中...</h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
-              正在將您的資料升級至最新的 WBS 架構，<br/>
+              正在將您的資料升級至最新的工作分解結構，<br/>
               這只需要幾秒鐘，請勿關閉視窗。
             </p>
           </div>
