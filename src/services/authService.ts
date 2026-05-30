@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { FirestoreUser } from '../types';
 import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
+import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
 
 type SupabaseUser = NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']>;
 
@@ -86,7 +87,21 @@ const requireSupabaseAuth = () => {
 
 const getSupabaseAuthRedirectUrl = () => {
   const configuredUrl = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL as string | undefined;
-  if (configuredUrl?.trim()) return configuredUrl;
+  const boardInviteToken = new URLSearchParams(window.location.search).get(BOARD_INVITE_TOKEN_PARAM);
+
+  if (configuredUrl?.trim()) {
+    if (!boardInviteToken) return configuredUrl;
+    const redirectUrl = new URL(configuredUrl);
+    redirectUrl.searchParams.set(BOARD_INVITE_TOKEN_PARAM, boardInviteToken);
+    return redirectUrl.toString();
+  }
+
+  if (boardInviteToken) {
+    const redirectUrl = new URL(`${window.location.origin}${window.location.pathname}`);
+    redirectUrl.searchParams.set(BOARD_INVITE_TOKEN_PARAM, boardInviteToken);
+    return redirectUrl.toString();
+  }
+
   return `${window.location.origin}${window.location.pathname}`;
 };
 
@@ -107,7 +122,7 @@ const getSupabaseSeedCredentials = () => {
 };
 
 export const isSupabaseLocalPasswordAuth = () =>
-  isSupabaseBackend && (getSupabaseAuthMode() === 'local-password' || isLocalSupabaseUrl());
+  isSupabaseBackend && (isLocalSupabaseUrl() || (import.meta.env.DEV && getSupabaseAuthMode() === 'local-password'));
 
 export const isLocalTestAuth = () => isLocalTestBackend;
 
