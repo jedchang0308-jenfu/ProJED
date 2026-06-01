@@ -11,6 +11,7 @@ import { useBoardPermissions } from '../hooks/useBoardPermissions';
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
+  const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const currentView = useBoardStore((state) => state.currentView);
   const setDependencySelection = useBoardStore((state) => state.setDependencySelection);
   const showStartDate = useBoardStore((state) => state.showStartDate);
@@ -160,6 +161,7 @@ export const GlobalContextMenu: React.FC = () => {
     };
 
     addNode(newNode);
+    setPendingTitleEditNodeId(newNode.id);
     setContextMenuState(null);
   };
 
@@ -201,6 +203,7 @@ export const GlobalContextMenu: React.FC = () => {
     };
 
     addNode(newNode);
+    setPendingTitleEditNodeId(newNode.id);
     setContextMenuState(null);
   };
 

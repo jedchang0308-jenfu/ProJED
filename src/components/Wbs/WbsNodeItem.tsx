@@ -16,6 +16,7 @@ import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import { compactClassNames } from '../ui/compactTokens';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -27,6 +28,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
   const [isTitleEditing, setIsTitleEditing] = useState(false);
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
   
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
@@ -39,6 +41,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
   const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
 
   const [localTitle, setLocalTitle] = useState(node?.title || '');
   const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
@@ -67,6 +71,21 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       setLocalStartDate(node?.startDate || '');
       setLocalEndDate(node?.endDate || '');
   }, [node?.startDate, node?.endDate]);
+
+  React.useEffect(() => {
+      if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
+
+      setLocalTitle(node.title || '新任務');
+      setIsTitleEditing(true);
+
+      window.requestAnimationFrame(() => {
+          const input = titleInputRef.current;
+          if (!input) return;
+          input.focus();
+          input.select();
+          setPendingTitleEditNodeId(null);
+      });
+  }, [pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
 
   // 取得全域顯示設定
   const dependencyContext = React.useContext(WbsDependencyContext);
@@ -321,17 +340,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 title: node.title
             });
         }}
-        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} items-center py-1 px-4 border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white text-sm active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} items-center py-px px-[10px] border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
-        <div className="flex items-center gap-1.5 overflow-hidden pr-4 relative" style={{ paddingLeft: `${indentPadding}rem` }}>
+        <div className="flex items-center gap-1 overflow-hidden pr-[10px] relative" style={{ paddingLeft: `${indentPadding}rem` }}>
           {/* 拖曳手把 */}
           <TaskDragHandle
               attributes={attributes}
               listeners={listeners}
               disabled={!canMoveTask}
-              size="sm"
+              size="xs"
               title="拖曳以排序或移動"
               className="-ml-2 opacity-0 group-hover:opacity-100"
           />
@@ -350,6 +369,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
           {/* 表格感 Input：透明背景、無邊框、focus時顯示底線或底色 */}
           <Input
+             ref={titleInputRef}
              type="text"
              value={localTitle}
              onChange={(e) => setLocalTitle(e.target.value)}
@@ -359,11 +379,11 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
              onKeyDown={handleTitleKeyDown}
              disabled={!canEditTask}
              voiceEnabled={isTitleEditing}
-             className={`flex-1 min-w-0 h-auto border-0 border-b border-transparent bg-transparent px-1 py-0.5 text-sm transition-all focus:bg-white focus:border-blue-400 focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+             className={`task-title-text flex-1 min-w-0 h-auto border-0 border-b border-transparent bg-transparent px-1 py-0 text-sm font-medium transition-all focus:bg-white focus:border-blue-400 focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
              placeholder="任務名稱"
           />
 
-          <div className="flex items-center gap-1.5 flex-shrink-0 w-24">
+          <div className="flex items-center gap-1 flex-shrink-0 w-24">
               <div className={`w-full bg-slate-200 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
                   <div 
                   className={`h-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'} transition-all`} 
@@ -437,13 +457,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
             `}
             onClick={canCreateDependency && isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); } : undefined}
         >
-            <div className="flex items-center gap-1.5 flex-1 pr-4 whitespace-nowrap overflow-hidden">
+            <div className="flex items-center gap-1 flex-1 pr-[10px] whitespace-nowrap overflow-hidden">
                 <input 
                     type="date" 
                     value={localStartDate}
                     onChange={handleStartDateChange}
                     readOnly={isStartDateReadOnly}
-                    className={`w-28 text-xs rounded px-1 min-h-[24px] cursor-pointer transition-all
+                    className={`w-28 text-xs rounded px-1 min-h-[22px] cursor-pointer transition-all
                         ${isStartDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
@@ -457,11 +477,11 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                     <div className="flex items-center gap-0.5 flex-shrink-0">
                         {dependencyMarkers[`${nodeId}_start`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
                             m.isSelf ? (
-                                <span key={m.id} title="間隔天數" className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                <span key={m.id} title="間隔天數" className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded text-[9px] font-semibold whitespace-nowrap cursor-help">
                                     {m.offset || 0} 工作天
                                 </span>
                             ) : (
-                                <span key={m.id} title={m.role === 'active' ? '主動驅動' : '被動跟隨'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-gray-800' : 'bg-gray-400'}`}>
+                                <span key={m.id} title={m.role === 'active' ? '主動驅動' : '被動跟隨'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-semibold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-gray-800' : 'bg-gray-400'}`}>
                                     {m.label}
                                 </span>
                             )
@@ -492,13 +512,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
             `}
             onClick={canCreateDependency && isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); } : undefined}
         >
-            <div className="flex items-center gap-1.5 flex-1 pr-4 whitespace-nowrap overflow-hidden">
+            <div className="flex items-center gap-1 flex-1 pr-[10px] whitespace-nowrap overflow-hidden">
                 <input 
                     type="date" 
                     value={localEndDate}
                     onChange={handleEndDateChange}
                     readOnly={isEndDateReadOnly}
-                    className={`w-28 text-xs rounded px-1 min-h-[24px] cursor-pointer transition-all
+                    className={`w-28 text-xs rounded px-1 min-h-[22px] cursor-pointer transition-all
                         ${isEndDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
@@ -506,7 +526,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 {isEndDateEffectivelyLocked && (
                     <span className="text-slate-400 absolute right-8 flex items-center bg-slate-50/50 pr-1 pl-0.5">
                         {node.isDurationLocked && !lockStatus.endLocked ? (
-                            <span className="opacity-60 text-[10px] font-bold">L</span>
+                            <span className="opacity-60 text-[10px] font-semibold">L</span>
                         ) : (
                             <Link size={12} className="opacity-60" />
                         )}
@@ -516,11 +536,11 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                     <div className="flex items-center gap-0.5 flex-shrink-0">
                         {dependencyMarkers[`${nodeId}_end`].filter(m => !m.isSelf || m.role === 'passive').map(m => (
                             m.isSelf ? (
-                                <span key={m.id} title="間隔天數" className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded text-[9px] font-bold whitespace-nowrap cursor-help">
+                                <span key={m.id} title="間隔天數" className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 rounded text-[9px] font-semibold whitespace-nowrap cursor-help">
                                     {m.offset || 0} 工作天
                                 </span>
                             ) : (
-                                <span key={m.id} title={m.role === 'active' ? '主動驅動' : '被動跟隨'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-bold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-gray-800' : 'bg-gray-400'}`}>
+                                <span key={m.id} title={m.role === 'active' ? '主動驅動' : '被動跟隨'} className={`w-[13px] h-[13px] rounded-full flex items-center justify-center text-[7.5px] font-semibold text-white shadow-sm leading-none ${m.role === 'active' ? 'bg-gray-800' : 'bg-gray-400'}`}>
                                     {m.label}
                                 </span>
                             )
@@ -545,7 +565,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
 
         {/* Col 5: 工期(天) */}
-        <div className="flex items-center px-2 gap-1">
+        <div className="flex items-center px-[8px] gap-1">
              <button
                  type="button"
                  onClick={handleToggleDurationLock}

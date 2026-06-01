@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
+import { compactClassNames } from './compactTokens';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
@@ -10,7 +11,7 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 export const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
   ({ className, variant = 'default', size = 'sm', icon, children, ...props }, ref) => {
     
-    const baseStyles = "inline-flex items-center rounded border font-medium transition-colors";
+    const baseStyles = "inline-flex items-center rounded border transition-colors";
     
     const variants = {
       default: "bg-slate-50 border-slate-100 text-slate-400",
@@ -21,7 +22,7 @@ export const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
     };
 
     const sizes = {
-      sm: "px-1.5 py-0.5 text-[10px] gap-1",
+      sm: compactClassNames.metaBadge,
       md: "px-2.5 py-0.5 text-xs gap-1.5",
     };
 

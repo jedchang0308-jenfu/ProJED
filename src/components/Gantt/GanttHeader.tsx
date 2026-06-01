@@ -36,8 +36,8 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({ mode, gridStart, total
 
             headerItems.push(
                 <div key={i} className="flex-shrink-0 border-r border-slate-700 flex flex-col items-center justify-center bg-slate-800" style={{ width: colWidth }}>
-                    <span className="text-[10px] font-bold text-slate-200">{label}</span>
-                    <span className="text-xs font-bold text-slate-100">{subLabel}</span>
+                    <span className="text-[10px] font-semibold text-slate-200">{label}</span>
+                    <span className="text-xs font-semibold text-slate-100">{subLabel}</span>
                 </div>
             );
         }
@@ -45,7 +45,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({ mode, gridStart, total
     };
 
     return (
-        <div className="sticky top-0 flex h-10 bg-slate-800 border-b-2 border-slate-900" style={{ zIndex: 100 }}>
+        <div className="sticky top-0 flex h-8 bg-slate-800 border-b-2 border-slate-900" style={{ zIndex: 100 }}>
             {renderHeader()}
         </div>
     );
@@ -149,7 +149,7 @@ export const GanttGrid: React.FC<GanttHeaderProps> = ({ mode, gridStart, totalUn
                 className="absolute top-0 bottom-0 w-px bg-red-400/50 z-10 pointer-events-none"
                 style={{ left: getX(dayjs(), colWidth, mode, gridStart) }}
             >
-                <div className="sticky top-[42px] bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full transform -translate-x-1/2 shadow-sm border border-white">今</div>
+                <div className="sticky top-[34px] bg-red-500 text-white text-[9px] font-semibold w-5 h-5 flex items-center justify-center rounded-full transform -translate-x-1/2 shadow-sm border border-white">今</div>
             </div>
         </>
     );

@@ -54,7 +54,7 @@ const safeSetItem = (key: string, value: string | null) => {
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'board', 'gantt', 'calendar', 'calendar_subscriptions'].includes(stored)) {
+        if (stored && ['list', 'board', 'gantt', 'calendar', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }
@@ -87,6 +87,7 @@ const useBoardStore = create<BoardStore>()(
         ...getStoredFilters(),
         dependencySelection: null,
         contextMenuState: null,
+        pendingTitleEditNodeId: null,
 
         // ===== 基本 setters =====
         setWorkspaces: (workspaces) => set({ workspaces }),
@@ -105,6 +106,7 @@ const useBoardStore = create<BoardStore>()(
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
         setContextMenuState: (state) => set({ contextMenuState: state }),
+        setPendingTitleEditNodeId: (nodeId) => set({ pendingTitleEditNodeId: nodeId }),
 
         // ===== Workspace CRUD =====
         addWorkspace: (title) => {

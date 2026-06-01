@@ -1,7 +1,7 @@
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
-export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'calendar_subscriptions' | 'recycle_bin';
+export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt';
 export type DragType = 'move' | 'left' | 'right';
 export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';
@@ -362,6 +362,7 @@ export interface BoardState {
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
+  pendingTitleEditNodeId: string | null;
 }
 
 export interface BoardActions {
@@ -395,6 +396,7 @@ export interface BoardActions {
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;
+  setPendingTitleEditNodeId: (nodeId: string | null) => void;
 
   exportData: () => void;
   importData: (jsonData: string | object) => Promise<void>;

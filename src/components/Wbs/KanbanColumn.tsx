@@ -37,6 +37,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const selectedTagIds = useTagStore((state) => state.selectedTagIds);
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
+  const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
+  const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const { canCreateTask, canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // 看板依賴選取 Context
@@ -62,6 +64,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       titleInputRef.current.select();
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
+    setEditValue(node.title || '新任務');
+    setIsEditing(true);
+    setPendingTitleEditNodeId(null);
+  }, [pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
 
   const handleStartEdit = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -186,6 +195,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     };
 
     addNode(newNode);
+    setPendingTitleEditNodeId(newNode.id);
   };
 
   const handleAddTaskSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -227,7 +237,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     >
       <div
         {...longPressHandlers}
-        className={`group flex flex-col gap-2 bg-white/40 p-3 transition-colors hover:bg-white ${
+        className={`group flex flex-col gap-0.5 bg-white/40 px-[10px] py-[6px] transition-colors hover:bg-white ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
@@ -245,9 +255,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           });
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="flex flex-1 items-center justify-between">
-            <div className="flex flex-1 items-center gap-2 overflow-hidden">
+            <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
               <TaskDragHandle
                 attributes={columnAttributes}
                 listeners={columnListeners}
@@ -264,11 +274,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   onKeyDown={handleKeyDown}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
-                  className="min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-bold text-slate-700 outline-none ring-2 ring-primary/30"
+                  className="task-title-text min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none ring-2 ring-primary/30"
                 />
               ) : (
                 <h3
-                  className={`truncate text-sm font-bold transition-colors hover:text-primary ${
+                  className={`task-title-text truncate text-sm font-medium transition-colors hover:text-primary ${
                     status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
                   }`}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -282,7 +292,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
           <div className="flex items-center gap-1">
             <span className="font-bold">{children.length}</span>
             <span>任務</span>
@@ -295,7 +305,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               <button
                 disabled={!canCreateDependency}
                 onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
                   isSelfStart
                     ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
                     : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 cursor-crosshair'
@@ -309,7 +319,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               <button
                 disabled={!canCreateDependency}
                 onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
                   isSelfEnd
                     ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
                     : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 cursor-crosshair'
@@ -367,7 +377,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
       <div
         ref={setDropNodeRef}
-        className={`scroll-container flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-1 mb-1 ${
+        className={`scroll-container flex-1 overflow-y-auto px-[10px] pb-[6px] scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-0 mb-0 ${
           isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
         }`}
       >
@@ -383,14 +393,14 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           ))}
         </SortableContext>
 
-        <form className="mt-2 space-y-2" onSubmit={handleAddTaskSubmit}>
+        <form className="mt-[6px] space-y-[6px]" onSubmit={handleAddTaskSubmit}>
           <Input
             ref={addTaskInputRef}
             value={newTaskTitle}
             onChange={(event) => setNewTaskTitle(event.target.value)}
             disabled={!canCreateTask}
             placeholder="輸入任務名稱"
-            className="h-9 bg-white text-xs"
+            className="h-8 bg-white text-xs"
           />
           <Button
             type="submit"
@@ -398,7 +408,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             size="none"
             fullWidth
             disabled={!canCreateTask}
-            className="gap-2 py-2 px-3 text-xs font-bold group"
+            className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold group"
           >
             <Plus size={14} className="transition-transform group-hover:scale-110" />
             新增任務

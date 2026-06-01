@@ -30,11 +30,11 @@ import {
 } from 'lucide-react';
 
 // ── 常數 ─────────────────────────────────────────────────
-const SIDEBAR_ROW_HEIGHT = 28;
+const SIDEBAR_ROW_HEIGHT = COMPACT_DIMENSIONS.taskRowHeight;
 // 每週最低高度（日期數字 + 任務條堆疊空間）
-const WEEK_DATE_HEADER_H = 28; // px，日期數字列的高度
-const TASK_LANE_H = 22;        // px，每條任務條的高度（含間距）
-const TASK_LANE_GAP = 2;       // px，任務條間距
+const WEEK_DATE_HEADER_H = COMPACT_DIMENSIONS.calendarHeaderHeight; // px，日期數字列的高度
+const TASK_LANE_H = COMPACT_DIMENSIONS.calendarLaneHeight;        // px，每條任務條的高度（含間距）
+const TASK_LANE_GAP = COMPACT_DIMENSIONS.calendarLaneGap;       // px，任務條間距
 const MAX_VISIBLE_LANES = 3;   // 超過此數顯示「+N 更多」
 
 // 狀態→樣式對照（靜態字典，確保 Tailwind 能掃描到）
@@ -62,8 +62,9 @@ const STATUS_STYLES = {
 };
 
 import SharedTaskSidebar from './SharedTaskSidebar';
-import { StatusFilterBar } from './ui/StatusFilterBar';
+import { ViewToolbar } from './ui/ViewToolbar';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
+import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass } from './ui/compactTokens';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -305,53 +306,45 @@ const CalendarView = () => {
     // ── 渲染 ──────────────────────────────────────────────
     return (
         <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-            {/* ── Toolbar ── */}
-            <div
-                className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0"
-                style={{ zIndex: 110 }}
-            >
-                {/* 狀態篩選器 */}
-                <div className="flex items-center gap-1 sm:gap-4 py-2 mr-4 flex-1">
-                    <StatusFilterBar />
-                </div>
-
-                {/* 月份導覽 + 控制 */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                        <button onClick={goToPrevMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition-colors" title="上個月">
+            <ViewToolbar
+                rightControls={(
+                    <>
+                    <div className="flex items-center gap-[8px]">
+                        <button onClick={goToPrevMonth} className={compactIconButtonClass()} title="上個月">
                             <ChevronLeft size={16} />
                         </button>
                         <span className="text-sm font-bold text-slate-700 min-w-[100px] text-center">
                             {currentMonth.format('YYYY 年 M 月')}
                         </span>
-                        <button onClick={goToNextMonth} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition-colors" title="下個月">
+                        <button onClick={goToNextMonth} className={compactIconButtonClass()} title="下個月">
                             <ChevronRight size={16} />
                         </button>
-                        <button onClick={goToToday} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-lg text-xs font-bold transition-all shadow-sm group" title="回到今天">
+                        <button onClick={goToToday} className={`${compactClassNames.textButtonBase} group`} title="回到今天">
                             <Calendar size={14} className="group-hover:scale-110 transition-transform" />
                             <span>今天</span>
                         </button>
                     </div>
-                    <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
-                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg mr-2">
+                    <div className="flex items-center gap-[8px] border-l border-slate-200 pl-[8px]">
+                        <div className={compactClassNames.segmented}>
                             <button
                                 onClick={() => setSidebarOpen(!isSidebarOpen)}
-                                className={`p-1.5 rounded transition-all ${!isSidebarOpen ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={compactIconButtonClass(!isSidebarOpen)}
                                 title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}
                             >
                                 {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                             </button>
                             <button
                                 onClick={() => setIsTaskListOpen(!isTaskListOpen)}
-                                className={`p-1.5 rounded transition-all ${!isTaskListOpen ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={compactIconButtonClass(!isTaskListOpen)}
                                 title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}
                             >
                                 <LayoutList size={16} />
                             </button>
                         </div>
                     </div>
-                </div>
-            </div>
+                    </>
+                )}
+            />
 
             {/* ── 主體 ── */}
             <div className="flex-1 flex overflow-hidden">
@@ -372,7 +365,7 @@ const CalendarView = () => {
                     {/* 週標頭（固定，不隨內容捲動）*/}
                     <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 shrink-0">
                         {weekDayNames.map((name, i) => (
-                            <div key={i} className={`py-2 text-center text-xs font-bold tracking-wider ${i === 0 || i === 6 ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <div key={i} className={`py-[6px] text-center text-xs font-semibold ${i === 0 || i === 6 ? 'text-slate-400' : 'text-slate-600'}`}>
                                 {name}
                             </div>
                         ))}
@@ -392,7 +385,7 @@ const CalendarView = () => {
                             // 計算本週行高：日期列 + 任務條堆疊高度 + 底部留白
                             const weekH = WEEK_DATE_HEADER_H
                                 + Math.min(numLanes, MAX_VISIBLE_LANES) * TASK_LANE_H
-                                + 8; // 底部留白
+                                + 6; // 底部留白
 
                             // 計算每個日期格顯示「+N 更多」的數量
                             const overflowByCol = {};
@@ -410,14 +403,14 @@ const CalendarView = () => {
                                 <div
                                     key={wIdx}
                                     className="relative border-b border-slate-100"
-                                    style={{ height: Math.max(weekH, 90) }}
+                                    style={{ height: Math.max(weekH, 66) }}
                                 >
                                     {/* Layer 1：日期格背景與日期數字 */}
                                     <div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
                                         {week.map((day, col) => (
                                             <div
                                                 key={day.dateStr}
-                                                className={`border-r border-slate-100 px-1 pt-1
+                                                className={`border-r border-slate-100 px-[4px] pt-[4px]
                                                     ${!day.isCurrentMonth ? 'bg-slate-50/80' : 'bg-white'}
                                                     ${day.isWeekend && day.isCurrentMonth ? 'bg-slate-50/50' : ''}
                                                     ${day.isToday ? 'bg-primary/[0.03]' : ''}
@@ -425,7 +418,7 @@ const CalendarView = () => {
                                             >
                                                 {/* 日期數字 */}
                                                 <span
-                                                    className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full
+                                                    className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full
                                                         ${day.isToday
                                                             ? 'bg-primary text-white shadow-sm'
                                                             : day.isCurrentMonth
@@ -437,7 +430,7 @@ const CalendarView = () => {
                                                 </span>
                                                 {/* 超出顯示的「+N 更多」提示 */}
                                                 {overflowByCol[col] > 0 && (
-                                                    <div className="text-[9px] text-slate-400 font-bold mt-auto pb-1 pointer-events-auto">
+                                                    <div className="text-[9px] text-slate-400 font-semibold mt-auto pb-[4px] pointer-events-auto">
                                                         +{overflowByCol[col]} 更多
                                                     </div>
                                                 )}
@@ -465,7 +458,7 @@ const CalendarView = () => {
 
                                             // 水平 padding：左端有名稱，中間、右端為空白條
                                             const horizontalPadding = seg.isTaskStart || seg.isSingleDay
-                                                ? 'px-2' : 'pl-0 pr-0';
+                                                ? 'px-[6px]' : 'pl-0 pr-0';
 
                                             return (
                                                 <div
@@ -497,8 +490,8 @@ const CalendarView = () => {
                                                     {/* 只在起始段或單日顯示圓點 + 文字 */}
                                                     {(seg.isTaskStart || seg.isSingleDay) && (
                                                         <>
-                                                            <div className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mr-1.5 ${styles.dot}`} />
-                                                            <span className="text-[11px] font-semibold truncate leading-none">
+                                                            <div className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mr-1 ${styles.dot}`} />
+                                                            <span className="task-title-text text-[11px] font-medium truncate leading-none">
                                                                 {seg.item.title}
                                                             </span>
                                                         </>

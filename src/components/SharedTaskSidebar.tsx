@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import useDialogStore from '../store/useDialogStore';
+import React, { useEffect, useRef, useState } from 'react';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
 import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus } from 'lucide-react';
@@ -9,10 +8,18 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
 import { TaskDragHandle } from './Wbs/TaskDragHandle';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { COMPACT_DIMENSIONS } from './ui/compactTokens';
+import type { TaskNode } from '../types';
 
 interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
 const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
-    const { canCreateTask, canMoveTask } = useBoardPermissions();
+    const { canCreateTask, canEditTask, canMoveTask } = useBoardPermissions();
+    const updateNode = useWbsStore(s => s.updateNode);
+    const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+    const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
+    const [isTitleEditing, setIsTitleEditing] = useState(false);
+    const [editValue, setEditValue] = useState(item.title || '');
+    const inputRef = useRef<HTMLInputElement>(null);
     const level = Number.isFinite(item.level) ? item.level : 0;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
@@ -24,7 +31,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
         transform: CSS.Transform.toString(transform),
         transition,
         height: rowHeight,
-        paddingLeft: Math.max(12, 12 + (level * 16)),
+        paddingLeft: Math.max(10, 10 + (level * 14)),
         position: 'relative' as any,
         zIndex: isDragging ? 50 : 1,
     };
@@ -32,6 +39,49 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     const isGroup = item.nodeType === 'group';
     const isTask = item.nodeType === 'task';
     const isMilestone = item.nodeType === 'milestone';
+
+    useEffect(() => {
+        if (!isTitleEditing) setEditValue(item.title || '');
+    }, [item.title, isTitleEditing]);
+
+    useEffect(() => {
+        if (pendingTitleEditNodeId !== item.id || !canEditTask) return;
+
+        setEditValue(item.title || '新任務');
+        setIsTitleEditing(true);
+
+        window.requestAnimationFrame(() => {
+            const input = inputRef.current;
+            if (!input) return;
+            input.focus();
+            input.select();
+            setPendingTitleEditNodeId(null);
+        });
+    }, [pendingTitleEditNodeId, item.id, item.title, canEditTask, setPendingTitleEditNodeId]);
+
+    const handleTitleSave = () => {
+        if (!canEditTask) {
+            setIsTitleEditing(false);
+            return;
+        }
+        const trimmed = editValue.trim() || '新任務';
+        if (trimmed !== item.title) {
+            updateNode(item.id, { title: trimmed, updatedAt: Date.now() });
+        }
+        setIsTitleEditing(false);
+    };
+
+    const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        event.stopPropagation();
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleTitleSave();
+        } else if (event.key === 'Escape') {
+            setEditValue(item.title || '');
+            setIsTitleEditing(false);
+        }
+    };
     
     const childIds = useWbsStore(s => s.parentNodesIndex[item.id]);
     const hasChildren = childIds && childIds.length > 0;
@@ -47,10 +97,12 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 e.preventDefault();
                 setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
             }}
-            className={`flex items-center px-4 border-b border-slate-50 hover:bg-slate-50 transition-colors gap-1 cursor-pointer group
-                ${isGroup ? 'font-black text-slate-800' : isTask && level === 1 ? 'font-bold text-slate-700' : 'text-slate-500'}
+            className={`flex items-center px-[10px] border-b border-slate-50 hover:bg-slate-50 transition-colors gap-1 cursor-pointer group
+                task-title-text ${isGroup ? 'font-medium text-slate-700' : isTask && level === 1 ? 'font-medium text-slate-600' : 'font-medium text-slate-500'}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
-            onClick={() => onClick(item)}
+            onClick={() => {
+                if (!isTitleEditing) onClick(item);
+            }}
         >
             <TaskDragHandle
                 attributes={attributes}
@@ -78,9 +130,23 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 {(isTask || isMilestone) && level <= 1 && <FileText size={12} className="text-slate-400" />}
                 {(isTask || isMilestone) && level > 1 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
             </div>
-            <span className={`truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
-                {item.title}
-            </span>
+            {isTitleEditing ? (
+                <input
+                    ref={inputRef}
+                    value={editValue}
+                    onChange={(event) => setEditValue(event.target.value)}
+                    onBlur={handleTitleSave}
+                    onKeyDown={handleTitleKeyDown}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    disabled={!canEditTask}
+                    className={`task-title-text min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 font-medium text-slate-700 outline-none ring-1 ring-primary/30 ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}
+                />
+            ) : (
+                <span className={`task-title-text truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
+                    {item.title}
+                </span>
+            )}
             {onAddChild && (
                 <button
                     disabled={!canCreateTask}
@@ -107,11 +173,12 @@ const SharedTaskSidebar = ({
     onItemClick,
     isTaskListOpen,
     setIsTaskListOpen,
-    rowHeight = 28
+    rowHeight = COMPACT_DIMENSIONS.taskRowHeight
 }: SharedTaskSidebarProps) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
+    const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
     const { canCreateTask, canMoveTask } = useBoardPermissions();
 
     const sensors = useDragSensors();
@@ -158,49 +225,51 @@ const SharedTaskSidebar = ({
         }
     };
 
-    const handleAddList = async () => {
+    const handleAddList = () => {
         if (!canCreateTask) return;
-        const title = await useDialogStore.getState().showPrompt("請輸入任務名稱：", "新任務");
-        if (title && title.trim() && activeWorkspaceId && activeBoardId) {
-            addNode({
+        if (activeWorkspaceId && activeBoardId) {
+            const newNode: TaskNode = {
                 id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
                 workspaceId: activeWorkspaceId,
                 boardId: activeBoardId,
                 parentId: null,
-                title: title.trim(),
+                title: '新任務',
                 status: 'todo',
                 nodeType: 'group',
                 order: flattenedItems.length,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-            });
+            };
+            addNode(newNode);
+            setPendingTitleEditNodeId(newNode.id);
         }
     };
 
-    const handleAddChild = async (item: any) => {
+    const handleAddChild = (item: any) => {
         if (!canCreateTask) return;
-        const { showPrompt } = useDialogStore.getState();
-        const title = await showPrompt("請輸入任務名稱：", "新任務");
-        if (title && title.trim() && activeWorkspaceId && activeBoardId) {
-            addNode({
+        if (activeWorkspaceId && activeBoardId) {
+            const newNode: TaskNode = {
                 id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
                 workspaceId: activeWorkspaceId,
                 boardId: activeBoardId,
                 parentId: item.id,
-                title: title.trim(),
+                title: '新任務',
                 status: 'todo',
                 nodeType: 'task',
                 order: 999, // default to end
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-            });
+            };
+            if (collapsedIds.has(item.id)) toggleCollapse(item.id);
+            addNode(newNode);
+            setPendingTitleEditNodeId(newNode.id);
         }
     };
 
     return (
         <div className={`flex-shrink-0 flex flex-col border-r border-slate-200 bg-white z-20 transition-all duration-300 ease-in-out relative ${isTaskListOpen ? 'w-64' : 'w-10'}`}>
             {!isTaskListOpen ? (
-                <div className="flex-1 flex flex-col items-center pt-4 gap-4 overflow-hidden">
+                <div className="flex-1 flex flex-col items-center pt-[6px] gap-[8px] overflow-hidden">
                     <button
                         onClick={() => setIsTaskListOpen(true)}
                         className="p-1.5 hover:bg-slate-100 rounded-full text-primary transition-colors"
@@ -212,7 +281,7 @@ const SharedTaskSidebar = ({
                 </div>
             ) : (
                 <>
-                    <div className="h-10 flex items-center justify-between px-4 border-b-2 border-slate-200 bg-slate-50 font-bold text-xs text-slate-500 uppercase tracking-wider shrink-0">
+                    <div className="h-8 flex items-center justify-between px-[10px] border-b-2 border-slate-200 bg-slate-50 font-semibold text-xs text-slate-500 shrink-0">
                         <span>任務名稱</span>
                         <button
                             onClick={() => setIsTaskListOpen(false)}
@@ -250,18 +319,18 @@ const SharedTaskSidebar = ({
                             </SortableContext>
                             <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                                 {activeSortableItem ? (
-                                    <div className="max-w-[220px] truncate rounded-md border border-primary/20 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing">
+                                    <div className="task-title-text max-w-[220px] truncate rounded-md border border-primary/20 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing">
                                         {(activeSortableItem as any).title || '未命名任務'}
                                     </div>
                                 ) : null}
                             </DragOverlay>
                         </DndContext>
                         
-                        <div className="px-4 py-3">
+                        <div className="px-[10px] py-[6px]">
                             <button
                                 onClick={handleAddList}
                                 disabled={!canCreateTask}
-                                className="w-full py-2 flex items-center justify-center gap-2 text-[11px] font-bold text-slate-400 hover:text-primary hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 rounded-lg transition-all"
+                                className="w-full py-[5px] flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-primary hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 rounded-lg transition-all"
                             >
                                 <Plus size={14} />
                                 <span>新增頂層任務</span>

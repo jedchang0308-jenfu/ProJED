@@ -17,18 +17,18 @@ import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
-import { useCalendarSync } from './hooks/useCalendarSync';
 import { migrateLocalStorageToFirestore } from './utils/migration';
 import AuthGate from './components/AuthGate';
 import MainLayout from './components/MainLayout';
 import { useCalendarStore } from './store/useCalendarStore';
 import dayjs from 'dayjs';
+import { supabaseWorkspaceService } from './services/supabase/projedService';
 import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CalendarView from './components/CalendarView';
-import CalendarSubscriptionsView from './components/CalendarSubscriptionsView';
+import SettingsView from './components/SettingsView';
 import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
@@ -72,9 +72,6 @@ function AppContent() {
   // 啟動目前資料後端的同步監聽
   useDataSync();
 
-  // 啟動 Google Calendar 同步初始化（準備 OAuth 工具，不會自動彈窗）
-  useCalendarSync({ autoInit: true });
-
   // 載入行政院人事日曆 (當年度與下年度)
   useEffect(() => {
     const currentYear = dayjs().year();
@@ -117,8 +114,16 @@ function AppContent() {
       userId,
       email: userEmail,
       displayName: userDisplayName,
-    }).then((invite) => {
+    }).then(async (invite) => {
       const store = useBoardStore.getState();
+      if (dataBackend === 'supabase') {
+        try {
+          const nextWorkspaces = await supabaseWorkspaceService.list();
+          store.setWorkspaces(nextWorkspaces);
+        } catch (workspaceError) {
+          console.warn('[BoardInvite] accepted but workspace reload failed:', workspaceError);
+        }
+      }
       store.setActiveWorkspace(invite.workspaceId);
       store.setActiveBoard(invite.boardId);
       store.setView('board');
@@ -145,8 +150,10 @@ function AppContent() {
     if (!userId) return;
 
     const hasLegacyData = localStorage.getItem('projed-storage') || localStorage.getItem('projed_data');
+    const hasBoardInviteToken = new URLSearchParams(window.location.search).has(BOARD_INVITE_TOKEN_PARAM);
     // 若有遷移資料，等待遷移完成，不自動建立
     if (hasLegacyData) return;
+    if (hasBoardInviteToken) return;
 
     const timer = setTimeout(() => {
       const currentWorkspaces = useBoardStore.getState().workspaces;
@@ -204,7 +211,8 @@ function AppContent() {
       case 'board':       return <BoardView />;
       case 'gantt':       return <GanttView />;
       case 'calendar':    return <CalendarView />;
-      case 'calendar_subscriptions': return <CalendarSubscriptionsView />;
+      case 'calendar_subscriptions': return <SettingsView initialSection="calendar" />;
+      case 'settings':    return <SettingsView />;
       case 'recycle_bin': return <RecycleBinView />;
       default:            return <HomeView />;
     }

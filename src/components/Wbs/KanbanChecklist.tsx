@@ -180,7 +180,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       {/* 單一待辦項目列 — 拖曳只由左側把手啟動，避免影響手機捲動 */}
       <div
         {...checklistLongPressHandlers}
-        className={`kanban-checklist-item relative kanban-scroll-touch flex items-center gap-1.5 py-1 group rounded transition-colors ${
+        className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
           isDragging
             ? 'opacity-40 bg-primary/5'
             : isSelectingMode
@@ -189,7 +189,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
                 : 'hover:bg-amber-50/60 cursor-crosshair'
               : `hover:bg-slate-50 ${isEditing ? 'cursor-default' : ''}`
         }`}
-        style={{ paddingLeft: `${depth * 16 + 4}px` }}
+        style={{ paddingLeft: `${depth * 14 + 2}px` }}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -208,7 +208,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           attributes={attributes}
           listeners={listeners}
           disabled={!canMoveTask || isEditing || isSelectingMode}
-          size="sm"
+          size="xs"
         />
 
         {isEditing ? (
@@ -223,11 +223,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             onClick={(e) => e.stopPropagation()}
             disabled={!canEditTask}
             voiceEnabled
-            className="h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0.5 text-xs text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
+            className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 text-xs font-medium text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
           />
         ) : (
           <span
-            className={`text-xs leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
+            className={`task-title-text text-xs font-medium leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { if (canEditTask) onStartEdit(e, child); }}
             title="點擊以編輯任務名稱"
@@ -238,12 +238,12 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 
         {/* 日期標籤區 — 選取模式：顯示可點擊按鈕；一般模式：顯示日期 */}
         {isSelectingMode ? (
-          <div className="flex items-center gap-1 ml-1">
+          <div className="flex items-center gap-0.5 ml-0.5">
             {/* 開始日按鈕 */}
             <button
               disabled={!canCreateDependency}
               onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'start', child.title); }}
-              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-bold transition-all ${
+              className={`flex items-center gap-0.5 px-1 py-0 rounded-full border text-[9px] font-semibold transition-all ${
                 isSelfStart
                   ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
                   : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 cursor-crosshair'
@@ -256,7 +256,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             <button
               disabled={!canCreateDependency}
               onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(child.id, 'end', child.title); }}
-              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-bold transition-all ${
+              className={`flex items-center gap-0.5 px-1 py-0 rounded-full border text-[9px] font-semibold transition-all ${
                 isSelfEnd
                   ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
                   : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 cursor-crosshair'
@@ -271,7 +271,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           {/* 日期區間標籤 */}
           {!isEditing && ((showStartDate && child.startDate) || child.endDate) && (
           <span 
-            className={`text-[9px] rounded px-1.5 py-0.5 flex-shrink-0 ml-1 flex items-center gap-0.5 ${
+            className={`text-[9px] rounded px-1 py-0 flex-shrink-0 ml-0.5 flex items-center gap-0.5 ${
               isDueToday
                 ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
                 : `border ${isEndDateEffectivelyLocked ? 'border-dashed border-slate-400 opacity-80 bg-slate-50 text-slate-500' : 'border-slate-200 bg-white text-slate-400'}`
@@ -309,7 +309,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       </div>
 
       {showTags && nodeTags.length > 0 && (
-        <div className="ml-8 mt-0.5 flex flex-wrap gap-1">
+        <div className="ml-6 mt-px flex flex-wrap gap-0.5">
           {nodeTags.slice(0, 3).map(tag => (
             <TagChip key={tag.id} tag={tag} compact />
           ))}
@@ -345,6 +345,8 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
+  const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   const { canEditTask } = useBoardPermissions();
 
   // 行內編輯狀態管理（在容器層統一管理，避免多個 item 同時進入編輯模式）
@@ -405,11 +407,21 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
       .sort((a, b) => a.order - b.order);
   }, [childIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, previewNodes, nextAncestorKey]);
 
+  useEffect(() => {
+    if (!pendingTitleEditNodeId || !canEditTask) return;
+    const child = children.find(item => item.id === pendingTitleEditNodeId);
+    if (!child) return;
+
+    setEditingId(child.id);
+    setEditValue(child.title || '新任務');
+    setPendingTitleEditNodeId(null);
+  }, [pendingTitleEditNodeId, children, canEditTask, setPendingTitleEditNodeId]);
+
   // 無子節點則不渲染
   if (isRecursiveParent || children.length === 0) return null;
 
   return (
-    <div className={depth === 0 ? 'kanban-checklist-root mt-2 pt-2 border-t border-slate-100' : ''}>
+    <div className={depth === 0 ? 'kanban-checklist-root mt-px pt-px border-t border-slate-100' : ''}>
       <SortableContext items={children.map(child => child.id)} strategy={verticalListSortingStrategy}>
         {children.map(child => (
           <ChecklistItem

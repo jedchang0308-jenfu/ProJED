@@ -10,7 +10,8 @@ import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../../hooks/useDragSensors';
-import { StatusFilterBar } from '../ui/StatusFilterBar';
+import { ViewToolbar } from '../ui/ViewToolbar';
+import { compactClassNames } from '../ui/compactTokens';
 import { useTagStore } from '../../store/useTagStore';
 import { matchesTagFilters } from '../../utils/tags';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
@@ -28,6 +29,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
+  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   // 從全域 Store 取出顯示狀態
   const showDependencies = useBoardStore(s => s.showDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
@@ -188,37 +190,39 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       updatedAt: Date.now()
     };
     addNode(newNode);
+    setPendingTitleEditNodeId(newNode.id);
   };
 
   return (
     <WbsDependencyContext.Provider value={dependencyContextValue}>
-      <div className="flex flex-col w-full h-full bg-white overflow-hidden pt-4 px-6 md:px-8 relative">
+      <div className="flex flex-col w-full h-full bg-white overflow-hidden relative">
         
 
         {/* 依賴選單 Modal 已經移除，統一由右鍵選單進入選取模式 */}
 
-      {/* 狀態篩選器 + 操作區 */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 shrink-0">
-        <StatusFilterBar />
-        
-        <div className="flex items-center gap-2 ml-4 shrink-0">
-          <Button onClick={handleCreateRootNode} disabled={!canCreateTask} className="flex items-center gap-2 shrink-0">
+      <ViewToolbar
+        rightControls={(
+        <div className="flex items-center gap-[8px] shrink-0">
+          <Button onClick={handleCreateRootNode} disabled={!canCreateTask} size="none" className="flex h-[30px] items-center gap-1.5 shrink-0 px-[10px] py-[5px] text-xs font-semibold">
             <Plus size={18} />
             <span>新增頂層任務</span>
           </Button>
         </div>
-      </div>
+        )}
+      />
+
+      <div className={`flex-1 flex flex-col min-h-0 ${compactClassNames.canvas}`}>
 
       {/* 依賴關係選取模式橫幅 (與看板模式一致) */}
       {dependencySelection && (
-          <div className="mb-4 shrink-0 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex items-center justify-between gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-2.5 text-amber-700 text-sm font-semibold">
-                  <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+          <div className="mb-[6px] shrink-0 bg-amber-50 border border-amber-200 rounded-lg px-[10px] py-[5px] flex items-center justify-between gap-[10px] shadow-sm animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-[8px] text-amber-700 text-sm font-semibold">
+                  <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
                   </div>
                   <span>
                       選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
-                      <span className={`mx-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
+                      <span className={`mx-1 px-1.5 py-0 rounded-full text-[10px] font-semibold ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
                           {dependencySelection.side === 'start' ? '開始日期' : '結束日期'}
                       </span>
                       — 請點擊清單中任一任務的「日期」作為依賴目標
@@ -226,7 +230,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
               </div>
               <button
                   onClick={() => setDependencySelection(null)}
-                  className="bg-white border border-amber-200 text-amber-600 hover:bg-amber-100 hover:text-amber-700 text-xs font-bold px-3 py-1.5 rounded-md transition-all flex-shrink-0 shadow-sm active:scale-95"
+                  className="bg-white border border-amber-200 text-amber-600 hover:bg-amber-100 hover:text-amber-700 text-xs font-semibold px-[10px] py-[5px] rounded-md transition-all flex-shrink-0 shadow-sm active:scale-95"
               >
                   取消（退出鍵）
               </button>
@@ -234,7 +238,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       )}
 
       {/* 清單容器 */}
-      <div className="flex-1 overflow-y-auto w-full pb-20 pr-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto w-full pb-[10px] pr-0 custom-scrollbar">
         {rootNodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
             <p className="mb-4">此專案目前沒有任何任務</p>
@@ -245,7 +249,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
         ) : (
           <div className="flex flex-col bg-white border border-slate-200 rounded-lg shadow-sm relative">
             {/* Header Column Titles (Tree Grid) */}
-            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} py-2 px-4 bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10`}>
+            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} py-[5px] px-[10px] bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
                 <div className="flex items-center pl-[28px]">任務名稱</div>
                 <div className="flex items-center">負責人</div>
                 <div className="flex items-center">狀態</div>
@@ -270,7 +274,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                 
                 <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                     {activeSortableItem ? (
-                        <div className="max-w-[360px] truncate rounded-md border border-primary/30 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
+                        <div className="task-title-text max-w-[360px] truncate rounded-md border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-xl ring-2 ring-primary/20 cursor-grabbing rotate-1 scale-[1.02] transform-gpu pointer-events-none z-50">
                             {activeSortableItem.title || '未命名任務'}
                         </div>
                     ) : null}
@@ -278,6 +282,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             </DndContext>
           </div>
         )}
+      </div>
       </div>
     </div>
     </WbsDependencyContext.Provider>

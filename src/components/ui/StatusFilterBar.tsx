@@ -7,6 +7,7 @@ import type { TaskStatus } from '../../types';
 import { UNASSIGNED_ASSIGNEE_FILTER } from '../../utils/taskFilters';
 import { getTagDotStyle } from '../../utils/tags';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { compactClassNames } from './compactTokens';
 
 const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
   { key: 'todo', label: '待辦', color: 'bg-status-todo' },
@@ -18,7 +19,7 @@ const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
 ];
 
 const filterPillClass = (active: boolean) =>
-  `flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm transition-all ${
+  `flex items-center gap-1.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm transition-all ${
     active
       ? 'border-primary ring-2 ring-primary/35 shadow-primary/10'
       : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
@@ -113,7 +114,7 @@ export const StatusFilterBar: React.FC = () => {
         id="filter-menu-trigger"
         type="button"
         onClick={() => setIsOpen(prev => !prev)}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
+        className={`${compactClassNames.segmentedButtonBase} border ${
           isOpen
             ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
             : hasActiveFilter
@@ -124,7 +125,7 @@ export const StatusFilterBar: React.FC = () => {
         <SlidersHorizontal size={13} />
         <span>過濾器</span>
         {activeFilterCount > 0 && (
-          <span className="rounded-full bg-amber-400 px-1 py-0.5 text-[9px] font-black leading-none text-white">
+          <span className="rounded-full bg-amber-400 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
             {activeFilterCount}
           </span>
         )}
@@ -137,10 +138,10 @@ export const StatusFilterBar: React.FC = () => {
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
-          className="absolute left-0 top-[calc(100%+6px)] z-[10000] max-h-[calc(100vh-6rem)] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150"
+          className="absolute left-0 top-[calc(100%+4px)] z-[10000] max-h-[calc(100vh-6rem)] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150"
         >
-          <div className="px-3 pt-3 pb-2">
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">任務狀態</p>
+          <div className="px-3 pt-2 pb-2">
+            <p className="mb-2 text-[10px] font-semibold text-slate-500">任務狀態</p>
             <div className="flex flex-wrap gap-2">
               {STATUS_CONFIG.map(status => {
                 const isActive = statusFilters[status.key];
@@ -164,12 +165,12 @@ export const StatusFilterBar: React.FC = () => {
 
           <div className="px-3 pt-2 pb-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">到期日</p>
+              <p className="text-[10px] font-semibold text-slate-500">到期日</p>
               {hasDueFilter && (
                 <button
                   type="button"
                   onClick={() => setDueWithinDays(null)}
-                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700"
+                  className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
                 >
                   清除
                 </button>
@@ -186,7 +187,7 @@ export const StatusFilterBar: React.FC = () => {
                 到期日
               </button>
 
-              <label className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm">
+              <label className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm">
                 <input
                   type="number"
                   min={0}
@@ -194,7 +195,7 @@ export const StatusFilterBar: React.FC = () => {
                   value={dueWithinDays ?? ''}
                   onChange={event => handleDueDaysChange(event.target.value)}
                   placeholder="天數"
-                  className="w-12 bg-transparent text-right text-[11px] font-bold text-slate-700 outline-none placeholder:text-slate-300"
+                  className="w-12 bg-transparent text-right text-[11px] font-semibold text-slate-700 outline-none placeholder:text-slate-300"
                   aria-label="到期天數"
                 />
                 <span>天內</span>
@@ -203,7 +204,7 @@ export const StatusFilterBar: React.FC = () => {
           </div>
 
           <div className="px-3 pt-2 pb-3">
-            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">介面顯示</p>
+            <p className="mb-2 text-[10px] font-semibold text-slate-500">介面顯示</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -241,13 +242,13 @@ export const StatusFilterBar: React.FC = () => {
 
           <div className="px-3 pt-2 pb-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">標籤</p>
+              <p className="text-[10px] font-semibold text-slate-500">標籤</p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleCreateTag}
                   disabled={!activeWorkspaceId || !canEditTask}
-                  className="inline-flex items-center gap-1 text-[10px] font-bold text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:text-slate-300"
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:text-slate-300"
                 >
                   <Plus size={11} />
                   新增標籤
@@ -256,7 +257,7 @@ export const StatusFilterBar: React.FC = () => {
                   <button
                     type="button"
                     onClick={clearTagFilters}
-                    className="text-[10px] font-bold text-slate-400 hover:text-slate-700"
+                    className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
                   >
                     清除
                   </button>
@@ -265,7 +266,7 @@ export const StatusFilterBar: React.FC = () => {
             </div>
 
             {tags.length === 0 ? (
-              <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm">
+                <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm">
                 <Tag size={12} />
                 尚未建立標籤
               </div>
@@ -294,12 +295,12 @@ export const StatusFilterBar: React.FC = () => {
 
           <div className="px-3 pt-2 pb-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">負責人</p>
+              <p className="text-[10px] font-semibold text-slate-500">負責人</p>
               {activeAssigneeCount > 0 && (
                 <button
                   type="button"
                   onClick={clearAssigneeFilters}
-                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700"
+                  className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
                 >
                   清除
                 </button>
@@ -316,7 +317,7 @@ export const StatusFilterBar: React.FC = () => {
                 未指派
               </button>
               {assigneeOptions.length === 0 ? (
-                <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-400 shadow-sm">
+                <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-400 shadow-sm">
                   <UserRound size={12} />
                   尚無看板成員
                 </div>

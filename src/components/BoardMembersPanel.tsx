@@ -16,6 +16,11 @@ import {
 import { buildBoardInviteUrl, generateBoardInviteToken, hashBoardInviteToken, isLocalBoardInviteUrl } from '../utils/boardInviteToken';
 
 type MemberPanelTab = 'emailInvite' | 'boardMembers' | 'rolePermissions';
+type BoardMembersPanelMode = 'popover' | 'embedded';
+
+type BoardMembersPanelProps = {
+  mode?: BoardMembersPanelMode;
+};
 
 const ROLE_LABELS: Record<CollaborationRole, string> = {
   owner: '擁有者',
@@ -65,15 +70,17 @@ const formatDate = (value?: number) => {
   }).format(new Date(value));
 };
 
-export const BoardMembersPanel: React.FC = () => {
+export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'popover' }) => {
+  const isEmbedded = mode === 'embedded';
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const boardMembers = useMemberStore(state => state.boardMembers);
   const loading = useMemberStore(state => state.loading);
+  const loadMembers = useMemberStore(state => state.loadMembers);
   const inviteBoardMember = useMemberStore(state => state.inviteBoardMember);
   const removeBoardMember = useMemberStore(state => state.removeBoardMember);
   const { canManageBoardMembers } = useBoardPermissions();
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(isEmbedded);
   const [activeTab, setActiveTab] = React.useState<MemberPanelTab>('emailInvite');
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [pendingInvites, setPendingInvites] = React.useState<BoardInvite[]>([]);
@@ -82,6 +89,10 @@ export const BoardMembersPanel: React.FC = () => {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
+    if (isEmbedded) {
+      setIsOpen(true);
+      return;
+    }
     if (!isOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -92,7 +103,7 @@ export const BoardMembersPanel: React.FC = () => {
 
     window.addEventListener('pointerdown', handlePointerDown);
     return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, [isOpen]);
+  }, [isEmbedded, isOpen]);
 
   const loadPendingInvites = React.useCallback(async () => {
     if (!activeWorkspaceId || !activeBoardId) {
@@ -113,6 +124,11 @@ export const BoardMembersPanel: React.FC = () => {
     if (!isOpen || activeTab !== 'emailInvite') return;
     void loadPendingInvites();
   }, [activeTab, isOpen, loadPendingInvites]);
+
+  React.useEffect(() => {
+    if (!isOpen || activeTab !== 'boardMembers' || !activeWorkspaceId || !activeBoardId) return;
+    void loadMembers(activeWorkspaceId, activeBoardId);
+  }, [activeBoardId, activeTab, activeWorkspaceId, isOpen, loadMembers]);
 
   const handleInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
@@ -201,35 +217,26 @@ export const BoardMembersPanel: React.FC = () => {
 
   if (!activeBoardId) return null;
 
-  return (
-    <div className="relative" ref={panelRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(current => !current)}
-        className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-      >
-        <Users size={16} />
-        <span>看板權限</span>
-        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
-          {boardMembers.length}
-        </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 top-11 z-[10020] w-[420px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+  const panelContent = isOpen ? (
+        <div className={isEmbedded
+          ? 'overflow-hidden border border-slate-200 bg-white'
+          : 'absolute right-0 top-11 z-[10020] w-[420px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl'
+        }>
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>
               <h3 className="text-sm font-bold text-slate-800">看板權限</h3>
               <p className="text-xs text-slate-400">管理看板邀請、成員與角色權限。</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="關閉看板權限面板"
-            >
-              <X size={16} />
-            </button>
+            {!isEmbedded && (
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="關閉看板權限面板"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-3 border-b border-slate-100 bg-slate-50 px-2 py-2">
@@ -417,7 +424,31 @@ export const BoardMembersPanel: React.FC = () => {
             </div>
           )}
         </div>
-      )}
+  ) : null;
+
+  if (isEmbedded) {
+    return (
+      <div ref={panelRef}>
+        {panelContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative" ref={panelRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(current => !current)}
+        className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+      >
+        <Users size={16} />
+        <span>看板權限</span>
+        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+          {boardMembers.length}
+        </span>
+      </button>
+
+      {panelContent}
     </div>
   );
 };

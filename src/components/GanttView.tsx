@@ -5,9 +5,10 @@ import { useWbsStore } from '../store/useWbsStore';
 import dayjs from 'dayjs';
 import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
-import { StatusFilterBar } from './ui/StatusFilterBar';
+import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
+import { compactClassNames, compactIconButtonClass, compactSegmentedButtonClass } from './ui/compactTokens';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -211,45 +212,40 @@ const GanttView = () => {
 
     return (
         <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-            {/* Toolbar */}
-            <div className="h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0" style={{ zIndex: 110 }}>
-                {/* Left: Status Filters */}
-                <div className="flex items-center gap-1 sm:gap-4 py-2 mr-4 flex-1">
-                    <StatusFilterBar />
-                </div>
-
-                {/* Right: Controls */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="flex p-0.5 bg-slate-100 rounded-lg">
+            <ViewToolbar
+                rightControls={(
+                    <>
+                    <div className="flex items-center gap-[8px]">
+                        <div className={compactClassNames.segmented}>
                             {['Day', 'Month', 'Quarter', 'Year'].map(m => (
                                 <button
                                     key={m}
                                     onClick={() => setMode(m)}
-                                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === m ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    className={compactSegmentedButtonClass(mode === m)}
                                 >
                                     {m === 'Day' ? '日度' : m === 'Month' ? '月度' : m === 'Quarter' ? '季度' : '年度'}
                                 </button>
                             ))}
                         </div>
-                        <button onClick={scrollToNow} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-lg text-xs font-bold transition-all shadow-sm group" title="跳轉至今天">
+                        <button onClick={scrollToNow} className={`${compactClassNames.textButtonBase} group`} title="跳轉至今天">
                             <Calendar size={14} className="group-hover:scale-110 transition-transform" />
                             <span>今天</span>
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
-                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                            <button onClick={() => setSidebarOpen(!isSidebarOpen)} className={`p-1.5 rounded transition-all ${!isSidebarOpen ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`} title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}>
+                    <div className="flex items-center gap-[8px] border-l border-slate-200 pl-[8px]">
+                        <div className={compactClassNames.segmented}>
+                            <button onClick={() => setSidebarOpen(!isSidebarOpen)} className={compactIconButtonClass(!isSidebarOpen)} title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}>
                                 {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                             </button>
-                            <button onClick={() => setIsTaskListOpen(!isTaskListOpen)} className={`p-1.5 rounded transition-all ${!isTaskListOpen ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`} title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}>
+                            <button onClick={() => setIsTaskListOpen(!isTaskListOpen)} className={compactIconButtonClass(!isTaskListOpen)} title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}>
                                 <LayoutList size={16} />
                             </button>
                         </div>
                     </div>
-                </div>
-            </div>
+                    </>
+                )}
+            />
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Left Sidebar */}

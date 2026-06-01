@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
 
 export const getX = (date: dayjs.Dayjs | string | null | undefined, colWidth: number, mode: string, gridStart: dayjs.Dayjs) => {
     if (!date) return 0;
@@ -89,4 +90,4 @@ export const GANTT_COLOR_MAP: Record<string, Record<string, string>> = {
     }
 };
 
-export const BAR_HEIGHT = 28;
+export const BAR_HEIGHT = COMPACT_DIMENSIONS.taskRowHeight;

@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 @theme {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", Arial, sans-serif;
+
   --color-primary: #6366f1;
   --color-primary-hover: #4f46e5;
   --color-primary-light: #eef2ff;
@@ -14,6 +16,8 @@
 
 @layer base {
   :root {
+    --font-app: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", Arial, sans-serif;
+    --font-task-title: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", "Segoe UI", system-ui, sans-serif;
     --bg-dark: #f8fafc;
     --bg-card: #ffffff;
     --bg-surface: #ffffff;
@@ -26,9 +30,25 @@
     --radius: 8px;
   }
 
+  html,
+  body,
+  #root {
+    font-family: var(--font-app);
+    letter-spacing: 0;
+  }
+
   body {
     @apply bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden h-screen;
-    font-family: 'Inter', 'Outfit', sans-serif;
+    font-family: var(--font-app);
+    font-synthesis-weight: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    letter-spacing: 0;
   }
 }
 
@@ -43,6 +63,13 @@
 
   .glass-card {
     @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl rounded-xl;
+  }
+
+  .task-title-text {
+    font-family: var(--font-task-title);
+    font-weight: 500;
+    font-synthesis-weight: none;
+    text-rendering: geometricPrecision;
   }
 }
 
@@ -190,13 +217,13 @@
     overscroll-behavior: contain;
   }
 
-  /* 手機看板任務卡片 Y 軸間距：8px -> 5.6px，縮小 30%。 */
+  /* 手機看板任務卡片 Y 軸間距：不改字級，只壓縮垂直留白。 */
   .kanban-task-card {
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
   .kanban-task-card-body {
-    padding: 6px;
+    padding: 2px 6px;
   }
 
   .kanban-task-title-row,
@@ -209,7 +236,7 @@
   .kanban-task-progress,
   .kanban-checklist-section,
   .kanban-card-dropzone {
-    margin-top: 3px;
+    margin-top: 2px;
   }
 
   .kanban-task-meta > * {
@@ -222,31 +249,31 @@
   }
 
   .kanban-checklist-toggle {
-    min-height: 22px;
+    min-height: 18px;
     min-width: 0;
-    padding-top: 1px;
-    padding-bottom: 1px;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .kanban-checklist-body {
     padding-left: 2px;
     padding-right: 2px;
-    padding-bottom: 1px;
+    padding-bottom: 0;
   }
 
   .kanban-checklist-root {
-    margin-top: 2px;
-    padding-top: 2px;
+    margin-top: 1px;
+    padding-top: 1px;
   }
 
   .kanban-checklist-item {
     gap: 4px;
-    padding-top: 1px;
-    padding-bottom: 1px;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
-  .kanban-card-dropzone.h-12 {
-    height: 32px;
+  .kanban-card-dropzone.h-5 {
+    height: 20px;
   }
 }
 

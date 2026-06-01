@@ -1,27 +1,15 @@
 // @ts-nocheck
 import React from 'react';
-import { useState, useEffect } from 'react';
-import { Menu, Layout, RefreshCw, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Loader2, Unplug, Undo2, Redo2, Sparkles } from 'lucide-react';
+import { useEffect } from 'react';
+import { Menu, Layout, ChevronRight, ListChecks, Columns, LineChart, CalendarDays, Undo2, Redo2, Sparkles } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
-import useCalendarSync from '../hooks/useCalendarSync';
 import useUndoStore from '../store/useUndoStore';
 import useRagStore from '../store/useRagStore';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import RagSidebar from './Rag/RagSidebar';
-
-/**
- * getRelativeTime — 將時間戳轉為相對時間（如「3 分鐘前」）
- * 設計意圖：同步按鈕旁顯示上次同步時間，增加使用者信心
- */
-function getRelativeTime(timestamp: number | null): string {
-    if (!timestamp) return '';
-    const diff = Math.floor((Date.now() - timestamp) / 1000);
-    if (diff < 60) return '剛剛';
-    if (diff < 3600) return `${Math.floor(diff / 60)} 分鐘前`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} 小時前`;
-    return `${Math.floor(diff / 86400)} 天前`;
-}
+import { compactIconButtonClass } from './ui/compactTokens';
+import { ModeSwitcher } from './ui/ModeSwitcher';
 
 const MainLayout = ({ children }) => {
     const {
@@ -30,12 +18,6 @@ const MainLayout = ({ children }) => {
     } = useBoardStore();
     
     const isSelectingMode = !!dependencySelection;
-
-    // ── Google 行事曆同步狀態 ──
-    const {
-        isConnected, isSyncing, lastSyncAt, error,
-        connect, disconnect, syncAll
-    } = useCalendarSync();
 
     // ── Undo / Redo 狀態 ──
     const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndoStore();
@@ -67,35 +49,15 @@ const MainLayout = ({ children }) => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo, canUndo, canRedo]);
 
-    // 同步相對時間（每 30 秒更新）
-    const [relativeTime, setRelativeTime] = useState(getRelativeTime(lastSyncAt));
-    useEffect(() => {
-        setRelativeTime(getRelativeTime(lastSyncAt));
-        const timer = setInterval(() => setRelativeTime(getRelativeTime(lastSyncAt)), 30000);
-        return () => clearInterval(timer);
-    }, [lastSyncAt]);
-
     const activeBoard = getActiveBoard();
     const activeWorkspace = getActiveWorkspace();
-
-    /**
-     * handleSyncClick — 同步按鈕點擊處理
-     * 設計意圖：
-     * - 未連接 → 觸發 OAuth 授權
-     * - 已連接 → 觸發全量同步
-     * - 同步中 → 不做任何事（按鈕已 disabled）
-     */
-    const handleSyncClick = async () => {
-        if (isSyncing) return;
-        if (!isConnected) {
-            connect();
-        } else {
-            const result = await syncAll();
-            if (result) {
-                console.log(`📊 同步結果: 新增 ${result.created}, 更新 ${result.updated}, 刪除 ${result.deleted}, 跳過 ${result.skipped}`);
-            }
-        }
-    };
+    const isBoardWorkspaceView = ['list', 'board', 'gantt', 'calendar'].includes(currentView);
+    const modeSwitcherOptions = [
+        { value: 'list', label: '清單', icon: <ListChecks size={13} /> },
+        { value: 'board', label: '看板', icon: <Columns size={13} /> },
+        { value: 'gantt', label: '甘特圖', icon: <LineChart size={13} /> },
+        { value: 'calendar', label: '月曆', icon: <CalendarDays size={13} /> },
+    ] as const;
 
     return (
         <div className="flex flex-col h-screen bg-slate-50 text-slate-800">
@@ -113,14 +75,27 @@ const MainLayout = ({ children }) => {
                         <Layout className="text-primary w-5 h-5" />
                         <span className="text-slate-700 font-bold hidden sm:inline">ProJED</span>
 
-                        {currentView === 'calendar_subscriptions' && (
+                        {(currentView === 'settings' || currentView === 'calendar_subscriptions') && (
                             <>
                                 <ChevronRight size={14} className="text-slate-300" />
-                                <span className="text-slate-700 font-bold">自訂行事曆訂閱</span>
+                                <span className="text-slate-700 font-bold">設定</span>
+                                {currentView === 'calendar_subscriptions' && (
+                                    <>
+                                        <ChevronRight size={14} className="text-slate-300" />
+                                        <span className="text-slate-500 font-bold">行事曆訂閱</span>
+                                    </>
+                                )}
                             </>
                         )}
 
-                        {currentView !== 'home' && currentView !== 'calendar_subscriptions' && activeWorkspace && (
+                        {currentView === 'recycle_bin' && (
+                            <>
+                                <ChevronRight size={14} className="text-slate-300" />
+                                <span className="text-slate-700 font-bold">資源回收桶</span>
+                            </>
+                        )}
+
+                        {isBoardWorkspaceView && activeWorkspace && activeBoard && (
                             <>
                                 <ChevronRight size={14} className="text-slate-300" />
                                 <span className="text-slate-400 whitespace-nowrap">{activeWorkspace.title}</span>
@@ -134,60 +109,24 @@ const MainLayout = ({ children }) => {
                                     {activeBoard?.title}
                                 </h1>
 
-                                <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200">
-                                    <div className="bg-slate-100 p-0.5 rounded-lg flex gap-0.5 shadow-inner">
-                                        {/* 清單模式 — 排在所有視圖之前，作為底層資料展示入口 */}
-                                        <button
-                                            onClick={() => setView('list')}
-                                            disabled={isSelectingMode}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'list' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
-                                        >
-                                            <ListChecks size={13} />
-                                            <span className="hidden md:inline">清單</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setView('board')}
-                                            disabled={isSelectingMode}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'board' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
-                                        >
-                                            <Columns size={13} />
-                                            <span className="hidden md:inline">看板</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setView('gantt')}
-                                            disabled={isSelectingMode}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'gantt' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
-                                        >
-                                            <LineChart size={13} />
-                                            <span className="hidden md:inline">甘特圖</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setView('calendar')}
-                                            disabled={isSelectingMode}
-                                            className={`p-1 px-2.5 rounded-md text-[10px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${currentView === 'calendar' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'} ${isSelectingMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title={isSelectingMode ? '選取模式中無法切換視圖' : ''}
-                                        >
-                                            <CalendarDays size={13} />
-                                            <span className="hidden md:inline">月曆</span>
-                                        </button>
-                                    </div>
+                                <div className="flex items-center gap-[8px] ml-[10px] pl-[10px] border-l border-slate-200">
+                                    <ModeSwitcher
+                                        value={currentView}
+                                        options={modeSwitcherOptions}
+                                        onChange={setView}
+                                        disabled={isSelectingMode}
+                                        disabledTitle="選取模式中無法切換視圖"
+                                    />
 
                                     {/* ── Undo / Redo 按鈕組 ── */}
-                                    <div className="flex items-center gap-0.5 ml-1 pl-3 border-l border-slate-200">
+                                    <div className="flex items-center gap-px ml-0 pl-[8px] border-l border-slate-200">
                                         {/* 上一步按鈕 */}
                                         <button
                                             id="btn-undo"
                                             onClick={undo}
                                             disabled={!canUndo()}
                                             title={canUndo() ? `上一步：${lastUndoLabel}\u000aCtrl+Z` : '沒有可撤銷的操作'}
-                                            className={`p-1 rounded transition-all ${
-                                                canUndo()
-                                                    ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 cursor-pointer'
-                                                    : 'text-slate-300 cursor-not-allowed'
-                                            }`}
+                                            className={canUndo() ? compactIconButtonClass() : `${compactIconButtonClass()} text-slate-300 cursor-not-allowed`}
                                         >
                                             <Undo2 size={15} />
                                         </button>
@@ -197,11 +136,7 @@ const MainLayout = ({ children }) => {
                                             onClick={redo}
                                             disabled={!canRedo()}
                                             title={canRedo() ? `下一步：${lastRedoLabel}\u000aCtrl+Shift+Z` : '沒有可重做的操作'}
-                                            className={`p-1 rounded transition-all ${
-                                                canRedo()
-                                                    ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 cursor-pointer'
-                                                    : 'text-slate-300 cursor-not-allowed'
-                                            }`}
+                                            className={canRedo() ? compactIconButtonClass() : `${compactIconButtonClass()} text-slate-300 cursor-not-allowed`}
                                         >
                                             <Redo2 size={15} />
                                         </button>
@@ -218,9 +153,8 @@ const MainLayout = ({ children }) => {
                     </div>
                 </div>
 
-                {/* ── Google 行事曆同步與智慧助理控制區 ── */}
+                {/* ── 智慧助理控制區 ── */}
                 <div className="flex items-center gap-1 sm:gap-2">
-                    {/* 智慧助理按鈕 */}
                     <button
                         onClick={toggleRagPanel}
                         className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
@@ -231,68 +165,6 @@ const MainLayout = ({ children }) => {
                         <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
                         <span className="hidden lg:inline">智慧助理</span>
                     </button>
-
-                    {/* 同步按鈕：三種狀態（未連接 / 已連接 / 同步中） */}
-                    <button
-                        onClick={handleSyncClick}
-                        disabled={isSyncing}
-                        className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
-                            isSyncing
-                                ? 'opacity-60 cursor-not-allowed'
-                                : isConnected
-                                    ? 'hover:border-green-400 hover:text-green-600'
-                                    : 'hover:border-primary hover:text-primary'
-                        }`}
-                        title={
-                            isSyncing
-                                ? '同步中...'
-                                : isConnected
-                                    ? `點擊同步 | 上次: ${relativeTime || '尚未同步'}`
-                                    : '點擊連接 Google 行事曆'
-                        }
-                    >
-                        {/* 圖示：同步中旋轉、已連接勾勾、未連接一般 */}
-                        {isSyncing ? (
-                            <Loader2 size={14} className="animate-spin" />
-                        ) : isConnected ? (
-                            <RefreshCw size={14} className="text-green-500" />
-                        ) : (
-                            <RefreshCw size={14} />
-                        )}
-
-                        {/* 文字標籤 */}
-                        <span className="hidden lg:inline">
-                            {isSyncing
-                                ? '同步中...'
-                                : isConnected
-                                    ? '同步 Google 日曆'
-                                    : '連接 Google 日曆'
-                            }
-                        </span>
-
-                        {/* 已連接狀態：顯示上次同步時間小圓點 */}
-                        {isConnected && !isSyncing && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                        )}
-                    </button>
-
-                    {/* 已連接時：顯示斷開連接的按鈕（小圖示） */}
-                    {isConnected && (
-                        <button
-                            onClick={disconnect}
-                            className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded text-slate-400 transition-all"
-                            title="斷開 Google 行事曆連接"
-                        >
-                            <Unplug size={14} />
-                        </button>
-                    )}
-
-                    {/* 同步錯誤提示 */}
-                    {error && (
-                        <span className="text-[10px] text-red-500 max-w-[120px] truncate hidden lg:inline" title={error}>
-                            ⚠️ {error}
-                        </span>
-                    )}
                 </div>
             </nav>
 

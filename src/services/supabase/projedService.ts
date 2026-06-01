@@ -249,7 +249,7 @@ const mapDependency = (dep: WbsDependencyWithNodes): Dependency => ({
   offset: dep.offset_days,
 });
 
-const resolveWorkspaceId = async (workspaceId: string): Promise<string> => {
+export const resolveWorkspaceId = async (workspaceId: string): Promise<string> => {
   if (isUuid(workspaceId)) return workspaceId;
   const { data, error } = await supabase
     .from('tenants')
@@ -261,7 +261,7 @@ const resolveWorkspaceId = async (workspaceId: string): Promise<string> => {
   return data.id;
 };
 
-const resolveProjectId = async (tenantId: string, projectId: string): Promise<string> => {
+export const resolveProjectId = async (tenantId: string, projectId: string): Promise<string> => {
   if (isUuid(projectId)) return projectId;
   const { data, error } = await supabase
     .from('projects')
@@ -449,17 +449,42 @@ export const supabaseBoardService = {
   create: async (workspaceId: string, title?: string): Promise<Board> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    assertNoError(userError);
+    const creatorId = userData.user?.id ?? null;
     const { data, error } = await supabase
       .from('projects')
       .insert({
         tenant_id: tenantId,
         name: title || '未命名看板',
         sort_order: Date.now(),
+        created_by: creatorId,
       })
       .select()
       .single();
     assertNoError(error);
     if (!data) throw new Error('Supabase did not return the created project.');
+    if (creatorId) {
+      const { data: workspaceMember, error: memberError } = await supabase
+        .from('tenant_members')
+        .select('role')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', creatorId)
+        .eq('status', 'active')
+        .maybeSingle();
+      assertNoError(memberError);
+      if (workspaceMember?.role) {
+        const { error: boardMemberError } = await supabase
+          .from('project_members')
+          .upsert({
+            tenant_id: tenantId,
+            project_id: data.id,
+            user_id: creatorId,
+            role: workspaceMember.role,
+          });
+        assertNoError(boardMemberError);
+      }
+    }
     return mapProjectToBoard(data);
   },
 
@@ -755,7 +780,26 @@ export const supabaseBoardInviteService = {
     assertNoError(error);
     if (!data) throw new Error('Supabase did not return the accepted board invite.');
     const row = data as BoardInviteRow;
-    return mapBoardInvite(row, row.tenant_id, row.project_id);
+    const [{ data: tenant, error: tenantError }, { data: project, error: projectError }] = await Promise.all([
+      supabase
+        .from('tenants')
+        .select('id,legacy_workspace_id')
+        .eq('id', row.tenant_id)
+        .maybeSingle(),
+      supabase
+        .from('projects')
+        .select('id,legacy_board_id')
+        .eq('tenant_id', row.tenant_id)
+        .eq('id', row.project_id)
+        .maybeSingle(),
+    ]);
+    assertNoError(tenantError);
+    assertNoError(projectError);
+    return mapBoardInvite(
+      row,
+      tenant ? legacyOrId(tenant.id, tenant.legacy_workspace_id) : row.tenant_id,
+      project ? legacyOrId(project.id, project.legacy_board_id) : row.project_id
+    );
   },
 };
 

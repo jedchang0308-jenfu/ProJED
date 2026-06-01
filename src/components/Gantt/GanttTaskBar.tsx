@@ -6,6 +6,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
+import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
 
 interface TaskItem {
     id: string;
@@ -103,7 +104,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const x1 = getX(start, colWidth, mode, gridStart);
     const x2 = getX(dayjs(end).add(1, 'day'), colWidth, mode, gridStart);
     let width = Math.max(x2 - x1, 24);
-    const barHeight = 25; // fixed
+    const barHeight = COMPACT_DIMENSIONS.ganttBarHeight;
 
     const isDragging = dragState && dragState.item.id === item.id;
     const isRelated = isHovered;
@@ -372,11 +373,11 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
             return (
                 <span
-                    className={`absolute whitespace-nowrap text-[11px] font-bold pointer-events-none select-none px-2 transition-transform duration-75
+                    className={`task-title-text absolute whitespace-nowrap text-[11px] font-medium pointer-events-none select-none px-2 transition-transform duration-75
                         ${item.type === 'list'
                             ? 'text-white drop-shadow-sm'
                             : item.type === 'card'
-                                ? `${GANTT_COLOR_MAP[status]?.card.match(/text-status-\w+/)?.[0] || 'text-status-todo'} font-extrabold`
+                                ? `${GANTT_COLOR_MAP[status]?.card.match(/text-status-\w+/)?.[0] || 'text-status-todo'}`
                                 : `${GANTT_COLOR_MAP[status]?.checklist.match(/text-status-\w+/)?.[0] || 'text-status-todo'} opacity-80`}
                     `}
                     style={textStyles}
@@ -391,11 +392,11 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
             return (
                 <div
-                    className={`absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-bold whitespace-nowrap pointer-events-none select-none
+                    className={`task-title-text absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-medium whitespace-nowrap pointer-events-none select-none
                         ${item.type === 'list'
                             ? `${GANTT_COLOR_MAP[status]?.list.match(/bg-status-\w+/)?.[0].replace('bg-', 'text-') || 'text-status-todo'} brightness-75`
                             : item.type === 'card'
-                                ? `${GANTT_COLOR_MAP[status]?.card.match(/text-status-\w+/)?.[0] || 'text-status-todo'} font-extrabold`
+                                ? `${GANTT_COLOR_MAP[status]?.card.match(/text-status-\w+/)?.[0] || 'text-status-todo'}`
                                 : `${GANTT_COLOR_MAP[status]?.checklist.match(/text-status-\w+/)?.[0] || 'text-status-todo'} opacity-80`}
                     `}
                 >

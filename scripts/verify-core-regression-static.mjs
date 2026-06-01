@@ -67,7 +67,7 @@ const checks = [
   {
     name: 'shared task sidebar guards missing node level before style calculations',
     ok: includes('src/components/SharedTaskSidebar.tsx', 'Number.isFinite(item.level) ? item.level : 0') &&
-      includes('src/components/SharedTaskSidebar.tsx', 'paddingLeft: Math.max(12, 12 + (level * 16))'),
+      includes('src/components/SharedTaskSidebar.tsx', 'paddingLeft: Math.max(10, 10 + (level * 14))'),
   },
 ];
 

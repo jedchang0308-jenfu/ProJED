@@ -1,13 +1,12 @@
 // @ts-nocheck
 import React from 'react';
-import { Layout, Plus, ChevronRight, LayoutDashboard, Menu, ChevronLeft, Trash2, Download, Upload, LogOut, CalendarPlus } from 'lucide-react';
+import { Plus, ChevronRight, LayoutDashboard, ChevronLeft, Trash2, LogOut, Settings } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import useDialogStore from '../store/useDialogStore';
-import { useWbsStore } from '../store/useWbsStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
-const Sidebar = ({ isOpen, toggle }) => {
+const Sidebar = () => {
     const { workspaces, activeBoardId, switchBoard, showHome, isSidebarOpen, setSidebarOpen, removeBoard, removeWorkspace, currentView, setView } = useBoardStore();
     const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
 
@@ -22,13 +21,23 @@ const Sidebar = ({ isOpen, toggle }) => {
                     >
                         <ChevronRight size={18} />
                     </button>
-                    <div className="h-full w-px bg-slate-100" />
+                    <div className="flex-1 w-px bg-slate-100" />
+                    <button
+                        onClick={() => setView('settings')}
+                        className={`mb-3 p-1.5 rounded-full transition-colors ${currentView === 'settings'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+                            }`}
+                        title="設定"
+                    >
+                        <Settings size={18} />
+                    </button>
                 </div>
             ) : (
                 <div className="w-64 h-full flex flex-col">
                     {/* Sidebar Header */}
                     <div className="h-14 p-4 border-b-2 border-slate-200 flex items-center justify-between bg-slate-50">
-                        <span className="font-bold text-xs text-slate-500 uppercase tracking-wider">工作區選單</span>
+                        <span className="font-semibold text-xs text-slate-500">工作區選單</span>
                         <div className="flex items-center gap-1">
                             <button onClick={showHome} className="p-1 hover:bg-slate-200 rounded text-slate-400 transition-colors" title="回到首頁">
                                 <LayoutDashboard size={14} />
@@ -48,7 +57,7 @@ const Sidebar = ({ isOpen, toggle }) => {
                         {workspaces.map((ws) => (
                             <div key={ws.id} className="space-y-1">
                                 <div className="px-3 py-2 flex items-center justify-between group">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{ws.title}</span>
+                                    <span className="text-xs font-semibold text-slate-400">{ws.title}</span>
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                         <button
                                             onClick={async () => {
@@ -93,12 +102,12 @@ const Sidebar = ({ isOpen, toggle }) => {
                                                     switchBoard(ws.id, board.id);
                                                 }
                                             }}
-                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors group/item cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 ${activeBoardId === board.id
+                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors group/item cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 ${activeBoardId === board.id && ['list', 'board', 'gantt', 'calendar'].includes(currentView)
                                                 ? 'bg-primary text-white shadow-md'
                                                 : 'text-slate-600 hover:bg-slate-100'
                                                 }`}
                                         >
-                                            <LayoutDashboard size={16} className={activeBoardId === board.id ? 'text-white' : 'text-slate-400'} />
+                                            <LayoutDashboard size={16} className={activeBoardId === board.id && ['list', 'board', 'gantt', 'calendar'].includes(currentView) ? 'text-white' : 'text-slate-400'} />
                                             <span className="text-sm font-medium truncate flex-1">{board.title}</span>
                                             <button
                                                 onClick={async (e) => {
@@ -125,25 +134,14 @@ const Sidebar = ({ isOpen, toggle }) => {
 
                     <div className="p-2 border-t border-slate-100 bg-slate-50/50">
                         <button
-                            onClick={() => setView('calendar_subscriptions')}
-                            className={`mb-2 w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${currentView === 'calendar_subscriptions'
+                            onClick={() => setView('settings')}
+                            className={`w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${currentView === 'settings'
                                 ? 'bg-primary text-white shadow-md font-bold text-sm tracking-wide'
                                 : 'text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm font-medium text-sm'
                                 }`}
                         >
-                            <CalendarPlus size={16} className={currentView === 'calendar_subscriptions' ? 'text-white/90' : 'text-slate-400'} />
-                            <span className="truncate flex-1 text-left">行事曆訂閱</span>
-                        </button>
-
-                        <button
-                            onClick={() => setView('recycle_bin')}
-                            className={`w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/50 ${currentView === 'recycle_bin'
-                                ? 'bg-rose-500 text-white shadow-md font-bold text-sm tracking-wide'
-                                : 'text-slate-600 hover:bg-white hover:text-rose-600 hover:shadow-sm font-medium text-sm'
-                                }`}
-                        >
-                            <Trash2 size={16} className={currentView === 'recycle_bin' ? 'text-white/90' : 'text-slate-400 group-hover:text-rose-500'} />
-                            <span className="truncate flex-1 text-left">資源回收桶</span>
+                            <Settings size={16} className={currentView === 'settings' ? 'text-white/90' : 'text-slate-400'} />
+                            <span className="truncate flex-1 text-left">設定</span>
                         </button>
                     </div>
 
@@ -164,36 +162,6 @@ const Sidebar = ({ isOpen, toggle }) => {
                             >
                                 <LogOut size={14} />
                             </button>
-                        </div>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => useWbsStore.getState().exportData()}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
-                            >
-                                <Download size={14} />
-                                匯出任務
-                            </button>
-                            <label className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium transition-colors ${canEditBoardSettings ? 'text-slate-600 hover:bg-slate-50 hover:text-primary cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`}>
-                                <Upload size={14} />
-                                匯入備份
-                                <input 
-                                    type="file" 
-                                    accept=".json" 
-                                    className="hidden" 
-                                    disabled={!canEditBoardSettings}
-                                    onChange={(e) => {
-                                        if (!canEditBoardSettings) return;
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        const reader = new FileReader();
-                                        reader.onload = (event) => {
-                                            useWbsStore.getState().importData(event.target?.result as string);
-                                        };
-                                        reader.readAsText(file);
-                                        e.target.value = '';
-                                    }}
-                                />
-                            </label>
                         </div>
                     </div>
                 </div>

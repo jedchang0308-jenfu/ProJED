@@ -15,12 +15,12 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { GlobalContextMenu } from './GlobalContextMenu';
-import { StatusFilterBar } from './ui/StatusFilterBar';
-import { BoardMembersPanel } from './BoardMembersPanel';
+import { ViewToolbar } from './ui/ViewToolbar';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
+import { compactClassNames } from './ui/compactTokens';
 import type { TaskNode, TaskStatus } from '../types';
 
 /**
@@ -37,6 +37,7 @@ const BoardView = () => {
     const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
     const setDependencySelection = useBoardStore(s => s.setDependencySelection);
+    const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
     const toggleStartDate = useBoardStore(s => s.toggleStartDate);
     const showStartDate = useBoardStore(s => s.showStartDate);
     const { addDependency, dependencies } = useWbsStore();
@@ -418,6 +419,7 @@ const BoardView = () => {
             updatedAt: Date.now(),
         };
         addNode(newNode);
+        setPendingTitleEditNodeId(newNode.id);
     };
 
     if (!activeBoardId) {
@@ -439,20 +441,16 @@ const BoardView = () => {
             onDragEnd={handleDragEnd}
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
-                {/* 工具列 (Toolbar) — 狀態篩選器 */}
-                <div className="relative z-[10000] h-12 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
-                    <StatusFilterBar />
-                    <BoardMembersPanel />
-                </div>
+                <ViewToolbar zIndex={10000} />
 
                 {/* 依賴關係選取模式橫幅 */}
                 {dependencySelection && (
-                    <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between gap-3">
+                    <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-[10px] py-[5px] flex items-center justify-between gap-[10px]">
                         <div className="flex items-center gap-2 text-amber-700 text-sm font-semibold">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
                             <span>
                                 選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
-                                <span className={`mx-1 px-1.5 py-0.5 rounded text-[11px] font-black ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                <span className={`mx-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
                                     {dependencySelection.side === 'start' ? '開始日' : '結束日'}
                                 </span>
                                 — 請點擊另一張卡片的日期標籤作為依賴目標
@@ -460,7 +458,7 @@ const BoardView = () => {
                         </div>
                         <button
                             onClick={() => setDependencySelection(null)}
-                            className="text-amber-500 hover:text-amber-700 text-xs font-bold px-2 py-1 rounded hover:bg-amber-100 transition-colors flex-shrink-0"
+                            className="text-amber-500 hover:text-amber-700 text-xs font-semibold px-2 py-0.5 rounded hover:bg-amber-100 transition-colors flex-shrink-0"
                         >
                             取消（退出鍵）
                         </button>
@@ -468,7 +466,7 @@ const BoardView = () => {
                 )}
 
                 {/* 列表畫布 (Lists Canvas) */}
-                <div className="scroll-container flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-4 items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                <div className={`scroll-container flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[10px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}>
                     <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                         {rootNodes.map(node => (
                             <KanbanColumn
@@ -483,7 +481,7 @@ const BoardView = () => {
                         <button
                             onClick={handleAddColumn}
                             disabled={!canCreateTask}
-                            className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 font-bold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                            className="w-full py-[6px] border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
                         >
                             <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
                             <span>新增任務</span>
@@ -493,7 +491,7 @@ const BoardView = () => {
             </div>
             <DragOverlay dropAnimation={null}>
                 {activeDrag?.node ? (
-                    <div className={`rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg will-change-transform ${
+                    <div className={`task-title-text rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
                         activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
                     }`}>
                         {activeDrag.node.title || '未命名任務'}

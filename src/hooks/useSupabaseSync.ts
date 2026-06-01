@@ -4,6 +4,8 @@ import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { isSupabaseConfigured, supabase } from '../services/supabase/client';
 import {
+  resolveProjectId,
+  resolveWorkspaceId,
   supabaseDependencyService,
   supabaseNodeService,
   supabaseWorkspaceService,
@@ -86,6 +88,8 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
       .channel('projed-workspaces-projects')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tenants' }, () => void loadWorkspaces())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => void loadWorkspaces())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tenant_members' }, () => void loadWorkspaces())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, () => void loadWorkspaces())
       .subscribe();
 
     return () => {
@@ -101,6 +105,7 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
     if (!resolvedActiveWorkspaceId) return;
 
     let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
     const loadBoardData = async () => {
       try {
         const [nodes, dependencies] = await Promise.all([
@@ -115,35 +120,46 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
       }
     };
 
-    void loadBoardData();
+    const subscribeBoardChanges = async () => {
+      try {
+        const tenantId = await resolveWorkspaceId(resolvedActiveWorkspaceId);
+        const projectId = await resolveProjectId(tenantId, activeBoardId);
+        if (cancelled) return;
 
-    const channel = supabase
-      .channel(`projed-board-${activeBoardId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'wbs_items',
-          filter: `project_id=eq.${activeBoardId}`,
-        },
-        () => void loadBoardData()
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'wbs_dependencies',
-          filter: `project_id=eq.${activeBoardId}`,
-        },
-        () => void loadBoardData()
-      )
-      .subscribe();
+        channel = supabase
+          .channel(`projed-board-${projectId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'wbs_items',
+              filter: `project_id=eq.${projectId}`,
+            },
+            () => void loadBoardData()
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'wbs_dependencies',
+              filter: `project_id=eq.${projectId}`,
+            },
+            () => void loadBoardData()
+          )
+          .subscribe();
+      } catch (error) {
+        console.error('[useSupabaseSync] Board subscription error:', error);
+      }
+    };
+
+    void loadBoardData();
+    void subscribeBoardChanges();
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [enabled, userId, activeBoardId, activeBoardExists, resolvedActiveWorkspaceId, workspaceIds, workspaces.length]);
 }
