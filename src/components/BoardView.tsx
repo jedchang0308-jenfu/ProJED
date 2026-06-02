@@ -466,7 +466,7 @@ const BoardView = () => {
                 )}
 
                 {/* 列表畫布 (Lists Canvas) */}
-                <div className={`scroll-container flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[10px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}>
+                <div className={`scroll-container flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}>
                     <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                         {rootNodes.map(node => (
                             <KanbanColumn
@@ -481,7 +481,7 @@ const BoardView = () => {
                         <button
                             onClick={handleAddColumn}
                             disabled={!canCreateTask}
-                            className="w-full py-[6px] border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:border-primary hover:text-primary hover:bg-slate-50 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                            className="w-full py-[8px] border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
                         >
                             <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
                             <span>新增任務</span>

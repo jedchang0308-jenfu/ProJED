@@ -24,6 +24,23 @@ interface WbsNodeItemProps {
   ancestorIds?: string[];
 }
 
+const getRowStatusAccentClass = (status?: TaskStatus) => {
+  switch (status) {
+    case 'completed':
+      return 'border-l-emerald-400';
+    case 'in_progress':
+      return 'border-l-blue-500';
+    case 'delayed':
+      return 'border-l-orange-500';
+    case 'unsure':
+      return 'border-l-purple-500';
+    case 'onhold':
+      return 'border-l-slate-300';
+    default:
+      return 'border-l-slate-300';
+  }
+};
+
 export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [] }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
@@ -312,13 +329,14 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   // 生成 Native Select 專用 Tailwind Class
   const getStatusSelectClass = (status: string) => {
-    const baseClass = "w-20 text-[11px] py-1 px-1 rounded border outline-none cursor-pointer appearance-none text-center font-medium transition-colors";
+    const baseClass = "w-20 text-[11px] py-1 px-1.5 rounded-full border outline-none cursor-pointer appearance-none text-center font-semibold transition-colors shadow-[0_1px_1px_rgba(15,23,42,0.04)]";
     switch (status) {
-      case 'completed': return `${baseClass} bg-green-50 text-green-700 border-green-200 hover:bg-green-100 focus:ring-1 focus:ring-green-400`;
+      case 'completed': return `${baseClass} bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 focus:ring-1 focus:ring-emerald-400`;
       case 'in_progress': return `${baseClass} bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 focus:ring-1 focus:ring-blue-400`;
-      case 'delayed': return `${baseClass} bg-red-50 text-red-700 border-red-200 hover:bg-red-100 focus:ring-1 focus:ring-red-400`;
+      case 'delayed': return `${baseClass} bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 focus:ring-1 focus:ring-orange-400`;
       case 'onhold': return `${baseClass} bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 focus:ring-1 focus:ring-amber-400`;
-      default: return `${baseClass} bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 focus:ring-1 focus:ring-gray-400`;
+      case 'unsure': return `${baseClass} bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 focus:ring-1 focus:ring-purple-400`;
+      default: return `${baseClass} bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 focus:ring-1 focus:ring-slate-400`;
     }
   };
 
@@ -340,7 +358,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 title: node.title
             });
         }}
-        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} items-center py-px px-[10px] border-b border-slate-100 group hover:bg-slate-50 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}

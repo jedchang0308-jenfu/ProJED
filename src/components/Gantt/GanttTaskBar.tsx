@@ -428,7 +428,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     onItemClick(item);
                 }
             }}
-            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-sm ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}`}
             style={{
                 left: x1,
                 width: width,

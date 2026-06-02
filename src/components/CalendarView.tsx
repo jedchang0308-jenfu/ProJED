@@ -43,6 +43,10 @@ const STATUS_STYLES = {
         bar: 'bg-status-todo/20 border-l-2 border-status-todo text-status-todo',
         dot: 'bg-status-todo',
     },
+    in_progress: {
+        bar: 'bg-blue-500/15 border-l-2 border-blue-500 text-blue-700',
+        dot: 'bg-blue-500',
+    },
     delayed: {
         bar: 'bg-status-delayed/20 border-l-2 border-status-delayed text-status-delayed',
         dot: 'bg-status-delayed',
@@ -483,7 +487,7 @@ const CalendarView = () => {
                                                         ${styles.bar}
                                                         ${roundLeft} ${roundRight}
                                                         ${horizontalPadding}
-                                                        hover:brightness-95 transition-all
+                                                        shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-white/70 hover:brightness-95 transition-all
                                                     `}
                                                     title={`${seg.item.title}${seg.item.startDate ? ` (${seg.item.startDate}` : ''}${seg.item.endDate ? ` ~ ${seg.item.endDate})` : ')'}`}
                                                 >

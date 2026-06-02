@@ -97,7 +97,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 e.preventDefault();
                 setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
             }}
-            className={`flex items-center px-[10px] border-b border-slate-50 hover:bg-slate-50 transition-colors gap-1 cursor-pointer group
+            className={`flex items-center px-[10px] border-b border-slate-100 hover:bg-primary/5 transition-colors gap-1 cursor-pointer group
                 task-title-text ${isGroup ? 'font-medium text-slate-700' : isTask && level === 1 ? 'font-medium text-slate-600' : 'font-medium text-slate-500'}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => {
@@ -267,7 +267,7 @@ const SharedTaskSidebar = ({
     };
 
     return (
-        <div className={`flex-shrink-0 flex flex-col border-r border-slate-200 bg-white z-20 transition-all duration-300 ease-in-out relative ${isTaskListOpen ? 'w-64' : 'w-10'}`}>
+        <div className={`flex-shrink-0 flex flex-col border-r border-slate-200 bg-white/95 z-20 transition-all duration-300 ease-in-out relative ${isTaskListOpen ? 'w-64' : 'w-10'}`}>
             {!isTaskListOpen ? (
                 <div className="flex-1 flex flex-col items-center pt-[6px] gap-[8px] overflow-hidden">
                     <button
@@ -281,7 +281,7 @@ const SharedTaskSidebar = ({
                 </div>
             ) : (
                 <>
-                    <div className="h-8 flex items-center justify-between px-[10px] border-b-2 border-slate-200 bg-slate-50 font-semibold text-xs text-slate-500 shrink-0">
+                    <div className="h-9 flex items-center justify-between px-[10px] border-b border-slate-200 bg-slate-50/90 font-semibold text-xs text-slate-500 shrink-0">
                         <span>任務名稱</span>
                         <button
                             onClick={() => setIsTaskListOpen(false)}

@@ -11,10 +11,10 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 export const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
   ({ className, variant = 'default', size = 'sm', icon, children, ...props }, ref) => {
     
-    const baseStyles = "inline-flex items-center rounded border transition-colors";
+    const baseStyles = "inline-flex items-center rounded-full border transition-colors shadow-[0_1px_1px_rgba(15,23,42,0.03)]";
     
     const variants = {
-      default: "bg-slate-50 border-slate-100 text-slate-400",
+      default: "bg-slate-50 border-slate-200 text-slate-500",
       success: "bg-emerald-50 border-emerald-200 text-emerald-600",
       warning: "bg-orange-50 border-orange-200 text-orange-600",
       danger: "bg-red-50 border-red-200 text-red-600",

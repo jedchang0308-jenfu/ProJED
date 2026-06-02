@@ -231,13 +231,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     <div
       ref={setColumnNodeRef}
       style={columnStyle}
-      className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-100/50 shadow-sm transition-all ${
+      className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/75 shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition-all ${
         isColumnDragging ? 'scale-105 rotate-1 opacity-50 shadow-2xl' : ''
       }`}
     >
       <div
         {...longPressHandlers}
-        className={`group flex flex-col gap-0.5 bg-white/40 px-[10px] py-[6px] transition-colors hover:bg-white ${
+        className={`group flex flex-col gap-1 border-b border-slate-200/70 bg-white px-[10px] py-[8px] transition-colors hover:bg-primary/[0.02] ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
@@ -377,7 +377,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
       <div
         ref={setDropNodeRef}
-        className={`scroll-container flex-1 overflow-y-auto px-[10px] pb-[6px] scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-0 mb-0 ${
+        className={`scroll-container flex-1 overflow-y-auto px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-0 mb-0 ${
           isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
         }`}
       >

@@ -68,6 +68,11 @@ export const GANTT_COLOR_MAP: Record<string, Record<string, string>> = {
         card: 'bg-white border-2 border-status-todo text-status-todo font-extrabold',
         checklist: 'bg-white border border-status-todo/30 text-status-todo'
     },
+    in_progress: {
+        list: 'bg-blue-500 text-white',
+        card: 'bg-blue-50 border-2 border-blue-400 text-blue-700 font-extrabold',
+        checklist: 'bg-blue-50 border border-blue-300 text-blue-700'
+    },
     delayed: {
         list: 'bg-status-delayed brightness-75 saturate-150 text-white',
         card: 'bg-white border-2 border-status-delayed text-status-delayed font-extrabold',

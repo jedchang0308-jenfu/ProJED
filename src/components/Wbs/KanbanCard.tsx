@@ -42,6 +42,15 @@ const statusTextColorMap: Record<TaskStatus, string> = {
   onhold: 'text-slate-400',
 };
 
+const statusBorderColorMap: Record<TaskStatus, string> = {
+  todo: 'border-l-slate-300',
+  in_progress: 'border-l-blue-500',
+  completed: 'border-l-emerald-400',
+  delayed: 'border-l-orange-500',
+  unsure: 'border-l-purple-500',
+  onhold: 'border-l-slate-300',
+};
+
 const isFromTaskDragHandle = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
@@ -263,17 +272,17 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           e.preventDefault();
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
-      className={`kanban-task-card relative kanban-scroll-touch bg-white border rounded-lg shadow-sm transition-all group mb-[4px] ${
+      className={`kanban-task-card relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
           : isSelectingMode
             ? isSelfNode
               ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
               : 'border-slate-200 hover:border-amber-300 hover:shadow-md cursor-crosshair'
-            : `border-slate-200 hover:border-primary hover:shadow-md ${isEditing ? 'cursor-default' : ''}`
+            : `border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md ${isEditing ? 'cursor-default' : ''}`
       }`}
     >
-      <div className="kanban-task-card-body flex items-start px-[8px] py-[2px]">
+      <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">
         {/* 卡片內容 — 只有左側把手可拖曳，避免手機滑動畫面時誤觸 */}
         <div className="flex-1 min-w-0">
           {/* 標題列 */}

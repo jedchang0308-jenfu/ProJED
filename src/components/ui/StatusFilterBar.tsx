@@ -19,10 +19,10 @@ const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
 ];
 
 const filterPillClass = (active: boolean) =>
-  `flex items-center gap-1.5 rounded-full border bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm transition-all ${
+  `flex h-[26px] items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all ${
     active
-      ? 'border-primary ring-2 ring-primary/35 shadow-primary/10'
-      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+      ? 'border-primary/40 bg-primary/5 text-primary ring-2 ring-primary/20'
+      : 'border-slate-200 hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
   }`;
 
 export const StatusFilterBar: React.FC = () => {
@@ -116,10 +116,10 @@ export const StatusFilterBar: React.FC = () => {
         onClick={() => setIsOpen(prev => !prev)}
         className={`${compactClassNames.segmentedButtonBase} border ${
           isOpen
-            ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+            ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
             : hasActiveFilter
-              ? 'border-amber-200 bg-amber-50 text-amber-600 shadow-sm'
-              : 'border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50'
+              ? 'border-amber-200 bg-amber-50 text-amber-700 shadow-sm ring-1 ring-amber-200/70'
+              : 'border-slate-200 bg-white text-slate-600 shadow-sm hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
         }`}
       >
         <SlidersHorizontal size={13} />

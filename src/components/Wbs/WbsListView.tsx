@@ -247,9 +247,9 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col bg-white border border-slate-200 rounded-lg shadow-sm relative">
+          <div className="flex flex-col overflow-hidden bg-white border border-slate-200 rounded-lg shadow-[0_10px_24px_rgba(15,23,42,0.05)] relative">
             {/* Header Column Titles (Tree Grid) */}
-            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} py-[5px] px-[10px] bg-slate-50 border-b border-slate-200 rounded-t-sm text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
+            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[32px] py-[6px] px-[10px] bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
                 <div className="flex items-center pl-[28px]">任務名稱</div>
                 <div className="flex items-center">負責人</div>
                 <div className="flex items-center">狀態</div>
