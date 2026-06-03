@@ -1,12 +1,14 @@
 import {
-  BOARD_ROLE_CAPABILITIES,
   WORKSPACE_ROLE_CAPABILITIES,
+  createDefaultBoardRolePermissionMatrix,
+  normalizeBoardRolePermissionMatrix,
   type ActivityEvent,
   type AuditLogEntry,
   type BoardInviteAcceptInput,
   type Board,
   type BoardInviteCreateInput,
   type BoardMember,
+  type BoardRolePermissionMatrix,
   type CurrentBoardAccess,
   type Dependency,
   type TaskNode,
@@ -54,6 +56,40 @@ export const dataBackend: DataBackend =
       : 'firebase';
 export const isSupabaseBackend = dataBackend === 'supabase';
 export const isLocalTestBackend = dataBackend === 'local-test';
+
+const BOARD_ROLE_PERMISSIONS_KEY = 'projed.boardRolePermissions';
+
+const getRolePermissionKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
+
+const readFallbackRolePermissions = (
+  workspaceId: string,
+  boardId: string
+): BoardRolePermissionMatrix => {
+  try {
+    const stored = localStorage.getItem(BOARD_ROLE_PERMISSIONS_KEY);
+    const allPermissions = stored ? JSON.parse(stored) as Record<string, Partial<BoardRolePermissionMatrix>> : {};
+    return normalizeBoardRolePermissionMatrix(allPermissions[getRolePermissionKey(workspaceId, boardId)]);
+  } catch {
+    return createDefaultBoardRolePermissionMatrix();
+  }
+};
+
+const writeFallbackRolePermissions = (
+  workspaceId: string,
+  boardId: string,
+  permissions: BoardRolePermissionMatrix
+): void => {
+  try {
+    const stored = localStorage.getItem(BOARD_ROLE_PERMISSIONS_KEY);
+    const allPermissions = stored ? JSON.parse(stored) as Record<string, BoardRolePermissionMatrix> : {};
+    localStorage.setItem(BOARD_ROLE_PERMISSIONS_KEY, JSON.stringify({
+      ...allPermissions,
+      [getRolePermissionKey(workspaceId, boardId)]: normalizeBoardRolePermissionMatrix(permissions),
+    }));
+  } catch {
+    // Fallback persistence should not block the UI.
+  }
+};
 
 const logAuditBestEffort = async (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>) => {
   if (!isSupabaseBackend) return;
@@ -160,6 +196,24 @@ export const memberService = {
       ? supabaseMemberService.listBoardMembers(workspaceId, boardId)
       : firestoreMemberService.listBoardMembers(workspaceId, boardId),
 
+  getBoardRolePermissions: async (workspaceId: string, boardId: string): Promise<BoardRolePermissionMatrix> =>
+    isLocalTestBackend
+      ? localTestMemberService.getBoardRolePermissions(workspaceId, boardId)
+      : isSupabaseBackend
+      ? supabaseMemberService.getBoardRolePermissions(workspaceId, boardId)
+      : readFallbackRolePermissions(workspaceId, boardId),
+
+  updateBoardRolePermissions: async (
+    workspaceId: string,
+    boardId: string,
+    permissions: BoardRolePermissionMatrix
+  ): Promise<void> =>
+    isLocalTestBackend
+      ? localTestMemberService.updateBoardRolePermissions(workspaceId, boardId, permissions)
+      : isSupabaseBackend
+      ? supabaseMemberService.updateBoardRolePermissions(workspaceId, boardId, permissions)
+      : writeFallbackRolePermissions(workspaceId, boardId, permissions),
+
   getCurrentBoardAccess: async (
     workspaceId: string,
     boardId: string,
@@ -169,9 +223,10 @@ export const memberService = {
       return supabaseMemberService.getCurrentBoardAccess(workspaceId, boardId, userId);
     }
 
-    const [workspaceMembers, boardMembers] = await Promise.all([
+    const [workspaceMembers, boardMembers, rolePermissions] = await Promise.all([
       memberService.listWorkspaceMembers(workspaceId),
       memberService.listBoardMembers(workspaceId, boardId),
+      memberService.getBoardRolePermissions(workspaceId, boardId),
     ]);
     const workspaceRole = workspaceMembers.find(member => member.userId === userId && member.status === 'active')?.role;
     const boardRole = boardMembers.find(member => member.userId === userId)?.role;
@@ -179,11 +234,11 @@ export const memberService = {
     if (workspaceRole) {
       WORKSPACE_ROLE_CAPABILITIES[workspaceRole].forEach(capability => capabilities.add(capability));
       if (workspaceRole === 'owner' || workspaceRole === 'admin') {
-        BOARD_ROLE_CAPABILITIES[workspaceRole].forEach(capability => capabilities.add(capability));
+        rolePermissions[workspaceRole].forEach(capability => capabilities.add(capability));
       }
     }
     if (boardRole) {
-      BOARD_ROLE_CAPABILITIES[boardRole].forEach(capability => capabilities.add(capability));
+      rolePermissions[boardRole].forEach(capability => capabilities.add(capability));
     }
     return {
       workspaceId,

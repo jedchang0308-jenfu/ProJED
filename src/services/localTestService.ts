@@ -1,4 +1,17 @@
-import type { Board, BoardInvite, BoardInviteAcceptInput, BoardInviteCreateInput, BoardMember, Dependency, TaskNode, TaskTag, Workspace, WorkspaceMember } from '../types';
+import {
+  normalizeBoardRolePermissionMatrix,
+  type Board,
+  type BoardInvite,
+  type BoardInviteAcceptInput,
+  type BoardInviteCreateInput,
+  type BoardMember,
+  type BoardRolePermissionMatrix,
+  type Dependency,
+  type TaskNode,
+  type TaskTag,
+  type Workspace,
+  type WorkspaceMember,
+} from '../types';
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
@@ -7,6 +20,7 @@ const DEPENDENCIES_KEY = 'projed-local-test.dependencies';
 const TAGS_KEY = 'projed-local-test.tags';
 const BOARD_MEMBERS_KEY = 'projed-local-test.boardMembers';
 const BOARD_INVITES_KEY = 'projed-local-test.boardInvites';
+const BOARD_ROLE_PERMISSIONS_KEY = 'projed-local-test.boardRolePermissions';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 
 const readJson = <T>(key: string, fallback: T): T => {
@@ -78,6 +92,8 @@ const readBoardMembers = () => readJson<Record<string, LocalBoardMemberRecord[]>
 const writeBoardMembers = (members: Record<string, LocalBoardMemberRecord[]>) => writeJson(BOARD_MEMBERS_KEY, members);
 const readBoardInvites = () => readJson<Record<string, LocalBoardInviteRecord[]>>(BOARD_INVITES_KEY, {});
 const writeBoardInvites = (invites: Record<string, LocalBoardInviteRecord[]>) => writeJson(BOARD_INVITES_KEY, invites);
+const readBoardRolePermissions = () => readJson<Record<string, Partial<BoardRolePermissionMatrix>>>(BOARD_ROLE_PERMISSIONS_KEY, {});
+const writeBoardRolePermissions = (permissions: Record<string, Partial<BoardRolePermissionMatrix>>) => writeJson(BOARD_ROLE_PERMISSIONS_KEY, permissions);
 const getBoardMemberKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
 const readCurrentLocalUserId = () =>
   readJson<{ uid?: string } | null>(LOCAL_TEST_SESSION_KEY, null)?.uid || 'local-test-user';
@@ -89,6 +105,16 @@ const canManageBoard = (workspaceId: string, boardId: string, userId = readCurre
 const requireCanManageBoard = (workspaceId: string, boardId: string) => {
   if (!canManageBoard(workspaceId, boardId)) {
     throw new Error('需要看板管理權限。');
+  }
+};
+const canConfigureRolePermissions = (workspaceId: string, boardId: string, userId = readCurrentLocalUserId()) => {
+  const records = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
+  const role = records.find(member => member.userId === userId)?.role;
+  return role === 'owner' || role === 'admin';
+};
+const requireCanConfigureRolePermissions = (workspaceId: string, boardId: string) => {
+  if (!canConfigureRolePermissions(workspaceId, boardId)) {
+    throw new Error('需要擁有者或管理員權限。');
   }
 };
 
@@ -228,6 +254,25 @@ export const localTestMemberService = {
     const key = getBoardMemberKey(workspaceId, boardId);
     const records = readBoardMembers()[key] || defaultBoardMemberRecords;
     return records.map(record => toBoardMember(workspaceId, boardId, record));
+  },
+
+  getBoardRolePermissions: async (workspaceId: string, boardId: string): Promise<BoardRolePermissionMatrix> => {
+    const key = getBoardMemberKey(workspaceId, boardId);
+    return normalizeBoardRolePermissionMatrix(readBoardRolePermissions()[key]);
+  },
+
+  updateBoardRolePermissions: async (
+    workspaceId: string,
+    boardId: string,
+    permissions: BoardRolePermissionMatrix
+  ): Promise<void> => {
+    requireCanConfigureRolePermissions(workspaceId, boardId);
+    const key = getBoardMemberKey(workspaceId, boardId);
+    const allPermissions = readBoardRolePermissions();
+    writeBoardRolePermissions({
+      ...allPermissions,
+      [key]: normalizeBoardRolePermissionMatrix(permissions),
+    });
   },
 
   upsertBoardMember: async (
@@ -563,4 +608,6 @@ export const localTestStorage = {
   writeBoardMembers,
   readBoardInvites,
   writeBoardInvites,
+  readBoardRolePermissions,
+  writeBoardRolePermissions,
 };

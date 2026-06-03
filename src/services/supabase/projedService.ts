@@ -1,4 +1,9 @@
-import { BOARD_ROLE_CAPABILITIES, WORKSPACE_ROLE_CAPABILITIES } from '../../types';
+import {
+  COLLABORATION_ROLES,
+  WORKSPACE_ROLE_CAPABILITIES,
+  createDefaultBoardRolePermissionMatrix,
+  normalizeBoardRolePermissionMatrix,
+} from '../../types';
 import type {
   ActivityEvent,
   AuditLogEntry,
@@ -7,6 +12,7 @@ import type {
   BoardInviteAcceptInput,
   BoardInviteCreateInput,
   BoardMember,
+  BoardRolePermissionMatrix,
   CollaborationRole,
   CurrentBoardAccess,
   Dependency,
@@ -18,11 +24,12 @@ import type {
   WorkspaceMember,
 } from '../../types';
 import { isSupabaseConfigured, supabase } from './client';
-import type { BoardInviteRow, Json, ProjectMemberRow, ProjectRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
+import type { BoardInviteRow, BoardRolePermissionRow, Json, ProjectMemberRow, ProjectRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 
 type WbsItemInsert = Partial<WbsItemRow>;
 type BoardInviteInsert = Partial<BoardInviteRow>;
+type BoardRolePermissionInsert = Partial<BoardRolePermissionRow>;
 type TaskTagInsert = Partial<TaskTagRow>;
 type WbsDependencyWithNodes = WbsDependencyRow & {
   from_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
@@ -74,6 +81,16 @@ const isMissingTagTableError = (error: unknown) => {
     || message.includes('wbs_item_tags');
 };
 
+const isMissingBoardRolePermissionsTableError = (error: unknown) => {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : String(error ?? '');
+  return message.includes("Could not find the table 'public.board_role_permissions'")
+    || message.includes('board_role_permissions');
+};
+
 const assertNoTagTableError = (error: { message: string } | null) => {
   if (!error) return false;
   if (isMissingTagTableError(error)) {
@@ -91,17 +108,18 @@ const buildCurrentBoardAccess = (
   workspaceId: string,
   boardId: string,
   workspaceRole?: CollaborationRole,
-  boardRole?: CollaborationRole
+  boardRole?: CollaborationRole,
+  rolePermissions: BoardRolePermissionMatrix = createDefaultBoardRolePermissionMatrix()
 ): CurrentBoardAccess => {
   const capabilities: PermissionCapability[] = [];
   if (workspaceRole) {
     capabilities.push(...WORKSPACE_ROLE_CAPABILITIES[workspaceRole]);
     if (workspaceRole === 'owner' || workspaceRole === 'admin') {
-      capabilities.push(...BOARD_ROLE_CAPABILITIES[workspaceRole]);
+      capabilities.push(...rolePermissions[workspaceRole]);
     }
   }
   if (boardRole) {
-    capabilities.push(...BOARD_ROLE_CAPABILITIES[boardRole]);
+    capabilities.push(...rolePermissions[boardRole]);
   }
   return {
     workspaceId,
@@ -220,6 +238,14 @@ const mapBoardMember = (
   createdAt: toTimestamp(row.created_at),
   updatedAt: toTimestamp(row.updated_at),
 });
+
+const mapBoardRolePermissionRows = (rows: BoardRolePermissionRow[] = []): BoardRolePermissionMatrix => {
+  const matrix = createDefaultBoardRolePermissionMatrix();
+  rows.forEach(row => {
+    matrix[row.role] = row.capabilities as PermissionCapability[];
+  });
+  return normalizeBoardRolePermissionMatrix(matrix);
+};
 
 const mapBoardInvite = (
   row: BoardInviteRow,
@@ -559,18 +585,59 @@ export const supabaseMemberService = {
     return ((data ?? []) as unknown as ProjectMemberWithProfile[]).map(row => mapBoardMember(row, workspaceId, boardId));
   },
 
+  getBoardRolePermissions: async (workspaceId: string, boardId: string): Promise<BoardRolePermissionMatrix> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { data, error } = await supabase
+      .from('board_role_permissions')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId);
+
+    if (error && isMissingBoardRolePermissionsTableError(error)) {
+      console.warn('[supabaseMemberService] board_role_permissions is not available; using default role permissions.');
+      return createDefaultBoardRolePermissionMatrix();
+    }
+    assertNoError(error);
+    return mapBoardRolePermissionRows((data ?? []) as BoardRolePermissionRow[]);
+  },
+
+  updateBoardRolePermissions: async (
+    workspaceId: string,
+    boardId: string,
+    permissions: BoardRolePermissionMatrix
+  ): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const normalizedPermissions = normalizeBoardRolePermissionMatrix(permissions);
+    const rows: BoardRolePermissionInsert[] = COLLABORATION_ROLES.map(role => ({
+      tenant_id: tenantId,
+      project_id: projectId,
+      role,
+      capabilities: normalizedPermissions[role],
+    }));
+
+    const { error } = await supabase
+      .from('board_role_permissions')
+      .upsert(rows, { onConflict: 'tenant_id,project_id,role' });
+    assertNoError(error);
+  },
+
   getCurrentBoardAccess: async (
     workspaceId: string,
     boardId: string,
     userId: string
   ): Promise<CurrentBoardAccess> => {
-    const [workspaceMembers, boardMembers] = await Promise.all([
+    const [workspaceMembers, boardMembers, rolePermissions] = await Promise.all([
       supabaseMemberService.listWorkspaceMembers(workspaceId),
       supabaseMemberService.listBoardMembers(workspaceId, boardId),
+      supabaseMemberService.getBoardRolePermissions(workspaceId, boardId),
     ]);
     const workspaceRole = workspaceMembers.find(member => member.userId === userId && member.status === 'active')?.role;
     const boardRole = boardMembers.find(member => member.userId === userId)?.role;
-    return buildCurrentBoardAccess(workspaceId, boardId, workspaceRole, boardRole);
+    return buildCurrentBoardAccess(workspaceId, boardId, workspaceRole, boardRole, rolePermissions);
   },
 
   upsertBoardMember: async (

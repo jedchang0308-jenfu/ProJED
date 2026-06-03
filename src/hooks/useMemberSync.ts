@@ -45,6 +45,7 @@ export function useMemberSync() {
       .channel(`projed-members-${activeWorkspaceId}-${activeBoardId || 'workspace'}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tenant_members' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_role_permissions' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, reload)
       .subscribe();
 

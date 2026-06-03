@@ -90,13 +90,13 @@ export default function AuthGate({ children }: AuthGateProps) {
       return;
     }
 
-    if (migrationState !== 'idle') return;
-
     if (isLocalTestBackend) {
       seedLocalTestEnvironment();
       setMigrationState('done');
       return;
     }
+
+    if (migrationState !== 'idle') return;
 
     if (isSupabaseBackend) {
       setMigrationState('done');

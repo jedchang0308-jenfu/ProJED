@@ -2,12 +2,21 @@ import dayjs from 'dayjs';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { localTestStorage } from '../services/localTestService';
-import type { Board, TaskNode, Workspace } from '../types';
+import type { Board, TaskNode, ViewMode, Workspace } from '../types';
 
 const LOCAL_TEST_WS_ID = 'local-test-workspace';
 const LOCAL_TEST_BOARD_ID = 'local-test-mobile-ui-board';
 const LOCAL_TEST_SEEDED_KEY = 'projed-local-test.seeded.v1';
 const LOCAL_TEST_SIZE_KEY = 'projed-local-test.seeded.size';
+const LOCAL_TEST_RESTORABLE_VIEWS = new Set<ViewMode>([
+  'list',
+  'board',
+  'gantt',
+  'calendar',
+  'calendar_subscriptions',
+  'settings',
+  'recycle_bin',
+]);
 
 type SeedOptions = {
   force?: boolean;
@@ -175,6 +184,23 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
   const nextNodes = force || !localStorage.getItem(LOCAL_TEST_SEEDED_KEY)
     ? Object.fromEntries(nodes.map(node => [node.id, node]))
     : existingNodes;
+  const storedActiveWorkspaceId = force ? null : localStorage.getItem('projed-last-ws');
+  const storedActiveBoardId = force ? null : localStorage.getItem('projed-last-board');
+  const workspaceWithStoredBoard = storedActiveBoardId
+    ? nextWorkspaces.find(item => item.boards.some(board => board.id === storedActiveBoardId))
+    : undefined;
+  const storedWorkspace = storedActiveWorkspaceId
+    ? nextWorkspaces.find(item => item.id === storedActiveWorkspaceId)
+    : undefined;
+  const storedWorkspaceBoard = storedWorkspace?.boards[0];
+  const nextActiveWorkspaceId = workspaceWithStoredBoard?.id ?? (storedWorkspaceBoard ? storedWorkspace.id : LOCAL_TEST_WS_ID);
+  const nextActiveBoardId = workspaceWithStoredBoard && storedActiveBoardId
+    ? storedActiveBoardId
+    : (storedWorkspaceBoard?.id ?? LOCAL_TEST_BOARD_ID);
+  const storedView = force ? null : localStorage.getItem('projed-last-view');
+  const nextView: ViewMode = storedView && LOCAL_TEST_RESTORABLE_VIEWS.has(storedView as ViewMode)
+    ? (storedView as ViewMode)
+    : 'board';
 
   localTestStorage.writeWorkspaces(nextWorkspaces);
   localTestStorage.writeNodes(nextNodes);
@@ -183,15 +209,15 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
   if (force) localTestStorage.writeBoardInvites({});
   localStorage.setItem(LOCAL_TEST_SEEDED_KEY, 'true');
   localStorage.setItem(LOCAL_TEST_SIZE_KEY, String(taskCount));
-  localStorage.setItem('projed-last-ws', LOCAL_TEST_WS_ID);
-  localStorage.setItem('projed-last-board', LOCAL_TEST_BOARD_ID);
-  localStorage.setItem('projed-last-view', 'board');
+  localStorage.setItem('projed-last-ws', nextActiveWorkspaceId);
+  localStorage.setItem('projed-last-board', nextActiveBoardId);
+  localStorage.setItem('projed-last-view', nextView);
 
   useBoardStore.setState({
     workspaces: nextWorkspaces,
-    activeWorkspaceId: LOCAL_TEST_WS_ID,
-    activeBoardId: LOCAL_TEST_BOARD_ID,
-    currentView: 'board',
+    activeWorkspaceId: nextActiveWorkspaceId,
+    activeBoardId: nextActiveBoardId,
+    currentView: nextView,
   });
   useWbsStore.getState().setNodes(Object.values(nextNodes));
   useWbsStore.setState({ dependencies: localTestStorage.readDependencies() });

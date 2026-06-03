@@ -30,6 +30,8 @@ export type PermissionCapability =
   | 'read_audit'
   | 'write_audit';
 
+export const COLLABORATION_ROLES = ['owner', 'admin', 'project_manager', 'member', 'viewer'] as const satisfies readonly CollaborationRole[];
+
 export const WORKSPACE_ROLE_CAPABILITIES = {
   owner: [
     'read_workspace',
@@ -114,6 +116,40 @@ export const BOARD_ROLE_CAPABILITIES = {
   ],
   viewer: ['read_board', 'read_activity'],
 } as const satisfies Record<CollaborationRole, readonly PermissionCapability[]>;
+
+export type BoardRolePermissionMatrix = Record<CollaborationRole, PermissionCapability[]>;
+
+export const BOARD_PERMISSION_CAPABILITIES: PermissionCapability[] = Array.from(
+  new Set(COLLABORATION_ROLES.flatMap(role => BOARD_ROLE_CAPABILITIES[role]))
+);
+
+export const createDefaultBoardRolePermissionMatrix = (): BoardRolePermissionMatrix => ({
+  owner: [...BOARD_ROLE_CAPABILITIES.owner],
+  admin: [...BOARD_ROLE_CAPABILITIES.admin],
+  project_manager: [...BOARD_ROLE_CAPABILITIES.project_manager],
+  member: [...BOARD_ROLE_CAPABILITIES.member],
+  viewer: [...BOARD_ROLE_CAPABILITIES.viewer],
+});
+
+export const normalizeBoardRolePermissionMatrix = (
+  matrix?: Partial<Record<CollaborationRole, readonly PermissionCapability[] | null>>
+): BoardRolePermissionMatrix => {
+  const defaults = createDefaultBoardRolePermissionMatrix();
+  const allowedCapabilities = new Set<PermissionCapability>(BOARD_PERMISSION_CAPABILITIES);
+
+  return COLLABORATION_ROLES.reduce((result, role) => {
+    if (role === 'owner') {
+      result[role] = defaults.owner;
+      return result;
+    }
+
+    const configured = matrix?.[role];
+    result[role] = configured
+      ? Array.from(new Set(configured.filter(capability => allowedCapabilities.has(capability))))
+      : defaults[role];
+    return result;
+  }, {} as BoardRolePermissionMatrix);
+};
 
 // Kept for old deep links and modal state. New task editing should prefer TaskNode ids.
 export type EditableItemType = 'list' | 'card' | 'checklist' | 'checklistitem' | 'tasknode';

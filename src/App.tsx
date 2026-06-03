@@ -36,6 +36,7 @@ import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
+import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
 
 const formatBoardInviteAcceptError = (inviteError: unknown): string => {
   const message = inviteError instanceof Error ? inviteError.message : '';
@@ -60,7 +61,7 @@ const formatBoardInviteAcceptError = (inviteError: unknown): string => {
  * 確保 user 一定存在。
  */
 function AppContent() {
-  const { currentView, workspaces, activeBoardId } = useBoardStore();
+  const { currentView, workspaces, activeWorkspaceId, activeBoardId } = useBoardStore();
   const user = useAuthStore(s => s.user);
   const userId = user?.uid ?? null;
   const userEmail = user?.email ?? null;
@@ -71,6 +72,14 @@ function AppContent() {
 
   // 啟動目前資料後端的同步監聽
   useDataSync();
+
+  useEffect(() => {
+    if (!userId || dataBackend !== 'local-test') return;
+
+    const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId);
+    const hasActiveBoard = Boolean(activeWorkspace?.boards.some(board => board.id === activeBoardId));
+    if (!hasActiveBoard) seedLocalTestEnvironment();
+  }, [activeBoardId, activeWorkspaceId, userId, workspaces]);
 
   // 載入行政院人事日曆 (當年度與下年度)
   useEffect(() => {
@@ -148,6 +157,7 @@ function AppContent() {
   // 表示為全新使用者，自動建立一個預設工作區。
   useEffect(() => {
     if (!userId) return;
+    if (dataBackend === 'local-test') return;
 
     const hasLegacyData = localStorage.getItem('projed-storage') || localStorage.getItem('projed_data');
     const hasBoardInviteToken = new URLSearchParams(window.location.search).has(BOARD_INVITE_TOKEN_PARAM);

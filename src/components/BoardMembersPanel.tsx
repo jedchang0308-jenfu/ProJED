@@ -6,12 +6,13 @@ import useBoardStore from '../store/useBoardStore';
 import { toast } from '../store/useToastStore';
 import { boardInviteService } from '../services/dataBackend';
 import {
-  BOARD_ROLE_CAPABILITIES,
   type BoardInvite,
   type BoardMember,
+  type BoardRolePermissionMatrix,
   type CollaborationRole,
   type PermissionCapability,
   type WorkspaceMember,
+  normalizeBoardRolePermissionMatrix,
 } from '../types';
 import { buildBoardInviteUrl, generateBoardInviteToken, hashBoardInviteToken, isLocalBoardInviteUrl } from '../utils/boardInviteToken';
 
@@ -55,8 +56,11 @@ const PERMISSION_ROWS: { capability: PermissionCapability; label: string }[] = [
 const getMemberLabel = (member: Pick<BoardMember | WorkspaceMember, 'userId' | 'profile'>) =>
   member.profile?.displayName || member.profile?.email || member.userId;
 
-const hasBoardCapability = (role: CollaborationRole, capability: PermissionCapability) =>
-  (BOARD_ROLE_CAPABILITIES[role] as readonly PermissionCapability[]).includes(capability);
+const hasBoardCapability = (
+  rolePermissions: BoardRolePermissionMatrix,
+  role: CollaborationRole,
+  capability: PermissionCapability
+) => rolePermissions[role].includes(capability);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -75,18 +79,27 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const boardMembers = useMemberStore(state => state.boardMembers);
+  const boardRolePermissions = useMemberStore(state => state.boardRolePermissions);
+  const currentBoardAccess = useMemberStore(state => state.currentBoardAccess);
   const loading = useMemberStore(state => state.loading);
   const loadMembers = useMemberStore(state => state.loadMembers);
   const inviteBoardMember = useMemberStore(state => state.inviteBoardMember);
   const removeBoardMember = useMemberStore(state => state.removeBoardMember);
+  const updateBoardRolePermissions = useMemberStore(state => state.updateBoardRolePermissions);
   const { canManageBoardMembers } = useBoardPermissions();
   const [isOpen, setIsOpen] = React.useState(isEmbedded);
   const [activeTab, setActiveTab] = React.useState<MemberPanelTab>('emailInvite');
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [pendingInvites, setPendingInvites] = React.useState<BoardInvite[]>([]);
   const [inviteLoading, setInviteLoading] = React.useState(false);
+  const [permissionSavingKey, setPermissionSavingKey] = React.useState<string | null>(null);
   const [recentInviteLinks, setRecentInviteLinks] = React.useState<Record<string, string>>({});
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const canConfigureRolePermissions =
+    currentBoardAccess?.workspaceRole === 'owner'
+    || currentBoardAccess?.workspaceRole === 'admin'
+    || currentBoardAccess?.boardRole === 'owner'
+    || currentBoardAccess?.boardRole === 'admin';
 
   React.useEffect(() => {
     if (isEmbedded) {
@@ -126,7 +139,12 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
   }, [activeTab, isOpen, loadPendingInvites]);
 
   React.useEffect(() => {
-    if (!isOpen || activeTab !== 'boardMembers' || !activeWorkspaceId || !activeBoardId) return;
+    if (
+      !isOpen
+      || (activeTab !== 'boardMembers' && activeTab !== 'rolePermissions')
+      || !activeWorkspaceId
+      || !activeBoardId
+    ) return;
     void loadMembers(activeWorkspaceId, activeBoardId);
   }, [activeBoardId, activeTab, activeWorkspaceId, isOpen, loadMembers]);
 
@@ -212,6 +230,38 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
       toast.success('看板成員已移除。');
     } catch {
       toast.error('無法移除此看板成員。');
+    }
+  };
+
+  const handlePermissionToggle = async (role: CollaborationRole, capability: PermissionCapability) => {
+    if (
+      !activeWorkspaceId
+      || !activeBoardId
+      || !canConfigureRolePermissions
+      || role === 'owner'
+      || permissionSavingKey
+    ) return;
+
+    const currentCapabilities = new Set(boardRolePermissions[role]);
+    if (currentCapabilities.has(capability)) {
+      currentCapabilities.delete(capability);
+    } else {
+      currentCapabilities.add(capability);
+    }
+
+    const nextPermissions = normalizeBoardRolePermissionMatrix({
+      ...boardRolePermissions,
+      [role]: Array.from(currentCapabilities),
+    });
+
+    try {
+      setPermissionSavingKey(`${role}:${capability}`);
+      await updateBoardRolePermissions(activeWorkspaceId, activeBoardId, nextPermissions);
+      toast.success('角色權限已更新。');
+    } catch {
+      toast.error('無法更新角色權限。');
+    } finally {
+      setPermissionSavingKey(null);
     }
   };
 
@@ -392,9 +442,14 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
 
           {activeTab === 'rolePermissions' && (
             <div className="max-h-[360px] overflow-auto px-4 py-3">
-              <div className="mb-3 flex items-center gap-2 text-xs font-bold text-slate-500">
-                <ShieldCheck size={14} />
-                <span>角色權限表</span>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                  <ShieldCheck size={14} />
+                  <span>角色權限表</span>
+                </div>
+                {canConfigureRolePermissions && (
+                  <span className="text-[11px] font-semibold text-blue-600">可設定</span>
+                )}
               </div>
               <div className="min-w-[380px] overflow-hidden rounded-md border border-slate-100">
                 <div className="grid grid-cols-[1.3fr_repeat(5,minmax(52px,1fr))] bg-slate-50 text-[11px] font-bold text-slate-500">
@@ -411,10 +466,31 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
                     <div className="px-2 py-2 font-medium text-slate-600">{row.label}</div>
                     {ROLE_OPTIONS.map(role => (
                       <div key={role} className="flex items-center justify-center px-1 py-2">
-                        {hasBoardCapability(role, row.capability) ? (
-                          <Check size={14} className="text-emerald-500" />
+                        {role === 'owner' || !canConfigureRolePermissions ? (
+                          hasBoardCapability(boardRolePermissions, role, row.capability) ? (
+                            <Check size={14} className="text-emerald-500" />
+                          ) : (
+                            <span className="h-1 w-1 rounded-full bg-slate-200" />
+                          )
                         ) : (
-                          <span className="h-1 w-1 rounded-full bg-slate-200" />
+                          <button
+                            type="button"
+                            aria-pressed={hasBoardCapability(boardRolePermissions, role, row.capability)}
+                            aria-label={`${ROLE_LABELS[role]} ${row.label}`}
+                            disabled={loading || Boolean(permissionSavingKey)}
+                            onClick={() => handlePermissionToggle(role, row.capability)}
+                            className={`inline-flex h-6 w-6 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                              hasBoardCapability(boardRolePermissions, role, row.capability)
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                : 'border-slate-200 bg-white text-slate-300 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600'
+                            }`}
+                          >
+                            {hasBoardCapability(boardRolePermissions, role, row.capability) ? (
+                              <Check size={14} />
+                            ) : (
+                              <span className="h-1 w-1 rounded-full bg-current" />
+                            )}
+                          </button>
                         )}
                       </div>
                     ))}

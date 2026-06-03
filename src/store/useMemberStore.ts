@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { BoardMember, CurrentBoardAccess, WorkspaceMember } from '../types';
+import { createDefaultBoardRolePermissionMatrix, type BoardMember, type BoardRolePermissionMatrix, type CurrentBoardAccess, type WorkspaceMember } from '../types';
 import { memberService } from '../services/dataBackend';
 import useAuthStore from './useAuthStore';
 
 interface MemberState {
   workspaceMembers: WorkspaceMember[];
   boardMembers: BoardMember[];
+  boardRolePermissions: BoardRolePermissionMatrix;
   currentBoardAccess: CurrentBoardAccess | null;
   loading: boolean;
   error: string | null;
@@ -16,6 +17,7 @@ interface MemberActions {
   loadMembers: (workspaceId: string | null | undefined, boardId: string | null | undefined) => Promise<void>;
   inviteBoardMember: (workspaceId: string, boardId: string, userId: string, role: BoardMember['role']) => Promise<void>;
   removeBoardMember: (workspaceId: string, boardId: string, userId: string) => Promise<void>;
+  updateBoardRolePermissions: (workspaceId: string, boardId: string, permissions: BoardRolePermissionMatrix) => Promise<void>;
 }
 
 type MemberStore = MemberState & MemberActions;
@@ -23,6 +25,7 @@ type MemberStore = MemberState & MemberActions;
 export const useMemberStore = create<MemberStore>((set, get) => ({
   workspaceMembers: [],
   boardMembers: [],
+  boardRolePermissions: createDefaultBoardRolePermissionMatrix(),
   currentBoardAccess: null,
   loading: false,
   error: null,
@@ -30,6 +33,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
   clearMembers: () => set({
     workspaceMembers: [],
     boardMembers: [],
+    boardRolePermissions: createDefaultBoardRolePermissionMatrix(),
     currentBoardAccess: null,
     loading: false,
     error: null,
@@ -40,6 +44,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       set({
         workspaceMembers: [],
         boardMembers: [],
+        boardRolePermissions: createDefaultBoardRolePermissionMatrix(),
         currentBoardAccess: null,
         loading: false,
         error: null,
@@ -53,6 +58,9 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       const boardMembers = boardId
         ? await memberService.listBoardMembers(workspaceId, boardId)
         : [];
+      const boardRolePermissions = boardId
+        ? await memberService.getBoardRolePermissions(workspaceId, boardId)
+        : createDefaultBoardRolePermissionMatrix();
       const currentUserId = useAuthStore.getState().user?.uid;
       const currentBoardAccess = boardId && currentUserId
         ? await memberService.getCurrentBoardAccess(workspaceId, boardId, currentUserId)
@@ -61,6 +69,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       set({
         workspaceMembers,
         boardMembers,
+        boardRolePermissions,
         currentBoardAccess,
         loading: false,
         error: null,
@@ -70,6 +79,7 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       set({
         workspaceMembers: [],
         boardMembers: [],
+        boardRolePermissions: createDefaultBoardRolePermissionMatrix(),
         currentBoardAccess: null,
         loading: false,
         error: error instanceof Error ? error.message : String(error),
@@ -99,6 +109,21 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
       await get().loadMembers(workspaceId, boardId);
     } catch (error) {
       console.error('[useMemberStore] removeBoardMember failed:', error);
+      set({
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  },
+
+  updateBoardRolePermissions: async (workspaceId, boardId, permissions) => {
+    set({ loading: true, error: null });
+    try {
+      await memberService.updateBoardRolePermissions(workspaceId, boardId, permissions);
+      await get().loadMembers(workspaceId, boardId);
+    } catch (error) {
+      console.error('[useMemberStore] updateBoardRolePermissions failed:', error);
       set({
         loading: false,
         error: error instanceof Error ? error.message : String(error),

@@ -92,6 +92,15 @@ export type ProjectMemberRow = {
   updated_at: string;
 };
 
+export type BoardRolePermissionRow = {
+  tenant_id: string;
+  project_id: string;
+  role: TenantRole;
+  capabilities: string[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type BoardInviteRow = {
   id: string;
   tenant_id: string;
@@ -296,6 +305,7 @@ export interface Database {
       tenant_members: Table<TenantMemberRow>;
       projects: Table<ProjectRow>;
       project_members: Table<ProjectMemberRow>;
+      board_role_permissions: Table<BoardRolePermissionRow>;
       board_invites: Table<BoardInviteRow>;
       wbs_items: Table<WbsItemRow>;
       task_tags: Table<TaskTagRow>;
