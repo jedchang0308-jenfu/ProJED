@@ -7,6 +7,8 @@ import {
   type BoardMember,
   type BoardRolePermissionMatrix,
   type Dependency,
+  type KnowledgeRecord,
+  type KnowledgeRecordInput,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -21,6 +23,7 @@ const TAGS_KEY = 'projed-local-test.tags';
 const BOARD_MEMBERS_KEY = 'projed-local-test.boardMembers';
 const BOARD_INVITES_KEY = 'projed-local-test.boardInvites';
 const BOARD_ROLE_PERMISSIONS_KEY = 'projed-local-test.boardRolePermissions';
+const KNOWLEDGE_RECORDS_KEY = 'projed-local-test.knowledgeRecords';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 
 const readJson = <T>(key: string, fallback: T): T => {
@@ -94,6 +97,8 @@ const readBoardInvites = () => readJson<Record<string, LocalBoardInviteRecord[]>
 const writeBoardInvites = (invites: Record<string, LocalBoardInviteRecord[]>) => writeJson(BOARD_INVITES_KEY, invites);
 const readBoardRolePermissions = () => readJson<Record<string, Partial<BoardRolePermissionMatrix>>>(BOARD_ROLE_PERMISSIONS_KEY, {});
 const writeBoardRolePermissions = (permissions: Record<string, Partial<BoardRolePermissionMatrix>>) => writeJson(BOARD_ROLE_PERMISSIONS_KEY, permissions);
+const readKnowledgeRecords = () => readJson<KnowledgeRecord[]>(KNOWLEDGE_RECORDS_KEY, []);
+const writeKnowledgeRecords = (records: KnowledgeRecord[]) => writeJson(KNOWLEDGE_RECORDS_KEY, records);
 const getBoardMemberKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
 const readCurrentLocalUserId = () =>
   readJson<{ uid?: string } | null>(LOCAL_TEST_SESSION_KEY, null)?.uid || 'local-test-user';
@@ -595,6 +600,76 @@ export const localTestTagService = {
   },
 };
 
+export const localTestRecordService = {
+  listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> =>
+    readKnowledgeRecords()
+      .filter(record => record.workspaceId === workspaceId && record.boardId === boardId && record.status !== 'archived')
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+
+  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> =>
+    readKnowledgeRecords()
+      .filter(record =>
+        record.workspaceId === workspaceId &&
+        record.boardId === boardId &&
+        record.status !== 'archived' &&
+        record.taskLinks.some(link => link.nodeId === nodeId)
+      )
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+
+  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+    const now = Date.now();
+    const records = readKnowledgeRecords();
+    const existing = input.id ? records.find(record => record.id === input.id) : undefined;
+    const recordId = existing?.id || input.id || createId('local_record');
+    const actorId = readCurrentLocalUserId();
+    const record: KnowledgeRecord = {
+      ...(existing || {}),
+      id: recordId,
+      workspaceId,
+      boardId,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      status: input.status,
+      visibility: input.visibility,
+      participantsText: input.participantsText,
+      occurredAt: input.occurredAt,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt,
+      recordedBy: input.recordedBy ?? actorId,
+      createdBy: existing?.createdBy ?? actorId,
+      updatedBy: actorId,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      ragEnabled: input.status === 'published' && input.visibility !== 'private',
+      taskLinks: input.taskLinks.map((link, index) => ({
+        id: `${recordId}_link_${link.nodeId}_${link.role}_${index}`,
+        recordId,
+        workspaceId,
+        boardId,
+        nodeId: link.nodeId,
+        role: link.role,
+        createdAt: now,
+      })),
+    };
+
+    writeKnowledgeRecords([
+      record,
+      ...records.filter(item => item.id !== record.id),
+    ]);
+    return record;
+  },
+
+  delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {
+    const now = Date.now();
+    writeKnowledgeRecords(readKnowledgeRecords().map(record =>
+      record.workspaceId === workspaceId && record.boardId === boardId && record.id === recordId
+        ? { ...record, status: 'archived', updatedAt: now }
+        : record
+    ));
+  },
+};
+
 export const localTestStorage = {
   readWorkspaces,
   writeWorkspaces,
@@ -610,4 +685,6 @@ export const localTestStorage = {
   writeBoardInvites,
   readBoardRolePermissions,
   writeBoardRolePermissions,
+  readKnowledgeRecords,
+  writeKnowledgeRecords,
 };

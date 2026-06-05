@@ -7,7 +7,7 @@ export const RAG_EMBEDDING_DIMENSIONS = 3072 as const;
 export const RAG_CHUNK_TARGET_CHARS = 1800;
 export const RAG_CHUNK_OVERLAP_CHARS = 240;
 
-export type RagSourceTable = 'wbs_items' | 'projects' | 'documents';
+export type RagSourceTable = 'wbs_items' | 'projects' | 'documents' | 'knowledge_records';
 
 export interface RagCitation {
   documentId: string | null;

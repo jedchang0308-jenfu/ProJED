@@ -4,6 +4,7 @@ import { CalendarDays, CircleDot, Lock, Plus, Unlock, UserRound, X } from 'lucid
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { TagPicker } from './Tags/TagPicker';
+import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskStatus } from '../types';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
@@ -463,6 +464,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               ))}
             </div>
           </section>
+
+          <TaskRecordTimeline nodeId={node.id} />
         </div>
       </div>
     </div>

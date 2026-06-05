@@ -25,6 +25,8 @@
     "verify:calendar-feed-ics": "node scripts/verify-calendar-feed-ics.mjs",
     "verify:core-regression-static": "node scripts/verify-core-regression-static.mjs",
     "verify:p9-edge-function": "node scripts/verify-p9-edge-function.mjs",
+    "verify:dev-002-records": "node scripts/verify-dev-002-records.mjs",
+    "verify:dev-003-record-tags": "node scripts/verify-dev-003-record-content-tags.mjs",
     "verify:p9-rag-local": "node scripts/verify-p9-rag-local.mjs",
     "verify:supabase:static": "node scripts/verify-supabase-static.mjs",
     "verify:ontology-collaboration": "node scripts/ontology-collaboration-qc.mjs",

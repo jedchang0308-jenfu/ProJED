@@ -186,3 +186,316 @@
 - 2026-06-01：建立 spec 與 dev task，定義四模式一致化緊湊 UI 系統。
 - 2026-06-01：完成 DEV-001 開發，新增 compact UI token、共用控制元件與 ModeSwitcher，統一清單、看板、甘特圖、月曆的 toolbar、主要控制項、任務 row/bar/lane 與畫布留白；lint、build 與 in-app browser 四模式切換驗證通過。
 - 2026-06-01：依使用者回饋「字體還是長得不一樣」補強美學一致性：全域 UI 字體改為中英混排 system stack，button/input/select/textarea 強制繼承字體，四模式相關 `font-black`、`uppercase`、`tracking-*` 收斂為一致的 `font-semibold` 視覺語氣；lint、build 與四模式 computed font-family 驗證通過。
+
+---
+
+## PM Active Progress Update - 2026-06-04
+
+- [x] DEV-001 [交付點] 統一 compact UI 系統
+- [ ] DEV-002 [交付點] 會議紀錄與個人工作紀錄 MVP
+
+## DEV-002：會議紀錄與個人工作紀錄 MVP
+
+狀態：Done
+節點類型：交付點
+父交付點：無
+是否計入產品交付完成：是
+優先級：P1
+原始需求邊界：使用者要求在 ProJED 加入「會議紀錄」與「個人工作紀錄」，可從看板快速選取相關任務，透過 task node 連結紀錄資訊，讓 AI 可做全域分析。
+主要規格：`ai-doc/specs/SPEC-003-meeting-work-records-workflow.md`
+
+## 任務目標
+
+在 ProJED 中建立「專案知識紀錄層」的 MVP，讓使用者可以快速建立會議紀錄與個人工作紀錄，並把紀錄連到一個或多個 task node。完成後，任務詳情頁可回看相關紀錄，紀錄可進入 RAG documents，作為後續 AI 全域分析基礎。
+
+## 開發範圍
+
+- [ ] 建立紀錄資料模型：`knowledge_records`、`record_task_links`。
+- [ ] 建立會議紀錄表單：紀錄時間、參與人員文字輸入、內容、關聯任務。
+- [ ] 建立個人工作紀錄表單：記錄人員固定目前登入者、時間區間預設一週前到今天、內容、關聯任務。
+- [ ] 建立可收疊右側紀錄填寫欄。
+- [ ] 進入看板式任務選取模式時，自動收起右側欄；完成或取消後恢復進入前狀態。
+- [ ] 建立看板式任務選取器，支援多選 task node。
+- [ ] 建立紀錄列表。
+- [ ] 在任務詳情頁新增相關紀錄時間軸。
+- [ ] 將 published record 同步成 RAG documents。
+- [ ] AI citation 可回到原始紀錄。
+
+## 不在本交付點範圍
+
+- 語音逐字稿。
+- 參與人員 member mapping。
+- AI 自動修改任務。
+- 複雜審批流程。
+- 完整部門級 BI 報表。
+
+## 驗收標準
+
+- [ ] 使用者可以在 active board 建立會議紀錄，填寫紀錄時間、參與人員與內容。
+- [ ] 使用者可以建立個人工作紀錄，記錄人員固定為目前登入者。
+- [ ] 個人工作紀錄時間區間預設為一週前到今天，且可手動調整。
+- [ ] 紀錄填寫頁以可收疊右側欄呈現。
+- [ ] 進入任務選取模式時右側欄自動收起；完成或取消後恢復進入前狀態。
+- [ ] 兩種紀錄都能透過看板式任務選取器連結一個或多個 task node。
+- [ ] 被連結的 task node 詳情頁可看到相關紀錄。
+- [ ] 編輯紀錄後，任務關聯與 RAG document 會同步更新。
+- [ ] AI 回答引用會議紀錄或工作紀錄時，citation 能回到原始紀錄。
+- [ ] private 工作紀錄不會被沒有權限的使用者或 AI retrieval 讀取。
+
+## RD 執行計畫
+
+- [ ] 盤點現有 `TaskNode`、`wbs_items`、RAG documents、citation contract 與權限模型。
+- [ ] 補 Supabase migration 與 TypeScript database types。
+- [ ] 實作 record service / store。
+- [ ] 實作右側紀錄填寫欄與 draft state。
+- [ ] 抽出看板式 task picker 選取模式。
+- [ ] 實作紀錄列表與任務詳情頁紀錄時間軸。
+- [ ] 實作 record to RAG document indexing adapter。
+- [ ] 補必要的 lint/build/type verification。
+
+## QA 驗證計畫
+
+- [ ] 使用者流程：會議紀錄新增、編輯、連結任務、回到任務查看。
+- [ ] 使用者流程：個人工作紀錄新增、預設一週時間區間、連結任務、回到任務查看。
+- [ ] UI 流程：右側欄展開、收起、進入選取模式自動收起、選取完成恢復狀態。
+- [ ] 邊界情境：未選任務、跨 board 任務、空內容 draft、時間區間不合法。
+- [ ] 權限情境：private / project / tenant visibility 與 RAG retrieval 一致。
+- [ ] FMEA：RAG citation 指錯來源、private 紀錄外洩、task link orphan、draft 遺失、選取模式與 drag-and-drop 衝突。
+
+## QC 驗證結果
+
+- [ ] 尚未執行；等待 RD 實作完成後依 QA 計畫驗證。
+
+## 相關文件
+
+- SPEC：`ai-doc/specs/SPEC-003-meeting-work-records-workflow.md`
+- Backlog：`ai-doc/backlog.md`
+- Documentation map：`ai-doc/documentation_map.md`
+
+## 變更紀錄
+
+- 2026-06-04：建立 DEV-002 PM 專案文件與交付邊界。
+
+---
+
+## PM DEV-003：紀錄內容內嵌任務標籤
+
+日期：2026-06-04
+狀態：Ready
+任務類型：Product UX refinement
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-004-record-content-inline-task-tags.md`
+父交付點：DEV-002 會議紀錄與個人工作紀錄 MVP
+
+### 任務目標
+
+修改紀錄與任務的關聯 UX，讓使用者可在撰寫內容時直接引用任務。看板任務選取仍是入口，但點選任務後，任務需插入 `內容` 編輯器目前游標位置，並以類似 Codex tag skill 的視覺 chip 呈現。
+
+### 使用者流程
+
+- 使用者開啟可收疊右側紀錄欄，並把游標放在 `內容` 欄。
+- 使用者點擊 `從看板選取`。
+- 右側欄自動收起，ProJED 切換到既有看板模式。
+- 使用者直接點選看板任務卡或 checklist 任務。
+- ProJED 恢復紀錄欄，並把任務 tag 插入原本內容游標位置。
+- 下方仍可保留關聯任務摘要，但主要任務引用要出現在內容本文中。
+
+### 功能需求
+
+- 內容編輯器需支援純文字與任務 tag 混排。
+- 任務 tag 視覺需接近 Codex mention chip：精簡、可讀、鍵盤友善，且和一般文字有明確區別。
+- 儲存內容維持字串格式，token 語法為：`@[Task title](task:nodeId)`。
+- 重新開啟紀錄時，需把既有 token parse 回 visual tag。
+- 儲存與發布時需保留 token 語法，供 AI/RAG 分析。
+- `record_task_links` 仍是權限、任務時間軸與 retrieval 使用的唯一結構化 graph edge。
+- 同一任務可在內容中出現多次，但 `record_task_links` 每個 record/task/role 僅保留唯一關聯。
+- 看板選取不得開啟另一個 task picker page。
+
+### RD 開發檢查點
+
+- 新增可重用 `RecordContentEditor`，支援內容文字與任務 tag chip。
+- 新增 mention parse/serialize helper，建議路徑：`src/utils/recordContentMentions.ts`。
+- 擴充 `useRecordStore`，在進入看板選取前記住 content cursor/selection。
+- `completeTaskSelection` 收到選取任務後，需把 task mention token 插入記憶的游標位置。
+- 保留既有 linked-task role data：`primary`、`related`、`follow_up`，並在插入內容時同步更新。
+- 保持鍵盤編輯行為：輸入、刪除、複製貼上、多行內容、游標移動。
+- 本 DEV 預期不需要 database migration。
+
+### QA 驗證計畫
+
+- 正式 UX 驗證文件：`ai-doc/qa/QA-DEV-003-record-content-inline-task-tags-ux-validation.md`。
+- 狀態：Ready for QC；QC 執行時以該文件的 UX-001 到 UX-020 作為主要操作腳本。
+- 建立會議紀錄，輸入文字，把游標放在中間，從看板選任務，確認 tag 插在該游標位置。
+- 建立個人工作紀錄，確認同樣支援 inline task tag。
+- 驗證進入看板選取時右側欄自動收起，完成或取消後恢復。
+- 驗證儲存草稿與發布紀錄後，重新開啟仍能 render 任務 tag。
+- 驗證同一任務可在內容中插入多次。
+- 驗證 `record_task_links` 維持唯一，任務詳情時間軸仍可看到紀錄。
+- 驗證 plain text search / RAG-ready content 保留足夠任務標題語境。
+
+### QC 證據需求
+
+- 進入看板選取前的瀏覽器截圖或 snapshot，需看得到內容游標位置。
+- 選取任務後的瀏覽器截圖或 snapshot，需看得到 `內容` 內的 inline task tag。
+- 儲存後 record payload 或 local state 證據，需看得到 token 語法。
+- 若有實作測試，收集 lint/build 或 targeted test 輸出。
+
+### 不在範圍
+
+- 任務 tag 以外的 rich text formatting。
+- member/user mention chip。
+- 新 database schema。
+- RAG embedding pipeline 行為變更。
+
+### 交付結果
+
+- [x] 已新增 `RecordContentEditor`，支援 contentEditable 內容與 inline task chip。
+- [x] 已新增 `recordContentMentions` helper，統一 parse、serialize、insert、extract/sync task links。
+- [x] 從看板點選任務會插入 `@[Task title](task:nodeId)` token，並在 editor 中顯示為 chip。
+- [x] 同一任務可在內容中插入多次。
+- [x] 關聯任務摘要仍維持唯一任務，並保留 role dropdown。
+- [x] 看板選取仍使用原看板模式，進入選取時右側欄自動收合。
+- [x] 2026-06-04 audit 修正 `RecordContentEditor`：改為 imperative DOM sync，避免 contentEditable 快速輸入產生重複殘影文字。
+
+### 驗證結果
+
+- [x] `npx.cmd tsc --noEmit`
+- [x] `npm.cmd run lint -- --quiet`
+- [x] `npm.cmd run verify:dev-002-records`
+- [x] `npm.cmd run build`
+- [x] Playwright smoke：會議紀錄內容可輸入文字。
+- [x] Playwright smoke：從看板選取任務後，右側欄恢復且內容內出現 task chip。
+- [x] Playwright smoke：同一任務插入兩次時，內容有 2 個 chip，摘要仍只有 1 筆唯一任務。
+- [x] `npm.cmd run verify:dev-003-record-tags`：驗證游標位置插入、重複 tag、刪除同步、legacy link 保留、plain text preview 去除 raw token。
+- [x] 2026-06-04 audit Playwright smoke：輸入 `今天討論 release ` 後文字無重複殘影；重複選 `資料庫改SQL` 後 chip=2、摘要 role select=1。
+
+### PM 文件更新
+
+- [x] 已建立 DEV-003 使用者視角 UX 驗證計畫：`ai-doc/qa/QA-DEV-003-record-content-inline-task-tags-ux-validation.md`。
+- [x] 驗證計畫已納入文件地圖：`ai-doc/documentation_map.md`。
+
+---
+
+## PM DEV-004：全人個人與團隊待辦平台 MVP
+
+日期：2026-06-04
+狀態：Planned
+任務類型：Product MVP
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-002-whole-person-todo-platform.md`
+Backlog：`ai-doc/backlog.md`
+交付規劃：DEV-004 為 umbrella PM delivery program；RD/QA/QC 實作追蹤以 DEV-004A 到 DEV-004D 四個獨立交付點為準。
+
+### 任務目標
+
+建立 ProJED 的全人待辦 MVP，讓使用者能以低摩擦方式捕捉個人事項，透過右側收件匣整理，並在需要時以看板優先的定位流程轉成正式 `TaskNode`。MVP 同時提供「我的今日」、站內通知、輕量共享、歷史歸檔與最小既有 `TaskNode` 相容。
+
+### 已確認產品決策
+
+- 個人 `InboxItem` 不屬於 workspace；只有轉正式任務時才進入 board/workspace。
+- 首頁維持最近使用 board；「我的今日」放在 board 上方並保留右側抽屜入口。
+- 全域收件匣採右側抽屜，分頁順序為 `今日 / 未整理 / 通知 / 完成 / 歷史`。
+- 頂部列常駐快速輸入框，支援 `/` 聚焦，送出成功後清空並保留焦點。
+- 第一版 `InboxItem.itemType` 支援 `todo / someday / note`。
+- 日期解析只支援簡單關鍵字與日期格式，結果先作為 `suggestedDueDate`。
+- 看板定位採大型 overlay，以看板預覽與點選插入線決定 board、欄位與任務間插入位置。
+- 輕量共享可通知被指派者，但不可再改派第三人，只能退回建立者。
+- 完成區保留 30 天後歸檔；歷史入口支援文字搜尋。
+- 通知支援已讀/未讀；已讀 30 天後歸檔，未讀永久保留。
+- MVP 接現有 Firebase/local backend；Supabase、雙後端與同步佇列列為 future upgrade。
+
+### 不在本交付點範圍
+
+- 團隊承諾功能、check-in date、reviewer、blocked reason、團隊週回顧。
+- 完整 AI 自動分類、自動排程、自動轉任務。
+- browser notification、email、calendar 外部提醒。
+- 拖曳式看板定位。
+- 完整同步佇列 UI。
+- Supabase / Firebase 雙後端一致性改造。
+- 完整歷史頁與進階日期篩選。
+
+### RD 交付點拆分
+
+| DEV | 狀態 | 節點類型 | 父交付點 | 交付完成判定 |
+|---|---|---|---|---|
+| DEV-004A | Planned | 交付點 | DEV-004 | 資料模型、service/store、local/test backend、Firebase backend 與既有 `TaskNode` 相容查詢可被 QA/QC 驗證。 |
+| DEV-004B | Planned | 交付點 | DEV-004 | 頂部快速捕捉與私人收件匣建立流程可用，包含 `/` 聚焦、日期建議與 pending 離線狀態。 |
+| DEV-004C | Planned | 交付點 | DEV-004 | 右側抽屜、我的今日、通知、完成與歷史分頁完成最小可用流程。 |
+| DEV-004D | Planned | 交付點 | DEV-004 | 使用者能從 inbox item 以看板定位 overlay 建立正式 `TaskNode`，並回填來源狀態。 |
+
+#### DEV-004A：資料模型與 service/store
+
+- [ ] 定義 `InboxItem`、`InboxNotification` TypeScript 型別。
+- [ ] 建立 `InboxItem` 狀態：`itemType`、`captureStatus`、`syncStatus`、`pinnedAt`、`completedAt`、`archivedAt`、`returnedAt`、`returnReason`。
+- [ ] 建立 local/test backend 行為。
+- [ ] 建立 Firebase service 行為。
+- [ ] 建立最小既有 `TaskNode` 相容查詢：指派給我、今天、逾期。
+- [ ] 確認不改寫既有 `TaskNode` 資料。
+
+#### DEV-004B：全域收件匣與頂部快速捕捉
+
+- [ ] 在頂部列加入常駐快速輸入框。
+- [ ] 支援 `/` 聚焦且不干擾其他文字輸入。
+- [ ] 送出後建立私人 `InboxItem`，清空並保留焦點。
+- [ ] 支援簡單日期解析：今天、明天、下週、`YYYY-MM-DD`、`MM/DD`。
+- [ ] 顯示日期建議確認/清除提示。
+- [ ] 支援 pending 離線暫存，可改文字與日期，不可指派或轉任務。
+
+#### DEV-004C：右側抽屜、我的今日、通知與歷史
+
+- [ ] 建立右側抽屜與分頁：`今日 / 未整理 / 通知 / 完成 / 歷史`。
+- [ ] 抽屜預設分頁：有今日項目開今日，否則開未整理。
+- [ ] 今日分頁分區：`InboxItem`、`我的正式任務`、`逾期任務`。
+- [ ] 每區最多 5 筆，可展開更多。
+- [ ] 逾期任務 1-3 筆展開，超過 3 筆收合。
+- [ ] 未整理分頁支援釘選，釘選排最上方。
+- [ ] 完成分頁只允許單筆恢復。
+- [ ] 歷史分頁支援文字搜尋。
+- [ ] 通知分頁支援已讀/未讀、通知歷史與 badge。
+- [ ] 支援基本快捷鍵：Enter、Esc、ArrowUp、ArrowDown。
+
+#### DEV-004D：看板定位 overlay 與正式任務轉換
+
+- [ ] 從右側抽屜或我的今日啟動轉任務。
+- [ ] 開啟大型看板定位 overlay。
+- [ ] 支援選 board、欄位、任務前/後、欄位頂部/底部插入線。
+- [ ] overlay 可修改 title、owner、due date。
+- [ ] 由 board 反推 workspace。
+- [ ] 建立正式 `TaskNode` 後回填 `promotedTaskNodeId`。
+- [ ] 成功後回到原處，顯示「查看任務」。
+- [ ] pending 離線項目同步成功前不可轉正式任務。
+
+### QA 驗證方向
+
+QA 應以 DEV-004A 到 DEV-004D 分別制定驗證計畫；可在共通回歸項目共用證據，但每個交付點都需有獨立通過標準。
+
+- 快速捕捉：連續輸入多筆、日期解析、失敗暫存、恢復連線同步。
+- 收件匣：未整理排序、釘選、分類、完成、恢復、歷史搜尋。
+- 我的今日：分區顯示、每區 5 筆、逾期區展開規則、正式 `TaskNode` 只查看。
+- 輕量共享：指派、通知、已讀/未讀、退回、不可再改派第三人。
+- 看板定位：overlay 空間、插入線、order、parentId、建立成功回填。
+- 權限與可見性：私人 inbox、輕量共享、正式 TaskNode 進 board/workspace。
+- 回歸：既有看板拖曳、任務詳情、清單/甘特/月曆顯示不受破壞。
+
+### QC 驗證需求
+
+- 逐一判定 DEV-004A、DEV-004B、DEV-004C、DEV-004D 是否達成交付完成判定，不用單一 DEV-004 大結論取代。
+- 驗證 RD 實作未超出 SPEC-002 MVP 範圍。
+- 驗證未做團隊承諾、外部提醒、拖曳定位、雙後端改造。
+- 收集 lint/build/typecheck 輸出。
+- 使用瀏覽器操作快速捕捉、右側抽屜、今日分頁、通知、轉任務 overlay。
+- 對 pending 離線、歷史歸檔、通知已讀/未讀做狀態證據截圖或 local state 證據。
+
+### 未來升級治理
+
+- 未來升級追蹤位於 `ai-doc/backlog.md` 的 `Future Upgrade Tracking - SPEC-002`。
+- 升級項目進入 `planned` 前，需補 spec、dev task、QA 驗證計畫。
+- 不得只把未來升級保留在對話中。
+
+### 狀態
+
+- [x] 已建立 SPEC-002。
+- [x] 已建立 backlog future upgrade tracking。
+- [x] 已建立 DEV-004 umbrella 與 DEV-004A-D dev task 條目。
+- [ ] 尚未執行 RD 開發。
+- [x] 已新增 DEV-003 專用 verifier：`scripts/verify-dev-003-record-content-tags.mjs`，並掛載為 `npm.cmd run verify:dev-003-record-tags`。

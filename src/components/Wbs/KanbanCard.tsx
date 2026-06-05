@@ -9,9 +9,10 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link } from 'lucide-react';
+import { Calendar, Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
+import useRecordStore from '../../store/useRecordStore';
 import { KanbanChecklist } from './KanbanChecklist';
 import { KanbanDependencyContext } from '../BoardView';
 import { Badge } from '../ui/Badge';
@@ -75,6 +76,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
+  const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
+  const recordDraft = useRecordStore(s => s.draft);
+  const insertRecordTaskMention = useRecordStore(s => s.insertTaskMentionAtCursor);
+  const isRecordSelected = recordDraft?.taskLinks.some(link => link.nodeId === nodeId) ?? false;
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
@@ -268,13 +273,24 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       ref={mergedRef}
       style={style}
       {...cardLongPressHandlers}
+      onClick={(e) => {
+        if (!isRecordSelectionMode) return;
+        e.preventDefault();
+        e.stopPropagation();
+        insertRecordTaskMention(nodeId, node.title || nodeId);
+      }}
       onContextMenu={(e) => {
           e.preventDefault();
+          if (isRecordSelectionMode) return;
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
       className={`kanban-task-card relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
+          : isRecordSelectionMode
+            ? isRecordSelected
+              ? 'cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-300 shadow-md'
+              : 'cursor-pointer border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 hover:shadow-md'
           : isSelectingMode
             ? isSelfNode
               ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
@@ -293,10 +309,18 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               <TaskDragHandle
                 attributes={attributes}
                 listeners={listeners}
-                disabled={!canMoveTask || isEditing || isSelectingMode}
+                disabled={!canMoveTask || isEditing || isSelectingMode || isRecordSelectionMode}
                 size="sm"
                 className="-ml-1"
               />
+
+              {isRecordSelectionMode ? (
+                <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                  isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'
+                }`}>
+                  {isRecordSelected ? <Check size={11} /> : null}
+                </span>
+              ) : null}
 
               {isEditing ? (
                 <Input
@@ -317,8 +341,18 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   className={`task-title-text text-sm font-medium leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${
                     statusTextColorMap[status as TaskStatus]
                   }`}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={handleStartEdit}
+                  onPointerDown={(e) => {
+                    if (!isRecordSelectionMode) e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    if (isRecordSelectionMode) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      insertRecordTaskMention(nodeId, node.title || nodeId);
+                      return;
+                    }
+                    handleStartEdit(e);
+                  }}
                   title="點擊以編輯任務名稱"
                 >
                   {node.title || '未命名任務'}

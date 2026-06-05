@@ -9,7 +9,7 @@
  * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { Plus, GitBranch } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -18,6 +18,7 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { ViewToolbar } from './ui/ViewToolbar';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
+import useRecordStore from '../store/useRecordStore';
 import useDialogStore from '../store/useDialogStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import { compactClassNames } from './ui/compactTokens';
@@ -41,6 +42,9 @@ const BoardView = () => {
     const toggleStartDate = useBoardStore(s => s.toggleStartDate);
     const showStartDate = useBoardStore(s => s.showStartDate);
     const { addDependency, dependencies } = useWbsStore();
+    const isRecordTaskSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
+    const recordDraft = useRecordStore(s => s.draft);
+    const exitRecordTaskSelectionMode = useRecordStore(s => s.exitTaskSelectionMode);
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
@@ -86,10 +90,17 @@ const BoardView = () => {
 
     // ESC 取消選取模式
     React.useEffect(() => {
-        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDependencySelection(null); };
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            if (isRecordTaskSelectionMode) {
+                exitRecordTaskSelectionMode(true);
+                return;
+            }
+            setDependencySelection(null);
+        };
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
-    }, [setDependencySelection]);
+    }, [exitRecordTaskSelectionMode, isRecordTaskSelectionMode, setDependencySelection]);
 
     const collisionDetection = useCallback((args: any) => {
         const pointerCollisions = pointerWithin(args);
@@ -442,6 +453,35 @@ const BoardView = () => {
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
                 <ViewToolbar zIndex={10000} />
+
+                {isRecordTaskSelectionMode && (
+                    <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 text-sm">
+                                <span className="font-semibold text-blue-800">選取紀錄關聯任務</span>
+                                <span className="ml-2 text-blue-600">直接點選看板上的任務，已選 {recordDraft?.taskLinks.length ?? 0} 筆</span>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => exitRecordTaskSelectionMode(true)}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                >
+                                    <Check size={14} />
+                                    完成
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => exitRecordTaskSelectionMode(true)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-600 hover:bg-blue-100"
+                                    title="離開選取模式"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* 依賴關係選取模式橫幅 */}
                 {dependencySelection && (

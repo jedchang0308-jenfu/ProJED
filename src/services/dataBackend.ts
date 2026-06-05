@@ -11,6 +11,8 @@ import {
   type BoardRolePermissionMatrix,
   type CurrentBoardAccess,
   type Dependency,
+  type KnowledgeRecord,
+  type KnowledgeRecordInput,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -22,6 +24,7 @@ import {
   memberService as firestoreMemberService,
   nodeService as firestoreNodeService,
   tagService as firestoreTagService,
+  recordService as firestoreRecordService,
   workspaceService as firestoreWorkspaceService,
 } from './firestoreService';
 import {
@@ -31,6 +34,7 @@ import {
   supabaseEventLogService,
   supabaseMemberService,
   supabaseNodeService,
+  supabaseRecordService,
   supabaseTagService,
   supabaseWorkspaceService,
 } from './supabase/projedService';
@@ -40,6 +44,7 @@ import {
   localTestDependencyService,
   localTestMemberService,
   localTestNodeService,
+  localTestRecordService,
   localTestTagService,
   localTestWorkspaceService,
 } from './localTestService';
@@ -435,6 +440,36 @@ export const tagService = {
       : isSupabaseBackend
       ? supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds)
       : firestoreTagService.setNodeTags(workspaceId, boardId, nodeId, tagIds),
+};
+
+export const recordService = {
+  listByProject: (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> =>
+    isLocalTestBackend
+      ? localTestRecordService.listByProject(workspaceId, boardId)
+      : isSupabaseBackend
+      ? supabaseRecordService.listByProject(workspaceId, boardId)
+      : firestoreRecordService.listByProject(workspaceId, boardId),
+
+  listByNode: (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> =>
+    isLocalTestBackend
+      ? localTestRecordService.listByNode(workspaceId, boardId, nodeId)
+      : isSupabaseBackend
+      ? supabaseRecordService.listByNode(workspaceId, boardId, nodeId)
+      : firestoreRecordService.listByNode(workspaceId, boardId, nodeId),
+
+  upsert: (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> =>
+    isLocalTestBackend
+      ? localTestRecordService.upsert(workspaceId, boardId, input)
+      : isSupabaseBackend
+      ? supabaseRecordService.upsert(workspaceId, boardId, input)
+      : firestoreRecordService.upsert(workspaceId, boardId, input),
+
+  delete: (workspaceId: string, boardId: string, recordId: string): Promise<void> =>
+    isLocalTestBackend
+      ? localTestRecordService.delete(workspaceId, boardId, recordId)
+      : isSupabaseBackend
+      ? supabaseRecordService.delete(workspaceId, boardId, recordId)
+      : firestoreRecordService.delete(workspaceId, boardId, recordId),
 };
 
 export const eventLogService = {

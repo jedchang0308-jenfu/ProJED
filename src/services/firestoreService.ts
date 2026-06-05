@@ -2,7 +2,7 @@ import { requireFirebaseDb } from './firebase';
 import { 
   collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs
 } from 'firebase/firestore';
-import type { Workspace, Board, BoardMember, Dependency, TaskTag, WorkspaceMember } from '../types';
+import type { Workspace, Board, BoardMember, Dependency, KnowledgeRecord, KnowledgeRecordInput, TaskTag, WorkspaceMember } from '../types';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -231,5 +231,69 @@ export const tagService = {
   setNodeTags: async (wsId: string, bId: string, nId: string, tagIds: string[]): Promise<void> => {
     const db = requireFirebaseDb();
     await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', nId), { tagIds, updatedAt: Date.now() });
+  },
+};
+
+export const recordService = {
+  listByProject: async (wsId: string, bId: string): Promise<KnowledgeRecord[]> => {
+    const db = requireFirebaseDb();
+    const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', bId, 'records'));
+    return snapshot.docs
+      .map(docSnap => ({ ...(docSnap.data() as KnowledgeRecord), id: docSnap.id }))
+      .filter(record => record.status !== 'archived')
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  },
+
+  listByNode: async (wsId: string, bId: string, nodeId: string): Promise<KnowledgeRecord[]> => {
+    const records = await recordService.listByProject(wsId, bId);
+    return records.filter(record => record.taskLinks.some(link => link.nodeId === nodeId));
+  },
+
+  upsert: async (wsId: string, bId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+    const db = requireFirebaseDb();
+    const recordRef = input.id
+      ? doc(db, 'workspaces', wsId, 'boards', bId, 'records', input.id)
+      : doc(collection(db, 'workspaces', wsId, 'boards', bId, 'records'));
+    const now = Date.now();
+    const previous = input.id ? await getDoc(recordRef) : null;
+    const existing = previous?.exists() ? previous.data() as KnowledgeRecord : undefined;
+    const record: KnowledgeRecord = {
+      ...(existing || {}),
+      id: recordRef.id,
+      workspaceId: wsId,
+      boardId: bId,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      status: input.status,
+      visibility: input.visibility,
+      participantsText: input.participantsText,
+      occurredAt: input.occurredAt,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt,
+      recordedBy: input.recordedBy,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      ragEnabled: input.status === 'published' && input.visibility !== 'private',
+      taskLinks: input.taskLinks.map((link, index) => ({
+        id: `${recordRef.id}_link_${link.nodeId}_${link.role}_${index}`,
+        recordId: recordRef.id,
+        workspaceId: wsId,
+        boardId: bId,
+        nodeId: link.nodeId,
+        role: link.role,
+        createdAt: now,
+      })),
+    };
+    await setDoc(recordRef, record);
+    return record;
+  },
+
+  delete: async (wsId: string, bId: string, recordId: string): Promise<void> => {
+    const db = requireFirebaseDb();
+    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'records', recordId), {
+      status: 'archived',
+      updatedAt: Date.now(),
+    });
   },
 };

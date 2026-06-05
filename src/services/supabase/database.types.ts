@@ -17,6 +17,7 @@ export type DocumentSourceType =
   | 'task'
   | 'project_note'
   | 'meeting_note'
+  | 'work_log'
   | 'risk'
   | 'decision'
   | 'uploaded_file'
@@ -24,6 +25,9 @@ export type DocumentSourceType =
   | 'manual';
 export type RagVisibility = 'tenant' | 'project' | 'private';
 export type RagSyncStatus = 'pending' | 'running' | 'synced' | 'failed' | 'deleted';
+export type KnowledgeRecordType = 'meeting' | 'work_log';
+export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
+export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
 export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
@@ -224,6 +228,41 @@ export type DocumentRow = {
   updated_at: string;
 };
 
+export type KnowledgeRecordRow = {
+  id: string;
+  tenant_id: string;
+  project_id: string;
+  legacy_record_id: string | null;
+  record_type: KnowledgeRecordType;
+  title: string;
+  content: string;
+  participants_text: string | null;
+  occurred_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  recorded_by: string | null;
+  status: KnowledgeRecordStatus;
+  visibility: RagVisibility;
+  rag_enabled: boolean;
+  source_document_id: string | null;
+  metadata: Json;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RecordTaskLinkRow = {
+  id: string;
+  tenant_id: string;
+  project_id: string;
+  record_id: string;
+  item_id: string;
+  role: RecordTaskLinkRole;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type DocumentVersionRow = {
   id: string;
   tenant_id: string;
@@ -314,6 +353,8 @@ export interface Database {
       activity_events: Table<ActivityEventRow>;
       audit_logs: Table<AuditLogRow>;
       documents: Table<DocumentRow>;
+      knowledge_records: Table<KnowledgeRecordRow>;
+      record_task_links: Table<RecordTaskLinkRow>;
       document_versions: Table<DocumentVersionRow>;
       document_chunks: Table<DocumentChunkRow>;
       document_embeddings: Table<DocumentEmbeddingRow>;
@@ -386,6 +427,9 @@ export interface Database {
       document_source_type: DocumentSourceType;
       rag_visibility: RagVisibility;
       rag_sync_status: RagSyncStatus;
+      knowledge_record_type: KnowledgeRecordType;
+      knowledge_record_status: KnowledgeRecordStatus;
+      record_task_link_role: RecordTaskLinkRole;
     };
     CompositeTypes: Record<string, never>;
   };

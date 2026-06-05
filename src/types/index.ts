@@ -1,13 +1,17 @@
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
-export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
+export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt';
 export type DragType = 'move' | 'left' | 'right';
 export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';
 export type CollaborationRole = 'owner' | 'admin' | 'project_manager' | 'member' | 'viewer';
 export type MembershipStatus = 'active' | 'invited' | 'suspended';
 export type BoardInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+export type KnowledgeRecordType = 'meeting' | 'work_log';
+export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
+export type KnowledgeRecordVisibility = 'private' | 'project' | 'tenant';
+export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
 export type CollaborationScope = 'workspace' | 'board';
 export type PermissionCapability =
   | 'read_workspace'
@@ -251,6 +255,54 @@ export interface ActivityEvent {
   entityId?: string | null;
   payload: Record<string, unknown>;
   createdAt?: number;
+}
+
+export interface RecordTaskLink {
+  id: string;
+  recordId: string;
+  workspaceId: string;
+  boardId: string;
+  nodeId: string;
+  role: RecordTaskLinkRole;
+  createdAt?: number;
+}
+
+export interface KnowledgeRecord {
+  id: string;
+  workspaceId: string;
+  boardId: string;
+  type: KnowledgeRecordType;
+  title: string;
+  content: string;
+  status: KnowledgeRecordStatus;
+  visibility: KnowledgeRecordVisibility;
+  participantsText?: string;
+  occurredAt?: number;
+  startedAt?: number;
+  endedAt?: number;
+  recordedBy?: string | null;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+  ragEnabled?: boolean;
+  sourceDocumentId?: string | null;
+  taskLinks: RecordTaskLink[];
+}
+
+export interface KnowledgeRecordInput {
+  id?: string;
+  type: KnowledgeRecordType;
+  title: string;
+  content: string;
+  status: KnowledgeRecordStatus;
+  visibility: KnowledgeRecordVisibility;
+  participantsText?: string;
+  occurredAt?: number;
+  startedAt?: number;
+  endedAt?: number;
+  recordedBy?: string | null;
+  taskLinks: Array<Pick<RecordTaskLink, 'nodeId' | 'role'>>;
 }
 
 export interface AuditLogEntry {

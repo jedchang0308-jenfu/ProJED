@@ -15,6 +15,7 @@ import { useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
+import useRecordStore from './store/useRecordStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
 import { migrateLocalStorageToFirestore } from './utils/migration';
@@ -28,6 +29,7 @@ import HomeView from './components/HomeView';
 import BoardView from './components/BoardView';
 import GanttView from './components/GanttView';
 import CalendarView from './components/CalendarView';
+import RecordsView from './components/Records/RecordsView';
 import SettingsView from './components/SettingsView';
 import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
@@ -66,12 +68,18 @@ function AppContent() {
   const userId = user?.uid ?? null;
   const userEmail = user?.email ?? null;
   const userDisplayName = user?.displayName ?? null;
+  const loadRecords = useRecordStore(s => s.loadRecords);
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
   const processedInviteToken = useRef<string | null>(null);
 
   // 啟動目前資料後端的同步監聽
   useDataSync();
+
+  useEffect(() => {
+    if (!userId || !activeWorkspaceId || !activeBoardId) return;
+    loadRecords(activeWorkspaceId, activeBoardId).catch(console.error);
+  }, [activeBoardId, activeWorkspaceId, loadRecords, userId]);
 
   useEffect(() => {
     if (!userId || dataBackend !== 'local-test') return;
@@ -221,6 +229,7 @@ function AppContent() {
       case 'board':       return <BoardView />;
       case 'gantt':       return <GanttView />;
       case 'calendar':    return <CalendarView />;
+      case 'records':     return <RecordsView />;
       case 'calendar_subscriptions': return <SettingsView initialSection="calendar" />;
       case 'settings':    return <SettingsView />;
       case 'recycle_bin': return <RecycleBinView />;

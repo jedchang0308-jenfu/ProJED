@@ -9,9 +9,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Link } from 'lucide-react';
+import { Check, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
+import useRecordStore from '../../store/useRecordStore';
 import { KanbanDependencyContext } from '../BoardView';
 import dayjs from 'dayjs';
 import { Input } from '../ui/Input';
@@ -99,6 +100,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
+  const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
+  const recordDraft = useRecordStore(s => s.draft);
+  const insertRecordTaskMention = useRecordStore(s => s.insertTaskMentionAtCursor);
+  const isRecordSelected = recordDraft?.taskLinks.some(link => link.nodeId === childId) ?? false;
   const isSelfStart = isSelectingMode && dependencySelection?.id === childId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === childId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
@@ -183,6 +188,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
           isDragging
             ? 'opacity-40 bg-primary/5'
+            : isRecordSelectionMode
+              ? isRecordSelected
+                ? 'cursor-pointer bg-blue-50 ring-1 ring-inset ring-blue-400'
+                : 'cursor-pointer hover:bg-blue-50/60'
             : isSelectingMode
               ? isSelfNode
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
@@ -193,6 +202,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (isRecordSelectionMode) return;
           useBoardStore.getState().setContextMenuState({
             isOpen: true,
             x: e.clientX,
@@ -201,15 +211,29 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             title: child.title || '未命名任務',
           });
         }}
+        onClick={(e) => {
+          if (!isRecordSelectionMode) return;
+          e.preventDefault();
+          e.stopPropagation();
+          insertRecordTaskMention(child.id, child.title || child.id);
+        }}
       >
 
         {/* 拖曳把手 */}
         <TaskDragHandle
           attributes={attributes}
           listeners={listeners}
-          disabled={!canMoveTask || isEditing || isSelectingMode}
+          disabled={!canMoveTask || isEditing || isSelectingMode || isRecordSelectionMode}
           size="xs"
         />
+
+        {isRecordSelectionMode ? (
+          <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+            isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'
+          }`}>
+            {isRecordSelected ? <Check size={9} /> : null}
+          </span>
+        ) : null}
 
         {isEditing ? (
           <Input
@@ -228,8 +252,18 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         ) : (
           <span
             className={`task-title-text text-xs font-medium leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { if (canEditTask) onStartEdit(e, child); }}
+            onPointerDown={(e) => {
+              if (!isRecordSelectionMode) e.stopPropagation();
+            }}
+            onClick={(e) => {
+              if (isRecordSelectionMode) {
+                e.preventDefault();
+                e.stopPropagation();
+                insertRecordTaskMention(child.id, child.title || child.id);
+                return;
+              }
+              if (canEditTask) onStartEdit(e, child);
+            }}
             title="點擊以編輯任務名稱"
           >
             {child.title || '未命名任務'}

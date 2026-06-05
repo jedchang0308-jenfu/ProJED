@@ -5,6 +5,7 @@ export type ModeSwitcherOption<T extends string> = {
   value: T;
   label: string;
   icon: React.ReactNode;
+  title?: string;
 };
 
 type ModeSwitcherProps<T extends string> = {
@@ -31,7 +32,7 @@ export function ModeSwitcher<T extends string>({
           active={value === option.value}
           disabled={disabled}
           onClick={() => onChange(option.value)}
-          title={disabled ? disabledTitle : ''}
+          title={disabled ? disabledTitle : option.title ?? ''}
           className={disabled ? 'opacity-50 cursor-not-allowed' : ''}
         >
           {option.icon}

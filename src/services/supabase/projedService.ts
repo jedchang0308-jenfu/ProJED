@@ -16,7 +16,10 @@ import type {
   CollaborationRole,
   CurrentBoardAccess,
   Dependency,
+  KnowledgeRecord,
+  KnowledgeRecordInput,
   PermissionCapability,
+  RecordTaskLink,
   TagColor,
   TaskNode,
   TaskTag,
@@ -24,13 +27,15 @@ import type {
   WorkspaceMember,
 } from '../../types';
 import { isSupabaseConfigured, supabase } from './client';
-import type { BoardInviteRow, BoardRolePermissionRow, Json, ProjectMemberRow, ProjectRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
+import type { BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
+import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
 
 type WbsItemInsert = Partial<WbsItemRow>;
 type BoardInviteInsert = Partial<BoardInviteRow>;
 type BoardRolePermissionInsert = Partial<BoardRolePermissionRow>;
 type TaskTagInsert = Partial<TaskTagRow>;
+type KnowledgeRecordInsert = Partial<KnowledgeRecordRow>;
 type WbsDependencyWithNodes = WbsDependencyRow & {
   from_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
   to_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
@@ -49,6 +54,12 @@ type TenantMemberWithProfile = TenantMemberRow & {
 };
 type ProjectMemberWithProfile = ProjectMemberRow & {
   profiles?: ProfileJoin | ProfileJoin[] | null;
+};
+type RecordTaskLinkWithItem = RecordTaskLinkRow & {
+  item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
+};
+type KnowledgeRecordWithLinks = KnowledgeRecordRow & {
+  record_task_links?: RecordTaskLinkWithItem[] | null;
 };
 
 const requireSupabase = () => {
@@ -145,6 +156,14 @@ const dependencySelect = `
   *,
   from_item:wbs_items!wbs_dependencies_from_item_id_fkey(id,legacy_node_id),
   to_item:wbs_items!wbs_dependencies_to_item_id_fkey(id,legacy_node_id)
+`;
+
+const recordSelect = `
+  *,
+  record_task_links(
+    *,
+    item:wbs_items!record_task_links_item_id_fkey(id,legacy_node_id)
+  )
 `;
 
 const mapTenantToWorkspace = (tenant: TenantRow, projects: ProjectRow[] = []): Workspace => ({
@@ -274,6 +293,53 @@ const mapDependency = (dep: WbsDependencyWithNodes): Dependency => ({
   toSide: dep.to_side,
   offset: dep.offset_days,
 });
+
+const mapRecordTaskLink = (
+  link: RecordTaskLinkWithItem,
+  recordId: string,
+  requestedWorkspaceId: string,
+  requestedBoardId: string
+): RecordTaskLink => ({
+  id: link.id,
+  recordId,
+  workspaceId: requestedWorkspaceId,
+  boardId: requestedBoardId,
+  nodeId: link.item ? legacyOrId(link.item.id, link.item.legacy_node_id) : link.item_id,
+  role: link.role,
+  createdAt: toTimestamp(link.created_at),
+});
+
+const mapKnowledgeRecord = (
+  row: KnowledgeRecordWithLinks,
+  requestedWorkspaceId: string,
+  requestedBoardId: string
+): KnowledgeRecord => {
+  const recordId = legacyOrId(row.id, row.legacy_record_id);
+  return {
+    id: recordId,
+    workspaceId: requestedWorkspaceId,
+    boardId: requestedBoardId,
+    type: row.record_type,
+    title: row.title,
+    content: row.content,
+    status: row.status,
+    visibility: row.visibility,
+    participantsText: row.participants_text ?? undefined,
+    occurredAt: toTimestamp(row.occurred_at),
+    startedAt: toTimestamp(row.started_at),
+    endedAt: toTimestamp(row.ended_at),
+    recordedBy: row.recorded_by,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: toTimestamp(row.created_at),
+    updatedAt: toTimestamp(row.updated_at),
+    ragEnabled: row.rag_enabled,
+    sourceDocumentId: row.source_document_id,
+    taskLinks: (row.record_task_links ?? []).map(link =>
+      mapRecordTaskLink(link, recordId, requestedWorkspaceId, requestedBoardId)
+    ),
+  };
+};
 
 export const resolveWorkspaceId = async (workspaceId: string): Promise<string> => {
   if (isUuid(workspaceId)) return workspaceId;
@@ -1241,6 +1307,353 @@ export const supabaseDependencyService = {
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId);
     assertNoError(error);
+  },
+};
+
+const toIso = (value: number | null | undefined) => value ? new Date(value).toISOString() : null;
+
+const createContentHash = (content: string): string => {
+  let hash = 2166136261;
+  for (let index = 0; index < content.length; index += 1) {
+    hash ^= content.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv32-${(hash >>> 0).toString(16)}-${content.length}`;
+};
+
+const buildRecordRagContent = (
+  record: KnowledgeRecordRow,
+  linkedTaskIds: string[]
+) => [
+  `Title: ${record.title}`,
+  `Type: ${record.record_type === 'meeting' ? 'meeting note' : 'personal work log'}`,
+  record.occurred_at ? `Occurred at: ${record.occurred_at}` : null,
+  record.started_at || record.ended_at ? `Time range: ${record.started_at ?? ''} - ${record.ended_at ?? ''}` : null,
+  record.participants_text ? `Participants: ${record.participants_text}` : null,
+  linkedTaskIds.length ? `Linked task ids: ${linkedTaskIds.join(', ')}` : null,
+  '',
+  record.content,
+].filter(Boolean).join('\n');
+
+const splitContentChunks = (content: string) => {
+  const chunks: string[] = [];
+  const size = 2800;
+  for (let index = 0; index < content.length; index += size) {
+    chunks.push(content.slice(index, index + size));
+  }
+  return chunks.length ? chunks : [''];
+};
+
+const syncRecordRagDocument = async (
+  tenantId: string,
+  projectId: string,
+  record: KnowledgeRecordRow,
+  linkedTaskIds: string[]
+): Promise<string | null> => {
+  const shouldMirror = record.status === 'published' && record.visibility !== 'private';
+  if (!shouldMirror) {
+    if (record.source_document_id) {
+      const { error } = await supabase
+        .from('documents')
+        .update({ rag_enabled: false, updated_by: record.updated_by })
+        .eq('tenant_id', tenantId)
+        .eq('id', record.source_document_id);
+      assertNoError(error);
+    }
+    return record.source_document_id;
+  }
+
+  const content = buildRecordRagContent(record, linkedTaskIds);
+  const contentHash = createContentHash(content);
+  const recordMetadata = {
+    recordType: record.record_type,
+    recordId: record.id,
+    linkedTaskIds,
+    occurredAt: record.occurred_at,
+    startedAt: record.started_at,
+    endedAt: record.ended_at,
+    participantsText: record.participants_text,
+  };
+  const metadata = stripUndefinedForJson(recordMetadata) ?? {};
+
+  const sourceType: DocumentRow['source_type'] = record.record_type === 'meeting' ? 'meeting_note' : 'work_log';
+  const { data: existing, error: existingError } = await supabase
+    .from('documents')
+    .select('id,content_hash')
+    .eq('tenant_id', tenantId)
+    .eq('source_table', 'knowledge_records')
+    .eq('source_id', record.id)
+    .maybeSingle();
+  assertNoError(existingError);
+
+  const documentPayload: Partial<DocumentRow> = {
+    tenant_id: tenantId,
+    project_id: projectId,
+    source_type: sourceType,
+    source_table: 'knowledge_records',
+    source_id: record.id,
+    title: record.title,
+    content_hash: contentHash,
+    visibility: record.visibility,
+    rag_enabled: true,
+    metadata,
+    updated_by: record.updated_by,
+  };
+
+  const documentId = existing?.id
+    ? existing.id
+    : (() => null)();
+
+  let savedDocumentId = documentId;
+  if (savedDocumentId) {
+    const { error } = await supabase
+      .from('documents')
+      .update(documentPayload)
+      .eq('tenant_id', tenantId)
+      .eq('id', savedDocumentId);
+    assertNoError(error);
+  } else {
+    const { data, error } = await supabase
+      .from('documents')
+      .insert({
+        ...documentPayload,
+        created_by: record.created_by,
+      })
+      .select('id')
+      .single();
+    assertNoError(error);
+    if (!data?.id) throw new Error('Supabase did not return the mirrored record document.');
+    savedDocumentId = data.id;
+  }
+
+  const { data: latestVersion, error: versionError } = await supabase
+    .from('document_versions')
+    .select('version')
+    .eq('tenant_id', tenantId)
+    .eq('document_id', savedDocumentId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertNoError(versionError);
+
+  const nextVersion = (latestVersion?.version ?? 0) + 1;
+  const { data: insertedVersion, error: insertVersionError } = await supabase
+    .from('document_versions')
+    .insert({
+      tenant_id: tenantId,
+      document_id: savedDocumentId,
+      version: nextVersion,
+      content,
+      content_hash: contentHash,
+      metadata,
+    })
+    .select('id')
+    .single();
+  assertNoError(insertVersionError);
+  if (!insertedVersion?.id) throw new Error('Supabase did not return the mirrored record document version.');
+
+  const { error: deleteChunksError } = await supabase
+    .from('document_chunks')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('document_id', savedDocumentId);
+  assertNoError(deleteChunksError);
+
+  const chunks = splitContentChunks(content).map((chunk, chunkIndex) => ({
+    tenant_id: tenantId,
+    document_id: savedDocumentId!,
+    document_version_id: insertedVersion.id,
+    chunk_index: chunkIndex,
+    content: chunk,
+    token_count: Math.ceil(chunk.length / 4),
+    metadata,
+  }));
+
+  const { error: insertChunksError } = await supabase
+    .from('document_chunks')
+    .insert(chunks);
+  assertNoError(insertChunksError);
+
+  const { error: insertSyncJobError } = await supabase
+    .from('rag_sync_jobs')
+    .insert({
+      tenant_id: tenantId,
+      provider: RAG_EMBEDDING_PROVIDER,
+      target_store_id: null,
+      source_document_id: savedDocumentId,
+      status: 'pending',
+      metadata: stripUndefinedForJson({
+        ...recordMetadata,
+        sourceTable: 'knowledge_records',
+        sourceType,
+        recordId: record.id,
+        contentHash,
+      }) ?? {},
+    });
+  assertNoError(insertSyncJobError);
+
+  return savedDocumentId;
+};
+
+const knowledgeRecordToInsert = async (
+  tenantId: string,
+  projectId: string,
+  input: KnowledgeRecordInput
+): Promise<KnowledgeRecordInsert> => {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  assertNoError(userError);
+  const userId = userData.user?.id ?? null;
+  return {
+    id: input.id && isUuid(input.id) ? input.id : undefined,
+    tenant_id: tenantId,
+    project_id: projectId,
+    legacy_record_id: input.id && !isUuid(input.id) ? input.id : null,
+    record_type: input.type,
+    title: input.title,
+    content: input.content,
+    participants_text: input.participantsText ?? null,
+    occurred_at: toIso(input.occurredAt),
+    started_at: toIso(input.startedAt),
+    ended_at: toIso(input.endedAt),
+    recorded_by: isUuid(input.recordedBy) ? input.recordedBy : userId,
+    status: input.status,
+    visibility: input.visibility,
+    rag_enabled: input.status === 'published' && input.visibility !== 'private',
+    metadata: stripUndefinedForJson({
+      legacyRecordId: input.id && !isUuid(input.id) ? input.id : null,
+    }) ?? {},
+    updated_by: userId,
+    created_by: userId,
+  };
+};
+
+export const supabaseRecordService = {
+  listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { data, error } = await supabase
+      .from('knowledge_records')
+      .select(recordSelect)
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .neq('status', 'archived')
+      .order('updated_at', { ascending: false });
+    assertNoError(error);
+    return ((data ?? []) as unknown as KnowledgeRecordWithLinks[])
+      .map(row => mapKnowledgeRecord(row, workspaceId, boardId));
+  },
+
+  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const itemId = await requireNodeId(tenantId, projectId, nodeId);
+    const { data, error } = await supabase
+      .from('record_task_links')
+      .select(`record:knowledge_records!record_task_links_record_id_fkey(${recordSelect})`)
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('item_id', itemId);
+    assertNoError(error);
+    return ((data ?? []) as unknown as Array<{ record?: KnowledgeRecordWithLinks | null }>)
+      .map(row => row.record)
+      .filter((record): record is KnowledgeRecordWithLinks => Boolean(record && record.status !== 'archived'))
+      .map(record => mapKnowledgeRecord(record, workspaceId, boardId))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  },
+
+  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const insert = await knowledgeRecordToInsert(tenantId, projectId, input);
+    const { data: saved, error: saveError } = await supabase
+      .from('knowledge_records')
+      .upsert(insert, input.id && !isUuid(input.id) ? { onConflict: 'tenant_id,project_id,legacy_record_id' } : undefined)
+      .select('*')
+      .single();
+    assertNoError(saveError);
+    if (!saved) throw new Error('Supabase did not return the saved knowledge record.');
+
+    const { error: deleteLinksError } = await supabase
+      .from('record_task_links')
+      .delete()
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('record_id', saved.id);
+    assertNoError(deleteLinksError);
+
+    const uniqueLinks = input.taskLinks.filter((link, index, links) =>
+      links.findIndex(item => item.nodeId === link.nodeId && item.role === link.role) === index
+    );
+    const resolvedLinks = await Promise.all(uniqueLinks.map(async link => ({
+      tenant_id: tenantId,
+      project_id: projectId,
+      record_id: saved.id,
+      item_id: await requireNodeId(tenantId, projectId, link.nodeId),
+      role: link.role,
+    })));
+
+    if (resolvedLinks.length > 0) {
+      const { error: insertLinksError } = await supabase
+        .from('record_task_links')
+        .insert(resolvedLinks);
+      assertNoError(insertLinksError);
+    }
+
+    const sourceDocumentId = await syncRecordRagDocument(
+      tenantId,
+      projectId,
+      saved,
+      uniqueLinks.map(link => link.nodeId)
+    );
+    if (sourceDocumentId !== saved.source_document_id || saved.rag_enabled !== insert.rag_enabled) {
+      const { error: updateSourceError } = await supabase
+        .from('knowledge_records')
+        .update({
+          source_document_id: sourceDocumentId,
+          rag_enabled: insert.rag_enabled,
+        })
+        .eq('tenant_id', tenantId)
+        .eq('project_id', projectId)
+        .eq('id', saved.id);
+      assertNoError(updateSourceError);
+    }
+
+    const { data: reloaded, error: reloadError } = await supabase
+      .from('knowledge_records')
+      .select(recordSelect)
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('id', saved.id)
+      .single();
+    assertNoError(reloadError);
+    if (!reloaded) throw new Error('Supabase did not return the saved knowledge record.');
+    return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId);
+  },
+
+  delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const query = supabase
+      .from('knowledge_records')
+      .update({ status: 'archived', rag_enabled: false })
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId);
+    const { data, error } = await (isUuid(recordId)
+      ? query.eq('id', recordId).select('source_document_id').maybeSingle()
+      : query.eq('legacy_record_id', recordId).select('source_document_id').maybeSingle());
+    assertNoError(error);
+    if (data?.source_document_id) {
+      const { error: documentError } = await supabase
+        .from('documents')
+        .update({ rag_enabled: false })
+        .eq('tenant_id', tenantId)
+        .eq('id', data.source_document_id);
+      assertNoError(documentError);
+    }
   },
 };
 

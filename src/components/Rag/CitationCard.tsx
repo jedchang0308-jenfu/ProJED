@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, KanbanSquare, Target } from 'lucide-react';
+import { BookOpenText, FileText, KanbanSquare, Target } from 'lucide-react';
 import type { RagCitation } from '../../services/rag/ragContract';
 
 interface CitationCardProps {
@@ -13,6 +13,8 @@ const CitationCard: React.FC<CitationCardProps> = ({ citation }) => {
         return <KanbanSquare size={14} className="text-blue-500" />;
       case 'projects':
         return <Target size={14} className="text-purple-500" />;
+      case 'knowledge_records':
+        return <BookOpenText size={14} className="text-emerald-500" />;
       case 'documents':
         return <FileText size={14} className="text-orange-500" />;
       default:
@@ -23,19 +25,23 @@ const CitationCard: React.FC<CitationCardProps> = ({ citation }) => {
   const getLabel = () => {
     switch (citation.sourceTable) {
       case 'wbs_items':
-        return '工作分解任務';
+        return '任務';
       case 'projects':
-        return '專案資料';
+        return '專案';
+      case 'knowledge_records':
+        return '會議/工作紀錄';
       case 'documents':
         return '文件';
       default:
-        return '引用來源';
+        return '來源';
     }
   };
 
   const handleClick = () => {
     if (citation.sourceTable === 'wbs_items') {
       document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId: citation.sourceId } }));
+    } else if (citation.sourceTable === 'knowledge_records') {
+      document.dispatchEvent(new CustomEvent('open-knowledge-record', { detail: { recordId: citation.sourceId } }));
     }
   };
 
