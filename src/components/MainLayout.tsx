@@ -210,10 +210,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
               isRecordOpen ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'hover:border-emerald-400 hover:text-emerald-600'
             }`}
-            title="開啟右側紀錄欄，新增或編輯會議/工作紀錄"
+            title="寫紀錄功能開發中，流程與資料保存可能尚未穩定"
           >
             <SquarePen size={14} className={isRecordOpen ? 'text-emerald-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">寫紀錄</span>
+            <span className="hidden lg:inline">寫紀錄(開發中)</span>
           </button>
 
           <button
