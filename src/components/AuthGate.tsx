@@ -36,6 +36,7 @@ interface AuthGateProps {
 export default function AuthGate({ children }: AuthGateProps) {
   const { user, loading, error, signInWithGoogle } = useAuthStore();
   const [isInApp, setIsInApp] = useState(false);
+  const [copiedLoginUrl, setCopiedLoginUrl] = useState(false);
   const isLocalTestMode = isLocalTestAuth();
   const isLocalSupabasePasswordMode = isSupabaseLocalPasswordAuth();
   const shouldAutoTestLogin =
@@ -66,6 +67,36 @@ export default function AuthGate({ children }: AuthGateProps) {
       LOCAL_TEST_ACCOUNTS[0];
     localStorage.setItem(LOCAL_TEST_SELECTED_ACCOUNT_KEY, matchedAccount.id);
     await signInWithGoogle();
+  };
+
+  const getExternalOpenUrl = () => {
+    const currentUrl = new URL(window.location.href);
+    const isAndroid = /Android/i.test(navigator.userAgent || '');
+
+    if (isAndroid) {
+      return `intent://${currentUrl.host}${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}#Intent;scheme=${currentUrl.protocol.replace(':', '')};package=com.android.chrome;end`;
+    }
+
+    const chromeScheme = currentUrl.protocol === 'https:' ? 'googlechromes' : 'googlechrome';
+    return `${chromeScheme}://${currentUrl.host}${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+  };
+
+  const getExternalOpenLabel = () => {
+    if (/Android/i.test(navigator.userAgent || '')) return '用 Chrome 開啟';
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent || '')) return '嘗試用 Chrome 開啟';
+    return '用外部瀏覽器開啟';
+  };
+
+  const handleCopyLoginUrl = async () => {
+    const loginUrl = window.location.href;
+
+    try {
+      await navigator.clipboard.writeText(loginUrl);
+      setCopiedLoginUrl(true);
+      window.setTimeout(() => setCopiedLoginUrl(false), 2500);
+    } catch {
+      window.prompt('請複製這個網址後，用 Chrome 或 Safari 開啟：', loginUrl);
+    }
   };
 
   useEffect(() => {
@@ -169,6 +200,21 @@ export default function AuthGate({ children }: AuthGateProps) {
                   <span className="text-blue-400 font-bold mx-1">以預設瀏覽器開啟</span>即可正常登入。
                 </p>
               </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <a
+                  href={getExternalOpenUrl()}
+                  className="rounded-lg bg-blue-500 px-4 py-2.5 text-center text-sm font-bold text-white transition-colors hover:bg-blue-400"
+                >
+                  {getExternalOpenLabel()}
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCopyLoginUrl}
+                  className="rounded-lg border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-bold text-slate-100 transition-colors hover:border-slate-400"
+                >
+                  {copiedLoginUrl ? '已複製網址' : '複製登入網址'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -184,8 +230,8 @@ export default function AuthGate({ children }: AuthGateProps) {
           {/* Login button */}
           <button
             onClick={isLocalTestMode ? handleLocalTestSignIn : signInWithGoogle}
-            disabled={shouldAutoTestLogin && loading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98]"
+            disabled={(shouldAutoTestLogin && loading) || isInApp}
+            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl px-6 py-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-white/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:shadow-none disabled:active:scale-100"
           >
             {isLocalTestMode ? (
               <>

@@ -20,13 +20,10 @@ export const isEmbeddedAuthBlocked = (): boolean => {
   if (typeof window === 'undefined') return false;
 
   const ua = navigator.userAgent || '';
-  const isStandalone =
-    window.matchMedia?.('(display-mode: standalone)').matches ||
-    (navigator as { standalone?: boolean }).standalone === true;
   const isInAppBrowser =
-    /FBAN|FBAV|Instagram|Line|MicroMessenger|Threads/i.test(ua);
+    /FBAN|FBAV|FB_IAB|Instagram|Line|MicroMessenger|Threads|TikTok|BytedanceWebview|KAKAOTALK/i.test(ua);
 
-  return isStandalone || isInAppBrowser;
+  return isInAppBrowser;
 };
 
 const getGoogleProvider = () => {
