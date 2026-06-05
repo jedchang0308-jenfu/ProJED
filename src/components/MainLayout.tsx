@@ -9,6 +9,7 @@ import {
   ListChecks,
   Menu,
   Redo2,
+  SquarePen,
   Sparkles,
   Undo2,
 } from 'lucide-react';
@@ -80,9 +81,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     },
     {
       value: 'records',
-      label: '紀錄(開發中)',
+      label: '紀錄庫(開發中)',
       icon: <BookOpenText size={13} />,
-      title: '紀錄功能開發中，內容可能尚未穩定',
+      title: '查看會議與工作紀錄總覽，功能仍在開發中',
     },
   ];
 
@@ -209,10 +210,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
               isRecordOpen ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'hover:border-emerald-400 hover:text-emerald-600'
             }`}
-            title="開啟會議與工作紀錄欄"
+            title="開啟右側紀錄欄，新增或編輯會議/工作紀錄"
           >
-            <BookOpenText size={14} className={isRecordOpen ? 'text-emerald-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">紀錄</span>
+            <SquarePen size={14} className={isRecordOpen ? 'text-emerald-500' : 'text-slate-400'} />
+            <span className="hidden lg:inline">寫紀錄</span>
           </button>
 
           <button
