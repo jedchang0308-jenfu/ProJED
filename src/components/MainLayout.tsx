@@ -46,12 +46,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { isOpen: isRagOpen, togglePanel: toggleRagPanel } = useRagStore();
   const {
     isPanelOpen: isRecordOpen,
-    openPanel: openRecordPanel,
-    closePanel: closeRecordPanel,
+    isPanelCollapsed: isRecordPanelCollapsed,
+    isMeetingMode,
+    startMeetingRecord,
+    exitMeetingMode,
     isTaskSelectionMode,
   } = useRecordStore();
 
-  const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode);
+  const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
+  const meetingRecordReserveClass =
+    isMeetingMode && isRecordOpen
+      ? isRecordPanelCollapsed
+        ? 'pb-12 sm:pb-0'
+        : 'pb-[48vh] sm:pb-0'
+      : '';
   const lastUndoLabel = undoStack.length > 0 ? undoStack[undoStack.length - 1].label : '';
   const lastRedoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : '';
   const activeBoard = getActiveBoard();
@@ -206,14 +214,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="flex items-center gap-1 sm:gap-2">
           <button
             type="button"
-            onClick={() => (isRecordOpen ? closeRecordPanel() : openRecordPanel())}
+            onClick={() => (isMeetingMode ? exitMeetingMode() : startMeetingRecord())}
             className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
-              isRecordOpen ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'hover:border-emerald-400 hover:text-emerald-600'
+              isRecordOpen || isMeetingMode ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'hover:border-emerald-400 hover:text-emerald-600'
             }`}
-            title="寫紀錄功能開發中，流程與資料保存可能尚未穩定"
+            title={isMeetingMode ? '結束會議模式，保留目前紀錄草稿' : '開始會議紀錄，切到看板並開啟速記欄'}
           >
             <SquarePen size={14} className={isRecordOpen ? 'text-emerald-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">寫紀錄(開發中)</span>
+            <span className="hidden lg:inline">{isMeetingMode ? '結束會議' : '會議紀錄'}</span>
           </button>
 
           <button
@@ -233,7 +241,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
 
-        <main className="relative flex h-full min-w-0 flex-1 flex-col">
+        <main className={`relative flex h-full min-w-0 flex-1 flex-col ${meetingRecordReserveClass}`}>
           {children}
         </main>
 

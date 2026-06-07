@@ -103,6 +103,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
   const recordDraft = useRecordStore(s => s.draft);
   const insertRecordTaskMention = useRecordStore(s => s.insertTaskMentionAtCursor);
+  const isRecordCaptureMode = isRecordSelectionMode;
   const isRecordSelected = recordDraft?.taskLinks.some(link => link.nodeId === childId) ?? false;
   const isSelfStart = isSelectingMode && dependencySelection?.id === childId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === childId && dependencySelection?.side === 'end';
@@ -188,7 +189,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
           isDragging
             ? 'opacity-40 bg-primary/5'
-            : isRecordSelectionMode
+            : isRecordCaptureMode
               ? isRecordSelected
                 ? 'cursor-pointer bg-blue-50 ring-1 ring-inset ring-blue-400'
                 : 'cursor-pointer hover:bg-blue-50/60'
@@ -202,7 +203,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (isRecordSelectionMode) return;
+          if (isRecordCaptureMode) return;
           useBoardStore.getState().setContextMenuState({
             isOpen: true,
             x: e.clientX,
@@ -212,7 +213,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           });
         }}
         onClick={(e) => {
-          if (!isRecordSelectionMode) return;
+          if (!isRecordCaptureMode) return;
           e.preventDefault();
           e.stopPropagation();
           insertRecordTaskMention(child.id, child.title || child.id);
@@ -223,11 +224,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         <TaskDragHandle
           attributes={attributes}
           listeners={listeners}
-          disabled={!canMoveTask || isEditing || isSelectingMode || isRecordSelectionMode}
+          disabled={!canMoveTask || isEditing || isSelectingMode || isRecordCaptureMode}
           size="xs"
         />
 
-        {isRecordSelectionMode ? (
+        {isRecordCaptureMode ? (
           <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
             isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'
           }`}>
@@ -253,10 +254,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           <span
             className={`task-title-text text-xs font-medium leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
             onPointerDown={(e) => {
-              if (!isRecordSelectionMode) e.stopPropagation();
+              if (!isRecordCaptureMode) e.stopPropagation();
             }}
             onClick={(e) => {
-              if (isRecordSelectionMode) {
+              if (isRecordCaptureMode) {
                 e.preventDefault();
                 e.stopPropagation();
                 insertRecordTaskMention(child.id, child.title || child.id);

@@ -1,6 +1,6 @@
 # ProJED Backlog
 
-更新日期：2026-06-04
+更新日期：2026-06-06
 
 ## Backlog 管理原則
 
@@ -14,6 +14,12 @@
 | DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
 |---|---|---|---|---|---|
 | DEV-002 | Ready | 交付點 | P1 | 會議紀錄與個人工作紀錄 MVP | `ai-doc/specs/SPEC-003-meeting-work-records-workflow.md` |
+| DEV-005 | Done | 交付點 | P1 | 會議看板主畫面紀錄工作流 | `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` |
+| DEV-006 | Done | 交付點 | P1 | Gmail-like 會議紀錄輸入器穩定化 | `ai-doc/specs/SPEC-006-gmail-like-record-editor.md` |
+| DEV-007 | Done | 交付點 | P1 | 會議中原生看板編輯與任務變更紀錄 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` |
+| DEV-008 | Done | 交付點 | P1 | 任務會議細節快速查找 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` |
+| DEV-009 | Done | 交付點 | P1 | 會議模式任務詳情內快速補記 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` |
+| DEV-010 | Ready | 交付點 | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
 
 ## DEV-002 範圍摘要
 
@@ -37,6 +43,110 @@ MVP 不包含：
 - 參與人員 member mapping。
 - AI 自動修改任務。
 - 複雜審批流程。
+
+## DEV-005 範圍摘要
+
+目標：將會議紀錄工作流從「紀錄頁主導」調整為「議題看板主導、紀錄輔助」，讓開會時所有人以 active board 的 Kanban 議題作為共同畫面，記錄者用右側速記欄同步記錄與連結任務。
+
+MVP 必須包含：
+
+- 上方會議入口：啟動後建立或開啟 meeting draft，切到 `board` view。
+- `BoardView` 會議狀態列：會議標題、已連結任務數、速記欄展開/收合、儲存草稿、發布、結束會議。
+- 會議模式下點 Kanban card / checklist item 可直接插入 `@[title](task:id)`。
+- `RecordSidebar` 在 meeting mode 下優先顯示內容編輯器，最近紀錄列表降級。
+- `RecordsView` 保留為會後查閱與整理的紀錄庫，不作為會議主畫面。
+
+MVP 不包含：
+
+- 完整會議管理。
+- AI 決議抽取或自動建立任務。
+- 跨 board 會議。
+- 多記錄者即時協作。
+- 新增 migration 或修改 `KnowledgeRecord` / `record_task_links` 資料格式。
+
+## DEV-006 範圍摘要
+
+目標：將會議紀錄內容輸入器改為 Gmail-like 基本撰寫體驗，修正目前自製 `contentEditable` 的選取、換行、貼上、undo/redo 與 IME 問題，並讓已關聯任務 chip 可複製、剪下、貼上與移動。
+
+MVP 必須包含：
+
+- 導入成熟 editor engine，取代手寫 DOM serialize / replaceChildren 同步。
+- 保留既有 `@[title](task:id)` token 與 `record_task_links` 資料契約。
+- 支援 `Ctrl+A`、`Ctrl+Z`、`Ctrl+Y`、Enter、貼上多行、中文 IME。
+- 支援 task chip copy / cut / paste / move / Backspace / Delete。
+- 新增自動 verifier 與實際輸入測試證據。
+
+MVP 不包含：
+
+- Gmail 富文字工具列。
+- bold / italic / link / list 儲存。
+- 新增 migration 或 editor JSON 後端格式。
+
+## DEV-007 範圍摘要
+
+目標：會議中看板仍維持一般編輯模式，不劫持卡片點擊；任務狀態、移動與關鍵變更在背景收集，儲存或發布會議紀錄時自動附加到內容。
+
+MVP 必須包含：
+
+- 會議模式不改變 Kanban card / checklist item 的主要點擊、拖曳與編輯行為。
+- 任務變更自動收集為 meeting activity。
+- 儲存/發布時將尚未附加的 activity 以 `@[title](task:id)` token 形式加入紀錄內容。
+- 不新增 migration，不改 `KnowledgeRecord` / `record_task_links`。
+
+## DEV-008 範圍摘要
+
+目標：未來專案成員可從任務詳情快速查找該任務在會議或工作紀錄中被討論過的細節，不需要進入紀錄庫翻整篇紀錄。
+
+MVP 必須包含：
+
+- 任務詳情頁將「關聯紀錄」升級為「任務知識」區塊。
+- 已關聯紀錄優先顯示包含目前任務 inline tag 的段落片段。
+- 沒有 inline tag 但有 `record_task_links` 的紀錄仍顯示整篇關聯 fallback。
+- 提供目前任務範圍內的搜尋，涵蓋任務備註、會議片段、工作紀錄片段與 DEV-007 任務變更片段。
+- 點擊片段可開啟原始紀錄。
+
+MVP 不包含：
+
+- AI 問答或語意搜尋。
+- AI 自動摘要、決議抽取或自動標記任務。
+- 新增 migration、meeting event table 或修改紀錄資料格式。
+
+## DEV-009 範圍摘要
+
+目標：會議模式下，使用者可在任務詳情內直接補記目前任務的討論內容，系統自動把補記 append 到目前 meeting draft 並連到該任務。
+
+MVP 必須包含：
+
+- `TaskDetailsModal` 在 meeting mode 顯示「本次會議」快速補記。
+- 補記內容 append 到目前 meeting draft，不寫入任務備註。
+- 系統自動加入目前任務 inline tag，並同步 `record_task_links`。
+- 支援「加入紀錄」與 `Ctrl+Enter`。
+- 發布後可由 DEV-008 任務知識查到。
+
+MVP 不包含：
+
+- 在任務詳情內編輯整篇會議紀錄。
+- AI 摘要、決議抽取或任務自動更新。
+- 新增資料模型或多人即時協作。
+
+## DEV-010 範圍摘要
+
+目標：修正會議模式中 `存草稿`、`發布`、`結束會議` 按鈕狀態不透明的 UX 問題。當按鈕不可操作時，系統需說明原因與下一步；`存草稿` 與 `發布` 需拆成不同條件；`結束會議` 需改成更清楚的 `離開會議模式` 語意，並保護未儲存內容。
+
+MVP 必須包含：
+
+- 會議狀態列顯示目前 draft 狀態、阻塞原因與下一步。
+- `存草稿` 在 meeting draft 存在且有 workspace / board 時可用，不因內容空白被靜默鎖住。
+- `發布` 只有在內容、任務補記或 pending meeting activity 足夠時可用。
+- disabled / aria-disabled 按鈕需有 hover、focus 與狀態列提示。
+- `結束會議` 改為 `離開會議模式` 或提供等價說明；有未儲存內容時需確認。
+- `BoardView` 與 `RecordSidebar` 共用同一套 action state 判斷。
+
+MVP 不包含：
+
+- 手機版會議紀錄工作流。
+- 新增 migration 或調整 `KnowledgeRecord` / `record_task_links`。
+- AI 摘要、會議管理、跨 board 會議。
 
 ## 後續候選交付
 
@@ -66,6 +176,11 @@ MVP 不包含：
 | DEV | 狀態 | 類型 | 優先級 | 標題 | 規格 |
 |---|---|---|---|---|---|
 | DEV-003 | Done | Product UX refinement | P1 | 紀錄內容內嵌任務標籤 | `ai-doc/specs/SPEC-004-record-content-inline-task-tags.md` |
+| DEV-005 | Done | Product UX refinement | P1 | 會議看板主畫面紀錄工作流 | `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` |
+| DEV-006 | Done | Product UX refinement | P1 | Gmail-like 會議紀錄輸入器穩定化 | `ai-doc/specs/SPEC-006-gmail-like-record-editor.md` |
+| DEV-008 | Done | Product UX refinement | P1 | 任務會議細節快速查找 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` |
+| DEV-009 | Done | Product UX refinement | P1 | 會議模式任務詳情內快速補記 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` |
+| DEV-010 | Ready | Product UX refinement | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
 
 ### DEV-003 摘要
 
@@ -78,6 +193,18 @@ MVP 不包含：
 - 同一任務可在內容中被引用多次。
 - 結構化 `record_task_links` 保持唯一，權限與 RAG 行為不變。
 - 沿用既有看板選取模式，不開啟另一個 task picker page。
+
+### DEV-005 摘要
+
+改善會議進行中的紀錄 UX：主畫面固定為議題看板，右側紀錄欄只作為速記與任務連結輔助。此項承接 DEV-002 的紀錄基礎與 DEV-003 的 inline task tag，不改資料模型。
+
+### DEV-005 驗收方向
+
+- 開會入口啟動後停留在 `board` view。
+- 會議狀態列清楚顯示 draft、已連結任務數與儲存/發布操作。
+- 點 Kanban card / checklist item 可插入 task tag。
+- 速記欄收合/展開不遺失 draft。
+- 紀錄庫只作為會後查閱與整理。
 
 ---
 

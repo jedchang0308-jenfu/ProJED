@@ -4,6 +4,7 @@ import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskSta
 import { nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
+import useRecordStore from './useRecordStore';
 import { useTagStore } from './useTagStore';
 
 /**
@@ -217,6 +218,19 @@ const logTaskActivity = (
   });
 };
 
+const recordMeetingTaskActivity = (
+  node: TaskNode,
+  eventType: ActivityEventType,
+  payload: Record<string, unknown>
+) => {
+  useRecordStore.getState().recordMeetingTaskActivity({
+    eventType,
+    nodeId: node.id,
+    title: node.title || node.id,
+    payload,
+  });
+};
+
 const logDependencyActivity = (
   boardNode: TaskNode | undefined,
   dependency: Dependency,
@@ -412,6 +426,17 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
             order: normalizedNode.order,
         },
     });
+    recordMeetingTaskActivity(normalizedNode, 'task_created', {
+        after: {
+            parentId: normalizedNode.parentId,
+            status: normalizedNode.status,
+            assigneeId: normalizedNode.assigneeId ?? null,
+            collaboratorIds: normalizedNode.collaboratorIds ?? [],
+            startDate: normalizedNode.startDate ?? null,
+            endDate: normalizedNode.endDate ?? null,
+            order: normalizedNode.order,
+        },
+    });
 
     // 紀錄上一步
     useUndoStore.getState().pushUndo({
@@ -467,6 +492,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
         logTaskActivity(newNode, event.eventType, event.payload);
+        recordMeetingTaskActivity(newNode, event.eventType, event.payload);
     });
 
     if (normalizedUpdates.isArchived === true && oldNode.isArchived !== true) {
@@ -864,7 +890,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           if (!beforeNode || !afterNode) continue;
 
           if ('startDate' in data || 'endDate' in data) {
-              logTaskActivity(afterNode, 'task_dates_changed', {
+              const activityPayload = {
                   source: 'dependency_schedule',
                   before: {
                       startDate: beforeNode.startDate ?? null,
@@ -874,15 +900,19 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                       startDate: afterNode.startDate ?? null,
                       endDate: afterNode.endDate ?? null,
                   },
-              });
+              };
+              logTaskActivity(afterNode, 'task_dates_changed', activityPayload);
+              recordMeetingTaskActivity(afterNode, 'task_dates_changed', activityPayload);
           }
 
           if ('status' in data) {
-              logTaskActivity(afterNode, 'task_status_changed', {
+              const activityPayload = {
                   source: 'dependency_schedule',
                   before: { status: beforeNode.status },
                   after: { status: afterNode.status },
-              });
+              };
+              logTaskActivity(afterNode, 'task_status_changed', activityPayload);
+              recordMeetingTaskActivity(afterNode, 'task_status_changed', activityPayload);
           }
       }
   },

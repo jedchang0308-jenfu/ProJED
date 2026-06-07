@@ -193,6 +193,12 @@
 
 - [x] DEV-001 [交付點] 統一 compact UI 系統
 - [ ] DEV-002 [交付點] 會議紀錄與個人工作紀錄 MVP
+- [x] DEV-005 [交付點] 會議看板主畫面紀錄工作流
+- [ ] DEV-006 [交付點] Gmail-like 會議紀錄輸入器穩定化
+- [ ] DEV-007 [交付點] 會議中原生看板編輯與任務變更紀錄
+- [x] DEV-008 [交付點] 任務會議細節快速查找
+- [x] DEV-009 [交付點] 會議模式任務詳情內快速補記
+- [ ] DEV-010 [交付點] 會議紀錄操作按鈕狀態溝通設計
 
 ## DEV-002：會議紀錄與個人工作紀錄 MVP
 
@@ -499,3 +505,481 @@ QA 應以 DEV-004A 到 DEV-004D 分別制定驗證計畫；可在共通回歸項
 - [x] 已建立 DEV-004 umbrella 與 DEV-004A-D dev task 條目。
 - [ ] 尚未執行 RD 開發。
 - [x] 已新增 DEV-003 專用 verifier：`scripts/verify-dev-003-record-content-tags.mjs`，並掛載為 `npm.cmd run verify:dev-003-record-tags`。
+
+---
+
+## PM DEV-005：會議看板主畫面紀錄工作流
+
+日期：2026-06-05
+狀態：Done
+節點類型：交付點
+任務類型：Product UX refinement
+父交付點：DEV-002 / DEV-003 follow-up
+是否計入產品交付完成：是
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md`
+
+### 任務目標
+
+修正會議紀錄工作流的主視角：開會時所有人共同看的畫面應是 active board 的議題看板，而不是紀錄庫或紀錄表單。DEV-005 要讓「會議紀錄」變成會議中的輔助速記與任務連結工具，並保留 DEV-002 / DEV-003 已完成的紀錄資料模型、inline task tag 與 RAG-ready content 行為。
+
+### 開發範圍
+
+- [x] 上方「寫紀錄」入口改成會議導向入口，啟動後建立或開啟 meeting draft。
+- [x] 啟動會議後自動切到 `board` view，並保持議題看板為主畫面。
+- [x] 在 `BoardView` 增加會議狀態列，顯示會議標題、已連結任務數、速記欄展開/收合、儲存草稿、發布與結束會議。
+- [x] 在會議模式下點 Kanban card 可插入 `@[title](task:id)` 到目前紀錄內容游標位置。
+- [x] 在會議模式下點 checklist item 可插入 `@[title](task:id)` 到目前紀錄內容游標位置。
+- [x] `RecordSidebar` 在 meeting mode 下優先顯示內容編輯器，壓縮標題、時間、參與人員與 visibility。
+- [x] `RecordSidebar` 最近紀錄列表在 meeting mode 下隱藏、下移或降級。
+- [x] `RecordsView` 文案與定位調整為會後查閱與整理的紀錄庫。
+
+### 不在本交付點範圍
+
+- 完整會議管理系統。
+- AI 決議抽取、自動建立任務或自動修改任務。
+- 跨 board 會議。
+- 多記錄者即時協作。
+- 新增資料庫 migration。
+- 修改 `KnowledgeRecord`、`record_task_links` 或 RAG token 格式。
+
+### 驗收標準
+
+- [x] 使用者從上方會議入口啟動後，主畫面停留在 `board` view。
+- [x] 使用者可在會議模式中看完整議題看板，同時用右側速記欄記錄。
+- [x] 點 Kanban card / checklist item 後，task tag 插入到目前紀錄內容游標位置。
+- [x] 速記欄收合與展開不遺失 draft、游標或已連結任務。
+- [x] 發布後紀錄會出現在紀錄庫；任務詳情頁相關紀錄時間軸由 DEV-002 verifier 覆蓋。
+- [x] 既有 DEV-002、DEV-003 的紀錄建立、inline tag、RAG-ready content 行為不退化。
+
+### RD handoff
+
+- [x] 先閱讀 `SPEC-005`，並確認不新增資料模型與 migration。
+- [x] 檢查 `useRecordStore` 是否適合新增 UI-only meeting mode 狀態。
+- [x] 檢查 `MainLayout` 上方入口、`BoardView` 狀態列、`RecordSidebar` meeting mode 版面與 `RecordsView` 文案。
+- [x] 優先沿用 DEV-003 的 `insertTaskMentionAtCursor` 與 `recordContentMentions` helper。
+- [x] 完成後執行 lint、DEV-002/003 verifier 與 build。
+
+### QA 驗證計畫重點
+
+- [ ] 使用者流程：從上方入口開始會議、觀看議題、速記、點任務插入 tag、發布紀錄。
+- [ ] 邊界情境：沒有 active board、沒有 draft、速記欄收合、重複點同一任務、從紀錄庫開啟既有紀錄。
+- [ ] FMEA：會議模式誤改任務、點任務行為不清楚、draft 遺失、`record_task_links` 不同步、筆電 viewport 遮蔽議題。
+- [ ] 回歸：DEV-002 紀錄 CRUD、DEV-003 inline tag、任務詳情相關紀錄、RAG-ready content。
+
+### QC 驗證需求
+
+- [ ] 依 QA 計畫做事實驗證，不修改程式碼。
+- [ ] 收集自動驗證輸出。
+- [ ] 使用桌機與筆電 viewport 檢查狀態列、看板、速記欄是否重疊或遮蔽；手機版不列入會議記錄驗收。
+- [ ] 驗證啟動會議後仍停留在 `board` view。
+- [ ] 驗證 task tag 插入位置、已連結任務數與發布後紀錄可回看。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-002-records
+npm.cmd run verify:dev-003-record-tags
+npm.cmd run build
+```
+
+### 相關文件
+
+- SPEC：`ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md`
+- Backlog：`ai-doc/backlog.md`
+- Documentation map：`ai-doc/documentation_map.md`
+
+### 狀態
+
+- [x] 已建立 SPEC-005。
+- [x] 已更新 backlog。
+- [x] 已建立 DEV-005 dev task 條目。
+- [x] RD 開發已完成。
+- [x] 已新增交付報告：`ai-doc/reports/PM-DEV-005-meeting-board-primary-workflow-implementation.md`。
+
+---
+
+## PM DEV-006：Gmail-like 會議紀錄輸入器穩定化
+
+日期：2026-06-06
+狀態：Done
+節點類型：交付點
+任務類型：Product UX refinement
+父交付點：DEV-003 / DEV-005 follow-up
+是否計入產品交付完成：是
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-006-gmail-like-record-editor.md`
+QA 計畫：`ai-doc/qa/QA-DEV-006-gmail-like-record-editor.md`
+
+### 任務目標
+
+修正會議紀錄內容輸入器的核心輸入 bug，讓它具備 Gmail 撰寫區的基本肌肉記憶，並讓已關聯任務 chip 可以被複製、剪下、貼上與移動。此 DEV 不改資料模型，繼續使用 `@[title](task:id)` 與 `record_task_links`。
+
+### 開發範圍
+
+- [x] 導入成熟 editor engine，取代目前自製 `contentEditable` DOM 同步。
+- [x] 保留 `RecordContentEditor` 對外 props，降低對 sidebar/store 的影響。
+- [x] 建立 task chip node，支援 parse、render、serialize、copy、cut、paste。
+- [x] 修正 `Ctrl+A`、Enter、貼上多行、undo/redo、中文 IME。
+- [x] task chip 支援 copy / cut / paste / move / Backspace / Delete。
+- [x] 新增 `verify:dev-006-gmail-editor` 自動驗證。
+- [x] 使用 browser 執行實際輸入測試。
+
+### 不在本交付點範圍
+
+- Gmail 富文字工具列。
+- bold / italic / link / list 儲存。
+- 新增 migration。
+- 改用 editor JSON 作為後端儲存格式。
+- 多人即時協作。
+
+### 驗收標準
+
+- [x] `Ctrl+A` 後輸入文字會替換 editor 全文。
+- [x] `Ctrl+Z` / `Ctrl+Y` 可復原與重做 editor 內文字。
+- [x] Enter 與貼上多行文字會保存可讀換行，儲存字串使用 `\n`。
+- [ ] 中文 IME 輸入不漏字、不重字。
+- [x] task chip 可複製、剪下、貼上與移動，貼上後仍是 chip。
+- [ ] 剪下或刪除 chip 後 `record_task_links` 同步更新。
+- [ ] 發布後重開紀錄，文字、換行、task chip 與關聯任務一致。
+- [x] DEV-002、DEV-003、DEV-005 回歸通過。
+
+### RD handoff
+
+- [x] 先閱讀 `SPEC-006` 與 `QA-DEV-006`。
+- [x] 導入 editor dependency 前確認 package lock 會更新。
+- [x] 保護 DEV-005 未提交變更，不回復既有 meeting mode。
+- [x] 完成後執行 lint、DEV-002/003/006 verifier 與 build。
+- [x] 補 browser 實際輸入測試證據。
+
+### QA / QC 重點
+
+- [ ] 以 `QA-DEV-006` 的 13 個實際輸入案例為主。
+- [ ] 必須包含 task chip copy / cut / paste / move 實測。
+- [ ] 必須包含中文 IME 輸入實測。
+- [ ] 必須檢查 1024x768 筆電 viewport；手機版不列入會議記錄驗收。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-002-records
+npm.cmd run verify:dev-003-record-tags
+npm.cmd run verify:dev-006-gmail-editor
+npm.cmd run verify:dev-006-browser-input
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] 已建立 SPEC-006。
+- [x] 已建立 QA-DEV-006 驗證計畫。
+- [x] 已建立 DEV-006 dev task 條目。
+- [x] RD 開發完成。
+- [x] 實際 browser input verifier 通過，截圖：`output/playwright/dev-006-gmail-editor.png`。
+
+---
+
+## PM DEV-007：會議中原生看板編輯與任務變更紀錄
+
+日期：2026-06-06
+狀態：Done
+節點類型：交付點
+任務類型：Product UX refinement
+父交付點：DEV-005 / DEV-006 follow-up
+是否計入產品交付完成：是
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md`
+QA 計畫：`ai-doc/qa/QA-DEV-007-meeting-activity-capture.md`
+
+### 任務目標
+
+會議中看板必須維持一般編輯體驗；任務狀態與移動等變更由背景收集，儲存/發布會議紀錄時自動附加為「會議中任務變更」。
+
+### 開發範圍
+
+- [x] 移除 meeting mode 對 Kanban card / checklist item click 的劫持。
+- [x] 會議模式中保留卡片拖曳、標題編輯、context menu 與 checklist 操作。
+- [x] 新增 meeting activity buffer 與 append 去重機制。
+- [x] `useWbsStore.updateNode` 在任務變更時通知 record store。
+- [x] `saveDraft` 前自動將 pending meeting activity append 到 content。
+- [x] 新增 DEV-007 verifier。
+
+### 驗收標準
+
+- [x] 開始會議後看板操作與一般看板一致。
+- [x] 任務狀態變更會進入會議紀錄內容。
+- [x] 任務移動會進入會議紀錄內容。
+- [x] activity 使用 task inline token 並同步 task links。
+- [x] 多次儲存不重複 append 同一 activity。
+- [x] DEV-002、DEV-003、DEV-006 回歸通過。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-002-records
+npm.cmd run verify:dev-003-record-tags
+npm.cmd run verify:dev-006-gmail-editor
+npm.cmd run verify:dev-007-meeting-activity
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] 已建立 SPEC-007。
+- [x] 已建立 QA-DEV-007 驗證計畫。
+- [x] 已建立 DEV-007 dev task 條目。
+- [x] RD 開發完成。
+- [x] in-app browser 檢查：會議狀態列顯示「看板維持一般編輯」，舊文案「點議題會插入紀錄」未出現。
+- [x] in-app browser 檢查：會議中點任務未插入 tag，已連結任務仍為 0。
+
+---
+
+## PM DEV-008：任務會議細節快速查找
+
+日期：2026-06-06
+狀態：Done
+節點類型：交付點
+任務類型：Product UX refinement
+父交付點：DEV-002 / DEV-007 follow-up
+是否計入產品交付完成：是
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md`
+QA 計畫：`ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md`
+
+### 任務目標
+
+讓未來專案成員可從任務詳情快速查找此任務在會議或工作紀錄中被討論過的細節，不必先進紀錄庫翻整篇紀錄。
+
+### 開發範圍
+
+- [x] 任務詳情頁將「關聯紀錄」升級為「任務知識」區塊。
+- [x] 關聯紀錄優先顯示包含目前任務 inline tag 的片段。
+- [x] 沒有 inline task tag 的 legacy 關聯紀錄顯示整篇關聯 fallback。
+- [x] 任務知識搜尋範圍限定在目前任務的備註與關聯紀錄片段。
+- [x] DEV-007 寫入的任務變更片段可在任務知識中顯示。
+- [x] 點擊片段可開啟原始紀錄。
+
+### 不在本交付點範圍
+
+- AI 問答或語意搜尋。
+- AI 自動摘要、決議抽取或自動標記任務。
+- 新增 migration、meeting event table 或修改 `KnowledgeRecord` / `record_task_links`。
+
+### 驗收標準
+
+- [x] 同一篇會議紀錄同時提到任務 A 與任務 B 時，任務 A 只顯示任務 A 片段，任務 B 只顯示任務 B 片段。
+- [x] 任務內搜尋可命中目前任務的會議細節、工作紀錄與備註。
+- [x] 搜尋任務 B 專屬關鍵字不會在任務 A 詳情中命中。
+- [x] 只有 `record_task_links` 的 legacy 關聯紀錄仍可被看到。
+- [x] 會議中任務狀態變更可從該任務詳情查到。
+- [x] 不新增資料模型或 migration。
+
+### RD handoff
+
+- [x] 先閱讀 `SPEC-008` 與既有 `TaskRecordTimeline`。
+- [x] 新增純函式片段抽取工具，避免把邏輯寫死在 React component。
+- [x] 延伸 `TaskRecordTimeline`，保留原 `nodeId` 呼叫介面。
+- [x] 新增 `verify:dev-008-task-knowledge`。
+- [x] 完成後執行 lint、DEV-002、DEV-006、DEV-007、DEV-008 verifier 與 build。
+
+### QA / QC 重點
+
+- [x] 依 `QA-DEV-008` 驗證雙任務片段隔離、fallback、搜尋與原始紀錄開啟。
+- [x] 檢查桌機與筆電 viewport 下任務詳情搜尋框與片段清單不重疊；手機版不列入會議記錄驗收。
+- [x] 確認本 DEV 不改 schema、不擴張到 AI 問答。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-002-records
+npm.cmd run verify:dev-006-gmail-editor
+npm.cmd run verify:dev-007-meeting-activity
+npm.cmd run verify:dev-008-task-knowledge
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] 已建立 SPEC-008。
+- [x] 已建立 QA-DEV-008 驗證計畫。
+- [x] 已建立 DEV-008 dev task 條目。
+- [x] RD 開發完成。
+- [x] `npm.cmd run lint -- --quiet`
+- [x] `npm.cmd run verify:dev-002-records`
+- [x] `npm.cmd run verify:dev-006-gmail-editor`
+- [x] `npm.cmd run verify:dev-007-meeting-activity`
+- [x] `npm.cmd run verify:dev-008-task-knowledge`
+- [x] `npm.cmd run build`
+- [x] Playwright UI smoke：固定測試環境登入後，任務詳情顯示「任務知識」、搜尋框、空狀態，console 0 errors。
+- [x] 補充決策：手機版不列入會議記錄驗收；既有 mobile smoke 僅作為參考，不作為 release gate。
+
+---
+
+## PM DEV-009：會議模式任務詳情內快速補記
+
+日期：2026-06-07
+狀態：Done
+節點類型：交付點
+任務類型：Product UX refinement
+父交付點：DEV-005 / DEV-007 / DEV-008 follow-up
+是否計入產品交付完成：是
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md`
+QA 計畫：`ai-doc/qa/QA-DEV-009-meeting-task-detail-quick-note.md`
+
+### 任務目標
+
+會議模式下，使用者可在任務詳情內直接補記目前任務的討論內容；系統自動 append 到目前 meeting draft，並用 inline task tag 連到該任務。
+
+### 開發範圍
+
+- [x] `TaskDetailsModal` 在 meeting mode 顯示「本次會議」快速補記。
+- [x] 補記內容寫入目前 meeting draft，不寫入 `TaskNode.detailNotes`。
+- [x] 補記內容自動包含目前任務 inline tag。
+- [x] append 後同步 `record_task_links`。
+- [x] 支援「加入紀錄」與 `Ctrl+Enter`。
+- [x] 空白內容不可加入紀錄。
+
+### 不在本交付點範圍
+
+- 任務詳情內完整會議紀錄編輯器。
+- AI 摘要、決議抽取或任務自動更新。
+- 新增 migration、meeting event table 或多人即時協作。
+
+### 驗收標準
+
+- [x] 非 meeting mode 不顯示快速補記區。
+- [x] meeting mode 任務詳情顯示快速補記區。
+- [x] 補記後 meeting draft content 包含 `## 任務討論`、時間、目前任務 tag 與輸入文字。
+- [x] 補記後 task links 包含目前任務。
+- [x] 補記不修改任務備註。
+- [x] 發布後可由 DEV-008 任務知識查到。
+
+### RD handoff
+
+- [x] 先閱讀 `SPEC-009`、`TaskDetailsModal` 與 `useRecordStore`。
+- [x] 新增 store action append 任務討論到 meeting draft。
+- [x] 任務詳情只呼叫 store action，不直接管理 record draft 格式。
+- [x] 新增 DEV-009 verifier。
+- [x] 完成後執行 lint、DEV-007、DEV-008、DEV-009 verifier 與 build。
+
+### QA / QC 重點
+
+- [x] 驗證 UI 只在 meeting mode 出現。
+- [x] 驗證 append 進 meeting draft 而不是任務備註。
+- [x] 驗證 inline task tag 與 taskLinks 同步。
+- [x] 驗證 `Ctrl+Enter` 行為。
+- [x] 桌機與筆電 viewport smoke；手機版不列入會議記錄工作流驗收。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-007-meeting-activity
+npm.cmd run verify:dev-008-task-knowledge
+npm.cmd run verify:dev-009-task-detail-quick-note
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] 已建立 SPEC-009。
+- [x] 已建立 QA-DEV-009 驗證計畫。
+- [x] 已建立 DEV-009 dev task 條目。
+- [x] RD 開發完成。
+- [x] `npm.cmd run lint -- --quiet`
+- [x] `npm.cmd run verify:dev-007-meeting-activity`
+- [x] `npm.cmd run verify:dev-008-task-knowledge`
+- [x] `npm.cmd run verify:dev-009-task-detail-quick-note`
+- [x] `npm.cmd run build`
+- [x] Playwright UI smoke：固定測試環境開始會議後，任務詳情顯示「本次會議」快速補記；輸入後加入 meeting draft 並清空輸入框。
+- [x] 補充決策：手機版不列入會議記錄工作流驗收；既有 mobile smoke 僅作為參考，不作為 release gate。
+- [x] QC UX 驗證通過：桌機 1440x950 與筆電 1024x768 smoke 均通過，見 `ai-doc/qc/QC-DEV-009-meeting-task-detail-quick-note-ux.md`。
+
+---
+
+## PM DEV-010：會議紀錄操作按鈕狀態溝通設計
+
+日期：2026-06-07
+狀態：Ready
+節點類型：交付點
+任務類型：Product UX refinement
+父交付點：DEV-005 / DEV-006 / DEV-007 / DEV-009 follow-up
+是否計入產品交付完成：是
+優先級：P1
+主要規格：`ai-doc/specs/SPEC-010-meeting-record-action-feedback.md`
+QA 計畫：`ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md`
+
+### 任務目標
+
+修正會議模式操作按鈕的溝通問題。使用者看到 `存草稿`、`發布`、`結束會議` 或 `離開會議模式` 時，需能理解每個按鈕差別、目前不能按的原因，以及下一步如何解除阻塞。
+
+### 開發範圍
+
+- [ ] 拆分 `存草稿` 與 `發布` 的啟用條件。
+- [ ] meeting draft 存在且有 workspace / board 時，`存草稿` 不因內容空白被靜默鎖住。
+- [ ] `發布` 需檢查內容、任務補記或 DEV-007 pending meeting activity。
+- [ ] 會議狀態列顯示目前 draft 狀態、阻塞原因與下一步。
+- [ ] 不可操作按鈕需有 hover / focus 原因提示。
+- [ ] `結束會議` 改為 `離開會議模式` 或加上等價說明。
+- [ ] 有未儲存內容時離開 meeting mode 需確認保存選項。
+- [ ] `BoardView` 與 `RecordSidebar` 共用同一套 action state helper。
+
+### 不在本交付點範圍
+
+- 手機版會議紀錄工作流。
+- 新增 migration 或調整 `KnowledgeRecord` / `record_task_links`。
+- AI 摘要、會議管理、跨 board 會議。
+- 重做整個紀錄側欄視覺設計。
+
+### 驗收標準
+
+- [ ] 空白 meeting draft 下，使用者知道為何不能發布。
+- [ ] 空白 meeting draft 下，`存草稿` 不因內容空白被鎖住。
+- [ ] 有內容、任務補記或 pending task activity 後，`發布` 變可用。
+- [ ] 不可操作按鈕 hover / keyboard focus 皆可看到原因。
+- [ ] `離開會議模式` 不會讓使用者誤以為已保存或已發布。
+- [ ] 有未儲存變更時離開會議模式會提示保存選項。
+- [ ] `BoardView` 與 `RecordSidebar` 操作規則一致。
+- [ ] 桌機與筆電 viewport 無遮擋、裁切、重疊或水平 overflow。
+
+### RD handoff
+
+- [ ] 先閱讀 `SPEC-010`、`BoardView`、`RecordSidebar` 與 `useRecordStore.saveDraft`。
+- [ ] 新增純函式 action state helper，集中判斷 `canSaveDraft`、`canPublish`、阻塞原因與 status message。
+- [ ] 修改 `saveDraft` 使 meeting draft 的草稿保存與發布驗證分離。
+- [ ] 修改會議狀態列與側欄底部按鈕，導入一致的原因提示。
+- [ ] 新增 `verify:dev-010-action-feedback` verifier。
+- [ ] 完成後執行 lint、DEV-007、DEV-008、DEV-009、DEV-010 verifier 與 build。
+
+### QA / QC 重點
+
+- [ ] 以使用者視角驗證 disabled / aria-disabled 按鈕是否可理解。
+- [ ] 驗證空白 draft、輸入內容、只有 task activity 三種狀態。
+- [ ] 驗證 hover、keyboard focus、狀態列三種原因揭露。
+- [ ] 驗證離開 meeting mode 的未儲存保護。
+- [ ] 桌機 1440x950 與筆電 1024x768 viewport smoke；手機版不列入會議記錄工作流驗收。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-007-meeting-activity
+npm.cmd run verify:dev-008-task-knowledge
+npm.cmd run verify:dev-009-task-detail-quick-note
+npm.cmd run verify:dev-010-action-feedback
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] 已建立 SPEC-010。
+- [x] 已建立 QA-DEV-010 驗證計畫。
+- [x] 已建立 DEV-010 dev task 條目。
+- [ ] RD 開發。
+- [ ] QA 驗證。
+- [ ] QC 事實驗證。

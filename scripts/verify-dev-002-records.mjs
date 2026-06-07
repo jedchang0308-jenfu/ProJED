@@ -51,7 +51,7 @@ const checks = [
     label: 'record store workflow',
     snippets: [
       'end.subtract(7,',
-      'isPanelCollapsed: true',
+      'isPanelCollapsed: collapsePanel ? true',
       'isTaskSelectionMode: true',
       'restoreCollapsedAfterSelection',
       'returnViewAfterSelection',
@@ -118,12 +118,33 @@ const checks = [
   },
   {
     path: 'src/components/Records/RecordContentEditor.tsx',
-    label: 'record inline task tag editor',
+    label: 'record inline task tag Lexical editor',
     snippets: [
-      'contentEditable',
+      'LexicalComposer',
+      'TaskMentionNode',
+      'HistoryPlugin',
+      'onCursorOffsetChange',
+    ],
+  },
+  {
+    path: 'src/components/Records/TaskMentionNode.ts',
+    label: 'record inline task tag node',
+    snippets: [
       'data-record-task-mention',
       'serializeTaskMention',
-      'onCursorOffsetChange',
+      'isKeyboardSelectable',
+      'exportDOM',
+      'importDOM',
+    ],
+  },
+  {
+    path: 'src/utils/recordLexicalContent.ts',
+    label: 'record inline task tag Lexical serialization',
+    snippets: [
+      '$serializeEditorContentToRecordString',
+      '$setEditorContentFromRecordString',
+      '$replaceTextNodeTaskMentionTokens',
+      'serializeTaskMention',
     ],
   },
   {

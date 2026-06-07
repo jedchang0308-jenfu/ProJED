@@ -1,30 +1,81 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { BookOpenText, CalendarClock, Plus } from 'lucide-react';
+import { BookOpenText, CalendarClock, FileText, Plus, Search } from 'lucide-react';
 import useRecordStore from '../../store/useRecordStore';
-import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
+import { useWbsStore } from '../../store/useWbsStore';
+import {
+  extractTaskRecordSnippets,
+  taskKnowledgeMatchesQuery,
+  type TaskKnowledgeSnippet,
+} from '../../utils/taskKnowledgeSnippets';
 
 interface TaskRecordTimelineProps {
   nodeId: string;
 }
 
+const getRecordTime = (record: { type: string; occurredAt?: number; endedAt?: number; startedAt?: number }) =>
+  record.type === 'meeting'
+    ? record.occurredAt
+    : record.endedAt || record.startedAt;
+
+const getSnippetLabel = (recordType: string, snippet: TaskKnowledgeSnippet) => {
+  if (snippet.kind === 'linked_record') return '整篇關聯';
+  if (/(狀態|位置|日期|負責人|協作者|標籤|封存|還原|新增任務|任務變更)/.test(snippet.text)) {
+    return '任務變更';
+  }
+  return recordType === 'meeting' ? '會議片段' : '工作片段';
+};
+
 const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
+  const node = useWbsStore(state => state.nodes[nodeId]);
   const records = useRecordStore(state => state.records);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
   const openNewRecord = useRecordStore(state => state.openNewRecord);
+  const [query, setQuery] = React.useState('');
+  const detailNotes = node?.detailNotes ?? [];
   const relatedRecords = React.useMemo(
     () => records
       .filter(record => record.taskLinks.some(link => link.nodeId === nodeId))
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+      .sort((a, b) => (getRecordTime(b) || b.updatedAt || 0) - (getRecordTime(a) || a.updatedAt || 0)),
     [nodeId, records]
   );
+  const knowledgeRecords = React.useMemo(
+    () => relatedRecords
+      .map(record => {
+        const snippets = extractTaskRecordSnippets(record.content, nodeId);
+        return { record, snippets };
+      })
+      .filter(({ record, snippets }) =>
+        taskKnowledgeMatchesQuery(query, [
+          record.title,
+          record.type === 'meeting' ? '會議' : '工作',
+          ...snippets.map(snippet => snippet.text),
+        ])
+      ),
+    [nodeId, query, relatedRecords]
+  );
+  const noteMatches = React.useMemo(
+    () => {
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery || !detailNotes.length) return [];
+      return detailNotes.filter(note =>
+        taskKnowledgeMatchesQuery(normalizedQuery, [note.title, note.content])
+      );
+    },
+    [detailNotes, query]
+  );
+  const snippetCount = knowledgeRecords.reduce((total, item) => total + item.snippets.length, 0);
+  const hasResults = knowledgeRecords.length > 0 || noteMatches.length > 0;
 
   return (
     <section className="border-t border-slate-100 pt-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-700">
           <BookOpenText size={16} className="text-blue-500" />
-          <span>關聯紀錄</span>
+          <span>任務知識</span>
+          <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            {relatedRecords.length} 紀錄 / {snippetCount} 片段
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -46,11 +97,36 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
         </div>
       </div>
 
+      <label className="mb-3 flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-500 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+        <Search size={14} className="shrink-0 text-slate-400" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+          placeholder="搜尋此任務的會議細節、變更或備註"
+        />
+      </label>
+
       <div className="space-y-2">
-        {relatedRecords.map(record => {
-          const time = record.type === 'meeting'
-            ? record.occurredAt
-            : record.endedAt || record.startedAt;
+        {noteMatches.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-800">
+              <FileText size={14} />
+              <span>備註命中</span>
+            </div>
+            <div className="space-y-2">
+              {noteMatches.map(note => (
+                <div key={note.id} className="rounded-md bg-white/80 p-2">
+                  <div className="truncate text-xs font-semibold text-slate-800">{note.title}</div>
+                  <div className="mt-1 line-clamp-3 text-xs leading-5 text-slate-600">{note.content}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {knowledgeRecords.map(({ record, snippets }) => {
+          const time = getRecordTime(record);
           return (
             <button
               key={record.id}
@@ -71,16 +147,26 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
                 <span className="mt-1 block text-xs text-slate-500">
                   {time ? dayjs(time).format('YYYY/MM/DD HH:mm') : '未填時間'}
                 </span>
-                <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-600">
-                  {renderRecordContentAsPlainText(record.content)}
+                <span className="mt-2 block space-y-1.5">
+                  {snippets.map(snippet => (
+                    <span
+                      key={snippet.id}
+                      className="block rounded-md bg-slate-50 px-2 py-1.5 text-xs leading-5 text-slate-600 group-hover:bg-white/80"
+                    >
+                      <span className="mb-1 inline-flex rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        {getSnippetLabel(record.type, snippet)}
+                      </span>
+                      <span className="line-clamp-3 block">{snippet.text}</span>
+                    </span>
+                  ))}
                 </span>
               </span>
             </button>
           );
         })}
-        {relatedRecords.length === 0 ? (
+        {!hasResults ? (
           <div className="rounded-md border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">
-            尚無關聯紀錄
+            {query.trim() ? '沒有符合搜尋的任務知識' : '尚無關聯紀錄'}
           </div>
         ) : null}
       </div>

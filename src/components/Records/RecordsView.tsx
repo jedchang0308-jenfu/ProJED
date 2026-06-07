@@ -16,8 +16,8 @@ const RecordsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <BookOpenText size={18} className="text-blue-500" />
           <div>
-            <h1 className="text-sm font-semibold text-slate-900">會議與工作紀錄</h1>
-            <p className="text-xs text-slate-500">以任務 node 串接討論、個人進度與 AI 分析脈絡。</p>
+            <h1 className="text-sm font-semibold text-slate-900">紀錄庫</h1>
+            <p className="text-xs text-slate-500">會後查閱與整理會議/工作紀錄；開會主畫面請使用看板上的會議紀錄入口。</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -47,7 +47,7 @@ const RecordsView: React.FC = () => {
           <div className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center">
             <FileText size={24} className="mx-auto mb-2 text-slate-300" />
             <div className="text-sm font-semibold text-slate-700">尚無紀錄</div>
-            <div className="mt-1 text-xs text-slate-500">從右側欄或本頁新增第一筆會議/工作紀錄。</div>
+            <div className="mt-1 text-xs text-slate-500">本頁用於會後整理；開會時請回到看板啟動會議紀錄。</div>
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">

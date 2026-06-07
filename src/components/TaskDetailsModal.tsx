@@ -1,8 +1,9 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CalendarDays, CircleDot, Lock, Plus, Unlock, UserRound, X } from 'lucide-react';
+import { CalendarDays, CircleDot, Lock, MessageSquareText, Plus, Send, Unlock, UserRound, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
+import useRecordStore from '../store/useRecordStore';
 import { TagPicker } from './Tags/TagPicker';
 import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskStatus } from '../types';
@@ -67,6 +68,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
+  const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
+  const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
+  const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const skipNextNotesSave = React.useRef(true);
   const assigneeOptions = React.useMemo(
     () => boardMembers.map(member => ({
@@ -220,6 +224,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const addNote = () => {
     if (!canEditTask) return;
     setNotes((current) => [...current, createNote(current.length + 1)]);
+  };
+
+  const handleAppendMeetingDiscussion = () => {
+    if (!canEditTask) return;
+    const didAppend = appendTaskDiscussionToMeetingDraft(node.id, node.title || node.id, meetingDiscussion);
+    if (didAppend) setMeetingDiscussion('');
   };
 
   const dependencies = useWbsStore((state) => state.dependencies);
@@ -427,6 +437,41 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
           </section>
+
+          {isMeetingMode ? (
+            <section className="border-b border-slate-100 py-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <MessageSquareText size={16} className="text-blue-500" />
+                <span>本次會議</span>
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                <textarea
+                  value={meetingDiscussion}
+                  onChange={(event) => setMeetingDiscussion(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                      event.preventDefault();
+                      handleAppendMeetingDiscussion();
+                    }
+                  }}
+                  disabled={!canEditTask}
+                  className="min-h-[88px] w-full resize-y rounded-md border border-blue-100 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                  placeholder="輸入此任務剛剛討論的內容"
+                />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleAppendMeetingDiscussion}
+                    disabled={!canEditTask || !meetingDiscussion.trim()}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    <Send size={13} />
+                    加入紀錄
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section className="pt-4">
             <div className="mb-3 flex items-center justify-between gap-3">

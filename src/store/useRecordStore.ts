@@ -6,9 +6,11 @@ import useBoardStore from './useBoardStore';
 import {
   extractTaskMentionIds,
   insertTaskMention,
+  serializeTaskMention,
   syncTaskLinksFromRecordContent,
   uniqueRecordTaskLinks,
 } from '../utils/recordContentMentions';
+import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
 import type {
   KnowledgeRecord,
   KnowledgeRecordInput,
@@ -24,6 +26,24 @@ type RecordDraft = KnowledgeRecordInput & {
   legacyTaskLinkNodeIds?: string[];
 };
 
+type TaskSelectionModeOptions = {
+  collapsePanel?: boolean;
+  returnToPreviousView?: boolean;
+};
+
+export type MeetingTaskActivityInput = {
+  eventType: string;
+  nodeId: string;
+  title: string;
+  occurredAt?: number;
+  payload?: Record<string, unknown>;
+};
+
+export type MeetingTaskActivity = Required<Omit<MeetingTaskActivityInput, 'payload'>> & {
+  payload: Record<string, unknown>;
+  summary: string;
+};
+
 interface RecordStoreState {
   records: KnowledgeRecord[];
   loading: boolean;
@@ -32,10 +52,14 @@ interface RecordStoreState {
   isPanelOpen: boolean;
   isPanelCollapsed: boolean;
   isTaskSelectionMode: boolean;
+  isMeetingMode: boolean;
+  meetingTaskCaptureEnabled: boolean;
   restoreCollapsedAfterSelection: boolean;
   returnViewAfterSelection: ViewMode | null;
   contentCursorOffset: number | null;
   draft: RecordDraft | null;
+  meetingActivities: MeetingTaskActivity[];
+  appendedMeetingActivityIds: string[];
 }
 
 interface RecordStoreActions {
@@ -45,12 +69,17 @@ interface RecordStoreActions {
   togglePanelCollapsed: () => void;
   openNewRecord: (type: KnowledgeRecordType, initialNodeId?: string) => void;
   openExistingRecord: (record: KnowledgeRecord) => void;
+  startMeetingRecord: () => void;
+  exitMeetingMode: () => void;
+  toggleMeetingTaskCapture: () => void;
   updateDraft: (updates: Partial<RecordDraft>) => void;
   setContentCursorOffset: (offset: number) => void;
   setDraftTaskRole: (nodeId: string, role: RecordTaskLinkRole) => void;
   toggleDraftTask: (nodeId: string) => void;
   insertTaskMentionAtCursor: (nodeId: string, title: string) => void;
-  enterTaskSelectionMode: () => void;
+  appendTaskDiscussionToMeetingDraft: (nodeId: string, title: string, text: string) => boolean;
+  recordMeetingTaskActivity: (activity: MeetingTaskActivityInput) => void;
+  enterTaskSelectionMode: (options?: TaskSelectionModeOptions) => void;
   exitTaskSelectionMode: (restorePanel?: boolean) => void;
   saveDraft: () => Promise<KnowledgeRecord | null>;
   archiveRecord: (recordId: string) => Promise<void>;
@@ -98,6 +127,94 @@ const syncDraftContentLinks = (draft: RecordDraft, content: string): RecordDraft
   taskLinks: syncTaskLinksFromRecordContent(content, draft.taskLinks, draft.legacyTaskLinkNodeIds ?? []),
 });
 
+const statusLabels: Record<string, string> = {
+  todo: '待辦',
+  in_progress: '進行中',
+  completed: '已完成',
+  delayed: '延遲',
+  unsure: '未確認',
+  onhold: '暫停',
+};
+
+const getPayloadStatus = (payload: Record<string, unknown>, side: 'before' | 'after') => {
+  const sidePayload = payload[side] as Record<string, unknown> | undefined;
+  const status = sidePayload?.status;
+  return typeof status === 'string' ? status : '';
+};
+
+const formatStatus = (status: string) => statusLabels[status] ?? (status || '未設定');
+
+const formatDateRange = (value: Record<string, unknown> | undefined) => {
+  const start = typeof value?.startDate === 'string' && value.startDate ? value.startDate : '未設定';
+  const end = typeof value?.endDate === 'string' && value.endDate ? value.endDate : '未設定';
+  return `${start} -> ${end}`;
+};
+
+const summarizeMeetingActivity = (activity: MeetingTaskActivityInput) => {
+  const payload = activity.payload ?? {};
+  if (activity.eventType === 'task_status_changed') {
+    return `狀態 ${formatStatus(getPayloadStatus(payload, 'before'))} -> ${formatStatus(getPayloadStatus(payload, 'after'))}`;
+  }
+  if (activity.eventType === 'task_moved') return '位置變更';
+  if (activity.eventType === 'task_dates_changed') {
+    const before = payload.before as Record<string, unknown> | undefined;
+    const after = payload.after as Record<string, unknown> | undefined;
+    return `日期 ${formatDateRange(before)} => ${formatDateRange(after)}`;
+  }
+  if (activity.eventType === 'task_assigned') return '負責人變更';
+  if (activity.eventType === 'task_collaborators_changed') return '協作者變更';
+  if (activity.eventType === 'task_tags_changed') return '標籤變更';
+  if (activity.eventType === 'task_archived') return '任務封存';
+  if (activity.eventType === 'task_restored') return '任務還原';
+  if (activity.eventType === 'task_created') return '新增任務';
+  return '任務更新';
+};
+
+const createMeetingActivity = (activity: MeetingTaskActivityInput): MeetingTaskActivity => {
+  const occurredAt = activity.occurredAt ?? Date.now();
+  return {
+    eventType: activity.eventType,
+    nodeId: activity.nodeId,
+    title: activity.title,
+    occurredAt,
+    payload: activity.payload ?? {},
+    summary: summarizeMeetingActivity(activity),
+  };
+};
+
+const getMeetingActivityId = (activity: MeetingTaskActivity) =>
+  `${activity.occurredAt}:${activity.eventType}:${activity.nodeId}:${activity.summary}`;
+
+const appendMeetingActivitiesToDraft = (
+  draft: RecordDraft,
+  activities: MeetingTaskActivity[],
+  appendedActivityIds: string[],
+) => {
+  const appendedIds = new Set(appendedActivityIds);
+  const pendingActivities = activities.filter(activity => !appendedIds.has(getMeetingActivityId(activity)));
+  if (draft.type !== 'meeting' || pendingActivities.length === 0) {
+    return { draft, appendedActivityIds };
+  }
+
+  const activityLines = pendingActivities.map(activity => {
+    const time = dayjs(activity.occurredAt).format('HH:mm');
+    return `- ${time} ${serializeTaskMention(activity.nodeId, activity.title)}：${activity.summary}`;
+  });
+  const content = [
+    draft.content.trim(),
+    '## 會議中任務變更',
+    ...activityLines,
+  ].filter(Boolean).join('\n\n');
+  const nextDraft = syncDraftContentLinks(draft, content);
+  return {
+    draft: nextDraft,
+    appendedActivityIds: [
+      ...appendedActivityIds,
+      ...pendingActivities.map(getMeetingActivityId),
+    ],
+  };
+};
+
 const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) => ({
   records: [],
   loading: false,
@@ -106,10 +223,14 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   isPanelOpen: false,
   isPanelCollapsed: false,
   isTaskSelectionMode: false,
+  isMeetingMode: false,
+  meetingTaskCaptureEnabled: false,
   restoreCollapsedAfterSelection: false,
   returnViewAfterSelection: null,
   contentCursorOffset: null,
   draft: null,
+  meetingActivities: [],
+  appendedMeetingActivityIds: [],
 
   loadRecords: async (workspaceId, boardId) => {
     set({ loading: true, error: null });
@@ -130,9 +251,13 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     isPanelOpen: false,
     isPanelCollapsed: false,
     isTaskSelectionMode: false,
+    isMeetingMode: false,
+    meetingTaskCaptureEnabled: false,
     returnViewAfterSelection: null,
     contentCursorOffset: null,
     draft: null,
+    meetingActivities: [],
+    appendedMeetingActivityIds: [],
   }),
 
   togglePanelCollapsed: () => set(state => ({ isPanelCollapsed: !state.isPanelCollapsed })),
@@ -143,8 +268,12 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       isPanelOpen: true,
       isPanelCollapsed: false,
       isTaskSelectionMode: false,
+      isMeetingMode: false,
+      meetingTaskCaptureEnabled: false,
       contentCursorOffset: 0,
       draft: createDefaultDraft(type, userId, initialNodeId),
+      meetingActivities: [],
+      appendedMeetingActivityIds: [],
       error: null,
     });
   },
@@ -155,6 +284,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       isPanelOpen: true,
       isPanelCollapsed: false,
       isTaskSelectionMode: false,
+      isMeetingMode: false,
+      meetingTaskCaptureEnabled: false,
       contentCursorOffset: record.content.length,
       draft: {
         id: record.id,
@@ -173,9 +304,57 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           .map(link => link.nodeId)
           .filter(nodeId => !mentionedNodeIds.includes(nodeId)),
       },
+      meetingActivities: [],
+      appendedMeetingActivityIds: [],
       error: null,
     });
   },
+
+  startMeetingRecord: () => {
+    const { activeBoardId, currentView, setView } = useBoardStore.getState();
+    if (!activeBoardId) {
+      set({
+        isPanelOpen: true,
+        isPanelCollapsed: false,
+        error: '請先選擇一個看板再開始會議紀錄。',
+      });
+      return;
+    }
+
+    if (currentView !== 'board') setView('board');
+
+    const userId = useAuthStore.getState().user?.uid ?? null;
+    set(state => {
+      const draft = state.draft?.type === 'meeting'
+        ? state.draft
+        : createDefaultDraft('meeting', userId);
+
+      return {
+        isPanelOpen: true,
+        isPanelCollapsed: false,
+        isTaskSelectionMode: false,
+        isMeetingMode: true,
+        meetingTaskCaptureEnabled: false,
+        returnViewAfterSelection: null,
+        contentCursorOffset: state.draft === draft ? state.contentCursorOffset ?? draft.content.length : draft.content.length,
+        draft,
+        meetingActivities: state.draft === draft ? state.meetingActivities : [],
+        appendedMeetingActivityIds: state.draft === draft ? state.appendedMeetingActivityIds : [],
+        error: null,
+      };
+    });
+  },
+
+  exitMeetingMode: () => set({
+    isMeetingMode: false,
+    meetingTaskCaptureEnabled: false,
+    isTaskSelectionMode: false,
+    returnViewAfterSelection: null,
+  }),
+
+  toggleMeetingTaskCapture: () => set(state => ({
+    meetingTaskCaptureEnabled: !state.meetingTaskCaptureEnabled,
+  })),
 
   updateDraft: (updates) => set(state => ({
     draft: state.draft
@@ -230,14 +409,40 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     };
   }),
 
-  enterTaskSelectionMode: () => {
+  appendTaskDiscussionToMeetingDraft: (nodeId, title, text) => {
+    const state = get();
+    if (!state.isMeetingMode || state.draft?.type !== 'meeting') return false;
+
+    const content = appendTaskDiscussionToRecordContent(state.draft.content, nodeId, title, text);
+    if (!content) return false;
+
+    const draft = syncDraftContentLinks(state.draft, content);
+
+    set({
+      draft,
+      contentCursorOffset: content.length,
+    });
+    return true;
+  },
+
+  recordMeetingTaskActivity: (activity) => set(state => {
+    if (!state.isMeetingMode || state.draft?.type !== 'meeting') return {};
+    const nextActivity = createMeetingActivity(activity);
+    return {
+      meetingActivities: [...state.meetingActivities, nextActivity],
+    };
+  }),
+
+  enterTaskSelectionMode: (options = {}) => {
     const { currentView, setView } = useBoardStore.getState();
+    const collapsePanel = options.collapsePanel ?? true;
+    const returnToPreviousView = options.returnToPreviousView ?? true;
     if (currentView !== 'board') setView('board');
     set(state => ({
       isPanelOpen: true,
       restoreCollapsedAfterSelection: state.isPanelCollapsed,
-      returnViewAfterSelection: currentView,
-      isPanelCollapsed: true,
+      returnViewAfterSelection: returnToPreviousView ? currentView : null,
+      isPanelCollapsed: collapsePanel ? true : state.isPanelCollapsed,
       isTaskSelectionMode: true,
     }));
   },
@@ -255,11 +460,27 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   },
 
   saveDraft: async () => {
-    const { draft } = get();
+    const {
+      draft: currentDraft,
+      isMeetingMode,
+      meetingActivities,
+      appendedMeetingActivityIds,
+    } = get();
     const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
-    if (!draft || !activeWorkspaceId || !activeBoardId) {
+    if (!currentDraft || !activeWorkspaceId || !activeBoardId) {
       set({ error: '請先選擇工作區與看板。' });
       return null;
+    }
+    const appended = isMeetingMode
+      ? appendMeetingActivitiesToDraft(currentDraft, meetingActivities, appendedMeetingActivityIds)
+      : { draft: currentDraft, appendedActivityIds: appendedMeetingActivityIds };
+    const draft = appended.draft;
+    if (draft !== currentDraft || appended.appendedActivityIds !== appendedMeetingActivityIds) {
+      set({
+        draft,
+        appendedMeetingActivityIds: appended.appendedActivityIds,
+        contentCursorOffset: draft.content.length,
+      });
     }
     if (!draft.title.trim() || !draft.content.trim()) {
       set({ error: '標題與內容不可空白。' });

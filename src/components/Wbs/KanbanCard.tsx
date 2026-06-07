@@ -79,6 +79,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
   const recordDraft = useRecordStore(s => s.draft);
   const insertRecordTaskMention = useRecordStore(s => s.insertTaskMentionAtCursor);
+  const isRecordCaptureMode = isRecordSelectionMode;
   const isRecordSelected = recordDraft?.taskLinks.some(link => link.nodeId === nodeId) ?? false;
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
@@ -274,20 +275,20 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       style={style}
       {...cardLongPressHandlers}
       onClick={(e) => {
-        if (!isRecordSelectionMode) return;
+        if (!isRecordCaptureMode) return;
         e.preventDefault();
         e.stopPropagation();
         insertRecordTaskMention(nodeId, node.title || nodeId);
       }}
       onContextMenu={(e) => {
           e.preventDefault();
-          if (isRecordSelectionMode) return;
+          if (isRecordCaptureMode) return;
           setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
       className={`kanban-task-card relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
-          : isRecordSelectionMode
+          : isRecordCaptureMode
             ? isRecordSelected
               ? 'cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-300 shadow-md'
               : 'cursor-pointer border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 hover:shadow-md'
@@ -309,12 +310,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               <TaskDragHandle
                 attributes={attributes}
                 listeners={listeners}
-                disabled={!canMoveTask || isEditing || isSelectingMode || isRecordSelectionMode}
+                disabled={!canMoveTask || isEditing || isSelectingMode || isRecordCaptureMode}
                 size="sm"
                 className="-ml-1"
               />
 
-              {isRecordSelectionMode ? (
+              {isRecordCaptureMode ? (
                 <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                   isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'
                 }`}>
@@ -342,10 +343,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                     statusTextColorMap[status as TaskStatus]
                   }`}
                   onPointerDown={(e) => {
-                    if (!isRecordSelectionMode) e.stopPropagation();
+                    if (!isRecordCaptureMode) e.stopPropagation();
                   }}
                   onClick={(e) => {
-                    if (isRecordSelectionMode) {
+                    if (isRecordCaptureMode) {
                       e.preventDefault();
                       e.stopPropagation();
                       insertRecordTaskMention(nodeId, node.title || nodeId);
