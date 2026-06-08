@@ -199,6 +199,9 @@
 - [x] DEV-008 [交付點] 任務會議細節快速查找
 - [x] DEV-009 [交付點] 會議模式任務詳情內快速補記
 - [ ] DEV-010 [交付點] 會議紀錄操作按鈕狀態溝通設計
+- [ ] DEV-011 [交付點] AI 任務導向會議紀錄統整工作流
+- [ ] DEV-012 [交付點] AI 會議紀錄自然語言品質提升
+- [ ] DEV-013 [交付點] 右鍵清單任務複製，包含子任務與子樹內部依賴
 
 ## DEV-002：會議紀錄與個人工作紀錄 MVP
 
@@ -983,3 +986,221 @@ npm.cmd run build
 - [ ] RD 開發。
 - [ ] QA 驗證。
 - [ ] QC 事實驗證。
+
+---
+
+## PM DEV-011：AI 任務導向會議紀錄統整工作流
+
+日期：2026-06-07
+狀態：Ready for QC
+類型：交付點 / Product UX refinement
+承接：DEV-007 / DEV-008 / DEV-009 / DEV-010
+優先級：P1
+規格：`ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md`
+QA：`ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md`
+
+### 任務背景
+
+會議紀錄不能再以逐筆 append 的流水帳作為 published 主體。會議中收集的速記、任務補記與任務變更 activity 應作為 AI input source，由後端 AI 在發布前整理成任務導向草稿；人類校稿後才正式發布。
+
+### RD Scope
+
+- [x] 新增 `src/utils/meetingRecordSynthesis.ts`，定義 source package、output contract 與 deterministic fallback。
+- [x] 新增 `src/services/meetingSynthesisService.ts`，前端只呼叫後端函式，不保存模型 API key。
+- [x] 新增 Supabase Edge Function `synthesize_meeting_record`。
+- [x] 更新 `useRecordStore`，加入 AI synthesis loading/error/ready 狀態。
+- [x] 更新發布流程：第一次發布先 AI 統整並保持 draft，第二次才 published。
+- [x] 停止 `saveDraft` 將原始 meeting activity append 到正文。
+- [x] 更新 `BoardView` / `RecordSidebar` 的 AI 統整中、錯誤、待校稿與發布狀態。
+- [x] 新增 `verify:dev-011-ai-meeting-synthesis`。
+
+### 非範圍
+
+- [x] 不新增 migration。
+- [x] 不改 `KnowledgeRecord`、`record_task_links`、RAG token 格式。
+- [x] 不讓 AI 自動建立、修改、移動或刪除任務。
+- [x] 不做即時 AI 統整。
+- [x] 手機版會議紀錄工作流不列入 release gate。
+
+### 驗收標準
+
+- [ ] 多次任務狀態變更只形成一段「狀態變更摘要」。
+- [ ] 任務 A / B 同時討論時，AI 依任務分段，不混淆結論。
+- [ ] AI 草稿保留 `@[title](task:id)` token。
+- [ ] AI 不自動建立、修改、移動任務。
+- [ ] AI 失敗時不覆蓋原草稿。
+- [ ] 人類校稿後發布，DEV-008 任務知識仍可查到統整後片段。
+- [ ] 桌機與筆電 viewport 下，AI 統整中、錯誤、校稿、發布狀態不重疊、不遮住看板。
+
+### RD Handoff
+
+- `useRecordStore.saveDraft({ nodes })` 是發布流程入口。
+- `synthesizeMeetingDraft` 只更新 `draft.content` 與 synthesis 狀態。
+- Edge Function 使用 `GEMINI_API_KEY`，前端不得持有模型 key。
+- AI source package 包含 raw draft content、task discussion notes、meeting activities 與 task metadata。
+- `record_task_links` 仍由 inline task token 與 `syncTaskLinksFromRecordContent` 維持。
+
+### QA / QC Handoff
+
+- QA 以 UX 為主驗證：第一次發布是否進入 AI 整理、成功後是否清楚要求校稿、失敗時是否保留原草稿。
+- QC 需確認沒有 migration、沒有任務自動修改路徑、沒有 activity raw append path 回到 `saveDraft`。
+- 手機版會議紀錄工作流不列入 release gate。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-007-meeting-activity
+npm.cmd run verify:dev-008-task-knowledge
+npm.cmd run verify:dev-009-task-detail-quick-note
+npm.cmd run verify:dev-010-action-feedback
+npm.cmd run verify:dev-011-ai-meeting-synthesis
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] SPEC-011 已建立。
+- [x] QA-DEV-011 已建立。
+- [x] backlog 已登錄 DEV-011。
+- [x] documentation map 已登錄 DEV-011。
+- [x] 自動驗證全部通過。
+- [ ] QC 事實驗證。
+
+---
+
+## PM DEV-012：AI 會議紀錄自然語言品質提升
+
+日期：2026-06-07
+狀態：Ready for QC
+類型：交付點 / Product UX refinement
+承接：DEV-011 / DEV-008
+優先級：P1
+規格：`ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md`
+QA：`ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md`
+
+### 任務背景
+
+DEV-011 已把會議紀錄改成 AI 發布前統整，但輸出仍偏固定欄位填空，讀起來不像人類整理的會議紀要。DEV-012 要保留任務導向與 task tag 查找能力，同時把任務內容改成自然語言紀要。AI 只能整理會中實際變更、速記與任務詳情補記，不得用專案既有狀態補內容，也不得自行推論下一步。
+
+### RD Scope
+
+- [x] 新增 SPEC-012 與 QA-DEV-012。
+- [x] 更新 `src/utils/meetingRecordSynthesis.ts` deterministic fallback，改為自然語言任務紀要。
+- [x] 更新 `synthesize_meeting_record` Edge Function prompt，禁止五欄固定模板。
+- [x] 更新 synthesis source package，任務 metadata 僅保留 id/title；會議內容來源限於 rawContent 與 activities。
+- [x] Edge Function 預設模型改為 `gemini-3.5-flash`，並保留 `GEMINI_MEETING_SYNTHESIS_MODEL` override。
+- [x] 新增 `verify:dev-012-meeting-record-quality`。
+- [x] 更新 DEV-011 verifier，使其驗證任務導向與非流水帳，而不是舊五欄格式。
+
+### 非範圍
+
+- [x] 不新增 migration。
+- [x] 不改 `KnowledgeRecord`、`record_task_links`、RAG token 格式。
+- [x] 不讓 AI 自動建立、修改、移動或刪除任務。
+- [x] 不做即時 AI 統整。
+- [x] 手機版會議紀錄工作流不列入 release gate。
+
+### 驗收標準
+
+- [ ] AI/fallback 草稿保留 `## 本次會議總結`、`## 任務討論與結論`、`## 待校稿項目`。
+- [ ] 每個任務段落以 `### @[title](task:id)` 開頭。
+- [ ] 任務內容為自然語言紀要，不出現五欄固定模板。
+- [ ] 不輸出目前任務狀態、任務背景、既有備註或無會議資訊填充句。
+- [ ] `下一步` 只在人類明確寫出行動時出現。
+- [ ] 重複 task activity 被合併，不列逐筆 timestamp。
+- [ ] DEV-008 任務知識仍可抽出目前任務片段，不混入其他任務。
+- [ ] 模型 unavailable / not found 時，原草稿不被覆蓋並提示檢查 `GEMINI_MEETING_SYNTHESIS_MODEL`。
+
+### RD Handoff
+
+- `meetingRecordSynthesis.ts` 是本地與測試 fallback 的品質基準。
+- `createMeetingSynthesisInput` 不應把專案靜態狀態、description、detail notes、start/end date 當作可寫入內容來源。
+- Edge Function prompt 必須維持 JSON output，不可回 markdown code fence。
+- `gemini-3.5-flash` 是正式環境預設模型；若部署環境不可用，應由 env override 修正，不做 silent fallback。
+- 保留每任務 `### @[title](task:id)`，避免破壞 DEV-008 以 paragraph 抽任務片段的邏輯。
+
+### QA / QC Handoff
+
+- QA 使用 golden samples 驗證自然語言品質，不只看指令通過。
+- QC 需確認沒有 migration、沒有 AI 任務修改路徑、沒有五欄模板回流。
+- 正式環境需做一次模型 smoke test；若 `gemini-3.5-flash` 不可用，需確認錯誤清楚且原草稿保留。
+- 手機版會議紀錄工作流不列入 release gate。
+
+### 驗證命令
+
+```powershell
+npm.cmd run lint -- --quiet
+npm.cmd run verify:dev-008-task-knowledge
+npm.cmd run verify:dev-011-ai-meeting-synthesis
+npm.cmd run verify:dev-012-meeting-record-quality
+npm.cmd run build
+```
+
+### 狀態
+
+- [x] SPEC-012 已建立。
+- [x] QA-DEV-012 已建立。
+- [x] backlog 已登錄 DEV-012。
+- [x] documentation map 已登錄 DEV-012。
+- [x] 自動驗證全部通過。
+- [ ] QC 事實驗證。
+
+---
+
+## PM DEV-013：右鍵清單任務複製
+
+日期：2026-06-08
+狀態：Ready for QC
+類型：交付點 / Product UX refinement
+來源：使用者要求「增加任務複製功能，放在右鍵清單裡，複製任務包含子任務的所有資訊」
+優先級：P1
+規格：`ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md`
+
+### 任務背景
+
+使用者需要在任務右鍵清單直接複製任務，且複製結果要包含子任務所有資訊。PM 決策確認：複製選取任務的非封存子樹，根任務標題加「（副本）」，子任務標題保持原樣；只複製子樹內部依賴，外部依賴不複製。
+
+### 交付範圍
+
+- [x] 在全域任務右鍵選單加入「複製任務」。
+- [x] 在 `useWbsStore` 實作 `duplicateNodeTree`，集中處理資料複製、id remap、排序、持久化與 undo/redo。
+- [x] 複製任務本體與所有未封存 descendants，保留 description、detailNotes、status、assigneeId、collaboratorIds、tagIds、startDate、endDate、isDurationLocked、nodeType、kanbanStageId。
+- [x] 複製子樹內部 dependencies，並將 fromId/toId remap 到新任務 id。
+- [x] Supabase 持久化必須 parent-first，再寫入 dependencies，避免 parent id 解析競態。
+- [x] 複製完成後顯示 toast，回報複製任務數與內部依賴數。
+
+### 不納入範圍
+
+- 不複製會議/知識紀錄連結。
+- 不複製活動歷史。
+- 不複製 Google Calendar 外部同步事件。
+- 不複製連到子樹外部任務的 dependencies。
+
+### 驗證計畫
+
+- [x] 單一任務複製後成為同層 sibling，根標題加「（副本）」。
+- [x] 多層子任務複製後 hierarchy 與 order 正確。
+- [x] detailNotes deep copy，note id 不沿用舊 id。
+- [x] 內部依賴複製且指向新任務 id，外部依賴不複製。
+- [x] 權限不足時不產生部分複製。
+- [x] Undo 一次移除整棵複製子樹與複製出的依賴；redo 一次恢復。
+- [x] `npm.cmd run lint -- --quiet`
+- [ ] `npx tsc --noEmit`（目前被既有 DEV-011/DEV-012 未完成檔案阻擋，非 DEV-013 新增程式）
+- [x] `npm.cmd run build`
+- [x] DEV-013 verifier 通過。
+
+### RD handoff
+
+- `GlobalContextMenu` 只負責呈現入口、權限檢查提示與呼叫 store action。
+- `useWbsStore.duplicateNodeTree` 負責找出子樹、建立 id map、產生 copied nodes/dependencies、更新 state、持久化、activity log、undo/redo。
+- 權限採現有 `useBoardPermissions`：`create_task` 必要；若存在內部 dependency，`create_dependency` 也必要。
+
+### PM evidence
+
+- [x] SPEC-013 已建立。
+- [x] backlog 已登錄 DEV-013。
+- [x] dev_task 已登錄 DEV-013。
+- [x] documentation map 已登錄 DEV-013。
+- [x] RD 實作完成。
+- [ ] QA/QC 驗證完成。

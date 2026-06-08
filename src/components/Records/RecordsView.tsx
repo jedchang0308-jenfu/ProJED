@@ -4,6 +4,10 @@ import { BookOpenText, BriefcaseBusiness, CalendarClock, FileText, Plus } from '
 import useRecordStore from '../../store/useRecordStore';
 import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
 
+const formatRecordType = (type: string) => (type === 'meeting' ? '會議紀錄' : '個人工作紀錄');
+
+const formatRecordStatus = (status: string) => (status === 'published' ? '已發布' : '草稿');
+
 const RecordsView: React.FC = () => {
   const records = useRecordStore(state => state.records);
   const loading = useRecordStore(state => state.loading);
@@ -50,40 +54,51 @@ const RecordsView: React.FC = () => {
             <div className="mt-1 text-xs text-slate-500">本頁用於會後整理；開會時請回到看板啟動會議紀錄。</div>
           </div>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            {records.map(record => {
-              const time = record.type === 'meeting'
-                ? record.occurredAt
-                : record.endedAt || record.startedAt;
-              return (
-                <button
-                  key={record.id}
-                  type="button"
-                  onClick={() => openExistingRecord(record)}
-                  className="rounded-md border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/30"
-                >
-                  <div className="mb-3 flex items-start gap-3">
-                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-50 text-blue-500">
-                      {record.type === 'meeting' ? <CalendarClock size={16} /> : <BriefcaseBusiness size={16} />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-slate-900">{record.title}</span>
-                      <span className="mt-1 block text-xs text-slate-500">
-                        {time ? dayjs(time).format('YYYY/MM/DD HH:mm') : '未填時間'}
+          <div className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+            <div className="hidden grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px_84px] items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-500 md:grid">
+              <span>紀錄</span>
+              <span>摘要</span>
+              <span>狀態</span>
+              <span className="text-right">任務</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {records.map(record => {
+                const time = record.type === 'meeting'
+                  ? record.occurredAt
+                  : record.endedAt || record.startedAt;
+                const previewText = renderRecordContentAsPlainText(record.content).trim() || '尚無內容摘要';
+                return (
+                  <button
+                    key={record.id}
+                    type="button"
+                    onClick={() => openExistingRecord(record)}
+                    className="record-list-row grid w-full gap-3 px-4 py-3 text-left transition hover:bg-blue-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 md:grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px_84px] md:items-center md:gap-4"
+                  >
+                    <span className="flex min-w-0 items-start gap-3">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-50 text-blue-500">
+                        {record.type === 'meeting' ? <CalendarClock size={16} /> : <BriefcaseBusiness size={16} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-slate-900">{record.title}</span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          {time ? dayjs(time).format('YYYY/MM/DD HH:mm') : '未填時間'}
+                        </span>
                       </span>
                     </span>
-                  </div>
-                  <p className="line-clamp-3 min-h-[60px] text-xs leading-5 text-slate-600">
-                    {renderRecordContentAsPlainText(record.content)}
-                  </p>
-                  <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-500">
-                    <span>{record.type === 'meeting' ? '會議紀錄' : '個人工作紀錄'}</span>
-                    <span>{record.status === 'published' ? '已發布' : '草稿'}</span>
-                    <span>{record.taskLinks.length} 任務</span>
-                  </div>
-                </button>
-              );
-            })}
+                    <span className="line-clamp-2 text-xs leading-5 text-slate-600 md:text-sm">
+                      {previewText}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      <span>{formatRecordType(record.type)}</span>
+                      <span className={record.status === 'published' ? 'text-emerald-700' : 'text-amber-700'}>
+                        {formatRecordStatus(record.status)}
+                      </span>
+                    </span>
+                    <span className="text-xs font-medium text-slate-600 md:text-right">{record.taskLinks.length} 任務</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

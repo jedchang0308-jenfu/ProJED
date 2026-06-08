@@ -9,7 +9,7 @@
  * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { Check, PanelRightClose, PanelRightOpen, Plus, Save, Send, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -44,13 +44,6 @@ const BoardView = () => {
     const { addDependency, dependencies } = useWbsStore();
     const isRecordTaskSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
     const recordDraft = useRecordStore(s => s.draft);
-    const isMeetingMode = useRecordStore(s => s.isMeetingMode);
-    const isRecordPanelCollapsed = useRecordStore(s => s.isPanelCollapsed);
-    const toggleRecordPanelCollapsed = useRecordStore(s => s.togglePanelCollapsed);
-    const updateRecordDraft = useRecordStore(s => s.updateDraft);
-    const saveRecordDraft = useRecordStore(s => s.saveDraft);
-    const savingRecordDraft = useRecordStore(s => s.saving);
-    const exitMeetingMode = useRecordStore(s => s.exitMeetingMode);
     const exitRecordTaskSelectionMode = useRecordStore(s => s.exitTaskSelectionMode);
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
@@ -58,12 +51,6 @@ const BoardView = () => {
     const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
-    const canSaveMeetingRecord = Boolean(activeWorkspaceId && activeBoardId && recordDraft?.title.trim() && recordDraft?.content.trim());
-
-    const handleMeetingSave = async (status: 'draft' | 'published') => {
-        updateRecordDraft({ status });
-        await saveRecordDraft();
-    };
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
@@ -466,62 +453,6 @@ const BoardView = () => {
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
                 <ViewToolbar zIndex={10000} />
-
-                {isMeetingMode && recordDraft?.type === 'meeting' && (
-                    <div className="shrink-0 border-b border-emerald-200 bg-emerald-50 px-[10px] py-[6px]">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-                                <span className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                                    會議中
-                                </span>
-                                <span className="max-w-[280px] truncate font-semibold text-emerald-900" title={recordDraft.title}>
-                                    {recordDraft.title || '會議紀錄'}
-                                </span>
-                                <span className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                    已連結 {recordDraft.taskLinks.length} 任務
-                                </span>
-                                <span className="text-xs text-emerald-700">
-                                    看板維持一般編輯；任務變更會納入紀錄
-                                </span>
-                            </div>
-                            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={toggleRecordPanelCollapsed}
-                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                                >
-                                    {isRecordPanelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
-                                    {isRecordPanelCollapsed ? '展開速記' : '收合速記'}
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!canSaveMeetingRecord || savingRecordDraft}
-                                    onClick={() => handleMeetingSave('draft')}
-                                    className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:text-slate-300"
-                                >
-                                    <Save size={14} />
-                                    存草稿
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!canSaveMeetingRecord || savingRecordDraft}
-                                    onClick={() => handleMeetingSave('published')}
-                                    className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                >
-                                    <Send size={14} />
-                                    發布
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={exitMeetingMode}
-                                    className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                                >
-                                    結束會議
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {isRecordTaskSelectionMode && (
                     <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">

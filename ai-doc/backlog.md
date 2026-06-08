@@ -20,6 +20,9 @@
 | DEV-008 | Done | 交付點 | P1 | 任務會議細節快速查找 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` |
 | DEV-009 | Done | 交付點 | P1 | 會議模式任務詳情內快速補記 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` |
 | DEV-010 | Ready | 交付點 | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
+| DEV-011 | Ready for QC | 交付點 | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
+| DEV-012 | Ready for QC | 交付點 | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
+| DEV-013 | Ready for QC | 交付點 | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 
 ## DEV-002 範圍摘要
 
@@ -148,6 +151,44 @@ MVP 不包含：
 - 新增 migration 或調整 `KnowledgeRecord` / `record_task_links`。
 - AI 摘要、會議管理、跨 board 會議。
 
+## DEV-011 範圍摘要
+
+目標：將會議紀錄從逐筆 append 流水帳改為 AI 發布前統整草稿。AI 讀取速記、任務補記、meeting activity 與任務脈絡，產出任務導向草稿；人類校稿後才發布。
+
+MVP 必須包含：
+
+- 發布前先由後端 AI 統整 meeting draft。
+- AI 只更新 draft content，不修改任務。
+- 原始 activity 不逐筆進入 published 正文。
+- 保留 task tag，支援 DEV-008 任務知識查找。
+- AI 失敗時保留原草稿。
+
+MVP 不包含：
+
+- 即時 AI 統整。
+- 新增 migration 或修改紀錄資料格式。
+- AI 自動建立、修改、移動任務。
+
+## DEV-012 範圍摘要
+
+目標：提升 DEV-011 AI 草稿品質，讓會議紀錄更像人類整理出的任務紀要，而不是死板欄位填空。保留三個大章節與 task tag，但任務內容只整理會中實際變更、速記與任務詳情補記，不用專案既有狀態補內容，也不自行推論下一步。
+
+MVP 必須包含：
+
+- 任務段落以 `### @[title](task:id)` 開頭。
+- 任務內容使用自然語言摘要，不使用五欄固定模板。
+- 每個任務保留 1 段紀要；只有人類明確講到時才列下一步。
+- 不輸出目前任務狀態、任務背景、既有備註或沒有會議資訊的填充句。
+- Edge Function 預設模型為 `gemini-3.5-flash`，並保留 env override。
+- Golden samples verifier 檢查自然語言品質與 DEV-008 片段抽取相容性。
+
+MVP 不包含：
+
+- 新增 migration。
+- AI 自動修改任務。
+- 即時 AI 統整。
+- 手機版會議紀錄工作流。
+
 ## 後續候選交付
 
 | 候選項目 | 狀態 | 說明 |
@@ -181,6 +222,9 @@ MVP 不包含：
 | DEV-008 | Done | Product UX refinement | P1 | 任務會議細節快速查找 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` |
 | DEV-009 | Done | Product UX refinement | P1 | 會議模式任務詳情內快速補記 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` |
 | DEV-010 | Ready | Product UX refinement | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
+| DEV-011 | Ready for QC | Product UX refinement | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
+| DEV-012 | Ready for QC | Product UX refinement | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
+| DEV-013 | Ready for QC | Product UX refinement | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 
 ### DEV-003 摘要
 

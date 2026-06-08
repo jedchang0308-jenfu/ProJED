@@ -44,50 +44,50 @@ const assertEqual = (label, actual, expected) => {
   if (actual !== expected) failures.push(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 };
 
-const token = mentions.serializeTaskMention('task_1', '品質驗證測試任務 1');
+const token = mentions.serializeTaskMention('task_1', '會議中討論的任務 1');
 
 assertEqual('blank discussion is ignored', discussion.appendTaskDiscussionToRecordContent('', 'task_1', '任務', '   '), null);
 assertEqual(
   'multiline discussion normalizes into one record line',
-  discussion.normalizeMeetingTaskDiscussionText(' 客戶規格確認\n RD 下週三補圖 '),
-  '客戶規格確認 / RD 下週三補圖',
+  discussion.normalizeMeetingTaskDiscussionText(' 設計方向確認\n RD 先改資料流 '),
+  '設計方向確認 / RD 先改資料流',
 );
 
 const firstAppend = discussion.appendTaskDiscussionToRecordContent(
   '',
   'task_1',
-  '品質驗證測試任務 1',
-  '客戶規格確認',
+  '會議中討論的任務 1',
+  '設計方向確認',
   1780800000000,
 );
 assert('first append creates task discussion heading', firstAppend?.includes('## 任務討論'));
 assert('first append includes task mention token', firstAppend?.includes(token));
-assert('first append includes discussion text', firstAppend?.includes('客戶規格確認'));
+assert('first append includes discussion text', firstAppend?.includes('設計方向確認'));
 
 const existingContent = [
-  '會議開場',
+  '會議速記',
   '',
   '## 任務討論',
-  '- 09:00 舊討論',
+  '- 09:00 既有討論',
   '',
-  '## 會議中任務變更',
-  '- 09:10 任務狀態改變',
+  '## 本次會議總結',
+  '- 待 AI 統整。',
 ].join('\n');
 const secondAppend = discussion.appendTaskDiscussionToRecordContent(
   existingContent,
   'task_1',
-  '品質驗證測試任務 1',
+  '會議中討論的任務 1',
   '新增討論',
   1780800300000,
 );
 assert('second append keeps one task discussion heading', (secondAppend?.match(/## 任務討論/g) || []).length === 1);
 assert(
   'second append inserts before next heading',
-  (secondAppend?.indexOf('新增討論') ?? -1) < (secondAppend?.indexOf('## 會議中任務變更') ?? -1),
+  (secondAppend?.indexOf('新增討論') ?? -1) < (secondAppend?.indexOf('## 本次會議總結') ?? -1),
 );
 
 const snippets = taskKnowledge.extractTaskRecordSnippets(firstAppend || '', 'task_1');
-assert('DEV-008 task knowledge can read quick note', snippets.some(snippet => snippet.text.includes('客戶規格確認')));
+assert('DEV-008 task knowledge can read quick note', snippets.some(snippet => snippet.text.includes('設計方向確認')));
 
 const storeSource = readFileSync('src/store/useRecordStore.ts', 'utf8');
 for (const snippet of [
@@ -95,6 +95,7 @@ for (const snippet of [
   'appendTaskDiscussionToRecordContent(state.draft.content, nodeId, title, text)',
   'syncDraftContentLinks(state.draft, content)',
   'contentCursorOffset: content.length',
+  '...resetMeetingSynthesisState',
 ]) {
   assert(`useRecordStore missing snippet: ${snippet}`, storeSource.includes(snippet));
 }

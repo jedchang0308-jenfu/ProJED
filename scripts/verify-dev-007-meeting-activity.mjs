@@ -5,15 +5,17 @@ const read = (path) => readFileSync(path, 'utf8');
 const checks = [
   {
     path: 'src/store/useRecordStore.ts',
-    label: 'record store meeting activity buffer',
+    label: 'record store meeting activity source buffer',
     snippets: [
       'meetingActivities: MeetingTaskActivity[]',
-      'appendedMeetingActivityIds: string[]',
       'recordMeetingTaskActivity',
-      'appendMeetingActivitiesToDraft',
-      '## 會議中任務變更',
-      'serializeTaskMention(activity.nodeId, activity.title)',
-      'syncDraftContentLinks(draft, content)',
+      'createMeetingActivity(activity)',
+      'createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes)',
+      'meetingSynthesisStatus',
+    ],
+    forbiddenSnippets: [
+      'const appended = isMeetingMode',
+      'appendMeetingActivitiesToDraft(currentDraft',
     ],
   },
   {
@@ -54,11 +56,12 @@ const checks = [
     path: 'src/components/BoardView.tsx',
     label: 'meeting status wording',
     snippets: [
-      '看板維持一般編輯',
-      '任務變更會納入紀錄',
+      '看板維持一般編輯；任務變更會供 AI 統整',
+      'meetingSynthesisStatus',
+      'AI整理',
     ],
     forbiddenSnippets: [
-      '點議題會插入紀錄',
+      '任務變更會納入紀錄',
       'toggleMeetingTaskCapture',
     ],
   },
@@ -66,9 +69,9 @@ const checks = [
     path: 'src/components/Records/RecordSidebar.tsx',
     label: 'meeting activity sidebar evidence',
     snippets: [
-      '本次會議變更',
+      'AI 統整來源：任務變更',
       'meetingActivities.length',
-      '插入任務',
+      '發布前會先由 AI 統整草稿',
     ],
   },
 ];

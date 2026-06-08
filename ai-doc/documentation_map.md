@@ -23,6 +23,9 @@
 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 | 任務詳情中的會議細節快速查找；承接 DEV-002 / DEV-007 的 task knowledge UX refinement。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 | 會議模式下任務詳情內快速補記；承接 DEV-005 / DEV-007 / DEV-008 的 meeting workflow UX refinement。 |
 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Ready | DEV-010 | 會議紀錄操作按鈕狀態溝通設計；承接 DEV-005 / DEV-006 / DEV-007 / DEV-009 的 meeting workflow UX refinement。 |
+| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Ready for QC | DEV-011 | AI 任務導向會議紀錄統整工作流；承接 DEV-007 / DEV-008 / DEV-009 / DEV-010 的 meeting record synthesis refinement。 |
+| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Ready for QC | DEV-012 | AI 會議紀錄自然語言品質提升；承接 DEV-011 / DEV-008 的 meeting record synthesis quality refinement。 |
+| `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Ready for QC | DEV-013 | 定義右鍵清單任務複製，包含子任務欄位與子樹內部依賴複製。 |
 
 ## 目前交付邊界
 
@@ -35,6 +38,9 @@
 - DEV-008：任務會議細節快速查找。
 - DEV-009：會議模式任務詳情內快速補記。
 - DEV-010：會議紀錄操作按鈕狀態溝通設計。
+- DEV-011：AI 任務導向會議紀錄統整工作流。
+- DEV-012：AI 會議紀錄自然語言品質提升。
+- DEV-013：右鍵清單任務複製，包含子任務與子樹內部依賴。
 
 DEV-002 的產品邊界：
 
@@ -132,6 +138,38 @@ DEV-010 的產品邊界：
 - 新增資料模型或 migration。
 - AI 摘要、完整會議管理或跨 board 會議。
 
+DEV-011 的產品邊界：
+
+- 會議紀錄發布前先由後端 AI 統整成任務導向草稿。
+- AI 只更新 meeting draft content，不建立、修改、移動或刪除任務。
+- 原始 meeting activity 僅作為 AI input source，不逐筆進入 published 正文。
+- 人類必須校稿後再次發布。
+- published 正文保留 `@[title](task:id)`，讓 DEV-008 任務知識查找可用。
+
+不包含：
+
+- 即時 AI 統整。
+- 手機版會議紀錄工作流。
+- 新增資料模型或 migration。
+- 完整會議管理、跨 board 會議或多記錄者即時協作。
+
+DEV-012 的產品邊界：
+
+- 保留 DEV-011 的發布前 AI 統整流程。
+- 保留三個大章節與每任務 `### @[title](task:id)` heading。
+- 任務段落改成自然語言任務紀要，不使用五欄固定模板。
+- 會議紀錄只整理 rawContent 與 meeting activity，不使用專案既有狀態補內容。
+- `下一步` 只在會議速記或任務補記中明確出現行動時輸出。
+- Edge Function 預設模型為 `gemini-3.5-flash`，並保留 env override。
+- Golden samples verifier 檢查自然語言品質與 DEV-008 任務片段抽取相容性。
+
+不包含：
+
+- 新增資料模型或 migration。
+- AI 自動修改任務。
+- 即時 AI 統整。
+- 手機版會議紀錄工作流。
+
 ## 建議 QA / QC 文件位置
 
 當 DEV-002 進入實作前，建議新增：
@@ -160,6 +198,9 @@ DEV-010 的產品邊界：
 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 / DEV-002 follow-up / DEV-007 follow-up | 定義任務詳情中的任務知識查找、片段抽取與任務內搜尋。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 / DEV-005 follow-up / DEV-008 follow-up | 定義會議模式任務詳情內快速補記與 meeting draft append 行為。 |
 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Ready | DEV-010 / DEV-005 follow-up / DEV-009 follow-up | 定義會議紀錄操作按鈕狀態、阻塞原因提示、草稿/發布條件拆分與離開保護。 |
+| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Ready for QC | DEV-011 / DEV-007 follow-up / DEV-008 follow-up / DEV-009 follow-up | 定義 AI 任務導向會議紀錄統整、發布前校稿流程、後端模型執行與不改任務邊界。 |
+| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Ready for QC | DEV-012 / DEV-011 follow-up / DEV-008 follow-up | 定義 AI 會議紀錄自然語言品質、任務紀要格式、模型預設與 golden samples 驗證。 |
+| `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Ready for QC | DEV-013 | 定義右鍵清單任務複製、任務子樹欄位保留、內部依賴 remap 與驗證邊界。 |
 
 ### Current Product Direction
 
@@ -170,6 +211,7 @@ DEV-010 的產品邊界：
 - DEV-005 進一步調整會議中的主視角：開會時應停留在議題看板，紀錄欄只作為輔助速記，不再讓紀錄庫頁成為會議主畫面。
 - DEV-007 修正會議看板互動：會議中仍使用一般看板編輯，任務變更由背景 meeting activity 納入紀錄。
 - DEV-010 補齊會議狀態列的溝通設計：按鈕不可操作時必須顯示原因與下一步，避免使用者只看到灰色按鈕。
+- DEV-012 提升 AI 會議紀錄品質：保留任務導向與 task tag，但輸出改為自然語言任務紀要，且 AI 不補寫人類沒講過或沒做過的事。
 
 ### Delivery Reports
 
@@ -192,6 +234,8 @@ DEV-010 的產品邊界：
 | `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | Ready for QC | DEV-008 | 任務會議細節快速查找驗證計畫，包含任務片段抽取、搜尋、fallback 與原始紀錄追溯。 |
 | `ai-doc/qa/QA-DEV-009-meeting-task-detail-quick-note.md` | Passed by QC | DEV-009 | 會議模式任務詳情內快速補記驗證計畫，包含 meeting draft append、task tag 與資料邊界。 |
 | `ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md` | Ready | DEV-010 | 會議紀錄操作按鈕狀態溝通 UX 驗證計畫，包含 disabled reason、tooltip/focus、離開保護與桌機/筆電 viewport。 |
+| `ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md` | Ready for QC | DEV-011 | AI 任務導向會議紀錄統整 UX 驗證計畫，包含實際輸入、AI 失敗保留草稿、校稿發布與桌機/筆電 viewport。 |
+| `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | Ready for QC | DEV-012 | AI 會議紀錄自然語言品質驗證計畫，包含 golden samples、實際輸入、模型不可用與任務知識查找相容性。 |
 
 ### QC Fact Reports
 

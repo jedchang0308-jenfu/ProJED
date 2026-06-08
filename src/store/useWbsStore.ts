@@ -52,6 +52,10 @@ export interface WbsBoardActions {
    * 軟刪除任務節點 (只標記 isArchived)
    */
   removeNode: (id: string) => void;
+  duplicateNodeTree: (
+    id: string,
+    options?: { includeInternalDependencies?: boolean; canCreateDependency?: boolean }
+  ) => Promise<{ rootId: string; nodeCount: number; dependencyCount: number } | null>;
 
   /**
    * 變更節點的階層關係 (拖曳到另一個父節點下)
@@ -144,6 +148,12 @@ const normalizeSmartStatusUpdates = (
 
 const createDependencyId = () =>
   `dep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createNodeId = () =>
+  `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+const createNoteId = () =>
+  `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 /**
  * 依賴標籤生成器（a, b, c, ..., aa, ab...）
@@ -444,6 +454,218 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         undo: () => get().removeNode(normalizedNode.id),
         redo: () => get().addNode(normalizedNode),
     });
+  },
+
+  duplicateNodeTree: async (id, options = {}) => {
+    const state = get();
+    const sourceNode = state.nodes[id];
+    if (!sourceNode || sourceNode.isArchived) return null;
+
+    const includeInternalDependencies = options.includeInternalDependencies ?? true;
+    const visited = new Set<string>();
+    const sourceTree: TaskNode[] = [];
+
+    const collectTree = (nodeId: string) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+
+      const node = state.nodes[nodeId];
+      if (!node || node.isArchived) return;
+
+      sourceTree.push(node);
+
+      const children = (state.parentNodesIndex[nodeId] || [])
+        .map(childId => state.nodes[childId])
+        .filter((child): child is TaskNode => Boolean(child) && !child.isArchived)
+        .sort((a, b) => a.order - b.order);
+
+      children.forEach(child => collectTree(child.id));
+    };
+
+    collectTree(id);
+    if (sourceTree.length === 0) return null;
+
+    const sourceIds = new Set(sourceTree.map(node => node.id));
+    const internalDependencies = state.dependencies.filter(dep =>
+      sourceIds.has(dep.fromId) && sourceIds.has(dep.toId)
+    );
+
+    if (includeInternalDependencies && internalDependencies.length > 0 && options.canCreateDependency === false) {
+      throw new Error('複製此任務需要建立依賴關係權限，否則無法完整複製子樹內部依賴。');
+    }
+
+    const idMap = new Map(sourceTree.map(node => [node.id, createNodeId()]));
+    const now = Date.now();
+    const parentKey = sourceNode.parentId || 'root';
+    const siblings = (state.parentNodesIndex[parentKey] || [])
+      .map(siblingId => state.nodes[siblingId])
+      .filter((sibling): sibling is TaskNode => Boolean(sibling) && sibling.boardId === sourceNode.boardId && !sibling.isArchived)
+      .sort((a, b) => a.order - b.order);
+    const currentIndex = siblings.findIndex(sibling => sibling.id === sourceNode.id);
+    const nextSibling = currentIndex >= 0 ? siblings[currentIndex + 1] : null;
+    const copiedRootOrder = nextSibling ? (sourceNode.order + nextSibling.order) / 2 : sourceNode.order + 1;
+
+    const copiedNodes = sourceTree.map((node) => {
+      const copiedId = idMap.get(node.id);
+      if (!copiedId) throw new Error(`Missing duplicated node id for ${node.id}.`);
+
+      const isRoot = node.id === sourceNode.id;
+      const parentId = isRoot
+        ? sourceNode.parentId || null
+        : node.parentId
+          ? idMap.get(node.parentId) ?? null
+          : null;
+
+      const copiedNode: TaskNode = {
+        ...node,
+        id: copiedId,
+        parentId,
+        title: isRoot ? `${node.title || '未命名任務'}（副本）` : node.title,
+        detailNotes: node.detailNotes?.map(note => ({
+          ...note,
+          id: createNoteId(),
+        })),
+        collaboratorIds: node.collaboratorIds ? [...node.collaboratorIds] : undefined,
+        tagIds: node.tagIds ? [...node.tagIds] : undefined,
+        order: isRoot ? copiedRootOrder : node.order,
+        createdAt: now,
+        updatedAt: now,
+        isArchived: false,
+      };
+
+      return applySmartStatus(copiedNode);
+    });
+
+    const copiedDependencies = includeInternalDependencies
+      ? internalDependencies.map(dep => ({
+          ...dep,
+          id: createDependencyId(),
+          fromId: idMap.get(dep.fromId) || dep.fromId,
+          toId: idMap.get(dep.toId) || dep.toId,
+        }))
+      : [];
+
+    const copiedNodeIds = new Set(copiedNodes.map(node => node.id));
+    const copiedDependencyIds = new Set(copiedDependencies.map(dep => dep.id));
+
+    const persistDuplicate = async () => {
+      for (const node of copiedNodes) {
+        if (node.workspaceId && node.boardId) {
+          await nodeService.create(node.workspaceId, node.boardId, node);
+        }
+      }
+
+      for (const dep of copiedDependencies) {
+        const node = copiedNodes.find(item => item.id === dep.fromId);
+        if (node?.workspaceId && node.boardId) {
+          await dependencyService.set(node.workspaceId, node.boardId, dep);
+        }
+      }
+    };
+
+    const applyDuplicateState = () => {
+      const current = get();
+      const nextNodes = { ...current.nodes };
+      copiedNodes.forEach(node => {
+        nextNodes[node.id] = node;
+      });
+
+      const existingDependencies = current.dependencies.filter(dep => !copiedDependencyIds.has(dep.id));
+      set({
+        nodes: nextNodes,
+        dependencies: [...existingDependencies, ...copiedDependencies],
+      });
+      get()._buildIndices(nextNodes);
+    };
+
+    const logDuplicateActivity = () => {
+      copiedNodes.forEach(node => {
+        logTaskActivity(node, 'task_created', {
+          source: 'duplicate_task_tree',
+          sourceTaskId: sourceNode.id,
+          after: {
+            parentId: node.parentId,
+            status: node.status,
+            assigneeId: node.assigneeId ?? null,
+            collaboratorIds: node.collaboratorIds ?? [],
+            startDate: node.startDate ?? null,
+            endDate: node.endDate ?? null,
+            order: node.order,
+          },
+        });
+        recordMeetingTaskActivity(node, 'task_created', {
+          source: 'duplicate_task_tree',
+          sourceTaskId: sourceNode.id,
+          after: {
+            parentId: node.parentId,
+            status: node.status,
+            assigneeId: node.assigneeId ?? null,
+            collaboratorIds: node.collaboratorIds ?? [],
+            startDate: node.startDate ?? null,
+            endDate: node.endDate ?? null,
+            order: node.order,
+          },
+        });
+      });
+
+      copiedDependencies.forEach(dep => {
+        logDependencyActivity(get().nodes[dep.fromId], dep, 'dependency_created', {
+          source: 'duplicate_task_tree',
+          sourceTaskId: sourceNode.id,
+          after: dep,
+        });
+      });
+    };
+
+    const removeDuplicate = async () => {
+      const current = get();
+      const nextNodes = { ...current.nodes };
+      copiedNodeIds.forEach(nodeId => {
+        delete nextNodes[nodeId];
+      });
+
+      set({
+        nodes: nextNodes,
+        dependencies: current.dependencies.filter(dep => !copiedDependencyIds.has(dep.id)),
+      });
+      get()._buildIndices(nextNodes);
+
+      for (const dep of copiedDependencies) {
+        const node = copiedNodes.find(item => item.id === dep.fromId);
+        if (node?.workspaceId && node.boardId) {
+          await dependencyService.delete(node.workspaceId, node.boardId, dep.id);
+        }
+      }
+
+      for (const node of [...copiedNodes].reverse()) {
+        if (node.workspaceId && node.boardId) {
+          await nodeService.delete(node.workspaceId, node.boardId, node.id);
+        }
+      }
+    };
+
+    await persistDuplicate();
+    applyDuplicateState();
+    logDuplicateActivity();
+
+    useUndoStore.getState().pushUndo({
+      label: '複製任務',
+      undo: () => { void removeDuplicate().catch(console.error); },
+      redo: () => {
+        void persistDuplicate()
+          .then(() => {
+            applyDuplicateState();
+            logDuplicateActivity();
+          })
+          .catch(console.error);
+      },
+    });
+
+    return {
+      rootId: idMap.get(sourceNode.id) || copiedNodes[0].id,
+      nodeCount: copiedNodes.length,
+      dependencyCount: copiedDependencies.length,
+    };
   },
 
   updateNode: (id, updates) => {

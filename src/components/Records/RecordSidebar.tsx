@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { BookOpenText, ChevronLeft, ChevronRight, FileText, PanelRightClose, PanelRightOpen, Plus, Save, Send, Trash2, UsersRound } from 'lucide-react';
+import { BookOpenText, CheckCircle2, ChevronLeft, ChevronRight, FileText, PanelRightClose, PanelRightOpen, Plus, Save, Send, Sparkles, Trash2, UsersRound } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -27,6 +27,40 @@ const recordTypeLabel = (type: KnowledgeRecordType) =>
 
 const statusLabel = (status: KnowledgeRecordStatus) =>
   status === 'published' ? '已發布' : status === 'archived' ? '已封存' : '草稿';
+
+const RECORD_SIDEBAR_WIDTH_STORAGE_KEY = 'projed-record-sidebar-width';
+const DEFAULT_RECORD_SIDEBAR_WIDTH = 390;
+const MIN_RECORD_SIDEBAR_WIDTH = 320;
+const MAX_RECORD_SIDEBAR_WIDTH = 760;
+const RECORD_SIDEBAR_MAIN_VIEW_MIN_WIDTH = 560;
+
+const clampRecordSidebarWidth = (value: number) => {
+  const viewportWidth = typeof window === 'undefined' ? 1365 : window.innerWidth;
+  const viewportMaxWidth = Math.max(
+    MIN_RECORD_SIDEBAR_WIDTH,
+    Math.min(MAX_RECORD_SIDEBAR_WIDTH, viewportWidth - RECORD_SIDEBAR_MAIN_VIEW_MIN_WIDTH)
+  );
+  return Math.min(Math.max(value, MIN_RECORD_SIDEBAR_WIDTH), viewportMaxWidth);
+};
+
+const readRecordSidebarWidth = () => {
+  if (typeof window === 'undefined') return DEFAULT_RECORD_SIDEBAR_WIDTH;
+  try {
+    const stored = Number(window.localStorage.getItem(RECORD_SIDEBAR_WIDTH_STORAGE_KEY));
+    return Number.isFinite(stored) ? clampRecordSidebarWidth(stored) : DEFAULT_RECORD_SIDEBAR_WIDTH;
+  } catch {
+    return DEFAULT_RECORD_SIDEBAR_WIDTH;
+  }
+};
+
+const persistRecordSidebarWidth = (width: number) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(RECORD_SIDEBAR_WIDTH_STORAGE_KEY, String(Math.round(width)));
+  } catch {
+    // Ignore storage failures; resizing should still work during the current session.
+  }
+};
 
 const visibilityLabel = (visibility: KnowledgeRecordVisibility) => {
   if (visibility === 'private') return '私人';
@@ -58,6 +92,10 @@ const RecordSidebar: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const nodes = useWbsStore(state => state.nodes);
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
+  const [sidebarWidth, setSidebarWidth] = React.useState(readRecordSidebarWidth);
+  const [isResizing, setIsResizing] = React.useState(false);
+  const sidebarWidthRef = React.useRef(sidebarWidth);
+  const resizeCleanupRef = React.useRef<(() => void) | null>(null);
   const records = useRecordStore(state => state.records);
   const draft = useRecordStore(state => state.draft);
   const loading = useRecordStore(state => state.loading);
@@ -75,6 +113,11 @@ const RecordSidebar: React.FC = () => {
   const contentCursorOffset = useRecordStore(state => state.contentCursorOffset);
   const setContentCursorOffset = useRecordStore(state => state.setContentCursorOffset);
   const meetingActivities = useRecordStore(state => state.meetingActivities);
+  const meetingSynthesisStatus = useRecordStore(state => state.meetingSynthesisStatus);
+  const meetingSynthesisError = useRecordStore(state => state.meetingSynthesisError);
+  const meetingSynthesisWarnings = useRecordStore(state => state.meetingSynthesisWarnings);
+  const meetingSynthesisProvider = useRecordStore(state => state.meetingSynthesisProvider);
+  const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const setDraftTaskRole = useRecordStore(state => state.setDraftTaskRole);
   const enterTaskSelectionMode = useRecordStore(state => state.enterTaskSelectionMode);
   const saveDraft = useRecordStore(state => state.saveDraft);
@@ -90,15 +133,119 @@ const RecordSidebar: React.FC = () => {
     return () => document.removeEventListener('open-knowledge-record', handleOpenRecord);
   }, [openExistingRecord, records]);
 
+  React.useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
+
+  React.useEffect(() => {
+    const handleViewportResize = () => {
+      setSidebarWidth(previousWidth => {
+        const nextWidth = clampRecordSidebarWidth(previousWidth);
+        sidebarWidthRef.current = nextWidth;
+        persistRecordSidebarWidth(nextWidth);
+        return nextWidth;
+      });
+    };
+
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, []);
+
+  React.useEffect(() => () => resizeCleanupRef.current?.(), []);
+
   if (!isPanelOpen) return null;
 
   const selectedLinks = draft?.taskLinks || [];
-  const canSave = Boolean(activeWorkspaceId && activeBoardId && draft && draft.title.trim() && draft.content.trim());
+  const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
+  const needsMeetingSynthesis = Boolean(isMeetingMode && draft?.type === 'meeting' && meetingSynthesisStatus !== 'ready');
+  const isPublished = Boolean(
+    draft?.id &&
+    lastSaveFeedback?.recordId === draft.id &&
+    lastSaveFeedback.status === 'published'
+  );
+  const publishedAt = lastSaveFeedback?.savedAt ? dayjs(lastSaveFeedback.savedAt).format('HH:mm') : '';
+  const canSave = Boolean(activeWorkspaceId && activeBoardId && draft && draft.title.trim() && (isMeetingMode || draft.content.trim()));
+  const canPublish = Boolean(
+    activeWorkspaceId &&
+    activeBoardId &&
+    draft &&
+    draft.title.trim() &&
+    (needsMeetingSynthesis || draft.content.trim()) &&
+    !isPublished
+  );
+  const publishLabel = isPublished
+    ? '已發布'
+    : meetingSynthesisStatus === 'error'
+    ? '重試 AI'
+    : needsMeetingSynthesis
+      ? 'AI整理'
+      : '發布';
+  const meetingStatusText = isPublished
+    ? `會議紀錄已發布 ${publishedAt}，可在紀錄庫與任務知識查找`
+    : meetingSynthesisStatus === 'synthesizing'
+      ? 'AI 正在整理草稿'
+      : meetingSynthesisStatus === 'ready'
+        ? 'AI 已整理，請校稿後發布'
+        : meetingSynthesisStatus === 'error'
+          ? `AI 統整失敗：${meetingSynthesisError || '請重試'}`
+          : '看板維持一般編輯；任務變更會供 AI 統整';
 
   const handleSave = async (status: KnowledgeRecordStatus) => {
     updateDraft({ status });
-    await saveDraft();
+    await saveDraft({ nodes });
   };
+
+  const applySidebarWidth = (nextWidth: number, persist = false) => {
+    const clampedWidth = clampRecordSidebarWidth(nextWidth);
+    sidebarWidthRef.current = clampedWidth;
+    setSidebarWidth(clampedWidth);
+    if (persist) persistRecordSidebarWidth(clampedWidth);
+  };
+
+  const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCleanupRef.current?.();
+
+    const startX = event.clientX;
+    const startWidth = sidebarWidthRef.current;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      applySidebarWidth(startWidth + startX - moveEvent.clientX);
+    };
+
+    const cleanup = () => {
+      setIsResizing(false);
+      persistRecordSidebarWidth(sidebarWidthRef.current);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+      resizeCleanupRef.current = null;
+    };
+
+    resizeCleanupRef.current = cleanup;
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    applySidebarWidth(sidebarWidth + (event.key === 'ArrowLeft' ? 24 : -24), true);
+  };
+
+  const sidebarResizeStyle = {
+    '--record-sidebar-width': `${sidebarWidth}px`,
+  } as React.CSSProperties;
 
   if (isPanelCollapsed) {
     return (
@@ -124,7 +271,27 @@ const RecordSidebar: React.FC = () => {
   }
 
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-30 flex max-h-[48vh] w-full shrink-0 flex-col border-t border-slate-200 bg-white shadow-2xl sm:relative sm:inset-auto sm:z-auto sm:max-h-none sm:w-[390px] sm:border-l sm:border-t-0 sm:shadow-sm">
+    <aside
+      className="fixed inset-x-0 bottom-0 z-30 flex max-h-[48vh] w-full shrink-0 flex-col border-t border-slate-200 bg-white shadow-2xl sm:relative sm:inset-auto sm:z-auto sm:max-h-none sm:w-[var(--record-sidebar-width)] sm:border-l sm:border-t-0 sm:shadow-sm"
+      style={sidebarResizeStyle}
+    >
+      <div
+        role="separator"
+        aria-label="調整紀錄欄寬度"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_RECORD_SIDEBAR_WIDTH}
+        aria-valuemax={MAX_RECORD_SIDEBAR_WIDTH}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        onPointerDown={handleResizeStart}
+        onKeyDown={handleResizeKeyDown}
+        title="拖拉調整紀錄欄寬度；方向鍵也可微調"
+        className={`record-sidebar-resize-handle absolute left-0 top-0 z-20 hidden h-full w-3 -translate-x-1/2 cursor-col-resize items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:flex ${
+          isResizing ? 'bg-blue-50/80' : 'hover:bg-blue-50/70'
+        }`}
+      >
+        <span className={`h-12 w-0.5 rounded-full ${isResizing ? 'bg-blue-500' : 'bg-slate-300'}`} />
+      </div>
       <div className="flex h-11 items-center justify-between border-b border-slate-200 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <BookOpenText size={16} className="text-blue-500" />
@@ -174,7 +341,66 @@ const RecordSidebar: React.FC = () => {
         <section className="border-b border-slate-100 p-3">
           {draft ? (
             <div className="space-y-3">
-              {!isMeetingMode ? (
+              {isMeetingMode ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                        <span className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                          會議中
+                        </span>
+                        <span className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          已連結 {draft.taskLinks.length} 任務
+                        </span>
+                      </div>
+                      <div className="truncate text-sm font-semibold text-emerald-950" title={draft.title}>
+                        {draft.title || '會議紀錄'}
+                      </div>
+                      <div className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-emerald-700">
+                        {isPublished ? <CheckCircle2 size={13} className="mt-0.5 shrink-0" /> : <Sparkles size={13} className="mt-0.5 shrink-0" />}
+                        <span>{meetingStatusText}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={togglePanelCollapsed}
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                    >
+                      <PanelRightClose size={14} />
+                      收合速記
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canSave || saving || isSynthesizing}
+                      onClick={() => handleSave('draft')}
+                      title={!canSave ? '請先輸入會議標題。' : undefined}
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                    >
+                      <Save size={14} />
+                      存草稿
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canPublish || saving || isSynthesizing}
+                      onClick={() => handleSave('published')}
+                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入會議標題；AI整理後再發布。' : needsMeetingSynthesis ? '先產生 AI 統整草稿，校稿後再發布。' : undefined}
+                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {isPublished ? <CheckCircle2 size={14} /> : <Send size={14} />}
+                      {publishLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exitMeetingMode}
+                      className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      結束會議
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {(['meeting', 'work_log'] as KnowledgeRecordType[]).map(type => (
                     <button
@@ -190,10 +416,6 @@ const RecordSidebar: React.FC = () => {
                       {recordTypeLabel(type)}
                     </button>
                   ))}
-                </div>
-              ) : (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
-                  會議模式：主畫面維持一般看板編輯；任務狀態、移動與關鍵變更會在儲存時納入紀錄。
                 </div>
               )}
 
@@ -274,7 +496,7 @@ const RecordSidebar: React.FC = () => {
               {isMeetingMode ? (
                 <div className="rounded-md border border-emerald-200 bg-emerald-50">
                   <div className="flex items-center justify-between border-b border-emerald-100 px-3 py-2">
-                    <span className="text-xs font-semibold text-emerald-800">本次會議變更</span>
+                    <span className="text-xs font-semibold text-emerald-800">AI 統整來源：任務變更</span>
                     <span className="rounded-md bg-white px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
                       {meetingActivities.length}
                     </span>
@@ -296,6 +518,47 @@ const RecordSidebar: React.FC = () => {
                       </div>
                     )}
                   </div>
+                </div>
+              ) : null}
+
+              {isMeetingMode ? (
+                <div className={`rounded-md border px-3 py-2 text-xs leading-5 ${
+                  isPublished
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : meetingSynthesisStatus === 'error'
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : meetingSynthesisStatus === 'ready'
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-amber-200 bg-amber-50 text-amber-800'
+                }`}>
+                  <div className="flex items-center gap-2 font-semibold">
+                    {isPublished ? <CheckCircle2 size={14} /> : <Sparkles size={14} />}
+                    {isPublished
+                      ? `會議紀錄已發布 ${publishedAt}`
+                      : meetingSynthesisStatus === 'synthesizing'
+                        ? 'AI 正在整理會議草稿'
+                        : meetingSynthesisStatus === 'ready'
+                          ? 'AI 已整理，請校稿後發布'
+                          : meetingSynthesisStatus === 'error'
+                            ? 'AI 統整失敗，原草稿已保留'
+                            : '發布前會先由 AI 統整草稿'}
+                  </div>
+                  <div className="mt-1">
+                    {isPublished
+                      ? '已儲存為正式紀錄，可在紀錄庫與任務相關紀錄中查找。'
+                      : meetingSynthesisStatus === 'ready'
+                        ? `草稿來源：${meetingSynthesisProvider || 'meeting synthesis'}。請確認結論、決議、待辦與阻塞。`
+                        : meetingSynthesisStatus === 'error'
+                          ? meetingSynthesisError
+                          : 'AI 會讀取速記、任務補記與任務變更摘要；不會自動修改任務。'}
+                  </div>
+                  {meetingSynthesisWarnings.length ? (
+                    <ul className="mt-1 list-disc pl-4">
+                      {meetingSynthesisWarnings.slice(0, 2).map(warning => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -365,38 +628,42 @@ const RecordSidebar: React.FC = () => {
 
               {error ? <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div> : null}
 
-              <div className="flex items-center justify-between gap-2">
-                {draft.id ? (
-                  <button
-                    type="button"
-                    onClick={() => draft.id && archiveRecord(draft.id)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-red-200 px-3 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 size={13} />
-                    封存
-                  </button>
-                ) : <span />}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={!canSave || saving}
-                    onClick={() => handleSave('draft')}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                  >
-                    <Save size={13} />
-                    存草稿
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!canSave || saving}
-                    onClick={() => handleSave('published')}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    <Send size={13} />
-                    發布
-                  </button>
+              {!isMeetingMode ? (
+                <div className="flex items-center justify-between gap-2">
+                  {draft.id ? (
+                    <button
+                      type="button"
+                      onClick={() => draft.id && archiveRecord(draft.id)}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-red-200 px-3 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 size={13} />
+                      封存
+                    </button>
+                  ) : <span />}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!canSave || saving || isSynthesizing}
+                      onClick={() => handleSave('draft')}
+                      title={!canSave ? '請先輸入標題。' : undefined}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                    >
+                      <Save size={13} />
+                      存草稿
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canPublish || saving || isSynthesizing}
+                      onClick={() => handleSave('published')}
+                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入標題；AI整理後再發布。' : needsMeetingSynthesis ? '先產生 AI 統整草稿，校稿後再發布。' : undefined}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      {isPublished ? <CheckCircle2 size={13} /> : <Send size={13} />}
+                      {publishLabel}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-slate-200 px-3 py-6 text-center">

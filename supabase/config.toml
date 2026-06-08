@@ -386,6 +386,9 @@ verify_jwt = false
 [functions.calendar-feed]
 verify_jwt = false
 
+[functions.synthesize_meeting_record]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

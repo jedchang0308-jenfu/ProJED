@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { CheckCircle2, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound } from 'lucide-react';
+import { CheckCircle2, Copy, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -19,6 +19,7 @@ export const GlobalContextMenu: React.FC = () => {
   const addNode = useWbsStore((state) => state.addNode);
   const removeNode = useWbsStore((state) => state.removeNode);
   const updateNode = useWbsStore((state) => state.updateNode);
+  const duplicateNodeTree = useWbsStore((state) => state.duplicateNodeTree);
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency } = useBoardPermissions();
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
@@ -291,6 +292,28 @@ export const GlobalContextMenu: React.FC = () => {
     setContextMenuState(null);
   };
 
+  const handleDuplicate = async () => {
+    if (!canCreateTask) return;
+    if (!contextMenuState) return;
+
+    try {
+      const result = await duplicateNodeTree(contextMenuState.nodeId, {
+        includeInternalDependencies: true,
+        canCreateDependency,
+      });
+      if (result) {
+        const dependencyText = result.dependencyCount > 0
+          ? `，包含 ${result.dependencyCount} 個內部依賴`
+          : '';
+        toast.success(`已複製 ${result.nodeCount} 個任務${dependencyText}。`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '複製任務失敗。');
+    } finally {
+      setContextMenuState(null);
+    }
+  };
+
   const handleOpenDetails = () => {
     if (!contextMenuState) return;
 
@@ -415,6 +438,15 @@ export const GlobalContextMenu: React.FC = () => {
             >
               <Plus size={14} className="flex-shrink-0 text-blue-500" />
               <span>新增下層任務</span>
+            </button>
+
+            <button
+              onClick={() => void handleDuplicate()}
+              disabled={!canCreateTask}
+              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Copy size={14} className="flex-shrink-0 text-slate-500" />
+              <span>複製任務</span>
             </button>
 
             {isDependencySupportedView && (
