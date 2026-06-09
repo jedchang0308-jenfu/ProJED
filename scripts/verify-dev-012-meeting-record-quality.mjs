@@ -165,7 +165,9 @@ for (const forbiddenSource of [
 }
 
 const edgeSource = readFileSync('supabase/functions/synthesize_meeting_record/index.ts', 'utf8');
-assert('edge default model is gemini-3.5-flash', edgeSource.includes("|| 'gemini-3.5-flash'"));
+assert('edge default model is gemini-3.5-flash', edgeSource.includes("configuredModel || 'gemini-3.5-flash'"));
+assert('edge fallback model is explicit', edgeSource.includes("'gemini-3.1-flash-lite'"));
+assert('edge fallback warning is surfaced', edgeSource.includes('不可用，已改用'));
 assert('edge prompt asks for natural language', edgeSource.includes('自然語言'));
 assert('edge prompt bans fixed five-column template', edgeSource.includes('不要使用固定五欄填空模板'));
 assert('edge prompt bans static task metadata as content', edgeSource.includes('不要把 task.status'));

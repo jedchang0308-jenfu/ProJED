@@ -29,7 +29,7 @@ npm.cmd run build
 - raw content 中 A/B 交錯出現。
 
 通過：
-- A/B 各自有 `### @[title](task:id)`。
+- A/B 各自有階層編號與 task tag，例如 `2.1 @[title](task:id)`、`2.1.1 @[title](task:id)`。
 - 每個任務為自然語言段落。
 - A 片段不含 B 的 QA 結論，B 片段不含 A 的設計結論。
 - 不出現 `目前任務狀態為`、`任務背景是`、`既有備註指出` 等專案靜態資料。
@@ -53,7 +53,7 @@ npm.cmd run build
 通過：
 - 任務段落不硬寫假決議。
 - 不自動寫「下一步」。
-- `## 待校稿項目` 只提醒需要人工補會議內容，不推測負責人、期限或決策。
+- `3. 待校稿項目` 只提醒需要人工補會議內容，不推測負責人、期限或決策。
 
 ### GS-004 下一步只整理人類明確內容
 
@@ -82,9 +82,11 @@ npm.cmd run build
 
 ## Edge / Failure QA
 
-- 模擬模型 unavailable / not found：原草稿不被覆蓋，UI 顯示 AI 統整失敗。
-- 確認錯誤訊息指向 `GEMINI_MEETING_SYNTHESIS_MODEL`。
-- 確認正式環境 smoke test 呼叫 `synthesize_meeting_record` 時使用預設 `gemini-3.5-flash`，除非 env override。
+- 未設定 `GEMINI_MEETING_SYNTHESIS_MODEL` 時，正式環境首選模型為 `gemini-3.5-flash`。
+- 未設定 env override 且首選模型 unavailable / not found 時，可受控 fallback 到 `gemini-3.1-flash-lite`；response 必須回傳 warning 與實際使用的 `model`，不可 silent fallback。
+- 明確設定 `GEMINI_MEETING_SYNTHESIS_MODEL` 且模型 unavailable / not found 時，不自動 fallback；原草稿不被覆蓋，UI 顯示 AI 統整失敗。
+- 確認錯誤訊息能指出模型設定問題，並保留 DEV-011 的重試 AI 統整行為。
+- 正式環境 backend smoke 已通過：`synthesize_meeting_record` 使用授權 user JWT 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。完整 UI smoke 仍需 Google OAuth browser session。
 
 ## UI QC
 

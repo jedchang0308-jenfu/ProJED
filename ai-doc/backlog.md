@@ -175,11 +175,11 @@ MVP 不包含：
 
 MVP 必須包含：
 
-- 任務段落以 `### @[title](task:id)` 開頭。
+- 任務段落以階層編號與 task tag 呈現，例如 `2.1 @[列表](task:id)`、`2.1.1 @[卡片](task:id)`、`2.1.1.1 @[子任務](task:id)`。
 - 任務內容使用自然語言摘要，不使用五欄固定模板。
 - 每個任務保留 1 段紀要；只有人類明確講到時才列下一步。
 - 不輸出目前任務狀態、任務背景、既有備註或沒有會議資訊的填充句。
-- Edge Function 預設模型為 `gemini-3.5-flash`，並保留 env override。
+- Edge Function 預設首選模型為 `gemini-3.5-flash`，並保留 env override；未設定 env override 且首選模型 unavailable 時，可受控 fallback 到 `gemini-3.1-flash-lite`，但 response 必須揭露 `warnings` 與實際 `model`。
 - Golden samples verifier 檢查自然語言品質與 DEV-008 片段抽取相容性。
 
 MVP 不包含：
@@ -205,10 +205,11 @@ MVP 不包含：
 | 部門會議跨 board 連結 | 支援 | MVP UI 先從 active board 開始，再提供 board 切換。 |
 | AI 是否可直接修改任務 | 不可 | AI 只提出建議，使用者確認後才新增或更新任務。 |
 
-## 目前阻塞
+## 目前阻塞 / 待人工驗證
 
-- Firebase Hosting 正式前端部署被本機 Firebase CLI 憑證過期阻擋；需使用者執行 `firebase login --reauth`。
-- DEV-011 / DEV-012 仍需正式環境 AI smoke test。
+- Firebase Hosting 已部署到 `https://projed-cc78d.web.app`。
+- DEV-011 / DEV-012 production backend AI smoke 已通過：正式 Edge Function 以授權 user JWT 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
+- DEV-011 / DEV-012 尚待 production UI smoke：正式前端使用 Google OAuth，需互動式登入後驗證 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。
 - DEV-013 已完成 QC fact report。
 
 ---

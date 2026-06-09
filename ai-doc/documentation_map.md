@@ -162,11 +162,11 @@ DEV-011 的產品邊界：
 DEV-012 的產品邊界：
 
 - 保留 DEV-011 的發布前 AI 統整流程。
-- 保留三個大章節與每任務 `### @[title](task:id)` heading。
+- 保留三個大章節；任務段落以階層編號與 task tag 呈現，例如 `2.1 @[列表](task:id)`、`2.1.1 @[卡片](task:id)`、`2.1.1.1 @[子任務](task:id)`。
 - 任務段落改成自然語言任務紀要，不使用五欄固定模板。
 - 會議紀錄只整理 rawContent 與 meeting activity，不使用專案既有狀態補內容。
 - `下一步` 只在會議速記或任務補記中明確出現行動時輸出。
-- Edge Function 預設模型為 `gemini-3.5-flash`，並保留 env override。
+- Edge Function 預設首選模型為 `gemini-3.5-flash`，並保留 env override；未設定 env override 且首選模型 unavailable 時，可受控 fallback 到 `gemini-3.1-flash-lite`，但 response 必須揭露 `warnings` 與實際 `model`。
 - Golden samples verifier 檢查自然語言品質與 DEV-008 任務片段抽取相容性。
 
 不包含：
@@ -248,4 +248,5 @@ DEV-012 的產品邊界：
 | 文件 | 狀態 | 關聯任務 | 用途 |
 |---|---|---|---|
 | `ai-doc/qc/QC-DEV-009-meeting-task-detail-quick-note-ux.md` | Pass | DEV-009 | DEV-009 UX 驗證事實報告，確認桌機與筆電會議補記工作流通過。 |
+| `ai-doc/qc/QC-DEV-011-012-production-ai-smoke.md` | Backend Pass / UI Pending | DEV-011 / DEV-012 | 正式 Hosting 部署與 Edge Function AI smoke 事實報告；後端正式 AI 統整通過，互動式前端 UI smoke 待 Google OAuth session。 |
 | `ai-doc/qc/QC-DEV-013-task-tree-duplicate-context-menu.md` | Pass | DEV-013 | DEV-013 右鍵任務複製事實驗證報告，確認子樹複製、內部依賴 remap、undo/redo 與 release gate 回歸通過。 |

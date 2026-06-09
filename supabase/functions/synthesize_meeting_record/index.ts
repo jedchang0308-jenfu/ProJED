@@ -252,35 +252,58 @@ serve(async (req) => {
   }
 
   const input = normalizeInput(requestData);
-  const generationModel = Deno.env.get('GEMINI_MEETING_SYNTHESIS_MODEL') || 'gemini-3.5-flash';
-  const generateEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${generationModel}:generateContent`;
+  const configuredModel = Deno.env.get('GEMINI_MEETING_SYNTHESIS_MODEL');
+  const primaryModel = configuredModel || 'gemini-3.5-flash';
+  const fallbackModels = configuredModel ? [] : ['gemini-3.1-flash-lite'];
+  const modelCandidates = [primaryModel, ...fallbackModels];
 
   try {
-    const genRes = await fetch(generateEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': geminiApiKey,
-      },
-      body: JSON.stringify({
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-        contents: [{ role: 'user', parts: [{ text: buildPrompt(input) }] }],
-      }),
-    });
+    let genData: unknown = null;
+    let generationModel = primaryModel;
+    const modelWarnings: string[] = [];
 
-    if (!genRes.ok) {
+    for (let index = 0; index < modelCandidates.length; index += 1) {
+      const candidateModel = modelCandidates[index];
+      const generateEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${candidateModel}:generateContent`;
+      const genRes = await fetch(generateEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': geminiApiKey,
+        },
+        body: JSON.stringify({
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          },
+          contents: [{ role: 'user', parts: [{ text: buildPrompt(input) }] }],
+        }),
+      });
+
+      if (genRes.ok) {
+        genData = await genRes.json();
+        generationModel = candidateModel;
+        break;
+      }
+
       const errorText = await genRes.text().catch(() => '');
       const modelUnavailable = [400, 404].includes(genRes.status) || /not found|unavailable|unsupported/i.test(errorText);
+      const nextModel = modelCandidates[index + 1];
+      if (modelUnavailable && nextModel) {
+        modelWarnings.push(`模型 ${candidateModel} 不可用，已改用 ${nextModel}。`);
+        continue;
+      }
+
       const message = modelUnavailable
-        ? `模型不可用，原始草稿已保留，請檢查 GEMINI_MEETING_SYNTHESIS_MODEL：${generationModel}`
+        ? `模型不可用，原始草稿已保留，請檢查 GEMINI_MEETING_SYNTHESIS_MODEL：${candidateModel}`
         : `Gemini API error: ${genRes.status}`;
       return createErrorResponse(message, modelUnavailable ? 'MODEL_UNAVAILABLE' : 'BAD_GATEWAY', 502, origin);
     }
 
-    const genData = await genRes.json();
+    if (!genData) {
+      return createErrorResponse('AI response did not include content', 'EMPTY_SYNTHESIS', 502, origin);
+    }
+
     const parsed = parseJsonOutput(extractOutputText(genData));
     const content = safeString(parsed.content);
 
@@ -290,7 +313,10 @@ serve(async (req) => {
 
     return createJsonResponse({
       content,
-      warnings: Array.isArray(parsed.warnings) ? parsed.warnings.filter((item: unknown) => typeof item === 'string') : [],
+      warnings: [
+        ...modelWarnings,
+        ...(Array.isArray(parsed.warnings) ? parsed.warnings.filter((item: unknown) => typeof item === 'string') : []),
+      ],
       linkedTaskIds: Array.isArray(parsed.linkedTaskIds) ? parsed.linkedTaskIds.filter((item: unknown) => typeof item === 'string') : [],
       provider: 'gemini',
       model: generationModel,
