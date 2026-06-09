@@ -1,14 +1,20 @@
 # ProJED Documentation Map
 
-更新日期：2026-06-06
+更新日期：2026-06-09
 
 ## Active PM 文件
 
 | 文件 | 狀態 | 用途 |
 |---|---|---|
 | `ai-doc/backlog.md` | Active | PM backlog、交付點與後續候選範圍。 |
-| `ai-doc/dev_task.md` | Active | DEV 任務主控文件，追蹤 RD / QA / QC。 |
+| `ai-doc/dev_task.md` | Active | DEV 任務主控板，只保留狀態、下一步、阻塞與驗證證據索引。 |
 | `ai-doc/documentation_map.md` | Active | 文件索引與目前交付邊界。 |
+
+## Archived PM 文件
+
+| 文件 | 狀態 | 用途 |
+|---|---|---|
+| `ai-doc/archived/dev_task_2026-06-09_before_restructure.md` | Archived | 2026-06-09 重整前的完整 dev_task 長版內容；保留歷史細節與舊 RD/QA/QC 紀錄。 |
 
 ## Active 規格文件
 
@@ -22,10 +28,10 @@
 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Implemented | DEV-007 | 會議中保留原生看板編輯，並將任務變更納入會議紀錄。 |
 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 | 任務詳情中的會議細節快速查找；承接 DEV-002 / DEV-007 的 task knowledge UX refinement。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 | 會議模式下任務詳情內快速補記；承接 DEV-005 / DEV-007 / DEV-008 的 meeting workflow UX refinement。 |
-| `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Ready | DEV-010 | 會議紀錄操作按鈕狀態溝通設計；承接 DEV-005 / DEV-006 / DEV-007 / DEV-009 的 meeting workflow UX refinement。 |
-| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Ready for QC | DEV-011 | AI 任務導向會議紀錄統整工作流；承接 DEV-007 / DEV-008 / DEV-009 / DEV-010 的 meeting record synthesis refinement。 |
-| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Ready for QC | DEV-012 | AI 會議紀錄自然語言品質提升；承接 DEV-011 / DEV-008 的 meeting record synthesis quality refinement。 |
-| `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Ready for QC | DEV-013 | 定義右鍵清單任務複製，包含子任務欄位與子樹內部依賴複製。 |
+| `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通設計；承接 DEV-005 / DEV-006 / DEV-007 / DEV-009 的 meeting workflow UX refinement。 |
+| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | In Verification | DEV-011 | AI 任務導向會議紀錄統整工作流；承接 DEV-007 / DEV-008 / DEV-009 / DEV-010 的 meeting record synthesis refinement。 |
+| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | In Verification | DEV-012 | AI 會議紀錄自然語言品質提升；承接 DEV-011 / DEV-008 的 meeting record synthesis quality refinement。 |
+| `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Implemented | DEV-013 | 定義右鍵清單任務複製，包含子任務欄位與子樹內部依賴複製。 |
 
 ## 目前交付邊界
 
@@ -197,10 +203,10 @@ DEV-012 的產品邊界：
 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Implemented | DEV-007 / DEV-005 follow-up / DEV-006 follow-up | 定義會議中保留原生看板編輯，並把任務變更納入會議紀錄。 |
 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 / DEV-002 follow-up / DEV-007 follow-up | 定義任務詳情中的任務知識查找、片段抽取與任務內搜尋。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 / DEV-005 follow-up / DEV-008 follow-up | 定義會議模式任務詳情內快速補記與 meeting draft append 行為。 |
-| `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Ready | DEV-010 / DEV-005 follow-up / DEV-009 follow-up | 定義會議紀錄操作按鈕狀態、阻塞原因提示、草稿/發布條件拆分與離開保護。 |
-| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Ready for QC | DEV-011 / DEV-007 follow-up / DEV-008 follow-up / DEV-009 follow-up | 定義 AI 任務導向會議紀錄統整、發布前校稿流程、後端模型執行與不改任務邊界。 |
-| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Ready for QC | DEV-012 / DEV-011 follow-up / DEV-008 follow-up | 定義 AI 會議紀錄自然語言品質、任務紀要格式、模型預設與 golden samples 驗證。 |
-| `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Ready for QC | DEV-013 | 定義右鍵清單任務複製、任務子樹欄位保留、內部依賴 remap 與驗證邊界。 |
+| `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Implemented | DEV-010 / DEV-005 follow-up / DEV-009 follow-up | 定義會議紀錄操作按鈕狀態、阻塞原因提示、草稿/發布條件拆分與離開保護。 |
+| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | In Verification | DEV-011 / DEV-007 follow-up / DEV-008 follow-up / DEV-009 follow-up | 定義 AI 任務導向會議紀錄統整、發布前校稿流程、後端模型執行與不改任務邊界。 |
+| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | In Verification | DEV-012 / DEV-011 follow-up / DEV-008 follow-up | 定義 AI 會議紀錄自然語言品質、任務紀要格式、模型預設與 golden samples 驗證。 |
+| `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Implemented | DEV-013 | 定義右鍵清單任務複製、任務子樹欄位保留、內部依賴 remap 與驗證邊界。 |
 
 ### Current Product Direction
 
@@ -233,12 +239,13 @@ DEV-012 的產品邊界：
 | `ai-doc/qa/QA-DEV-007-meeting-activity-capture.md` | Ready for QC | DEV-007 | 會議中看板原生編輯與任務變更自動納入紀錄的驗證計畫。 |
 | `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | Ready for QC | DEV-008 | 任務會議細節快速查找驗證計畫，包含任務片段抽取、搜尋、fallback 與原始紀錄追溯。 |
 | `ai-doc/qa/QA-DEV-009-meeting-task-detail-quick-note.md` | Passed by QC | DEV-009 | 會議模式任務詳情內快速補記驗證計畫，包含 meeting draft append、task tag 與資料邊界。 |
-| `ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md` | Ready | DEV-010 | 會議紀錄操作按鈕狀態溝通 UX 驗證計畫，包含 disabled reason、tooltip/focus、離開保護與桌機/筆電 viewport。 |
-| `ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md` | Ready for QC | DEV-011 | AI 任務導向會議紀錄統整 UX 驗證計畫，包含實際輸入、AI 失敗保留草稿、校稿發布與桌機/筆電 viewport。 |
-| `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | Ready for QC | DEV-012 | AI 會議紀錄自然語言品質驗證計畫，包含 golden samples、實際輸入、模型不可用與任務知識查找相容性。 |
+| `ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通 UX 驗證計畫，包含 disabled reason、tooltip/focus、離開保護與桌機/筆電 viewport。 |
+| `ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md` | In Verification | DEV-011 | AI 任務導向會議紀錄統整 UX 驗證計畫，包含實際輸入、AI 失敗保留草稿、校稿發布與桌機/筆電 viewport。 |
+| `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | In Verification | DEV-012 | AI 會議紀錄自然語言品質驗證計畫，包含 golden samples、實際輸入、模型不可用與任務知識查找相容性。 |
 
 ### QC Fact Reports
 
 | 文件 | 狀態 | 關聯任務 | 用途 |
 |---|---|---|---|
 | `ai-doc/qc/QC-DEV-009-meeting-task-detail-quick-note-ux.md` | Pass | DEV-009 | DEV-009 UX 驗證事實報告，確認桌機與筆電會議補記工作流通過。 |
+| `ai-doc/qc/QC-DEV-013-task-tree-duplicate-context-menu.md` | Pass | DEV-013 | DEV-013 右鍵任務複製事實驗證報告，確認子樹複製、內部依賴 remap、undo/redo 與 release gate 回歸通過。 |

@@ -85,69 +85,6 @@ const createTaskFallback = (nodeId: string, input: MeetingSynthesisInput): Meeti
   };
 };
 
-const getTaskOrder = (input: MeetingSynthesisInput) => {
-  const ids = [
-    ...input.taskLinks.map(link => link.nodeId),
-    ...collectMentionedTaskIds(input.rawContent),
-    ...input.activities.map(activity => activity.nodeId),
-    ...input.tasks.map(task => task.id),
-  ].filter(Boolean);
-  return unique(ids);
-};
-
-const extractTaskParagraphs = (content: string, taskId: string) =>
-  content
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.includes(`](task:${taskId})`))
-    .map(line => normalizeText(
-      line
-        .replace(/^[-*]\s*/, '')
-        .replace(/^\d{1,2}:\d{2}\s+/, ''),
-    ))
-    .map(line => normalizeText(
-      stripTaskMentions(line).replace(/^[：:，,、\s]+/, ''),
-    ))
-    .filter(Boolean);
-
-const summarizeStatusChanges = (activities: MeetingSynthesisActivity[]) => {
-  if (activities.length === 0) return '';
-
-  const summaries = unique(activities.map(activity => activity.summary).filter(Boolean));
-  if (summaries.length === 0) return '任務有更新。';
-  return truncate(summaries.map(ensureSentence).filter(Boolean).join(' '), 220);
-};
-
-const extractExplicitNextSteps = (notes: string[]) => {
-  const actionPattern = /(需要|需|請|要|應|待|後續|會後|下次|接著|預計|明天|今天|本週|下週|月底|期限|以前|前完成|先|再|由.+負責|負責)/;
-  const negatedPattern = /(不用|不需要|無需|不用再|不再|取消|不必)/;
-  return notes
-    .filter(note => actionPattern.test(note) && !negatedPattern.test(note))
-    .map(note => truncate(note, 140))
-    .slice(0, 3);
-};
-
-const summarizeTaskDiscussion = (
-  task: MeetingSynthesisTask,
-  input: MeetingSynthesisInput,
-  taskActivities: MeetingSynthesisActivity[],
-) => {
-  const notes = extractTaskParagraphs(input.rawContent, task.id);
-  const statusSummary = summarizeStatusChanges(taskActivities);
-
-  const narrativeParts = [
-    notes.length ? truncate(notes.slice(-3).join('；'), 280) : '',
-    statusSummary,
-  ].filter(Boolean);
-
-  return {
-    hasMeetingEvidence: notes.length > 0 || taskActivities.length > 0,
-    narrative: truncate(narrativeParts.join(' '), 360),
-    nextSteps: extractExplicitNextSteps(notes),
-  };
-};
-
 const isCleanDraftScaffoldLine = (line: string) => {
   const normalized = normalizeText(line.replace(/^[-*]\s*/, ''));
   return (

@@ -155,7 +155,7 @@ const RecordContentOnChangePlugin: React.FC<{
 }> = ({ onChange, onCursorOffsetChange }) => {
   const lastContentRef = React.useRef<string | null>(null);
 
-  const handleChange = React.useCallback((editorState: EditorState, editor: LexicalEditor) => {
+  const handleChange = React.useCallback((editorState: EditorState, _editor: LexicalEditor) => {
     editorState.read(() => {
       const nextValue = $serializeEditorContentToRecordString();
       if (lastContentRef.current !== nextValue) {
@@ -196,7 +196,7 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
           <ContentEditable
             className={`${editorClassName || 'min-h-[150px]'} w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100`}
             aria-placeholder={placeholder || ''}
-            placeholder={null}
+            placeholder={<span />}
           />
         )}
         placeholder={null}

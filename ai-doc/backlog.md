@@ -1,6 +1,6 @@
 # ProJED Backlog
 
-更新日期：2026-06-06
+更新日期：2026-06-09
 
 ## Backlog 管理原則
 
@@ -13,16 +13,16 @@
 
 | DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
 |---|---|---|---|---|---|
-| DEV-002 | Ready | 交付點 | P1 | 會議紀錄與個人工作紀錄 MVP | `ai-doc/specs/SPEC-003-meeting-work-records-workflow.md` |
+| DEV-002 | Done | 交付點 | P1 | 會議紀錄與個人工作紀錄 MVP | `ai-doc/specs/SPEC-003-meeting-work-records-workflow.md` |
 | DEV-005 | Done | 交付點 | P1 | 會議看板主畫面紀錄工作流 | `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` |
 | DEV-006 | Done | 交付點 | P1 | Gmail-like 會議紀錄輸入器穩定化 | `ai-doc/specs/SPEC-006-gmail-like-record-editor.md` |
 | DEV-007 | Done | 交付點 | P1 | 會議中原生看板編輯與任務變更紀錄 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` |
 | DEV-008 | Done | 交付點 | P1 | 任務會議細節快速查找 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` |
 | DEV-009 | Done | 交付點 | P1 | 會議模式任務詳情內快速補記 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` |
-| DEV-010 | Ready | 交付點 | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
-| DEV-011 | Ready for QC | 交付點 | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
-| DEV-012 | Ready for QC | 交付點 | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
-| DEV-013 | Ready for QC | 交付點 | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
+| DEV-010 | Done | 交付點 | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
+| DEV-011 | In Verification | 交付點 | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
+| DEV-012 | In Verification | 交付點 | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
+| DEV-013 | Done | 交付點 | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 
 ## DEV-002 範圍摘要
 
@@ -207,8 +207,9 @@ MVP 不包含：
 
 ## 目前阻塞
 
-- 尚未進入 RD 實作。
-- 實作前需確認 private / project / tenant visibility 的 RLS 與 RAG retrieval 權限模型。
+- Firebase Hosting 正式前端部署被本機 Firebase CLI 憑證過期阻擋；需使用者執行 `firebase login --reauth`。
+- DEV-011 / DEV-012 仍需正式環境 AI smoke test。
+- DEV-013 已完成 QC fact report。
 
 ---
 
@@ -224,7 +225,7 @@ MVP 不包含：
 | DEV-010 | Ready | Product UX refinement | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
 | DEV-011 | Ready for QC | Product UX refinement | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
 | DEV-012 | Ready for QC | Product UX refinement | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
-| DEV-013 | Ready for QC | Product UX refinement | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
+| DEV-013 | Done | Product UX refinement | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 
 ### DEV-003 摘要
 
