@@ -27,7 +27,7 @@
 ## 目前 PM 結論
 
 - `main` 已推上 GitHub：`f4e2c66 feat: enhance meeting record workflow`。
-- Supabase Edge Function `synthesize_meeting_record` 已部署到正式 Supabase，狀態 `ACTIVE`。
+- Supabase Edge Function `synthesize_meeting_record` 已部署到正式 Supabase，狀態 `ACTIVE`；2026-06-09 匿名 HTTP smoke 回傳 `401`，確認 endpoint 存在且仍要求 JWT。
 - Firebase Hosting 正式前端部署尚未完成；阻塞原因是本機 Firebase 憑證過期，需要 `firebase login --reauth`。
 - 會議紀錄工作流目前是主要交付主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-013 右鍵任務複製已通過 QC。
@@ -56,7 +56,7 @@
 | DEV-008 | 交付點 | Done | 是 | 任務會議細節快速查找 | `SPEC-008`、`verify:dev-008-task-knowledge` | 無 |
 | DEV-009 | 交付點 | Done | 是 | 任務詳情內會議快速補記 | `SPEC-009`、`QA/QC-DEV-009`、`verify:dev-009-task-detail-quick-note` | 無 |
 | DEV-010 | 交付點 | Done | 是 | 會議紀錄操作按鈕狀態溝通 | `SPEC-010`、`QA-DEV-010`、`verify:dev-010-action-feedback` | 無 |
-| DEV-011 | 交付點 | In Verification | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、Supabase deployed | production AI smoke |
+| DEV-011 | 交付點 | In Verification | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、Supabase ACTIVE + 401 auth smoke | production AI smoke |
 | DEV-012 | 交付點 | In Verification | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality` | golden sample / production smoke |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 
@@ -86,7 +86,7 @@
 | 阻塞 | 影響 | 解除方式 |
 |---|---|---|
 | Firebase CLI 憑證過期 | 無法部署 Firebase Hosting 正式前端 | 使用者執行 `firebase login --reauth`，再跑 deploy。 |
-| DEV-011 / DEV-012 尚缺 production AI smoke | AI 會議紀錄品質尚未完成正式環境確認 | Firebase 前端部署後，用正式環境建立會議、AI 整理、校稿發布。 |
+| DEV-011 / DEV-012 尚缺 production AI smoke | AI 會議紀錄品質尚未完成正式前端流程確認；Supabase function endpoint 已確認 ACTIVE 且匿名請求回 `401` | Firebase 前端部署後，用正式環境建立會議、AI 整理、校稿發布。 |
 
 ---
 
