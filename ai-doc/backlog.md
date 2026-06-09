@@ -222,9 +222,9 @@ MVP 不包含：
 | DEV-006 | Done | Product UX refinement | P1 | Gmail-like 會議紀錄輸入器穩定化 | `ai-doc/specs/SPEC-006-gmail-like-record-editor.md` |
 | DEV-008 | Done | Product UX refinement | P1 | 任務會議細節快速查找 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` |
 | DEV-009 | Done | Product UX refinement | P1 | 會議模式任務詳情內快速補記 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` |
-| DEV-010 | Ready | Product UX refinement | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
-| DEV-011 | Ready for QC | Product UX refinement | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
-| DEV-012 | Ready for QC | Product UX refinement | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
+| DEV-010 | Done | Product UX refinement | P1 | 會議紀錄操作按鈕狀態溝通設計 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` |
+| DEV-011 | In Verification | Product UX refinement | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
+| DEV-012 | In Verification | Product UX refinement | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
 | DEV-013 | Done | Product UX refinement | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 
 ### DEV-003 摘要
