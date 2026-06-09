@@ -103,12 +103,15 @@ async (page) => {
 
   await focusEditor();
   await page.keyboard.press('End');
+  const insertTaskButton = page.locator('button', { hasText: '插入任務' }).first();
+  assert((await insertTaskButton.count()) === 1, 'meeting insert task button missing');
+  await insertTaskButton.click();
   const firstTask = page.locator('text=品質驗證測試任務 1').first();
   assert((await firstTask.count()) >= 1, 'first kanban task missing');
   await firstTask.click();
   await page.waitForTimeout(300);
   state = await readEditor();
-  assert(state.chipCount === 1, 'clicking a task in meeting mode should insert one task chip', state);
+  assert(state.chipCount === 1, 'clicking a task after entering insert-task mode should insert one task chip', state);
 
   const copiedText = await page.evaluate(async () => {
     const chip = document.querySelector('[data-record-task-mention="true"]');
