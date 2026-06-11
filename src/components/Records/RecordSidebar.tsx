@@ -1,10 +1,12 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { BookOpenText, CheckCircle2, ChevronLeft, ChevronRight, FileText, PanelRightClose, PanelRightOpen, Plus, Save, Send, Sparkles, Trash2, UsersRound } from 'lucide-react';
+import { AlertTriangle, BookOpenText, CheckCircle2, ChevronLeft, ChevronRight, FileText, PanelRightClose, PanelRightOpen, Plus, Save, Send, Sparkles, Trash2, UsersRound } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { useWbsStore } from '../../store/useWbsStore';
+import { useMeetingModeExitGuard } from '../../hooks/useMeetingModeExitGuard';
+import { getMeetingRecordActionState, type MeetingRecordWorkflowStage } from '../../utils/meetingRecordWorkflow';
 import RecordContentEditor from './RecordContentEditor';
 import type { KnowledgeRecord, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
 
@@ -68,6 +70,64 @@ const visibilityLabel = (visibility: KnowledgeRecordVisibility) => {
   return '專案';
 };
 
+const MEETING_TERMS = {
+  stage: {
+    capture: '速記',
+    ai_suggestion: 'AI整理',
+    review: '校稿',
+    published: '發布',
+  },
+  action: {
+    collapse: '收合',
+    saveDraft: '存草稿',
+    ai: 'AI整理',
+    publish: '發布',
+    exit: '離開',
+  },
+  state: {
+    meeting: '會議中',
+    unsaved: '未儲存',
+    synced: '已同步',
+  },
+} as const;
+
+const WORKFLOW_STEPS: Array<{ stage: MeetingRecordWorkflowStage; label: string }> = [
+  { stage: 'capture', label: MEETING_TERMS.stage.capture },
+  { stage: 'ai_suggestion', label: MEETING_TERMS.stage.ai_suggestion },
+  { stage: 'review', label: MEETING_TERMS.stage.review },
+  { stage: 'published', label: MEETING_TERMS.stage.published },
+];
+
+const workflowStepIndex = (stage: MeetingRecordWorkflowStage) =>
+  WORKFLOW_STEPS.findIndex(step => step.stage === stage);
+
+const MeetingWorkflowStepper: React.FC<{ stage: MeetingRecordWorkflowStage }> = ({ stage }) => {
+  const activeIndex = workflowStepIndex(stage);
+
+  return (
+    <div className="grid grid-cols-4 gap-1.5" aria-label="會議紀錄流程">
+      {WORKFLOW_STEPS.map((step, index) => {
+        const isActive = step.stage === stage;
+        const isComplete = index < activeIndex || stage === 'published';
+        return (
+          <div
+            key={step.stage}
+            className={`flex min-w-0 items-center justify-center rounded border px-0.5 py-0.5 text-[9px] font-semibold leading-4 ${
+              isActive
+                ? 'border-emerald-500 bg-emerald-600 text-white'
+                : isComplete
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-slate-200 bg-white text-slate-500'
+            }`}
+          >
+            <span className="whitespace-nowrap">{step.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const RecordListItem: React.FC<{ record: KnowledgeRecord; onOpen: () => void }> = ({ record, onOpen }) => (
   <button
     type="button"
@@ -107,7 +167,6 @@ const RecordSidebar: React.FC = () => {
   const openNewRecord = useRecordStore(state => state.openNewRecord);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
   const closePanel = useRecordStore(state => state.closePanel);
-  const exitMeetingMode = useRecordStore(state => state.exitMeetingMode);
   const togglePanelCollapsed = useRecordStore(state => state.togglePanelCollapsed);
   const updateDraft = useRecordStore(state => state.updateDraft);
   const contentCursorOffset = useRecordStore(state => state.contentCursorOffset);
@@ -118,10 +177,13 @@ const RecordSidebar: React.FC = () => {
   const meetingSynthesisWarnings = useRecordStore(state => state.meetingSynthesisWarnings);
   const meetingSynthesisProvider = useRecordStore(state => state.meetingSynthesisProvider);
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
+  const draftBaselineSignature = useRecordStore(state => state.draftBaselineSignature);
   const setDraftTaskRole = useRecordStore(state => state.setDraftTaskRole);
   const enterTaskSelectionMode = useRecordStore(state => state.enterTaskSelectionMode);
+  const synthesizeMeetingDraft = useRecordStore(state => state.synthesizeMeetingDraft);
   const saveDraft = useRecordStore(state => state.saveDraft);
   const archiveRecord = useRecordStore(state => state.archiveRecord);
+  const requestExitMeetingMode = useMeetingModeExitGuard();
 
   React.useEffect(() => {
     const handleOpenRecord = (event: Event) => {
@@ -157,42 +219,75 @@ const RecordSidebar: React.FC = () => {
 
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
-  const needsMeetingSynthesis = Boolean(isMeetingMode && draft?.type === 'meeting' && meetingSynthesisStatus !== 'ready');
-  const isPublished = Boolean(
-    draft?.id &&
-    lastSaveFeedback?.recordId === draft.id &&
-    lastSaveFeedback.status === 'published'
-  );
-  const publishedAt = lastSaveFeedback?.savedAt ? dayjs(lastSaveFeedback.savedAt).format('HH:mm') : '';
-  const canSave = Boolean(activeWorkspaceId && activeBoardId && draft && draft.title.trim() && (isMeetingMode || draft.content.trim()));
-  const canPublish = Boolean(
-    activeWorkspaceId &&
-    activeBoardId &&
-    draft &&
-    draft.title.trim() &&
-    (needsMeetingSynthesis || draft.content.trim()) &&
-    !isPublished
-  );
-  const publishLabel = isPublished
+  const isMeetingDraft = Boolean(isMeetingMode && draft?.type === 'meeting');
+  const meetingActionState = getMeetingRecordActionState({
+    draft,
+    activeWorkspaceId,
+    activeBoardId,
+    saving,
+    meetingSynthesisStatus,
+    meetingSynthesisError,
+    meetingActivityCount: meetingActivities.length,
+    draftBaselineSignature,
+    lastSaveFeedback,
+  });
+  const compactMeetingStatus = meetingActionState.isPublished
     ? '已發布'
-    : meetingSynthesisStatus === 'error'
-    ? '重試 AI'
-    : needsMeetingSynthesis
-      ? 'AI整理'
-      : '發布';
-  const meetingStatusText = isPublished
-    ? `會議紀錄已發布 ${publishedAt}，可在紀錄庫與任務知識查找`
     : meetingSynthesisStatus === 'synthesizing'
-      ? 'AI 正在整理草稿'
-      : meetingSynthesisStatus === 'ready'
-        ? 'AI 已整理，請校稿後發布'
-        : meetingSynthesisStatus === 'error'
-          ? `AI 統整失敗：${meetingSynthesisError || '請重試'}`
-          : '看板維持一般編輯；任務變更會供 AI 統整';
+      ? 'AI整理中'
+      : meetingActionState.hasAiDraft
+        ? '校稿中'
+        : meetingActionState.canPublish
+          ? '可發布'
+          : '速記中';
+  const compactMeetingNext = meetingActionState.isPublished
+    ? '可離開'
+    : meetingActionState.hasAiDraft
+      ? '校稿後發布'
+      : meetingActionState.canPublish
+        ? '可發布或AI整理'
+        : '輸入後可發布';
+  const compactMeetingRisk = meetingActivities.length > 0 && !meetingActionState.hasAiDraft && !meetingActionState.isPublished
+    ? `任務變更 ${meetingActivities.length} 筆需整理`
+    : meetingActionState.isDirty && !meetingActionState.isPublished
+      ? '未儲存'
+      : '已同步';
+  const isPublished = isMeetingDraft
+    ? meetingActionState.isPublished
+    : Boolean(
+      draft?.id &&
+      lastSaveFeedback?.recordId === draft.id &&
+      lastSaveFeedback.status === 'published'
+    );
+  const publishedAt = lastSaveFeedback?.savedAt ? dayjs(lastSaveFeedback.savedAt).format('HH:mm') : '';
+  const canSave = isMeetingDraft
+    ? meetingActionState.canSaveDraft
+    : Boolean(activeWorkspaceId && activeBoardId && draft && draft.title.trim() && draft.content.trim());
+  const canPublish = Boolean(
+    isMeetingDraft
+      ? meetingActionState.canPublish
+      : activeWorkspaceId &&
+        activeBoardId &&
+        draft &&
+        draft.title.trim() &&
+        draft.content.trim() &&
+        !isPublished
+  );
+  const publishLabel = isMeetingDraft
+    ? isPublished
+      ? '已發布'
+      : '發布'
+    : isPublished
+      ? '已發布'
+      : '發布';
 
   const handleSave = async (status: KnowledgeRecordStatus) => {
     updateDraft({ status });
     await saveDraft({ nodes });
+  };
+
+  const handleSynthesizeMeetingDraft = async () => {
+    await synthesizeMeetingDraft(nodes);
   };
 
   const applySidebarWidth = (nextWidth: number, persist = false) => {
@@ -328,9 +423,9 @@ const RecordSidebar: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={isMeetingMode ? exitMeetingMode : closePanel}
+            onClick={isMeetingMode ? () => void requestExitMeetingMode() : closePanel}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-            title={isMeetingMode ? '結束會議模式，保留目前草稿' : '關閉紀錄欄'}
+            title={isMeetingMode ? '離開會議模式；未儲存時會先詢問是否存草稿' : '關閉紀錄欄'}
           >
             <ChevronRight size={17} />
           </button>
@@ -342,61 +437,95 @@ const RecordSidebar: React.FC = () => {
           {draft ? (
             <div className="space-y-3">
               {isMeetingMode ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                        <span className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                          會議中
-                        </span>
-                        <span className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                          已連結 {draft.taskLinks.length} 任務
-                        </span>
-                      </div>
-                      <div className="truncate text-sm font-semibold text-emerald-950" title={draft.title}>
-                        {draft.title || '會議紀錄'}
-                      </div>
-                      <div className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-emerald-700">
-                        {isPublished ? <CheckCircle2 size={13} className="mt-0.5 shrink-0" /> : <Sparkles size={13} className="mt-0.5 shrink-0" />}
-                        <span>{meetingStatusText}</span>
-                      </div>
+                <div data-meeting-workflow-card="compact" className="rounded-lg border border-emerald-200 bg-emerald-50 p-1.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {MEETING_TERMS.state.meeting}
+                      </span>
+                      <span className="rounded border border-emerald-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        {draft.taskLinks.length} 任務
+                      </span>
+                      <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                        meetingActionState.isDirty
+                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-emerald-200 bg-white text-emerald-700'
+                      }`}>
+                        {meetingActionState.isDirty ? MEETING_TERMS.state.unsaved : MEETING_TERMS.state.synced}
+                      </span>
+                  </div>
+
+                  <div className="mt-1">
+                    <MeetingWorkflowStepper stage={meetingActionState.stage} />
+                  </div>
+
+                  <div
+                    className="mt-1 rounded border border-emerald-200 bg-white px-1.5 py-0.5 text-[10px] leading-4 text-emerald-800"
+                    title={`${meetingActionState.statusMessage} ${meetingActionState.nextActionMessage}${meetingActionState.riskMessage ? ` ${meetingActionState.riskMessage}` : ''}`}
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="inline-flex items-center gap-1 font-semibold">
+                        {isPublished ? <CheckCircle2 size={12} className="shrink-0" /> : <Sparkles size={12} className="shrink-0" />}
+                        {compactMeetingStatus}
+                      </span>
+                      <span className="text-emerald-700">{compactMeetingNext}</span>
+                      <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 ${
+                        meetingActionState.isDirty || meetingActionState.riskMessage
+                          ? 'bg-amber-50 text-amber-800'
+                          : 'bg-emerald-50 text-emerald-700'
+                      }`}>
+                        {meetingActionState.isDirty || meetingActionState.riskMessage ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
+                        {compactMeetingRisk}
+                      </span>
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+
+                  <div className="mt-1 grid grid-cols-5 gap-1">
                     <button
                       type="button"
                       onClick={togglePanelCollapsed}
-                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                      title="收合會議速記欄"
+                      className="inline-flex h-6 items-center justify-center gap-0.5 rounded border border-emerald-200 bg-white px-0.5 text-[9px] font-semibold text-emerald-700 hover:bg-emerald-100"
                     >
-                      <PanelRightClose size={14} />
-                      收合速記
+                      <PanelRightClose size={11} />
+                      {MEETING_TERMS.action.collapse}
                     </button>
                     <button
                       type="button"
-                      disabled={!canSave || saving || isSynthesizing}
+                      disabled={!meetingActionState.canSaveDraft}
                       onClick={() => handleSave('draft')}
-                      title={!canSave ? '請先輸入會議標題。' : undefined}
-                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-emerald-200 bg-white px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                      title={meetingActionState.saveDraftDisabledReason ?? '保存目前編輯器內容為草稿，不會發布。'}
+                      className="inline-flex h-6 items-center justify-center gap-0.5 rounded border border-emerald-200 bg-white px-0.5 text-[9px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:text-slate-300"
                     >
-                      <Save size={14} />
-                      存草稿
+                      <Save size={11} />
+                      {MEETING_TERMS.action.saveDraft}
                     </button>
                     <button
                       type="button"
-                      disabled={!canPublish || saving || isSynthesizing}
+                      disabled={!meetingActionState.canRunAi}
+                      onClick={() => void handleSynthesizeMeetingDraft()}
+                      title={meetingActionState.aiDisabledReason ?? '用 AI 將速記與任務變更整理成校稿內容。'}
+                      className="inline-flex h-6 items-center justify-center gap-0.5 rounded border border-blue-200 bg-white px-0.5 text-[9px] font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                    >
+                      <Sparkles size={11} />
+                      {MEETING_TERMS.action.ai}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!meetingActionState.canPublish}
                       onClick={() => handleSave('published')}
-                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入會議標題；AI整理後再發布。' : needsMeetingSynthesis ? '先產生 AI 統整草稿，校稿後再發布。' : undefined}
-                      className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : meetingActionState.publishDisabledReason ?? '直接發布目前編輯器內容，不會自動執行 AI整理。'}
+                      className="inline-flex h-6 items-center justify-center gap-0.5 rounded bg-emerald-700 px-0.5 text-[9px] font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
-                      {isPublished ? <CheckCircle2 size={14} /> : <Send size={14} />}
-                      {publishLabel}
+                      {isPublished ? <CheckCircle2 size={11} /> : <Send size={11} />}
+                      {MEETING_TERMS.action.publish}
                     </button>
                     <button
                       type="button"
-                      onClick={exitMeetingMode}
-                      className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      onClick={() => void requestExitMeetingMode()}
+                      className="inline-flex h-6 items-center justify-center gap-0.5 rounded border border-slate-200 bg-white px-0.5 text-[9px] font-semibold text-slate-600 hover:bg-slate-50"
+                      title="離開會議模式；未儲存時會先詢問是否存草稿"
                     >
-                      結束會議
+                      {MEETING_TERMS.action.exit}
                     </button>
                   </div>
                 </div>
@@ -496,7 +625,7 @@ const RecordSidebar: React.FC = () => {
               {isMeetingMode ? (
                 <div className="rounded-md border border-emerald-200 bg-emerald-50">
                   <div className="flex items-center justify-between border-b border-emerald-100 px-3 py-2">
-                    <span className="text-xs font-semibold text-emerald-800">AI 統整來源：任務變更</span>
+                    <span className="text-xs font-semibold text-emerald-800">AI整理來源：任務變更</span>
                     <span className="rounded-md bg-white px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
                       {meetingActivities.length}
                     </span>
@@ -536,21 +665,21 @@ const RecordSidebar: React.FC = () => {
                     {isPublished
                       ? `會議紀錄已發布 ${publishedAt}`
                       : meetingSynthesisStatus === 'synthesizing'
-                        ? 'AI 正在整理會議草稿'
+                        ? 'AI整理中'
                         : meetingSynthesisStatus === 'ready'
-                          ? 'AI 已整理，請校稿後發布'
-                          : meetingSynthesisStatus === 'error'
-                            ? 'AI 統整失敗，原草稿已保留'
-                            : '發布前會先由 AI 統整草稿'}
+                          ? 'AI整理完成，請校稿後發布'
+                        : meetingSynthesisStatus === 'error'
+                          ? 'AI整理失敗，原草稿已保留'
+                            : 'AI整理是建議動作，可跳過'}
                   </div>
                   <div className="mt-1">
                     {isPublished
                       ? '已儲存為正式紀錄，可在紀錄庫與任務相關紀錄中查找。'
                       : meetingSynthesisStatus === 'ready'
                         ? `草稿來源：${meetingSynthesisProvider || 'meeting synthesis'}。請確認結論、決議、待辦與阻塞。`
-                        : meetingSynthesisStatus === 'error'
+                      : meetingSynthesisStatus === 'error'
                           ? meetingSynthesisError
-                          : 'AI 會讀取速記、任務補記與任務變更摘要；不會自動修改任務。'}
+                          : '直接發布會保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。'}
                   </div>
                   {meetingSynthesisWarnings.length ? (
                     <ul className="mt-1 list-disc pl-4">
@@ -562,7 +691,7 @@ const RecordSidebar: React.FC = () => {
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid gap-2 ${isMeetingMode ? 'grid-cols-1' : 'grid-cols-2'}`}>
                 <label className="block text-xs font-medium text-slate-500">
                   可見性
                   <select
@@ -575,17 +704,23 @@ const RecordSidebar: React.FC = () => {
                     <option value="tenant">工作區</option>
                   </select>
                 </label>
-                <label className="block text-xs font-medium text-slate-500">
-                  狀態
-                  <select
-                    value={draft.status}
-                    onChange={event => updateDraft({ status: event.target.value as KnowledgeRecordStatus })}
-                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="draft">草稿</option>
-                    <option value="published">已發布</option>
-                  </select>
-                </label>
+                {isMeetingMode ? (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500">
+                    流程狀態：{meetingActionState.isPublished ? '已發布' : meetingActionState.hasAiDraft ? '校稿中' : '草稿'}
+                  </div>
+                ) : (
+                  <label className="block text-xs font-medium text-slate-500">
+                    狀態
+                    <select
+                      value={draft.status}
+                      onChange={event => updateDraft({ status: event.target.value as KnowledgeRecordStatus })}
+                      className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value="draft">草稿</option>
+                      <option value="published">已發布</option>
+                    </select>
+                  </label>
+                )}
               </div>
 
               <div className="rounded-md border border-slate-200">
@@ -655,7 +790,7 @@ const RecordSidebar: React.FC = () => {
                       type="button"
                       disabled={!canPublish || saving || isSynthesizing}
                       onClick={() => handleSave('published')}
-                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入標題；AI整理後再發布。' : needsMeetingSynthesis ? '先產生 AI 統整草稿，校稿後再發布。' : undefined}
+                      title={isPublished ? `已於 ${publishedAt} 發布成功。` : !canPublish ? '請先輸入標題與內容。' : '發布。'}
                       className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
                       {isPublished ? <CheckCircle2 size={13} /> : <Send size={13} />}

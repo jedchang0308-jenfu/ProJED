@@ -10,8 +10,10 @@ const useDialogStore = create<DialogStore>((set) => ({
     isOpen: false,
     type: 'confirm',
     message: '',
+    description: '',
     defaultValue: '',
     inputValue: '',
+    actions: [],
 
     // resolve 函式：當使用者按下確認/取消時被呼叫
     resolvePromise: null,
@@ -25,6 +27,8 @@ const useDialogStore = create<DialogStore>((set) => ({
             isOpen: true,
             type: 'confirm',
             message,
+            description: '',
+            actions: [],
             resolvePromise: resolve as (value: boolean | string | null) => void,
         });
     }),
@@ -34,8 +38,21 @@ const useDialogStore = create<DialogStore>((set) => ({
             isOpen: true,
             type: 'prompt',
             message,
+            description: '',
             defaultValue,
             inputValue: defaultValue,
+            actions: [],
+            resolvePromise: resolve as (value: boolean | string | null) => void,
+        });
+    }),
+
+    showActionDialog: (config): Promise<string | null> => new Promise((resolve) => {
+        set({
+            isOpen: true,
+            type: 'action',
+            message: config.title,
+            description: config.message ?? '',
+            actions: config.actions,
             resolvePromise: resolve as (value: boolean | string | null) => void,
         });
     }),
@@ -49,7 +66,9 @@ const useDialogStore = create<DialogStore>((set) => ({
             return {
                 isOpen: false,
                 resolvePromise: null,
-                inputValue: ''
+                description: '',
+                inputValue: '',
+                actions: [],
             };
         });
     }

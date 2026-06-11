@@ -4,53 +4,98 @@ const read = (path) => readFileSync(path, 'utf8');
 
 const checks = [
   {
-    path: 'src/components/BoardView.tsx',
-    label: 'BoardView action feedback',
+    path: 'src/utils/meetingRecordWorkflow.ts',
+    label: 'meeting record workflow helper',
     snippets: [
-      'canSaveMeetingRecord',
-      'canPublishMeetingRecord',
-      'title={!canSaveMeetingRecord',
-      'title={isMeetingPublished',
-      '請先輸入會議標題；AI整理後再發布。',
-      'publishMeetingLabel',
-      'lastSaveFeedback',
-      '會議紀錄已發布',
+      'MeetingRecordWorkflowStage',
+      'getMeetingRecordActionState',
+      'getRecordDraftSignature',
+      'canSaveDraft',
+      'canRunAi',
+      'canPublish',
+      '直接發布只保存目前編輯器內容',
     ],
-    forbiddenSnippets: [
-      'disabled={!canSaveMeetingRecord || savingRecordDraft}',
-      '任務變更會納入紀錄',
+  },
+  {
+    path: 'src/hooks/useMeetingModeExitGuard.ts',
+    label: 'meeting mode exit guard',
+    snippets: [
+      'showActionDialog',
+      'save_and_exit',
+      'exit_without_saving',
+      '存草稿後離開',
+      '直接離開',
+      'saveDraft({ nodes })',
     ],
   },
   {
     path: 'src/components/Records/RecordSidebar.tsx',
-    label: 'RecordSidebar action feedback',
+    label: 'RecordSidebar guarded workflow',
     snippets: [
-      'canSave',
-      'canPublish',
-      'title={!canSave',
-      'title={isPublished',
-      '請先輸入標題；AI整理後再發布。',
-      'publishLabel',
-      'lastSaveFeedback',
-      '已儲存為正式紀錄',
+      'MeetingWorkflowStepper',
+      'meetingActionState.canSaveDraft',
+      'meetingActionState.canRunAi',
+      'meetingActionState.canPublish',
+      'MEETING_TERMS',
+      'AI整理',
+      '直接發布目前編輯器內容',
+      '離開會議模式',
+      '流程狀態',
     ],
     forbiddenSnippets: [
-      'disabled={!canSave || saving}',
-      '任務狀態、移動與關鍵變更會在儲存時納入紀錄',
+      'needsMeetingSynthesis',
+      '發布前會先由 AI 統整草稿',
+      'AI整理後再發布',
+      '>結束會議<',
     ],
   },
   {
     path: 'src/store/useRecordStore.ts',
-    label: 'record store draft/publish split',
+    label: 'record store dirty baseline and optional AI',
     snippets: [
-      'const wantsPublish = currentDraft.status ===',
-      "draft.type === 'work_log'",
-      'await get().synthesizeMeetingDraft(options.nodes)',
+      'draftBaselineSignature',
+      'getRecordDraftSignature',
       'lastSaveFeedback',
       'savedAt: Date.now()',
+      'synthesizeMeetingDraft',
     ],
     forbiddenSnippets: [
-      'const appended = isMeetingMode',
+      'await get().synthesizeMeetingDraft',
+      'meetingSynthesisStatus !==',
+      'appendMeetingActivitiesToDraft(currentDraft',
+    ],
+  },
+  {
+    path: 'src/components/MainLayout.tsx',
+    label: 'MainLayout guarded meeting exit',
+    snippets: [
+      'useMeetingModeExitGuard',
+      'requestExitMeetingMode',
+      '離開會議',
+      '未儲存變更會先詢問是否存草稿',
+    ],
+    forbiddenSnippets: [
+      '結束會議模式，保留目前紀錄草稿',
+      '結束會議',
+    ],
+  },
+  {
+    path: 'src/store/useDialogStore.ts',
+    label: 'action dialog store',
+    snippets: [
+      'showActionDialog',
+      "type: 'action'",
+      'actions: config.actions',
+    ],
+  },
+  {
+    path: 'src/components/GlobalDialog.tsx',
+    label: 'action dialog UI',
+    snippets: [
+      "type === 'action'",
+      'actions.map',
+      'action.description',
+      'action.variant',
     ],
   },
 ];
@@ -72,9 +117,9 @@ for (const check of checks) {
 }
 
 if (failures.length > 0) {
-  console.error('DEV-010 action feedback verification failed.');
+  console.error('DEV-010/018 action feedback verification failed.');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log(`DEV-010 action feedback verification passed: ${checks.length} file groups checked.`);
+console.log(`DEV-010/018 action feedback verification passed: ${checks.length} file groups checked.`);

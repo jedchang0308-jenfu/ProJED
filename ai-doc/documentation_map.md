@@ -1,5 +1,20 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-06-10
+
+### DEV-018 文件索引
+
+| 文件 | 狀態 | 對應 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-018-meeting-record-guardrail-workflow-redesign.md` | Implemented | DEV-018 | 會議紀錄側欄四階段防呆工作流、AI整理動作化、直接發布語意與未儲存離開保護。 |
+| `ai-doc/qa/QA-DEV-018-meeting-record-guardrail-workflow.md` | Ready for QC | DEV-018 | 驗證空白草稿、直接發布、AI整理、AI 失敗、未儲存離開、已儲存離開、任務變更來源與 viewport。 |
+
+產品方向補充：
+
+- DEV-018 supersedes DEV-010 的舊會議操作列期待；會議防呆入口以 `RecordSidebar` workflow 為主。
+- DEV-018 supersedes DEV-011 / DEV-012 的「發布前必須 AI整理」假設；AI整理是建議動作，直接發布只保存目前編輯器內容。
+- DEV-018 不變更資料模型與 RAG token，只重設會議紀錄 UX/UI workflow。
+
 更新日期：2026-06-09
 
 ## Active PM 文件

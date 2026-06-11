@@ -191,7 +191,6 @@ for (const snippet of [
   'meetingSynthesisStatus',
   'synthesizeMeetingDraft',
   'synthesizeMeetingRecord',
-  'meetingSynthesisStatus !==',
   'draft: preservedDraft',
   'getMeetingTaskPath',
   'groupId: group.id',
@@ -199,6 +198,7 @@ for (const snippet of [
   assert(`useRecordStore missing snippet: ${snippet}`, storeSource.includes(snippet));
 }
 assert('saveDraft no longer appends raw activity before publish', !storeSource.includes('appendMeetingActivitiesToDraft(currentDraft'));
+assert('DEV-018 publish no longer auto-runs AI synthesis', !storeSource.includes('await get().synthesizeMeetingDraft'));
 
 const serviceSource = readFileSync('src/services/meetingSynthesisService.ts', 'utf8');
 for (const snippet of [

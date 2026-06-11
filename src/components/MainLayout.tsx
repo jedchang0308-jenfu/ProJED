@@ -17,6 +17,7 @@ import useBoardStore from '../store/useBoardStore';
 import useUndoStore from '../store/useUndoStore';
 import useRagStore from '../store/useRagStore';
 import useRecordStore from '../store/useRecordStore';
+import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { toast } from '../store/useToastStore';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
@@ -49,9 +50,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     isPanelCollapsed: isRecordPanelCollapsed,
     isMeetingMode,
     startMeetingRecord,
-    exitMeetingMode,
     isTaskSelectionMode,
   } = useRecordStore();
+  const requestExitMeetingMode = useMeetingModeExitGuard();
 
   const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
   const meetingRecordReserveClass =
@@ -68,7 +69,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const developmentViewWarnings: Partial<Record<ViewMode, string>> = {
     calendar: '日曆功能仍在開發中，顯示內容與操作流程可能尚未穩定。',
-    records: '紀錄功能仍在開發中，資料保存與流程可能尚未穩定。',
   };
 
   const handleModeChange = (nextView: ViewMode) => {
@@ -214,14 +214,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="flex items-center gap-1 sm:gap-2">
           <button
             type="button"
-            onClick={() => (isMeetingMode ? exitMeetingMode() : startMeetingRecord())}
+            onClick={() => (isMeetingMode ? void requestExitMeetingMode() : startMeetingRecord())}
             className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
               isRecordOpen || isMeetingMode ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'hover:border-emerald-400 hover:text-emerald-600'
             }`}
-            title={isMeetingMode ? '結束會議模式，保留目前紀錄草稿' : '開始會議紀錄，切到看板並開啟速記欄'}
+            title={isMeetingMode ? '離開會議模式；若有未儲存變更會先詢問是否存草稿' : '開始會議紀錄，切到看板並開啟速記欄'}
           >
             <SquarePen size={14} className={isRecordOpen ? 'text-emerald-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">{isMeetingMode ? '結束會議' : '會議紀錄'}</span>
+            <span className="hidden lg:inline">{isMeetingMode ? '離開會議' : '會議紀錄'}</span>
           </button>
 
           <button

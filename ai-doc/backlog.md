@@ -1,5 +1,21 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-06-10
+
+### DEV-018：會議紀錄防呆 UX/UI 流程重設計
+
+| DEV | 狀態 | 類型 | 優先度 | 摘要 | 文件 |
+|---|---|---|---|---|---|
+| DEV-018 | In Verification | 交付點 | P1 | 重設會議紀錄側欄為四階段防呆工作流，將 AI整理改為建議性動作，新增未儲存離開三選一防呆。 | `ai-doc/specs/SPEC-018-meeting-record-guardrail-workflow-redesign.md` |
+
+範圍邊界：
+
+- 不新增資料表或 migration。
+- 不改 `KnowledgeRecord`、`record_task_links`、RAG token 格式。
+- 不新增 BoardView 上方會議操作列。
+- 不把 AI整理改成自動任務修改。
+- 手機版會議紀錄工作流不列入 release gate。
+
 更新日期：2026-06-09
 
 ## Backlog 管理原則

@@ -53,25 +53,13 @@ const checks = [
     ],
   },
   {
-    path: 'src/components/BoardView.tsx',
-    label: 'meeting status wording',
-    snippets: [
-      '看板維持一般編輯；任務變更會供 AI 統整',
-      'meetingSynthesisStatus',
-      'AI整理',
-    ],
-    forbiddenSnippets: [
-      '任務變更會納入紀錄',
-      'toggleMeetingTaskCapture',
-    ],
-  },
-  {
     path: 'src/components/Records/RecordSidebar.tsx',
     label: 'meeting activity sidebar evidence',
     snippets: [
       'AI 統整來源：任務變更',
       'meetingActivities.length',
-      '發布前會先由 AI 統整草稿',
+      'AI 整理是發布前建議',
+      '直接發布會保存目前 editor 內容',
     ],
   },
 ];

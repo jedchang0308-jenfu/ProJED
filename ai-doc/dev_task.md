@@ -1,5 +1,36 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-06-10
+
+### DEV-018：會議紀錄防呆 UX/UI 流程重設計
+
+狀態：In Verification
+節點類型：交付點
+父交付點：DEV-005 / DEV-010 / DEV-011 / DEV-012
+是否計入產品交付完成：是
+
+交付文件：
+
+- `ai-doc/specs/SPEC-018-meeting-record-guardrail-workflow-redesign.md`
+- `ai-doc/qa/QA-DEV-018-meeting-record-guardrail-workflow.md`
+
+範圍：
+
+- 將會議速記側欄改為 `速記`、`AI整理`、`校稿`、`發布` 四階段工作流。
+- AI整理改為建議性動作；發布時直接保存編輯器內容，不自動呼叫 AI。
+- 新增側欄狀態卡，集中呈現目前階段、下一步、草稿同步狀態、AI 狀態與直接發布風險。
+- 新增未儲存離開三選一防呆：`存草稿後離開`、`直接離開`、`取消`。
+- 擴充 `GlobalDialog` / `DialogStore` 支援 2-3 個自訂 action button。
+- 更新 DEV-010 驗證腳本，移除過時的 BoardView 會議操作列期待。
+
+下一步：
+
+| 項目 | 狀態 | Owner | 說明 |
+|---|---|---|---|
+| DEV-018 RD | Done | RD | workflow helper、RecordSidebar、MainLayout、DialogStore、useRecordStore 已更新。 |
+| DEV-018 QA | Ready | QA | 依 `QA-DEV-018` 執行案例驗證。 |
+| DEV-018 QC | Done | QC | DEV-007 至 DEV-012 verifier、build、1440x950 / 1024x768 viewport smoke 已通過。 |
+
 更新日期：2026-06-09
 文件用途：本檔只做 PM 主控、交付狀態、下一步與驗證證據索引。歷史長版內容已封存到 `ai-doc/archived/dev_task_2026-06-09_before_restructure.md`。
 

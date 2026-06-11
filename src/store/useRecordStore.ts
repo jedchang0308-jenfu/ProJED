@@ -12,6 +12,7 @@ import {
 } from '../utils/recordContentMentions';
 import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
 import type { MeetingSynthesisInput } from '../utils/meetingRecordSynthesis';
+import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
 import { useMemberStore } from './useMemberStore';
 import type {
   KnowledgeRecord,
@@ -73,6 +74,7 @@ interface RecordStoreState {
   returnViewAfterSelection: ViewMode | null;
   contentCursorOffset: number | null;
   draft: RecordDraft | null;
+  draftBaselineSignature: string | null;
   meetingActivities: MeetingTaskActivity[];
   appendedMeetingActivityIds: string[];
   meetingSynthesisStatus: MeetingSynthesisStatus;
@@ -332,6 +334,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   returnViewAfterSelection: null,
   contentCursorOffset: null,
   draft: null,
+  draftBaselineSignature: null,
   meetingActivities: [],
   appendedMeetingActivityIds: [],
   meetingSynthesisStatus: 'idle',
@@ -364,6 +367,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     returnViewAfterSelection: null,
     contentCursorOffset: null,
     draft: null,
+    draftBaselineSignature: null,
     meetingActivities: [],
     appendedMeetingActivityIds: [],
     ...resetMeetingSynthesisState,
@@ -374,6 +378,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
   openNewRecord: (type, initialNodeId) => {
     const userId = useAuthStore.getState().user?.uid ?? null;
+    const draft = createDefaultDraft(type, userId, initialNodeId);
     set({
       isPanelOpen: true,
       isPanelCollapsed: false,
@@ -381,7 +386,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       isMeetingMode: false,
       meetingTaskCaptureEnabled: false,
       contentCursorOffset: 0,
-      draft: createDefaultDraft(type, userId, initialNodeId),
+      draft,
+      draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
       ...resetMeetingSynthesisState,
@@ -392,6 +398,23 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
   openExistingRecord: (record) => {
     const mentionedNodeIds = extractTaskMentionIds(record.content);
+    const draft = {
+      id: record.id,
+      type: record.type,
+      title: record.title,
+      content: record.content,
+      status: record.status,
+      visibility: record.visibility,
+      participantsText: record.participantsText ?? '',
+      occurredAt: record.occurredAt,
+      startedAt: record.startedAt,
+      endedAt: record.endedAt,
+      recordedBy: record.recordedBy,
+      taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+      legacyTaskLinkNodeIds: record.taskLinks
+        .map(link => link.nodeId)
+        .filter(nodeId => !mentionedNodeIds.includes(nodeId)),
+    };
     set({
       isPanelOpen: true,
       isPanelCollapsed: false,
@@ -399,23 +422,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       isMeetingMode: false,
       meetingTaskCaptureEnabled: false,
       contentCursorOffset: record.content.length,
-      draft: {
-        id: record.id,
-        type: record.type,
-        title: record.title,
-        content: record.content,
-        status: record.status,
-        visibility: record.visibility,
-        participantsText: record.participantsText ?? '',
-        occurredAt: record.occurredAt,
-        startedAt: record.startedAt,
-        endedAt: record.endedAt,
-        recordedBy: record.recordedBy,
-        taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
-        legacyTaskLinkNodeIds: record.taskLinks
-          .map(link => link.nodeId)
-          .filter(nodeId => !mentionedNodeIds.includes(nodeId)),
-      },
+      draft,
+      draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
       ...resetMeetingSynthesisState,
@@ -453,6 +461,9 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         returnViewAfterSelection: null,
         contentCursorOffset: state.draft === draft ? state.contentCursorOffset ?? draft.content.length : draft.content.length,
         draft,
+        draftBaselineSignature: isExistingMeetingDraft
+          ? state.draftBaselineSignature ?? getRecordDraftSignature(draft)
+          : getRecordDraftSignature(draft),
         meetingActivities: state.draft === draft ? state.meetingActivities : [],
         appendedMeetingActivityIds: state.draft === draft ? state.appendedMeetingActivityIds : [],
         ...(isExistingMeetingDraft ? {} : resetMeetingSynthesisState),
@@ -489,7 +500,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     const nextLinks = state.draft.taskLinks.map(link =>
       link.nodeId === nodeId ? { ...link, role } : link
     );
-    return { draft: { ...state.draft, taskLinks: uniqueLinks(nextLinks) } };
+    return { draft: { ...state.draft, taskLinks: uniqueLinks(nextLinks) }, lastSaveFeedback: null };
   }),
 
   toggleDraftTask: (nodeId) => set(state => {
@@ -499,7 +510,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     const taskLinks = hasLink
       ? state.draft.taskLinks.filter(link => link.nodeId !== nodeId)
       : [...state.draft.taskLinks, { nodeId, role: nextRole }];
-    return { draft: { ...state.draft, taskLinks } };
+    return { draft: { ...state.draft, taskLinks }, lastSaveFeedback: null };
   }),
 
   insertTaskMentionAtCursor: (nodeId, title) => set(state => {
@@ -524,6 +535,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         content: insertion.content,
         taskLinks,
       },
+      lastSaveFeedback: null,
     };
   }),
 
@@ -641,24 +653,16 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     }));
   },
 
-  saveDraft: async (options = {}) => {
+  saveDraft: async (_options = {}) => {
     const {
       draft: currentDraft,
-      isMeetingMode,
-      meetingSynthesisStatus,
     } = get();
     const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
     if (!currentDraft || !activeWorkspaceId || !activeBoardId) {
       set({ error: '請先選擇工作區與看板。' });
       return null;
     }
-    const isMeetingDraft = isMeetingMode && currentDraft.type === 'meeting';
     const wantsPublish = currentDraft.status === 'published';
-
-    if (isMeetingDraft && wantsPublish && meetingSynthesisStatus !== 'ready') {
-      await get().synthesizeMeetingDraft(options.nodes);
-      return null;
-    }
 
     const draft = currentDraft;
     if (!draft.title.trim()) {
@@ -695,6 +699,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           id: saved.id,
           taskLinks: saved.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
         },
+        draftBaselineSignature: getRecordDraftSignature({
+          ...payload,
+          id: saved.id,
+          taskLinks: saved.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+        }),
         records: [saved, ...state.records.filter(record => record.id !== saved.id)],
         lastSaveFeedback: {
           recordId: saved.id,
@@ -723,6 +732,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         saving: false,
         records: state.records.filter(record => record.id !== recordId),
         draft: state.draft?.id === recordId ? null : state.draft,
+        draftBaselineSignature: state.draft?.id === recordId ? null : state.draftBaselineSignature,
         lastSaveFeedback: state.lastSaveFeedback?.recordId === recordId ? null : state.lastSaveFeedback,
       }));
     } catch (error) {

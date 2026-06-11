@@ -2,7 +2,8 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
 export type ViewMode = 'home' | 'list' | 'board' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
-export type DialogType = 'confirm' | 'prompt';
+export type DialogType = 'confirm' | 'prompt' | 'action';
+export type DialogActionVariant = 'primary' | 'secondary' | 'danger';
 export type DragType = 'move' | 'left' | 'right';
 export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue' | 'sky' | 'lime' | 'pink' | 'black' | 'gray';
 export type CollaborationRole = 'owner' | 'admin' | 'project_manager' | 'member' | 'viewer';
@@ -513,14 +514,30 @@ export interface DialogStore {
   isOpen: boolean;
   type: DialogType;
   message: string;
+  description: string;
   defaultValue: string;
   inputValue: string;
+  actions: DialogAction[];
   resolvePromise: ((value: boolean | string | null) => void) | null;
 
   setInputValue: (val: string) => void;
   showConfirm: (message: string) => Promise<boolean>;
   showPrompt: (message: string, defaultValue?: string) => Promise<string | null>;
+  showActionDialog: (config: ActionDialogConfig) => Promise<string | null>;
   closeDialog: (result: boolean | string | null) => void;
+}
+
+export interface DialogAction {
+  id: string;
+  label: string;
+  description?: string;
+  variant?: DialogActionVariant;
+}
+
+export interface ActionDialogConfig {
+  title: string;
+  message?: string;
+  actions: DialogAction[];
 }
 
 export interface TaskWithType {
