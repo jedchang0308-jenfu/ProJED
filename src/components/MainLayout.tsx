@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
+  ArrowLeft,
   BookOpenText,
+  BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
   Columns,
@@ -18,6 +20,7 @@ import useUndoStore from '../store/useUndoStore';
 import useRagStore from '../store/useRagStore';
 import useRecordStore from '../store/useRecordStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
+import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import { toast } from '../store/useToastStore';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
@@ -25,6 +28,7 @@ import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
 import { compactIconButtonClass } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
+import { StatusFilterBar } from './ui/StatusFilterBar';
 import type { ViewMode } from '../types';
 
 interface MainLayoutProps {
@@ -50,10 +54,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     isPanelCollapsed: isRecordPanelCollapsed,
     isMeetingMode,
     startMeetingRecord,
+    openNewRecord,
     isTaskSelectionMode,
   } = useRecordStore();
   const requestExitMeetingMode = useMeetingModeExitGuard();
+  const guardRecordDraft = useRecordDraftGuard();
 
+  const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
   const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
   const meetingRecordReserveClass =
     isMeetingMode && isRecordOpen
@@ -66,6 +73,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const activeBoard = getActiveBoard();
   const activeWorkspace = getActiveWorkspace();
   const isBoardWorkspaceView = ['list', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
+  const isTaskFilterView = ['list', 'board', 'gantt', 'calendar'].includes(currentView);
+  const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
 
   const developmentViewWarnings: Partial<Record<ViewMode, string>> = {
     calendar: '日曆功能仍在開發中，顯示內容與操作流程可能尚未穩定。',
@@ -75,6 +84,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const warning = developmentViewWarnings[nextView];
     if (warning) toast.warning(warning);
     setView(nextView);
+  };
+
+  const exitSettings = useCallback(() => {
+    setView(activeWorkspace && activeBoard ? 'board' : 'home');
+  }, [activeBoard, activeWorkspace, setView]);
+
+  const handleStartMeetingRecord = () => {
+    if (isMeetingMode) {
+      void requestExitMeetingMode();
+      return;
+    }
+    void guardRecordDraft(() => startMeetingRecord(), {
+      title: '新增會議記錄？',
+      message: '新增會議記錄會切到會議紀錄流程；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
+  };
+
+  const handleStartWorkLog = () => {
+    void guardRecordDraft(() => openNewRecord('work_log'), {
+      title: '新增個人紀錄？',
+      message: '新增個人紀錄會開啟新的紀錄草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
   };
 
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
@@ -89,9 +120,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     },
     {
       value: 'records',
-      label: '紀錄庫(開發中)',
+      label: '紀錄庫',
       icon: <BookOpenText size={13} />,
-      title: '查看會議與工作紀錄總覽，功能仍在開發中',
+      title: '查看與整理會議紀錄、會後會議紀錄與個人工作紀錄',
     },
   ];
 
@@ -102,6 +133,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       const target = event.target as HTMLElement;
       const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (isEditable) return;
+
+      if (event.key === 'Escape' && isSettingsScopeView) {
+        event.preventDefault();
+        exitSettings();
+        return;
+      }
 
       if (ctrlOrCmd && !event.shiftKey && event.key === 'z') {
         event.preventDefault();
@@ -114,26 +151,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canRedo, canUndo, redo, undo]);
+  }, [canRedo, canUndo, exitSettings, isSettingsScopeView, redo, undo]);
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 text-slate-800">
-      <nav className="z-40 flex h-10 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      <nav className="z-40 flex h-10 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-2 shadow-sm sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 overflow-visible">
           <button
             type="button"
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="mr-2 rounded border border-slate-200 p-1 text-slate-500 hover:bg-slate-100"
+            className="mr-1 rounded border border-slate-200 p-1 text-slate-500 hover:bg-slate-100 sm:mr-2"
             title={isSidebarOpen ? '收合側欄' : '展開側欄'}
           >
             <Menu size={18} />
           </button>
 
-          <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+          <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium sm:gap-2">
             <Layout className="h-5 w-5 shrink-0 text-primary" />
-            <span className="hidden font-bold text-slate-700 sm:inline">ProJED</span>
+            <span className="shrink-0 font-bold text-slate-700">ProJED</span>
 
-            {(currentView === 'settings' || currentView === 'calendar_subscriptions') && (
+            {isSettingsScopeView && (
               <>
                 <ChevronRight size={14} className="text-slate-300" />
                 <span className="font-bold text-slate-700">設定</span>
@@ -143,6 +180,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     <span className="font-bold text-slate-500">日曆訂閱</span>
                   </>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={exitSettings}
+                  className="ml-2 inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 shadow-sm transition-colors hover:border-primary/40 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  title="離開設定 (Esc)"
+                >
+                  <ArrowLeft size={13} />
+                  <span className="hidden sm:inline">離開設定</span>
+                  <span className="rounded bg-slate-100 px-1 text-[10px] font-semibold text-slate-500">Esc</span>
+                </button>
               </>
             )}
 
@@ -155,28 +202,31 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
               <>
-                <ChevronRight size={14} className="text-slate-300" />
-                <span className="whitespace-nowrap text-slate-400">{activeWorkspace.title}</span>
-                <ChevronRight size={14} className="text-slate-300" />
+                <span className="shrink-0 text-slate-300" aria-hidden="true">/</span>
                 <h1
                   contentEditable
                   suppressContentEditableWarning
+                  title={`目前位置：${activeWorkspace.title} / ${activeBoard.title}`}
                   onBlur={(event) => updateBoardTitle(activeWorkspace.id, activeBoard.id, event.currentTarget.innerText)}
-                  className="max-w-[150px] cursor-text truncate rounded px-2 py-0.5 font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:max-w-[300px]"
+                  className="min-w-[1.5rem] max-w-[4.5rem] cursor-text truncate rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:max-w-[180px] sm:px-2 sm:text-sm md:max-w-[260px]"
                 >
                   {activeBoard.title}
                 </h1>
 
-                <div className="ml-[10px] flex items-center gap-[8px] border-l border-slate-200 pl-[10px]">
+                <div className="ml-0 flex items-center gap-1 border-l-0 border-slate-200 pl-0 sm:ml-[10px] sm:gap-[8px] sm:border-l sm:pl-[10px]">
                   <ModeSwitcher
                     value={currentView}
                     options={modeSwitcherOptions}
                     onChange={handleModeChange}
                     disabled={isSelectingMode}
-                    disabledTitle="選取模式中無法切換檢視"
+                    disabledTitle={isMeetingMode ? '紀錄中先離開紀錄再切換檢視' : '選取模式中無法切換檢視'}
                   />
 
-                  <div className="ml-0 flex items-center gap-px border-l border-slate-200 pl-[8px]">
+                  {isTaskFilterView ? (
+                    <StatusFilterBar compactLabel />
+                  ) : null}
+
+                  <div className="ml-0 hidden items-center gap-px border-l border-slate-200 pl-[8px] sm:flex">
                     <button
                       id="btn-undo"
                       type="button"
@@ -211,23 +261,55 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => (isMeetingMode ? void requestExitMeetingMode() : startMeetingRecord())}
-            className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
-              isRecordOpen || isMeetingMode ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'hover:border-emerald-400 hover:text-emerald-600'
-            }`}
-            title={isMeetingMode ? '離開會議模式；若有未儲存變更會先詢問是否存草稿' : '開始會議紀錄，切到看板並開啟速記欄'}
-          >
-            <SquarePen size={14} className={isRecordOpen ? 'text-emerald-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">{isMeetingMode ? '離開會議' : '會議紀錄'}</span>
-          </button>
+        <div className="hidden items-center gap-1 sm:flex sm:gap-2">
+          {isMeetingMode ? (
+            <div
+              role="status"
+              data-active-record-kind="meeting"
+              className="btn-outline flex h-7 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap border-blue-200 bg-blue-50 px-2 text-xs text-blue-700 sm:h-8 sm:px-3 sm:text-sm"
+              title="已開啟會議紀錄；離開請使用右側紀錄欄的離開紀錄。"
+            >
+              <BookOpenText size={14} className="text-blue-600" />
+              <span className="hidden lg:inline">紀錄中</span>
+            </div>
+          ) : isNonMeetingRecordOpen ? (
+            <div
+              role="status"
+              data-active-record-kind="work-log"
+              className="btn-outline flex h-7 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap border-blue-200 bg-blue-50 px-2 text-xs text-blue-700 sm:h-8 sm:px-3 sm:text-sm"
+              title="已開啟個人紀錄；若要新增會議記錄，請先離開目前紀錄。"
+            >
+              <BookOpenText size={14} className="text-blue-600" />
+              <span className="hidden lg:inline">紀錄中</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStartMeetingRecord}
+              className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-emerald-400 hover:text-emerald-600 sm:h-8 sm:px-3 sm:text-sm"
+              title="新增會議記錄，切到看板並開啟右側紀錄欄"
+            >
+              <SquarePen size={14} className="text-slate-400" />
+              <span className="hidden lg:inline">新增會議記錄</span>
+            </button>
+          )}
+
+          {!isMeetingMode && !isRecordOpen ? (
+            <button
+              type="button"
+              onClick={handleStartWorkLog}
+              className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-slate-400 hover:text-slate-700 sm:h-8 sm:px-3 sm:text-sm"
+              title="新增個人紀錄；會在撰寫前先決定紀錄類型"
+            >
+              <BriefcaseBusiness size={14} className="text-slate-400" />
+              <span className="hidden xl:inline">新增個人紀錄</span>
+            </button>
+          ) : null}
 
           <button
             type="button"
             onClick={toggleRagPanel}
-            className={`btn-outline flex h-7 items-center gap-1.5 px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
+            className={`btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
               isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600'
             }`}
             title="開啟 AI 全域分析"

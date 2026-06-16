@@ -1,5 +1,4 @@
 import React from 'react';
-import { StatusFilterBar } from './StatusFilterBar';
 import { compactClassNames } from './compactTokens';
 
 type ViewToolbarProps = {
@@ -7,19 +6,18 @@ type ViewToolbarProps = {
   zIndex?: number;
 };
 
-export const ViewToolbar: React.FC<ViewToolbarProps> = ({ rightControls, zIndex = 110 }) => (
-  <div
-    className={compactClassNames.toolbar}
-    style={{ zIndex }}
-  >
-    <div className={compactClassNames.toolbarLeft}>
-      <StatusFilterBar />
-    </div>
+export const ViewToolbar: React.FC<ViewToolbarProps> = ({ rightControls, zIndex = 110 }) => {
+  if (!rightControls) return null;
 
-    {rightControls && (
+  return (
+    <div
+      className={compactClassNames.toolbar}
+      style={{ zIndex }}
+    >
+      <div className="flex flex-1" />
       <div className={compactClassNames.toolbarRight}>
         {rightControls}
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
+};

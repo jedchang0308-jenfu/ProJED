@@ -25,7 +25,11 @@ const filterPillClass = (active: boolean) =>
       : 'border-slate-200 hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
   }`;
 
-export const StatusFilterBar: React.FC = () => {
+type StatusFilterBarProps = {
+  compactLabel?: boolean;
+};
+
+export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -113,6 +117,7 @@ export const StatusFilterBar: React.FC = () => {
         ref={triggerRef}
         id="filter-menu-trigger"
         type="button"
+        aria-label="過濾器"
         onClick={() => setIsOpen(prev => !prev)}
         className={`${compactClassNames.segmentedButtonBase} border ${
           isOpen
@@ -123,7 +128,7 @@ export const StatusFilterBar: React.FC = () => {
         }`}
       >
         <SlidersHorizontal size={13} />
-        <span>過濾器</span>
+        <span className={compactLabel ? 'hidden sm:inline' : undefined}>過濾器</span>
         {activeFilterCount > 0 && (
           <span className="rounded-full bg-amber-400 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
             {activeFilterCount}
@@ -138,7 +143,7 @@ export const StatusFilterBar: React.FC = () => {
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
-          className="absolute left-0 top-[calc(100%+4px)] z-[10000] max-h-[calc(100vh-6rem)] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150"
+          className="absolute right-0 top-[calc(100%+4px)] z-[10000] max-h-[calc(100vh-6rem)] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150 sm:left-0 sm:right-auto"
         >
           <div className="px-3 pt-2 pb-2">
             <p className="mb-2 text-[10px] font-semibold text-slate-500">任務狀態</p>

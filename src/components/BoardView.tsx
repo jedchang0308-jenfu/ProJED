@@ -15,7 +15,6 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { GlobalContextMenu } from './GlobalContextMenu';
-import { ViewToolbar } from './ui/ViewToolbar';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useRecordStore from '../store/useRecordStore';
@@ -452,8 +451,6 @@ const BoardView = () => {
             onDragEnd={handleDragEnd}
         >
             <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
-                <ViewToolbar zIndex={10000} />
-
                 {isRecordTaskSelectionMode && (
                     <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
                         <div className="flex items-center justify-between gap-3">

@@ -33,7 +33,7 @@ export function ModeSwitcher<T extends string>({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           title={disabled ? disabledTitle : option.title ?? ''}
-          className={disabled ? 'opacity-50 cursor-not-allowed' : ''}
+          className={`${disabled ? 'opacity-50 cursor-not-allowed' : ''} max-sm:px-2`}
         >
           {option.icon}
           <span className="hidden md:inline">{option.label}</span>
