@@ -351,6 +351,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         onContextMenu={(e) => {
             e.preventDefault();
             setContextMenuState({
+                kind: 'task',
                 isOpen: true,
                 x: e.clientX,
                 y: e.clientY,

@@ -7,6 +7,7 @@ import {
   type BoardMember,
   type BoardRolePermissionMatrix,
   type Dependency,
+  type ActivityEvent,
   type KnowledgeRecord,
   type KnowledgeRecordInput,
   type TaskNode,
@@ -24,6 +25,7 @@ const BOARD_MEMBERS_KEY = 'projed-local-test.boardMembers';
 const BOARD_INVITES_KEY = 'projed-local-test.boardInvites';
 const BOARD_ROLE_PERMISSIONS_KEY = 'projed-local-test.boardRolePermissions';
 const KNOWLEDGE_RECORDS_KEY = 'projed-local-test.knowledgeRecords';
+const ACTIVITY_EVENTS_KEY = 'projed-local-test.activityEvents';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 
 const readJson = <T>(key: string, fallback: T): T => {
@@ -99,6 +101,8 @@ const readBoardRolePermissions = () => readJson<Record<string, Partial<BoardRole
 const writeBoardRolePermissions = (permissions: Record<string, Partial<BoardRolePermissionMatrix>>) => writeJson(BOARD_ROLE_PERMISSIONS_KEY, permissions);
 const readKnowledgeRecords = () => readJson<KnowledgeRecord[]>(KNOWLEDGE_RECORDS_KEY, []);
 const writeKnowledgeRecords = (records: KnowledgeRecord[]) => writeJson(KNOWLEDGE_RECORDS_KEY, records);
+const readActivityEvents = () => readJson<ActivityEvent[]>(ACTIVITY_EVENTS_KEY, []);
+const writeActivityEvents = (events: ActivityEvent[]) => writeJson(ACTIVITY_EVENTS_KEY, events);
 const getBoardMemberKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
 const readCurrentLocalUserId = () =>
   readJson<{ uid?: string } | null>(LOCAL_TEST_SESSION_KEY, null)?.uid || 'local-test-user';
@@ -670,6 +674,39 @@ export const localTestRecordService = {
   },
 };
 
+export const localTestEventLogService = {
+  logActivity: async (event: Omit<ActivityEvent, 'id' | 'actorId' | 'createdAt'>): Promise<void> => {
+    const now = Date.now();
+    const saved: ActivityEvent = {
+      ...event,
+      id: createId('local_activity'),
+      actorId: readCurrentLocalUserId(),
+      createdAt: now,
+    };
+    writeActivityEvents([saved, ...readActivityEvents()].slice(0, 1000));
+  },
+
+  listActivity: async (query: {
+    workspaceId: string;
+    boardId?: string | null;
+    scope: 'workspace' | 'board';
+    startedAt: number;
+    endedAt: number;
+    eventTypes?: string[];
+  }): Promise<ActivityEvent[]> => {
+    const eventTypeSet = query.eventTypes?.length ? new Set(query.eventTypes) : null;
+    return readActivityEvents()
+      .filter(event => event.workspaceId === query.workspaceId)
+      .filter(event => query.scope === 'workspace' || event.boardId === query.boardId)
+      .filter(event => !eventTypeSet || eventTypeSet.has(event.eventType))
+      .filter(event => {
+        const createdAt = event.createdAt ?? 0;
+        return createdAt >= query.startedAt && createdAt <= query.endedAt;
+      })
+      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  },
+};
+
 export const localTestStorage = {
   readWorkspaces,
   writeWorkspaces,
@@ -687,4 +724,6 @@ export const localTestStorage = {
   writeBoardRolePermissions,
   readKnowledgeRecords,
   writeKnowledgeRecords,
+  readActivityEvents,
+  writeActivityEvents,
 };

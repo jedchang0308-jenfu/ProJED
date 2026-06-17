@@ -17,7 +17,7 @@ export const useMeetingModeExitGuard = () => {
   const draftBaselineSignature = useRecordStore(state => state.draftBaselineSignature);
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const saveDraft = useRecordStore(state => state.saveDraft);
-  const exitMeetingMode = useRecordStore(state => state.exitMeetingMode);
+  const closePanel = useRecordStore(state => state.closePanel);
   const showActionDialog = useDialogStore(state => state.showActionDialog);
 
   const actionState = getMeetingRecordActionState({
@@ -36,7 +36,7 @@ export const useMeetingModeExitGuard = () => {
     if (!isMeetingMode) return;
 
     if (!actionState.isDirty) {
-      exitMeetingMode();
+      closePanel();
       return;
     }
 
@@ -53,7 +53,7 @@ export const useMeetingModeExitGuard = () => {
         {
           id: 'exit_without_saving',
           label: '直接離開',
-          description: '只離開會議模式，不保存新變更。',
+          description: '關閉會議速記，不保存新變更。',
           variant: 'danger',
         },
         {
@@ -66,12 +66,12 @@ export const useMeetingModeExitGuard = () => {
 
     if (choice === 'save_and_exit') {
       const saved = await saveDraft({ nodes });
-      if (saved) exitMeetingMode();
+      if (saved) closePanel();
       return;
     }
 
     if (choice === 'exit_without_saving') {
-      exitMeetingMode();
+      closePanel();
     }
-  }, [actionState.exitWarning, actionState.isDirty, exitMeetingMode, isMeetingMode, nodes, saveDraft, showActionDialog]);
+  }, [actionState.exitWarning, actionState.isDirty, closePanel, isMeetingMode, nodes, saveDraft, showActionDialog]);
 };

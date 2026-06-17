@@ -147,6 +147,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       const touch = e.touches[0];
       if (!child) return;
       useBoardStore.getState().setContextMenuState({
+        kind: 'task',
         isOpen: true,
         x: touch.clientX,
         y: touch.clientY,
@@ -205,6 +206,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           e.stopPropagation();
           if (isRecordCaptureMode) return;
           useBoardStore.getState().setContextMenuState({
+            kind: 'task',
             isOpen: true,
             x: e.clientX,
             y: e.clientY,

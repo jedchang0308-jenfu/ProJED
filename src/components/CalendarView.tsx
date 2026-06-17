@@ -471,7 +471,7 @@ const CalendarView = () => {
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
-                                                        useBoardStore.getState().setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId: seg.item.id, title: seg.item.title });
+                                                        useBoardStore.getState().setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: seg.item.id, title: seg.item.title });
                                                     }}
                                                     style={{
                                                         position: 'absolute',

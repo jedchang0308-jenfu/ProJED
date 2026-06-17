@@ -3,6 +3,7 @@ import {
   createDefaultBoardRolePermissionMatrix,
   normalizeBoardRolePermissionMatrix,
   type ActivityEvent,
+  type ActivityEventListQuery,
   type AuditLogEntry,
   type BoardInviteAcceptInput,
   type Board,
@@ -45,6 +46,7 @@ import {
   localTestMemberService,
   localTestNodeService,
   localTestRecordService,
+  localTestEventLogService,
   localTestTagService,
   localTestWorkspaceService,
 } from './localTestService';
@@ -474,7 +476,18 @@ export const recordService = {
 
 export const eventLogService = {
   logActivity: (event: Omit<ActivityEvent, 'id' | 'actorId' | 'createdAt'>): Promise<void> =>
-    isSupabaseBackend ? supabaseEventLogService.logActivity(event) : Promise.resolve(),
+    isLocalTestBackend
+      ? localTestEventLogService.logActivity(event)
+      : isSupabaseBackend
+        ? supabaseEventLogService.logActivity(event)
+        : Promise.resolve(),
+
+  listActivity: (query: ActivityEventListQuery): Promise<ActivityEvent[]> =>
+    isLocalTestBackend
+      ? localTestEventLogService.listActivity(query)
+      : isSupabaseBackend
+        ? supabaseEventLogService.listActivity(query)
+        : Promise.resolve([]),
 
   logAudit: (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>): Promise<void> =>
     isSupabaseBackend ? supabaseEventLogService.logAudit(entry) : Promise.resolve(),

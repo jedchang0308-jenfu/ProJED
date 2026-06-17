@@ -6,6 +6,7 @@ import {
 } from '../../types';
 import type {
   ActivityEvent,
+  ActivityEventListQuery,
   AuditLogEntry,
   Board,
   BoardInvite,
@@ -27,7 +28,7 @@ import type {
   WorkspaceMember,
 } from '../../types';
 import { isSupabaseConfigured, supabase } from './client';
-import type { BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
+import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
 
@@ -441,6 +442,26 @@ const resolveEventEntityId = async (
   if (entityTable === 'wbs_dependencies' && projectId) return resolveDependencyId(tenantId, projectId, entityId);
   return null;
 };
+
+const mapActivityEvent = (
+  row: ActivityEventRow,
+  requestedWorkspaceId: string,
+  requestedBoardId?: string | null,
+): ActivityEvent => ({
+  id: row.id,
+  workspaceId: requestedWorkspaceId,
+  boardId: requestedBoardId ?? row.project_id,
+  actorId: row.actor_id,
+  eventType: row.event_type as ActivityEvent['eventType'],
+  entityTable: row.entity_table ?? '',
+  entityId: (() => {
+    const payload = row.payload as Record<string, unknown> | null;
+    const legacyEntityId = payload?.legacyEntityId;
+    return typeof legacyEntityId === 'string' && legacyEntityId ? legacyEntityId : row.entity_id;
+  })(),
+  payload: (row.payload as Record<string, unknown> | null) ?? {},
+  createdAt: toTimestamp(row.created_at),
+});
 
 const taskNodeToInsert = async (tenantId: string, projectId: string, node: TaskNode): Promise<WbsItemInsert> => ({
   id: isUuid(node.id) ? node.id : undefined,
@@ -1673,6 +1694,33 @@ export const supabaseEventLogService = {
       activity_payload: stripUndefinedForJson(payload) ?? {},
     });
     assertNoError(error);
+  },
+
+  listActivity: async (query: ActivityEventListQuery): Promise<ActivityEvent[]> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(query.workspaceId);
+    const projectId = query.boardId ? await resolveProjectId(tenantId, query.boardId) : null;
+    const eventTypes = query.eventTypes?.length ? query.eventTypes : undefined;
+
+    let request = supabase
+      .from('activity_events')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .gte('created_at', new Date(query.startedAt).toISOString())
+      .lte('created_at', new Date(query.endedAt).toISOString())
+      .order('created_at', { ascending: true });
+
+    if (query.scope === 'board' && projectId) {
+      request = request.eq('project_id', projectId);
+    }
+    if (eventTypes) {
+      request = request.in('event_type', eventTypes);
+    }
+
+    const { data, error } = await request;
+    assertNoError(error);
+    return ((data ?? []) as ActivityEventRow[])
+      .map(row => mapActivityEvent(row, query.workspaceId, query.scope === 'board' ? query.boardId : row.project_id));
   },
 
   logAudit: async (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 'createdAt'>): Promise<void> => {

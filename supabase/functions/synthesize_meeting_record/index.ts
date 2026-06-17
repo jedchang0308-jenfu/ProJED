@@ -160,6 +160,8 @@ const buildPrompt = (input: MeetingSynthesisInput) => {
 18. 當多個新增任務屬於同一 tasks[].path 主線時，要彙整成工作主線、工作面與下層拆解。
 19. 總結可以整理任務樹脈絡，但不能補出人類沒有講過的決策、下一步或風險。
 
+20. 子層任務 heading 必須顯示完整任務路徑 task tags，而不是只顯示目前任務；例如卡片層使用「2.1.1 @[列表](task:list-id) @[卡片](task:card-id)」，子任務層使用「2.1.1.1 @[列表](task:list-id) @[卡片](task:card-id) @[子任務](task:child-id)」。
+
 JSON schema:
 {
   "content": "markdown string",
@@ -187,7 +189,7 @@ content 必須保留三個大章節，但任務內容請使用自然語言段落
 2.1.1.2.1 @[問BOSS](task:grandchild-id)
 新增任務「問BOSS」。
 
-3. 待校稿項目
+3. 其他
 - ...
 
 任務分段規則：
@@ -198,7 +200,9 @@ content 必須保留三個大章節，但任務內容請使用自然語言段落
 - 同一任務段落內只能整理該任務資訊，不要混入其他任務的結論。
 - 每個任務只整理 rawContent 中的會議速記、任務詳情補記，以及 activities 中實際發生的任務變更。
 - 沒有會議內容或任務變更的兄弟任務不要硬寫段落。
-- 沒有明確決議或下一步時不要硬寫，必要時放到「待校稿項目」提醒人工確認。
+- 沒有明確決議或下一步時不要硬寫，必要時放到「其他」提醒人工確認。
+
+補充：若 tasks[].path 有多層，請把 path 中每一層都依序放在同一個 heading；heading 後方的敘述仍只描述目前任務本身的會議內容或 activity 結論。
 
 Source package:
 ${sourcePackage}`;

@@ -13,6 +13,7 @@ import {
 import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
 import type { MeetingSynthesisInput } from '../utils/meetingRecordSynthesis';
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
+import { mergeProjectChangeImportBlocks } from '../utils/projectChangeImport';
 import { useMemberStore } from './useMemberStore';
 import type {
   KnowledgeRecord,
@@ -132,7 +133,7 @@ const createDefaultDraft = (
     title,
     content: '',
     status: 'draft',
-    visibility: type === 'work_log' ? 'private' : 'project',
+    visibility: 'tenant',
     participantsText: '',
     occurredAt: now.valueOf(),
     startedAt: start.valueOf(),
@@ -594,19 +595,23 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       const result = await synthesizeMeetingRecord(
         createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes),
       );
+      const mergedContent = mergeProjectChangeImportBlocks(result.content, preservedDraft.content);
       const nextDraft = syncDraftContentLinks(
         {
           ...preservedDraft,
           status: 'draft',
-          legacyTaskLinkNodeIds: result.linkedTaskIds,
+          legacyTaskLinkNodeIds: Array.from(new Set([
+            ...(preservedDraft.legacyTaskLinkNodeIds ?? []),
+            ...result.linkedTaskIds,
+          ])),
         },
-        result.content,
+        mergedContent,
       );
 
       set({
         saving: false,
         draft: nextDraft,
-        contentCursorOffset: result.content.length,
+        contentCursorOffset: mergedContent.length,
         meetingSynthesisStatus: 'ready',
         meetingSynthesisError: null,
         meetingSynthesisWarnings: result.warnings,
@@ -666,10 +671,10 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     const draft = currentDraft;
     if (!draft.title.trim()) {
-      set({ error: '標題與內容不可空白。' });
+      set({ error: '請先輸入標題。' });
       return null;
     }
-    if ((wantsPublish || draft.type === 'work_log') && !draft.content.trim()) {
+    if (wantsPublish && !draft.content.trim()) {
       set({ error: '發布前請先輸入內容。' });
       return null;
     }

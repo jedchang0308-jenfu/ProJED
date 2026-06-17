@@ -9,6 +9,35 @@ export type MeetingSynthesisWorkflowStatus = 'idle' | 'synthesizing' | 'ready' |
 
 export type MeetingRecordWorkflowStage = 'capture' | 'ai_suggestion' | 'review' | 'published';
 
+export type MeetingWorkflowStepCommand = 'saveDraft' | 'runAi' | 'publish';
+
+export type MeetingWorkflowStepVisualState =
+  | 'current'
+  | 'available'
+  | 'optional'
+  | 'complete'
+  | 'locked'
+  | 'processing';
+
+export type MeetingWorkflowStepTone = 'primary' | 'neutral' | 'optional';
+
+export type MeetingWorkflowStepAction = {
+  stage: MeetingRecordWorkflowStage;
+  label: string;
+  actionLabel: string;
+  outcomeLabel: string;
+  statusLabel: string;
+  command: MeetingWorkflowStepCommand;
+  visualState: MeetingWorkflowStepVisualState;
+  tone: MeetingWorkflowStepTone;
+  isOptional: boolean;
+  ariaDescription: string;
+  disabledReason: string | null;
+  enabled: boolean;
+  isComplete: boolean;
+  isRecommended: boolean;
+};
+
 export type MeetingRecordDraftLike = {
   id?: string;
   type: KnowledgeRecordType;
@@ -53,6 +82,8 @@ export type MeetingRecordActionState = {
   canPublish: boolean;
   isDirty: boolean;
   isPublished: boolean;
+  isSaving: boolean;
+  isSynthesizing: boolean;
   hasContent: boolean;
   hasAiDraft: boolean;
   saveDraftDisabledReason: string | null;
@@ -200,10 +231,146 @@ export const getMeetingRecordActionState = ({
     canPublish: !publishDisabledReason,
     isDirty,
     isPublished,
+    isSaving: saving,
+    isSynthesizing,
     hasContent,
     hasAiDraft,
     saveDraftDisabledReason,
     aiDisabledReason,
     publishDisabledReason,
   };
+};
+
+const getMeetingWorkflowStepStatusLabel = (
+  visualState: MeetingWorkflowStepVisualState,
+  isRecommended: boolean,
+) => {
+  if (visualState === 'processing') return '處理中';
+  if (visualState === 'complete') return '完成';
+  if (visualState === 'optional') return '選用';
+  if (isRecommended) return '目前';
+  if (visualState === 'available') return '可執行';
+  return '未開放';
+};
+
+const createMeetingWorkflowStepAction = (
+  step: Omit<MeetingWorkflowStepAction, 'statusLabel'>,
+): MeetingWorkflowStepAction => ({
+  ...step,
+  statusLabel: getMeetingWorkflowStepStatusLabel(step.visualState, step.isRecommended),
+});
+
+export const getMeetingWorkflowStepActions = (
+  state: MeetingRecordActionState,
+): MeetingWorkflowStepAction[] => {
+  const captureComplete = Boolean(state.hasContent || state.hasAiDraft || state.isPublished);
+  const aiComplete = Boolean(state.hasAiDraft || state.isPublished);
+  const reviewComplete = Boolean(state.isPublished);
+  const publishComplete = Boolean(state.isPublished);
+  const canUseActions = !state.isPublished && !state.isSynthesizing && !state.isSaving;
+
+  const recommendedStage: MeetingRecordWorkflowStage = state.isPublished
+    ? 'published'
+    : state.isSynthesizing
+      ? 'ai_suggestion'
+      : state.hasAiDraft
+        ? 'review'
+        : state.hasContent
+          ? 'published'
+          : 'capture';
+
+  const captureVisualState: MeetingWorkflowStepVisualState = captureComplete
+    ? 'complete'
+    : recommendedStage === 'capture'
+      ? 'current'
+      : state.canSaveDraft
+        ? 'available'
+        : 'locked';
+
+  const aiVisualState: MeetingWorkflowStepVisualState = state.isSynthesizing
+    ? 'processing'
+    : aiComplete
+      ? 'complete'
+      : state.canRunAi
+        ? 'optional'
+        : 'locked';
+
+  const reviewVisualState: MeetingWorkflowStepVisualState = reviewComplete
+    ? 'complete'
+    : recommendedStage === 'review'
+      ? state.canSaveDraft ? 'current' : 'locked'
+      : state.hasAiDraft && state.canSaveDraft
+        ? 'available'
+        : 'locked';
+
+  const publishVisualState: MeetingWorkflowStepVisualState = publishComplete
+    ? 'complete'
+    : recommendedStage === 'published' && state.canPublish
+      ? 'current'
+      : state.canPublish
+        ? 'available'
+        : 'locked';
+
+  return [
+    createMeetingWorkflowStepAction({
+      stage: 'capture',
+      label: '速記',
+      actionLabel: state.hasAiDraft ? '存校稿' : '存草稿',
+      outcomeLabel: state.hasAiDraft ? '確認後存草稿' : '存草稿，不發布',
+      command: 'saveDraft',
+      visualState: captureVisualState,
+      tone: 'primary',
+      isOptional: false,
+      ariaDescription: '速記階段。按下後會保存草稿，不會發布。',
+      disabledReason: state.saveDraftDisabledReason,
+      enabled: canUseActions && state.canSaveDraft,
+      isComplete: captureComplete,
+      isRecommended: recommendedStage === 'capture' && !state.isPublished,
+    }),
+    createMeetingWorkflowStepAction({
+      stage: 'ai_suggestion',
+      label: 'AI整理',
+      actionLabel: state.hasAiDraft ? '重新整理' : '整理',
+      outcomeLabel: '選用：產生建議',
+      command: 'runAi',
+      visualState: aiVisualState,
+      tone: 'optional',
+      isOptional: true,
+      ariaDescription: 'AI整理是選用動作。按下後會產生整理建議，不會自動發布。',
+      disabledReason: state.aiDisabledReason,
+      enabled: canUseActions && state.canRunAi,
+      isComplete: aiComplete,
+      isRecommended: state.isSynthesizing && !state.isPublished,
+    }),
+    createMeetingWorkflowStepAction({
+      stage: 'review',
+      label: '校稿',
+      actionLabel: '存校稿',
+      outcomeLabel: '確認後存草稿',
+      command: 'saveDraft',
+      visualState: reviewVisualState,
+      tone: 'primary',
+      isOptional: false,
+      ariaDescription: '校稿階段。按下後會保存校稿草稿，不會發布。',
+      disabledReason: state.hasAiDraft ? state.saveDraftDisabledReason : '請先完成 AI整理或手動整理內容。',
+      enabled: canUseActions && state.hasAiDraft && state.canSaveDraft,
+      isComplete: reviewComplete,
+      isRecommended: recommendedStage === 'review' && !state.isPublished,
+    }),
+    createMeetingWorkflowStepAction({
+      stage: 'published',
+      label: '發布',
+      actionLabel: state.hasAiDraft ? '發布校稿' : '發布目前內容',
+      outcomeLabel: '發布目前內容',
+      command: 'publish',
+      visualState: publishVisualState,
+      tone: 'primary',
+      isOptional: false,
+      ariaDescription: '發布階段。按下後會保存目前編輯器內容為正式紀錄。',
+      disabledReason: state.publishDisabledReason,
+      enabled: canUseActions && state.canPublish,
+      isComplete: publishComplete,
+      isRecommended: recommendedStage === 'published',
+    }),
+  ];
 };

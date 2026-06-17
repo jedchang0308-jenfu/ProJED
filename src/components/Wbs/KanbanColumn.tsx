@@ -212,6 +212,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       const touch = e.touches[0];
       if (!node) return;
       setContextMenuState({
+        kind: 'task',
         isOpen: true,
         x: touch.clientX,
         y: touch.clientY,
@@ -247,6 +248,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         onContextMenu={(event) => {
           event.preventDefault();
           setContextMenuState({
+            kind: 'task',
             isOpen: true,
             x: event.clientX,
             y: event.clientY,

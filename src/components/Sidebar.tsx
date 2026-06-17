@@ -1,173 +1,342 @@
 // @ts-nocheck
 import React from 'react';
-import { Plus, ChevronRight, LayoutDashboard, ChevronLeft, Trash2, LogOut, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutDashboard, LogOut, Settings } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
-import useDialogStore from '../store/useDialogStore';
-import { useBoardPermissions } from '../hooks/useBoardPermissions';
+
+const BOARD_WORKSPACE_VIEWS = ['list', 'board', 'gantt', 'calendar'];
+const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
+const TITLE_INPUT_CLASS =
+  'min-w-0 flex-1 rounded border border-primary/30 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+
+const isTextInputEvent = (event) => {
+  const target = event.target;
+  return target?.closest?.('input, textarea, select, [contenteditable="true"]');
+};
 
 const Sidebar = () => {
-    const { workspaces, activeBoardId, switchBoard, showHome, isSidebarOpen, setSidebarOpen, removeBoard, removeWorkspace, currentView, setView } = useBoardStore();
-    const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
+  const {
+    workspaces,
+    activeBoardId,
+    switchBoard,
+    isSidebarOpen,
+    setSidebarOpen,
+    updateWorkspaceTitle,
+    updateBoardTitle,
+    currentView,
+    setView,
+    setContextMenuState,
+    pendingWorkspaceTitleEditId,
+    setPendingWorkspaceTitleEditId,
+    pendingBoardTitleEdit,
+    setPendingBoardTitleEdit,
+  } = useBoardStore();
 
-    return (
-        <aside className={`bg-white border-r border-slate-200 flex-shrink-0 transition-all duration-300 ease-in-out z-30 shadow-sm relative overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-10'}`}>
-            {!isSidebarOpen ? (
-                <div className="flex-1 flex flex-col items-center pt-4 gap-4 h-full bg-slate-50/30">
+  const [editingWorkspaceId, setEditingWorkspaceId] = React.useState(null);
+  const [workspaceTitleDraft, setWorkspaceTitleDraft] = React.useState('');
+  const [editingBoard, setEditingBoard] = React.useState(null);
+  const [boardTitleDraft, setBoardTitleDraft] = React.useState('');
+  const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
+
+  const startWorkspaceTitleEdit = React.useCallback((workspace) => {
+    setEditingBoard(null);
+    setBoardTitleDraft('');
+    setEditingWorkspaceId(workspace.id);
+    setWorkspaceTitleDraft(workspace.title || '');
+  }, []);
+
+  const cancelWorkspaceTitleEdit = React.useCallback(() => {
+    setEditingWorkspaceId(null);
+    setWorkspaceTitleDraft('');
+  }, []);
+
+  const commitWorkspaceTitleEdit = React.useCallback((workspace) => {
+    const title = workspaceTitleDraft.trim();
+    if (title && title !== workspace.title) {
+      updateWorkspaceTitle(workspace.id, title);
+    }
+    cancelWorkspaceTitleEdit();
+  }, [cancelWorkspaceTitleEdit, updateWorkspaceTitle, workspaceTitleDraft]);
+
+  const startBoardTitleEdit = React.useCallback((workspace, board) => {
+    setEditingWorkspaceId(null);
+    setWorkspaceTitleDraft('');
+    setEditingBoard({ workspaceId: workspace.id, boardId: board.id });
+    setBoardTitleDraft(board.title || '');
+  }, []);
+
+  const cancelBoardTitleEdit = React.useCallback(() => {
+    setEditingBoard(null);
+    setBoardTitleDraft('');
+  }, []);
+
+  const commitBoardTitleEdit = React.useCallback((workspace, board) => {
+    const title = boardTitleDraft.trim();
+    if (title && title !== board.title) {
+      updateBoardTitle(workspace.id, board.id, title);
+    }
+    cancelBoardTitleEdit();
+  }, [boardTitleDraft, cancelBoardTitleEdit, updateBoardTitle]);
+
+  React.useEffect(() => {
+    if (!pendingWorkspaceTitleEditId) return;
+    const workspace = workspaces.find((item) => item.id === pendingWorkspaceTitleEditId);
+    if (workspace) {
+      startWorkspaceTitleEdit(workspace);
+    }
+    setPendingWorkspaceTitleEditId(null);
+  }, [pendingWorkspaceTitleEditId, setPendingWorkspaceTitleEditId, startWorkspaceTitleEdit, workspaces]);
+
+  React.useEffect(() => {
+    if (!pendingBoardTitleEdit) return;
+    const workspace = workspaces.find((item) => item.id === pendingBoardTitleEdit.workspaceId);
+    const board = workspace?.boards.find((item) => item.id === pendingBoardTitleEdit.boardId);
+    if (workspace && board) {
+      startBoardTitleEdit(workspace, board);
+    }
+    setPendingBoardTitleEdit(null);
+  }, [pendingBoardTitleEdit, setPendingBoardTitleEdit, startBoardTitleEdit, workspaces]);
+
+  const handleWorkspaceContextMenu = (event, workspace) => {
+    event.preventDefault();
+    setContextMenuState({
+      kind: 'workspace',
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      workspaceId: workspace.id,
+      title: workspace.title,
+    });
+  };
+
+  const handleBoardContextMenu = (event, workspace, board) => {
+    event.preventDefault();
+    setContextMenuState({
+      kind: 'board',
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      workspaceId: workspace.id,
+      boardId: board.id,
+      title: board.title,
+    });
+  };
+
+  return (
+    <aside className={`relative z-30 flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-10'}`}>
+      {!isSidebarOpen ? (
+        <div className="flex h-full flex-1 flex-col items-center gap-4 bg-slate-50/30 pt-4">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="rounded-full p-1.5 text-primary transition-colors hover:bg-slate-100"
+            title="展開工作區選單"
+          >
+            <ChevronRight size={18} />
+          </button>
+          <div className="w-px flex-1 bg-slate-100" />
+          <button
+            onClick={() => setView('settings')}
+            className={`mb-3 rounded-full p-1.5 transition-colors ${
+              isSettingsScopeView
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+            }`}
+            title="設定"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex h-full w-64 flex-col">
+          <div className="flex h-14 items-center justify-between border-b-2 border-slate-200 bg-slate-50 p-4">
+            <span className="text-xs font-semibold text-slate-500">工作區選單</span>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200"
+              title="收合工作區選單"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-4 overflow-y-auto p-2">
+            {workspaces.map((ws) => (
+              <div key={ws.id} className="space-y-1">
+                <div
+                  className="group flex items-center justify-between gap-2 px-3 py-2"
+                  onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
+                >
+                  {editingWorkspaceId === ws.id ? (
+                    <input
+                      value={workspaceTitleDraft}
+                      autoFocus
+                      onChange={(event) => setWorkspaceTitleDraft(event.target.value)}
+                      onBlur={() => commitWorkspaceTitleEdit(ws)}
+                      onKeyDown={(event) => {
+                        if (event.nativeEvent?.isComposing) return;
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelWorkspaceTitleEdit();
+                        }
+                      }}
+                      className={TITLE_INPUT_CLASS}
+                      aria-label="編輯工作區名稱"
+                    />
+                  ) : (
                     <button
-                        onClick={() => setSidebarOpen(true)}
-                        className="p-1.5 hover:bg-slate-100 rounded-full text-primary transition-colors"
-                        title="展開工作區選單"
+                      type="button"
+                      onClick={() => startWorkspaceTitleEdit(ws)}
+                      className="min-w-0 flex-1 truncate rounded text-left text-xs font-semibold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      title="點擊改名，右鍵開啟選單"
                     >
-                        <ChevronRight size={18} />
+                      {ws.title}
                     </button>
-                    <div className="flex-1 w-px bg-slate-100" />
-                    <button
-                        onClick={() => setView('settings')}
-                        className={`mb-3 p-1.5 rounded-full transition-colors ${currentView === 'settings'
-                            ? 'bg-primary text-white shadow-sm'
-                            : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
-                            }`}
-                        title="設定"
-                    >
-                        <Settings size={18} />
-                    </button>
+                  )}
                 </div>
-            ) : (
-                <div className="w-64 h-full flex flex-col">
-                    {/* Sidebar Header */}
-                    <div className="h-14 p-4 border-b-2 border-slate-200 flex items-center justify-between bg-slate-50">
-                        <span className="font-semibold text-xs text-slate-500">工作區選單</span>
-                        <div className="flex items-center gap-1">
-                            <button onClick={showHome} className="p-1 hover:bg-slate-200 rounded text-slate-400 transition-colors" title="回到首頁">
-                                <LayoutDashboard size={14} />
-                            </button>
-                            <button
-                                onClick={() => setSidebarOpen(false)}
-                                className="p-1 hover:bg-slate-200 rounded text-slate-400 transition-colors"
-                                title="收疊工作區選單"
-                            >
-                                <ChevronLeft size={14} />
-                            </button>
-                        </div>
-                    </div>
 
-                    {/* Workspace List */}
-                    <div className="flex-1 overflow-y-auto p-2 space-y-4">
-                        {workspaces.map((ws) => (
-                            <div key={ws.id} className="space-y-1">
-                                <div className="px-3 py-2 flex items-center justify-between group">
-                                    <span className="text-xs font-semibold text-slate-400">{ws.title}</span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                        <button
-                                            onClick={async () => {
-                                                if (!canCreateBoard) return;
-                                                const name = await useDialogStore.getState().showPrompt("請輸入看板名稱：");
-                                                if (name && name.trim()) useBoardStore.getState().addBoard(ws.id, name);
-                                            }}
-                                            disabled={!canCreateBoard}
-                                            className={`p-1 rounded ${canCreateBoard ? 'hover:bg-primary-light hover:text-primary text-slate-400' : 'text-slate-300 cursor-not-allowed'}`}
-                                            title="新增看板"
-                                        >
-                                            <Plus size={14} />
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                if (!canDeleteWorkspace) return;
-                                                const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${ws.title}」及其所有看板嗎？您可以隨時使用 Ctrl+Z 復原。`);
-                                                if (confirmed) {
-                                                    removeWorkspace(ws.id);
-                                                    showHome();
-                                                }
-                                            }}
-                                            disabled={!canDeleteWorkspace}
-                                            className={`p-1 rounded ${canDeleteWorkspace ? 'hover:bg-red-50 hover:text-red-500 text-slate-300' : 'text-slate-200 cursor-not-allowed'}`}
-                                            title="刪除工作區"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                </div>
+                <div className="space-y-1">
+                  {ws.boards.map((board) => {
+                    const isCurrentBoard = activeBoardId === board.id;
+                    const isMainBoardActive = isCurrentBoard && BOARD_WORKSPACE_VIEWS.includes(currentView);
+                    const isCurrentSettingsProject = isSettingsScopeView && isCurrentBoard;
+                    const isBoardSwitchLocked = isSettingsScopeView;
+                    const isEditingBoard = editingBoard?.workspaceId === ws.id && editingBoard?.boardId === board.id;
+                    const boardItemTitle = isSettingsScopeView
+                      ? isCurrentBoard
+                        ? '目前正在此專案設定中'
+                        : '請先離開設定頁面再切換專案'
+                      : undefined;
+                    const handleBoardClick = () => {
+                      if (isBoardSwitchLocked) return;
+                      switchBoard(ws.id, board.id);
+                    };
 
-                                <div className="space-y-1">
-                                    {ws.boards.map((board) => (
-                                        <div
-                                            key={board.id}
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => switchBoard(ws.id, board.id)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    switchBoard(ws.id, board.id);
-                                                }
-                                            }}
-                                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors group/item cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 ${activeBoardId === board.id && ['list', 'board', 'gantt', 'calendar'].includes(currentView)
-                                                ? 'bg-primary text-white shadow-md'
-                                                : 'text-slate-600 hover:bg-slate-100'
-                                                }`}
-                                        >
-                                            <LayoutDashboard size={16} className={activeBoardId === board.id && ['list', 'board', 'gantt', 'calendar'].includes(currentView) ? 'text-white' : 'text-slate-400'} />
-                                            <span className="text-sm font-medium truncate flex-1">{board.title}</span>
-                                            <button
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (!canEditBoardSettings) return;
-                                                    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
-                                                    if (confirmed) {
-                                                        removeBoard(ws.id, board.id);
-                                                        if (activeBoardId === board.id) showHome();
-                                                    }
-                                                }}
-                                                disabled={!canEditBoardSettings}
-                                                className={`p-1 rounded transition-all opacity-0 group-hover/item:opacity-100 ${!canEditBoardSettings ? 'cursor-not-allowed opacity-40' : activeBoardId === board.id ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-400'}`}
-                                                title="刪除看板"
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    return (
+                      <div
+                        key={board.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-disabled={isBoardSwitchLocked && !isCurrentBoard}
+                        data-sidebar-current-settings-project={isCurrentSettingsProject ? 'true' : undefined}
+                        title={boardItemTitle}
+                        onClick={handleBoardClick}
+                        onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
+                        onKeyDown={(event) => {
+                          if (isTextInputEvent(event)) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleBoardClick();
+                          }
+                        }}
+                        className={`group/item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                          isMainBoardActive
+                            ? 'cursor-pointer bg-primary text-white shadow-md'
+                            : isCurrentSettingsProject
+                              ? 'cursor-default border border-primary/20 bg-primary-light/40 text-primary shadow-sm'
+                              : isBoardSwitchLocked
+                                ? 'cursor-not-allowed text-slate-300 opacity-70'
+                                : 'cursor-pointer text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <LayoutDashboard
+                          size={16}
+                          className={
+                            isMainBoardActive
+                              ? 'text-white'
+                              : isCurrentSettingsProject
+                                ? 'text-primary'
+                                : 'text-slate-400'
+                          }
+                        />
 
-                    <div className="p-2 border-t border-slate-100 bg-slate-50/50">
-                        <button
-                            onClick={() => setView('settings')}
-                            className={`w-full px-3 py-2 rounded-lg flex items-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${currentView === 'settings'
-                                ? 'bg-primary text-white shadow-md font-bold text-sm tracking-wide'
-                                : 'text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm font-medium text-sm'
-                                }`}
-                        >
-                            <Settings size={16} className={currentView === 'settings' ? 'text-white/90' : 'text-slate-400'} />
-                            <span className="truncate flex-1 text-left">設定</span>
-                        </button>
-                    </div>
+                        {isEditingBoard ? (
+                          <input
+                            value={boardTitleDraft}
+                            autoFocus
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => setBoardTitleDraft(event.target.value)}
+                            onBlur={() => commitBoardTitleEdit(ws, board)}
+                            onKeyDown={(event) => {
+                              if (event.nativeEvent?.isComposing) return;
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                              }
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                cancelBoardTitleEdit();
+                              }
+                            }}
+                            className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
+                            aria-label="編輯看板名稱"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startBoardTitleEdit(ws, board);
+                            }}
+                            className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            title="點擊改名，右鍵開啟選單"
+                          >
+                            {board.title}
+                          </button>
+                        )}
 
-                    {/* Footer */}
-                    <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                                {(useAuthStore.getState().user?.displayName || 'U')[0].toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="text-sm font-semibold text-slate-700 truncate">{useAuthStore.getState().user?.displayName || '使用者'}</div>
-                                <div className="text-xs text-slate-400 truncate">{useAuthStore.getState().user?.email || ''}</div>
-                            </div>
-                            <button
-                                onClick={() => useAuthStore.getState().signOut()}
-                                className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded text-slate-400 transition-colors"
-                                title="登出"
-                            >
-                                <LogOut size={14} />
-                            </button>
-                        </div>
-                    </div>
+                        {isCurrentSettingsProject ? (
+                          <span className="shrink-0 rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[11px] font-bold text-primary">
+                            設定中
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
-            )}
-        </aside>
-    );
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-slate-100 bg-slate-50/50 p-2">
+            <button
+              onClick={() => setView('settings')}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                isSettingsScopeView
+                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
+                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
+              }`}
+            >
+              <Settings size={16} className={isSettingsScopeView ? 'text-white/90' : 'text-slate-400'} />
+              <span className="min-w-0 flex-1 truncate text-left">設定</span>
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100 bg-slate-50/50 p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shadow-sm">
+                {(useAuthStore.getState().user?.displayName || 'U')[0].toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-slate-700">{useAuthStore.getState().user?.displayName || '使用者'}</div>
+                <div className="truncate text-xs text-slate-400">{useAuthStore.getState().user?.email || ''}</div>
+              </div>
+              <button
+                onClick={() => useAuthStore.getState().signOut()}
+                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                title="登出"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </aside>
+  );
 };
 
 export default Sidebar;

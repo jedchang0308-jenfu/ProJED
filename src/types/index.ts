@@ -258,6 +258,15 @@ export interface ActivityEvent {
   createdAt?: number;
 }
 
+export interface ActivityEventListQuery {
+  workspaceId: string;
+  boardId?: string | null;
+  scope: CollaborationScope;
+  startedAt: number;
+  endedAt: number;
+  eventTypes?: ActivityEventType[];
+}
+
 export interface RecordTaskLink {
   id: string;
   recordId: string;
@@ -434,6 +443,38 @@ export interface EditingItem {
 
 export type StatusFilters = Record<TaskStatus, boolean>;
 
+export type BoardContextMenuState =
+  | {
+      kind: 'task';
+      isOpen: boolean;
+      x: number;
+      y: number;
+      nodeId: string;
+      title: string;
+    }
+  | {
+      kind: 'workspace';
+      isOpen: boolean;
+      x: number;
+      y: number;
+      workspaceId: string;
+      title: string;
+    }
+  | {
+      kind: 'board';
+      isOpen: boolean;
+      x: number;
+      y: number;
+      workspaceId: string;
+      boardId: string;
+      title: string;
+    };
+
+export interface PendingBoardTitleEdit {
+  workspaceId: string;
+  boardId: string;
+}
+
 export interface BoardState {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
@@ -450,8 +491,10 @@ export interface BoardState {
   selectedAssigneeIds: string[];
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
-  contextMenuState: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null;
+  contextMenuState: BoardContextMenuState | null;
   pendingTitleEditNodeId: string | null;
+  pendingWorkspaceTitleEditId: string | null;
+  pendingBoardTitleEdit: PendingBoardTitleEdit | null;
 }
 
 export interface BoardActions {
@@ -463,8 +506,9 @@ export interface BoardActions {
 
   addWorkspace: (title?: string) => void;
   removeWorkspace: (wsId: string) => void;
+  updateWorkspaceTitle: (workspaceId: string, newTitle: string) => void;
 
-  addBoard: (workspaceId: string, boardName: string) => void;
+  addBoard: (workspaceId: string, boardName: string) => string | void;
   removeBoard: (wsId: string, bId: string) => void;
   updateBoardTitle: (workspaceId: string, boardId: string, newTitle: string) => void;
   switchBoard: (workspaceId: string, boardId: string) => void;
@@ -484,8 +528,10 @@ export interface BoardActions {
   clearAssigneeFilters: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
-  setContextMenuState: (state: { isOpen: boolean; x: number; y: number; nodeId: string; title: string } | null) => void;
+  setContextMenuState: (state: BoardContextMenuState | null) => void;
   setPendingTitleEditNodeId: (nodeId: string | null) => void;
+  setPendingWorkspaceTitleEditId: (workspaceId: string | null) => void;
+  setPendingBoardTitleEdit: (target: PendingBoardTitleEdit | null) => void;
 
   exportData: () => void;
   importData: (jsonData: string | object) => Promise<void>;

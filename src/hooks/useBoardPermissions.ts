@@ -30,6 +30,7 @@ export const useBoardPermissions = () => {
       canCreateDependency,
       canDeleteDependency,
       canCreateBoard: can('create_board'),
+      canEditWorkspaceSettings: can('manage_workspace_settings'),
       canDeleteWorkspace: can('delete_workspace'),
       canEditBoardSettings: can('edit_board_settings'),
       canManageBoardMembers: can('manage_board_members'),

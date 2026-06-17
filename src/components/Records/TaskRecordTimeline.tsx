@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { BookOpenText, CalendarClock, FileText, Plus, Search } from 'lucide-react';
 import useRecordStore from '../../store/useRecordStore';
 import { useWbsStore } from '../../store/useWbsStore';
+import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import {
   extractTaskRecordSnippets,
   taskKnowledgeMatchesQuery,
@@ -31,6 +32,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
   const records = useRecordStore(state => state.records);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
   const openNewRecord = useRecordStore(state => state.openNewRecord);
+  const guardRecordDraft = useRecordDraftGuard();
   const [query, setQuery] = React.useState('');
   const detailNotes = node?.detailNotes ?? [];
   const relatedRecords = React.useMemo(
@@ -66,6 +68,18 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
   );
   const snippetCount = knowledgeRecords.reduce((total, item) => total + item.snippets.length, 0);
   const hasResults = knowledgeRecords.length > 0 || noteMatches.length > 0;
+  const handleNewRecord = (type: 'meeting' | 'work_log') => {
+    void guardRecordDraft(() => openNewRecord(type, nodeId), {
+      title: type === 'meeting' ? '補會後紀錄到此任務？' : '補工作紀錄到此任務？',
+      message: '補紀錄會自動關聯目前任務並開啟新的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
+  };
+  const handleOpenRecord = (record: Parameters<typeof openExistingRecord>[0]) => {
+    void guardRecordDraft(() => openExistingRecord(record), {
+      title: '開啟另一筆紀錄？',
+      message: '開啟另一筆紀錄會替換目前編輯中的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
+  };
 
   return (
     <section className="border-t border-slate-100 pt-4">
@@ -80,19 +94,21 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => openNewRecord('meeting', nodeId)}
+            onClick={() => handleNewRecord('meeting')}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            title="補一筆會後紀錄，並自動關聯目前任務。"
           >
             <Plus size={13} />
-            會議
+            補會後紀錄
           </button>
           <button
             type="button"
-            onClick={() => openNewRecord('work_log', nodeId)}
+            onClick={() => handleNewRecord('work_log')}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            title="補一筆個人工作紀錄，並自動關聯目前任務。"
           >
             <Plus size={13} />
-            工作
+            補工作紀錄
           </button>
         </div>
       </div>
@@ -131,7 +147,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
             <button
               key={record.id}
               type="button"
-              onClick={() => openExistingRecord(record)}
+              onClick={() => handleOpenRecord(record)}
               className="flex w-full items-start gap-3 rounded-md border border-slate-200 bg-white p-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30"
             >
               <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-50 text-blue-500">

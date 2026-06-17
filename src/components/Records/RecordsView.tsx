@@ -2,6 +2,7 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { BookOpenText, BriefcaseBusiness, CalendarClock, FileText, Plus } from 'lucide-react';
 import useRecordStore from '../../store/useRecordStore';
+import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
 
 const formatRecordType = (type: string) => (type === 'meeting' ? '會議紀錄' : '個人工作紀錄');
@@ -13,6 +14,21 @@ const RecordsView: React.FC = () => {
   const loading = useRecordStore(state => state.loading);
   const openNewRecord = useRecordStore(state => state.openNewRecord);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
+  const guardRecordDraft = useRecordDraftGuard();
+
+  const handleNewMeetingRecord = () => {
+    void guardRecordDraft(() => openNewRecord('meeting'), {
+      title: '新增會後會議紀錄？',
+      message: '新增會後會議紀錄會開啟新的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
+  };
+
+  const handleOpenRecord = (record: Parameters<typeof openExistingRecord>[0]) => {
+    void guardRecordDraft(() => openExistingRecord(record), {
+      title: '開啟另一筆紀錄？',
+      message: '開啟另一筆紀錄會替換目前編輯中的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
+  };
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
@@ -21,25 +37,18 @@ const RecordsView: React.FC = () => {
           <BookOpenText size={18} className="text-blue-500" />
           <div>
             <h1 className="text-sm font-semibold text-slate-900">紀錄庫</h1>
-            <p className="text-xs text-slate-500">會後查閱與整理會議/工作紀錄；開會主畫面請使用看板上的會議紀錄入口。</p>
+            <p className="text-xs text-slate-500">會後查閱與整理會議紀錄/個人工作紀錄；開會主畫面請使用看板上的新增會議記錄入口。</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => openNewRecord('meeting')}
+            onClick={handleNewMeetingRecord}
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            title="補一筆會後會議紀錄；開會中請使用上方新增會議記錄。"
           >
             <Plus size={14} />
-            會議紀錄
-          </button>
-          <button
-            type="button"
-            onClick={() => openNewRecord('work_log')}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white hover:bg-slate-700"
-          >
-            <Plus size={14} />
-            工作紀錄
+            補一筆會後紀錄
           </button>
         </div>
       </div>
@@ -71,7 +80,7 @@ const RecordsView: React.FC = () => {
                   <button
                     key={record.id}
                     type="button"
-                    onClick={() => openExistingRecord(record)}
+                    onClick={() => handleOpenRecord(record)}
                     className="record-list-row grid w-full gap-3 px-4 py-3 text-left transition hover:bg-blue-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 md:grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px_84px] md:items-center md:gap-4"
                   >
                     <span className="flex min-w-0 items-start gap-3">

@@ -253,7 +253,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       e.preventDefault();
       const touch = e.touches[0];
       if (!node) return;
-      setContextMenuState({ isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
+      setContextMenuState({ kind: 'task', isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
     },
     { delay: 500, tolerance: 8 }
   );
@@ -283,7 +283,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       onContextMenu={(e) => {
           e.preventDefault();
           if (isRecordCaptureMode) return;
-          setContextMenuState({ isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
+          setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
       className={`kanban-task-card relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging

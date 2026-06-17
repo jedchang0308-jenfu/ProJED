@@ -88,6 +88,8 @@ const useBoardStore = create<BoardStore>()(
         dependencySelection: null,
         contextMenuState: null,
         pendingTitleEditNodeId: null,
+        pendingWorkspaceTitleEditId: null,
+        pendingBoardTitleEdit: null,
 
         // ===== 基本 setters =====
         setWorkspaces: (workspaces) => set({ workspaces }),
@@ -107,6 +109,8 @@ const useBoardStore = create<BoardStore>()(
         setDependencySelection: (state) => set({ dependencySelection: state }),
         setContextMenuState: (state) => set({ contextMenuState: state }),
         setPendingTitleEditNodeId: (nodeId) => set({ pendingTitleEditNodeId: nodeId }),
+        setPendingWorkspaceTitleEditId: (workspaceId) => set({ pendingWorkspaceTitleEditId: workspaceId }),
+        setPendingBoardTitleEdit: (target) => set({ pendingBoardTitleEdit: target }),
 
         // ===== Workspace CRUD =====
         addWorkspace: (title) => {
@@ -145,6 +149,18 @@ const useBoardStore = create<BoardStore>()(
                 workspaces: state.workspaces.filter(ws => ws.id !== wsId)
             }));
             workspaceService.delete(wsId).catch(console.error);
+        },
+
+        updateWorkspaceTitle: (workspaceId, newTitle) => {
+            const title = newTitle.trim();
+            if (!title) return;
+
+            set((state) => ({
+                workspaces: state.workspaces.map(ws =>
+                    ws.id === workspaceId ? { ...ws, title } : ws
+                )
+            }));
+            workspaceService.update(workspaceId, { title }).catch(console.error);
         },
 
         toggleStatusFilter: (status) => set((state) => {
@@ -347,21 +363,25 @@ const useBoardStore = create<BoardStore>()(
                 .then((createdBoard) => {
                     set((state) => ({
                         workspaces: state.workspaces.map(ws => {
-                            if (ws.id !== targetWorkspaceId) return ws;
-                            return {
-                                ...ws,
-                                boards: ws.boards.map(board =>
-                                    board.id === tempId ? createdBoard : board
-                                ),
-                            };
-                        }),
-                        activeBoardId: state.activeBoardId === tempId ? createdBoard.id : state.activeBoardId,
-                    }));
+                    if (ws.id !== targetWorkspaceId) return ws;
+                    return {
+                        ...ws,
+                        boards: ws.boards.map(board =>
+                            board.id === tempId ? { ...createdBoard, title: board.title || createdBoard.title } : board
+                        ),
+                    };
+                }),
+                activeBoardId: state.activeBoardId === tempId ? createdBoard.id : state.activeBoardId,
+                pendingBoardTitleEdit: state.pendingBoardTitleEdit?.boardId === tempId
+                    ? { workspaceId: targetWorkspaceId, boardId: createdBoard.id }
+                    : state.pendingBoardTitleEdit,
+            }));
                     if (get().activeBoardId === createdBoard.id) {
                         safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
                     }
                 })
                 .catch(console.error);
+            return tempId;
         },
 
         removeBoard: (wsId, bId) => {

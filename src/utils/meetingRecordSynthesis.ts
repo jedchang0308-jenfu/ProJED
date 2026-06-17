@@ -95,6 +95,7 @@ const isCleanDraftScaffoldLine = (line: string) => {
     normalized === '本次會議總結' ||
     normalized === '任務討論' ||
     normalized === '任務討論與結論' ||
+    normalized === '其他' ||
     normalized === '待校稿項目'
   );
 };
@@ -184,6 +185,17 @@ const getEvidenceTaskOrder = (input: MeetingSynthesisInput) =>
 
 const getTaskPath = (task: MeetingSynthesisTask) =>
   task.path?.length ? task.path : [{ id: task.id, title: task.title }];
+
+const getDisplayTaskPath = (task: MeetingSynthesisTask) => {
+  const path = getTaskPath(task).filter(item => item.id && item.title);
+  if (path.some(item => item.id === task.id)) return path;
+  return [...path, { id: task.id, title: task.title }];
+};
+
+const formatTaskPathMentions = (task: MeetingSynthesisTask) =>
+  getDisplayTaskPath(task)
+    .map(pathItem => serializeTaskMention(pathItem.id, pathItem.title))
+    .join(' ');
 
 type SynthesisTreeNode = {
   task: MeetingSynthesisTask;
@@ -322,7 +334,7 @@ const renderSynthesisTreeNode = (
 ): string[] => {
   linkedTaskIds.push(node.task.id);
   const lines = [
-    `${sectionNumber} ${serializeTaskMention(node.task.id, node.task.title)}`,
+    `${sectionNumber} ${formatTaskPathMentions(node.task)}`,
   ];
 
   if (node.summary?.hasMeetingEvidence) {
@@ -406,7 +418,7 @@ export const buildDeterministicMeetingSynthesis = (
     '2. 任務討論與結論',
     sections.join('\n\n') || '- 尚無會中補記或任務變更可整理。',
     '',
-    '3. 待校稿項目',
+    '3. 其他',
     sections.length ? '- 請確認上述整理是否符合會議實際發言與操作。' : '- 請補上會中實際討論內容或任務變更後再發布。',
   ].join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
