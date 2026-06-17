@@ -65,7 +65,7 @@ const result = synthesis.buildDeterministicMeetingSynthesis({
 
 assert('result has numbered summary heading', result.content.includes('1. 本次會議總結'));
 assert('result has numbered task-oriented heading', result.content.includes('2. 任務討論與結論'));
-assert('result has numbered proofread heading', result.content.includes('3. 待校稿項目'));
+assert('result has numbered other heading', result.content.includes('3. 其他'));
 assert('result does not use markdown headings', !/^#{1,6}\s+/m.test(result.content));
 assert('result keeps task A token', result.content.includes(taskA));
 assert('result keeps task B token', result.content.includes(taskB));
@@ -156,12 +156,12 @@ const treeResult = synthesis.buildDeterministicMeetingSynthesis({
 });
 
 assert('tree synthesis has one numbered list section', treeResult.content.includes(`2.1 ${listTask}`));
-assert('tree synthesis has card section under list', treeResult.content.includes(`2.1.1 ${parentTask}`));
-assert('tree synthesis does not flatten child as parent numbered section', !treeResult.content.includes(`2.2 ${childTask}`));
-assert('tree synthesis does not flatten grandchild as parent numbered section', !treeResult.content.includes(`2.2 ${grandchildTask}`));
-assert('tree synthesis includes child subsection by hierarchy only', treeResult.content.includes(`2.1.1.1 ${childTask}`));
-assert('tree synthesis includes sibling container for deep task', treeResult.content.includes(`2.1.1.2 ${siblingTask}`));
-assert('tree synthesis includes deep task by hierarchy only', treeResult.content.includes(`2.1.1.2.1 ${grandchildTask}`));
+assert('tree synthesis has card section with full path', treeResult.content.includes(`2.1.1 ${listTask} ${parentTask}`));
+assert('tree synthesis does not flatten child as parent numbered section', !treeResult.content.includes(`2.2 ${listTask} ${parentTask} ${childTask}`));
+assert('tree synthesis does not flatten grandchild as parent numbered section', !treeResult.content.includes(`2.2 ${listTask} ${parentTask} ${siblingTask} ${grandchildTask}`));
+assert('tree synthesis includes child subsection with full path', treeResult.content.includes(`2.1.1.1 ${listTask} ${parentTask} ${childTask}`));
+assert('tree synthesis includes sibling container with full path', treeResult.content.includes(`2.1.1.2 ${listTask} ${parentTask} ${siblingTask}`));
+assert('tree synthesis includes deep task with full path', treeResult.content.includes(`2.1.1.2.1 ${listTask} ${parentTask} ${siblingTask} ${grandchildTask}`));
 assert('tree synthesis does not use system task labels', !treeResult.content.includes('本任務') && !treeResult.content.includes('子任務：'));
 assert('tree synthesis does not use markdown headings', !/^#{1,6}\s+/m.test(treeResult.content));
 assert('tree synthesis keeps child activity in child group', treeResult.content.includes('待辦 -> 進行中'));

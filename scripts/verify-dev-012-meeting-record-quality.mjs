@@ -84,7 +84,7 @@ const result = synthesis.buildDeterministicMeetingSynthesis({
 for (const snippet of [
   '1. 本次會議總結',
   '2. 任務討論與結論',
-  '3. 待校稿項目',
+  '3. 其他',
   taskA,
   taskB,
   taskC,

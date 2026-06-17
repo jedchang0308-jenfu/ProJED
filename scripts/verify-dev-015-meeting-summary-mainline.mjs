@@ -39,6 +39,7 @@ const assert = (label, condition) => {
 
 const pathOf = (...items) => items.map(([id, title]) => ({ id, title }));
 const mention = (id, title) => mentions.serializeTaskMention(id, title);
+const pathMentions = (...items) => items.map(([id, title]) => mention(id, title)).join(' ');
 const createTask = (id, title, parentId, path, order) => ({
   id,
   title,
@@ -102,11 +103,11 @@ assert('summary includes QA decomposition', summarySection.includes('制定驗�
 assert('summary is not first-three activity log', (summarySection.match(/新增任務「/g) || []).length <= 1);
 assert('summary is not missing deeper tasks', summarySection.includes('問BOSS') && summarySection.includes('執行QC驗證'));
 
-assert('task section keeps numbered list heading', result.content.includes(`2.1 ${mention(...weekly)}`));
-assert('task section keeps numbered card heading', result.content.includes(`2.1.1 ${mention(...rd)}`));
-assert('task section keeps numbered child heading', result.content.includes(`2.1.1.1 ${mention(...requirement)}`));
-assert('task section keeps numbered grandchild heading', result.content.includes(`2.1.1.1.1 ${mention(...boss)}`));
-assert('task section keeps QA hierarchy', result.content.includes(`2.1.2 ${mention(...qa)}`) && result.content.includes(`2.1.2.1 ${mention(...qaPlan)}`));
+assert('task section keeps numbered list heading', result.content.includes(`2.1 ${pathMentions(weekly)}`));
+assert('task section keeps numbered card heading with full path', result.content.includes(`2.1.1 ${pathMentions(weekly, rd)}`));
+assert('task section keeps numbered child heading with full path', result.content.includes(`2.1.1.1 ${pathMentions(weekly, rd, requirement)}`));
+assert('task section keeps numbered grandchild heading with full path', result.content.includes(`2.1.1.1.1 ${pathMentions(weekly, rd, requirement, boss)}`));
+assert('task section keeps QA hierarchy with full path', result.content.includes(`2.1.2 ${pathMentions(weekly, qa)}`) && result.content.includes(`2.1.2.1 ${pathMentions(weekly, qa, qaPlan)}`));
 assert('task section is present', taskSection.includes(mention(...transfer)));
 
 for (const task of tasks) {

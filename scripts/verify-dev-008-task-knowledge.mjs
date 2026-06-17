@@ -61,7 +61,7 @@ const synthesizedMeeting = [
   '- 阻塞：未記錄明確阻塞。',
   '- 狀態變更摘要：本次未記錄狀態變更。',
   '',
-  '## 待校稿項目',
+  '## 其他',
   '- 請確認 A / B 的負責人與期限。',
 ].join('\n');
 
@@ -99,7 +99,7 @@ const treeMeeting = [
   `##### ${siblingTask}`,
   '兄弟任務只確認排程，不影響子任務 A-1。',
   '',
-  '## 待校稿項目',
+  '## 其他',
   '- 請確認。'
 ].join('\n');
 const listTreeSnippets = taskKnowledge.extractTaskRecordSnippets(treeMeeting, 'list_research', { maxLength: 700 });
@@ -124,7 +124,7 @@ const numberedTreeMeeting = [
   `2.1.1.2 ${siblingTask}`,
   '兄弟任務只確認排程，不影響子任務 A-1。',
   '',
-  '3. 待校稿項目',
+  '3. 其他',
   '- 請確認。'
 ].join('\n');
 const numberedListSnippets = taskKnowledge.extractTaskRecordSnippets(numberedTreeMeeting, 'list_research', { maxLength: 700 });

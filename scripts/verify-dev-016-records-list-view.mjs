@@ -14,7 +14,7 @@ assert(
   source.includes('md:grid-cols-[minmax(220px,1.05fr)_minmax(280px,2fr)_140px_84px]'),
 );
 assert('records view keeps summary preview text', source.includes('renderRecordContentAsPlainText(record.content)'));
-assert('records view keeps existing record open action', source.includes('onClick={() => openExistingRecord(record)}'));
+assert('records view keeps guarded existing record open action', source.includes('handleOpenRecord(record)'));
 assert('records view keeps task count visible', source.includes('{record.taskLinks.length} 任務'));
 assert('records view no longer uses multi-card grid', !source.includes('lg:grid-cols-2 xl:grid-cols-3'));
 assert('records view no longer uses card row shadow buttons', !source.includes('hover:border-blue-300 hover:bg-blue-50/30'));

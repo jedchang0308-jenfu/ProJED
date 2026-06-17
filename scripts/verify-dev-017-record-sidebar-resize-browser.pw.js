@@ -10,7 +10,7 @@ async (page) => {
 
   const openMeetingSidebar = async () => {
     if ((await page.locator('aside', { hasText: '會議速記' }).count()) === 0) {
-      await page.locator('nav button', { hasText: '會議紀錄' }).first().click();
+      await page.locator('nav button', { hasText: /新增會議記錄|會議紀錄/ }).first().click();
     }
     await page.locator('aside', { hasText: '會議速記' }).last().waitFor({ state: 'visible', timeout: 10000 });
     return page.locator('aside', { hasText: '會議速記' }).last();
@@ -21,7 +21,7 @@ async (page) => {
 
   if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {
     await page.locator('button', { hasText: '使用固定測試環境' }).click();
-    await page.locator('button', { hasText: '會議紀錄' }).waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('button', { hasText: /新增會議記錄|會議紀錄/ }).waitFor({ state: 'visible', timeout: 10000 });
   }
 
   await page.evaluate(() => localStorage.removeItem('projed-record-sidebar-width'));

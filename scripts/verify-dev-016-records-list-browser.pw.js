@@ -23,7 +23,7 @@ async (page) => {
   await page.locator('h1', { hasText: '紀錄庫' }).waitFor({ state: 'visible', timeout: 10000 });
   const rows = page.locator('.record-list-row');
   if ((await rows.count()) === 0) {
-    await page.locator('main button', { hasText: '工作紀錄' }).first().click();
+    await page.locator('main button', { hasText: '補一筆會後紀錄' }).first().click();
     const recordPanel = page.locator('aside', { hasText: '專案紀錄' }).last();
     await recordPanel.waitFor({ state: 'visible', timeout: 10000 });
     const editor = recordPanel.locator('div[contenteditable="true"]').first();
@@ -36,7 +36,7 @@ async (page) => {
 
   const openRecordPanel = page.locator('aside', { hasText: '專案紀錄' }).last();
   if ((await openRecordPanel.count()) > 0) {
-    const closePanelButton = openRecordPanel.locator('button[title="關閉紀錄欄"]').last();
+    const closePanelButton = openRecordPanel.locator('button[aria-label="離開紀錄"], button[title="關閉紀錄欄"]').last();
     if ((await closePanelButton.count()) > 0) {
       await closePanelButton.click();
       await openRecordPanel.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
