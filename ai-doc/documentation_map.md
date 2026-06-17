@@ -1,6 +1,48 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-06-10
+## Documentation Map Update - 2026-06-15
+
+### DEV-024: AI整理保留手寫內容與章節結構
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md` | Ready | DEV-024 / DEV-011 / DEV-012 / DEV-020 | 定義 `AI整理` 必須保留使用者手寫內容、自訂章節、task mention 與 project change evidence；補上 deterministic human-draft merge guard，不得只靠 prompt。 |
+| `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md` | Ready | DEV-024 / DEV-021 / DEV-022 | 驗證手寫段落、自訂章節、任務 mention、專案變化匯入、idempotent、fallback placement 與真實操作測試。 |
+
+DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延伸到使用者已輸入的 human draft content；此開發點不新增資料庫 schema，也不改 record content persistence 格式。
+
+### DEV-023: 專案變化匯入整併為紀錄流程第一步
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md` | Ready | DEV-023 / DEV-020 | 定義將 `先匯入專案變化` 整併為會議與個人紀錄流程第一步，預設收合，點擊 `匯入` 後才展開設定。 |
+| `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md` | Ready | DEV-023 / DEV-020 | 驗證會議與個人流程都有 `匯入` 第一格、獨立大型匯入卡片移除、展開面板、插入/跳過/empty/error 與 viewport。 |
+| `ai-doc/reports/PDCA-DEV-020-record-ui-simplification.md` | Superseded risk by DEV-023 | DEV-020 / DEV-023 | DEV-023 supersedes PDCA-DEV-020 中「專案變化匯入仍在流程上方」的殘留 UI 風險。 |
+
+### DEV-022: 專案變化匯入後 AI整理同整成單一會議紀錄
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-022-project-change-single-record-integration.md` | Implemented | DEV-022 | 定義 project change evidence normalization、single-record merge guard 與 fallback evidence note。 |
+| `ai-doc/qa/QA-DEV-022-project-change-single-record-integration.md` | Passed | DEV-022 | 驗證最終內容只有一組 `1/2/3` 主結構、marker 移除、taskLinks preserve 與 idempotent。 |
+| `ai-doc/reports/CAPA-20260615-project-change-double-meeting-content.md` | Closed | DEV-022 / DEV-021 | 分析 DEV-021 preserve append 導致兩份會議內容的根因，已由 DEV-022 integrated synthesis guard 關閉。 |
+
+### DEV-021: 專案變化匯入後 AI整理保留機制
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-021-project-change-ai-preserve.md` | Implemented | DEV-021 | 定義已匯入專案變化為受保護內容，AI整理不得丟失；已落實 deterministic merge guard 與 taskLinks 依 merged content 同步。 |
+| `ai-doc/qa/QA-DEV-021-project-change-ai-preserve.md` | Passed | DEV-021 | 定義並通過匯入後 AI整理、存草稿/發布保存、preserve/idempotent、taskLinks 與 prompt-only regression 驗證。 |
+| `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` | Risk closed by DEV-021 | DEV-020 | DEV-020 未涵蓋 AI整理後保留匯入內容的缺口，已由 DEV-021 補齊。 |
+| `ai-doc/qa/QA-DEV-020-record-workflow-redesign.md` | Risk closed by DEV-021 | DEV-020 | DEV-020 QA 未涵蓋「匯入 -> AI整理 -> 存草稿/發布」保留驗證，已由 DEV-021 補齊。 |
+
+## PDCA Update - 2026-06-15
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/reports/PDCA-DEV-020-record-ui-simplification.md` | Done | DEV-020 / DEV-019 / DEV-010 | 紀錄 UI 精簡 PDCA：統一 topbar `紀錄中`、將重複摘要 chip 改為 `sr-only` marker、更新靜態與 browser smoke 驗證。 |
+
+## Documentation Map Update - 2026-06-11
 
 ### DEV-018 文件索引
 
@@ -8,14 +50,20 @@
 |---|---|---|---|
 | `ai-doc/specs/SPEC-018-meeting-record-guardrail-workflow-redesign.md` | Implemented | DEV-018 | 會議紀錄側欄四階段防呆工作流、AI整理動作化、直接發布語意與未儲存離開保護。 |
 | `ai-doc/qa/QA-DEV-018-meeting-record-guardrail-workflow.md` | Ready for QC | DEV-018 | 驗證空白草稿、直接發布、AI整理、AI 失敗、未儲存離開、已儲存離開、任務變更來源與 viewport。 |
+| `ai-doc/specs/SPEC-019-record-type-and-meeting-workflow-layering.md` | Implemented | DEV-019 | 補足紀錄類型與會議流程分層，避免 `會議紀錄 / 個人工作紀錄` 被誤解成流程步驟。 |
+| `ai-doc/qa/QA-DEV-019-record-type-and-meeting-workflow-layering.md` | Implemented | DEV-019 | 驗證一般紀錄模式、會議模式、個人工作紀錄狀態、離開與收合分離、viewport。 |
+| `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` | Implemented | DEV-020 | 重構紀錄功能為先選類型、匯入專案變化、撰寫、儲存或發布的完整工作流。 |
+| `ai-doc/qa/QA-DEV-020-record-workflow-redesign.md` | Passed | DEV-020 | 驗證看板主入口、專案變化匯入、未儲存防呆、功能說明與 viewport。 |
 
 產品方向補充：
 
 - DEV-018 supersedes DEV-010 的舊會議操作列期待；會議防呆入口以 `RecordSidebar` workflow 為主。
 - DEV-018 supersedes DEV-011 / DEV-012 的「發布前必須 AI整理」假設；AI整理是建議動作，直接發布只保存目前編輯器內容。
 - DEV-018 不變更資料模型與 RAG token，只重設會議紀錄 UX/UI workflow。
+- DEV-019 clarifies DEV-018：`會議紀錄 / 個人工作紀錄` 是紀錄類型，`速記 / AI整理 / 校稿 / 發布` 才是會議模式流程。
+- DEV-020 supersedes DEV-019 的局部補強：紀錄類型必須在開始撰寫前決定，並把專案變化匯入、功能說明與未儲存保護納入完整紀錄工作流。
 
-更新日期：2026-06-09
+更新日期：2026-06-11
 
 ## Active PM 文件
 
@@ -47,6 +95,10 @@
 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | In Verification | DEV-011 | AI 任務導向會議紀錄統整工作流；承接 DEV-007 / DEV-008 / DEV-009 / DEV-010 的 meeting record synthesis refinement。 |
 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | In Verification | DEV-012 | AI 會議紀錄自然語言品質提升；承接 DEV-011 / DEV-008 的 meeting record synthesis quality refinement。 |
 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` | Implemented | DEV-013 | 定義右鍵清單任務複製，包含子任務欄位與子樹內部依賴複製。 |
+| `ai-doc/specs/SPEC-019-record-type-and-meeting-workflow-layering.md` | Implemented | DEV-019 | 定義紀錄類型層、會議流程層與個人工作紀錄簡單狀態。 |
+| `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` | Implemented | DEV-020 | 定義紀錄功能重構、專案變化匯入、功能說明、dirty guard 與 RD/QA/QC 邊界。 |
+| `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md` | Ready | DEV-023 | 定義專案變化匯入整併為會議與個人紀錄流程第一步；父交付點 DEV-020。 |
+| `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md` | Ready | DEV-024 | 定義 AI整理保留手寫內容與章節結構；父交付點 DEV-011 / DEV-012 / DEV-020。 |
 
 ## 目前交付邊界
 
@@ -62,6 +114,7 @@
 - DEV-011：AI 任務導向會議紀錄統整工作流。
 - DEV-012：AI 會議紀錄自然語言品質提升。
 - DEV-013：右鍵清單任務複製，包含子任務與子樹內部依賴。
+- DEV-020：紀錄功能重構與專案變化匯入流程。
 
 DEV-002 的產品邊界：
 
@@ -257,6 +310,9 @@ DEV-012 的產品邊界：
 | `ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通 UX 驗證計畫，包含 disabled reason、tooltip/focus、離開保護與桌機/筆電 viewport。 |
 | `ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md` | In Verification | DEV-011 | AI 任務導向會議紀錄統整 UX 驗證計畫，包含實際輸入、AI 失敗保留草稿、校稿發布與桌機/筆電 viewport。 |
 | `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | In Verification | DEV-012 | AI 會議紀錄自然語言品質驗證計畫，包含 golden samples、實際輸入、模型不可用與任務知識查找相容性。 |
+| `ai-doc/qa/QA-DEV-020-record-workflow-redesign.md` | Passed | DEV-020 | 紀錄功能重構驗證計畫，包含看板主入口、專案變化匯入、未儲存防呆、功能說明與 viewport。 |
+| `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md` | Ready | DEV-023 | 驗證專案變化匯入作為紀錄流程第一步、預設收合、展開面板、插入/跳過與 DEV-021/022 回歸。 |
+| `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md` | Ready | DEV-024 | 驗證 AI整理不得覆蓋使用者手寫內容、章節結構、task mention 與 project change evidence，並包含真實操作測試。 |
 
 ### QC Fact Reports
 

@@ -1,12 +1,60 @@
 # ProJED Backlog
 
-## Backlog Update - 2026-06-10
+## Backlog Update - 2026-06-15
+
+### DEV-024: AI整理保留手寫內容與章節結構
+
+| DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
+|---|---|---|---|---|---|
+| DEV-024 | Ready | 開發點 | P1 AI synthesis guard | 修正 `AI整理` 覆蓋使用者已手寫內容與自訂章節的風險；新增 deterministic human-draft merge guard，承接 DEV-011 / DEV-012 / DEV-020，並維持 DEV-021 / DEV-022 回歸。 | `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md`, `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md` |
+
+AI synthesis guard 註記：
+- `AI整理` 必須整理、補強與統整手寫草稿，不得直接覆蓋 preserved draft。
+- 手寫段落、自訂章節、task mention 與 project change evidence 都必須合流到同一份紀錄。
+- 禁止只靠 prompt；需有 deterministic merge guard、idempotent test 與真實操作驗證。
+
+### DEV-023: 專案變化匯入整併為紀錄流程第一步
+
+| DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
+|---|---|---|---|---|---|
+| DEV-023 | Ready | 開發點 | P1 UX refinement | 將 `先匯入專案變化` 從流程上方獨立大卡片整併為紀錄流程第一步；父交付點 DEV-020，不新增產品交付點。 | `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md`, `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md` |
+
+UX refinement 註記：
+- 會議紀錄流程：`匯入 -> 速記 -> AI整理 -> 校稿 -> 發布`。
+- 個人工作紀錄流程：`匯入 -> 撰寫 -> 存草稿 -> 發布`。
+- 匯入仍為 optional step，不阻擋直接撰寫、存草稿或發布。
+- DEV-021 / DEV-022 preserve 與 single-record guard 需保持通過。
+
+### DEV-022: 專案變化匯入後 AI整理同整成單一會議紀錄
+
+| DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
+|---|---|---|---|---|---|
+| DEV-022 | Done | 交付點 | P1 | 修正 DEV-021 preserve append 造成匯入內容以第二份完整會議紀錄保留；改為把專案變化 evidence 統整進同一份 AI整理結果。 | `ai-doc/specs/SPEC-022-project-change-single-record-integration.md`, `ai-doc/qa/QA-DEV-022-project-change-single-record-integration.md`, `ai-doc/reports/CAPA-20260615-project-change-double-meeting-content.md` |
+
+CAPA 註記：
+- DEV-021 已解決「匯入內容不丟失」。
+- DEV-022 已補上 integrated synthesis guard，避免輸出出現兩組 `1. 本次會議總結 / 2. 任務討論與結論 / 3. 待校稿項目`。
+
+### DEV-021: 專案變化匯入後 AI整理保留機制
+
+| DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
+|---|---|---|---|---|---|
+| DEV-021 | Done | 交付點 | P1 | 修正先匯入專案變化後再 AI整理會覆蓋既有匯入內容；新增 deterministic merge guard、preserve/idempotent verifier 與 QA gate。 | `ai-doc/specs/SPEC-021-project-change-ai-preserve.md`, `ai-doc/qa/QA-DEV-021-project-change-ai-preserve.md` |
+
+DEV-020 狀態風險：
+- DEV-020 的「專案變化匯入」與「AI整理」流程已形成可操作路徑，但缺少「已匯入專案變化是受保護內容」的不變式。
+- DEV-021 已於 2026-06-15 補齊 deterministic merge guard、preserve/idempotent verifier 與 taskLinks merged-content 驗證。
+- DEV-020 的資料保留風險已由 DEV-021 關閉；後續若改動 AI整理回寫，需重跑 DEV-021 gate。
+
+## Backlog Update - 2026-06-11
 
 ### DEV-018：會議紀錄防呆 UX/UI 流程重設計
 
 | DEV | 狀態 | 類型 | 優先度 | 摘要 | 文件 |
 |---|---|---|---|---|---|
 | DEV-018 | In Verification | 交付點 | P1 | 重設會議紀錄側欄為四階段防呆工作流，將 AI整理改為建議性動作，新增未儲存離開三選一防呆。 | `ai-doc/specs/SPEC-018-meeting-record-guardrail-workflow-redesign.md` |
+| DEV-019 | Done | 開發點 | P1 | 補足紀錄類型層級：區分會議紀錄、個人工作紀錄與會議流程，避免使用者把類型誤認成流程步驟。 | `ai-doc/specs/SPEC-019-record-type-and-meeting-workflow-layering.md` |
+| DEV-020 | Done | 交付點 | P1 | 重構紀錄功能：看板主入口、開始前決定紀錄類型、預設專案變化匯入、完整未儲存防呆與含流程圖的功能說明。 | `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` |
 
 範圍邊界：
 
@@ -16,7 +64,7 @@
 - 不把 AI整理改成自動任務修改。
 - 手機版會議紀錄工作流不列入 release gate。
 
-更新日期：2026-06-09
+更新日期：2026-06-11
 
 ## Backlog 管理原則
 
@@ -39,6 +87,15 @@
 | DEV-011 | In Verification | 交付點 | P1 | AI 任務導向會議紀錄統整工作流 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` |
 | DEV-012 | In Verification | 交付點 | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
 | DEV-013 | Done | 交付點 | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
+| DEV-020 | Done | 交付點 | P1 | 紀錄功能重構與專案變化匯入流程 | `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` |
+
+## Active 開發點
+
+| DEV | 狀態 | 父交付點 | 優先級 | 主題 | 文件 |
+|---|---|---|---|---|---|
+| DEV-019 | Done | DEV-002 / DEV-005 / DEV-018 | P1 | 紀錄類型與會議流程層級重整 | `ai-doc/specs/SPEC-019-record-type-and-meeting-workflow-layering.md` |
+| DEV-023 | Ready | DEV-020 | P1 UX refinement | 專案變化匯入整併為紀錄流程第一步 | `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md` |
+| DEV-024 | Ready | DEV-011 / DEV-012 / DEV-020 | P1 AI synthesis guard | AI整理保留手寫內容與章節結構 | `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md` |
 
 ## DEV-002 範圍摘要
 
