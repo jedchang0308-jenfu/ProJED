@@ -3,6 +3,7 @@ import React from 'react';
 import { ChevronLeft, ChevronRight, LayoutDashboard, LogOut, Settings } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'board', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
@@ -37,6 +38,8 @@ const Sidebar = () => {
   const [editingBoard, setEditingBoard] = React.useState(null);
   const [boardTitleDraft, setBoardTitleDraft] = React.useState('');
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
+  const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
+  const canOpenWorkspaceContextMenu = canCreateBoard || canDeleteWorkspace;
 
   const startWorkspaceTitleEdit = React.useCallback((workspace) => {
     setEditingBoard(null);
@@ -99,6 +102,7 @@ const Sidebar = () => {
 
   const handleWorkspaceContextMenu = (event, workspace) => {
     event.preventDefault();
+    if (!canOpenWorkspaceContextMenu) return;
     setContextMenuState({
       kind: 'workspace',
       isOpen: true,
@@ -111,6 +115,7 @@ const Sidebar = () => {
 
   const handleBoardContextMenu = (event, workspace, board) => {
     event.preventDefault();
+    if (!canCreateBoard && !canEditBoardSettings) return;
     setContextMenuState({
       kind: 'board',
       isOpen: true,
@@ -279,10 +284,11 @@ const Sidebar = () => {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (!canEditBoardSettings) return;
                               startBoardTitleEdit(ws, board);
                             }}
                             className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            title="點擊改名，右鍵開啟選單"
+                            title={canEditBoardSettings ? '點擊改名，右鍵開啟選單' : '你沒有編輯看板設定的權限'}
                           >
                             {board.title}
                           </button>

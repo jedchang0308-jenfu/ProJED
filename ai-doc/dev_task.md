@@ -1,5 +1,88 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-06-18
+
+### DEV-026: Trello-like 看板分享體驗
+
+狀態: Implemented / Browser Smoke Passed
+節點類型: 交付點
+優先級: P1 UI/UX migration
+父交付點: 無
+是否計入產品交付完成: 是
+關聯需求: 使用者希望邀請別人加入看板的 UI/UX 對齊 Trello，讓 Trello 使用者轉換過來時，邏輯與肌肉記憶可以無縫移轉。
+
+任務目標:
+- 將看板邀請入口移到 active board topbar 的 `分享` 按鈕。
+- 以 `分享看板` modal 承載 email 邀請、角色選擇、複製連結、pending invite 與看板成員。
+- 將 role permission matrix 保留在設定頁，避免干擾分享主流程。
+- 保留既有 `board_invites`、accept/revoke、RLS、audit 與 OAuth invite token preserve 資料契約。
+- 補齊 desktop/laptop/mobile viewport 與 visible error sweep 驗證。
+
+交付文件:
+- `ai-doc/specs/SPEC-026-trello-like-board-share-ui.md`
+- `ai-doc/qa/QA-DEV-026-trello-like-board-share-ui.md`
+
+| 階段 | Owner | 狀態 | 輸出 |
+|---|---|---|---|
+| PM/RD 規格 | PM/RD | Done | SPEC-026 |
+| QA 驗證計畫 | QA | Done | QA-DEV-026 |
+| RD 實作 | RD | Done | Trello-like share modal + topbar entry + settings split |
+| QC 事實驗證 | QC | Browser Smoke Passed / DB Smoke Pending | desktop + 390x844 browser smoke, static gates, ontology static guard |
+
+Regression gate:
+- `npm.cmd run lint -- --quiet`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+- `npm.cmd run verify:ontology-collaboration`
+- `npm.cmd run verify:dev-026-trello-like-board-share-ui`
+
+Implementation evidence:
+- UI: `src/components/MainLayout.tsx` active board topbar `分享` button with member count badge and mobile-safe hit target.
+- Modal: `src/components/BoardMembersPanel.tsx` exports `BoardShareDialog` for Trello-like invite flow and keeps `BoardMembersPanel` as settings role permission matrix.
+- Guardrail: `src/components/Sidebar.tsx` now wires board permission capability checks; `src/components/GlobalContextMenu.tsx` dead hidden transfer code removed for lint gate.
+- Verified: `npm.cmd run verify:dev-026-trello-like-board-share-ui`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run lint -- --quiet`, `npm.cmd run build:test`, `npm.cmd run verify:ontology-collaboration`.
+- Browser smoke: `http://127.0.0.1:4173/` desktop modal visible; 390x844 mobile share button hit target fixed, modal width 366px with no left/right overflow.
+- Pending: `verify:ontology-collaboration` service-role DB smoke remains pending unless run with `--db` or `ONTOLOGY_COLLABORATION_DB_QC=true`.
+
+### DEV-025: 受控跨工作區移動專案
+
+狀態: Implemented / QC Pending
+任務類型: 功能開發 / 權限與資料一致性
+優先級: P1
+關聯需求: 使用者希望專案可在不同工作區之間移動，但擔心權限外洩、資料遺失與稽核斷鏈。
+
+任務目標:
+- 將「專案跨工作區移動」定義為受控搬移流程，而不是自由拖拉或複製。
+- 搬移前必須提供影響預覽，包含成員保留/移除、資料列數、邀請、標籤與 RAG 影響。
+- 搬移必須由後端 RPC 以交易方式完成，避免半搬移狀態。
+- 搬移必須保留 `project_id`，並更新所有 project-scoped 與 workspace-scoped 關聯。
+- 搬移必須留下 source tenant 與 target tenant audit log。
+
+交付文件:
+- `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
+- `ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md`
+
+| 階段 | Owner | 狀態 | 輸出 |
+|---|---|---|---|
+| PM/RD 規格 | PM/RD | Ready | SPEC-025 |
+| QA 驗證計畫 | QA | Ready | QA-DEV-025 |
+| RD 實作 | RD | Done | Supabase RPC migration + frontend controlled transfer flow + local-test fallback |
+| QA 靜態驗證 | QA | Done | `verify:dev-025-project-workspace-transfer`, TypeScript, production build |
+| QC 事實驗證 | QC | Pending | Apply migration to Supabase target, then verify RLS, audit log, data consistency, RAG visibility evidence |
+
+Regression gate:
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+- `npm.cmd run verify:settings-project-context`
+- `npm.cmd run verify:core-regression-static`
+- `npm.cmd run verify:dev-025-project-workspace-transfer`
+
+Implementation evidence:
+- Migration: `supabase/migrations/20260618120000_controlled_project_workspace_transfer.sql`
+- UI: board context menu controlled transfer dialog with preflight preview and project-name confirmation
+- Service/store: Supabase RPC integration plus local-test transfer path
+- Verified: `npm.cmd run verify:dev-025-project-workspace-transfer`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`
+
 ## PM Update - 2026-06-15
 
 ### DEV-024: AI整理保留手寫內容與章節結構
@@ -299,10 +382,11 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
-| 2 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 3 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
-| 4 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
+| 1 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
+| 2 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
+| 3 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 4 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
+| 5 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
 
 ---
 
@@ -323,11 +407,14 @@ CAPA 來源：
 | DEV-012 | 交付點 | In Verification | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
+| DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 
 ### 交付點完成率
 
 - Done：10 個交付點。
 - In Verification：2 個交付點。
+- Implemented / Browser Smoke Passed：1 個交付點。
+- Ready：0 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。
 

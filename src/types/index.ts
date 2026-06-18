@@ -22,6 +22,7 @@ export type PermissionCapability =
   | 'delete_workspace'
   | 'read_board'
   | 'edit_board_settings'
+  | 'move_board_between_workspaces'
   | 'manage_board_members'
   | 'create_task'
   | 'edit_task'
@@ -66,6 +67,7 @@ export const BOARD_ROLE_CAPABILITIES = {
   owner: [
     'read_board',
     'edit_board_settings',
+    'move_board_between_workspaces',
     'manage_board_members',
     'create_task',
     'edit_task',
@@ -82,6 +84,7 @@ export const BOARD_ROLE_CAPABILITIES = {
   admin: [
     'read_board',
     'edit_board_settings',
+    'move_board_between_workspaces',
     'manage_board_members',
     'create_task',
     'edit_task',
@@ -98,6 +101,7 @@ export const BOARD_ROLE_CAPABILITIES = {
   project_manager: [
     'read_board',
     'edit_board_settings',
+    'move_board_between_workspaces',
     'manage_board_members',
     'create_task',
     'edit_task',
@@ -222,6 +226,33 @@ export interface CurrentBoardAccess {
   capabilities: PermissionCapability[];
 }
 
+export interface BoardWorkspaceTransferPreview {
+  blocked: boolean;
+  reasons: string[];
+  sourceWorkspaceId: string;
+  sourceWorkspaceTitle?: string | null;
+  targetWorkspaceId: string;
+  targetWorkspaceTitle?: string | null;
+  boardId: string;
+  boardTitle: string;
+  transferLocked?: boolean;
+  counts: {
+    targetActiveMembers?: number;
+    preservedMembers?: number;
+    removedMembers?: number;
+    tasks?: number;
+    dependencies?: number;
+    tagsToMap?: number;
+    documents?: number;
+    records?: number;
+    pendingInvitesToRevoke?: number;
+    ragDocumentsToResync?: number;
+    revokedInvites?: number;
+    remappedTags?: number;
+    ragJobsCreated?: number;
+  };
+}
+
 export type ActivityEventType =
   | 'task_created'
   | 'task_assigned'
@@ -234,7 +265,8 @@ export type ActivityEventType =
   | 'task_tags_changed'
   | 'dependency_created'
   | 'dependency_updated'
-  | 'dependency_deleted';
+  | 'dependency_deleted'
+  | 'project_workspace_transferred';
 
 export type AuditAction =
   | 'invite_created'
@@ -244,7 +276,8 @@ export type AuditAction =
   | 'member_removed'
   | 'member_role_changed'
   | 'board_deleted'
-  | 'workspace_deleted';
+  | 'workspace_deleted'
+  | 'board_workspace_transferred';
 
 export interface ActivityEvent {
   id?: string;
@@ -511,6 +544,7 @@ export interface BoardActions {
   addBoard: (workspaceId: string, boardName: string) => string | void;
   removeBoard: (wsId: string, bId: string) => void;
   updateBoardTitle: (workspaceId: string, boardId: string, newTitle: string) => void;
+  moveBoardToWorkspace: (workspaceId: string, boardId: string, targetWorkspaceId: string, expectedBoardTitle: string) => Promise<void>;
   switchBoard: (workspaceId: string, boardId: string) => void;
 
   getActiveBoard: () => Board | undefined;

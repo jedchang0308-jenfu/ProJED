@@ -1,6 +1,7 @@
 import {
   normalizeBoardRolePermissionMatrix,
   type Board,
+  type BoardWorkspaceTransferPreview,
   type BoardInvite,
   type BoardInviteAcceptInput,
   type BoardInviteCreateInput,
@@ -494,6 +495,119 @@ export const localTestBoardService = {
         boards: (workspace.boards || []).filter(board => board.id !== boardId),
       };
     }));
+  },
+
+  previewWorkspaceTransfer: async (
+    workspaceId: string,
+    boardId: string,
+    targetWorkspaceId: string
+  ): Promise<BoardWorkspaceTransferPreview> => {
+    requireCanManageBoard(workspaceId, boardId);
+    const workspaces = readWorkspaces();
+    const sourceWorkspace = workspaces.find(workspace => workspace.id === workspaceId);
+    const targetWorkspace = workspaces.find(workspace => workspace.id === targetWorkspaceId);
+    const board = sourceWorkspace?.boards?.find(item => item.id === boardId);
+    if (!sourceWorkspace || !board) throw new Error('Board not found in source workspace.');
+    if (!targetWorkspace) throw new Error('Target workspace not found.');
+
+    const nodes = Object.values(readNodes()).filter(node => node.workspaceId === workspaceId && node.boardId === boardId);
+    const nodeIds = new Set(nodes.map(node => node.id));
+    const dependencies = readDependencies().filter(dep => nodeIds.has(dep.fromId) || nodeIds.has(dep.toId));
+    const records = readKnowledgeRecords().filter(record => record.workspaceId === workspaceId && record.boardId === boardId);
+    const invites = readBoardInvites()[getBoardMemberKey(workspaceId, boardId)] || [];
+    const members = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
+
+    return {
+      blocked: workspaceId === targetWorkspaceId,
+      reasons: workspaceId === targetWorkspaceId ? ['source_and_target_are_same'] : [],
+      sourceWorkspaceId: workspaceId,
+      sourceWorkspaceTitle: sourceWorkspace.title,
+      targetWorkspaceId,
+      targetWorkspaceTitle: targetWorkspace.title,
+      boardId,
+      boardTitle: board.title,
+      counts: {
+        targetActiveMembers: 6,
+        preservedMembers: members.length,
+        removedMembers: 0,
+        tasks: nodes.length,
+        dependencies: dependencies.length,
+        tagsToMap: 0,
+        documents: records.length,
+        records: records.length,
+        pendingInvitesToRevoke: invites.filter(invite => invite.status === 'pending').length,
+        ragDocumentsToResync: records.filter(record => record.ragEnabled).length,
+      },
+    };
+  },
+
+  moveToWorkspace: async (
+    workspaceId: string,
+    boardId: string,
+    targetWorkspaceId: string,
+    expectedBoardTitle: string
+  ): Promise<BoardWorkspaceTransferPreview> => {
+    const preview = await localTestBoardService.previewWorkspaceTransfer(workspaceId, boardId, targetWorkspaceId);
+    if (preview.blocked) throw new Error('Board transfer is blocked.');
+
+    const workspaces = readWorkspaces();
+    const sourceWorkspace = workspaces.find(workspace => workspace.id === workspaceId);
+    const board = sourceWorkspace?.boards?.find(item => item.id === boardId);
+    if (!board) throw new Error('Board not found in source workspace.');
+    if (board.title !== expectedBoardTitle.trim()) throw new Error('Board title confirmation does not match.');
+
+    writeWorkspaces(workspaces.map(workspace => {
+      if (workspace.id === workspaceId) {
+        return { ...workspace, boards: (workspace.boards || []).filter(item => item.id !== boardId) };
+      }
+      if (workspace.id === targetWorkspaceId) {
+        return { ...workspace, boards: [...(workspace.boards || []), { ...board, order: Date.now() }] };
+      }
+      return workspace;
+    }));
+
+    const nodes = readNodes();
+    writeNodes(Object.fromEntries(Object.entries(nodes).map(([nodeId, node]) => [
+      nodeId,
+      node.workspaceId === workspaceId && node.boardId === boardId
+        ? { ...node, workspaceId: targetWorkspaceId, updatedAt: Date.now() }
+        : node,
+    ])) as Record<string, TaskNode>);
+
+    writeKnowledgeRecords(readKnowledgeRecords().map(record =>
+      record.workspaceId === workspaceId && record.boardId === boardId
+        ? {
+            ...record,
+            workspaceId: targetWorkspaceId,
+            taskLinks: record.taskLinks.map(link => ({ ...link, workspaceId: targetWorkspaceId })),
+            updatedAt: Date.now(),
+          }
+        : record
+    ));
+
+    const oldMemberKey = getBoardMemberKey(workspaceId, boardId);
+    const newMemberKey = getBoardMemberKey(targetWorkspaceId, boardId);
+    const allMembers = readBoardMembers();
+    writeBoardMembers({
+      ...allMembers,
+      [newMemberKey]: allMembers[oldMemberKey] || defaultBoardMemberRecords,
+      [oldMemberKey]: [],
+    });
+
+    const allInvites = readBoardInvites();
+    writeBoardInvites({
+      ...allInvites,
+      [newMemberKey]: (allInvites[oldMemberKey] || []).map(invite => ({
+        ...invite,
+        workspaceId: targetWorkspaceId,
+        status: invite.status === 'pending' ? 'revoked' : invite.status,
+        revokedAt: invite.status === 'pending' ? Date.now() : invite.revokedAt,
+        updatedAt: Date.now(),
+      })),
+      [oldMemberKey]: [],
+    });
+
+    return preview;
   },
 };
 

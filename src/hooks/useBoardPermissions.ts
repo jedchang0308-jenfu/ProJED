@@ -33,6 +33,7 @@ export const useBoardPermissions = () => {
       canEditWorkspaceSettings: can('manage_workspace_settings'),
       canDeleteWorkspace: can('delete_workspace'),
       canEditBoardSettings: can('edit_board_settings'),
+      canMoveBoardBetweenWorkspaces: can('move_board_between_workspaces'),
       canManageBoardMembers: can('manage_board_members'),
       isReadOnly:
         !canCreateTask &&

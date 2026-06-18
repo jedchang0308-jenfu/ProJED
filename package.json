@@ -49,6 +49,8 @@
     "verify:dev-022-project-change-single-record": "node scripts/verify-dev-022-project-change-single-record.mjs",
     "verify:dev-023-record-project-change-import-workflow-step": "node scripts/verify-dev-023-record-project-change-import-workflow-step.mjs",
     "verify:dev-024-ai-synthesis-preserve-human-draft": "node scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs",
+    "verify:dev-025-project-workspace-transfer": "node scripts/verify-dev-025-project-workspace-transfer.mjs",
+    "verify:dev-026-trello-like-board-share-ui": "node scripts/verify-dev-026-trello-like-board-share-ui.mjs",
     "verify:settings-project-context": "node scripts/verify-settings-project-context.mjs",
     "verify:settings-project-context-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=settings-project-context open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=settings-project-context run-code --filename=scripts/verify-settings-project-context-browser.pw.js\"",
     "verify:dev-013-task-duplicate": "node scripts/verify-dev-013-task-duplicate.mjs",

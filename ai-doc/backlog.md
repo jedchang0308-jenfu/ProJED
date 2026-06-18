@@ -1,5 +1,18 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-06-18
+
+### DEV-026: Trello-like 看板分享體驗
+
+| DEV | 狀態 | 節點類型 | 優先級 | 目標 | 文件 |
+|---|---|---|---|---|---|
+| DEV-026 | Implemented / Browser Smoke Passed | 交付點 | P1 UI/UX migration | 將看板邀請加入流程改為 Trello-like：active board topbar `分享` 入口、`分享看板` modal、email invite、角色 dropdown、複製連結、pending invite 與成員列表；role permission matrix 降層留在設定頁。 | `ai-doc/specs/SPEC-026-trello-like-board-share-ui.md`, `ai-doc/qa/QA-DEV-026-trello-like-board-share-ui.md` |
+
+交付邊界：
+- 保留既有 `board_invites`、accept/revoke、RLS、audit 與 OAuth invite token preserve。
+- 不新增 migration，不做名稱 autocomplete，不改工作區層級成員管理。
+- 已補 `verify:dev-026-trello-like-board-share-ui`，並完成 desktop 與 390x844 mobile browser smoke；DB role smoke 仍需在 release gate 需要時用 service-role 旗標執行。
+
 ## Backlog Update - 2026-06-15
 
 ### DEV-024: AI整理保留手寫內容與章節結構

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { CheckCircle2, Copy, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound, Pencil, LayoutDashboard } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, Copy, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound, Pencil, LayoutDashboard, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -10,6 +10,7 @@ import { toast } from '../store/useToastStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useDialogStore from '../store/useDialogStore';
 import useAuthStore from '../store/useAuthStore';
+import { boardService } from '../services/dataBackend';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -21,6 +22,7 @@ export const GlobalContextMenu: React.FC = () => {
   const activeBoardId = useBoardStore((state) => state.activeBoardId);
   const addBoard = useBoardStore((state) => state.addBoard);
   const removeBoard = useBoardStore((state) => state.removeBoard);
+  const moveBoardToWorkspace = useBoardStore((state) => state.moveBoardToWorkspace);
   const removeWorkspace = useBoardStore((state) => state.removeWorkspace);
   const switchBoard = useBoardStore((state) => state.switchBoard);
   const showHome = useBoardStore((state) => state.showHome);
@@ -32,13 +34,14 @@ export const GlobalContextMenu: React.FC = () => {
   const removeNode = useWbsStore((state) => state.removeNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const duplicateNodeTree = useWbsStore((state) => state.duplicateNodeTree);
-  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency, canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
+  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency, canCreateBoard, canDeleteWorkspace, canEditBoardSettings, canMoveBoardBetweenWorkspaces } = useBoardPermissions();
   const currentUserId = useAuthStore((state) => state.user?.uid);
   const workspaceMembers = useMemberStore((state) => state.workspaceMembers);
   const currentBoardAccess = useMemberStore((state) => state.currentBoardAccess);
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
+  const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12, maxHeight: 320 });
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +76,16 @@ export const GlobalContextMenu: React.FC = () => {
   };
   const canEditBoardSettingsInWorkspace = (workspaceId: string) => {
     if (currentBoardAccess?.workspaceId === workspaceId && canEditBoardSettings) return true;
+    if (isWorkspaceOwner(workspaceId)) return true;
+    const role = getWorkspaceRole(workspaceId);
+    return role === 'owner' || role === 'admin' || role === 'project_manager';
+  };
+  const canMoveBoardFromWorkspace = (workspaceId: string) => {
+    if (currentBoardAccess?.workspaceId === workspaceId && canMoveBoardBetweenWorkspaces) return true;
+    if (
+      currentBoardAccess?.workspaceId === workspaceId &&
+      ['owner', 'admin', 'project_manager'].includes(currentBoardAccess.boardRole || '')
+    ) return true;
     if (isWorkspaceOwner(workspaceId)) return true;
     const role = getWorkspaceRole(workspaceId);
     return role === 'owner' || role === 'admin' || role === 'project_manager';
@@ -427,6 +440,17 @@ export const GlobalContextMenu: React.FC = () => {
     setContextMenuState(null);
   };
 
+  const handleOpenTransferBoard = () => {
+    if (!contextMenuState || contextMenuState.kind !== 'board') return;
+    if (!canMoveBoardFromWorkspace(contextMenuState.workspaceId)) return;
+    setTransferBoardTarget({
+      workspaceId: contextMenuState.workspaceId,
+      boardId: contextMenuState.boardId,
+      title: contextMenuState.title,
+    });
+    setContextMenuState(null);
+  };
+
   const handleDeleteBoard = async () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
     if (!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId)) return;
@@ -514,6 +538,15 @@ export const GlobalContextMenu: React.FC = () => {
                   <span>新增看板</span>
                 </button>
                 <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                <button
+                  onClick={handleOpenTransferBoard}
+                  disabled={!canMoveBoardFromWorkspace(contextMenuState.workspaceId) || workspaces.length < 2}
+                  title={workspaces.length < 2 ? '需要至少兩個工作區才能移動看板' : undefined}
+                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-indigo-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  <ArrowRightLeft size={14} className="flex-shrink-0 text-indigo-500" />
+                  <span>移動到工作區</span>
+                </button>
                 <button
                   onClick={() => void handleDeleteBoard()}
                   disabled={!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId)}
@@ -681,6 +714,205 @@ export const GlobalContextMenu: React.FC = () => {
       {detailsNodeId && (
         <TaskDetailsModal nodeId={detailsNodeId} onClose={() => setDetailsNodeId(null)} />
       )}
+      {transferBoardTarget && (
+        <BoardWorkspaceTransferDialog
+          sourceWorkspaceId={transferBoardTarget.workspaceId}
+          boardId={transferBoardTarget.boardId}
+          boardTitle={transferBoardTarget.title}
+          workspaces={workspaces}
+          onClose={() => setTransferBoardTarget(null)}
+          onMove={moveBoardToWorkspace}
+        />
+      )}
     </>
   );
 };
+
+const TRANSFER_REASON_LABELS = {
+  source_and_target_are_same: '來源與目標工作區相同',
+  source_project_manager_required: '需要來源專案管理權限',
+  target_workspace_admin_required: '需要目標工作區 owner/admin 權限',
+  project_transfer_locked: '此專案已鎖定禁止搬移',
+};
+
+const BoardWorkspaceTransferDialog = ({
+  sourceWorkspaceId,
+  boardId,
+  boardTitle,
+  workspaces,
+  onClose,
+  onMove,
+}) => {
+  const targetOptions = workspaces.filter(workspace => workspace.id !== sourceWorkspaceId);
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState(targetOptions[0]?.id || '');
+  const [preview, setPreview] = useState(null);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
+  const [error, setError] = useState('');
+  const selectedTarget = workspaces.find(workspace => workspace.id === targetWorkspaceId);
+  const sourceWorkspace = workspaces.find(workspace => workspace.id === sourceWorkspaceId);
+  const counts = preview?.counts || {};
+  const canSubmit = Boolean(preview && !preview.blocked && confirmTitle.trim() === boardTitle && !isMoving);
+
+  useEffect(() => {
+    if (!targetWorkspaceId) return;
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    setError('');
+    setPreview(null);
+
+    boardService.previewWorkspaceTransfer(sourceWorkspaceId, boardId, targetWorkspaceId)
+      .then(result => {
+        if (!cancelled) setPreview(result);
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : '無法取得搬移預覽');
+      })
+      .finally(() => {
+        if (!cancelled) setIsPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceWorkspaceId, boardId, targetWorkspaceId]);
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setIsMoving(true);
+    setError('');
+    try {
+      await onMove(sourceWorkspaceId, boardId, targetWorkspaceId, confirmTitle.trim());
+      toast.success('專案已移動到目標工作區');
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '專案搬移失敗');
+    } finally {
+      setIsMoving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+              <ArrowRightLeft size={17} className="text-indigo-500" />
+              移動到工作區
+            </div>
+            <p className="mt-1 truncate text-sm text-slate-500" title={boardTitle}>{boardTitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 w-8 items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="grid gap-4 px-5 py-4">
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
+            <div>
+              <label className="mb-1 block text-xs font-bold uppercase text-slate-400">來源工作區</label>
+              <div className="min-h-10 border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                {sourceWorkspace?.title || sourceWorkspaceId}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold uppercase text-slate-400">目標工作區</label>
+              <select
+                value={targetWorkspaceId}
+                onChange={(event) => {
+                  setTargetWorkspaceId(event.target.value);
+                  setConfirmTitle('');
+                }}
+                className="h-10 w-full border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              >
+                {targetOptions.map(workspace => (
+                  <option key={workspace.id} value={workspace.id}>{workspace.title}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {isPreviewLoading ? (
+            <div className="border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              正在檢查搬移風險...
+            </div>
+          ) : null}
+
+          {preview ? (
+            <div className="grid gap-3 border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                <TransferCount label="任務" value={counts.tasks} />
+                <TransferCount label="依賴" value={counts.dependencies} />
+                <TransferCount label="標籤" value={counts.tagsToMap ?? counts.remappedTags} />
+                <TransferCount label="文件" value={counts.documents} />
+                <TransferCount label="紀錄" value={counts.records} />
+                <TransferCount label="RAG 重建" value={counts.ragDocumentsToResync ?? counts.ragJobsCreated} />
+              </div>
+              <div className="grid gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <div>保留成員：{counts.preservedMembers ?? 0}</div>
+                <div>移除非目標工作區成員：{counts.removedMembers ?? 0}</div>
+                <div>撤銷待處理邀請：{counts.pendingInvitesToRevoke ?? counts.revokedInvites ?? 0}</div>
+              </div>
+              {preview.blocked ? (
+                <div className="flex gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                  <div>
+                    {(preview.reasons || []).map(reason => (
+                      <div key={reason}>{TRANSFER_REASON_LABELS[reason] || reason}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase text-slate-400">輸入專案名稱確認</label>
+            <input
+              value={confirmTitle}
+              onChange={(event) => setConfirmTitle(event.target.value)}
+              placeholder={boardTitle}
+              className="h-10 w-full border border-slate-300 px-3 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              disabled={!preview || preview.blocked || isMoving}
+            />
+          </div>
+
+          {error ? (
+            <div className="border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            className="h-10 bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {isMoving ? '搬移中...' : `移動到 ${selectedTarget?.title || '工作區'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TransferCount = ({ label, value }) => (
+  <div className="border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+    <div className="text-xs text-slate-400">{label}</div>
+    <div className="mt-1 text-base font-bold text-slate-800 dark:text-slate-100">{value ?? 0}</div>
+  </div>
+);

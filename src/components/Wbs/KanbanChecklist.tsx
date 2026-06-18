@@ -243,13 +243,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             ref={inputRef}
             value={editValue}
             onChange={(e) => onEditValueChange(e.target.value)}
-            onVoiceResult={onEditValueChange}
             onBlur={() => onSave(child)}
             onKeyDown={(e) => onKeyDown(e, child)}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             disabled={!canEditTask}
-            voiceEnabled
             className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 text-xs font-medium text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
           />
         ) : (

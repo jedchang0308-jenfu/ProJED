@@ -317,6 +317,39 @@ const useBoardStore = create<BoardStore>()(
             boardService.update(workspaceId, boardId, { title: newTitle }).catch(console.error);
         },
 
+        moveBoardToWorkspace: async (workspaceId, boardId, targetWorkspaceId, expectedBoardTitle) => {
+            const { workspaces } = get();
+            const sourceWorkspace = workspaces.find(ws => ws.id === workspaceId);
+            const board = sourceWorkspace?.boards.find(item => item.id === boardId);
+            if (!board) throw new Error('Board not found in source workspace.');
+
+            await boardService.moveToWorkspace(workspaceId, boardId, targetWorkspaceId, expectedBoardTitle);
+
+            safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
+            safeSetItem(BOARD_STORAGE_KEY, boardId);
+            safeSetItem(VIEW_STORAGE_KEY, 'board');
+            set((state) => ({
+                workspaces: state.workspaces.map(ws => {
+                    if (ws.id === workspaceId) {
+                        return { ...ws, boards: ws.boards.filter(item => item.id !== boardId) };
+                    }
+                    if (ws.id === targetWorkspaceId) {
+                        const alreadyExists = ws.boards.some(item => item.id === boardId);
+                        return {
+                            ...ws,
+                            boards: alreadyExists
+                                ? ws.boards.map(item => item.id === boardId ? { ...item, ...board, order: Date.now() } : item)
+                                : [...ws.boards, { ...board, order: Date.now() }],
+                        };
+                    }
+                    return ws;
+                }),
+                activeWorkspaceId: targetWorkspaceId,
+                activeBoardId: boardId,
+                currentView: 'board',
+            }));
+        },
+
         // ===== Derived Getters =====
         getActiveBoard: () => {
             const { workspaces, activeWorkspaceId, activeBoardId } = get();

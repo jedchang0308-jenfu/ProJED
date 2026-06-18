@@ -273,24 +273,25 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         </div>
 
         <div className="flex-1 overflow-auto px-4 py-4">
-          <section className="border-b border-slate-100 pb-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <section className="border-b border-slate-100 pb-2">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
               <CalendarDays size={16} className="text-blue-500" />
               <span>時間設定</span>
             </div>
 
-            <div className="mb-3">
+            <div className="grid gap-2 md:grid-cols-3">
+            <div className="min-w-0">
               <label className="text-xs font-medium text-slate-500">
                 狀態
                 <div className="mt-1 flex items-center gap-2">
-                  <span className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-status-${currentStatus}/15 text-slate-500`}>
+                  <span className={`hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-status-${currentStatus}/15 text-slate-500`}>
                     <CircleDot size={15} />
                   </span>
                   <select
                     value={currentStatus}
                     onChange={(event) => { if (canEditTask) updateNode(node.id, { status: event.target.value as TaskStatus }); }}
                     disabled={!canEditTask}
-                    className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   >
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -302,18 +303,18 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
 
-            <div className="mb-3">
+            <div className="min-w-0">
               <label className="text-xs font-medium text-slate-500">
                 指派人
                 <div className="mt-1 flex items-center gap-2">
-                  <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-500">
+                  <span className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-500">
                     <UserRound size={15} />
                   </span>
                   <select
                     value={node.assigneeId || ''}
                     onChange={handleAssigneeChange}
                     disabled={!canAssignTask}
-                    className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
                   >
                     <option value="">未指派</option>
                     {!hasCurrentAssignee && node.assigneeId && (
@@ -335,10 +336,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
 
-            <div className="mb-3">
-              <label className="text-xs font-medium text-slate-500">
-                標籤
-                <div className="mt-1">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-slate-500">
+                <div className="mt-5">
                   <TagPicker
                     workspaceId={node.workspaceId}
                     selectedTagIds={node.tagIds || []}
@@ -346,10 +346,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     disabled={!canEditTask}
                   />
                 </div>
-              </label>
+              </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-2 md:col-span-3 md:grid-cols-3">
               <label className="text-xs font-medium text-slate-500">
                 開始日期
                 <div className="mt-1 flex items-center gap-2">
@@ -358,14 +358,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     value={startDate}
                     onChange={(event) => updateDate('startDate', event.target.value)}
                     readOnly={!canEditTask || startLocked}
-                    className={`h-9 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
+                    className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
                       !canEditTask || startLocked
                         ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
                         : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
                     }`}
                   />
                   <span
-                    className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border ${
+                    className={`${startLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border ${
                       startLocked
                         ? 'border-amber-200 bg-amber-50 text-amber-600'
                         : 'border-slate-200 bg-slate-50 text-slate-300'
@@ -384,7 +384,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     value={endDate}
                     onChange={(event) => updateDate('endDate', event.target.value)}
                     readOnly={!canEditTask || endLocked || node.isDurationLocked}
-                    className={`h-9 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
+                    className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
                       !canEditTask || endLocked || node.isDurationLocked
                         ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
                         : isDueToday
@@ -393,7 +393,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     }`}
                   />
                   <span
-                    className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border ${
+                    className={`${endLocked || node.isDurationLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border ${
                       endLocked || node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50 text-amber-600'
                         : 'border-slate-200 bg-slate-50 text-slate-300'
@@ -411,7 +411,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     type="button"
                     onClick={handleToggleDurationLock}
                     disabled={!canEditTask}
-                    className={`inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border transition-colors ${
+                    className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border transition-colors ${
                       node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
                         : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100'
@@ -427,7 +427,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     onChange={handleDurationChange}
                     placeholder="-"
                     disabled={!canEditTask || !node.isDurationLocked}
-                    className={`h-9 w-full rounded-md border px-2 text-sm text-center outline-none transition ${
+                    className={`h-8 w-full rounded-md border px-2 text-sm text-center outline-none transition ${
                       !node.isDurationLocked
                         ? 'border-transparent bg-slate-50 text-slate-400'
                         : 'border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
@@ -435,6 +435,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   />
                 </div>
               </label>
+            </div>
             </div>
           </section>
 

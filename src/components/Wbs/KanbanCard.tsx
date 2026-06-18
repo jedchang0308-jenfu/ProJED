@@ -328,13 +328,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   ref={inputRef}
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  onVoiceResult={setEditValue}
                   onBlur={handleSave}
                   onKeyDown={handleKeyDown}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                   disabled={!canEditTask}
-                  voiceEnabled
                   className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none ring-2 ring-primary/30 focus:ring-2 focus:ring-primary/30 focus:ring-offset-0"
                 />
               ) : (

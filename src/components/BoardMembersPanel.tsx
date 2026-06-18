@@ -1,5 +1,14 @@
 import React from 'react';
-import { Check, Clock, Link2, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react';
+import {
+  Check,
+  Clock,
+  Copy,
+  Link2,
+  ShieldCheck,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { useMemberStore } from '../store/useMemberStore';
 import useBoardStore from '../store/useBoardStore';
@@ -14,40 +23,46 @@ import {
   type WorkspaceMember,
   normalizeBoardRolePermissionMatrix,
 } from '../types';
-import { buildBoardInviteUrl, generateBoardInviteToken, hashBoardInviteToken, isLocalBoardInviteUrl } from '../utils/boardInviteToken';
+import {
+  buildBoardInviteUrl,
+  generateBoardInviteToken,
+  hashBoardInviteToken,
+  isLocalBoardInviteUrl,
+} from '../utils/boardInviteToken';
 
-type MemberPanelTab = 'emailInvite' | 'boardMembers' | 'rolePermissions';
-type BoardMembersPanelMode = 'popover' | 'embedded';
+type ShareTab = 'members' | 'requests';
+type BoardMembersPanelMode = 'embedded';
 
 type BoardMembersPanelProps = {
   mode?: BoardMembersPanelMode;
 };
 
-const ROLE_LABELS: Record<CollaborationRole, string> = {
+type BoardShareDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export const ROLE_LABELS: Record<CollaborationRole, string> = {
   owner: '擁有者',
-  admin: '管理員',
-  project_manager: '專案管理者',
+  admin: '系統管理員',
+  project_manager: '專案負責人',
   member: '成員',
   viewer: '檢視者',
 };
 
 const ROLE_OPTIONS: CollaborationRole[] = ['owner', 'admin', 'project_manager', 'member', 'viewer'];
+const INVITE_ROLE_OPTIONS: CollaborationRole[] = ['admin', 'project_manager', 'member', 'viewer'];
 const DEFAULT_INVITE_ROLE: CollaborationRole = 'member';
-
-const PANEL_TABS: { id: MemberPanelTab; label: string }[] = [
-  { id: 'emailInvite', label: '邀請連結' },
-  { id: 'boardMembers', label: '看板成員' },
-  { id: 'rolePermissions', label: '角色權限' },
-];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const PERMISSION_ROWS: { capability: PermissionCapability; label: string }[] = [
-  { capability: 'read_board', label: '檢查看板' },
+  { capability: 'read_board', label: '查看看板' },
   { capability: 'create_task', label: '建立任務' },
   { capability: 'edit_task', label: '編輯任務' },
   { capability: 'move_task', label: '移動任務' },
   { capability: 'delete_task', label: '刪除任務' },
   { capability: 'assign_task', label: '指派任務' },
-  { capability: 'create_dependency', label: '建立依賴關係' },
+  { capability: 'create_dependency', label: '建立相依關係' },
   { capability: 'manage_board_members', label: '管理看板成員' },
   { capability: 'edit_board_settings', label: '編輯看板設定' },
   { capability: 'read_audit', label: '查看稽核紀錄' },
@@ -56,17 +71,21 @@ const PERMISSION_ROWS: { capability: PermissionCapability; label: string }[] = [
 const getMemberLabel = (member: Pick<BoardMember | WorkspaceMember, 'userId' | 'profile'>) =>
   member.profile?.displayName || member.profile?.email || member.userId;
 
+const getMemberEmail = (member: Pick<BoardMember | WorkspaceMember, 'userId' | 'profile'>) =>
+  member.profile?.email || member.userId;
+
+const getMemberInitial = (member: Pick<BoardMember | WorkspaceMember, 'userId' | 'profile'>) =>
+  getMemberLabel(member).trim().slice(0, 1).toUpperCase() || '?';
+
 const hasBoardCapability = (
   rolePermissions: BoardRolePermissionMatrix,
   role: CollaborationRole,
   capability: PermissionCapability
 ) => rolePermissions[role].includes(capability);
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 const formatDate = (value?: number) => {
   if (!value) return '-';
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat('zh-TW', {
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
@@ -74,8 +93,15 @@ const formatDate = (value?: number) => {
   }).format(new Date(value));
 };
 
-export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'popover' }) => {
-  const isEmbedded = mode === 'embedded';
+const canConfigureRolePermissionsFromAccess = (
+  currentBoardAccess: ReturnType<typeof useMemberStore.getState>['currentBoardAccess']
+) =>
+  currentBoardAccess?.workspaceRole === 'owner'
+  || currentBoardAccess?.workspaceRole === 'admin'
+  || currentBoardAccess?.boardRole === 'owner'
+  || currentBoardAccess?.boardRole === 'admin';
+
+const useBoardMemberPanelState = () => {
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const boardMembers = useMemberStore(state => state.boardMembers);
@@ -87,36 +113,54 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
   const removeBoardMember = useMemberStore(state => state.removeBoardMember);
   const updateBoardRolePermissions = useMemberStore(state => state.updateBoardRolePermissions);
   const { canManageBoardMembers } = useBoardPermissions();
-  const [isOpen, setIsOpen] = React.useState(isEmbedded);
-  const [activeTab, setActiveTab] = React.useState<MemberPanelTab>('emailInvite');
+
+  return {
+    activeWorkspaceId,
+    activeBoardId,
+    boardMembers,
+    boardRolePermissions,
+    currentBoardAccess,
+    loading,
+    loadMembers,
+    inviteBoardMember,
+    removeBoardMember,
+    updateBoardRolePermissions,
+    canManageBoardMembers,
+    canConfigureRolePermissions: canConfigureRolePermissionsFromAccess(currentBoardAccess),
+  };
+};
+
+export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpenChange }) => {
+  const {
+    activeWorkspaceId,
+    activeBoardId,
+    boardMembers,
+    loading,
+    loadMembers,
+    inviteBoardMember,
+    removeBoardMember,
+    canManageBoardMembers,
+  } = useBoardMemberPanelState();
+  const activeBoard = useBoardStore(state => {
+    const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId);
+    return workspace?.boards.find(board => board.id === state.activeBoardId);
+  });
+  const [activeTab, setActiveTab] = React.useState<ShareTab>('members');
   const [inviteEmail, setInviteEmail] = React.useState('');
+  const [inviteRole, setInviteRole] = React.useState<CollaborationRole>(DEFAULT_INVITE_ROLE);
   const [pendingInvites, setPendingInvites] = React.useState<BoardInvite[]>([]);
   const [inviteLoading, setInviteLoading] = React.useState(false);
-  const [permissionSavingKey, setPermissionSavingKey] = React.useState<string | null>(null);
   const [recentInviteLinks, setRecentInviteLinks] = React.useState<Record<string, string>>({});
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
-  const canConfigureRolePermissions =
-    currentBoardAccess?.workspaceRole === 'owner'
-    || currentBoardAccess?.workspaceRole === 'admin'
-    || currentBoardAccess?.boardRole === 'owner'
-    || currentBoardAccess?.boardRole === 'admin';
+  const [latestInviteId, setLatestInviteId] = React.useState<string | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  React.useEffect(() => {
-    if (isEmbedded) {
-      setIsOpen(true);
-      return;
-    }
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, [isEmbedded, isOpen]);
+  const latestInvite = latestInviteId
+    ? pendingInvites.find(invite => invite.id === latestInviteId) ?? null
+    : null;
+  const latestInviteLink = latestInviteId ? recentInviteLinks[latestInviteId] : undefined;
+  const inviteDisabledReason = !canManageBoardMembers
+    ? '你沒有管理看板成員的權限。'
+    : '';
 
   const loadPendingInvites = React.useCallback(async () => {
     if (!activeWorkspaceId || !activeBoardId) {
@@ -128,25 +172,26 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
       const invites = await boardInviteService.listPending(activeWorkspaceId, activeBoardId);
       setPendingInvites(invites);
     } catch (error) {
-      console.warn('[BoardMembersPanel] 無法讀取待處理的看板邀請:', error);
+      console.warn('[BoardShareDialog] failed to load pending invites:', error);
       setPendingInvites([]);
     }
   }, [activeBoardId, activeWorkspaceId]);
 
   React.useEffect(() => {
-    if (!isOpen || activeTab !== 'emailInvite') return;
+    if (!open || !activeWorkspaceId || !activeBoardId) return;
+    void loadMembers(activeWorkspaceId, activeBoardId);
     void loadPendingInvites();
-  }, [activeTab, isOpen, loadPendingInvites]);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, [activeBoardId, activeWorkspaceId, loadMembers, loadPendingInvites, open]);
 
   React.useEffect(() => {
-    if (
-      !isOpen
-      || (activeTab !== 'boardMembers' && activeTab !== 'rolePermissions')
-      || !activeWorkspaceId
-      || !activeBoardId
-    ) return;
-    void loadMembers(activeWorkspaceId, activeBoardId);
-  }, [activeBoardId, activeTab, activeWorkspaceId, isOpen, loadMembers]);
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onOpenChange(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onOpenChange, open]);
 
   const handleInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
@@ -162,20 +207,21 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
       const createdInvite = await boardInviteService.create(activeWorkspaceId, activeBoardId, {
         email,
         tokenHash: await hashBoardInviteToken(token),
-        defaultRole: DEFAULT_INVITE_ROLE,
+        defaultRole: inviteRole,
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
       const inviteUrl = buildBoardInviteUrl(token);
       setRecentInviteLinks(current => ({ ...current, [createdInvite.id]: inviteUrl }));
-      toast.success(
-        isLocalBoardInviteUrl(inviteUrl)
-          ? '本機測試邀請連結已建立，請勿傳給真實受邀者。'
-          : '邀請連結已建立，請複製後傳給對方。'
-      );
+      setLatestInviteId(createdInvite.id);
       setInviteEmail('');
+      setActiveTab('requests');
+      toast.success(isLocalBoardInviteUrl(inviteUrl)
+        ? '已建立本機測試邀請連結，請在同一個測試環境開啟。'
+        : '已建立看板邀請。');
       await loadPendingInvites();
-    } catch {
-      toast.error('無法邀請此看板成員。');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      toast.error(message || '無法建立看板邀請。');
     } finally {
       setInviteLoading(false);
     }
@@ -183,14 +229,16 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
 
   const handleCopyInviteLink = async (invite: BoardInvite) => {
     const link = recentInviteLinks[invite.id];
-    if (!link) return;
+    if (!link) {
+      toast.warning('此邀請的安全連結只會在建立當次顯示。請撤回後重新分享。');
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(link);
-      toast.success(
-        isLocalBoardInviteUrl(link)
-          ? '本機測試邀請連結已複製，請勿傳給真實受邀者。'
-          : '邀請連結已複製。'
-      );
+      toast.success(isLocalBoardInviteUrl(link)
+        ? '已複製本機測試邀請連結。'
+        : '已複製邀請連結。');
     } catch {
       toast.error('無法複製邀請連結。');
     }
@@ -202,10 +250,16 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
     try {
       setInviteLoading(true);
       await boardInviteService.revoke(activeWorkspaceId, activeBoardId, invite.id);
-      toast.success('看板邀請已撤回。');
+      setRecentInviteLinks(current => {
+        const next = { ...current };
+        delete next[invite.id];
+        return next;
+      });
+      if (latestInviteId === invite.id) setLatestInviteId(null);
+      toast.success('已刪除邀請連結。');
       await loadPendingInvites();
     } catch {
-      toast.error('無法撤回此看板邀請。');
+      toast.error('無法刪除邀請連結。');
     } finally {
       setInviteLoading(false);
     }
@@ -216,9 +270,9 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
 
     try {
       await inviteBoardMember(activeWorkspaceId, activeBoardId, member.userId, role);
-      toast.success('看板角色已更新。');
+      toast.success('已更新看板角色。');
     } catch {
-      toast.error('無法更新此看板角色。');
+      toast.error('無法更新看板角色。');
     }
   };
 
@@ -227,9 +281,342 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
 
     try {
       await removeBoardMember(activeWorkspaceId, activeBoardId, member.userId);
-      toast.success('看板成員已移除。');
+      toast.success('已移除看板成員。');
     } catch {
-      toast.error('無法移除此看板成員。');
+      toast.error('無法移除看板成員。');
+    }
+  };
+
+  if (!open || !activeBoardId) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10040] flex items-start justify-center bg-slate-950/45 px-3 py-8 sm:items-center sm:py-4"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onOpenChange(false);
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="board-share-title"
+        className="flex max-h-[calc(100vh-4rem)] w-full max-w-[660px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+        data-board-share-dialog
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div className="min-w-0">
+            <h2 id="board-share-title" className="text-xl font-semibold text-slate-900">
+              分享看板
+            </h2>
+            <p className="mt-1 truncate text-sm text-slate-500">
+              {activeBoard?.title || '目前看板'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            aria-label="關閉分享看板"
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="overflow-y-auto px-5 py-4">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_132px_auto]">
+            <input
+              ref={inputRef}
+              type="email"
+              value={inviteEmail}
+              disabled={!canManageBoardMembers || inviteLoading}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleInvite();
+                }
+              }}
+              className="h-11 min-w-0 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+              placeholder="電子郵件地址或名稱"
+              aria-label="電子郵件地址或名稱"
+            />
+            <select
+              value={inviteRole}
+              disabled={!canManageBoardMembers || inviteLoading}
+              onChange={(event) => setInviteRole(event.target.value as CollaborationRole)}
+              className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+              aria-label="邀請角色"
+            >
+              {INVITE_ROLE_OPTIONS.map(role => (
+                <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!canManageBoardMembers || inviteLoading || !inviteEmail.trim()}
+              onClick={handleInvite}
+              className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              data-board-share-submit
+            >
+              分享
+            </button>
+          </div>
+
+          {inviteDisabledReason ? (
+            <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {inviteDisabledReason}
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center">
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-slate-500">
+              <Link2 size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-800">
+                {latestInvite ? '邀請連結已建立' : '建立邀請後即可複製專屬連結'}
+              </div>
+              <div className="mt-0.5 text-xs leading-5 text-slate-500">
+                {latestInvite
+                  ? `${latestInvite.email} 可使用受邀信箱透過此連結加入為 ${ROLE_LABELS[latestInvite.defaultRole]}。`
+                  : '目前資料層採 email 專屬邀請；先輸入 email 並按分享，再複製連結。'}
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                disabled={!latestInvite || !latestInviteLink || !canManageBoardMembers}
+                onClick={() => latestInvite && handleCopyInviteLink(latestInvite)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Copy size={15} />
+                複製連結
+              </button>
+              <button
+                type="button"
+                disabled={!latestInvite || !canManageBoardMembers || inviteLoading}
+                onClick={() => latestInvite && handleRevokeInvite(latestInvite)}
+                className="inline-flex h-9 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                刪除連結
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 border-b border-slate-200">
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('members')}
+                className={`border-b-2 px-0 pb-2 text-sm font-semibold ${
+                  activeTab === 'members'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                看板成員 <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{boardMembers.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('requests')}
+                className={`border-b-2 px-0 pb-2 text-sm font-semibold ${
+                  activeTab === 'requests'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                加入要求 <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{pendingInvites.length}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            {activeTab === 'members' ? (
+              <MemberRows
+                members={boardMembers}
+                loading={loading}
+                canManage={canManageBoardMembers}
+                onRoleChange={handleRoleChange}
+                onRemove={handleRemove}
+              />
+            ) : (
+              <PendingInviteRows
+                invites={pendingInvites}
+                inviteLoading={inviteLoading}
+                canManage={canManageBoardMembers}
+                recentInviteLinks={recentInviteLinks}
+                onCopy={handleCopyInviteLink}
+                onRevoke={handleRevokeInvite}
+              />
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const MemberRows: React.FC<{
+  members: BoardMember[];
+  loading: boolean;
+  canManage: boolean;
+  onRoleChange: (member: BoardMember, role: CollaborationRole) => void;
+  onRemove: (member: BoardMember) => void;
+}> = ({ members, loading, canManage, onRoleChange, onRemove }) => {
+  if (members.length === 0) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+        目前沒有看板成員。
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2" data-board-share-members>
+      {members.map(member => {
+        const isOwner = member.role === 'owner';
+        const disabled = !canManage || loading || isOwner;
+        return (
+          <div key={member.userId} className="flex items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+              {getMemberInitial(member)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-slate-800">{getMemberLabel(member)}</div>
+              <div className="truncate text-xs text-slate-500">{getMemberEmail(member)}</div>
+            </div>
+            <select
+              value={member.role}
+              disabled={disabled}
+              onChange={(event) => onRoleChange(member, event.target.value as CollaborationRole)}
+              className="h-9 max-w-[132px] rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+              aria-label={`${getMemberLabel(member)} 的看板角色`}
+              title={!canManage ? '你沒有管理看板成員的權限。' : isOwner ? '擁有者角色不可在此變更。' : undefined}
+            >
+              {ROLE_OPTIONS.map(role => (
+                <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onRemove(member)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label={`移除 ${getMemberLabel(member)}`}
+              title={!canManage ? '你沒有管理看板成員的權限。' : isOwner ? '擁有者不可移除。' : '移除成員'}
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const PendingInviteRows: React.FC<{
+  invites: BoardInvite[];
+  inviteLoading: boolean;
+  canManage: boolean;
+  recentInviteLinks: Record<string, string>;
+  onCopy: (invite: BoardInvite) => void;
+  onRevoke: (invite: BoardInvite) => void;
+}> = ({ invites, inviteLoading, canManage, recentInviteLinks, onCopy, onRevoke }) => {
+  if (invites.length === 0) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500" data-board-share-requests>
+        目前沒有待處理的加入要求。
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2" data-board-share-requests>
+      {invites.map(invite => {
+        const hasLink = Boolean(recentInviteLinks[invite.id]);
+        return (
+          <div key={invite.id} className="flex items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+              <Clock size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-slate-800">{invite.email}</div>
+              <div className="truncate text-xs text-slate-500">
+                {ROLE_LABELS[invite.defaultRole]} · 建立於 {formatDate(invite.createdAt)}
+              </div>
+              {!hasLink ? (
+                <div className="mt-0.5 text-xs text-slate-400">
+                  安全連結只在建立當次顯示；需要連結時請撤回後重新分享。
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={!canManage || !hasLink || inviteLoading}
+              onClick={() => onCopy(invite)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label={`複製 ${invite.email} 的邀請連結`}
+              title={hasLink ? '複製邀請連結' : '安全連結只在建立當次顯示'}
+            >
+              <Copy size={15} />
+            </button>
+            <button
+              type="button"
+              disabled={!canManage || inviteLoading}
+              onClick={() => onRevoke(invite)}
+              className="inline-flex h-9 items-center justify-center rounded-md px-2 text-xs font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              撤回
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = () => {
+  const {
+    activeWorkspaceId,
+    activeBoardId,
+    boardMembers,
+    boardRolePermissions,
+    currentBoardAccess,
+    loading,
+    loadMembers,
+    inviteBoardMember,
+    removeBoardMember,
+    updateBoardRolePermissions,
+    canManageBoardMembers,
+    canConfigureRolePermissions,
+  } = useBoardMemberPanelState();
+  const [permissionSavingKey, setPermissionSavingKey] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!activeWorkspaceId || !activeBoardId) return;
+    void loadMembers(activeWorkspaceId, activeBoardId);
+  }, [activeBoardId, activeWorkspaceId, loadMembers]);
+
+  const handleRoleChange = async (member: BoardMember, role: CollaborationRole) => {
+    if (!activeWorkspaceId || !activeBoardId || !canManageBoardMembers || member.role === 'owner') return;
+
+    try {
+      await inviteBoardMember(activeWorkspaceId, activeBoardId, member.userId, role);
+      toast.success('已更新看板角色。');
+    } catch {
+      toast.error('無法更新看板角色。');
+    }
+  };
+
+  const handleRemove = async (member: BoardMember) => {
+    if (!activeWorkspaceId || !activeBoardId || !canManageBoardMembers || member.role === 'owner') return;
+
+    try {
+      await removeBoardMember(activeWorkspaceId, activeBoardId, member.userId);
+      toast.success('已移除看板成員。');
+    } catch {
+      toast.error('無法移除看板成員。');
     }
   };
 
@@ -257,7 +644,7 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
     try {
       setPermissionSavingKey(`${role}:${capability}`);
       await updateBoardRolePermissions(activeWorkspaceId, activeBoardId, nextPermissions);
-      toast.success('角色權限已更新。');
+      toast.success('已更新角色權限。');
     } catch {
       toast.error('無法更新角色權限。');
     } finally {
@@ -267,264 +654,104 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = ({ mode = 'po
 
   if (!activeBoardId) return null;
 
-  const panelContent = isOpen ? (
-        <div className={isEmbedded
-          ? 'overflow-hidden border border-slate-200 bg-white'
-          : 'absolute right-0 top-11 z-[10020] w-[420px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl'
-        }>
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800">看板權限</h3>
-              <p className="text-xs text-slate-400">管理看板邀請、成員與角色權限。</p>
+  return (
+    <section className="overflow-hidden border border-slate-200 bg-white" data-board-permission-settings>
+      <header className="border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <ShieldCheck size={16} className="text-primary" />
+          看板權限設定
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          分享邀請已移到看板右上角。此處保留進階成員角色與權限矩陣。
+        </p>
+        {!canManageBoardMembers ? (
+          <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            你目前沒有管理看板成員的權限，只能查看設定。
+          </div>
+        ) : null}
+      </header>
+
+      <div className="grid gap-5 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(460px,1.2fr)]">
+        <div>
+          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700">
+            <Users size={16} />
+            看板成員
+          </div>
+          <MemberRows
+            members={boardMembers}
+            loading={loading}
+            canManage={canManageBoardMembers}
+            onRoleChange={handleRoleChange}
+            onRemove={handleRemove}
+          />
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <ShieldCheck size={16} />
+              角色權限矩陣
             </div>
-            {!isEmbedded && (
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                aria-label="關閉看板權限面板"
-              >
-                <X size={16} />
-              </button>
+            {canConfigureRolePermissions ? (
+              <span className="text-xs font-semibold text-blue-600">可編輯</span>
+            ) : (
+              <span className="text-xs font-semibold text-slate-400">
+                {currentBoardAccess ? '僅可檢視' : '讀取中'}
+              </span>
             )}
           </div>
 
-          <div className="grid grid-cols-3 border-b border-slate-100 bg-slate-50 px-2 py-2">
-            {PANEL_TABS.map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`h-8 rounded-md text-xs font-bold transition ${
-                  activeTab === tab.id
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-500 hover:bg-white/70 hover:text-slate-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <div className="overflow-x-auto rounded-md border border-slate-200">
+            <div className="min-w-[620px]">
+              <div className="grid grid-cols-[1.4fr_repeat(5,minmax(80px,1fr))] bg-slate-50 text-xs font-bold text-slate-500">
+                <div className="px-3 py-2">權限</div>
+                {ROLE_OPTIONS.map(role => (
+                  <div key={role} className="px-2 py-2 text-center">{ROLE_LABELS[role]}</div>
+                ))}
+              </div>
 
-          {activeTab === 'emailInvite' && (
-            <div className="px-4 py-4">
-              <div className="mb-3 flex items-center gap-2 text-xs font-bold text-slate-500">
-                <UserPlus size={14} />
-                <span>建立邀請連結</span>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="請輸入成員電子郵件"
-                  value={inviteEmail}
-                  disabled={!canManageBoardMembers || inviteLoading}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
-                  aria-label="邀請電子郵件"
-                />
-                <button
-                  type="button"
-                  disabled={!canManageBoardMembers || inviteLoading || !inviteEmail.trim()}
-                  onClick={handleInvite}
-                  className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              {PERMISSION_ROWS.map(row => (
+                <div
+                  key={row.capability}
+                  className="grid grid-cols-[1.4fr_repeat(5,minmax(80px,1fr))] border-t border-slate-200 text-xs"
                 >
-                  邀請
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-slate-400">
-                系統目前不會自動寄出電子郵件。建立後請點待處理邀請右側的連結圖示，複製後自行傳給對方。
-              </p>
-              {!canManageBoardMembers && (
-                <p className="mt-2 text-xs text-slate-400">你目前的角色可以查看看板權限，但不能邀請成員。</p>
-              )}
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
-                  <Clock size={14} />
-                  <span>待處理邀請</span>
-                </div>
-                {pendingInvites.length === 0 ? (
-                  <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                    目前沒有待處理邀請。
-                  </div>
-                ) : (
-                  <div className="max-h-48 space-y-2 overflow-y-auto">
-                    {pendingInvites.map(invite => (
-                      <div key={invite.id} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold text-slate-700">{invite.email}</div>
-                          <div className="text-xs text-slate-400">
-                            待接受 - {ROLE_LABELS[invite.defaultRole]} - 送出時間 {formatDate(invite.createdAt)}
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            {recentInviteLinks[invite.id]
-                              ? isLocalBoardInviteUrl(recentInviteLinks[invite.id])
-                                ? '這是本機測試連結，只能供 QA 驗證；請勿傳給真實受邀者。'
-                                : '點右側連結圖示複製邀請連結。'
-                              : '邀請連結只會在建立當下顯示；如需重寄請撤回後重新建立。'}
-                          </div>
-                        </div>
+                  <div className="px-3 py-2 font-medium text-slate-700">{row.label}</div>
+                  {ROLE_OPTIONS.map(role => (
+                    <div key={role} className="flex items-center justify-center px-2 py-2">
+                      {role === 'owner' || !canConfigureRolePermissions ? (
+                        hasBoardCapability(boardRolePermissions, role, row.capability) ? (
+                          <Check size={15} className="text-emerald-500" />
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-200" />
+                        )
+                      ) : (
                         <button
                           type="button"
-                          disabled={!canManageBoardMembers || inviteLoading}
-                          onClick={() => handleRevokeInvite(invite)}
-                          className="inline-flex h-8 items-center justify-center rounded-md px-2 text-xs font-semibold text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                          aria-pressed={hasBoardCapability(boardRolePermissions, role, row.capability)}
+                          aria-label={`${ROLE_LABELS[role]} ${row.label}`}
+                          disabled={loading || Boolean(permissionSavingKey)}
+                          onClick={() => handlePermissionToggle(role, row.capability)}
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            hasBoardCapability(boardRolePermissions, role, row.capability)
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                              : 'border-slate-200 bg-white text-slate-300 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600'
+                          }`}
                         >
-                          撤回
+                          {hasBoardCapability(boardRolePermissions, role, row.capability) ? (
+                            <Check size={15} />
+                          ) : (
+                            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                          )}
                         </button>
-                        {recentInviteLinks[invite.id] ? (
-                          <button
-                            type="button"
-                            disabled={!canManageBoardMembers || inviteLoading}
-                            onClick={() => handleCopyInviteLink(invite)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
-                            aria-label={`複製 ${invite.email} 的邀請連結`}
-                          >
-                            <Link2 size={14} />
-                          </button>
-                        ) : (
-                          <span
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-300"
-                            title="邀請連結只會在建立當下顯示；如需重寄，請撤回後重新建立。"
-                            aria-label="邀請連結已無法在此裝置查回"
-                          >
-                            <Link2 size={14} />
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'boardMembers' && (
-            <div className="max-h-[360px] overflow-y-auto px-4 py-3">
-              <div className="space-y-2">
-                {boardMembers.length === 0 ? (
-                  <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-4 text-sm text-slate-500">
-                    目前沒有看板成員。
-                  </div>
-                ) : boardMembers.map(member => (
-                  <div key={member.userId} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                      {getMemberLabel(member).slice(0, 1).toUpperCase()}
+                      )}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-slate-700">{getMemberLabel(member)}</div>
-                      <div className="truncate text-xs text-slate-400">{member.profile?.email || member.userId}</div>
-                    </div>
-                    <select
-                      value={member.role}
-                      disabled={!canManageBoardMembers || loading || member.role === 'owner'}
-                      onChange={(event) => handleRoleChange(member, event.target.value as CollaborationRole)}
-                      className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 disabled:bg-slate-100 disabled:text-slate-400"
-                      aria-label={`${getMemberLabel(member)} 的角色`}
-                    >
-                      {ROLE_OPTIONS.map(role => (
-                        <option key={role} value={role}>{ROLE_LABELS[role]}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={!canManageBoardMembers || loading || member.role === 'owner'}
-                      onClick={() => handleRemove(member)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
-                      aria-label={`從看板移除 ${getMemberLabel(member)}`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'rolePermissions' && (
-            <div className="max-h-[360px] overflow-auto px-4 py-3">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                  <ShieldCheck size={14} />
-                  <span>角色權限表</span>
-                </div>
-                {canConfigureRolePermissions && (
-                  <span className="text-[11px] font-semibold text-blue-600">可設定</span>
-                )}
-              </div>
-              <div className="min-w-[380px] overflow-hidden rounded-md border border-slate-100">
-                <div className="grid grid-cols-[1.3fr_repeat(5,minmax(52px,1fr))] bg-slate-50 text-[11px] font-bold text-slate-500">
-                  <div className="px-2 py-2">權限項目</div>
-                  {ROLE_OPTIONS.map(role => (
-                    <div key={role} className="px-1 py-2 text-center">{ROLE_LABELS[role]}</div>
                   ))}
                 </div>
-                {PERMISSION_ROWS.map(row => (
-                  <div
-                    key={row.capability}
-                    className="grid grid-cols-[1.3fr_repeat(5,minmax(52px,1fr))] border-t border-slate-100 text-xs"
-                  >
-                    <div className="px-2 py-2 font-medium text-slate-600">{row.label}</div>
-                    {ROLE_OPTIONS.map(role => (
-                      <div key={role} className="flex items-center justify-center px-1 py-2">
-                        {role === 'owner' || !canConfigureRolePermissions ? (
-                          hasBoardCapability(boardRolePermissions, role, row.capability) ? (
-                            <Check size={14} className="text-emerald-500" />
-                          ) : (
-                            <span className="h-1 w-1 rounded-full bg-slate-200" />
-                          )
-                        ) : (
-                          <button
-                            type="button"
-                            aria-pressed={hasBoardCapability(boardRolePermissions, role, row.capability)}
-                            aria-label={`${ROLE_LABELS[role]} ${row.label}`}
-                            disabled={loading || Boolean(permissionSavingKey)}
-                            onClick={() => handlePermissionToggle(role, row.capability)}
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded border transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              hasBoardCapability(boardRolePermissions, role, row.capability)
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                                : 'border-slate-200 bg-white text-slate-300 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600'
-                            }`}
-                          >
-                            {hasBoardCapability(boardRolePermissions, role, row.capability) ? (
-                              <Check size={14} />
-                            ) : (
-                              <span className="h-1 w-1 rounded-full bg-current" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-          )}
+          </div>
         </div>
-  ) : null;
-
-  if (isEmbedded) {
-    return (
-      <div ref={panelRef}>
-        {panelContent}
       </div>
-    );
-  }
-
-  return (
-    <div className="relative" ref={panelRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(current => !current)}
-        className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-      >
-        <Users size={16} />
-        <span>看板權限</span>
-        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
-          {boardMembers.length}
-        </span>
-      </button>
-
-      {panelContent}
-    </div>
+    </section>
   );
 };

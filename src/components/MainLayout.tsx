@@ -14,16 +14,18 @@ import {
   SquarePen,
   Sparkles,
   Undo2,
+  UserPlus,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useUndoStore from '../store/useUndoStore';
 import useRagStore from '../store/useRagStore';
 import useRecordStore from '../store/useRecordStore';
+import { useMemberStore } from '../store/useMemberStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
-import { toast } from '../store/useToastStore';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
+import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
 import { compactIconButtonClass } from './ui/compactTokens';
@@ -59,6 +61,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   } = useRecordStore();
   const requestExitMeetingMode = useMeetingModeExitGuard();
   const guardRecordDraft = useRecordDraftGuard();
+  const boardMemberCount = useMemberStore(state => state.boardMembers.length);
+  const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
   const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
@@ -76,13 +80,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const isTaskFilterView = ['list', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
 
-  const developmentViewWarnings: Partial<Record<ViewMode, string>> = {
-    calendar: '日曆功能仍在開發中，顯示內容與操作流程可能尚未穩定。',
-  };
-
   const handleModeChange = (nextView: ViewMode) => {
-    const warning = developmentViewWarnings[nextView];
-    if (warning) toast.warning(warning);
     setView(nextView);
   };
 
@@ -155,8 +153,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 text-slate-800">
-      <nav className="z-40 flex h-10 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-2 shadow-sm sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 overflow-visible">
+      <nav className="z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 shadow-sm sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(!isSidebarOpen)}
@@ -261,7 +259,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </div>
         </div>
 
-        <div className="hidden items-center gap-1 sm:flex sm:gap-2">
+        <div className="relative z-20 flex shrink-0 items-center gap-1 sm:gap-2">
+          {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
+            <button
+              type="button"
+              onClick={() => setShareDialogOpen(true)}
+              className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-blue-400 hover:text-blue-600 sm:h-8 sm:px-3 sm:text-sm"
+              title="分享看板"
+              data-board-share-open
+            >
+              <UserPlus size={14} className="text-slate-400" />
+              <span>分享</span>
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
+                {boardMemberCount}
+              </span>
+            </button>
+          ) : null}
+
+          <div className="hidden items-center gap-1 sm:flex sm:gap-2">
           {isMeetingMode ? (
             <div
               role="status"
@@ -299,10 +314,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               type="button"
               onClick={handleStartWorkLog}
               className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-slate-400 hover:text-slate-700 sm:h-8 sm:px-3 sm:text-sm"
-              title="新增個人紀錄；會在撰寫前先決定紀錄類型"
+              title="新增個人紀錄開發中，內容可能尚未穩定"
             >
               <BriefcaseBusiness size={14} className="text-slate-400" />
-              <span className="hidden xl:inline">新增個人紀錄</span>
+              <span className="hidden xl:inline">新增個人紀錄(開發中)</span>
             </button>
           ) : null}
 
@@ -317,8 +332,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
             <span className="hidden lg:inline">AI 分析</span>
           </button>
+          </div>
         </div>
       </nav>
+
+      <BoardShareDialog open={isShareDialogOpen} onOpenChange={setShareDialogOpen} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />

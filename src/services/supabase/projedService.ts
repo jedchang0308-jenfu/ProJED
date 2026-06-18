@@ -14,6 +14,7 @@ import type {
   BoardInviteCreateInput,
   BoardMember,
   BoardRolePermissionMatrix,
+  BoardWorkspaceTransferPreview,
   CollaborationRole,
   CurrentBoardAccess,
   Dependency,
@@ -642,6 +643,46 @@ export const supabaseBoardService = {
       .eq('tenant_id', tenantId)
       .eq('id', projectId);
     assertNoError(error);
+  },
+
+  previewWorkspaceTransfer: async (
+    workspaceId: string,
+    boardId: string,
+    targetWorkspaceId: string
+  ): Promise<BoardWorkspaceTransferPreview> => {
+    requireSupabase();
+    const sourceTenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(sourceTenantId, boardId);
+    const targetTenantId = await resolveWorkspaceId(targetWorkspaceId);
+    const { data, error } = await (supabase as any).rpc('preview_project_workspace_transfer', {
+      source_tenant_id: sourceTenantId,
+      project_id: projectId,
+      target_tenant_id: targetTenantId,
+    });
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return a project transfer preview.');
+    return data as BoardWorkspaceTransferPreview;
+  },
+
+  moveToWorkspace: async (
+    workspaceId: string,
+    boardId: string,
+    targetWorkspaceId: string,
+    expectedBoardTitle: string
+  ): Promise<BoardWorkspaceTransferPreview> => {
+    requireSupabase();
+    const sourceTenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(sourceTenantId, boardId);
+    const targetTenantId = await resolveWorkspaceId(targetWorkspaceId);
+    const { data, error } = await (supabase as any).rpc('move_project_to_workspace', {
+      source_tenant_id: sourceTenantId,
+      project_id: projectId,
+      target_tenant_id: targetTenantId,
+      expected_project_name: expectedBoardTitle,
+    });
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return a project transfer result.');
+    return data as BoardWorkspaceTransferPreview;
   },
 };
 

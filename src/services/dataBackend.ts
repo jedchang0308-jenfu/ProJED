@@ -7,6 +7,7 @@ import {
   type AuditLogEntry,
   type BoardInviteAcceptInput,
   type Board,
+  type BoardWorkspaceTransferPreview,
   type BoardInviteCreateInput,
   type BoardMember,
   type BoardRolePermissionMatrix,
@@ -185,6 +186,35 @@ export const boardService = {
       : isSupabaseBackend
       ? supabaseBoardService.delete(workspaceId, boardId)
       : firestoreBoardService.delete(workspaceId, boardId);
+  },
+
+  previewWorkspaceTransfer: (
+    workspaceId: string,
+    boardId: string,
+    targetWorkspaceId: string
+  ): Promise<BoardWorkspaceTransferPreview> => {
+    if (isLocalTestBackend) {
+      return localTestBoardService.previewWorkspaceTransfer(workspaceId, boardId, targetWorkspaceId);
+    }
+    if (isSupabaseBackend) {
+      return supabaseBoardService.previewWorkspaceTransfer(workspaceId, boardId, targetWorkspaceId);
+    }
+    return Promise.reject(new Error('Board transfer between workspaces requires the Supabase backend.'));
+  },
+
+  moveToWorkspace: (
+    workspaceId: string,
+    boardId: string,
+    targetWorkspaceId: string,
+    expectedBoardTitle: string
+  ): Promise<BoardWorkspaceTransferPreview> => {
+    if (isLocalTestBackend) {
+      return localTestBoardService.moveToWorkspace(workspaceId, boardId, targetWorkspaceId, expectedBoardTitle);
+    }
+    if (isSupabaseBackend) {
+      return supabaseBoardService.moveToWorkspace(workspaceId, boardId, targetWorkspaceId, expectedBoardTitle);
+    }
+    return Promise.reject(new Error('Board transfer between workspaces requires the Supabase backend.'));
   },
 };
 

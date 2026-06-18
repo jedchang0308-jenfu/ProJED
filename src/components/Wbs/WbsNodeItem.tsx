@@ -44,7 +44,6 @@ const getRowStatusAccentClass = (status?: TaskStatus) => {
 export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [] }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
-  const [isTitleEditing, setIsTitleEditing] = useState(false);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
   
   const wbsDependencies = useWbsStore(s => s.dependencies);
@@ -93,8 +92,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
 
       setLocalTitle(node.title || '新任務');
-      setIsTitleEditing(true);
-
       window.requestAnimationFrame(() => {
           const input = titleInputRef.current;
           if (!input) return;
@@ -169,7 +166,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   // ----- 行內編輯處理 -----
   const handleTitleBlur = () => {
-    setIsTitleEditing(false);
     if (!canEditTask) {
         setLocalTitle(node.title || '');
         return;
@@ -392,12 +388,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
              type="text"
              value={localTitle}
              onChange={(e) => setLocalTitle(e.target.value)}
-             onVoiceResult={setLocalTitle}
-             onFocus={() => setIsTitleEditing(true)}
              onBlur={handleTitleBlur}
              onKeyDown={handleTitleKeyDown}
              disabled={!canEditTask}
-             voiceEnabled={isTitleEditing}
              className={`task-title-text flex-1 min-w-0 h-auto border-0 border-b border-transparent bg-transparent px-1 py-0 text-sm font-medium transition-all focus:bg-white focus:border-blue-400 focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
              placeholder="任務名稱"
           />
