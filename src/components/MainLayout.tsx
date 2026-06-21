@@ -10,6 +10,7 @@ import {
   LineChart,
   ListChecks,
   Menu,
+  Network,
   Redo2,
   SquarePen,
   Sparkles,
@@ -76,7 +77,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const lastRedoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : '';
   const activeBoard = getActiveBoard();
   const activeWorkspace = getActiveWorkspace();
-  const isBoardWorkspaceView = ['list', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
+  const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
   const isTaskFilterView = ['list', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
 
@@ -108,6 +109,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
     { value: 'list', label: '清單', icon: <ListChecks size={13} /> },
+    { value: 'mindmap', label: '心智圖', icon: <Network size={13} /> },
     { value: 'board', label: '看板', icon: <Columns size={13} /> },
     { value: 'gantt', label: '甘特', icon: <LineChart size={13} /> },
     {

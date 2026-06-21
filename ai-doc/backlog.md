@@ -1,6 +1,113 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-06-19
+
+### DEV-027F: Mind map UI polish after relationship-line QC
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-027F | Implemented / Browser QC Passed | UI/UX polish | P0 | Fix relationship-line viewport overflow, zoom-scaled hit targets, inline editor placement, oversized arrow marker, and creation-mode hitbox interference | `ai-doc/qc/QC-DEV-027F-mindmap-ui-polish.md`, `output/playwright/dev-027F-mindmap-ui-desktop.png`, `output/playwright/dev-027F-mindmap-ui-mobile.png` |
+
+### DEV-027E: Xmind-like note relationship line UX parity
+
+Status: Implemented / Browser QC Passed (2026-06-19)
+
+Delivered:
+- Note-only relationship line upgraded from MVP to Xmind-like editable canvas object.
+- Inline label edit replaces prompt as the main create/edit flow.
+- Selected relationship exposes endpoint handles, Bezier control handles, style popover, keyboard delete/edit, toolbar selected-node flow, shortcut flow, and right-click start flow.
+- Browser QC evidence: `ai-doc/qc/QC-DEV-027E-xmind-note-relationship-line-ux-parity.md`.
+
+| DEV | 狀態 | 類型 | 優先級 | 範圍 | 文件 |
+|---|---|---|---|---|---|
+| DEV-027E | Ready | 後續開發點 / 心智圖 UI/UX parity | P1 | 將 DEV-027C 筆記型關聯線升級為 Xmind-like 可直接操作圖形物件：inline label edit、線條本體選取、endpoint/control point 拖曳、樣式控制、快捷鍵與右鍵入口 | `ai-doc/specs/SPEC-027E-xmind-note-relationship-line-ux-parity.md`, `ai-doc/qa/QA-DEV-027E-xmind-note-relationship-line-ux-parity.md` |
+
+範圍邊界：
+- 保留筆記型關聯線，不做任務依賴、不影響排程。
+- 不做 floating topic，除非另開 ProJED WBS 外自由節點模型。
+- 不做 Xmind 匯入/匯出、summary boundary、marker、attachment。
+
+驗收重點：
+- 關聯線本體與 label 都可直接選取。
+- Space / double-click 可在畫布上 inline 編輯 label，不使用 prompt 作主流程。
+- 選取後顯示 circular endpoints 與 square control points。
+- endpoint 可拖曳調整連接位置或重新連到另一任務。
+- control point 可拖曳調整曲線。
+- 樣式控制可調顏色、粗細、線型、箭頭與 label 文字樣式。
+- DEV-027B/027C/027D browser regression 需通過。
+
+### DEV-027D: Mind map date display and existing filter integration
+
+| DEV | 狀態 | 類型 | 優先級 | 範圍 | 文件 |
+|---|---|---|---|---|---|
+| DEV-027D | Implemented / QC Pending | 功能補強 / 心智圖 UX parity | P1 | 心智圖節點顯示日期，並沿用既有 WBS 狀態、到期、負責人、標籤 filter；開始日期由既有 `showStartDate` 控制 | `ai-doc/specs/SPEC-027D-mindmap-date-display-filter.md`, `ai-doc/qa/QA-DEV-027D-mindmap-date-display-filter.md`, `ai-doc/qc/QC-DEV-027D-mindmap-date-display-filter.md` |
+
+驗收重點：
+- 節點日期 badge 不得破壞 Xmind-like branch 閱讀與 connector geometry。
+- `showStartDate=false` 時不得顯示開始日期。
+- `dueWithinDays`、status、assignee、tag filter 必須與 List/Kanban 既有規則一致。
+- 父任務被 filter 隱藏時，子任務不得孤立顯示。
+
+### DEV-027B: Xmind-like keyboard, zoom, tidy connector, and drag insertion preview polish
+
+最新範圍補充（2026-06-19）：
+- 心智圖新增任務後只選取，不立即開啟 rename input。
+- 選取狀態可連續 `Enter` / `Tab` 新增同階或子階任務。
+- 方向鍵可移動選取；選取任務後直接打字才改名。
+- QA/QC 必須用 DOM、鍵盤流程與截圖驗證此行為，不得沿用舊的 input 連續新增驗收。
+
+| DEV | 狀態 | 節點類型 | 優先級 | 目標 | 文件 |
+|---|---|---|---|---|---|
+| DEV-027B | Implemented / Browser QC Passed | 開發點 | P0 UI quality reopen | 補齊心智圖模式的 Xmind-like 核心操作缺口：`Enter` 必須在目前任務下方新增同階任務；畫布必須可縮放且維持高解析；connector 必須像使用者圖 1 一樣以整齊 trunk / bracket 呈現而非雜亂交錯；拖曳時必須像使用者圖 2 一樣明確畫出預期插入位置與最終落點。 | `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md`, `ai-doc/qa/QA-DEV-027B-xmind-interaction-polish.md`, `ai-doc/qc/QC-DEV-027B-xmind-interaction-polish.md` |
+
+觸發原因：
+- 使用者指出目前 `Enter` 行為仍不符合 Xmind：必須在選取任務的「下面」產生同 parent、同 side、同階任務，不能新增到任意位置或只在資料上同階。
+- 使用者要求心智圖畫布可縮放，且縮放後文字、節點與線條解析度要夠，不可模糊、鋸齒或錯位。
+- 使用者圖 1 顯示同一 parent 底下多個子題需共用整齊垂直 trunk / rounded bracket；目前若線條呈現雜亂曲線、交錯或散落，仍不符合 Xmind-like。
+- 使用者圖 2 顯示拖曳中的預覽必須明確畫出插入位置：淡色 placeholder / insertion bar、預期 connector 與 ghost node 必須讓使用者在 mouseup 前知道任務會落在哪裡。
+
+交付邊界：
+- DEV-027B 是 DEV-027 的支援開發點，不新增資料模型、不做 Xmind 匯入/匯出、不做 style panel、不做 relationship / summary boundary。
+- 需要新增或更新 browser verifier，驗證 keyboard insertion order、zoom rendering、tidy connector topology、drag insertion preview、desktop/laptop/mobile viewport 與 visible error sweep。
+- DEV-027A 已通過的 connector endpoint、same-side persistence、viewer read-only、cycle guard 不得退化。
+
+交付證據：
+- RD 已完成 `Enter` insert-after-selected sibling，root sibling 會繼承同側 placement。
+- RD 已新增 zoom toolbar、reset / fit controls 與 Ctrl/Meta + wheel zoom；connector endpoint 依 zoom 校正。
+- RD 已將 parent-child connector 改為 shared trunk / bracket-like H/V topology，並補 children group metadata。
+- RD 已新增 explicit insertion placeholder、ghost node clamp、pre-drop connector 與 parent/sibling/side preview metadata。
+- QC 已通過 DEV-027B static/browser verifier、DEV-027/DEV-027A regressions、TypeScript、lint、build:test 與 core regression。
+
 ## Backlog Update - 2026-06-18
+
+### DEV-027A: Xmind-like connector line and drag interaction repair
+
+| DEV | 狀態 | 節點類型 | 優先級 | 目標 | 文件 |
+|---|---|---|---|---|---|
+| DEV-027A | Implemented / Browser QC Passed | 開發點 | P0 UI quality reopen | 修復心智圖 branch connector line 與拖曳互動，使父子節點、兄弟 trunk、中心主題到 root branch 的連線形成 Xmind-like 連續拓撲；拖動任務時顯示階層與位置變化的即時預覽動畫；任務可拖到同一側並保留同側布局意圖，並補 connector geometry 與 drag preview browser verifier。 | `ai-doc/qa/QA-DEV-027A-xmind-connector-line-visual-validation.md`, `ai-doc/qc/QC-DEV-027A-xmind-connector-drag-ui.md` |
+
+觸發原因：
+- 使用者截圖顯示樹狀圖線條殘破，存在孤立短線、父子關係斷裂、connector endpoint 未貼齊節點等 UI fail。
+- 原 DEV-027 browser smoke 有驗證拖曳與 viewport，但未對 branch connector topology 做幾何驗證。
+- 使用者新增需求要求拖動任務時需像 Xmind 一樣有任務變化即時預覽動畫，不能只靠原生 drag ghost 或靜態 drop target。
+- 使用者新增需求要求任務可拖動到同一側，ProJED 不得再以 root index 強制平均拆成左右兩側。
+
+交付證據：
+- RD 已改為 centralized SVG connector overlay，connector endpoint 由 node bbox 計算並隨 resize / scroll / collapse / drag 重算。
+- RD 已新增拖曳中的 preview node 與 connector preview，並保存使用者 root side placement 意圖。
+- QC 已通過 `verify:dev-027-xmind-connector-lines-browser`、`verify:dev-027-xmind-drag-preview-browser`、`verify:dev-027-xmind-like-mind-map-browser`、static/type/lint/build/core regression gates。
+
+### DEV-027: Xmind-like 心智圖模式
+
+| DEV | 狀態 | 節點類型 | 優先級 | 目標 | 文件 |
+|---|---|---|---|---|---|
+| DEV-027 | Implemented / Browser QC Passed | 交付點 | P1 planning UX migration | 新增 `心智圖` 模式，讓 active board 的 WBS 任務以 Xmind-like 心智圖呈現；一個任務就是一個分支，只顯示任務名稱，並支援核心鍵盤與拖曳階層操作。 | `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md`, `ai-doc/qa/QA-DEV-027-xmind-like-mind-map-mode.md`, `ai-doc/qc/QC-DEV-027-xmind-like-mind-map-mode.md` |
+
+交付邊界：
+- 採 HCS 引導決策 `1A 2B 3A`：核心心智圖 MVP、Xmind-like 視覺布局與互動但不複製品牌細節、完全共用現有 WBS 任務資料。
+- 第一版支援模式切換、分支顯示、展開/收合、拖曳階層、雙擊/鍵盤改名、`Enter` 同層、`Tab` 子層、`Delete` 刪除。
+- 不新增資料表、migration、草稿區、Xmind 匯入/匯出、關聯線、摘要框、標記、貼紙、style panel、自由縮放定位或任務欄位完整顯示。
+- 已補 DEV-027 static verifier 與 browser QC；拖曳階層、cycle guard、viewer 唯讀權限與 mobile viewport 均已由 Playwright browser script 驗證。
 
 ### DEV-026: Trello-like 看板分享體驗
 
@@ -101,6 +208,7 @@ DEV-020 狀態風險：
 | DEV-012 | In Verification | 交付點 | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
 | DEV-013 | Done | 交付點 | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 | DEV-020 | Done | 交付點 | P1 | 紀錄功能重構與專案變化匯入流程 | `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` |
+| DEV-027 | Implemented / Static + Browser Smoke Passed | 交付點 | P1 planning UX migration | Xmind-like 心智圖模式 | `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md` |
 
 ## Active 開發點
 
