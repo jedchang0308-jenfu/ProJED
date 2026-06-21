@@ -1,6 +1,288 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-06-19
+
+### DEV-027F: Mind map UI polish after relationship-line QC
+
+Status: Implemented / Browser QC Passed (2026-06-19)
+
+Scope:
+- Fix visible UI errors found after DEV-027E relationship-line implementation.
+- Align selected relationship editor/panel/hit targets with `ui-ux-design-principles` viewport and target-size expectations.
+- Provide screenshot evidence.
+
+Delivered:
+- Relationship style panel and inline label editor moved to viewport-level overlays with clamp positioning.
+- Relationship line/label hitboxes and endpoint/control handles moved to viewport-level overlays so they do not shrink under zoom.
+- Relationship overlay coordinates recompute on canvas scroll.
+- Existing relationship hitboxes are disabled during relationship creation mode to avoid blocking task selection.
+- Arrow marker size no longer inflates when the selected line becomes thicker.
+- Screenshot evidence: `output/playwright/dev-027F-mindmap-ui-desktop.png`, `output/playwright/dev-027F-mindmap-ui-mobile.png`.
+- QC evidence: `ai-doc/qc/QC-DEV-027F-mindmap-ui-polish.md`.
+
+Verified:
+- `npm.cmd run verify:dev-027f-mindmap-ui-polish-browser`: Pass
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
+- `npm.cmd run verify:dev-027c-xmind-note-relationship-lines-browser`: Pass
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity`: Pass
+- `npm.cmd exec tsc -- --noEmit`: Pass
+- `npm.cmd run lint -- --quiet`: Pass
+- `npm.cmd run build:test`: Pass, with existing Vite chunk-size/dynamic-import warnings
+
+### DEV-027E: Xmind-like note relationship line UX parity
+
+Status: Implemented / Browser QC Passed (2026-06-19)
+
+Completion evidence:
+- Implemented Xmind-like note relationship line object interactions in `src/components/MindMap/MindMapView.tsx` and `src/components/MindMap/MindMapNode.tsx`.
+- Added inline label creation/editing, line/label selection, Space edit, Delete/Backspace delete, endpoint/control-point drag, endpoint reconnect, style popover, selected-node toolbar flow, `Ctrl+Shift+R`, and task right-click start flow.
+- SVG overlay no longer blocks task nodes; relationship interaction is handled by HTML line hitboxes and handles.
+- QC evidence added: `ai-doc/qc/QC-DEV-027E-xmind-note-relationship-line-ux-parity.md`.
+- Added gates: `verify:dev-027e-xmind-note-relationship-line-ux-parity` and `verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`.
+
+Verified:
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity`: Pass
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
+- `npm.cmd run verify:dev-027c-xmind-note-relationship-lines`: Pass
+- `npm.cmd run verify:dev-027c-xmind-note-relationship-lines-browser`: Pass
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
+- `npm.cmd run verify:dev-027d-mindmap-date-display-filter-browser`: Pass
+- `npm.cmd exec tsc -- --noEmit`: Pass
+- `npm.cmd run lint -- --quiet`: Pass
+- `npm.cmd run build:test`: Pass, with existing Vite chunk-size/dynamic-import warnings
+
+狀態：Ready
+類型：後續開發點 / 心智圖 UI/UX parity
+關聯：DEV-027C
+
+需求摘要：
+- DEV-027C 已完成筆記型關聯線 MVP，但目前仍不像 Xmind 的 Relationship 圖形物件。
+- 本輪文件依 Xmind 官方 Relationship / Text / Mind Mapping 說明，整理 ProJED 差異與後續開發範圍。
+- 關聯線仍維持筆記功能，不做任務依賴、不改排程、不做功能連動。
+
+主要差距：
+- ProJED 目前主要靠 toolbar 進入兩點建立；Xmind 支援選 topic、toolbar、Insert menu、兩 topic 建立、快捷鍵。
+- ProJED label 使用 prompt；Xmind 可選線後 Space、雙擊、右鍵 Edit 直接編輯文字。
+- ProJED 線條本體不可直接點選，主要靠 label hitbox；Xmind Relationship 是可選取圖形物件。
+- ProJED endpoint 只是顯示，不可拖；Xmind 有 circular endpoints 與 square control points。
+- ProJED 樣式固定；Xmind 可調線型、粗細、顏色、箭頭與文字樣式。
+
+交付文件：
+- `ai-doc/specs/SPEC-027E-xmind-note-relationship-line-ux-parity.md`
+- `ai-doc/qa/QA-DEV-027E-xmind-note-relationship-line-ux-parity.md`
+
+RD exit gate:
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity`
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`
+- `npm.cmd run verify:dev-027c-xmind-note-relationship-lines-browser`
+- `npm.cmd run verify:dev-027d-mindmap-date-display-filter-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run lint -- --quiet`
+- `npm.cmd run build:test`
+
+### DEV-027D: Mind map date display and existing filter integration
+
+狀態：Implemented / QC Pending
+類型：功能補強 / 心智圖 UX parity
+關聯：DEV-027 / DEV-027B / DEV-027C
+
+需求摘要：
+- 心智圖任務節點新增日期顯示，一個任務仍是一個 branch，日期作為節點內輔助 metadata。
+- 日期顯示沿用既有規則：`showStartDate=true` 時顯示開始日；結束日存在時顯示結束日。
+- 心智圖任務 visibility 沿用既有 WBS filter：狀態、到期日、負責人、標籤。
+- filter 規則與現有 WBS 一致：父任務被 filter 隱藏時，子任務不孤立顯示。
+
+交付文件：
+- `ai-doc/specs/SPEC-027D-mindmap-date-display-filter.md`
+- `ai-doc/qa/QA-DEV-027D-mindmap-date-display-filter.md`
+- `ai-doc/qc/QC-DEV-027D-mindmap-date-display-filter.md`
+
+RD exit gate:
+- `npm.cmd run verify:dev-027d-mindmap-date-display-filter`
+- `npm.cmd run verify:dev-027d-mindmap-date-display-filter-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run lint -- --quiet`
+- `npm.cmd run build:test`
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`
+- `npm.cmd run verify:dev-027c-xmind-note-relationship-lines-browser`
+
+### DEV-027B: Xmind-like keyboard, zoom, tidy connector, and drag insertion preview polish
+
+最新變更（2026-06-19）：
+- 新增任務後只選取，不立即進入編輯。
+- 可連續按 `Enter` / `Tab` 建立同階或子階任務；此流程不依賴 rename input。
+- 方向鍵可移動選取任務。
+- 選取任務後直接打字才進入 rename mode；rename input 內 `Enter` 只 commit 名稱。
+- QC 已依最新 verifier 重新驗證並通過，狀態維持 Browser QC Passed。
+
+狀態: Implemented / Browser QC Passed
+節點類型: 開發點
+優先級: P0 UI quality reopen
+父交付點: DEV-027
+是否計入產品交付完成: 是
+關聯需求: 使用者補充心智圖模式仍缺少 Xmind-like 關鍵操作與視覺行為：按 `Enter` 要在選取任務下方新增同階任務；畫布要能縮放且解析度足夠；線條要像參考圖 1 一樣整齊，不能雜亂；任務拖動時的預覽動畫要像參考圖 2 一樣明確畫出預期插入位置。
+
+任務目標:
+- `Enter` keyboard insertion：選取任務後按 `Enter`，必須在該任務正下方建立同 parent、同 level、同 side、order 緊接其後的新任務；新任務建立後直接進入命名編輯。
+- Zoomable canvas：心智圖工作區提供縮放能力，至少支援 zoom in、zoom out、reset / fit；縮放後節點文字、connector、drag preview 與 hit target 保持清晰、對齊且可操作。
+- Tidy connector topology：同 parent 多子節點以 shared vertical trunk / rounded bracket 或等效整齊拓撲呈現，避免每個 child 各自拉雜亂曲線、交錯線、殘留短線或穿越節點。
+- Drag insertion preview：拖曳任務時顯示明確 insertion placeholder / gap / connector preview / ghost node，能在 mouseup 前判斷會插入哪個 parent、哪個 sibling 前後、哪一側。
+- 補自動化與 UI QC：新增 browser verifier 驗證 keyboard insertion order、zoom sharpness / geometry、tidy connector、drag preview position fidelity、desktop/laptop/mobile viewport、visible error sweep。
+- 保留 DEV-027A 已通過能力：connector endpoint <= 6px、無 orphan segment、same-side root placement persistence、viewer read-only、cycle guard、baseline browser flow 不得退化。
+
+交付文件:
+- `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md`
+- `ai-doc/qa/QA-DEV-027B-xmind-interaction-polish.md`
+- `ai-doc/qc/QC-DEV-027B-xmind-interaction-polish.md`
+
+| 階段 | Owner | 狀態 | 輸出 |
+|---|---|---|---|
+| PM/RD 規格 | PM/RD | Done | SPEC-027B |
+| QA 驗證計畫 | QA | Done | QA-DEV-027B |
+| RD 實作 | RD | Done | Enter insertion + zoom canvas + tidy connector + drag insertion preview |
+| QC 事實驗證 | QC | Browser QC Passed | browser screenshots + geometry / preview metadata evidence |
+
+RD exit gate:
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish`
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`
+- `npm.cmd run verify:dev-027-xmind-connector-lines-browser`
+- `npm.cmd run verify:dev-027-xmind-drag-preview-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run lint -- --quiet`
+- `npm.cmd run build:test`
+- `npm.cmd run verify:core-regression-static`
+
+Implementation notes for RD:
+- Enter 新增 sibling 時必須重算同 parent 兄弟 order，不能只 append 到 parent 最後或 root list 最後。
+- Zoom 建議使用 vector-first rendering：HTML text 保持文字渲染，connector / preview 使用 SVG path，避免 bitmap scaling 模糊。
+- Connector layout 必須按 parent group 計算 shared trunk / bracket，讓 child stack 先整列對齊再畫線，不得只用任意 Bezier pair 造成視覺雜亂。
+- Drag preview 必須共用 final layout 的 positioning rule；preview 顯示的 parent / sibling / side 必須與 drop 後結果一致。
+
+Implementation evidence:
+- `Enter`：`createSibling` 使用 selected node 的 parent/order 插入，root sibling 會繼承 selected root side。
+- Xmind-like selection-first insert：新增任務後只選取，不立即進入編輯；可連續按 `Enter` / `Tab` 新增同階或子階任務；方向鍵可移動選取；選取任務後直接打字才進入 rename mode。
+- Zoom：心智圖 toolbar 新增 zoom in / zoom out / reset / fit controls，工作區提供 `data-mindmap-zoom-level`，connector 座標依 zoomLevel 校正。
+- Tidy connector：parent-child connector 改為 bracket-shaped `H/V/H` path，同 parent children 共用 trunk x；children group 暴露 parent/direction metadata。
+- Drag insertion preview：拖曳 hover node 時顯示 `data-mindmap-insertion-preview`、`data-mindmap-drop-preview`、`data-mindmap-drag-preview`，並提供 target parent、sibling before/after、drop position、direction metadata。
+
+Verified:
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish`：Pass，16 checks。
+- `npm.cmd exec tsc -- --noEmit`：Pass。
+- `npm.cmd run lint -- --quiet`：Pass。
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`：Pass。
+- `npm.cmd run verify:dev-027-xmind-connector-lines-browser`：Pass。
+- `npm.cmd run verify:dev-027-xmind-drag-preview-browser`：Pass。
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`：Pass，31 checks。
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`：Pass。
+- `npm.cmd run build:test`：Pass；僅既有 Vite dynamic import / chunk size warning。
+- `npm.cmd run verify:core-regression-static`：Pass，10 checks。
+
 ## PM Update - 2026-06-18
+
+### DEV-027A: Xmind-like connector line and drag interaction repair
+
+狀態: Implemented / Browser QC Passed
+節點類型: 開發點
+優先級: P0 UI quality reopen
+父交付點: DEV-027
+是否計入產品交付完成: 是
+關聯需求: 使用者截圖指出心智圖樹狀線條殘破，分支線只剩孤立短線，父子節點無法靠線條追蹤；本輪新增拖動任務需有 Xmind-like 即時預覽動畫，且任務可拖到同一側，不得被固定平均拆成左右兩側。
+
+任務目標:
+- 先依 Xmind 官方 Topic / Branch / Skeleton / Mind Mapping structure 文件建立視覺基準。
+- 修復心智圖 connector line，使 center-to-main、parent-to-child、sibling trunk 都形成連續可讀拓撲。
+- 拖動任務時，必須有任務位置與階層變化的即時預覽動畫；拖曳中不可只顯示瀏覽器原生 ghost 或靜態 drop target。
+- 任務可拖動到同一側並保留同側布局意圖，不得像目前一樣由 root index 強制平均拆成左右兩側。
+- 補 browser verifier，驗證 connector endpoint、orphan segment、collapse/expand、drag 後重算、desktop/laptop/mobile viewport。
+- 補 browser verifier，驗證 drag preview animation、same-side drop、side persistence 與 side-aware connector recompute。
+- 使用與使用者截圖同等複雜度的 fixture 驗證，不得只用簡單 3 節點 smoke。
+
+交付文件:
+- `ai-doc/qa/QA-DEV-027A-xmind-connector-line-visual-validation.md`
+- `ai-doc/qc/QC-DEV-027A-xmind-connector-drag-ui.md`
+
+| 階段 | Owner | 狀態 | 輸出 |
+|---|---|---|---|
+| QA 驗證計畫 | QA | Done | QA-DEV-027A |
+| RD 修復 | RD | Done | centralized SVG connector overlay + drag preview + same-side layout persistence + browser verifier |
+| QC 事實驗證 | QC | Browser QC Passed | screenshot + geometry evidence + same-side persistence evidence |
+
+RD exit gate:
+- `npm.cmd run verify:dev-027-xmind-connector-lines-browser`
+- `npm.cmd run verify:dev-027-xmind-drag-preview-browser`
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run lint -- --quiet`
+
+Implementation evidence:
+- Connector rendering 改為整張 mind map 集中 SVG overlay，由實際 DOM bbox 計算 center-to-root 與 parent-to-child endpoint，避免每個 node 自畫短線造成斷裂。
+- Drag interaction 新增 `data-mindmap-drag-preview` 與 `data-mindmap-drop-preview`，pointer move 時 preview node 與 connector path 會同步更新。
+- Root branch side placement 改由使用者 drop 意圖保存，支援多個 root branches 留在同一側，並在 mode switch / hard reload 後保留。
+- Browser verifier 已覆蓋 connector endpoint、orphan segment、node overlap、drag preview movement、same-side drop、side persistence 與 desktop/laptop/mobile screenshot。
+
+Verified:
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`：Pass，31 checks。
+- `npm.cmd exec tsc -- --noEmit`：Pass。
+- `npm.cmd run lint -- --quiet`：Pass。
+- `npm.cmd run verify:dev-027-xmind-connector-lines-browser`：Pass。
+- `npm.cmd run verify:dev-027-xmind-drag-preview-browser`：Pass。
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`：Pass。
+- `npm.cmd run build:test`：Pass；僅既有 Vite dynamic import / chunk size warning。
+- `npm.cmd run verify:core-regression-static`：Pass，10 checks。
+
+### DEV-027: Xmind-like 心智圖模式
+
+狀態: Implemented / Browser QC Passed
+節點類型: 交付點
+優先級: P1 planning UX migration
+父交付點: 無
+是否計入產品交付完成: 是
+關聯需求: 使用者常用 Xmind 心智圖規劃工作計畫，且 Xmind 樹狀分支邏輯與 ProJED WBS 階層相同；希望在 ProJED 新增心智圖模式，讓規劃可直接變成任務。
+
+任務目標:
+- 在現有模式切換列新增 `心智圖` 模式。
+- Active board title 作為中心主題，既有 WBS 任務作為分支節點。
+- 一個任務就是一個分支，第一版節點只顯示任務名稱。
+- 視覺布局與互動高度接近 Xmind 類心智圖，但避免一比一複製品牌細節。
+- 心智圖所有新增、改名、刪除、拖曳調整階層都直接更新既有 WBS 任務資料。
+- 第一版支援核心 MVP：模式切換、分支顯示、展開/收合、拖曳階層、雙擊/鍵盤改名、`Enter` 新增同層、`Tab` 新增子層、`Delete` 刪除。
+
+交付文件:
+- `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md`
+- `ai-doc/qa/QA-DEV-027-xmind-like-mind-map-mode.md`
+- `ai-doc/qc/QC-DEV-027-xmind-like-mind-map-mode.md`
+
+| 階段 | Owner | 狀態 | 輸出 |
+|---|---|---|---|
+| PM/RD 規格 | PM/RD | Done | SPEC-027 |
+| QA 驗證計畫 | QA | Done | QA-DEV-027 |
+| RD 實作 | RD | Done | MindMap view mode + Xmind-like core interactions |
+| QC 事實驗證 | QC | Browser QC Passed | keyboard flow + delete guard + drag hierarchy + cycle guard + viewer read-only + viewport smoke |
+
+Regression gate:
+- `npm.cmd run lint -- --quiet`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+- `npm.cmd run verify:core-regression-static`
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`
+
+Decision evidence:
+- HCS 引導決策：`1A 2B 3A`。
+- 範圍：核心心智圖 MVP。
+- 視覺策略：Xmind-like 視覺布局與互動，但不複製 Xmind 品牌細節。
+- 資料策略：完全共用現有 WBS 任務資料，不做草稿區。
+
+Implementation evidence:
+- UI wiring: `ViewMode` 新增 `mindmap`，`MainLayout` topbar 新增 `心智圖`，`App.renderContent` 掛入 `MindMapView`。
+- Components: `src/components/MindMap/MindMapView.tsx`、`src/components/MindMap/MindMapNode.tsx`。
+- Data contract: 直接共用 `useWbsStore` 的 `nodes`、`parentNodesIndex`、`addNode`、`updateNode`、`removeNode`，不新增資料表或獨立草稿。
+- Interaction: owner browser smoke 已驗證新增 root、`Tab` 子任務、`F2` 改名、含子任務 `Delete` 確認、清單跨視圖同步與 cleanup。
+- Verified: `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`, `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`, `npm.cmd run verify:dev-027-xmind-connector-lines-browser`, `npm.cmd run verify:dev-027-xmind-drag-preview-browser`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run lint -- --quiet`, `npm.cmd run build:test`, `npm.cmd run verify:core-regression-static`。
 
 ### DEV-026: Trello-like 看板分享體驗
 
@@ -408,13 +690,14 @@ CAPA 來源：
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
+| DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
 
 ### 交付點完成率
 
 - Done：10 個交付點。
 - In Verification：2 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
-- Ready：0 個交付點。
+- Ready：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。
 

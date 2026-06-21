@@ -35,6 +35,7 @@ import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
 import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
+import MindMapView from './components/MindMap/MindMapView';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
@@ -226,6 +227,7 @@ function AppContent() {
     switch (currentView) {
       case 'home':        return <HomeView />;
       case 'list':        return <WbsListView boardId={activeBoardId || ''} />; // 攔截原本的 ListView
+      case 'mindmap':     return <MindMapView />;
       case 'board':       return <BoardView />;
       case 'gantt':       return <GanttView />;
       case 'calendar':    return <CalendarView />;

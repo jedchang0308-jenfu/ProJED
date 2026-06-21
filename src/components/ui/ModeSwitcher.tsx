@@ -33,6 +33,7 @@ export function ModeSwitcher<T extends string>({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           title={disabled ? disabledTitle : option.title ?? ''}
+          data-mode-switcher-value={option.value}
           className={`${disabled ? 'opacity-50 cursor-not-allowed' : ''} max-sm:px-2`}
         >
           {option.icon}
