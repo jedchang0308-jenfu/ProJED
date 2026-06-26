@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, GitBranch, Plus, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
 import { useMemberStore } from '../../store/useMemberStore';
@@ -25,12 +26,36 @@ const filterPillClass = (active: boolean) =>
       : 'border-slate-200 hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
   }`;
 
+const FILTER_PANEL_WIDTH = 288;
+const FILTER_PANEL_GUTTER = 8;
+
+type FilterPanelPosition = {
+  left: number;
+  top: number;
+  maxHeight: number;
+};
+
+const getFilterPanelPosition = (trigger: HTMLButtonElement): FilterPanelPosition => {
+  const rect = trigger.getBoundingClientRect();
+  const navBottom = trigger.closest('nav')?.getBoundingClientRect().bottom ?? 0;
+  const maxLeft = Math.max(FILTER_PANEL_GUTTER, window.innerWidth - FILTER_PANEL_WIDTH - FILTER_PANEL_GUTTER);
+  const left = Math.min(Math.max(rect.left, FILTER_PANEL_GUTTER), maxLeft);
+  const top = Math.max(rect.bottom + 4, navBottom + 4);
+
+  return {
+    left,
+    top,
+    maxHeight: Math.max(160, window.innerHeight - top - FILTER_PANEL_GUTTER),
+  };
+};
+
 type StatusFilterBarProps = {
   compactLabel?: boolean;
 };
 
 export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel = false }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [panelPosition, setPanelPosition] = useState<FilterPanelPosition | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -72,6 +97,22 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePanelPosition = () => {
+      if (!triggerRef.current) return;
+      setPanelPosition(getFilterPanelPosition(triggerRef.current));
+    };
+
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
+    };
+  }, [isOpen]);
+
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
   const selectedAssigneeSet = useMemo(() => new Set(selectedAssigneeIds), [selectedAssigneeIds]);
   const assigneeOptions = useMemo(
@@ -111,6 +152,18 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
     await createTag(activeWorkspaceId, trimmed);
   };
 
+  const handleFilterToggle = () => {
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+
+    if (triggerRef.current) {
+      setPanelPosition(getFilterPanelPosition(triggerRef.current));
+    }
+    setIsOpen(true);
+  };
+
   return (
     <div className={`relative ${isOpen ? 'z-[10000]' : 'z-10'}`}>
       <button
@@ -118,7 +171,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
         id="filter-menu-trigger"
         type="button"
         aria-label="過濾器"
-        onClick={() => setIsOpen(prev => !prev)}
+        onClick={handleFilterToggle}
         className={`${compactClassNames.segmentedButtonBase} border ${
           isOpen
             ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
@@ -137,13 +190,19 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
         <ChevronDown size={11} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
+      {isOpen && panelPosition && createPortal(
         <div
           ref={panelRef}
+          data-filter-menu-panel
           onClick={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
-          className="absolute right-0 top-[calc(100%+4px)] z-[10000] max-h-[calc(100vh-6rem)] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1 duration-150 sm:left-0 sm:right-auto"
+          className="fixed z-[10000] w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in duration-150"
+          style={{
+            left: panelPosition.left,
+            top: panelPosition.top,
+            maxHeight: panelPosition.maxHeight,
+          }}
         >
           <div className="px-3 pt-2 pb-2">
             <p className="mb-2 text-[10px] font-semibold text-slate-500">任務狀態</p>
@@ -345,7 +404,8 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

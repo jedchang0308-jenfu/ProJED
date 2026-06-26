@@ -11,7 +11,7 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
@@ -26,20 +26,23 @@ import dayjs from 'dayjs';
 import { supabaseWorkspaceService } from './services/supabase/projedService';
 import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
-import BoardView from './components/BoardView';
-import GanttView from './components/GanttView';
-import CalendarView from './components/CalendarView';
-import RecordsView from './components/Records/RecordsView';
-import SettingsView from './components/SettingsView';
-import RecycleBinView from './components/RecycleBinView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
-import { WbsListView } from './components/Wbs/WbsListView'; // 新增的 WBS 視圖
-import MindMapView from './components/MindMap/MindMapView';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
 import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
+
+const BoardView = lazy(() => import('./components/BoardView'));
+const GanttView = lazy(() => import('./components/GanttView'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
+const RecordsView = lazy(() => import('./components/Records/RecordsView'));
+const SettingsView = lazy(() => import('./components/SettingsView'));
+const RecycleBinView = lazy(() => import('./components/RecycleBinView'));
+const MindMapView = lazy(() => import('./components/MindMap/MindMapView'));
+const WbsListView = lazy(() =>
+  import('./components/Wbs/WbsListView').then(module => ({ default: module.WbsListView })),
+);
 
 const formatBoardInviteAcceptError = (inviteError: unknown): string => {
   const message = inviteError instanceof Error ? inviteError.message : '';
@@ -241,7 +244,9 @@ function AppContent() {
 
   return (
     <MainLayout>
-      {renderContent()}
+      <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
+        {renderContent()}
+      </Suspense>
       <GlobalDialog />
     </MainLayout>
   );

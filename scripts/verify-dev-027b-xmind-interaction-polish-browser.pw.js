@@ -38,6 +38,8 @@ async (page) => {
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
   const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
   const input = () => page.locator('[data-mindmap-title-input]').first();
+  const relationshipPathByLabel = (label) => page.locator(`[data-mindmap-note-relationship-path][data-label="${label}"]`).first();
+  const relationshipTargetByLabel = (label) => page.locator(`[data-mindmap-note-relationship-click-target][data-label="${label}"]`).first();
 
   const assertNoVisibleErrors = async (label) => {
     const bodyText = await page.locator('body').innerText();
@@ -135,7 +137,6 @@ async (page) => {
 
   const collectEndpointDistances = async () => page.evaluate(() => {
     const surface = document.querySelector('[data-mindmap-surface]');
-    const zoom = Number(document.querySelector('[data-mindmap-zoom-level]')?.getAttribute('data-mindmap-zoom-level') || '1');
     const surfaceRect = surface?.getBoundingClientRect();
     const rectToJson = (rect) => rect ? {
       left: rect.left,
@@ -148,6 +149,7 @@ async (page) => {
       rect: rectToJson(element.getBoundingClientRect()),
     }));
     const nodeById = Object.fromEntries(nodes.map(node => [node.id, node]));
+    const zoom = Number(document.querySelector('[data-mindmap-zoom-level]')?.getAttribute('data-mindmap-zoom-level') || '1');
     return Array.from(document.querySelectorAll('[data-mindmap-connector-path]')).map((path) => {
       const toNodeId = path.getAttribute('data-to-node-id');
       const toNode = nodeById[toNodeId];
@@ -164,6 +166,224 @@ async (page) => {
     });
   });
 
+  const collectZoomRenderer = async () => page.evaluate(() => {
+    const surface = document.querySelector('[data-mindmap-surface]');
+    const style = surface ? getComputedStyle(surface) : null;
+    const firstNode = document.querySelector('[data-mindmap-node]');
+    const nodeStyle = firstNode ? getComputedStyle(firstNode) : null;
+    return {
+      renderer: surface?.getAttribute('data-mindmap-zoom-renderer') || '',
+      quality: surface?.getAttribute('data-mindmap-zoom-quality') || '',
+      cssZoom: style?.zoom || '',
+      vectorZoom: style?.getPropertyValue('--mindmap-zoom').trim() || '',
+      transform: style?.transform || '',
+      nodeFontSize: nodeStyle?.fontSize || '',
+    };
+  });
+
+  const collectZoomPreviewState = async () => page.evaluate(() => {
+    const scrollSurface = document.querySelector('[data-mindmap-middle-pan="true"]');
+    const content = document.querySelector('[data-mindmap-surface]');
+    const contentStyle = content ? getComputedStyle(content) : null;
+    return {
+      interaction: scrollSurface?.getAttribute('data-mindmap-zoom-interaction') || '',
+      active: scrollSurface?.getAttribute('data-mindmap-zoom-preview-active') || '',
+      committedLevel: Number(scrollSurface?.getAttribute('data-mindmap-zoom-level') || '0'),
+      committedDataLevel: Number(scrollSurface?.getAttribute('data-mindmap-zoom-committed-level') || '0'),
+      previewLevel: Number(scrollSurface?.getAttribute('data-mindmap-zoom-preview-level') || '0'),
+      previewScale: Number(scrollSurface?.getAttribute('data-mindmap-zoom-preview-scale') || '0'),
+      contentPreviewTransform: content?.getAttribute('data-mindmap-zoom-preview-transform') || '',
+      transform: contentStyle?.transform || '',
+      label: document.querySelector('[data-mindmap-zoom-label]')?.textContent?.trim() || '',
+    };
+  });
+
+  const collectZoomPathSnapshot = async () => page.evaluate(() => {
+    const scrollSurface = document.querySelector('[data-mindmap-middle-pan="true"]');
+    return {
+      recomputeCount: Number(scrollSurface?.getAttribute('data-mindmap-recompute-count') || '0'),
+      connectorPaths: Array.from(document.querySelectorAll('[data-mindmap-connector-path]')).map(path => ({
+        id: path.getAttribute('data-mindmap-connector-path'),
+        d: path.getAttribute('d'),
+        strokeWidth: path.getAttribute('stroke-width'),
+      })),
+      relationshipPaths: Array.from(document.querySelectorAll('[data-mindmap-note-relationship-path]')).map(path => ({
+        id: path.getAttribute('data-mindmap-note-relationship-path'),
+        d: path.getAttribute('d'),
+        strokeWidth: path.getAttribute('stroke-width'),
+      })),
+    };
+  });
+
+  const collectMindMapVisibility = async () => page.evaluate(() => {
+    const surface = document.querySelector('[data-mindmap-middle-pan="true"]');
+    const center = document.querySelector('[data-mindmap-center]');
+    const centerRect = center?.getBoundingClientRect();
+    const viewportLeft = 255;
+    const viewportTop = 88;
+    const isVisible = (rect) => rect && rect.right > viewportLeft && rect.left < window.innerWidth && rect.bottom > viewportTop && rect.top < window.innerHeight;
+    const visibleNodes = Array.from(document.querySelectorAll('[data-mindmap-node]'))
+      .filter(node => isVisible(node.getBoundingClientRect()))
+      .map(node => node.getAttribute('data-mindmap-node-title') || '');
+    return {
+      zoom: surface?.getAttribute('data-mindmap-zoom-level') || '',
+      centered: surface?.getAttribute('data-mindmap-content-centered') || '',
+      scrollLeft: Math.round(surface?.scrollLeft || 0),
+      scrollTop: Math.round(surface?.scrollTop || 0),
+      nodeCount: document.querySelectorAll('[data-mindmap-node]').length,
+      visibleCount: visibleNodes.length,
+      visibleNodes: visibleNodes.slice(0, 12),
+      centerVisible: Boolean(isVisible(centerRect)),
+      center: centerRect ? {
+        left: Math.round(centerRect.left),
+        top: Math.round(centerRect.top),
+        right: Math.round(centerRect.right),
+        bottom: Math.round(centerRect.bottom),
+      } : null,
+    };
+  });
+
+  const wheelZoomAtSurface = async (deltaY) => {
+    const box = await page.locator('[data-mindmap-middle-pan="true"]').first().boundingBox();
+    assert(Boolean(box), 'mind map zoom surface should have a viewport box for wheel zoom');
+    const point = {
+      x: box.x + box.width * 0.52,
+      y: box.y + box.height * 0.48,
+    };
+    await page.evaluate(({ deltaY, point }) => {
+      const surface = document.querySelector('[data-mindmap-middle-pan="true"]');
+      surface?.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: true,
+        deltaY,
+        clientX: point.x,
+        clientY: point.y,
+      }));
+    }, { deltaY, point });
+  };
+
+  const applyDatesToNodes = async (titles) => {
+    await page.evaluate((titles) => {
+      const filters = {
+        statusFilters: {
+          todo: true,
+          in_progress: true,
+          delayed: true,
+          completed: true,
+          unsure: true,
+          onhold: true,
+        },
+        showDependencies: true,
+        showStartDate: true,
+        showTags: true,
+        dueWithinDays: null,
+        selectedAssigneeIds: [],
+      };
+      const titleSet = new Set(titles);
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      Object.values(nodes).forEach((node, index) => {
+        if (!node || !titleSet.has(node.title)) return;
+        node.status = 'todo';
+        node.startDate = `2026-05-${String(21 + (index % 5)).padStart(2, '0')}`;
+        node.endDate = `2026-05-${String(24 + (index % 5)).padStart(2, '0')}`;
+        node.updatedAt = Date.now();
+      });
+      localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
+      localStorage.setItem('projed-filters', JSON.stringify(filters));
+    }, titles);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
+    await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('[data-mindmap-connector-overlay]').waitFor({ state: 'visible', timeout: 15000 });
+    await nodeByTitle(titles[0]).waitFor({ state: 'visible', timeout: 15000 });
+  };
+
+  const createInlineRelationship = async (fromTitle, toTitle, label) => {
+    await nodeByTitle(fromTitle).click();
+    const fromId = await nodeByTitle(fromTitle).getAttribute('data-mindmap-node');
+    await page.locator('[data-mindmap-note-relationship-tool]').click();
+    await page.locator(`[data-mindmap-note-relationship-tool][data-active="true"][data-source-node-id="${fromId}"]`).waitFor({ state: 'visible', timeout: 10000 });
+    const sourceBox = await nodeByTitle(fromTitle).boundingBox();
+    assert(Boolean(sourceBox), 'relationship source should have a bounding box before draft preview');
+    await page.mouse.move(sourceBox.x + sourceBox.width + 120, sourceBox.y + sourceBox.height / 2 + 16, { steps: 8 });
+    await page.locator('[data-mindmap-note-relationship-draft-preview]').waitFor({ state: 'visible', timeout: 10000 });
+    const draftMeta = await page.locator('[data-mindmap-note-relationship-draft-preview]').first().evaluate(element => ({
+      coordinateSpace: element.getAttribute('data-mindmap-note-relationship-draft-coordinate-space'),
+      pathCoordinateSpace: element.querySelector('[data-mindmap-note-relationship-draft-preview-path]')?.getAttribute('data-mindmap-note-relationship-draft-coordinate-space') || '',
+      hasPath: Boolean(element.querySelector('[data-mindmap-note-relationship-draft-preview-path]')),
+    }));
+    assert(
+      draftMeta.coordinateSpace === 'map-local' &&
+        draftMeta.pathCoordinateSpace === 'map-local' &&
+        draftMeta.hasPath,
+      'relationship draft preview should be present in the same map-local layer before zoom/pan validation',
+      { draftMeta },
+    );
+    await nodeByTitle(toTitle).click();
+    const editor = page.locator('[data-mindmap-note-relationship-label-input]').first();
+    await editor.waitFor({ state: 'visible', timeout: 10000 });
+    await editor.fill(label);
+    await page.keyboard.press('Enter');
+    await relationshipPathByLabel(label).waitFor({ state: 'visible', timeout: 10000 });
+    await relationshipTargetByLabel(label).click({ force: true });
+    await page.locator('[data-mindmap-note-relationship-style-panel]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-mindmap-note-relationship-style-dash="7 6"]').click();
+    await page.locator('[data-mindmap-note-relationship-style-arrow="both"]').click();
+    await page.locator('[data-mindmap-note-relationship-style-width="2.25"]').click();
+  };
+
+  const collectCompositeSceneMeta = async (relationshipLabel) => page.evaluate((relationshipLabel) => {
+    const visible = (element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < window.innerWidth && rect.top < window.innerHeight;
+    };
+    const relationship = document.querySelector(`[data-mindmap-note-relationship][data-label="${relationshipLabel}"]`);
+    const selectedRelationshipId = relationship?.getAttribute('data-mindmap-note-relationship') || '';
+    return {
+      visibleNodes: Array.from(document.querySelectorAll('[data-mindmap-node]')).filter(visible).length,
+      visibleDateBadges: Array.from(document.querySelectorAll('[data-mindmap-node-dates]')).filter(visible).length,
+      connectorPaths: document.querySelectorAll('[data-mindmap-connector-path]').length,
+      relationshipPaths: document.querySelectorAll(`[data-mindmap-note-relationship-path][data-label="${relationshipLabel}"]`).length,
+      relationshipSelected: relationship?.getAttribute('data-selected') === 'true',
+      relationshipLabelTargets: document.querySelectorAll(`[data-mindmap-note-relationship-click-target][data-label="${relationshipLabel}"]`).length,
+      relationshipEndpoints: selectedRelationshipId
+        ? document.querySelectorAll(`[data-relationship-id="${selectedRelationshipId}"][data-mindmap-note-relationship-endpoint]`).length
+        : 0,
+      relationshipControlPoints: selectedRelationshipId
+        ? document.querySelectorAll(`[data-relationship-id="${selectedRelationshipId}"][data-mindmap-note-relationship-screen-control-point]`).length
+        : 0,
+      relationshipCoordinateSpaces: selectedRelationshipId
+        ? Array.from(document.querySelectorAll(`[data-relationship-id="${selectedRelationshipId}"][data-mindmap-note-relationship-coordinate-space]`))
+          .map(element => element.getAttribute('data-mindmap-note-relationship-coordinate-space') || '')
+        : [],
+      relationshipPathD: document.querySelector(`[data-mindmap-note-relationship-path][data-label="${relationshipLabel}"]`)?.getAttribute('d') || '',
+      recomputeCount: document.querySelector('[data-mindmap-recompute-count]')?.getAttribute('data-mindmap-recompute-count') || '',
+      zoom: document.querySelector('[data-mindmap-view] [data-mindmap-zoom-level]')?.getAttribute('data-mindmap-zoom-level') || '',
+      scrollLeft: Math.round(document.querySelector('[data-mindmap-middle-pan="true"]')?.scrollLeft || 0),
+      scrollTop: Math.round(document.querySelector('[data-mindmap-middle-pan="true"]')?.scrollTop || 0),
+    };
+  }, relationshipLabel);
+
+  const assertCompositeScene = async (relationshipLabel, label) => {
+    const meta = await collectCompositeSceneMeta(relationshipLabel);
+    assert(
+      meta.visibleNodes >= 3 &&
+        meta.visibleDateBadges >= 2 &&
+        meta.connectorPaths >= 2 &&
+        meta.relationshipPaths === 1 &&
+        meta.relationshipSelected &&
+        meta.relationshipLabelTargets >= 1 &&
+        meta.relationshipEndpoints >= 2 &&
+        meta.relationshipControlPoints >= 2 &&
+        meta.relationshipCoordinateSpaces.every(space => space === 'map-local') &&
+        meta.relationshipPathD.startsWith('M '),
+      label,
+      { meta },
+    );
+    return meta;
+  };
+
   const collectTidyTrunks = async (parentId, childIds) => page.evaluate(({ parentId, childIds }) => childIds.map((childId) => {
     const path = document.querySelector(`[data-from-node-id="${parentId}"][data-to-node-id="${childId}"]`);
     const d = path?.getAttribute('d') || '';
@@ -178,6 +398,14 @@ async (page) => {
 
   await openApp();
   await assertNoVisibleErrors('DEV-027B initial');
+  await page.waitForTimeout(650);
+  const initialVisibility = await collectMindMapVisibility();
+  assert(
+    initialVisibility.centerVisible && initialVisibility.visibleCount >= 3 && initialVisibility.centered === 'initial',
+    'mind map should be visible and centered immediately after entering the mode',
+    { initialVisibility },
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027B-initial-visible-centered.png', fullPage: true });
 
   const stamp = Date.now().toString(36);
   const parent = `DEV027B selected parent 1 ${stamp}`;
@@ -188,6 +416,7 @@ async (page) => {
   const deleteParent = `DEV027B delete parent ${stamp}`;
   const deleteChildren = [1, 2, 3].map(index => `DEV027B delete child ${index} ${stamp}`);
   const children = [1, 2, 3, 4, 5].map(index => `DEV027B child ${index} ${stamp}`);
+  const zoomPanRelationship = `DEV027B zoom-pan relation ${stamp}`;
 
   await createRoot(parent);
   await createRoot(targetRoot);
@@ -222,20 +451,209 @@ async (page) => {
   assert(childMeta.every((meta, index) => index === 0 || meta.top > childMeta[index - 1].top), 'Enter siblings should render below the previously selected sibling', { childMeta });
   await page.screenshot({ path: 'output/playwright/dev-027B-enter-sibling-order.png', fullPage: true });
 
+  await applyDatesToNodes([parent, ...children, targetRoot]);
+  await createInlineRelationship(children[0], children[3], zoomPanRelationship);
+  await assertCompositeScene(
+    zoomPanRelationship,
+    'zoom/pan validation fixture should include tasks, date badges, tree connectors, selected relationship line, relationship label, endpoints, and control points',
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027B-zoom-pan-composite-fixture.png', fullPage: true });
+
+  const zoomBeforeButton = Number(await page.locator('[data-mindmap-view] [data-mindmap-zoom-level]').first().getAttribute('data-mindmap-zoom-level'));
+  const zoomBeforeButtonRaw = await page.locator('[data-mindmap-view] [data-mindmap-zoom-level]').first().getAttribute('data-mindmap-zoom-level');
+  const zoomPathBeforeButton = await collectZoomPathSnapshot();
   await page.locator('[data-mindmap-zoom-in]').click();
+  await page.waitForTimeout(350);
+  const zoomPathAfterButton = await collectZoomPathSnapshot();
+  assert(
+    JSON.stringify(zoomPathAfterButton.connectorPaths) === JSON.stringify(zoomPathBeforeButton.connectorPaths) &&
+      JSON.stringify(zoomPathAfterButton.relationshipPaths) === JSON.stringify(zoomPathBeforeButton.relationshipPaths) &&
+      zoomPathAfterButton.recomputeCount === zoomPathBeforeButton.recomputeCount,
+    'zoom button should only scale the viewport and must not recompute connector or relationship paths',
+    { zoomPathBeforeButton, zoomPathAfterButton },
+  );
+  const zoomAfterSingleButtonRaw = await page.locator('[data-mindmap-view] [data-mindmap-zoom-level]').first().getAttribute('data-mindmap-zoom-level');
+  const zoomAfterSingleButton = Number(zoomAfterSingleButtonRaw);
+  assert(
+    Math.abs((zoomAfterSingleButton - zoomBeforeButton) - 0.05) < 0.005 &&
+      /^\d+\.\d{3}$/.test(zoomBeforeButtonRaw || '') &&
+      /^\d+\.\d{3}$/.test(zoomAfterSingleButtonRaw || ''),
+    'zoom button should use fine 5% increments and expose three-decimal zoom state',
+    { zoomBeforeButtonRaw, zoomAfterSingleButtonRaw, zoomBeforeButton, zoomAfterSingleButton },
+  );
   await page.locator('[data-mindmap-zoom-in]').click();
   await page.waitForTimeout(350);
   const zoomAfterIn = await page.locator('[data-mindmap-view] [data-mindmap-zoom-level]').first().getAttribute('data-mindmap-zoom-level');
   assert(Number(zoomAfterIn) > 1, 'zoom level should change after zoom-in', { zoomAfterIn });
+  const zoomRenderer = await collectZoomRenderer();
+  assert(
+    zoomRenderer.renderer === 'css-zoom-layer' &&
+      zoomRenderer.quality === 'zoom-only-no-path-recompute' &&
+      Number(zoomRenderer.vectorZoom) > 1 &&
+      Number(zoomRenderer.cssZoom) > 1 &&
+      parseFloat(zoomRenderer.nodeFontSize) <= 14.5 &&
+      (zoomRenderer.transform === 'none' || zoomRenderer.transform === ''),
+    'zoom-in should use one CSS zoom layer instead of recomputing mind map layout or paths',
+    { zoomRenderer },
+  );
   const zoomDistances = await collectEndpointDistances();
   assert(zoomDistances.every(item => item.distance <= 10), 'zoomed connector endpoints should remain aligned with node edges', { zoomDistances: zoomDistances.filter(item => item.distance > 10) });
-  await selectNode(children[2]);
-  await page.screenshot({ path: 'output/playwright/dev-027B-zoom-150.png', fullPage: true });
+  const zoomButtonVisibility = await collectMindMapVisibility();
+  assert(
+    zoomButtonVisibility.centerVisible && zoomButtonVisibility.visibleCount >= 3,
+    'zoom button changes should keep the mind map visible instead of jumping to blank space',
+    { zoomButtonVisibility },
+  );
+  await relationshipTargetByLabel(zoomPanRelationship).click({ force: true });
+  await assertCompositeScene(
+    zoomPanRelationship,
+    'button zoom evidence should still include date badges plus selected relationship label, endpoints, and control points',
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027B-zoom-fine-step.png', fullPage: true });
 
   await page.locator('[data-mindmap-zoom-reset]').click();
   await page.waitForTimeout(250);
   assert(Number(await page.locator('[data-mindmap-view] [data-mindmap-zoom-level]').first().getAttribute('data-mindmap-zoom-level')) === 1, 'zoom reset should restore 100%');
+  const resetVisibility = await collectMindMapVisibility();
+  assert(resetVisibility.centerVisible && resetVisibility.visibleCount >= 3, 'zoom reset should keep the mind map visible', { resetVisibility });
   await page.screenshot({ path: 'output/playwright/dev-027B-zoom-100.png', fullPage: true });
+
+  await page.locator('[data-mindmap-zoom-fit]').click();
+  await page.waitForTimeout(650);
+  const fitVisibility = await collectMindMapVisibility();
+  assert(
+    fitVisibility.centerVisible && fitVisibility.visibleCount >= Math.min(10, fitVisibility.nodeCount) && fitVisibility.centered === 'fit',
+    'fit-to-content should zoom and scroll to visible mind map content, not a blank padded canvas',
+    { fitVisibility },
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027B-fit-visible-content.png', fullPage: true });
+
+  const wheelZoomBefore = await collectZoomPreviewState();
+  await wheelZoomAtSurface(-180);
+  await wheelZoomAtSurface(-180);
+  await wheelZoomAtSurface(-180);
+  await page.waitForTimeout(60);
+  const wheelZoomPreview = await collectZoomPreviewState();
+  assert(
+    wheelZoomPreview.interaction === 'preview-then-vector-commit' &&
+      wheelZoomPreview.active === 'true' &&
+      wheelZoomPreview.previewLevel > wheelZoomBefore.committedLevel &&
+      wheelZoomPreview.previewScale > 1 &&
+      wheelZoomPreview.contentPreviewTransform === 'scale' &&
+      wheelZoomPreview.transform !== 'none' &&
+      wheelZoomPreview.label !== '100%',
+    'wheel zoom should use transient preview transform during continuous zoom',
+    { wheelZoomBefore, wheelZoomPreview },
+  );
+  await page.waitForFunction(() => !document.querySelector('[data-mindmap-middle-pan="true"]')?.hasAttribute('data-mindmap-zoom-preview-active'), null, { timeout: 5000 });
+  await page.waitForTimeout(120);
+  const wheelZoomCommitted = await collectZoomPreviewState();
+  assert(
+    wheelZoomCommitted.committedLevel > wheelZoomBefore.committedLevel &&
+      wheelZoomCommitted.committedDataLevel === wheelZoomCommitted.committedLevel &&
+      wheelZoomCommitted.active === '' &&
+      wheelZoomCommitted.contentPreviewTransform === '' &&
+      (wheelZoomCommitted.transform === 'none' || wheelZoomCommitted.transform === ''),
+    'wheel zoom should commit back to zoom layer after idle',
+    { wheelZoomBefore, wheelZoomPreview, wheelZoomCommitted },
+  );
+  const wheelZoomRenderer = await collectZoomRenderer();
+  assert(
+    wheelZoomRenderer.renderer === 'css-zoom-layer' &&
+      wheelZoomRenderer.quality === 'zoom-only-no-path-recompute' &&
+      Number(wheelZoomRenderer.vectorZoom) === wheelZoomCommitted.committedLevel &&
+      Number(wheelZoomRenderer.cssZoom) === wheelZoomCommitted.committedLevel &&
+      parseFloat(wheelZoomRenderer.nodeFontSize) <= 14.5,
+    'wheel zoom committed state should remain one zoom layer without path recompute',
+    { wheelZoomRenderer, wheelZoomCommitted },
+  );
+  await relationshipTargetByLabel(zoomPanRelationship).click({ force: true });
+  await assertCompositeScene(
+    zoomPanRelationship,
+    'wheel zoom evidence should still include date badges plus selected relationship label, endpoints, and control points',
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027B-wheel-zoom-smooth-commit.png', fullPage: true });
+
+  await page.locator('[data-mindmap-zoom-reset]').click();
+  await page.waitForTimeout(250);
+  await relationshipTargetByLabel(zoomPanRelationship).click({ force: true });
+  const panCompositeBefore = await assertCompositeScene(
+    zoomPanRelationship,
+    'middle-mouse pan fixture should start with date badges plus selected relationship label, endpoints, and control points',
+  );
+
+  const panSurface = page.locator('[data-mindmap-middle-pan="true"]').first();
+  const panSurfaceBox = await panSurface.boundingBox();
+  assert(Boolean(panSurfaceBox), 'mind map pan surface should have a viewport box');
+  const panBefore = await panSurface.evaluate(element => ({
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+    scrollWidth: element.scrollWidth,
+    scrollHeight: element.scrollHeight,
+    clientWidth: element.clientWidth,
+    clientHeight: element.clientHeight,
+  }));
+  assert(
+    panBefore.scrollWidth >= panBefore.clientWidth * 2 && panBefore.scrollHeight >= panBefore.clientHeight * 1.8,
+    'mind map canvas should include Xmind-like edge padding for panning to far sides',
+    { panBefore },
+  );
+  const panStart = {
+    x: panSurfaceBox.x + panSurfaceBox.width * 0.5,
+    y: panSurfaceBox.y + panSurfaceBox.height * 0.55,
+  };
+  await page.mouse.move(panStart.x, panStart.y);
+  await page.mouse.down({ button: 'middle' });
+  await page.waitForFunction(() => document.querySelector('[data-mindmap-middle-pan-active="true"]'), null, { timeout: 5000 });
+  assert(await panSurface.getAttribute('data-mindmap-middle-pan-mode') === 'velocity', 'middle mouse panning should use Xmind-like velocity mode');
+  await page.mouse.move(panStart.x + 90, panStart.y + 50, { steps: 6 });
+  await page.waitForTimeout(350);
+  const panSmall = await panSurface.evaluate(element => ({
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+    speedX: Math.abs(Number(element.getAttribute('data-mindmap-middle-pan-speed-x') || '0')),
+    speedY: Math.abs(Number(element.getAttribute('data-mindmap-middle-pan-speed-y') || '0')),
+  }));
+  await page.mouse.move(panStart.x + 320, panStart.y + 180, { steps: 8 });
+  await page.waitForTimeout(500);
+  const panLarge = await panSurface.evaluate(element => ({
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+    speedX: Math.abs(Number(element.getAttribute('data-mindmap-middle-pan-speed-x') || '0')),
+    speedY: Math.abs(Number(element.getAttribute('data-mindmap-middle-pan-speed-y') || '0')),
+  }));
+  await page.mouse.up({ button: 'middle' });
+  await page.waitForTimeout(200);
+  const panAfter = await panSurface.evaluate(element => ({
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+    active: element.getAttribute('data-mindmap-middle-pan-active') || '',
+    mode: element.getAttribute('data-mindmap-middle-pan-mode') || '',
+  }));
+  assert(
+    panSmall.scrollLeft > panBefore.scrollLeft &&
+      panSmall.scrollTop > panBefore.scrollTop &&
+      panLarge.scrollLeft > panSmall.scrollLeft + 80 &&
+      panLarge.scrollTop > panSmall.scrollTop + 35 &&
+      panLarge.speedX > panSmall.speedX &&
+      panLarge.speedY > panSmall.speedY &&
+      panAfter.active === '' &&
+      panAfter.mode === '',
+    'middle mouse offset should continuously pan faster as the cursor moves farther from the press point',
+    { panBefore, panSmall, panLarge, panAfter },
+  );
+  await relationshipTargetByLabel(zoomPanRelationship).click({ force: true });
+  const panCompositeAfter = await assertCompositeScene(
+    zoomPanRelationship,
+    'middle-mouse pan evidence should still include date badges plus selected relationship label, endpoints, and control points',
+  );
+  assert(
+    panCompositeAfter.relationshipPathD === panCompositeBefore.relationshipPathD &&
+      panCompositeAfter.recomputeCount === panCompositeBefore.recomputeCount,
+    'middle-mouse pan should only scroll the viewport and must not rewrite or recompute the selected relationship path',
+    { panCompositeBefore, panCompositeAfter },
+  );
+  await page.screenshot({ path: 'output/playwright/dev-027B-middle-mouse-pan.png', fullPage: true });
 
   const updatedChildMeta = await collectNodeMeta(children);
   const tidyTrunks = await collectTidyTrunks(parentId, updatedChildMeta.map(meta => meta.id));
@@ -268,6 +686,7 @@ async (page) => {
     siblingAfterId: element.getAttribute('data-sibling-after-id'),
     dropPosition: element.getAttribute('data-drop-position'),
     direction: element.getAttribute('data-direction'),
+    coordinateSpace: element.getAttribute('data-mindmap-insertion-preview-coordinate-space'),
   }));
   const targetMeta = (await collectNodeMeta([dragTarget]))[0];
   const hasSiblingPlacement = (previewMeta.dropPosition === 'before' && previewMeta.siblingAfterId === targetMeta.id)
@@ -277,7 +696,12 @@ async (page) => {
     previewMeta,
     targetMeta,
   });
-  assert((await page.locator('[data-mindmap-drop-preview]').count()) > 0, 'drag insertion preview should include an intended connector');
+  const dropPreviewMeta = await page.locator('[data-mindmap-drop-preview]').first().evaluate(element => ({
+    coordinateSpace: element.getAttribute('data-mindmap-drop-preview-coordinate-space'),
+    d: element.getAttribute('d') || '',
+  }));
+  assert(previewMeta.coordinateSpace === 'map-local', 'drag insertion placeholder should render in the map-local zoom layer', { previewMeta });
+  assert(dropPreviewMeta.coordinateSpace === 'map-local' && dropPreviewMeta.d.startsWith('M '), 'drag insertion preview should include a map-local intended connector', { dropPreviewMeta });
   assert((await page.locator('[data-mindmap-drag-preview]').count()) > 0, 'drag insertion preview should include a ghost node');
   await page.screenshot({ path: 'output/playwright/dev-027B-drag-insertion-preview-hover.png', fullPage: true });
   await page.mouse.up();
@@ -333,9 +757,14 @@ async (page) => {
     previewMeta,
     postDrop,
     screenshots: [
+      'output/playwright/dev-027B-initial-visible-centered.png',
       'output/playwright/dev-027B-enter-sibling-order.png',
-      'output/playwright/dev-027B-zoom-150.png',
+      'output/playwright/dev-027B-zoom-pan-composite-fixture.png',
+      'output/playwright/dev-027B-zoom-fine-step.png',
       'output/playwright/dev-027B-zoom-100.png',
+      'output/playwright/dev-027B-fit-visible-content.png',
+      'output/playwright/dev-027B-wheel-zoom-smooth-commit.png',
+      'output/playwright/dev-027B-middle-mouse-pan.png',
       'output/playwright/dev-027B-tidy-bracket-parent-five-children.png',
       'output/playwright/dev-027B-drag-insertion-preview-hover.png',
       'output/playwright/dev-027B-drag-insertion-preview-post-drop.png',

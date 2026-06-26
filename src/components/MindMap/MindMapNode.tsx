@@ -99,7 +99,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
   return (
     <div
-      className={`flex items-center gap-5 ${isLeft ? 'flex-row-reverse text-right' : 'text-left'}`}
+      className={`flex items-center gap-[var(--mindmap-node-gap)] ${isLeft ? 'flex-row-reverse text-right' : 'text-left'}`}
       data-mindmap-branch-level={level}
       data-mindmap-branch-direction={direction}
     >
@@ -146,7 +146,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragEnd={onDragEnd}
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
-          className={`relative z-10 flex min-h-[38px] max-w-[260px] items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${getDropClasses(dropTarget, node.id)}`}
+          className={`relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${getDropClasses(dropTarget, node.id)}`}
         >
           {hasChildren ? (
             <button
@@ -155,14 +155,14 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                 event.stopPropagation();
                 onToggleExpanded(node.id);
               }}
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              className="flex h-[var(--mindmap-toggle-size)] w-[var(--mindmap-toggle-size)] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               title={isExpanded ? '收合分支' : '展開分支'}
               data-mindmap-toggle
             >
-              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} className={isLeft ? 'rotate-180' : ''} />}
+              {isExpanded ? <ChevronDown size="var(--mindmap-toggle-icon-size)" /> : <ChevronRight size="var(--mindmap-toggle-icon-size)" className={isLeft ? 'rotate-180' : ''} />}
             </button>
           ) : (
-            <span className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="h-[var(--mindmap-toggle-size)] w-[var(--mindmap-toggle-size)] shrink-0" aria-hidden="true" />
           )}
 
           {isEditing ? (
@@ -177,7 +177,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                 if (event.key === 'Enter') onEditCommit();
                 if (event.key === 'Escape') onEditCancel();
               }}
-              className="min-w-[120px] flex-1 rounded border border-blue-200 bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-800 outline-none ring-2 ring-blue-100"
+              className="min-w-[var(--mindmap-input-min-width)] flex-1 rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-800 outline-none ring-2 ring-blue-100"
               data-mindmap-title-input
             />
           ) : (
@@ -187,13 +187,13 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
               </span>
               {hasVisibleDates ? (
                 <span
-                  className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-700"
+                  className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-[var(--mindmap-date-pad-x)] py-[var(--mindmap-date-pad-y)] text-[length:var(--mindmap-date-font-size)] font-semibold leading-none text-amber-700"
                   title={`${showStartDate && node.startDate ? node.startDate : ''}${showStartDate && node.startDate && node.endDate ? ' ~ ' : ''}${node.endDate || ''}`}
                   data-mindmap-node-dates
                   data-start-date={showStartDate ? node.startDate || '' : ''}
                   data-end-date={node.endDate || ''}
                 >
-                  <Calendar size={10} className="shrink-0" />
+                  <Calendar size="var(--mindmap-date-icon-size)" className="shrink-0" />
                   <span className="truncate">
                     {showStartDate && node.startDate ? (
                       <>
@@ -212,7 +212,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
       {hasChildren && isExpanded && (
         <div
-          className="flex flex-col gap-3"
+          className="flex flex-col gap-[var(--mindmap-children-gap)]"
           data-mindmap-children-group
           data-mindmap-children-parent-id={node.id}
           data-mindmap-children-direction={direction}

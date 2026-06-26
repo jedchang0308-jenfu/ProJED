@@ -146,16 +146,20 @@ async (page) => {
 
     assert(panelBox.x >= 0 && panelBox.x + panelBox.width <= viewport.width, 'relationship style panel should stay inside viewport horizontally', { panelBox, viewport });
     assert(panelBox.y >= 0 && panelBox.y + panelBox.height <= viewport.height, 'relationship style panel should stay inside viewport vertically', { panelBox, viewport });
+    assert(await panel.getAttribute('data-mindmap-note-relationship-style-drawer') === 'true', 'relationship style controls should use the right drawer layout');
+    assert(panelBox.x + panelBox.width >= viewport.width - 2, 'relationship style drawer should be attached to the right viewport edge', { panelBox, viewport });
+    assert(panelBox.width >= 300, 'relationship style drawer should be wide enough for Xmind-like setting groups', { panelBox });
+    assert(panelBox.height >= viewport.height - 120, 'relationship style drawer should occupy the work area height', { panelBox, viewport });
     assert(labelBox.width >= 88 && labelBox.height >= 28, 'relationship label hit target should remain finger-clickable', { labelBox });
     assert(lineBox.width >= 72 && lineBox.height >= 18, 'relationship line hit target should remain clickable', { lineBox });
 
-    const handleBoxes = await page.locator('[data-mindmap-note-relationship-endpoint], [data-mindmap-note-relationship-control-point]').evaluateAll(elements => elements.map(element => {
+    const handleBoxes = await page.locator('[data-mindmap-note-relationship-screen-control-point]').evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect();
       return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
     }));
-    assert(handleBoxes.length === 4, 'selected relationship should expose exactly four draggable handles', { handleBoxes });
-    const tiny = handleBoxes.filter(box => box.width < 10 || box.height < 10);
-    assert(tiny.length === 0, 'relationship handles should be large enough to drag reliably', { tiny, handleBoxes });
+    assert(handleBoxes.length === 2, 'selected relationship should expose two visible Bezier adjustment control points', { handleBoxes });
+    const tiny = handleBoxes.filter(box => box.width < 18 || box.height < 18);
+    assert(tiny.length === 0, 'relationship adjustment control points should be large enough to drag reliably', { tiny, handleBoxes });
   };
 
   const scrollRelationshipIntoView = async (label) => {
