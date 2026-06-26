@@ -2,6 +2,45 @@
 
 ## PM Update - 2026-06-19
 
+### DEV-028: 四模式一致的 Trello-like 任務操作契約
+
+狀態: Implemented / Browser Smoke Passed / Manual Click QC Pending (2026-06-26)
+節點類型: 交付點
+優先級: P0 UI/UX interaction consistency
+父交付點: 無
+是否計入產品交付完成: 是
+建立日期: 2026-06-26
+
+關聯需求:
+- 使用者要求目前任務操作從「點擊即編輯」改為接近 Trello 的操作邏輯，降低 Trello 使用者跳槽摩擦。
+- 使用者進一步指定清單、心智圖、看板、甘特四個模式必須高度一致，建立跨模式肌肉記憶。
+- 使用者明確排除兩項: 不做看板卡片正面資訊降噪；不把 Level 3+ 下層任務預設收進 Card back。
+
+任務目標:
+- 四模式單擊既有任務都先選取該任務，再開啟同一個 `TaskDetailsModal`；關閉詳情後保留選取狀態。
+- 四模式任務名稱不再因單擊任務或標題直接進入編輯。
+- 改名改由明確入口觸發: 鉛筆、右鍵重新命名、`t`、F2；心智圖保留選取後直接打字改名。
+- 新增任務命名採 2C: 桌機四模式新增後只選取新任務，直接打字才開始改名；手機新增後自動開命名鍵盤。
+- 快捷鍵採 1A: 清單、看板、甘特 `Enter` 開詳情；心智圖 `Enter` 保留新增同階。
+- 右鍵/長按採 3A: 四模式都開任務操作選單；心智圖關聯線建立改走 toolbar、快捷鍵或 selected-node action。
+- 保留四模式專用能力: 心智圖鍵盤/關聯線、看板 Level 3+ 正面顯示、甘特排程拖曳、會議紀錄任務選取模式。
+- 詳情容器採 5A: 保留既有 `TaskDetailsModal`；選取視覺採 6A: 最小 selected highlight / ring。
+
+交付文件:
+- `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`
+- `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md`
+
+RD exit gate:
+- Added DEV-028 static / browser verifiers covering list, mind map, board, and Gantt click-to-details, selected-state retention, explicit rename, new-task naming, task context menu, and drag/click collision.
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 29/29
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`: Pass
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
+- `npm.cmd exec tsc -- --noEmit`: Pass
+- `npm.cmd run lint -- --quiet`: Pass
+- `npm.cmd run build:test`: Pass
+- QA manual click validation plan updated on 2026-06-26; DEV-028 still requires MAN-028-001 to MAN-028-027 human-operated click evidence before calling manual QC complete.
+
 ### DEV-027F: Mind map UI polish after relationship-line QC
 
 Status: Implemented / Browser QC Passed (2026-06-19)
@@ -664,11 +703,12 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
-| 2 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
-| 3 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 4 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
-| 5 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
+| 1 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 2 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
+| 3 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
+| 4 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-027 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
+| 5 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
+| 6 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
 
 ---
 
@@ -691,12 +731,14 @@ CAPA 來源：
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
+| DEV-028 | 交付點 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`verify:dev-028-cross-mode-task-interactions`、browser smoke | 依 QA-DEV-028 補人工親自點擊 QC |
 
 ### 交付點完成率
 
 - Done：10 個交付點。
 - In Verification：2 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
+- Implemented / Browser Smoke Passed / Manual Click QC Pending：1 個交付點。
 - Ready：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。

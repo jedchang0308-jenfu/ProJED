@@ -11,11 +11,21 @@ import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useDialogStore from '../store/useDialogStore';
 import useAuthStore from '../store/useAuthStore';
 import { boardService } from '../services/dataBackend';
+import {
+  OPEN_TASK_DETAILS_EVENT,
+  isTextInputTarget,
+  prepareNewTaskNaming,
+  selectAndOpenTaskDetails,
+} from '../utils/taskInteractions';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
+  const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
+  const setSelectedTaskId = useBoardStore((state) => state.setSelectedTaskId);
+  const pendingDirectTitleEditNodeId = useBoardStore((state) => state.pendingDirectTitleEditNodeId);
+  const setPendingDirectTitleEditNodeId = useBoardStore((state) => state.setPendingDirectTitleEditNodeId);
   const setPendingWorkspaceTitleEditId = useBoardStore((state) => state.setPendingWorkspaceTitleEditId);
   const setPendingBoardTitleEdit = useBoardStore((state) => state.setPendingBoardTitleEdit);
   const workspaces = useBoardStore((state) => state.workspaces);
@@ -108,6 +118,22 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   useEffect(() => {
+    const handleOpenTaskDetails = (event: Event) => {
+      const customEvent = event as CustomEvent<{ taskId: string }>;
+      if (customEvent.detail?.taskId) {
+        setSelectedTaskId(customEvent.detail.taskId);
+        setDetailsNodeId(customEvent.detail.taskId);
+      }
+    };
+
+    document.addEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails);
+
+    return () => {
+      document.removeEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails);
+    };
+  }, [setSelectedTaskId]);
+
+  useEffect(() => {
     if (!contextMenuState) return;
 
     const close = () => setContextMenuState(null);
@@ -115,23 +141,58 @@ export const GlobalContextMenu: React.FC = () => {
       if (event.key === 'Escape') close();
     };
 
-    const handleOpenTaskDetails = (event: Event) => {
-      const customEvent = event as CustomEvent<{ taskId: string }>;
-      if (customEvent.detail?.taskId) {
-        setDetailsNodeId(customEvent.detail.taskId);
-      }
-    };
-
     window.addEventListener('scroll', close, true);
     window.addEventListener('keydown', handleKey);
-    document.addEventListener('open-task-details', handleOpenTaskDetails);
 
     return () => {
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('keydown', handleKey);
-      document.removeEventListener('open-task-details', handleOpenTaskDetails);
     };
   }, [contextMenuState, setContextMenuState]);
+
+  useEffect(() => {
+    const handleTaskShortcut = (event: KeyboardEvent) => {
+      if (!selectedTaskId || detailsNodeId || contextMenuState?.isOpen) return;
+      if (!['list', 'board', 'gantt'].includes(currentView)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isTextInputTarget(event.target)) return;
+      if (event.isComposing) return;
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        selectAndOpenTaskDetails(selectedTaskId);
+        return;
+      }
+
+      if (event.key === 'F2' || event.key.toLowerCase() === 't') {
+        event.preventDefault();
+        setPendingDirectTitleEditNodeId(null);
+        setPendingTitleEditNodeId(selectedTaskId);
+        return;
+      }
+
+      if (
+        pendingDirectTitleEditNodeId === selectedTaskId &&
+        event.key.length === 1 &&
+        !event.key.match(/^\s$/)
+      ) {
+        event.preventDefault();
+        setPendingDirectTitleEditNodeId(null);
+        setPendingTitleEditNodeId(selectedTaskId, event.key);
+      }
+    };
+
+    window.addEventListener('keydown', handleTaskShortcut);
+    return () => window.removeEventListener('keydown', handleTaskShortcut);
+  }, [
+    contextMenuState?.isOpen,
+    currentView,
+    detailsNodeId,
+    pendingDirectTitleEditNodeId,
+    selectedTaskId,
+    setPendingDirectTitleEditNodeId,
+    setPendingTitleEditNodeId,
+  ]);
 
   useLayoutEffect(() => {
     if (contextMenuState?.isOpen) {
@@ -218,7 +279,7 @@ export const GlobalContextMenu: React.FC = () => {
     };
 
     addNode(newNode);
-    setPendingTitleEditNodeId(newNode.id);
+    prepareNewTaskNaming(newNode.id);
     setContextMenuState(null);
   };
 
@@ -260,7 +321,7 @@ export const GlobalContextMenu: React.FC = () => {
     };
 
     addNode(newNode);
-    setPendingTitleEditNodeId(newNode.id);
+    prepareNewTaskNaming(newNode.id);
     setContextMenuState(null);
   };
 
@@ -373,7 +434,15 @@ export const GlobalContextMenu: React.FC = () => {
   const handleOpenDetails = () => {
     if (!contextMenuState) return;
 
-    setDetailsNodeId(contextMenuState.nodeId);
+    selectAndOpenTaskDetails(contextMenuState.nodeId);
+    setContextMenuState(null);
+  };
+
+  const handleRenameTask = () => {
+    if (!contextMenuState || contextMenuState.kind !== 'task') return;
+    setSelectedTaskId(contextMenuState.nodeId);
+    setPendingDirectTitleEditNodeId(null);
+    setPendingTitleEditNodeId(contextMenuState.nodeId);
     setContextMenuState(null);
   };
 
@@ -567,6 +636,15 @@ export const GlobalContextMenu: React.FC = () => {
             </button>
 
             <button
+              onClick={handleRenameTask}
+              disabled={!canEditTask}
+              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Pencil size={14} className="flex-shrink-0 text-indigo-500" />
+              <span>重新命名任務</span>
+            </button>
+
+            <button
               onClick={handleMarkCompleted}
               disabled={!canEditTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-gray-700"
@@ -754,6 +832,19 @@ const BoardWorkspaceTransferDialog = ({
   const sourceWorkspace = workspaces.find(workspace => workspace.id === sourceWorkspaceId);
   const counts = preview?.counts || {};
   const canSubmit = Boolean(preview && !preview.blocked && confirmTitle.trim() === boardTitle && !isMoving);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape' || event.isComposing || isMoving) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isMoving, onClose]);
 
   useEffect(() => {
     if (!targetWorkspaceId) return;

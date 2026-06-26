@@ -27,13 +27,15 @@ const GlobalDialog = () => {
             // Do not stop propagation everywhere, just specific keys for dialog
             const target = e.target;
             const isFromDialog = target.closest?.('.global-dialog-content');
-            if (!isFromDialog) return;
 
             if (e.key === 'Escape') {
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 closeDialog(type === 'prompt' ? null : type === 'action' ? null : false);
             } else if (e.key === 'Enter') {
+                if (!isFromDialog) return;
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 closeDialog(type === 'prompt' ? inputValue : type === 'action' ? actions[0]?.id ?? null : true);
             }
         };

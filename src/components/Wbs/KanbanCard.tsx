@@ -3,13 +3,13 @@
  * 設計意圖：取代舊版 Card.tsx，資料來源改為 useWbsStore 的 TaskNode。
  * 卡片內部嵌入 KanbanChecklist 以遞迴呈現 Level 3+ 的下層任務。
  * 
- * 【編輯功能】點擊卡片標題可行內編輯任務名稱，Enter 或失焦即儲存，ESC 取消。
+ * 【編輯功能】卡片採閱讀優先；鉛筆、右鍵或快捷鍵才行內編輯任務名稱。
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link } from 'lucide-react';
+import { Calendar, Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link, Pencil } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -25,6 +25,7 @@ import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -67,7 +68,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+  const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
+  const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const tags = useTagStore(s => s.tags);
   const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
@@ -103,10 +106,16 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   useEffect(() => {
     if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
-    setEditValue(node.title || '新任務');
+    const initialValue = pendingTitleEditInitialValue ?? node.title ?? '新任務';
+    setEditValue(initialValue);
     setIsEditing(true);
     setPendingTitleEditNodeId(null);
-  }, [pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
+    window.requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      if (pendingTitleEditInitialValue !== null) input.setSelectionRange(initialValue.length, initialValue.length);
+    });
+  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
 
   /** 開始編輯：儲存目前標題做為初始值 */
   const handleStartEdit = (e: React.MouseEvent) => {
@@ -275,16 +284,22 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       style={style}
       {...cardLongPressHandlers}
       onClick={(e) => {
-        if (!isRecordCaptureMode) return;
-        e.preventDefault();
-        e.stopPropagation();
-        insertRecordTaskMention(nodeId, node.title || nodeId);
+        if (isRecordCaptureMode) {
+          e.preventDefault();
+          e.stopPropagation();
+          insertRecordTaskMention(nodeId, node.title || nodeId);
+          return;
+        }
+        if (isEditing || isDragging || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
+        selectAndOpenTaskDetails(nodeId);
       }}
       onContextMenu={(e) => {
           e.preventDefault();
           if (isRecordCaptureMode) return;
           setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
+      data-task-id={nodeId}
+      data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       className={`kanban-task-card relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
@@ -296,8 +311,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             ? isSelfNode
               ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
               : 'border-slate-200 hover:border-amber-300 hover:shadow-md cursor-crosshair'
-            : `border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md ${isEditing ? 'cursor-default' : ''}`
-      }`}
+            : `border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md ${isEditing ? 'cursor-default' : 'cursor-pointer'}`
+      } ${selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
     >
       <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">
         {/* 卡片內容 — 只有左側把手可拖曳，避免手機滑動畫面時誤觸 */}
@@ -333,16 +348,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                   disabled={!canEditTask}
+                  data-task-title-input="true"
                   className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none ring-2 ring-primary/30 focus:ring-2 focus:ring-primary/30 focus:ring-offset-0"
                 />
               ) : (
                 <h4
-                  className={`task-title-text text-sm font-medium leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${
+                  className={`task-title-text text-sm font-medium leading-tight flex-1 truncate transition-colors ${
                     statusTextColorMap[status as TaskStatus]
                   }`}
-                  onPointerDown={(e) => {
-                    if (!isRecordCaptureMode) e.stopPropagation();
-                  }}
                   onClick={(e) => {
                     if (isRecordCaptureMode) {
                       e.preventDefault();
@@ -350,12 +363,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                       insertRecordTaskMention(nodeId, node.title || nodeId);
                       return;
                     }
-                    handleStartEdit(e);
                   }}
-                  title="點擊以編輯任務名稱"
+                  title={node.title || '未命名任務'}
                 >
                   {node.title || '未命名任務'}
                 </h4>
+              )}
+              {!isEditing && !isRecordCaptureMode && (
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  disabled={!canEditTask}
+                  data-task-interaction-control="true"
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+                  title="重新命名任務"
+                >
+                  <Pencil size={13} />
+                </button>
               )}
             </div>
           </div>

@@ -52,6 +52,12 @@ async (page) => {
   const relationshipCurveHitboxByLabel = (label) => page.locator(`[data-mindmap-note-relationship-curve-click-target][data-label="${label}"]`).first();
   const relationshipHitboxByLabel = (label) => page.locator(`[data-mindmap-note-relationship-line-click-target][data-label="${label}"]`).first();
   const stylePanel = () => page.locator('[data-mindmap-note-relationship-style-panel]').first();
+  const closeTaskDetailsIfOpen = async () => {
+    const modal = page.locator('[data-task-details-modal="true"]');
+    if ((await modal.count()) === 0) return;
+    await modal.locator('button[title="關閉"]').click();
+    await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  };
 
   const assertNoVisibleErrors = async (label) => {
     const bodyText = await page.locator('body').innerText();
@@ -141,6 +147,7 @@ async (page) => {
 
   const createInlineRelationship = async (fromTitle, toTitle, label) => {
     await nodeByTitle(fromTitle).click();
+    await closeTaskDetailsIfOpen();
     const fromId = await nodeByTitle(fromTitle).getAttribute('data-mindmap-node');
     await page.locator('[data-mindmap-note-relationship-tool]').click();
     await page.locator(`[data-mindmap-note-relationship-tool][data-active="true"][data-source-node-id="${fromId}"]`).waitFor({ state: 'visible', timeout: 10000 });
@@ -482,10 +489,14 @@ async (page) => {
   await page.keyboard.press('Escape');
 
   await nodeByTitle(rightClickSource).click();
-  const rightClickSourceId = await nodeByTitle(rightClickSource).getAttribute('data-mindmap-node');
+  await closeTaskDetailsIfOpen();
   await nodeByTitle(rightClickSource).click({ button: 'right' });
-  await page.locator(`[data-mindmap-note-relationship-tool][data-active="true"][data-source-node-id="${rightClickSourceId}"]`).waitFor({ state: 'visible', timeout: 10000 });
-  assert(await page.locator('[data-mindmap-note-relationship-tool]').getAttribute('data-source-node-id') === rightClickSourceId, 'right-clicking a task should start note relationship mode from that task');
+  await page.locator('text=重新命名任務').waitFor({ state: 'visible', timeout: 10000 });
+  assert(
+    await page.locator('[data-mindmap-note-relationship-tool]').getAttribute('data-active') === 'false',
+    'right-clicking a task should open the task menu and should not start note relationship mode',
+  );
+  await page.keyboard.press('Escape');
 
   await assertNoVisibleErrors('DEV-027E final');
 }

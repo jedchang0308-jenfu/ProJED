@@ -525,7 +525,10 @@ export interface BoardState {
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: BoardContextMenuState | null;
+  selectedTaskId: string | null;
   pendingTitleEditNodeId: string | null;
+  pendingTitleEditInitialValue: string | null;
+  pendingDirectTitleEditNodeId: string | null;
   pendingWorkspaceTitleEditId: string | null;
   pendingBoardTitleEdit: PendingBoardTitleEdit | null;
 }
@@ -563,7 +566,9 @@ export interface BoardActions {
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: BoardContextMenuState | null) => void;
-  setPendingTitleEditNodeId: (nodeId: string | null) => void;
+  setSelectedTaskId: (nodeId: string | null) => void;
+  setPendingTitleEditNodeId: (nodeId: string | null, initialValue?: string | null) => void;
+  setPendingDirectTitleEditNodeId: (nodeId: string | null) => void;
   setPendingWorkspaceTitleEditId: (workspaceId: string | null) => void;
   setPendingBoardTitleEdit: (target: PendingBoardTitleEdit | null) => void;
 

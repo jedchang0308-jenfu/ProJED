@@ -33,9 +33,27 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
     const handleClickOutside = (event: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) setIsOpen(false);
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      if (editingTagId) {
+        setEditingTagId(null);
+        setEditingName('');
+        return;
+      }
+
+      setIsOpen(false);
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, [editingTagId, isOpen]);
 
   const toggleTag = (tagId: string) => {
     if (disabled) return;
@@ -96,7 +114,10 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 top-[calc(100%+6px)] z-[300] w-72 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div
+          data-tag-picker-panel
+          className="absolute left-0 top-[calc(100%+6px)] z-[300] w-72 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+        >
           <div className="border-b border-slate-100 p-3">
             <input
               value={query}

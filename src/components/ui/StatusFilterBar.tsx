@@ -105,11 +105,21 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
       setPanelPosition(getFilterPanelPosition(triggerRef.current));
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setIsOpen(false);
+    };
+
     window.addEventListener('resize', updatePanelPosition);
     window.addEventListener('scroll', updatePanelPosition, true);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => {
       window.removeEventListener('resize', updatePanelPosition);
       window.removeEventListener('scroll', updatePanelPosition, true);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
   }, [isOpen]);
 

@@ -3,13 +3,13 @@
  * 設計意圖：在 KanbanCard 內部呈現深層子節點，保留 WBS 階層關係。
  * 每一層透過 depth 增加縮排，左側拖曳把手負責排序，標題支援行內編輯。
  * 
- * 【編輯功能】點擊任務標題可行內編輯，Enter 或失焦即儲存，ESC 取消。
+ * 【編輯功能】下層任務採閱讀優先；鉛筆、右鍵或快捷鍵才行內編輯。
  * 【拖曳功能】每個任務現在是可拖曳元素，支援跨卡片及升級至列表等操作。
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, Link } from 'lucide-react';
+import { Check, Link, Pencil } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -24,6 +24,7 @@ import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -94,6 +95,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const isEditing = editingId === childId;
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
+  const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // 看板依賴選取 Context
@@ -198,8 +200,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
               ? isSelfNode
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
                 : 'hover:bg-amber-50/60 cursor-crosshair'
-              : `hover:bg-slate-50 ${isEditing ? 'cursor-default' : ''}`
-        }`}
+              : `hover:bg-slate-50 ${isEditing ? 'cursor-default' : 'cursor-pointer'}`
+        } ${selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 2}px` }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -215,11 +217,17 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           });
         }}
         onClick={(e) => {
-          if (!isRecordCaptureMode) return;
-          e.preventDefault();
-          e.stopPropagation();
-          insertRecordTaskMention(child.id, child.title || child.id);
+          if (isRecordCaptureMode) {
+            e.preventDefault();
+            e.stopPropagation();
+            insertRecordTaskMention(child.id, child.title || child.id);
+            return;
+          }
+          if (isEditing || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
+          selectAndOpenTaskDetails(child.id);
         }}
+        data-task-id={child.id}
+        data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
       >
 
         {/* 拖曳把手 */}
@@ -248,14 +256,12 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             disabled={!canEditTask}
+            data-task-title-input="true"
             className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 text-xs font-medium text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
           />
         ) : (
           <span
-            className={`task-title-text text-xs font-medium leading-tight flex-1 truncate cursor-text hover:text-primary transition-colors ${statusTextMap[status]}`}
-            onPointerDown={(e) => {
-              if (!isRecordCaptureMode) e.stopPropagation();
-            }}
+            className={`task-title-text text-xs font-medium leading-tight flex-1 truncate transition-colors ${statusTextMap[status]}`}
             onClick={(e) => {
               if (isRecordCaptureMode) {
                 e.preventDefault();
@@ -263,12 +269,23 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
                 insertRecordTaskMention(child.id, child.title || child.id);
                 return;
               }
-              if (canEditTask) onStartEdit(e, child);
             }}
-            title="點擊以編輯任務名稱"
+            title={child.title || '未命名任務'}
           >
             {child.title || '未命名任務'}
           </span>
+        )}
+        {!isEditing && !isRecordCaptureMode && (
+          <button
+            type="button"
+            disabled={!canEditTask}
+            onClick={(event) => onStartEdit(event, child)}
+            data-task-interaction-control="true"
+            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+            title="重新命名任務"
+          >
+            <Pencil size={11} />
+          </button>
         )}
 
         {/* 日期標籤區 — 選取模式：顯示可點擊按鈕；一般模式：顯示日期 */}
@@ -381,6 +398,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+  const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   const { canEditTask } = useBoardPermissions();
 
@@ -447,10 +465,16 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
     const child = children.find(item => item.id === pendingTitleEditNodeId);
     if (!child) return;
 
+    const initialValue = pendingTitleEditInitialValue ?? child.title ?? '新任務';
     setEditingId(child.id);
-    setEditValue(child.title || '新任務');
+    setEditValue(initialValue);
     setPendingTitleEditNodeId(null);
-  }, [pendingTitleEditNodeId, children, canEditTask, setPendingTitleEditNodeId]);
+    window.requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      if (pendingTitleEditInitialValue !== null) input.setSelectionRange(initialValue.length, initialValue.length);
+    });
+  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, children, canEditTask, setPendingTitleEditNodeId]);
 
   // 無子節點則不渲染
   if (isRecursiveParent || children.length === 0) return null;

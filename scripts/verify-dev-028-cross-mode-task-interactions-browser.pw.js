@@ -1,0 +1,146 @@
+/* eslint-disable */
+async (page) => {
+  const assert = (condition, message, details = {}) => {
+    if (!condition) {
+      const error = new Error(`${message}: ${JSON.stringify(details)}`);
+      error.details = details;
+      throw error;
+    }
+  };
+
+  const account = {
+    id: 'local-test-user',
+    uid: 'local-test-user',
+    email: 'test@projed.local',
+    displayName: 'ProJED local QA',
+    createdAt: 1704067200000,
+  };
+
+  const openApp = async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate((account) => {
+      localStorage.setItem('projed-local-test.selected-account', account.id);
+      localStorage.setItem('projed-local-test.session', JSON.stringify({
+        uid: account.uid,
+        email: account.email,
+        displayName: account.displayName,
+        createdAt: account.createdAt,
+      }));
+    }, account);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+  };
+
+  const switchMode = async (mode) => {
+    await page.locator(`[data-mode-switcher-value="${mode}"]`).click();
+    await page.waitForTimeout(250);
+  };
+
+  const closeDetails = async () => {
+    await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
+    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
+  const closeDetailsWithEsc = async () => {
+    await page.keyboard.press('Escape');
+    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
+  const firstVisibleTask = async (selector) => {
+    const locator = page.locator(selector).filter({ hasNot: page.locator('[data-task-title-input="true"]') }).first();
+    await locator.waitFor({ state: 'visible', timeout: 15000 });
+    return locator;
+  };
+
+  const clickTaskMainSurface = async (locator, position = { x: 80, y: 12 }) => {
+    await locator.click({ position });
+  };
+
+  const assertClickOpensDetails = async ({ mode, selector, titleInputSelector, clickPosition }) => {
+    await switchMode(mode);
+    const task = await firstVisibleTask(selector);
+    const taskId = await task.getAttribute('data-task-id');
+    assert(Boolean(taskId), `${mode} task should expose data-task-id`);
+
+    await clickTaskMainSurface(task, clickPosition);
+    const modal = page.locator('[data-task-details-modal="true"]');
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    const modalTaskId = await modal.getAttribute('data-task-id');
+    assert(modalTaskId === taskId, `${mode} single click should open TaskDetailsModal`, { taskId, modalTaskId });
+    await closeDetailsWithEsc();
+
+    const selectedCount = await page.locator(`[data-task-id="${taskId}"][data-task-selected="true"]`).count();
+    assert(selectedCount > 0, `${mode} should retain selected task after closing details with Escape`, { taskId, selectedCount });
+
+    await clickTaskMainSurface(page.locator(`[data-task-id="${taskId}"]`).first(), clickPosition);
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    await closeDetails();
+    const renameInputs = await page.locator(titleInputSelector).count();
+    assert(renameInputs === 0, `${mode} title click should not enter rename input`, { renameInputs });
+  };
+
+  const assertMindMapClickOpensDetails = async () => {
+    await switchMode('mindmap');
+    await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
+    const node = page.locator('[data-mindmap-node]').first();
+    await node.waitFor({ state: 'visible', timeout: 15000 });
+    const taskId = await node.getAttribute('data-mindmap-node');
+    await node.click();
+    const modal = page.locator('[data-task-details-modal="true"]');
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    const modalTaskId = await modal.getAttribute('data-task-id');
+    assert(modalTaskId === taskId, 'mindmap single click should open TaskDetailsModal', { taskId, modalTaskId });
+    await closeDetailsWithEsc();
+
+    const selected = await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count();
+    assert(selected === 1, 'mindmap should retain selected node after closing details with Escape', { taskId, selected });
+    const renameInputs = await page.locator('[data-mindmap-title-input]').count();
+    assert(renameInputs === 0, 'mindmap title click should not enter rename input', { renameInputs });
+  };
+
+  let step = 'open-app';
+  try {
+    await openApp();
+
+    step = 'list-click-details';
+    await assertClickOpensDetails({
+      mode: 'list',
+      selector: '[data-task-id]',
+      titleInputSelector: '[data-task-title-input="true"]',
+      clickPosition: { x: 90, y: 12 },
+    });
+
+    step = 'mindmap-click-details';
+    await assertMindMapClickOpensDetails();
+
+    step = 'board-click-details';
+    await assertClickOpensDetails({
+      mode: 'board',
+      selector: '.kanban-task-card[data-task-id]',
+      titleInputSelector: '[data-task-title-input="true"]',
+      clickPosition: { x: 90, y: 18 },
+    });
+
+    step = 'gantt-click-details';
+    await assertClickOpensDetails({
+      mode: 'gantt',
+      selector: '[data-task-id]',
+      titleInputSelector: '[data-task-title-input="true"]',
+      clickPosition: { x: 120, y: 12 },
+    });
+
+    step = 'mobile-board-visibility';
+    await page.setViewportSize({ width: 390, height: 844 });
+    await switchMode('board');
+    await firstVisibleTask('.kanban-task-card[data-task-id]');
+    const hasVisibleCard = await page.evaluate(() => {
+      const task = document.querySelector('.kanban-task-card[data-task-id]');
+      const rect = task?.getBoundingClientRect();
+      return rect ? rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth && rect.right > 0 : false;
+    });
+    assert(hasVisibleCard, 'mobile board task card should remain reachable in the viewport');
+  } catch (error) {
+    throw new Error(`${step}: ${error.message}`);
+  }
+}

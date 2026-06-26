@@ -22,6 +22,7 @@ import useDialogStore from '../store/useDialogStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import { compactClassNames } from './ui/compactTokens';
 import type { TaskNode, TaskStatus } from '../types';
+import { prepareNewTaskNaming } from '../utils/taskInteractions';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -37,7 +38,6 @@ const BoardView = () => {
     const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
     const setDependencySelection = useBoardStore(s => s.setDependencySelection);
-    const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
     const toggleStartDate = useBoardStore(s => s.toggleStartDate);
     const showStartDate = useBoardStore(s => s.showStartDate);
     const { addDependency, dependencies } = useWbsStore();
@@ -429,7 +429,7 @@ const BoardView = () => {
             updatedAt: Date.now(),
         };
         addNode(newNode);
-        setPendingTitleEditNodeId(newNode.id);
+        prepareNewTaskNaming(newNode.id);
     };
 
     if (!activeBoardId) {

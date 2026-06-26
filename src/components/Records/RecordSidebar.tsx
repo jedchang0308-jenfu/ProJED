@@ -415,7 +415,21 @@ const createInitialProjectChangeImportState = (): ProjectChangeImportState => ({
   message: null,
 });
 
-const RecordHelpDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+const RecordHelpDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [onClose]);
+
+  return (
   <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 p-4">
     <div data-record-help-dialog className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
       <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
@@ -467,7 +481,8 @@ const RecordHelpDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 const ProjectChangeImportPanel: React.FC<{
   state: ProjectChangeImportState;

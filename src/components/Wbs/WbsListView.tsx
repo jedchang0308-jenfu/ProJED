@@ -16,6 +16,7 @@ import { useTagStore } from '../../store/useTagStore';
 import { matchesTagFilters } from '../../utils/tags';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { prepareNewTaskNaming } from '../../utils/taskInteractions';
 
 interface WbsListViewProps {
   boardId: string;
@@ -29,7 +30,6 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
-  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   // 從全域 Store 取出顯示狀態
   const showDependencies = useBoardStore(s => s.showDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
@@ -190,7 +190,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       updatedAt: Date.now()
     };
     addNode(newNode);
-    setPendingTitleEditNodeId(newNode.id);
+    prepareNewTaskNaming(newNode.id);
   };
 
   return (

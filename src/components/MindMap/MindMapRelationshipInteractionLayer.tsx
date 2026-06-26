@@ -49,6 +49,7 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
   cancelRelationshipLabelEdit,
 }) => {
   const selectRelationshipFromEvent = (event: React.SyntheticEvent, path: MindMapRelationshipPath) => {
+    event.preventDefault();
     event.stopPropagation();
     selectRelationship(path.id);
   };
@@ -83,6 +84,9 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
               startRelationshipLabelEdit(path.id);
             }}
             onPointerDown={(event) => selectRelationshipFromEvent(event, path)}
+            onPointerUp={(event) => selectRelationshipFromEvent(event, path)}
+            onMouseDown={(event) => selectRelationshipFromEvent(event, path)}
+            onMouseUp={(event) => selectRelationshipFromEvent(event, path)}
             onKeyDown={(event) => handleRelationshipHotkey(event, path.id)}
             onPointerEnter={() => hoverRelationship(path.id)}
             onPointerLeave={() => clearRelationshipHover(path.id)}
@@ -120,6 +124,9 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
               startRelationshipLabelEdit(path.id);
             }}
             onPointerDown={(event) => selectRelationshipFromEvent(event, path)}
+            onPointerUp={(event) => selectRelationshipFromEvent(event, path)}
+            onMouseDown={(event) => selectRelationshipFromEvent(event, path)}
+            onMouseUp={(event) => selectRelationshipFromEvent(event, path)}
             onKeyDown={(event) => handleRelationshipHotkey(event, path.id)}
             onPointerEnter={() => hoverRelationship(path.id)}
             onPointerLeave={() => clearRelationshipHover(path.id)}
@@ -146,6 +153,9 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             startRelationshipLabelEdit(path.id);
           }}
           onPointerDown={(event) => selectRelationshipFromEvent(event, path)}
+          onPointerUp={(event) => selectRelationshipFromEvent(event, path)}
+          onMouseDown={(event) => selectRelationshipFromEvent(event, path)}
+          onMouseUp={(event) => selectRelationshipFromEvent(event, path)}
           onKeyDown={(event) => handleRelationshipHotkey(event, path.id)}
           onPointerEnter={() => hoverRelationship(path.id)}
           onPointerLeave={() => clearRelationshipHover(path.id)}

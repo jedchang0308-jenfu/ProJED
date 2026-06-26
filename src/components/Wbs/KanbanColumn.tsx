@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Link } from 'lucide-react';
+import { Plus, Link, Pencil } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
@@ -17,6 +17,7 @@ import { useTagStore } from '../../store/useTagStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { matchesTagFilters } from '../../utils/tags';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -38,7 +39,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
+  const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
+  const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
   const { canCreateTask, canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // 看板依賴選取 Context
@@ -67,10 +70,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
   useEffect(() => {
     if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
-    setEditValue(node.title || '新任務');
+    const initialValue = pendingTitleEditInitialValue ?? node.title ?? '新任務';
+    setEditValue(initialValue);
     setIsEditing(true);
     setPendingTitleEditNodeId(null);
-  }, [pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
+    window.requestAnimationFrame(() => {
+      const input = titleInputRef.current;
+      if (!input) return;
+      if (pendingTitleEditInitialValue !== null) input.setSelectionRange(initialValue.length, initialValue.length);
+    });
+  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
 
   const handleStartEdit = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -195,7 +204,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     };
 
     addNode(newNode);
-    setPendingTitleEditNodeId(newNode.id);
+    prepareNewTaskNaming(newNode.id);
   };
 
   const handleAddTaskSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -238,13 +247,19 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     >
       <div
         {...longPressHandlers}
+        data-task-id={nodeId}
+        data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
         className={`group flex flex-col gap-1 border-b border-slate-200/70 bg-white px-[10px] py-[8px] transition-colors hover:bg-primary/[0.02] ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
                     : 'cursor-crosshair hover:bg-amber-50/30'
                 : ''
-        }`}
+        } ${selectedTaskId === nodeId ? 'ring-2 ring-inset ring-primary/30 bg-primary/[0.04]' : ''}`}
+        onClick={(event) => {
+          if (isEditing || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+          selectAndOpenTaskDetails(nodeId);
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           setContextMenuState({
@@ -276,6 +291,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   onKeyDown={handleKeyDown}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
+                  data-task-title-input="true"
                   className="task-title-text min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none ring-2 ring-primary/30"
                 />
               ) : (
@@ -283,12 +299,22 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                   className={`task-title-text truncate text-sm font-medium transition-colors hover:text-primary ${
                     status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
                   }`}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={handleStartEdit}
-                  title="點擊以編輯任務名稱"
+                  title={node.title || '未命名任務'}
                 >
                   {node.title || '未命名任務'}
                 </h3>
+              )}
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  disabled={!canEditTask}
+                  data-task-interaction-control="true"
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+                  title="重新命名任務"
+                >
+                  <Pencil size={13} />
+                </button>
               )}
             </div>
           </div>

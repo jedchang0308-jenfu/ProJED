@@ -43,6 +43,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const updateNode = useWbsStore(s => s.updateNode);
     const wbsDependencies = useWbsStore(s => s.dependencies);
     const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+    const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const { canEditTask, canMoveTask } = useBoardPermissions();
     const [isCoarsePointer, setIsCoarsePointer] = useState(false);
     const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer;
@@ -424,11 +425,13 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             onMouseUp={(e) => {
                 // 只允許左鍵觸發點擊（防止右鍵觸發 setView）
                 if (e.button !== 0) return;
-                if (!dragState || !dragState.hasDragged) {
+                const latestDragState = dragStateRef.current;
+                if (!latestDragState || !latestDragState.hasDragged) {
                     onItemClick(item);
                 }
             }}
-            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+            data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
+            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
             style={{
                 left: x1,
                 width: width,

@@ -3,7 +3,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import type { TaskStatus } from '../../types';
 import { Input } from '../ui/Input';
-import { ChevronRight, ChevronDown, Link, Lock, Unlock } from 'lucide-react';
+import { ChevronRight, ChevronDown, Link, Lock, Unlock, Pencil } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -17,6 +17,7 @@ import { getNodeTags, matchesTagFilters } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
+import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -58,9 +59,12 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
   const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+  const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
+  const selectedTaskId = useBoardStore(s => s.selectedTaskId);
 
   const [localTitle, setLocalTitle] = useState(node?.title || '');
+  const [isTitleEditing, setIsTitleEditing] = useState(false);
   const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
   const [localEndDate, setLocalEndDate] = useState(node?.endDate || '');
 
@@ -80,8 +84,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   // ✅ 同步 Store 狀態到 Local State (確保 Undo/Redo 發生時畫面能正確更新)
   React.useEffect(() => {
-      setLocalTitle(node?.title || '');
-  }, [node?.title]);
+      if (!isTitleEditing) setLocalTitle(node?.title || '');
+  }, [node?.title, isTitleEditing]);
 
   React.useEffect(() => {
       setLocalStartDate(node?.startDate || '');
@@ -91,15 +95,21 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   React.useEffect(() => {
       if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
 
-      setLocalTitle(node.title || '新任務');
+      const initialValue = pendingTitleEditInitialValue ?? node.title ?? '新任務';
+      setLocalTitle(initialValue);
+      setIsTitleEditing(true);
       window.requestAnimationFrame(() => {
           const input = titleInputRef.current;
           if (!input) return;
           input.focus();
-          input.select();
+          if (pendingTitleEditInitialValue !== null) {
+              input.setSelectionRange(initialValue.length, initialValue.length);
+          } else {
+              input.select();
+          }
           setPendingTitleEditNodeId(null);
       });
-  }, [pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
+  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
 
   // 取得全域顯示設定
   const dependencyContext = React.useContext(WbsDependencyContext);
@@ -165,20 +175,41 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const handleToggle = () => setIsExpanded(!isExpanded);
 
   // ----- 行內編輯處理 -----
+  const startTitleEdit = (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!canEditTask || !node) return;
+    setLocalTitle(node.title || '新任務');
+    setIsTitleEditing(true);
+    window.requestAnimationFrame(() => {
+        const input = titleInputRef.current;
+        input?.focus();
+        input?.select();
+    });
+  };
+
   const handleTitleBlur = () => {
     if (!canEditTask) {
         setLocalTitle(node.title || '');
+        setIsTitleEditing(false);
         return;
     }
     if (localTitle.trim() !== node.title) {
         updateNode(node.id, { title: localTitle.trim() || '未命名任務' });
     }
+    setIsTitleEditing(false);
   };
 
   const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
+        e.preventDefault();
         (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setLocalTitle(node.title || '');
+        setIsTitleEditing(false);
     }
   };
 
@@ -355,7 +386,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 title: node.title
             });
         }}
-        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        onClick={(event) => {
+            if (isTitleEditing || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+            selectAndOpenTaskDetails(node.id);
+        }}
+        data-task-id={node.id}
+        data-task-selected={selectedTaskId === node.id ? 'true' : undefined}
+        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${selectedTaskId === node.id ? 'ring-2 ring-inset ring-primary/35 bg-primary/[0.04]' : ''} ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
@@ -382,18 +419,41 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
               <span className="flex-shrink-0 text-[10px] text-amber-600 border border-amber-300 bg-amber-50 px-1 py-0.5 rounded leading-none mr-1">里程碑</span>
           ) : null}
 
-          {/* 表格感 Input：透明背景、無邊框、focus時顯示底線或底色 */}
-          <Input
-             ref={titleInputRef}
-             type="text"
-             value={localTitle}
-             onChange={(e) => setLocalTitle(e.target.value)}
-             onBlur={handleTitleBlur}
-             onKeyDown={handleTitleKeyDown}
-             disabled={!canEditTask}
-             className={`task-title-text flex-1 min-w-0 h-auto border-0 border-b border-transparent bg-transparent px-1 py-0 text-sm font-medium transition-all focus:bg-white focus:border-blue-400 focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
-             placeholder="任務名稱"
-          />
+          {isTitleEditing ? (
+            <Input
+              ref={titleInputRef}
+              type="text"
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              disabled={!canEditTask}
+              data-task-title-input="true"
+              className={`task-title-text flex-1 min-w-0 h-auto border-0 border-b border-blue-400 bg-white px-1 py-0 text-sm font-medium transition-all focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
+              placeholder="任務名稱"
+            />
+          ) : (
+            <>
+              <span
+                className={`task-title-text flex-1 min-w-0 truncate px-1 text-sm font-medium ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
+                title={node.title || '未命名任務'}
+              >
+                {node.title || '未命名任務'}
+              </span>
+              <button
+                type="button"
+                onClick={startTitleEdit}
+                disabled={!canEditTask}
+                data-task-interaction-control="true"
+                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+                title="重新命名任務"
+              >
+                <Pencil size={13} />
+              </button>
+            </>
+          )}
 
           <div className="flex items-center gap-1 flex-shrink-0 w-24">
               <div className={`w-full bg-slate-200 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
