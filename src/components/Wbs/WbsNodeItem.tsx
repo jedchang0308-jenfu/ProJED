@@ -18,6 +18,7 @@ import { TagChip } from '../Tags/TagChip';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -62,6 +63,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
+  const touchTapGuard = useTouchTapGuard();
 
   const [localTitle, setLocalTitle] = useState(node?.title || '');
   const [isTitleEditing, setIsTitleEditing] = useState(false);
@@ -375,6 +377,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       <div 
         ref={setNodeRef}
         style={dndStyle}
+        {...touchTapGuard.handlers}
         onContextMenu={(e) => {
             e.preventDefault();
             setContextMenuState({
@@ -392,7 +395,8 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         }}
         data-task-id={node.id}
         data-task-selected={selectedTaskId === node.id ? 'true' : undefined}
-        className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${selectedTaskId === node.id ? 'ring-2 ring-inset ring-primary/35 bg-primary/[0.04]' : ''} ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        data-touch-tap-guard="true"
+        className={`mobile-pan-item grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${selectedTaskId === node.id ? 'ring-2 ring-inset ring-primary/35 bg-primary/[0.04]' : ''} ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}

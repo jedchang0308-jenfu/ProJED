@@ -111,6 +111,12 @@
   touch-action: pan-x pan-y;
 }
 
+.mobile-pan-surface,
+.mobile-pan-item,
+.mobile-pan-rail {
+  touch-action: pan-x pan-y;
+}
+
 .task-drag-hitbox,
 .kanban-drag-dot-hitbox {
   touch-action: none;
@@ -180,7 +186,89 @@
    ======================================== */
 
 /* 觸控裝置專用樣式 */
-@media (hover: none) and (pointer: coarse) {
+@media (max-width: 640px), (hover: none) and (pointer: coarse) {
+
+  /* 手機資訊密度：目標將主要留白壓到約 70%，增加同屏文字資訊量。 */
+  .app-main-nav {
+    height: 34px !important;
+    min-height: 34px !important;
+    gap: 6px !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .app-main-nav button {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .app-main-nav .btn-outline {
+    height: 30px !important;
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+
+  .app-board-title {
+    padding: 0 4px !important;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
+
+  .app-compact-toolbar {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .app-compact-toolbar-left,
+  .app-compact-toolbar-right {
+    gap: 7px !important;
+  }
+
+  .app-compact-toolbar-left {
+    margin-right: 7px !important;
+  }
+
+  .app-compact-canvas {
+    padding: 7px 8px !important;
+  }
+
+  .app-compact-segmented {
+    border-radius: 6px !important;
+    padding: 1px !important;
+  }
+
+  .app-compact-segmented-button {
+    height: 26px !important;
+    min-height: 26px !important;
+    gap: 4px !important;
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+    border-radius: 5px !important;
+  }
+
+  .app-compact-icon-button {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+    border-radius: 5px !important;
+  }
+
+  .app-compact-text-button {
+    height: 26px !important;
+    min-height: 26px !important;
+    gap: 4px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 6px !important;
+  }
+
+  .app-compact-meta-badge {
+    gap: 3px !important;
+    padding: 1px 4px !important;
+  }
 
   /* 拖動小點放大點擊區，但不增加實際欄寬與列高 */
   .task-drag-hitbox,
@@ -189,6 +277,7 @@
     margin: -8px !important;
     min-width: 44px;
     min-height: 44px;
+    opacity: 1 !important;
   }
 
   /* 防止文字選取干擾拖動 */
@@ -205,10 +294,10 @@
     padding: 16px;
   }
 
-  /* 按鈕觸控區域放大 */
+  /* 一般按鈕保持可點，但不再強制把工具列撐高。明確拖曳把手仍維持 44px 熱區。 */
   button {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 34px;
+    min-width: 34px;
   }
 
   /* 滾動容器觸控優化 */
@@ -217,13 +306,74 @@
     overscroll-behavior: contain;
   }
 
+  .mobile-pan-surface,
+  .mobile-pan-item {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .mobile-pan-item {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .mobile-pan-rail {
+    min-height: 34px;
+    touch-action: pan-x pan-y;
+  }
+
+  [data-mobile-pan-rail="gantt"] {
+    min-height: 40px;
+  }
+
+  [data-mobile-pan-surface="board"] {
+    gap: 8px !important;
+  }
+
+  [data-kanban-column],
+  [data-mobile-pan-surface="board"] > .flex-shrink-0 {
+    width: 252px !important;
+    border-radius: 6px !important;
+  }
+
+  [data-kanban-column-header] {
+    gap: 3px !important;
+    padding: 6px 7px !important;
+  }
+
+  [data-kanban-column-header] > div,
+  [data-kanban-column-header] .flex {
+    gap: 5px !important;
+  }
+
+  [data-mobile-pan-surface="kanban-column"] {
+    padding: 5px !important;
+    border-radius: 5px !important;
+  }
+
+  [data-kanban-column] form {
+    margin-top: 4px !important;
+  }
+
+  [data-kanban-column] input {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+
+  [data-kanban-column] form button {
+    min-height: 28px !important;
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+  }
+
   /* 手機看板任務卡片 Y 軸間距：不改字級，只壓縮垂直留白。 */
   .kanban-task-card {
-    margin-bottom: 2px;
+    margin-bottom: 1px;
+    border-radius: 6px !important;
   }
 
   .kanban-task-card-body {
-    padding: 2px 6px;
+    padding: 2px 5px;
   }
 
   .kanban-task-title-row,
@@ -240,7 +390,7 @@
   }
 
   .kanban-task-meta > * {
-    min-height: 18px;
+    min-height: 16px;
   }
 
   /* 手機下層任務區塊 Y 軸間距減半。 */
@@ -273,7 +423,61 @@
   }
 
   .kanban-card-dropzone.h-5 {
-    height: 20px;
+    height: 16px;
+  }
+
+  [data-mobile-pan-surface="wbs-list"] {
+    padding-bottom: 7px !important;
+  }
+
+  [data-mobile-pan-surface="wbs-list"] [data-touch-tap-guard="true"] {
+    min-height: 26px !important;
+    padding: 1px 7px !important;
+  }
+
+  [data-mobile-pan-surface="wbs-list"] [data-touch-tap-guard="true"] button:not(.task-drag-hitbox) {
+    min-height: 24px !important;
+    min-width: 24px !important;
+    padding: 1px !important;
+  }
+
+  [data-mobile-pan-surface="wbs-list"] .task-title-text {
+    line-height: 1.22 !important;
+  }
+
+  [data-mindmap-surface] {
+    --mindmap-root-gap: 34px !important;
+    --mindmap-node-gap: 14px !important;
+    --mindmap-children-gap: 8px !important;
+    --mindmap-node-min-height: 30px !important;
+    --mindmap-node-max-width: 240px !important;
+    --mindmap-node-pad-x: 7px !important;
+    --mindmap-node-pad-y: 4px !important;
+    --mindmap-toggle-size: 16px !important;
+    --mindmap-toggle-icon-size: 12px !important;
+    --mindmap-date-pad-x: 4px !important;
+    --mindmap-date-pad-y: 1px !important;
+    --mindmap-root-side-gap: 11px !important;
+    --mindmap-root-side-pad: 6px !important;
+    --mindmap-center-min-height: 48px !important;
+    --mindmap-center-pad-x: 17px !important;
+    --mindmap-center-pad-y: 11px !important;
+    min-height: 170vh !important;
+    min-width: 210vw !important;
+    gap: 34px !important;
+    padding: 34vh 40vw !important;
+  }
+
+  [data-mindmap-node] [data-mindmap-node-dates] {
+    margin-top: 2px !important;
+  }
+
+  [data-mobile-pan-surface="gantt"] [data-task-id] {
+    border-radius: 5px !important;
+  }
+
+  [data-mobile-pan-surface="gantt"] .task-title-text {
+    font-size: 10px !important;
   }
 }
 

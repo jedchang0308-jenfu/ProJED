@@ -24,6 +24,7 @@ import useRecordStore from '../store/useRecordStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
+import { useCoarsePointer } from '../hooks/useCoarsePointer';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
@@ -64,6 +65,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const guardRecordDraft = useRecordDraftGuard();
   const boardMemberCount = useMemberStore(state => state.boardMembers.length);
   const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
+  const [isSmallViewport, setIsSmallViewport] = React.useState(false);
+  const isCoarsePointer = useCoarsePointer();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
   const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
@@ -80,8 +83,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
   const isTaskFilterView = ['list', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
+  const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
+  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar', 'records']), []);
 
   const handleModeChange = (nextView: ViewMode) => {
+    if (isMobileBoardOnly && nextView !== 'board') return;
     setView(nextView);
   };
 
@@ -125,6 +131,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       title: '查看與整理會議紀錄、會後會議紀錄與個人工作紀錄',
     },
   ];
+  const visibleModeSwitcherOptions = isMobileBoardOnly
+    ? modeSwitcherOptions.filter(option => option.value === 'board')
+    : modeSwitcherOptions;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia('(max-width: 640px)');
+    const updateSmallViewport = () => setIsSmallViewport(query.matches);
+    updateSmallViewport();
+    query.addEventListener?.('change', updateSmallViewport);
+    return () => query.removeEventListener?.('change', updateSmallViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileBoardOnly || !activeWorkspace || !activeBoard) return;
+    if (!mobileBlockedViews.has(currentView)) return;
+    setView('board');
+  }, [activeBoard, activeWorkspace, currentView, isMobileBoardOnly, mobileBlockedViews, setView]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -154,8 +178,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, [canRedo, canUndo, exitSettings, isSettingsScopeView, redo, undo]);
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-800">
-      <nav className="z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 shadow-sm sm:px-4">
+    <div className="flex h-screen flex-col bg-slate-50 text-slate-800" data-mobile-density="compact">
+      <nav className="app-main-nav z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 shadow-sm sm:px-4">
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <button
             type="button"
@@ -208,7 +232,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   suppressContentEditableWarning
                   title={`目前位置：${activeWorkspace.title} / ${activeBoard.title}`}
                   onBlur={(event) => updateBoardTitle(activeWorkspace.id, activeBoard.id, event.currentTarget.innerText)}
-                  className="min-w-[1.5rem] max-w-[4.5rem] cursor-text truncate rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:max-w-[180px] sm:px-2 sm:text-sm md:max-w-[260px]"
+                  className="app-board-title min-w-[1.5rem] max-w-[4.5rem] cursor-text truncate rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:max-w-[180px] sm:px-2 sm:text-sm md:max-w-[260px]"
                 >
                   {activeBoard.title}
                 </h1>
@@ -216,7 +240,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <div className="ml-0 flex items-center gap-1 border-l-0 border-slate-200 pl-0 sm:ml-[10px] sm:gap-[8px] sm:border-l sm:pl-[10px]">
                   <ModeSwitcher
                     value={currentView}
-                    options={modeSwitcherOptions}
+                    options={visibleModeSwitcherOptions}
                     onChange={handleModeChange}
                     disabled={isSelectingMode}
                     disabledTitle={isMeetingMode ? '紀錄中先離開紀錄再切換檢視' : '選取模式中無法切換檢視'}

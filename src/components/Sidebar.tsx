@@ -127,6 +127,13 @@ const Sidebar = () => {
     });
   };
 
+  const handleWorkspaceTitleKeyDown = (event, workspace) => {
+    if (isTextInputEvent(event)) return;
+    if (event.key !== 'F2') return;
+    event.preventDefault();
+    startWorkspaceTitleEdit(workspace);
+  };
+
   return (
     <aside className={`relative z-30 flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-10'}`}>
       {!isSidebarOpen ? (
@@ -192,14 +199,15 @@ const Sidebar = () => {
                       aria-label="編輯工作區名稱"
                     />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => startWorkspaceTitleEdit(ws)}
+                    <span
+                      tabIndex={0}
+                      data-sidebar-workspace-title="true"
+                      onKeyDown={(event) => handleWorkspaceTitleKeyDown(event, ws)}
                       className="min-w-0 flex-1 truncate rounded text-left text-xs font-semibold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      title="點擊改名，右鍵開啟選單"
+                      title="右鍵開啟選單，F2 重新命名"
                     >
                       {ws.title}
-                    </button>
+                    </span>
                   )}
                 </div>
 
@@ -226,12 +234,20 @@ const Sidebar = () => {
                         role="button"
                         tabIndex={0}
                         aria-disabled={isBoardSwitchLocked && !isCurrentBoard}
+                        data-sidebar-board-row="true"
                         data-sidebar-current-settings-project={isCurrentSettingsProject ? 'true' : undefined}
                         title={boardItemTitle}
                         onClick={handleBoardClick}
                         onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
                         onKeyDown={(event) => {
                           if (isTextInputEvent(event)) return;
+                          if (event.key === 'F2') {
+                            event.preventDefault();
+                            if (canEditBoardSettings) {
+                              startBoardTitleEdit(ws, board);
+                            }
+                            return;
+                          }
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
                             handleBoardClick();
@@ -280,18 +296,13 @@ const Sidebar = () => {
                             aria-label="編輯看板名稱"
                           />
                         ) : (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (!canEditBoardSettings) return;
-                              startBoardTitleEdit(ws, board);
-                            }}
-                            className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            title={canEditBoardSettings ? '點擊改名，右鍵開啟選單' : '你沒有編輯看板設定的權限'}
+                          <span
+                            data-sidebar-board-title="true"
+                            className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium"
+                            title={canEditBoardSettings ? '點擊開啟看板，右鍵開啟選單，F2 重新命名' : '點擊開啟看板'}
                           >
                             {board.title}
-                          </button>
+                          </span>
                         )}
 
                         {isCurrentSettingsProject ? (

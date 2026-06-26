@@ -5,6 +5,8 @@ import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
+import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
 
@@ -34,28 +36,21 @@ interface GanttTaskBarProps {
     viewport: { scrollLeft: number; width: number };
     scrollAreaRef: React.RefObject<HTMLDivElement | null>;
     onItemClick: (item: TaskItem) => void;
+    rowHeight?: number;
 }
 
 const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     item, colWidth, mode, gridStart, gridEnd, activeBoard, activeWorkspaceId,
-    setSimulatedDates, simulatedDates, showDependencies, viewport, scrollAreaRef, onItemClick
+    setSimulatedDates, simulatedDates, showDependencies, viewport, scrollAreaRef, onItemClick, rowHeight = BAR_HEIGHT
 }) => {
     const updateNode = useWbsStore(s => s.updateNode);
     const wbsDependencies = useWbsStore(s => s.dependencies);
     const setContextMenuState = useBoardStore(s => s.setContextMenuState);
     const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const { canEditTask, canMoveTask } = useBoardPermissions();
-    const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+    const isCoarsePointer = useCoarsePointer();
+    const touchTapGuard = useTouchTapGuard();
     const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer;
-
-    useEffect(() => {
-        if (typeof window === 'undefined' || !window.matchMedia) return;
-        const query = window.matchMedia('(pointer: coarse)');
-        const updatePointerMode = () => setIsCoarsePointer(query.matches);
-        updatePointerMode();
-        query.addEventListener?.('change', updatePointerMode);
-        return () => query.removeEventListener?.('change', updatePointerMode);
-    }, []);
 
     // Hover state
     const [isHovered, setIsHovered] = useState(false);
@@ -105,7 +100,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const x1 = getX(start, colWidth, mode, gridStart);
     const x2 = getX(dayjs(end).add(1, 'day'), colWidth, mode, gridStart);
     let width = Math.max(x2 - x1, 24);
-    const barHeight = COMPACT_DIMENSIONS.ganttBarHeight;
+    const barHeight = Math.min(COMPACT_DIMENSIONS.ganttBarHeight, Math.max(14, rowHeight - 7));
 
     const isDragging = dragState && dragState.item.id === item.id;
     const isRelated = isHovered;
@@ -410,6 +405,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     return (
         <div
             data-task-id={item.id}
+            {...touchTapGuard.handlers}
             onMouseDown={(e) => {
                 // 只允許左鍵觸發拖曳（防止右鍵誤觸跳轉）
                 if (e.button !== 0) return;
@@ -425,18 +421,20 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             onMouseUp={(e) => {
                 // 只允許左鍵觸發點擊（防止右鍵觸發 setView）
                 if (e.button !== 0) return;
+                if (touchTapGuard.shouldSuppressTap()) return;
                 const latestDragState = dragStateRef.current;
                 if (!latestDragState || !latestDragState.hasDragged) {
                     onItemClick(item);
                 }
             }}
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
-            className={`absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-not-allowed' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+            data-touch-tap-guard="true"
+            className={`mobile-pan-item absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-pointer' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
             style={{
                 left: x1,
                 width: width,
                 height: barHeight,
-                top: item.row * BAR_HEIGHT + (BAR_HEIGHT - barHeight) / 2,
+                top: item.row * rowHeight + (rowHeight - barHeight) / 2,
                 transition: isDragging ? 'none' : 'all 0.2s'
             }}
         >

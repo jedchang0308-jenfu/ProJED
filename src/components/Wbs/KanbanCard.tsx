@@ -26,6 +26,7 @@ import type { TaskStatus } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -95,6 +96,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
+  const touchTapGuard = useTouchTapGuard();
 
   // 進入編輯模式時自動聚焦並全選文字
   useEffect(() => {
@@ -270,8 +272,25 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const cardLongPressHandlers = {
     ...longPressHandlers,
     onTouchStart: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchStart(e);
       if (isFromTaskDragHandle(e.target)) return;
       longPressHandlers.onTouchStart(e);
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchMove(e);
+      longPressHandlers.onTouchMove(e);
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchEnd(e);
+      longPressHandlers.onTouchEnd(e);
+    },
+    onTouchCancel: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchCancel(e);
+      longPressHandlers.onTouchCancel(e);
+    },
+    onClickCapture: (e: React.MouseEvent) => {
+      touchTapGuard.handlers.onClickCapture(e);
+      if (!e.isPropagationStopped()) longPressHandlers.onClickCapture(e);
     },
   };
 
@@ -300,7 +319,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       }}
       data-task-id={nodeId}
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
-      className={`kanban-task-card relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
+      data-touch-tap-guard="true"
+      className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
           : isRecordCaptureMode

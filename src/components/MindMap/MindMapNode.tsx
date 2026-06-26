@@ -2,6 +2,8 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import type { TaskNode } from '../../types';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
+import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 
 export type MindMapDirection = 'left' | 'right';
 export type MindMapDropMode = 'before' | 'after' | 'child';
@@ -78,6 +80,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   renderChild,
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const isCoarsePointer = useCoarsePointer();
+  const touchTapGuard = useTouchTapGuard();
   const isSelected = selectedNodeId === node.id;
   const isEditing = editingNodeId === node.id;
   const isExpanded = expandedNodeIds.has(node.id);
@@ -117,7 +121,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           data-mindmap-node-direction={direction}
           data-mindmap-parent-id={node.parentId || ''}
           data-mindmap-node-order={node.order}
-          draggable={canMoveTask && !isEditing}
+          draggable={canMoveTask && !isEditing && !isCoarsePointer}
+          {...touchTapGuard.handlers}
           onClick={(event) => {
             event.stopPropagation();
             if (isRelationshipModeActive) {
@@ -139,7 +144,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             if (!isRelationshipModeActive) onSelect(node.id);
           }}
           onDragStart={(event) => {
-            if (!canMoveTask || isEditing) {
+            if (!canMoveTask || isEditing || isCoarsePointer) {
               event.preventDefault();
               return;
             }
@@ -151,7 +156,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragEnd={onDragEnd}
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
-          className={`relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${getDropClasses(dropTarget, node.id)}`}
+          data-touch-tap-guard="true"
+          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isEditing && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
         >
           {hasChildren ? (
             <button

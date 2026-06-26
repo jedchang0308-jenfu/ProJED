@@ -503,7 +503,10 @@ const BoardView = () => {
                 )}
 
                 {/* 列表畫布 (Lists Canvas) */}
-                <div className={`scroll-container flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}>
+                <div
+                    className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}
+                    data-mobile-pan-surface="board"
+                >
                     <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                         {rootNodes.map(node => (
                             <KanbanColumn

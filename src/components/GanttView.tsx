@@ -10,6 +10,7 @@ import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
 import { compactClassNames, compactIconButtonClass, compactSegmentedButtonClass } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { useCoarsePointer } from '../hooks/useCoarsePointer';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -27,6 +28,8 @@ const GanttView = () => {
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+    const isCoarsePointer = useCoarsePointer();
+    const ganttRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
 
     const toggleCollapse = (id: string) => {
         setCollapsedIds(prev => {
@@ -255,15 +258,20 @@ const GanttView = () => {
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
-                    rowHeight={BAR_HEIGHT}
+                    rowHeight={ganttRowHeight}
                 />
 
                 {/* Right Timeline */}
                 <div className="flex-1 overflow-hidden relative">
-                    <div ref={scrollAreaRef} onScroll={handleScroll} className="h-full overflow-scroll relative select-none bg-white scrollbar-gantt">
+                    <div
+                        ref={scrollAreaRef}
+                        onScroll={handleScroll}
+                        className="mobile-pan-surface h-full overflow-scroll relative select-none bg-white scrollbar-gantt"
+                        data-mobile-pan-surface="gantt"
+                    >
                         <GanttHeader mode={mode} gridStart={gridStart} totalUnits={totalUnits} colWidth={colWidth} />
 
-                        <div className="relative" style={{ width: totalUnits * colWidth, minHeight: '100%', height: `calc(${Math.max(flattenedItems.length * BAR_HEIGHT, 100)}px + 65vh)` }}>
+                        <div className="relative" style={{ width: totalUnits * colWidth, minHeight: '100%', height: `calc(${Math.max(flattenedItems.length * ganttRowHeight, 100)}px + 65vh)` }}>
                             
                             <GanttGrid mode={mode} gridStart={gridStart} totalUnits={totalUnits} colWidth={colWidth} />
                             
@@ -285,8 +293,11 @@ const GanttView = () => {
                                     viewport={viewport}
                                     scrollAreaRef={scrollAreaRef}
                                     onItemClick={handleItemClick}
+                                    rowHeight={ganttRowHeight}
                                 />
                             ))}
+
+                            <div className="mobile-pan-rail absolute bottom-0 left-0 right-0" data-mobile-pan-rail="gantt" aria-hidden="true" />
                         </div>
                     </div>
                 </div>

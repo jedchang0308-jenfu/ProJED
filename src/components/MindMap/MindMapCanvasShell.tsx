@@ -32,9 +32,10 @@ const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
 }) => (
   <div
     ref={surfaceRef}
-    className={`min-h-0 flex-1 overflow-auto ${compactClassNames.canvas}`}
+    className={`mobile-pan-surface min-h-0 flex-1 overflow-auto ${compactClassNames.canvas}`}
     onWheel={onWheel}
     onMouseDown={onMouseDown}
+    data-mobile-pan-surface="mindmap"
     data-mindmap-zoom-level={zoomLevelText}
     data-mindmap-zoom-interaction="preview-then-vector-commit"
     data-mindmap-middle-pan="true"
@@ -44,7 +45,7 @@ const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
         ref={contentRef}
         role="tree"
         aria-label="WBS 心智圖"
-        className="relative flex min-h-[220vh] min-w-[260vw] items-center justify-center gap-[var(--mindmap-root-gap)] px-[55vw] py-[45vh]"
+        className="mobile-pan-surface relative flex min-h-[220vh] min-w-[260vw] items-center justify-center gap-[var(--mindmap-root-gap)] px-[55vw] py-[45vh]"
         style={mapContentStyle}
         onClick={onContentClick}
         data-mindmap-surface
