@@ -2,6 +2,19 @@
 
 ## Backlog Update - 2026-06-26
 
+### DEV-034: 手機看板全區拖移改善
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-034 | Implemented / Browser QC Passed | 交付點 | P0 mobile board UX | 手機維持只有看板模式；補強看板主要內容區的全區拖移，讓卡片、下層任務、欄位空白與看板空白都可點住移動畫面，同時保留短點擊開詳情、拖曳把手、input、日期/依賴控制。 | `ai-doc/specs/SPEC-034-mobile-board-full-surface-pan.md`, `ai-doc/qa/QA-DEV-034-mobile-board-full-surface-pan.md`, `ai-doc/qc/QC-DEV-034-mobile-board-full-surface-pan.md`, upgraded `verify:dev-029-mobile-pan-first-interactions`, DEV-031 browser regression |
+
+驗收重點:
+- 手機 / coarse pointer 下仍只顯示看板模式。
+- 從卡片、下層任務、欄位空白處或看板空白處拖移，對應 board `scrollLeft` 或 column `scrollTop` 必須有可量測變化。
+- pan 後不得誤開 `TaskDetailsModal`；短點擊卡片與下層任務仍開正確任務詳情。
+- 新增任務 input、日期/依賴控制、展開收合與拖曳把手不得被全區 pan 攔截。
+- 390x844 viewport 必須通過 visible error sweep，且不得有重疊、裁切、不可操作或非預期 overflow。
+
 ### DEV-028: 四模式一致的 Trello-like 任務操作契約
 
 | DEV | Status | Type | Priority | Scope | Evidence |
@@ -226,7 +239,10 @@ DEV-020 狀態風險：
 | DEV-012 | In Verification | 交付點 | P1 | AI 會議紀錄自然語言品質提升 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` |
 | DEV-013 | Done | 交付點 | P1 | 右鍵清單任務複製，包含子任務與子樹內部依賴 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md` |
 | DEV-020 | Done | 交付點 | P1 | 紀錄功能重構與專案變化匯入流程 | `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` |
+| DEV-026 | Implemented / Browser Smoke Passed | 交付點 | P1 UI/UX migration | Trello-like 看板分享體驗 | `ai-doc/specs/SPEC-026-trello-like-board-share-ui.md` |
 | DEV-027 | Implemented / Static + Browser Smoke Passed | 交付點 | P1 planning UX migration | Xmind-like 心智圖模式 | `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md` |
+| DEV-028 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 交付點 | P0 UI/UX interaction consistency | 四模式一致的 Trello-like 任務操作契約 | `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` |
+| DEV-034 | Implemented / Browser QC Passed | 交付點 | P0 mobile board UX | 手機看板全區拖移改善 | `ai-doc/specs/SPEC-034-mobile-board-full-surface-pan.md`, `ai-doc/qc/QC-DEV-034-mobile-board-full-surface-pan.md` |
 
 ## Active 開發點
 

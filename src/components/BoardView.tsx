@@ -13,6 +13,7 @@ import { Check, Plus, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
+import { useMobileBoardDragScroll } from '../hooks/useMobileBoardDragScroll';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import useBoardStore from '../store/useBoardStore';
@@ -50,6 +51,8 @@ const BoardView = () => {
     const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
+    const boardPanSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+    useMobileBoardDragScroll(boardPanSurfaceRef);
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
@@ -504,7 +507,9 @@ const BoardView = () => {
 
                 {/* 列表畫布 (Lists Canvas) */}
                 <div
+                    ref={boardPanSurfaceRef}
                     className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}
+                    data-mobile-board-pan="true"
                     data-mobile-pan-surface="board"
                 >
                     <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>

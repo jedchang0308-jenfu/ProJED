@@ -431,6 +431,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             onChange={(event) => setNewTaskTitle(event.target.value)}
             disabled={!canCreateTask}
             placeholder="輸入任務名稱"
+            data-mobile-board-pan-allow="true"
             className="h-8 bg-white text-xs"
           />
           <Button
@@ -439,6 +440,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             size="none"
             fullWidth
             disabled={!canCreateTask}
+            data-mobile-board-pan-allow="true"
             className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold group"
           >
             <Plus size={14} className="transition-transform group-hover:scale-110" />

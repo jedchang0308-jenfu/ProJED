@@ -1,5 +1,53 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-06-26
+
+### DEV-034: 手機看板全區拖移改善
+
+狀態: Implemented / Browser QC Passed
+節點類型: 交付點
+優先級: P0 mobile board UX
+父交付點: 無
+是否計入產品交付完成: 是
+建立日期: 2026-06-26
+
+關聯需求:
+- 使用者確認手機應維持只有看板模式，本需求只針對手機看板模式。
+- 使用者回報手機看板「點住移動」範圍太小，實際操作時很難移動畫面。
+- 既有 DEV-029 驗證只證明 pan 後不誤開詳情，未證明從卡片、下層任務、欄位空白與看板空白拖移時畫面真的會移動。
+
+任務目標:
+- 手機 / coarse pointer 下，看板主要內容區都能自然拖移：卡片、下層任務、欄位內容、欄位空白處、看板空白處。
+- 保留手機 board-only routing，不開放清單、心智圖、甘特、日曆或紀錄庫手機模式。
+- 保留短點擊開任務詳情、拖曳把手移動任務、新增任務 input、日期 / 依賴控制與展開收合按鈕。
+- 升級 DEV-029 verifier，從「pan 不誤開詳情」提升為「多種看板位置 pan 會造成實際 scroll displacement」。
+
+交付文件:
+- `ai-doc/specs/SPEC-034-mobile-board-full-surface-pan.md`
+- `ai-doc/qa/QA-DEV-034-mobile-board-full-surface-pan.md`
+- `ai-doc/qc/QC-DEV-034-mobile-board-full-surface-pan.md`
+
+RD exit gate:
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`
+- `npm.cmd run verify:dev-031-mobile-density`
+- `npm.cmd run verify:dev-031-mobile-density-browser`
+- 視實作觸及範圍重跑 `verify:dev-032-kanban-all-level-task-details-browser`、`verify:dev-033-task-details-title-edit-browser`、`tsc --noEmit`、`lint --quiet`、`build:test`。
+
+PM Gate:
+- Cross-spec check: DEV-034 相容 DEV-029 mobile pan-first、DEV-031 mobile density、DEV-028 click-to-details / explicit rename / drag-handle 契約。
+- ADR: 不需要。此變更是局部 UI gesture handling，不改資料模型、權限、狀態機、release gate 或跨模組資料契約。
+- Blocker: 無。RD 已依 SPEC-034 與 QA-DEV-034 完成實作與 browser QC。
+
+Implementation / QC evidence:
+- 新增 `src/hooks/useMobileBoardDragScroll.ts`，以 native capture touch listener 支援手機看板全區拖移。
+- `src/components/BoardView.tsx` 已將 hook 掛到外層 board scroll surface，且不解除 mobile board-only。
+- `scripts/verify-dev-029-mobile-pan-first-interactions-browser.pw.js` 已升級為實際量測 `scrollLeft` / `scrollTop` displacement。
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`: Pass，23/23。
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`: Pass。
+- `npm.cmd run verify:dev-031-mobile-density-browser`: Pass。
+- `npm.cmd run build`: Pass。
+
 ## PM Update - 2026-06-19
 
 ### DEV-028: 四模式一致的 Trello-like 任務操作契約
@@ -703,12 +751,13 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 2 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
-| 3 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
-| 4 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-027 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
-| 5 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
-| 6 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
+| 1 | DEV-034 手機看板全區拖移改善 RD | Implemented / Browser QC Passed | RD / QC | 已完成 mobile board full-surface drag-scroll，並通過 DEV-029 static/browser、DEV-031 browser regression 與 build。 |
+| 2 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 3 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
+| 4 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
+| 5 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-027 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
+| 6 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
+| 7 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
 
 ---
 
@@ -732,6 +781,7 @@ CAPA 來源：
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
 | DEV-028 | 交付點 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`verify:dev-028-cross-mode-task-interactions`、browser smoke | 依 QA-DEV-028 補人工親自點擊 QC |
+| DEV-034 | 交付點 | Implemented / Browser QC Passed | 是 | 手機看板全區拖移改善 | `SPEC-034`、`QA-DEV-034`、`QC-DEV-034`、`verify:dev-029-mobile-pan-first-interactions`、browser verifier、DEV-031 browser density gate | 觀察真機手勢回饋 |
 
 ### 交付點完成率
 
@@ -739,6 +789,7 @@ CAPA 來源：
 - In Verification：2 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Browser Smoke Passed / Manual Click QC Pending：1 個交付點。
+- Implemented / Browser QC Passed：1 個交付點。
 - Ready：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。

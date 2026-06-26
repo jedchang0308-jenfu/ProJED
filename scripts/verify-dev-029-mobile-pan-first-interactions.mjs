@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   useCoarsePointer: 'src/hooks/useCoarsePointer.ts',
   useTouchTapGuard: 'src/hooks/useTouchTapGuard.ts',
+  mobileBoardDragScroll: 'src/hooks/useMobileBoardDragScroll.ts',
   css: 'src/index.css',
   boardView: 'src/components/BoardView.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
@@ -59,12 +60,36 @@ assert(
 assert(
   'board mode exposes pan surfaces, tap guard, and bottom rail',
   source.boardView.includes('data-mobile-pan-surface="board"') &&
+    source.boardView.includes('data-mobile-board-pan="true"') &&
+    source.boardView.includes('useMobileBoardDragScroll(boardPanSurfaceRef)') &&
     source.kanbanColumn.includes('data-mobile-pan-surface="kanban-column"') &&
     source.kanbanColumn.includes('data-mobile-pan-rail="kanban-column"') &&
+    source.kanbanColumn.includes('data-mobile-board-pan-allow="true"') &&
     source.kanbanCard.includes('useTouchTapGuard') &&
     source.kanbanCard.includes('data-touch-tap-guard="true"') &&
     source.kanbanCard.includes('mobile-pan-item') &&
     source.kanbanCard.includes('selectAndOpenTaskDetails(nodeId)'),
+);
+
+assert(
+  'mobile board drag-scroll hook covers full board surface and preserves controls',
+  source.mobileBoardDragScroll.includes('addEventListener') &&
+    source.mobileBoardDragScroll.includes("surface.addEventListener('touchstart', handleTouchStart, { capture: true") &&
+    source.mobileBoardDragScroll.includes("surface.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false })") &&
+    source.mobileBoardDragScroll.includes("surface.addEventListener('click', handleClickCapture, true)") &&
+    source.mobileBoardDragScroll.includes('Math.hypot(totalX, totalY) > threshold') &&
+    source.mobileBoardDragScroll.includes('surface.scrollLeft -= deltaX') &&
+    source.mobileBoardDragScroll.includes('gesture.columnSurface.scrollTop -= deltaY') &&
+    source.mobileBoardDragScroll.includes('data-mobile-board-pan-active') &&
+    source.mobileBoardDragScroll.includes('data-mobile-board-pan-suppressed-click') &&
+    source.mobileBoardDragScroll.includes('PAN_ALLOWED_INTERACTIVE_SELECTOR') &&
+    source.mobileBoardDragScroll.includes('data-mobile-board-pan-allow="true"') &&
+    source.mobileBoardDragScroll.includes('[data-task-drag-handle="true"]') &&
+    source.mobileBoardDragScroll.includes('[data-task-interaction-control="true"]') &&
+    source.mobileBoardDragScroll.includes('[data-task-details-modal="true"]') &&
+    source.mobileBoardDragScroll.includes('[data-mobile-pan-surface="kanban-column"]') &&
+    source.mobileBoardDragScroll.includes('.kanban-checklist-item') &&
+    source.mobileBoardDragScroll.includes('.kanban-task-card'),
 );
 
 assert(
@@ -85,12 +110,23 @@ assert(
 );
 
 assert(
-  'browser verifier covers mobile board-only pan-first contract',
-  source.browserVerifier.includes('setCoarsePointer') &&
+  'browser verifier covers mobile board-only full-surface pan contract',
+    source.browserVerifier.includes('setCoarsePointer') &&
     source.browserVerifier.includes('mobile should only expose board mode') &&
     source.browserVerifier.includes('dispatchTouchSequence') &&
+    source.browserVerifier.includes("step = 'card horizontal pan'") &&
+    source.browserVerifier.includes("step = 'checklist horizontal pan'") &&
+    source.browserVerifier.includes("step = 'checklist vertical pan'") &&
+    source.browserVerifier.includes("step = 'column blank vertical pan'") &&
+    source.browserVerifier.includes("step = 'add task input vertical pan'") &&
+    source.browserVerifier.includes("step = 'add task button vertical pan'") &&
+    source.browserVerifier.includes("step = 'board blank horizontal pan'") &&
+    source.browserVerifier.includes('drag should horizontally scroll board') &&
+    source.browserVerifier.includes('drag should vertically scroll column') &&
     source.browserVerifier.includes('pan should not open TaskDetailsModal') &&
-    source.browserVerifier.includes('tap should open TaskDetailsModal'),
+    source.browserVerifier.includes('tap should open TaskDetailsModal') &&
+    source.browserVerifier.includes('input should accept focus and text without mobile board pan interference') &&
+    source.browserVerifier.includes('should have no visible runtime errors'),
 );
 
 const failed = results.filter(result => !result.ok);
