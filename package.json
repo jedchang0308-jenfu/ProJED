@@ -67,6 +67,8 @@
     "verify:dev-027g-mindmap-system-health": "node scripts/verify-dev-027g-mindmap-system-health.mjs",
     "verify:dev-027g-mindmap-bundle-health": "node scripts/verify-dev-027g-mindmap-bundle-health.mjs",
     "verify:dev-027g-mindmap-system-health-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev027G-system-health -Filename scripts/verify-dev-027g-mindmap-system-health-browser.pw.js -OutputDirectory output/playwright",
+    "verify:dev-028-cross-mode-task-interactions": "node scripts/verify-dev-028-cross-mode-task-interactions.mjs",
+    "verify:dev-028-cross-mode-task-interactions-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev028-cross-mode -Filename scripts/verify-dev-028-cross-mode-task-interactions-browser.pw.js -OutputDirectory output/playwright",
     "verify:settings-project-context": "node scripts/verify-settings-project-context.mjs",
     "verify:settings-project-context-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=settings-project-context open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=settings-project-context run-code --filename=scripts/verify-settings-project-context-browser.pw.js\"",
     "verify:dev-013-task-duplicate": "node scripts/verify-dev-013-task-duplicate.mjs",

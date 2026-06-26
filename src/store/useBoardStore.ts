@@ -54,7 +54,7 @@ const safeSetItem = (key: string, value: string | null) => {
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
+        if (stored && ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }
@@ -87,7 +87,10 @@ const useBoardStore = create<BoardStore>()(
         ...getStoredFilters(),
         dependencySelection: null,
         contextMenuState: null,
+        selectedTaskId: null,
         pendingTitleEditNodeId: null,
+        pendingTitleEditInitialValue: null,
+        pendingDirectTitleEditNodeId: null,
         pendingWorkspaceTitleEditId: null,
         pendingBoardTitleEdit: null,
 
@@ -108,7 +111,12 @@ const useBoardStore = create<BoardStore>()(
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
         setContextMenuState: (state) => set({ contextMenuState: state }),
-        setPendingTitleEditNodeId: (nodeId) => set({ pendingTitleEditNodeId: nodeId }),
+        setSelectedTaskId: (nodeId) => set({ selectedTaskId: nodeId }),
+        setPendingTitleEditNodeId: (nodeId, initialValue = null) => set({
+            pendingTitleEditNodeId: nodeId,
+            pendingTitleEditInitialValue: nodeId ? initialValue : null,
+        }),
+        setPendingDirectTitleEditNodeId: (nodeId) => set({ pendingDirectTitleEditNodeId: nodeId }),
         setPendingWorkspaceTitleEditId: (workspaceId) => set({ pendingWorkspaceTitleEditId: workspaceId }),
         setPendingBoardTitleEdit: (target) => set({ pendingBoardTitleEdit: target }),
 

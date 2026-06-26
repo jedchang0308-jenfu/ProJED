@@ -142,6 +142,7 @@ import {
   syncCommittedZoomTelemetry,
   type MindMapZoomAnchor,
 } from './mindMapZoom';
+import { openTaskDetails } from '../../utils/taskInteractions';
 
 type RootSideDropTarget = MindMapDirection | null;
 
@@ -173,6 +174,8 @@ const MindMapView: React.FC = () => {
   const dueWithinDays = useBoardStore(state => state.dueWithinDays);
   const selectedAssigneeIds = useBoardStore(state => state.selectedAssigneeIds);
   const showStartDate = useBoardStore(state => state.showStartDate);
+  const setSelectedTaskId = useBoardStore(state => state.setSelectedTaskId);
+  const setContextMenuState = useBoardStore(state => state.setContextMenuState);
   const selectedTagIds = useTagStore(state => state.selectedTagIds);
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, isReadOnly } = useBoardPermissions();
 
@@ -921,7 +924,42 @@ const MindMapView: React.FC = () => {
     finishRelationshipDraftMode();
   }, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode]);
 
-  const handleSurfaceClick = React.useCallback(() => {
+  const handleNodeOpenDetails = React.useCallback((nodeId: string) => {
+    if (relationshipToolActive || editingNodeId || draggedNodeId) return;
+    selectNode(nodeId);
+    setSelectedTaskId(nodeId);
+    openTaskDetails(nodeId);
+  }, [draggedNodeId, editingNodeId, relationshipToolActive, selectNode, setSelectedTaskId]);
+
+  const handleNodeContextMenu = React.useCallback((nodeId: string, title: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    selectNode(nodeId);
+    setSelectedTaskId(nodeId);
+    setContextMenuState({
+      kind: 'task',
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId,
+      title,
+    });
+  }, [selectNode, setContextMenuState, setSelectedTaskId]);
+
+  const handleSurfaceClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      event.target instanceof Element &&
+      event.target.closest([
+        '[data-mindmap-note-relationship-click-target]',
+        '[data-mindmap-note-relationship-line-click-target]',
+        '[data-mindmap-note-relationship-curve-click-target]',
+        '[data-mindmap-note-relationship-endpoint]',
+        '[data-mindmap-note-relationship-control-point]',
+        '[data-mindmap-note-relationship-style-panel]',
+      ].join(','))
+    ) {
+      return;
+    }
     selectNode(null);
     clearRelationshipLabelEdit();
     clearRelationshipDraft();
@@ -1047,6 +1085,13 @@ const MindMapView: React.FC = () => {
     if (!selectedRelationshipId) return undefined;
     const handleRelationshipWindowKeyDown = (event: KeyboardEvent) => {
       if (isMindMapTextEditingTarget(event.target)) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        clearSelectedRelationship();
+        return;
+      }
       if (isMindMapRelationshipLabelEditKey(event)) {
         event.preventDefault();
         startRelationshipLabelEdit(selectedRelationshipId);
@@ -1059,7 +1104,7 @@ const MindMapView: React.FC = () => {
     };
     window.addEventListener('keydown', handleRelationshipWindowKeyDown);
     return () => window.removeEventListener('keydown', handleRelationshipWindowKeyDown);
-  }, [removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit]);
+  }, [clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit]);
 
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const action = getMindMapKeyboardAction(event, {
@@ -1308,14 +1353,6 @@ const MindMapView: React.FC = () => {
     setDragPreview(prev => updateDragPreviewPointerPosition(prev, event));
   }, [draggedNodeId]);
 
-  const startRelationshipFromNode = React.useCallback((nodeId: string) => {
-    if (!canEditTask) return;
-    setRelationshipToolActive(true);
-    beginRelationshipDraftSelection(nodeId);
-    clearRelationshipHover();
-    clearRelationshipLabelEdit();
-  }, [beginRelationshipDraftSelection, canEditTask, clearRelationshipHover, clearRelationshipLabelEdit]);
-
   const renderNode = (node: TaskNode, direction: MindMapDirection, level: number): React.ReactNode => (
     <MindMapNode
       key={node.id}
@@ -1333,6 +1370,8 @@ const MindMapView: React.FC = () => {
       canEditTask={canEditTask}
       canMoveTask={canMoveTask}
       onSelect={handleNodeSelect}
+      onOpenDetails={handleNodeOpenDetails}
+      onOpenContextMenu={handleNodeContextMenu}
       onToggleExpanded={toggleNodeExpansion}
       onEditStart={startEdit}
       onEditingTitleChange={setEditingTitle}
@@ -1343,7 +1382,6 @@ const MindMapView: React.FC = () => {
       onDragEnd={clearDragState}
       onDragOverNode={handleDragOverNode}
       onDropOnNode={handleDropOnNode}
-      onRelationshipStart={startRelationshipFromNode}
       renderChild={renderNode}
     />
   );

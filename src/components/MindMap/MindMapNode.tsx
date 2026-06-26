@@ -26,6 +26,8 @@ interface MindMapNodeProps {
   canEditTask: boolean;
   canMoveTask: boolean;
   onSelect: (nodeId: string) => void;
+  onOpenDetails: (nodeId: string) => void;
+  onOpenContextMenu: (nodeId: string, title: string, event: React.MouseEvent) => void;
   onToggleExpanded: (nodeId: string) => void;
   onEditStart: (nodeId: string, title?: string) => void;
   onEditingTitleChange: (title: string) => void;
@@ -36,7 +38,6 @@ interface MindMapNodeProps {
   onDragEnd: () => void;
   onDragOverNode: (event: React.DragEvent<HTMLDivElement>, nodeId: string) => void;
   onDropOnNode: (event: React.DragEvent<HTMLDivElement>, nodeId: string) => void;
-  onRelationshipStart: (nodeId: string) => void;
   renderChild: (node: TaskNode, direction: MindMapDirection, level: number) => React.ReactNode;
 }
 
@@ -62,6 +63,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   canEditTask,
   canMoveTask,
   onSelect,
+  onOpenDetails,
+  onOpenContextMenu,
   onToggleExpanded,
   onEditStart,
   onEditingTitleChange,
@@ -72,7 +75,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   onDragEnd,
   onDragOverNode,
   onDropOnNode,
-  onRelationshipStart,
   renderChild,
 }) => {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -118,17 +120,20 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           draggable={canMoveTask && !isEditing}
           onClick={(event) => {
             event.stopPropagation();
-            onSelect(node.id);
+            if (isRelationshipModeActive) {
+              onSelect(node.id);
+              return;
+            }
+            onOpenDetails(node.id);
           }}
           onDoubleClick={(event) => {
             event.stopPropagation();
             if (canEditTask) onEditStart(node.id);
           }}
           onContextMenu={(event) => {
-            if (!canEditTask) return;
             event.preventDefault();
             event.stopPropagation();
-            onRelationshipStart(node.id);
+            onOpenContextMenu(node.id, node.title || '未命名任務', event);
           }}
           onFocus={() => {
             if (!isRelationshipModeActive) onSelect(node.id);

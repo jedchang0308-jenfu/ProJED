@@ -70,6 +70,22 @@ const RagSidebar: React.FC = () => {
     };
   }, [isQuickMenuOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      if (isQuickMenuOpen) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setIsOpen(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isOpen, isQuickMenuOpen, setIsOpen]);
+
   const activeWorkspace = getActiveWorkspace();
   const activeBoard = getActiveBoard();
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
-import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus, Pencil } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -10,13 +10,16 @@ import { TaskDragHandle } from './Wbs/TaskDragHandle';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { COMPACT_DIMENSIONS } from './ui/compactTokens';
 import type { TaskNode } from '../types';
+import { prepareNewTaskNaming } from '../utils/taskInteractions';
 
 interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
 const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
     const { canCreateTask, canEditTask, canMoveTask } = useBoardPermissions();
     const updateNode = useWbsStore(s => s.updateNode);
     const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
+    const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
     const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
+    const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const [isTitleEditing, setIsTitleEditing] = useState(false);
     const [editValue, setEditValue] = useState(item.title || '');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -47,17 +50,22 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     useEffect(() => {
         if (pendingTitleEditNodeId !== item.id || !canEditTask) return;
 
-        setEditValue(item.title || '新任務');
+        const initialValue = pendingTitleEditInitialValue ?? item.title ?? '新任務';
+        setEditValue(initialValue);
         setIsTitleEditing(true);
 
         window.requestAnimationFrame(() => {
             const input = inputRef.current;
             if (!input) return;
             input.focus();
-            input.select();
+            if (pendingTitleEditInitialValue !== null) {
+                input.setSelectionRange(initialValue.length, initialValue.length);
+            } else {
+                input.select();
+            }
             setPendingTitleEditNodeId(null);
         });
-    }, [pendingTitleEditNodeId, item.id, item.title, canEditTask, setPendingTitleEditNodeId]);
+    }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, item.id, item.title, canEditTask, setPendingTitleEditNodeId]);
 
     const handleTitleSave = () => {
         if (!canEditTask) {
@@ -97,8 +105,11 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 e.preventDefault();
                 setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
             }}
+            data-task-id={item.id}
+            data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
             className={`flex items-center px-[10px] border-b border-slate-100 hover:bg-primary/5 transition-colors gap-1 cursor-pointer group
                 task-title-text ${isGroup ? 'font-medium text-slate-700' : isTask && level === 1 ? 'font-medium text-slate-600' : 'font-medium text-slate-500'}
+                ${selectedTaskId === item.id ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary/30' : ''}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => {
                 if (!isTitleEditing) onClick(item);
@@ -140,12 +151,30 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                     disabled={!canEditTask}
+                    data-task-title-input="true"
                     className={`task-title-text min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 font-medium text-slate-700 outline-none ring-1 ring-primary/30 ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}
                 />
             ) : (
-                <span className={`task-title-text truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
-                    {item.title}
-                </span>
+                <>
+                    <span className={`task-title-text min-w-0 flex-1 truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
+                        {item.title}
+                    </span>
+                    <button
+                        type="button"
+                        disabled={!canEditTask}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            if (!canEditTask) return;
+                            setEditValue(item.title || '新任務');
+                            setIsTitleEditing(true);
+                        }}
+                        data-task-interaction-control="true"
+                        className="ml-auto flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+                        title="重新命名任務"
+                    >
+                        <Pencil size={12} />
+                    </button>
+                </>
             )}
             {onAddChild && (
                 <button
@@ -155,7 +184,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                         if (!canCreateTask) return;
                         onAddChild(item);
                     }}
-                    className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
                     title="新增下層任務"
                 >
                     <Plus size={12} />
@@ -178,7 +207,6 @@ const SharedTaskSidebar = ({
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
-    const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
     const { canCreateTask, canMoveTask } = useBoardPermissions();
 
     const sensors = useDragSensors();
@@ -241,7 +269,7 @@ const SharedTaskSidebar = ({
                 updatedAt: Date.now(),
             };
             addNode(newNode);
-            setPendingTitleEditNodeId(newNode.id);
+            prepareNewTaskNaming(newNode.id);
         }
     };
 
@@ -262,7 +290,7 @@ const SharedTaskSidebar = ({
             };
             if (collapsedIds.has(item.id)) toggleCollapse(item.id);
             addNode(newNode);
-            setPendingTitleEditNodeId(newNode.id);
+            prepareNewTaskNaming(newNode.id);
         }
     };
 

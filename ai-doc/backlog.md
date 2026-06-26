@@ -1,5 +1,23 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-06-26
+
+### DEV-028: 四模式一致的 Trello-like 任務操作契約
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-028 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 交付點 | P0 UI/UX interaction consistency | 清單、心智圖、看板、甘特四模式採用一致任務操作契約：單擊 = 選取 + 開詳情、明確改名入口、新增任務命名桌機/手機分流、ESC 關閉最上層暫時性 UI、右鍵/長按任務選單、拖曳/選取 guard；不做看板卡片正面資訊降噪、不把 Level 3+ 收進 Card back。 | `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`, `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md`, `verify:dev-028-cross-mode-task-interactions`, `verify:dev-028-cross-mode-task-interactions-browser`, MAN-028 manual click QC pending |
+
+驗收重點:
+- 四模式單擊既有任務都先選取，再開啟同一個 `TaskDetailsModal`；關閉詳情後保留選取狀態。
+- 四模式任務名稱不因單擊直接進入編輯；改名需用鉛筆、右鍵、`t` 或 F2。
+- 新增任務採 2C：桌機四模式新增後只選取新任務並可直接打字改名；手機新增後自動開命名鍵盤。
+- 快捷鍵採 1A：清單、看板、甘特 `Enter` 開詳情；心智圖 `Enter` 保留新增同階。
+- 右鍵/長按採 3A：四模式都開任務操作選單；心智圖關聯線入口改走 toolbar、快捷鍵或 selected-node action。
+- 心智圖保留 selection-first keyboard flow、關聯線模式與直接打字改名。
+- 看板 Level 3+ 仍顯示在卡片正面，卡片資訊密度不因本 DEV 下降。
+- 甘特拖曳/拉伸仍代表排程，且拖曳後不誤開詳情。
+
 ## Backlog Update - 2026-06-19
 
 ### DEV-027F: Mind map UI polish after relationship-line QC

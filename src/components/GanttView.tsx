@@ -9,6 +9,7 @@ import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
 import { compactClassNames, compactIconButtonClass, compactSegmentedButtonClass } from './ui/compactTokens';
+import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -21,7 +22,6 @@ const GanttView = () => {
         selectedAssigneeIds,
         isSidebarOpen,
         setSidebarOpen,
-        setView,
         showDependencies,
     } = useBoardStore();
 
@@ -206,8 +206,7 @@ const GanttView = () => {
     }, [mode, colWidth, gridStart]);
 
     const handleItemClick = (item: any) => {
-        // 切換到清單視圖，讓使用者在行內編輯此節點
-        setView('list');
+        selectAndOpenTaskDetails(item.id);
     };
 
     return (

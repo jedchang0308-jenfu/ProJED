@@ -62,6 +62,13 @@ async (page) => {
     assert(count === 0, label, { inputCount: count });
   };
 
+  const closeTaskDetailsIfOpen = async () => {
+    const modal = page.locator('[data-task-details-modal="true"]');
+    if ((await modal.count()) === 0) return;
+    await modal.locator('button[title="關閉"]').click();
+    await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
   const getSelectedTitle = async () => selectedNode().getAttribute('data-mindmap-node-title');
 
   const expectSelected = async (title, label) => {
@@ -73,6 +80,7 @@ async (page) => {
 
   const selectNode = async (title) => {
     await nodeByTitle(title).click();
+    await closeTaskDetailsIfOpen();
     await expectSelected(title, `node should be selected: ${title}`);
   };
 
@@ -111,6 +119,7 @@ async (page) => {
   const deleteNode = async (title) => {
     if ((await nodeByTitle(title).count()) === 0) return;
     await nodeByTitle(title).click();
+    await closeTaskDetailsIfOpen();
     await page.keyboard.press('Delete');
     if ((await page.locator('.global-dialog-content').count()) > 0) {
       await page.locator('.global-dialog-content button').last().click();
@@ -301,6 +310,7 @@ async (page) => {
 
   const createInlineRelationship = async (fromTitle, toTitle, label) => {
     await nodeByTitle(fromTitle).click();
+    await closeTaskDetailsIfOpen();
     const fromId = await nodeByTitle(fromTitle).getAttribute('data-mindmap-node');
     await page.locator('[data-mindmap-note-relationship-tool]').click();
     await page.locator(`[data-mindmap-note-relationship-tool][data-active="true"][data-source-node-id="${fromId}"]`).waitFor({ state: 'visible', timeout: 10000 });
@@ -324,9 +334,11 @@ async (page) => {
     const editor = page.locator('[data-mindmap-note-relationship-label-input]').first();
     await editor.waitFor({ state: 'visible', timeout: 10000 });
     await editor.fill(label);
-    await page.keyboard.press('Enter');
+    await editor.press('Enter');
+    await editor.waitFor({ state: 'hidden', timeout: 10000 });
     await relationshipPathByLabel(label).waitFor({ state: 'visible', timeout: 10000 });
-    await relationshipTargetByLabel(label).click({ force: true });
+    await closeTaskDetailsIfOpen();
+    await page.locator(`[data-mindmap-note-relationship-line-click-target][data-label="${label}"]`).first().click({ force: true });
     await page.locator('[data-mindmap-note-relationship-style-panel]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-mindmap-note-relationship-style-dash="7 6"]').click();
     await page.locator('[data-mindmap-note-relationship-style-arrow="both"]').click();
