@@ -25,6 +25,7 @@ import { TagChip } from '../Tags/TagChip';
 import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -97,6 +98,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const showTags = useBoardStore(s => s.showTags);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const touchTapGuard = useTouchTapGuard();
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
@@ -163,21 +165,29 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const checklistLongPressHandlers = {
     ...longPressHandlers,
     onTouchStart: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchStart(e);
       e.stopPropagation();
       if (isFromTaskDragHandle(e.target)) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchMove(e);
       e.stopPropagation();
       longPressHandlers.onTouchMove(e);
     },
     onTouchEnd: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchEnd(e);
       e.stopPropagation();
       longPressHandlers.onTouchEnd(e);
     },
     onTouchCancel: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchCancel(e);
       e.stopPropagation();
       longPressHandlers.onTouchCancel(e);
+    },
+    onClickCapture: (e: React.MouseEvent) => {
+      touchTapGuard.handlers.onClickCapture(e);
+      if (!e.isPropagationStopped()) longPressHandlers.onClickCapture(e);
     },
   };
 
@@ -223,11 +233,16 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             insertRecordTaskMention(child.id, child.title || child.id);
             return;
           }
-          if (isEditing || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
+          if (isEditing || isSelectingMode || isTaskPrimaryActionTarget(e.target)) {
+            e.stopPropagation();
+            return;
+          }
+          e.stopPropagation();
           selectAndOpenTaskDetails(child.id);
         }}
         data-task-id={child.id}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
+        data-touch-tap-guard="true"
       >
 
         {/* 拖曳把手 */}

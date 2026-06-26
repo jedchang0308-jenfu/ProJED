@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CalendarDays, CircleDot, Lock, MessageSquareText, Plus, Send, Unlock, UserRound, X } from 'lucide-react';
+import { CalendarDays, CircleDot, Lock, MessageSquareText, Pencil, Plus, Send, Unlock, UserRound, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -67,11 +67,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const [size, setSize] = React.useState(readSavedSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
+  const [titleValue, setTitleValue] = React.useState('');
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const skipNextNotesSave = React.useRef(true);
+  const skipNextTitleBlurSave = React.useRef(false);
   const assigneeOptions = React.useMemo(
     () => boardMembers.map(member => ({
       id: member.userId,
@@ -85,6 +87,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest('[data-task-details-title-input="true"]')) return;
       const hasNestedOverlay = Boolean(document.querySelector('[data-tag-picker-panel], .global-dialog-content'));
       if (hasNestedOverlay) return;
       event.preventDefault();
@@ -100,6 +103,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   React.useEffect(() => {
     if (!node) return;
 
+    setTitleValue(node.title || '');
     setStartDate(node.startDate || '');
     setEndDate(node.endDate || '');
     setNotes(
@@ -108,7 +112,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         : [{ id: 'note_default', title: '備註', content: node.description || '' }]
     );
     skipNextNotesSave.current = true;
-  }, [node?.id]);
+  }, [node?.id, node?.title]);
 
   React.useEffect(() => {
     const modal = modalRef.current;
@@ -205,6 +209,43 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     });
   };
 
+  const saveTitle = () => {
+    if (skipNextTitleBlurSave.current) {
+      skipNextTitleBlurSave.current = false;
+      setTitleValue(node.title || '');
+      return;
+    }
+    if (!canEditTask) {
+      setTitleValue(node.title || '');
+      return;
+    }
+
+    const trimmed = titleValue.trim();
+    if (!trimmed) {
+      setTitleValue(node.title || '');
+      return;
+    }
+    if (trimmed !== node.title) {
+      updateNode(node.id, { title: trimmed, updatedAt: Date.now() });
+    }
+    setTitleValue(trimmed);
+  };
+
+  const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveTitle();
+      event.currentTarget.blur();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      skipNextTitleBlurSave.current = true;
+      setTitleValue(node.title || '');
+      event.currentTarget.blur();
+    }
+  };
+
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEditTask) return;
     const strVal = e.target.value;
@@ -273,10 +314,27 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900" title={node.title}>
-              {node.title}
-            </p>
+          <div className="min-w-0 flex-1 pr-3">
+            <div className="flex min-w-0 items-center gap-2">
+              {canEditTask ? (
+                <input
+                  type="text"
+                  value={titleValue}
+                  onChange={(event) => setTitleValue(event.target.value)}
+                  onBlur={saveTitle}
+                  onKeyDown={handleTitleKeyDown}
+                  data-task-details-title-input="true"
+                  aria-label="編輯任務名稱"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold text-slate-900 outline-none transition hover:border-slate-200 hover:bg-slate-50 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  title={node.title}
+                />
+              ) : (
+                <p className="truncate text-sm font-semibold text-slate-900" title={node.title}>
+                  {node.title}
+                </p>
+              )}
+              {canEditTask ? <Pencil size={14} className="shrink-0 text-slate-400" aria-hidden="true" /> : null}
+            </div>
             <p className="text-xs text-slate-500">更多詳情選項</p>
           </div>
           <button
