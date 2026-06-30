@@ -121,42 +121,63 @@ const useBoardStore = create<BoardStore>()(
         setPendingBoardTitleEdit: (target) => set({ pendingBoardTitleEdit: target }),
 
         // ===== Workspace CRUD =====
-        addWorkspace: (title) => {
+        addWorkspace: async (title) => {
             const userId = getUserId();
-            const tempId = 'ws_' + Date.now();
-            safeSetItem(WS_STORAGE_KEY, tempId);
-            set((state) => ({
-                workspaces: [...state.workspaces, {
-                    id: tempId,
-                    title: title || '我的工作區',
-                    boards: [],
-                    ownerId: userId,
-                    members: [userId],
-                    order: Date.now(),
-                    createdAt: Date.now()
-                }],
-                activeWorkspaceId: tempId,
-            }));
-            workspaceService.create(userId, title)
-                .then((createdWorkspace) => {
-                    set((state) => ({
-                        workspaces: state.workspaces.map(ws =>
-                            ws.id === tempId ? { ...createdWorkspace, boards: ws.boards } : ws
-                        ),
-                        activeWorkspaceId: state.activeWorkspaceId === tempId ? createdWorkspace.id : state.activeWorkspaceId,
-                    }));
-                    if (get().activeWorkspaceId === createdWorkspace.id) {
-                        safeSetItem(WS_STORAGE_KEY, createdWorkspace.id);
-                    }
-                })
-                .catch(console.error);
+            const workspaceTitle = title?.trim() || '我的工作區';
+            const createdWorkspace = await workspaceService.create(userId, workspaceTitle);
+            if (!createdWorkspace?.id) {
+                throw new Error('建立工作區失敗：後端未回傳工作區識別碼。');
+            }
+
+            safeSetItem(WS_STORAGE_KEY, createdWorkspace.id);
+            safeSetItem(BOARD_STORAGE_KEY, null);
+            safeSetItem(VIEW_STORAGE_KEY, 'home');
+            set((state) => {
+                const exists = state.workspaces.some(ws => ws.id === createdWorkspace.id);
+                return {
+                    workspaces: exists
+                        ? state.workspaces.map(ws => ws.id === createdWorkspace.id ? { ...createdWorkspace, boards: ws.boards || [] } : ws)
+                        : [...state.workspaces, { ...createdWorkspace, boards: createdWorkspace.boards || [] }],
+                    activeWorkspaceId: createdWorkspace.id,
+                    activeBoardId: null,
+                    currentView: 'home',
+                };
+            });
+            return createdWorkspace;
         },
 
-        removeWorkspace: (wsId) => {
-            set((state) => ({
-                workspaces: state.workspaces.filter(ws => ws.id !== wsId)
-            }));
-            workspaceService.delete(wsId).catch(console.error);
+        removeWorkspace: async (wsId) => {
+            await workspaceService.delete(wsId);
+            set((state) => {
+                const deletedWorkspace = state.workspaces.find(ws => ws.id === wsId);
+                const deletedBoardIds = new Set((deletedWorkspace?.boards || []).map(board => board.id));
+                const isActiveWorkspaceDeleted = state.activeWorkspaceId === wsId;
+                const isActiveBoardDeleted = Boolean(state.activeBoardId && deletedBoardIds.has(state.activeBoardId));
+                const shouldClearContextMenu = state.contextMenuState?.kind === 'workspace'
+                    && state.contextMenuState.workspaceId === wsId;
+                const shouldClearEditingItem = state.editingItem?.workspaceId === wsId
+                    || Boolean(state.editingItem?.boardId && deletedBoardIds.has(state.editingItem.boardId));
+
+                if (isActiveWorkspaceDeleted) safeSetItem(WS_STORAGE_KEY, null);
+                if (isActiveWorkspaceDeleted || isActiveBoardDeleted) safeSetItem(BOARD_STORAGE_KEY, null);
+                if (isActiveWorkspaceDeleted || isActiveBoardDeleted) safeSetItem(VIEW_STORAGE_KEY, 'home');
+                if (shouldClearEditingItem) safeSetItem(MODAL_STORAGE_KEY, null);
+
+                return {
+                    workspaces: state.workspaces.filter(ws => ws.id !== wsId),
+                    activeWorkspaceId: isActiveWorkspaceDeleted ? null : state.activeWorkspaceId,
+                    activeBoardId: isActiveWorkspaceDeleted || isActiveBoardDeleted ? null : state.activeBoardId,
+                    currentView: isActiveWorkspaceDeleted || isActiveBoardDeleted ? 'home' : state.currentView,
+                    editingItem: shouldClearEditingItem ? null : state.editingItem,
+                    selectedTaskId: isActiveWorkspaceDeleted || isActiveBoardDeleted ? null : state.selectedTaskId,
+                    pendingTitleEditNodeId: isActiveWorkspaceDeleted || isActiveBoardDeleted ? null : state.pendingTitleEditNodeId,
+                    pendingTitleEditInitialValue: isActiveWorkspaceDeleted || isActiveBoardDeleted ? null : state.pendingTitleEditInitialValue,
+                    pendingDirectTitleEditNodeId: isActiveWorkspaceDeleted || isActiveBoardDeleted ? null : state.pendingDirectTitleEditNodeId,
+                    pendingWorkspaceTitleEditId: state.pendingWorkspaceTitleEditId === wsId ? null : state.pendingWorkspaceTitleEditId,
+                    pendingBoardTitleEdit: state.pendingBoardTitleEdit?.workspaceId === wsId ? null : state.pendingBoardTitleEdit,
+                    contextMenuState: shouldClearContextMenu ? null : state.contextMenuState,
+                };
+            });
         },
 
         updateWorkspaceTitle: (workspaceId, newTitle) => {

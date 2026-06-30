@@ -3,7 +3,7 @@
 對應 DEV: DEV-023  
 父交付點: DEV-020  
 節點類型: 開發點  
-狀態: Ready for QC  
+狀態: Browser QC Passed
 優先級: P1
 
 ## 驗證目標
@@ -160,3 +160,14 @@ DEV-023 可交付 QC 的條件：
 - DEV-021 / DEV-022 guard 無回歸。
 - PM 文件明確標示 DEV-023 為 DEV-020 UX refinement 開發點，不新增產品交付點。
 
+## 本輪 QC 結果（2026-06-29）
+
+- Pass：`npm.cmd run verify:dev-023-record-project-change-import-workflow-step`，18 checks。
+- Pass：`npm.cmd run verify:dev-020-record-workflow-redesign`。
+- Pass：`npm.cmd run verify:dev-020-project-change-import-browser`，產出 1440px 與 1024px 截圖。
+- Pass：`npm.cmd run verify:dev-021-project-change-ai-preserve`。
+- Pass：`npm.cmd run verify:dev-022-project-change-single-record`。
+- Pass：`npm.cmd exec tsc -- --noEmit`。
+- Pass：`$env:NODE_OPTIONS='--max-old-space-size=4096'; npm.cmd run build`。
+
+註記：DEV-020 browser verifier 已修正 linked-task selector 的過時假設。現行 UI 是先點 `關聯任務` toggle，再於 `data-record-linked-tasks-list` 中顯示 `選取任務` 按鈕。

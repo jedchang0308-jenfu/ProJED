@@ -118,8 +118,8 @@ begin
 
   requires_admin := include_unassigned or exists (
     select 1
-    from unnest(assignee_user_ids) as assignee_user_id
-    where assignee_user_id <> auth.uid()
+    from unnest(assignee_user_ids) as selected_assignee_user_id
+    where selected_assignee_user_id <> auth.uid()
   );
 
   if requires_admin and exists (

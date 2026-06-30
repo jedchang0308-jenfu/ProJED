@@ -28,6 +28,8 @@ import HomeView from './components/HomeView';
 // ListView 已由 WbsListView 取代，import 移除
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
+import { AppInstallAssistant } from './components/AppInstallAssistant';
+import { QuickCaptureShell } from './components/QuickCaptureShell';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
@@ -89,8 +91,13 @@ function AppContent() {
     if (!userId || dataBackend !== 'local-test') return;
 
     const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId);
-    const hasActiveBoard = Boolean(activeWorkspace?.boards.some(board => board.id === activeBoardId));
-    if (!hasActiveBoard) seedLocalTestEnvironment();
+    const hasBrokenWorkspaceSelection = Boolean(activeWorkspaceId && !activeWorkspace);
+    const hasBrokenBoardSelection = Boolean(
+      activeBoardId && activeWorkspace && !activeWorkspace.boards.some(board => board.id === activeBoardId)
+    );
+    if (workspaces.length === 0 || hasBrokenWorkspaceSelection || hasBrokenBoardSelection) {
+      seedLocalTestEnvironment();
+    }
   }, [activeBoardId, activeWorkspaceId, userId, workspaces]);
 
   // 載入行政院人事日曆 (當年度與下年度)
@@ -181,7 +188,10 @@ function AppContent() {
       const currentWorkspaces = useBoardStore.getState().workspaces;
       if (currentWorkspaces.length === 0) {
         console.log('[Init] 全新使用者，自動建立預設工作區。');
-        useBoardStore.getState().addWorkspace('我的工作區');
+        useBoardStore.getState().addWorkspace('我的工作區').catch((error) => {
+          console.error('[Init] 自動建立預設工作區失敗:', error);
+          toast.error(error instanceof Error ? error.message : '建立預設工作區失敗，請稍後再試。');
+        });
       }
     }, 3000);
 
@@ -258,6 +268,8 @@ function App() {
       <AuthGate>
         <AppContent />
       </AuthGate>
+      <QuickCaptureShell />
+      <AppInstallAssistant />
       <ToastContainer />
     </>
   );

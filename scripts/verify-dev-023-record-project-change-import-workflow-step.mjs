@@ -10,6 +10,7 @@ function read(path) {
 const files = {
   spec: 'ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md',
   qa: 'ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md',
+  qc: 'ai-doc/qc/QC-DEV-023-record-project-change-import-workflow-step.md',
   devTask: 'ai-doc/dev_task.md',
   backlog: 'ai-doc/backlog.md',
   documentationMap: 'ai-doc/documentation_map.md',
@@ -24,12 +25,12 @@ const contents = Object.fromEntries(
 
 const checks = [
   {
-    name: 'SPEC-023 is Ready and attached to DEV-020 as a dev point',
+    name: 'SPEC-023 is attached to DEV-020 as an implemented dev point',
     pass:
       contents.spec.includes('對應 DEV: DEV-023') &&
       contents.spec.includes('父交付點: DEV-020') &&
       contents.spec.includes('節點類型: 開發點') &&
-      contents.spec.includes('狀態: Ready') &&
+      contents.spec.includes('狀態: Implemented / Browser QC Passed') &&
       contents.spec.includes('是否計入產品交付完成: 否'),
   },
   {
@@ -105,6 +106,14 @@ const checks = [
       contents.qa.includes('優先級'),
   },
   {
+    name: 'QC-DEV-023 records browser QC evidence and DB unchanged boundary',
+    pass:
+      contents.qc.includes('Browser QC Passed / DB unchanged') &&
+      contents.qc.includes('verify:dev-020-project-change-import-browser') &&
+      contents.qc.includes('dev-020-record-workflow-1440.png') &&
+      contents.qc.includes('不新增資料庫 schema'),
+  },
+  {
     name: 'QA-DEV-023 regression commands include DEV-020 / DEV-021 / DEV-022 gates',
     pass:
       contents.qa.includes('verify:dev-020-record-workflow-redesign') &&
@@ -116,20 +125,21 @@ const checks = [
       contents.qa.includes('npm.cmd run build'),
   },
   {
-    name: 'PM dev_task registers DEV-023 as Ready with SPEC / QA / verifier evidence',
+    name: 'PM dev_task registers DEV-023 as implemented with SPEC / QA / QC / verifier evidence',
     pass:
       contents.devTask.includes('DEV-023: 專案變化匯入整併為紀錄流程第一步') &&
       contents.devTask.includes('父交付點: DEV-020') &&
-      contents.devTask.includes('狀態: Ready') &&
+      contents.devTask.includes('狀態: Implemented / Browser QC Passed / DB unchanged') &&
       contents.devTask.includes('SPEC-023') &&
       contents.devTask.includes('QA-DEV-023') &&
+      contents.devTask.includes('QC-DEV-023') &&
       contents.devTask.includes('verify:dev-023-record-project-change-import-workflow-step'),
   },
   {
     name: 'Backlog registers DEV-023 as P1 UX refinement under DEV-020',
     pass:
       contents.backlog.includes('DEV-023') &&
-      contents.backlog.includes('Ready') &&
+      contents.backlog.includes('Implemented / Browser QC Passed') &&
       contents.backlog.includes('DEV-020') &&
       contents.backlog.includes('P1 UX refinement') &&
       contents.backlog.includes('SPEC-023-record-project-change-import-workflow-step.md'),
@@ -139,6 +149,7 @@ const checks = [
     pass:
       contents.documentationMap.includes('SPEC-023-record-project-change-import-workflow-step.md') &&
       contents.documentationMap.includes('QA-DEV-023-record-project-change-import-workflow-step.md') &&
+      contents.documentationMap.includes('QC-DEV-023-record-project-change-import-workflow-step.md') &&
       contents.documentationMap.includes('supersedes PDCA-DEV-020') &&
       contents.documentationMap.includes('專案變化匯入仍在流程上方'),
   },

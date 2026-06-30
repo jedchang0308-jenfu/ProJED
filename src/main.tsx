@@ -5,8 +5,12 @@ import './index.css'
 import App from './App.js' // 配合 Vite/TS 配置，通常是匯入 .tsx (原本可能寫 .jsx) 但 Vite 容許
 import GlobalErrorBoundary from './components/GlobalErrorBoundary'
 import { installSupabaseBrowserDiagnostics } from './services/supabase/browserDiagnostics'
+import { setupPwaInstallPromptListener } from './services/pwaInstallService'
+import { setupPwaLifecycle } from './services/pwaUpdateService'
 
 installSupabaseBrowserDiagnostics();
+setupPwaInstallPromptListener();
+setupPwaLifecycle();
 
 // 全域監聽資源載入錯誤 (常發生在 PWA 發布新版本後，快取抓到舊 index.html 但找不到 JS chunk)
 window.addEventListener('error', (event) => {

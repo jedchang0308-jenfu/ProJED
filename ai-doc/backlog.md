@@ -1,5 +1,50 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-06-29
+
+### DEV-038: 設定中心作用範圍一致性與高風險防呆
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-038 | Ready for RD / SPEC + QA Ready | 交付點 | P0 backup/import/trash risk, P1 settings IA consistency | 建立設定中心作用範圍 taxonomy，修正全頁 `目前看板` 語境混用；備份頁拆分全域匯出與目前看板匯入，匯入前增加目標確認；回收桶改為目前看板回收桶；看板權限與快速開啟標示各自作用範圍。 | `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`, `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md` |
+
+驗收重點:
+- 設定中心頁首不再把所有頁籤都框在目前看板。
+- 每個設定 section 都顯示作用範圍。
+- 匯出明確是全域快照；匯入明確是匯入至目前看板。
+- 匯入備份前必須確認目標 Workspace / Board。
+- 回收桶清空前必須顯示目前看板與永久刪除數量。
+- 快速開啟必須標示為此裝置 / 目前帳號範圍。
+
+### DEV-037: 行事曆訂閱來源範圍清晰化
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-037 | Ready for RD / SPEC + QA Ready | 交付點 | P1 settings IA and data-scope clarity | 重構行事曆訂閱的來源範圍語意：預設目前看板、支援工作區全部看板與自訂範圍、每筆訂閱顯示來源/條件 summary，並延伸 filters / Edge Function / DB validation 讓 Board scope 真正只輸出該看板任務。 | `ai-doc/specs/SPEC-037-calendar-subscription-source-scope-clarity.md`, `ai-doc/qa/QA-DEV-037-calendar-subscription-source-scope-clarity.md` |
+
+驗收重點:
+- 從 active board 進入設定時，新增訂閱預設為 `目前看板`。
+- 訂閱列表每筆都顯示 `來源` 與 `條件`，不再要求使用者從訂閱名稱猜測資料範圍。
+- Board scope 的 `.ics` feed 不得包含其他 Board 任務。
+- Legacy workspace-only 訂閱仍可讀取與修改，UI 顯示為 `工作區全部看板`。
+- 若資料層仍只能支援 workspace scope，不得把 UI 選項命名為 `目前看板`。
+
+### DEV-034: App 快速啟動與加入主畫面 UX
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-034 | Done / Browser QC Passed / Local-first scope | 交付點 | P0 mobile quick-capture readiness | 降低 App 開啟等待與加入主畫面摩擦：PWA 更新基礎、平台分流安裝助理、設定頁快速開啟入口、AuthGate 外 QuickCaptureShell、local-first pending InboxItem queue；正式雲端 Inbox/轉任務接 SPEC-002 後續。 | `ai-doc/specs/SPEC-034-fast-start-pwa-install-guidance.md`, `ai-doc/qc/QC-DEV-034-fast-start-pwa-install-guidance.md`, `verify:dev-034-pwa-install-guidance`, `verify:dev-034-pwa-install-guidance-browser`, `output/playwright/dev-034-quick-capture-before-login-mobile.png`, `output/playwright/dev-034-pwa-install-guidance-desktop.png`, `output/playwright/dev-034-pwa-install-guidance-mobile.png` |
+
+驗收重點:
+- 使用者不需額外設定快取與更新；App 背景檢查更新，避免輸入中強制刷新。
+- 加入主畫面引導需在合適平台自動出現，且可在設定頁永久回查。
+- iOS 指引只保留三步驟：點分享、選加入主畫面、點新增。
+- 內建瀏覽器先提示用 Safari / Chrome 開啟，不用 403 或瀏覽器政策作主說明。
+- 使用者可選稍後或不再提示，且設定頁可重新顯示提示。
+- 使用者在未登入或完整 App 載入前，可先輸入快記並保存為本機 `syncStatus=pending` 的私人 `InboxItem`。
+- 快記面板送出後自動收合為右下角入口，不得遮擋手機底部導航。
+- 正式雲端 Inbox、跨裝置同步、今日區塊與轉正式任務仍接 SPEC-002 後續交付，不在本輪宣告完成。
+
 ## Backlog Update - 2026-06-26
 
 ### DEV-028: 四模式一致的 Trello-like 任務操作契約
@@ -155,13 +200,14 @@ AI synthesis guard 註記：
 
 | DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
 |---|---|---|---|---|---|
-| DEV-023 | Ready | 開發點 | P1 UX refinement | 將 `先匯入專案變化` 從流程上方獨立大卡片整併為紀錄流程第一步；父交付點 DEV-020，不新增產品交付點。 | `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md`, `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md` |
+| DEV-023 | Implemented / Browser QC Passed | 開發點 | P1 UX refinement | 將 `先匯入專案變化` 從流程上方獨立大卡片整併為紀錄流程第一步；父交付點 DEV-020，不新增產品交付點。 | `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md`, `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md`, `ai-doc/qc/QC-DEV-023-record-project-change-import-workflow-step.md`, `verify:dev-023-record-project-change-import-workflow-step`, `verify:dev-020-project-change-import-browser` |
 
 UX refinement 註記：
 - 會議紀錄流程：`匯入 -> 速記 -> AI整理 -> 校稿 -> 發布`。
 - 個人工作紀錄流程：`匯入 -> 撰寫 -> 存草稿 -> 發布`。
 - 匯入仍為 optional step，不阻擋直接撰寫、存草稿或發布。
 - DEV-021 / DEV-022 preserve 與 single-record guard 需保持通過。
+- 2026-06-29 已通過 DEV-023 static、DEV-020 browser、DEV-021 preserve、DEV-022 single-record 與 TypeScript gate。
 
 ### DEV-022: 專案變化匯入後 AI整理同整成單一會議紀錄
 

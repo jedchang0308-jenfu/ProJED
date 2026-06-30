@@ -551,10 +551,9 @@ export const supabaseWorkspaceService = {
   delete: async (workspaceId: string): Promise<void> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
-    const { error } = await supabase
-      .from('tenants')
-      .delete()
-      .eq('id', tenantId);
+    const { error } = await supabase.rpc('delete_workspace', {
+      target_tenant_id: tenantId,
+    });
     assertNoError(error);
   },
 };

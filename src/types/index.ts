@@ -13,6 +13,9 @@ export type KnowledgeRecordType = 'meeting' | 'work_log';
 export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type KnowledgeRecordVisibility = 'private' | 'project' | 'tenant';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
+export type InboxItemType = 'todo' | 'someday' | 'note';
+export type InboxItemCaptureStatus = 'untriaged' | 'today' | 'completed' | 'archived';
+export type InboxItemSyncStatus = 'pending' | 'synced' | 'failed';
 export type CollaborationScope = 'workspace' | 'board';
 export type PermissionCapability =
   | 'read_workspace'
@@ -251,6 +254,23 @@ export interface BoardWorkspaceTransferPreview {
     remappedTags?: number;
     ragJobsCreated?: number;
   };
+}
+
+export interface InboxItem {
+  id: string;
+  title: string;
+  note?: string;
+  itemType: InboxItemType;
+  captureStatus: InboxItemCaptureStatus;
+  syncStatus: InboxItemSyncStatus;
+  createdBy?: string | null;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number | null;
+  archivedAt?: number | null;
+  suggestedDueDate?: string | null;
+  confirmedDueDate?: string | null;
+  promotedTaskNodeId?: string | null;
 }
 
 export type ActivityEventType =
@@ -540,8 +560,8 @@ export interface BoardActions {
   setView: (view: ViewMode) => void;
   setSidebarOpen: (isOpen: boolean) => void;
 
-  addWorkspace: (title?: string) => void;
-  removeWorkspace: (wsId: string) => void;
+  addWorkspace: (title?: string) => Promise<Workspace>;
+  removeWorkspace: (wsId: string) => Promise<void>;
   updateWorkspaceTitle: (workspaceId: string, newTitle: string) => void;
 
   addBoard: (workspaceId: string, boardName: string) => string | void;

@@ -9,6 +9,7 @@ const LOCAL_TEST_BOARD_ID = 'local-test-mobile-ui-board';
 const LOCAL_TEST_SEEDED_KEY = 'projed-local-test.seeded.v1';
 const LOCAL_TEST_SIZE_KEY = 'projed-local-test.seeded.size';
 const LOCAL_TEST_RESTORABLE_VIEWS = new Set<ViewMode>([
+  'home',
   'list',
   'board',
   'gantt',
@@ -186,6 +187,10 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
     : existingNodes;
   const storedActiveWorkspaceId = force ? null : localStorage.getItem('projed-last-ws');
   const storedActiveBoardId = force ? null : localStorage.getItem('projed-last-board');
+  const storedView = force ? null : localStorage.getItem('projed-last-view');
+  const nextView: ViewMode = storedView && LOCAL_TEST_RESTORABLE_VIEWS.has(storedView as ViewMode)
+    ? (storedView as ViewMode)
+    : 'board';
   const workspaceWithStoredBoard = storedActiveBoardId
     ? nextWorkspaces.find(item => item.boards.some(board => board.id === storedActiveBoardId))
     : undefined;
@@ -193,14 +198,13 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
     ? nextWorkspaces.find(item => item.id === storedActiveWorkspaceId)
     : undefined;
   const storedWorkspaceBoard = storedWorkspace?.boards[0];
-  const nextActiveWorkspaceId = workspaceWithStoredBoard?.id ?? (storedWorkspaceBoard ? storedWorkspace.id : LOCAL_TEST_WS_ID);
-  const nextActiveBoardId = workspaceWithStoredBoard && storedActiveBoardId
+  const shouldKeepWorkspaceOverview = nextView === 'home' && Boolean(storedWorkspace) && !storedActiveBoardId;
+  const nextActiveWorkspaceId = workspaceWithStoredBoard?.id ?? (storedWorkspace ? storedWorkspace.id : LOCAL_TEST_WS_ID);
+  const nextActiveBoardId = shouldKeepWorkspaceOverview
+    ? null
+    : workspaceWithStoredBoard && storedActiveBoardId
     ? storedActiveBoardId
     : (storedWorkspaceBoard?.id ?? LOCAL_TEST_BOARD_ID);
-  const storedView = force ? null : localStorage.getItem('projed-last-view');
-  const nextView: ViewMode = storedView && LOCAL_TEST_RESTORABLE_VIEWS.has(storedView as ViewMode)
-    ? (storedView as ViewMode)
-    : 'board';
 
   localTestStorage.writeWorkspaces(nextWorkspaces);
   localTestStorage.writeNodes(nextNodes);
@@ -210,7 +214,11 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
   localStorage.setItem(LOCAL_TEST_SEEDED_KEY, 'true');
   localStorage.setItem(LOCAL_TEST_SIZE_KEY, String(taskCount));
   localStorage.setItem('projed-last-ws', nextActiveWorkspaceId);
-  localStorage.setItem('projed-last-board', nextActiveBoardId);
+  if (nextActiveBoardId) {
+    localStorage.setItem('projed-last-board', nextActiveBoardId);
+  } else {
+    localStorage.removeItem('projed-last-board');
+  }
   localStorage.setItem('projed-last-view', nextView);
 
   useBoardStore.setState({

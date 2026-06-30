@@ -18,7 +18,8 @@ const checks = [
   },
   {
     name: 'mobile/coarse pointer gantt schedule dragging is disabled',
-    ok: includes('src/components/Gantt/GanttTaskBar.tsx', "window.matchMedia('(pointer: coarse)'") &&
+    ok: includes('src/components/Gantt/GanttTaskBar.tsx', 'useCoarsePointer') &&
+      includes('src/hooks/useCoarsePointer.ts', "window.matchMedia('(pointer: coarse)'") &&
       includes('src/components/Gantt/GanttTaskBar.tsx', 'canEditTask && canMoveTask && !isCoarsePointer'),
   },
   {

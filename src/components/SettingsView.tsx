@@ -6,6 +6,7 @@ import {
   FolderX,
   Settings,
   ShieldCheck,
+  Smartphone,
   Upload,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
@@ -13,8 +14,9 @@ import { useWbsStore } from '../store/useWbsStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { BoardMembersPanel } from './BoardMembersPanel';
 import CalendarSubscriptionsView from './CalendarSubscriptionsView';
+import { AppInstallAssistant } from './AppInstallAssistant';
 
-type SettingsSection = 'backup' | 'permissions' | 'calendar';
+type SettingsSection = 'backup' | 'permissions' | 'calendar' | 'app';
 
 type SettingsViewProps = {
   initialSection?: SettingsSection;
@@ -43,6 +45,12 @@ const SETTINGS_SECTIONS: Array<{
     label: '行事曆訂閱',
     description: '建立可供外部行事曆讀取的任務訂閱連結。',
     icon: CalendarPlus,
+  },
+  {
+    id: 'app',
+    label: '快速開啟',
+    description: '將 ProJED 加到桌面，之後直接點圖示開啟。',
+    icon: Smartphone,
   },
 ];
 
@@ -83,7 +91,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
           </div>
         </header>
 
-        <nav className="grid gap-2 sm:grid-cols-3" aria-label="設定分類">
+        <nav className="grid gap-2 sm:grid-cols-4" aria-label="設定分類">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
             const isActive = activeSection === section.id;
@@ -116,6 +124,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
         {activeSection === 'backup' && <BackupSettings />}
         {activeSection === 'permissions' && <PermissionSettings hasActiveBoard={Boolean(activeBoard)} />}
         {activeSection === 'calendar' && <CalendarSubscriptionsView />}
+        {activeSection === 'app' && <AppInstallAssistant mode="settings" />}
       </div>
     </div>
   );

@@ -53,6 +53,7 @@ export const GlobalContextMenu: React.FC = () => {
   const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
   const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
+  const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12, maxHeight: 320 });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const openedAtRef = useRef(0);
@@ -478,8 +479,16 @@ export const GlobalContextMenu: React.FC = () => {
     const { workspaceId, title } = contextMenuState;
     const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${title}」嗎？這會一併刪除底下的看板。`);
     if (confirmed) {
-      removeWorkspace(workspaceId);
-      showHome();
+      setIsDeletingWorkspace(true);
+      try {
+        await removeWorkspace(workspaceId);
+        toast.success(`已刪除工作區「${title}」。`);
+      } catch (error) {
+        console.error('[GlobalContextMenu] delete workspace failed:', error);
+        toast.error(error instanceof Error ? error.message : '刪除工作區失敗，請重新整理後再試。');
+      } finally {
+        setIsDeletingWorkspace(false);
+      }
     }
     setContextMenuState(null);
   };
@@ -575,11 +584,11 @@ export const GlobalContextMenu: React.FC = () => {
                 <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                 <button
                   onClick={() => void handleDeleteWorkspace()}
-                  disabled={!canDeleteWorkspaceInWorkspace(contextMenuState.workspaceId)}
+                  disabled={isDeletingWorkspace || !canDeleteWorkspaceInWorkspace(contextMenuState.workspaceId)}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
                   <Trash2 size={14} className="flex-shrink-0 text-red-500" />
-                  <span>刪除工作區</span>
+                  <span>{isDeletingWorkspace ? '刪除中...' : '刪除工作區'}</span>
                 </button>
               </>
             ) : menuKind === 'board' ? (

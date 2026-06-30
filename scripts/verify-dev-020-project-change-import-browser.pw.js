@@ -69,7 +69,9 @@ async (page) => {
   assert((await page.locator('[data-record-composer-close]').count()) === 1, 'work log should expose the shared close tool slot');
   assert((await page.locator('[data-record-composer-close][aria-label="離開紀錄"]').count()) === 1, 'work log close control should use the unified exit record name');
   assert((await page.locator('[data-record-composer-summary]').count()) === 1, 'work log should show the shared composer summary');
-  assert((await page.locator('[data-record-composer-linked-tasks] button', { hasText: '選取任務' }).count()) === 1, 'work log should use the unified linked-task action label');
+  assert((await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').count()) === 1, 'work log should expose the unified linked-task toggle');
+  await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').click();
+  assert((await page.locator('[data-record-linked-tasks-list] button', { hasText: '選取任務' }).count()) === 1, 'work log should use the unified linked-task action label after expanding linked tasks');
   assert((await page.locator('[data-meeting-workflow-arrow-stepper]').count()) === 0, 'work log should not show meeting workflow');
   assert((await page.locator('[data-record-workflow-kind="work-log"]').count()) === 1, 'work log should show the work-log workflow card');
   assert((await page.locator('[data-work-log-workflow-step]').count()) === 4, 'work log workflow should show import/write/save/publish steps');

@@ -1,5 +1,364 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-06-29
+
+### DEV-038: 設定中心作用範圍一致性與高風險防呆
+
+狀態: Ready for RD / SPEC + QA Ready
+節點類型: 交付點
+優先級: P0 backup/import/trash risk, P1 settings IA consistency
+父交付點: DEV-036 Trello-like Workspace Governance
+關聯開發點: DEV-037 行事曆訂閱來源範圍清晰化
+是否計入產品交付完成: 是
+建立日期: 2026-06-29
+
+關聯需求:
+- 使用者追問：依行事曆訂閱邏輯，設定裡其他頁面是否也有邏輯不一致。
+- 已確認 `備份與資料`、`回收桶`、`權限設定`、`快速開啟` 存在不同作用範圍混用問題。
+- 使用者要求由 Dev PM 寫成開發文件，不足處用 HCS `#引導模式` 補足。
+
+HCS 引導決策（採建議預設）:
+- `1A`: 保留單一設定中心，但每個頁籤明確標示 `設定範圍`；暫不拆成多個設定入口。
+- `2A`: 備份頁明確分成 `匯出全域快照` 與 `匯入至目前看板`；不在本 DEV 做完整 Workspace/Board 還原。
+- `3A`: 回收桶改為 `目前看板回收桶`，清空前顯示看板名稱與任務數量。
+- `4A`: 行事曆訂閱續接 DEV-037，不在本 DEV 重複實作資料契約。
+
+核心問題:
+- `SettingsView` 頁首目前以 `系統設定與管理 / 目前看板` 統包所有設定，導致全域快照、看板匯入、外部連結、裝置設定混在同一語境。
+- `exportData` 實際匯出全域 `nodes/dependencies/tags/workspaces` 快照；`importData` 卻要求 active workspace/board 並匯入至目前看板。
+- `RecycleBinView` 實際只依 `activeBoardId` 顯示封存任務，但入口與標題未明確說是目前看板回收桶。
+
+交付文件:
+- `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`
+- `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md`
+
+RD 執行範圍:
+- 更新 `SettingsView.tsx` 頁首、頁籤文案與各 section scope summary。
+- 更新 `BackupSettings`，拆分全域匯出與目前看板匯入，並在匯入前新增確認摘要。
+- 更新 `RecycleBinView` 文案與清空確認，明確標示 active board 範圍。
+- 更新 `BoardMembersPanel` embedded mode 的 `看板權限` 文案與 target summary。
+- 更新 `AppInstallAssistant` settings mode 的 `此裝置 / 目前帳號` scope summary。
+- 補 static verifier、browser verifier 與 package scripts。
+
+交付邊界:
+- 不改 `exportData` / `importData` 的資料格式。
+- 不做完整全域還原、Workspace 還原或 Board 還原 wizard。
+- 不新增全工作區或全系統回收桶。
+- 不修改 Supabase schema、RLS、migration。
+- 不取代 DEV-037 的行事曆訂閱資料契約。
+
+RD acceptance:
+- 設定中心頁首不再用 `目前看板` 框住所有頁籤。
+- 每個設定 section 都能看出作用範圍。
+- 備份頁清楚區分全域匯出與目前看板匯入。
+- 匯入備份前有目標看板確認，不會直接選檔後立即匯入。
+- 回收桶明確是目前看板回收桶，清空前顯示目標看板與永久刪除數量。
+- 看板權限頁顯示目前看板目標，不再與分享邀請主流程混淆。
+- 快速開啟頁顯示此裝置 / 目前帳號範圍，不受 active board 語境影響。
+- 390px mobile viewport 不因 scope summary 出現文字重疊、裁切或水平 overflow。
+
+RD exit gate:
+- `npm.cmd run verify:dev-038-settings-scope-consistency`
+- `npm.cmd run verify:dev-038-settings-scope-consistency-browser`
+- `npm.cmd run verify:settings-project-context`
+- `npm.cmd run verify:settings-project-context-browser`
+- `npm.cmd run verify:dev-036-trello-like-workspace-governance`
+- `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`
+- `npm.cmd run verify:dev-026-trello-like-board-share-ui`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+
+Conditional gate:
+- 若本輪同步觸及 `CalendarSubscriptionsView` 或 DEV-037 已實作，需加跑 `npm.cmd run verify:dev-037-calendar-subscription-source-scope`；若 DEV-037 尚未實作，QC 記錄為 deferred dependency，不阻塞 DEV-038 的 Settings/Backup/RecycleBin 交付。
+
+Stop conditions:
+- 如果 RD 發現匯入實際會覆寫目前看板任務但無法在 UI 前置確認，停止，不得宣告完成。
+- 如果清空回收桶確認無法取得正確 active board 與刪除數量，停止，不得改成更模糊的全域文案。
+- 如果要改 import/export 資料格式或新增還原 wizard，另開 DEV，不納入本 DEV。
+- 如果要改 DB schema、RLS 或 production release，必須走對應 Supabase / deployment-release-gate。
+
+### DEV-037: 行事曆訂閱來源範圍清晰化
+
+狀態: Ready for RD / SPEC + QA Ready
+節點類型: 交付點
+優先級: P1 settings IA and data-scope clarity
+父交付點: DEV-036 Trello-like Workspace Governance
+是否計入產品交付完成: 是
+建立日期: 2026-06-29
+
+關聯需求:
+- 使用者指出設定頁「工作區」與「看板」邏輯混亂，看不出來自己在訂閱哪一個範圍。
+- 需要用 HCS `#問對問題 #差距分析 #設計思考 #溝通設計` 提出優化方案，並由 Dev PM 寫成開發文件。
+- DEV-036 已決定 Workspace 採 Trello-like 容器模型；行事曆訂閱必須延續該語意。
+
+HCS 引導補齊:
+- `#問對問題`：這個頁面真正要回答的是「我要把哪個任務範圍同步到外部行事曆？」
+- `#差距分析`：現有 filters 只有 `workspace_ids / assignee / date_types`，不能明確表達單一 Board scope；UI 也沒有 canonical source summary。
+- `#設計思考`：從 active board 進入設定時，使用者最常見期待是訂閱目前看板；進階的 workspace / custom scope 不能成為預設。
+- `#溝通設計`：每筆訂閱必須拆成 `來源` 與 `條件`，訂閱名稱只作為使用者自訂標籤。
+
+核心決策:
+- 新增訂閱預設來源：有 active board 時為 `目前看板`；沒有 active board 時為目前 Workspace 的 `工作區全部看板`。
+- UI 第一段改為 `訂閱範圍`，支援 `目前看板`、`工作區全部看板`、`自訂範圍` 的語意分層。
+- 資料契約延伸 `CalendarSubscriptionFilters`，加入 `scope_type?: 'board' | 'workspace' | 'custom'` 與 `project_ids?: string[]`。
+- 既有缺少 `scope_type` 的訂閱視為 legacy `workspace` scope，UI 顯示 `工作區全部看板`。
+- Board scope 必須由 Edge Function 與 DB validation 共同保證，不可只有前端文案。
+
+交付文件:
+- `ai-doc/specs/SPEC-037-calendar-subscription-source-scope-clarity.md`
+- `ai-doc/qa/QA-DEV-037-calendar-subscription-source-scope-clarity.md`
+
+RD 執行範圍:
+- 更新 `CalendarSubscriptionFilters` type、service normalizer 與 create/update payload。
+- 新增或延伸 Board / Project ref 查詢，讓 UI 能顯示 Workspace / Board path。
+- 更新 `public.calendar_subscription_filter_allowed(filters jsonb)`，驗證 `scope_type` / `project_ids` / project-to-workspace 關係與使用者權限。
+- 更新 `supabase/functions/calendar-feed/index.ts`，feed request 每次依 membership 與 project scope 重新計算 allowed projects。
+- 改造 `CalendarSubscriptionsView`：建立表單、即時預覽、訂閱列表 summary、edit flow 與 mobile layout。
+- 補 static verifier、browser verifier 與 ICS feed verifier。
+
+交付邊界:
+- 不做 Google Calendar write API 或雙向同步。
+- 不新增 billing、seat、quota 或 realtime subscription。
+- 不重做整個 Settings IA。
+- 不變更 DEV-036 Workspace / Board 核心模型。
+
+RD acceptance:
+- 使用者建立訂閱前能清楚知道來源是目前看板、工作區全部看板，或自訂範圍。
+- Board scope 的 `.ics` feed 不包含其他看板任務。
+- Workspace scope 的 `.ics` feed 只包含使用者仍有權讀取的看板任務。
+- 既有 legacy 訂閱仍可讀取、修改、停用、重新產生連結，且 UI 顯示為 `工作區全部看板`。
+- 訂閱列表每筆都有 `來源` 與 `條件`，不需要使用者從名稱猜測。
+- Mobile viewport 不因來源摘要造成文字重疊、裁切或水平 overflow。
+
+RD exit gate:
+- `npm.cmd run verify:dev-037-calendar-subscription-source-scope`
+- `npm.cmd run verify:dev-037-calendar-subscription-source-scope-browser`
+- `npm.cmd run verify:calendar-feed-ics`
+- `npm.cmd run verify:settings-project-context`
+- `npm.cmd run verify:settings-project-context-browser`
+- `npm.cmd run verify:dev-036-trello-like-workspace-governance`
+- `npm.cmd run verify:dev-026-trello-like-board-share-ui`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+
+Stop conditions:
+- 如果無法在 Edge Function 中可靠限制 `project_id`，停止，不得宣告 Board scope 完成。
+- 如果 DB validation 無法驗證 `project_ids`，停止並先補 migration / DB QC。
+- 如果 UI 只能改文案但資料仍只能表達 workspace scope，不得把選項命名為 `目前看板`。
+- 如果需要部署 Edge Function 或套 migration，必須走 deployment-release-gate。
+
+### DEV-036: Trello-like Workspace Governance
+
+狀態: Implemented / Local Automated QC Passed / DB unchanged
+節點類型: 交付點
+優先級: P1 workspace governance / IA correction
+父交付點: 無
+是否計入產品交付完成: 是
+建立日期: 2026-06-29
+
+關聯需求:
+- 使用者決定 ProJED 改成與 Trello 類似的 Workspace 模型。
+- 開發計畫不得再局限於固定「我的工作區」與「共用工作區」兩項。
+- Workspace 應作為多張 Board 的治理容器；Board 作為具體專案與任務執行單位。
+
+核心決策:
+- 採 Trello-like Workspace 模型。
+- 使用者可建立多個 Workspace。
+- 不限制為「我的工作區 / 共用工作區」兩筆固定資料。
+- 「我的 / 共用」若保留，只能作為輔助 filter / view，不是資料模型。
+- Board sharing 不會自動搬移 Workspace。
+- Board 跨 Workspace 移動仍沿用 DEV-025 受控搬移。
+
+HCS 引導決策（2026-06-29）:
+- `1A`: 新增 Workspace 入口放在 Sidebar「工作區選單」標題列右側，以 `+` icon button 呈現，tooltip / accessible label 為 `新增工作區`。
+- `2A`: Workspace create 採 backend-success-first；後端成功前不得寫入前端 Workspace 清單、active workspace 或 localStorage。
+- `3A`: First-run 只自動建立 `我的工作區`，但使用者後續可建立多個 Workspace；authenticated user 可建立 Workspace，建立者成為 owner。
+
+交付文件:
+- `ai-doc/decisions/ADR-036-trello-like-workspace-governance.md`
+- `ai-doc/specs/SPEC-036-trello-like-workspace-governance.md`
+- `ai-doc/qa/QA-DEV-036-trello-like-workspace-governance.md`
+- `ai-doc/qc/QC-DEV-036-trello-like-workspace-governance.md`
+
+End-State Architecture:
+- `tenants` 保持作為 Workspace。
+- `projects` 保持作為 Board。
+- `tenant_members` 管 Workspace 成員與 owner/admin 繼承。
+- `project_members` 管 Board 可見性與寫入權限。
+- Workspace 可代表公司、部門、團隊、外部協作範圍或大型工作群。
+
+Phase Roadmap:
+- Phase 0：PM / Architecture Alignment，建立 ADR / SPEC / QA / 文件索引。本輪完成。
+- Phase 1：Workspace Create / Navigation MVP，Sidebar 工作區選單標題列右側新增 `+` 入口、dialog 建立 Workspace、backend-success-first create、First-run 建立 `我的工作區`、Home/Sidebar 支援多 Workspace 分組瀏覽、空 Workspace 建立 Board CTA。
+- Phase 2：Workspace Settings / Member Governance，補 Workspace members、roles、owner/admin 管理與 Board guest-like access 說明。
+- Phase 3：Board Placement / Move UX Polish，整合 DEV-025 preview/confirm flow，維持受控搬移。
+- Phase 4：Workspace Overview，規劃跨 Board table/calendar/activity overview。
+
+本輪 RD 實作範圍:
+- Sidebar「工作區選單」標題列右側新增 `新增工作區` `+` icon button。
+- 新增 Workspace dialog 具備名稱輸入、空白阻擋、建立中防 double submit、成功/失敗可見回饋。
+- `addWorkspace` 改為 Promise / awaitable contract，採 backend-success-first，後端成功後才更新 store 與 localStorage。
+- First-run 自動建立 `我的工作區` 改走相同 Promise flow；失敗時 toast，不建立本機假 workspace。
+- Home 改為 Workspace 分組呈現 Boards；空 Workspace 顯示 `建立看板` CTA。
+- local-test seed 修正為可恢復 `home + no activeBoard` 狀態，避免新增空 Workspace 後 reload 被帶回基準看板。
+- 補 DEV-036 static verifier、browser verifier、package scripts 與 QC 文件。
+
+交付邊界:
+- 未新增 Supabase migration。
+- 未修改 RLS、Workspace member settings、Board guest-like access、billing、quota 或 production deployment。
+
+Phase 1 RD acceptance:
+- Sidebar 工作區選單標題列右側有 `新增工作區` `+` icon button。
+- 新增 Workspace dialog 具備名稱輸入、空白阻擋、建立中防 double submit、成功/失敗可見回饋。
+- `addWorkspace` 或等效 store action 採 Promise / awaitable contract，後端成功後才更新 store 與 localStorage。
+- First-run 沒有任何 Workspace 時建立 `我的工作區`，且失敗時不建立本機假資料。
+- Home 以 Workspace 分組呈現 Boards；空 Workspace 顯示 `建立看板` CTA。
+- 建立第二個以上 Workspace 後 reload 仍存在，且 Board 不會混入其他 Workspace。
+
+Phase 1 RD exit gate:
+- `npm.cmd run verify:dev-036-trello-like-workspace-governance`
+- `npm.cmd run verify:dev-036-trello-like-workspace-governance-browser`
+- `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`
+- `npm.cmd run verify:dev-035-workspace-delete-browser`
+- `npm.cmd run verify:dev-030-sidebar-rename-contract`
+- `npm.cmd run verify:dev-030-sidebar-rename-contract-browser`
+- `npm.cmd run verify:dev-025-project-workspace-transfer`
+- `npm.cmd run verify:dev-026-trello-like-board-share-ui`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+
+本輪驗證結果:
+- Pass: `npm.cmd run verify:dev-036-trello-like-workspace-governance`，24/24。
+- Pass: `npm.cmd run verify:dev-036-trello-like-workspace-governance-browser`。
+- Pass: `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`，22/22。
+- Pass: `npm.cmd run verify:dev-035-workspace-delete-browser`。
+- Pass: `npm.cmd run verify:dev-030-sidebar-rename-contract`，9/9。
+- Pass: `npm.cmd run verify:dev-030-sidebar-rename-contract-browser`。
+- Pass: `npm.cmd run verify:dev-025-project-workspace-transfer`。
+- Pass: `npm.cmd run verify:dev-026-trello-like-board-share-ui`，15/15。
+- Pass: `npm.cmd exec tsc -- --noEmit`。
+- Pass: `$env:NODE_OPTIONS='--max-old-space-size=4096'; npm.cmd run build`。
+
+Stop conditions:
+- 若發現既有 schema / RLS 無法支援多 Workspace 建立與 Board visibility，需停止並補 Supabase design review。
+- 若需要更改 `tenant_members` / `project_members` constraint 或 guest-like access，需另開 migration plan 與 DB QC。
+- 若 Workspace create 無法做到 backend-success-first，需停止，不得改回 optimistic ghost workspace。
+- 若要部署或套 migration，需走 deployment-release-gate。
+
+### DEV-035: 工作區刪除持久化修正
+
+狀態: Implemented / Local Automated QC Passed / Supabase DB QC Pending
+節點類型: 交付點
+優先級: P0 data consistency bug
+父交付點: 無
+是否計入產品交付完成: 是
+建立日期: 2026-06-29
+
+關聯需求:
+- 使用者回報工作區已刪除，但重新整理後又出現在工作區清單。
+- 截圖顯示刪除入口來自工作區右鍵選單，正式站重新整理後後端資料重新載回。
+
+任務目標:
+- 工作區刪除必須以後端持久化成功為準，不得先讓 UI 假裝刪除成功。
+- Supabase 正式環境需提供 owner-only workspace delete RPC，避免直接依賴缺少 RLS policy 的 `tenants.delete()`。
+- 刪除失敗時必須顯示使用者可見錯誤，不可只 `console.error`。
+- 刪除 active workspace 後必須清除 active workspace / board / modal 與 localStorage 殘留，避免重新整理後指向不存在資料。
+
+目前根因判斷:
+- `useBoardStore.removeWorkspace` 目前先 optimistic 移除 state，再呼叫 `workspaceService.delete(wsId).catch(console.error)`。
+- `supabaseWorkspaceService.delete` 目前直接刪 `public.tenants`。
+- 現有 Supabase migration 沒有 `tenants` delete policy 或受控 delete RPC；正式 backend delete 很可能失敗，reload 後 `useSupabaseSync` 重新載回同一筆 workspace。
+
+交付文件:
+- `ai-doc/specs/SPEC-035-workspace-delete-persistence-fix.md`
+- `ai-doc/qa/QA-DEV-035-workspace-delete-persistence-fix.md`
+- `ai-doc/qc/QC-DEV-035-workspace-delete-persistence-fix.md`
+
+RD 執行範圍:
+- 新增 Supabase `public.delete_workspace(target_tenant_id uuid)` RPC，限定 active owner 可執行，並設定 revoke/grant。
+- `supabaseWorkspaceService.delete` 改呼叫 RPC。
+- `removeWorkspace` 改為 async，後端成功後才更新 Zustand state。
+- `GlobalContextMenu` await delete result，成功/失敗 toast 清楚回報。
+- 補 static verifier、browser verifier 與 package scripts。
+
+RD exit gate:
+- `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`
+- `npm.cmd run verify:dev-035-workspace-delete-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+
+本輪驗證結果:
+- Pass: `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`，21/21。
+- Pass: `npm.cmd run verify:dev-035-workspace-delete-browser`，涵蓋取消確認、刪除後 reload 不復活、active workspace cleanup、mobile reload smoke。
+- Pass: `npm.cmd exec tsc -- --noEmit`。
+- Pass: `$env:NODE_OPTIONS='--max-old-space-size=4096'; npm.cmd run build`。
+- Pass: `npm.cmd run verify:core-regression-static`，10/10。
+- Pass: `npm.cmd run verify:dev-030-sidebar-rename-contract`，9/9。
+- Pass: `npm.cmd run verify:dev-030-sidebar-rename-contract-browser`。
+
+交付邊界:
+- 已新增 Supabase migration 檔，但本輪未套用到遠端資料庫、未部署正式站。
+- Supabase CLI 在本機不可用，因此 owner/admin/member/viewer DB role QC 需等 migration 套用到目標資料庫後執行。
+
+QA 驗證計畫:
+- Static：migration RPC、owner-only guard、revoke/grant、service RPC、store async contract、UI toast、package script。
+- Browser：local-test 刪除 workspace 後 reload 不復活；刪 active workspace 不殘留 active board；取消 confirm 不刪除；mobile viewport 不重疊。
+- Supabase DB QC：owner 成功、admin/member/viewer 失敗、cascade 後一般 authenticated user 不可讀 tenant-scoped data。
+
+治理註記:
+- 不另建 ADR；本輪是修復既有 owner-only delete 行為，未新增新的 workspace lifecycle、soft delete 或角色政策。
+- 若後續要做 workspace recycle bin、復原或 admin 可刪除，需另開 ADR。
+
+### DEV-034: App 快速啟動與加入主畫面 UX
+
+狀態: Done / Browser QC Passed / Local-first scope
+節點類型: 交付點
+優先級: P0 mobile quick-capture readiness
+父交付點: 無
+是否計入產品交付完成: 是
+建立日期: 2026-06-29
+
+關聯需求:
+- 使用者指出 App 開啟等待時間對出差臨時記雜事不友善。
+- 使用者要求快取與更新不需使用者另外操作，或最多第一次操作一次後永久設定。
+- 使用者指出加入主畫面 UI 說明太複雜，使用者不知道怎麼用，需做到不再回頭問開發人員。
+
+任務目標:
+- App Shell 透過 PWA 快取與背景更新策略提升再次開啟速度，且更新不可被舊快取卡死。
+- 加入主畫面引導需自動出現或在設定頁永久可查，不要求使用者理解技術名詞。
+- 依平台分流：iOS Safari 顯示三步驟、Android/Desktop 可用原生安裝提示、內建瀏覽器先導到 Safari / Chrome。
+- QuickCaptureShell 需讓使用者在完整資料載入前可先記文字。
+- local-first pending queue 需將快記先保存為私人 `InboxItem`，避免等待 workspace / board / records / members 全部載入。
+
+目前 RD 範圍:
+- DEV-034A：PWA 更新基礎已先行完成，採 `vite-plugin-pwa`、背景檢查與下次開啟套用策略。
+- DEV-034B：PWA 安裝助理已驗證，新增自動提示、設定頁快速開啟入口、安裝偏好記憶與平台分流文案。
+- DEV-034C：QuickCaptureShell 已驗證，掛在 `AuthGate` 外，登入檢查/資料升級/主 App lazy loading 前可先輸入。
+- DEV-034D：local-first pending queue 已驗證，以 localStorage 保存 `syncStatus=pending` 的私人 `InboxItem`；正式雲端 Inbox 與轉任務接 SPEC-002 後續。
+
+交付文件:
+- `ai-doc/specs/SPEC-034-fast-start-pwa-install-guidance.md`
+- `ai-doc/qc/QC-DEV-034-fast-start-pwa-install-guidance.md`
+
+RD exit gate:
+- `npm.cmd run verify:dev-034-pwa-install-guidance`
+- `npm.cmd run verify:dev-034-pwa-install-guidance-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run lint -- --quiet`
+- `npm.cmd run build`
+- Browser smoke：設定頁需可看到 `快速開啟` 與加入主畫面助理，不得出現水平溢位或對使用者暴露技術詞。
+- Browser smoke：未登入手機畫面可先存一筆快記到本機收件匣，且不得遮擋後續設定入口。
+
+Verified（2026-06-29）:
+- `npm.cmd run verify:dev-034-pwa-install-guidance`: Pass，24/24。
+- `npm.cmd run verify:dev-034-pwa-install-guidance-browser`: Pass，輸出 `output/playwright/dev-034-quick-capture-before-login-mobile.png`、`output/playwright/dev-034-pwa-install-guidance-desktop.png`、`output/playwright/dev-034-pwa-install-guidance-mobile.png`。
+- `npm.cmd exec tsc -- --noEmit`: Pass。
+- `npm.cmd run lint -- --quiet`: Pass。
+- `npm.cmd run build`: Pass，產出 `dist/sw.js`、`dist/workbox-6c1be909.js`、`dist/manifest.webmanifest`。
+
+殘留邊界:
+- 本輪 local-first queue 不等於正式雲端 Inbox；跨裝置同步、今日區塊、指派/分享、轉正式任務仍屬 SPEC-002 後續交付。
+
 ## PM Update - 2026-06-19
 
 ### DEV-028: 四模式一致的 Trello-like 任務操作契約
@@ -408,7 +767,7 @@ Implementation evidence:
 
 ### DEV-024: AI整理保留手寫內容與章節結構
 
-狀態: Ready
+狀態: Implemented / Browser QC Passed / DB unchanged
 節點類型: 開發點
 優先級: P1 AI synthesis guard
 父交付點: DEV-011 / DEV-012 / DEV-020
@@ -465,19 +824,27 @@ Implementation evidence:
 主要文件：
 - `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md`
 - `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md`
+- `ai-doc/qc/QC-DEV-023-record-project-change-import-workflow-step.md`
 
 | 階段 | 負責角色 | 狀態 | 交付物 |
 |---|---|---|---|
-| 規格 | PM/RD | Ready | SPEC-023 |
-| 驗證計畫 | QA | Ready | QA-DEV-023 |
-| 實作 | RD | Pending | workflow first-step integration |
-| 事實驗證 | QC/Verifier | Pending | DEV-023 workflow-step verifier |
+| 規格 | PM/RD | Implemented | SPEC-023 |
+| 驗證計畫 | QA | Browser QC Passed | QA-DEV-023 |
+| 實作 | RD | Implemented | workflow first-step integration |
+| 事實驗證 | QC/Verifier | Browser QC Passed | DEV-023 workflow-step verifier |
 
-驗證證據暫列：
-- `SPEC-023`
-- `QA-DEV-023`
-- `verify:dev-023-record-project-change-import-workflow-step`
-- 待 RD 實作後重跑 DEV-020 / DEV-021 / DEV-022 regression gates。
+驗證證據：
+- Pass: `npm.cmd run verify:dev-023-record-project-change-import-workflow-step`，18 checks。
+- Pass: `npm.cmd run verify:dev-020-record-workflow-redesign`。
+- Pass: `npm.cmd run verify:dev-020-project-change-import-browser`，截圖 `output/playwright/dev-020-record-workflow-1440.png`、`output/playwright/dev-020-record-workflow-1024.png`。
+- Pass: `npm.cmd run verify:dev-021-project-change-ai-preserve`。
+- Pass: `npm.cmd run verify:dev-022-project-change-single-record`。
+- Pass: `npm.cmd exec tsc -- --noEmit`。
+- Pass: `$env:NODE_OPTIONS='--max-old-space-size=4096'; npm.cmd run build`。
+
+交付邊界：
+- 不新增資料庫 schema、migration 或 record content persistence 格式。
+- QA 文件要求的 ROT-001 至 ROT-007 人工真實點擊測試尚未人工簽核；本輪完成自動化 browser QC。
 
 ### DEV-022: 專案變化匯入後 AI整理同整成單一會議紀錄
 
@@ -755,7 +1122,7 @@ CAPA 來源：
 | DEV-016 | 開發點 | DEV-002 | Done | 紀錄庫改為條列式清單 | `verify:dev-016-records-list-view`、browser verifier |
 | DEV-017 | 開發點 | DEV-005 / DEV-010 | Done | 會議紀錄右側欄可拖拉調整並記憶寬度 | `verify:dev-017-record-sidebar-resize`、browser verifier |
 | DEV-019 | 開發點 | DEV-002 / DEV-005 / DEV-018 | Done | 紀錄類型與會議流程層級重整 | `SPEC-019`、`QA-DEV-019`、`verify:dev-010-action-feedback`、`verify:dev-019-record-type-layering-browser` |
-| DEV-023 | 開發點 | DEV-020 | Ready | 專案變化匯入整併為紀錄流程第一步 | `SPEC-023`、`QA-DEV-023`、`verify:dev-023-record-project-change-import-workflow-step` |
+| DEV-023 | 開發點 | DEV-020 | Implemented / Browser QC Passed / DB unchanged | 專案變化匯入整併為紀錄流程第一步 | `SPEC-023`、`QA-DEV-023`、`QC-DEV-023`、`verify:dev-023-record-project-change-import-workflow-step`、`verify:dev-020-project-change-import-browser` |
 | DEV-024 | 開發點 | DEV-011 / DEV-012 / DEV-020 | Ready | AI整理保留手寫內容與章節結構 | `SPEC-024`、`QA-DEV-024`、`verify:dev-024-ai-synthesis-preserve-human-draft` |
 
 ---

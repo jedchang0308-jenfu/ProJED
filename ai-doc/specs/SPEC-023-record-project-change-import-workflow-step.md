@@ -3,7 +3,7 @@
 對應 DEV: DEV-023  
 父交付點: DEV-020  
 節點類型: 開發點  
-狀態: Ready  
+狀態: Implemented / Browser QC Passed
 優先級: P1  
 是否計入產品交付完成: 否
 
@@ -85,6 +85,17 @@ The product implementation should keep existing DEV-020 / DEV-021 / DEV-022 mark
 - 不改資料庫 schema，不改 record content persistence 格式。
 - DEV-021 / DEV-022 project change preserve 與 single-record merge verifier 必須仍通過。
 
+## 實作與 QC 結果
+
+2026-06-29 已確認 DEV-023 行為落地：
+
+- 會議紀錄 workflow 第一格為 `匯入`，流程為 `匯入 -> 速記 -> AI整理 -> 校稿 -> 發布`。
+- 個人工作紀錄 workflow 第一格為 `匯入`，流程為 `匯入 -> 撰寫 -> 存草稿 -> 發布`。
+- `data-project-change-import-panel` 預設收合，點擊 `匯入` 後在 `data-record-composer-workflow` 內展開。
+- Project change preview / insert 仍走 `wrapProjectChangeImportContent`。
+- DEV-021 preserve 與 DEV-022 single-record guard 已通過回歸。
+- 本 DEV 未新增資料庫 schema、migration 或 record content persistence 格式。
+
 ## Regression Gate
 
 RD 完成後至少需通過：
@@ -98,4 +109,3 @@ npm.cmd run verify:dev-023-record-project-change-import-workflow-step
 npm.cmd exec tsc -- --noEmit
 npm.cmd run build
 ```
-

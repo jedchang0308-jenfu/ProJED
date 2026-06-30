@@ -368,6 +368,10 @@ export interface Database {
         Args: { tenant_name: string };
         Returns: TenantRow;
       };
+      delete_workspace: {
+        Args: { target_tenant_id: string };
+        Returns: void;
+      };
       accept_board_invite: {
         Args: { invite_token_hash: string };
         Returns: BoardInviteRow;
