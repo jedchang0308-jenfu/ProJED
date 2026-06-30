@@ -104,6 +104,17 @@ const isMissingBoardRolePermissionsTableError = (error: unknown) => {
     || message.includes('board_role_permissions');
 };
 
+const isMissingDeleteWorkspaceRpcError = (error: unknown) => {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : String(error ?? '');
+  return message.includes('Could not find the function public.delete_workspace')
+    || message.includes('delete_workspace(target_tenant_id)')
+    || (message.includes('delete_workspace') && message.includes('schema cache'));
+};
+
 const assertNoTagTableError = (error: { message: string } | null) => {
   if (!error) return false;
   if (isMissingTagTableError(error)) {
@@ -554,6 +565,9 @@ export const supabaseWorkspaceService = {
     const { error } = await supabase.rpc('delete_workspace', {
       target_tenant_id: tenantId,
     });
+    if (isMissingDeleteWorkspaceRpcError(error)) {
+      throw new Error('資料庫尚未載入 delete_workspace RPC。請套用最新 Supabase migration，或在 SQL Editor 執行 schema cache reload 後再試。');
+    }
     assertNoError(error);
   },
 };
