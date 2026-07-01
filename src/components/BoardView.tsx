@@ -20,9 +20,13 @@ import { useWbsStore } from '../store/useWbsStore';
 import useRecordStore from '../store/useRecordStore';
 import useDialogStore from '../store/useDialogStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
+import { TaskDragOverlayPreview } from './Wbs/TaskDragOverlayPreview';
+import { TaskZoneBoardPanel } from './TaskZoneView';
 import { compactClassNames } from './ui/compactTokens';
 import type { TaskNode, TaskStatus } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
+import useTaskZoneStore from '../store/useTaskZoneStore';
+import { toast } from '../store/useToastStore';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -45,8 +49,10 @@ const BoardView = () => {
     const recordDraft = useRecordStore(s => s.draft);
     const exitRecordTaskSelectionMode = useRecordStore(s => s.exitTaskSelectionMode);
     const addNode = useWbsStore(s => s.addNode);
+    const upsertNodeLocal = useWbsStore(s => s.upsertNodeLocal);
     const updateNode = useWbsStore(s => s.updateNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
+    const placeTaskOnBoard = useTaskZoneStore(s => s.placeTaskOnBoard);
     const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
@@ -106,7 +112,7 @@ const BoardView = () => {
         const collisions = pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
         const activeType = args.active?.data.current?.type;
 
-        if (['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '')) {
+        if (['wbs-column', 'wbs-card', 'wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '')) {
             const checklistDropCollision = collisions.find((collision: any) => {
                 const container = typeof args.droppableContainers?.get === 'function'
                     ? args.droppableContainers.get(collision.id)
@@ -170,8 +176,20 @@ const BoardView = () => {
      * 7. wbs-checklist → wbs-checklist    : 同卡片內任務排序 ✨新增
      */
     const handleDragStart = (event: any) => {
-        if (!canMoveTask) return;
         const { active } = event;
+        const activeType = active.data.current?.type;
+        if (activeType === 'quick-capture-item' || activeType === 'personal-task-zone-item') {
+            if (!canCreateTask) return;
+            lastValidOverRef.current = null;
+            setActiveDrag({
+                id: active.id,
+                type: activeType,
+                title: active.data.current?.title || '未命名任務',
+            });
+            return;
+        }
+
+        if (!canMoveTask) return;
         const nodeId = active.data.current?.nodeId;
         lastValidOverRef.current = null;
         setActiveDrag({
@@ -374,6 +392,43 @@ const BoardView = () => {
         return null;
     };
 
+    const getTaskZoneDropIntent = (overData: any, nodesRecord: Record<string, TaskNode>) => {
+        if (!overData) return null;
+        const targetType = overData.type;
+        const targetNode = nodesRecord[overData.nodeId];
+        const parentIndex = buildPreviewParentIndex(nodesRecord);
+
+        if (targetType === 'wbs-column') {
+            return {
+                parentId: overData.nodeId,
+                order: getAppendOrder(overData.nodeId, undefined, nodesRecord, parentIndex),
+                insertBeforeId: null,
+                insertAfterId: null,
+            };
+        }
+
+        if (targetType === 'wbs-card' || targetType === 'wbs-checklist') {
+            if (!targetNode) return null;
+            return {
+                parentId: targetNode.parentId,
+                order: targetNode.order,
+                insertBeforeId: targetNode.id,
+                insertAfterId: null,
+            };
+        }
+
+        if (targetType === 'wbs-card-drop' || targetType === 'wbs-checklist-drop') {
+            return {
+                parentId: overData.nodeId,
+                order: getAppendOrder(overData.nodeId, undefined, nodesRecord, parentIndex),
+                insertBeforeId: null,
+                insertAfterId: null,
+            };
+        }
+
+        return null;
+    };
+
     const isValidDropIntent = (draggedNodeId: string, intent: any, nodesRecord: Record<string, TaskNode>) => {
         if (!intent) return false;
         if (intent.parentId === draggedNodeId) return false;
@@ -384,16 +439,19 @@ const BoardView = () => {
     const lastValidOverRef = React.useRef<any>(null);
 
     const handleDragOver = (event: any) => {
-        if (!canMoveTask) return;
         const { active, over } = event;
+        if (active?.data.current?.type === 'quick-capture-item' || active?.data.current?.type === 'personal-task-zone-item') {
+            if (!canCreateTask) return;
+        } else if (!canMoveTask) {
+            return;
+        }
         if (over && active?.id !== over.id) {
             lastValidOverRef.current = over;
         }
     };
 
-    const handleDragEnd = (event: any) => {
+    const handleDragEnd = async (event: any) => {
         setActiveDrag(null);
-        if (!canMoveTask) return;
         const { active, over } = event;
         const effectiveOver = over && active.id !== over.id ? over : lastValidOverRef.current;
         lastValidOverRef.current = null;
@@ -402,6 +460,31 @@ const BoardView = () => {
         const activeData = active.data.current;
         const overData = effectiveOver.data.current;
         const state = useWbsStore.getState();
+        if (activeData?.type === 'quick-capture-item' || activeData?.type === 'personal-task-zone-item') {
+            if (!canCreateTask || !activeWorkspaceId || !activeBoardId) return;
+            const intent = getTaskZoneDropIntent(overData, state.nodes);
+            if (!intent) return;
+
+            try {
+                const placedTask = await placeTaskOnBoard({
+                    taskId: activeData.taskId || activeData.itemId,
+                    workspaceId: activeWorkspaceId,
+                    boardId: activeBoardId,
+                    parentId: intent.parentId,
+                    order: intent.order,
+                    insertBeforeId: intent.insertBeforeId,
+                    insertAfterId: intent.insertAfterId,
+                });
+                upsertNodeLocal(placedTask);
+                toast.success('已歸位到看板。');
+            } catch (error) {
+                const message = error instanceof Error ? error.message : '任務歸位失敗。';
+                toast.error(message);
+            }
+            return;
+        }
+
+        if (!canMoveTask) return;
         const draggedNode = state.nodes[activeData?.nodeId];
         const intent = getDropIntent(activeData, overData, state.nodes);
 
@@ -450,7 +533,8 @@ const BoardView = () => {
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
         >
-            <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
+            <div className="relative flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
+                <TaskZoneBoardPanel canCreateTask={canCreateTask} />
                 {isRecordTaskSelectionMode && (
                     <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
                         <div className="flex items-center justify-between gap-3">
@@ -530,12 +614,13 @@ const BoardView = () => {
                 </div>
             </div>
             <DragOverlay dropAnimation={null}>
-                {activeDrag?.node ? (
-                    <div className={`task-title-text rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
-                        activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
-                    }`}>
-                        {activeDrag.node.title || '未命名任務'}
-                    </div>
+                {activeDrag?.type === 'quick-capture-item' || activeDrag?.type === 'personal-task-zone-item' ? (
+                    <TaskDragOverlayPreview title={activeDrag.title || '未命名任務'} />
+                ) : activeDrag?.node ? (
+                    <TaskDragOverlayPreview
+                        title={activeDrag.node.title || '未命名任務'}
+                        widthClass={activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'}
+                    />
                 ) : null}
             </DragOverlay>
         </DndContext>

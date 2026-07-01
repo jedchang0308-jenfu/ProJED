@@ -1,5 +1,29 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-06-30
+
+### DEV-040: 任務專區與快速任務入口
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-040-personal-task-zone-and-quick-task-entry.md` | Local + Browser + Production DB QC Passed / Deploy Pending | DEV-040 / DEV-039 / DEV-028 / SPEC-002 | 定義將高頻 `快速備忘` 工作流升級為第一級 `任務專區`：快速輸入直接建立 canonical task、個人私有 `待歸位` 任務、拖到看板定位、沿用既有 TaskNode / wbs_items / 任務拖移定位框，並保留 Phase 2 跨 workspace/project 聚合架構。 |
+| `ai-doc/qa/QA-DEV-040-personal-task-zone-and-quick-task-entry.md` | Local + Browser + Production DB QC Passed / Deploy Pending | DEV-040 | 驗證計畫涵蓋 `任務專區` 主視覺入口、快速任務建立、個人任務私有 RLS、跨裝置同步、拖到看板定位、drop indicator 與一般任務拖移一致、permission failure、DEV-039 舊資料相容、board drag/drop regression、static verifier、browser smoke verifier 與 release evidence gate。 |
+| `ai-doc/qc/QC-DEV-040-personal-task-zone-and-quick-task-entry.md` | Local + Browser + Production DB QC Passed / Deploy Pending | DEV-040 | 記錄 DEV-040 release gate evidence：static、TypeScript、build、browser smoke、production Supabase migrations、RPC/RLS grants、DB-level authenticated flow QC 與 QC task cleanup。 |
+
+PM 治理註記：DEV-040 取代「備忘先進 inbox，再轉任務」作為高頻主工作流。使用者已確認 `1B+C / 2A / 3A+C`：此功能同時是個人任務控制中心與跨工作區任務入口；快速輸入直接建立任務；需要私有 personal zone 與未來跨 workspace 聚合。第一個 RD pass 只授權 private personal task zone、`待歸位`、主視覺 `任務專區` 與拖到目前看板定位；AI 解析、團隊共用 inbox、完整跨 workspace filters 與通知/行事曆整合均延後。2026-06-30 補強後鎖定 Phase 1 DB 落點為 hidden personal project + normal `wbs_items`，不得讓 `wbs_items.project_id` nullable 或新增 global task table；主視覺 IA 為 Sidebar 一級入口 + badge + Home/board-adjacent quick entry；舊 `inbox_items` 不自動 migration，若呈現只能整合在 `任務專區` legacy 區塊。若 RD 需要新增 global task identity 或 nullable project scope，需先補 ADR。不得把 `inbox_items` 擴張成第二套完整任務系統。
+
+RD 實作註記：2026-06-30 已新增 TaskZoneView / useTaskZoneStore / taskZoneService / Supabase RPC migration / Sidebar 與 Home 主視覺入口 / BoardView personal-task-zone drag placement。2026-07-01 release gate 已通過 local static、TypeScript、build、browser smoke 與 production DB/RPC QC；production deploy 與 post-deploy smoke 尚待執行。
+
+### DEV-039: 雲端快速備忘與拖移轉任務
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-039-cloud-quick-capture-inbox-drag-to-task.md` | Done / Production DB QC Passed / Local + Browser Gates Passed | DEV-039 / DEV-034 / SPEC-002 | 定義快速記錄從本機 localStorage 升級為使用者-facing 的個人雲端備忘錄、未登入/離線 local outbox、登入後跨裝置同步、 deterministic no-token parser、promotion transaction/RPC、匿名認領與換帳號保護，以及在 BoardView 內用既有 dnd-kit 體驗拖移快記轉成正式 TaskNode。RD 已完成 migration、store、service、UI、verifier scripts、production DB/RLS/RPC QC 與 cross-session cloud visibility smoke。 |
+| `ai-doc/qa/QA-DEV-039-cloud-quick-capture-inbox-drag-to-task.md` | Done / QC Passed | DEV-039 | 驗證計畫涵蓋使用者-facing 命名 `快速備忘` / `備忘錄`、Supabase `inbox_items` RLS / Data API、local pending sync、跨裝置可見、promotion atomicity/idempotency、board permission、legacy migration、拖到欄位/卡片/checklist 建立任務、failure mode、mobile viewport 與 DEV-034/028/035/036 regression。 |
+| `ai-doc/qc/QC-DEV-039-cloud-quick-memo-inbox-drag-to-task.md` | Done / Production DB QC Passed / Local + Browser Gates Passed | DEV-039 | 記錄 DEV-039 已通過的 static、browser、TypeScript、build、DEV-028/034/035/036 regression、Supabase static gate、production migration、RLS、grants、RPC transaction、cross-session cloud visibility 與測試資料清除證據。 |
+
+PM 治理註記：DEV-039 是 DEV-034 local-first QuickCapture 的後續正式交付點，也是 SPEC-002 個人備忘錄方向的聚焦切片。使用者-facing 命名固定為 `快速備忘` / `備忘錄`，不得顯示 `收件匣` 或 `Inbox`；內部 `inbox_items` 可暫作資料契約名稱。本 DEV 明確取代 SPEC-002 中「第一版不採拖曳、改用點選插入線」的舊假設；目前授權只到雲端備忘錄、local outbox v2、匿名認領/換帳號保護、無 token parser、promotion transaction/RPC 與 BoardView drag-to-task，不包含完整筆記 / 知識庫型備忘、AI 分類、我的今日、通知中心或輕量改派。
+
 ## Documentation Map Update - 2026-06-29
 
 ### DEV-038: 設定中心作用範圍一致性與高風險防呆

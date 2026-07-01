@@ -73,7 +73,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const tags = useTagStore(s => s.tags);
-  const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const { canCreateTask, canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
 
   // 看板依賴選取 Context
@@ -96,6 +96,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
+  const isQuickMemoDrag = activeType === 'quick-capture-item' || activeType === 'personal-task-zone-item';
+  const canDropActiveAsTask = isQuickMemoDrag ? canCreateTask : canMoveTask;
   const touchTapGuard = useTouchTapGuard();
 
   // 進入編輯模式時自動聚焦並全選文字
@@ -191,7 +193,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   // 使用獨立 id `${nodeId}-card-drop` 區分「被拖動中的卡片」和「作為放置區的卡片」
   const { setNodeRef: setDropRef } = useDroppable({
     id: `${nodeId}-card-drop`,
-    disabled: !canMoveTask || activeType === 'wbs-card',
+    disabled: isQuickMemoDrag ? !canCreateTask : (!canMoveTask || activeType === 'wbs-card'),
     data: {
       type: 'wbs-card-drop',
       nodeId,
@@ -201,7 +203,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
     id: `${nodeId}-checklist-drop`,
-    disabled: !canMoveTask || !['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeNodeId === nodeId,
+    disabled: !canDropActiveAsTask || !['wbs-column', 'wbs-card', 'wbs-checklist', 'quick-capture-item', 'personal-task-zone-item', 'personal-task-zone-item'].includes(activeType || '') || activeNodeId === nodeId,
     data: {
       type: 'wbs-checklist-drop',
       nodeId,
@@ -211,7 +213,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const { setNodeRef: setChecklistAreaDropRef, isOver: isChecklistAreaDropOver } = useDroppable({
     id: `${nodeId}-checklist-area-drop`,
-    disabled: !canMoveTask || !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
+    disabled: !canDropActiveAsTask || !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '') || activeNodeId === nodeId,
     data: {
       type: 'wbs-checklist-drop',
       nodeId,
@@ -227,13 +229,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
   const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
-  const canDropIntoChecklist = canMoveTask && ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
+  const canDropIntoChecklist = canDropActiveAsTask && ['wbs-column', 'wbs-card', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '') && activeNodeId !== nodeId;
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
   const isOverChecklistDescendant = (() => {
 
-    if (activeType !== 'wbs-checklist' || overData?.type !== 'wbs-checklist' || !overNodeId) {
+    if (!['wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '') || overData?.type !== 'wbs-checklist' || !overNodeId) {
       return false;
     }
 
@@ -550,3 +552,4 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     </div>
   );
 };
+

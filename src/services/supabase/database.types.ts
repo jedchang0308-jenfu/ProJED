@@ -336,6 +336,31 @@ export type CalendarSubscriptionRow = {
   updated_at: string;
 };
 
+export type InboxItemType = 'todo' | 'someday' | 'note';
+export type InboxItemCaptureStatus = 'untriaged' | 'promoted' | 'completed' | 'archived';
+
+export type InboxItemRow = {
+  id: string;
+  owner_id: string;
+  client_mutation_id: string;
+  title: string;
+  raw_text: string;
+  detail_text: string | null;
+  item_type: InboxItemType;
+  capture_status: InboxItemCaptureStatus;
+  source_workspace_id: string | null;
+  source_project_id: string | null;
+  suggested_due_date: string | null;
+  confirmed_due_date: string | null;
+  promotion_client_mutation_id: string | null;
+  promoted_task_node_id: string | null;
+  promoted_at: string | null;
+  completed_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -361,6 +386,7 @@ export interface Database {
       rag_sync_jobs: Table<RagSyncJobRow>;
       external_rag_objects: Table<ExternalRagObjectRow>;
       calendar_subscriptions: Table<CalendarSubscriptionRow>;
+      inbox_items: Table<InboxItemRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -371,6 +397,61 @@ export interface Database {
       delete_workspace: {
         Args: { target_tenant_id: string };
         Returns: void;
+      };
+      promote_inbox_item_to_task: {
+        Args: {
+          p_inbox_item_id: string;
+          p_target_project_id: string;
+          p_target_parent_id?: string | null;
+          p_insert_before_id?: string | null;
+          p_insert_after_id?: string | null;
+          p_promotion_client_mutation_id: string;
+          p_title?: string | null;
+          p_description?: string | null;
+          p_confirmed_due_date?: string | null;
+        };
+        Returns: {
+          task_node_id: string;
+          inbox_item_id: string;
+          capture_status: string;
+          promoted_at: string;
+        }[];
+      };
+      ensure_personal_task_zone: {
+        Args: Record<string, never>;
+        Returns: {
+          tenant_id: string;
+          project_id: string;
+        }[];
+      };
+      create_personal_quick_task: {
+        Args: {
+          p_client_mutation_id: string;
+          p_title: string;
+          p_description?: string | null;
+          p_suggested_due_date?: string | null;
+          p_source_context?: Json;
+        };
+        Returns: {
+          task_node_id: string;
+          tenant_id: string;
+          project_id: string;
+        }[];
+      };
+      place_personal_task_on_board: {
+        Args: {
+          p_task_id: string;
+          p_target_project_id: string;
+          p_target_parent_id?: string | null;
+          p_insert_before_id?: string | null;
+          p_insert_after_id?: string | null;
+          p_placement_client_mutation_id: string;
+        };
+        Returns: {
+          task_node_id: string;
+          target_tenant_id: string;
+          target_project_id: string;
+        }[];
       };
       accept_board_invite: {
         Args: { invite_token_hash: string };

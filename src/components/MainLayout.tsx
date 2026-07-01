@@ -11,6 +11,7 @@ import {
   ListChecks,
   Menu,
   Network,
+  NotebookText,
   Redo2,
   SquarePen,
   Sparkles,
@@ -280,6 +281,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               <>
                 <ChevronRight size={14} className="text-slate-300" />
                 <span className="font-bold text-slate-700">工作區總覽</span>
+              </>
+            ) : null}
+
+            {currentView === 'task_zone' ? (
+              <>
+                <ChevronRight size={14} className="text-slate-300" />
+                <NotebookText size={15} className="text-primary" />
+                <span className="font-bold text-slate-700">任務專區</span>
               </>
             ) : null}
           </div>

@@ -1,8 +1,9 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, ChevronRight, LayoutDashboard, LogOut, Plus, Settings, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutDashboard, LogOut, NotebookText, Plus, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
+import useTaskZoneStore from '../store/useTaskZoneStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { toast } from '../store/useToastStore';
 
@@ -44,6 +45,7 @@ const Sidebar = () => {
   const [newWorkspaceError, setNewWorkspaceError] = React.useState('');
   const [isCreatingWorkspace, setIsCreatingWorkspace] = React.useState(false);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
+  const taskZoneCount = useTaskZoneStore((state) => state.getUnplacedCount());
   const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
   const canOpenWorkspaceContextMenu = canCreateBoard || canDeleteWorkspace;
 
@@ -188,6 +190,22 @@ const Sidebar = () => {
           >
             <ChevronRight size={18} />
           </button>
+          <button
+            onClick={() => setView('task_zone')}
+            className={`relative rounded-full p-1.5 transition-colors ${
+              currentView === 'task_zone'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+            }`}
+            title="任務專區"
+          >
+            <NotebookText size={18} />
+            {taskZoneCount > 0 ? (
+              <span className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-orange-500 px-1 text-[10px] font-bold leading-4 text-white">
+                {taskZoneCount}
+              </span>
+            ) : null}
+          </button>
           <div className="w-px flex-1 bg-slate-100" />
           <button
             onClick={() => setView('settings')}
@@ -228,6 +246,27 @@ const Sidebar = () => {
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-2">
+            <button
+              type="button"
+              onClick={() => setView('task_zone')}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                currentView === 'task_zone'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'text-slate-700 hover:bg-slate-100 hover:text-primary'
+              }`}
+              data-sidebar-task-zone="true"
+            >
+              <NotebookText size={16} className={currentView === 'task_zone' ? 'text-white/90' : 'text-slate-400'} />
+              <span className="min-w-0 flex-1 truncate text-sm font-bold">任務專區</span>
+              {taskZoneCount > 0 ? (
+                <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                  currentView === 'task_zone' ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-600'
+                }`}>
+                  {taskZoneCount}
+                </span>
+              ) : null}
+            </button>
+
             {workspaces.map((ws) => (
               <div key={ws.id} className="space-y-1">
                 <div

@@ -1,7 +1,7 @@
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
-export type ViewMode = 'home' | 'list' | 'mindmap' | 'board' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
+export type ViewMode = 'home' | 'task_zone' | 'list' | 'mindmap' | 'board' | 'gantt' | 'calendar' | 'records' | 'calendar_subscriptions' | 'settings' | 'recycle_bin';
 export type DialogType = 'confirm' | 'prompt' | 'action';
 export type DialogActionVariant = 'primary' | 'secondary' | 'danger';
 export type DragType = 'move' | 'left' | 'right';
@@ -14,8 +14,8 @@ export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type KnowledgeRecordVisibility = 'private' | 'project' | 'tenant';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
 export type InboxItemType = 'todo' | 'someday' | 'note';
-export type InboxItemCaptureStatus = 'untriaged' | 'today' | 'completed' | 'archived';
-export type InboxItemSyncStatus = 'pending' | 'synced' | 'failed';
+export type InboxItemCaptureStatus = 'untriaged' | 'promoted' | 'completed' | 'archived';
+export type InboxItemSyncStatus = 'pending' | 'syncing' | 'synced' | 'failed';
 export type CollaborationScope = 'workspace' | 'board';
 export type PermissionCapability =
   | 'read_workspace'
@@ -258,12 +258,24 @@ export interface BoardWorkspaceTransferPreview {
 
 export interface InboxItem {
   id: string;
+  schemaVersion?: number;
+  cloudId?: string | null;
+  clientMutationId?: string;
   title: string;
+  rawText?: string;
   note?: string;
+  detailText?: string | null;
   itemType: InboxItemType;
   captureStatus: InboxItemCaptureStatus;
   syncStatus: InboxItemSyncStatus;
   createdBy?: string | null;
+  createdAuthUserId?: string | null;
+  anonymousOwnerKey?: string | null;
+  requiresOwnershipConfirmation?: boolean;
+  sourceWorkspaceId?: string | null;
+  sourceBoardId?: string | null;
+  lastSyncError?: string | null;
+  migratedFromLocalOnly?: boolean;
   createdAt: number;
   updatedAt: number;
   completedAt?: number | null;
@@ -271,6 +283,52 @@ export interface InboxItem {
   suggestedDueDate?: string | null;
   confirmedDueDate?: string | null;
   promotedTaskNodeId?: string | null;
+  promotedAt?: number | null;
+  promotionClientMutationId?: string | null;
+}
+
+export interface InboxItemPromotionInput {
+  inboxItemId: string;
+  workspaceId: string;
+  boardId: string;
+  parentId: string | null;
+  insertBeforeId?: string | null;
+  insertAfterId?: string | null;
+  promotionClientMutationId: string;
+  taskNodeId: string;
+  title: string;
+  description?: string | null;
+  endDate?: string | null;
+  order: number;
+}
+
+export interface InboxItemPromotionResult {
+  item: InboxItem;
+  taskNode: TaskNode;
+}
+
+export interface PersonalTaskZoneInfo {
+  workspaceId: string;
+  boardId: string;
+}
+
+export interface PersonalQuickTaskInput {
+  clientMutationId: string;
+  title: string;
+  description?: string | null;
+  suggestedDueDate?: string | null;
+  sourceContext?: Record<string, unknown>;
+}
+
+export interface PersonalTaskPlacementInput {
+  taskId: string;
+  workspaceId: string;
+  boardId: string;
+  parentId: string | null;
+  order?: number;
+  insertBeforeId?: string | null;
+  insertAfterId?: string | null;
+  placementClientMutationId: string;
 }
 
 export type ActivityEventType =

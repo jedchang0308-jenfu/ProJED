@@ -54,6 +54,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
+  const isQuickMemoDrag = activeType === 'quick-capture-item' || activeType === 'personal-task-zone-item';
+  const canDropQuickMemo = isQuickMemoDrag && canCreateTask;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
@@ -142,7 +144,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
   const { setNodeRef: setDropNodeRef, isOver } = useDroppable({
     id: `${nodeId}-drop`,
-    disabled: !canMoveTask,
+    disabled: isQuickMemoDrag ? !canCreateTask : !canMoveTask,
     data: {
       type: 'wbs-column',
       nodeId,
@@ -176,12 +178,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   })();
   const isChecklistLayerTargeted = Boolean(
     overData?.type === 'wbs-checklist-drop' ||
-    (activeType === 'wbs-checklist' && overData?.type === 'wbs-checklist')
+    (['wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '') && overData?.type === 'wbs-checklist')
+  );
+  const canTargetCardLayer = Boolean(
+    (canMoveTask && ['wbs-card', 'wbs-checklist'].includes(activeType || '')) ||
+    canDropQuickMemo
   );
   const isCardLayerTargeted = Boolean(
     active &&
     activeNodeId !== nodeId &&
-    ['wbs-card', 'wbs-checklist'].includes(activeType || '') &&
+    canTargetCardLayer &&
     !isChecklistLayerTargeted &&
     (isOver || overData?.nodeId === nodeId || isOverColumnDescendant)
   );

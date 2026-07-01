@@ -42,6 +42,7 @@ export interface WbsBoardActions {
    * 新增單一任務節點
    */
   addNode: (node: TaskNode) => void;
+  upsertNodeLocal: (node: TaskNode) => void;
 
   /**
    * 更新任務節點 (部分欄位)
@@ -454,6 +455,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         undo: () => get().removeNode(normalizedNode.id),
         redo: () => get().addNode(normalizedNode),
     });
+  },
+
+  upsertNodeLocal: (node) => {
+    const state = get();
+    const normalizedNode = applySmartStatus(node);
+    const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
+    set({ nodes: updatedNodes });
+    get()._buildIndices(updatedNodes);
   },
 
   duplicateNodeTree: async (id, options = {}) => {

@@ -54,7 +54,7 @@ const safeSetItem = (key: string, value: string | null) => {
 const getStoredView = () => {
     try {
         const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-        if (stored && ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
+        if (stored && ['home', 'task_zone', 'list', 'mindmap', 'board', 'gantt', 'calendar', 'records', 'calendar_subscriptions', 'settings', 'recycle_bin'].includes(stored)) {
             return stored as ViewMode;
         }
     } catch { /* ignore */ }

@@ -106,22 +106,24 @@ assert(
 );
 
 assert(
-  'quick capture store persists private pending inbox items locally',
+  'quick capture store persists private pending quick memo items locally',
   source.quickCaptureStore.includes("const QUICK_CAPTURE_STORAGE_KEY = 'projed.quickCapture.inboxItems'") &&
     source.quickCaptureStore.includes('syncStatus: \'pending\'') &&
     source.quickCaptureStore.includes('captureStatus: \'untriaged\'') &&
-    source.quickCaptureStore.includes('itemType = \'note\'') &&
+    source.quickCaptureStore.includes('itemType = \'todo\'') &&
+    source.quickCaptureStore.includes('requiresOwnershipConfirmation') &&
     source.quickCaptureStore.includes('writeItems(nextItems)') &&
     source.quickCaptureStore.includes('markCompleted') &&
     source.quickCaptureStore.includes('clearCompleted'),
 );
 
 assert(
-  'InboxItem type aligns with SPEC-002 local-first fields',
+  'InboxItem type aligns with DEV-039 local-first quick memo fields',
   source.types.includes("export type InboxItemType = 'todo' | 'someday' | 'note'") &&
-    source.types.includes("export type InboxItemCaptureStatus = 'untriaged' | 'today' | 'completed' | 'archived'") &&
-    source.types.includes("export type InboxItemSyncStatus = 'pending' | 'synced' | 'failed'") &&
+    source.types.includes("export type InboxItemCaptureStatus = 'untriaged' | 'promoted' | 'completed' | 'archived'") &&
+    source.types.includes("export type InboxItemSyncStatus = 'pending' | 'syncing' | 'synced' | 'failed'") &&
     source.types.includes('export interface InboxItem') &&
+    source.types.includes('requiresOwnershipConfirmation?: boolean') &&
     source.types.includes('promotedTaskNodeId?: string | null'),
 );
 
@@ -131,8 +133,8 @@ assert(
     source.quickCaptureShell.includes('data-quick-capture-input') &&
     source.quickCaptureShell.includes('data-quick-capture-save') &&
     source.quickCaptureShell.includes('data-quick-capture-sync-status') &&
-    source.quickCaptureShell.includes('存入收件匣') &&
-    source.quickCaptureShell.includes('先存本機') &&
+    source.quickCaptureShell.includes('存入備忘錄') &&
+    source.quickCaptureShell.includes('快速備忘') &&
     source.quickCaptureShell.includes('待整理'),
 );
 

@@ -1,17 +1,35 @@
 // @ts-nocheck
 import React from 'react';
-import { Layout as LayoutIcon, Plus, Trash2, Trello } from 'lucide-react';
+import { Layout as LayoutIcon, NotebookText, Plus, SendHorizontal, Trash2, Trello } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
+import useTaskZoneStore from '../store/useTaskZoneStore';
+import { toast } from '../store/useToastStore';
 
 const HomeView = () => {
-    const { workspaces, addBoard, removeBoard, switchBoard } = useBoardStore();
+    const { workspaces, addBoard, removeBoard, switchBoard, setView } = useBoardStore();
+    const createTask = useTaskZoneStore(state => state.createTask);
+    const taskZoneCount = useTaskZoneStore(state => state.getUnplacedCount());
+    const [quickTaskTitle, setQuickTaskTitle] = React.useState('');
 
     const handleCreateBoard = async (event, workspaceId) => {
         event.preventDefault();
         const name = await useDialogStore.getState().showPrompt('請輸入新看板名稱：', '新專案');
         if (name && name.trim()) {
             addBoard(workspaceId, name.trim());
+        }
+    };
+
+    const handleQuickTaskSubmit = async (event) => {
+        event.preventDefault();
+        const title = quickTaskTitle.trim();
+        if (!title) return;
+        try {
+            await createTask({ title });
+            setQuickTaskTitle('');
+            toast.success('已建立任務，留在待歸位。');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : '快速建立任務失敗。');
         }
     };
 
@@ -31,6 +49,46 @@ const HomeView = () => {
                         </div>
                     </div>
                 </header>
+
+                <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-emerald-50 p-4 shadow-sm sm:p-5" data-home-task-zone-entry="true">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                            <div className="rounded-xl bg-white p-2 text-primary shadow-sm">
+                                <NotebookText size={22} />
+                            </div>
+                            <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-slate-900">任務專區</h3>
+                                <p className="mt-1 text-sm text-slate-600">
+                                    先把事情建立成任務，還沒決定歸屬時留在待歸位；之後拖到看板定位。
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setView('task_zone')}
+                                    className="mt-2 text-xs font-bold text-primary hover:text-primary-dark"
+                                >
+                                    查看 {taskZoneCount} 筆待歸位任務
+                                </button>
+                            </div>
+                        </div>
+                        <form onSubmit={handleQuickTaskSubmit} className="flex min-w-0 flex-1 gap-2">
+                            <input
+                                value={quickTaskTitle}
+                                onChange={(event) => setQuickTaskTitle(event.target.value)}
+                                placeholder="快速建立任務..."
+                                className="min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                data-home-task-zone-input="true"
+                            />
+                            <button
+                                type="submit"
+                                disabled={!quickTaskTitle.trim()}
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-slate-300"
+                            >
+                                <SendHorizontal size={15} />
+                                建立
+                            </button>
+                        </form>
+                    </div>
+                </section>
 
                 {workspaces.length === 0 ? (
                     <section className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">

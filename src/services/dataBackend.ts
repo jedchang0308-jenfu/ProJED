@@ -13,8 +13,14 @@ import {
   type BoardRolePermissionMatrix,
   type CurrentBoardAccess,
   type Dependency,
+  type InboxItem,
+  type InboxItemPromotionInput,
+  type InboxItemPromotionResult,
   type KnowledgeRecord,
   type KnowledgeRecordInput,
+  type PersonalQuickTaskInput,
+  type PersonalTaskPlacementInput,
+  type PersonalTaskZoneInfo,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -34,9 +40,11 @@ import {
   supabaseBoardInviteService,
   supabaseDependencyService,
   supabaseEventLogService,
+  supabaseInboxService,
   supabaseMemberService,
   supabaseNodeService,
   supabaseRecordService,
+  supabaseTaskZoneService,
   supabaseTagService,
   supabaseWorkspaceService,
 } from './supabase/projedService';
@@ -66,6 +74,12 @@ export const isSupabaseBackend = dataBackend === 'supabase';
 export const isLocalTestBackend = dataBackend === 'local-test';
 
 const BOARD_ROLE_PERMISSIONS_KEY = 'projed.boardRolePermissions';
+const FALLBACK_MEMO_CLOUD_KEY = 'projed.quickMemo.cloudItems';
+const FALLBACK_TASK_ZONE_KEY = 'projed.taskZone.personalTasks';
+const FALLBACK_TASK_ZONE: PersonalTaskZoneInfo = {
+  workspaceId: 'personal_task_zone',
+  boardId: 'personal_task_zone',
+};
 
 const getRolePermissionKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
 
@@ -106,6 +120,182 @@ const logAuditBestEffort = async (entry: Omit<AuditLogEntry, 'id' | 'actorId' | 
   } catch (error) {
     console.warn('[auditLog] Failed to write collaboration audit event:', error);
   }
+};
+
+const readFallbackMemoCloud = (): InboxItem[] => {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(FALLBACK_MEMO_CLOUD_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeFallbackMemoCloud = (items: InboxItem[]) => {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(FALLBACK_MEMO_CLOUD_KEY, JSON.stringify(items));
+};
+
+const readFallbackTaskZoneTasks = (): TaskNode[] => {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(FALLBACK_TASK_ZONE_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeFallbackTaskZoneTasks = (tasks: TaskNode[]) => {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(FALLBACK_TASK_ZONE_KEY, JSON.stringify(tasks));
+};
+
+const fallbackInboxService = {
+  list: async (): Promise<InboxItem[]> => readFallbackMemoCloud(),
+
+  upsert: async (ownerId: string, item: InboxItem): Promise<InboxItem> => {
+    const now = Date.now();
+    const cloudId = item.cloudId || `memo_cloud_${item.clientMutationId || item.id}`;
+    const synced: InboxItem = {
+      ...item,
+      id: cloudId,
+      cloudId,
+      schemaVersion: 2,
+      createdBy: ownerId,
+      createdAuthUserId: ownerId,
+      syncStatus: 'synced',
+      requiresOwnershipConfirmation: false,
+      lastSyncError: null,
+      updatedAt: now,
+    };
+    const items = readFallbackMemoCloud();
+    const next = [
+      synced,
+      ...items.filter(existing =>
+        existing.cloudId !== cloudId &&
+        existing.id !== cloudId &&
+        existing.clientMutationId !== synced.clientMutationId
+      ),
+    ];
+    writeFallbackMemoCloud(next);
+    return synced;
+  },
+
+  markCompleted: async (itemId: string): Promise<InboxItem> => {
+    const now = Date.now();
+    const items = readFallbackMemoCloud();
+    const target = items.find(item => item.id === itemId || item.cloudId === itemId);
+    if (!target) throw new Error('找不到備忘項目。');
+    const updated = { ...target, captureStatus: 'completed' as const, completedAt: now, updatedAt: now };
+    writeFallbackMemoCloud(items.map(item => item === target ? updated : item));
+    return updated;
+  },
+
+  archive: async (itemId: string): Promise<InboxItem> => {
+    const now = Date.now();
+    const items = readFallbackMemoCloud();
+    const target = items.find(item => item.id === itemId || item.cloudId === itemId);
+    if (!target) throw new Error('找不到備忘項目。');
+    const updated = { ...target, captureStatus: 'archived' as const, archivedAt: now, updatedAt: now };
+    writeFallbackMemoCloud(items.map(item => item === target ? updated : item));
+    return updated;
+  },
+
+  promote: async (input: InboxItemPromotionInput): Promise<InboxItemPromotionResult> => {
+    const now = Date.now();
+    const items = readFallbackMemoCloud();
+    const target = items.find(item => item.id === input.inboxItemId || item.cloudId === input.inboxItemId);
+    if (!target) throw new Error('找不到備忘項目。');
+    if (target.captureStatus === 'promoted' && target.promotionClientMutationId !== input.promotionClientMutationId) {
+      throw new Error('此備忘已轉成任務。');
+    }
+
+    const updated: InboxItem = {
+      ...target,
+      captureStatus: 'promoted',
+      promotedTaskNodeId: target.promotedTaskNodeId || input.taskNodeId,
+      promotedAt: target.promotedAt || now,
+      promotionClientMutationId: target.promotionClientMutationId || input.promotionClientMutationId,
+      updatedAt: now,
+    };
+    writeFallbackMemoCloud(items.map(item => item === target ? updated : item));
+
+    return {
+      item: updated,
+      taskNode: {
+        id: updated.promotedTaskNodeId || input.taskNodeId,
+        workspaceId: input.workspaceId,
+        boardId: input.boardId,
+        parentId: input.parentId,
+        title: input.title,
+        description: input.description ?? undefined,
+        status: 'todo',
+        nodeType: 'task',
+        order: input.order,
+        endDate: input.endDate ?? undefined,
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+  },
+};
+
+const fallbackTaskZoneService = {
+  ensureZone: async (): Promise<PersonalTaskZoneInfo> => FALLBACK_TASK_ZONE,
+
+  listUnplacedTasks: async (): Promise<TaskNode[]> =>
+    readFallbackTaskZoneTasks().filter(task => !task.isArchived),
+
+  createQuickTask: async (input: PersonalQuickTaskInput): Promise<TaskNode> => {
+    const now = Date.now();
+    const task: TaskNode = {
+      id: `task_zone_${input.clientMutationId || now}`,
+      workspaceId: FALLBACK_TASK_ZONE.workspaceId,
+      boardId: FALLBACK_TASK_ZONE.boardId,
+      parentId: null,
+      title: input.title,
+      description: input.description || undefined,
+      status: 'todo',
+      nodeType: 'task',
+      order: now,
+      endDate: input.suggestedDueDate || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const tasks = readFallbackTaskZoneTasks();
+    writeFallbackTaskZoneTasks([task, ...tasks.filter(existing => existing.id !== task.id)]);
+    return task;
+  },
+
+  updateTask: async (taskId: string, updates: Partial<TaskNode>): Promise<void> => {
+    const tasks = readFallbackTaskZoneTasks();
+    writeFallbackTaskZoneTasks(tasks.map(task => task.id === taskId ? { ...task, ...updates, updatedAt: Date.now() } : task));
+  },
+
+  archiveTask: async (taskId: string): Promise<void> => {
+    const tasks = readFallbackTaskZoneTasks();
+    writeFallbackTaskZoneTasks(tasks.map(task => task.id === taskId ? { ...task, isArchived: true, updatedAt: Date.now() } : task));
+  },
+
+  placeTaskOnBoard: async (input: PersonalTaskPlacementInput): Promise<TaskNode> => {
+    const tasks = readFallbackTaskZoneTasks();
+    const task = tasks.find(item => item.id === input.taskId);
+    if (!task) throw new Error('找不到待歸位任務。');
+    const placed: TaskNode = {
+      ...task,
+      workspaceId: input.workspaceId,
+      boardId: input.boardId,
+      parentId: input.parentId,
+      order: input.order ?? Date.now(),
+      updatedAt: Date.now(),
+    };
+    writeFallbackTaskZoneTasks(tasks.filter(item => item.id !== input.taskId));
+    return placed;
+  },
 };
 
 export const workspaceService = {
@@ -329,6 +519,50 @@ export const boardInviteService = {
       : isSupabaseBackend
       ? supabaseBoardInviteService.accept(input)
       : Promise.reject(new Error('Board email invites are only available with the Supabase backend.')),
+};
+
+export const inboxService = {
+  list: (): Promise<InboxItem[]> =>
+    isSupabaseBackend ? supabaseInboxService.list() : fallbackInboxService.list(),
+
+  upsert: (ownerId: string, item: InboxItem): Promise<InboxItem> =>
+    isSupabaseBackend ? supabaseInboxService.upsert(ownerId, item) : fallbackInboxService.upsert(ownerId, item),
+
+  markCompleted: (itemId: string): Promise<InboxItem> =>
+    isSupabaseBackend ? supabaseInboxService.markCompleted(itemId) : fallbackInboxService.markCompleted(itemId),
+
+  archive: (itemId: string): Promise<InboxItem> =>
+    isSupabaseBackend ? supabaseInboxService.archive(itemId) : fallbackInboxService.archive(itemId),
+
+  promote: (input: InboxItemPromotionInput): Promise<InboxItemPromotionResult> =>
+    isSupabaseBackend ? supabaseInboxService.promote(input) : fallbackInboxService.promote(input),
+};
+
+export const taskZoneService = {
+  ensureZone: (): Promise<PersonalTaskZoneInfo> =>
+    isSupabaseBackend ? supabaseTaskZoneService.ensureZone() : fallbackTaskZoneService.ensureZone(),
+
+  loadZoneTasks: async (): Promise<{ zone: PersonalTaskZoneInfo; tasks: TaskNode[] }> => {
+    if (isSupabaseBackend) return supabaseTaskZoneService.loadZoneTasks();
+    const zone = await fallbackTaskZoneService.ensureZone();
+    const tasks = await fallbackTaskZoneService.listUnplacedTasks();
+    return { zone, tasks };
+  },
+
+  listUnplacedTasks: (): Promise<TaskNode[]> =>
+    isSupabaseBackend ? supabaseTaskZoneService.listUnplacedTasks() : fallbackTaskZoneService.listUnplacedTasks(),
+
+  createQuickTask: (input: PersonalQuickTaskInput): Promise<TaskNode> =>
+    isSupabaseBackend ? supabaseTaskZoneService.createQuickTask(input) : fallbackTaskZoneService.createQuickTask(input),
+
+  updateTask: (taskId: string, updates: Partial<TaskNode>): Promise<void> =>
+    isSupabaseBackend ? supabaseTaskZoneService.updateTask(taskId, updates) : fallbackTaskZoneService.updateTask(taskId, updates),
+
+  archiveTask: (taskId: string): Promise<void> =>
+    isSupabaseBackend ? supabaseTaskZoneService.archiveTask(taskId) : fallbackTaskZoneService.archiveTask(taskId),
+
+  placeTaskOnBoard: (input: PersonalTaskPlacementInput): Promise<TaskNode> =>
+    isSupabaseBackend ? supabaseTaskZoneService.placeTaskOnBoard(input) : fallbackTaskZoneService.placeTaskOnBoard(input),
 };
 
 export const nodeService = {

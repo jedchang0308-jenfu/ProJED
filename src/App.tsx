@@ -16,6 +16,7 @@ import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
 import useRecordStore from './store/useRecordStore';
+import useTaskZoneStore from './store/useTaskZoneStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
 import { migrateLocalStorageToFirestore } from './utils/migration';
@@ -29,7 +30,6 @@ import HomeView from './components/HomeView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
 import { AppInstallAssistant } from './components/AppInstallAssistant';
-import { QuickCaptureShell } from './components/QuickCaptureShell';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
@@ -42,6 +42,7 @@ const RecordsView = lazy(() => import('./components/Records/RecordsView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 const RecycleBinView = lazy(() => import('./components/RecycleBinView'));
 const MindMapView = lazy(() => import('./components/MindMap/MindMapView'));
+const TaskZoneView = lazy(() => import('./components/TaskZoneView'));
 const WbsListView = lazy(() =>
   import('./components/Wbs/WbsListView').then(module => ({ default: module.WbsListView })),
 );
@@ -75,6 +76,7 @@ function AppContent() {
   const userEmail = user?.email ?? null;
   const userDisplayName = user?.displayName ?? null;
   const loadRecords = useRecordStore(s => s.loadRecords);
+  const loadTaskZone = useTaskZoneStore(s => s.load);
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
   const processedInviteToken = useRef<string | null>(null);
@@ -86,6 +88,11 @@ function AppContent() {
     if (!userId || !activeWorkspaceId || !activeBoardId) return;
     loadRecords(activeWorkspaceId, activeBoardId).catch(console.error);
   }, [activeBoardId, activeWorkspaceId, loadRecords, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    loadTaskZone().catch(console.error);
+  }, [loadTaskZone, userId]);
 
   useEffect(() => {
     if (!userId || dataBackend !== 'local-test') return;
@@ -239,6 +246,7 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;
+      case 'task_zone':   return <TaskZoneView />;
       case 'list':        return <WbsListView boardId={activeBoardId || ''} />; // 攔截原本的 ListView
       case 'mindmap':     return <MindMapView />;
       case 'board':       return <BoardView />;
@@ -268,7 +276,6 @@ function App() {
       <AuthGate>
         <AppContent />
       </AuthGate>
-      <QuickCaptureShell />
       <AppInstallAssistant />
       <ToastContainer />
     </>

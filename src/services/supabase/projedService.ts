@@ -18,8 +18,14 @@ import type {
   CollaborationRole,
   CurrentBoardAccess,
   Dependency,
+  InboxItem,
+  InboxItemPromotionInput,
+  InboxItemPromotionResult,
   KnowledgeRecord,
   KnowledgeRecordInput,
+  PersonalQuickTaskInput,
+  PersonalTaskPlacementInput,
+  PersonalTaskZoneInfo,
   PermissionCapability,
   RecordTaskLink,
   TagColor,
@@ -29,7 +35,7 @@ import type {
   WorkspaceMember,
 } from '../../types';
 import { isSupabaseConfigured, supabase } from './client';
-import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
+import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, InboxItemRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
 
@@ -187,6 +193,7 @@ const mapTenantToWorkspace = (tenant: TenantRow, projects: ProjectRow[] = []): W
   order: toTimestamp(tenant.created_at),
   createdAt: toTimestamp(tenant.created_at),
   boards: projects
+    .filter(project => !isPersonalTaskZoneMetadata(project.metadata))
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(project => ({
       id: legacyOrId(project.id, project.legacy_board_id),
@@ -196,6 +203,14 @@ const mapTenantToWorkspace = (tenant: TenantRow, projects: ProjectRow[] = []): W
       createdAt: toTimestamp(project.created_at),
     })),
 });
+
+const isPersonalTaskZoneMetadata = (metadata: Json | null | undefined) =>
+  Boolean(
+    metadata &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).system_scope === 'personal_task_zone'
+  );
 
 const mapProjectToBoard = (project: ProjectRow): Board => ({
   id: legacyOrId(project.id, project.legacy_board_id),
@@ -515,9 +530,11 @@ export const supabaseWorkspaceService = {
       .order('sort_order', { ascending: true });
     assertNoError(projectsError);
 
-    return (tenants ?? []).map(tenant =>
-      mapTenantToWorkspace(tenant, (projects ?? []).filter(project => project.tenant_id === tenant.id))
-    );
+    return (tenants ?? [])
+      .filter(tenant => !isPersonalTaskZoneMetadata(tenant.metadata))
+      .map(tenant =>
+        mapTenantToWorkspace(tenant, (projects ?? []).filter(project => project.tenant_id === tenant.id))
+      );
   },
 
   create: async (title?: string): Promise<Workspace> => {
@@ -571,6 +588,36 @@ export const supabaseWorkspaceService = {
     assertNoError(error);
   },
 };
+
+const mapInboxItem = (row: InboxItemRow): InboxItem => ({
+  id: row.id,
+  schemaVersion: 2,
+  cloudId: row.id,
+  clientMutationId: row.client_mutation_id,
+  title: row.title,
+  rawText: row.raw_text,
+  note: row.raw_text,
+  detailText: row.detail_text,
+  itemType: row.item_type,
+  captureStatus: row.capture_status,
+  syncStatus: 'synced',
+  createdBy: row.owner_id,
+  createdAuthUserId: row.owner_id,
+  anonymousOwnerKey: null,
+  requiresOwnershipConfirmation: false,
+  sourceWorkspaceId: row.source_workspace_id,
+  sourceBoardId: row.source_project_id,
+  suggestedDueDate: row.suggested_due_date,
+  confirmedDueDate: row.confirmed_due_date,
+  promotedTaskNodeId: row.promoted_task_node_id,
+  promotedAt: toTimestamp(row.promoted_at) ?? null,
+  promotionClientMutationId: row.promotion_client_mutation_id,
+  completedAt: toTimestamp(row.completed_at) ?? null,
+  archivedAt: toTimestamp(row.archived_at) ?? null,
+  createdAt: toTimestamp(row.created_at) ?? Date.now(),
+  updatedAt: toTimestamp(row.updated_at) ?? Date.now(),
+  lastSyncError: null,
+});
 
 export const supabaseBoardService = {
   create: async (workspaceId: string, title?: string): Promise<Board> => {
@@ -1174,6 +1221,219 @@ export const supabaseNodeService = {
       await supabaseTagService.setNodeTags(workspaceId, boardId, mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId).id, node.tagIds);
     }
     return mapWbsItemToTaskNode(data, new Map(), workspaceId, boardId);
+  },
+};
+
+export const supabaseInboxService = {
+  list: async (): Promise<InboxItem[]> => {
+    requireSupabase();
+    const { data, error } = await supabase
+      .from('inbox_items')
+      .select('*')
+      .is('archived_at', null)
+      .order('created_at', { ascending: false });
+    assertNoError(error);
+    return (data ?? []).map(row => mapInboxItem(row as InboxItemRow));
+  },
+
+  upsert: async (ownerId: string, item: InboxItem): Promise<InboxItem> => {
+    requireSupabase();
+    const sourceWorkspaceId = item.sourceWorkspaceId
+      ? await resolveWorkspaceId(item.sourceWorkspaceId)
+      : null;
+    const sourceProjectId = sourceWorkspaceId && item.sourceBoardId
+      ? await resolveProjectId(sourceWorkspaceId, item.sourceBoardId)
+      : null;
+
+    const payload: Partial<InboxItemRow> = {
+      id: item.cloudId && isUuid(item.cloudId) ? item.cloudId : undefined,
+      owner_id: ownerId,
+      client_mutation_id: item.clientMutationId || item.id,
+      title: item.title,
+      raw_text: item.rawText || item.note || item.title,
+      detail_text: item.detailText ?? null,
+      item_type: item.itemType,
+      capture_status: item.captureStatus === 'promoted' ? 'promoted' : item.captureStatus,
+      source_workspace_id: sourceWorkspaceId,
+      source_project_id: sourceProjectId,
+      suggested_due_date: item.suggestedDueDate ?? null,
+      confirmed_due_date: item.confirmedDueDate ?? null,
+      completed_at: item.completedAt ? new Date(item.completedAt).toISOString() : null,
+      archived_at: item.archivedAt ? new Date(item.archivedAt).toISOString() : null,
+    };
+
+    const { data, error } = await supabase
+      .from('inbox_items')
+      .upsert(payload, { onConflict: 'owner_id,client_mutation_id' })
+      .select()
+      .single();
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return the synced memo item.');
+    return mapInboxItem(data as InboxItemRow);
+  },
+
+  markCompleted: async (itemId: string): Promise<InboxItem> => {
+    requireSupabase();
+    const { data, error } = await supabase
+      .from('inbox_items')
+      .update({ capture_status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', itemId)
+      .select()
+      .single();
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return the completed memo item.');
+    return mapInboxItem(data as InboxItemRow);
+  },
+
+  archive: async (itemId: string): Promise<InboxItem> => {
+    requireSupabase();
+    const { data, error } = await supabase
+      .from('inbox_items')
+      .update({ capture_status: 'archived', archived_at: new Date().toISOString() })
+      .eq('id', itemId)
+      .select()
+      .single();
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return the archived memo item.');
+    return mapInboxItem(data as InboxItemRow);
+  },
+
+  promote: async (input: InboxItemPromotionInput): Promise<InboxItemPromotionResult> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(input.workspaceId);
+    const projectId = await resolveProjectId(tenantId, input.boardId);
+    const parentId = await resolveNodeId(tenantId, projectId, input.parentId);
+    const insertBeforeId = await resolveNodeId(tenantId, projectId, input.insertBeforeId);
+    const insertAfterId = await resolveNodeId(tenantId, projectId, input.insertAfterId);
+
+    const { data, error } = await supabase.rpc('promote_inbox_item_to_task', {
+      p_inbox_item_id: input.inboxItemId,
+      p_target_project_id: projectId,
+      p_target_parent_id: parentId,
+      p_insert_before_id: insertBeforeId,
+      p_insert_after_id: insertAfterId,
+      p_promotion_client_mutation_id: input.promotionClientMutationId,
+      p_title: input.title,
+      p_description: input.description ?? null,
+      p_confirmed_due_date: input.endDate ?? null,
+    });
+    assertNoError(error);
+    const promotion = Array.isArray(data) ? data[0] : data;
+    if (!promotion?.task_node_id) throw new Error('Supabase did not return the promoted task id.');
+
+    const [{ data: itemRow, error: itemError }, { data: taskRow, error: taskError }] = await Promise.all([
+      supabase.from('inbox_items').select('*').eq('id', promotion.inbox_item_id).single(),
+      supabase.from('wbs_items').select('*').eq('id', promotion.task_node_id).single(),
+    ]);
+    assertNoError(itemError);
+    assertNoError(taskError);
+    if (!itemRow || !taskRow) throw new Error('Supabase promotion result is incomplete.');
+
+    return {
+      item: mapInboxItem(itemRow as InboxItemRow),
+      taskNode: mapWbsItemToTaskNode(taskRow as WbsItemRow, new Map(), input.workspaceId, input.boardId),
+    };
+  },
+};
+
+const mapTaskZoneInfo = (row: { tenant_id: string; project_id: string }): PersonalTaskZoneInfo => ({
+  workspaceId: row.tenant_id,
+  boardId: row.project_id,
+});
+
+export const supabaseTaskZoneService = {
+  ensureZone: async (): Promise<PersonalTaskZoneInfo> => {
+    requireSupabase();
+    const { data, error } = await (supabase as any).rpc('ensure_personal_task_zone');
+    assertNoError(error);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.tenant_id || !row?.project_id) throw new Error('Supabase did not return the personal task zone.');
+    return mapTaskZoneInfo(row);
+  },
+
+  listUnplacedTasks: async (): Promise<TaskNode[]> => {
+    requireSupabase();
+    const zone = await supabaseTaskZoneService.ensureZone();
+    return supabaseNodeService.listByProject(zone.workspaceId, zone.boardId);
+  },
+
+  loadZoneTasks: async (): Promise<{ zone: PersonalTaskZoneInfo; tasks: TaskNode[] }> => {
+    requireSupabase();
+    const zone = await supabaseTaskZoneService.ensureZone();
+    const tasks = await supabaseNodeService.listByProject(zone.workspaceId, zone.boardId);
+    return { zone, tasks };
+  },
+
+  createQuickTask: async (input: PersonalQuickTaskInput): Promise<TaskNode> => {
+    requireSupabase();
+    const { data, error } = await (supabase as any).rpc('create_personal_quick_task', {
+      p_client_mutation_id: input.clientMutationId,
+      p_title: input.title,
+      p_description: input.description ?? null,
+      p_suggested_due_date: input.suggestedDueDate ?? null,
+      p_source_context: stripUndefinedForJson(input.sourceContext ?? {}) ?? {},
+    });
+    assertNoError(error);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.task_node_id || !row?.tenant_id || !row?.project_id) {
+      throw new Error('Supabase did not return the created personal task.');
+    }
+
+    const { data: taskRow, error: taskError } = await supabase
+      .from('wbs_items')
+      .select('*')
+      .eq('tenant_id', row.tenant_id)
+      .eq('project_id', row.project_id)
+      .eq('id', row.task_node_id)
+      .single();
+    assertNoError(taskError);
+    if (!taskRow) throw new Error('Supabase did not return the created personal task row.');
+    return mapWbsItemToTaskNode(taskRow as WbsItemRow, new Map(), row.tenant_id, row.project_id);
+  },
+
+  updateTask: async (taskId: string, updates: Partial<TaskNode>): Promise<void> => {
+    const zone = await supabaseTaskZoneService.ensureZone();
+    await supabaseNodeService.update(zone.workspaceId, zone.boardId, taskId, updates);
+  },
+
+  archiveTask: async (taskId: string): Promise<void> => {
+    const zone = await supabaseTaskZoneService.ensureZone();
+    await supabaseNodeService.update(zone.workspaceId, zone.boardId, taskId, {
+      isArchived: true,
+      updatedAt: Date.now(),
+    });
+  },
+
+  placeTaskOnBoard: async (input: PersonalTaskPlacementInput): Promise<TaskNode> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(input.workspaceId);
+    const projectId = await resolveProjectId(tenantId, input.boardId);
+    const parentId = await resolveNodeId(tenantId, projectId, input.parentId);
+    const insertBeforeId = await resolveNodeId(tenantId, projectId, input.insertBeforeId);
+    const insertAfterId = await resolveNodeId(tenantId, projectId, input.insertAfterId);
+
+    const { data, error } = await (supabase as any).rpc('place_personal_task_on_board', {
+      p_task_id: input.taskId,
+      p_target_project_id: projectId,
+      p_target_parent_id: parentId,
+      p_insert_before_id: insertBeforeId,
+      p_insert_after_id: insertAfterId,
+      p_placement_client_mutation_id: input.placementClientMutationId,
+    });
+    assertNoError(error);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.task_node_id) throw new Error('Supabase did not return the placed task id.');
+
+    const { data: taskRow, error: taskError } = await supabase
+      .from('wbs_items')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('id', row.task_node_id)
+      .single();
+    assertNoError(taskError);
+    if (!taskRow) throw new Error('Supabase did not return the placed task row.');
+    return mapWbsItemToTaskNode(taskRow as WbsItemRow, new Map(), input.workspaceId, input.boardId);
   },
 };
 

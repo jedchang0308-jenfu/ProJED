@@ -1,5 +1,251 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-06-30
+
+### DEV-040: 任務專區與快速任務入口
+
+狀態: Local + Browser + Production DB QC Passed / Deploy Pending
+節點類型: 交付點
+優先級: P0 task identity + high-frequency UX, P1 cross-workspace aggregation
+父交付點: DEV-039 雲端快速備忘與拖移轉任務
+關聯交付方向: SPEC-002 全人個人與團隊待辦平台, SPEC-028 四模式一致任務操作契約, SPEC-039 雲端快速備忘
+是否計入產品交付完成: 是
+建立日期: 2026-06-30
+
+交付文件:
+- `ai-doc/specs/SPEC-040-personal-task-zone-and-quick-task-entry.md`
+- `ai-doc/qa/QA-DEV-040-personal-task-zone-and-quick-task-entry.md`
+
+使用者已確認:
+- `1B+C`: 此功能同時是個人任務控制中心，也是跨工作區 / 專案的任務入口。
+- `2A`: 快速輸入應直接建立任務，不應先建立備忘再轉任務。
+- `3A+C`: 系統需支援個人私有任務專區，並保留未來彙總所有可存取 workspace / project 任務的方向。
+- 使用者認為目前分成兩個浮窗不直覺，並希望高使用率視窗移到更主視覺的位置。
+
+PM 架構決策:
+- 不把 `inbox_items` 擴張成第二套完整任務系統。
+- 快速建立項目應使用 canonical task record：`TaskNode` / `wbs_items`。
+- Phase 1 採私有 personal task zone + `待歸位` 任務 + 拖到看板定位。
+- Phase 1 DB 落點鎖定：每位 authenticated user 建立或重用一個 hidden personal project；快速任務是該 project 底下的正常 `wbs_items`，不得讓 `wbs_items.project_id` nullable，也不得新增 global task table。
+- 任務專區拖移必須共用既有任務拖移 primitives 與定位框視覺，不另寫 memo-only 拖移動畫。
+- 跨工作區聚合屬 End-State / Phase 2；本輪先文件化，不納入第一個 RD pass，除非使用者另行授權。
+- 舊 DEV-039 `inbox_items` 不在 Phase 1 自動 migration；若需呈現，只能整合在 `任務專區` legacy 區塊，不得恢復第二個主流程浮窗。
+
+已授權 Phase 1 範圍:
+- 新增主視覺入口 `任務專區`。
+- 快速輸入直接建立 personal-zone task。
+- 顯示 `待歸位` 個人任務。
+- 個人任務支援核心任務操作：建立、標題編輯、完成 / 取消完成、刪除、雲端同步、拖移、歸位到看板。
+- 若既有 task details 已支援 description、due date、checklist / subtasks 且不依賴 board-only context，personal-zone task 也必須支援；若無法支援需明確列為 defer 或 stop condition。
+- 個人任務可拖到目前看板位置並使用正常任務 drop indicator。
+- 個人任務需維持私有、雲端同步、跨裝置可見。
+- 主視覺 IA 鎖定：Sidebar 一級入口 `任務專區` + `待歸位` badge；Home 或 board-adjacent primary area 提供快速建立或進入任務專區；底部浮窗只能降級為 shortcut。
+
+不在第一個 RD pass:
+- AI 解析 / token 消耗型整理。
+- 團隊共用收件匣。
+- 完整跨 workspace aggregated filters。
+- 行事曆 / 通知 / reminder 引擎重構。
+- 未經 release gate 的 production deploy。
+
+RD stop conditions:
+- 若無法保留同一 task id 完成 board placement。
+- 若必須新增 global task table 或讓 `wbs_items.project_id` nullable。
+- 若 RLS 會導致個人任務暴露給 workspace 成員。
+- 若個人任務只能支援 memo-like 行為，無法達到 Phase 1 核心任務功能矩陣。
+- 若 implementation 需要 production migration / deploy 但尚未再次取得授權。
+
+交付證據要求:
+- changed files list。
+- migration names, if any。
+- personal-zone task storage 說明。
+- drag/drop reuse existing task primitives 說明。
+- QA-DEV-040 result before release/deploy。
+
+RD implementation update - 2026-06-30:
+- 已新增 `TaskZoneView` 與 `useTaskZoneStore`，主視覺入口改為 `任務專區`，快速輸入走 personal task zone service，不再走 `inbox_items`。
+- 已新增 `taskZoneService` dataBackend contract 與 Supabase implementation，包含 `ensureZone`、`listUnplacedTasks`、`createQuickTask`、`updateTask`、`archiveTask`、`placeTaskOnBoard`。
+- 已新增 migration `20260630070000_dev_040_personal_task_zone.sql`，定義 hidden personal tenant/project、`ensure_personal_task_zone`、`create_personal_quick_task`、`place_personal_task_on_board` 與 function grants。
+- 已將 Sidebar 加入一級 `任務專區` 入口與 `待歸位` badge；HomeView 加入主視覺快速建立任務入口。
+- 已將 BoardView 中的主流程快速面板改為 `TaskZoneBoardPanel`，拖曳 source 使用 `personal-task-zone-item`，drop 後呼叫 personal task placement service 並沿用 `TaskDragOverlayPreview`。
+- 已保留舊 `QuickCaptureShell` 作為 legacy 元件，但 App/Board 主流程不再掛載，避免新快速輸入繼續寫入 `inbox_items`。
+- 已新增 static verifier `npm run verify:dev-040-personal-task-zone`，檢查 task-zone UI、App/Sidebar/Home routing、BoardView placement、dataBackend contract、Supabase RPC contract、migration 與 dev_task evidence。
+- 已新增 browser smoke verifier `npm run verify:dev-040-personal-task-zone-browser`，檢查 Sidebar 一級入口、Home 主視覺卡、任務專區建立任務、BoardView 整合面板與共用 drag handle。
+- 已補 `place_personal_task_on_board` 防呆：target project 不得是 personal task zone 本身，避免把待歸位任務「歸位」回隱藏個人 project。
+- 已將任務專區 card 拆成 non-draggable 與 draggable wrapper；主頁 card 不需要 DnD context，看板內 card 才註冊 `personal-task-zone-item` drag source。
+- 已補 placement order contract：前端把 drop intent order 傳入 task-zone placement input，fallback 與 Supabase placement 語意一致。
+- 已補 RPC subtree move：personal task 歸位到看板時，連同 descendant tasks 一起移到 target tenant/project，避免根任務歸位後子任務留在 hidden personal project。
+- 已補 DB-level idempotency guard：personal task zone 的 `client_mutation_id` 使用 unique expression index，避免重試或競態建立重複任務。
+- 已補 RPC idempotency 競態處理：`create_personal_quick_task` 撞 unique violation 時回查並回傳既有 task，避免 concurrent retry 對前端變成建立失敗。
+- 已補 personal zone root-task display：任務專區列表只顯示 root personal tasks；若 personal task 未來有子任務，子任務跟隨 root 歸位，不會在待歸位清單重複成獨立卡片。
+- 已補開發文件 release handoff：SPEC-040 與 QA-DEV-040 明確列出 migration 套用順序、static/browser/TypeScript/build gate、Supabase/RLS evidence、rollback 條件與不得宣稱完成的 stop condition。
+- 已補任務專區詳情面板：待歸位任務在尚未進看板前可編輯標題、狀態、開始/結束日期與多備註欄，並同步到 TaskNode 欄位；指派、tag、records、依賴等 board-context 功能保留到歸位後使用既有任務詳情。
+- 已修正任務專區詳情面板備註儲存 guard：改為 dirty-based autosave，只有使用者編輯或新增備註欄才會寫回，避免切換任務或 props 同步時誤觸發儲存，也避免連續編輯被 skip flag 吃掉。
+- 已確認並補 verifier 契約：Supabase `wbs_items` mapping / update payload 已涵蓋 `detail_notes`、`description`、`status`、`start_date`、`end_date`，任務專區詳情面板新增欄位可同步到 canonical TaskNode 資料層。
+- 已補任務專區詳情面板 close-flush：若使用者編輯備註後立即關閉面板，會先同步最後一次 dirty notes，再關閉，避免 debounce timer cleanup 造成最後輸入遺失。
+- Release gate 修正：已更新 DEV-039 static verifier，使其承認 DEV-040 已將 Board/App 主流程從 `QuickCaptureShell` supersede 為 `TaskZoneBoardPanel` / `task_zone`，DEV-039 只保留 cloud memo legacy infrastructure 與資料契約檢查。
+- Release gate production QC 發現並修正 `ensure_personal_task_zone()` output-column ambiguity：`tenant_id/project_id` output 欄位與 `on conflict (tenant_id, user_id)` 在 PL/pgSQL 中衝突，已改用 `tenant_members_pkey` / `project_members_pkey` constraint name，並新增 hotfix migration `20260701010000_fix_dev_040_personal_task_zone_conflict.sql`。
+- Release gate evidence - 2026-07-01:
+  - `npm run verify:dev-039-cloud-quick-capture-inbox`: Passed.
+  - `npm run verify:dev-040-personal-task-zone`: Passed.
+  - `npx tsc --noEmit`: Passed.
+  - `npm run build`: Passed; release bundles include `TaskZoneView-Db9aHybR.js`, `BoardView-WpxNL38B.js`, `index-C-FBBdhO.js`.
+  - `npm run verify:dev-039-cloud-quick-capture-inbox-browser`: Passed after verifier was updated for DEV-040 superseded workflow.
+  - `npm run verify:dev-040-personal-task-zone-browser`: Passed.
+  - Supabase production migration applied: `20260701005406 dev_040_personal_task_zone`.
+  - Supabase production hotfix migration applied: `fix_dev_040_personal_task_zone_conflict`.
+  - Production DB QC passed: anon RPC rejected; functions/indexes/authenticated grants exist; DB-level authenticated flow verified personal zone idempotency, quick task idempotency, detail field persistence, placement to normal project, and QC task cleanup.
+- 已補 task-zone load contract：`loadZoneTasks` 一次完成 zone bootstrap 與 task load，避免前端 load 重複呼叫 ensure zone。
+- 已補 dependency scope move：personal task subtree 歸位時，子樹內部 `wbs_dependencies.tenant_id/project_id` 同步移到 target board。
+- 已修正 tag assignment scope 策略：只保留 target tenant 已存在的 tag assignment 並同步 project scope；personal-zone-only tag assignment 會移除，避免把個人隱藏 tenant tag 錯掛到正式 workspace。
+- Supabase CLI 在此環境不可用，migration 檔名採手動 timestamp 建立；尚未套用 local/production DB。
+- TypeScript/build/browser/Supabase/RLS gate 已於 2026-07-01 release gate 執行並通過；production deploy 與 post-deploy smoke 尚待執行。
+
+### DEV-039: 雲端快速備忘與拖移轉任務
+
+狀態: Done / Production DB QC Passed / Local + Browser Gates Passed
+節點類型: 交付點
+優先級: P0 cross-device capture trust, P1 inbox-to-task workflow
+父交付點: DEV-034 App 快速啟動與加入主畫面 UX
+關聯交付方向: SPEC-002 全人個人與團隊待辦平台
+是否計入產品交付完成: 是
+建立日期: 2026-06-30
+
+關聯需求:
+- 使用者確認目前快速記錄本機保存會造成手機記錄電腦看不到，期望工作流更順。
+- 使用者決策採 `1C`: 快記先進個人雲端收件匣，整理時再選 workspace / board。
+- 使用者決策採 `2A`: 整理後主要轉成正式任務，不先做完整備忘功能。
+- 使用者決策採 `3B`: 未登入或離線時先本機暫存，登入或恢復連線後同步。
+- 使用者要求評估並採納「可直接拖移快記到清單或看板位置，體驗像平時拖移任務」。
+- 使用者希望 `2C` 文字解析但不消耗 token，因此採 deterministic `2C-lite`：規則拆標題、內容與簡單日期，不呼叫 AI / LLM。
+- RD 主管審查後補齊 HCS 引導決策：promotion 採單一 transaction/RPC、未登入/換帳號 local outbox 採帳號綁定與匿名認領、TaskNode body 使用邏輯 `description`、promotion 必須檢查 target board create permission。
+- 使用者決定產品命名由「收件匣」改為「快速備忘 / 備忘錄」；UI 不得顯示 `收件匣` 或 `Inbox`。
+
+核心問題:
+- 現有 `QuickCaptureShell` 與 `useQuickCaptureStore` 只使用 `localStorage`，登入使用者仍無跨裝置同步。
+- 目前功能只完成捕捉，沒有雲端備忘錄、整理入口、同步狀態、轉任務狀態機與失敗復原。
+- 目前 `BoardView` 的 DnD context 在看板內；全域 QuickCaptureShell 在 App root，若要做到同手感拖移，需讓 board-aware inbox drawer 接入既有 dnd-kit context，而不是另寫拖移引擎。
+
+交付文件:
+- `ai-doc/specs/SPEC-039-cloud-quick-capture-inbox-drag-to-task.md`
+- `ai-doc/qa/QA-DEV-039-cloud-quick-capture-inbox-drag-to-task.md`
+- `ai-doc/qc/QC-DEV-039-cloud-quick-memo-inbox-drag-to-task.md`
+
+RD 執行範圍:
+- 新增 Supabase `public.inbox_items` schema、RLS、grants、indexes 與 schema cache reload。
+- 新增 `promote_inbox_item_to_task` RPC 或等效單一 transaction contract，避免 ghost task 與重複轉任務。
+- 更新 Supabase database types、dataBackend inbox service 與 QuickCapture store sync contract。
+- 本機 outbox v2 支援 `pending / syncing / synced / failed`、`clientMutationId` 去重、`createdAuthUserId` 帳號歸屬、匿名 item 認領與 legacy localStorage migration。
+- QuickCaptureShell 文案改為 truthful sync state：`已同步`、`待同步`、`同步失敗`。
+- 新增整理備忘錄入口與 `MemoTriageDrawer`。
+- 在 board view 內讓已同步 quick capture item 可拖移到欄位、卡片間或 checklist zone，drop 後透過 promotion RPC 建立正式 `TaskNode`。
+- 轉任務成功後標記 `InboxItem.promoted`，回填 `promoted_task_node_id`，避免重複轉換。
+- 權限不足或 viewer 不得 promote 到 target board；target parent / order 必須屬於目前 board。
+- 使用 deterministic parser 拆 title/detail/date，不呼叫 AI token。
+
+RD implementation update - 2026-06-30:
+- 新增 Supabase migration `20260630060610_cloud_quick_memo_inbox_items.sql`，建立 `public.inbox_items`、owner-only RLS、grants、indexes、schema cache reload 與 `promote_inbox_item_to_task` transaction RPC。
+- 新增 hardening migration `20260630060727_harden_quick_memo_inbox_items_privileges.sql`，撤銷 `public` / `anon` 表權限，只保留 `authenticated` CRUD。
+- 升級 `useQuickCaptureStore` 為 local outbox v2，包含 deterministic parser、匿名備忘認領、帳號隔離、legacy migration、cloud sync、promotion API。
+- 更新 `QuickCaptureShell` 使用 `快速備忘 / 備忘錄` 命名，移除使用者-facing `收件匣` 文案，加入雲端同步、本機待匯入與同步失敗狀態。
+- 將備忘整理與輸入整合回同一個 `QuickCaptureShell`；看板畫面不再顯示第二個備忘錄浮窗。
+- 更新 `BoardView`，在 DnD context 內渲染可拖移版 `QuickCaptureShell`，支援備忘拖到欄位、卡片、checklist drop zone 後呼叫 promotion，再將回傳 TaskNode 寫入本地 WBS store。
+- 新增 `inboxService` dataBackend contract、Supabase implementation、fallback implementation、`database.types.ts` 型別與 DEV-039 verifier scripts。
+- 已通過 static verifier、browser verifier、TypeScript、build、相關回歸 gate 與 production DB/RLS/RPC/cross-session cloud visibility QC；DEV-039 可宣告 Done。
+
+QC update - 2026-06-30:
+- 已通過 `verify:dev-039-cloud-quick-capture-inbox`、`tsc --noEmit`、`build`、`verify:dev-039-cloud-quick-capture-inbox-browser`、DEV-028 static/browser、DEV-034 static/browser、DEV-035 static、DEV-036 static 與 `verify:supabase:static`。
+- 已新增 QC 證據報告 `ai-doc/qc/QC-DEV-039-cloud-quick-memo-inbox-drag-to-task.md`。
+- 產品命名決策已固定：使用者-facing 名稱為 `備忘錄` / `快速備忘`，不是 `收件匣`；technical table/RPC 名稱可暫保留 `inbox_items` 作為 implementation detail。
+- 剩餘 blocker：目前環境缺少遠端 Supabase project ref 或 DB connection，無法套用並驗證 migration、RLS、RPC transaction 與真實跨裝置雲端同步。
+
+Remote DB preflight update - 2026-06-30:
+- 已從 env 找到 production Supabase project ref `knodlkxqpcqyrtgwpdst` 與 development ref `fhisnnufoeulxqrchldf`。
+- Production 唯讀檢查確認尚未套用 DEV-039 migration，且尚無 `public.inbox_items` 與 `public.promote_inbox_item_to_task(...)`。
+- Production 唯讀檢查確認 migration prerequisites 存在：`profiles`、`projects`、`tenants`、`wbs_items`、`public.touch_updated_at()`、`private.current_user_can_write_project(...)`，既有核心表已啟用 RLS。
+- Development ref 兩次 Supabase MCP 查詢皆 connection timeout，無法作為安全 staging 驗證目標。
+- 下一步需使用者明確確認是否允許套用 production DB migration；未確認前不得執行 production schema change。
+
+Production DB migration update - 2026-06-30:
+- 使用者已明確允許套用 production migration。
+- 已套用 production migration `20260630060610 / cloud_quick_memo_inbox_items`。
+- 初次 grants 驗證發現 `anon` 仍有表層 privileges；已套用 `20260630060727 / harden_quick_memo_inbox_items_privileges` 修正。
+- 已驗證 production migration history 包含 DEV-039 兩個 migration。
+- 已驗證 `public.inbox_items` 存在、RLS enabled、四個 owner-only policies 存在。
+- 已驗證 `anon` 無 SELECT/INSERT 權限，`authenticated` 只保留 SELECT/INSERT/UPDATE/DELETE。
+- 已用 rollback transaction 驗證 authenticated owner 可 insert/select 自己的 memo，non-owner 看不到且 update/delete count 為 0。
+- 已用 anon role 實測 `select public.inbox_items` 回 `permission denied for table inbox_items`。
+- 已用 rollback transaction 驗證 `promote_inbox_item_to_task` 可建立 task、memo 轉 promoted、task metadata 連回 memo、同 promotion key 重試不重複建立 task。
+- 已用 rollback transaction 驗證 non-owner promote 回 `Memo item belongs to another user.`
+- 已用 production persistent smoke 驗證同帳號新 session 可讀到剛建立的 memo，其他帳號讀不到；測試資料已刪除且確認 `qc_inbox_rows_persisted=false`、`qc_wbs_rows_persisted=false`。
+- 本輪 hardening 後已重跑並通過 `verify:dev-039-cloud-quick-capture-inbox`、`verify:supabase:static`、`tsc --noEmit`、`build`、`verify:dev-039-cloud-quick-capture-inbox-browser`。
+
+UX correction - 2026-06-30:
+- 使用者實測指出「快速備忘」與「備忘錄」分成兩個浮窗不直覺。
+- 已改為看板畫面只顯示同一個底部 `QuickCaptureShell`：上方輸入新備忘，下方直接列出待整理備忘並提供拖曳把手。
+- App root 的全域 `QuickCaptureShell` 在 `board` view 隱藏，避免與看板內可拖移版重複。
+- 舊 `MemoTriageDrawer` 元件已移除，避免未來回歸成雙浮窗。
+
+Drag consistency correction - 2026-06-30:
+- 使用者指出備忘拖移動畫與任務拖移不一致。
+- 確認 DnD engine 原本已共用 BoardView 的 `DndContext`，但備忘項目有自己的 drag handle 與 overlay preview。
+- 已將備忘拖移把手改用既有 `TaskDragHandle`。
+- 已新增 `TaskDragOverlayPreview`，任務與備忘的 `DragOverlay` 共用同一個預覽元件，避免兩套動畫外觀。
+- 已將 `quick-capture-item` 納入 Kanban column/card/checklist drop target highlight 條件，讓備忘拖過去時顯示與任務拖移一致的定位框。
+
+交付邊界:
+- 不做完整筆記 / 知識庫型備忘系統。
+- 不做 `note` / `someday` 的完整整理 UI。
+- 不做 AI 分類、AI 看板建議或 AI 任務拆解。
+- 不做我的今日、通知中心、browser notification、email、calendar reminder。
+- 不做輕量共享、改派或團隊 inbox。
+- 不做非 board view 的跨畫面拖移；第一版 drag-to-task 以 BoardView context 為準。
+
+RD acceptance:
+- 登入使用者新增快速備忘後，手機與電腦可看到同一筆雲端備忘 item。
+- 未登入或離線時可先保存本機，恢復登入/連線後自動同步。
+- 未登入建立的匿名 item 登入後需明確認領才同步；換帳號不得把 A 帳號 pending item 同步到 B 帳號。
+- legacy localStorage item 可升級到 outbox v2，且不丟失原文字。
+- UI 明確顯示 `已同步`、`待同步`、`同步失敗`，不得用模糊文案。
+- pending / failed item 不可轉任務，且顯示 disabled reason。
+- 整理備忘錄可由快速備忘入口進入。
+- 在 board view 中，已同步快記可拖到欄位或看板位置並建立正式 `TaskNode`。
+- 快記轉任務不得採前端兩段式 task insert + inbox update；必須以單一 transaction / RPC 或等效機制保證 atomicity。
+- 同一 inbox item / promotion key 重試不得建立第二張任務。
+- 無 target board create permission 者不得 promote。
+- 拖移 preview、drop highlight 與 toast 體驗需接近既有任務拖移。
+- 成功轉任務後 `InboxItem` 標記 promoted，且不可重複轉同一筆。
+- deterministic parser 不呼叫 LLM，不消耗 token。
+- 390px mobile viewport 不出現重疊、裁切、水平 overflow 或無法關閉 drawer。
+
+RD exit gate:
+- `npm.cmd run verify:dev-039-cloud-quick-capture-inbox`
+- `npm.cmd run verify:dev-039-cloud-quick-capture-inbox-browser`
+- `npm.cmd run verify:dev-034-pwa-install-guidance`
+- `npm.cmd run verify:dev-034-pwa-install-guidance-browser`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`
+- `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`
+- `npm.cmd run verify:dev-036-trello-like-workspace-governance`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+
+Supabase / DB gate:
+- 新增 migration 後必須驗證 owner 可 CRUD、其他 authenticated user 不可讀寫、anon 不可存取。
+- 必須確認 Data API expose / grants / RLS policy 與 PostgREST schema cache reload。
+- 如需套用遠端 migration 或 production release，必須走 Supabase skill 與 deployment-release-gate。
+
+Stop conditions:
+- 如果 `inbox_items` 沒有正確 RLS 與 owner-only policy，停止。
+- 如果新表未能被 authenticated client 透過 Data API 存取，停止。
+- 如果拖移需要另做一套與既有任務不同的 drag engine，停止並回報 PM。
+- 如果 drop order 無法與既有任務排序一致，停止。
+- 如果無法以單一 transaction / RPC 或等效機制保證 `TaskNode` 與 `InboxItem.promoted` 原子一致，停止。
+- 如果匿名認領或換帳號規則無法避免 local item 同步到錯誤帳號，停止。
+- 如果 legacy localStorage migration 可能清空使用者文字，停止。
+- 如果要使用 AI / LLM token 做解析或分類，需先取得使用者授權。
+- 如果需求擴張到正式備忘、通知中心、我的今日或輕量改派，另開 DEV。
+
 ## PM Update - 2026-06-29
 
 ### DEV-038: 設定中心作用範圍一致性與高風險防呆
