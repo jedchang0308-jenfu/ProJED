@@ -4,7 +4,7 @@
 
 ### DEV-040: 任務專區與快速任務入口
 
-狀態: Local + Browser + Production DB QC Passed / Deploy Pending
+狀態: Production Released / Production Smoke Passed
 節點類型: 交付點
 優先級: P0 task identity + high-frequency UX, P1 cross-workspace aggregation
 父交付點: DEV-039 雲端快速備忘與拖移轉任務

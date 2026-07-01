@@ -1,7 +1,7 @@
 # QC-DEV-040 - Personal Task Zone and Quick Task Entry
 
 Date: 2026-07-01
-Status: Local + Browser + Production DB QC Passed / Deploy Pending
+Status: Production Released / Production Smoke Passed
 
 ## Scope
 
@@ -53,3 +53,11 @@ Fix:
 
 - Firebase Hosting deploy.
 - Post-deploy production smoke.
+
+## Firebase Hosting release evidence
+
+- Deploy command: `npx firebase deploy --only hosting --project projed-cc78d`
+- Hosting URL: `https://projed-cc78d.web.app`
+- Deploy result: success, 36 files found in `dist`, upload complete, version finalized, release complete.
+- Static production smoke: HTTP 200, `#root` present, HTML references `assets/index-C-FBBdhO.js` and `assets/index-0G4QFJDB.css`.
+- Browser production smoke: `https://projed-cc78d.web.app/` loads title `ProJED 3.0 | 專案管理系統`, root text length 58, expected login/app text visible, no `收件匣` / `Inbox` legacy label, no browser console error logs.
