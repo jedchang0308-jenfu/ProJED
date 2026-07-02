@@ -12,7 +12,9 @@ import {
 } from '../utils/recordContentMentions';
 import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
 import type { MeetingSynthesisInput } from '../utils/meetingRecordSynthesis';
+import { mergeHumanDraftWithAiSynthesis } from '../utils/meetingHumanDraftMerge';
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
+import { createMeetingRecordScaffold, hasMeaningfulMeetingRecordContent } from '../utils/meetingRecordScaffold';
 import { mergeProjectChangeImportBlocks } from '../utils/projectChangeImport';
 import { useMemberStore } from './useMemberStore';
 import type {
@@ -131,7 +133,7 @@ const createDefaultDraft = (
     id: createId(),
     type,
     title,
-    content: '',
+    content: type === 'meeting' ? createMeetingRecordScaffold() : '',
     status: 'draft',
     visibility: 'tenant',
     participantsText: '',
@@ -386,7 +388,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       isTaskSelectionMode: false,
       isMeetingMode: false,
       meetingTaskCaptureEnabled: false,
-      contentCursorOffset: 0,
+      contentCursorOffset: draft.content.length,
       draft,
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
@@ -595,7 +597,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       const result = await synthesizeMeetingRecord(
         createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes),
       );
-      const mergedContent = mergeProjectChangeImportBlocks(result.content, preservedDraft.content);
+      const projectMergedContent = mergeProjectChangeImportBlocks(result.content, preservedDraft.content);
+      const mergedContent = mergeHumanDraftWithAiSynthesis(projectMergedContent, preservedDraft.content);
       const nextDraft = syncDraftContentLinks(
         {
           ...preservedDraft,
@@ -674,7 +677,10 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       set({ error: '請先輸入標題。' });
       return null;
     }
-    if (wantsPublish && !draft.content.trim()) {
+    const hasPublishableContent = draft.type === 'meeting'
+      ? hasMeaningfulMeetingRecordContent(draft.content)
+      : Boolean(draft.content.trim());
+    if (wantsPublish && !hasPublishableContent) {
       set({ error: '發布前請先輸入內容。' });
       return null;
     }

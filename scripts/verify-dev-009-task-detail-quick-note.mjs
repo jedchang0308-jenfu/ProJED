@@ -6,6 +6,7 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-009');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingRecordScaffold.ts',
   'src/utils/meetingTaskDiscussion.ts',
   'src/utils/taskKnowledgeSnippets.ts',
 ];
@@ -15,6 +16,7 @@ rmSync(tempRoot, { recursive: true, force: true });
 const rewriteImports = (outputText) =>
   outputText
     .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingRecordScaffold'", "from './meetingRecordScaffold.js'")
     .replaceAll("from './meetingTaskDiscussion'", "from './meetingTaskDiscussion.js'");
 
 for (const sourcePath of sources) {
@@ -60,17 +62,17 @@ const firstAppend = discussion.appendTaskDiscussionToRecordContent(
   '設計方向確認',
   1780800000000,
 );
-assert('first append creates task discussion heading', firstAppend?.includes('## 任務討論'));
+assert('first append creates task discussion heading', firstAppend?.includes('2. 任務討論與結論'));
 assert('first append includes task mention token', firstAppend?.includes(token));
 assert('first append includes discussion text', firstAppend?.includes('設計方向確認'));
 
 const existingContent = [
   '會議速記',
   '',
-  '## 任務討論',
+  '2. 任務討論與結論',
   '- 09:00 既有討論',
   '',
-  '## 本次會議總結',
+  '1. 本次會議總結',
   '- 待 AI 統整。',
 ].join('\n');
 const secondAppend = discussion.appendTaskDiscussionToRecordContent(
@@ -80,10 +82,10 @@ const secondAppend = discussion.appendTaskDiscussionToRecordContent(
   '新增討論',
   1780800300000,
 );
-assert('second append keeps one task discussion heading', (secondAppend?.match(/## 任務討論/g) || []).length === 1);
+assert('second append keeps one task discussion heading', (secondAppend?.match(/2\. 任務討論與結論/g) || []).length === 1);
 assert(
   'second append inserts before next heading',
-  (secondAppend?.indexOf('新增討論') ?? -1) < (secondAppend?.indexOf('## 本次會議總結') ?? -1),
+  (secondAppend?.indexOf('新增討論') ?? -1) < (secondAppend?.indexOf('1. 本次會議總結') ?? -1),
 );
 
 const snippets = taskKnowledge.extractTaskRecordSnippets(firstAppend || '', 'task_1');

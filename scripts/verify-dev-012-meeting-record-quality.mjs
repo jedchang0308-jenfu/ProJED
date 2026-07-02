@@ -6,6 +6,7 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-012');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingRecordScaffold.ts',
   'src/utils/meetingRecordSynthesis.ts',
   'src/utils/taskKnowledgeSnippets.ts',
 ];
@@ -15,6 +16,7 @@ rmSync(tempRoot, { recursive: true, force: true });
 const rewriteImports = (outputText) =>
   outputText
     .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingRecordScaffold'", "from './meetingRecordScaffold.js'")
     .replaceAll("from './meetingRecordSynthesis'", "from './meetingRecordSynthesis.js'")
     .replaceAll("from './taskKnowledgeSnippets'", "from './taskKnowledgeSnippets.js'");
 
@@ -84,7 +86,7 @@ const result = synthesis.buildDeterministicMeetingSynthesis({
 for (const snippet of [
   '1. 本次會議總結',
   '2. 任務討論與結論',
-  '3. 其他',
+  '3. 臨時動議&其他',
   taskA,
   taskB,
   taskC,
@@ -176,6 +178,8 @@ assert('edge prompt restricts next steps to human content', edgeSource.includes(
 assert('edge prompt bans markdown headings', edgeSource.includes('不得有任何行以 #'));
 assert('edge prompt requires numbered headings', edgeSource.includes('1. / 2.1 / 2.1.1'));
 assert('edge prompt bans system task labels', edgeSource.includes('不要加「本任務」或「子任務：」'));
+assert('edge prompt avoids repeated ancestor tags', edgeSource.includes('不要重複祖先 path tags'));
+assert('edge prompt says heading only shows current task tag', edgeSource.includes('heading 只放目前任務的 task tag'));
 assert('edge prompt requires assignee target', edgeSource.includes('負責人變更必須說明變為誰'));
 assert('edge model error is explicit', edgeSource.includes('請檢查 GEMINI_MEETING_SYNTHESIS_MODEL'));
 

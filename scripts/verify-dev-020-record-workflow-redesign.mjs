@@ -189,7 +189,8 @@ const checks = [
     path: 'src/store/useRecordStore.ts',
     label: 'draft save semantics',
     snippets: [
-      "if (wantsPublish && !draft.content.trim())",
+      'hasMeaningfulMeetingRecordContent(draft.content)',
+      'if (wantsPublish && !hasPublishableContent)',
       "set({ error: '請先輸入標題。' })",
     ],
     forbiddenSnippets: [

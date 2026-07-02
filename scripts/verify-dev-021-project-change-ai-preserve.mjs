@@ -6,13 +6,18 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-021');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingRecordScaffold.ts',
+  'src/utils/meetingTaskDiscussion.ts',
   'src/utils/projectChangeImport.ts',
 ];
 
 rmSync(tempRoot, { recursive: true, force: true });
 
 const rewriteImports = (outputText) =>
-  outputText.replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'");
+  outputText
+    .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingRecordScaffold'", "from './meetingRecordScaffold.js'")
+    .replaceAll("from './meetingTaskDiscussion'", "from './meetingTaskDiscussion.js'");
 
 for (const sourcePath of sources) {
   const source = readFileSync(sourcePath, 'utf8');
@@ -54,11 +59,27 @@ const importedBody = [
   '- 任務 B：@[測試任務 B](task:task_b) 期限改為 2026-06-30。',
 ].join('\n');
 const protectedBlock = wrapProjectChangeImportContent(importedBody);
+const renderedPreview = [
+  '1. 本次會議總結',
+  '- 本次更新「測試任務」。',
+  '',
+  '2. 任務討論與結論',
+  '2.1 @[測試任務 A](task:task_a)',
+  '- 任務 A：RD 先確認 API。',
+  '',
+  '3. 臨時動議&其他',
+  '- 請確認上述整理是否符合會議實際發言與操作。',
+].join('\n');
 
 assert('wrapped block includes start marker', protectedBlock.includes(PROJECT_CHANGE_IMPORT_BLOCK_START));
 assert('wrapped block includes title', protectedBlock.includes(PROJECT_CHANGE_IMPORT_BLOCK_TITLE));
 assert('wrapped block includes body', protectedBlock.includes(importedBody));
 assert('wrapped block includes end marker', protectedBlock.includes(PROJECT_CHANGE_IMPORT_BLOCK_END));
+assert('task discussion body extractor returns section 2 body', projectChangeImport.extractProjectChangeImportTaskDiscussionBody(renderedPreview).includes('2.1 @[測試任務 A](task:task_a)'));
+assert('task discussion body extractor omits section 1 heading', !projectChangeImport.extractProjectChangeImportTaskDiscussionBody(renderedPreview).includes('1. 本次會議總結'));
+assert('task discussion body extractor omits section 3 heading', !projectChangeImport.extractProjectChangeImportTaskDiscussionBody(renderedPreview).includes('3. 臨時動議&其他'));
+assert('stripProjectChangeImportBlocks removes protected block markers', !projectChangeImport.stripProjectChangeImportBlocks(protectedBlock).includes(PROJECT_CHANGE_IMPORT_BLOCK_START));
+assert('stripProjectChangeImportBlocks removes protected block body', !projectChangeImport.stripProjectChangeImportBlocks(protectedBlock).includes(importedBody));
 
 const preservedContent = [
   '會議手寫摘要：今天先討論風險。',
@@ -106,8 +127,10 @@ assert('legacy heading import evidence is extracted', legacyEvidenceBlocks.lengt
 assert('rendered meeting evidence strips section heading', !normalizeProjectChangeImportEvidence(`1. 本次會議總結\n${importedBody}`).includes('1. 本次會議總結'));
 
 const sidebarSource = readFileSync('src/components/Records/RecordSidebar.tsx', 'utf8');
-assert('RecordSidebar imports wrapProjectChangeImportContent', sidebarSource.includes('wrapProjectChangeImportContent'));
-assert('RecordSidebar wraps project change preview before insertion', sidebarSource.includes('wrapProjectChangeImportContent(projectChangeImport.previewContent)'));
+assert('RecordSidebar imports task-discussion insert helper', sidebarSource.includes('extractProjectChangeImportTaskDiscussionBody'));
+assert('RecordSidebar normalizes existing legacy project-change blocks', sidebarSource.includes('normalizeProjectChangeDraftContent'));
+assert('RecordSidebar strips legacy project change blocks before inserting', sidebarSource.includes('stripProjectChangeImportBlocks(draft.content)'));
+assert('RecordSidebar inserts project change preview into task discussion section', sidebarSource.includes('appendLineToMarkdownSection(cleanedDraftContent, MEETING_RECORD_TASKS_HEADING, projectChangeBody)'));
 assert('RecordSidebar no longer inserts raw preview content directly', !sidebarSource.includes('[draft.content.trim(), projectChangeImport.previewContent.trim()]'));
 
 const storeSource = readFileSync('src/store/useRecordStore.ts', 'utf8');

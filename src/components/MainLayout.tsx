@@ -288,7 +288,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               <>
                 <ChevronRight size={14} className="text-slate-300" />
                 <NotebookText size={15} className="text-primary" />
-                <span className="font-bold text-slate-700">任務專區</span>
+                <span className="font-bold text-slate-700">任務工作台</span>
               </>
             ) : null}
           </div>

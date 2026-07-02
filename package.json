@@ -35,6 +35,9 @@
     "verify:dev-008-task-knowledge": "node scripts/verify-dev-008-task-knowledge.mjs",
     "verify:dev-009-task-detail-quick-note": "node scripts/verify-dev-009-task-detail-quick-note.mjs",
     "verify:dev-010-action-feedback": "node scripts/verify-dev-010-action-feedback.mjs",
+    "verify:record-meeting-scaffold-and-human-preserve": "node scripts/verify-record-meeting-scaffold-and-human-preserve.mjs",
+    "verify:record-workflow-no-auto-publish-step": "node scripts/verify-record-workflow-no-auto-publish-step.mjs",
+    "verify:record-workflow-no-auto-publish-step-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix record-workflow-no-auto-publish -Filename scripts/verify-record-workflow-no-auto-publish-step-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-011-ai-meeting-synthesis": "node scripts/verify-dev-011-ai-meeting-synthesis.mjs",
     "verify:dev-012-meeting-record-quality": "node scripts/verify-dev-012-meeting-record-quality.mjs",
     "verify:dev-015-meeting-summary-mainline": "node scripts/verify-dev-015-meeting-summary-mainline.mjs",
@@ -89,6 +92,9 @@
     "verify:dev-040-personal-task-zone-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev040-task-zone -Filename scripts/verify-dev-040-personal-task-zone-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-041-task-zone-direct-drag-placement": "node scripts/verify-dev-041-task-zone-direct-drag-placement.mjs",
     "verify:dev-041-task-zone-direct-drag-placement-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev041-task-zone-direct-drag -Filename scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js -OutputDirectory output/playwright",
+    "verify:dev-042-task-workbench": "node scripts/verify-dev-042-task-workbench.mjs",
+    "verify:dev-042-workbench-staging": "node scripts/verify-dev-042-workbench-staging.mjs",
+    "verify:dev-042-task-workbench-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev042-task-workbench -Filename scripts/verify-dev-042-task-workbench-browser.pw.js -OutputDirectory output/playwright",
     "verify:settings-project-context": "node scripts/verify-settings-project-context.mjs",
     "verify:settings-project-context-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=settings-project-context open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=settings-project-context run-code --filename=scripts/verify-settings-project-context-browser.pw.js\"",
     "verify:dev-013-task-duplicate": "node scripts/verify-dev-013-task-duplicate.mjs",
@@ -108,7 +114,8 @@
     "preview": "vite preview",
     "preview:test": "vite preview --mode test --host 127.0.0.1 --port 4173",
     "preview:p9": "vite preview --mode p9 --host 127.0.0.1 --port 4173",
-    "seed:p9-rag": "node scripts/seed-p9-rag.mjs"
+    "seed:p9-rag": "node scripts/seed-p9-rag.mjs",
+    "typecheck": "tsc --noEmit --pretty false"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

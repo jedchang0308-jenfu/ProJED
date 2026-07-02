@@ -331,6 +331,17 @@ export interface PersonalTaskPlacementInput {
   placementClientMutationId: string;
 }
 
+export interface TaskWorkbenchStageInput {
+  taskId: string;
+  sourceWorkspaceId: string;
+  sourceBoardId: string;
+  stageClientMutationId: string;
+}
+
+export interface TaskWorkbenchStageResult {
+  stagedTask: TaskNode;
+}
+
 export interface TaskBoardMoveInput {
   taskId: string;
   sourceWorkspaceId: string;
@@ -484,6 +495,11 @@ export interface TaskNode {
   createdAt?: number;
   updatedAt?: number;
   isArchived?: boolean;
+  placementStatus?: 'placed' | 'unplaced' | 'staged';
+  stagedFromWorkspaceId?: string | null;
+  stagedFromBoardId?: string | null;
+  stagedFromParentId?: string | null;
+  stagedFromSortOrder?: number | null;
 }
 
 export interface TaskDetailNote {

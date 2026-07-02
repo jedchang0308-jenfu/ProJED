@@ -18,7 +18,7 @@ DEV-023 定義為 DEV-020 的 UX refinement 開發點，不新增產品交付點
 - 會議紀錄與個人工作紀錄都以 `匯入` 作為 optional first step。
 - 預設版面精簡，只顯示流程步驟與必要狀態。
 - 使用者點擊 `匯入` step 後，才展開日期、範圍、預覽、插入與跳過。
-- 保留既有 project change import preview、protected content、single-record merge guard 行為。
+- 保留既有 project change import preview、legacy protected content / single-record merge guard 行為；實際插入時，project change 預覽應直接寫入 `2. 任務討論與結論`。
 - 不改資料庫 schema，不改 record content persistence 格式。
 
 ## 流程定義
@@ -52,12 +52,12 @@ DEV-023 定義為 DEV-020 的 UX refinement 開發點，不新增產品交付點
   - 插入紀錄並開始撰寫
   - 跳過
 - 點擊 `跳過` 後，`匯入` step 顯示已略過，面板收合，不阻擋後續流程。
-- 點擊 `插入紀錄並開始撰寫` 後，`匯入` step 顯示已插入與事件數，面板收合，游標與下一步操作應回到紀錄撰寫脈絡。
+- 點擊 `插入紀錄並開始撰寫` 後，`匯入` step 顯示已插入與事件數，面板收合，游標與下一步操作應回到紀錄撰寫脈絡；插入內容應落在 `2. 任務討論與結論`。
 - 空資料與錯誤狀態應在展開面板內呈現，不阻擋後續撰寫、存草稿或發布。
 
 ## 不變式
 
-- 匯入後仍必須走 `wrapProjectChangeImportContent`，不得改回 raw preview insertion。
+- `wrapProjectChangeImportContent` 保留作為 legacy / merge guard，相容舊草稿；新插入路徑應直接寫入 `2. 任務討論與結論`，不得改回 raw preview 直接 append 到文末。
 - DEV-021 的「已匯入專案變化不得被 AI整理丟失」guard 必須仍成立。
 - DEV-022 的「匯入內容必須統整進同一份會議紀錄」guard 必須仍成立。
 - 不得新增資料庫 schema、migration 或持久化 record content 格式。
@@ -92,7 +92,7 @@ The product implementation should keep existing DEV-020 / DEV-021 / DEV-022 mark
 - 會議紀錄 workflow 第一格為 `匯入`，流程為 `匯入 -> 速記 -> AI整理 -> 校稿 -> 發布`。
 - 個人工作紀錄 workflow 第一格為 `匯入`，流程為 `匯入 -> 撰寫 -> 存草稿 -> 發布`。
 - `data-project-change-import-panel` 預設收合，點擊 `匯入` 後在 `data-record-composer-workflow` 內展開。
-- Project change preview / insert 仍走 `wrapProjectChangeImportContent`。
+- Project change preview 可沿用既有摘要生成；插入時應將預覽內文寫入 `2. 任務討論與結論`，legacy protected block 只保留相容性。
 - DEV-021 preserve 與 DEV-022 single-record guard 已通過回歸。
 - 本 DEV 未新增資料庫 schema、migration 或 record content persistence 格式。
 

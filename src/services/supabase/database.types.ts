@@ -455,6 +455,20 @@ export interface Database {
           target_project_id: string;
         }[];
       };
+      place_task_to_workbench_staging: {
+        Args: {
+          p_task_id: string;
+          p_source_project_id: string;
+          p_stage_client_mutation_id: string;
+        };
+        Returns: {
+          task_node_id: string;
+          target_tenant_id: string;
+          target_project_id: string;
+          source_tenant_id: string;
+          source_project_id: string;
+        }[];
+      };
       move_task_to_board: {
         Args: {
           p_task_id: string;

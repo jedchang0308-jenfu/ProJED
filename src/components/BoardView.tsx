@@ -53,6 +53,26 @@ const getTaskZoneMoveErrorMessage = (error: unknown) => {
     return message || '任務移入目前看板失敗。';
 };
 
+const getTaskZoneStageErrorMessage = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    if (message.includes('place_task_to_workbench_staging') || message.includes('schema cache') || message.includes('資料庫尚未載入')) {
+        return '拖回待歸位尚未完成資料庫更新。請先套用 DEV-042 migration 並重新載入 Supabase schema cache。';
+    }
+    if (message.includes('tags') || message.includes('標籤')) {
+        return '這個任務含有標籤，拖回待歸位需先完成標籤轉移規則。';
+    }
+    if (message.includes('dependencies') || message.includes('依賴')) {
+        return '這個任務含有跨任務依賴，拖回待歸位需使用受控搬移流程。';
+    }
+    if (message.includes('record') || message.includes('紀錄')) {
+        return '這個任務含有紀錄關聯，拖回待歸位需使用受控搬移流程。';
+    }
+    if (message.includes('permission') || message.includes('權限')) {
+        return '你沒有足夠權限把這個任務移回待歸位。';
+    }
+    return message || '拖回待歸位失敗。';
+};
+
 const BoardView = () => {
     const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
@@ -66,8 +86,10 @@ const BoardView = () => {
     const addNode = useWbsStore(s => s.addNode);
     const upsertNodeLocal = useWbsStore(s => s.upsertNodeLocal);
     const updateNode = useWbsStore(s => s.updateNode);
+    const removeNodeLocal = useWbsStore(s => s.removeNodeLocal);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const placeTaskOnBoard = useTaskZoneStore(s => s.placeTaskOnBoard);
+    const stagePlacedTask = useTaskZoneStore(s => s.stagePlacedTask);
     const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
@@ -128,6 +150,20 @@ const BoardView = () => {
         const activeType = args.active?.data.current?.type;
 
         if (['wbs-column', 'wbs-card', 'wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '')) {
+            const stagingDropCollision = collisions.find((collision: any) => {
+                const container = typeof args.droppableContainers?.get === 'function'
+                    ? args.droppableContainers.get(collision.id)
+                    : args.droppableContainers?.find((item: any) => item.id === collision.id);
+                return container?.data.current?.type === 'task-zone-staging-drop';
+            });
+
+            if (stagingDropCollision) {
+                return [
+                    stagingDropCollision,
+                    ...collisions.filter((collision: any) => collision.id !== stagingDropCollision.id),
+                ];
+            }
+
             const checklistDropCollision = collisions.find((collision: any) => {
                 const container = typeof args.droppableContainers?.get === 'function'
                     ? args.droppableContainers.get(collision.id)
@@ -478,6 +514,32 @@ const BoardView = () => {
         const activeData = active.data.current;
         const overData = effectiveOver.data.current;
         const state = useWbsStore.getState();
+        if (overData?.type === 'task-zone-staging-drop') {
+            if (!canMoveTask) return;
+            const nodeId = activeData?.nodeId;
+            const sourceNode = nodeId ? state.nodes[nodeId] : null;
+            const sourceWorkspaceId = activeData?.sourceWorkspaceId || sourceNode?.workspaceId;
+            const sourceBoardId = activeData?.sourceBoardId || sourceNode?.boardId;
+
+            if (!nodeId || !sourceWorkspaceId || !sourceBoardId) {
+                toast.error('任務來源資訊不足，無法拖回待歸位。');
+                return;
+            }
+
+            try {
+                await stagePlacedTask({
+                    taskId: nodeId,
+                    sourceWorkspaceId,
+                    sourceBoardId,
+                });
+                removeNodeLocal(nodeId);
+                toast.success('已移回待歸位。');
+            } catch (error) {
+                toast.error(getTaskZoneStageErrorMessage(error));
+            }
+            return;
+        }
+
         if (activeData?.source === 'task-zone-my-task' && activeData?.nodeId === overData?.nodeId) return;
         if (activeData?.source === 'task-zone-my-task' && (!state.nodes[activeData.nodeId] || activeData.sourceWorkspaceId !== activeWorkspaceId || activeData.sourceBoardId !== activeBoardId)) {
             if (!canMoveTask || !activeWorkspaceId || !activeBoardId) return;

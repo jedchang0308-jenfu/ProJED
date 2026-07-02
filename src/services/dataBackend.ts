@@ -23,6 +23,8 @@ import {
   type PersonalTaskZoneInfo,
   type TaskBoardMoveInput,
   type TaskBoardMoveResult,
+  type TaskWorkbenchStageInput,
+  type TaskWorkbenchStageResult,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -578,6 +580,11 @@ export const nodeService = {
     isSupabaseBackend
       ? supabaseNodeService.moveToBoard(input)
       : Promise.reject(new Error('跨看板任務歸位目前只支援 Supabase backend。')),
+
+  stageToWorkbench: (input: TaskWorkbenchStageInput): Promise<TaskWorkbenchStageResult> =>
+    isSupabaseBackend
+      ? supabaseNodeService.stageToWorkbench(input)
+      : Promise.reject(new Error('拖回待歸位目前只支援 Supabase backend。')),
 
   create: (workspaceId: string, boardId: string, node: TaskNode): Promise<void | TaskNode> =>
     isLocalTestBackend

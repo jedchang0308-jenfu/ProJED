@@ -4,6 +4,7 @@ import type {
   KnowledgeRecordVisibility,
   RecordTaskLinkRole,
 } from '../types';
+import { hasMeaningfulMeetingRecordContent } from './meetingRecordScaffold';
 
 export type MeetingSynthesisWorkflowStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
@@ -129,7 +130,9 @@ export const getMeetingRecordActionState = ({
   const hasWorkspace = Boolean(activeWorkspaceId && activeBoardId);
   const hasDraft = Boolean(draft && draft.type === 'meeting');
   const hasTitle = Boolean(draft?.title.trim());
-  const hasContent = Boolean(draft?.content.trim());
+  const hasContent = draft?.type === 'meeting'
+    ? hasMeaningfulMeetingRecordContent(draft.content)
+    : Boolean(draft?.content.trim());
   const hasSourceForAi = Boolean(hasContent || meetingActivityCount > 0);
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
   const hasAiDraft = meetingSynthesisStatus === 'ready';
@@ -183,10 +186,10 @@ export const getMeetingRecordActionState = ({
 
   const stage: MeetingRecordWorkflowStage = isPublished
     ? 'published'
-    : hasAiDraft
-      ? 'review'
-      : hasSourceForAi
-        ? 'ai_suggestion'
+    : isSynthesizing
+      ? 'ai_suggestion'
+      : hasAiDraft
+        ? 'review'
         : 'capture';
 
   const statusMessage = isPublished
@@ -201,15 +204,15 @@ export const getMeetingRecordActionState = ({
             ? `AI整理失敗，原草稿已保留：${meetingSynthesisError || '請重試。'}`
             : !hasContent
               ? '目前是速記階段，先輸入會議內容或從任務詳情加入補記。'
-              : '目前可直接發布編輯器內容，也可先用 AI整理成校稿。';
+              : '目前仍在速記階段，可繼續撰寫、存草稿，或用 AI整理成校稿；發布只在定稿時使用。';
 
   const nextActionMessage = isPublished
     ? '下一步：可離開會議模式，或到紀錄庫查閱。'
     : hasAiDraft
       ? '下一步：人工校稿後按「發布」。'
       : !hasContent
-        ? '下一步：輸入會議內容；有內容後即可發布。'
-        : '下一步：直接發布，或先按「AI整理」。';
+        ? '下一步：輸入會議內容；可先存草稿。'
+        : '下一步：繼續撰寫、存草稿，或按「AI整理」產生校稿；「發布」只在你決定定稿時使用。';
 
   const activityRisk = hasUnresolvedActivities
     ? `已偵測 ${meetingActivityCount} 筆任務變更。直接發布只保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。`
@@ -263,7 +266,7 @@ const createMeetingWorkflowStepAction = (
 export const getMeetingWorkflowStepActions = (
   state: MeetingRecordActionState,
 ): MeetingWorkflowStepAction[] => {
-  const captureComplete = Boolean(state.hasContent || state.hasAiDraft || state.isPublished);
+  const captureComplete = Boolean(state.hasAiDraft || state.isPublished);
   const aiComplete = Boolean(state.hasAiDraft || state.isPublished);
   const reviewComplete = Boolean(state.isPublished);
   const publishComplete = Boolean(state.isPublished);
@@ -275,9 +278,7 @@ export const getMeetingWorkflowStepActions = (
       ? 'ai_suggestion'
       : state.hasAiDraft
         ? 'review'
-        : state.hasContent
-          ? 'published'
-          : 'capture';
+        : 'capture';
 
   const captureVisualState: MeetingWorkflowStepVisualState = captureComplete
     ? 'complete'

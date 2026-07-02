@@ -1,5 +1,251 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-07-02
+
+### DEV-042: 任務工作台與跨工作區任務中繼站
+
+狀態: Phase 1 Local Verification Passed / Phase 2-3 RD Contract Ready / No Migration / No Deploy
+節點類型: 交付點
+優先級: P0 task workbench IA clarity, P1 cross-board task transfer foundation, P2 external task source extensibility
+父交付點: DEV-041 任務專區中控台與直接拖曳歸位
+關聯交付方向: DEV-040 任務專區與快速任務入口, DEV-041 任務專區中控台與直接拖曳歸位, SPEC-028 四模式一致任務操作契約, SPEC-037 行事曆訂閱來源範圍清晰化
+是否計入產品交付完成: 是
+建立日期: 2026-07-02
+Authorized phase: Phase 1 implementation complete and locally verified; Phase 2/3 are RD Contract Ready but not authorized for implementation, migration, deploy, push or git commit.
+
+交付文件:
+- `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md`
+
+Human Decision Brief:
+- 使用者提出 `任務專區` 應升級為 `任務工作台`，定位不再只是個人待歸位任務入口，而是跨工作區、跨看板、未來可串外部系統任務的個人任務中控台。
+- 使用者提出 `我的任務` 不應只代表 assigned list，而應改為一個依截止日期排序的任務視圖；範圍包含 `未歸位任務` 與 `已歸位任務`。
+- 使用者提出 `任務工作台` 是中繼站：除了把未歸位任務拖進看板，也要能把已歸位任務拉回未歸位 / 待歸位區，再移到其他看板或工作區。
+- HCS 引導決策 `1A`: 本輪只補文件到 Phase 1 RD Implementation Ready，暫不授權 RD 實作。
+- HCS 引導決策 `2B`: `我的任務` 改名後的 tab 固定採 `任務排序`；UI copy 必須同時說明此視圖是依截止日期排序，避免被誤解為手動排序。
+- HCS 引導決策 `3A`: 已歸位任務拖回 `待歸位` 的能力列入 Phase 2，只先寫規格，不在 Phase 1 實作。
+- 固定產品語意: `待歸位` 是任務的 placement state，不是第二套任務資料池；`任務排序` 是任務工作台的瀏覽視圖，不取代待歸位中繼站。
+- AI assumption: 第一版不自動串接外部系統、不做多重歸位、不做跨 route active drag state；這些列為後續 phase。
+- Follow-up documentation closure: Phase 2 placed-to-unplaced staging and Phase 3 external task command center have been expanded to RD Contract Ready in `SPEC-042`; they remain not authorized for implementation.
+
+End-State Architecture:
+- `任務工作台` 是 ProJED 個人任務中控台，左側或主入口負責跨工作區任務來源與篩選，中間看板負責結構化歸位，右側 drawer / modal 負責細節。
+- 任務工作台至少包含兩個核心區塊:
+  - `待歸位`: 尚未有 active board placement，或使用者刻意拉回中繼站等待重新歸位的任務。
+  - `任務排序`: 依截止日期 / 排程時間顯示範圍內任務，包含待歸位與已歸位任務。
+- 過濾器從目前 `訂閱範圍` 升級為任務工作台 filter；需沿用或延伸看板既有 filter 模組，並新增跨域維度:
+  - 工作區: 全部 / 目前工作區 / 指定工作區。
+  - 看板: 全部 / 目前看板 / 指定看板。
+  - 歸位狀態: 全部 / 待歸位 / 已歸位。
+  - 任務關係: 指派給我 / 我建立的 / 我追蹤的，第一版至少保留 `指派給我`。
+  - 時間: 逾期 / 今天 / 本週 / 無期限，第一版可先落地截止日期排序。
+- 已歸位任務被拖回 `待歸位` 時，不得產生新任務或 ghost copy；預設語意是移動同一 canonical task id，並清除或暫存其 active board placement。
+- 任務被拉回待歸位後必須保留來源摘要，例如 `來自：工作區 / 看板 / 欄位`，並提供可理解的 `回到原位置` 或等效復原策略，避免使用者誤以為任務被刪除。
+- 未來外部系統任務可出現在任務工作台，但外部任務要拖入 ProJED 看板前必須先轉成 ProJED canonical task。
+
+Phase Roadmap:
+- Phase 1 - IA rename and filter foundation:
+  - 將使用者-facing `任務專區` 改為 `任務工作台`。
+  - 將目前 `我的任務` 視圖改為 `任務排序`。
+  - 將 `訂閱範圍` 改為工作台 filter，重用看板 filter 互動語言，新增工作區 / 看板 / 歸位狀態。
+  - `任務排序` 必須同時包含待歸位與已歸位任務，不得漏掉待歸位任務。
+  - Phase 1 only changes browsing, filtering, naming and IA. It must not implement placed-to-unplaced movement.
+  - 不改 canonical task identity，不導入外部來源，不支援跨 route active drag。
+- Phase 2 - Workbench staging and re-placement:
+  - 允許已歸位任務被拖回 `待歸位` 中繼站。
+  - `待歸位` 任務可再拖入目前看板、其他看板或其他可存取工作區。
+  - 保留來源摘要、復原策略、權限 guard 與失敗復原。
+  - 需新增或擴充 move RPC / service contract，確保 move 是 transaction、idempotent 且不產生 duplicate。
+- Phase 3 - Cross-system task command center:
+  - 加入外部任務來源，例如行事曆、會議記錄、第三方任務系統。
+  - 外部來源先以 read-only 或 `轉成 ProJED 任務` 模式進入工作台；不得直接當成 ProJED board task 拖移。
+  - 擴充動態牆 / 行動流，依時間排序各工作區與外部來源的個人待辦。
+
+Fixed Decisions:
+- `任務工作台` 是正式產品方向，取代 `任務專區` 作為長期命名。
+- `任務排序` 是第一版固定 tab 名稱；它代表依截止日期排序，不代表使用者可手動拖拉排序。
+- `待歸位` 必須被視為任務工作台的一級狀態，且必須出現在整體任務排序 / filter 結果中。
+- 已歸位與待歸位任務都必須使用 canonical task identity；不得建立第二套 memo-only 任務模型。
+- 拖曳體驗必須沿用既有任務 DnD primitives、overlay、positioning frame、drop indicator 與 permission guard。
+
+Deferred Decisions:
+- 跨工作區 move 時，是否直接改 `tenant_id/project_id`、是否保留原 workspace audit trail、是否允許跨 tenant 移動，需在 Phase 2 RD readiness 補正式 contract。
+- `回到原位置` 是以 placement history table、task metadata snapshot、或 existing activity log 實作，待 RD 評估後決定。
+- `期限排序` 預設排序欄位若任務無截止日期，需定義 fallback: start date、created_at、updated_at 或 manual priority。
+- 外部系統任務來源、授權、同步頻率、衝突解決與 token / API 成本不在 Phase 1。
+
+RD Implementation Contract - Phase 1:
+- UI:
+  - Sidebar / breadcrumb / page title / panel title 的使用者-facing 名稱改為 `任務工作台`。
+  - Source panel tab 從 `我的任務` 改為 `任務排序`。
+  - `任務排序` list 先依截止日期升冪顯示，無截止日期任務置於後段；需標示 `待歸位` 或來源看板摘要。
+  - Filter 區塊替代目前 `訂閱範圍` 主視覺，使用者可收折；收折狀態顯示目前範圍摘要。
+- Sorting:
+  - Primary sort: due date / `end_date` ascending.
+  - Secondary sort: `start_date` ascending when due date is absent.
+  - Tertiary sort: `created_at` ascending.
+  - Stable fallback: title ascending, then task id ascending.
+  - Overdue / today / this week buckets use the user's local timezone; if no browser timezone is available, fallback to `Asia/Taipei`.
+- Filter defaults and counts:
+  - 預設工作區: 全部可存取工作區。
+  - 預設看板: 全部可存取看板。
+  - 預設歸位狀態: 全部。
+  - 預設任務關係: 指派給我 + 待歸位。
+  - `待歸位` count = current filter scope 中 unplaced canonical tasks count。
+  - `任務排序` count = current filter scope 中 `待歸位` + 已歸位且符合任務關係條件的 tasks count。
+- Empty states:
+  - 若 `待歸位` 為空，顯示 `目前沒有待歸位任務`，並保留快速建立入口。
+  - 若 `任務排序` 為空，顯示 `目前篩選範圍內沒有待處理任務`，並提供清除 filter 的明確操作。
+- Data / service:
+  - Phase 1 可沿用 DEV-041 assigned-task listing + personal unplaced task listing，先在 client/service 層合併成 workbench list。
+  - Filter state 需至少包含 workspace scope、board scope、placement state scope。
+  - `待歸位` 任務必須固定納入 `任務排序`，不受 assigned-task-only 查詢漏掉。
+- Permissions:
+  - Filter 不得顯示使用者不可存取的 workspace / board / task title / count。
+  - 已歸位任務的詳情、完成、刪除、拖曳仍走既有 task permission guard。
+- Migration:
+  - Phase 1 若只改 UI/filter aggregation，不需要 DB migration。
+  - Phase 2 若支援 placed-to-unplaced 或跨工作區 move，必須建立 RPC / migration / RLS gate，不得只在前端清空 board state。
+
+RD Acceptance:
+- 使用者看到的主要入口與頁面名稱為 `任務工作台`，不再以 `任務專區` 作為長期主命名。
+- 使用者可在 `任務排序` 看到符合 filter 範圍的待歸位與已歸位任務。
+- 使用者可用工作區、看板與歸位狀態縮小 `任務排序` 與 `待歸位` 範圍。
+- 待歸位任務不會因切到任務排序而消失。
+- 已歸位任務與待歸位任務卡片的核心操作能力保持與一般任務一致，且不洩漏無權限資料。
+- Filter 的互動語言與看板 filter 保持一致，但多出工作區、看板與歸位狀態維度。
+
+Out of scope for Phase 1:
+- 把已歸位任務拖回待歸位後再跨工作區移動。
+- 外部系統任務串接。
+- 多重歸位或一個 task 同時存在多個看板。
+- 跨 route active drag state。
+- AI 自動判斷任務應放到哪個看板。
+- Production migration、production deploy 或 release。
+
+Stop conditions:
+- 若 `期限排序` 只能顯示已歸位 assigned tasks，無法包含待歸位任務。
+- 若需要重寫整個 board DnD engine 才能支援工作台來源卡片。
+- 若 placed-to-unplaced 被實作成複製任務而不是移動同一 canonical task id。
+- 若跨工作區 move 可能繞過 workspace / board 權限。
+- 若 UI 將 `任務工作台` 放成右側詳情抽屜主入口，破壞左到右資訊流。
+- 若 Phase 2 需要 DB migration / RPC 但尚未建立 QA/QC gate 或未取得 production migration 授權。
+
+QA/QC Gate:
+- Required QA fixture:
+  - 至少一筆待歸位任務。
+  - 至少一筆已歸位且指派給目前使用者的任務。
+  - 至少一筆有截止日的任務。
+  - 至少一筆無截止日的任務。
+  - 至少一筆不可存取 workspace / board 的反向權限案例，用於確認 filter count 與 title 不外洩。
+- Static verifier 需檢查使用者-facing `任務工作台`、`任務排序`、工作區 / 看板 / 歸位狀態 filter contract、待歸位固定納入任務排序。
+- Browser smoke 需覆蓋:
+  - 從入口進入任務工作台。
+  - 切換 `待歸位` / `任務排序`。
+  - `任務排序` 同時顯示待歸位與已歸位任務的標籤或來源摘要。
+  - 收折 / 展開 filter 後摘要仍正確。
+  - 拖曳待歸位任務到看板仍顯示與一般任務一致的定位框。
+- Regression gate 需包含 DEV-041 direct drag placement、DEV-040 personal task zone、DEV-028 normal board DnD。
+- Phase 2 必須新增 Supabase/RLS/RPC QC，驗證 placed-to-unplaced、re-placement、cross-board / cross-workspace permission denial、idempotency、failure recovery 與 rollback。
+
+Evidence required before implementation can be marked done:
+- `npm run verify:dev-042-task-workbench`
+- `npm run verify:dev-042-task-workbench-browser`
+- `npm run verify:dev-041-task-zone-direct-drag-placement`
+- `npm run verify:dev-040-personal-task-zone`
+- `npm run verify:dev-028-cross-mode-task-interactions`
+- `npx tsc --noEmit`
+- `npm run build`
+- Phase 2 only: Supabase migration/RPC/RLS QC evidence before production release.
+
+### RD Implementation Update - 2026-07-02 - DEV-042 Phase 1 task workbench
+
+- Type: RD implementation / Phase 1 only
+- Authorization: User requested `$dev-pm 執行開發`; scope interpreted as DEV-042 Phase 1 implementation only. Phase 2 placed-to-unplaced movement, migration, deploy, push and git commit remain out of scope.
+- Implemented scope:
+  - User-facing `任務專區` surfaces in TaskZone page, BoardView source panel and main breadcrumb were renamed to `任務工作台`.
+  - Source panel `我的任務` tab is now labelled `任務排序`.
+  - `任務排序` aggregates `待歸位` personal tasks and placed assigned tasks into one scheduled workbench list.
+  - Added Phase 1 placement-state filter: `全部`, `待歸位`, `已歸位`.
+  - `任務排序` tab count now reflects the current placement-state filter result while preserving total count in the button title for handoff/debug readability.
+  - Added deterministic schedule sorting by due date / end date, start date, created time, title and task id fallback.
+  - Filter copy now uses `工作台篩選` and explains that unplaced tasks are fixed into task sorting.
+  - Added DEV-042 static and browser smoke verifier entrypoints.
+- Files:
+  - `src/components/TaskZoneView.tsx`
+  - `src/components/MainLayout.tsx`
+  - `package.json`
+  - `scripts/verify-dev-042-task-workbench.mjs`
+  - `scripts/verify-dev-042-task-workbench-browser.pw.js`
+  - `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs`
+  - `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js`
+  - `ai-doc/dev_task.md`
+  - `ai-doc/documentation_map.md`
+- Boundary:
+  - No placed-to-unplaced movement was implemented.
+  - No DB migration, Supabase RPC, production deploy, push or git commit was executed.
+  - No validation command was executed in this turn.
+- Remaining evidence required:
+  - `npm run verify:dev-042-task-workbench`
+  - `npm run verify:dev-042-task-workbench-browser`
+  - `npm run verify:dev-041-task-zone-direct-drag-placement`
+  - `npm run verify:dev-040-personal-task-zone`
+  - `npm run verify:dev-028-cross-mode-task-interactions`
+  - `npx tsc --noEmit`
+  - `npm run build`
+
+### QA Gate Alignment - 2026-07-02 - DEV-041/042 verifier naming compatibility
+
+- Type: QA gate hardening / DEV-042 compatibility
+- Scope: DEV-042 renames the source-panel assigned-task tab from `我的任務` to `任務排序`; DEV-041 verifier contracts were updated so the existing direct-drag smoke can keep validating the same DnD behavior under the new user-facing name.
+- Change:
+  - DEV-041 browser smoke now accepts `任務排序` as the tab name while preserving compatibility with the old `我的任務` label.
+  - DEV-041 static verifier now checks the new workbench copy that待歸位任務 is fixed into the sorting view.
+  - DEV-041 static verifier empty-state contract now follows DEV-042 `workbenchItems.length === 0 && !isAssignedLoading`, so placement-state filtering is covered instead of the old assigned-only list condition.
+  - DEV-041 static verifier now follows DEV-042 `task-sort-unplaced` sorted-item key instead of the older `my-task-unplaced` key.
+  - DEV-042 browser smoke was converted to the same Playwright wrapper format used by existing browser verifier scripts and now seeds the local test session before opening the app.
+  - DEV-042 static verifier now also checks that DEV-041 static/browser verifier contracts remain compatible with the `任務排序` rename.
+- Evidence status: Not executed in this turn. Requires DEV-041 and DEV-042 static/browser gates after explicit validation authorization.
+
+### Validation Evidence - 2026-07-02 - DEV-042 Phase 1 local verification passed
+
+- Type: QC evidence / local verification
+- Authorization: User explicitly allowed validation with `允許執行驗證`.
+- Commands passed:
+  - `npm run verify:dev-042-task-workbench`
+  - `npx tsc --noEmit`
+  - `npm run verify:dev-041-task-zone-direct-drag-placement`
+  - `npm run verify:dev-040-personal-task-zone`
+  - `npm run verify:dev-028-cross-mode-task-interactions`
+  - `npm run verify:dev-042-task-workbench-browser`
+  - `npm run verify:dev-041-task-zone-direct-drag-placement-browser`
+  - `npm run build`
+- Test server:
+  - Started with `npm run dev:test:server`.
+  - Stopped with `npm run dev:test:stop`.
+- Fixes made during validation:
+  - DEV-041 static verifier now follows DEV-042 `workbenchItems.length === 0 && !isAssignedLoading` empty-state contract.
+  - DEV-041 static verifier now follows DEV-042 `task-sort-unplaced` sorted-item key.
+- Build evidence:
+  - `npm run build` generated bundles including `TaskZoneView-CYbdklK5.js`, `BoardView-DPhOSzS-.js`, and `index-OesGg4iV.js`.
+- Release boundary:
+  - No DB migration was created or applied.
+  - No production deploy, production smoke, push or git commit was executed in this turn.
+
+### PM Documentation Closure - 2026-07-02 - DEV-042 follow-up phase contracts completed
+
+- Type: PM evidence / development documentation closure
+- Scope: Complete follow-up development documentation after DEV-042 Phase 1 local verification.
+- Change:
+  - `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md` now includes an Architecture Memory Capsule.
+  - Phase 2 `Workbench staging and re-placement` is now written to RD Contract Ready with scope, out of scope, implementation contract, data/API/permission impact, entry conditions, acceptance, QA/QC gate, stop conditions and evidence required.
+  - Phase 3 `External task command center` is now written to RD Contract Ready with source adapter, conversion boundary, privacy/cost entry conditions, QA/QC gate and stop conditions.
+  - DEV-042 status now distinguishes Phase 1 local verification from Phase 2/3 deferred RD contracts.
+- Authorization boundary:
+  - Phase 1 is locally verified.
+  - Phase 2/3 implementation is not authorized.
+  - No migration, deploy, push or git commit was executed.
+- Evidence status: Documentation-only update in this turn; no validation command executed after this documentation closure.
+
 ## PM Update - 2026-07-01
 
 ### DEV-041: 任務專區中控台與直接拖曳歸位
@@ -2426,3 +2672,88 @@ RD Implementation Notes：
 - Remaining release boundary:
   - DEV-041 Supabase migration is present but not applied to production in this turn.
   - Production deploy, production smoke and push are not executed in this turn.
+
+### RD Follow-up - 2026-07-02 - DEV-041 collapsible scope and unplaced-in-my-tasks
+
+- Type: UX correction / task-zone source panel follow-up
+- User issue: The scope selector takes too much space in the high-frequency task-zone panel, and `待歸位` tasks should not be missing from `我的任務`.
+- Change:
+  - `訂閱範圍` now has a persisted `scopeCollapsed` preference and a `data-task-zone-scope-toggle` control, so the range selector can be expanded only when needed.
+  - `我的任務` count now includes both `待歸位` personal tasks and assigned placed tasks.
+  - The `我的任務` tab renders `待歸位` tasks first via `DraggablePersonalTaskCard`, preserving `personal-task-zone-item` placement behavior instead of treating them as placed `wbs-card` tasks.
+  - Placed assigned tasks remain under the `已在看板` group and keep canonical move behavior.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require `scopeCollapsed`, `data-task-zone-scope-toggle`, `myTaskCount`, `my-task-unplaced`, and the user-facing copy that unplaced tasks are fixed into `我的任務`.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and focused browser smoke after explicit validation authorization.
+### PM Documentation Closure - DEV-042 RD completeness補齊
+
+- 2026-07-02：依 RD 主管審視結果補齊 DEV-042 文件完整性缺口。
+- SPEC-042 top-level status 已同步為 `Phase 1 Local Verification Passed / Phase 2-3 RD Contract Ready / No Migration / No Deploy`，避免 `dev_task.md`、`documentation_map.md` 與 spec 狀態不一致。
+- Human Decision Brief 已追加後續授權紀錄：使用者後續以 `$dev-pm` 執行開發授權 Phase 1 implementation and validation；Phase 2/3 仍僅為 RD Contract Ready，不代表可實作、migration、deploy、push 或 git commit。
+- Phase 2/3 RD Handoff Contract 已補上 `Dependencies`、`Deferred Decisions`、`Recovery Conditions` 與 proposed future verifier names，讓下一輪 AI/RD 可直接判斷能否進入 implementation gate。
+- Next condition：使用者可另行授權 commit、release/deploy gate 或 Phase 2 implementation；在明確授權前，不執行 migration、deploy、push 或 git commit。
+
+### RD Implementation Update - 2026-07-02 - DEV-042 Phase 2 RD implementation slice
+
+- Type: RD implementation / Phase 2 local slice
+- Authorization: Active goal `$dev-pm 執行開發`; interpreted as local Phase 2 implementation progress only. Production migration, deploy, push and git commit remain out of scope.
+- Implemented scope:
+  - Added `task-zone-staging-drop` droppable target in the BoardView-integrated `任務工作台` source panel so placed tasks can be dragged back to `待歸位`.
+  - BoardView now routes drops on `task-zone-staging-drop` to `stagePlacedTask`, then removes the staged task from the current board only after the service call succeeds.
+  - Added `stagePlacedTask` in `useTaskZoneStore`, `removeNodeLocal` in `useWbsStore`, and `nodeService.stageToWorkbench` / `supabaseNodeService.stageToWorkbench`.
+  - Added Supabase migration `supabase/migrations/20260702040000_dev_042_workbench_staging.sql` defining `place_task_to_workbench_staging` and updating `place_personal_task_on_board` so staged tasks can be re-placed by the staging user.
+  - Added static verifier entrypoint `npm run verify:dev-042-workbench-staging`.
+- Safety boundary:
+  - The migration file was created but not applied to production.
+  - The first slice fails closed for tasks with tags, linked records, or external dependencies until controlled move/tag-transfer policy is defined.
+  - No production migration, deploy, push or git commit was executed.
+- Validation status: Executed locally on 2026-07-02 in this turn. Requires explicit validation authorization for static verifier, browser smoke, Supabase DB/RLS QC, `npx tsc --noEmit`, and `npm run build`.
+
+### Validation Update - 2026-07-02 - DEV-042 Phase 2
+- `npm run verify:dev-042-workbench-staging`: PASS, 21 pass / 0 fail.
+- `npm run typecheck`: initially unavailable because the package script was missing.
+- `npx tsc --noEmit --pretty false`: PASS.
+- `npm run build`: PASS, Vite production build generated `dist/` assets; non-blocking warning: Browserslist data is 6 months old.
+- Follow-up config: `package.json` now exposes `typecheck` as `tsc --noEmit --pretty false`.
+- Boundary: no production migration apply, deploy, git stage, git commit, git push, browser smoke, or DB QC was executed.
+### RD Implementation Update - 2026-07-02 - DEV-042 Task workbench filter UX slice
+
+- Implemented locally:
+  - Moved task workbench `任務排序` filter controls into a modal dialog.
+  - Kept left workbench panel focused on task scanning by showing only filter summary plus `調整篩選`.
+  - Added assignee filtering for unassigned, current user, loaded members, and assignee ids found in loaded tasks.
+  - Made workbench filter preferences board-scoped through the active board id.
+- File changed:
+  - `src/components/TaskZoneView.tsx`
+- Boundary:
+  - This is a frontend/local-preference slice only.
+  - It does not expand backend subscription permissions or cross-workspace arbitrary-assignee query coverage.
+  - Other assignee filtering is only complete for tasks already loaded locally; backend query/RLS support remains a separate future slice.
+- Validation:
+  - Not executed after this slice.
+  - Required next checks: `npm run typecheck`, `npm run build`, browser smoke for modal open/close, board-scoped persistence, and assignee filter behavior.
+- Not executed:
+  - Production migration, deployment, git stage, git commit, git push, DB QC.
+### RD Implementation Update - 2026-07-02 - DEV-042 Workbench development badge
+
+- Implemented locally:
+  - Added a visible `開發中` badge next to the `任務工作台` title.
+- Intent:
+  - Make the current feature maturity explicit in the UI while DEV-042 still has pending backend/release/browser-QC work.
+- File changed:
+  - `src/components/TaskZoneView.tsx`
+- Validation:
+  - Not executed after this label-only slice.
+- Boundary:
+  - No production migration, deployment, git stage, git commit, git push, or DB QC.
+
+### Validation Update - 2026-07-02 - DEV-042 Task workbench filter and development badge
+
+- `npm run typecheck`: PASS.
+- `npm run build`: PASS; Vite production build generated `dist/` assets.
+- Non-blocking build warning:
+  - Browserslist/caniuse-lite data is 6 months old.
+- Validation not executed:
+  - Browser smoke for filter modal open/close.
+  - Manual board-scoped persistence check.
+  - Manual assignee filter behavior check.
+  - Production DB QC, production migration, deployment, git stage, git commit, git push.

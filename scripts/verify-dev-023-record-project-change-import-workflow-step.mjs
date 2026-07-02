@@ -193,9 +193,12 @@ const checks = [
       contents.recordSidebar.includes('data-project-change-import-panel'),
   },
   {
-    name: 'RecordSidebar keeps protected content insertion path',
+    name: 'RecordSidebar inserts project change preview into task discussion section',
     pass:
-      contents.recordSidebar.includes('wrapProjectChangeImportContent(projectChangeImport.previewContent)') &&
+      contents.recordSidebar.includes('extractProjectChangeImportTaskDiscussionBody(projectChangeImport.previewContent)') &&
+      contents.recordSidebar.includes('normalizeProjectChangeDraftContent') &&
+      contents.recordSidebar.includes('stripProjectChangeImportBlocks(draft.content)') &&
+      contents.recordSidebar.includes('appendLineToMarkdownSection(cleanedDraftContent, MEETING_RECORD_TASKS_HEADING, projectChangeBody)') &&
       contents.recordSidebar.includes("stepState: 'inserted'") &&
       contents.recordSidebar.includes("stepState: 'skipped'"),
   },

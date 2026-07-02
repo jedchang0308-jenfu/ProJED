@@ -1,5 +1,18 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-07-02
+
+### DEV-042: 任務工作台與跨工作區任務中繼站
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | Phase 1 Local Verification Passed / Phase 2-3 RD Contract Ready / No Migration / No Deploy | DEV-042 / DEV-041 / DEV-040 / DEV-028 / SPEC-037 | 新增 DEV-042 交付點，將 `任務專區` 長期升級為 `任務工作台`：工作台是跨工作區、跨看板、未來可串外部任務來源的個人任務中控台；HCS 決策 `1A / 2B / 3A` 固定 `我的任務` 改名為 `任務排序`，已歸位任務拖回待歸位列 Phase 2；Phase 1 已通過 local verification，Phase 2/3 已補到 RD Contract Ready 但未授權實作。 |
+| `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md` | Phase 1 Local Verification Passed / Phase 2-3 RD Contract Ready / No Migration / No Deploy | DEV-042 / DEV-041 / DEV-040 / DEV-028 / SPEC-037 | DEV-042 正式規格，補齊 RD 主管審查缺口：Authorized phase、Phase 1 hard boundary、`任務排序` sorting contract、工作區 / 看板 / 歸位狀態 filter default、count rules、empty states、QA fixture、permission boundary、Architecture Memory Capsule、Phase 2 workbench staging/re-placement RD Handoff Contract、Phase 3 external task command center RD Handoff Contract、stop conditions 與 QA/QC gate。 |
+| `scripts/verify-dev-042-task-workbench.mjs` | Passed 2026-07-02 | DEV-042 | DEV-042 static verifier，檢查 `任務工作台` 命名、`任務排序` tab、工作台篩選、歸位狀態 filter、排序 contract、待歸位固定納入任務排序、Phase 1 不做 placed-to-unplaced、文件 / package verifier entrypoints，以及 DEV-041 verifier 對 `任務排序` 改名的相容性。 |
+| `scripts/verify-dev-042-task-workbench-browser.pw.js` | Passed 2026-07-02 | DEV-042 | DEV-042 browser smoke 入口，檢查 full-page 任務工作台、BoardView 左側 source panel、`任務排序` tab、工作台篩選、全部 / 待歸位 / 已歸位 filter、任務排序 item placement 標籤或 empty state；不執行 placed-to-unplaced。 |
+
+PM 治理註記：DEV-042 是 DEV-041 後續產品方向，不覆蓋 DEV-041 已完成的直接拖曳歸位交付邊界。使用者已透過 HCS 引導固定 `1A / 2B / 3A`：tab 名稱採 `任務排序`，但 UI 必須說明其為依截止日期排序；已歸位任務拖回待歸位列 Phase 2。本輪已依 `$dev-pm 執行開發` 完成 Phase 1 local verification，範圍只包含命名、`任務排序`、工作區 / 看板 / 歸位狀態 filter，以及待歸位固定納入排序。後續文件已依 All-Phase RD Contract Gate 補齊 Phase 2 placed-to-unplaced / re-placement 與 Phase 3 external task command center 的 RD Handoff Contract；Phase 2/3 尚未授權實作。未執行 migration、production deploy、push 或 git commit。
+
 ## Documentation Map Update - 2026-07-01
 
 ### DEV-041: 任務專區中控台與直接拖曳歸位
@@ -507,3 +520,40 @@ DEV-012 的產品邊界：
 | `ai-doc/qc/QC-DEV-009-meeting-task-detail-quick-note-ux.md` | Pass | DEV-009 | DEV-009 UX 驗證事實報告，確認桌機與筆電會議補記工作流通過。 |
 | `ai-doc/qc/QC-DEV-011-012-production-ai-smoke.md` | Backend Pass / UI Pending | DEV-011 / DEV-012 | 正式 Hosting 部署與 Edge Function AI smoke 事實報告；後端正式 AI 統整通過，互動式前端 UI smoke 待 Google OAuth session。 |
 | `ai-doc/qc/QC-DEV-013-task-tree-duplicate-context-menu.md` | Pass | DEV-013 | DEV-013 右鍵任務複製事實驗證報告，確認子樹複製、內部依賴 remap、undo/redo 與 release gate 回歸通過。 |
+## DEV-042 RD completeness補齊
+
+- Source of truth: `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md`。
+- Current state: Phase 1 Local Verification Passed；Phase 2/3 are RD Contract Ready only；No Migration；No Deploy。
+- Added cold-start handoff details: Architecture Memory Capsule, Phase 2/3 Dependencies, Deferred Decisions, Recovery Conditions, proposed future verifier names, and explicit authorization boundary.
+- Authorization boundary: Phase 1 implementation and validation were authorized and completed locally; Phase 2/3 implementation, migration, deploy, push and git commit require new explicit user authorization.
+- Next condition: if the user asks to continue implementation, start from DEV-042 Phase 2 workbench staging/re-placement gate; if the user asks release, route through deployment-release-gate before any production action.
+
+## DEV-042 Phase 2 implementation slice - 2026-07-02
+
+- Source of truth: `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md`。
+- Implementation files: `src/components/TaskZoneView.tsx`, `src/components/BoardView.tsx`, `src/store/useTaskZoneStore.ts`, `src/store/useWbsStore.ts`, `src/services/dataBackend.ts`, `src/services/supabase/projedService.ts`, `src/types/index.ts`, `src/services/supabase/database.types.ts`。
+- Migration file: `supabase/migrations/20260702040000_dev_042_workbench_staging.sql` creates `place_task_to_workbench_staging` and extends `place_personal_task_on_board` for staged-by re-placement; migration is not applied to production.
+- Verifier entrypoint: `scripts/verify-dev-042-workbench-staging.mjs` via `npm run verify:dev-042-workbench-staging`; not executed yet.
+- Boundary: first slice supports placed task drag-back into `待歸位` through a Supabase RPC contract and local UI/store plumbing; tasks with tags, linked records, or external dependencies fail closed pending controlled move/tag-transfer policy.
+- Next condition: request validation authorization to run static verifier/typecheck/build/browser/DB QC, or authorize production migration through release gate. No deploy, push or git commit has been executed.
+
+## DEV-042 Phase 2 validation evidence - 2026-07-02
+- Spec evidence: `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md` now records local validation evidence.
+- DEV evidence: `ai-doc/dev_task.md` now records the verifier and TypeScript check results.
+- Script evidence: `package.json` now exposes `typecheck` for repeatable local validation.
+- Build evidence: `npm run build` passed and generated `dist/` assets.
+- Boundary: production migration, deployment and Git publish actions remain separate release-gated work.
+## DEV-042 Task workbench filter UX slice - 2026-07-02
+
+- Feature area: Task Workbench / `任務排序` filter.
+- Product file: `src/components/TaskZoneView.tsx`.
+- Spec record: `ai-doc/specs/SPEC-042-task-workbench-cross-workspace-staging.md`.
+- DEV status record: `ai-doc/dev_task.md`.
+- Implemented behavior:
+  - Filter moved into modal.
+  - Per-board filter preference persistence.
+  - Assignee filter for loaded workbench task set.
+- Explicit limitation:
+  - Remote subscription still defaults to assigned-to-me; arbitrary assignee cross-workspace loading requires a future backend/API/RLS slice.
+- Evidence status:
+  - Local code change recorded, validation pending.

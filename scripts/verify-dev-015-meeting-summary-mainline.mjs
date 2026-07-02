@@ -6,13 +6,16 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-015');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingRecordScaffold.ts',
   'src/utils/meetingRecordSynthesis.ts',
 ];
 
 rmSync(tempRoot, { recursive: true, force: true });
 
 const rewriteImports = (outputText) =>
-  outputText.replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'");
+  outputText
+    .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingRecordScaffold'", "from './meetingRecordScaffold.js'");
 
 for (const sourcePath of sources) {
   const source = readFileSync(sourcePath, 'utf8');
@@ -104,10 +107,10 @@ assert('summary is not first-three activity log', (summarySection.match(/新增�
 assert('summary is not missing deeper tasks', summarySection.includes('問BOSS') && summarySection.includes('執行QC驗證'));
 
 assert('task section keeps numbered list heading', result.content.includes(`2.1 ${pathMentions(weekly)}`));
-assert('task section keeps numbered card heading with full path', result.content.includes(`2.1.1 ${pathMentions(weekly, rd)}`));
-assert('task section keeps numbered child heading with full path', result.content.includes(`2.1.1.1 ${pathMentions(weekly, rd, requirement)}`));
-assert('task section keeps numbered grandchild heading with full path', result.content.includes(`2.1.1.1.1 ${pathMentions(weekly, rd, requirement, boss)}`));
-assert('task section keeps QA hierarchy with full path', result.content.includes(`2.1.2 ${pathMentions(weekly, qa)}`) && result.content.includes(`2.1.2.1 ${pathMentions(weekly, qa, qaPlan)}`));
+assert('task section keeps numbered card heading with current task only', result.content.includes(`2.1.1 ${mention(...rd)}`));
+assert('task section keeps numbered child heading with current task only', result.content.includes(`2.1.1.1 ${mention(...requirement)}`));
+assert('task section keeps numbered grandchild heading with current task only', result.content.includes(`2.1.1.1.1 ${mention(...boss)}`));
+assert('task section keeps QA hierarchy with current task only', result.content.includes(`2.1.2 ${mention(...qa)}`) && result.content.includes(`2.1.2.1 ${mention(...qaPlan)}`));
 assert('task section is present', taskSection.includes(mention(...transfer)));
 
 for (const task of tasks) {
@@ -118,6 +121,7 @@ const edgeSource = readFileSync('supabase/functions/synthesize_meeting_record/in
 assert('edge prompt defines mainline summary', edgeSource.includes('主線摘要，不是 activity log'));
 assert('edge prompt bans bulk created-task list in summary', edgeSource.includes('不能逐筆列出大量'));
 assert('edge prompt asks to aggregate task paths', edgeSource.includes('彙整成工作主線、工作面與下層拆解'));
+assert('edge prompt avoids repeated ancestor tags', edgeSource.includes('不要重複祖先 path tags'));
 
 if (failures.length > 0) {
   console.error('DEV-015 meeting summary mainline verification failed.');

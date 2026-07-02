@@ -1,15 +1,17 @@
 import React from 'react';
-import { CalendarDays, Check, CircleDot, MessageSquareText, NotebookText, Pencil, Pin, PinOff, Plus, RefreshCw, SendHorizontal, SlidersHorizontal, Trash2, X } from 'lucide-react';
-import { useDraggable } from '@dnd-kit/core';
+import { CalendarDays, Check, CircleDot, MessageSquareText, NotebookText, Pencil, Pin, PinOff, Plus, RefreshCw, SendHorizontal, SlidersHorizontal, Trash2, UserRound, X } from 'lucide-react';
+import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import useAuthStore from '../store/useAuthStore';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useTaskZoneStore from '../store/useTaskZoneStore';
+import { useMemberStore } from '../store/useMemberStore';
 import { toast } from '../store/useToastStore';
 import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
 import { TaskDragHandle } from './Wbs/TaskDragHandle';
 import { Badge } from './ui/Badge';
 import { nodeService } from '../services/dataBackend';
+import { UNASSIGNED_ASSIGNEE_FILTER, matchesAssigneeFilter } from '../utils/taskFilters';
 import {
   createAssignedToMeTaskSource,
   describeTaskSubscriptionScope,
@@ -27,14 +29,18 @@ const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
 ];
 
 type TaskZoneSourceTab = 'unplaced' | 'my_tasks';
+type TaskZonePlacementFilter = 'all' | 'unplaced' | 'placed';
 
 interface TaskZoneSourcePanelPrefs {
   open: boolean;
   pinned: boolean;
   tab: TaskZoneSourceTab;
   scope: TaskSubscriptionScope;
+  placementFilter: TaskZonePlacementFilter;
+  scopeCollapsed: boolean;
   customWorkspaceIds: string[];
   customBoardIds: string[];
+  selectedAssigneeIds: string[];
 }
 
 const TASK_ZONE_SOURCE_PANEL_PREFS_KEY = 'projed-task-zone-source-panel';
@@ -44,29 +50,58 @@ const getDefaultTaskZoneSourcePanelPrefs = (): TaskZoneSourcePanelPrefs => ({
   pinned: false,
   tab: 'unplaced',
   scope: 'all',
+  placementFilter: 'all',
+  scopeCollapsed: true,
   customWorkspaceIds: [],
   customBoardIds: [],
+  selectedAssigneeIds: [],
 });
 
-const readTaskZoneSourcePanelPrefs = (): TaskZoneSourcePanelPrefs => {
+const getTaskZoneSourcePanelPrefsKey = (boardId?: string | null) => (
+  boardId ? `${TASK_ZONE_SOURCE_PANEL_PREFS_KEY}:${boardId}` : TASK_ZONE_SOURCE_PANEL_PREFS_KEY
+);
+
+const normalizeTaskZoneSourcePanelPrefs = (stored: Partial<TaskZoneSourcePanelPrefs> | null | undefined): TaskZoneSourcePanelPrefs => {
+  const defaults = getDefaultTaskZoneSourcePanelPrefs();
+  return {
+    ...defaults,
+    ...stored,
+    customWorkspaceIds: Array.isArray(stored?.customWorkspaceIds) ? stored.customWorkspaceIds.filter(Boolean) : [],
+    customBoardIds: Array.isArray(stored?.customBoardIds) ? stored.customBoardIds.filter(Boolean) : [],
+    selectedAssigneeIds: Array.isArray(stored?.selectedAssigneeIds) ? stored.selectedAssigneeIds.filter(Boolean) : [],
+  };
+};
+
+const readTaskZoneSourcePanelPrefs = (boardId?: string | null): TaskZoneSourcePanelPrefs => {
   if (typeof window === 'undefined') return getDefaultTaskZoneSourcePanelPrefs();
   try {
-    const stored = window.localStorage.getItem(TASK_ZONE_SOURCE_PANEL_PREFS_KEY);
-    if (!stored) return getDefaultTaskZoneSourcePanelPrefs();
-    return { ...getDefaultTaskZoneSourcePanelPrefs(), ...JSON.parse(stored) };
+    const scopedKey = getTaskZoneSourcePanelPrefsKey(boardId);
+    const stored = window.localStorage.getItem(scopedKey);
+    if (stored) return normalizeTaskZoneSourcePanelPrefs(JSON.parse(stored));
+    if (boardId) {
+      const legacyStored = window.localStorage.getItem(TASK_ZONE_SOURCE_PANEL_PREFS_KEY);
+      if (legacyStored) return normalizeTaskZoneSourcePanelPrefs(JSON.parse(legacyStored));
+    }
+    return getDefaultTaskZoneSourcePanelPrefs();
   } catch {
     return getDefaultTaskZoneSourcePanelPrefs();
   }
 };
 
-const writeTaskZoneSourcePanelPrefs = (prefs: TaskZoneSourcePanelPrefs) => {
+const writeTaskZoneSourcePanelPrefs = (prefs: TaskZoneSourcePanelPrefs, boardId?: string | null) => {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(TASK_ZONE_SOURCE_PANEL_PREFS_KEY, JSON.stringify(prefs));
+    window.localStorage.setItem(getTaskZoneSourcePanelPrefsKey(boardId), JSON.stringify(prefs));
   } catch {
     // local preference only; ignore storage failures.
   }
 };
+
+const toggleStringSelection = (items: string[], value: string) => (
+  items.includes(value) ? items.filter(item => item !== value) : [...items, value]
+);
+
+const shortMemberLabel = (userId: string) => userId.length > 8 ? `成員 ${userId.slice(0, 8)}` : userId;
 
 const createTaskZoneNote = (index: number): TaskDetailNote => ({
   id: `task_zone_note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -76,8 +111,36 @@ const createTaskZoneNote = (index: number): TaskDetailNote => ({
 
 const formatTaskMeta = (task: TaskNode) => {
   const parts = [task.status === 'completed' ? '已完成' : '待歸位'];
+  if (task.stagedFromWorkspaceId || task.stagedFromBoardId) parts.push('來源已記錄');
   if (task.endDate) parts.push(`期限 ${task.endDate}`);
   return parts.join(' · ');
+};
+
+const getTaskCreatedAt = (task: TaskNode): string => {
+  const metadata = task as TaskNode & { createdAt?: string | null; created_at?: string | null };
+  return metadata.createdAt || metadata.created_at || '';
+};
+
+const compareTasksBySchedule = (left: TaskNode, right: TaskNode) => {
+  const leftBucket = left.endDate ? 0 : left.startDate ? 1 : 2;
+  const rightBucket = right.endDate ? 0 : right.startDate ? 1 : 2;
+  if (leftBucket !== rightBucket) return leftBucket - rightBucket;
+
+  const leftDate = left.endDate || left.startDate || getTaskCreatedAt(left);
+  const rightDate = right.endDate || right.startDate || getTaskCreatedAt(right);
+  const dateCompare = leftDate.localeCompare(rightDate);
+  if (dateCompare !== 0) return dateCompare;
+
+  const titleCompare = (left.title || '').localeCompare(right.title || '', 'zh-Hant');
+  if (titleCompare !== 0) return titleCompare;
+
+  return left.id.localeCompare(right.id);
+};
+
+const describePlacementFilter = (filter: TaskZonePlacementFilter) => {
+  if (filter === 'unplaced') return '只看待歸位';
+  if (filter === 'placed') return '只看已歸位';
+  return '全部歸位狀態';
 };
 
 const TaskZoneDetailsPanel: React.FC<{
@@ -521,6 +584,38 @@ const TaskZoneComposer: React.FC<{ compact?: boolean }> = ({ compact = false }) 
   );
 };
 
+const TaskZoneStagingDropZone: React.FC<{ canMoveTask: boolean }> = ({ canMoveTask }) => {
+  const { active } = useDndContext();
+  const activeData = active?.data.current;
+  const activeType = activeData?.type;
+  const acceptsActiveTask = activeType === 'wbs-card' || activeType === 'wbs-checklist' || activeData?.source === 'task-zone-my-task';
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'task-zone-staging-drop',
+    disabled: !canMoveTask || !acceptsActiveTask,
+    data: {
+      type: 'task-zone-staging-drop',
+      accepts: ['wbs-card', 'wbs-checklist', 'task-zone-my-task'],
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border border-dashed px-3 py-3 text-xs font-semibold leading-relaxed transition ${
+        isOver && acceptsActiveTask
+          ? 'border-primary bg-primary/10 text-primary shadow-inner'
+          : 'border-blue-200 bg-blue-50 text-blue-700'
+      }`}
+      data-task-zone-staging-drop="true"
+      data-task-zone-staging-drop-active={isOver && acceptsActiveTask ? 'true' : 'false'}
+    >
+      {canMoveTask
+        ? '把已歸位任務拖到這裡，會移回待歸位中繼站；之後可再拖到其他看板位置。'
+        : '目前看板沒有移動權限，不能把已歸位任務拖回待歸位。'}
+    </div>
+  );
+};
+
 const DraggableAssignedTaskCard: React.FC<{
   task: TaskNode;
   locationLabel: string;
@@ -705,6 +800,8 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
   canMoveTask = false,
 }) => {
   const user = useAuthStore(state => state.user);
+  const workspaceMembers = useMemberStore(state => state.workspaceMembers);
+  const boardMembers = useMemberStore(state => state.boardMembers);
   const workspaces = useBoardStore(state => state.workspaces);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const activeBoardId = useBoardStore(state => state.activeBoardId);
@@ -721,7 +818,8 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
   const removeTask = useTaskZoneStore(state => state.removeTask);
   const isLoading = useTaskZoneStore(state => state.isLoading);
   const isAssignedLoading = useTaskZoneStore(state => state.isAssignedLoading);
-  const [prefs, setPrefs] = React.useState<TaskZoneSourcePanelPrefs>(() => readTaskZoneSourcePanelPrefs());
+  const [prefs, setPrefs] = React.useState<TaskZoneSourcePanelPrefs>(() => readTaskZoneSourcePanelPrefs(activeBoardId));
+  const [filterDialogOpen, setFilterDialogOpen] = React.useState(false);
   const [detailsTarget, setDetailsTarget] = React.useState<{ id: string; source: 'personal' | 'assigned' } | null>(null);
   const pendingTasks = tasks.filter(task => !task.isArchived && task.status !== 'completed');
 
@@ -733,10 +831,15 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
   const patchPrefs = (updates: Partial<TaskZoneSourcePanelPrefs>) => {
     setPrefs(current => {
       const next = { ...current, ...updates };
-      writeTaskZoneSourcePanelPrefs(next);
+      writeTaskZoneSourcePanelPrefs(next, activeBoardId);
       return next;
     });
   };
+
+  React.useEffect(() => {
+    setPrefs(readTaskZoneSourcePanelPrefs(activeBoardId));
+    setFilterDialogOpen(false);
+  }, [activeBoardId]);
 
   const toggleCustomWorkspace = (workspaceId: string) => {
     patchPrefs({
@@ -753,6 +856,22 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
       customBoardIds: prefs.customBoardIds.includes(boardId)
         ? prefs.customBoardIds.filter(id => id !== boardId)
         : [...prefs.customBoardIds, boardId],
+    });
+  };
+
+  const toggleAssigneeFilter = (assigneeId: string) => {
+    patchPrefs({
+      selectedAssigneeIds: toggleStringSelection(prefs.selectedAssigneeIds, assigneeId),
+    });
+  };
+
+  const clearWorkbenchFilters = () => {
+    patchPrefs({
+      scope: 'all',
+      placementFilter: 'all',
+      customWorkspaceIds: [],
+      customBoardIds: [],
+      selectedAssigneeIds: [],
     });
   };
 
@@ -796,6 +915,97 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
     return Array.from(byId.values())
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
   }, [assignedTaskSource, nodes, remoteAssignedTasks, user?.uid]);
+
+  const assigneeLabelById = React.useMemo(() => {
+    const labels = new Map<string, string>();
+    const addLabel = (userId?: string | null, label?: string | null) => {
+      if (!userId) return;
+      labels.set(userId, label || labels.get(userId) || shortMemberLabel(userId));
+    };
+    workspaceMembers.forEach(member => addLabel(member.userId, member.profile?.displayName || member.profile?.email));
+    boardMembers.forEach(member => addLabel(member.userId, member.profile?.displayName || member.profile?.email));
+    addLabel(user?.uid, user?.displayName || user?.email || '我');
+    return labels;
+  }, [boardMembers, user?.displayName, user?.email, user?.uid, workspaceMembers]);
+
+  const filterCandidateTasks = React.useMemo(
+    () => [...pendingTasks, ...assignedTasks],
+    [assignedTasks, pendingTasks]
+  );
+
+  const unassignedTaskCount = React.useMemo(
+    () => filterCandidateTasks.filter(task => !task.assigneeId).length,
+    [filterCandidateTasks]
+  );
+
+  const assigneeOptions = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    filterCandidateTasks.forEach(task => {
+      if (!task.assigneeId) return;
+      counts.set(task.assigneeId, (counts.get(task.assigneeId) || 0) + 1);
+    });
+
+    const ids = new Set<string>([
+      ...Array.from(assigneeLabelById.keys()),
+      ...Array.from(counts.keys()),
+      ...prefs.selectedAssigneeIds.filter(id => id !== UNASSIGNED_ASSIGNEE_FILTER),
+    ]);
+
+    return Array.from(ids)
+      .map(id => ({
+        id,
+        label: assigneeLabelById.get(id) || shortMemberLabel(id),
+        count: counts.get(id) || 0,
+      }))
+      .filter(option => option.count > 0 || prefs.selectedAssigneeIds.includes(option.id) || option.id === user?.uid)
+      .sort((left, right) => {
+        if (left.id === user?.uid) return -1;
+        if (right.id === user?.uid) return 1;
+        if (left.count !== right.count) return right.count - left.count;
+        return left.label.localeCompare(right.label, 'zh-Hant');
+      });
+  }, [assigneeLabelById, filterCandidateTasks, prefs.selectedAssigneeIds, user?.uid]);
+
+  const describeAssigneeFilters = React.useCallback(() => {
+    if (prefs.selectedAssigneeIds.length === 0) return '全部負責人';
+    return prefs.selectedAssigneeIds
+      .map(id => id === UNASSIGNED_ASSIGNEE_FILTER ? '未指派' : (assigneeLabelById.get(id) || shortMemberLabel(id)))
+      .join('、');
+  }, [assigneeLabelById, prefs.selectedAssigneeIds]);
+
+  const filteredPendingTasks = React.useMemo(
+    () => pendingTasks.filter(task => matchesAssigneeFilter(task, prefs.selectedAssigneeIds)),
+    [pendingTasks, prefs.selectedAssigneeIds]
+  );
+
+  const filteredAssignedTasks = React.useMemo(
+    () => assignedTasks.filter(task => matchesAssigneeFilter(task, prefs.selectedAssigneeIds)),
+    [assignedTasks, prefs.selectedAssigneeIds]
+  );
+
+  const myTaskCount = pendingTasks.length + assignedTasks.length;
+  const workbenchItems = React.useMemo(
+    () => [
+      ...(prefs.placementFilter === 'placed'
+        ? []
+        : filteredPendingTasks.map(task => ({ task, placement: 'unplaced' as const }))),
+      ...(prefs.placementFilter === 'unplaced'
+        ? []
+        : filteredAssignedTasks.map(task => ({ task, placement: 'placed' as const }))),
+    ].sort((left, right) => compareTasksBySchedule(left.task, right.task)),
+    [filteredAssignedTasks, filteredPendingTasks, prefs.placementFilter]
+  );
+
+  const filterSummaryText = [
+    describeTaskSubscriptionScope(prefs.scope, activeWorkspace?.title, activeBoard?.title),
+    describePlacementFilter(prefs.placementFilter),
+    describeAssigneeFilters(),
+  ].join(' · ');
+  const hasActiveWorkbenchFilters = prefs.scope !== 'all'
+    || prefs.placementFilter !== 'all'
+    || prefs.customWorkspaceIds.length > 0
+    || prefs.customBoardIds.length > 0
+    || prefs.selectedAssigneeIds.length > 0;
 
   const detailsTask = detailsTarget?.source === 'personal'
     ? tasks.find(task => task.id === detailsTarget.id)
@@ -854,7 +1064,7 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
           type="button"
           onClick={() => patchPrefs({ open: true })}
           className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary hover:bg-primary/15"
-          title="開啟任務專區"
+          title="開啟任務工作台"
         >
           <NotebookText size={18} />
         </button>
@@ -870,7 +1080,7 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
       className="flex w-[340px] max-w-[82vw] shrink-0 flex-col border-r border-slate-200 bg-white shadow-[8px_0_24px_rgba(15,23,42,0.06)]"
       data-task-zone-source-panel="true"
       data-task-zone-board-panel="true"
-      aria-label="任務專區來源面板"
+      aria-label="任務工作台來源面板"
     >
       <div className="border-b border-slate-200 px-3 py-3">
         <div className="flex items-center justify-between gap-2">
@@ -879,8 +1089,13 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
               <NotebookText size={18} />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-sm font-black text-slate-900">任務專區</span>
-              <span className="block truncate text-xs text-slate-500">跨工作區的個人任務來源</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-sm font-black text-slate-900">任務工作台</span>
+                <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
+                  開發中
+                </span>
+              </span>
+              <span className="block truncate text-xs text-slate-500">跨工作區任務中繼站</span>
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
@@ -918,8 +1133,9 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
             className={`rounded-xl px-3 py-2 text-xs font-bold transition ${prefs.tab === 'my_tasks' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             data-task-zone-source-tab="my_tasks"
             data-task-zone-source-tab-active={prefs.tab === 'my_tasks' ? 'true' : 'false'}
+            title={`任務排序總數 ${myTaskCount}，目前篩選 ${workbenchItems.length}`}
           >
-            我的任務 {assignedTasks.length}
+            任務排序 {workbenchItems.length}
           </button>
         </div>
       </div>
@@ -928,11 +1144,12 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
         {prefs.tab === 'unplaced' ? (
           <div className="space-y-3">
             <TaskZoneComposer compact />
+            <TaskZoneStagingDropZone canMoveTask={canMoveTask} />
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
               拖曳左側把手到看板任務、欄位或子任務區，會使用與一般任務相同的定位框。
             </div>
             <div className="space-y-2">
-              {isLoading ? <div className="text-xs text-slate-500">載入任務專區...</div> : null}
+              {isLoading ? <div className="text-xs text-slate-500">載入任務工作台...</div> : null}
               {pendingTasks.length === 0 && !isLoading ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs font-semibold text-slate-500">
                   目前沒有待歸位任務。
@@ -953,84 +1170,67 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="mb-2 flex items-center gap-2 text-xs font-black text-slate-700">
-                <SlidersHorizontal size={14} />
-                訂閱範圍
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {([
-                  ['all', describeTaskSubscriptionScope('all')],
-                  ['workspace', describeTaskSubscriptionScope('workspace', activeWorkspace?.title)],
-                  ['board', describeTaskSubscriptionScope('board', activeWorkspace?.title, activeBoard?.title)],
-                  ['custom', describeTaskSubscriptionScope('custom')],
-                ] as Array<[TaskSubscriptionScope, string]>).map(([scope, label]) => (
-                  <button
-                    key={scope}
-                    type="button"
-                    onClick={() => patchPrefs({ scope })}
-                    className={`truncate rounded-lg px-2 py-1.5 text-xs font-bold ${prefs.scope === scope ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
-                    title={label}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {prefs.scope === 'custom' ? (
-                <div className="mt-3 space-y-2">
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5 text-[11px] font-semibold leading-relaxed text-blue-700">
-                    已選 {customWorkspaceCount} 個工作區、{customBoardCount} 個看板。勾工作區代表整個工作區；勾看板只代表該看板，兩者採聯集。
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" data-task-zone-scope-panel="summary">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-2 text-xs font-black text-slate-700">
+                    <SlidersHorizontal size={14} />
+                    篩選器
+                    {hasActiveWorkbenchFilters ? (
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">已套用</span>
+                    ) : null}
                   </div>
-                  {workspaces.map(workspace => (
-                    <div key={workspace.id} className="rounded-lg border border-slate-200 bg-white p-2">
-                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={prefs.customWorkspaceIds.includes(workspace.id)}
-                          onChange={() => toggleCustomWorkspace(workspace.id)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
-                        />
-                        <span className="truncate">{workspace.title}</span>
-                      </label>
-                      <div className="mt-2 space-y-1 pl-5">
-                        {workspace.boards.map(board => (
-                          <label key={board.id} className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold text-slate-500">
-                            <input
-                              type="checkbox"
-                              checked={prefs.customBoardIds.includes(board.id)}
-                              onChange={() => toggleCustomBoard(board.id)}
-                              className="h-3 w-3 rounded border-slate-300 text-primary focus:ring-primary"
-                            />
-                            <span className="truncate">{board.title}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                  <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-relaxed text-blue-700">
+                    {filterSummaryText}
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    此看板獨立保存 · {workbenchItems.length}/{myTaskCount} 筆
+                  </div>
                 </div>
-              ) : null}
-              <div className="mt-2 text-[11px] leading-4 text-slate-500">
-                預設來源為所有可存取且指派給我的任務；自訂範圍採工作區與看板聯集，未勾選任何項目時不顯示任務。
+                <button
+                  type="button"
+                  onClick={() => setFilterDialogOpen(true)}
+                  className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-100"
+                  data-task-zone-filter-dialog-open="true"
+                >
+                  調整篩選
+                </button>
               </div>
             </div>
 
             <div className="space-y-2">
               {isAssignedLoading ? (
                 <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-500">
-                  載入我的任務...
+                  載入任務排序...
                 </div>
               ) : null}
-              {assignedTasks.length === 0 && !isAssignedLoading ? (
+              {workbenchItems.length === 0 && !isAssignedLoading ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs font-semibold text-slate-500">
-                  目前範圍內沒有指派給你的未完成任務。
+                  目前篩選範圍內沒有待處理任務。
                 </div>
               ) : null}
-              {assignedTasks.map(task => {
+              {workbenchItems.map(({ task, placement }) => {
+                if (placement === 'unplaced') {
+                  return (
+                    <div key={`task-sort-unplaced-${task.id}`} data-task-zone-sort-item="unplaced">
+                      <div className="mb-1 px-1 text-[11px] font-black text-orange-600">待歸位</div>
+                      <DraggablePersonalTaskCard
+                        task={task}
+                        canPlaceOnBoard={canCreateTask}
+                        onToggleComplete={toggleComplete}
+                        onRemove={(item) => removeTask(item.id).catch(error => toast.error(error instanceof Error ? error.message : '任務刪除失敗。'))}
+                        onRename={rename}
+                        onOpenDetails={(item) => setDetailsTarget({ id: item.id, source: 'personal' })}
+                      />
+                    </div>
+                  );
+                }
                 const canDragInCurrentBoard = canMoveTask && task.workspaceId === activeWorkspaceId && task.boardId === activeBoardId;
                 const isCrossWorkspace = task.workspaceId !== activeWorkspaceId;
                 return (
+                  <div key={`task-sort-placed-${task.id}`} data-task-zone-sort-item="placed">
+                    <div className="mb-1 px-1 text-[11px] font-black text-slate-500">已歸位 · {getTaskLocationLabel(task)}</div>
                   <DraggableAssignedTaskCard
-                    key={task.id}
                     task={task}
                     locationLabel={getTaskLocationLabel(task)}
                     canDragInCurrentBoard={canDragInCurrentBoard}
@@ -1042,12 +1242,213 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
                     onOpenDetails={(item) => setDetailsTarget({ id: item.id, source: 'assigned' })}
                     onOpenBoard={openTaskBoard}
                   />
+                  </div>
                 );
               })}
             </div>
           </div>
         )}
       </div>
+
+      {filterDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[10002] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setFilterDialogOpen(false);
+          }}
+          data-task-zone-filter-dialog="true"
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-base font-black text-slate-900">
+                  <SlidersHorizontal size={18} />
+                  任務排序篩選器
+                </div>
+                <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">
+                  這組篩選只套用並保存於目前看板：{activeBoard?.title || '未命名看板'}。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterDialogOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                title="關閉篩選器"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+              <section className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold leading-relaxed text-blue-700">
+                目前：{filterSummaryText}
+                {prefs.scope === 'custom' ? ` · 已選 ${customWorkspaceCount} 個工作區、${customBoardCount} 個看板` : ''}
+              </section>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs font-black text-slate-500">範圍</div>
+                  <div className="text-[11px] font-semibold text-slate-400">依目前看板獨立保存</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {([
+                    ['all', describeTaskSubscriptionScope('all')],
+                    ['workspace', describeTaskSubscriptionScope('workspace', activeWorkspace?.title)],
+                    ['board', describeTaskSubscriptionScope('board', activeWorkspace?.title, activeBoard?.title)],
+                    ['custom', describeTaskSubscriptionScope('custom')],
+                  ] as Array<[TaskSubscriptionScope, string]>).map(([scope, label]) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => patchPrefs({ scope })}
+                      className={`truncate rounded-xl px-3 py-2 text-xs font-black transition ${prefs.scope === scope ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                      title={label}
+                      data-task-zone-scope-filter={scope}
+                      data-task-zone-scope-filter-active={prefs.scope === scope ? 'true' : 'false'}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {prefs.scope === 'custom' ? (
+                  <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-lg border border-blue-100 bg-white px-2 py-1.5 text-[11px] font-semibold leading-relaxed text-blue-700">
+                      已選 {customWorkspaceCount} 個工作區、{customBoardCount} 個看板。勾工作區代表整個工作區；勾看板只代表該看板，兩者採聯集。
+                    </div>
+                    <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                      {workspaces.map(workspace => (
+                        <div key={workspace.id} className="rounded-lg border border-slate-200 bg-white p-2">
+                          <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={prefs.customWorkspaceIds.includes(workspace.id)}
+                              onChange={() => toggleCustomWorkspace(workspace.id)}
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
+                            />
+                            <span className="truncate">{workspace.title}</span>
+                          </label>
+                          <div className="mt-2 space-y-1 pl-5">
+                            {workspace.boards.map(board => (
+                              <label key={board.id} className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold text-slate-500">
+                                <input
+                                  type="checkbox"
+                                  checked={prefs.customBoardIds.includes(board.id)}
+                                  onChange={() => toggleCustomBoard(board.id)}
+                                  className="h-3 w-3 rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                <span className="truncate">{board.title}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              <section>
+                <div className="mb-2 text-xs font-black text-slate-500">歸位狀態</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ['all', '全部'],
+                    ['unplaced', '待歸位'],
+                    ['placed', '已歸位'],
+                  ] as Array<[TaskZonePlacementFilter, string]>).map(([placementFilter, label]) => (
+                    <button
+                      key={placementFilter}
+                      type="button"
+                      onClick={() => patchPrefs({ placementFilter })}
+                      className={`rounded-xl px-3 py-2 text-xs font-black transition ${prefs.placementFilter === placementFilter ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                      data-task-zone-placement-filter={placementFilter}
+                      data-task-zone-placement-filter-active={prefs.placementFilter === placementFilter ? 'true' : 'false'}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs font-black text-slate-500">負責人</div>
+                  {prefs.selectedAssigneeIds.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => patchPrefs({ selectedAssigneeIds: [] })}
+                      className="text-[11px] font-black text-blue-600 hover:text-blue-700"
+                    >
+                      清除負責人
+                    </button>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleAssigneeFilter(UNASSIGNED_ASSIGNEE_FILTER)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition ${prefs.selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER) ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                    data-task-zone-assignee-filter={UNASSIGNED_ASSIGNEE_FILTER}
+                    data-task-zone-assignee-filter-active={prefs.selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER) ? 'true' : 'false'}
+                  >
+                    <UserRound size={13} />
+                    未指派
+                    <span className="text-[10px] text-slate-400">{unassignedTaskCount}</span>
+                  </button>
+                  {assigneeOptions.length === 0 ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-400">
+                      <UserRound size={13} />
+                      尚無可選負責人
+                    </div>
+                  ) : (
+                    assigneeOptions.map(option => {
+                      const active = prefs.selectedAssigneeIds.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => toggleAssigneeFilter(option.id)}
+                          className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black transition ${active ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+                          data-task-zone-assignee-filter={option.id}
+                          data-task-zone-assignee-filter-active={active ? 'true' : 'false'}
+                          title={option.label}
+                        >
+                          <UserRound size={13} />
+                          <span className="max-w-[160px] truncate">{option.label}</span>
+                          <span className="text-[10px] text-slate-400">{option.count}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                  負責人篩選會套用在待歸位與已歸位任務；目前遠端同步來源仍以「指派給我」為預設，其他負責人任務需已在本機任務集合中才會出現。
+                </p>
+              </section>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={clearWorkbenchFilters}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+              >
+                重設篩選
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterDialogOpen(false)}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-black text-white hover:bg-slate-800"
+              >
+                套用並關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {detailsTask ? (
         <TaskZoneDetailsPanel
@@ -1094,10 +1495,10 @@ const TaskZoneView = () => {
 
   const openBoardTaskZone = (tab: TaskZoneSourceTab) => {
     writeTaskZoneSourcePanelPrefs({
-      ...readTaskZoneSourcePanelPrefs(),
+      ...readTaskZoneSourcePanelPrefs(activeBoard?.id),
       open: true,
       tab,
-    });
+    }, activeBoard?.id);
     setView(activeBoard ? 'board' : 'home');
   };
 
@@ -1112,9 +1513,9 @@ const TaskZoneView = () => {
                   <NotebookText size={14} />
                   個人任務控制中心
                 </div>
-                <h2 className="mt-3 text-3xl font-black tracking-tight">任務專區</h2>
+                <h2 className="mt-3 text-3xl font-black tracking-tight">任務工作台</h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-                  快速輸入會直接建立任務。還沒決定屬於哪個看板時，先留在待歸位；進入看板後可用相同拖移體驗定位。
+                  快速輸入會直接建立任務；還沒決定看板時先留在待歸位。進入看板後可在左側工作台用任務排序與相同拖移體驗定位。
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:items-end">
@@ -1132,7 +1533,7 @@ const TaskZoneView = () => {
                   className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
                   data-task-zone-my-tasks-cta="true"
                 >
-                  {activeBoard ? '在看板查看我的任務' : '先選看板查看我的任務'}
+                  {activeBoard ? '在看板查看任務排序' : '先選看板查看任務排序'}
                 </button>
               </div>
             </div>
@@ -1165,7 +1566,7 @@ const TaskZoneView = () => {
                 重新整理
               </button>
               <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold leading-relaxed text-blue-700">
-                我的任務與精準拖曳歸位會在看板左側任務專區面板操作，讓來源、看板結構與任務細節維持左到右資訊流。
+                任務排序與精準拖曳歸位會在看板左側任務工作台面板操作，讓來源、看板結構與任務細節維持左到右資訊流。
               </div>
             </div>
           </div>
@@ -1183,7 +1584,7 @@ const TaskZoneView = () => {
             <span className="text-xs font-semibold text-slate-500">{pendingTasks.length} 筆</span>
           </div>
           {isLoading ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">載入任務專區...</div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">載入任務工作台...</div>
           ) : pendingTasks.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
               目前沒有待歸位任務。上方建立後會先出現在這裡。

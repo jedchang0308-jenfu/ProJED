@@ -160,7 +160,7 @@ async (page) => {
     console.log(`PASS cleaned up fallback unplaced smoke item ${fallbackUnplacedTaskId}`);
   }
 
-  const myTasksTab = page.getByRole('button', { name: /我的任務/ }).first();
+  const myTasksTab = page.getByRole('button', { name: /任務排序|我的任務/ }).first();
   await myTasksTab.waitFor({ state: 'visible', timeout: 10000 });
   await myTasksTab.click();
   console.log('PASS my-tasks tab is reachable');

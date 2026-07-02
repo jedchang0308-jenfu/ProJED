@@ -1,7 +1,8 @@
 import dayjs from 'dayjs';
 import { serializeTaskMention } from './recordContentMentions';
+import { MEETING_RECORD_TASKS_HEADING } from './meetingRecordScaffold';
 
-export const MEETING_TASK_DISCUSSION_HEADING = '## 任務討論';
+export const MEETING_TASK_DISCUSSION_HEADING = MEETING_RECORD_TASKS_HEADING;
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -23,7 +24,7 @@ export const appendLineToMarkdownSection = (content: string, heading: string, li
 
   const insertSearchStart = match.index + match[0].length;
   const rest = trimmedContent.slice(insertSearchStart);
-  const nextHeadingOffset = rest.search(/\n##\s+/);
+  const nextHeadingOffset = rest.search(/\n(?:#{1,6}\s+|\d+\.\s+)/);
   if (nextHeadingOffset === -1) return `${trimmedContent}\n${line}`;
 
   const insertAt = insertSearchStart + nextHeadingOffset;

@@ -31,6 +31,8 @@ import type {
   TagColor,
   TaskBoardMoveInput,
   TaskBoardMoveResult,
+  TaskWorkbenchStageInput,
+  TaskWorkbenchStageResult,
   TaskNode,
   TaskTag,
   Workspace,
@@ -133,6 +135,17 @@ const isMissingMoveTaskToBoardRpcError = (error: unknown) => {
   return message.includes('Could not find the function public.move_task_to_board')
     || message.includes('move_task_to_board(p_task_id')
     || (message.includes('move_task_to_board') && message.includes('schema cache'));
+};
+
+const isMissingWorkbenchStagingRpcError = (error: unknown) => {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : String(error ?? '');
+  return message.includes('Could not find the function public.place_task_to_workbench_staging')
+    || message.includes('place_task_to_workbench_staging(p_task_id')
+    || (message.includes('place_task_to_workbench_staging') && message.includes('schema cache'));
 };
 
 const assertNoTagTableError = (error: { message: string } | null) => {
@@ -262,6 +275,11 @@ const mapWbsItemToTaskNode = (
   createdAt: toTimestamp(item.created_at),
   updatedAt: toTimestamp(item.updated_at),
   isArchived: item.is_archived,
+  placementStatus: typeof metadata?.placement_status === 'string' ? metadata.placement_status as TaskNode['placementStatus'] : undefined,
+  stagedFromWorkspaceId: typeof metadata?.staged_from_tenant_id === 'string' ? metadata.staged_from_tenant_id : null,
+  stagedFromBoardId: typeof metadata?.staged_from_project_id === 'string' ? metadata.staged_from_project_id : null,
+  stagedFromParentId: typeof metadata?.staged_from_parent_id === 'string' ? metadata.staged_from_parent_id : null,
+  stagedFromSortOrder: typeof metadata?.staged_from_sort_order === 'number' ? metadata.staged_from_sort_order : null,
   tagIds,
   };
 };
@@ -1129,6 +1147,43 @@ export const supabaseNodeService = {
       workspaceIdByTenantId.get(item.tenant_id) || item.tenant_id,
       boardIdByProjectId.get(item.project_id) || item.project_id
     )).filter(task => taskMatchesSubscriptionSource(task, source, currentUserId));
+  },
+
+  stageToWorkbench: async (input: TaskWorkbenchStageInput): Promise<TaskWorkbenchStageResult> => {
+    requireSupabase();
+    const sourceTenantId = await resolveWorkspaceId(input.sourceWorkspaceId);
+    const sourceProjectId = await resolveProjectId(sourceTenantId, input.sourceBoardId);
+    const sourceTaskId = await requireNodeId(sourceTenantId, sourceProjectId, input.taskId);
+
+    const { data, error } = await (supabase as any).rpc('place_task_to_workbench_staging', {
+      p_task_id: sourceTaskId,
+      p_source_project_id: sourceProjectId,
+      p_stage_client_mutation_id: input.stageClientMutationId,
+    });
+
+    if (isMissingWorkbenchStagingRpcError(error)) {
+      throw new Error('資料庫尚未載入 place_task_to_workbench_staging RPC。請先套用 DEV-042 Supabase migration 並 reload schema cache，再執行拖回待歸位。');
+    }
+
+    assertNoError(error);
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.task_node_id || !row?.target_tenant_id || !row?.target_project_id) {
+      throw new Error('Supabase did not return the staged task id.');
+    }
+
+    const { data: taskRow, error: taskError } = await supabase
+      .from('wbs_items')
+      .select('*')
+      .eq('tenant_id', row.target_tenant_id)
+      .eq('project_id', row.target_project_id)
+      .eq('id', row.task_node_id)
+      .single();
+    assertNoError(taskError);
+    if (!taskRow) throw new Error('Supabase did not return the staged task row.');
+
+    return {
+      stagedTask: mapWbsItemToTaskNode(taskRow as WbsItemRow, new Map(), row.target_tenant_id, row.target_project_id),
+    };
   },
 
   moveToBoard: async (input: TaskBoardMoveInput): Promise<TaskBoardMoveResult> => {

@@ -1,5 +1,7 @@
 import type { ActivityEvent, ActivityEventType, TaskNode } from '../types';
 import { extractTaskMentionIds } from './recordContentMentions';
+import { MEETING_RECORD_TASKS_HEADING, isMeetingRecordScaffoldLine } from './meetingRecordScaffold';
+import { appendLineToMarkdownSection } from './meetingTaskDiscussion';
 import type { MeetingSynthesisActivity, MeetingSynthesisInput, MeetingSynthesisTask } from './meetingRecordSynthesis';
 
 export type ProjectChangeScope = 'board' | 'workspace';
@@ -168,6 +170,19 @@ const normalizeProjectChangeText = (value: string) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+const extractSectionBody = (content: string, heading: string) => {
+  const normalizedContent = content.replace(/\r\n?/g, '\n');
+  const headingPattern = new RegExp(`(?:^|\\n)${escapeRegExp(heading)}\\n`);
+  const match = headingPattern.exec(normalizedContent);
+  if (!match) return '';
+
+  const insertSearchStart = match.index + match[0].length;
+  const rest = normalizedContent.slice(insertSearchStart);
+  const nextHeadingOffset = rest.search(/\n(?:#{1,6}\s+|\d+\.\s+)/);
+  const body = nextHeadingOffset === -1 ? rest : rest.slice(0, nextHeadingOffset);
+  return normalizeProjectChangeText(body);
+};
+
 const normalizeProjectChangeFingerprint = (value: string) =>
   normalizeProjectChangeText(value)
     .replace(new RegExp(escapeRegExp(PROJECT_CHANGE_IMPORT_BLOCK_START), 'g'), '')
@@ -195,6 +210,7 @@ const normalizeRenderedMeetingLineAsEvidence = (line: string) => {
   if (trimmed === PROJECT_CHANGE_IMPORT_PROTECTED_NOTE) return '';
   if (trimmed === '受保護內容：AI整理不得刪除此區塊。') return '';
   if (isProofreadPlaceholder(trimmed)) return '';
+  if (isMeetingRecordScaffoldLine(trimmed)) return '';
   if (isMeetingSectionHeading(trimmed)) return '';
   return trimmed.replace(/^\d+(?:\.\d+)+\s+/, '- ');
 };
@@ -208,6 +224,25 @@ export const normalizeProjectChangeImportEvidence = (content: string) =>
       .filter(Boolean)
       .join('\n'),
   );
+
+export const extractProjectChangeImportTaskDiscussionBody = (content: string) =>
+  extractSectionBody(content, MEETING_RECORD_TASKS_HEADING) || normalizeProjectChangeImportEvidence(content);
+
+export const normalizeProjectChangeDraftContent = (content: string) => {
+  const legacyBlocks = extractProjectChangeImportBlocks(content);
+  if (legacyBlocks.length === 0) return content;
+
+  const cleanedContent = stripProjectChangeImportBlocks(content);
+  const legacyBodies = uniqueBlocks(legacyBlocks.map(block => normalizeProjectChangeImportEvidence(block)).filter(Boolean));
+  if (legacyBodies.length === 0) return cleanedContent;
+
+  const combinedBody = normalizeProjectChangeText(legacyBodies.join('\n\n'));
+  const normalizedContent = cleanedContent.replace(/\s+/g, ' ').trim();
+  const normalizedBody = combinedBody.replace(/\s+/g, ' ').trim();
+  if (normalizedContent.includes(normalizedBody)) return cleanedContent;
+
+  return appendLineToMarkdownSection(cleanedContent, MEETING_RECORD_TASKS_HEADING, combinedBody);
+};
 
 const uniqueBlocks = (blocks: string[]) => {
   const seen = new Set<string>();
@@ -264,7 +299,7 @@ export const extractProjectChangeImportEvidenceBlocks = (content: string) =>
       .filter(Boolean),
   );
 
-const stripProjectChangeImportBlocks = (content: string) => {
+export const stripProjectChangeImportBlocks = (content: string) => {
   const normalizedContent = content.replace(/\r\n?/g, '\n');
   const markerPattern = new RegExp(
     `\\n*${escapeRegExp(PROJECT_CHANGE_IMPORT_BLOCK_START)}[\\s\\S]*?${escapeRegExp(PROJECT_CHANGE_IMPORT_BLOCK_END)}\\n*`,

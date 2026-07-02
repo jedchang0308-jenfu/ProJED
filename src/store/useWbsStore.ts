@@ -43,6 +43,7 @@ export interface WbsBoardActions {
    */
   addNode: (node: TaskNode) => void;
   upsertNodeLocal: (node: TaskNode) => void;
+  removeNodeLocal: (id: string) => void;
 
   /**
    * 更新任務節點 (部分欄位)
@@ -461,6 +462,24 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const state = get();
     const normalizedNode = applySmartStatus(node);
     const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
+    set({ nodes: updatedNodes });
+    get()._buildIndices(updatedNodes);
+  },
+
+  removeNodeLocal: (id) => {
+    const state = get();
+    const idsToRemove = new Set<string>();
+    const collect = (nodeId: string) => {
+      if (idsToRemove.has(nodeId)) return;
+      idsToRemove.add(nodeId);
+      (state.parentNodesIndex[nodeId] || []).forEach(collect);
+    };
+    collect(id);
+    if (idsToRemove.size === 0) return;
+    const updatedNodes = { ...state.nodes };
+    idsToRemove.forEach(nodeId => {
+      delete updatedNodes[nodeId];
+    });
     set({ nodes: updatedNodes });
     get()._buildIndices(updatedNodes);
   },

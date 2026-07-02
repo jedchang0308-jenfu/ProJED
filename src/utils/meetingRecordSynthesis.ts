@@ -1,4 +1,10 @@
 import { serializeTaskMention, TASK_MENTION_PATTERN } from './recordContentMentions';
+import {
+  MEETING_RECORD_OTHER_HEADING,
+  MEETING_RECORD_SUMMARY_HEADING,
+  MEETING_RECORD_TASKS_HEADING,
+  isMeetingRecordScaffoldLine,
+} from './meetingRecordScaffold';
 
 export type MeetingSynthesisTask = {
   id: string;
@@ -67,6 +73,11 @@ const stripTaskMentions = (value: string) => {
   return value.replace(TASK_MENTION_PATTERN, '');
 };
 
+const isMajorMeetingSectionHeading = (line: string) =>
+  /^1\.\s+/.test(line.trim()) ||
+  /^2\.\s+/.test(line.trim()) ||
+  /^3\.\s+/.test(line.trim());
+
 const collectMentionedTaskIds = (content: string) => {
   const ids: string[] = [];
   TASK_MENTION_PATTERN.lastIndex = 0;
@@ -87,50 +98,64 @@ const createTaskFallback = (nodeId: string, input: MeetingSynthesisInput): Meeti
 
 const isCleanDraftScaffoldLine = (line: string) => {
   const normalized = normalizeText(line.replace(/^[-*]\s*/, ''));
-  return (
-    normalized === '' ||
-    /^#{1,6}\s+/.test(normalized) ||
-    /^\d+(?:\.\d+)*(?:\.)?\s+/.test(normalized) ||
-    normalized === '待 AI 統整。' ||
-    normalized === '本次會議總結' ||
-    normalized === '任務討論' ||
-    normalized === '任務討論與結論' ||
-    normalized === '其他' ||
-    normalized === '待校稿項目'
-  );
+  return isMeetingRecordScaffoldLine(normalized);
 };
 
 const cleanHumanMeetingLine = (line: string) => {
   const trimmed = line.trim();
   if (isCleanDraftScaffoldLine(trimmed)) return '';
 
-  return normalizeText(
+  const cleaned = normalizeText(
     stripTaskMentions(trimmed)
       .replace(/^[-*]\s*/, '')
       .replace(/^\d{1,2}:\d{2}\s*/, '')
+      .replace(/^\d+(?:\.\d+)+\.?\s*/, '')
       .replace(/^[：:，,、\s]+/, ''),
   );
+  return isMeetingRecordScaffoldLine(cleaned) ? '' : cleaned;
 };
 
-const extractCleanHumanMeetingLines = (content: string) =>
-  unique(
-    content
-      .replace(/\r\n?/g, '\n')
-      .split('\n')
-      .map(cleanHumanMeetingLine)
-      .filter(Boolean),
-  );
+const extractCleanUntaskedHumanMeetingLines = (content: string) => {
+  const lines: string[] = [];
+  let activeTaskIds: string[] = [];
 
-const extractCleanTaskParagraphs = (content: string, taskId: string) =>
-  unique(
-    content
-      .replace(/\r\n?/g, '\n')
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.includes(`](task:${taskId})`))
-      .map(cleanHumanMeetingLine)
-      .filter(Boolean),
-  );
+  for (const rawLine of content.replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = rawLine.trim();
+    if (isMajorMeetingSectionHeading(trimmed)) activeTaskIds = [];
+
+    const mentionedTaskIds = collectMentionedTaskIds(rawLine);
+    if (mentionedTaskIds.length > 0) {
+      activeTaskIds = mentionedTaskIds;
+      continue;
+    }
+    if (activeTaskIds.length > 0) continue;
+
+    const line = cleanHumanMeetingLine(rawLine);
+    if (line && !lines.includes(line)) lines.push(line);
+  }
+
+  return lines;
+};
+
+const extractCleanTaskParagraphs = (content: string, taskId: string) => {
+  const lines: string[] = [];
+  let activeTaskIds: string[] = [];
+
+  for (const rawLine of content.replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = rawLine.trim();
+    if (isMajorMeetingSectionHeading(trimmed)) activeTaskIds = [];
+
+    const mentionedTaskIds = collectMentionedTaskIds(rawLine);
+    if (mentionedTaskIds.length > 0) activeTaskIds = mentionedTaskIds;
+
+    const line = cleanHumanMeetingLine(rawLine);
+    if (!line) continue;
+    if (!mentionedTaskIds.includes(taskId) && !activeTaskIds.includes(taskId)) continue;
+    if (!lines.includes(line)) lines.push(line);
+  }
+
+  return lines;
+};
 
 const summarizeCleanStatusChanges = (activities: MeetingSynthesisActivity[]) => {
   if (activities.length === 0) return '';
@@ -170,11 +195,20 @@ const summarizeCleanTaskDiscussion = (
 };
 
 const collectHumanSummaryLines = (input: MeetingSynthesisInput) =>
-  extractCleanHumanMeetingLines(input.rawContent)
+  extractCleanUntaskedHumanMeetingLines(input.rawContent)
     .filter(line => !/^新增任務「.+」[。.]?$/.test(line))
     .filter(line => /(決議|結論|確認|風險|阻塞|負責|期限|需要|下一步|待辦|改為|完成)/.test(line))
-    .map(line => truncate(line, 180))
     .slice(0, 2);
+
+const collectHumanOtherLines = (
+  input: MeetingSynthesisInput,
+  summaryLines: string[],
+) => {
+  const summarySet = new Set(summaryLines);
+  return extractCleanUntaskedHumanMeetingLines(input.rawContent)
+    .filter(line => !summarySet.has(line))
+    .filter(line => !/^新增任務「.+」[。.]?$/.test(line));
+};
 
 const getEvidenceTaskOrder = (input: MeetingSynthesisInput) =>
   unique([
@@ -186,16 +220,8 @@ const getEvidenceTaskOrder = (input: MeetingSynthesisInput) =>
 const getTaskPath = (task: MeetingSynthesisTask) =>
   task.path?.length ? task.path : [{ id: task.id, title: task.title }];
 
-const getDisplayTaskPath = (task: MeetingSynthesisTask) => {
-  const path = getTaskPath(task).filter(item => item.id && item.title);
-  if (path.some(item => item.id === task.id)) return path;
-  return [...path, { id: task.id, title: task.title }];
-};
-
-const formatTaskPathMentions = (task: MeetingSynthesisTask) =>
-  getDisplayTaskPath(task)
-    .map(pathItem => serializeTaskMention(pathItem.id, pathItem.title))
-    .join(' ');
+const formatTaskHeadingMention = (task: MeetingSynthesisTask) =>
+  serializeTaskMention(task.id, task.title);
 
 type SynthesisTreeNode = {
   task: MeetingSynthesisTask;
@@ -334,7 +360,7 @@ const renderSynthesisTreeNode = (
 ): string[] => {
   linkedTaskIds.push(node.task.id);
   const lines = [
-    `${sectionNumber} ${formatTaskPathMentions(node.task)}`,
+    `${sectionNumber} ${formatTaskHeadingMention(node.task)}`,
   ];
 
   if (node.summary?.hasMeetingEvidence) {
@@ -409,17 +435,22 @@ export const buildDeterministicMeetingSynthesis = (
     .filter(Boolean);
 
   const generalSummaryLines = buildMainlineSummaryLines(input, sortedRootNodes);
+  const otherHumanLines = collectHumanOtherLines(input, generalSummaryLines);
+  const fallbackOtherLines = sections.length
+    ? ['請確認上述整理是否符合會議實際發言與操作。']
+    : ['請補上會中實際討論內容或任務變更後再發布。'];
+  const otherLines = otherHumanLines.length ? otherHumanLines : fallbackOtherLines;
 
   const content = [
-    '1. 本次會議總結',
+    MEETING_RECORD_SUMMARY_HEADING,
     ...generalSummaryLines.map(line => `- ${line}`),
     input.participantsText ? `- 參與人員：${normalizeText(input.participantsText)}` : '',
     '',
-    '2. 任務討論與結論',
+    MEETING_RECORD_TASKS_HEADING,
     sections.join('\n\n') || '- 尚無會中補記或任務變更可整理。',
     '',
-    '3. 其他',
-    sections.length ? '- 請確認上述整理是否符合會議實際發言與操作。' : '- 請補上會中實際討論內容或任務變更後再發布。',
+    MEETING_RECORD_OTHER_HEADING,
+    ...otherLines.map(line => `- ${line}`),
   ].join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
   return {

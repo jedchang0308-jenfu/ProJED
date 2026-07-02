@@ -29,7 +29,7 @@ npm.cmd run build
 - raw content 中 A/B 交錯出現。
 
 通過：
-- A/B 各自有階層編號與 task tag；子層 heading 需顯示完整任務路徑，例如 `2.1 @[title](task:id)`、`2.1.1 @[parent](task:id) @[title](task:id)`。
+- A/B 各自有階層編號與 task tag；子層 heading 只顯示目前任務的 task tag，例如 `2.1 @[title](task:id)`、`2.1.1 @[title](task:id)`，不要重複祖先 path tags。
 - 每個任務為自然語言段落。
 - A 片段不含 B 的 QA 結論，B 片段不含 A 的設計結論。
 - 不出現 `目前任務狀態為`、`任務背景是`、`既有備註指出` 等專案靜態資料。

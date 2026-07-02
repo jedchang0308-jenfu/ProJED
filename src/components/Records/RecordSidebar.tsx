@@ -10,7 +10,9 @@ import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { eventLogService } from '../../services/dataBackend';
 import { synthesizeMeetingRecord } from '../../services/meetingSynthesisService';
 import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDraftSignature, type MeetingWorkflowStepAction } from '../../utils/meetingRecordWorkflow';
-import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
+import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, extractProjectChangeImportTaskDiscussionBody, normalizeProjectChangeDraftContent, stripProjectChangeImportBlocks, type ProjectChangeScope } from '../../utils/projectChangeImport';
+import { appendLineToMarkdownSection } from '../../utils/meetingTaskDiscussion';
+import { MEETING_RECORD_TASKS_HEADING } from '../../utils/meetingRecordScaffold';
 import RecordContentEditor from './RecordContentEditor';
 import type { KnowledgeRecord, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
 
@@ -688,6 +690,13 @@ const RecordSidebar: React.FC = () => {
     setIsLinkedTasksOpen(false);
   }, [draft?.id]);
 
+  React.useEffect(() => {
+    if (!draft || draft.type !== 'meeting') return;
+    const normalizedContent = normalizeProjectChangeDraftContent(draft.content);
+    if (normalizedContent === draft.content) return;
+    updateDraft({ content: normalizedContent });
+  }, [draft, updateDraft]);
+
   if (!isPanelOpen) return null;
 
   const selectedLinks = draft?.taskLinks || [];
@@ -918,10 +927,13 @@ const RecordSidebar: React.FC = () => {
 
   const handleInsertProjectChanges = () => {
     if (!draft || !projectChangeImport.previewContent.trim()) return;
-    const projectChangeBlock = wrapProjectChangeImportContent(projectChangeImport.previewContent);
-    const nextContent = [draft.content.trim(), projectChangeBlock]
-      .filter(Boolean)
-      .join('\n\n');
+    const cleanedDraftContent = stripProjectChangeImportBlocks(draft.content);
+    const projectChangeBody = extractProjectChangeImportTaskDiscussionBody(projectChangeImport.previewContent);
+    const normalizedContent = cleanedDraftContent.replace(/\s+/g, ' ').trim();
+    const normalizedBody = projectChangeBody.replace(/\s+/g, ' ').trim();
+    const nextContent = normalizedContent.includes(normalizedBody)
+      ? cleanedDraftContent
+      : appendLineToMarkdownSection(cleanedDraftContent, MEETING_RECORD_TASKS_HEADING, projectChangeBody);
     updateDraft({ content: nextContent });
     setContentCursorOffset(nextContent.length);
     setProjectChangeImport(state => ({
@@ -929,7 +941,7 @@ const RecordSidebar: React.FC = () => {
       dismissedDraftId: draft.id ?? null,
       status: 'ready',
       stepState: 'inserted',
-      message: `已插入 ${state.eventCount} 筆專案變化整理，請繼續撰寫或校稿。`,
+      message: `已插入 ${state.eventCount} 筆專案變化到「任務討論與結論」，請繼續撰寫或校稿。`,
     }));
     setIsProjectImportExpanded(false);
   };

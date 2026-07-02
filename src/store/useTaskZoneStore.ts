@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { nodeService, taskZoneService } from '../services/dataBackend';
-import type { PersonalTaskPlacementInput, PersonalTaskZoneInfo, TaskNode } from '../types';
+import type { PersonalTaskPlacementInput, PersonalTaskZoneInfo, TaskNode, TaskWorkbenchStageInput } from '../types';
 import type { TaskSubscriptionSource } from '../utils/taskSubscriptionSources';
 
 const createClientMutationId = (prefix: string) =>
@@ -23,6 +23,7 @@ type TaskZoneActions = {
   createTask: (input: { title: string; description?: string | null; suggestedDueDate?: string | null }) => Promise<TaskNode | null>;
   updateTask: (taskId: string, updates: Partial<TaskNode>) => Promise<void>;
   removeTask: (taskId: string) => Promise<void>;
+  stagePlacedTask: (input: Omit<TaskWorkbenchStageInput, 'stageClientMutationId'>) => Promise<TaskNode>;
   placeTaskOnBoard: (input: Omit<PersonalTaskPlacementInput, 'placementClientMutationId'>) => Promise<TaskNode>;
   getUnplacedCount: () => number;
 };
@@ -134,6 +135,29 @@ const useTaskZoneStore = create<TaskZoneState & TaskZoneActions>((set, get) => (
         tasks: sortTasks([current, ...state.tasks]),
         error: error instanceof Error ? error.message : '任務刪除失敗。',
       }));
+      throw error;
+    }
+  },
+
+  stagePlacedTask: async (input) => {
+    set({ isMutating: true, error: null });
+    try {
+      const { stagedTask } = await nodeService.stageToWorkbench({
+        ...input,
+        stageClientMutationId: createClientMutationId('workbench_stage'),
+      });
+      set(state => ({
+        tasks: sortTasks([stagedTask, ...state.tasks.filter(task => task.id !== stagedTask.id)]),
+        assignedTasks: sortTasks(state.assignedTasks.filter(task => task.id !== input.taskId)),
+        zone: state.zone || { workspaceId: stagedTask.workspaceId, boardId: stagedTask.boardId },
+        isMutating: false,
+      }));
+      return stagedTask;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : '拖回待歸位失敗。',
+        isMutating: false,
+      });
       throw error;
     }
   },
