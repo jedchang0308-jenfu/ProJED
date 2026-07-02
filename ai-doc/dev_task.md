@@ -2795,3 +2795,13 @@ RD Implementation Notes：
 - Known limitation:
   - Authenticated feature-level production smoke for dragging placed tasks back to workbench was not automated in production; dev/test browser smoke and DB RPC QC cover the implementation contract.
   - Build warning remains non-blocking: Browserslist/caniuse-lite data is 6 months old.
+
+### 2026-07-02 Production hotfix: Task workbench sorting localeCompare
+
+- Issue: production reported `TypeError: m.localeCompare is not a function` after task workbench release.
+- Root cause: task sorting could pass non-string values, especially numeric `TaskNode.createdAt`, into `.localeCompare()`.
+- Fix commit: `a4b6a3a fix: harden task workbench sorting`.
+- Fix scope: normalize task sort values through `toTaskSortString()` before all task workbench string comparisons.
+- Validation: `npm run verify:dev-042-task-workbench` passed 18/18, `npm run typecheck` passed, `npm run build` passed.
+- Deployment: Firebase Hosting `projed-cc78d`, URL `https://projed-cc78d.web.app`.
+- Production smoke: HTTP 200, production HTML references `assets/index-B5WFXCln.js`, browser smoke loaded `ProJED 3.0 | 專案管理系統` with no critical `localeCompare` runtime error.
