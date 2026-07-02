@@ -557,3 +557,16 @@ DEV-012 的產品邊界：
   - Remote subscription still defaults to assigned-to-me; arbitrary assignee cross-workspace loading requires a future backend/API/RLS slice.
 - Evidence status:
   - Local code change recorded, validation pending.
+
+## DEV-042 release evidence - 2026-07-02
+
+- Release branch: `codex/BUG修正`.
+- Deployed source commit: `a0befe7 feat: release task workbench updates`.
+- Supabase production project: `ProJED` / `knodlkxqpcqyrtgwpdst`.
+- Supabase migration applied: `20260702094146 dev_042_workbench_staging`.
+- Firebase hosting project: `projed-cc78d`.
+- Production URL: `https://projed-cc78d.web.app`.
+- Evidence record: `ai-doc/dev_task.md` section `Release Update - 2026-07-02 - DEV-042 / Release scope A`.
+- Production smoke boundary:
+  - App-shell and bundle provenance passed.
+  - Authenticated feature-level production smoke remains manual/pending.

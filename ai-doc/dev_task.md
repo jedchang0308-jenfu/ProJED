@@ -2757,3 +2757,41 @@ RD Implementation Notes：
   - Manual board-scoped persistence check.
   - Manual assignee filter behavior check.
   - Production DB QC, production migration, deployment, git stage, git commit, git push.
+
+### Release Update - 2026-07-02 - DEV-042 / Release scope A
+
+- Release scope:
+  - User selected `A`, meaning the whole dirty worktree was accepted as a single release scope.
+- Source control:
+  - Release branch: `codex/BUG修正`.
+  - Deployed source commit: `a0befe7 feat: release task workbench updates`.
+  - Commit pushed to `origin/codex/BUG修正`.
+- Local gates:
+  - `npm run verify:dev-042-task-workbench`: PASS, 18 pass / 0 fail.
+  - `npm run verify:dev-042-workbench-staging`: PASS, 21 pass / 0 fail.
+  - `npm run typecheck`: PASS.
+  - `npm run build`: PASS.
+  - DEV-042 dev/test browser smoke: PASS.
+  - Production artifact preview app-shell smoke: PASS.
+- Supabase production migration:
+  - Project: `ProJED` / `knodlkxqpcqyrtgwpdst`.
+  - Applied migration: `20260702094146 dev_042_workbench_staging`.
+  - DB QC: PASS.
+  - Verified RPCs: `place_task_to_workbench_staging`, `place_personal_task_on_board`.
+  - Verified function security: `security_definer = true`, `search_path=public, private, extensions`, `authenticated` execute allowed, `anon/public` execute denied.
+- Firebase Hosting:
+  - Project: `projed-cc78d`.
+  - Hosting URL: `https://projed-cc78d.web.app`.
+  - Deploy result: PASS after Firebase reauth.
+  - Production bundles observed:
+    - `assets/index-36clWt82.js`
+    - `assets/index-CUWqbDcR.css`
+    - `assets/TaskZoneView-DrsoknQh.js` from build artifact.
+- Post-deploy smoke:
+  - `https://projed-cc78d.web.app/`: HTTP 200.
+  - Browser title: `ProJED 3.0 | 專案管理系統`.
+  - App shell: `#root` exists and body text is non-empty.
+  - No critical browser errors matched missing env/module/chunk/config patterns.
+- Known limitation:
+  - Authenticated feature-level production smoke for dragging placed tasks back to workbench was not automated in production; dev/test browser smoke and DB RPC QC cover the implementation contract.
+  - Build warning remains non-blocking: Browserslist/caniuse-lite data is 6 months old.
