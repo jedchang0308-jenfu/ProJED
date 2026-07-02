@@ -116,9 +116,16 @@ const formatTaskMeta = (task: TaskNode) => {
   return parts.join(' · ');
 };
 
+const toTaskSortString = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+};
+
 const getTaskCreatedAt = (task: TaskNode): string => {
-  const metadata = task as TaskNode & { createdAt?: string | null; created_at?: string | null };
-  return metadata.createdAt || metadata.created_at || '';
+  const metadata = task as TaskNode & { created_at?: unknown };
+  return toTaskSortString(metadata.createdAt ?? metadata.created_at);
 };
 
 const compareTasksBySchedule = (left: TaskNode, right: TaskNode) => {
@@ -126,15 +133,15 @@ const compareTasksBySchedule = (left: TaskNode, right: TaskNode) => {
   const rightBucket = right.endDate ? 0 : right.startDate ? 1 : 2;
   if (leftBucket !== rightBucket) return leftBucket - rightBucket;
 
-  const leftDate = left.endDate || left.startDate || getTaskCreatedAt(left);
-  const rightDate = right.endDate || right.startDate || getTaskCreatedAt(right);
+  const leftDate = toTaskSortString(left.endDate || left.startDate || getTaskCreatedAt(left));
+  const rightDate = toTaskSortString(right.endDate || right.startDate || getTaskCreatedAt(right));
   const dateCompare = leftDate.localeCompare(rightDate);
   if (dateCompare !== 0) return dateCompare;
 
-  const titleCompare = (left.title || '').localeCompare(right.title || '', 'zh-Hant');
+  const titleCompare = toTaskSortString(left.title).localeCompare(toTaskSortString(right.title), 'zh-Hant');
   if (titleCompare !== 0) return titleCompare;
 
-  return left.id.localeCompare(right.id);
+  return toTaskSortString(left.id).localeCompare(toTaskSortString(right.id));
 };
 
 const describePlacementFilter = (filter: TaskZonePlacementFilter) => {
@@ -962,7 +969,7 @@ export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTas
         if (left.id === user?.uid) return -1;
         if (right.id === user?.uid) return 1;
         if (left.count !== right.count) return right.count - left.count;
-        return left.label.localeCompare(right.label, 'zh-Hant');
+        return toTaskSortString(left.label).localeCompare(toTaskSortString(right.label), 'zh-Hant');
       });
   }, [assigneeLabelById, filterCandidateTasks, prefs.selectedAssigneeIds, user?.uid]);
 
