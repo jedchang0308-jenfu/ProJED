@@ -331,6 +331,23 @@ export interface PersonalTaskPlacementInput {
   placementClientMutationId: string;
 }
 
+export interface TaskBoardMoveInput {
+  taskId: string;
+  sourceWorkspaceId: string;
+  sourceBoardId: string;
+  targetWorkspaceId: string;
+  targetBoardId: string;
+  parentId: string | null;
+  order?: number;
+  insertBeforeId?: string | null;
+  insertAfterId?: string | null;
+}
+
+export interface TaskBoardMoveResult {
+  movedTask: TaskNode;
+  movedNodes: TaskNode[];
+}
+
 export type ActivityEventType =
   | 'task_created'
   | 'task_assigned'

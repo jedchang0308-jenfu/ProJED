@@ -21,6 +21,8 @@ import {
   type PersonalQuickTaskInput,
   type PersonalTaskPlacementInput,
   type PersonalTaskZoneInfo,
+  type TaskBoardMoveInput,
+  type TaskBoardMoveResult,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -59,6 +61,7 @@ import {
   localTestTagService,
   localTestWorkspaceService,
 } from './localTestService';
+import type { TaskSubscriptionSource } from '../utils/taskSubscriptionSources';
 
 export type DataBackend = 'firebase' | 'supabase' | 'local-test';
 
@@ -566,6 +569,16 @@ export const taskZoneService = {
 };
 
 export const nodeService = {
+  listAssignedToMe: (source: TaskSubscriptionSource, currentUserId: string): Promise<TaskNode[]> =>
+    isSupabaseBackend
+      ? supabaseNodeService.listAssignedToMe(source, currentUserId)
+      : Promise.resolve([]),
+
+  moveToBoard: (input: TaskBoardMoveInput): Promise<TaskBoardMoveResult> =>
+    isSupabaseBackend
+      ? supabaseNodeService.moveToBoard(input)
+      : Promise.reject(new Error('跨看板任務歸位目前只支援 Supabase backend。')),
+
   create: (workspaceId: string, boardId: string, node: TaskNode): Promise<void | TaskNode> =>
     isLocalTestBackend
       ? localTestNodeService.create(workspaceId, boardId, node)

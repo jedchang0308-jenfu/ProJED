@@ -1,5 +1,102 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-07-01
+
+### DEV-041: 任務專區中控台與直接拖曳歸位
+
+狀態: Local Verification Passed / Production DB Migration Pending / Deploy Not Requested
+節點類型: 交付點
+優先級: P0 task-zone placement UX parity, P1 personal task command center architecture
+父交付點: DEV-040 任務專區與快速任務入口
+關聯交付方向: SPEC-040 任務專區, SPEC-028 四模式一致任務操作契約
+是否計入產品交付完成: 是
+建立日期: 2026-07-01
+
+交付文件:
+- `ai-doc/specs/SPEC-041-task-zone-direct-drag-placement.md`
+- `ai-doc/qa/QA-DEV-041-task-zone-direct-drag-placement.md`
+
+使用者已確認:
+- 目前在 `任務專區` full page 看到 `待歸位` 任務時，不清楚如何歸位。
+- 期望任務專區任務能像之前快速備忘一樣，直接拖拉到任務 / 看板位置。
+- 拖曳動畫、定位框、drop indicator 與一般任務拖移必須一致。
+- 使用者視線流為左到右資訊越來越細：左側找大方向與來源，中間處理看板 / 任務結構，右側看細節或編輯。
+- 任務專區未來要升級成個人待辦任務中控台，可跨工作區、跨看板、跨系統顯示屬於自己的任務，包含依時間排序的 action-oriented 動態牆。
+- `1C`: BoardView 左側任務專區 panel 採使用者可釘選模式；預設情境式展開，但使用者可釘選成固定第二左欄，系統記住上次狀態。
+- `2C`: DEV-041 第一版直接加做 ProJED 內部 `我的任務` MVP，顯示跨工作區指派給我的任務；外部來源與完整動態牆仍延後。
+- `3A`: 未來動態牆 / 外部任務採行動流優先；外部任務需先 `轉成 ProJED 任務` 才能拖進看板。
+- RD readiness addendum:
+  - `我的任務 MVP` 與訂閱月曆共用或延伸同一套 source-scope / filter 模組；可選工作區與看板。
+  - 預設訂閱所有 `指派給我` 的任務。
+  - 左側 panel pin/collapse 狀態採本機裝置偏好。
+  - `我的任務` 卡片第一版與一般任務卡片同功能。
+
+PM 架構決策:
+- DEV-041 不新增歸位 wizard 作為主要流程；核心是把 `任務專區` 任務納入正式任務拖移系統。
+- 精準歸位必須在目標看板可見時完成，因此第一版以 BoardView 左側 integrated `任務專區` source panel 作為放置模式。
+- Board-integrated surface 不是第二個浮窗，而是同一個任務專區在 BoardView DnD context 內的左側來源層呈現。
+- 產品資訊層固定為：左側來源 / 中間結構 / 右側細節；不得把任務專區來源層放到右側 detail area 作為主設計。
+- Full-page `TaskZoneView` 需提供清楚 `到目前看板歸位` / `選擇看板歸位` 入口，避免使用者不知道下一步。
+- 不要求第一版支援跨 route active drag state；若要從 full-page 直接拖到不可見看板中的精確位置，需另拆高風險跨 route DnD architecture。
+- DEV-041 是個人任務中控台的 Phase 1：先完成左側來源 panel、待歸位拖曳歸位、ProJED 內部 `我的任務` MVP；未來再擴充 `我建立的`、今日/逾期、action-oriented 動態牆與外部任務來源。
+- `我的任務` MVP 第一版採訂閱月曆同類 source-scope / filter 模型，預設為所有可存取 workspace / board 中 `指派給我` 的任務，並允許使用者調整 workspace / board 範圍。
+- `我的任務` 卡片與一般任務卡片同功能；拖曳 placed task 預設語意是 move canonical task，不是 copy，且必須走既有權限與 move guard。
+
+RD 範圍:
+- 在 BoardView 左側提供 task-zone source panel，列出目前使用者 `待歸位` 任務。
+- source panel 支援 pin/unpin，並以本機裝置偏好記住使用者上次狀態。
+- 新增 ProJED 內部 `我的任務` MVP，沿用或延伸訂閱月曆 source-scope / filter 模型，預設列出目前使用者在可存取 workspace / board 中被指派的任務。
+- `我的任務` 支援 workspace / board 範圍控制。
+- `我的任務` 卡片支援一般任務卡片核心操作：標題、日期、狀態、完成、刪除、拖曳，全部走既有 task permission guard。
+- task-zone card 使用 shared `TaskDragHandle`、shared task drag overlay 與既有 board drop indicator。
+- board column/card/subtask drop target 接受 `personal-task-zone-item` 作為 task source variant。
+- drop 成功後呼叫既有 `taskZoneService.placeTaskOnBoard` / `place_personal_task_on_board`，成功後才從 `待歸位` 移除。
+- Full-page `TaskZoneView` 加入明確 placement CTA，能帶使用者進入 board placement mode。
+- 新增 DEV-041 static / browser verifier，覆蓋 full-page discoverability、left source panel、shared overlay/drop indicator 與 normal board drag regression。
+
+不在本輪:
+- AI 自動判斷任務應放到哪裡。
+- 批次歸位。
+- 完整跨 workspace 任務搜尋定位。
+- 跨 route 拖曳不中斷並直接 drop 到不可見目標。
+- ProJED 內部完整跨工作區聚合。
+- `我建立的`、`今日`、`逾期`、`即將到期` 等聚合擴充。
+- 動態牆完整事件流。
+- 外部系統任務串接。
+- `我的任務` 既有 placed task 的預設複製語意；若要複製需另做明確 copy action。
+- 新資料表、nullable `wbs_items.project_id`、新 task identity。
+- production deploy。
+
+RD stop conditions:
+- 若必須替換現有 board DnD engine 才能顯示一致定位框。
+- 若任務專區 source panel 變成第二個獨立浮窗。
+- 若任務專區來源層被放到右側 detail area 作為主設計。
+- 若 placement 只能複製任務而不能移動同一 canonical task id。
+- 若 normal board drag/drop 手感或 DEV-028 契約被破壞。
+- 若 `我的任務` MVP 會洩漏不可存取的 workspace / board / task title 或 count。
+- 若 `我的任務` placed task 拖曳會複製而非 move，或 move 未走權限 / subtree / dependency guard。
+- 若需要 schema/RPC migration 但尚未建立 migration 與 Supabase gate。
+
+驗收標準:
+- 使用者從 `任務專區` 可明確知道如何進入看板歸位模式。
+- 在 BoardView 中可開啟左側 integrated 任務專區 source panel，直接拖曳 `待歸位` 任務到中間看板任務位置。
+- 使用者可釘選 / 取消釘選左側 source panel，且狀態會被記住。
+- 使用者可在 `我的任務` MVP 看見預設跨工作區 `指派給我` 的 ProJED 任務，並可用 workspace / board 範圍控制。
+- `我的任務` 卡片操作能力與一般任務卡片一致，並遵守相同權限。
+- task-zone drag overlay 與 normal task drag overlay 一致。
+- board positioning frame / insert indicator 與 normal task drag 一致。
+- drop between tasks、empty column、supported subtask area 均沿用正常 task drop intent。
+- 成功後任務出現在 target board，並從 `待歸位` 移除；失敗時任務保留且不產生 ghost / duplicate。
+- UI 位置符合左側來源、中間結構、右側細節。
+
+證據要求:
+- `npm run verify:dev-041-task-zone-direct-drag-placement`
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`
+- `npm run verify:dev-040-personal-task-zone`
+- `npm run verify:dev-028-cross-mode-task-interactions`
+- `npx tsc --noEmit`
+- `npm run build`
+
 ## PM Update - 2026-06-30
 
 ### DEV-040: 任務專區與快速任務入口
@@ -1435,3 +1532,897 @@ node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --no
 - PM 可新增支援開發點，但必須標明父交付點與驗證證據。
 - 每次 release 前只更新：狀態、下一步、阻塞、驗證證據。
 - 舊任務詳細歷程保留在 archive，不再回填到 active control board。
+
+### 2026-07-01 DEV-041 補齊：任務專區訂閱來源決策
+
+使用者補充決策：
+
+- 「我的任務」來源需與「訂閱月曆」共用同一個來源訂閱模組。
+- 使用者可以控制要訂閱的項目。
+- 任務專區比月曆多一層工作區 + 看板選擇能力。
+- 預設訂閱所有「指派給我」的可存取項目。
+- Q2 採 A；Q3 採 C。實作時若原題語意需要落地，依 DEV-041 規格 D-041-16 的高階原則解讀。
+
+RD Implementation Notes：
+
+- 先抽象 calendar subscription 的 source/filter model，避免任務專區另建平行篩選器。
+- BoardView 內的任務專區必須改成左側 source panel，而不是浮窗。
+- 未歸位任務拖入看板需共用既有任務 DnD 模組，定位框與任務拖移一致。
+- 我的任務 MVP 可先交付「指派給我 + 工作區 / 看板範圍」；外部來源與完整動態牆排程延後。
+- 不得新增全域任務真相來源；跨工作區個人任務應由既有任務資料、權限與訂閱來源聚合而來。
+
+### 2026-07-01 DEV-041 RD Progress：左側任務專區 Source Panel MVP
+
+本輪已實作：
+
+- BoardView 內任務專區由底部 / 右下浮窗改為左側 source panel，符合「左到右資訊越來越細」視線流。
+- 左側任務專區支援收合與釘選，偏好儲存在 localStorage，不進雲端同步。
+- 待歸位任務仍使用既有 `personal-task-zone-item` drag payload，拖入看板時沿用 BoardView 現有定位框與 drop intent。
+- 新增「我的任務」分頁 MVP：以前端已載入的 WBS nodes 篩選 `assigneeId === current user` 且未完成 / 未封存任務。
+- 我的任務分頁提供全部 / 目前工作區 / 目前看板範圍切換，對應未來與訂閱月曆共用 source/filter 模組的 UI 骨架。
+- 目前看板內的我的任務可送出一般 `wbs-card` drag data，使用既有任務拖移引擎調整位置，不另建 DnD 模組。
+- 我的任務卡提供開詳情、重新命名、完成 / 取消完成、封存等核心操作，呼叫既有 `useWbsStore.updateNode`。
+
+本輪刻意未完成 / 下一步缺口：
+
+- 「我的任務」資料來源目前只涵蓋前端已載入 nodes，尚未完成跨工作區 / 跨看板的後端聚合查詢。
+- 跨工作區 / 跨看板將既有 canonical task 移入目前看板尚未開放直接拖移；目前提供「到所在看板」入口，避免用 `updateNode` 製造舊位置殘留或資料路徑不一致。
+- 尚未抽出真正與訂閱月曆共用的 source/filter service；目前先完成 UI 與 store 使用邊界。
+- 尚未執行型別檢查、build、UI smoke 或 DnD 實機驗證。
+
+下一個 RD 建議：
+
+1. 抽象 `subscription source/filter` 共用型別與 service，讓月曆訂閱與任務專區共用資料來源規則。
+2. 補 `task move service` 或 RPC，支援 canonical task 跨工作區 / 跨看板搬移，包含舊位置清理、子樹 board/workspace scope、一致 audit。
+3. 再開放跨看板我的任務拖入目前看板，並補 QA smoke：定位框、overlay、drop 後位置、無重複任務。
+
+### 2026-07-01 DEV-041 RD Progress：共用訂閱來源模型
+
+本輪新增 / 調整：
+
+- 新增 `src/utils/taskSubscriptionSources.ts`，作為任務專區與訂閱月曆共用的來源訂閱模型起點。
+- 共用模組目前提供：
+  - `createDefaultCalendarSubscriptionFilters()`：月曆訂閱預設為 `assignee: me`、`due_date`。
+  - `createAssignedToMeTaskSource()`：任務專區「我的任務」預設來源。
+  - `taskMatchesSubscriptionSource()`：前端 task source 篩選器。
+  - `TaskSubscriptionScope`：`all` / `workspace` / `board`。
+- `CalendarSubscriptionsView` 的預設 filter 改由共用模組產生。
+- `TaskZoneSourcePanel` 的「我的任務」篩選改由共用 source matcher 判斷，不再直接在元件內硬寫 `assigneeId === user.uid` 與 scope 判斷。
+
+仍未完成：
+
+- 後端尚未提供完整跨工作區 / 跨看板的 assigned-to-me 聚合查詢。
+- 月曆訂閱 service 尚未支援 board/project scope 欄位；目前只共用預設與前端來源模型。
+- 尚未處理 canonical task 跨工作區 / 跨看板拖移進目前看板的 transaction / RPC。
+- 尚未執行 typecheck、build、DnD UI smoke。
+
+### 2026-07-01 DEV-041 RD Progress：月曆訂閱 Filter Contract 擴充
+
+本輪新增 / 調整：
+
+- `CalendarSubscriptionFilters` 增加可選 `scope_type` 與 `board_ids`，讓訂閱來源可以承載工作區 / 看板範圍。
+- `createDefaultCalendarSubscriptionFilters()` 預設帶入 `scope_type: workspace` 與 `board_ids: []`。
+- `calendarSubscriptionService.normalizeFilters()` 會保留並正規化 `scope_type` / `board_ids`，避免建立或更新訂閱時把看板範圍欄位清掉。
+
+仍未完成：
+
+- `CalendarSubscriptionsView` 尚未提供看板範圍 UI。
+- calendar feed / 後端實際查詢尚未依 `board_ids` 限縮。
+- 任務專區尚未改成從後端 subscription source 查詢完整 assigned-to-me 任務。
+
+### 2026-07-01 DEV-041 RD Progress：我的任務後端來源查詢
+
+本輪新增 / 調整：
+
+- `supabaseNodeService.listAssignedToMe(source, currentUserId)`：以既有 `wbs_items.assignee_id` 查詢所有 RLS 允許且指派給目前使用者的任務。
+- `dataBackend.nodeService.listAssignedToMe()`：Supabase backend 使用後端查詢；非 Supabase backend 暫回空陣列，前端仍可用已載入 WBS nodes fallback。
+- `useTaskZoneStore` 增加：
+  - `assignedTasks`
+  - `isAssignedLoading`
+  - `loadAssignedTasks(source, currentUserId)`
+- `TaskZoneSourcePanel` 的「我的任務」改為合併：
+  - 後端 assigned-to-me 結果作主來源。
+  - 目前已載入 WBS nodes 作覆蓋 / fallback，避免目前看板任務失去正確 parent/order 與拖移定位。
+- 任務專區 scope 仍使用共用 `TaskSubscriptionSource`，支援 all / workspace / board 查詢條件。
+
+安全邊界：
+
+- 本輪沒有新增資料表、RLS policy、RPC 或 migration。
+- 查詢依賴既有 `wbs_items` Data API 與 RLS；若使用者無權限，後端不應回傳。
+- 尚未開放跨工作區 / 跨看板任務直接拖入目前看板，避免在沒有 transaction/RPC 時造成舊位置殘留。
+
+仍未完成：
+
+- 跨工作區 / 跨看板 canonical move service / RPC。
+- 月曆訂閱 UI 的 board scope 選擇。
+- calendar feed 實際依 `board_ids` 限縮。
+- typecheck、build、DnD UI smoke 尚未執行。
+
+### 2026-07-01 DEV-041 RD Progress：月曆訂閱 Board Scope UI
+
+本輪新增 / 調整：
+
+- `CalendarSubscriptionsView` 新增訂閱範圍切換：工作區 / 看板。
+- 使用者選擇看板範圍時，可從已選工作區底下的看板清單勾選 `board_ids`。
+- 取消工作區時，會同步移除該工作區底下已選看板，避免留下孤兒 board filter。
+- 訂閱列表描述新增 `範圍：工作區 / 看板` 顯示。
+- 這讓月曆訂閱 UI 與任務專區共用的 `scope_type` / `board_ids` contract 對齊。
+
+仍未完成：
+
+- calendar feed / Edge Function / 後端實際查詢尚未依 `board_ids` 限縮。
+- 尚未驗證既有已儲存訂閱在新增 scope 欄位後的相容性。
+- 尚未執行 typecheck、build 或 UI smoke。
+
+### 2026-07-01 DEV-041 RD Progress：我的任務跨看板拖入目前看板
+
+本輪新增 / 調整：
+
+- 新增 `TaskBoardMoveInput`，讓 canonical task move 使用與待歸位 placement 相同的 target parent/order 語意。
+- `dataBackend.nodeService.moveToBoard()`：Supabase backend 支援 canonical task 移入目標看板；非 Supabase backend 先回錯誤。
+- `supabaseNodeService.moveToBoard()`：以既有 `wbs_items` 更新同一筆任務的 `tenant_id`、`project_id`、`parent_id`、`sort_order`、`item_type`，並回傳移動後的 `TaskNode`。
+- `DraggableAssignedTaskCard`：我的任務卡拖曳資料新增 source workspace / board，跨看板任務也允許拖曳。
+- `BoardView.handleDragEnd()`：
+  - 若我的任務已在目前看板且已載入，沿用既有 WBS move engine。
+  - 若我的任務來自其他工作區 / 看板或尚未載入目前看板，使用 `nodeService.moveToBoard()` 搬移同一顆 canonical task。
+  - 搬移成功後 `upsertNodeLocal()` 到目前看板，避免建立副本。
+
+安全邊界與殘留風險：
+
+- 本輪未新增 migration、RPC、RLS policy 或資料表。
+- 目前只更新被拖曳的 task node 本身；若該 task 有子任務，子任務是否需同步更新 `tenant_id/project_id` 仍需 QC 驗證與後續 service hardening。
+- 尚未重排來源看板 siblings order；若來源看板依 order 顯示，可能留下 order gap，但不會產生副本。
+- 尚未處理跨 workspace tag assignment / dependency / record links 的一致性。
+- 尚未執行 typecheck、build、DnD UI smoke 或 Supabase 實查。
+
+### 2026-07-01 DEV-041 RD Progress：canonical move 資料一致性補強
+
+本輪新增 / 調整：
+
+- `supabaseNodeService.moveToBoard()` 在移動 root task 前，會先讀來源看板 `wbs_items` 並建立子樹集合。
+- 移動 root task 後，會同步更新 descendants 的 `tenant_id/project_id`，避免子任務仍留在舊工作區 / 看板造成跨 project parent chain。
+- 來源看板同 parent siblings 會重新整理 `sort_order`，降低拖走任務後留下 order gap 的機率。
+- 同 tenant / workspace 內跨看板移動時，會同步更新 moved root + descendants 的 `wbs_item_tags.project_id`，讓標籤 assignment 跟著移到目標看板。
+- 若 `wbs_item_tags` table 不存在，沿用既有 tag table missing fallback，不阻塞任務移動。
+
+仍未完成 / 待後續設計：
+
+- 跨 tenant / workspace 移動時，tag assignment 尚未安全移植，避免引用目標 workspace 不存在的 tag。
+- dependencies、record links、activity event target scope 尚未隨 canonical move 重寫。
+- 目前仍不是 DB transaction / RPC；若中途任一步失敗，可能需要後續修復工具或改成 Postgres function。
+- 尚未執行 typecheck、build、Supabase 實查、DnD UI smoke。
+
+### 2026-07-01 DEV-041 RD Progress：canonical move 前端子樹同步
+
+本輪新增 / 調整：
+
+- 新增 `TaskBoardMoveResult`，讓 canonical move 回傳：
+  - `movedTask`：被拖曳的 root task。
+  - `movedNodes`：root + descendants 的完整 moved subtree。
+- `dataBackend.nodeService.moveToBoard()` 回傳型別改為 `TaskBoardMoveResult`。
+- `supabaseNodeService.moveToBoard()` 在完成 root + descendants scope 更新後，會用同一批資料組出 moved subtree 並回傳。
+- `BoardView.handleDragEnd()` 接到跨看板 move 結果後，會逐一 `upsertNodeLocal()` root + descendants，讓拖入目前看板後子任務不必等重新載入才出現。
+
+仍未完成 / 待驗證：
+
+- 尚未執行 typecheck/build，需確認所有呼叫端型別已同步。
+- 尚未以實際 UI 驗證跨看板拖入含子任務的 task，確認 parent index、drop indicator、子任務展開與排序都正確。
+- `moveToBoard()` 仍非 DB transaction；若中途失敗仍可能需要後續改為 RPC。
+
+### 2026-07-01 DEV-041 RD Progress：canonical move 內部 dependency 同步
+
+本輪新增 / 調整：
+
+- `supabaseNodeService.moveToBoard()` 在同 tenant / workspace 跨看板移動時，會同步更新 moved subtree 內部 dependencies 的 `project_id`。
+- 同步條件限定為：`from_item_id` 與 `to_item_id` 都在 moved root + descendants 內。
+- 不同步只有單端連到 moved subtree 的 dependencies，避免把來源看板或其他看板的外部依賴誤搬到目標看板。
+
+刻意保留 / 未處理：
+
+- `record_task_links.project_id` 尚未重寫；因為該欄位可能代表 record 所屬看板，而不一定等同 task 所屬看板，需先確認資料契約。
+- 跨 tenant / workspace 的 dependencies 與 tags 仍未安全移植。
+- 最終仍建議把 canonical move 收斂成 RPC / transaction，避免多段 Data API update 中途失敗造成半完成狀態。
+- 尚未執行 typecheck、build、Supabase 實查或 UI smoke。
+
+### 2026-07-01 DEV-041 RD Progress：calendar feed board scope filter
+
+本輪新增 / 調整：
+
+- `calendarSubscriptionService.normalizeFilters()` 現在會在 `scope_type: board` 時，把 UI 傳入的 `board_ids` 正規化成 Supabase `projects.id`。
+- 新增 `resolveBoardIds()`，會依已選 workspace/tenant 將 legacy board id 解析成 project id，避免 Edge Function 猜測 app id / DB id。
+- `supabase/functions/calendar-feed/index.ts` 支援 `scope_type` 與 `board_ids`。
+- 當訂閱為 board scope 時，calendar feed 會套用 `project_id in board_ids`；若沒有 board ids，回傳空 feed。
+- `calendarSubscriptionService.listBoardRefs()` 新增 board/project ref 查詢。
+- `CalendarSubscriptionsView` 會讀取 board refs，讓已儲存的 project id 能在訂閱列表顯示看板名稱，修改訂閱時也能轉回 app board id。
+
+仍未完成 / 待驗證：
+
+- 尚未部署 Edge Function；production feed 不會自動吃到此變更。
+- 尚未跑 typecheck/build，需確認 Edge Function 與前端型別無誤。
+- 尚未實際建立 board scope 訂閱並讀取 `.ics` 驗證只回傳指定看板任務。
+- 尚未補 QC report / smoke evidence。
+
+### 2026-07-01 DEV-041 RD Progress：canonical move 跨工作區 preflight guard
+
+本輪新增 / 調整：
+
+- `supabaseNodeService.moveToBoard()` 在跨 tenant / workspace 移動前，會先檢查 moved root + descendants 是否存在高風險關聯：
+  - `wbs_item_tags`
+  - `wbs_dependencies`
+  - `record_task_links`
+- 若跨 workspace moved subtree 有上述任一關聯，會中止移動並回傳錯誤：需要使用受控移動流程。
+- 若 `wbs_item_tags` table 不存在，沿用既有 missing-table fallback；不把缺 tag table 當成阻塞。
+- 目的：在尚未完成 transaction/RPC 與跨 workspace 關聯移植前，避免任務被搬走但 tags/dependencies/records 留在來源 workspace 造成半一致資料。
+
+仍未完成 / 待後續設計：
+
+- 真正的跨 workspace canonical move 仍需 DB transaction / RPC，包含 tags、dependencies、record links、activity events 的一致性重寫。
+- 目前 guard 是保守防呆，不是完整搬移能力。
+- 尚未執行 typecheck、build、Supabase 實查或 UI smoke。
+
+### 2026-07-01 DEV-041 RD Progress：我的任務跨工作區拖曳提示收斂
+
+本輪新增 / 調整：
+
+- `TaskZoneSourcePanel` 的「我的任務」卡片拖曳提示更精準：
+  - 目前看板內任務：顯示「可直接拖移定位」。
+  - 同工作區跨看板任務：顯示「可拖入目前看板」。
+  - 跨工作區任務：顯示「跨工作區，含關聯時需受控移動」。
+- 拖曳能力本身不移除；仍可嘗試拖入目前看板，但後端 preflight guard 會在 tags / dependencies / record links 等高風險關聯存在時阻擋。
+- 目的：避免 UI 承諾超出目前非 transaction move service 的安全能力。
+
+仍未完成 / 待驗證：
+
+- 尚未 UI smoke 驗證三種提示是否在正確任務狀態出現。
+- 尚未 typecheck/build。
+
+### 2026-07-01 DEV-041 RD Progress：calendar feed legacy board id 相容
+
+本輪新增 / 調整：
+
+- `supabase/functions/calendar-feed/index.ts` 的 `board_ids` 不再只接受 UUID project id。
+- 新增 Edge Function 內部 `resolveBoardIds()`：
+  - 保留已是 UUID 的 project id。
+  - 將 legacy board id 透過 `projects.legacy_board_id` 解析成 project id。
+  - 解析範圍限定在 `allowedTenantIds`，避免訂閱 feed 查到未授權 tenant 的 project。
+- Board scope feed 現在會用 resolved project ids 套用 `project_id in (...)`。
+- 目的：舊訂閱或尚未正規化的 `board_ids` 不會因不是 UUID 而回空 feed。
+
+仍未完成 / 待驗證：
+
+- 尚未部署 Edge Function。
+- 尚未實際用 legacy board id 與 project id 各跑一次 `.ics` smoke。
+- 尚未 typecheck/build。
+
+### 2026-07-01 DEV-041 QA/QC Readiness Addendum：個人任務中控台來源與歸位驗收
+
+本輪補齊內容：
+
+- 已補 `QA-DEV-041` section 11，將使用者決策轉成可驗收 QA/QC 項目。
+- 驗收重點固定為：任務專區與訂閱月曆共用 source-subscription 概念、任務專區額外支援 workspace / board scope、預設 all assigned-to-me、拖入看板必須 move canonical task 而非 duplicate。
+- 新增 QA case：shared source contract、board-scope filtering、placed-task canonical move、cross-workspace guarded move、command center layout regression。
+- 新增 stop conditions：不得產生與訂閱月曆不相容的平行來源模型；不得用 create-copy-delete 假裝任務移動；不得在跨工作區搬移時靜默遺失 tags / dependencies / activity / record links / assignee metadata。
+
+目前仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`
+- `npm run verify:dev-040-personal-task-zone`
+- `npm run verify:dev-028-cross-mode-task-interactions`
+- `npx tsc --noEmit`
+- `npm run build`
+- Supabase production / staging 實際資料驗證與 Edge Function deploy。
+
+下一步建議：
+
+1. 先跑 typecheck/build，確認目前 DEV-041 實作沒有編譯缺口。
+2. 再做 browser smoke，重點錄影比對一般任務拖曳與任務專區拖曳的 overlay / drop indicator 是否一致。
+3. 最後做 Supabase guarded move 測試，特別驗證跨工作區含關聯任務不會被半套移動破壞資料。
+
+### 2026-07-01 DEV-041 RD Progress：canonical task move RPC contract
+
+本輪新增 / 調整：
+
+- 新增 Supabase migration `20260701020000_dev_041_move_task_to_board_rpc.sql`，建立 `public.move_task_to_board(...)` RPC。
+- RPC 目的：讓 `我的任務` / 個人任務中控台拖入目前看板時，優先由資料庫端以單一受控流程移動同一個 canonical `wbs_items` task subtree，而不是只靠前端多段 REST update。
+- RPC 權限：沿用既有 Supabase RPC 風格，使用 `security definer` 但在 function 內明確檢查 `auth.uid()`、source board write permission 與 target board write permission；並 revoke public/anon execute，只 grant authenticated。
+- RPC 資料保護：
+  - 不允許 source board 與 target board 相同；同看板排序仍交給既有一般任務 DnD。
+  - target board 不得是 personal task zone。
+  - source 是 personal task zone 時要求走既有 `place_personal_task_on_board`。
+  - 跨 workspace 若偵測 tags、dependencies、record links、activity 或 audit history，會拒絕並要求 controlled move flow，避免靜默遺失關聯。
+  - 任務含 linked records 時，跨 board move 先拒絕，避免 record/project scope 被半套搬移。
+  - 同 workspace / simple cross-board move 會同步調整 task subtree、內部 dependencies、wbs_item_tags 與 activity_events 的 project scope。
+- 更新 `Database.Functions.move_task_to_board` 型別，讓 typed Supabase client 可呼叫此 RPC。
+- 更新 `supabaseNodeService.moveToBoard()`：
+  - 先 resolve source/target tenant/project/node ids。
+  - 優先呼叫 `move_task_to_board` RPC。
+  - RPC 成功後回讀 target board rows，重建 moved subtree 的 `TaskNode[]` 並回傳給 BoardView local store。
+  - 若 production 尚未套用 migration 或 PostgREST schema cache 尚未載入此 RPC，才落回既有 guarded fallback。
+
+重要限制 / 風險：
+
+- 本機沒有 `supabase` CLI，因此 migration 檔名未透過 `supabase migration new` 產生；已依現有 timestamp sequence 手動建立。
+- 尚未套用 production migration。
+- 尚未執行 SQL migration dry run、Supabase RPC query、typecheck、build、browser DnD smoke。
+- RPC 使用 `security definer` 是為了配合既有 private permission helper / RLS 架構；後續 production 前應跑 Supabase advisors 或等效 SQL review，確認 function execute grant 與 permission guard 無 BOLA / IDOR 風險。
+
+下一步建議：
+
+1. 先執行 `npx tsc --noEmit` 與 `npm run build`。
+2. 再在 staging / linked Supabase 套用 migration 並呼叫 `move_task_to_board` 做 simple same-workspace cross-board move smoke。
+3. 補 browser smoke，確認 `我的任務` 拖入看板時定位框、overlay、drop 後位置與一般任務拖曳一致。
+4. 最後才考慮 production migration / deploy。
+
+### 2026-07-01 DEV-041 RD Progress：RPC missing fallback hardening
+
+本輪補強：
+
+- `supabaseNodeService.moveToBoard()` 預設不再靜默落回前端多段 REST fallback。
+- 若 Supabase/PostgREST 尚未載入 `move_task_to_board` RPC，會明確拋出：需要先套用 DEV-041 Supabase migration 並 reload schema cache。
+- 舊 fallback 仍保留，但必須顯式設定 `VITE_ALLOW_DEV_041_MOVE_FALLBACK=true` 才會啟用；此開關只應用於本地開發或緊急排查，不應作為 production 預設。
+
+原因：
+
+- DEV-041 的最終交付目標是 canonical task move 進入資料庫受控邊界。
+- 若 production migration 尚未套用卻靜默 fallback，使用者可能以為已經走 RPC transaction，但實際仍是多段 REST update，這會造成驗收證據失真。
+- 明確錯誤比隱性降級安全，尤其此流程會移動任務身份、子樹、排序、scope 與關聯資料。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：cross-board move error UX hardening
+
+本輪補強：
+
+- `BoardView` 新增 `getTaskZoneMoveErrorMessage()`，將跨看板 / 跨工作區歸位失敗轉成使用者可理解的產品訊息。
+- 若缺少 `move_task_to_board` RPC、PostgREST schema cache 尚未 reload 或 migration 尚未套用，toast 會提示需要套用 DEV-041 migration 並 reload schema cache。
+- 若任務含標籤、依賴、紀錄或歷史關聯而需要受控搬移，toast 會提示不能直接跨工作區搬移，需使用受控搬移流程。
+- 若是權限不足，toast 會提示沒有足夠權限把任務移入目前看板。
+
+原因：
+
+- 使用者從任務專區拖曳進看板時，若失敗只看到 DB / RPC 原始錯誤，會無法判斷下一步。
+- DEV-041 的操作體驗目標是「像一般任務拖曳一樣自然」，失敗狀態也必須是任務語言，而不是基礎設施語言。
+- 此補強不改 DnD 判斷、不改資料搬移邏輯，只補使用者可理解的 failure recovery。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：cross-workspace task card guidance
+
+本輪補強：
+
+- `TaskZoneView` 的 `我的任務` 卡片已在跨工作區情境下顯示 inline guidance。
+- 文案明確說明：任務可嘗試拖入目前看板；若含標籤、依賴、紀錄或歷史關聯，系統會要求改用受控搬移。
+- 保留既有 `到所在看板` 入口，讓使用者不必只靠失敗 toast 才知道下一步。
+
+原因：
+
+- 使用者期望任務專區像跨工作區任務中控台；卡片需要在拖曳前揭露資料搬移限制。
+- 受控搬移限制屬於資料完整性保護，不應只在 drop 失敗後才以錯誤訊息出現。
+- 此補強不改 DnD engine、不改 move service、不改資料庫，只降低跨工作區操作的認知落差。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：custom task-zone subscription scope
+
+本輪新增 / 調整：
+
+- `TaskSubscriptionScope` 新增 `custom`，讓任務專區可表達自訂來源範圍。
+- `createAssignedToMeTaskSource()` 新增 `workspaceIds` / `boardIds` options，仍沿用與訂閱月曆同類的 source-subscription model。
+- `TaskZoneSourcePanel` 的 `我的任務` 範圍選擇新增 `自訂`。
+- 自訂範圍可勾選工作區與看板：
+  - 勾選工作區可限制來源到指定 workspace。
+  - 勾選看板可進一步限制到指定 board。
+  - 勾選看板時會自動納入其 workspace，避免孤兒 board scope。
+- 自訂偏好仍使用本機 `localStorage`，符合先前 pin/collapse 狀態採本機裝置偏好的決策；尚未做雲端同步。
+
+原因：
+
+- 使用者已確認「我的任務」來源要與訂閱月曆共用同一個模組，且使用者可以控制要訂閱的項目。
+- 原本只有全部 / 目前工作區 / 目前看板三種快捷 scope，仍不足以表達「我想克制要訂閱的工作區與看板」。
+- 此補強讓 DEV-041 更接近個人任務中控台，而不是只能看當前 context 的快捷面板。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：external dependency move guard
+
+本輪補強：
+
+- DEV-041 `move_task_to_board` migration 新增外部 dependency guard。
+- 若要搬移的任務子樹與子樹外任務存在 dependency，RPC 會拒絕直接跨看板移動，要求受控搬移流程。
+- 保留原本「子樹內部 dependency 可跟著整棵子樹搬移」的行為。
+- DEV-041 靜態 verifier 新增對此 guard 文案的檢查。
+- QA 文件新增 `B-041-012A Cross-board external dependency guard`。
+
+原因：
+
+- 原 migration 只更新 `from_item_id` 與 `to_item_id` 都在 task subtree 內的 dependency。
+- 若任務和子樹外任務有 dependency，直接跨看板搬移會留下跨 board 斷裂或語意不清的關聯。
+- 對個人任務中控台而言，拖曳要像一般任務一樣直覺，但不能犧牲資料完整性；這類關聯必須進受控搬移。
+
+仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`。
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`。
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+- 自訂 scope 的跨工作區 / 跨看板實機篩選驗證。
+
+### 2026-07-01 DEV-041 RD Progress：custom scope union semantics fix
+
+本輪修正：
+
+- 修正 `custom` task subscription scope 的篩選語意。
+- 自訂範圍現在採 union：符合任一已選 workspace 或任一已選 board 即可顯示。
+- 自訂範圍若未選任何 workspace / board，會顯示空清單，不再隱性等同全部。
+- 勾選 board 不再自動把整個 workspace 納入 source，避免使用者只想訂閱單一看板卻看到整個工作區。
+- Supabase `listAssignedToMe()` 在 `custom` scope 下不先用 workspace/project 做 backend AND 篩選，改由前端 `taskMatchesSubscriptionSource()` 做最終 union filter，避免混選 workspace + board 時誤砍結果。
+
+原因：
+
+- 使用者的決策是「可以控制要訂閱的項目」，不是只提供目前 context 快捷篩選。
+- 上一版 custom scope 若同時有 workspaceIds 與 boardIds，既有 AND 篩選會讓 boardIds 壓掉 workspace selection，語意不直覺。
+- 本修正讓 `自訂` 更接近訂閱清單語意：我選哪些來源，就看到那些來源的 `指派給我` 任務。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+- 自訂 scope 實機篩選驗證。
+
+### 2026-07-01 DEV-041 RD Progress：custom scope UI clarity
+
+本輪補強：
+
+- `我的任務` 訂閱範圍按鈕由三欄改為兩欄，讓 `全部 / 目前工作區 / 目前看板 / 自訂` 四個選項排版更穩定。
+- `自訂` 範圍新增選取摘要：顯示已選幾個工作區、幾個看板。
+- 自訂範圍文案明確說明：勾工作區代表整個工作區；勾看板只代表該看板，兩者採聯集。
+
+原因：
+
+- 使用者要控制訂閱項目時，必須能看懂目前範圍是哪些來源的集合。
+- 上一輪已修正資料篩選語意，這輪補齊 UI 語意，避免 nested checkbox 被誤解成階層 AND filter。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+- 自訂 scope 實機篩選驗證。
+
+### 2026-07-01 DEV-041 RD Progress：remote assigned-task operations
+
+本輪補強：
+
+- `TaskZoneView` 的 `我的任務` 詳情來源改為從已彙整的 assigned task list 取得，而不是只從目前看板 `nodes` 取得。
+- 遠端指派任務的詳情更新、改名、完成 / 取消完成、封存改走 canonical `nodeService.update(workspaceId, boardId, taskId, updates)`。
+- `useTaskZoneStore` 新增 `patchAssignedTask()`，讓遠端任務更新成功後可同步更新任務專區 UI cache。
+- 若任務剛好也存在目前看板 local store，成功更新後同步 patch `useWbsStore`，避免目前看板畫面落差。
+- 開發文件補上 2026-07-01 引導決策：與訂閱月曆共用來源訂閱模組、預設所有指派給我、工作區 + 看板可控、第一版不先做完整動態牆 / 外部串接。
+
+原因：
+
+- 個人任務中控台會顯示跨工作區 / 跨看板任務；若操作只寫目前看板 local store，會導致遠端任務看得到但改不了。
+- 任務專區必須是 canonical task 的操作入口，而不是第二套只存在前端的備忘清單。
+- 這是後續擴充動態牆與外部任務來源前的必要資料一致性基礎。
+
+仍未執行：
+
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+- 遠端 assigned task 詳情 / 卡片操作實機驗證。
+
+### 2026-07-01 DEV-041 RD Progress：verifier entrypoints
+
+本輪補強：
+
+- `package.json` 新增 `verify:dev-041-task-zone-direct-drag-placement`。
+- `package.json` 新增 `verify:dev-041-task-zone-direct-drag-placement-browser`。
+- 新增 `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs`，檢查 DEV-041 靜態契約：
+  - BoardView 內整合左側任務專區來源面板。
+  - 未歸位任務與 `我的任務` 共用既有任務拖曳 overlay / handle。
+  - `我的任務` 遠端操作走 canonical update service。
+  - 任務專區與訂閱月曆共用相容來源欄位。
+  - DEV-041 move RPC、migration、database types 與文件契約存在。
+- 新增 `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js`，提供瀏覽器 smoke 入口，檢查 BoardView 左側來源面板、待歸位建立入口、共享拖曳把手、`我的任務` tab 與左到右視線流。
+
+原因：
+
+- DEV-041 文件已列出 verifier 指令，但 package/script 尚未存在，會讓 QA/QC 無法按文件重現驗收。
+- 本輪先補可執行入口，避免後續只靠聊天紀錄或手動描述判斷功能是否完成。
+
+仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`。
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`。
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：verifier hardening
+
+本輪補強：
+
+- 修正 DEV-041 靜態 verifier 的 custom scope union 檢查字串，使其對齊實際 `taskMatchesSubscriptionSource()` 實作。
+- 修正 DEV-041 靜態 verifier 的 migration record-link 錯誤文案檢查，使其對齊實際 SQL migration 內容。
+- DEV-041 browser smoke 啟動時會重設 `projed-task-zone-source-panel` localStorage 偏好，避免測試機曾把任務專區收合而造成假失敗。
+
+原因：
+
+- verifier 本身也屬於交付契約；若檢查字串與實作不一致，後續 QC 會卡在假失敗，無法判斷產品功能真缺口。
+- browser smoke 要驗證的是左側任務專區面板存在與流程可用，不應被使用者本機偏好狀態干擾。
+
+仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`。
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`。
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：my-tasks permission/loading UX
+
+本輪補強：
+
+- `我的任務` 載入中不再同時顯示空狀態，避免使用者誤判目前範圍沒有任務。
+- `我的任務` 卡片在目前看板沒有移動權限時，顯示「目前看板沒有移動權限」並維持拖曳停用。
+- 非目前看板但可拖移的任務，新增說明：拖入目前看板時會檢查來源與目標看板權限，成功後移動同一個任務，不建立副本。
+- DEV-041 靜態 verifier 補檢查上述 UI contract。
+- QA 文件補上 loading empty-state 與權限說明驗收點。
+
+原因：
+
+- 個人任務中控台會混合目前看板、其他看板與跨工作區任務；使用者需要知道「看得到」不等於「一定能直接移動」。
+- 權限 guard 最終仍由 canonical service / RPC 負責，但 UI 應避免讓使用者把權限拒絕誤解為拖曳壞掉。
+
+仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`。
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`。
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：full-page command-center CTAs
+
+本輪補強：
+
+- Full-page `TaskZoneView` 新增 `到目前看板歸位 / 選擇看板歸位` CTA。
+- Full-page `TaskZoneView` 新增 `在看板查看我的任務 / 先選看板查看我的任務` CTA。
+- CTA 會先寫入任務專區左側面板偏好，確保進入看板後面板展開，並切到對應 tab：`待歸位` 或 `我的任務`。
+- Full-page 狀態卡補文案說明：`我的任務` 與精準拖曳歸位在看板左側任務專區面板操作，以維持左到右資訊流。
+- DEV-041 靜態 verifier 與 browser smoke 補檢查 full-page CTA。
+- QA 文件補上 full-page `待歸位` / `我的任務` 導流驗收點。
+
+原因：
+
+- 使用者從 sidebar 進入 full-page `任務專區` 時，仍需要清楚知道下一步如何把項目放回任務與看板。
+- 不把完整 `我的任務` 清單複製到 full page，是為了避免形成第二套主介面；精準歸位仍應在看板可見、左側來源面板可見的情境完成。
+
+仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`。
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`。
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-01 DEV-041 RD Progress：backend evidence boundary
+
+本輪補強：
+
+- DEV-041 靜態 verifier 補檢查 data backend 對非 Supabase backend 的明確限制文案。
+- QA 文件補充 backend evidence boundary：
+  - local-test 可 smoke 左側來源面板、待歸位任務建立與共享拖曳把手。
+  - canonical `我的任務` 跨看板搬移、assigned-task aggregation 與 RPC guard 行為需要 Supabase backend evidence。
+
+原因：
+
+- `nodeService.listAssignedToMe()` / `moveToBoard()` 已存在，前端不會因方法不存在失敗。
+- 但 DEV-041 的核心 canonical move 與跨工作區 guard 是 Supabase RPC 契約；local-test 不能證明 migration、RLS、RPC transaction 或 association guard 正確。
+- 明確記錄 evidence boundary 可避免 QC 用 local-test smoke 誤宣稱 DEV-041 全部完成。
+
+仍未執行：
+
+- `npm run verify:dev-041-task-zone-direct-drag-placement`。
+- `npm run verify:dev-041-task-zone-direct-drag-placement-browser`。
+- TypeScript 檢查。
+- Build。
+- Supabase migration apply。
+- RPC smoke test。
+- Browser DnD smoke。
+
+### 2026-07-02 - DEV-041 browser smoke CTA activation evidence contract
+- Type: PM evidence / QA gate hardening
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so B-041-001 now activates the full-page `任務專區` placement CTA and `我的任務` CTA, then verifies that each path reaches the BoardView left-side integrated task-zone panel.
+- Reason: Previous browser smoke only asserted CTA visibility. That was weaker than the QA plan, which requires activating the placement action and confirming the user reaches BoardView or a board-picker-to-BoardView path.
+- Boundary: No product code, database migration, production state, deployment, git operation, build, typecheck, or browser run was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement-browser` plus the static verifier, typecheck, build, Supabase RPC/migration evidence, and production/staging smoke only after explicit authorization.
+
+### 2026-07-02 - DEV-041 static verifier guards CTA activation coverage
+- Type: PM evidence / QA gate hardening
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so the static gate now requires the browser smoke to click both full-page task-zone CTAs and verify that each path reaches the BoardView left-side source panel.
+- Reason: The QA plan requires activation, not only CTA visibility. The static verifier now prevents accidental regression back to a weaker visibility-only smoke test.
+- Boundary: No product code, database migration, production state, deployment, git operation, build, typecheck, static verifier run, or browser run was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 source-panel active-tab verification anchors
+- Type: Development support / QA gate hardening
+- Change: Added explicit `data-task-zone-source-tab` and `data-task-zone-source-tab-active` attributes to the BoardView-integrated task-zone source panel tabs, then updated the DEV-041 browser smoke and static verifier to require CTA navigation to open the correct active tab (`待歸位` or `我的任務`).
+- UX polish: Removed visible markdown-style backticks from the full-page task-zone guidance copy around `我的任務`.
+- Reason: Previous smoke could pass when the panel opened but stayed on the wrong tab. The verifier now checks that the full-page CTA carries the intended workflow state into the left-side command-center panel.
+- Boundary: No database migration, production state, deployment, git operation, build, typecheck, static verifier run, or browser run was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 board positioning-frame smoke coverage
+- Type: Development support / QA gate hardening
+- Change: Added stable `data-kanban-drop-indicator="column"` and `data-kanban-drop-indicator-active` attributes to the existing Kanban column drop surface, then updated the DEV-041 browser smoke to drag a `待歸位` task-zone item into the board and require the normal board positioning frame to become active.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to read `src/components/Wbs/KanbanColumn.tsx` and require the drop-indicator selector plus browser mouse-drag coverage.
+- Reason: The user explicitly reported that task-zone dragging previously did not show the same positioning frame as normal task dragging. The browser smoke now targets that acceptance point instead of only checking shared handles and overlay-adjacent selectors.
+- Boundary: No drag smoke run, static verifier run, typecheck, build, database migration, production state, deployment, or git operation was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 task-card positioning-frame parity coverage
+- Type: Development support / QA gate hardening
+- Change: Added task-card-level positioning-frame state to `src/components/Wbs/KanbanCard.tsx` with `data-kanban-card-drop-indicator="card"` and `data-kanban-card-drop-indicator-active`. The active state reuses the existing Kanban card/drop collision path and applies the same primary ring/border visual language while dragging a task-zone item over a task card.
+- Browser gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so the drag smoke prefers an existing task card target and requires `data-kanban-card-drop-indicator-active="true"`; it falls back to the column drop indicator only when no card exists in local test data.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to read `src/components/Wbs/KanbanCard.tsx` and require the task-card drop-indicator selector, active state, visible ring class and browser smoke coverage.
+- Reason: The reported UX gap was specifically that dragging a task-zone item over board tasks did not show the same positioning frame as normal task dragging. Column-level coverage alone was too weak; task-card-level evidence is now part of the acceptance contract.
+- Boundary: No browser smoke run, static verifier run, typecheck, build, database migration, production state, deployment, or git operation was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 assigned my-task drag positioning-frame smoke coverage
+- Type: Development support / QA gate hardening
+- Change: Added `data-task-zone-my-task-id` to assigned `我的任務` cards and extended `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so, when local test data contains an assigned my-task card, the smoke drags it into the board and requires the normal task-card or column positioning frame to become active.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require assigned my-task drag positioning-frame smoke coverage and the stable my-task id selector.
+- Reason: DEV-041 is not only about unplaced `待歸位` tasks. The upgraded personal task command center requires `我的任務` items to use the same normal task drag/drop visual language when moving into the current board.
+- Boundary: No browser smoke run, static verifier run, typecheck, build, database migration, production state, deployment, or git operation was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 QA/Spec positioning-frame evidence alignment
+- Type: PM evidence / QA contract hardening
+- Change: Added QA case `B-041-015 Task-card positioning-frame parity for task-zone sources` and Spec decision `D-041-18` to make task-card-level positioning-frame evidence explicit for both `待歸位` and `我的任務` drag sources.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so documentation checks require the task-card positioning-frame evidence contract, `data-kanban-card-drop-indicator-active`, and `data-task-zone-my-task-id`.
+- Reason: Browser/static verifier work had advanced beyond the QA handoff text. This aligns the implementation evidence, QA plan and product spec around the user-reported gap: dragging from task zone must show the normal task-card positioning frame, not only a column-level highlight.
+- Boundary: No browser smoke run, static verifier run, typecheck, build, database migration, production state, deployment, or git operation was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 non-destructive positioning-frame browser smoke
+- Type: QA gate hardening / side-effect control
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so positioning-frame smoke checks cancel the drag with `Escape` after the frame becomes visible, before releasing the mouse.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require `page.keyboard.press('Escape')` in the browser smoke contract.
+- Reason: The positioning-frame smoke is meant to prove visual drag parity, not perform a real placement or canonical assigned-task move. Releasing directly over the board could mutate local-test data or trigger backend move paths, making a visual smoke unnecessarily destructive and harder to repeat.
+- Boundary: No browser smoke run, static verifier run, typecheck, build, database migration, production state, deployment, or git operation was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+
+### 2026-07-02 - DEV-041 task-card positioning-frame source guard
+- Type: Development support / regression control
+- Change: Tightened `src/components/Wbs/KanbanCard.tsx` so task-card positioning-frame activation now requires an explicit task-like drag source whitelist: `wbs-card`, `wbs-checklist`, `quick-capture-item`, or `personal-task-zone-item`.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require the `canShowCardInsertFrame` guard and its source whitelist.
+- Reason: The previous active-frame condition could be satisfied by non-task-card drag sources whenever `canMoveTask` was true. DEV-041 needs task-zone sources to match normal task drag, not broaden task-card positioning frames to unrelated drag types such as column movement.
+- Boundary: No browser smoke run, static verifier run, typecheck, build, database migration, production state, deployment, or git operation was executed in this step.
+- Remaining evidence required: run `npm run verify:dev-041-task-zone-direct-drag-placement`, `npm run verify:dev-041-task-zone-direct-drag-placement-browser`, `npx tsc --noEmit`, `npm run build`, and Supabase RPC/migration evidence after explicit authorization.
+### PM Evidence - 2026-07-02 - DEV-041 documentation map verifier index
+
+- Type: PM evidence
+- Scope: 補齊 `ai-doc/documentation_map.md` 的 DEV-041 續接入口，將 static verifier 與 browser smoke verifier 納入正式文件地圖。
+- Files:
+  - `ai-doc/documentation_map.md`
+  - `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs`
+  - `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js`
+- Decision recorded: DEV-041 的定位框 parity 證據以 task-card indicator 為主要證據，column indicator 只作為沒有可用任務卡時的 fallback；`我的任務` 若本地沒有指派資料可記錄 skip，但 canonical Supabase move/RPC 仍需後續驗證。
+- Evidence status: Not executed in this turn. No static verifier, browser smoke, typecheck, build, migration, git, or deploy was run.
+- Remaining gate: DEV-041 仍需執行 static verifier、browser smoke、typecheck/build、Supabase RPC/migration evidence，以及 release/deploy gate 後才可標示完成。
+
+### RD Cleanup - 2026-07-02 - DEV-041 KanbanCard DnD source list dedupe
+
+- Type: Development objective support
+- Scope: 移除 `src/components/Wbs/KanbanCard.tsx` checklist drop 允許來源清單中重複的 `personal-task-zone-item` 字串。
+- Behavior impact: No intended behavior change. The allowed source set remains `wbs-column`, `wbs-card`, `wbs-checklist`, `quick-capture-item`, and `personal-task-zone-item`.
+- Reason: 降低 DEV-041 DnD contract 的維護噪音，避免後續檢查誤判為兩個不同 task-zone source。
+- Evidence status: Not executed in this turn. Requires existing DEV-041 static verifier and browser smoke for confirmation.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 documentation map coverage
+
+- Type: PM evidence / QA gate hardening
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so the DEV-041 static verifier now reads `ai-doc/documentation_map.md`.
+- Static gate now requires:
+  - DEV-041 documentation map heading.
+  - SPEC-041 and QA-DEV-041 entries.
+  - Static verifier and browser smoke verifier entries.
+  - Task-card indicator as primary evidence and column indicator as fallback wording.
+  - Explicit `not executed in this turn` status wording for verifier entries.
+- Reason: `documentation_map.md` is the cold-start handoff entry. If verifier entrypoints disappear from the map, the next PM/RD/QC pass can miss required evidence and falsely treat DEV-041 as document-complete.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 DnD source dedupe contract
+
+- Type: PM evidence / QA gate hardening
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so the DEV-041 static verifier fails if `src/components/Wbs/KanbanCard.tsx` reintroduces a duplicate contiguous `personal-task-zone-item` entry in DnD source lists.
+- Reason: DEV-041 relies on task-zone sources behaving like task-like drag sources, not on accumulating ad hoc source aliases. Duplicate source entries create maintenance noise and make later DnD reviews less reliable.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 cancelled drag side-effect check
+
+- Type: QA gate hardening / side-effect control
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so cancelled positioning-frame smokes now verify that the source item remains visible after `Escape` + `mouse.up`.
+- Covered paths:
+  - `待歸位` smoke task remains visible in the source panel after cancelled drag.
+  - `我的任務` card remains visible in the source panel after cancelled drag when local assigned-task data exists.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require both cancelled-drag source-visibility PASS messages.
+- Reason: DEV-041 positioning-frame smoke should prove visual drag parity without accidentally placing or moving records. Checking source visibility after cancellation gives stronger evidence than pressing `Escape` alone.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 reusable unplaced smoke source
+
+- Type: QA gate hardening / side-effect reduction
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so the unplaced positioning-frame smoke first reuses an existing `[data-task-zone-item="true"]` source item. It only creates a fallback `DEV-041 drag smoke ...` item when no reusable unplaced source item exists.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require both reuse and fallback log messages, so the smoke cannot regress to always creating new unplaced test data.
+- Reason: The smoke is meant to validate drag affordance and cancellation behavior, not continuously accumulate local unplaced tasks. Reusing existing source data reduces test-data pollution while preserving a fallback path for empty local states.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 scoped unplaced drag handle selector
+
+- Type: QA gate hardening / selector precision
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so the unplaced source smoke waits for the drag handle inside the selected `unplacedTaskItem` instead of using a global `[data-task-drag-handle="true"]` selector.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require the scoped `unplacedTaskItem.locator('[data-task-drag-handle="true"]')` contract.
+- Reason: DEV-041 evidence must prove the task-zone source item itself exposes the shared task drag handle. A global handle selector could accidentally pass because a board task handle exists, even if the task-zone source card regressed.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 fallback unplaced smoke cleanup
+
+- Type: QA gate hardening / side-effect reduction
+- Change: Added `data-task-zone-remove="true"` to the `待歸位` task-zone card remove button in `src/components/TaskZoneView.tsx`.
+- Browser smoke: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so it tracks `createdFallbackUnplacedItem`. If the smoke creates a fallback `DEV-041 drag smoke ...` item because no reusable source item exists, it removes only that fallback item after cancelled-drag visibility checks pass.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require `data-task-zone-remove`, `createdFallbackUnplacedItem`, and the `cleaned up fallback unplaced smoke item` evidence message.
+- Reason: DEV-041 browser smoke should not accumulate local fallback tasks across repeated runs. Cleanup is restricted to the item created by the smoke; existing user/local QA items are reused but not removed.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### QA/Spec Alignment - 2026-07-02 - DEV-041 non-polluting smoke contract
+
+- Type: PM evidence / QA contract hardening
+- Change: Updated `ai-doc/specs/SPEC-041-task-zone-direct-drag-placement.md` and `ai-doc/qa/QA-DEV-041-task-zone-direct-drag-placement.md` so the DEV-041 positioning-frame browser smoke is explicitly required to avoid accumulating local `待歸位` test data.
+- Spec contract:
+  - Browser smoke should reuse an existing `待歸位` source item when one exists.
+  - Browser smoke may create fallback `DEV-041 drag smoke ...` data only when no reusable item exists.
+  - Browser smoke must clean up only its own fallback item after cancelled-drag source-visibility checks pass.
+  - `data-task-zone-remove` is the fallback cleanup anchor.
+- QA contract:
+  - QA must collect browser logs showing reuse or fallback creation plus fallback cleanup.
+  - Existing user/QA data must not be removed by the smoke.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so the documentation check requires the non-polluting smoke contract in both SPEC and QA.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### QA Case Split - 2026-07-02 - DEV-041 B-041-016 non-polluting browser smoke
+
+- Type: PM evidence / QA contract hardening
+- Change: Added QA case `B-041-016 Non-polluting browser smoke for unplaced source items` to `ai-doc/qa/QA-DEV-041-task-zone-direct-drag-placement.md`.
+- Scope: The case separates smoke side-effect control from `B-041-015` positioning-frame parity, so QA can independently verify reuse, fallback creation, fallback cleanup and protection of existing user/QA data.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require `B-041-016` and its cleanup evidence strings.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### Spec Decision Split - 2026-07-02 - DEV-041 D-041-19 non-polluting smoke
+
+- Type: PM evidence / spec contract hardening
+- Change: Added spec decision `D-041-19：定位框 browser smoke 不得污染待歸位資料` to `ai-doc/specs/SPEC-041-task-zone-direct-drag-placement.md`.
+- Scope: The decision separates non-polluting browser smoke behavior from `D-041-18` task-card positioning-frame parity. `D-041-18` now owns visual/DnD evidence; `D-041-19` owns test-data side-effect control.
+- Contract:
+  - Reuse existing `待歸位` source items when available.
+  - Create fallback `DEV-041 drag smoke ...` data only when no reusable item exists.
+  - Clean up only smoke-created fallback data after cancelled-drag source visibility is proven.
+  - Preserve `data-task-zone-remove` as the cleanup anchor.
+  - Do not remove existing user or QA data.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require `D-041-19` and its `B-041-016` correspondence.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### Documentation Map Alignment - 2026-07-02 - DEV-041 non-polluting smoke gate
+
+- Type: PM evidence / cold-start handoff hardening
+- Change: Updated `ai-doc/documentation_map.md` so DEV-041 cold-start handoff now points to `D-041-19`, `B-041-016`, `data-task-zone-remove`, and the fallback cleanup gate.
+- Scope:
+  - SPEC row now states `D-041-18` owns task-card positioning-frame parity and `D-041-19` owns non-polluting browser smoke.
+  - QA row now calls out `B-041-016` as the independent non-polluting browser smoke case.
+  - Static verifier row now states it protects the fallback cleanup gate.
+  - Browser smoke row now states reusable source item, fallback creation and `data-task-zone-remove` cleanup behavior.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so documentation-map checks require `D-041-19`, `B-041-016`, `data-task-zone-remove`, and `fallback cleanup gate`.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 dev_task latest-decision coverage
+
+- Type: PM evidence / QA gate hardening
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so the DEV-041 static verifier now requires the latest dev_task evidence entries for:
+  - `QA Case Split - 2026-07-02 - DEV-041 B-041-016 non-polluting browser smoke`
+  - `Spec Decision Split - 2026-07-02 - DEV-041 D-041-19 non-polluting smoke`
+  - `Documentation Map Alignment - 2026-07-02 - DEV-041 non-polluting smoke gate`
+  - `data-task-zone-remove`
+  - `fallback cleanup gate`
+- Reason: DEV-041's cold-start and QA handoff now depend on the non-polluting smoke contract. Static gate coverage must fail if dev_task loses these latest decisions while older DEV-041 evidence remains present.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` after explicit validation authorization.
+
+### QA Gate Hardening - 2026-07-02 - DEV-041 id-anchored fallback cleanup
+
+- Type: QA gate hardening / browser smoke stability
+- Change: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` so fallback unplaced cleanup records `fallbackUnplacedTaskId` from the created card's `data-task-id`, then reselects the card with `[data-task-zone-item="true"][data-task-id="${fallbackUnplacedTaskId}"]` before cleanup.
+- Reason: A dynamic `.first()` locator can rebind to another `待歸位` item after the fallback item is removed, making `waitFor({ state: 'hidden' })` unstable or falsely tied to the next card. The cleanup must target the exact fallback item created by the smoke.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` to require `fallbackUnplacedTaskId`, the id-anchored selector, and the data-task-id cleanup assertion.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### QA/Spec Alignment - 2026-07-02 - DEV-041 id-anchored fallback cleanup contract
+
+- Type: PM evidence / QA contract hardening
+- Change: Updated `ai-doc/specs/SPEC-041-task-zone-direct-drag-placement.md` and `ai-doc/qa/QA-DEV-041-task-zone-direct-drag-placement.md` so non-polluting browser smoke cleanup explicitly requires capturing the fallback item's `data-task-id` and reselecting `[data-task-zone-item="true"][data-task-id="..."]` before cleanup.
+- Reason: The side-effect contract should not only say "remove fallback item"; it must define how QA avoids locator rebinding after DOM mutation. This keeps `B-041-016` aligned with the implemented browser smoke.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so SPEC, QA and dev_task checks require `data-task-id`, `fallbackUnplacedTaskId` and the id-anchored fallback cleanup contract.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` and `npm run verify:dev-041-task-zone-direct-drag-placement-browser` after explicit validation authorization.
+
+### Documentation Map Alignment - 2026-07-02 - DEV-041 id-anchored fallback cleanup
+
+- Type: PM evidence / cold-start handoff hardening
+- Change: Updated `ai-doc/documentation_map.md` so the DEV-041 verifier rows now mention `data-task-id`, `fallbackUnplacedTaskId`, `[data-task-zone-item="true"][data-task-id="..."]`, and id-anchored fallback cleanup.
+- Reason: The documentation map is the cold-start entrypoint. If it only says `data-task-zone-remove`, the next PM/RD/QC pass can miss the real stability requirement: cleanup must target the exact fallback card created by the smoke and must not let `.first()` rebind after deletion.
+- Static gate: Updated `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` so documentation-map checks require the id-anchored cleanup wording.
+- Evidence status: Not executed in this turn. Requires `npm run verify:dev-041-task-zone-direct-drag-placement` after explicit validation authorization.
+
+### Validation Evidence - 2026-07-02 - DEV-041 local verification passed
+
+- Type: QC evidence / local release gate
+- Authorization: User selected option `2` (`允許執行驗證並提交`); scope excludes production migration, deploy and push.
+- Commands passed:
+  - `npm run verify:dev-041-task-zone-direct-drag-placement`
+  - `npm run verify:dev-041-task-zone-direct-drag-placement-browser`
+  - `npm run verify:dev-040-personal-task-zone`
+  - `npm run verify:dev-028-cross-mode-task-interactions`
+  - `npx tsc --noEmit`
+  - `npm run build`
+- Fixes made during validation:
+  - `src/services/supabase/projedService.ts` now applies `taskMatchesSubscriptionSource(...)` after mapping assigned tasks, so Supabase assigned-task listing uses the shared task/calendar source contract.
+  - `supabase/migrations/20260701020000_dev_041_move_task_to_board_rpc.sql` now preserves the static contract message `Cannot directly move tasks from the personal task zone.`
+  - `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` now uses the actual title input selector and targets the top-left body of a card to avoid checklist droppable interference when verifying task-card positioning frame parity.
+  - `scripts/verify-dev-040-personal-task-zone.mjs` now accepts the DEV-041 superseded BoardView source panel name `TaskZoneSourcePanel` and the current DEV-040 production-released state.
+- Build evidence: `npm run build` generated production bundles including `TaskZoneView-D9l4vsLP.js`, `BoardView-D-hwzwe4.js`, and `index-D2lh0Q4n.js`.
+- Remaining release boundary:
+  - DEV-041 Supabase migration is present but not applied to production in this turn.
+  - Production deploy, production smoke and push are not executed in this turn.

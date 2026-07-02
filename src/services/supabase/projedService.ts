@@ -29,11 +29,14 @@ import type {
   PermissionCapability,
   RecordTaskLink,
   TagColor,
+  TaskBoardMoveInput,
+  TaskBoardMoveResult,
   TaskNode,
   TaskTag,
   Workspace,
   WorkspaceMember,
 } from '../../types';
+import { taskMatchesSubscriptionSource, type TaskSubscriptionSource } from '../../utils/taskSubscriptionSources';
 import { isSupabaseConfigured, supabase } from './client';
 import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, InboxItemRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
@@ -119,6 +122,17 @@ const isMissingDeleteWorkspaceRpcError = (error: unknown) => {
   return message.includes('Could not find the function public.delete_workspace')
     || message.includes('delete_workspace(target_tenant_id)')
     || (message.includes('delete_workspace') && message.includes('schema cache'));
+};
+
+const isMissingMoveTaskToBoardRpcError = (error: unknown) => {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : String(error ?? '');
+  return message.includes('Could not find the function public.move_task_to_board')
+    || message.includes('move_task_to_board(p_task_id')
+    || (message.includes('move_task_to_board') && message.includes('schema cache'));
 };
 
 const assertNoTagTableError = (error: { message: string } | null) => {
@@ -1059,6 +1073,261 @@ export const supabaseBoardInviteService = {
 };
 
 export const supabaseNodeService = {
+  listAssignedToMe: async (source: TaskSubscriptionSource, currentUserId: string): Promise<TaskNode[]> => {
+    requireSupabase();
+    const tenantIds = source.scope !== 'custom' && source.workspaceIds.length > 0
+      ? await Promise.all(source.workspaceIds.map(resolveWorkspaceId))
+      : [];
+    const projectIds = source.scope !== 'custom' && source.boardIds.length > 0 && tenantIds.length === 1
+      ? await Promise.all(source.boardIds.map(boardId => resolveProjectId(tenantIds[0], boardId)))
+      : [];
+
+    let query = supabase
+      .from('wbs_items')
+      .select('*')
+      .eq('assignee_id', currentUserId)
+      .order('updated_at', { ascending: false });
+
+    if (!source.includeArchived) query = query.eq('is_archived', false);
+    if (!source.includeCompleted) query = query.neq('status', 'completed');
+    if (tenantIds.length > 0) query = query.in('tenant_id', tenantIds);
+    if (projectIds.length > 0) query = query.in('project_id', projectIds);
+
+    const { data, error } = await query;
+    assertNoError(error);
+    const rows = data ?? [];
+    if (rows.length === 0) return [];
+
+    const tenantIdsFromRows = Array.from(new Set(rows.map(row => row.tenant_id).filter(Boolean)));
+    const projectIdsFromRows = Array.from(new Set(rows.map(row => row.project_id).filter(Boolean)));
+    const [{ data: tenants, error: tenantError }, { data: projects, error: projectError }] = await Promise.all([
+      supabase
+        .from('tenants')
+        .select('id,legacy_workspace_id')
+        .in('id', tenantIdsFromRows),
+      supabase
+        .from('projects')
+        .select('id,tenant_id,legacy_board_id')
+        .in('id', projectIdsFromRows),
+    ]);
+    assertNoError(tenantError);
+    assertNoError(projectError);
+
+    const workspaceIdByTenantId = new Map((tenants ?? []).map(tenant => [
+      tenant.id,
+      legacyOrId(tenant.id, tenant.legacy_workspace_id),
+    ]));
+    const boardIdByProjectId = new Map((projects ?? []).map(project => [
+      project.id,
+      legacyOrId(project.id, project.legacy_board_id),
+    ]));
+    const nodeIdByDbId = new Map(rows.map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
+
+    return rows.map(item => mapWbsItemToTaskNode(
+      item,
+      nodeIdByDbId,
+      workspaceIdByTenantId.get(item.tenant_id) || item.tenant_id,
+      boardIdByProjectId.get(item.project_id) || item.project_id
+    )).filter(task => taskMatchesSubscriptionSource(task, source, currentUserId));
+  },
+
+  moveToBoard: async (input: TaskBoardMoveInput): Promise<TaskBoardMoveResult> => {
+    requireSupabase();
+    const sourceTenantId = await resolveWorkspaceId(input.sourceWorkspaceId);
+    const sourceProjectId = await resolveProjectId(sourceTenantId, input.sourceBoardId);
+    const targetTenantId = await resolveWorkspaceId(input.targetWorkspaceId);
+    const targetProjectId = await resolveProjectId(targetTenantId, input.targetBoardId);
+    const targetParentId = await resolveNodeId(targetTenantId, targetProjectId, input.parentId);
+    const sourceTaskId = await requireNodeId(sourceTenantId, sourceProjectId, input.taskId);
+
+    const insertBeforeId = await resolveNodeId(targetTenantId, targetProjectId, input.insertBeforeId);
+    const insertAfterId = await resolveNodeId(targetTenantId, targetProjectId, input.insertAfterId);
+    const moveClientMutationId = `move_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const { data: moveRpcData, error: moveRpcError } = await supabase.rpc('move_task_to_board', {
+      p_task_id: sourceTaskId,
+      p_source_project_id: sourceProjectId,
+      p_target_project_id: targetProjectId,
+      p_target_parent_id: targetParentId,
+      p_insert_before_id: insertBeforeId,
+      p_insert_after_id: insertAfterId,
+      p_target_sort_order: input.order ?? null,
+      p_move_client_mutation_id: moveClientMutationId,
+    });
+
+    if (!isMissingMoveTaskToBoardRpcError(moveRpcError)) {
+      assertNoError(moveRpcError);
+      const moveRow = Array.isArray(moveRpcData) ? moveRpcData[0] : moveRpcData;
+      if (!moveRow?.task_node_id) throw new Error('Supabase did not return the moved task id.');
+      const { data: targetRows, error: targetRowsError } = await supabase
+        .from('wbs_items')
+        .select('*')
+        .eq('tenant_id', targetTenantId)
+        .eq('project_id', targetProjectId)
+        .order('sort_order', { ascending: true });
+      assertNoError(targetRowsError);
+      const targetItems = (targetRows ?? []) as WbsItemRow[];
+      const movedDbIds = new Set<string>([moveRow.task_node_id]);
+      const collectMoved = (parentId: string) => {
+        targetItems
+          .filter(item => item.parent_id === parentId)
+          .forEach(child => {
+            movedDbIds.add(child.id);
+            collectMoved(child.id);
+          });
+      };
+      collectMoved(moveRow.task_node_id);
+      const movedRows = targetItems.filter(item => movedDbIds.has(item.id));
+      const nodeIdByDbId = new Map(movedRows.map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
+      const movedRootRow = movedRows.find(item => item.id === moveRow.task_node_id);
+      const movedNodes = movedRows.map(item => mapWbsItemToTaskNode(
+        item,
+        nodeIdByDbId,
+        input.targetWorkspaceId,
+        input.targetBoardId,
+      ));
+      const movedTask = movedNodes.find(node => node.id === legacyOrId(moveRow.task_node_id, movedRootRow?.legacy_node_id)) || movedNodes[0];
+      return { movedTask, movedNodes };
+    }
+
+    if (import.meta.env.VITE_ALLOW_DEV_041_MOVE_FALLBACK !== 'true') {
+      throw new Error('資料庫尚未載入 move_task_to_board RPC。請先套用 DEV-041 Supabase migration 並 reload schema cache，再執行跨看板任務歸位。');
+    }
+
+    const { data: sourceRows, error: sourceRowsError } = await supabase
+      .from('wbs_items')
+      .select('*')
+      .eq('tenant_id', sourceTenantId)
+      .eq('project_id', sourceProjectId);
+    assertNoError(sourceRowsError);
+    const sourceItems = (sourceRows ?? []) as WbsItemRow[];
+    const sourceTask = sourceItems.find(item => item.id === sourceTaskId);
+    if (!sourceTask) throw new Error('找不到來源任務，無法移入目前看板。');
+    const descendantIds = new Set<string>();
+    const collectDescendants = (parentId: string) => {
+      sourceItems
+        .filter(item => item.parent_id === parentId)
+        .forEach(child => {
+          descendantIds.add(child.id);
+          collectDescendants(child.id);
+        });
+    };
+    collectDescendants(sourceTaskId);
+    const sourceSiblingIds = sourceItems
+      .filter(item => item.parent_id === sourceTask.parent_id && item.id !== sourceTaskId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(item => item.id);
+    const movedItemIds = [sourceTaskId, ...Array.from(descendantIds)];
+
+    if (sourceTenantId !== targetTenantId) {
+      const [tagCheck, dependencyCheck, recordLinkCheck] = await Promise.all([
+        supabase
+          .from('wbs_item_tags')
+          .select('item_id')
+          .eq('tenant_id', sourceTenantId)
+          .eq('project_id', sourceProjectId)
+          .in('item_id', movedItemIds)
+          .limit(1),
+        supabase
+          .from('wbs_dependencies')
+          .select('id')
+          .eq('tenant_id', sourceTenantId)
+          .eq('project_id', sourceProjectId)
+          .or(`from_item_id.in.(${movedItemIds.join(',')}),to_item_id.in.(${movedItemIds.join(',')})`)
+          .limit(1),
+        supabase
+          .from('record_task_links')
+          .select('id')
+          .eq('tenant_id', sourceTenantId)
+          .eq('project_id', sourceProjectId)
+          .in('item_id', movedItemIds)
+          .limit(1),
+      ]);
+      const tagTableMissing = assertNoTagTableError(tagCheck.error);
+      if (!tagTableMissing) assertNoError(tagCheck.error);
+      assertNoError(dependencyCheck.error);
+      assertNoError(recordLinkCheck.error);
+      if ((tagCheck.data?.length || 0) > 0 || (dependencyCheck.data?.length || 0) > 0 || (recordLinkCheck.data?.length || 0) > 0) {
+        throw new Error('此任務含有標籤、依賴或紀錄關聯，跨工作區移動需使用受控移動流程。');
+      }
+    }
+
+    const updatePayload: WbsItemInsert = {
+      tenant_id: targetTenantId,
+      project_id: targetProjectId,
+      parent_id: targetParentId,
+      sort_order: input.order ?? 0,
+      item_type: input.parentId ? 'task' : 'group',
+    };
+
+    const { data, error } = await supabase
+      .from('wbs_items')
+      .update(updatePayload)
+      .eq('tenant_id', sourceTenantId)
+      .eq('project_id', sourceProjectId)
+      .eq('id', sourceTaskId)
+      .select()
+      .single();
+    assertNoError(error);
+    if (!data) throw new Error('Supabase did not return the moved task.');
+
+    const descendantIdList = Array.from(descendantIds);
+    if (descendantIdList.length > 0) {
+      const { error: descendantError } = await supabase
+        .from('wbs_items')
+        .update({
+          tenant_id: targetTenantId,
+          project_id: targetProjectId,
+        })
+        .in('id', descendantIdList);
+      assertNoError(descendantError);
+    }
+
+    if (sourceSiblingIds.length > 0) {
+      await Promise.all(sourceSiblingIds.map((id, index) => supabase
+        .from('wbs_items')
+        .update({ sort_order: index })
+        .eq('tenant_id', sourceTenantId)
+        .eq('project_id', sourceProjectId)
+        .eq('id', id)
+        .then(({ error }) => assertNoError(error))
+      ));
+    }
+
+    if (sourceTenantId === targetTenantId && movedItemIds.length > 0) {
+      const { error: tagScopeError } = await supabase
+        .from('wbs_item_tags')
+        .update({ project_id: targetProjectId })
+        .eq('tenant_id', sourceTenantId)
+        .eq('project_id', sourceProjectId)
+        .in('item_id', movedItemIds);
+      if (!assertNoTagTableError(tagScopeError)) assertNoError(tagScopeError);
+
+      const { error: dependencyScopeError } = await supabase
+        .from('wbs_dependencies')
+        .update({ project_id: targetProjectId })
+        .eq('tenant_id', sourceTenantId)
+        .eq('project_id', sourceProjectId)
+        .in('from_item_id', movedItemIds)
+        .in('to_item_id', movedItemIds);
+      assertNoError(dependencyScopeError);
+    }
+
+    const movedRows = [data as WbsItemRow, ...sourceItems.filter(item => descendantIds.has(item.id)).map(item => ({
+      ...item,
+      tenant_id: targetTenantId,
+      project_id: targetProjectId,
+    }))];
+    const nodeIdByDbId = new Map(movedRows.map(item => [item.id, legacyOrId(item.id, item.legacy_node_id)]));
+    const movedNodes = movedRows.map(item => mapWbsItemToTaskNode(
+      item,
+      nodeIdByDbId,
+      input.targetWorkspaceId,
+      input.targetBoardId,
+    ));
+    const movedTask = movedNodes.find(node => node.id === legacyOrId(sourceTaskId, sourceTask.legacy_node_id)) || movedNodes[0];
+    return { movedTask, movedNodes };
+  },
+
   listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);

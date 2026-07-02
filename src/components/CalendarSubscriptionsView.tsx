@@ -17,6 +17,7 @@ import { isSupabaseBackend } from '../services/dataBackend';
 import {
   calendarSubscriptionService,
   type CalendarSubscription,
+  type CalendarBoardRef,
   type CalendarWorkspaceRef,
   type CalendarWorkspaceMember,
 } from '../services/supabase/calendarSubscriptionService';
@@ -27,14 +28,11 @@ import type {
 } from '../services/supabase/database.types';
 import { toast } from '../store/useToastStore';
 import { UNASSIGNED_ASSIGNEE_FILTER } from '../utils/taskFilters';
+import { createDefaultCalendarSubscriptionFilters } from '../utils/taskSubscriptionSources';
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
-const emptyFilters = (): CalendarSubscriptionFilters => ({
-  workspace_ids: [],
-  assignee: { type: 'me' },
-  date_types: ['due_date'],
-});
+const emptyFilters = (): CalendarSubscriptionFilters => createDefaultCalendarSubscriptionFilters();
 
 const formatDateTime = (value: string | null) => {
   if (!value) return '尚未讀取';
@@ -102,6 +100,7 @@ const describeAssigneeFilter = (
 const describeFilters = (
   subscription: CalendarSubscription,
   workspaceNameById: Map<string, string>,
+  boardNameById: Map<string, string>,
   memberNameById: Map<string, string>,
   currentUserId?: string,
 ) => {
@@ -112,7 +111,13 @@ const describeFilters = (
   const dateTypes = subscription.filters.date_types
     .map((type) => type === 'start_date' ? '開始日' : '到期日')
     .join('、');
-  return `${workspaces || '未指定工作區'}｜負責人：${assignee}｜日期：${dateTypes || '未指定'}`;
+  const boards = (subscription.filters.board_ids || [])
+    .map((boardId) => boardNameById.get(boardId) ?? boardId.slice(0, 8))
+    .join('、');
+  const scope = subscription.filters.scope_type === 'board'
+    ? `看板：${boards || '未指定'}`
+    : '工作區';
+  return `${workspaces || '未指定工作區'}｜範圍：${scope}｜負責人：${assignee}｜日期：${dateTypes || '未指定'}`;
 };
 
 const toggleArrayValue = <T extends string>(items: T[], value: T) =>
@@ -123,6 +128,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   const workspaces = useBoardStore((state) => state.workspaces);
   const [subscriptions, setSubscriptions] = useState<CalendarSubscription[]>([]);
   const [workspaceRefs, setWorkspaceRefs] = useState<CalendarWorkspaceRef[]>([]);
+  const [boardRefs, setBoardRefs] = useState<CalendarBoardRef[]>([]);
   const [members, setMembers] = useState<CalendarWorkspaceMember[]>([]);
   const [generatedUrls, setGeneratedUrls] = useState<Record<string, string>>({});
   const [name, setName] = useState('我的工作行事曆');
@@ -133,6 +139,16 @@ const CalendarSubscriptionsView: React.FC = () => {
 
   const selectedWorkspaceCount = new Set(filters.workspace_ids).size;
   const selectedWorkspaceKey = filters.workspace_ids.join(',');
+  const selectedBoardSet = useMemo(() => new Set(filters.board_ids || []), [filters.board_ids]);
+  const availableBoards = useMemo(() => (
+    workspaces
+      .filter((workspace) => filters.workspace_ids.includes(workspace.id))
+      .flatMap((workspace) => workspace.boards.map((board) => ({
+        ...board,
+        workspaceId: workspace.id,
+        workspaceTitle: workspace.title,
+      })))
+  ), [filters.workspace_ids, workspaces]);
   const assigneeSelection = useMemo(
     () => getAssigneeSelection(filters.assignee, user?.uid),
     [filters.assignee, user?.uid]
@@ -198,6 +214,24 @@ const CalendarSubscriptionsView: React.FC = () => {
     return map;
   }, [subscriptions, workspaceRefs, workspaces]);
 
+  const boardNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    workspaces.forEach((workspace) => {
+      workspace.boards.forEach((board) => map.set(board.id, `${workspace.title} / ${board.title}`));
+    });
+    boardRefs.forEach((board) => {
+      const workspaceName = workspaceNameById.get(board.workspaceId) ?? board.workspaceId.slice(0, 8);
+      map.set(board.id, `${workspaceName} / ${board.name}`);
+      map.set(board.appBoardId, `${workspaceName} / ${board.name}`);
+    });
+    subscriptions.forEach((subscription) => {
+      (subscription.filters.board_ids || []).forEach((boardId) => {
+        if (!map.has(boardId)) map.set(boardId, boardId.slice(0, 8));
+      });
+    });
+    return map;
+  }, [boardRefs, subscriptions, workspaceNameById, workspaces]);
+
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>();
     members.forEach((member) => map.set(member.userId, getMemberLabel(member)));
@@ -209,12 +243,14 @@ const CalendarSubscriptionsView: React.FC = () => {
     if (!isSupabaseBackend) return;
     setIsLoading(true);
     try {
-      const [nextSubscriptions, nextWorkspaceRefs] = await Promise.all([
+      const [nextSubscriptions, nextWorkspaceRefs, nextBoardRefs] = await Promise.all([
         calendarSubscriptionService.list(),
         calendarSubscriptionService.listWorkspaceRefs(),
+        calendarSubscriptionService.listBoardRefs(),
       ]);
       setSubscriptions(nextSubscriptions);
       setWorkspaceRefs(nextWorkspaceRefs);
+      setBoardRefs(nextBoardRefs);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '讀取訂閱失敗');
     } finally {
@@ -302,6 +338,7 @@ const CalendarSubscriptionsView: React.FC = () => {
     if (!user) return '請先登入';
     if (!name.trim()) return '請輸入訂閱名稱';
     if (filters.workspace_ids.length === 0) return '請至少選擇一個工作區';
+    if (filters.scope_type === 'board' && (filters.board_ids || []).length === 0) return '請至少選擇一個看板';
     if (filters.date_types.length === 0) return '請至少選擇一種日期類型';
     if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
       return '請至少選擇一個負責人或未指派';
@@ -345,9 +382,12 @@ const CalendarSubscriptionsView: React.FC = () => {
     const displayWorkspaceIds = subscription.filters.workspace_ids.map((workspaceId) =>
       workspaceRefs.find((workspace) => workspace.id === workspaceId)?.appWorkspaceId ?? workspaceId
     );
+    const displayBoardIds = (subscription.filters.board_ids || []).map((boardId) =>
+      boardRefs.find((board) => board.id === boardId)?.appBoardId ?? boardId
+    );
     setEditingId(subscription.id);
     setName(subscription.name);
-    setFilters({ ...subscription.filters, workspace_ids: displayWorkspaceIds });
+    setFilters({ ...subscription.filters, workspace_ids: displayWorkspaceIds, board_ids: displayBoardIds });
   };
 
   const setSubscriptionActive = async (subscription: CalendarSubscription, isActive: boolean) => {
@@ -428,15 +468,74 @@ const CalendarSubscriptionsView: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={filters.workspace_ids.includes(workspace.id)}
-                      onChange={() => setFilters((current) => ({
-                        ...current,
-                        workspace_ids: toggleArrayValue(current.workspace_ids, workspace.id),
-                      }))}
+                      onChange={() => setFilters((current) => {
+                        const workspace_ids = toggleArrayValue(current.workspace_ids, workspace.id);
+                        const allowedBoardIds = new Set(
+                          workspaces
+                            .filter((item) => workspace_ids.includes(item.id))
+                            .flatMap((item) => item.boards.map((board) => board.id))
+                        );
+                        return {
+                          ...current,
+                          workspace_ids,
+                          board_ids: (current.board_ids || []).filter((boardId) => allowedBoardIds.has(boardId)),
+                        };
+                      })}
                     />
                     <span>{workspace.title}</span>
                   </label>
                 ))}
               </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-bold text-slate-500">範圍</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFilters((current) => ({ ...current, scope_type: 'workspace', board_ids: [] }))}
+                  className={`h-9 border px-3 text-sm font-bold ${
+                    (filters.scope_type || 'workspace') === 'workspace'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  工作區
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilters((current) => ({ ...current, scope_type: 'board' }))}
+                  className={`h-9 border px-3 text-sm font-bold ${
+                    filters.scope_type === 'board'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  看板
+                </button>
+              </div>
+              {filters.scope_type === 'board' ? (
+                <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  {availableBoards.length === 0 ? (
+                    <div className="text-xs font-semibold text-slate-400">請先選擇包含看板的工作區。</div>
+                  ) : (
+                    availableBoards.map((board) => (
+                      <label key={board.id} className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedBoardSet.has(board.id)}
+                          onChange={() => setFilters((current) => ({
+                            ...current,
+                            scope_type: 'board',
+                            board_ids: toggleArrayValue(current.board_ids || [], board.id),
+                          }))}
+                        />
+                        <span className="min-w-0 truncate">{board.workspaceTitle} / {board.title}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4">
@@ -580,7 +679,7 @@ const CalendarSubscriptionsView: React.FC = () => {
                             </span>
                           </div>
                           <div className="mt-1 text-sm text-slate-500">
-                            {describeFilters(subscription, workspaceNameById, memberNameById, user?.uid)}
+                            {describeFilters(subscription, workspaceNameById, boardNameById, memberNameById, user?.uid)}
                           </div>
                           <div className="mt-1 text-xs text-slate-400">
                             最後同步：{formatDateTime(subscription.lastAccessedAt)}

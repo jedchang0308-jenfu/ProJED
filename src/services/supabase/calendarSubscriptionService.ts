@@ -33,6 +33,13 @@ export type CalendarWorkspaceRef = {
   name: string;
 };
 
+export type CalendarBoardRef = {
+  id: string;
+  appBoardId: string;
+  workspaceId: string;
+  name: string;
+};
+
 export type CalendarSubscriptionInput = {
   name: string;
   filters: CalendarSubscriptionFilters;
@@ -107,11 +114,17 @@ const normalizeAssigneeFilter = (
   };
 };
 
-const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => ({
-  workspace_ids: await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)),
-  assignee: normalizeAssigneeFilter(filters.assignee),
-  date_types: normalizeDateTypes(filters.date_types),
-});
+const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  const workspaceIds = await Promise.all(filters.workspace_ids.map(resolveWorkspaceId));
+  const scopeType = filters.scope_type || 'workspace';
+  return {
+    scope_type: scopeType,
+    workspace_ids: workspaceIds,
+    board_ids: scopeType === 'board' ? await resolveBoardIds(workspaceIds, filters.board_ids || []) : [],
+    assignee: normalizeAssigneeFilter(filters.assignee),
+    date_types: normalizeDateTypes(filters.date_types),
+  };
+};
 
 const toJson = (filters: CalendarSubscriptionFilters): Json => filters as unknown as Json;
 
@@ -135,6 +148,35 @@ export const resolveWorkspaceId = async (workspaceId: string): Promise<string> =
   assertNoError(error);
   if (!data?.id) throw new Error(`找不到工作區：${workspaceId}`);
   return data.id;
+};
+
+const resolveBoardIds = async (workspaceIds: string[], boardIds: string[] = []): Promise<string[]> => {
+  requireSupabase();
+  const uniqueBoardIds = Array.from(new Set(boardIds.filter(Boolean)));
+  if (uniqueBoardIds.length === 0) return [];
+
+  const resolvedIds = uniqueBoardIds.filter(isUuid);
+  const legacyIds = uniqueBoardIds.filter((boardId) => !isUuid(boardId));
+  if (legacyIds.length === 0) return resolvedIds;
+
+  const uniqueWorkspaceIds = Array.from(new Set(workspaceIds));
+  if (uniqueWorkspaceIds.length === 0) return resolvedIds;
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id,legacy_board_id,tenant_id')
+    .in('tenant_id', uniqueWorkspaceIds)
+    .in('legacy_board_id', legacyIds);
+  assertNoError(error);
+
+  const resolvedLegacyIds = new Set((data ?? []).map((project) => project.legacy_board_id).filter(Boolean));
+  const missingLegacyId = legacyIds.find((boardId) => !resolvedLegacyIds.has(boardId));
+  if (missingLegacyId) throw new Error(`找不到看板：${missingLegacyId}`);
+
+  return Array.from(new Set([
+    ...resolvedIds,
+    ...(data ?? []).map((project) => project.id),
+  ]));
 };
 
 export const calendarSubscriptionService = {
@@ -181,6 +223,21 @@ export const calendarSubscriptionService = {
       id: tenant.id,
       appWorkspaceId: tenant.legacy_workspace_id || tenant.id,
       name: tenant.name,
+    }));
+  },
+
+  listBoardRefs: async (): Promise<CalendarBoardRef[]> => {
+    requireSupabase();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id,legacy_board_id,tenant_id,name')
+      .order('created_at', { ascending: true });
+    assertNoError(error);
+    return (data ?? []).map((project) => ({
+      id: project.id,
+      appBoardId: project.legacy_board_id || project.id,
+      workspaceId: project.tenant_id,
+      name: project.name,
     }));
   },
 

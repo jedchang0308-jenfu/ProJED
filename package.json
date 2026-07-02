@@ -87,6 +87,8 @@
     "verify:dev-039-cloud-quick-capture-inbox-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev039-quick-memo -Filename scripts/verify-dev-039-cloud-quick-capture-inbox-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-040-personal-task-zone": "node scripts/verify-dev-040-personal-task-zone.mjs",
     "verify:dev-040-personal-task-zone-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev040-task-zone -Filename scripts/verify-dev-040-personal-task-zone-browser.pw.js -OutputDirectory output/playwright",
+    "verify:dev-041-task-zone-direct-drag-placement": "node scripts/verify-dev-041-task-zone-direct-drag-placement.mjs",
+    "verify:dev-041-task-zone-direct-drag-placement-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev041-task-zone-direct-drag -Filename scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js -OutputDirectory output/playwright",
     "verify:settings-project-context": "node scripts/verify-settings-project-context.mjs",
     "verify:settings-project-context-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=settings-project-context open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=settings-project-context run-code --filename=scripts/verify-settings-project-context-browser.pw.js\"",
     "verify:dev-013-task-duplicate": "node scripts/verify-dev-013-task-duplicate.mjs",

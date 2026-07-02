@@ -203,7 +203,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
     id: `${nodeId}-checklist-drop`,
-    disabled: !canDropActiveAsTask || !['wbs-column', 'wbs-card', 'wbs-checklist', 'quick-capture-item', 'personal-task-zone-item', 'personal-task-zone-item'].includes(activeType || '') || activeNodeId === nodeId,
+    disabled: !canDropActiveAsTask || !['wbs-column', 'wbs-card', 'wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '') || activeNodeId === nodeId,
     data: {
       type: 'wbs-checklist-drop',
       nodeId,
@@ -233,6 +233,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
+  const canShowCardInsertFrame = ['wbs-card', 'wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '');
   const isOverChecklistDescendant = (() => {
 
     if (!['wbs-checklist', 'quick-capture-item', 'personal-task-zone-item'].includes(activeType || '') || overData?.type !== 'wbs-checklist' || !overNodeId) {
@@ -253,6 +254,15 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     return false;
   })();
   const isChecklistTargeted = isChecklistAreaDropOver || isChecklistDropOver || isOverChecklistDescendant;
+  const isCardInsertTargeted = Boolean(
+    active &&
+    activeNodeId !== nodeId &&
+    canDropActiveAsTask &&
+    canShowCardInsertFrame &&
+    !isChecklistTargeted &&
+    ['wbs-card', 'wbs-card-drop'].includes(overData?.type || '') &&
+    overData?.nodeId === nodeId
+  );
 
   // 合併兩個 ref：讓同一個 DOM 元素同時具備「可拖動」和「可放置」的能力
   const mergedRef = useCallback((el: HTMLDivElement | null) => {
@@ -322,9 +332,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-task-id={nodeId}
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       data-touch-tap-guard="true"
+      data-kanban-card-drop-indicator="card"
+      data-kanban-card-drop-indicator-active={isCardInsertTargeted ? 'true' : undefined}
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragging
           ? 'opacity-60 shadow-md border-slate-200'
+          : isCardInsertTargeted
+            ? 'border-primary/70 bg-primary/[0.05] ring-2 ring-primary/35 shadow-md'
           : isRecordCaptureMode
             ? isRecordSelected
               ? 'cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-300 shadow-md'

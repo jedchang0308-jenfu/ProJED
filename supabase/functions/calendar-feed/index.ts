@@ -2,7 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
 
 type SubscriptionFilters = {
+  scope_type?: string;
   workspace_ids?: string[];
+  board_ids?: string[];
   assignee?: {
     type?: string;
     user_id?: string;
@@ -89,7 +91,9 @@ const isExpired = (expiresAt: string | null) =>
   Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
 
 const normalizeFilters = (filters: SubscriptionFilters) => ({
+  scopeType: filters.scope_type === "board" ? "board" : "workspace",
   workspaceIds: Array.from(new Set((filters.workspace_ids ?? []).filter(Boolean))),
+  boardIds: Array.from(new Set((filters.board_ids ?? []).filter(Boolean))),
   assignee: filters.assignee ?? { type: "me" },
   dateTypes: Array.from(new Set((filters.date_types ?? []).filter((item) => DATE_TYPES.has(item)))),
 });
@@ -166,8 +170,30 @@ const getAllowedTenantIds = async (subscription: CalendarSubscription) => {
   return allowedTenantIds;
 };
 
+const resolveBoardIds = async (boardIds: string[], allowedTenantIds: string[]) => {
+  const uniqueBoardIds = Array.from(new Set(boardIds.filter(Boolean)));
+  if (uniqueBoardIds.length === 0) return [];
+
+  const projectIds = uniqueBoardIds.filter((boardId) => UUID_RE.test(boardId));
+  const legacyBoardIds = uniqueBoardIds.filter((boardId) => !UUID_RE.test(boardId));
+  if (legacyBoardIds.length === 0) return projectIds;
+  if (allowedTenantIds.length === 0) return projectIds;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id")
+    .in("tenant_id", allowedTenantIds)
+    .in("legacy_board_id", legacyBoardIds);
+  if (error) throw error;
+
+  return Array.from(new Set([
+    ...projectIds,
+    ...((data ?? []) as Array<{ id: string }>).map((project) => project.id),
+  ]));
+};
+
 const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: string[]) => {
-  const { dateTypes } = normalizeFilters(subscription.filters_json);
+  const { boardIds, dateTypes, scopeType } = normalizeFilters(subscription.filters_json);
   const assigneeSelection = normalizeAssigneeSelection(subscription);
 
   if (allowedTenantIds.length === 0 || dateTypes.length === 0) {
@@ -185,6 +211,17 @@ const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: st
     .in("tenant_id", allowedTenantIds)
     .order("updated_at", { ascending: false })
     .limit(FEED_TASK_LIMIT);
+
+  if (scopeType === "board") {
+    const resolvedBoardIds = await resolveBoardIds(boardIds, allowedTenantIds);
+    if (resolvedBoardIds.length === 0) {
+      return buildCalendarFeedIcs({
+        subscription,
+        assigneeUserId: assigneeSelection.userIds[0] ?? subscription.owner_user_id,
+      });
+    }
+    taskQuery = taskQuery.in("project_id", resolvedBoardIds);
+  }
 
   if (assigneeSelection.userIds.length > 0 && assigneeSelection.includeUnassigned) {
     taskQuery = taskQuery.or(`assignee_id.in.(${assigneeSelection.userIds.join(",")}),assignee_id.is.null`);

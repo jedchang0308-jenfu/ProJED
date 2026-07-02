@@ -417,6 +417,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
         }`}
         data-mobile-pan-surface="kanban-column"
+        data-kanban-drop-indicator="column"
+        data-kanban-drop-indicator-active={isCardLayerTargeted ? 'true' : undefined}
       >
         <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
           {children.map((child) => (

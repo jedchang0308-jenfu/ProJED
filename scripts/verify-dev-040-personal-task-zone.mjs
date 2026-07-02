@@ -102,7 +102,7 @@ addCheck(
 addCheck(
   'BoardView uses task-zone panel and canonical placement service',
   containsAll(boardView, [
-    'TaskZoneBoardPanel',
+    'TaskZoneSourcePanel',
     'personal-task-zone-item',
     'placeTaskOnBoard',
     'order: intent.order',
@@ -181,7 +181,7 @@ addCheck(
   containsAll(devTask, [
     'RD implementation update - 2026-06-30',
     '20260630070000_dev_040_personal_task_zone.sql',
-    'Local + Browser + Production DB QC Passed / Deploy Pending',
+    'Production Released / Production Smoke Passed',
     'Release gate evidence - 2026-07-01',
     'Production DB QC passed',
   ])

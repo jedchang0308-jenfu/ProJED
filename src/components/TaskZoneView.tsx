@@ -1,13 +1,21 @@
 import React from 'react';
-import { CalendarDays, Check, CircleDot, MessageSquareText, NotebookText, Pencil, Plus, RefreshCw, SendHorizontal, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, CircleDot, MessageSquareText, NotebookText, Pencil, Pin, PinOff, Plus, RefreshCw, SendHorizontal, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
 import useAuthStore from '../store/useAuthStore';
 import useBoardStore from '../store/useBoardStore';
+import { useWbsStore } from '../store/useWbsStore';
 import useTaskZoneStore from '../store/useTaskZoneStore';
 import { toast } from '../store/useToastStore';
 import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
 import { TaskDragHandle } from './Wbs/TaskDragHandle';
 import { Badge } from './ui/Badge';
+import { nodeService } from '../services/dataBackend';
+import {
+  createAssignedToMeTaskSource,
+  describeTaskSubscriptionScope,
+  taskMatchesSubscriptionSource,
+  type TaskSubscriptionScope,
+} from '../utils/taskSubscriptionSources';
 
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
   { value: 'todo', label: '待辦' },
@@ -17,6 +25,48 @@ const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
   { value: 'completed', label: '完成' },
   { value: 'unsure', label: '未定' },
 ];
+
+type TaskZoneSourceTab = 'unplaced' | 'my_tasks';
+
+interface TaskZoneSourcePanelPrefs {
+  open: boolean;
+  pinned: boolean;
+  tab: TaskZoneSourceTab;
+  scope: TaskSubscriptionScope;
+  customWorkspaceIds: string[];
+  customBoardIds: string[];
+}
+
+const TASK_ZONE_SOURCE_PANEL_PREFS_KEY = 'projed-task-zone-source-panel';
+
+const getDefaultTaskZoneSourcePanelPrefs = (): TaskZoneSourcePanelPrefs => ({
+  open: true,
+  pinned: false,
+  tab: 'unplaced',
+  scope: 'all',
+  customWorkspaceIds: [],
+  customBoardIds: [],
+});
+
+const readTaskZoneSourcePanelPrefs = (): TaskZoneSourcePanelPrefs => {
+  if (typeof window === 'undefined') return getDefaultTaskZoneSourcePanelPrefs();
+  try {
+    const stored = window.localStorage.getItem(TASK_ZONE_SOURCE_PANEL_PREFS_KEY);
+    if (!stored) return getDefaultTaskZoneSourcePanelPrefs();
+    return { ...getDefaultTaskZoneSourcePanelPrefs(), ...JSON.parse(stored) };
+  } catch {
+    return getDefaultTaskZoneSourcePanelPrefs();
+  }
+};
+
+const writeTaskZoneSourcePanelPrefs = (prefs: TaskZoneSourcePanelPrefs) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TASK_ZONE_SOURCE_PANEL_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // local preference only; ignore storage failures.
+  }
+};
 
 const createTaskZoneNote = (index: number): TaskDetailNote => ({
   id: `task_zone_note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -359,6 +409,7 @@ const PersonalTaskCardBody: React.FC<{
           onClick={() => onRemove(task)}
           className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
           title="刪除"
+          data-task-zone-remove="true"
         >
           <Trash2 size={15} />
         </button>
@@ -470,22 +521,258 @@ const TaskZoneComposer: React.FC<{ compact?: boolean }> = ({ compact = false }) 
   );
 };
 
-export const TaskZoneBoardPanel: React.FC<{ canCreateTask?: boolean }> = ({ canCreateTask = false }) => {
+const DraggableAssignedTaskCard: React.FC<{
+  task: TaskNode;
+  locationLabel: string;
+  canDragInCurrentBoard: boolean;
+  canDragTask: boolean;
+  isCrossWorkspace: boolean;
+  onToggleComplete: (task: TaskNode) => void;
+  onArchive: (task: TaskNode) => void;
+  onRename: (task: TaskNode, title: string) => void;
+  onOpenDetails: (task: TaskNode) => void;
+  onOpenBoard: (task: TaskNode) => void;
+}> = ({
+  task,
+  locationLabel,
+  canDragInCurrentBoard,
+  canDragTask,
+  isCrossWorkspace,
+  onToggleComplete,
+  onArchive,
+  onRename,
+  onOpenDetails,
+  onOpenBoard,
+}) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [draftTitle, setDraftTitle] = React.useState(task.title || '');
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `task-zone-my-task-${task.id}`,
+    disabled: !canDragTask,
+    data: {
+      type: 'wbs-card',
+      source: 'task-zone-my-task',
+      nodeId: task.id,
+      columnId: task.parentId || task.boardId,
+      sourceWorkspaceId: task.workspaceId,
+      sourceBoardId: task.boardId,
+      title: task.title,
+    },
+  });
+
+  React.useEffect(() => {
+    setDraftTitle(task.title || '');
+  }, [task.id, task.title]);
+
+  const commitRename = () => {
+    const nextTitle = draftTitle.trim();
+    if (!nextTitle) {
+      setDraftTitle(task.title || '');
+      setIsEditing(false);
+      return;
+    }
+    if (nextTitle !== task.title) onRename(task, nextTitle);
+    setIsEditing(false);
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition ${isDragging ? 'opacity-40' : 'hover:border-primary/30 hover:shadow-md'}`}
+      data-task-zone-my-task-card="true"
+      data-task-zone-my-task-id={task.id}
+    >
+      <div className="flex items-start gap-2">
+        <TaskDragHandle
+          attributes={attributes}
+          listeners={listeners}
+          disabled={!canDragTask}
+          title={canDragInCurrentBoard
+            ? '使用一般任務拖移方式調整位置'
+            : isCrossWorkspace
+              ? '拖到目前看板；若含標籤、依賴或紀錄關聯，系統會要求受控移動'
+              : '拖到目前看板位置歸位'}
+          size="sm"
+          className="-ml-1 mt-0.5"
+        />
+        <div className="min-w-0 flex-1">
+          {isEditing ? (
+            <input
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setDraftTitle(task.title || '');
+                  setIsEditing(false);
+                }
+              }}
+              className="w-full rounded-md border border-primary bg-white px-2 py-1 text-sm font-semibold text-slate-800 outline-none ring-2 ring-primary/20"
+            />
+          ) : (
+            <div className="truncate text-sm font-semibold text-slate-800">{task.title || '未命名任務'}</div>
+          )}
+          <div className="mt-1 truncate text-xs text-slate-500">{locationLabel}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+            <Badge variant={task.status === 'completed' ? 'success' : 'warning'}>
+              {task.status === 'completed' ? '已完成' : '指派給我'}
+            </Badge>
+            {canDragInCurrentBoard ? (
+              <span className="font-semibold text-blue-600">可直接拖移定位</span>
+            ) : !canDragTask ? (
+              <span className="font-semibold text-slate-500">目前看板沒有移動權限</span>
+            ) : isCrossWorkspace ? (
+              <span className="flex items-center gap-1.5">
+                <span className="font-semibold text-amber-600">跨工作區，含關聯時需受控移動</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenBoard(task)}
+                  className="font-semibold text-primary hover:underline"
+                >
+                  到所在看板
+                </button>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className="font-semibold text-blue-600">可拖入目前看板</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenBoard(task)}
+                  className="font-semibold text-primary hover:underline"
+                >
+                  到所在看板
+                </button>
+              </span>
+            )}
+          </div>
+          {isCrossWorkspace ? (
+            <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] font-semibold leading-relaxed text-amber-700">
+              可拖入目前看板；若含標籤、依賴、紀錄或歷史關聯，系統會要求改用受控搬移。
+            </div>
+          ) : canDragTask && !canDragInCurrentBoard ? (
+            <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-semibold leading-relaxed text-blue-700">
+              拖入目前看板時會檢查來源與目標看板權限，成功後移動同一個任務，不建立副本。
+            </div>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOpenDetails(task)}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-blue-50 hover:text-primary"
+            title="開啟詳情"
+          >
+            <NotebookText size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary"
+            title="重新命名"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleComplete(task)}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600"
+            title={task.status === 'completed' ? '取消完成' : '標記完成'}
+          >
+            <Check size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onArchive(task)}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+            title="封存"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const TaskZoneSourcePanel: React.FC<{ canCreateTask?: boolean; canMoveTask?: boolean }> = ({
+  canCreateTask = false,
+  canMoveTask = false,
+}) => {
   const user = useAuthStore(state => state.user);
+  const workspaces = useBoardStore(state => state.workspaces);
+  const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
+  const activeBoardId = useBoardStore(state => state.activeBoardId);
+  const setView = useBoardStore(state => state.setView);
+  const switchBoard = useBoardStore(state => state.switchBoard);
+  const nodes = useWbsStore(state => state.nodes);
+  const updateNode = useWbsStore(state => state.updateNode);
   const tasks = useTaskZoneStore(state => state.tasks);
+  const remoteAssignedTasks = useTaskZoneStore(state => state.assignedTasks);
   const load = useTaskZoneStore(state => state.load);
+  const loadAssignedTasks = useTaskZoneStore(state => state.loadAssignedTasks);
+  const patchAssignedTask = useTaskZoneStore(state => state.patchAssignedTask);
   const updateTask = useTaskZoneStore(state => state.updateTask);
   const removeTask = useTaskZoneStore(state => state.removeTask);
   const isLoading = useTaskZoneStore(state => state.isLoading);
-  const [isOpen, setIsOpen] = React.useState(true);
-  const [detailsTaskId, setDetailsTaskId] = React.useState<string | null>(null);
+  const isAssignedLoading = useTaskZoneStore(state => state.isAssignedLoading);
+  const [prefs, setPrefs] = React.useState<TaskZoneSourcePanelPrefs>(() => readTaskZoneSourcePanelPrefs());
+  const [detailsTarget, setDetailsTarget] = React.useState<{ id: string; source: 'personal' | 'assigned' } | null>(null);
   const pendingTasks = tasks.filter(task => !task.isArchived && task.status !== 'completed');
-  const detailsTask = detailsTaskId ? tasks.find(task => task.id === detailsTaskId) : null;
+
+  const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId);
+  const activeBoard = activeWorkspace?.boards.find(board => board.id === activeBoardId);
+  const customWorkspaceCount = prefs.customWorkspaceIds.length;
+  const customBoardCount = prefs.customBoardIds.length;
+
+  const patchPrefs = (updates: Partial<TaskZoneSourcePanelPrefs>) => {
+    setPrefs(current => {
+      const next = { ...current, ...updates };
+      writeTaskZoneSourcePanelPrefs(next);
+      return next;
+    });
+  };
+
+  const toggleCustomWorkspace = (workspaceId: string) => {
+    patchPrefs({
+      scope: 'custom',
+      customWorkspaceIds: prefs.customWorkspaceIds.includes(workspaceId)
+        ? prefs.customWorkspaceIds.filter(id => id !== workspaceId)
+        : [...prefs.customWorkspaceIds, workspaceId],
+    });
+  };
+
+  const toggleCustomBoard = (boardId: string) => {
+    patchPrefs({
+      scope: 'custom',
+      customBoardIds: prefs.customBoardIds.includes(boardId)
+        ? prefs.customBoardIds.filter(id => id !== boardId)
+        : [...prefs.customBoardIds, boardId],
+    });
+  };
 
   React.useEffect(() => {
     if (!user?.uid) return;
     load().catch(console.error);
   }, [load, user?.uid]);
+
+  const assignedTaskSource = React.useMemo(() => createAssignedToMeTaskSource({
+    scope: prefs.scope,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+    workspaceIds: prefs.customWorkspaceIds,
+    boardIds: prefs.customBoardIds,
+  }), [activeBoardId, activeWorkspaceId, prefs.customBoardIds, prefs.customWorkspaceIds, prefs.scope]);
+
+  React.useEffect(() => {
+    if (!user?.uid) return;
+    loadAssignedTasks(assignedTaskSource, user.uid).catch(console.error);
+  }, [assignedTaskSource, loadAssignedTasks, user?.uid]);
 
   const toggleComplete = (task: TaskNode) => {
     updateTask(task.id, { status: task.status === 'completed' ? 'todo' : 'completed' })
@@ -497,63 +784,283 @@ export const TaskZoneBoardPanel: React.FC<{ canCreateTask?: boolean }> = ({ canC
       .catch(error => toast.error(error instanceof Error ? error.message : '任務重新命名失敗。'));
   };
 
+  const assignedTasks = React.useMemo(() => {
+    if (!user?.uid) return [];
+    const localAssignedTasks = Object.values(nodes)
+      .filter((task): task is TaskNode => Boolean(task) && taskMatchesSubscriptionSource(task, assignedTaskSource, user.uid))
+    const byId = new Map<string, TaskNode>();
+    remoteAssignedTasks.forEach(task => {
+      if (taskMatchesSubscriptionSource(task, assignedTaskSource, user.uid)) byId.set(task.id, task);
+    });
+    localAssignedTasks.forEach(task => byId.set(task.id, task));
+    return Array.from(byId.values())
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+  }, [assignedTaskSource, nodes, remoteAssignedTasks, user?.uid]);
+
+  const detailsTask = detailsTarget?.source === 'personal'
+    ? tasks.find(task => task.id === detailsTarget.id)
+    : detailsTarget?.source === 'assigned'
+      ? assignedTasks.find(task => task.id === detailsTarget.id)
+      : null;
+
+  const getTaskLocationLabel = React.useCallback((task: TaskNode) => {
+    const workspace = workspaces.find(item => item.id === task.workspaceId);
+    const board = workspace?.boards.find(item => item.id === task.boardId);
+    return `${workspace?.title || '未知工作區'} / ${board?.title || '未知看板'}`;
+  }, [workspaces]);
+
+  const persistAssignedTask = React.useCallback(async (task: TaskNode, updates: Partial<TaskNode>) => {
+    const finalUpdates = { ...updates, updatedAt: Date.now() };
+    await nodeService.update(task.workspaceId, task.boardId, task.id, finalUpdates);
+    patchAssignedTask(task.id, finalUpdates);
+    if (nodes[task.id]) updateNode(task.id, finalUpdates);
+  }, [nodes, patchAssignedTask, updateNode]);
+
+  const updateAssignedTask = React.useCallback(async (taskId: string, updates: Partial<TaskNode>) => {
+    const task = assignedTasks.find(item => item.id === taskId);
+    if (!task) throw new Error('找不到指派任務，請重新載入任務專區。');
+    await persistAssignedTask(task, updates);
+  }, [assignedTasks, persistAssignedTask]);
+
+  const toggleAssignedComplete = (task: TaskNode) => {
+    persistAssignedTask(task, { status: task.status === 'completed' ? 'todo' : 'completed' })
+      .catch(error => toast.error(error instanceof Error ? error.message : '任務狀態更新失敗。'));
+  };
+
+  const renameAssigned = (task: TaskNode, title: string) => {
+    persistAssignedTask(task, { title })
+      .catch(error => toast.error(error instanceof Error ? error.message : '任務重新命名失敗。'));
+  };
+
+  const archiveAssigned = (task: TaskNode) => {
+    persistAssignedTask(task, { isArchived: true })
+      .catch(error => toast.error(error instanceof Error ? error.message : '任務封存失敗。'));
+  };
+
+  const openTaskBoard = (task: TaskNode) => {
+    if (!task.workspaceId || !task.boardId) return;
+    switchBoard(task.workspaceId, task.boardId);
+    setView('board');
+  };
+
+  if (!prefs.open && !prefs.pinned) {
+    return (
+      <aside
+        className="flex w-12 shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3"
+        data-task-zone-source-panel="collapsed"
+        aria-label="任務專區"
+      >
+        <button
+          type="button"
+          onClick={() => patchPrefs({ open: true })}
+          className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary hover:bg-primary/15"
+          title="開啟任務專區"
+        >
+          <NotebookText size={18} />
+        </button>
+        <div className="mt-3 rounded-full bg-orange-50 px-2 py-1 text-xs font-bold text-orange-600">
+          {pendingTasks.length}
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <section
-      className="fixed inset-x-2 bottom-2 z-[9996] mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 sm:inset-x-auto sm:right-4 sm:w-[440px]"
+      className="flex w-[340px] max-w-[82vw] shrink-0 flex-col border-r border-slate-200 bg-white shadow-[8px_0_24px_rgba(15,23,42,0.06)]"
+      data-task-zone-source-panel="true"
       data-task-zone-board-panel="true"
-      aria-label="任務專區"
+      aria-label="任務專區來源面板"
     >
-      <button
-        type="button"
-        onClick={() => setIsOpen(open => !open)}
-        className="flex w-full items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-left"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <NotebookText size={17} />
+      <div className="border-b border-slate-200 px-3 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <NotebookText size={18} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-black text-slate-900">任務專區</span>
+              <span className="block truncate text-xs text-slate-500">跨工作區的個人任務來源</span>
+            </span>
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-bold text-slate-900">任務專區</span>
-            <span className="block truncate text-xs text-slate-500">快速建立任務，拖到看板定位</span>
+          <span className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => patchPrefs({ pinned: !prefs.pinned, open: true })}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary"
+              title={prefs.pinned ? '取消釘選' : '釘選在左側'}
+            >
+              {prefs.pinned ? <PinOff size={15} /> : <Pin size={15} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => patchPrefs({ open: false })}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              title="收合"
+            >
+              <X size={15} />
+            </button>
           </span>
-        </span>
-        <Badge variant={pendingTasks.length > 0 ? 'warning' : 'success'}>
-          {pendingTasks.length > 0 ? `${pendingTasks.length} 待歸位` : '已清空'}
-        </Badge>
-      </button>
-
-      {isOpen ? (
-        <div className="space-y-3 p-3">
-          <TaskZoneComposer compact />
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
-            拖曳左側把手到看板位置，即可歸位成正式看板任務。
-          </div>
-          <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
-            {isLoading ? <div className="text-xs text-slate-500">載入任務專區...</div> : null}
-            {pendingTasks.map(task => (
-              <DraggablePersonalTaskCard
-                key={task.id}
-                task={task}
-                canPlaceOnBoard={canCreateTask}
-                onToggleComplete={toggleComplete}
-                onRemove={(item) => removeTask(item.id).catch(error => toast.error(error instanceof Error ? error.message : '任務刪除失敗。'))}
-                onRename={rename}
-                onOpenDetails={(item) => setDetailsTaskId(item.id)}
-              />
-            ))}
-          </div>
         </div>
-      ) : null}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => patchPrefs({ tab: 'unplaced' })}
+            className={`rounded-xl px-3 py-2 text-xs font-bold transition ${prefs.tab === 'unplaced' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            data-task-zone-source-tab="unplaced"
+            data-task-zone-source-tab-active={prefs.tab === 'unplaced' ? 'true' : 'false'}
+          >
+            待歸位 {pendingTasks.length}
+          </button>
+          <button
+            type="button"
+            onClick={() => patchPrefs({ tab: 'my_tasks' })}
+            className={`rounded-xl px-3 py-2 text-xs font-bold transition ${prefs.tab === 'my_tasks' ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            data-task-zone-source-tab="my_tasks"
+            data-task-zone-source-tab-active={prefs.tab === 'my_tasks' ? 'true' : 'false'}
+          >
+            我的任務 {assignedTasks.length}
+          </button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {prefs.tab === 'unplaced' ? (
+          <div className="space-y-3">
+            <TaskZoneComposer compact />
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
+              拖曳左側把手到看板任務、欄位或子任務區，會使用與一般任務相同的定位框。
+            </div>
+            <div className="space-y-2">
+              {isLoading ? <div className="text-xs text-slate-500">載入任務專區...</div> : null}
+              {pendingTasks.length === 0 && !isLoading ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs font-semibold text-slate-500">
+                  目前沒有待歸位任務。
+                </div>
+              ) : null}
+              {pendingTasks.map(task => (
+                <DraggablePersonalTaskCard
+                  key={task.id}
+                  task={task}
+                  canPlaceOnBoard={canCreateTask}
+                  onToggleComplete={toggleComplete}
+                  onRemove={(item) => removeTask(item.id).catch(error => toast.error(error instanceof Error ? error.message : '任務刪除失敗。'))}
+                  onRename={rename}
+                  onOpenDetails={(item) => setDetailsTarget({ id: item.id, source: 'personal' })}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-black text-slate-700">
+                <SlidersHorizontal size={14} />
+                訂閱範圍
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([
+                  ['all', describeTaskSubscriptionScope('all')],
+                  ['workspace', describeTaskSubscriptionScope('workspace', activeWorkspace?.title)],
+                  ['board', describeTaskSubscriptionScope('board', activeWorkspace?.title, activeBoard?.title)],
+                  ['custom', describeTaskSubscriptionScope('custom')],
+                ] as Array<[TaskSubscriptionScope, string]>).map(([scope, label]) => (
+                  <button
+                    key={scope}
+                    type="button"
+                    onClick={() => patchPrefs({ scope })}
+                    className={`truncate rounded-lg px-2 py-1.5 text-xs font-bold ${prefs.scope === scope ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+                    title={label}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {prefs.scope === 'custom' ? (
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5 text-[11px] font-semibold leading-relaxed text-blue-700">
+                    已選 {customWorkspaceCount} 個工作區、{customBoardCount} 個看板。勾工作區代表整個工作區；勾看板只代表該看板，兩者採聯集。
+                  </div>
+                  {workspaces.map(workspace => (
+                    <div key={workspace.id} className="rounded-lg border border-slate-200 bg-white p-2">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={prefs.customWorkspaceIds.includes(workspace.id)}
+                          onChange={() => toggleCustomWorkspace(workspace.id)}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        <span className="truncate">{workspace.title}</span>
+                      </label>
+                      <div className="mt-2 space-y-1 pl-5">
+                        {workspace.boards.map(board => (
+                          <label key={board.id} className="flex cursor-pointer items-center gap-2 text-[11px] font-semibold text-slate-500">
+                            <input
+                              type="checkbox"
+                              checked={prefs.customBoardIds.includes(board.id)}
+                              onChange={() => toggleCustomBoard(board.id)}
+                              className="h-3 w-3 rounded border-slate-300 text-primary focus:ring-primary"
+                            />
+                            <span className="truncate">{board.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-2 text-[11px] leading-4 text-slate-500">
+                預設來源為所有可存取且指派給我的任務；自訂範圍採工作區與看板聯集，未勾選任何項目時不顯示任務。
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {isAssignedLoading ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-500">
+                  載入我的任務...
+                </div>
+              ) : null}
+              {assignedTasks.length === 0 && !isAssignedLoading ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs font-semibold text-slate-500">
+                  目前範圍內沒有指派給你的未完成任務。
+                </div>
+              ) : null}
+              {assignedTasks.map(task => {
+                const canDragInCurrentBoard = canMoveTask && task.workspaceId === activeWorkspaceId && task.boardId === activeBoardId;
+                const isCrossWorkspace = task.workspaceId !== activeWorkspaceId;
+                return (
+                  <DraggableAssignedTaskCard
+                    key={task.id}
+                    task={task}
+                    locationLabel={getTaskLocationLabel(task)}
+                    canDragInCurrentBoard={canDragInCurrentBoard}
+                    canDragTask={canMoveTask}
+                    isCrossWorkspace={isCrossWorkspace}
+                    onToggleComplete={toggleAssignedComplete}
+                    onArchive={archiveAssigned}
+                    onRename={renameAssigned}
+                    onOpenDetails={(item) => setDetailsTarget({ id: item.id, source: 'assigned' })}
+                    onOpenBoard={openTaskBoard}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
       {detailsTask ? (
         <TaskZoneDetailsPanel
           task={detailsTask}
-          onClose={() => setDetailsTaskId(null)}
-          onUpdate={updateTask}
+          onClose={() => setDetailsTarget(null)}
+          onUpdate={detailsTarget?.source === 'assigned' ? updateAssignedTask : updateTask}
         />
       ) : null}
     </section>
   );
 };
+
+export const TaskZoneBoardPanel = TaskZoneSourcePanel;
 
 const TaskZoneView = () => {
   const user = useAuthStore(state => state.user);
@@ -585,6 +1092,15 @@ const TaskZoneView = () => {
       .catch(error => toast.error(error instanceof Error ? error.message : '任務重新命名失敗。'));
   };
 
+  const openBoardTaskZone = (tab: TaskZoneSourceTab) => {
+    writeTaskZoneSourcePanelPrefs({
+      ...readTaskZoneSourcePanelPrefs(),
+      open: true,
+      tab,
+    });
+    setView(activeBoard ? 'board' : 'home');
+  };
+
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-8" data-task-zone-view="true">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -601,13 +1117,24 @@ const TaskZoneView = () => {
                   快速輸入會直接建立任務。還沒決定屬於哪個看板時，先留在待歸位；進入看板後可用相同拖移體驗定位。
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => activeBoard ? setView('board') : setView('home')}
-                className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
-              >
-                {activeBoard ? '回到目前看板' : '回到工作區總覽'}
-              </button>
+              <div className="flex flex-col gap-2 sm:items-end">
+                <button
+                  type="button"
+                  onClick={() => openBoardTaskZone('unplaced')}
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-900 shadow-sm transition hover:bg-blue-50"
+                  data-task-zone-placement-cta="true"
+                >
+                  {activeBoard ? '到目前看板歸位' : '選擇看板歸位'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openBoardTaskZone('my_tasks')}
+                  className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
+                  data-task-zone-my-tasks-cta="true"
+                >
+                  {activeBoard ? '在看板查看我的任務' : '先選看板查看我的任務'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -637,6 +1164,9 @@ const TaskZoneView = () => {
                 <RefreshCw size={13} />
                 重新整理
               </button>
+              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold leading-relaxed text-blue-700">
+                我的任務與精準拖曳歸位會在看板左側任務專區面板操作，讓來源、看板結構與任務細節維持左到右資訊流。
+              </div>
             </div>
           </div>
         </section>

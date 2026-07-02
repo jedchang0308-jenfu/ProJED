@@ -1,5 +1,18 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-07-01
+
+### DEV-041: 任務專區中控台與直接拖曳歸位
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-041-task-zone-direct-drag-placement.md` | RD Implementation Ready / Human Confirmed / Spec + QA Ready | DEV-041 / DEV-040 / DEV-028 / SPEC-002 | 定義任務專區從 `待歸位` 拖曳歸位升級為個人任務中控台 Phase 1：full-page 任務專區需提供清楚看板歸位入口，BoardView 左側需提供可釘選的 integrated 任務專區 source panel，並讓 task-zone card 共用正式任務拖移 handle、overlay、drop indicator 與 placement service；第一版同時納入 ProJED 內部 `我的任務` MVP，沿用或延伸訂閱月曆 source-scope / filter 模型，預設訂閱 `指派給我`，可選 workspace / board，卡片與一般任務卡同功能；`D-041-18` 固定 task-card positioning-frame parity，`D-041-19` 固定 browser smoke 不得污染 `待歸位` 資料。 |
+| `ai-doc/qa/QA-DEV-041-task-zone-direct-drag-placement.md` | Ready for QA after RD implementation | DEV-041 | 驗證任務專區卡片可從 BoardView 左側 source panel 直接拖到中間看板欄位、任務間與支援的子任務區，定位框與一般任務拖移一致，成功後持久化並從 `待歸位` 移除，失敗時不產生 ghost / duplicate，且 normal board drag/drop 不回歸；同時確認右側 detail area 未被任務來源層佔用、pin/unpin 本機狀態會保存、`我的任務` MVP 不洩漏無權限資料且卡片操作符合一般任務卡；`B-041-016` 獨立驗證非污染 browser smoke：重用既有 `待歸位`、必要時建立 fallback、取消拖曳後清理 fallback、不得刪除既有使用者/QA 資料。 |
+| `scripts/verify-dev-041-task-zone-direct-drag-placement.mjs` | Static verifier passed 2026-07-02 | DEV-041 | 靜態檢查 BoardView source panel、TaskZone source tabs、shared drag overlay、Supabase service/RPC contract、訂閱 source-scope 欄位，以及 task-card / column drop indicator selector 是否存在；同時檢查 `D-041-19` / `B-041-016` / `data-task-zone-remove` / `data-task-id` 非污染 smoke 文件契約，用來防止任務專區改回第二套 DnD、遺失定位框契約、遺漏 fallback cleanup gate 或漏掉 id-anchored fallback cleanup。 |
+| `scripts/verify-dev-041-task-zone-direct-drag-placement-browser.pw.js` | Browser smoke passed 2026-07-02 | DEV-041 | 瀏覽器 smoke 入口，覆蓋 full-page CTA 進入目前看板、左側任務專區 panel active tab、`待歸位` 與 `我的任務` 拖曳時的正常任務定位框顯示；task-card indicator 為主要證據，column indicator 只作為沒有可用任務卡時的 fallback；`待歸位` smoke 優先重用既有 source item，只有無可重用項目時建立 `DEV-041 drag smoke ...` fallback，記錄 `fallbackUnplacedTaskId`，再透過 `data-task-zone-remove` 與 `[data-task-zone-item="true"][data-task-id="..."]` 精準清理該 fallback。 |
+
+PM 治理註記：DEV-041 是 DEV-040 上線後的 UX parity 補強，也是個人任務中控台架構的第一步。它不改 DEV-040 的 hidden personal project / canonical `wbs_items` / `place_personal_task_on_board` 架構，也不新增第二套 DnD engine。產品資訊層固定為左側來源、中間結構、右側細節；因此 task-zone placement surface 必須放在 BoardView 左側來源層，不得作為右側 detail dock 主設計。2026-07-01 HCS 引導決策採 `1C / 2C / 3A`：左側 panel 可釘選並記住狀態；DEV-041 第一版納入 ProJED 內部 `我的任務` MVP；未來動態牆 / 外部任務採行動流優先，外部任務需先轉成 ProJED 任務才可拖進看板。RD readiness addendum 進一步固定：`我的任務` 與訂閱月曆共用或延伸 source-scope / filter 模型，預設訂閱所有 `指派給我`，可選 workspace / board；pin/collapse 是本機裝置偏好；`我的任務` 卡片與一般任務卡同功能，拖曳 placed task 預設為 move canonical task，不是 copy。規格刻意避免承諾第一版跨 route active drag state；精準歸位需在目標看板可見時完成。完整動態牆與外部來源串接仍為後續 phase。
+
 ## Documentation Map Update - 2026-06-30
 
 ### DEV-040: 任務專區與快速任務入口

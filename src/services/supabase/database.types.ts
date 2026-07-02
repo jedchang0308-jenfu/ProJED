@@ -34,7 +34,9 @@ export type CalendarSubscriptionAssigneeFilter =
   | { type: 'user'; user_id: string }
   | { type: 'selected'; user_ids: string[]; include_unassigned?: boolean };
 export type CalendarSubscriptionFilters = {
+  scope_type?: 'workspace' | 'board';
   workspace_ids: string[];
+  board_ids?: string[];
   assignee: CalendarSubscriptionAssigneeFilter;
   date_types: CalendarSubscriptionDateType[];
 };
@@ -446,6 +448,23 @@ export interface Database {
           p_insert_before_id?: string | null;
           p_insert_after_id?: string | null;
           p_placement_client_mutation_id: string;
+        };
+        Returns: {
+          task_node_id: string;
+          target_tenant_id: string;
+          target_project_id: string;
+        }[];
+      };
+      move_task_to_board: {
+        Args: {
+          p_task_id: string;
+          p_source_project_id: string;
+          p_target_project_id: string;
+          p_target_parent_id?: string | null;
+          p_insert_before_id?: string | null;
+          p_insert_after_id?: string | null;
+          p_target_sort_order?: number | null;
+          p_move_client_mutation_id?: string | null;
         };
         Returns: {
           task_node_id: string;
