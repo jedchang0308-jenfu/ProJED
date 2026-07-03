@@ -1,7 +1,7 @@
 # QC-DEV-040: 正式環境同型 BUG 風險驗證紀錄
 
 日期: 2026-07-03
-狀態: Local Automated QC Passed / Production Smoke Not Run
+狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / Extended 7-Point Matrix Partially Covered
 關聯 DEV: DEV-040
 參考文件:
 - `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
@@ -9,27 +9,46 @@
 
 ## 驗證結論
 
-本輪 QC 判定為 local / source / browser automated gates 通過。
+本輪 QC 判定為 local / source / browser automated gates 通過，且已完成 Firebase Hosting production deploy 與正式站 authenticated UI smoke。
 
-不得宣稱「正式環境已修復」：尚未取得 production deploy、正式環境登入、正式 DB count、正式 Network / Console 或 rollback readiness 證據。
+可宣稱：使用者回報的 2 個原始正式環境 BUG，在正式站 `https://projed-cc78d.web.app/` 以臨時 Supabase 測試帳號完成 authenticated UI smoke，未重現卡住或任務消失。
+
+不得過度宣稱：7 點延伸風險矩陣尚未全部以人工 / 自動化 production smoke 關閉，尤其 member stale、tag stale、Google Calendar REST timeout、MindMap 跨裝置語意仍需後續專項驗證。
 
 ## 本輪已驗證範圍
 
-- 已發生 BUG 1：新增會議記錄 > 匯入 > 整理專案變化，本機 browser gate 通過，未觀察到卡住。
-- 已發生 BUG 2：全域任務平台新增未歸位任務，切換看板後仍保留，本機 browser gate 通過。
+- 已發生 BUG 1：新增會議記錄 > 匯入 > 整理專案變化，本機 browser gate 與正式站 authenticated UI smoke 通過，正式站已整理 1 筆任務變化並產生預覽，未觀察到卡住。
+- 已發生 BUG 2：全域任務平台新增未歸位任務，切換看板後仍保留，本機 browser gate 與正式站 authenticated UI smoke 通過。
 - MindMap regression：DEV-027G browser gate 原先因 click-to-details modal 攔截而失敗；已改為驗證腳本在用 click 輔助選取時關閉合法開啟的詳情 modal，並保留產品 click-to-details 規格。
 - Source-level release gate：`verify:source` 通過。
+- Production release gate：Firebase Hosting deploy 成功，正式 URL 載入新 bundle `index-CZrWLuKx.js`，post-deploy browser smoke 無 console error、pageerror 或 failed request。
+
+## Production Release Evidence - 2026-07-03
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Release commit | Pass | `42aa451d5ddaa4190bbd3216b60626d7195f67bd` / branch `codex/正式環境BUG修正` |
+| Branch push | Pass | `origin/codex/正式環境BUG修正` |
+| Build artifact | Pass | `dist/index.html` loads `/assets/index-CZrWLuKx.js` and `/assets/index-CwzdflxX.css` |
+| Pre-deploy preview smoke | Pass | `http://127.0.0.1:4174/` app shell loaded `index-CZrWLuKx.js`; no console/pageerror/failed request |
+| Supabase P5 CRUD/dependency smoke | Pass | Temporary user/tenant/project/WBS/dependency create/update/delete passed and cleaned |
+| Supabase P6 readiness | Pass | Production Supabase host reachable; Google OAuth authorize URL generated with redirect `https://projed-cc78d.web.app/` |
+| Firebase deploy | Pass | `npx firebase deploy --only hosting --project projed-cc78d --non-interactive`; Hosting URL `https://projed-cc78d.web.app` |
+| Post-deploy HTTP artifact check | Pass | `https://projed-cc78d.web.app/` and `https://projed-cc78d.firebaseapp.com/` HTTP 200; `index-CZrWLuKx.js` present; old `index-BCr1zfI2.js` absent |
+| Post-deploy browser smoke | Pass | Title `ProJED 3.0 | 專案管理系統`; root shell non-empty; no console/pageerror/failed request |
+| OAuth start smoke | Pass | Google login redirects to Google account page via Supabase OAuth; no pageerror / failed request before credential entry |
+| `npm run verify:dev-040-production-auth-ui-smoke` | Pass | Temporary Supabase test account + tenant + 2 boards + activity event; project import resolved with 1 activity preview; unplaced task remained after board switch; cleanup deleted tenant/user |
 
 ## 7 點覆蓋矩陣
 
 | 風險點 | QA case | 本輪 evidence | 判定 |
 |---|---|---|---|
-| 備份匯入後 dependencies 消失 | QA-P0-001 / QA-P0-002 | `verify:source`、Supabase static gate；未執行 production-like 匯入 + DB count | Partially covered / production-like pending |
-| RAG / 知識檢索 timeout 卡住 | QA-P0-003 / QA-P0-004 / QA-P0-005 | `verify:p9-edge-function` via `verify:source`；未執行 production-like timeout / 401 / 500 browser proof | Partially covered / timeout pending |
-| 新增看板 temp id race | QA-P1-001 / QA-P1-002 / QA-P1-003 | `verify:source` core regression；未執行 rapid board create + backend failure injection | Partially covered / production-like pending |
+| 備份匯入後 dependencies 消失 | QA-P0-001 / QA-P0-002 | `verify:source`、Supabase static gate、P5 production Supabase dependency CRUD smoke；未執行完整備份匯入 + DB count | Production DB dependency smoke passed / backup import pending |
+| RAG / 知識檢索 timeout 卡住 | QA-P0-003 / QA-P0-004 / QA-P0-005 | `verify:p9-edge-function` via `verify:source`；未執行 production timeout / 401 / 500 browser injection | Partially covered / timeout injection pending |
+| 新增看板 temp id race | QA-P1-001 / QA-P1-002 / QA-P1-003 | `verify:source` core regression；正式 authenticated UI smoke 覆蓋 board switch 後未歸位任務保留；未執行 rapid board create + backend failure injection | Partially covered / board-create race pending |
 | member stale response | QA-P1-004 / QA-P1-005 | 未觸及 member implementation；未執行 A/B board delayed response proof | Pending |
 | tag stale response | QA-P1-006 / QA-P1-007 | 未觸及 tag implementation；未執行 workspace A/B delayed response proof | Pending |
-| Google Calendar timeout | QA-P2-001 / QA-P2-002 / QA-P2-003 / QA-P2-004 | `verify:calendar-feed-ics` via `verify:source`；未執行 Google OAuth / REST timeout browser proof | Partially covered / external smoke pending |
+| Google Calendar timeout | QA-P2-001 / QA-P2-002 / QA-P2-003 / QA-P2-004 | `verify:calendar-feed-ics` via `verify:source`；OAuth start smoke passed；未執行 Google Calendar REST timeout browser proof | Partially covered / external REST timeout pending |
 | MindMap localStorage-only 語意 | QA-P2-005 / QA-P2-006 | `verify:dev-027g-mindmap-system-health`、`verify:dev-027g-mindmap-system-health-browser`、`verify:dev-027d-mindmap-date-display-filter-browser`；未取得產品決策是否升級雲端同步 | Local regression passed / product decision pending |
 
 ## 指令證據
@@ -51,6 +70,7 @@
 | `npm run verify:dev-027d-mindmap-date-display-filter-browser` | Pass | date/filter browser gate 通過 |
 | `npm run verify:dev-028-cross-mode-task-interactions` | Pass | 35/35 |
 | `npm run verify:dev-028-cross-mode-task-interactions-browser` | Pass | click-to-details / mode-aware keyboard browser gate 通過 |
+| `npm run verify:dev-040-production-auth-ui-smoke` | Pass | 正式站 authenticated UI smoke 通過；臨時 Supabase tenant/user 已清理 |
 
 ## 截圖證據
 
@@ -64,15 +84,15 @@
 
 ## 未驗證 / 不得宣稱
 
-- 未部署 production。
-- 未執行正式環境 smoke。
-- 未驗證正式 Supabase DB count、RLS role matrix 或正式資料修復。
-- 未驗證正式 Google OAuth / Calendar API timeout。
+- 未執行正式資料修復；本輪也沒有需要修復的既有正式資料。
+- 未執行完整備份匯入 + DB count。
+- 未驗證正式 Google Calendar REST API timeout。
 - 未驗證 production-like Supabase 慢查詢、RAG timeout、member stale response、tag stale response 的完整 7 點人工矩陣。
 - 未執行 MindMap localStorage-only 語意的跨裝置 / 清快取產品決策驗證。
 
 ## QC 判定
 
 - Local automated QC: Pass.
-- Production QC: Not run / requires explicit authorization.
-- Release readiness: Not approved for production release until deployment-release-gate and production smoke are complete.
+- Production release: Deployed.
+- Production QC for original 2 BUG flows: Pass.
+- Extended 7-point risk matrix: Partially covered; remaining items listed above require separate targeted validation.

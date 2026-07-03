@@ -1,6 +1,6 @@
 # QA-DEV-040: 正式環境同型 BUG 風險驗證計畫
 
-狀態: RD Contract Ready / QA Plan Complete / Local QC Executed / Production Smoke Requires Authorization
+狀態: QA Plan Complete / Local QC Executed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered
 關聯 DEV: DEV-040
 建立日期: 2026-07-03
 參考規格: `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`

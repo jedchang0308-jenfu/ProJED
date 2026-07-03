@@ -1,6 +1,6 @@
 # SPEC-040: 正式環境同型 BUG 風險硬化與驗證
 
-狀態: Implemented / Local Automated QC Passed / Production Release Not Authorized
+狀態: Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered
 關聯 DEV: DEV-040
 建立日期: 2026-07-03
 文件責任: Dev PM / RD / QA
@@ -18,7 +18,8 @@
 - 本 DEV 以正式環境差異造成的同型風險為主，不只處理已發生的 2 個症狀。
 - 本 DEV 的範圍包含 7 個高風險點：備份匯入 dependencies、RAG/知識檢索 timeout、新增看板 temp id race、成員 stale response、標籤 stale response、Google Calendar timeout、心智圖 localStorage-only 語意。
 - Phase 0 原始範圍先建立開發文件與 QA 驗證計畫；後續 hotfix slice 已完成產品程式修正與 local/source/browser automated QC。
-- 本 DEV 仍未授權 production deploy、遠端 migration、正式資料修復或正式環境 smoke；不得宣稱正式環境已修復。
+- 使用者後續已授權正式環境驗證；本輪已完成 Firebase Hosting production deploy 與原始 2 BUG flow 的正式站 authenticated UI smoke。
+- 本 DEV 仍不得宣稱 7 點延伸矩陣全部關閉；member/tag stale、Google Calendar REST timeout、MindMap 跨裝置語意與完整備份匯入 DB count 仍需後續專項驗證。
 
 AI assumptions:
 - 正式環境問題的主要共因是 async operation 沒有 bounded failure、workspace/board 切換時 stale response 覆蓋新狀態、以及 local-only 資料與正式資料來源語意不清。
@@ -269,15 +270,15 @@ Evidence required:
 
 ### Phase 4: Production Release / Smoke Gate
 
-Authorization: Blocked Pending Human Authorization
-Document status: RD Contract Ready / Not Authorized
+Authorization: Authorized for this hotfix production verification
+Document status: Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered
 
 Scope:
 - 將已完成並通過 local / production-like QC 的修正部署正式環境。
-- 執行 production smoke：7 個風險點至少各有一個正式環境證據。
+- 執行 production smoke：本輪已完成原始 2 BUG flow 的正式站 authenticated UI smoke；7 點延伸矩陣剩餘項需另行排程。
 
 Out of scope:
-- 未授權下不部署、不改遠端資料、不做資料修復。
+- 不做正式資料修復、schema/RLS/migration 或延伸矩陣剩餘項的高風險操作，除非另行授權。
 
 Entry condition:
 - Phase 1 至少完成 P0 gate；是否包含 Phase 2 / 3 由使用者授權範圍決定。
@@ -286,7 +287,8 @@ Entry condition:
 
 Acceptance:
 - 正式環境不再出現已知 2 個 BUG。
-- P0/P1 flow 在正式環境有 UI 結束狀態、DB count、Network / Console evidence。
+- P0/P1 原始 flow 在正式環境有 UI 結束狀態、正式 Supabase 臨時資料、Network / Console evidence。
+- 延伸 7 點未完成項必須在 QC 文件明列，不得過度宣稱。
 
 Evidence:
 - deployment-release-gate evidence、production URL、commit / branch、smoke 截圖、rollback readiness。
@@ -299,13 +301,13 @@ Evidence:
 | Phase 1 P0 Bounded Failure + Persistence | Not Authorized | RD Contract Ready / Not Authorized | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、模型更換、deploy | 使用者授權 RD | 無資料遺失、無無限 loading | verifier、DB count、UI/Network evidence |
 | Phase 2 P1 Context Race / Stale Response | Not Authorized | RD Contract Ready / Not Authorized | addBoard temp id race、members、tags stale guard | core data model、RLS、deploy | Phase 1 or direct authorization | 切換後 UI state 只屬於當前 context | rapid-switch evidence、DB/localStorage evidence |
 | Phase 3 P2 External / Local-only Semantics | Not Authorized | RD Contract Ready / Not Authorized; MindMap cloud sync Blocked Human Re-entry | Google Calendar timeout、MindMap local-only guardrail | ICS feed、notification、cloud sync without decision | 使用者授權；MindMap 語意需決策 | API timeout 可見結束；local-only 不破壞主資料 | timeout evidence、localStorage clear evidence |
-| Phase 4 Production Release / Smoke | Blocked Pending Human Authorization | RD Contract Ready / Not Authorized | deploy、formal smoke、rollback readiness | 未授權 deploy、資料修復 | RD/QC passed + 使用者部署授權 | 正式環境 7 點 smoke 通過 | deployment-release-gate evidence |
+| Phase 4 Production Release / Smoke | Authorized | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | deploy、formal smoke、rollback readiness | 正式資料修復、完整備份匯入 DB count、member/tag delayed response、Google Calendar REST timeout、MindMap cloud semantics | RD/QC passed + 使用者正式環境驗證授權 | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項明列 | deployment-release-gate evidence、production authenticated UI smoke |
 
 ## Deferred Scope Audit
 
 | Deferred scope | Classification | Tracking / reason |
 |---|---|---|
-| production deploy / production smoke | Same Spec Phase | Phase 4，需使用者授權與 deployment-release-gate。 |
+| production deploy / production smoke | Same Spec Phase | Phase 4 已完成原始 2 BUG flow production smoke；延伸矩陣剩餘項另行追蹤。 |
 | remote schema / RLS / migration | Blocked Human Re-entry | 若 Phase 1-3 發現需要，停止並回報；不得自行執行。 |
 | 正式資料修復 / 補匯入 / 刪資料 | Blocked Human Re-entry | 涉及正式資料風險，需使用者明確授權、備份與 rollback plan。 |
 | 心智圖 localStorage 資料雲端同步 | Blocked Human Re-entry | 產品語意未確認；若定位為專案資料才新增後端同步設計。 |

@@ -6,11 +6,11 @@
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md` | Implemented / Local Automated QC Passed / Production Release Not Authorized | DEV-040 / DEV-011 / DEV-020 / DEV-027 / DEV-037 / DEV-039 | 依正式環境 2 個已發生 BUG 推導同型風險，定義 7 個高風險點：備份匯入 dependencies、RAG timeout、新增看板 temp id race、member stale response、tag stale response、Google Calendar timeout、MindMap localStorage-only 語意；包含 End-State、Architecture Memory Capsule、Phase Roadmap、RD Handoff Contract、Deferred Scope Audit 與 All-Phase Coverage Matrix。本輪 hotfix slice 已完成 local/source/browser automated QC，正式環境發布仍未授權。 |
-| `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | RD Contract Ready / QA Plan Complete / Local QC Executed / Production Smoke Requires Authorization | DEV-040 | 針對 7 個正式環境風險制定 FMEA、P0/P1/P2 測試案例、local / production-like / production smoke evidence 要求，以及 regression gate；明確禁止未做 production smoke 就宣稱正式環境已修復。 |
-| `ai-doc/qc/QC-DEV-040-production-environment-risk-validation.md` | Local Automated QC Passed / Production Smoke Not Run | DEV-040 / DEV-011 / DEV-020 / DEV-027G / DEV-028 / DEV-039 | 記錄本輪 local/source/browser QC：原始兩個 BUG gate、MindMap DEV-027G regression、DEV-028 click-to-details regression、TypeScript、lint、build、verify:source；production deploy、正式環境 smoke、正式 DB count 與外部服務 smoke 未授權未執行。 |
+| `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md` | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | DEV-040 / DEV-011 / DEV-020 / DEV-027 / DEV-037 / DEV-039 | 依正式環境 2 個已發生 BUG 推導同型風險，定義 7 個高風險點：備份匯入 dependencies、RAG timeout、新增看板 temp id race、member stale response、tag stale response、Google Calendar timeout、MindMap localStorage-only 語意；包含 End-State、Architecture Memory Capsule、Phase Roadmap、RD Handoff Contract、Deferred Scope Audit 與 All-Phase Coverage Matrix。本輪 hotfix slice 已部署 production，原始 2 BUG flow 正式站 smoke 通過，延伸 7 點仍部分待驗證。 |
+| `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | QA Plan Complete / Local QC Executed / Production Smoke Executed for Original BUG Flows | DEV-040 | 針對 7 個正式環境風險制定 FMEA、P0/P1/P2 測試案例、local / production-like / production smoke evidence 要求，以及 regression gate；本輪已完成原始 2 BUG production authenticated UI smoke。 |
+| `ai-doc/qc/QC-DEV-040-production-environment-risk-validation.md` | Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / Extended 7-Point Matrix Partially Covered | DEV-040 / DEV-011 / DEV-020 / DEV-027G / DEV-028 / DEV-039 | 記錄本輪 local/source/browser QC、Firebase Hosting deploy、artifact hash、post-deploy smoke、Supabase P5/P6 smoke、OAuth start smoke 與正式站 authenticated UI smoke；原始 2 BUG flow 通過，member/tag/Google Calendar/MindMap 等延伸矩陣剩餘項未過度宣稱。 |
 
-PM 治理註記：DEV-040 是正式環境同型 BUG 風險硬化交付點，來源為「本機測沒問題、正式環境才卡住或資料消失」的系統性差異。本輪已完成 local/source/browser automated QC，但 production deploy、remote migration、正式資料修復、正式環境 smoke 與 MindMap 雲端同步語意均未授權；不得宣稱正式環境已修復。若使用者要求繼續開發或發布，production release 必須另走 deployment-release-gate。
+PM 治理註記：DEV-040 是正式環境同型 BUG 風險硬化交付點，來源為「本機測沒問題、正式環境才卡住或資料消失」的系統性差異。本輪已完成 local/source/browser automated QC、Firebase Hosting production deploy 與原始 2 BUG 正式站 authenticated UI smoke；可宣稱原始 2 BUG flow 已通過 production smoke。不得宣稱 7 點延伸矩陣全部關閉；member/tag stale、Google Calendar REST timeout、MindMap 跨裝置語意與完整備份匯入 DB count 仍需後續專項驗證。
 
 ## Documentation Map Update - 2026-07-02
 
@@ -486,7 +486,7 @@ DEV-012 的產品邊界：
 | `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md` | Ready | DEV-024 | 驗證 AI整理不得覆蓋使用者手寫內容、章節結構、task mention 與 project change evidence，並包含真實操作測試。 |
 | `ai-doc/qa/QA-DEV-026-trello-like-board-share-ui.md` | Static + Browser Smoke Passed / DB Smoke Pending | DEV-026 | 驗證 Trello-like 分享入口、modal 邀請、複製連結、pending invite、成員 tab、權限不足與 viewport。 |
 | `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA Plan Updated / Automated Browser Smoke Passed / Manual Click QC Pending | DEV-028 | 驗證四模式單擊選取並開詳情、explicit rename、新增任務命名分流、右鍵/長按任務選單、看板 Level 3+ 保留、甘特 drag/click 互斥、viewport 與 MAN-028 人工親自點擊操作。 |
-| `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | RD Contract Ready / QA Plan Complete / Local QC Executed / Production Smoke Requires Authorization | DEV-040 | 驗證正式環境同型 BUG 風險：dependencies 匯入、RAG timeout、看板 temp id、member/tag stale response、Google Calendar timeout、MindMap local-only 語意與 production smoke evidence；本輪 local QC 已執行，production smoke 需另行授權。 |
+| `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | QA Plan Complete / Local QC Executed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered | DEV-040 | 驗證正式環境同型 BUG 風險：dependencies 匯入、RAG timeout、看板 temp id、member/tag stale response、Google Calendar timeout、MindMap local-only 語意與 production smoke evidence；本輪已完成原始 2 BUG production authenticated UI smoke，延伸矩陣剩餘項需另行驗證。 |
 
 ### QC Fact Reports
 

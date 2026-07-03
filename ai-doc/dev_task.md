@@ -4,7 +4,7 @@
 
 ### DEV-040: 正式環境同型 BUG 風險硬化與驗證
 
-狀態: Local Automated QC Passed / Production Smoke Not Run / Production Release Not Authorized
+狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / Extended 7-Point Matrix Partially Covered
 節點類型: 交付點
 優先級: P0 production freeze/data-loss risk, P1 context race/stale response, P2 external timeout/local-only semantics
 父交付點: 無；關聯 DEV-011 / DEV-020 / DEV-027 / DEV-037 / DEV-039
@@ -24,7 +24,8 @@
 
 Human Decision Brief:
 - 已確認：本 DEV 以正式環境同型風險為交付點，範圍包含 7 個風險點。
-- 已確認：本輪 local/source/browser automated QC 已通過；尚未授權 production deploy、remote migration、正式資料修復或正式環境 smoke。
+- 已確認：本輪 local/source/browser automated QC 已通過；使用者已授權正式環境驗證，production deploy 與正式站 authenticated UI smoke 已完成。
+- 已確認：兩個原始正式 BUG flow 已在正式站通過 smoke；7 點延伸矩陣仍有 member/tag stale、Google Calendar REST timeout、MindMap 跨裝置語意等待專項驗證。
 - AI assumption：正式環境問題主要來自 bounded failure 缺口、source-of-truth 缺口、stale-response 缺口與 localStorage-only 語意缺口。
 - Re-entry：production deploy、遠端 migration、資料修復 / 刪除、心智圖雲端同步語意、付費 / 第三方成本改變需使用者重新授權。
 
@@ -33,7 +34,7 @@ Phase Roadmap:
 - Phase 1: P0 Bounded Failure + Persistence，處理備份匯入 dependencies 持久化、RAG / knowledge retrieval timeout / fallback；RD Contract Ready / Not Authorized。
 - Phase 2: P1 Context Race / Stale Response，處理新增看板 temp id race、member stale response、tag stale response；RD Contract Ready / Not Authorized。
 - Phase 3: P2 External Service Timeout + Local-only Semantics，處理 Google Calendar timeout 與 MindMap localStorage-only 語意；RD Contract Ready / Not Authorized，MindMap 雲端同步為 Blocked Human Re-entry。
-- Phase 4: Production Release / Smoke Gate，部署與正式環境 smoke；Blocked Pending Human Authorization，必須使用 deployment-release-gate。
+- Phase 4: Production Release / Smoke Gate，部署與正式環境 smoke；Done for original 2 BUG flows，必須保留 deployment-release-gate evidence。
 
 All-Phase Coverage Matrix:
 
@@ -43,7 +44,7 @@ All-Phase Coverage Matrix:
 | Phase 1 P0 Bounded Failure + Persistence | Not Authorized | RD Contract Ready / Not Authorized | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、deploy、模型更換 | 使用者授權 RD | 無資料遺失、無無限 loading | verifier、DB count、UI/Network evidence |
 | Phase 2 P1 Context Race / Stale Response | Not Authorized | RD Contract Ready / Not Authorized | addBoard temp id、member stale guard、tag stale guard | core data model、RLS、deploy | 使用者授權 RD | 快速切換後只顯示當前 context | rapid-switch evidence、localStorage / DB evidence |
 | Phase 3 P2 External / Local-only Semantics | Not Authorized | RD Contract Ready / Not Authorized; MindMap cloud sync Blocked Human Re-entry | Google Calendar timeout、MindMap local-only guardrail | ICS feed、notification、cloud sync without decision | 使用者授權；MindMap 語意需決策 | 外部 API 失敗可見結束；local-only 不破壞主資料 | timeout evidence、localStorage clear evidence |
-| Phase 4 Production Release / Smoke | Blocked Pending Human Authorization | RD Contract Ready / Not Authorized | deploy、formal smoke、rollback readiness | 未授權 deploy、資料修復 | RD/QC passed + 使用者部署授權 | 正式環境 7 點 smoke 通過 | deployment-release-gate evidence |
+| Phase 4 Production Release / Smoke | Authorized | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | deploy、formal smoke、rollback readiness | 正式資料修復、完整備份匯入 DB count、member/tag delayed response、Google Calendar REST timeout、MindMap cloud semantics | RD/QC passed + 使用者正式環境驗證授權 | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項明列 | deployment-release-gate evidence、production authenticated UI smoke |
 
 Deferred Scope Audit:
 - Same Spec Phase: production deploy / smoke 由 Phase 4 管控，需使用者授權與 deployment-release-gate。
@@ -53,9 +54,9 @@ Deferred Scope Audit:
 - No Tracking: DEV-039 工作台 filter / placement lanes 本體重構已由 DEV-039 管控，本 DEV 不重複。
 
 Next condition:
-- 若使用者要求「繼續開發 DEV-040」或正式發布，先取得明確 production / deployment 授權並走 deployment-release-gate，禁止直接跳 production。
-- 若任一修正需要遠端 migration、資料修復或 deploy，停止並取得明確授權。
-- QC 未完成 production smoke 前，不得回報「正式環境已修復」。
+- 若使用者要求繼續關閉 7 點延伸矩陣，針對 member/tag stale、Google Calendar REST timeout、MindMap 跨裝置語意另開專項驗證或 DEV。
+- 若任一後續修正需要遠端 migration、資料修復或再次 deploy，停止並取得明確授權。
+- 僅可回報「原始 2 個正式 BUG flow 已通過 production smoke」；不得宣稱 7 點延伸矩陣全部關閉。
 
 Stop conditions:
 - 需要 production deploy、remote migration、正式資料修復或資料刪除。
@@ -74,6 +75,13 @@ Local QC evidence - 2026-07-03:
 - `npm run verify:dev-027g-mindmap-system-health-browser` 通過。
 - `npm run verify:dev-028-cross-mode-task-interactions-browser` 通過。
 - 詳細證據記錄於 `ai-doc/qc/QC-DEV-040-production-environment-risk-validation.md`。
+
+Production release / smoke evidence - 2026-07-03:
+- Release commit：`42aa451d5ddaa4190bbd3216b60626d7195f67bd`。
+- Branch：`codex/正式環境BUG修正` pushed to `origin/codex/正式環境BUG修正`。
+- Firebase Hosting：`npx firebase deploy --only hosting --project projed-cc78d --non-interactive` 通過，URL `https://projed-cc78d.web.app`。
+- Artifact：正式 `index.html` 載入 `index-CZrWLuKx.js` / `index-CwzdflxX.css`，舊 `index-BCr1zfI2.js` 不存在。
+- `npm run verify:dev-040-production-auth-ui-smoke` 通過：正式站臨時 Supabase user/tenant/2 boards/activity event，專案變化整理產生 1 筆預覽，未歸位任務切換看板後仍存在，cleanup 刪除臨時 tenant/user。
 
 ## PM Update - 2026-07-02
 
@@ -1424,7 +1432,7 @@ CAPA 來源：
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
 | DEV-028 | 交付點 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`verify:dev-028-cross-mode-task-interactions`、browser smoke | 依 QA-DEV-028 補人工親自點擊 QC |
-| DEV-040 | 交付點 | Local Automated QC Passed / Production Smoke Not Run / Production Release Not Authorized | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040` | 等使用者授權 production / deployment gate；不得宣稱正式環境已修復 |
+| DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke` | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項需另行驗證 |
 
 ### 交付點完成率
 
@@ -1432,7 +1440,7 @@ CAPA 來源：
 - In Verification：2 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Browser Smoke Passed / Manual Click QC Pending：1 個交付點。
-- Local Automated QC Passed / Production Smoke Not Run / Production Release Not Authorized：1 個交付點。
+- Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered：1 個交付點。
 - Ready：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。
