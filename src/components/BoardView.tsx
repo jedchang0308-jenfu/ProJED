@@ -19,10 +19,14 @@ import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useRecordStore from '../store/useRecordStore';
 import useDialogStore from '../store/useDialogStore';
+import { useTagStore } from '../store/useTagStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
+import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames } from './ui/compactTokens';
 import type { TaskNode, TaskStatus } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
+import { projectTaskFilterResults } from '../features/taskFilters';
+import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../features/taskWorkbench/placement';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -129,16 +133,31 @@ const BoardView = () => {
     const rootIds = useWbsStore(s => s.parentNodesIndex['root']);
     const boardRootIds = useWbsStore(s => s.parentNodesIndex[activeBoardId || '']);
     const storeNodes = useWbsStore(s => s.nodes);
+    const statusFilters = useBoardStore(s => s.statusFilters);
+    const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+    const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
+    const selectedTagIds = useTagStore(s => s.selectedTagIds);
+    const taskFilters = useMemo(() => ({
+        statusFilters,
+        dueWithinDays,
+        selectedAssigneeIds,
+        selectedTagIds,
+        keyword: '',
+    }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    const filterProjection = useMemo(
+        () => projectTaskFilterResults(storeNodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, storeNodes, taskFilters],
+    );
 
     // 合併並排序根節點 (Level 1 = 列表欄)
     const rootNodes = useMemo(() => {
         const ids1 = (rootIds || []).filter(id => {
             const n = storeNodes[id];
-            return n && n.boardId === activeBoardId && !n.isArchived;
+            return n && n.boardId === activeBoardId && !n.isArchived && filterProjection.visibleTaskIds.has(n.id);
         });
         const ids2 = (boardRootIds || []).filter(id => {
             const n = storeNodes[id];
-            return n && !n.isArchived;
+            return n && !n.isArchived && filterProjection.visibleTaskIds.has(n.id);
         });
         // 合併去重
         const allIds = Array.from(new Set([...ids1, ...ids2]));
@@ -146,7 +165,7 @@ const BoardView = () => {
             .map(id => storeNodes[id])
             .filter(node => node)
             .sort((a, b) => a.order - b.order);
-    }, [rootIds, boardRootIds, activeBoardId, storeNodes]);
+    }, [rootIds, boardRootIds, activeBoardId, storeNodes, filterProjection]);
 
     const statuses = [
         { key: 'todo', label: '待辦', color: 'bg-status-todo' },
@@ -177,6 +196,8 @@ const BoardView = () => {
         setActiveDrag({
             id: active.id,
             type: active.data.current?.type,
+            source: active.data.current?.source,
+            title: active.data.current?.title,
             node: nodeId ? useWbsStore.getState().nodes[nodeId] : null,
         });
     };
@@ -221,6 +242,19 @@ const BoardView = () => {
             if (id === excludeId) return max;
             const node = nodes[id];
             return node ? Math.max(max, node.order) : max;
+        }, -1) + 1;
+    };
+
+    const getBoardRootAppendOrder = (
+        boardId: string,
+        excludeId?: string,
+        nodesOverride?: Record<string, TaskNode>,
+    ) => {
+        const nodes = nodesOverride || useWbsStore.getState().nodes;
+        return Object.values(nodes).reduce((max, node) => {
+            if (!node || node.isArchived || node.id === excludeId) return max;
+            if (node.boardId !== boardId || node.parentId !== null) return max;
+            return Math.max(max, node.order ?? 0);
         }, -1) + 1;
     };
 
@@ -403,10 +437,43 @@ const BoardView = () => {
         const overData = effectiveOver.data.current;
         const state = useWbsStore.getState();
         const draggedNode = state.nodes[activeData?.nodeId];
+
+        if (draggedNode && overData?.type === 'task-workbench-unplaced-lane') {
+            updateNode(draggedNode.id, {
+                boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID,
+                parentId: null,
+                order: getBoardRootAppendOrder(TASK_WORKBENCH_UNPLACED_BOARD_ID, draggedNode.id, state.nodes),
+                updatedAt: Date.now(),
+            });
+            recalculateAncestorStatus(draggedNode.id);
+            return;
+        }
+
+        if (draggedNode && overData?.type === 'task-workbench-placed-board-lane' && overData.boardId && overData.workspaceId) {
+            updateNode(draggedNode.id, {
+                workspaceId: overData.workspaceId,
+                boardId: overData.boardId,
+                parentId: null,
+                order: getBoardRootAppendOrder(overData.boardId, draggedNode.id, state.nodes),
+                nodeType: draggedNode.nodeType || 'task',
+                updatedAt: Date.now(),
+            });
+            recalculateAncestorStatus(draggedNode.id);
+            return;
+        }
+
         const intent = getDropIntent(activeData, overData, state.nodes);
 
         if (draggedNode && isValidDropIntent(draggedNode.id, intent, state.nodes)) {
             const updates = normalizeMovedSiblingOrders(draggedNode.id, intent, state.nodes);
+            if (activeData?.source === 'task-workbench' && activeWorkspaceId && activeBoardId) {
+                updates[draggedNode.id] = {
+                    ...(updates[draggedNode.id] || {}),
+                    workspaceId: activeWorkspaceId,
+                    boardId: activeBoardId,
+                    nodeType: intent?.parentId ? 'task' : (updates[draggedNode.id]?.nodeType || draggedNode.nodeType),
+                };
+            }
             Object.entries(updates).forEach(([nodeId, nodeUpdates]) => updateNode(nodeId, nodeUpdates));
             recalculateAncestorStatus(draggedNode.id);
         }
@@ -450,82 +517,86 @@ const BoardView = () => {
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
         >
-            <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
-                {isRecordTaskSelectionMode && (
-                    <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0 text-sm">
-                                <span className="font-semibold text-blue-800">選取紀錄關聯任務</span>
-                                <span className="ml-2 text-blue-600">直接點選看板上的任務，已選 {recordDraft?.taskLinks.length ?? 0} 筆</span>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => exitRecordTaskSelectionMode(true)}
-                                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                >
-                                    <Check size={14} />
-                                    完成
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => exitRecordTaskSelectionMode(true)}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-600 hover:bg-blue-100"
-                                    title="離開選取模式"
-                                >
-                                    <X size={14} />
-                                </button>
+            <div className="flex-1 flex min-w-0 bg-slate-50 overflow-hidden">
+                <TaskWorkbenchPanel canMoveTask={canMoveTask} />
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                    {isRecordTaskSelectionMode && (
+                        <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 text-sm">
+                                    <span className="font-semibold text-blue-800">選取紀錄關聯任務</span>
+                                    <span className="ml-2 text-blue-600">直接點選看板上的任務，已選 {recordDraft?.taskLinks.length ?? 0} 筆</span>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => exitRecordTaskSelectionMode(true)}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                    >
+                                        <Check size={14} />
+                                        完成
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => exitRecordTaskSelectionMode(true)}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-600 hover:bg-blue-100"
+                                        title="離開選取模式"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* 依賴關係選取模式橫幅 */}
-                {dependencySelection && (
-                    <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-[10px] py-[5px] flex items-center justify-between gap-[10px]">
-                        <div className="flex items-center gap-2 text-amber-700 text-sm font-semibold">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
-                            <span>
-                                選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
-                                <span className={`mx-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                                    {dependencySelection.side === 'start' ? '開始日' : '結束日'}
+                    {/* 依賴關係選取模式橫幅 */}
+                    {dependencySelection && (
+                        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-[10px] py-[5px] flex items-center justify-between gap-[10px]">
+                            <div className="flex items-center gap-2 text-amber-700 text-sm font-semibold">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+                                <span>
+                                    選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
+                                    <span className={`mx-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                        {dependencySelection.side === 'start' ? '開始日' : '結束日'}
+                                    </span>
+                                    — 請點擊另一張卡片的日期標籤作為依賴目標
                                 </span>
-                                — 請點擊另一張卡片的日期標籤作為依賴目標
-                            </span>
+                            </div>
+                            <button
+                                onClick={() => setDependencySelection(null)}
+                                className="text-amber-500 hover:text-amber-700 text-xs font-semibold px-2 py-0.5 rounded hover:bg-amber-100 transition-colors flex-shrink-0"
+                            >
+                                取消（退出鍵）
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setDependencySelection(null)}
-                            className="text-amber-500 hover:text-amber-700 text-xs font-semibold px-2 py-0.5 rounded hover:bg-amber-100 transition-colors flex-shrink-0"
-                        >
-                            取消（退出鍵）
-                        </button>
-                    </div>
-                )}
+                    )}
 
-                {/* 列表畫布 (Lists Canvas) */}
-                <div
-                    className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}
-                    data-mobile-pan-surface="board"
-                >
-                    <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
-                        {rootNodes.map(node => (
-                            <KanbanColumn
-                                key={node.id}
-                                nodeId={node.id}
-                            />
-                        ))}
-                    </SortableContext>
+                    {/* 列表畫布 (Lists Canvas) */}
+                    <div
+                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}
+                        data-mobile-pan-surface="board"
+                    >
+                        <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
+                            {rootNodes.map(node => (
+                                <KanbanColumn
+                                    key={node.id}
+                                    nodeId={node.id}
+                                    filterProjection={filterProjection}
+                                />
+                            ))}
+                        </SortableContext>
 
-                    {/* 新增列表按鈕 */}
-                    <div className="flex-shrink-0 w-[260px]">
-                        <button
-                            onClick={handleAddColumn}
-                            disabled={!canCreateTask}
-                            className="w-full py-[8px] border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
-                        >
-                            <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-                            <span>新增任務</span>
-                        </button>
+                        {/* 新增列表按鈕 */}
+                        <div className="flex-shrink-0 w-[260px]">
+                            <button
+                                onClick={handleAddColumn}
+                                disabled={!canCreateTask}
+                                className="w-full py-[8px] border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                            >
+                                <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
+                                <span>新增任務</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -534,7 +605,7 @@ const BoardView = () => {
                     <div className={`task-title-text rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
                         activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
                     }`}>
-                        {activeDrag.node.title || '未命名任務'}
+                        {activeDrag.title || activeDrag.node.title || '未命名任務'}
                     </div>
                 ) : null}
             </DragOverlay>

@@ -1,27 +1,18 @@
 import type { TaskNode } from '../../types';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
-import { matchesTagFilters } from '../../utils/tags';
+import { matchesTaskFilters, type TaskFilterState } from '../../features/taskFilters';
 import type { MindMapDirection, MindMapDropMode } from './MindMapNode';
 
 type PositionedTaskNode = TaskNode & { mindMapSide?: MindMapDirection };
 export type SideOverrides = Record<string, MindMapDirection>;
 
-export interface MindMapFilterState {
-  statusFilters: Record<string, boolean>;
-  dueWithinDays: number | null;
-  selectedAssigneeIds: string[];
-  selectedTagIds: string[];
-}
+export type MindMapFilterState = TaskFilterState;
 
 const getParentKey = (parentId: string | null) => parentId || 'root';
 
 const sortTasks = (tasks: TaskNode[]) => [...tasks].sort((a, b) => a.order - b.order);
 
 const matchesMindMapFilters = (node: TaskNode, filters: MindMapFilterState) =>
-  Boolean(filters.statusFilters[node.status || 'todo']) &&
-  matchesDueDateFilter(node, filters.dueWithinDays) &&
-  matchesAssigneeFilter(node, filters.selectedAssigneeIds) &&
-  matchesTagFilters(node, filters.selectedTagIds);
+  matchesTaskFilters(node, filters);
 
 export const getSiblingNodes = (
   nodes: Record<string, TaskNode>,

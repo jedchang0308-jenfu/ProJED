@@ -58,13 +58,30 @@ async (page) => {
 
   const setFilters = async (overrides = {}) => {
     await page.evaluate(({ defaultFilters, overrides }) => {
-      localStorage.setItem('projed-filters', JSON.stringify({
+      const legacyFilters = {
         ...defaultFilters,
         ...overrides,
         statusFilters: {
           ...defaultFilters.statusFilters,
           ...(overrides.statusFilters || {}),
         },
+      };
+      localStorage.setItem('projed-filters', JSON.stringify(legacyFilters));
+      localStorage.setItem('projed-task-filters:v1', JSON.stringify({
+        version: 1,
+        filters: {
+          statusFilters: legacyFilters.statusFilters,
+          dueWithinDays: legacyFilters.dueWithinDays,
+          selectedAssigneeIds: legacyFilters.selectedAssigneeIds,
+          selectedTagIds: [],
+          keyword: '',
+        },
+        displaySettings: {
+          showDependencies: legacyFilters.showDependencies,
+          showStartDate: legacyFilters.showStartDate,
+          showTags: legacyFilters.showTags,
+        },
+        updatedAt: Date.now(),
       }));
     }, { defaultFilters, overrides });
     await page.reload({ waitUntil: 'networkidle' });
@@ -92,6 +109,22 @@ async (page) => {
   await page.evaluate((defaultFilters) => {
     window.__PROJED_QC__?.reset(18);
     localStorage.setItem('projed-filters', JSON.stringify(defaultFilters));
+    localStorage.setItem('projed-task-filters:v1', JSON.stringify({
+      version: 1,
+      filters: {
+        statusFilters: defaultFilters.statusFilters,
+        dueWithinDays: defaultFilters.dueWithinDays,
+        selectedAssigneeIds: defaultFilters.selectedAssigneeIds,
+        selectedTagIds: [],
+        keyword: '',
+      },
+      displaySettings: {
+        showDependencies: defaultFilters.showDependencies,
+        showStartDate: defaultFilters.showStartDate,
+        showTags: defaultFilters.showTags,
+      },
+      updatedAt: Date.now(),
+    }));
   }, defaultFilters);
 
   const titles = await page.evaluate(() => {

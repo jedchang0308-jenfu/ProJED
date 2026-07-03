@@ -3,21 +3,17 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, GitBranch, Plus, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
 import { useMemberStore } from '../../store/useMemberStore';
+import { useWbsStore } from '../../store/useWbsStore';
 import { useTagStore } from '../../store/useTagStore';
-import type { TaskStatus } from '../../types';
-import { UNASSIGNED_ASSIGNEE_FILTER } from '../../utils/taskFilters';
+import {
+  createBoardAssigneeFilterOptions,
+  countActiveTaskFilters,
+  TASK_STATUS_OPTIONS,
+  UNASSIGNED_ASSIGNEE_FILTER,
+} from '../../features/taskFilters';
 import { getTagDotStyle } from '../../utils/tags';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { compactClassNames } from './compactTokens';
-
-const STATUS_CONFIG: { key: TaskStatus; label: string; color: string }[] = [
-  { key: 'todo', label: '待辦', color: 'bg-status-todo' },
-  { key: 'in_progress', label: '進行中', color: 'bg-blue-500' },
-  { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
-  { key: 'completed', label: '完成', color: 'bg-status-completed' },
-  { key: 'unsure', label: '未定', color: 'bg-status-unsure' },
-  { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
-];
 
 const filterPillClass = (active: boolean) =>
   `flex h-[26px] items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all ${
@@ -73,6 +69,8 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const toggleAssigneeFilter = useBoardStore(s => s.toggleAssigneeFilter);
   const clearAssigneeFilters = useBoardStore(s => s.clearAssigneeFilters);
+  const activeBoardId = useBoardStore(s => s.activeBoardId);
+  const nodes = useWbsStore(s => s.nodes);
   const { canEditTask } = useBoardPermissions();
   const boardMembers = useMemberStore(s => s.boardMembers);
 
@@ -126,20 +124,20 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
   const selectedAssigneeSet = useMemo(() => new Set(selectedAssigneeIds), [selectedAssigneeIds]);
   const assigneeOptions = useMemo(
-    () => boardMembers
-      .map(member => ({
-        id: member.userId,
-        label: member.profile?.displayName || member.profile?.email || member.userId,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant')),
-    [boardMembers]
+    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes),
+    [activeBoardId, boardMembers, nodes]
   );
-  const hiddenStatusCount = STATUS_CONFIG.filter(status => !statusFilters[status.key]).length;
   const activeTagCount = selectedTagIds.length;
   const activeAssigneeCount = selectedAssigneeIds.length;
   const hasDueFilter = dueWithinDays !== null && dueWithinDays !== undefined;
-  const hasActiveFilter = hiddenStatusCount > 0 || activeTagCount > 0 || activeAssigneeCount > 0 || hasDueFilter || !showDependencies || !showTags;
-  const activeFilterCount = hiddenStatusCount + activeTagCount + activeAssigneeCount + (hasDueFilter ? 1 : 0);
+  const activeFilterCount = countActiveTaskFilters({
+    statusFilters,
+    dueWithinDays,
+    selectedAssigneeIds,
+    selectedTagIds,
+    keyword: '',
+  });
+  const hasActiveFilter = activeFilterCount > 0;
 
   const handleDueDaysChange = (value: string) => {
     if (value === '') {
@@ -189,6 +187,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
               ? 'border-amber-200 bg-amber-50 text-amber-700 shadow-sm ring-1 ring-amber-200/70'
               : 'border-slate-200 bg-white text-slate-600 shadow-sm hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
         }`}
+        data-active-task-filter-count={activeFilterCount}
       >
         <SlidersHorizontal size={13} />
         <span className={compactLabel ? 'hidden sm:inline' : undefined}>過濾器</span>
@@ -217,7 +216,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
           <div className="px-3 pt-2 pb-2">
             <p className="mb-2 text-[10px] font-semibold text-slate-500">任務狀態</p>
             <div className="flex flex-wrap gap-2">
-              {STATUS_CONFIG.map(status => {
+              {TASK_STATUS_OPTIONS.map(status => {
                 const isActive = statusFilters[status.key];
                 return (
                   <button
@@ -277,7 +276,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
             </div>
           </div>
 
-          <div className="px-3 pt-2 pb-3">
+          <div className="px-3 pt-2 pb-3" data-task-display-settings="true">
             <p className="mb-2 text-[10px] font-semibold text-slate-500">介面顯示</p>
             <div className="flex flex-wrap gap-2">
               <button

@@ -13,8 +13,7 @@ import { useDragSensors } from '../../hooks/useDragSensors';
 import { ViewToolbar } from '../ui/ViewToolbar';
 import { compactClassNames } from '../ui/compactTokens';
 import { useTagStore } from '../../store/useTagStore';
-import { matchesTagFilters } from '../../utils/tags';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import { matchesTaskFilters } from '../../features/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { prepareNewTaskNaming } from '../../utils/taskInteractions';
 
@@ -28,6 +27,13 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
+  const taskFilters = React.useMemo(() => ({
+    statusFilters,
+    dueWithinDays,
+    selectedAssigneeIds,
+    selectedTagIds,
+    keyword: '',
+  }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   // 從全域 Store 取出顯示狀態
@@ -170,10 +176,10 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // ✅ 只有當索引陣列變更時 (Add/Remove/Move)，才重新評估根節點集合
   const rootNodes = React.useMemo(() => {
       const state = useWbsStore.getState();
-      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && statusFilters[node.status || 'todo'] && matchesDueDateFilter(node, dueWithinDays) && matchesAssigneeFilter(node, selectedAssigneeIds) && matchesTagFilters(node, selectedTagIds));
-      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && statusFilters[node.status || 'todo'] && matchesDueDateFilter(node, dueWithinDays) && matchesAssigneeFilter(node, selectedAssigneeIds) && matchesTagFilters(node, selectedTagIds));
+      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && matchesTaskFilters(node, taskFilters));
+      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && matchesTaskFilters(node, taskFilters));
       return [...arr1, ...arr2].sort((a, b) => a.order - b.order);
-  }, [rootIds, altRootIds, boardId, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds]);
+  }, [rootIds, altRootIds, boardId, taskFilters]);
 
   const handleCreateRootNode = () => {
     if (!canCreateTask) return;

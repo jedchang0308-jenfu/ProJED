@@ -3,6 +3,12 @@ import { create } from 'zustand';
 import useAuthStore from './useAuthStore';
 import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
+import {
+    createDefaultTaskDisplaySettings,
+    createDefaultTaskFilters,
+    readBoardTaskFilterPrefs,
+    writeBoardTaskFilterPrefs,
+} from '../features/taskFilters';
 
 // ===== Helper: 取得當前登入使用者的 uid =====
 const getUserId = (): string => {
@@ -16,33 +22,44 @@ const VIEW_STORAGE_KEY = 'projed-last-view';
 const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
-const FILTER_STORAGE_KEY = 'projed-filters';
 
 const getDefaultFilters = () => ({
-    statusFilters: {
-        todo: true,
-        in_progress: true,
-        delayed: true,
-        completed: true,
-        unsure: true,
-        onhold: true,
-    },
-    showDependencies: true,
-    showStartDate: true,
-    showTags: true,
-    dueWithinDays: null,
-    selectedAssigneeIds: [],
+    statusFilters: createDefaultTaskFilters().statusFilters,
+    showDependencies: createDefaultTaskDisplaySettings().showDependencies,
+    showStartDate: createDefaultTaskDisplaySettings().showStartDate,
+    showTags: createDefaultTaskDisplaySettings().showTags,
+    dueWithinDays: createDefaultTaskFilters().dueWithinDays,
+    selectedAssigneeIds: createDefaultTaskFilters().selectedAssigneeIds,
 });
 
 const getStoredFilters = () => {
     try {
-        const stored = localStorage.getItem(FILTER_STORAGE_KEY);
-        if (stored) {
-            return { ...getDefaultFilters(), ...JSON.parse(stored) };
-        }
+        const prefs = readBoardTaskFilterPrefs();
+        return {
+            ...getDefaultFilters(),
+            statusFilters: prefs.filters.statusFilters,
+            showDependencies: prefs.displaySettings.showDependencies,
+            showStartDate: prefs.displaySettings.showStartDate,
+            showTags: prefs.displaySettings.showTags,
+            dueWithinDays: prefs.filters.dueWithinDays,
+            selectedAssigneeIds: prefs.filters.selectedAssigneeIds,
+        };
     } catch { /* ignore */ }
     return getDefaultFilters();
 };
+
+const persistBoardTaskFilters = (state, updates = {}) => writeBoardTaskFilterPrefs({
+    filters: {
+        statusFilters: updates.statusFilters ?? state.statusFilters,
+        dueWithinDays: updates.dueWithinDays ?? state.dueWithinDays,
+        selectedAssigneeIds: updates.selectedAssigneeIds ?? state.selectedAssigneeIds,
+    },
+    displaySettings: {
+        showDependencies: updates.showDependencies ?? state.showDependencies,
+        showStartDate: updates.showStartDate ?? state.showStartDate,
+        showTags: updates.showTags ?? state.showTags,
+    },
+});
 
 const safeSetItem = (key: string, value: string | null) => {
     try {
@@ -197,64 +214,29 @@ const useBoardStore = create<BoardStore>()(
                 ...state.statusFilters,
                 [status]: !state.statusFilters[status]
             };
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: newFilters,
-                showDependencies: state.showDependencies,
-                showStartDate: state.showStartDate,
-                showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays,
-                selectedAssigneeIds: state.selectedAssigneeIds
-            }));
+            persistBoardTaskFilters(state, { statusFilters: newFilters });
             return { statusFilters: newFilters };
         }),
 
         // 切換 UI 顯示
         toggleDependencies: () => set((state) => {
             const newDeps = !state.showDependencies;
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: state.statusFilters,
-                showDependencies: newDeps,
-                showStartDate: state.showStartDate,
-                showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays,
-                selectedAssigneeIds: state.selectedAssigneeIds
-            }));
+            persistBoardTaskFilters(state, { showDependencies: newDeps });
             return { showDependencies: newDeps };
         }),
         toggleStartDate: () => set((state) => {
             const newStart = !state.showStartDate;
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: state.statusFilters,
-                showDependencies: state.showDependencies,
-                showStartDate: newStart,
-                showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays,
-                selectedAssigneeIds: state.selectedAssigneeIds
-            }));
+            persistBoardTaskFilters(state, { showStartDate: newStart });
             return { showStartDate: newStart };
         }),
         toggleTags: () => set((state) => {
             const newTags = !state.showTags;
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: state.statusFilters,
-                showDependencies: state.showDependencies,
-                showStartDate: state.showStartDate,
-                showTags: newTags,
-                dueWithinDays: state.dueWithinDays,
-                selectedAssigneeIds: state.selectedAssigneeIds
-            }));
+            persistBoardTaskFilters(state, { showTags: newTags });
             return { showTags: newTags };
         }),
         setDueWithinDays: (days) => set((state) => {
             const nextDays = days === null || days === undefined ? null : Math.max(0, Math.min(365, Math.floor(days)));
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: state.statusFilters,
-                showDependencies: state.showDependencies,
-                showStartDate: state.showStartDate,
-                showTags: state.showTags,
-                dueWithinDays: nextDays,
-                selectedAssigneeIds: state.selectedAssigneeIds
-            }));
+            persistBoardTaskFilters(state, { dueWithinDays: nextDays });
             return { dueWithinDays: nextDays };
         }),
         toggleAssigneeFilter: (assigneeId) => set((state) => {
@@ -262,25 +244,11 @@ const useBoardStore = create<BoardStore>()(
             const nextAssigneeIds = currentIds.includes(assigneeId)
                 ? currentIds.filter(id => id !== assigneeId)
                 : [...currentIds, assigneeId];
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: state.statusFilters,
-                showDependencies: state.showDependencies,
-                showStartDate: state.showStartDate,
-                showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays,
-                selectedAssigneeIds: nextAssigneeIds
-            }));
+            persistBoardTaskFilters(state, { selectedAssigneeIds: nextAssigneeIds });
             return { selectedAssigneeIds: nextAssigneeIds };
         }),
         clearAssigneeFilters: () => set((state) => {
-            safeSetItem(FILTER_STORAGE_KEY, JSON.stringify({
-                statusFilters: state.statusFilters,
-                showDependencies: state.showDependencies,
-                showStartDate: state.showStartDate,
-                showTags: state.showTags,
-                dueWithinDays: state.dueWithinDays,
-                selectedAssigneeIds: []
-            }));
+            persistBoardTaskFilters(state, { selectedAssigneeIds: [] });
             return { selectedAssigneeIds: [] };
         }),
 

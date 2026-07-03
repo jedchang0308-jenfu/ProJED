@@ -5,7 +5,6 @@ const files = {
   appInstallAssistant: 'src/components/AppInstallAssistant.tsx',
   pwaInstallService: 'src/services/pwaInstallService.ts',
   settingsView: 'src/components/SettingsView.tsx',
-  quickCaptureShell: 'src/components/QuickCaptureShell.tsx',
   quickCaptureStore: 'src/store/useQuickCaptureStore.ts',
   types: 'src/types/index.ts',
   app: 'src/App.tsx',
@@ -26,8 +25,6 @@ const source = Object.fromEntries(Object.entries(files).map(([label, file]) => [
 const userFacingInstallText = source.appInstallAssistant.replace(/import[\s\S]*?type PwaInstallContext,\n} from '..\/services\/pwaInstallService';/, '');
 const forbiddenTechnicalTerms = ['Service Worker', 'service worker', 'manifest', 'cache', 'PWA'];
 const forbiddenMatches = forbiddenTechnicalTerms.filter(term => userFacingInstallText.includes(term));
-const userFacingQuickCaptureText = source.quickCaptureShell.replace(/import[\s\S]*?from '.\/ui\/Badge';/, '');
-const quickCaptureForbiddenMatches = ['Service Worker', 'manifest', 'PWA', 'schema', 'API'].filter(term => userFacingQuickCaptureText.includes(term));
 
 assert(
   'install service captures browser install event and persists preference',
@@ -60,13 +57,12 @@ assert(
 );
 
 assert(
-  'auto assistant is mounted globally after auth gate',
+  'auto install assistant is mounted globally after auth gate without retired quick capture shell',
   source.app.includes("import { AppInstallAssistant } from './components/AppInstallAssistant'") &&
-    source.app.includes("import { QuickCaptureShell } from './components/QuickCaptureShell'") &&
+    !source.app.includes('QuickCaptureShell') &&
     source.app.includes('<AppInstallAssistant />') &&
-    source.app.includes('<QuickCaptureShell />') &&
-    source.app.indexOf('</AuthGate>') < source.app.indexOf('<QuickCaptureShell />') &&
-    source.app.indexOf('</AuthGate>') < source.app.indexOf('<AppInstallAssistant />'),
+    source.app.indexOf('</AuthGate>') < source.app.indexOf('<AppInstallAssistant />') &&
+    !existsSync(resolve('src/components/QuickCaptureShell.tsx')),
 );
 
 assert(
@@ -126,20 +122,11 @@ assert(
 );
 
 assert(
-  'quick capture shell exposes immediate capture DOM contract',
-  source.quickCaptureShell.includes('data-quick-capture-shell') &&
-    source.quickCaptureShell.includes('data-quick-capture-input') &&
-    source.quickCaptureShell.includes('data-quick-capture-save') &&
-    source.quickCaptureShell.includes('data-quick-capture-sync-status') &&
-    source.quickCaptureShell.includes('存入收件匣') &&
-    source.quickCaptureShell.includes('先存本機') &&
-    source.quickCaptureShell.includes('待整理'),
-);
-
-assert(
-  'user-facing quick capture avoids implementation terms',
-  quickCaptureForbiddenMatches.length === 0,
-  quickCaptureForbiddenMatches,
+  'retired quick capture floating shell remains absent while local inbox storage is kept for migration',
+  !existsSync(resolve('src/components/QuickCaptureShell.tsx')) &&
+    !source.app.includes('data-quick-capture-shell') &&
+    source.quickCaptureStore.includes('markPromoted') &&
+    source.types.includes('promotedTaskNodeId?: string | null'),
 );
 
 assert(
@@ -151,7 +138,7 @@ assert(
   'SPEC-034 is promoted into DEV-034 delivery governance',
   source.spec.includes('DEV-034') &&
     source.spec.includes('PWA 安裝助理') &&
-    source.spec.includes('QuickCaptureShell') &&
+    source.spec.includes('QuickCaptureShell 已退役') &&
     source.spec.includes('資料同步分層'),
 );
 

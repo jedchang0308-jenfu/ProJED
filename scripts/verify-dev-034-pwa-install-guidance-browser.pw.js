@@ -13,7 +13,7 @@ async (page) => {
     if (await fixedTestLogin.count()) {
       await fixedTestLogin.click();
     }
-    await page.locator('aside').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('nav').waitFor({ state: 'visible', timeout: 10000 });
   };
 
   const ensureSidebarOpen = async () => {
@@ -55,35 +55,16 @@ async (page) => {
     await assertNoHorizontalOverflow(label);
   };
 
-  const assertQuickCaptureBeforeLogin = async () => {
+  const assertRetiredQuickCaptureShellAbsent = async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('http://127.0.0.1:4173/?qcReset=1', { waitUntil: 'networkidle' });
-    await page.evaluate(() => localStorage.removeItem('projed.quickCapture.inboxItems'));
-    await page.reload({ waitUntil: 'networkidle' });
-
-    const shell = page.locator('[data-quick-capture-shell]');
-    await shell.waitFor({ state: 'visible', timeout: 10000 });
-    const input = page.locator('[data-quick-capture-input]');
-    await input.fill('DEV-034 出差途中先記下這件事');
-    await page.locator('[data-quick-capture-save]').click();
-
-    await page.waitForFunction(() => {
-      const items = JSON.parse(localStorage.getItem('projed.quickCapture.inboxItems') || '[]');
-      return items.some((item) =>
-        item.title.includes('DEV-034') &&
-        item.captureStatus === 'untriaged' &&
-        item.syncStatus === 'pending'
-      );
-    }, null, { timeout: 10000 });
-
-    const text = await shell.innerText();
-    assert(text.includes('待整理'), 'quick capture should show pending inbox state before login', { text });
-    assert(!/Service Worker|manifest|PWA|schema|API/i.test(text), 'quick capture should not expose implementation terms', { text });
-    await assertNoHorizontalOverflow('mobile quick capture before login');
-    await page.screenshot({ path: 'output/playwright/dev-034-quick-capture-before-login-mobile.png', fullPage: true });
+    assert(await page.locator('[data-quick-capture-shell]').count() === 0, 'retired quick capture floating shell should not render before login');
+    assert(await page.locator('[data-quick-capture-toggle]').count() === 0, 'retired quick capture toggle should not render before login');
+    await assertNoHorizontalOverflow('mobile without retired quick capture shell');
+    await page.screenshot({ path: 'output/playwright/dev-034-quick-capture-shell-removed-mobile.png', fullPage: true });
   };
 
-  await assertQuickCaptureBeforeLogin();
+  await assertRetiredQuickCaptureShellAbsent();
 
   await openApp({ width: 1440, height: 900 });
   await ensureSidebarOpen();
@@ -100,6 +81,7 @@ async (page) => {
   return {
     passed: true,
     screenshots: [
+      'output/playwright/dev-034-quick-capture-shell-removed-mobile.png',
       'output/playwright/dev-034-pwa-install-guidance-desktop.png',
       'output/playwright/dev-034-pwa-install-guidance-mobile.png',
     ],

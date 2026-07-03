@@ -27,12 +27,14 @@ import { TaskDragHandle } from './TaskDragHandle';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
+import type { TaskFilterResultProjection } from '../../features/taskFilters';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
   columnId: string;     // 所屬的 Level 1 列表 ID（用於 DnD 跨列識別）
   previewNodes?: Record<string, any> | null;
   previewParentIndex?: Record<string, string[]> | null;
+  filterProjection?: TaskFilterResultProjection | null;
 }
 
 /** 狀態色彩對應 */
@@ -57,7 +59,7 @@ const statusBorderColorMap: Record<TaskStatus, string> = {
 const isFromTaskDragHandle = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
-export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previewNodes, previewParentIndex }) => {
+export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previewNodes, previewParentIndex, filterProjection }) => {
   const storeNode = useWbsStore(s => s.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
@@ -531,6 +533,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                     depth={0}
                     previewNodes={previewNodes}
                     previewParentIndex={previewParentIndex}
+                    filterProjection={filterProjection}
                   />
                 </div>
               )}

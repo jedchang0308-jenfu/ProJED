@@ -1,12 +1,13 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, ChevronRight, LayoutDashboard, LogOut, Plus, Settings, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardList, LayoutDashboard, LogOut, Plus, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { toast } from '../store/useToastStore';
+import { openTaskWorkbenchPanel } from './TaskWorkbenchPanel';
 
-const BOARD_WORKSPACE_VIEWS = ['list', 'board', 'gantt', 'calendar'];
+const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
 const TITLE_INPUT_CLASS =
   'min-w-0 flex-1 rounded border border-primary/30 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
@@ -44,8 +45,14 @@ const Sidebar = () => {
   const [newWorkspaceError, setNewWorkspaceError] = React.useState('');
   const [isCreatingWorkspace, setIsCreatingWorkspace] = React.useState(false);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
+  const isTaskWorkbenchView = false;
   const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
   const canOpenWorkspaceContextMenu = canCreateBoard || canDeleteWorkspace;
+
+  const handleOpenTaskWorkbench = React.useCallback(() => {
+    setView(activeBoardId ? 'board' : 'home');
+    openTaskWorkbenchPanel();
+  }, [activeBoardId, setView]);
 
   const startWorkspaceTitleEdit = React.useCallback((workspace) => {
     setEditingBoard(null);
@@ -189,6 +196,18 @@ const Sidebar = () => {
             <ChevronRight size={18} />
           </button>
           <div className="w-px flex-1 bg-slate-100" />
+          <button
+            onClick={handleOpenTaskWorkbench}
+            className={`rounded-full p-1.5 transition-colors ${
+              isTaskWorkbenchView
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+            }`}
+            title="開啟全域任務平台"
+            data-sidebar-task-workbench-button="true"
+          >
+            <ClipboardList size={18} />
+          </button>
           <button
             onClick={() => setView('settings')}
             className={`mb-3 rounded-full p-1.5 transition-colors ${
@@ -375,6 +394,18 @@ const Sidebar = () => {
           </div>
 
           <div className="border-t border-slate-100 bg-slate-50/50 p-2">
+            <button
+              onClick={handleOpenTaskWorkbench}
+              data-sidebar-task-workbench-button="true"
+              className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                isTaskWorkbenchView
+                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
+                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
+              }`}
+            >
+              <ClipboardList size={16} className={isTaskWorkbenchView ? 'text-white/90' : 'text-slate-400'} />
+              <span className="min-w-0 flex-1 truncate text-left">開啟全域任務平台</span>
+            </button>
             <button
               onClick={() => setView('settings')}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${

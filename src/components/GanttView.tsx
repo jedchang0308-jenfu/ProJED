@@ -2,12 +2,13 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
+import { useTagStore } from '../store/useTagStore';
 import dayjs from 'dayjs';
 import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
+import { matchesTaskFilters } from '../features/taskFilters';
 import { compactClassNames, compactIconButtonClass, compactSegmentedButtonClass } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
@@ -25,6 +26,14 @@ const GanttView = () => {
         setSidebarOpen,
         showDependencies,
     } = useBoardStore();
+    const selectedTagIds = useTagStore(state => state.selectedTagIds);
+    const taskFilters = useMemo(() => ({
+        statusFilters,
+        dueWithinDays,
+        selectedAssigneeIds,
+        selectedTagIds,
+        keyword: '',
+    }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -80,9 +89,7 @@ const GanttView = () => {
         const traverse = (nodeId: string, level: number) => {
             const node = state.nodes[nodeId];
             if (!node || node.isArchived) return -1;
-            if (!statusFilters[node.status]) return -1;
-            if (!matchesDueDateFilter(node, dueWithinDays)) return -1;
-            if (!matchesAssigneeFilter(node, selectedAssigneeIds)) return -1;
+            if (!matchesTaskFilters(node, taskFilters)) return -1;
 
             // Map level to legacy types for gantt filters temporarily
             let pseudoType = 'checklist';
@@ -169,7 +176,7 @@ const GanttView = () => {
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, statusFilters, dueWithinDays, selectedAssigneeIds, mode, collapsedIds, nodes]);
+    }, [activeBoardId, taskFilters, mode, collapsedIds, nodes]);
 
     const colWidth = getColWidth(mode);
 

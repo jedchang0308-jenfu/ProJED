@@ -333,6 +333,7 @@ const MindMapView: React.FC = () => {
     dueWithinDays,
     selectedAssigneeIds,
     selectedTagIds,
+    keyword: '',
   }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
 
   const rootNodes = React.useMemo(() => {

@@ -63,9 +63,38 @@ async (page) => {
     const taskId = await task.getAttribute('data-task-id');
     assert(Boolean(taskId), `${mode} task should expose data-task-id`);
 
+    const clickDebug = await task.evaluate((element, position) => {
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + position.x;
+      const y = rect.top + position.y;
+      const hit = document.elementFromPoint(x, y);
+      return {
+        taskId: element.getAttribute('data-task-id'),
+        rect: {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          right: Math.round(rect.right),
+          bottom: Math.round(rect.bottom),
+        },
+        click: { x: Math.round(x), y: Math.round(y) },
+        hitTag: hit?.tagName || null,
+        hitText: hit?.textContent?.trim().slice(0, 80) || '',
+        hitTaskId: hit?.closest?.('[data-task-id]')?.getAttribute('data-task-id') || null,
+        hitControl: Boolean(hit?.closest?.('[data-task-interaction-control="true"],[data-task-drag-handle="true"]')),
+        workbenchPanel: document.querySelector('[data-task-workbench-panel]')?.getAttribute('data-task-workbench-panel') || null,
+        recordSelectingBanner: document.body.textContent?.includes('選擇任務加入紀錄') || false,
+      };
+    }, clickPosition);
+
     await clickTaskMainSurface(task, clickPosition);
     const modal = page.locator('[data-task-details-modal="true"]');
-    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    try {
+      await modal.waitFor({ state: 'visible', timeout: 10000 });
+    } catch (error) {
+      throw new Error(`${mode} click did not open TaskDetailsModal: ${JSON.stringify(clickDebug)}`);
+    }
     const modalTaskId = await modal.getAttribute('data-task-id');
     assert(modalTaskId === taskId, `${mode} single click should open TaskDetailsModal`, { taskId, modalTaskId });
     await closeDetailsWithEsc();
@@ -73,7 +102,8 @@ async (page) => {
     const selectedCount = await page.locator(`[data-task-id="${taskId}"][data-task-selected="true"]`).count();
     assert(selectedCount > 0, `${mode} should retain selected task after closing details with Escape`, { taskId, selectedCount });
 
-    await clickTaskMainSurface(page.locator(`[data-task-id="${taskId}"]`).first(), clickPosition);
+    const escapedTaskId = taskId.replace(/"/g, '\\"');
+    await clickTaskMainSurface(page.locator(`${selector}[data-task-id="${escapedTaskId}"]`).first(), clickPosition);
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     await closeDetails();
     const renameInputs = await page.locator(titleInputSelector).count();

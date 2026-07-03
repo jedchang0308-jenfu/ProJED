@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const files = {
   mindMapView: 'src/components/MindMap/MindMapView.tsx',
+  mindMapTree: 'src/components/MindMap/mindMapTree.ts',
   mindMapNode: 'src/components/MindMap/MindMapNode.tsx',
   browserVerifier: 'scripts/verify-dev-027d-mindmap-date-display-filter-browser.pw.js',
   packageJson: 'package.json',
@@ -17,32 +18,32 @@ for (const [label, file] of Object.entries(files)) {
 }
 
 const mindMapView = read(files.mindMapView);
+const mindMapTree = read(files.mindMapTree);
 const mindMapNode = read(files.mindMapNode);
 const browserVerifier = read(files.browserVerifier);
 const pkg = read(files.packageJson);
 
 assert(
-  'MindMapView imports and uses existing filter stores/helpers',
+  'MindMapView reads the shared board task filter state',
   mindMapView.includes("import { useTagStore } from '../../store/useTagStore';") &&
-    mindMapView.includes("import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';") &&
-    mindMapView.includes("import { matchesTagFilters } from '../../utils/tags';") &&
     mindMapView.includes('statusFilters = useBoardStore') &&
     mindMapView.includes('dueWithinDays = useBoardStore') &&
     mindMapView.includes('selectedAssigneeIds = useBoardStore') &&
     mindMapView.includes('showStartDate = useBoardStore') &&
-    mindMapView.includes('selectedTagIds = useTagStore'),
+    mindMapView.includes('selectedTagIds = useTagStore') &&
+    mindMapView.includes('const mindMapFilters = React.useMemo(() => ({') &&
+    mindMapView.includes('keyword:') &&
+    mindMapView.includes('getMindMapRootNodes(nodes, parentNodesIndex, boardId, mindMapFilters)') &&
+    mindMapView.includes('getMindMapChildren(nodes, parentNodesIndex, boardId, mindMapFilters, nodeId)'),
 );
 
 assert(
-  'MindMap root and child traversal apply the same visibility filter',
-  mindMapView.includes('const matchesMindMapFilters = React.useCallback') &&
-    mindMapView.includes('Boolean(statusFilters[node.status ||') &&
-    mindMapView.includes('matchesDueDateFilter(node, dueWithinDays)') &&
-    mindMapView.includes('matchesAssigneeFilter(node, selectedAssigneeIds)') &&
-    mindMapView.includes('matchesTagFilters(node, selectedTagIds)') &&
-    mindMapView.includes('!node.isArchived && matchesMindMapFilters(node)') &&
-    mindMapView.includes('}, [boardId, matchesMindMapFilters, nodes, parentNodesIndex]);') &&
-    mindMapView.includes('}, [boardId, matchesMindMapFilters, nodes, parentNodesIndex]);'),
+  'MindMap root and child traversal apply the shared task filter predicate',
+  mindMapTree.includes("import { matchesTaskFilters, type TaskFilterState } from '../../features/taskFilters';") &&
+    mindMapTree.includes('export type MindMapFilterState = TaskFilterState;') &&
+    mindMapTree.includes('const matchesMindMapFilters = (node: TaskNode, filters: MindMapFilterState) =>') &&
+    mindMapTree.includes('matchesTaskFilters(node, filters)') &&
+    mindMapTree.includes('matchesMindMapFilters(node, filters)'),
 );
 
 assert(
@@ -61,7 +62,7 @@ assert(
 assert(
   'MindMapView passes start-date visibility into every recursive node',
   mindMapView.includes('showStartDate={showStartDate}') &&
-    mindMapView.includes('showStartDate,') &&
+    mindMapView.includes('const showStartDate = useBoardStore') &&
     mindMapView.includes('renderChild={renderNode}'),
 );
 

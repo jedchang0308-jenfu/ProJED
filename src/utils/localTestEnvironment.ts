@@ -11,6 +11,7 @@ const LOCAL_TEST_SIZE_KEY = 'projed-local-test.seeded.size';
 const LOCAL_TEST_RESTORABLE_VIEWS = new Set<ViewMode>([
   'home',
   'list',
+  'mindmap',
   'board',
   'gantt',
   'calendar',

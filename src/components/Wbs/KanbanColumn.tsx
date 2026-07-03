@@ -13,29 +13,24 @@ import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
 import { TaskDragHandle } from './TaskDragHandle';
-import { useTagStore } from '../../store/useTagStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
-import { matchesTagFilters } from '../../utils/tags';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 
 interface KanbanColumnProps {
   nodeId: string;
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
+  filterProjection?: TaskFilterResultProjection | null;
 }
 
-export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes, previewParentIndex }) => {
+export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes, previewParentIndex, filterProjection }) => {
   const storeNode = useWbsStore((state) => state.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore((state) => state.getNodeProgress(nodeId));
   const addNode = useWbsStore((state) => state.addNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
-  const statusFilters = useBoardStore((state) => state.statusFilters);
-  const dueWithinDays = useBoardStore((state) => state.dueWithinDays);
-  const selectedAssigneeIds = useBoardStore((state) => state.selectedAssigneeIds);
-  const selectedTagIds = useTagStore((state) => state.selectedTagIds);
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
@@ -120,9 +115,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
     return (childIds || [])
       .map((id) => nodes[id])
-      .filter((child) => child && !child.isArchived && statusFilters[child.status || 'todo'] && matchesDueDateFilter(child, dueWithinDays) && matchesAssigneeFilter(child, selectedAssigneeIds) && matchesTagFilters(child, selectedTagIds))
+      .filter((child) => child && !child.isArchived && (!filterProjection || filterProjection.visibleTaskIds.has(child.id)))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, previewNodes]);
+  }, [childIds, filterProjection, previewNodes]);
 
   const {
     attributes: columnAttributes,
@@ -420,6 +415,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               columnId={nodeId}
               previewNodes={previewNodes}
               previewParentIndex={previewParentIndex}
+              filterProjection={filterProjection}
             />
           ))}
         </SortableContext>

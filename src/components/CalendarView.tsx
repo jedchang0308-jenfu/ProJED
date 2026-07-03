@@ -23,6 +23,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
+import { useTagStore } from '../store/useTagStore';
 import dayjs from 'dayjs';
 import {
     ChevronLeft, ChevronRight, ChevronDown, Calendar,
@@ -67,7 +68,7 @@ const STATUS_STYLES = {
 
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../utils/taskFilters';
+import { matchesTaskFilters } from '../features/taskFilters';
 import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass } from './ui/compactTokens';
 
 // ──────────────────────────────────────────────────────────
@@ -182,6 +183,14 @@ const CalendarView = () => {
         toggleStatusFilter,
         setView,
     } = useBoardStore();
+    const selectedTagIds = useTagStore(state => state.selectedTagIds);
+    const taskFilters = useMemo(() => ({
+        statusFilters,
+        dueWithinDays,
+        selectedAssigneeIds,
+        selectedTagIds,
+        keyword: '',
+    }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
@@ -214,10 +223,7 @@ const CalendarView = () => {
         
         Object.values(nodes).forEach((node: any) => {
             if (!node || node.isArchived || node.boardId !== activeBoardId) return;
-            const status = node.status || 'todo';
-            if (!statusFilters[status]) return;
-            if (!matchesDueDateFilter(node, dueWithinDays)) return;
-            if (!matchesAssigneeFilter(node, selectedAssigneeIds)) return;
+            if (!matchesTaskFilters(node, taskFilters)) return;
             
             // Map nodeType to pseudoType for filters
             let pseudoType = 'checklist';
@@ -245,7 +251,7 @@ const CalendarView = () => {
         });
         
         return items;
-    }, [activeBoardId, nodes, statusFilters, dueWithinDays, selectedAssigneeIds, collapsedIds]);
+    }, [activeBoardId, nodes, taskFilters, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {

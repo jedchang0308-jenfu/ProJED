@@ -81,7 +81,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const activeBoard = getActiveBoard();
   const activeWorkspace = getActiveWorkspace();
   const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
-  const isTaskFilterView = ['list', 'board', 'gantt', 'calendar'].includes(currentView);
+  const isTaskFilterView = ['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
   const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar', 'records']), []);

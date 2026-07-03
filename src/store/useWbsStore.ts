@@ -6,6 +6,11 @@ import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
 import { useTagStore } from './useTagStore';
+import {
+  isTaskWorkbenchUnplacedTask,
+  removeTaskWorkbenchUnplacedTask,
+  upsertTaskWorkbenchUnplacedTask,
+} from '../features/taskWorkbench/placement';
 
 /**
  * WbsStore 狀態定義
@@ -420,12 +425,17 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     set({ nodes: updatedNodes });
     get()._buildIndices(updatedNodes);
 
-    // 同步寫入 Firestore
-    if (normalizedNode.workspaceId && normalizedNode.boardId) {
+    const isUnplacedTask = isTaskWorkbenchUnplacedTask(normalizedNode);
+
+    // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
+    if (isUnplacedTask) {
+        upsertTaskWorkbenchUnplacedTask(normalizedNode);
+    } else if (normalizedNode.workspaceId && normalizedNode.boardId) {
         nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).catch(console.error);
     }
 
-    logTaskActivity(normalizedNode, 'task_created', {
+    if (!isUnplacedTask) {
+      logTaskActivity(normalizedNode, 'task_created', {
         after: {
             parentId: normalizedNode.parentId,
             status: normalizedNode.status,
@@ -435,8 +445,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
             endDate: normalizedNode.endDate ?? null,
             order: normalizedNode.order,
         },
-    });
-    recordMeetingTaskActivity(normalizedNode, 'task_created', {
+      });
+      recordMeetingTaskActivity(normalizedNode, 'task_created', {
         after: {
             parentId: normalizedNode.parentId,
             status: normalizedNode.status,
@@ -446,7 +456,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
             endDate: normalizedNode.endDate ?? null,
             order: normalizedNode.order,
         },
-    });
+      });
+    }
 
     // 紀錄上一步
     useUndoStore.getState().pushUndo({
@@ -695,6 +706,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (
         ('parentId' in normalizedUpdates && normalizedUpdates.parentId !== oldNode.parentId) || 
         ('isArchived' in normalizedUpdates && normalizedUpdates.isArchived !== oldNode.isArchived) ||
+        ('workspaceId' in normalizedUpdates && normalizedUpdates.workspaceId !== oldNode.workspaceId) ||
         ('boardId' in normalizedUpdates && normalizedUpdates.boardId !== oldNode.boardId) ||
         ('order' in normalizedUpdates && normalizedUpdates.order !== oldNode.order)
     ) {
@@ -707,12 +719,30 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         get().recalculateAncestorStatus(id);
     }
 
-    // 非同步寫入 Firestore
-    if (newNode.workspaceId && newNode.boardId) {
-        nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
+    const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
+    const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
+
+    // 非同步寫入資料來源；跨看板/未歸位移動使用 create/delete，避免只 update 新路徑造成舊路徑殘留。
+    if (newIsUnplaced) {
+        upsertTaskWorkbenchUnplacedTask(newNode);
+        if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
+            nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
+        }
+    } else if (newNode.workspaceId && newNode.boardId) {
+        if (oldWasUnplaced) {
+            removeTaskWorkbenchUnplacedTask(id);
+            nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
+        } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
+            nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
+            if (oldNode.workspaceId && oldNode.boardId) {
+                nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
+            }
+        } else {
+            nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
+        }
     }
 
-    buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
+    if (!newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
         logTaskActivity(newNode, event.eventType, event.payload);
         recordMeetingTaskActivity(newNode, event.eventType, event.payload);
     });

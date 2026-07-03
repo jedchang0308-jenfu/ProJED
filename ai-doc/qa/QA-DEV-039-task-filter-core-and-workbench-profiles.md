@@ -1,0 +1,284 @@
+# QA-DEV-039: 任務過濾器核心與全域任務平台兩欄篩選驗證計畫
+
+關聯 DEV：DEV-039
+關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
+狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Local Automated QC Passed / Phase 2 QA Contract Ready / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+建立日期：2026-07-02
+最新修正：2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
+
+## 驗證目標
+
+確認任務過濾器重構後，任務視圖共用同一個過濾語意，顯示設定不被誤算為過濾條件，全域任務平台維持 BoardView 左側跨看板拖拉定位，且工作台主畫面只保留一顆 `過濾器` 按鈕；點開後才在 popover 內選看板並調同看板任務過濾條件。
+
+未歸位與已歸位看板是工作台固定位置區，不是過濾器，也不是看板 selector 的選項。未歸位任務與已歸位任務必須有相同核心任務操作能力。Phase 1C 需確認同一 selected board 與同一組任務 filter 條件下，看板與工作台以相同 `matchedTaskIds` 作為結果真相；看板可額外顯示 context-only ancestor，但不得把它算成符合結果。
+
+## Zero-Tolerance Failures
+
+- 全域任務平台被實作成獨立整頁 route。
+- 全域任務平台不在 BoardView 左側，導致跨看板拖拉定位消失。
+- 全域任務平台出現 `設定檔`、`儲存`、`另存`、`複製到`、`全域`、`看板專屬` 等 profile/save/copy UI。
+- 全域任務平台程式出現 `TaskWorkbenchFilterProfile`、`readTaskWorkbenchProfiles`、`writeTaskWorkbenchProfiles` 或 workbench profile localStorage key。
+- 全域任務平台仍把 `目前工作區` 或 `目前看板` 當成來源範圍 filter。
+- 全域任務平台仍把 `待歸位 / 已歸位` 當成任務狀態 filter、來源範圍 filter 或預設排除條件。
+- 全域任務平台切換看板 selector 時，把已歸位任務清單限縮成單一看板來源，而不是跨看板顯示。
+- 全域任務平台主畫面常駐顯示看板 select，或把過濾器呈現成第二個 select/dropdown，而不是單一按鈕 + overlay。
+- 全域任務平台缺少 `未歸位` 與 `已歸位看板` 兩個 placement lanes。
+- 全域任務平台下方顯示區仍命名為 `已歸位任務`，或沒有顯示未歸位任務。
+- `所有任務排序` 未依到期日由早到晚排序，或把未設到期日任務排在有到期日任務前面。
+- 未歸位任務卡比已歸位任務卡少任何核心任務操作能力。
+- 任務無法藉由拖移在未歸位與已歸位看板間雙向移動。
+- 拖移後任務 title、status、date、assignee、tags、notes 或詳情資料遺失。
+- 拖移後同一任務同時存在於未歸位與已歸位 lane。
+- 未歸類任務被放進看板 selector、過濾器 panel，或被看板任務 filter 隱藏。
+- 正式環境發布或 production smoke 被安排在 Phase 1C QC passed 之前。
+- 清單、看板、甘特、日曆、心智圖對同一組 filter 結果不一致。
+- 同看板同條件下，看板與全域任務平台的 `matchedTaskIds` 不一致。
+- 看板因父層欄位 / 卡片不符合 filter 而藏掉符合條件的子任務。
+- 全域任務平台把 context-only ancestor 列為符合結果。
+- 看板與全域任務平台的負責人 filter option source 不同，造成同 label/id 條件篩出不同任務。
+- active filter count 把 `showDependencies`、`showStartDate`、`showTags` 算成過濾條件。
+- Mobile viewport 出現過濾 panel 重疊、主要 CTA 裁切或水平 overflow。
+- Phase 2 宣稱 `全部可見任務`，但資料層只能列出目前已載入任務。
+
+## Phase 1 Static Verification
+
+| Case | 檢查項目 | 預期 |
+|---|---|---|
+| QA-039-S01 | 文件登錄 | `dev_task.md`、`documentation_map.md`、`backlog.md` 均包含 DEV-039 與兩欄篩選決策 |
+| QA-039-S02 | 共用核心 | 存在 `src/features/taskFilters`，且包含 types/defaults/predicates/describe/storage 或等效模組 |
+| QA-039-S03 | Predicate 收斂 | 任務視圖透過共用 `matchesTaskFilters` 或等效核心入口判斷狀態、到期日、負責人、標籤、關鍵字 |
+| QA-039-S04 | 顯示設定分離 | `showDependencies`、`showStartDate`、`showTags` 不在 active filter count 中 |
+| QA-039-S05 | 標籤一致性 | 甘特與日曆不再漏接 tag filter |
+| QA-039-S06 | 心智圖入口 | `mindmap` 模式可操作同一組任務視圖過濾器 |
+| QA-039-S07 | Workbench source | `src` 內存在全域任務平台元件與 BoardView 左側嵌入點，不是獨立整頁 route |
+| QA-039-S08 | Workbench one-button filter control | 主畫面存在 filter toggle；board select 只存在 filter popover / filter panel 內；不存在 filter summary、selected board path selectors |
+| QA-039-S09 | No profile storage | 不存在 workbench profile type、default、read/write profile storage helper |
+| QA-039-S10 | No forbidden source/placement filter | 不存在 `目前工作區`、`目前看板` 作為 source filter；`待歸位 / 已歸位` 不得出現在 filter panel 或 `placementFilter` |
+| QA-039-S11 | Removed info guard | 工作台元件不含資料來源摘要、設定看板路徑、全部看板摘要、`拖到所選看板` 等已取消文案 |
+| QA-039-S12 | Unclassified inbox section | 工作台存在未歸類任務 section/input/add/list/item selectors，並使用 `useQuickCaptureStore` 的 `untriaged` items |
+| QA-039-S13 | Placement lane selectors | 工作台存在 `data-task-workbench-unplaced-lane`、`data-task-workbench-placed-board-lane`、`data-task-workbench-lane-drop-target` |
+| QA-039-S14 | Task card parity contract | 未歸位與已歸位任務卡共用同一個 task card 元件或等效 interaction contract，不存在功能降級分支 |
+| QA-039-S15 | Release ordering guard | PM 文件明確標示 production release gate 必須排在 Phase 1C QC passed 之後 |
+
+Gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-filter-core
+```
+
+## Phase 1 Browser Verification
+
+| Case | 操作 | 預期 |
+|---|---|---|
+| QA-039-B01 | 在心智圖模式開啟任務過濾器 | 可看到同一顆任務過濾入口，active count 從 0 開始 |
+| QA-039-B02 | 切換顯示設定中的標籤顯示 | 畫面呈現改變，但 active filter count 不增加 |
+| QA-039-B03 | 開啟全域任務平台 | 工作台在 BoardView 左側；主畫面只看到一顆過濾器按鈕，不顯示常駐看板 select |
+| QA-039-B04 | 檢查工作台面板文字 | 看不到 `設定檔`、`儲存`、`另存`、`複製到`、`全域`、`看板專屬` |
+| QA-039-B05 | 開啟過濾器 popover | Popover 內看板欄預設為目前 active board；任務清單跨看板顯示目前已載入任務 |
+| QA-039-B06 | 在 popover 內切換看板欄 | 只切換正在編輯的看板 filter state；任務清單仍保留其他看板任務 |
+| QA-039-B07 | 開啟工作台過濾器並關閉某狀態 | 只影響目前選擇看板的任務在跨看板清單中的顯示 |
+| QA-039-B08 | 點擊重設 | 目前看板過濾器回到預設，不需要儲存或 profile |
+| QA-039-B09 | 新增未歸位任務 | 新增後立即以完整任務卡顯示在未歸位 lane，且 reload 後仍可見 |
+| QA-039-B10 | 切換看板與套用過濾器 | 未歸位 lane 不受看板 selector 或過濾器隱藏；過濾器只作用於已歸位看板 lane |
+| QA-039-B11 | 390px mobile viewport | 工作台預設 rail，不擠出看板卡片；展開 overlay 後不水平 overflow |
+
+## Phase 1B Placement Lane Verification
+
+Phase 1B 已通過本機自動化 QC。Production release 仍需等 Phase 1C QC passed 後，再取得使用者明確 deployment authorization。
+
+Static gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+```
+
+Browser gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser
+```
+
+| Case | 操作 | 預期 |
+|---|---|---|
+| QA-039-P1B-B01 | 開啟 BoardView 左側全域任務平台 | 可看到 `未歸位` 與 `已歸位看板` 兩個位置區；工作台仍不是獨立整頁 |
+| QA-039-P1B-B02 | 新增未歸位任務 | 卡片具備與已歸位任務相同的點擊詳情、拖拉、狀態/日期/負責人/標籤呈現能力 |
+| QA-039-P1B-B03 | 拖移未歸位任務到已歸位看板 lane | 任務出現在目前選擇看板 lane，內容與 identity 保留，未歸位 lane 不留重複 |
+| QA-039-P1B-B04 | 拖移已歸位看板任務到未歸位 lane | 任務從該看板 lane 移除並出現在未歸位 lane，內容與 identity 保留 |
+| QA-039-P1B-B05 | 對已歸位看板 lane 套用過濾器 | 已歸位看板 lane 依 filter 更新；未歸位 lane 不被 filter 隱藏或改變 |
+| QA-039-P1B-B06 | 切換看板 selector | 已歸位任務 lane 仍跨看板顯示；未歸位 lane 保持獨立位置區 |
+| QA-039-P1B-B07 | 點擊未歸位與已歸位任務卡 | 兩者開啟同一套任務詳情 UI 或等價操作入口 |
+| QA-039-P1B-B08 | 390px mobile viewport 拖拉/展開工作台 | 兩個 lane 可理解且不造成主要 CTA 裁切或水平 overflow |
+
+Phase 1B regression gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-filter-core
+npm.cmd run verify:dev-039-task-filter-core-browser
+npm.cmd run verify:dev-028-cross-mode-task-interactions
+npm.cmd run verify:dev-028-cross-mode-task-interactions-browser
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
+
+Gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-filter-core-browser
+```
+
+## Phase 1C Filter Result Parity Verification
+
+Phase 1C 已完成本機自動化 QC。此節是已執行的 QA contract；production release 不得因本機 QC passed 自動執行，仍需另行明確部署授權與 deployment-release-gate。
+
+Static gate：
+
+```powershell
+npm.cmd run verify:dev-039-filter-result-parity
+```
+
+Browser gate：
+
+```powershell
+npm.cmd run verify:dev-039-filter-result-parity-browser
+```
+
+Static cases：
+
+| Case | 檢查項目 | 預期 |
+|---|---|---|
+| QA-039-P1C-S01 | Result projection helper | 存在 task filter result projection helper 或等效模組，可產出 `matchedTaskIds`、`visibleContainerIds`、`contextOnlyContainerIds` |
+| QA-039-P1C-S02 | Board renderer wiring | BoardView / KanbanColumn / KanbanChecklist 或等效階層 renderer 使用 projection，不再只用父層單點 filter 決定整段是否顯示 |
+| QA-039-P1C-S03 | Workbench wiring | 全域任務平台已歸位任務 lane 依各任務所屬看板使用該看板 `matchedTaskIds`，不自行另外 flat filter 出不同結果 |
+| QA-039-P1C-S04 | Assignee option source | 看板 filter 與工作台 filter 對 selected board 使用同一負責人選項來源 contract |
+| QA-039-P1C-S05 | No scope creep | 不新增 profile/storage/sync/schema/RLS/migration/production deploy |
+| QA-039-P1C-S06 | Regression protection | two-column workbench、placement lanes、no profile/save/copy、active count 分離仍被 verifier 保護 |
+
+Browser cases：
+
+| Case | 操作 | 預期 |
+|---|---|---|
+| QA-039-P1C-B01 | 建立父層不符合、子任務符合 status filter 的看板資料，套用同一 filter | 看板顯示父層 context 與符合子任務；工作台列出同一子任務 id |
+| QA-039-P1C-B02 | 同一資料下檢查 non-matching sibling | sibling 不出現在看板結果或工作台結果 |
+| QA-039-P1C-B03 | 套用負責人 filter | 看板與工作台使用同一 assignee id，`matchedTaskIds` 一致 |
+| QA-039-P1C-B04 | 套用標籤 / 到期日 / 關鍵字 filter | 兩側 `matchedTaskIds` 一致；看板 context-only ancestor 不被計入結果 |
+| QA-039-P1C-B05 | 切換看板 selector 後套用相同條件 | 每個 selected board 都只比較該看板的 `matchedTaskIds`，不混入其他看板 |
+| QA-039-P1C-B06 | 390px mobile viewport 開啟工作台與過濾器 | parity 修正不造成 filter panel 重疊、CTA 裁切或水平 overflow |
+
+Phase 1C regression gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-filter-core
+npm.cmd run verify:dev-039-task-filter-core-browser
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser
+npm.cmd run verify:dev-028-cross-mode-task-interactions
+npm.cmd run verify:dev-028-cross-mode-task-interactions-browser
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
+
+Phase 1C QC evidence（2026-07-02）：
+
+- `npm.cmd run verify:dev-039-filter-result-parity`，25/25 passed。
+- `npm.cmd run verify:dev-039-filter-result-parity-browser` passed。
+- `npm.cmd run verify:dev-039-task-filter-core`，60/60 passed。
+- `npm.cmd run verify:dev-039-task-filter-core-browser` passed。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes`，19/19 passed。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` passed。
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`，35/35 passed。
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser` passed。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build` passed。
+
+## Phase 1 Regression Gate
+
+```powershell
+npm.cmd run verify:dev-027d-mindmap-date-display-filter
+npm.cmd run verify:dev-027d-mindmap-date-display-filter-browser
+npm.cmd run verify:dev-028-cross-mode-task-interactions
+npm.cmd run verify:dev-028-cross-mode-task-interactions-browser
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
+
+DEV-028 browser verifier 必須 scope 回目前模式的任務卡，避免左側工作台與看板卡片共用 `data-task-id` 時誤點工作台卡片。
+
+## Phase 2 Verification Contract
+
+Phase 2 仍需使用者或 PM 明確授權。
+
+| Case | 檢查項目 | 預期 |
+|---|---|---|
+| QA-039-P2-S01 | Task source contract | 存在 `TaskWorkbenchTaskSource` 或等效 service，輸出 workspace/board path 與 visibility summary |
+| QA-039-P2-S02 | Permission boundary | 查詢 contract 以 membership/RLS 為邊界，不只靠前端 filter |
+| QA-039-P2-S03 | Data shape | 每筆任務包含 task id、workspace/board id、status、dates、assignee、tags、updatedAt |
+| QA-039-P2-S04 | Partial state | UI 支援 partial result、loading、retry、error summary |
+| QA-039-P2-S05 | Summary truth | UI 只有在資料層完成時才能宣稱全部可見任務 |
+
+建議 gate：
+
+```powershell
+npm.cmd run verify:dev-039-phase2-workbench-task-source
+npm.cmd run verify:dev-039-phase2-workbench-task-source-browser
+npm.cmd run verify:supabase:static
+```
+
+## Manual UX Review
+
+- 5 秒內能看懂工作台只需要先選看板，再調過濾器。
+- 長 Workspace / Board 名稱不會破壞兩欄版面。
+- 使用者不會以為有設定檔、另存、複製或同步能力。
+- 使用者能分辨未歸位 / 已歸位看板是位置區，不是過濾器條件。
+- 使用者能從任務卡能力判斷未歸位任務與已歸位任務是同一種任務，只是位置不同。
+- 工作台仍像側邊工具，不像獨立功能頁。
+- 任務卡仍可拖拉到目前看板定位，且主內容點擊可開任務詳情。
+
+## QC Handoff Evidence
+
+QC 回報至少包含：
+
+- DEV-039 static verifier 結果。
+- DEV-039 browser verifier 結果與 mobile 截圖。
+- DEV-027D / DEV-028 regression 結果。
+- TypeScript 與 build 結果。
+- 工作台無 profile/save/copy UI 的證據。
+- 看板 A / 看板 B 切換與各自過濾器作用證據。
+- Phase 1A 歷史證據：未歸類任務新增、顯示、reload persistence、且不受過濾器影響。
+- Phase 1B 新增證據：未歸位 / 已歸位看板雙 lane 截圖、雙向拖移證據、任務資料不遺失證據、未歸位與已歸位卡片功能等價證據。
+- Phase 1C 新增證據：同看板同條件下 board/workbench `matchedTaskIds` 比對、context-only ancestor 不列入工作台、負責人選項來源一致證據。
+- Production release ordering evidence：任何正式環境發布文件或 gate 均排在 Phase 1C QC passed 之後。
+
+## All-Phase QA Coverage Matrix
+
+| Phase | QA status | Primary risk | Required verification | Stop / fail condition | Evidence owner |
+|---|---|---|---|---|---|
+| Phase 0 | Done | 後續 RD 誤解共用範圍 | 文件索引、HCS/第一性原理決策 | 把所有 filter state 合成同一份 global state | PM |
+| Phase 1 | QA Passed / Historical | 五視圖 filter 不一致、工作台 profile UI 回流 | Static verifier、browser verifier、mobile viewport、DEV-027D/DEV-028 regression、TS/build | `src` 無 Workbench source、未共用 predicate、仍保留 profile/save/copy | QC + RD |
+| Phase 1B | QA Passed / Local Automated QC Passed | 工作台失去跨看板定位本質、未歸位任務功能降級 | Placement lane static/browser、drag proof、task parity proof、DEV-028 regression、TS/build | 無雙 lane、不能雙向拖移、未歸位卡片功能少於已歸位卡片、發布早於 QC | QA + QC + RD |
+| Phase 1C | QA Passed / Local Automated QC Passed | 看板階層式篩選與工作台扁平篩選結果不一致 | Result parity static/browser、matchedTaskIds comparison、assignee option source proof、Phase 1/1B regression、TS/build | `matchedTaskIds` 不一致、符合子任務被父層藏掉、context-only ancestor 被列為結果、發布早於 QC | QA + QC + RD |
+| Phase 2 | QA Contract Ready / Not Authorized | `全部可見任務` 文案與資料層不一致、權限外洩 | Task source service/static verifier、browser cross-board proof、DB role matrix if needed | query 只能列 local/assigned tasks、無權任務洩漏 | QA + QC |
+| Phase 3 | Deferred / Not Authorized | UI section 元件化造成行為漂移 | Regression verifier、viewport review | 元件化後 filter 結果或 summary 改變 | RD + QC |
+| Phase 4 | Deferred / Not Authorized | 舊 profile 概念回流 | Static guard、docs audit | profile type/storage/UI 重新出現在 DEV-039 | PM + QC |
+
+## Deferred Verification Scope Audit
+
+| Deferred verification | Classification | Covered by | Notes |
+|---|---|---|---|
+| Cross-board all-visible task DB proof | Same Spec Phase | Phase 2 | Phase 1 只能驗證 UI 不誤稱資料來源 |
+| Workbench placement lanes and bidirectional drag | Same Spec Phase | Phase 1B | 已通過本機自動化 QC；production release 後續仍需獨立 deployment gate |
+| Board/workbench filter result parity | Same Spec Phase | Phase 1C | 已通過本機自動化 QC；已比對 canonical matched task IDs 與 context-only ancestors |
+| Filter UI section componentization | Same Spec Phase | Phase 3 | 不改產品語意，不新增儲存 |
+| Profile backend sync, migration, conflict handling | Cancelled for DEV-039 | No active QA target | 使用者已取消儲存/profile 類功能 |
+| Calendar subscription source scope | New DEV | DEV-037 | 只在觸及 CalendarSubscriptions 程式碼時做 conditional regression |
+| Production smoke, remote migration, data repair/delete | Blocked Human Re-entry | deployment-release-gate / Supabase gate | 不可由 DEV-039 local QC 自動涵蓋；且不得早於 Phase 1C QC passed |
+
+## Phase Exit Decision Rules
+
+- Phase 1 可以在所有 Phase 1 gates passed 後標為 `Implemented / QC Passed`，但不得因此標示 Phase 2 done。
+- Phase 1B 是 Phase 1/1A 後的產品修正 gate；已通過本機自動化 QC，但不得因此視為 production release 已完成。
+- Phase 1B 必須同時通過 task parity、雙向拖移與資料不重複/不遺失證據；只有看到兩個 lane 不足以通過。
+- Phase 1C 需同時通過 static/browser parity gate、`matchedTaskIds` 比對、context-only ancestor 檢查與 Phase 1/1B regression；只證明共用 predicate 不足以通過。
+- Phase 2 必須同時有 UI evidence 與資料權限 evidence；只有 browser smoke 不足以通過。
+- Phase 3 只允許元件化，不得順手新增儲存、profile 或同步。
+- Phase 4 只處理遺留清理與防回流 gate，不得變成 profile governance。
+- 任一 phase 若出現 profile/save/copy UI，直接退回設計決策，不得用「進階功能」名義保留。

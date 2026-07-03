@@ -1,5 +1,38 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-07-02
+
+### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-039 | Phase 1/1A Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / Phase 2 RD Contract Ready / All-Phase Coverage Complete | 交付點 | P0 workbench placement drag parity, P1 task focus consistency, P1 workbench UX clarity, P1 filter result parity | Phase 1 已建立任務過濾器共用核心、五視圖一致性、顯示設定分離與 Workbench 單一過濾器入口；工作台主畫面只保留 `過濾器` 按鈕，popover 內選看板並調同看板過濾器，不做設定檔/儲存/複製；Phase 1B 已補回未歸位 / 已歸位看板 placement lanes、雙向拖移與未歸位任務功能等價；Phase 1C 已完成 filter result parity 實作與本機自動化 QC，要求同看板同條件下看板與工作台 `matchedTaskIds` 一致；production release 仍需明確部署授權與 deployment-release-gate；Phase 2 補全部可見任務資料來源契約；已補 All-Phase Coverage Matrix 與 Deferred Scope Audit。 | `ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`, `ai-doc/qa/QA-DEV-039-task-filter-core-and-workbench-profiles.md`, `ai-doc/qc/QC-DEV-039-task-filter-core-and-workbench-profiles.md` |
+
+驗收重點:
+- 任務過濾條件收斂到共用 predicate，不再每個視圖各寫一套。
+- active filter count 只計算真正過濾條件，不計算顯示設定。
+- 甘特、日曆、心智圖與清單/看板的狀態、到期日、負責人、標籤結果一致。
+- 全域任務平台不再提供 `目前工作區`、`目前看板` 作為來源範圍。
+- Phase 1 全域任務平台預設包含目前已載入任務集合，不以 `待歸位 / 已歸位` 作為 filter 或預設排除條件；全部可見任務資料層留 Phase 2。
+- 全域任務平台主畫面只保留一顆 `過濾器` 按鈕；使用者在 popover 內選看板並逐看板設定過濾器。
+- 全域任務平台 popover 內的看板欄只切換正在設定哪個看板的過濾器；已歸位任務清單跨看板顯示目前已載入任務，並依各任務所屬看板套用該看板 filter state。
+- 下方顯示區名稱為 `所有任務排序`，合併未歸位任務與符合 filter 的已歸位任務；預設依到期日由早到晚排序，未設到期日者排最後。
+- 全域任務平台過濾器必須是按鈕 + overlay，視覺上不可像第二個下拉欄位。
+- `未歸位 / 已歸位看板` 已以 placement lanes 補回；它們不是過濾器、不是任務狀態，也不是看板 selector 選項。
+- 未歸位任務與已歸位任務功能必須一樣，僅位置不同。
+- 任務可藉由拖移在未歸位與已歸位看板間雙向移動，且不得遺失或重複資料。
+- 同一 selected board、同一組 status / due / assignee / tag / keyword filter 下，看板與全域任務平台的 `matchedTaskIds` 必須一致。
+- 看板可顯示不符合 filter 的父層欄位 / 卡片作為 context-only container，但不得把它算成符合結果；全域任務平台只列真正符合條件的任務 identity。
+- 看板與全域任務平台的負責人 filter option source 必須對齊 selected board context，避免表面條件相同但實際 id/source 不同。
+- 全域任務平台不得出現設定檔、儲存、另存、複製、全域 profile 或看板專屬 profile。
+- 產品定位修正：全域任務平台不可改成獨立整頁；需保留 BoardView 左側跨看板拖拉中繼站。Phase 1 資料來源標示為目前已載入任務集合，真正全部可見任務留 Phase 2。
+- RD 不得只修改 `dist/assets/TaskZoneView-*.js`，必須恢復或重建可維護 source。
+- Phase 1B Workbench Placement Lanes Restore 已通過本機自動化 QC；不得宣稱已部署 production。
+- Phase 1C Filter Result Parity 已通過本機自動化 QC；不得宣稱已部署 production。
+- 正式環境發布 / production smoke / deployment-release-gate 仍需使用者明確部署授權。
+- Phase 2 已有 RD Contract，但未授權直接開工；後端 sync、migration、profile governance 不屬於 DEV-039 目前範圍。
+- All-Phase Coverage Matrix 已明列 Phase 0-4 與 Production Release Gate 的 authorization、entry condition、acceptance 與 evidence；Deferred Scope Audit 已將 future/backend/production 範圍分類完成。
+
 ## Backlog Update - 2026-06-29
 
 ### DEV-038: 設定中心作用範圍一致性與高風險防呆
@@ -33,7 +66,7 @@
 
 | DEV | Status | Type | Priority | Scope | Evidence |
 |---|---|---|---|---|---|
-| DEV-034 | Done / Browser QC Passed / Local-first scope | 交付點 | P0 mobile quick-capture readiness | 降低 App 開啟等待與加入主畫面摩擦：PWA 更新基礎、平台分流安裝助理、設定頁快速開啟入口、AuthGate 外 QuickCaptureShell、local-first pending InboxItem queue；正式雲端 Inbox/轉任務接 SPEC-002 後續。 | `ai-doc/specs/SPEC-034-fast-start-pwa-install-guidance.md`, `ai-doc/qc/QC-DEV-034-fast-start-pwa-install-guidance.md`, `verify:dev-034-pwa-install-guidance`, `verify:dev-034-pwa-install-guidance-browser`, `output/playwright/dev-034-quick-capture-before-login-mobile.png`, `output/playwright/dev-034-pwa-install-guidance-desktop.png`, `output/playwright/dev-034-pwa-install-guidance-mobile.png` |
+| DEV-034 | Done / Browser QC Passed / Local-first scope / QuickCaptureShell Retired | 交付點 | P0 mobile quick-capture readiness | 降低 App 開啟等待與加入主畫面摩擦：PWA 更新基礎、平台分流安裝助理、設定頁快速開啟入口、local-first pending InboxItem queue；右下角 QuickCaptureShell 已由 DEV-039 全域任務平台 `未歸位` lane 取代。正式雲端 Inbox/轉任務接 SPEC-002 後續。 | `ai-doc/specs/SPEC-034-fast-start-pwa-install-guidance.md`, `ai-doc/qc/QC-DEV-034-fast-start-pwa-install-guidance.md`, `verify:dev-034-pwa-install-guidance`, `verify:dev-034-pwa-install-guidance-browser`, `output/playwright/dev-034-quick-capture-shell-removed-mobile.png`, `output/playwright/dev-034-pwa-install-guidance-desktop.png`, `output/playwright/dev-034-pwa-install-guidance-mobile.png` |
 
 驗收重點:
 - 使用者不需額外設定快取與更新；App 背景檢查更新，避免輸入中強制刷新。
@@ -41,8 +74,7 @@
 - iOS 指引只保留三步驟：點分享、選加入主畫面、點新增。
 - 內建瀏覽器先提示用 Safari / Chrome 開啟，不用 403 或瀏覽器政策作主說明。
 - 使用者可選稍後或不再提示，且設定頁可重新顯示提示。
-- 使用者在未登入或完整 App 載入前，可先輸入快記並保存為本機 `syncStatus=pending` 的私人 `InboxItem`。
-- 快記面板送出後自動收合為右下角入口，不得遮擋手機底部導航。
+- 右下角 QuickCaptureShell 浮窗不得再渲染；舊 `InboxItem` localStorage 僅保留為全域任務平台 `未歸位` lane 的遷移來源。
 - 正式雲端 Inbox、跨裝置同步、今日區塊與轉正式任務仍接 SPEC-002 後續交付，不在本輪宣告完成。
 
 ## Backlog Update - 2026-06-26

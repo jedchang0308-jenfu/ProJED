@@ -3,8 +3,10 @@
 狀態：Done / Browser QC Passed / Local-first scope  
 文件角色：PM / RD 開發規格  
 建立日期：2026-06-29  
-更新日期：2026-06-29  
+更新日期：2026-07-03
 需求來源：使用者在 `codex/UX優化` 分支提出出差臨時記事啟動摩擦、PWA 更新策略、加入主畫面指引過於複雜等 UX 問題。
+
+最新修正：2026-07-03，QuickCaptureShell 已退役；右下角 `待整理` 浮窗已由 DEV-039 全域任務平台的 `未歸位` lane 取代。保留 `useQuickCaptureStore` 與 `projed.quickCapture.inboxItems` 僅作舊本機快記資料遷移與未歸位來源，不再全域掛載可輸入浮窗。
 
 ---
 
@@ -472,12 +474,12 @@ type CaptureDraft = {
 ### 15.4 DEV / Backlog 登錄狀態
 
 - 使用者已要求 `pm-dev 執行開發`，本文件提升為 `DEV-034 [交付點] App 快速啟動與加入主畫面 UX`。
-- 目前已完成並驗證：Slice B PWA 安裝助理與設定頁快速開啟入口、Slice C QuickCaptureShell、Slice D local-first pending queue。
+- 目前已完成並驗證：Slice B PWA 安裝助理與設定頁快速開啟入口、Slice C QuickCaptureShell 已退役、Slice D local-first pending queue 保留為未歸位資料來源。
 - DEV-034 仍未宣告完整 Inbox 產品完成；正式雲端 Inbox、正式任務轉換與跨裝置同步需接 SPEC-002 後續交付。
 - 拆分支援開發點：
   - `DEV-034A` PWA 更新基礎與背景套用策略
   - `DEV-034B` PWA 安裝助理與加入主畫面 UX
-  - `DEV-034C` QuickCaptureShell
+  - `DEV-034C` QuickCaptureShell 已退役，由 DEV-039 全域任務平台 `未歸位` lane 取代
   - `DEV-034D` local-first pending queue 與啟動效能優化
 
 ### 15.5 Slice B RD Evidence
@@ -494,12 +496,12 @@ type CaptureDraft = {
 
 - 新增 `src/types/index.ts` 的 `InboxItem`、`InboxItemType`、`InboxItemCaptureStatus`、`InboxItemSyncStatus`，與 SPEC-002 的私人收件匣語意對齊。
 - 新增 `src/store/useQuickCaptureStore.ts`：使用 `projed.quickCapture.inboxItems` localStorage key 保存本機快記，每筆預設 `captureStatus=untriaged`、`syncStatus=pending`。
-- 新增 `src/components/QuickCaptureShell.tsx`：掛在 `AuthGate` 外，使用者即使在登入檢查、資料升級或主 App lazy loading 前，也能先輸入並存入本機收件匣。
-- 更新 `src/App.tsx`：全域掛載 QuickCaptureShell。
-- 快記送出後自動收合為右下角小入口，避免遮擋手機底部設定或其他導航。
+- `src/components/QuickCaptureShell.tsx` 已移除：右下角快記 / 待整理浮窗不再掛載。
+- 更新 `src/App.tsx`：移除 QuickCaptureShell 全域掛載，保留 PWA 安裝助理與 Toast。
+- `useQuickCaptureStore` 保留，僅供舊本機收件匣資料被全域任務平台 `未歸位` lane 讀取、提升或遷移。
 - 目前不做正式雲端 Inbox schema、不做跨裝置同步、不做轉正式 `TaskNode`；pending item 可本機保存、查看、標記完成或刪除。
-- `verify:dev-034-pwa-install-guidance` 已擴充檢查 QuickCapture store、InboxItem 型別、根層掛載與非技術文案。
-- `verify:dev-034-pwa-install-guidance-browser` 已擴充未登入手機情境：可先存一筆快記到 localStorage，並驗證 `syncStatus=pending`、`captureStatus=untriaged`。
+- `verify:dev-034-pwa-install-guidance` 已調整為檢查 QuickCapture store、InboxItem 型別仍保留，但 QuickCaptureShell 不得再存在或根層掛載。
+- `verify:dev-034-pwa-install-guidance-browser` 已調整為手機情境確認右下角快記浮窗與 toggle 不再渲染。
 
 ### 15.7 Slice B-C-D Verification
 
@@ -537,4 +539,4 @@ Deferred scope：
 ## 16. 文件狀態
 
 本文件保存本對話已形成的產品決策、現況分析、差距分析、心理成因與實作建議。  
-目前已建立 DEV-034，並完成 PWA 更新基礎、加入主畫面助理、QuickCaptureShell 與 local-first pending queue，且已通過 Browser QC。後續若要做完整私人 Inbox、跨裝置同步與正式任務轉換，需接續 SPEC-002 另開或恢復對應交付點。
+目前已建立 DEV-034，並完成 PWA 更新基礎、加入主畫面助理與 local-first pending queue；QuickCaptureShell 已退役並由 DEV-039 全域任務平台 `未歸位` lane 取代。後續若要做完整私人 Inbox、跨裝置同步與正式任務轉換，需接續 SPEC-002 另開或恢復對應交付點。

@@ -34,6 +34,7 @@ type QuickCaptureInput = {
 interface QuickCaptureStore {
   items: InboxItem[];
   addItem: (input: QuickCaptureInput) => InboxItem | null;
+  markPromoted: (itemId: string, taskNodeId: string) => void;
   markCompleted: (itemId: string) => void;
   removeItem: (itemId: string) => void;
   clearCompleted: () => void;
@@ -70,6 +71,17 @@ const useQuickCaptureStore = create<QuickCaptureStore>((set, get) => ({
     writeItems(nextItems);
     set({ items: nextItems });
     return item;
+  },
+
+  markPromoted: (itemId, taskNodeId) => {
+    const now = Date.now();
+    const nextItems = sortItems(get().items.map(item => (
+      item.id === itemId
+        ? { ...item, promotedTaskNodeId: taskNodeId, updatedAt: now }
+        : item
+    )));
+    writeItems(nextItems);
+    set({ items: nextItems });
   },
 
   markCompleted: (itemId) => {

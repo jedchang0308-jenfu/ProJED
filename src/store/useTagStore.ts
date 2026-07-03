@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { TagColor, TaskTag } from '../types';
 import { tagService } from '../services/dataBackend';
 import { createTagId, DEFAULT_TAG_COLOR, sortTags } from '../utils/tags';
+import { readBoardTaskFilterPrefs, writeBoardTaskFilterPrefs } from '../features/taskFilters';
 
 interface TagState {
   tags: TaskTag[];
@@ -21,10 +22,14 @@ interface TagActions {
 }
 
 const normalizeTagName = (name: string) => name.trim().slice(0, 40);
+const getStoredSelectedTagIds = () => readBoardTaskFilterPrefs().filters.selectedTagIds;
+const persistSelectedTagIds = (selectedTagIds: string[]) => {
+  writeBoardTaskFilterPrefs({ filters: { selectedTagIds } });
+};
 
 export const useTagStore = create<TagState & TagActions>((set, get) => ({
   tags: [],
-  selectedTagIds: [],
+  selectedTagIds: getStoredSelectedTagIds(),
   loading: false,
   error: null,
 
@@ -33,17 +38,22 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
   loadTags: async (workspaceId) => {
     if (!workspaceId) {
       set({ tags: [], selectedTagIds: [], loading: false, error: null });
+      persistSelectedTagIds([]);
       return;
     }
 
     set({ loading: true, error: null });
     try {
       const tags = await tagService.listByWorkspace(workspaceId);
-      set((state) => ({
-        tags: sortTags(tags),
-        selectedTagIds: state.selectedTagIds.filter(id => tags.some(tag => tag.id === id)),
-        loading: false,
-      }));
+      set((state) => {
+        const nextSelectedTagIds = state.selectedTagIds.filter(id => tags.some(tag => tag.id === id));
+        persistSelectedTagIds(nextSelectedTagIds);
+        return {
+          tags: sortTags(tags),
+          selectedTagIds: nextSelectedTagIds,
+          loading: false,
+        };
+      });
     } catch (error) {
       console.error('[useTagStore] loadTags failed:', error);
       set({ loading: false, error: error instanceof Error ? error.message : '無法載入標籤。' });
@@ -113,6 +123,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
       tags: state.tags.filter(tag => tag.id !== tagId),
       selectedTagIds: state.selectedTagIds.filter(id => id !== tagId),
     }));
+    persistSelectedTagIds(get().selectedTagIds.filter(id => id !== tagId));
 
     try {
       await tagService.delete(workspaceId, tagId);
@@ -123,12 +134,17 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
   },
 
   toggleTagFilter: (tagId) => {
-    set((state) => ({
-      selectedTagIds: state.selectedTagIds.includes(tagId)
+    set((state) => {
+      const selectedTagIds = state.selectedTagIds.includes(tagId)
         ? state.selectedTagIds.filter(id => id !== tagId)
-        : [...state.selectedTagIds, tagId],
-    }));
+        : [...state.selectedTagIds, tagId];
+      persistSelectedTagIds(selectedTagIds);
+      return { selectedTagIds };
+    });
   },
 
-  clearTagFilters: () => set({ selectedTagIds: [] }),
+  clearTagFilters: () => {
+    persistSelectedTagIds([]);
+    set({ selectedTagIds: [] });
+  },
 }));

@@ -20,9 +20,9 @@ import { useLongPress } from '../../hooks/useLongPress';
 import type { TaskStatus, TaskNode } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
-import { getNodeTags, matchesTagFilters } from '../../utils/tags';
+import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
@@ -33,6 +33,7 @@ interface KanbanChecklistProps {
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
   ancestorIds?: string[];
+  filterProjection?: TaskFilterResultProjection | null;
 }
 
 /** 狀態對應的文字色 */
@@ -65,6 +66,7 @@ interface ChecklistItemProps {
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
   ancestorIds?: string[];
+  filterProjection?: TaskFilterResultProjection | null;
 }
 
 const ChecklistItem: React.FC<ChecklistItemProps> = ({
@@ -80,6 +82,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   previewNodes,
   previewParentIndex,
   ancestorIds = [],
+  filterProjection,
 }) => {
   const storeChild = useWbsStore(s => s.nodes[initialChild.id]);
   const child = previewNodes?.[initialChild.id] || storeChild;
@@ -391,6 +394,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           previewNodes={previewNodes}
           previewParentIndex={previewParentIndex}
           ancestorIds={ancestorIds}
+          filterProjection={filterProjection}
         />
       )}
     </div>
@@ -400,7 +404,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 // =====================================================
 // KanbanChecklist — 主要容器元件
 // =====================================================
-export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, depth = 0, previewNodes, previewParentIndex, ancestorIds = [] }) => {
+export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, depth = 0, previewNodes, previewParentIndex, ancestorIds = [], filterProjection }) => {
   const isRecursiveParent = ancestorIds.includes(parentId);
   const nextAncestorIds = [...ancestorIds, parentId];
   const nextAncestorKey = nextAncestorIds.join('|');
@@ -408,10 +412,6 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   const storeChildIds = useWbsStore(s => s.parentNodesIndex[parentId]);
   const childIds = previewParentIndex?.[parentId] || storeChildIds;
   const updateNode = useWbsStore(s => s.updateNode);
-  const statusFilters = useBoardStore(s => s.statusFilters);
-  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
-  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
-  const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
   const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
@@ -471,9 +471,9 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
     return (childIds || [])
       .filter(id => !nextAncestors.has(id))
       .map(id => nodes[id])
-      .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesAssigneeFilter(n, selectedAssigneeIds) && matchesTagFilters(n, selectedTagIds))
+      .filter(n => n && !n.isArchived && (!filterProjection || filterProjection.visibleTaskIds.has(n.id)))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, previewNodes, nextAncestorKey]);
+  }, [childIds, filterProjection, previewNodes, nextAncestorKey]);
 
   useEffect(() => {
     if (!pendingTitleEditNodeId || !canEditTask) return;
@@ -512,6 +512,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
             previewNodes={previewNodes}
             previewParentIndex={previewParentIndex}
             ancestorIds={nextAncestorIds}
+            filterProjection={filterProjection}
           />
         ))}
       </SortableContext>

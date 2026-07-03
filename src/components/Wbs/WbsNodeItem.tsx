@@ -13,9 +13,9 @@ import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
-import { getNodeTags, matchesTagFilters } from '../../utils/tags';
+import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
-import { matchesAssigneeFilter, matchesDueDateFilter } from '../../utils/taskFilters';
+import { matchesTaskFilters } from '../../features/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
@@ -138,6 +138,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const tags = useTagStore(s => s.tags);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
+  const taskFilters = React.useMemo(() => ({
+    statusFilters,
+    dueWithinDays,
+    selectedAssigneeIds,
+    selectedTagIds,
+    keyword: '',
+  }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
   const boardMembers = useMemberStore(s => s.boardMembers);
   const membersLoading = useMemberStore(s => s.loading);
   const assigneeOptions = React.useMemo(
@@ -160,9 +167,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       return (childrenIds || [])
         .filter(id => !nextAncestors.has(id))
         .map(id => state.nodes[id])
-        .filter(n => n && !n.isArchived && statusFilters[n.status || 'todo'] && matchesDueDateFilter(n, dueWithinDays) && matchesAssigneeFilter(n, selectedAssigneeIds) && matchesTagFilters(n, selectedTagIds))
+        .filter(n => n && !n.isArchived && matchesTaskFilters(n, taskFilters))
         .sort((a,b) => a.order - b.order);
-  }, [childrenIds, statusFilters, dueWithinDays, selectedAssigneeIds, selectedTagIds, nextAncestorKey]);
+  }, [childrenIds, taskFilters, nextAncestorKey]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
