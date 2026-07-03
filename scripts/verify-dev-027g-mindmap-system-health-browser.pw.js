@@ -52,6 +52,13 @@ async (page) => {
   const relationshipLineTargetByLabel = (label) => page.locator(`[data-mindmap-note-relationship-line-click-target][data-label="${label}"]`).first();
   const selectedRelationshipByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"][data-selected="true"]`).first();
 
+  const closeTaskDetailsIfOpen = async () => {
+    const modal = page.locator('[data-task-details-modal="true"]');
+    if ((await modal.count()) === 0) return;
+    await modal.locator('button[title="關閉"]').click();
+    await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
   const assertNoVisibleErrors = async (label) => {
     const bodyText = await page.locator('body').innerText();
     const visibleError = [
@@ -95,6 +102,7 @@ async (page) => {
 
   const selectNode = async (title) => {
     await nodeByTitle(title).click();
+    await closeTaskDetailsIfOpen();
     await nodeByTitle(title).focus();
   };
 
@@ -177,7 +185,7 @@ async (page) => {
   };
 
   const createInlineRelationship = async (fromTitle, toTitle, label) => {
-    await nodeByTitle(fromTitle).click();
+    await selectNode(fromTitle);
     const fromId = await nodeByTitle(fromTitle).getAttribute('data-mindmap-node');
     await page.locator('[data-mindmap-note-relationship-tool]').click();
     await page.locator(`[data-mindmap-note-relationship-tool][data-active="true"][data-source-node-id="${fromId}"]`).waitFor({ state: 'visible', timeout: 10000 });

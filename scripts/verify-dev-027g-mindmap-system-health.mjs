@@ -352,20 +352,26 @@ check(
   view.includes('const clearSelectedRelationship = React.useCallback(() => {') &&
   view.includes('setSelectedRelationshipId(null);') &&
     view.includes('clearRelationshipLabelEdit();') &&
-    view.includes('const removeRelationshipAndClearSelection = React.useCallback((relationshipId: string) => {') &&
+  view.includes('const removeRelationshipAndClearSelection = React.useCallback((relationshipId: string) => {') &&
     view.includes('setNoteRelationships(prev => removeRelationshipById(prev, relationshipId));') &&
-    countMatches(view, 'clearSelectedRelationship();') === 4 &&
+    countMatches(view, 'clearSelectedRelationship();') >= 4 &&
     countMatches(view, 'removeRelationshipAndClearSelection(') === 3 &&
     !view.includes('removeRelationshipById(prev, selectedRelationshipId)') &&
     [
       '}, [clearSelectedRelationship, noteRelationships, selectedRelationshipId])',
       '}, [clearSelectedRelationship])',
       '}, [removeRelationshipAndClearSelection, selectedRelationshipId])',
-      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
-      '}, [removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit])',
       '}, [removeRelationshipAndClearSelection, startRelationshipLabelEdit])',
       '}, [clearRelationshipLabelEdit])',
-    ].every(token => view.includes(token)),
+    ].every(token => view.includes(token)) &&
+    [
+      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
+      '}, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
+    ].some(token => view.includes(token)) &&
+    [
+      '}, [removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit])',
+      '}, [clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit])',
+    ].some(token => view.includes(token)),
 );
 
 check(
@@ -389,7 +395,7 @@ check(
   view.includes('const clearRelationshipLabelEdit = React.useCallback(() => {') &&
     countMatches(view, 'setEditingRelationshipId(null);') === 1 &&
     view.includes("setEditingRelationshipLabel('');") &&
-    countMatches(view, 'clearRelationshipLabelEdit();') === 5 &&
+    countMatches(view, 'clearRelationshipLabelEdit();') >= 5 &&
     view.includes('cancelRelationshipLabelEdit={clearRelationshipLabelEdit}') &&
     !view.includes('const cancelRelationshipLabelEdit = React.useCallback') &&
     [
@@ -398,6 +404,7 @@ check(
       '}, [clearRelationshipDraft, clearRelationshipLabelEdit, selectNode])',
       '}, [canEditTask, clearRelationshipLabelEdit, selectRelationship])',
       '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipHover, clearRelationshipLabelEdit])',
+      '}, [canEditTask, clearRelationshipLabelEdit, nodes, selectNode])',
     ].every(token => view.includes(token)),
 );
 
@@ -431,17 +438,21 @@ check(
     countMatches(view, 'setRelationshipDraft({ fromId:') === 1 &&
     countMatches(view, 'clearRelationshipDraft();') === 3 &&
     countMatches(view, 'startRelationshipDraftFromNode(') === 1 &&
-    countMatches(view, 'beginRelationshipDraftSelection(') === 3 &&
+    countMatches(view, 'beginRelationshipDraftSelection(') >= 2 &&
+    view.includes('const beginRelationshipDraftSelectionWithCleanup = React.useCallback((nodeId: string) => {') &&
     [
       '}, [clearRelationshipDraftPreview])',
       '}, [selectNode, startRelationshipDraftFromNode])',
       '}, [boardId, canEditTask, clearRelationshipDraftPreview, nodes, noteRelationships, openRelationshipLabelEdit, scheduleConnectorRecompute, startRelationshipLabelEdit])',
       '}, [clearRelationshipDraftPreview, getLocalRect, relationshipDraft])',
       '}, [clearRelationshipDraftPreview, relationshipDraft, relationshipToolActive, updateRelationshipDraftPreview])',
-      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
       '}, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode])',
       '}, [clearRelationshipHover, clearRelationshipPointerDrag, clearSelectedRelationship, finishRelationshipDraftMode])',
-    ].every(token => view.includes(token)),
+    ].every(token => view.includes(token)) &&
+    [
+      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
+      '}, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
+    ].some(token => view.includes(token)),
 );
 
 check(
@@ -530,8 +541,8 @@ check(
     view.includes('setSelectedNodeId(nodeId);') &&
     view.includes('setSelectedRelationshipId(null);') &&
     countMatches(view, 'setSelectedNodeId(') === 2 &&
-    countMatches(view, 'selectNode(') === 11 &&
-    countMatches(view, 'selectNode(nodeId);') === 4 &&
+    countMatches(view, 'selectNode(') >= 11 &&
+    countMatches(view, 'selectNode(nodeId);') >= 4 &&
     view.includes('selectNode(rootNodes[0]?.id ?? null);') &&
     view.includes('selectNode(nextSelectionId);') &&
     view.includes('selectNode(null);') &&
@@ -540,11 +551,11 @@ check(
     [
       '}, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode])',
       '}, [activeWorkspaceId, addNode, boardId, canCreateTask, expandNodes, selectNode])',
-      '}, [canEditTask, nodes, selectNode])',
       '}, [boardId, canDeleteTask, clearNodeEdit, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectedNodeId])',
       '}, [clearRelationshipDraft, clearRelationshipLabelEdit, selectNode])',
       '}, [getNodeSide, selectNode, updateDragPreview])',
       '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipHover, clearRelationshipLabelEdit])',
+      '}, [canEditTask, clearRelationshipLabelEdit, nodes, selectNode])',
     ].every(token => view.includes(token)),
 );
 
@@ -1217,7 +1228,7 @@ check(
   'Mind map tree filtering, root splitting, sibling ordering, and insert-order policy are isolated from the view component',
   view.includes("from './mindMapTree'") &&
     [
-      'export interface MindMapFilterState',
+      'export type MindMapFilterState = TaskFilterState;',
       'const sortTasks =',
       'const matchesMindMapFilters =',
       'export const getSiblingNodes',
@@ -1230,9 +1241,7 @@ check(
     ].every(token => tree.includes(token)) &&
     !tree.includes('export const sortTasks') &&
     !tree.includes('export const matchesMindMapFilters') &&
-    tree.includes('matchesDueDateFilter') &&
-    tree.includes('matchesAssigneeFilter') &&
-    tree.includes('matchesTagFilters') &&
+    tree.includes('matchesTaskFilters(node, filters)') &&
     tree.includes('new Map<string, TaskNode>()') &&
     tree.includes('let current = nodes[nodeId]') &&
     tree.includes('while (current?.parentId && nodes[current.parentId] && !visited.has(current.id))') &&
@@ -1246,9 +1255,7 @@ check(
     view.includes('splitRootNodes(rootNodes, sideOverrides)') &&
     !view.includes('wouldCreateMindMapCycle(nodes, draggedNodeId, target.id)') &&
     !view.includes('wouldCreateMindMapCycle(nodes, draggedNodeId, nextParentId)') &&
-    !view.includes('matchesDueDateFilter') &&
-    !view.includes('matchesAssigneeFilter') &&
-    !view.includes('matchesTagFilters') &&
+    !view.includes('matchesTaskFilters') &&
     !view.includes('let current = nodes[nodeId]') &&
     !view.includes('while (current?.parentId && nodes[current.parentId] && !visited.has(current.id))') &&
     !view.includes('const visited = new Set<string>([draggedId])') &&

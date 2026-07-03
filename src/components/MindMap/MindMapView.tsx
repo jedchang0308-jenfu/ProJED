@@ -43,6 +43,7 @@ import {
   getMindMapCenterElement,
   getMindMapNodeElement,
   getMindMapNodeId,
+  isMindMapRelationshipInteractionElement,
 } from './mindMapDomSelectors';
 import { MINDMAP_MESSAGES, getMindMapDeleteTaskConfirmMessage } from './mindMapMessages';
 import {
@@ -287,6 +288,13 @@ const MindMapView: React.FC = () => {
     startRelationshipDraftFromNode(nodeId);
     selectNode(nodeId);
   }, [selectNode, startRelationshipDraftFromNode]);
+
+  const beginRelationshipDraftSelectionWithCleanup = React.useCallback((nodeId: string) => {
+    if (!canEditTask) return;
+    clearRelationshipHover();
+    clearRelationshipLabelEdit();
+    beginRelationshipDraftSelection(nodeId);
+  }, [beginRelationshipDraftSelection, canEditTask, clearRelationshipHover, clearRelationshipLabelEdit]);
 
   const openRelationshipLabelEdit = React.useCallback((relationshipId: string, label: string) => {
     selectRelationship(relationshipId);
@@ -790,9 +798,10 @@ const MindMapView: React.FC = () => {
     const node = nodes[nodeId];
     if (!node) return;
     selectNode(nodeId);
+    clearRelationshipLabelEdit();
     setEditingNodeId(nodeId);
     setEditingTitle(initialTitle ?? node.title ?? '');
-  }, [canEditTask, nodes, selectNode]);
+  }, [canEditTask, clearRelationshipLabelEdit, nodes, selectNode]);
 
   const commitEditForNode = React.useCallback((nodeId: string, title = editingTitle) => {
     const node = nodes[nodeId];
@@ -876,14 +885,14 @@ const MindMapView: React.FC = () => {
     setRelationshipToolActive(active => {
       const nextActive = !active;
       if (nextActive && selectedNodeId) {
-        beginRelationshipDraftSelection(selectedNodeId);
+        beginRelationshipDraftSelectionWithCleanup(selectedNodeId);
       } else {
         clearRelationshipDraft();
       }
       return nextActive;
     });
     clearSelectedRelationship();
-  }, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId]);
+  }, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId]);
 
   const createNoteRelationshipInline = React.useCallback((fromId: string, toId: string) => {
     if (!canEditTask || !boardId) return;
@@ -948,17 +957,7 @@ const MindMapView: React.FC = () => {
   }, [selectNode, setContextMenuState, setSelectedTaskId]);
 
   const handleSurfaceClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (
-      event.target instanceof Element &&
-      event.target.closest([
-        '[data-mindmap-note-relationship-click-target]',
-        '[data-mindmap-note-relationship-line-click-target]',
-        '[data-mindmap-note-relationship-curve-click-target]',
-        '[data-mindmap-note-relationship-endpoint]',
-        '[data-mindmap-note-relationship-control-point]',
-        '[data-mindmap-note-relationship-style-panel]',
-      ].join(','))
-    ) {
+    if (isMindMapRelationshipInteractionElement(event.target)) {
       return;
     }
     selectNode(null);
@@ -1108,6 +1107,11 @@ const MindMapView: React.FC = () => {
   }, [clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit]);
 
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const consumeMindMapKeyboardEvent = () => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation?.();
+    };
     const action = getMindMapKeyboardAction(event, {
       isEditingText: isMindMapTextEditingTarget(event.target),
       isEditingNode: Boolean(editingNodeId),
@@ -1118,25 +1122,25 @@ const MindMapView: React.FC = () => {
     if (!action) return;
 
     if (action.type === 'toggle-relationship-tool') {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       toggleRelationshipTool();
       return;
     }
 
     if (action.type === 'deactivate-relationship-mode') {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       deactivateRelationshipMode();
       return;
     }
 
     if (action.type === 'remove-selected-relationship' && selectedRelationshipId) {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       removeSelectedRelationship();
       return;
     }
 
     if (action.type === 'edit-selected-relationship-label' && selectedRelationshipId) {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       startRelationshipLabelEdit(selectedRelationshipId);
       return;
     }
@@ -1149,21 +1153,21 @@ const MindMapView: React.FC = () => {
         action.direction,
       );
       if (nextSelectionId) {
-        event.preventDefault();
+        consumeMindMapKeyboardEvent();
         selectNode(nextSelectionId);
       }
       return;
     }
 
     if (action.type === 'select-parent' && selectedNodeId) {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       const parentSelectionId = getParentSelection(selectedNodeId, nodes);
       if (parentSelectionId) selectNode(parentSelectionId);
       return;
     }
 
     if (action.type === 'select-first-child' && selectedNodeId) {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       const children = getChildren(selectedNodeId);
       const firstChildId = getFirstChildSelection(children);
       if (firstChildId) {
@@ -1174,25 +1178,25 @@ const MindMapView: React.FC = () => {
     }
 
     if (action.type === 'create-sibling') {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       createSiblingForNode(selectedNodeId);
       return;
     }
 
     if (action.type === 'create-child') {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       createChildForNode(selectedNodeId);
       return;
     }
 
     if (action.type === 'rename-selected' && selectedNodeId) {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       startEdit(selectedNodeId, action.initialTitle);
       return;
     }
 
     if (action.type === 'archive-selected-node' && selectedNodeId) {
-      event.preventDefault();
+      consumeMindMapKeyboardEvent();
       void archiveNode();
     }
   }, [

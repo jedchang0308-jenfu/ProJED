@@ -18,6 +18,32 @@ export class MeetingSynthesisError extends Error {
   }
 }
 
+const MEETING_SYNTHESIS_TIMEOUT_MS = 30000;
+
+const isTimeoutOrAbortError = (error: unknown) => {
+  const name = error instanceof Error ? error.name : '';
+  const message = error instanceof Error ? error.message : String(error);
+  const context = error && typeof error === 'object' && 'context' in error
+    ? (error as { context?: unknown }).context
+    : null;
+  const contextMessage = context && typeof context === 'object' && 'message' in context
+    ? String((context as { message?: unknown }).message)
+    : '';
+  return /abort|timeout|timed out/i.test(`${name} ${message} ${contextMessage}`);
+};
+
+const buildTimeoutFallbackSynthesis = (input: MeetingSynthesisInput): MeetingSynthesisResponse => {
+  const fallback = buildDeterministicMeetingSynthesis(input);
+  return {
+    ...fallback,
+    warnings: [
+      `AI整理超過 ${Math.round(MEETING_SYNTHESIS_TIMEOUT_MS / 1000)} 秒未完成，已改用本機規則整理；請人工校稿。`,
+      ...fallback.warnings,
+    ],
+    provider: 'deterministic-timeout-fallback',
+  };
+};
+
 const parseFunctionError = async (error: unknown) => {
   let code = 'SYNTHESIS_ERROR';
   let status = 500;
@@ -49,12 +75,25 @@ export const synthesizeMeetingRecord = async (
     return buildDeterministicMeetingSynthesis(input);
   }
 
-  const { data, error } = await supabase.functions.invoke<MeetingSynthesisResponse>(
+  const invokeResponse = await supabase.functions.invoke<MeetingSynthesisResponse>(
     'synthesize_meeting_record',
-    { body: input },
-  );
+    { body: input, timeout: MEETING_SYNTHESIS_TIMEOUT_MS },
+  ).catch(async error => {
+    if (isTimeoutOrAbortError(error)) {
+      return {
+        data: buildTimeoutFallbackSynthesis(input),
+        error: null,
+      };
+    }
+    throw await parseFunctionError(error);
+  });
+
+  const { data, error } = invokeResponse;
 
   if (error) {
+    if (isTimeoutOrAbortError(error)) {
+      return buildTimeoutFallbackSynthesis(input);
+    }
     throw await parseFunctionError(error);
   }
 

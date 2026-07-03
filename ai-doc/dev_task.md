@@ -1,5 +1,80 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-07-03
+
+### DEV-040: 正式環境同型 BUG 風險硬化與驗證
+
+狀態: Local Automated QC Passed / Production Smoke Not Run / Production Release Not Authorized
+節點類型: 交付點
+優先級: P0 production freeze/data-loss risk, P1 context race/stale response, P2 external timeout/local-only semantics
+父交付點: 無；關聯 DEV-011 / DEV-020 / DEV-027 / DEV-037 / DEV-039
+是否計入產品交付完成: 是
+建立日期: 2026-07-03
+
+原始需求邊界:
+- 使用者回報正式環境 BUG：新增會議記錄 > 匯入 > 整理專案變化，正式環境卡住不動。
+- 使用者回報正式環境 BUG：全域任務平台新增未歸位任務，切換不同看板後任務消失。
+- 使用者要求依原因分析推導其他可能 BUG，並由 QA 針對 7 點制定驗證計畫。
+- 使用者要求由 Dev PM 寫成開發文件；後續已完成本機 hotfix / verifier 修正與 local automated QC。
+
+交付文件:
+- `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
+- `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md`
+- `ai-doc/qc/QC-DEV-040-production-environment-risk-validation.md`
+
+Human Decision Brief:
+- 已確認：本 DEV 以正式環境同型風險為交付點，範圍包含 7 個風險點。
+- 已確認：本輪 local/source/browser automated QC 已通過；尚未授權 production deploy、remote migration、正式資料修復或正式環境 smoke。
+- AI assumption：正式環境問題主要來自 bounded failure 缺口、source-of-truth 缺口、stale-response 缺口與 localStorage-only 語意缺口。
+- Re-entry：production deploy、遠端 migration、資料修復 / 刪除、心智圖雲端同步語意、付費 / 第三方成本改變需使用者重新授權。
+
+Phase Roadmap:
+- Phase 0: PM / QA Documentation，建立 SPEC-040、QA-DEV-040、dev_task 與 documentation map 索引；本輪完成。
+- Phase 1: P0 Bounded Failure + Persistence，處理備份匯入 dependencies 持久化、RAG / knowledge retrieval timeout / fallback；RD Contract Ready / Not Authorized。
+- Phase 2: P1 Context Race / Stale Response，處理新增看板 temp id race、member stale response、tag stale response；RD Contract Ready / Not Authorized。
+- Phase 3: P2 External Service Timeout + Local-only Semantics，處理 Google Calendar timeout 與 MindMap localStorage-only 語意；RD Contract Ready / Not Authorized，MindMap 雲端同步為 Blocked Human Re-entry。
+- Phase 4: Production Release / Smoke Gate，部署與正式環境 smoke；Blocked Pending Human Authorization，必須使用 deployment-release-gate。
+
+All-Phase Coverage Matrix:
+
+| Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|
+| Phase 0 PM / QA Documentation | Authorized | Done | SPEC-040、QA-DEV-040、PM 索引 | 程式修改、deploy、migration、資料修復 | 使用者要求寫成開發文件 | 文件與索引完成 | 文件 diff |
+| Phase 1 P0 Bounded Failure + Persistence | Not Authorized | RD Contract Ready / Not Authorized | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、deploy、模型更換 | 使用者授權 RD | 無資料遺失、無無限 loading | verifier、DB count、UI/Network evidence |
+| Phase 2 P1 Context Race / Stale Response | Not Authorized | RD Contract Ready / Not Authorized | addBoard temp id、member stale guard、tag stale guard | core data model、RLS、deploy | 使用者授權 RD | 快速切換後只顯示當前 context | rapid-switch evidence、localStorage / DB evidence |
+| Phase 3 P2 External / Local-only Semantics | Not Authorized | RD Contract Ready / Not Authorized; MindMap cloud sync Blocked Human Re-entry | Google Calendar timeout、MindMap local-only guardrail | ICS feed、notification、cloud sync without decision | 使用者授權；MindMap 語意需決策 | 外部 API 失敗可見結束；local-only 不破壞主資料 | timeout evidence、localStorage clear evidence |
+| Phase 4 Production Release / Smoke | Blocked Pending Human Authorization | RD Contract Ready / Not Authorized | deploy、formal smoke、rollback readiness | 未授權 deploy、資料修復 | RD/QC passed + 使用者部署授權 | 正式環境 7 點 smoke 通過 | deployment-release-gate evidence |
+
+Deferred Scope Audit:
+- Same Spec Phase: production deploy / smoke 由 Phase 4 管控，需使用者授權與 deployment-release-gate。
+- Blocked Human Re-entry: remote schema/RLS/migration、正式資料修復 / 補匯入 / 刪資料。
+- Blocked Human Re-entry: MindMap localStorage-only 資料若要升級為跨裝置專案資料，需使用者先確認產品語意。
+- New DEV: Google Calendar subscription ICS source scope 續接 DEV-037；DEV-004 全人待辦平台 / formal Inbox cloud sync 續接既有 umbrella。
+- No Tracking: DEV-039 工作台 filter / placement lanes 本體重構已由 DEV-039 管控，本 DEV 不重複。
+
+Next condition:
+- 若使用者要求「繼續開發 DEV-040」或正式發布，先取得明確 production / deployment 授權並走 deployment-release-gate，禁止直接跳 production。
+- 若任一修正需要遠端 migration、資料修復或 deploy，停止並取得明確授權。
+- QC 未完成 production smoke 前，不得回報「正式環境已修復」。
+
+Stop conditions:
+- 需要 production deploy、remote migration、正式資料修復或資料刪除。
+- RAG / timeout fallback 會產生偽引用、錯誤資料或額外第三方成本。
+- stale-response 修正需要放寬權限或修改 RLS。
+- 心智圖 local-only 資料語意需改為專案資料但未取得使用者確認。
+
+Evidence required:
+- targeted verifier、TypeScript、build、production-like Supabase manual smoke。
+- 每個風險點至少保留操作前 / 後 / reload 截圖、Console / Network evidence、DB count 或 localStorage evidence。
+
+Local QC evidence - 2026-07-03:
+- `npm run verify:source` 通過。
+- `npm run verify:dev-020-project-change-import-browser` 通過。
+- `npm run verify:dev-039-task-workbench-placement-lanes-browser` 通過。
+- `npm run verify:dev-027g-mindmap-system-health-browser` 通過。
+- `npm run verify:dev-028-cross-mode-task-interactions-browser` 通過。
+- 詳細證據記錄於 `ai-doc/qc/QC-DEV-040-production-environment-risk-validation.md`。
+
 ## PM Update - 2026-07-02
 
 ### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構
@@ -253,7 +328,7 @@ Stop conditions:
 
 ### DEV-038: 設定中心作用範圍一致性與高風險防呆
 
-狀態: Ready for RD / SPEC + QA Ready
+狀態: RD Contract Ready / SPEC + QA Ready
 節點類型: 交付點
 優先級: P0 backup/import/trash risk, P1 settings IA consistency
 父交付點: DEV-036 Trello-like Workspace Governance
@@ -328,7 +403,7 @@ Stop conditions:
 
 ### DEV-037: 行事曆訂閱來源範圍清晰化
 
-狀態: Ready for RD / SPEC + QA Ready
+狀態: RD Contract Ready / SPEC + QA Ready
 節點類型: 交付點
 優先級: P1 settings IA and data-scope clarity
 父交付點: DEV-036 Trello-like Workspace Governance
@@ -1319,12 +1394,13 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 2 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
-| 3 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
-| 4 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-027 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
-| 5 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
-| 6 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
+| 1 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者授權後處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
+| 2 | DEV-011 / DEV-012 production UI smoke | In Verification | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 3 | DEV-026 Trello-like 看板分享體驗 RD | Done | RD | 已完成 topbar 分享入口、分享 modal、設定頁權限矩陣降層與 DEV-026 verifier。 |
+| 4 | DEV-011 / DEV-012 production backend AI smoke | Done | QC | 正式 Edge Function 以授權 user JWT 呼叫成功，回傳 AI 統整內容與實際模型。 |
+| 5 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-027 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
+| 6 | DEV-020 紀錄功能重構 RD | Done | RD | 已依 SPEC-020 重構紀錄入口、專案變化匯入、未儲存保護與功能說明。 |
+| 7 | 文件同步清理 backlog / documentation map | Done | PM | backlog、dev_task、documentation map 與 QC evidence 狀態一致。 |
 
 ---
 
@@ -1348,6 +1424,7 @@ CAPA 來源：
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
 | DEV-028 | 交付點 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`verify:dev-028-cross-mode-task-interactions`、browser smoke | 依 QA-DEV-028 補人工親自點擊 QC |
+| DEV-040 | 交付點 | Local Automated QC Passed / Production Smoke Not Run / Production Release Not Authorized | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040` | 等使用者授權 production / deployment gate；不得宣稱正式環境已修復 |
 
 ### 交付點完成率
 
@@ -1355,6 +1432,7 @@ CAPA 來源：
 - In Verification：2 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Browser Smoke Passed / Manual Click QC Pending：1 個交付點。
+- Local Automated QC Passed / Production Smoke Not Run / Production Release Not Authorized：1 個交付點。
 - Ready：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。

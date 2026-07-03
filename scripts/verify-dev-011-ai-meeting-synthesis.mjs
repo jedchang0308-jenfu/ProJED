@@ -205,6 +205,8 @@ for (const snippet of [
   "supabase.functions.invoke<MeetingSynthesisResponse>",
   "'synthesize_meeting_record'",
   'buildDeterministicMeetingSynthesis(input)',
+  'MEETING_SYNTHESIS_TIMEOUT_MS',
+  'deterministic-timeout-fallback',
   'MeetingSynthesisError',
 ]) {
   assert(`meetingSynthesisService missing snippet: ${snippet}`, serviceSource.includes(snippet));

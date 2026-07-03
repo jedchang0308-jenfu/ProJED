@@ -18,3 +18,15 @@ export const getMindMapCenterElement = (root: ParentNode | null | undefined) =>
 
 export const getMindMapNodeId = (element: HTMLElement) =>
   element.getAttribute(MINDMAP_NODE_ATTRIBUTE);
+
+const MINDMAP_RELATIONSHIP_INTERACTION_SELECTOR = [
+  '[data-mindmap-note-relationship-click-target]',
+  '[data-mindmap-note-relationship-line-click-target]',
+  '[data-mindmap-note-relationship-curve-click-target]',
+  '[data-mindmap-note-relationship-endpoint]',
+  '[data-mindmap-note-relationship-control-point]',
+  '[data-mindmap-note-relationship-style-panel]',
+].join(',');
+
+export const isMindMapRelationshipInteractionElement = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest(MINDMAP_RELATIONSHIP_INTERACTION_SELECTOR));

@@ -51,6 +51,8 @@ assert(
   'WBS store persists unplaced tasks locally and transitions between unplaced and real boards',
   source.wbsStore.includes("from '../features/taskWorkbench/placement'") &&
     source.wbsStore.includes('isTaskWorkbenchUnplacedTask') &&
+    source.wbsStore.includes('readTaskWorkbenchUnplacedTasks') &&
+    source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes') &&
     source.wbsStore.includes('upsertTaskWorkbenchUnplacedTask') &&
     source.wbsStore.includes('removeTaskWorkbenchUnplacedTask') &&
     source.wbsStore.includes('oldWasUnplaced') &&

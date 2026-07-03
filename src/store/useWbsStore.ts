@@ -8,6 +8,7 @@ import useRecordStore from './useRecordStore';
 import { useTagStore } from './useTagStore';
 import {
   isTaskWorkbenchUnplacedTask,
+  readTaskWorkbenchUnplacedTasks,
   removeTaskWorkbenchUnplacedTask,
   upsertTaskWorkbenchUnplacedTask,
 } from '../features/taskWorkbench/placement';
@@ -117,6 +118,24 @@ export interface WbsBoardActions {
 }
 
 export type WbsStore = WbsBoardState & WbsBoardActions;
+
+const mergeLocalUnplacedTasksForSetNodes = (
+  incomingNodes: TaskNode[],
+  currentNodes: Record<string, TaskNode>,
+) => {
+  const mergedNodes = new Map<string, TaskNode>();
+  incomingNodes.forEach(node => mergedNodes.set(node.id, node));
+
+  [
+    ...Object.values(currentNodes).filter(isTaskWorkbenchUnplacedTask),
+    ...readTaskWorkbenchUnplacedTasks(),
+  ].forEach(task => {
+    if (task.isArchived || mergedNodes.has(task.id)) return;
+    mergedNodes.set(task.id, task);
+  });
+
+  return Array.from(mergedNodes.values());
+};
 
 // 進度計算輔助函數
 const getStatusProgress = (status: TaskStatus): number => {
@@ -400,7 +419,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   },
 
   setNodes: (nodes) => {
-    const nodesRecord = nodes.reduce((acc, node) => {
+    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes);
+    const nodesRecord = nodesWithLocalUnplacedTasks.reduce((acc, node) => {
       const normalizedNode = applySmartStatus(node);
       acc[normalizedNode.id] = normalizedNode;
 

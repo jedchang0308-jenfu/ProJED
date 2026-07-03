@@ -158,6 +158,9 @@ const checks = [
       ".from('activity_events')",
       ".gte('created_at'",
       ".lte('created_at'",
+      'ACTIVITY_EVENT_QUERY_TIMEOUT_MS',
+      'createTimeoutAbortSignal',
+      '.abortSignal(signal)',
     ],
   },
   {

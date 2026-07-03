@@ -82,6 +82,20 @@ const assertNoError = (error: { message: string } | null) => {
   if (error) throw new Error(error.message);
 };
 
+const ACTIVITY_EVENT_QUERY_TIMEOUT_MS = 45000;
+
+const createTimeoutAbortSignal = (timeoutMs: number): AbortSignal | undefined => {
+  if (typeof AbortSignal === 'undefined') return undefined;
+  if (typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(timeoutMs);
+  }
+  if (typeof AbortController === 'undefined') return undefined;
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+};
+
 const isMissingTagTableError = (error: unknown) => {
   const message = error instanceof Error
     ? error.message
@@ -1755,6 +1769,10 @@ export const supabaseEventLogService = {
     }
     if (eventTypes) {
       request = request.in('event_type', eventTypes);
+    }
+    const signal = createTimeoutAbortSignal(ACTIVITY_EVENT_QUERY_TIMEOUT_MS);
+    if (signal) {
+      request = request.abortSignal(signal);
     }
 
     const { data, error } = await request;

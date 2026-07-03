@@ -170,6 +170,23 @@ const getMeetingWorkflowStepHint = (step: MeetingWorkflowArrowStepItem) => {
 };
 
 const AI_MEETING_SYNTHESIS_TOOLTIP = 'AI整理是建議動作，可跳過。\n直接發布會保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。';
+const PROJECT_CHANGE_IMPORT_TIMEOUT_MS = 45000;
+
+const withProjectChangeImportTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMessage: string,
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), PROJECT_CHANGE_IMPORT_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
 
 const getMeetingWorkflowStepTitle = (step: MeetingWorkflowArrowStepItem) => {
   if (step.stage === 'project_import') {
@@ -873,14 +890,17 @@ const RecordSidebar: React.FC = () => {
     }));
 
     try {
-      const events = await eventLogService.listActivity({
-        workspaceId: activeWorkspaceId,
-        boardId: activeBoardId,
-        scope: projectChangeImport.scope,
-        startedAt,
-        endedAt,
-        eventTypes: PROJECT_CHANGE_EVENT_TYPES,
-      });
+      const events = await withProjectChangeImportTimeout(
+        eventLogService.listActivity({
+          workspaceId: activeWorkspaceId,
+          boardId: activeBoardId,
+          scope: projectChangeImport.scope,
+          startedAt,
+          endedAt,
+          eventTypes: PROJECT_CHANGE_EVENT_TYPES,
+        }),
+        '讀取專案變化逾時，請確認正式環境連線後重試；也可以縮短日期範圍再整理。',
+      );
 
       if (events.length === 0) {
         setProjectChangeImport(state => ({
@@ -893,11 +913,14 @@ const RecordSidebar: React.FC = () => {
         return;
       }
 
-      const result = await synthesizeMeetingRecord(createProjectChangeSynthesisInput(
-        draft.title || '專案變化紀錄',
-        events,
-        nodes,
-      ));
+      const result = await withProjectChangeImportTimeout(
+        synthesizeMeetingRecord(createProjectChangeSynthesisInput(
+          draft.title || '專案變化紀錄',
+          events,
+          nodes,
+        )),
+        '整理專案變化逾時，請稍後重試；也可以縮短日期範圍或先手動撰寫紀錄。',
+      );
       setProjectChangeImport(state => ({
         ...state,
         status: 'ready',
