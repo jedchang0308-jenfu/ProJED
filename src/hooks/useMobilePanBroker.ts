@@ -26,6 +26,18 @@ const findVerticalSurface = (target: EventTarget | null) => {
   return target.closest('[data-mobile-pan-surface="kanban-column"]') as HTMLElement | null;
 };
 
+const isMobilePanPassThroughTarget = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('[data-mobile-pan-pass-through="true"]'));
+
+const recordMobilePanDebug = (entry: Record<string, unknown>) => {
+  if (typeof window === 'undefined' || import.meta.env.MODE !== 'test') return;
+  const debugWindow = window as any;
+  debugWindow.__projedMobilePanDebug = [
+    ...(debugWindow.__projedMobilePanDebug || []),
+    { ...entry, at: Date.now() },
+  ].slice(-50);
+};
+
 export const useMobilePanBroker = <TElement extends HTMLElement>() => {
   const surfaceRef = React.useRef<TElement | null>(null);
   const panStateRef = React.useRef<MobilePanState | null>(null);
@@ -55,11 +67,24 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
         suppressNextClickRef.current = true;
         scheduleSuppressReset();
       }
+      recordMobilePanDebug({ type: 'reset', wasActive: Boolean(panStateRef.current?.active) });
       panStateRef.current = null;
     };
 
     const handleTouchStart = (event: TouchEvent) => {
-      if (!isCoarsePointer() || event.touches.length !== 1 || isTaskPrimaryActionTarget(event.target)) {
+      const passThrough = isMobilePanPassThroughTarget(event.target);
+      const primaryActionTarget = isTaskPrimaryActionTarget(event.target);
+      const blockedByControl = primaryActionTarget && !passThrough;
+      recordMobilePanDebug({
+        type: 'touchstart',
+        target: event.target instanceof Element ? event.target.tagName : null,
+        primaryActionTarget,
+        passThrough,
+        touchCount: event.touches.length,
+        coarse: isCoarsePointer(),
+        blockedByControl,
+      });
+      if (!isCoarsePointer() || event.touches.length !== 1 || blockedByControl) {
         reset();
         return;
       }
@@ -68,6 +93,7 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
       const verticalSurface = findVerticalSurface(event.target);
       const canScrollX = canScrollHorizontally(horizontalSurface);
       const canScrollY = canScrollVertically(verticalSurface);
+      recordMobilePanDebug({ type: 'touchstart:surfaces', canScrollX, canScrollY });
 
       if (!canScrollX && !canScrollY) {
         reset();
@@ -96,6 +122,15 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
       const deltaY = touch.clientY - state.startY;
       const wantsHorizontalPan = state.canScrollX && Math.abs(deltaX) > PAN_THRESHOLD_PX;
       const wantsVerticalPan = state.canScrollY && Math.abs(deltaY) > PAN_THRESHOLD_PX;
+      recordMobilePanDebug({
+        type: 'touchmove',
+        deltaX,
+        deltaY,
+        wantsHorizontalPan,
+        wantsVerticalPan,
+        canScrollX: state.canScrollX,
+        canScrollY: state.canScrollY,
+      });
 
       if (!state.active && !wantsHorizontalPan && !wantsVerticalPan) return;
 
@@ -120,18 +155,21 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
       clearSuppressTimer();
     };
 
-    horizontalSurface.addEventListener('touchstart', handleTouchStart, { passive: true });
-    horizontalSurface.addEventListener('touchmove', handleTouchMove, { passive: false });
-    horizontalSurface.addEventListener('touchend', reset, { passive: true });
-    horizontalSurface.addEventListener('touchcancel', reset, { passive: true });
+    const passiveCaptureOptions = { passive: true, capture: true } as AddEventListenerOptions;
+    const activeCaptureOptions = { passive: false, capture: true } as AddEventListenerOptions;
+
+    horizontalSurface.addEventListener('touchstart', handleTouchStart, passiveCaptureOptions);
+    horizontalSurface.addEventListener('touchmove', handleTouchMove, activeCaptureOptions);
+    horizontalSurface.addEventListener('touchend', reset, passiveCaptureOptions);
+    horizontalSurface.addEventListener('touchcancel', reset, passiveCaptureOptions);
     horizontalSurface.addEventListener('click', handleClickCapture, true);
 
     return () => {
       clearSuppressTimer();
-      horizontalSurface.removeEventListener('touchstart', handleTouchStart);
-      horizontalSurface.removeEventListener('touchmove', handleTouchMove);
-      horizontalSurface.removeEventListener('touchend', reset);
-      horizontalSurface.removeEventListener('touchcancel', reset);
+      horizontalSurface.removeEventListener('touchstart', handleTouchStart, passiveCaptureOptions);
+      horizontalSurface.removeEventListener('touchmove', handleTouchMove, activeCaptureOptions);
+      horizontalSurface.removeEventListener('touchend', reset, passiveCaptureOptions);
+      horizontalSurface.removeEventListener('touchcancel', reset, passiveCaptureOptions);
       horizontalSurface.removeEventListener('click', handleClickCapture, true);
     };
   }, []);

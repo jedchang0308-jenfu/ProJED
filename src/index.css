@@ -125,6 +125,10 @@
   user-select: none;
 }
 
+.task-drag-hitbox[data-mobile-pan-pass-through="true"] {
+  touch-action: pan-x pan-y;
+}
+
 .dragging {
   opacity: 0.5;
   transform: scale(1.05);

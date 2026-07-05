@@ -4,9 +4,12 @@ import { resolve } from 'node:path';
 const files = {
   useCoarsePointer: 'src/hooks/useCoarsePointer.ts',
   useMobilePanBroker: 'src/hooks/useMobilePanBroker.ts',
+  useLongPress: 'src/hooks/useLongPress.ts',
   useTouchTapGuard: 'src/hooks/useTouchTapGuard.ts',
   css: 'src/index.css',
   boardView: 'src/components/BoardView.tsx',
+  mobileTaskActionContext: 'src/components/Wbs/mobileTaskActionContext.ts',
+  taskDragHandle: 'src/components/Wbs/TaskDragHandle.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
@@ -128,6 +131,63 @@ assert(
     source.browserVerifier.includes('card body pan suppresses task actions') &&
     source.browserVerifier.includes('mobile quick tap opens TaskDetailsModal when no pan movement occurs') &&
     source.browserVerifier.includes('desktop mouse click still opens TaskDetailsModal'),
+);
+
+assert(
+  'mobile compact drag-action mode replaces mobile full task menu',
+  source.mobileTaskActionContext.includes('MobileTaskActionContext') &&
+    source.mobileTaskActionContext.includes('window.innerWidth <= 768') &&
+    source.boardView.includes('data-mobile-task-action-rail') &&
+    source.boardView.includes('data-mobile-task-action-rail-placement="top"') &&
+    source.boardView.includes('data-mobile-task-action-text="true"') &&
+    source.boardView.includes('data-mobile-task-action-label={label}') &&
+    source.boardView.includes('標示完成') &&
+    source.boardView.includes('新增同階') &&
+    source.boardView.includes('新增下層') &&
+    source.boardView.includes('刪除任務') &&
+    source.boardView.includes('data-mobile-task-action={item.key}') &&
+    source.boardView.includes('data-mobile-drag-preview') &&
+    source.boardView.includes('data-mobile-drop-indicator') &&
+    source.boardView.includes('MOBILE_TASK_ACTION_FAILSAFE_MS') &&
+    source.boardView.includes('MOBILE_TASK_EDGE_SCROLL_THRESHOLD_PX') &&
+    source.boardView.includes('autoScrollMobileTaskSurfaces') &&
+    source.boardView.includes('startMobileTaskAutoScroll') &&
+    source.boardView.includes("type: 'edge-scroll'") &&
+    source.boardView.includes("window.addEventListener('pointercancel'") &&
+    source.boardView.includes("document.addEventListener('visibilitychange'") &&
+    source.boardView.includes("event.key === 'Escape'") &&
+    source.boardView.includes("recordMobileTaskActionDebug({ type: 'cancel:reset'") &&
+    source.boardView.includes("showConfirm(`確定要刪除任務") &&
+    source.useLongPress.includes('ignoreTaskDragHandle') &&
+    source.useMobilePanBroker.includes('isMobilePanPassThroughTarget') &&
+    source.taskDragHandle.includes('data-mobile-pan-pass-through') &&
+    source.taskDragHandle.includes('data-mobile-drag-disabled') &&
+    source.kanbanCard.includes('dragDisabled={mobileActionMode}') &&
+    source.kanbanCard.includes('isMobileTaskActionMode()') &&
+    source.kanbanCard.includes('mobileTaskAction?.begin') &&
+    source.kanbanChecklist.includes('dragDisabled={mobileActionMode}') &&
+    source.kanbanChecklist.includes('isMobileTaskActionMode()') &&
+    source.kanbanChecklist.includes('mobileTaskAction?.begin') &&
+    source.taskWorkbench.includes('mobileActionMode') &&
+    source.taskWorkbench.includes('disabled: !canMoveTask || mobileActionMode') &&
+    source.taskWorkbench.includes('data-mobile-drop-target={task.id}'),
+);
+
+assert(
+  'browser verifier covers Phase 1B mobile compact action rail operations',
+    source.browserVerifier.includes('card long press enters mobile drag-action mode') &&
+    source.browserVerifier.includes('checklist row long press enters mobile drag-action mode') &&
+    source.browserVerifier.includes('mobile drag handle short pan scrolls the board') &&
+    source.browserVerifier.includes('card drag handle long press uses mobile action mode') &&
+    source.browserVerifier.includes('checklist drag handle long press uses mobile action mode') &&
+    source.browserVerifier.includes('touchcancel exits mobile drag-action mode without committing') &&
+    source.browserVerifier.includes('drag-action near right viewport edge auto-scrolls board') &&
+    source.browserVerifier.includes('drag-action near bottom column edge auto-scrolls column') &&
+    source.browserVerifier.includes('drop on delete action opens confirmation without immediate delete') &&
+    source.browserVerifier.includes('long press drag to another task reorders by task position') &&
+    source.browserVerifier.includes('drop on add-child action creates a child and opens details') &&
+    source.browserVerifier.includes('drop on complete action toggles task completed state') &&
+    source.browserVerifier.includes('workbench row long press enters mobile drag-action mode'),
 );
 
 const failed = results.filter(result => !result.ok);

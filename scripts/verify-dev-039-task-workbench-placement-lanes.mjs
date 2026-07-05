@@ -3,7 +3,10 @@ import { resolve } from 'node:path';
 
 const files = {
   placement: 'src/features/taskWorkbench/placement.ts',
+  taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
+  kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
+  kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
   boardView: 'src/components/BoardView.tsx',
   wbsStore: 'src/store/useWbsStore.ts',
   quickCaptureStore: 'src/store/useQuickCaptureStore.ts',
@@ -92,6 +95,19 @@ assert(
     source.taskWorkbench.includes('data-task-workbench-hierarchy-depth') &&
     source.taskWorkbench.includes('style={{ paddingLeft:') &&
     source.browserVerifier.includes('dense text rows should not render a separate drag handle'),
+);
+
+assert(
+  'Task Workbench all-task ordering reuses the board task date badge module',
+  source.taskDateBadge.includes('export const TaskDateBadge') &&
+    source.taskDateBadge.includes("surface === 'kanban-card'") &&
+    source.taskDateBadge.includes("surface === 'checklist'") &&
+    source.taskDateBadge.includes("data-task-date-surface=\"workbench\"") &&
+    source.kanbanCard.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+    source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+    source.taskWorkbench.includes("import { TaskDateBadge } from './Wbs/TaskDateBadge'") &&
+    source.taskWorkbench.includes('surface="workbench"') &&
+    source.browserVerifier.includes('all-task sorted lane should render due date badges from the shared task date module'),
 );
 
 assert(

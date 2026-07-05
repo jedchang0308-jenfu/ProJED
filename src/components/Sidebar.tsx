@@ -395,18 +395,6 @@ const Sidebar = () => {
 
           <div className="border-t border-slate-100 bg-slate-50/50 p-2">
             <button
-              onClick={handleOpenTaskWorkbench}
-              data-sidebar-task-workbench-button="true"
-              className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                isTaskWorkbenchView
-                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
-                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
-              }`}
-            >
-              <ClipboardList size={16} className={isTaskWorkbenchView ? 'text-white/90' : 'text-slate-400'} />
-              <span className="min-w-0 flex-1 truncate text-left">開啟全域任務平台</span>
-            </button>
-            <button
               onClick={() => setView('settings')}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                 isSettingsScopeView

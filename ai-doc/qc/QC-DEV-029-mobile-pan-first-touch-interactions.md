@@ -9,7 +9,7 @@
 ## 驗證結論
 
 - 判定：通過，本機 automated + real browser gesture matrix 通過。
-- 範圍：DEV-029 Phase 1 BoardView / KanbanCard / KanbanChecklist / TaskWorkbench mobile overlay pan-first 觸控仲裁。
+- 範圍：DEV-029 Phase 1 + Phase 1B BoardView / KanbanCard / KanbanChecklist / TaskWorkbench mobile overlay pan-first 觸控仲裁、compact action rail、手機拖曳把手 pass-through、長按卡死復原與 drag-action edge auto-scroll。
 - 限制：H01-H04 physical-phone 補充案例未在本機環境執行；不得宣稱 iOS Safari / Android Chrome 真機手感已完成簽核。
 
 ## RD 修正事實
@@ -21,15 +21,18 @@
 - `src/components/Wbs/KanbanChecklist.tsx` 移除 touch handler 內的 `stopPropagation()`，讓手勢可抵達捲動 surface。
 - 看板卡片與 checklist 的隱藏 rename pencil 改為不可見時 `pointer-events: none`，只在 hover / focus-visible 時可操作，避免不可見控制項攔截手機 pan。
 - `src/components/TaskWorkbenchPanel.tsx` 對 `未歸位` 與 `所有任務排序` row 套用 `useTouchTapGuard()`，短滑後 suppress compatibility click，避免 row pan 後誤開詳情。
-- `scripts/verify-dev-029-mobile-pan-first-interactions.mjs` 補強 static gate，檢查 mobile tap-to-details、pan suppression 與 task workbench row touch tap guard。
+- 2026-07-05 Phase 1B hotfix：手機 `TaskDragHandle` 保留可見把手但停用 dnd-kit touch listener，改為 pan pass-through；把手短滑可移動畫面，把手長按也進入同一個 mobile drag-action mode。
+- 2026-07-05 Phase 1B hotfix：`touchcancel` 改為純取消不提交，並補 `pointercancel`、visibility、blur、pagehide、`Escape` 與 timeout hard-cancel，避免真機長按模式卡住。
+- 2026-07-05 Phase 1B hotfix：mobile drag-action mode 補 edge auto-scroll；拖曳靠近 board 右邊緣會自動增加 `scrollLeft`，靠近 column 底部會自動增加 `scrollTop`。
+- `scripts/verify-dev-029-mobile-pan-first-interactions.mjs` 補強 static gate，檢查 mobile tap-to-details、pan suppression、task workbench row touch tap guard、compact action rail、手機把手 pass-through 與 hard-cancel 退出路徑。
 
 ## 執行項目
 
 | Gate | Result | Evidence |
 |---|---|---|
-| `npm.cmd run verify:dev-029-mobile-pan-first-interactions` | Pass, 27/27 | static gate 覆蓋 touch tap guard、mobile tap-to-details、L2+ pan broker、hidden control hit-test、workbench row guard |
+| `npm.cmd run verify:dev-029-mobile-pan-first-interactions` | Pass, 32/32 | static gate 覆蓋 touch tap guard、mobile tap-to-details、L2+ pan broker、hidden control hit-test、workbench row guard、compact action rail、手機把手 pass-through、hard-cancel 退出路徑 |
 | `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser` | Pass | wrapper exit code 0 |
-| Fixed-session browser matrix | Pass, 25/25 | `localStorage.dev029-mobile-pan-operation-matrix-result`，`ok=true`、`pass=25`、`fail=0` |
+| Fixed-session browser matrix | Pass | 新增覆蓋手機拖曳把手短滑 pan、父/子任務把手長按、drag-action 右邊緣 / 底部邊緣 auto-scroll、`touchcancel` 退出不卡死 |
 | `npm.cmd run verify:dev-028-cross-mode-task-interactions` | Pass, 35/35 | desktop/cross-mode contract static regression |
 | `npm.cmd run verify:dev-039-task-workbench-placement-lanes` | Pass, 22/22 | task workbench placement/static regression |
 | `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` | Pass | task workbench browser regression |
@@ -53,8 +56,13 @@ Key cases:
 - `QA-029-E05`: hidden rename pencil `opacity=0`、`pointer-events=none`，且 hit-test 不落在控制項。
 - `QA-029-B06`: workbench row pan suppresses task actions，Pass。
 - `QA-029-D03`: desktop mouse click still opens `TaskDetailsModal`，clicked `qc-card-1` and modal `data-task-id=qc-card-1`。
-- `QA-029-C01` / `QA-029-C02`: card / checklist row long press opens task menu。
-- `QA-029-F02`: card main surface `touch-action=pan-x pan-y`，explicit drag handle `touch-action=none`。
+- `QA-029-C01` / `QA-029-C02`: card / checklist row long press opens top text compact action rail。
+- `QA-029-B09`: mobile drag handle short pan moves board `scrollLeft`。
+- `QA-029-C09` / `QA-029-C10`: parent / checklist drag handle long press uses mobile action mode。
+- `QA-029-C11`: `touchcancel` exits mobile drag-action mode and removes rail / preview。
+- `QA-029-C12`: drag-action near right viewport edge auto-scrolls board horizontally。
+- `QA-029-C13`: drag-action near bottom column edge auto-scrolls column vertically。
+- `QA-029-F02`: card main surface and mobile drag handle `touch-action=pan-x pan-y`；drag handle has `data-mobile-pan-pass-through="true"` and `data-mobile-drag-disabled="true"`。
 
 Screenshots:
 - `output/playwright/dev-029-mobile-pan-operation-matrix-1783180293462-A01-loaded.png`

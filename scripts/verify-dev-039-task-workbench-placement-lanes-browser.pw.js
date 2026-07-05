@@ -166,6 +166,23 @@ async (page) => {
       'all-task sorted lane should sort by due date ascending with the earlier unplaced task above later placed tasks',
       { sortedTexts, unplacedIndex, placedIndex },
     );
+    const sortedUnplacedCard = placedLane
+      .locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="unplaced"]')
+      .filter({ hasText: '尚未歸位的採購提醒' })
+      .first();
+    const sortedPlacedCard = placedLane
+      .locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="placed"]')
+      .filter({ hasText: '已歸位任務 - 國泰發現' })
+      .first();
+    assert(
+      await sortedUnplacedCard.locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-01"]').count() === 1 &&
+        await sortedPlacedCard.locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-08"]').count() === 1,
+      'all-task sorted lane should render due date badges from the shared task date module',
+      {
+        unplacedDateText: await sortedUnplacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null),
+        placedDateText: await sortedPlacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null),
+      },
+    );
     const seededUnplacedCompactCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').first();
     const seededUnplacedBox = await seededUnplacedCompactCard.boundingBox();
     assert(

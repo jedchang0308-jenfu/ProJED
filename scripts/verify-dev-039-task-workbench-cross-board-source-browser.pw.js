@@ -240,6 +240,30 @@ async (page) => {
       'cross-board tasks should sort by due date rather than active board',
       { activeBoardLabel, sortedIds, bIndex, childIndex, aIndex },
     );
+    const bDateBadge = allTaskCards
+      .filter({ hasText: 'Board B cross-source task' })
+      .first()
+      .locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-05"]');
+    const childDateBadge = allTaskCards
+      .filter({ hasText: 'List child hierarchy task' })
+      .first()
+      .locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-06"]');
+    const aDateBadge = allTaskCards
+      .filter({ hasText: 'Board A cross-source task' })
+      .first()
+      .locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-08"]');
+    assert(
+      await bDateBadge.count() === 1 &&
+        await childDateBadge.count() === 1 &&
+        await aDateBadge.count() === 1,
+      'cross-board all-task ordering should show due dates on each sorted task row',
+      {
+        activeBoardLabel,
+        bDateText: await bDateBadge.textContent().catch(() => null),
+        childDateText: await childDateBadge.textContent().catch(() => null),
+        aDateText: await aDateBadge.textContent().catch(() => null),
+      },
+    );
 
     const rootCard = allTaskCards.filter({ hasText: 'Board B cross-source task' }).first();
     const childCard = allTaskCards.filter({ hasText: 'List child hierarchy task' }).first();

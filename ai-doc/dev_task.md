@@ -2,6 +2,199 @@
 
 ## PM Update - 2026-07-05
 
+### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
+
+狀態: RD Contract Ready / Not Authorized / Documentation Only
+節點類型: 交付點 addendum / interaction contract
+父交付點: DEV-028 四模式一致的 Trello-like 任務操作契約
+是否計入產品交付完成: 是，限後續 RD 完成後；本輪只文件化不開發
+建立日期: 2026-07-05
+
+原始需求邊界:
+- 使用者要求刪除「重新命名任務點鉛筆、F2、右鍵選單、長按選單、標題雙擊、外層直接打字」等任務外層 rename gesture。
+- 新規則：任務名稱只能先進入任務詳情頁，再在任務詳情頁的任務名稱區編輯。
+- 任務詳情頁中的任務名稱 UI 必須有不同視覺，引導使用者理解可點選編輯。
+- 使用者明確要求本輪「寫成開發文件，先不開發」。
+
+Human Decision Brief:
+- 已確認：看板卡片、L3+ 待辦列、全域任務平台排序列、未歸位列、清單列、甘特列與心智圖節點不再承載 rename。
+- 已確認：右鍵 / 長按選單不得直接提供「重新命名」外層入口；若需要改名，應開啟任務詳情。
+- 已確認：`TaskDetailsModal` / 任務詳情頁 title area 是唯一改名入口，且必須有 editable affordance。
+- 已否決：pencil、F2、`t`、右鍵重新命名、長按重新命名、標題雙擊、selected task 直接打字進入外層 rename。
+- AI 假設：資料模型不變；此 addendum 是 UI interaction contract 與 verifier 更新，不需要 schema / migration。若既有新增任務流程依賴 inline rename，RD 應改為導向詳情頁 title edit。
+
+目前授權邊界:
+- Authorized: SPEC / QA / dev_task / documentation_map 文件更新。
+- Not Authorized: 產品程式碼修改、verifier 實作、QA/QC 實際操作驗證、production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態。
+
+RD Handoff / Implementation Contract:
+- 移除或停用任務外層 surface 的 rename affordance：pencil、right-click rename、long-press rename、`t`、F2、double-click title、selected task direct typing、outer inline title input。
+- 清單、看板、L3+ 待辦、工作台、甘特、心智圖的任務名稱點擊語意保持「開詳情」，不得直接進入 rename。
+- `TaskDetailsModal` 任務名稱區改為唯一 title edit locus，需有淡色底、細邊框、hover / focus outline、常駐或 hover 可見 affordance 等可辨識視覺。
+- 詳情頁 title edit 需支援可驗收的進入、輸入、儲存、取消或失焦策略；不得造成名稱遺失。
+- 任務操作選單可保留其他功能，但不得有直接 rename；可改成「開啟詳情」或等效入口。
+- 新增任務若需立即命名，需導向任務詳情頁 title edit，不得在任務列或卡片上開 outer rename input。
+- 保留 DEV-028 click-to-details、DEV-029 mobile pan-first、心智圖 Enter/Tab/方向鍵、看板 Level 3+ 正面顯示與既有拖曳/依賴/日期控制。
+
+Acceptance:
+- 四模式與全域任務平台中，任務卡 / 任務列 / 節點 / 甘特列外層不存在可觸發 rename 的 UI 或快捷鍵。
+- 單擊任務名稱只會開任務詳情，不會直接進入外層改名。
+- 任務詳情頁任務名稱區看得出可編輯，且可在桌機與手機完成 title edit。
+- 右鍵 / 長按任務操作選單不包含直接「重新命名」入口。
+- 新增任務命名流程若存在，必須落在詳情頁 title edit。
+- 手機短滑仍依 DEV-029 優先 pan；無位移 tap 仍可開詳情；不得因移除外層 rename 破壞既有 pan-first。
+- Desktop 與 390x844 mobile viewport 下，title edit affordance、modal、context menu 不得重疊、裁切或溢出。
+
+QA / QC gate:
+- 更新 `verify:dev-028-cross-mode-task-interactions` 與 browser verifier，新增外層 rename removal、detail-only title edit、new-task title edit case。
+- 執行 DEV-029 mobile pan-first regression，確認手機任務卡與 L2+ 子任務列短滑不被 title edit 改動破壞。
+- 執行 DEV-027B / DEV-027E 心智圖 regression，確認 Enter/Tab/方向鍵仍有效且直接打字不再 rename。
+- 執行 `npm.cmd exec tsc -- --noEmit`、`npm.cmd run build:test`。
+- 補人工 MAN-028 cases：外層無 rename、詳情 title edit 可辨識可操作、context menu 無 rename、新增任務導向詳情 title edit。
+
+Stop Conditions:
+- 任一外層 task surface 仍可透過 pencil、F2、`t`、右鍵、長按、雙擊或直接打字 rename。
+- 詳情頁任務名稱不可辨識為可編輯，或無法完成儲存 / 取消。
+- 新增任務命名流程因移除 inline rename 而斷裂。
+- 改名流程造成任務名稱遺失、空值覆蓋或錯任務更新。
+- 未取得使用者實作授權前，RD 不得修改產品程式碼。
+
+Deferred Scope Audit:
+- Product code implementation: Same Spec Phase / Not Authorized，需使用者明確授權 RD 開發。
+- Automated verifier implementation: Same Spec Phase / Not Authorized，隨 RD implementation 一起開。
+- Manual QA/QC execution: Blocked Human Re-entry，需使用者授權 QA/QC 實際驗證。
+- Production deploy: Blocked Human Re-entry，需 deployment-release-gate。
+- DB schema / migration / RLS / RPC: No Tracking，UI interaction contract 不需要資料層變更。
+- Task details drawer/page redesign: New DEV Candidate，若要把 `TaskDetailsModal` 改成抽屜或新頁面需另行決策。
+
+All-Phase Coverage Matrix:
+
+| Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
+|---|---|---|---|---|
+| 0 | PM/RD Contract Addendum | Complete | Authorized | SPEC-028、QA-DEV-028、dev_task、documentation_map updated |
+| 1 | Detail-Only Title Edit RD Implementation | RD Contract Ready | Not Authorized | product diff、static/browser verifier、TypeScript、build:test |
+| 2 | QA/QC Verification | QA Plan Ready | Not Authorized | MAN-028 updated evidence、browser traces、mobile regression |
+| 3 | Production Release | Not Started | Not Authorized | deployment-release-gate、post-deploy smoke、rollback target |
+
+文件:
+- `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`
+- `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md`
+- `ai-doc/documentation_map.md`
+
+### DEV-029 Addendum: 手機精簡任務操作列與長按拖放
+
+狀態: Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed
+節點類型: 交付點 addendum / mobile interaction contract
+父交付點: DEV-029 手機 Pan-First 觸控手勢仲裁
+是否計入產品交付完成: 是，Phase 1B 已完成本機自動化驗證；正式部署另需授權
+建立日期: 2026-07-05
+
+原始需求邊界:
+- 使用者指出手機版右鍵清單功能太多，要求刪除多數功能，只保留精簡。
+- 使用者希望手機長按任務時，像 Trello 類手機互動一樣，同時出現任務操作清單與任務拖曳模式。
+- 任務可拖曳到其他任務位置排序；若拖曳到操作清單選項，表示選擇該功能。
+- 使用者明確說本次只改手機模式，電腦模式不改。
+- 使用者先要求寫成開發文件；後續已授權 Dev PM 執行開發，完成手機模式 Phase 1B 實作與本機驗證。
+
+Human Decision Brief:
+- HCS 引導決策來源：使用者回答 `1B 2B 3A`。
+- 1B：手機長按清單保留「標示完成 / 取消完成、新增同階任務、新增下層任務、刪除任務」。
+- 2B：長按後任務浮起，可拖曳排序，同時顯示精簡操作區。
+- 3A：低風險功能可由 drop 直接觸發；刪除必須二次確認，不可直接刪。
+- 已確認：電腦版右鍵選單、桌機拖曳、桌機快捷鍵與桌機 click-to-details 不改。
+- 已否決：手機完整桌機型右鍵清單、drop 到刪除直接刪除、手機清單保留改名 / 指派 / 複製 / 依賴 / 升降階。
+- AI 假設：compact action rail options 可保留 tap fallback；新增任務命名需遵守 DEV-028 addendum，走詳情頁 title edit，不開外層 rename。
+
+目前授權邊界:
+- Authorized / Complete: 產品程式碼修改、DEV-029 static/browser verifier 更新、本機自動化 QA、SPEC / QA / dev_task / documentation_map 文件更新。
+- Not Authorized: production deploy、schema / migration、手機非 board modes 重新開放、桌機行為修改、完整 physical-phone supplemental 簽核。
+
+End-State Architecture:
+- DEV-029 維持 pan-first：手機短滑仍優先移動畫面，不能被拖曳排序搶走。
+- 手機無位移 quick tap 仍開 `TaskDetailsModal`。
+- 手機長按任務進入單一 mobile drag-action mode：任務浮起、compact action rail 顯示、同一狀態機處理排序 drop 與操作 drop。
+- Compact action rail 是手機專用 UI，不取代桌機 context menu。
+- Delete action 是高風險 target，只能開確認，不能直接刪除。
+
+RD Handoff / Implementation Contract:
+- 新增或擴充 mobile-only `MobileTaskActionRail` / equivalent。
+- 用單一 mobile drag-action state machine 管理 long-press lift、action rail、insertion preview、drop target resolution。
+- Movement > 8-10px before long-press threshold 仍判定 pan；不得進 action rail 或 drag preview。
+- Long press threshold 維持 450-550ms，低位移才進 drag-action mode。
+- Drop target priority：pointer 位於 action option bounds 內時 action rail target 優先；否則 task insertion target 優先。
+- Allowed action targets：toggle complete、add sibling、add child、delete confirmation。
+- Removed mobile actions：more details, rename, assignee, copy, dependency start/end, level up/down, any desktop-only advanced option。
+- Add sibling / add child 需防 duplicate pointerup/touchend；失敗時 visible error 且原任務狀態不變。
+- Desktop context menu selector / code path 必須保留，並加 regression evidence。
+
+Acceptance:
+- 390x844 mobile 長按父卡片與子任務列都顯示頂部 compact action rail，且任務浮起。
+- Compact action rail 必須以文字標籤呈現 action，不得只有圖示。
+- Compact action rail 只有四個 allowed actions。
+- 手機長按後拖到任務位置會顯示插入線並可排序 / 移動。
+- 手機任務拖曳把手短滑也必須移動畫面；不得啟動第二套 dnd-kit TouchSensor 造成卡死。
+- 手機長按拖曳任務靠近看板左右邊緣時，board 必須跟著水平捲動；靠近欄位上下邊緣時，column 必須跟著垂直捲動。
+- `touchcancel`、`pointercancel`、視窗失焦、切換頁籤、`Escape` 或 fail-safe timeout 必須退出 mobile drag-action mode，且不得誤提交排序 / 完成 / 刪除。
+- Drop 到完成 / 取消完成會切換狀態一次。
+- Drop 到新增同階 / 新增下層會各自建立一筆任務，且命名流程不開外層 rename。
+- Drop 到刪除只開確認；確認前任務仍存在。
+- 短滑仍 pan，不出現 action rail / drag preview。
+- Quick tap 仍開任務詳情。
+- Desktop 1440x900 right-click context menu 不變。
+- Mobile viewport 不得裁切 action rail 或產生 horizontal overflow。
+
+QA / QC gate:
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+- Manual / physical-phone supplemental：長按手感、拖曳排序、drop 到 action rail、刪除確認與短滑 pan 不互相誤觸。
+
+QC evidence（2026-07-05）:
+- `npx tsc --noEmit` passed。
+- `npm run verify:dev-029-mobile-pan-first-interactions` passed，32/32。
+- `npm run verify:dev-029-mobile-pan-first-interactions-browser` passed；覆蓋 390x844 mobile pan-first、父卡 / 子任務 / 工作台長按頂部文字 action rail、compact 4 actions、手機拖曳把手短滑 pan、拖曳把手長按進入 mobile action mode、長按拖曳靠近右邊緣 auto-scroll board、靠近欄位底部 auto-scroll column、`touchcancel` 退出不卡死、拖到任務位置排序、drop 到刪除開確認、drop 到新增下層開新任務詳情、drop 到完成切換狀態、quick tap 開詳情、desktop click regression。
+- `npm run build:test` passed；PWA test build generated。
+- Local test server restarted and verified at `http://127.0.0.1:4173/`。
+- Physical phone supplemental H01-H04 尚未執行；不得宣稱真機手感最終簽核。
+
+Stop Conditions:
+- 任一桌機行為被改動。
+- 手機長按仍開完整桌機右鍵清單。
+- 手機 compact action rail 出現已移除功能。
+- 短滑觸發 drag-action mode。
+- Drop 到刪除直接刪除。
+- Drop action 造成重複新增、錯任務更新、任務順序遺失或不可見失敗。
+- 需要 schema / migration / production deploy。
+
+Deferred Scope Audit:
+- Product code implementation: Complete，本輪已授權並完成。
+- Automated verifier implementation: Complete，本輪已授權並完成。
+- Local automated QA/QC execution: Complete，DEV-029 static/browser、TypeScript、build:test passed。
+- Physical-phone supplemental QA: Blocked Human Re-entry，需使用者真機操作 / 錄影或另行授權。
+- Production deploy: Blocked Human Re-entry，需 deployment-release-gate。
+- Desktop context menu changes: No Tracking，本輪明確不改電腦模式。
+- Full mobile desktop-style context menu: No Tracking，已被 2026-07-05 決策拒絕。
+- Direct delete by drop: No Tracking，已被 2026-07-05 決策拒絕。
+- DB schema / migration / RLS / RPC: No Tracking，前端手勢與 UI contract 不需要資料層變更。
+- Mobile non-board modes: Same Spec Phase / Phase 2，只有重新開放手機 list / mindmap / gantt / calendar 時處理。
+
+All-Phase Coverage Matrix:
+
+| Phase | 名稱 | 文件狀態 | 授權狀態 | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 0 | PM/RD Contract Addendum | Complete | Authorized | 文件化 HCS `1B 2B 3A` 與 RD/QA 契約 | 產品程式碼、測試執行、部署 | 使用者要求寫成開發文件 | SPEC/QA/dev_task/documentation_map updated | diff / rg consistency |
+| 1B | Mobile Compact Action Rail + Long-Press Drag-Action Mode | Implemented / Local Automated QA Passed | Authorized / Complete | 手機 compact action rail、長按浮起、拖曳排序、drop 到安全功能、刪除確認 | 桌機、完整手機選單、direct delete、DB、production | 使用者授權 RD 開發 | Phase 1B automated acceptance passed | DEV-029 static/browser、TS、build:test、mobile screenshots |
+| 2 | Future Mobile Non-Board Modes | RD Contract Ready | Not Authorized | 未來手機非 board modes pan-first / long-press normalization | 本輪重開非 board modes | 手機非 board mode 重新開放 | 模式專屬 gesture 不互相誤觸 | mode-specific verifier |
+| 3 | Production Release | Blocked Human Re-entry | Not Authorized | 正式部署與 smoke | 未授權部署 | 使用者明確授權部署 | production smoke + rollback readiness | deployment-release-gate |
+
+文件:
+- `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`
+- `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md`
+- `ai-doc/documentation_map.md`
+
 ### DEV-041: PWA 更新通知與快取恢復
 
 狀態: Production Release Deployed / Local + Production Smoke Passed
@@ -181,7 +374,7 @@ Stop conditions:
 - 長按任務操作選單消失或與 pan 互相誤觸。
 - interactive controls 被 pan guard 擋住。
 - dnd-kit 在短滑時先搶走 touch，造成畫面不能自然移動。
-- 需要恢復手機 tap-to-details、手機拖曳排序優先或 production deploy，但未取得使用者重新授權。
+- 需要再次取消 / 重定義手機 tap-to-details、讓拖曳排序取代 pan-first、修改桌機行為或 production deploy，但未取得使用者重新授權。
 
 Deferred Scope Audit:
 
@@ -189,7 +382,10 @@ Deferred Scope Audit:
 |---|---|---|---|
 | 手機非 board modes pan-first | Same Spec Phase | DEV-029 Phase 2 | 重新開放 mobile list / mindmap / gantt / calendar |
 | Mobile tap-to-details 恢復 | No Tracking | DEV-029 Phase 1 | 已依 2026-07-04 真機回饋恢復；後續若要再次取消或重定義，需重新授權 |
-| 手機任務拖曳排序全面重設計 | New DEV | Backlog after DEV-029 Phase 1 | 使用者要求手機拖曳排序優先於 pan |
+| 手機任務長按拖曳排序與 compact action rail | Same Spec Phase | DEV-029 Phase 1B | 使用者已以 HCS `1B 2B 3A` 確認產品決策；需另行授權 RD 開發 |
+| 手機完整桌機型右鍵清單 | No Tracking | None | 已被 2026-07-05 決策拒絕，手機只保留 compact action rail |
+| 手機 drop 到刪除直接刪除 | No Tracking | None | 已被 2026-07-05 決策拒絕，刪除需二次確認 |
+| 手機加回改名 / 指派 / 複製 / 依賴 / 升降階 | Blocked Human Re-entry | Separate decision | 使用者明確要求重新擴充手機操作清單 |
 | Production deploy | Blocked Human Re-entry | deployment-release-gate | 使用者明確授權部署 |
 | DB / schema / RLS / migration | No Tracking | None | 本需求為前端手勢，不涉及資料層 |
 
@@ -198,6 +394,7 @@ All-Phase Coverage Matrix:
 | Phase / DEV | Authorization | Document status | Scope | Acceptance | Evidence |
 |---|---|---|---|---|---|
 | DEV-029 Phase 1 | Authorized by user 2026-07-04 | Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | Board mobile pan-first gesture arbitration | 任務卡/子任務/欄位/空白短滑可 pan；長按才任務功能；interactive controls 可用 | DEV-029 static/browser、DEV-028 regression、DEV-039 workbench mobile regression、TS、build:test、QC-DEV-029 |
+| DEV-029 Phase 1B | Not Authorized | RD Contract Ready / Not Authorized | Mobile compact action rail and long-press drag-action mode | 手機長按任務浮起並顯示四項 compact action rail；可拖曳排序；刪除只開確認；桌機不變 | DEV-029 static/browser、desktop context menu regression、TS、build:test、mobile screenshots |
 | DEV-029 Phase 2 | Not Authorized | RD Contract Ready / Not Authorized | Future mobile non-board modes pan-first normalization | 各模式 pan-first 且不破壞模式專屬操作 | mode-specific browser verifiers、DEV-027/028 regression |
 | Production Release Gate | Not Authorized | Blocked Human Re-entry | 正式環境發布與 smoke | production smoke + rollback readiness | deployment-release-gate |
 
@@ -1019,8 +1216,8 @@ Verified（2026-06-29）:
 任務目標:
 - 四模式單擊既有任務都先選取該任務，再開啟同一個 `TaskDetailsModal`；關閉詳情後保留選取狀態。
 - 四模式任務名稱不再因單擊任務或標題直接進入編輯。
-- 改名改由明確入口觸發: 鉛筆、右鍵重新命名、`t`、F2；心智圖保留選取後直接打字改名。
-- 新增任務命名採 2C: 桌機四模式新增後只選取新任務，直接打字才開始改名；手機新增後自動開命名鍵盤。
+- 2026-07-05 addendum 已取代舊版改名契約：鉛筆、右鍵重新命名、`t`、F2、心智圖選取後直接打字、外層 inline rename 均不再是有效入口；任務名稱只能在詳情頁 title edit。
+- 2026-07-05 addendum 已取代舊版 2C 新增任務命名分流；新增任務若需命名，需導向詳情頁 title edit，不得在外層任務列 / 卡片開 rename input。
 - 快捷鍵採 1A: 清單、看板、甘特 `Enter` 開詳情；心智圖 `Enter` 保留新增同階。
 - 右鍵/長按採 3A: 四模式都開任務操作選單；心智圖關聯線建立改走 toolbar、快捷鍵或 selected-node action。
 - 保留四模式專用能力: 心智圖鍵盤/關聯線、看板 Level 3+ 正面顯示、甘特排程拖曳、會議紀錄任務選取模式。
@@ -1031,7 +1228,8 @@ Verified（2026-06-29）:
 - `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md`
 
 RD exit gate:
-- Added DEV-028 static / browser verifiers covering list, mind map, board, and Gantt click-to-details, selected-state retention, explicit rename, new-task naming, task context menu, and drag/click collision.
+- Original 2026-06-26 DEV-028 static / browser verifiers covered list, mind map, board, and Gantt click-to-details, selected-state retention, explicit rename, new-task naming, task context menu, and drag/click collision.
+- 2026-07-05 addendum requires future verifier update for detail-only title edit and outer rename removal before this revised interaction contract can be called implemented.
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 29/29
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`: Pass
 - `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass

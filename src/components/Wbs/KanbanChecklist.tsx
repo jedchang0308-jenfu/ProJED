@@ -14,6 +14,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanDependencyContext } from '../BoardView';
+import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import dayjs from 'dayjs';
 import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
@@ -26,6 +27,7 @@ import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
+import { TaskDateBadge } from './TaskDateBadge';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -94,7 +96,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const status = child?.status || 'todo';
   const tags = useTagStore(s => s.tags);
   const nodeTags = getNodeTags(child, tags);
-  const isDueToday = status !== 'completed' && !!child?.endDate && dayjs(child.endDate).isSame(dayjs(), 'day');
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
   const isEditing = editingId === childId;
   const showStartDate = useBoardStore(s => s.showStartDate);
@@ -105,6 +106,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
+  const mobileTaskAction = React.useContext(MobileTaskActionContext);
+  const mobileActionMode = isMobileTaskActionMode();
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
@@ -119,7 +122,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(childId, wbsDependencies);
-  const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(child?.isDurationLocked);
 
   // 每個任務都是可拖曳元素
   // data.type = 'wbs-checklist' 供 handleDragEnd 辨識
@@ -146,13 +148,17 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     transition,
   };
 
-  // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
+  // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
   const longPressHandlers = useLongPress(
     (e) => {
+      if (!child) return;
+      if (mobileActionMode) {
+        mobileTaskAction?.begin({ id: child.id, title: child.title, status: child.status }, e);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       const touch = e.touches[0];
-      if (!child) return;
       useBoardStore.getState().setContextMenuState({
         kind: 'task',
         isOpen: true,
@@ -162,25 +168,41 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         title: child.title || '未命名任務',
       });
     },
-    { delay: 500, tolerance: 8 }
+    { delay: 500, tolerance: 8, ignoreTaskDragHandle: !mobileActionMode }
   );
 
   const checklistLongPressHandlers = {
     ...longPressHandlers,
     onTouchStart: (e: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchStart(e);
-      if (isFromTaskDragHandle(e.target)) return;
+      if (isFromTaskDragHandle(e.target) && !mobileActionMode) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(childId)) {
+        mobileTaskAction.move(e);
+        return;
+      }
       touchTapGuard.handlers.onTouchMove(e);
       longPressHandlers.onTouchMove(e);
     },
     onTouchEnd: (e: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(childId)) {
+        touchTapGuard.handlers.onTouchEnd(e);
+        mobileTaskAction.end(e);
+        longPressHandlers.onTouchEnd(e);
+        return;
+      }
       touchTapGuard.handlers.onTouchEnd(e);
       longPressHandlers.onTouchEnd(e);
     },
     onTouchCancel: (e: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(childId)) {
+        touchTapGuard.handlers.onTouchCancel(e);
+        mobileTaskAction.cancel(e);
+        longPressHandlers.onTouchCancel(e);
+        return;
+      }
       touchTapGuard.handlers.onTouchCancel(e);
       longPressHandlers.onTouchCancel(e);
     },
@@ -240,6 +262,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           selectAndOpenTaskDetails(child.id);
         }}
         data-task-id={child.id}
+        data-mobile-drop-target={child.id}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
       >
@@ -249,6 +272,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           attributes={attributes}
           listeners={listeners}
           disabled={!canMoveTask || isEditing || isSelectingMode || isRecordCaptureMode}
+          dragDisabled={mobileActionMode}
           size="xs"
         />
 
@@ -335,34 +359,19 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         ) : (
           <>
           {/* 日期區間標籤 */}
-          {!isEditing && ((showStartDate && child.startDate) || child.endDate) && (
-          <span 
-            className={`text-[9px] rounded px-1 py-0 flex-shrink-0 ml-0.5 flex items-center gap-0.5 ${
-              isDueToday
-                ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
-                : `border ${isEndDateEffectivelyLocked ? 'border-dashed border-slate-400 opacity-80 bg-slate-50 text-slate-500' : 'border-slate-200 bg-white text-slate-400'}`
-            }`}
-            title={isEndDateEffectivelyLocked ? (child.isDurationLocked ? '因工期鎖定，由開始日期推算' : '此日期由依賴關係計算') : ''}
-          >
-            {showStartDate && (
-                <>
-                    <span className={lockStatus.startLocked ? 'underline decoration-dashed decoration-slate-400 opacity-70' : ''}>
-                        {child.startDate
-                          ? dayjs(child.startDate).year() !== dayjs().year()
-                            ? dayjs(child.startDate).format('YY/MM/DD')
-                            : dayjs(child.startDate).format('MM/DD')
-                          : '...'}
-                    </span>
-                    <span className="opacity-50">→</span>
-                </>
-            )}
-            <span className={isEndDateEffectivelyLocked ? 'underline decoration-dashed decoration-slate-400 opacity-70' : ''}>
-                {child.endDate ? (dayjs(child.endDate).year() !== dayjs().year()
-                  ? dayjs(child.endDate).format('YY/MM/DD')
-                  : dayjs(child.endDate).format('MM/DD')) : '...'}
-            </span>
-          </span>
-          )}
+          {!isEditing ? (
+            <TaskDateBadge
+              startDate={child.startDate}
+              endDate={child.endDate}
+              status={status}
+              showStartDate={showStartDate}
+              startLocked={lockStatus.startLocked}
+              endLocked={lockStatus.endLocked}
+              durationLocked={Boolean(child.isDurationLocked)}
+              surface="checklist"
+              className="ml-0.5"
+            />
+          ) : null}
           </>
         )}
 

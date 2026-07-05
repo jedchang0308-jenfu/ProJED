@@ -9,12 +9,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link, Pencil } from 'lucide-react';
+import { Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link, Pencil } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanChecklist } from './KanbanChecklist';
 import { KanbanDependencyContext } from '../BoardView';
+import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
@@ -28,6 +29,7 @@ import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
+import { TaskDateBadge } from './TaskDateBadge';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -70,7 +72,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
-  const isEndDateEffectivelyLocked = lockStatus.endLocked || node?.isDurationLocked;
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
@@ -83,6 +84,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
+  const mobileTaskAction = React.useContext(MobileTaskActionContext);
+  const mobileActionMode = isMobileTaskActionMode();
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
@@ -231,7 +234,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
-  const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const canDropIntoChecklist = canMoveTask && ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
   const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
@@ -263,15 +265,19 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     setDropRef(el);
   }, [setNodeRef, setDropRef]);
 
-  // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
+  // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
   const longPressHandlers = useLongPress(
     (e) => {
+      if (!node) return;
+      if (mobileActionMode) {
+        mobileTaskAction?.begin({ id: nodeId, title: node.title, status: node.status }, e);
+        return;
+      }
       e.preventDefault();
       const touch = e.touches[0];
-      if (!node) return;
       setContextMenuState({ kind: 'task', isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
     },
-    { delay: 500, tolerance: 8 }
+    { delay: 500, tolerance: 8, ignoreTaskDragHandle: !mobileActionMode }
   );
 
   const cardLongPressHandlers = {
@@ -279,21 +285,37 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     onTouchStart: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
       touchTapGuard.handlers.onTouchStart(e);
-      if (isFromTaskDragHandle(e.target)) return;
+      if (isFromTaskDragHandle(e.target) && !mobileActionMode) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
+      if (mobileTaskAction?.isActive(nodeId)) {
+        mobileTaskAction.move(e);
+        return;
+      }
       touchTapGuard.handlers.onTouchMove(e);
       longPressHandlers.onTouchMove(e);
     },
     onTouchEnd: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
+      if (mobileTaskAction?.isActive(nodeId)) {
+        touchTapGuard.handlers.onTouchEnd(e);
+        mobileTaskAction.end(e);
+        longPressHandlers.onTouchEnd(e);
+        return;
+      }
       touchTapGuard.handlers.onTouchEnd(e);
       longPressHandlers.onTouchEnd(e);
     },
     onTouchCancel: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
+      if (mobileTaskAction?.isActive(nodeId)) {
+        touchTapGuard.handlers.onTouchCancel(e);
+        mobileTaskAction.cancel(e);
+        longPressHandlers.onTouchCancel(e);
+        return;
+      }
       touchTapGuard.handlers.onTouchCancel(e);
       longPressHandlers.onTouchCancel(e);
     },
@@ -327,6 +349,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
       }}
       data-task-id={nodeId}
+      data-mobile-drop-target={nodeId}
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       data-touch-tap-guard="true"
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
@@ -355,6 +378,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 attributes={attributes}
                 listeners={listeners}
                 disabled={!canMoveTask || isEditing || isSelectingMode || isRecordCaptureMode}
+                dragDisabled={mobileActionMode}
                 size="sm"
                 className="-ml-1"
               />
@@ -466,21 +490,15 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 // 一般模式：原始日期 Badge 顯示
                 <>
               {/* 日期區間 */}
-              {( (showStartDate && node.startDate) || node.endDate) && (
-                <Badge variant={isDueToday ? 'warning' : 'default'} size="sm" icon={<Calendar size={10} />}>
-                  {showStartDate && (
-                      <>
-                          <span className={lockStatus.startLocked ? 'underline decoration-dashed decoration-slate-400 underline-offset-[3px] opacity-70' : ''} title={lockStatus.startLocked ? '此日期由依賴推算' : ''}>
-                            {node.startDate ? (dayjs(node.startDate).year() !== dayjs().year() ? dayjs(node.startDate).format('YY/MM/DD') : dayjs(node.startDate).format('MM/DD')) : '...'}
-                          </span>
-                          <span className="opacity-50">→</span>
-                      </>
-                  )}
-                  <span className={isEndDateEffectivelyLocked ? 'underline decoration-dashed decoration-slate-400 underline-offset-[3px] opacity-70' : ''} title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，由開始日期推算' : '此日期由依賴推算') : ''}>
-                    {node.endDate ? (dayjs(node.endDate).year() !== dayjs().year() ? dayjs(node.endDate).format('YY/MM/DD') : dayjs(node.endDate).format('MM/DD')) : '...'}
-                  </span>
-                </Badge>
-              )}
+              <TaskDateBadge
+                startDate={node.startDate}
+                endDate={node.endDate}
+                status={status}
+                showStartDate={showStartDate}
+                startLocked={lockStatus.startLocked}
+                endLocked={lockStatus.endLocked}
+                durationLocked={Boolean(node.isDurationLocked)}
+              />
 
               {/* 子節點完成進度 */}
               {hasChildren && (

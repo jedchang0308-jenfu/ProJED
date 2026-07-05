@@ -22,6 +22,8 @@ interface UseLongPressOptions {
   delay?: number;
   /** 允許的手指位移容差（px），超過此值視為拖曳意圖，取消長按 */
   tolerance?: number;
+  /** 是否忽略拖曳把手上的長按；桌機/舊路徑預設忽略，手機 compact action mode 可關閉。 */
+  ignoreTaskDragHandle?: boolean;
 }
 
 interface LongPressHandlers {
@@ -39,7 +41,7 @@ const isTaskDragHandleEvent = (target: EventTarget | null) =>
 
 export function useLongPress(
   onLongPress: (e: React.TouchEvent) => void,
-  { delay = 500, tolerance = 8 }: UseLongPressOptions = {}
+  { delay = 500, tolerance = 8, ignoreTaskDragHandle = true }: UseLongPressOptions = {}
 ): LongPressHandlers {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,7 +70,7 @@ export function useLongPress(
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (isTaskDragHandleEvent(e.target)) {
+      if (ignoreTaskDragHandle && isTaskDragHandleEvent(e.target)) {
         cancel();
         return;
       }
@@ -90,7 +92,7 @@ export function useLongPress(
         onLongPress(e);
       }, delay);
     },
-    [cancel, onLongPress, delay]
+    [cancel, onLongPress, delay, ignoreTaskDragHandle]
   );
 
   const onTouchMove = useCallback(

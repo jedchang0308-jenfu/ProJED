@@ -9,7 +9,7 @@
  * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, CheckCircle2, ListPlus, Plus, Trash2, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -25,9 +25,16 @@ import { KanbanColumn } from './Wbs/KanbanColumn';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames } from './ui/compactTokens';
 import type { TaskNode, TaskStatus } from '../types';
-import { prepareNewTaskNaming } from '../utils/taskInteractions';
+import { prepareNewTaskNaming, selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../features/taskWorkbench/placement';
+import {
+    isMobileTaskActionMode,
+    MobileTaskActionContext,
+    type MobileTaskAction,
+    type MobileTaskActionState,
+    type MobileTaskDropPosition,
+} from './Wbs/mobileTaskActionContext';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -38,6 +45,138 @@ export const KanbanDependencyContext = React.createContext<{
     handleKanbanDependencySelect: (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => void;
     dependencies: import('../types').Dependency[];
 } | null>(null);
+
+const mobileActionItems: Array<{
+    key: MobileTaskAction;
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    permission: 'edit' | 'create' | 'delete';
+    activeClassName: string;
+    idleClassName: string;
+}> = [
+    {
+        key: 'toggle-complete',
+        label: '標示完成',
+        icon: CheckCircle2,
+        permission: 'edit',
+        activeClassName: 'border-emerald-500 bg-emerald-500 text-white',
+        idleClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+    },
+    {
+        key: 'add-sibling',
+        label: '新增同階',
+        icon: Plus,
+        permission: 'create',
+        activeClassName: 'border-sky-500 bg-sky-500 text-white',
+        idleClassName: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100',
+    },
+    {
+        key: 'add-child',
+        label: '新增下層',
+        icon: ListPlus,
+        permission: 'create',
+        activeClassName: 'border-indigo-500 bg-indigo-500 text-white',
+        idleClassName: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
+    },
+    {
+        key: 'delete',
+        label: '刪除任務',
+        icon: Trash2,
+        permission: 'delete',
+        activeClassName: 'border-red-500 bg-red-500 text-white',
+        idleClassName: 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100',
+    },
+];
+
+const MobileTaskActionLayer: React.FC<{
+    state: MobileTaskActionState | null;
+    canEditTask: boolean;
+    canCreateTask: boolean;
+    canDeleteTask: boolean;
+}> = ({ state, canEditTask, canCreateTask, canDeleteTask }) => {
+    if (!state) return null;
+
+    const canUseAction = (permission: 'edit' | 'create' | 'delete') => {
+        if (permission === 'edit') return canEditTask;
+        if (permission === 'create') return canCreateTask;
+        return canDeleteTask;
+    };
+
+    return (
+        <>
+            <div
+                className="pointer-events-none fixed z-[90] max-w-[240px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-primary/25 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
+                style={{ left: state.pointerX, top: state.pointerY }}
+                data-mobile-drag-preview="true"
+                data-task-id={state.nodeId}
+            >
+                <div className="truncate">{state.title || '未命名任務'}</div>
+            </div>
+
+            {state.dropIndicatorRect ? (
+                <div
+                    className="pointer-events-none fixed z-[85] h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_rgba(99,102,241,0.15)]"
+                    style={{
+                        left: state.dropIndicatorRect.left,
+                        top: state.dropIndicatorRect.top,
+                        width: state.dropIndicatorRect.width,
+                    }}
+                    data-mobile-drop-indicator="true"
+                    data-mobile-drop-target={state.hoverTargetId || undefined}
+                    data-mobile-drop-position={state.dropPosition || undefined}
+                />
+            ) : null}
+
+            <div
+                className="fixed left-1/2 z-[95] grid w-[calc(100vw-1rem)] max-w-[420px] -translate-x-1/2 grid-cols-2 gap-2"
+                style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+                data-mobile-task-action-rail="true"
+                data-mobile-task-action-rail-placement="top"
+            >
+                {mobileActionItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = state.hoverAction === item.key;
+                    const enabled = canUseAction(item.permission);
+                    const label = item.key === 'toggle-complete' && state.status === 'completed'
+                        ? '取消完成'
+                        : item.label;
+                    return (
+                        <button
+                            key={item.key}
+                            type="button"
+                            disabled={!enabled}
+                            title={label}
+                            aria-label={label}
+                            className={`flex h-12 min-w-0 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-md backdrop-blur transition ${
+                                active ? item.activeClassName : item.idleClassName
+                            } disabled:cursor-not-allowed disabled:opacity-35`}
+                            data-mobile-task-action={item.key}
+                            data-mobile-task-action-label={label}
+                        >
+                            <Icon size={18} className="shrink-0" />
+                            <span className="min-w-0 truncate" data-mobile-task-action-text="true">
+                                {label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+        </>
+    );
+};
+
+const recordMobileTaskActionDebug = (entry: Record<string, unknown>) => {
+    if (typeof window === 'undefined' || import.meta.env.MODE !== 'test') return;
+    const debugWindow = window as any;
+    debugWindow.__projedMobileTaskActionDebug = [
+        ...(debugWindow.__projedMobileTaskActionDebug || []),
+        { ...entry, at: Date.now() },
+    ].slice(-30);
+};
+
+const MOBILE_TASK_ACTION_FAILSAFE_MS = 12000;
+const MOBILE_TASK_EDGE_SCROLL_THRESHOLD_PX = 56;
+const MOBILE_TASK_EDGE_SCROLL_MAX_STEP_PX = 18;
 
 const BoardView = () => {
     const mobilePanSurfaceRef = useMobilePanBroker<HTMLDivElement>();
@@ -52,10 +191,25 @@ const BoardView = () => {
     const exitRecordTaskSelectionMode = useRecordStore(s => s.exitTaskSelectionMode);
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
+    const removeNode = useWbsStore(s => s.removeNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
-    const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+    const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
+    const [mobileTaskAction, setMobileTaskAction] = useState<MobileTaskActionState | null>(null);
+    const mobileTaskActionRef = React.useRef<MobileTaskActionState | null>(null);
+    const mobileTaskActionFailSafeRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mobileTaskAutoScrollFrameRef = React.useRef<number | null>(null);
+    const mobileTaskAutoScrollPointRef = React.useRef<{ x: number; y: number } | null>(null);
+    const lastValidOverRef = React.useRef<any>(null);
+
+    const stopMobileTaskAutoScroll = React.useCallback(() => {
+        mobileTaskAutoScrollPointRef.current = null;
+        if (mobileTaskAutoScrollFrameRef.current !== null && typeof window !== 'undefined') {
+            window.cancelAnimationFrame(mobileTaskAutoScrollFrameRef.current);
+        }
+        mobileTaskAutoScrollFrameRef.current = null;
+    }, []);
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
@@ -192,6 +346,12 @@ const BoardView = () => {
      */
     const handleDragStart = (event: any) => {
         if (!canMoveTask) return;
+        if (isMobileTaskActionMode()) {
+            lastValidOverRef.current = null;
+            commitMobileTaskActionState(null);
+            setActiveDrag(null);
+            return;
+        }
         const { active } = event;
         const nodeId = active.data.current?.nodeId;
         lastValidOverRef.current = null;
@@ -417,7 +577,519 @@ const BoardView = () => {
         return true;
     };
 
-    const lastValidOverRef = React.useRef<any>(null);
+    const commitMobileTaskActionState = React.useCallback((next: MobileTaskActionState | null) => {
+        if (mobileTaskActionFailSafeRef.current) {
+            clearTimeout(mobileTaskActionFailSafeRef.current);
+            mobileTaskActionFailSafeRef.current = null;
+        }
+        if (!next) stopMobileTaskAutoScroll();
+        mobileTaskActionRef.current = next;
+        setMobileTaskAction(next);
+        if (next && typeof window !== 'undefined') {
+            mobileTaskActionFailSafeRef.current = window.setTimeout(() => {
+                if (!mobileTaskActionRef.current) return;
+                recordMobileTaskActionDebug({ type: 'failsafe:timeout', nodeId: mobileTaskActionRef.current.nodeId });
+                mobileTaskActionRef.current = null;
+                setMobileTaskAction(null);
+                setActiveDrag(null);
+                lastValidOverRef.current = null;
+                mobileTaskActionFailSafeRef.current = null;
+            }, MOBILE_TASK_ACTION_FAILSAFE_MS);
+        }
+    }, [stopMobileTaskAutoScroll]);
+
+    const readTouchPoint = (event: any) => {
+        const touch = event.touches?.[0] || event.changedTouches?.[0];
+        if (!touch) return null;
+        return { x: touch.clientX, y: touch.clientY };
+    };
+
+    const getMobileTaskEdgeScrollDelta = (
+        position: number,
+        min: number,
+        max: number,
+    ) => {
+        const threshold = MOBILE_TASK_EDGE_SCROLL_THRESHOLD_PX;
+        const maxStep = MOBILE_TASK_EDGE_SCROLL_MAX_STEP_PX;
+        if (position < min + threshold) {
+            return -Math.min(maxStep, Math.ceil(((min + threshold - position) / threshold) * maxStep));
+        }
+        if (position > max - threshold) {
+            return Math.min(maxStep, Math.ceil(((position - (max - threshold)) / threshold) * maxStep));
+        }
+        return 0;
+    };
+
+    const scrollElementBy = (element: HTMLElement, deltaX: number, deltaY: number) => {
+        const beforeLeft = element.scrollLeft;
+        const beforeTop = element.scrollTop;
+        if (deltaX) element.scrollLeft += deltaX;
+        if (deltaY) element.scrollTop += deltaY;
+        return beforeLeft !== element.scrollLeft || beforeTop !== element.scrollTop;
+    };
+
+    const findMobileTaskAutoScrollColumn = (point: { x: number; y: number }) => {
+        const element = document.elementFromPoint(point.x, point.y);
+        const directColumn = element instanceof Element
+            ? element.closest('[data-mobile-pan-surface="kanban-column"]') as HTMLElement | null
+            : null;
+        if (directColumn) return directColumn;
+
+        const columns = Array.from(document.querySelectorAll('[data-mobile-pan-surface="kanban-column"]')) as HTMLElement[];
+        return columns.find((column) => {
+            const rect = column.getBoundingClientRect();
+            return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top - 80 && point.y <= rect.bottom + 80;
+        }) || null;
+    };
+
+    const autoScrollMobileTaskSurfaces = React.useCallback((point: { x: number; y: number }) => {
+        if (typeof document === 'undefined') return false;
+        let didScroll = false;
+
+        const boardSurface = mobilePanSurfaceRef.current || document.querySelector('[data-mobile-pan-surface="board"]') as HTMLElement | null;
+        if (boardSurface) {
+            const boardRect = boardSurface.getBoundingClientRect();
+            const deltaX = getMobileTaskEdgeScrollDelta(point.x, boardRect.left, boardRect.right);
+            if (deltaX) {
+                didScroll = scrollElementBy(boardSurface, deltaX, 0) || didScroll;
+            }
+        }
+
+        const columnSurface = findMobileTaskAutoScrollColumn(point);
+        if (columnSurface) {
+            const columnRect = columnSurface.getBoundingClientRect();
+            const top = Math.max(columnRect.top, 0);
+            const bottom = Math.min(columnRect.bottom, window.innerHeight || columnRect.bottom);
+            const deltaY = getMobileTaskEdgeScrollDelta(point.y, top, bottom);
+            if (deltaY) {
+                didScroll = scrollElementBy(columnSurface, 0, deltaY) || didScroll;
+            }
+        }
+
+        if (didScroll) {
+            recordMobileTaskActionDebug({
+                type: 'edge-scroll',
+                point,
+                boardScrollLeft: boardSurface?.scrollLeft ?? null,
+                columnScrollTop: columnSurface?.scrollTop ?? null,
+            });
+        }
+        return didScroll;
+    }, [mobilePanSurfaceRef]);
+
+    const createMobileTaskNodeId = () =>
+        `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const getSiblingInsertOrderAfter = (sourceNode: TaskNode, nodesRecord: Record<string, TaskNode>) => {
+        const siblings = Object.values(nodesRecord)
+            .filter(node =>
+                node &&
+                !node.isArchived &&
+                (node.parentId || null) === (sourceNode.parentId || null) &&
+                node.boardId === sourceNode.boardId
+            )
+            .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+        const index = siblings.findIndex(node => node.id === sourceNode.id);
+        const nextSibling = index >= 0 ? siblings[index + 1] : null;
+        return nextSibling
+            ? ((sourceNode.order ?? 0) + (nextSibling.order ?? 0)) / 2
+            : (sourceNode.order ?? 0) + 1;
+    };
+
+    const addMobileSiblingTask = React.useCallback((nodeId: string) => {
+        if (!canCreateTask) return;
+        const state = useWbsStore.getState();
+        const sourceNode = state.nodes[nodeId];
+        if (!sourceNode || sourceNode.isArchived) return;
+        const parentNode = sourceNode.parentId ? state.nodes[sourceNode.parentId] : null;
+        if (parentNode?.status === 'completed') {
+            void useDialogStore.getState().showConfirm('已完成任務底下不能新增同階任務。');
+            return;
+        }
+
+        const newNode: TaskNode = {
+            id: createMobileTaskNodeId(),
+            workspaceId: sourceNode.workspaceId || activeWorkspaceId || '',
+            boardId: sourceNode.boardId || activeBoardId || '',
+            parentId: sourceNode.parentId || null,
+            title: '新任務',
+            status: 'todo',
+            nodeType: sourceNode.parentId ? 'task' : (sourceNode.nodeType || 'task'),
+            order: getSiblingInsertOrderAfter(sourceNode, state.nodes),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+        addNode(newNode);
+        selectAndOpenTaskDetails(newNode.id);
+    }, [activeBoardId, activeWorkspaceId, addNode, canCreateTask]);
+
+    const addMobileChildTask = React.useCallback((nodeId: string) => {
+        if (!canCreateTask) return;
+        const state = useWbsStore.getState();
+        const sourceNode = state.nodes[nodeId];
+        if (!sourceNode || sourceNode.isArchived) return;
+        if (sourceNode.status === 'completed') {
+            void useDialogStore.getState().showConfirm('已完成任務底下不能新增下層任務。');
+            return;
+        }
+
+        const newNode: TaskNode = {
+            id: createMobileTaskNodeId(),
+            workspaceId: sourceNode.workspaceId || activeWorkspaceId || '',
+            boardId: sourceNode.boardId || activeBoardId || '',
+            parentId: sourceNode.id,
+            title: '新任務',
+            status: 'todo',
+            nodeType: 'task',
+            order: getAppendOrder(sourceNode.id, undefined, state.nodes),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+        addNode(newNode);
+        selectAndOpenTaskDetails(newNode.id);
+    }, [activeBoardId, activeWorkspaceId, addNode, canCreateTask]);
+
+    const executeMobileTaskAction = React.useCallback(async (action: MobileTaskAction, nodeId: string) => {
+        const state = useWbsStore.getState();
+        const node = state.nodes[nodeId];
+        recordMobileTaskActionDebug({ type: 'action:start', action, nodeId, canEditTask, canCreateTask, canDeleteTask });
+        if (!node || node.isArchived) {
+            recordMobileTaskActionDebug({ type: 'action:blocked-missing', action, nodeId });
+            return;
+        }
+
+        if (action === 'toggle-complete') {
+            if (!canEditTask) {
+                recordMobileTaskActionDebug({ type: 'action:blocked-permission', action, nodeId });
+                return;
+            }
+            updateNode(nodeId, {
+                status: node.status === 'completed' ? 'todo' : 'completed',
+                updatedAt: Date.now(),
+            });
+            recalculateAncestorStatus(nodeId);
+            recordMobileTaskActionDebug({ type: 'action:complete', action, nodeId, from: node.status, to: node.status === 'completed' ? 'todo' : 'completed' });
+            return;
+        }
+
+        if (action === 'add-sibling') {
+            addMobileSiblingTask(nodeId);
+            return;
+        }
+
+        if (action === 'add-child') {
+            addMobileChildTask(nodeId);
+            return;
+        }
+
+        if (action === 'delete') {
+            if (!canDeleteTask) return;
+            const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除任務「${node.title || '未命名任務'}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
+            if (!confirmed) return;
+            removeNode(nodeId);
+        }
+    }, [addMobileChildTask, addMobileSiblingTask, canDeleteTask, canEditTask, recalculateAncestorStatus, removeNode, updateNode]);
+
+    const executeMobileTaskDrop = React.useCallback((
+        draggedNodeId: string,
+        targetNodeId: string | null,
+        dropPosition: MobileTaskDropPosition | null,
+    ) => {
+        recordMobileTaskActionDebug({ type: 'drop:start', draggedNodeId, targetNodeId, dropPosition, canMoveTask });
+        if (!canMoveTask || !targetNodeId || !dropPosition || draggedNodeId === targetNodeId) {
+            recordMobileTaskActionDebug({ type: 'drop:blocked-basic', draggedNodeId, targetNodeId, dropPosition, canMoveTask });
+            return;
+        }
+        const state = useWbsStore.getState();
+        const draggedNode = state.nodes[draggedNodeId];
+        const targetNode = state.nodes[targetNodeId];
+        if (!draggedNode || !targetNode || draggedNode.isArchived || targetNode.isArchived) {
+            recordMobileTaskActionDebug({ type: 'drop:blocked-missing', draggedNodeId, targetNodeId });
+            return;
+        }
+
+        const intent = {
+            parentId: targetNode.parentId || null,
+            order: (targetNode.order ?? 0) + (dropPosition === 'after' ? 0.5 : -0.5),
+            nodeType: targetNode.parentId ? 'task' : (draggedNode.nodeType || 'task'),
+        };
+        if (!isValidDropIntent(draggedNode.id, intent, state.nodes)) {
+            recordMobileTaskActionDebug({ type: 'drop:blocked-invalid-intent', draggedNodeId, targetNodeId, intent });
+            return;
+        }
+
+        const updates = normalizeMovedSiblingOrders(draggedNode.id, intent, state.nodes);
+        updates[draggedNode.id] = {
+            ...(updates[draggedNode.id] || {}),
+            workspaceId: targetNode.workspaceId || draggedNode.workspaceId,
+            boardId: targetNode.boardId || draggedNode.boardId,
+            nodeType: intent.nodeType,
+            updatedAt: Date.now(),
+        };
+
+        Object.entries(updates).forEach(([nodeId, nodeUpdates]) => updateNode(nodeId, nodeUpdates));
+        recalculateAncestorStatus(draggedNode.id);
+        recordMobileTaskActionDebug({ type: 'drop:complete', draggedNodeId, targetNodeId, dropPosition, updates });
+    }, [canMoveTask, recalculateAncestorStatus, updateNode]);
+
+    const resolveMobileTaskHover = React.useCallback((
+        point: { x: number; y: number },
+        activeState: MobileTaskActionState,
+    ): Pick<MobileTaskActionState, 'hoverAction' | 'hoverTargetId' | 'dropPosition' | 'dropIndicatorRect'> => {
+        const element = document.elementFromPoint(point.x, point.y);
+        const actionElement = element instanceof Element
+            ? element.closest('[data-mobile-task-action]')
+            : null;
+        if (actionElement) {
+            const action = actionElement.getAttribute('data-mobile-task-action') as MobileTaskAction | null;
+            return {
+                hoverAction: action,
+                hoverTargetId: null,
+                dropPosition: null,
+                dropIndicatorRect: null,
+            };
+        }
+
+        const targetElement = element instanceof Element
+            ? element.closest('[data-mobile-drop-target][data-task-id]')
+            : null;
+        const targetNodeId = targetElement?.getAttribute('data-task-id') || null;
+        if (!targetNodeId || targetNodeId === activeState.nodeId || !canMoveTask) {
+            return {
+                hoverAction: null,
+                hoverTargetId: null,
+                dropPosition: null,
+                dropIndicatorRect: null,
+            };
+        }
+
+        const nodes = useWbsStore.getState().nodes;
+        const draggedNode = nodes[activeState.nodeId];
+        const targetNode = nodes[targetNodeId];
+        if (!draggedNode || !targetNode || draggedNode.isArchived || targetNode.isArchived) {
+            return {
+                hoverAction: null,
+                hoverTargetId: null,
+                dropPosition: null,
+                dropIndicatorRect: null,
+            };
+        }
+
+        const rect = (targetElement as HTMLElement).getBoundingClientRect();
+        const dropPosition: MobileTaskDropPosition = point.y > rect.top + rect.height / 2 ? 'after' : 'before';
+        const intent = {
+            parentId: targetNode.parentId || null,
+            order: (targetNode.order ?? 0) + (dropPosition === 'after' ? 0.5 : -0.5),
+            nodeType: targetNode.parentId ? 'task' : (draggedNode.nodeType || 'task'),
+        };
+        if (!isValidDropIntent(draggedNode.id, intent, nodes)) {
+            return {
+                hoverAction: null,
+                hoverTargetId: null,
+                dropPosition: null,
+                dropIndicatorRect: null,
+            };
+        }
+
+        return {
+            hoverAction: null,
+            hoverTargetId: targetNodeId,
+            dropPosition,
+            dropIndicatorRect: {
+                left: rect.left,
+                top: dropPosition === 'after' ? rect.bottom : rect.top,
+                width: rect.width,
+            },
+        };
+    }, [canMoveTask]);
+
+    const startMobileTaskAutoScroll = React.useCallback((point: { x: number; y: number }) => {
+        if (typeof window === 'undefined') return;
+        mobileTaskAutoScrollPointRef.current = point;
+        if (mobileTaskAutoScrollFrameRef.current !== null) return;
+
+        const tick = () => {
+            mobileTaskAutoScrollFrameRef.current = null;
+            const currentPoint = mobileTaskAutoScrollPointRef.current;
+            const activeState = mobileTaskActionRef.current;
+            if (!currentPoint || !activeState) return;
+
+            const didScroll = autoScrollMobileTaskSurfaces(currentPoint);
+            if (!didScroll) return;
+
+            const latestState = mobileTaskActionRef.current;
+            if (latestState) {
+                commitMobileTaskActionState({
+                    ...latestState,
+                    pointerX: currentPoint.x,
+                    pointerY: currentPoint.y,
+                    ...resolveMobileTaskHover(currentPoint, latestState),
+                });
+            }
+            mobileTaskAutoScrollFrameRef.current = window.requestAnimationFrame(tick);
+        };
+
+        mobileTaskAutoScrollFrameRef.current = window.requestAnimationFrame(tick);
+    }, [autoScrollMobileTaskSurfaces, commitMobileTaskActionState, resolveMobileTaskHover]);
+
+    const beginMobileTaskAction = React.useCallback((
+        task: { id: string; title?: string; status?: TaskStatus },
+        event: React.TouchEvent,
+    ) => {
+        if (!isMobileTaskActionMode()) return false;
+        if (!canMoveTask && !canEditTask && !canCreateTask && !canDeleteTask) return false;
+        const point = readTouchPoint(event);
+        if (!point) return false;
+
+        const state = useWbsStore.getState();
+        const node = state.nodes[task.id];
+        if (!node || node.isArchived) return false;
+
+        event.preventDefault();
+        event.stopPropagation();
+        useBoardStore.getState().setContextMenuState(null);
+        setActiveDrag(null);
+
+        commitMobileTaskActionState({
+            nodeId: node.id,
+            title: node.title || task.title || '未命名任務',
+            status: node.status || task.status || 'todo',
+            pointerX: point.x,
+            pointerY: point.y,
+            hoverAction: null,
+            hoverTargetId: null,
+            dropPosition: null,
+            dropIndicatorRect: null,
+        });
+        return true;
+    }, [canCreateTask, canDeleteTask, canEditTask, canMoveTask, commitMobileTaskActionState]);
+
+    const moveMobileTaskAction = React.useCallback((event: React.TouchEvent) => {
+        const activeState = mobileTaskActionRef.current;
+        if (!activeState) return;
+        const point = readTouchPoint(event);
+        if (!point) return;
+        event.preventDefault();
+        event.stopPropagation();
+        commitMobileTaskActionState({
+            ...activeState,
+            pointerX: point.x,
+            pointerY: point.y,
+            ...resolveMobileTaskHover(point, activeState),
+        });
+        startMobileTaskAutoScroll(point);
+    }, [commitMobileTaskActionState, resolveMobileTaskHover, startMobileTaskAutoScroll]);
+
+    const getFinalMobileTaskHover = React.useCallback((event: React.TouchEvent | undefined, activeState: MobileTaskActionState) => {
+        const previousHover = {
+            hoverAction: activeState.hoverAction,
+            hoverTargetId: activeState.hoverTargetId,
+            dropPosition: activeState.dropPosition,
+            dropIndicatorRect: activeState.dropIndicatorRect,
+        };
+        const point = event ? readTouchPoint(event) : null;
+        if (!point) return previousHover;
+        const resolvedHover = resolveMobileTaskHover(point, activeState);
+        return resolvedHover.hoverAction || resolvedHover.hoverTargetId ? resolvedHover : previousHover;
+    }, [resolveMobileTaskHover]);
+
+    const endMobileTaskAction = React.useCallback((event: React.TouchEvent) => {
+        const activeState = mobileTaskActionRef.current;
+        if (!activeState) return;
+        const finalHover = getFinalMobileTaskHover(event, activeState);
+        event.preventDefault();
+        event.stopPropagation();
+        commitMobileTaskActionState(null);
+
+        if (finalHover.hoverAction) {
+            recordMobileTaskActionDebug({ type: 'end:action', nodeId: activeState.nodeId, finalHover });
+            void executeMobileTaskAction(finalHover.hoverAction, activeState.nodeId);
+            return;
+        }
+        recordMobileTaskActionDebug({ type: 'end:drop', nodeId: activeState.nodeId, finalHover });
+        executeMobileTaskDrop(activeState.nodeId, finalHover.hoverTargetId, finalHover.dropPosition);
+    }, [commitMobileTaskActionState, executeMobileTaskAction, executeMobileTaskDrop, getFinalMobileTaskHover]);
+
+    const cancelMobileTaskAction = React.useCallback((event?: React.TouchEvent) => {
+        const activeState = mobileTaskActionRef.current;
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        recordMobileTaskActionDebug({ type: 'cancel:reset', nodeId: activeState?.nodeId || null });
+        commitMobileTaskActionState(null);
+    }, [commitMobileTaskActionState]);
+
+    const mobileTaskActionApi = React.useMemo(() => ({
+        state: mobileTaskAction,
+        begin: beginMobileTaskAction,
+        move: moveMobileTaskAction,
+        end: endMobileTaskAction,
+        cancel: cancelMobileTaskAction,
+        isActive: (nodeId?: string) => {
+            const activeState = mobileTaskActionRef.current;
+            if (!activeState) return false;
+            return nodeId ? activeState.nodeId === nodeId : true;
+        },
+    }), [beginMobileTaskAction, cancelMobileTaskAction, endMobileTaskAction, mobileTaskAction, moveMobileTaskAction]);
+
+    React.useEffect(() => {
+        const handleMove = (event: TouchEvent) => moveMobileTaskAction(event as any);
+        const handleEnd = (event: TouchEvent) => endMobileTaskAction(event as any);
+        const handleCancel = (event: TouchEvent) => cancelMobileTaskAction(event as any);
+        const options = { capture: true, passive: false } as AddEventListenerOptions;
+        window.addEventListener('touchmove', handleMove, options);
+        window.addEventListener('touchend', handleEnd, options);
+        window.addEventListener('touchcancel', handleCancel, options);
+        return () => {
+            window.removeEventListener('touchmove', handleMove, options);
+            window.removeEventListener('touchend', handleEnd, options);
+            window.removeEventListener('touchcancel', handleCancel, options);
+        };
+    }, [cancelMobileTaskAction, endMobileTaskAction, moveMobileTaskAction]);
+
+    React.useEffect(() => {
+        const hardCancel = (reason: string) => {
+            const activeState = mobileTaskActionRef.current;
+            if (!activeState && !activeDrag) return;
+            recordMobileTaskActionDebug({ type: 'hard-cancel', reason, nodeId: activeState?.nodeId || null });
+            commitMobileTaskActionState(null);
+            setActiveDrag(null);
+            lastValidOverRef.current = null;
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'visible') hardCancel('visibilitychange');
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') hardCancel('escape');
+        };
+        const handlePointerCancel = () => hardCancel('pointercancel');
+        const handleBlur = () => hardCancel('blur');
+        const handlePageHide = () => hardCancel('pagehide');
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        document.addEventListener('keydown', handleKeyDown, true);
+        window.addEventListener('pointercancel', handlePointerCancel, true);
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('pagehide', handlePageHide);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            document.removeEventListener('keydown', handleKeyDown, true);
+            window.removeEventListener('pointercancel', handlePointerCancel, true);
+            window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('pagehide', handlePageHide);
+        };
+    }, [activeDrag, commitMobileTaskActionState]);
+
+    React.useEffect(() => () => {
+        if (mobileTaskActionFailSafeRef.current) {
+            clearTimeout(mobileTaskActionFailSafeRef.current);
+            mobileTaskActionFailSafeRef.current = null;
+        }
+        stopMobileTaskAutoScroll();
+    }, [stopMobileTaskAutoScroll]);
 
     const handleDragOver = (event: any) => {
         if (!canMoveTask) return;
@@ -429,6 +1101,10 @@ const BoardView = () => {
 
     const handleDragEnd = (event: any) => {
         setActiveDrag(null);
+        if (isMobileTaskActionMode()) {
+            lastValidOverRef.current = null;
+            return;
+        }
         if (!canMoveTask) return;
         const { active, over } = event;
         const effectiveOver = over && active.id !== over.id ? over : lastValidOverRef.current;
@@ -511,6 +1187,7 @@ const BoardView = () => {
 
     return (
         <KanbanDependencyContext.Provider value={{ dependencySelection, handleKanbanDependencySelect, dependencies }}>
+        <MobileTaskActionContext.Provider value={mobileTaskActionApi}>
         <DndContext
             sensors={sensors}
             collisionDetection={collisionDetection}
@@ -612,7 +1289,14 @@ const BoardView = () => {
                     </div>
                 ) : null}
             </DragOverlay>
+            <MobileTaskActionLayer
+                state={mobileTaskAction}
+                canEditTask={canEditTask}
+                canCreateTask={canCreateTask}
+                canDeleteTask={canDeleteTask}
+            />
         </DndContext>
+        </MobileTaskActionContext.Provider>
         </KanbanDependencyContext.Provider>
     );
 };

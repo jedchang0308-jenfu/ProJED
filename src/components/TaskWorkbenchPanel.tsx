@@ -36,6 +36,9 @@ import { isTaskWorkbenchSortableTask, listWorkbenchTasks, mergeUnplacedTasks } f
 import type { InboxItem, TaskNode, TaskStatus } from '../types';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { useTouchTapGuard } from '../hooks/useTouchTapGuard';
+import { useLongPress } from '../hooks/useLongPress';
+import { TaskDateBadge } from './Wbs/TaskDateBadge';
+import { isMobileTaskActionMode, MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 
 const PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
 const OPEN_PANEL_EVENT = 'projed:open-task-workbench-panel';
@@ -238,6 +241,19 @@ const WorkbenchDragCard: React.FC<{
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
   const depth = Math.max(0, Math.min(hierarchyDepth, 6));
+  const mobileTaskAction = React.useContext(MobileTaskActionContext);
+  const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
+  React.useEffect(() => {
+    const update = () => setMobileActionMode(isMobileTaskActionMode());
+    update();
+    window.addEventListener('resize', update);
+    const query = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
+    query?.addEventListener?.('change', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      query?.removeEventListener?.('change', update);
+    };
+  }, []);
   const hierarchyTextClass = depth === 0
     ? 'font-semibold text-slate-800'
     : depth === 1
@@ -245,7 +261,7 @@ const WorkbenchDragCard: React.FC<{
       : 'font-medium text-slate-600';
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `task-workbench-${surface}-${task.id}`,
-    disabled: !canMoveTask,
+    disabled: !canMoveTask || mobileActionMode,
     data: {
       type: 'wbs-card',
       source: 'task-workbench',
@@ -257,14 +273,64 @@ const WorkbenchDragCard: React.FC<{
     },
   });
   const touchTapGuard = useTouchTapGuard();
+  const showStartDate = useBoardStore(s => s.showStartDate);
+  const dependencies = useWbsStore(s => s.dependencies);
+  const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
+  const lockStatus = getNodeLockStatus(task.id, dependencies);
+  const longPressHandlers = useLongPress(
+    (event) => {
+      if (!isMobileTaskActionMode()) return;
+      mobileTaskAction?.begin({ id: task.id, title: task.title, status: task.status }, event);
+    },
+    { delay: 500, tolerance: 8 },
+  );
+  const workbenchTouchHandlers = {
+    ...longPressHandlers,
+    onTouchStart: (event: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchStart(event);
+      longPressHandlers.onTouchStart(event);
+    },
+    onTouchMove: (event: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(task.id)) {
+        mobileTaskAction.move(event);
+        return;
+      }
+      touchTapGuard.handlers.onTouchMove(event);
+      longPressHandlers.onTouchMove(event);
+    },
+    onTouchEnd: (event: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(task.id)) {
+        touchTapGuard.handlers.onTouchEnd(event);
+        mobileTaskAction.end(event);
+        longPressHandlers.onTouchEnd(event);
+        return;
+      }
+      touchTapGuard.handlers.onTouchEnd(event);
+      longPressHandlers.onTouchEnd(event);
+    },
+    onTouchCancel: (event: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(task.id)) {
+        touchTapGuard.handlers.onTouchCancel(event);
+        mobileTaskAction.cancel(event);
+        longPressHandlers.onTouchCancel(event);
+        return;
+      }
+      touchTapGuard.handlers.onTouchCancel(event);
+      longPressHandlers.onTouchCancel(event);
+    },
+    onClickCapture: (event: React.MouseEvent) => {
+      touchTapGuard.handlers.onClickCapture(event);
+      if (!event.isPropagationStopped()) longPressHandlers.onClickCapture(event);
+    },
+  };
+  const draggableBindings = mobileActionMode ? {} : { ...attributes, ...listeners };
 
   if (isUnplacedLaneRow) {
     return (
       <div
         ref={setNodeRef}
-        {...attributes}
-        {...listeners}
-        {...touchTapGuard.handlers}
+        {...draggableBindings}
+        {...workbenchTouchHandlers}
         onClick={(event) => {
           if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
           selectAndOpenTaskDetails(task.id);
@@ -280,6 +346,7 @@ const WorkbenchDragCard: React.FC<{
         data-task-workbench-hierarchy-depth={0}
         data-touch-tap-guard="true"
         data-task-id={task.id}
+        data-mobile-drop-target={task.id}
       >
         <span
           className="task-title-text min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-slate-700"
@@ -294,9 +361,8 @@ const WorkbenchDragCard: React.FC<{
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      {...touchTapGuard.handlers}
+      {...draggableBindings}
+      {...workbenchTouchHandlers}
       onClick={(event) => {
         if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
         selectAndOpenTaskDetails(task.id);
@@ -313,8 +379,21 @@ const WorkbenchDragCard: React.FC<{
       data-task-workbench-hierarchy-depth={depth}
       data-touch-tap-guard="true"
       data-task-id={task.id}
+      data-mobile-drop-target={task.id}
     >
-      <div className={`truncate text-sm leading-6 ${hierarchyTextClass}`}>{task.title || '未命名任務'}</div>
+      <div className="flex min-w-0 items-center gap-2">
+        <div className={`min-w-0 flex-1 truncate text-sm leading-6 ${hierarchyTextClass}`}>{task.title || '未命名任務'}</div>
+        <TaskDateBadge
+          startDate={task.startDate}
+          endDate={task.endDate}
+          status={task.status}
+          showStartDate={showStartDate}
+          startLocked={lockStatus.startLocked}
+          endLocked={lockStatus.endLocked}
+          durationLocked={Boolean(task.isDurationLocked)}
+          surface="workbench"
+        />
+      </div>
     </div>
   );
 };
