@@ -6,10 +6,11 @@
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md` | Phase 1 Implemented / Local QC Pending / Production Deploy Pending | DEV-041 / DEV-034 | 定義並實作正式部署前的新版本可見更新提示、更新按鈕、PWA lifecycle state、stale chunk/cache recovery、reload loop guard、ErrorBoundary recovery 整合、DEV-034 regression 與 production release gate 邊界；Phase 1 已完成 code slice，待 QC 與 deployment-release-gate。 |
-| `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md` | Phase 1 QA Plan Ready / RD Implemented / QC Pending | DEV-041 / DEV-034 | 規劃 static/browser QA：`onNeedRefresh` 顯示更新提示、更新按鈕 apply flow、dismiss/later、offline ready、chunk-load recovery、cache clear scope、ErrorBoundary integration、mobile/desktop UI、accessibility、DEV-034 regression、TypeScript/build 與 production deploy evidence 禁止過度宣稱。 |
+| `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md` | Production Release Deployed / Local + Production Smoke Passed | DEV-041 / DEV-034 | 定義並實作正式部署前的新版本可見更新提示、更新按鈕、PWA lifecycle state、stale chunk/cache recovery、reload loop guard、ErrorBoundary recovery 整合、DEV-034 regression 與 production release gate 邊界；已完成 local QC、production artifact smoke、Firebase deploy、post-deploy smoke 與 authenticated production UI smoke。 |
+| `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md` | Local + Production QC Passed / Production Release Deployed | DEV-041 / DEV-034 | 規劃 static/browser QA：`onNeedRefresh` 顯示更新提示、更新按鈕 apply flow、dismiss/later、offline ready、chunk-load recovery、cache clear scope、ErrorBoundary integration、mobile/desktop UI、accessibility、DEV-034 regression、TypeScript/build 與 production deploy evidence 禁止過度宣稱。 |
+| `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md` | Production Release Deployed / Local + Production QC Passed | DEV-041 / DEV-034 / DEV-039 / DEV-029 | 記錄 release boundary、local QC、production build artifact、pre-deploy production-like smoke、Firebase deploy、post-deploy HTTP/browser smoke、authenticated production UI smoke、residual risks 與 rollback target。 |
 
-PM 治理註記：DEV-041 已進入 Phase 1 implementation，並已授權正式部署；部署仍必須等本機 QC 與 deployment-release-gate 通過後才能宣稱完成。強制更新、release notes 後端、版本 API、analytics、push/email notification、DB schema / migration / RLS / RPC 不屬於目前授權範圍。
+PM 治理註記：DEV-041 已完成 Phase 1 implementation、local QC 與 Firebase Hosting production release；正式站 `https://projed-cc78d.web.app/` 已載入 `assets/index-C2sty1Hz.js` 並通過 post-deploy browser smoke。強制更新、release notes 後端、版本 API、analytics、push/email notification、DB schema / migration / RLS / RPC 不屬於目前授權範圍。
 
 ## Documentation Map Update - 2026-07-04
 

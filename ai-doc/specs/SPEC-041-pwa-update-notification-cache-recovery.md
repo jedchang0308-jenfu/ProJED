@@ -1,6 +1,6 @@
 # SPEC-041: PWA 更新通知與快取恢復
 
-狀態: Phase 1 Implemented / Local QC Pending / Production Deploy Pending
+狀態: Production Release Deployed / Local + Production Smoke Passed
 關聯 DEV: DEV-041
 節點類型: 交付點
 父交付點: Production release readiness / PWA lifecycle reliability
@@ -231,7 +231,8 @@ UI / RWD 驗收:
 - 新增 DEV-041 static/browser verifiers，並把 script 掛進 `package.json`。
 
 Production release note:
-- 此段僅代表 Phase 1 code implemented；正式部署需等 QC 與 deployment-release-gate 完成後才可宣稱。
+- 2026-07-05 已完成 local QC、production artifact smoke、Firebase Hosting deploy、post-deploy browser smoke 與 authenticated production UI smoke。
+- QC report: `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`
 
 ## QA / QC Gate
 
@@ -278,8 +279,8 @@ Production deploy gate:
 | Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
 |---|---|---|---|---|
 | 0 | PM/RD Contract | Complete | Authorized for documentation only | SPEC/QA/dev_task/documentation_map/backlog updated |
-| 1 | Visible PWA Update Prompt & Cache Recovery | Phase 1 Implemented / QC Pending | Authorized | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
-| 2 | Production Release Gate | Blocked Human Re-entry | Not Authorized | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
+| 1 | Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed | Authorized / Complete | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
+| 2 | Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed | Authorized / Complete | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
 | 3 | Optional Release Metadata / Mandatory Policy | RD Contract Ready | Not Authorized | separate human decision、SPEC addendum or new DEV |
 
 ## RD Start Checklist

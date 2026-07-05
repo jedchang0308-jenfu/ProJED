@@ -126,7 +126,7 @@ assert(
 
 assert(
   'SPEC and QA are updated for implementation evidence',
-  source.spec.includes('Phase 1 Implemented') &&
+  (source.spec.includes('Phase 1 Implemented') || source.spec.includes('Production Release Deployed')) &&
     source.spec.includes('AppUpdatePrompt') &&
     source.qa.includes('QC Evidence') &&
     source.qa.includes('verify:dev-041-pwa-update-notification-cache-recovery-browser'),
@@ -146,4 +146,3 @@ console.log(JSON.stringify({
 if (failed.length > 0) {
   process.exit(1);
 }
-

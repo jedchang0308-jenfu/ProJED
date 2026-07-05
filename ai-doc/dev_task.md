@@ -4,7 +4,7 @@
 
 ### DEV-041: PWA 更新通知與快取恢復
 
-狀態: Phase 1 Implemented / Local QC Pending / Production Deploy Pending
+狀態: Production Release Deployed / Local + Production Smoke Passed
 節點類型: 交付點
 父交付點: Production release readiness / PWA lifecycle reliability
 是否計入產品交付完成: 是，限正式部署前的使用者更新可見性、快取恢復與版本切換可靠性
@@ -34,10 +34,10 @@ End-State Architecture:
 - production deploy 前必須能驗證新版本提示、更新按鈕、cache recovery 與 DEV-034 PWA install guidance regression。
 
 RD Handoff:
-- Phase 1: Visible PWA Update Prompt & Cache Recovery，Document status 為 `Phase 1 Implemented / Local QC Pending`。
+- Phase 1: Visible PWA Update Prompt & Cache Recovery，Document status 為 `Local + Browser QC Passed / Complete`。
 - Phase 1 scope：擴充 `src/services/pwaUpdateService.ts` update state、掛載全域更新提示 UI、實作更新按鈕、dismiss/later、chunk-load/cache recovery guard、ErrorBoundary recovery 整合、static/browser verifier。
 - Phase 1 touchpoints：`src/services/pwaUpdateService.ts`、`src/main.tsx`、`src/App.tsx` 或全域 layout、`src/components/AppUpdatePrompt.tsx` 或等效新元件、`src/components/GlobalErrorBoundary.tsx`、DEV-041 verifier scripts。
-- Phase 2: Production Release Gate，Document status 為 `Authorized / Pending`；使用者已要求正式部署，必須套用 `deployment-release-gate`。
+- Phase 2: Production Release Gate，Document status 為 `Production Release Deployed / Post-Deploy Smoke Passed`；已套用 `deployment-release-gate`。
 - Phase 3: Optional Release Metadata / Mandatory Policy，Document status 為 `RD Contract Ready / Not Authorized`；release notes、版本 API、強制更新與 analytics 另行決策。
 
 Acceptance:
@@ -58,6 +58,26 @@ QA / QC gate:
 - `npm.cmd exec tsc -- --noEmit`
 - `npm.cmd run build:test`
 
+QC evidence（2026-07-05）:
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery` passed，21/21。
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser` passed；mobile update prompt visible/tappable、dismiss keeps queued update state、update button invokes callback、recovery prompt exposes cache action。
+- DEV-034 static/browser regression passed。
+- DEV-028 static/browser regression passed；static 35/35。
+- DEV-029 static/browser regression passed；static 27/27。
+- DEV-039 task-filter-core static/browser passed；static 61/61。
+- DEV-039 filter-result-parity static/browser passed；static 26/26。
+- DEV-039 placement lanes static/browser passed；static 22/22。
+- DEV-039 cross-board source static/browser passed；static 23/23。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build:test` passed。
+- `npm.cmd run build` passed；production bundle `assets/index-C2sty1Hz.js`，CSS `assets/index-Bz5Y4Esx.css`，PWA `sw.js` generated。
+- Production-like preview smoke passed at `http://127.0.0.1:4174/` with service worker ready and no critical runtime errors。
+- Firebase Hosting deploy passed：`npx.cmd firebase deploy --only hosting --project projed-cc78d --non-interactive`，Hosting URL `https://projed-cc78d.web.app`。
+- Post-deploy HTTP smoke passed：`web.app` and `firebaseapp.com` HTTP 200 and load `index-C2sty1Hz.js`。
+- Post-deploy browser smoke passed：app shell non-empty, `sw.js` ready, no critical console/pageerror/failed request。
+- `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed；temporary Supabase user/tenant cleaned up, project import resolved, task workbench unplaced task persisted after board switch。
+- QC report: `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。
+
 Deferred Scope Audit:
 - production deploy / Firebase Hosting release: Blocked Human Re-entry，需使用者明確授權並走 deployment-release-gate。
 - mandatory update / forced refresh: RD Contract Ready / Not Authorized，牽涉使用者工作中斷風險。
@@ -71,8 +91,8 @@ All-Phase Coverage Matrix:
 | Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
 |---|---|---|---|---|
 | 0 | PM/RD Contract | Complete | Authorized | SPEC/QA/dev_task/documentation_map/backlog updated |
-| 1 | Visible PWA Update Prompt & Cache Recovery | Phase 1 Implemented / QC Pending | Authorized | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
-| 2 | Production Release Gate | Authorized / Pending | Authorized | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
+| 1 | Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed | Authorized / Complete | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
+| 2 | Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed | Authorized / Complete | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
 | 3 | Optional Release Metadata / Mandatory Policy | RD Contract Ready | Not Authorized | separate human decision、SPEC addendum or new DEV |
 
 文件:

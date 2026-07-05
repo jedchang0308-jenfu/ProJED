@@ -6,7 +6,7 @@
 
 | DEV | Status | Type | Priority | Scope | Evidence |
 |---|---|---|---|---|---|
-| DEV-041 | Phase 1 Implemented / Local QC Pending / Production Deploy Pending | 交付點 | P0 production update visibility, P0 stale cache recovery, P1 release-readiness evidence | 在正式部署前建立可見的新版本更新提示與更新按鈕；沿用現有 Vite PWA prompt update 架構，讓 `onNeedRefresh` 通知全域 UI，使用者按更新後才套用；補 stale chunk/cache recovery、reload loop guard、ErrorBoundary recovery 整合與 DEV-034 PWA install guidance regression。 | `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`, `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md` |
+| DEV-041 | Production Release Deployed / Local + Production Smoke Passed | 交付點 | P0 production update visibility, P0 stale cache recovery, P1 release-readiness evidence | 在正式部署前建立可見的新版本更新提示與更新按鈕；沿用現有 Vite PWA prompt update 架構，讓 `onNeedRefresh` 通知全域 UI，使用者按更新後才套用；補 stale chunk/cache recovery、reload loop guard、ErrorBoundary recovery 整合與 DEV-034 PWA install guidance regression。 | `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`, `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md`, `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md` |
 
 驗收重點:
 - 有新版本時，使用者必須看到可見更新提示。
@@ -15,7 +15,7 @@
 - cache recovery 不得清除未授權業務資料。
 - 390x844 mobile 與 1440x900 desktop viewport 下提示可見、可點、不溢出。
 - DEV-034 PWA install guidance 不得被破壞。
-- RD implementation 與 production deploy 已授權，但需通過 local QC 與 deployment-release-gate 才能宣稱完成。
+- RD implementation 與 production deploy 已完成，local QC、production artifact smoke、Firebase deploy、post-deploy smoke 與 authenticated production UI smoke 均已通過。
 - 強制更新、release notes backend、analytics、push/email notification、DB schema/migration/RLS/RPC 均未授權。
 
 ## Backlog Update - 2026-07-04

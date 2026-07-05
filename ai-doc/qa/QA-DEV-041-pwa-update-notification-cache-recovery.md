@@ -1,6 +1,6 @@
 # QA-DEV-041: PWA 更新通知與快取恢復驗證計畫
 
-狀態: Phase 1 QA Plan Ready / RD Implemented / QC Pending
+狀態: Local + Production QC Passed / Production Release Deployed
 關聯 DEV: DEV-041
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 建立日期: 2026-07-05
@@ -158,6 +158,9 @@ QC 報告不得只寫「看起來可以」；至少需包含:
 - DEV-034 regression evidence。
 - TypeScript 與 build evidence。
 - production deploy 是否執行；若未執行需明確寫「Production Not Deployed」。
+
+QC evidence report:
+- `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`
 
 ## Stop Conditions
 
