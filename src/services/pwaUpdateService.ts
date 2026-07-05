@@ -6,6 +6,7 @@ export type PwaUpdateStatus =
   | 'update-available'
   | 'applying'
   | 'offline-ready'
+  | 'updated'
   | 'recoverable-cache-error'
   | 'failed';
 
@@ -18,14 +19,20 @@ export type PwaUpdateState = {
   lastUpdateFoundAt: number | null;
   lastAppliedAt: number | null;
   recoveryAttemptCount: number;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  previousVersion: string | null;
   errorMessage: string | null;
 };
+
 type PwaUpdateListener = (state: PwaUpdateState) => void;
 type RegisterUpdateCallback = ReturnType<typeof registerSW>;
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const APP_SHELL_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 const MAX_AUTO_RECOVERY_ATTEMPTS = 1;
+const APP_VERSION_KEY = 'projed.pwaUpdate.currentBundle';
 const RECOVERY_ATTEMPTS_KEY = 'projed.pwaUpdate.recoveryAttempts';
 const STATE_EVENT_NAME = 'projed:pwa-update-state';
 
@@ -34,6 +41,7 @@ const listeners = new Set<PwaUpdateListener>();
 let updateSW: RegisterUpdateCallback | null = null;
 let queuedUpdate: (() => Promise<void>) | null = null;
 let backgroundListenersBound = false;
+let appShellCheckListenersBound = false;
 let setupDone = false;
 let testControlsInstalled = false;
 
@@ -46,6 +54,9 @@ let updateState: PwaUpdateState = {
   lastUpdateFoundAt: null,
   lastAppliedAt: null,
   recoveryAttemptCount: 0,
+  currentVersion: null,
+  latestVersion: null,
+  previousVersion: null,
   errorMessage: null,
 };
 
@@ -54,6 +65,7 @@ declare global {
     __projedPwaUpdateTest?: {
       getState: () => PwaUpdateState;
       simulateUpdateAvailable: () => void;
+      simulateUpdated: () => void;
       simulateOfflineReady: () => void;
       simulateRecoverableCacheError: (message?: string) => void;
       reset: () => void;
@@ -102,6 +114,115 @@ const writeRecoveryAttempts = (count: number, firstAttemptAt: number) => {
 const resetRecoveryAttempts = () => {
   if (typeof sessionStorage === 'undefined') return;
   sessionStorage.removeItem(RECOVERY_ATTEMPTS_KEY);
+};
+
+const extractBundleVersionFromSrc = (src: string | null | undefined) => {
+  const match = src?.match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/);
+  return match?.[1] ?? null;
+};
+
+const getCurrentAppShellVersion = () => {
+  if (typeof document === 'undefined') return null;
+  const entryScript = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/index-"]');
+  return extractBundleVersionFromSrc(entryScript?.getAttribute('src'));
+};
+
+const extractAppShellVersionFromHtml = (html: string) => {
+  const match = html.match(/<script[^>]+src=["']([^"']*\/assets\/index-[A-Za-z0-9_-]+\.js)["']/);
+  return extractBundleVersionFromSrc(match?.[1]);
+};
+
+const fetchLatestAppShellVersion = async () => {
+  const response = await fetch(`/index.html?projed_update_check=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return extractAppShellVersionFromHtml(await response.text());
+};
+
+const recordLoadedAppVersion = () => {
+  if (typeof localStorage === 'undefined') return;
+
+  const currentVersion = getCurrentAppShellVersion();
+  if (!currentVersion) return;
+
+  let previousVersion: string | null = null;
+  try {
+    previousVersion = localStorage.getItem(APP_VERSION_KEY);
+    localStorage.setItem(APP_VERSION_KEY, currentVersion);
+  } catch {
+    previousVersion = null;
+  }
+
+  setUpdateState({
+    currentVersion,
+    latestVersion: currentVersion,
+    previousVersion,
+  });
+
+  if (previousVersion !== currentVersion && !updateState.updateAvailable) {
+    setUpdateState({
+      status: 'updated',
+      updateAvailable: false,
+      dismissedAt: null,
+      currentVersion,
+      latestVersion: currentVersion,
+      previousVersion,
+      lastAppliedAt: Date.now(),
+      errorMessage: null,
+    });
+  }
+};
+
+const checkForAppShellUpdate = async () => {
+  const currentVersion = getCurrentAppShellVersion();
+  if (!currentVersion || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
+
+  setUpdateState({
+    currentVersion,
+    lastCheckedAt: Date.now(),
+  });
+
+  try {
+    const latestVersion = await fetchLatestAppShellVersion();
+    if (!latestVersion) return false;
+
+    setUpdateState({ latestVersion });
+    if (latestVersion === currentVersion) return false;
+
+    queuedUpdate = async () => {
+      window.location.reload();
+    };
+    setUpdateState({
+      status: 'update-available',
+      updateAvailable: true,
+      dismissedAt: null,
+      currentVersion,
+      latestVersion,
+      lastUpdateFoundAt: Date.now(),
+      errorMessage: null,
+    });
+    return true;
+  } catch (error) {
+    console.warn('[PWA] App shell version check failed:', error);
+    return false;
+  }
+};
+
+const bindAppShellUpdateChecks = () => {
+  if (appShellCheckListenersBound || typeof window === 'undefined' || typeof document === 'undefined') return;
+  appShellCheckListenersBound = true;
+
+  window.setTimeout(() => {
+    void checkForAppShellUpdate();
+  }, 3000);
+  window.setInterval(() => {
+    void checkForAppShellUpdate();
+  }, APP_SHELL_CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void checkForAppShellUpdate();
+  });
 };
 
 const reserveAutomaticRecoveryAttempt = () => {
@@ -185,7 +306,21 @@ const installPwaUpdateTestControls = () => {
         status: 'update-available',
         updateAvailable: true,
         dismissedAt: null,
+        currentVersion: 'test-current',
+        latestVersion: 'test-next',
         lastUpdateFoundAt: Date.now(),
+        errorMessage: null,
+      });
+    },
+    simulateUpdated: () => {
+      setUpdateState({
+        status: 'updated',
+        updateAvailable: false,
+        dismissedAt: null,
+        currentVersion: 'test-next',
+        latestVersion: 'test-next',
+        previousVersion: 'test-current',
+        lastAppliedAt: Date.now(),
         errorMessage: null,
       });
     },
@@ -214,6 +349,9 @@ const installPwaUpdateTestControls = () => {
         lastUpdateFoundAt: null,
         lastAppliedAt: null,
         recoveryAttemptCount: 0,
+        currentVersion: null,
+        latestVersion: null,
+        previousVersion: null,
         errorMessage: null,
       });
     },
@@ -241,7 +379,11 @@ export const applyPwaUpdate = async () => {
       lastCheckedAt: Date.now(),
       errorMessage: null,
     });
-    return false;
+    const foundAppShellUpdate = await checkForAppShellUpdate();
+    if (!foundAppShellUpdate) {
+      setUpdateState({ status: 'idle' });
+      return false;
+    }
   }
   return runQueuedUpdate();
 };
@@ -298,8 +440,13 @@ export const setupPwaLifecycle = () => {
   if (setupDone) return;
   setupDone = true;
 
+  if (typeof window === 'undefined') return;
+  if (import.meta.env.PROD) {
+    recordLoadedAppVersion();
+    bindAppShellUpdateChecks();
+  }
   if (!import.meta.env.PROD) return;
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (!('serviceWorker' in navigator)) return;
 
   updateSW = registerSW({
     immediate: true,
@@ -312,6 +459,7 @@ export const setupPwaLifecycle = () => {
         status: 'update-available',
         updateAvailable: true,
         dismissedAt: null,
+        currentVersion: getCurrentAppShellVersion() ?? updateState.currentVersion,
         lastUpdateFoundAt: Date.now(),
         errorMessage: null,
       });
@@ -319,7 +467,7 @@ export const setupPwaLifecycle = () => {
     },
     onOfflineReady() {
       console.info('[PWA] App shell cached for faster startup and offline reopen.');
-      if (!updateState.updateAvailable) {
+      if (!updateState.updateAvailable && updateState.status !== 'updated') {
         setUpdateState({
           status: 'offline-ready',
           offlineReady: true,
@@ -334,20 +482,26 @@ export const setupPwaLifecycle = () => {
 
       const checkForUpdate = () => {
         if (!navigator.onLine) return;
-        setUpdateState({
-          status: updateState.updateAvailable ? updateState.status : 'checking',
-          lastCheckedAt: Date.now(),
-        });
+        const canShowChecking = !updateState.updateAvailable && updateState.status !== 'updated';
+        if (canShowChecking) {
+          setUpdateState({
+            status: 'checking',
+            lastCheckedAt: Date.now(),
+          });
+        } else {
+          setUpdateState({ lastCheckedAt: Date.now() });
+        }
         registration.update().catch((error) => {
           console.warn('[PWA] Update check failed:', error);
           setUpdateState({
-            status: updateState.updateAvailable ? updateState.status : 'failed',
+            status: updateState.updateAvailable || updateState.status === 'updated' ? updateState.status : 'failed',
             errorMessage: error instanceof Error ? error.message : '檢查更新失敗。',
           });
         }).finally(() => {
           if (!updateState.updateAvailable && updateState.status === 'checking') {
             setUpdateState({ status: 'idle' });
           }
+          void checkForAppShellUpdate();
         });
       };
 

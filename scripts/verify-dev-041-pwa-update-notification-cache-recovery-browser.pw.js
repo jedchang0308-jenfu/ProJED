@@ -65,9 +65,24 @@ async (page) => {
     assert(await page.locator('[data-pwa-update-error]').count() === 1, 'recovery prompt should show error detail');
   };
 
+  const runUpdatedMatrix = async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.__projedPwaUpdateTest.reset());
+    await page.evaluate(() => window.__projedPwaUpdateTest.simulateUpdated());
+    const prompt = page.locator('[data-pwa-update-prompt]');
+    await prompt.waitFor({ state: 'visible', timeout: 10000 });
+    const text = await prompt.innerText();
+    assert(/已更新到新版/.test(text), 'updated prompt should confirm the newest version is loaded', { text });
+    await page.locator('[data-pwa-updated-confirm]').click();
+    await prompt.waitFor({ state: 'hidden', timeout: 5000 });
+    const state = await page.evaluate(() => window.__projedPwaUpdateTest.getState());
+    assert(state.status === 'updated' && state.dismissedAt, 'updated prompt should be dismissible without changing update state', state);
+  };
+
   await runMobileMatrix();
   await runApplyMatrix();
   await runRecoveryMatrix();
+  await runUpdatedMatrix();
 
   const criticalDiagnostics = diagnostics.filter(line => (
     /pageerror|console:error/i.test(line) &&
@@ -82,6 +97,7 @@ async (page) => {
       'dismiss keeps queued update state',
       'update button invokes queued callback',
       'recovery prompt exposes cache action',
+      'updated prompt confirms newest loaded version',
     ],
     diagnostics: diagnostics.slice(-20),
   }, null, 2);

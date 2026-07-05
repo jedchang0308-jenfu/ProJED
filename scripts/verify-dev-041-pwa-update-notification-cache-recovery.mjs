@@ -29,11 +29,23 @@ assert(
     source.pwaUpdateService.includes("'update-available'") &&
     source.pwaUpdateService.includes("'applying'") &&
     source.pwaUpdateService.includes("'offline-ready'") &&
+    source.pwaUpdateService.includes("'updated'") &&
     source.pwaUpdateService.includes("'recoverable-cache-error'") &&
     source.pwaUpdateService.includes("'failed'") &&
     source.pwaUpdateService.includes('export const getPwaUpdateState') &&
     source.pwaUpdateService.includes('export const subscribePwaUpdateState') &&
     source.pwaUpdateService.includes("const STATE_EVENT_NAME = 'projed:pwa-update-state'"),
+);
+
+assert(
+  'app shell bundle hash is recorded and checked independently of service worker events',
+  source.pwaUpdateService.includes("const APP_VERSION_KEY = 'projed.pwaUpdate.currentBundle'") &&
+    source.pwaUpdateService.includes('getCurrentAppShellVersion') &&
+    source.pwaUpdateService.includes('extractAppShellVersionFromHtml') &&
+    source.pwaUpdateService.includes('fetchLatestAppShellVersion') &&
+    source.pwaUpdateService.includes('recordLoadedAppVersion') &&
+    source.pwaUpdateService.includes('bindAppShellUpdateChecks') &&
+    source.pwaUpdateService.includes("cache: 'no-store'"),
 );
 
 assert(
@@ -92,6 +104,8 @@ assert(
     source.appUpdatePrompt.includes('data-pwa-update-dismiss') &&
     source.appUpdatePrompt.includes('data-pwa-update-later') &&
     source.appUpdatePrompt.includes('data-pwa-cache-recovery') &&
+    source.appUpdatePrompt.includes('data-pwa-updated-confirm') &&
+    source.appUpdatePrompt.includes('已更新到新版') &&
     source.appUpdatePrompt.includes('aria-live="polite"'),
 );
 
@@ -107,6 +121,7 @@ assert(
   'test-mode helper allows deterministic browser verification without production update',
   source.pwaUpdateService.includes('__projedPwaUpdateTest') &&
     source.pwaUpdateService.includes('simulateUpdateAvailable') &&
+    source.pwaUpdateService.includes('simulateUpdated') &&
     source.pwaUpdateService.includes('simulateRecoverableCacheError') &&
     source.pwaUpdateService.includes("import.meta.env.MODE !== 'test'"),
 );

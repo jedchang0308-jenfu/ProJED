@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RefreshCw, X } from 'lucide-react';
 import {
   applyPwaUpdate,
   clearPwaApplicationCacheAndReload,
@@ -12,6 +12,7 @@ import { Button } from './ui/Button';
 
 const isVisibleState = (state: PwaUpdateState) => (
   (state.updateAvailable && !state.dismissedAt) ||
+  (state.status === 'updated' && !state.dismissedAt) ||
   state.status === 'recoverable-cache-error' ||
   state.status === 'failed'
 );
@@ -25,6 +26,7 @@ export const AppUpdatePrompt: React.FC = () => {
 
   const visible = isVisibleState(state);
   const isRecovery = state.status === 'recoverable-cache-error' || state.status === 'failed';
+  const isUpdated = state.status === 'updated';
   const content = useMemo(() => {
     if (isRecovery) {
       return {
@@ -33,12 +35,19 @@ export const AppUpdatePrompt: React.FC = () => {
         actionLabel: '重新整理',
       };
     }
+    if (isUpdated) {
+      return {
+        title: state.previousVersion ? '已更新到新版' : '目前已是最新版本',
+        description: '你現在看到的是最新版本，之後有新版時會在這裡提示。',
+        actionLabel: '知道了',
+      };
+    }
     return {
       title: '有新版本可用',
       description: '更新後會重新整理畫面，建議先完成正在輸入的內容。',
       actionLabel: '更新',
     };
-  }, [isRecovery]);
+  }, [isRecovery, isUpdated, state.previousVersion]);
 
   const handleUpdate = async () => {
     if (isApplying) return;
@@ -64,8 +73,8 @@ export const AppUpdatePrompt: React.FC = () => {
       aria-live="polite"
     >
       <div className="mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-900/20 sm:p-4">
-        <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${isRecovery ? 'bg-amber-50 text-amber-600' : 'bg-primary/10 text-primary'}`}>
-          {isRecovery ? <AlertTriangle size={18} /> : <RefreshCw size={18} />}
+        <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${isRecovery ? 'bg-amber-50 text-amber-600' : isUpdated ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/10 text-primary'}`}>
+          {isRecovery ? <AlertTriangle size={18} /> : isUpdated ? <CheckCircle2 size={18} /> : <RefreshCw size={18} />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
@@ -78,7 +87,7 @@ export const AppUpdatePrompt: React.FC = () => {
                 type="button"
                 onClick={dismissPwaUpdatePrompt}
                 className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label="稍後更新"
+                aria-label={isUpdated ? '關閉更新提示' : '稍後更新'}
                 data-pwa-update-dismiss
               >
                 <X size={16} />
@@ -109,6 +118,16 @@ export const AppUpdatePrompt: React.FC = () => {
                   清除快取後重整
                 </Button>
               </>
+            ) : isUpdated ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={dismissPwaUpdatePrompt}
+                data-pwa-updated-confirm
+              >
+                {content.actionLabel}
+              </Button>
             ) : (
               <>
                 <Button
