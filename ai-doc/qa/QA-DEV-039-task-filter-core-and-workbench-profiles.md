@@ -13,6 +13,7 @@
 - 2026-07-04 hierarchy follow-up，`所有任務排序` 需用縮排與字重/灰階呈現 hierarchy depth；不得因扁平排序讓所有 level 看起來完全相同。
 - 2026-07-04 sticky title follow-up，`未歸位` 與 `所有任務排序` 是 section title，不得呈現得像一般任務列；兩者需為 sticky header，捲動各自區塊時仍可見。
 - 2026-07-04 chevron collapse follow-up，工作台收合狀態需使用精簡 chevron 符號，collapsed rail 寬度由 48px 減半到約 24px；展開狀態的收合按鈕需用 `ChevronLeft`，不得回到 Notebook 或 panel 類圖示卡片。
+- 2026-07-05 DEV-042 compatibility follow-up，手機版工作台收合狀態不得再顯示 in-flow collapsed rail；工作台需透過 Sidebar / top-nav 入口開啟 overlay。桌機仍保留約 24px compact rail。
 
 ## 驗證目標
 
@@ -58,7 +59,7 @@
 - `所有任務排序` 中父層與子層沒有任何縮排或文字權重差異。
 - 階層提示改變原本的到期日排序真相，或把清單改成不可跨看板比較的樹狀分組。
 - `未歸位` 或 `所有任務排序` 標題在區塊捲動後消失、被任務列蓋住、或缺少明確 section header UI。
-- 工作台 collapsed rail 使用 Notebook/clipboard 類大圖示、展開狀態收合按鈕使用 PanelLeftClose 類圖示、寬度回到 48px、或數字 badge 撐出水平 overflow。
+- 桌機工作台 collapsed rail 使用 Notebook/clipboard 類大圖示、展開狀態收合按鈕使用 PanelLeftClose 類圖示、寬度回到 48px、或數字 badge 撐出水平 overflow；手機版仍顯示任何 in-flow collapsed rail。
 - 使用者無權 board/task 出現在 task source、store、UI 或測試輸出。
 
 ## Phase 1 Static Verification
@@ -101,7 +102,7 @@ npm.cmd run verify:dev-039-task-filter-core
 | QA-039-B08 | 點擊重設 | 目前看板過濾器回到預設，不需要儲存或 profile |
 | QA-039-B09 | 新增未歸位任務 | 新增後立即以完整任務卡顯示在未歸位 lane，且 reload 後仍可見 |
 | QA-039-B10 | 切換看板與套用過濾器 | 未歸位 lane 不受看板 selector 或過濾器隱藏；過濾器只作用於已歸位看板 lane |
-| QA-039-B11 | 390px mobile viewport | 工作台預設 rail，不擠出看板卡片；展開 overlay 後不水平 overflow |
+| QA-039-B11 | 390px mobile viewport | 工作台 closed state 不顯示 in-flow rail；透過 Sidebar / top-nav 入口開啟 overlay 後不水平 overflow |
 
 ## Phase 1B Placement Lane Verification
 
@@ -128,7 +129,7 @@ npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser
 | QA-039-P1B-B05 | 對已歸位看板 lane 套用過濾器 | 已歸位看板 lane 依 filter 更新；未歸位 lane 不被 filter 隱藏或改變 |
 | QA-039-P1B-B06 | 切換看板 selector | 已歸位任務 lane 仍跨看板顯示；未歸位 lane 保持獨立位置區 |
 | QA-039-P1B-B07 | 點擊未歸位與已歸位任務卡 | 兩者開啟同一套任務詳情 UI 或等價操作入口 |
-| QA-039-P1B-B08 | 390px mobile viewport 拖拉/展開工作台 | 兩個 lane 可理解且不造成主要 CTA 裁切或水平 overflow |
+| QA-039-P1B-B08 | 390px mobile viewport 拖拉/展開工作台 | closed state 無 in-flow rail；透過 Sidebar / top-nav 入口開啟 overlay 後兩個 lane 可理解且不造成主要 CTA 裁切或水平 overflow |
 
 Phase 1B regression gate：
 

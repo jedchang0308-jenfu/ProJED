@@ -262,28 +262,28 @@ async (page) => {
     step = 'mobile-viewport';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
-    const collapsedWorkbench = page.locator('[data-task-workbench-panel="collapsed"]');
-    await collapsedWorkbench.waitFor({ state: 'visible', timeout: 10000 });
-    const collapsedRailBox = await collapsedWorkbench.boundingBox();
-    const collapsedToggleBox = await collapsedWorkbench.locator('[data-task-workbench-collapsed-toggle="true"]').boundingBox();
-    const collapsedCountBox = await collapsedWorkbench.locator('[data-task-workbench-collapsed-count="true"]').boundingBox();
     assert(
-      collapsedRailBox &&
-        collapsedToggleBox &&
-        collapsedCountBox &&
-        collapsedRailBox.width <= 26 &&
-        collapsedToggleBox.width <= 26 &&
-        collapsedCountBox.width <= 22,
-      'collapsed task workbench rail should use the compact chevron affordance at half width',
-      { collapsedRailBox, collapsedToggleBox, collapsedCountBox },
+      await page.locator('[data-task-workbench-panel="collapsed"]').count() === 0,
+      'mobile closed task workbench should not render an in-flow collapsed rail',
+    );
+    assert(
+      await page.locator('[data-sidebar-panel="collapsed"]').count() === 0,
+      'mobile closed sidebar should not render an in-flow collapsed rail',
     );
     const mobileBoardHasCard = await page.evaluate(() => {
       const task = document.querySelector('.kanban-task-card[data-task-id]');
       const rect = task?.getBoundingClientRect();
       return rect ? rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth && rect.right > 0 : false;
     });
-    assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is collapsed');
-    await page.locator('[data-task-workbench-panel="collapsed"] button[title="開啟全域任務平台"]').click();
+    assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is closed');
+    const mobileClosedOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+    assert(!mobileClosedOverflow, 'mobile closed rails should not create document-level horizontal overflow');
+
+    await page.locator('[data-main-sidebar-toggle="true"]').click();
+    await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-sidebar-task-workbench-button="true"]').click();
+    await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 10000 });
+    await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-unplaced-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-placed-board-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });

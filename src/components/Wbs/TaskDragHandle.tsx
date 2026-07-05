@@ -51,6 +51,7 @@ export const TaskDragHandle: React.FC<TaskDragHandleProps> = ({
         event.stopPropagation();
       }}
       onClick={(event) => event.stopPropagation()}
+      style={dragDisabled ? { touchAction: 'pan-x pan-y' } : undefined}
       className={`task-drag-hitbox ${sizeClassMap[size]} flex shrink-0 ${
         dragDisabled ? 'cursor-pointer' : 'cursor-grab touch-none active:cursor-grabbing'
       } items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${

@@ -2,6 +2,104 @@
 
 ## PM Update - 2026-07-05
 
+### DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
+
+狀態: Implemented / Local Automated Browser QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed
+節點類型: 交付點 / UI RWD regression
+父交付點: DEV-039 全域任務平台 / DEV-001 緊湊 UI 系統
+是否計入產品交付完成: 是，本輪完成 local RD implementation + automated QA；production deploy 與 physical-phone supplemental 未執行
+建立日期: 2026-07-05
+
+原始需求邊界:
+- 使用者以手機截圖指出：左側欄收疊後仍然佔用太多版面，手機版特別明顯。
+- 初始指令為「寫成開發文件」；後續依開發任務執行授權完成產品程式碼、verifier 與本機 QA/QC，仍不含 production deploy、DB/RLS/migration 或正式資料修復。
+
+Human Decision Brief:
+- 已確認：手機版 collapsed 左側導覽不得保留 in-flow rail。
+- 已確認：手機版 collapsed 全域任務平台不得保留 in-flow rail 或垂直邊線控制條。
+- 已確認：手機版展開 Sidebar / TaskWorkbench 時採 overlay / drawer，不推擠主內容。
+- 已確認：桌機版可保留精簡 collapsed rail；主 Sidebar 不超過 40px，TaskWorkbench 不超過 24px。
+- 已否決：手機版保留 `Sidebar w-10` + `TaskWorkbenchPanel w-6` 的雙 rail 狀態、badge 擠在 rail 內、用壓縮任務內容補償左欄佔寬。
+- AI 假設：不涉及 DB schema、migration、RLS、RPC；現有 `MainLayout` top nav menu 可作為手機 Sidebar 開啟入口；工作台入口可放在 Sidebar overlay 或單一 fixed icon，但不得佔 layout flow。
+
+目前授權邊界:
+- Authorized / Complete: SPEC / QA / dev_task / documentation_map 文件更新；產品程式碼修改；DEV-042 static/browser verifier；DEV-029 / DEV-039 regression verifier 更新；本機 automated QA/QC。
+- Not Authorized / Not Executed: production deploy、正式站 smoke、DB schema/migration/RLS/RPC、正式資料修復、physical-phone supplemental 手感驗證。
+
+End-State Architecture:
+- Mobile collapsed state 的語意是 off-canvas / zero-width；desktop collapsed state 的語意才是 compact rail。
+- `Sidebar` 在 mobile closed 狀態不再作為 flex child 佔寬；展開時用 fixed overlay drawer。
+- `TaskWorkbenchPanel` 在 narrow closed 狀態不再回傳 in-flow `aside w-6`；展開時用 fixed overlay drawer。
+- BoardView 主內容在 mobile closed state 取得接近完整 viewport 寬度；overlay 開啟時主內容不縮小，只被暫時覆蓋。
+
+RD Handoff / Implementation Contract:
+- `src/components/Sidebar.tsx`：mobile / coarse pointer closed state 不渲染 in-flow `w-10` rail；desktop collapsed rail 可保留。
+- `src/components/Sidebar.tsx`：mobile expanded state 使用 fixed overlay drawer，需支援 close button、backdrop click 或 Escape。
+- `src/components/TaskWorkbenchPanel.tsx`：`isNarrowViewport && !mobileOverlayOpen` 不回傳 in-flow collapsed aside；若保留入口，使用 fixed 單一 icon 或 top nav / Sidebar 內入口。
+- `src/components/TaskWorkbenchPanel.tsx`：mobile overlay 維持安全寬度，關閉後不留下 count badge、gutter 或 vertical border。
+- `src/components/MainLayout.tsx`：top nav menu 是 mobile Sidebar 的主要入口；`main` 不因 Sidebar closed 而縮小。
+- `src/components/BoardView.tsx`：TaskWorkbench removed from flex flow 後，Board canvas 仍可 horizontal pan，DEV-029 手勢不得回歸。
+
+Acceptance:
+- 320x844、375x844、390x844、430x932 mobile viewport 下，Sidebar closed + TaskWorkbench closed 時左側無 in-flow rail、無雙垂直線、無 count badge 外溢、無 horizontal overflow。
+- Mobile open Sidebar / TaskWorkbench 時使用 overlay，不縮小 main / Board canvas computed width。
+- Overlay 可用 visible close、backdrop click 或 Escape 關閉，且關閉後不殘留遮罩或 focus trap。
+- Desktop 1440x900 下，Sidebar collapsed rail <= 40px，TaskWorkbench collapsed rail <= 24px，count badge 不撐寬。
+- DEV-029 mobile pan-first 與 DEV-039 workbench placement / cross-board source 不回歸。
+
+QA / QC gate:
+- `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas`
+- `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser`
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser`
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+
+QC Evidence - 2026-07-05:
+- `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas` passed，16/16。
+- `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser` passed；截圖：`output/playwright/dev-042-mobile-left-sidebar-offcanvas-1783263537691-mobile-closed.png`、`mobile-sidebar-overlay.png`、`mobile-workbench-overlay.png`、`desktop-collapsed-rails.png`。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` passed；已更新 mobile section 為 DEV-042 off-canvas contract。
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser` passed。
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser` passed；已更新 mobile workbench 開啟入口與 sidebar overlay cleanup。
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions` passed，32/32。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
+- `npm.cmd run build:test` passed；Vite 僅提示 Browserslist/caniuse-lite 資料偏舊。
+
+Stop Conditions:
+- Mobile closed state 仍保留 `Sidebar` in-flow rail 或 `TaskWorkbenchPanel` in-flow rail。
+- 移除 rails 後 Sidebar 或 TaskWorkbench 無法開啟。
+- Overlay 開啟時 Board canvas 被縮窄，而不是 overlay 覆蓋。
+- 任一 mobile viewport 出現 horizontal overflow。
+- DEV-029 或 DEV-039 主要 regression 失敗。
+- 需要 production deploy、DB migration、RLS/RPC 或正式資料修復時，必須停下取得授權。
+
+Deferred Scope Audit:
+- Product code implementation: Same Spec Phase / Complete，本輪已完成 local RD。
+- Static/browser verifier implementation: Same Spec Phase / Complete，本輪已完成 DEV-042 verifier 與 DEV-029/DEV-039 regression verifier 相容更新。
+- Manual mobile QC / physical-phone check: Blocked Human Re-entry，需使用者授權 QA/QC 或提供真機回饋；本輪未宣稱真機手感簽核。
+- Production deploy: Blocked Human Re-entry，需 deployment-release-gate。
+- DB schema / migration / RLS / RPC: No Tracking，本 DEV 是 layout/UI contract。
+- Full Sidebar IA redesign: New DEV Candidate，若要重整導覽資訊架構需另行決策。
+- RecordSidebar / RagSidebar mobile redesign: No Tracking，不屬於本輪左側欄與工作台 collapsed rail 問題。
+
+All-Phase Coverage Matrix:
+
+| Phase | 名稱 | 文件狀態 | 授權狀態 | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 0 | PM/RD Contract | Complete | Authorized | 文件化手機 zero-width collapsed contract、RD/QA gate、stop conditions | 產品程式碼、測試執行、部署 | 使用者要求寫成開發文件 | SPEC/QA/dev_task/documentation_map updated | diff / file links |
+| 1 | Mobile Zero-Width Collapsed Layout | Implemented | Authorized / Complete | Sidebar mobile off-canvas、TaskWorkbench mobile no in-flow rail、overlay open/close、desktop rail regression | DB、production、資料修復、整站 IA 重構 | 使用者授權 RD 開發 | mobile closed no in-flow rails；overlay 不縮 main；desktop rail preserved | static/browser verifier、TS、build:test、screenshots |
+| 2 | QA/QC Verification | Local Automated Browser QA Passed | Authorized / Local Complete | viewport matrix、visible error sweep、touch/keyboard open-close、DEV-029/DEV-039 regression | production smoke unless deployment authorized；physical-phone supplemental | Phase 1 implementation complete | automated viewport/regression evidence passed；真機未執行 | QA-DEV-042 / QC-DEV-042 |
+| 3 | Production Release | Not Started | Blocked Human Re-entry | deploy and post-deploy smoke | 未授權 deployment | 使用者明確部署授權 | production smoke passed + rollback target recorded | deployment-release-gate |
+
+文件:
+- `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
+- `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md`
+- `ai-doc/qc/QC-DEV-042-mobile-left-sidebar-offcanvas-collapse.md`
+- `ai-doc/documentation_map.md`
+
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 
 狀態: RD Contract Ready / Not Authorized / Documentation Only

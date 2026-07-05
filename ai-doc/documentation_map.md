@@ -2,6 +2,17 @@
 
 ## Documentation Map Update - 2026-07-05
 
+### DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md` | Implemented / Local Automated Browser QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed | DEV-042 / DEV-039 / DEV-001 | 定義並記錄手機版 collapsed Sidebar / TaskWorkbench 不保留 in-flow rail；手機展開採 overlay / drawer，不推擠主內容；桌機保留受控 compact rail。 |
+| `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed | DEV-042 | 記錄 DEV-042 static/browser viewport gate、overlay open/close、DEV-029 pan-first 與 DEV-039 workbench regression gate；真機與 production 未執行。 |
+| `ai-doc/qc/QC-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed | DEV-042 | 記錄 RD 修正、static 16/16、browser screenshots、DEV-029/DEV-039 regression、TypeScript、diff check 與 build:test evidence。 |
+| `ai-doc/dev_task.md` | DEV-042 Implemented / Local Automated QA Passed / Production Not Deployed | DEV-042 | 記錄授權邊界：產品程式碼、verifier 與本機 automated QA/QC 已完成；production deploy、DB/RLS/migration、正式資料修復與真機手感未執行。 |
+
+PM 治理註記：DEV-042 修正的是「手機 collapsed state 不應被桌機 compact rail 語意綁住」。本輪已同時處理主工作區側欄與全域任務平台：mobile closed 不再渲染 in-flow rail，open state 以 overlay 顯示；desktop compact rail 保留。DB schema、migration、RLS/RPC、production deploy、完整 Sidebar IA redesign、physical-phone supplemental 不在本輪完成範圍。
+
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |

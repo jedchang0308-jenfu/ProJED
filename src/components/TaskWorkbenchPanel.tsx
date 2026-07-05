@@ -636,6 +636,17 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   }, [isNarrowViewport, patchPanelPrefs]);
 
   React.useEffect(() => {
+    if (!isNarrowViewport || !mobileOverlayOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.preventDefault();
+      setMobileOverlayOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isNarrowViewport, mobileOverlayOpen]);
+
+  React.useEffect(() => {
     if (!panelPrefs.filtersOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -817,6 +828,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
 
   if (!isExpanded) {
+    if (isNarrowViewport) return null;
+
     return (
       <aside
         className="flex w-6 shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3"
@@ -854,6 +867,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
           style={{ left: 'min(340px, calc(100vw - 52px))' }}
           onClick={() => setMobileOverlayOpen(false)}
           aria-label="關閉全域任務平台遮罩"
+          data-mobile-task-workbench-backdrop="true"
         />
       ) : null}
       <aside
@@ -864,6 +878,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
         }`}
         style={isNarrowViewport ? { width: 'min(340px, calc(100vw - 52px))' } : undefined}
         data-task-workbench-panel="true"
+        data-mobile-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
         aria-label="全域任務平台"
       >
         <div className="relative border-b border-slate-200 px-3 py-3" data-task-workbench-filter-control-area="true">

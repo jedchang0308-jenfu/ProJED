@@ -44,6 +44,7 @@ const Sidebar = () => {
   const [newWorkspaceTitle, setNewWorkspaceTitle] = React.useState('');
   const [newWorkspaceError, setNewWorkspaceError] = React.useState('');
   const [isCreatingWorkspace, setIsCreatingWorkspace] = React.useState(false);
+  const [isNarrowViewport, setIsNarrowViewport] = React.useState(false);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
   const isTaskWorkbenchView = false;
   const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
@@ -52,7 +53,28 @@ const Sidebar = () => {
   const handleOpenTaskWorkbench = React.useCallback(() => {
     setView(activeBoardId ? 'board' : 'home');
     openTaskWorkbenchPanel();
-  }, [activeBoardId, setView]);
+    if (isNarrowViewport) setSidebarOpen(false);
+  }, [activeBoardId, isNarrowViewport, setSidebarOpen, setView]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)');
+    const syncViewport = () => setIsNarrowViewport(media.matches);
+    syncViewport();
+    media.addEventListener?.('change', syncViewport);
+    return () => media.removeEventListener?.('change', syncViewport);
+  }, []);
+
+  React.useEffect(() => {
+    if (!isNarrowViewport || !isSidebarOpen) return;
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      event.preventDefault();
+      setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isNarrowViewport, isSidebarOpen, setSidebarOpen]);
 
   const startWorkspaceTitleEdit = React.useCallback((workspace) => {
     setEditingBoard(null);
@@ -184,8 +206,34 @@ const Sidebar = () => {
     }
   }, [addWorkspace, newWorkspaceTitle]);
 
+  const isMobileOverlay = isNarrowViewport && isSidebarOpen;
+
+  if (isNarrowViewport && !isSidebarOpen) {
+    return null;
+  }
+
   return (
-    <aside className={`relative z-30 flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-10'}`}>
+    <>
+    {isMobileOverlay ? (
+      <button
+        type="button"
+        className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
+        style={{ left: 'min(288px, calc(100vw - 48px))' }}
+        onClick={() => setSidebarOpen(false)}
+        aria-label="關閉工作區選單遮罩"
+        data-mobile-sidebar-backdrop="true"
+      />
+    ) : null}
+    <aside
+      className={`flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-300 ease-in-out ${
+        isMobileOverlay
+          ? 'fixed bottom-0 left-0 top-10 z-50 shadow-2xl'
+          : `relative z-30 ${isSidebarOpen ? 'w-64' : 'w-10'}`
+      }`}
+      style={isMobileOverlay ? { width: 'min(288px, calc(100vw - 48px))' } : undefined}
+      data-sidebar-panel={isSidebarOpen ? 'expanded' : 'collapsed'}
+      data-mobile-sidebar-overlay={isMobileOverlay ? 'true' : undefined}
+    >
       {!isSidebarOpen ? (
         <div className="flex h-full flex-1 flex-col items-center gap-4 bg-slate-50/30 pt-4">
           <button
@@ -221,7 +269,7 @@ const Sidebar = () => {
           </button>
         </div>
       ) : (
-        <div className="flex h-full w-64 flex-col">
+        <div className={`flex h-full ${isMobileOverlay ? 'w-full' : 'w-64'} flex-col`}>
           <div className="flex h-14 items-center justify-between border-b-2 border-slate-200 bg-slate-50 p-4">
             <span className="text-xs font-semibold text-slate-500">工作區選單</span>
             <div className="flex items-center gap-1">
@@ -395,6 +443,19 @@ const Sidebar = () => {
 
           <div className="border-t border-slate-100 bg-slate-50/50 p-2">
             <button
+              onClick={handleOpenTaskWorkbench}
+              className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                isTaskWorkbenchView
+                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
+                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
+              }`}
+              title="開啟全域任務平台"
+              data-sidebar-task-workbench-button="true"
+            >
+              <ClipboardList size={16} className={isTaskWorkbenchView ? 'text-white/90' : 'text-slate-400'} />
+              <span className="min-w-0 flex-1 truncate text-left">全域任務平台</span>
+            </button>
+            <button
               onClick={() => setView('settings')}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                 isSettingsScopeView
@@ -500,6 +561,7 @@ const Sidebar = () => {
         </div>
       ) : null}
     </aside>
+    </>
   );
 };
 

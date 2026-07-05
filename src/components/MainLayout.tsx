@@ -186,6 +186,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             onClick={() => setSidebarOpen(!isSidebarOpen)}
             className="mr-1 rounded border border-slate-200 p-1 text-slate-500 hover:bg-slate-100 sm:mr-2"
             title={isSidebarOpen ? '收合側欄' : '展開側欄'}
+            aria-label={isSidebarOpen ? '收合工作區選單' : '展開工作區選單'}
+            data-main-sidebar-toggle="true"
           >
             <Menu size={18} />
           </button>
@@ -367,7 +369,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
 
-        <main className={`relative flex h-full min-w-0 flex-1 flex-col ${meetingRecordReserveClass}`}>
+        <main className={`relative flex h-full min-w-0 flex-1 flex-col ${meetingRecordReserveClass}`} data-app-main="true">
           {children}
         </main>
 

@@ -14,6 +14,7 @@
 - 2026-07-04 sticky title follow-up，`未歸位` 與 `所有任務排序` 是 section title，不是任務列；需用 sticky header UI 呈現，區塊捲動後仍停留在各自區塊頂端。
 - 2026-07-04 chevron collapse follow-up，工作台收合狀態需與主側欄使用同類精簡 chevron affordance，rail 寬度縮小 50%，不再使用 Notebook 類大圖示按鈕；展開狀態的收合按鈕也需使用 `ChevronLeft`。
 - 2026-07-04 hierarchy follow-up，使用者要求 `所有任務排序` 可看出不同 level；維持到期日排序，但每列需以縮排、字重與灰階提示階層深度。
+- 2026-07-05 DEV-042 compatibility follow-up：手機版工作台收合契約由「精簡 rail」升級為 no in-flow rail / off-canvas；桌機仍保留約 24px compact rail。手機開啟工作台需透過 Sidebar / top-nav 入口進入 overlay，不得再用 in-flow collapsed rail 佔用 BoardView 寬度。
 
 ## 背景
 
@@ -49,6 +50,7 @@
 17. 若任務的 `parentId` 指向不存在且不是合法 root / board root parent，該 orphan 不得出現在看板投影或 `所有任務排序`，且不得被容器顯示設定放行。
 18. 任務台清單必須採密集文字列；不得回復成大卡片、獨立拖曳圖示、日期 chip 或陰影式卡片堆疊。
 19. `所有任務排序` 是扁平排序清單，但必須保留 hierarchy cue：L1 無縮排，子層依 parent chain 增加縮排並降低視覺權重。
+20. DEV-042 生效後，手機版全域任務平台 closed state 不再保留 in-flow collapsed rail；桌機版才保留 compact rail。手機 workbench open state 是 overlay，不推擠 BoardView。
 
 設計原因：
 

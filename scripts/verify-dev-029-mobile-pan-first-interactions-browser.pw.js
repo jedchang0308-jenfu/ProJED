@@ -293,9 +293,35 @@ async (page) => {
     clientHeight: element.clientHeight,
   }));
 
+  const closeMobileSidebarIfOpen = async () => {
+    const sidebarOverlay = page.locator('[data-mobile-sidebar-overlay="true"]').first();
+    const sidebarBackdrop = page.locator('[data-mobile-sidebar-backdrop="true"]').first();
+    if (!(await sidebarOverlay.count()) && !(await sidebarBackdrop.count())) return;
+    await page.keyboard.press('Escape').catch(() => undefined);
+    await sidebarOverlay.waitFor({ state: 'detached', timeout: 1200 }).catch(async () => {
+      if (await sidebarBackdrop.count()) {
+        await sidebarBackdrop.click({ timeout: 1200, force: true }).catch(() => undefined);
+      }
+    });
+    await page.waitForTimeout(80);
+  };
+
   const ensureWorkbenchOpen = async () => {
     const expanded = page.locator('[data-task-workbench-panel="true"]');
-    if (await expanded.count()) return expanded;
+    const expandedBox = await expanded.first().boundingBox().catch(() => null);
+    if (expandedBox) return expanded;
+    const sidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+    if (await sidebarToggle.count()) {
+      await sidebarToggle.click({ timeout: 5000 }).catch(() => undefined);
+      const sidebarWorkbenchButton = page.locator('[data-sidebar-task-workbench-button="true"]').first();
+      if (await sidebarWorkbenchButton.count()) {
+        await sidebarWorkbenchButton.waitFor({ state: 'visible', timeout: 5000 });
+        await sidebarWorkbenchButton.click({ timeout: 5000 });
+        await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => undefined);
+        await expanded.waitFor({ state: 'visible', timeout: 5000 });
+        return expanded;
+      }
+    }
     const toggle = page.locator('[data-task-workbench-collapsed-toggle="true"]').first();
     await toggle.waitFor({ state: 'visible', timeout: 5000 });
     await toggle.click({ timeout: 5000 });
@@ -304,6 +330,7 @@ async (page) => {
   };
 
   const closeWorkbenchIfOpen = async () => {
+    await closeMobileSidebarIfOpen();
     const expanded = page.locator('[data-task-workbench-panel="true"]');
     if (!(await expanded.count())) return;
     const box = await expanded.boundingBox().catch(() => null);
@@ -312,6 +339,7 @@ async (page) => {
     if (!(await collapse.count())) return;
     await collapse.click({ timeout: 5000 }).catch(() => undefined);
     await page.waitForTimeout(160);
+    await closeMobileSidebarIfOpen();
   };
 
   const runCase = async (id, scenario, fn) => {
@@ -757,6 +785,7 @@ async (page) => {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+      await closeMobileSidebarIfOpen();
       await card().waitFor({ state: 'visible', timeout: 10000 });
       const taskId = await card().getAttribute('data-task-id');
       await card().click({ position: { x: 84, y: 28 }, timeout: 5000 });
