@@ -113,7 +113,10 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
           supabaseDependencyService.listByProject(resolvedActiveWorkspaceId, activeBoardId),
         ]);
         if (cancelled) return;
-        useWbsStore.getState().setNodes(nodes);
+        useWbsStore.getState().setNodes(nodes, {
+          scopeBoardIds: [activeBoardId],
+          preserveOutOfScope: true,
+        });
         useWbsStore.setState({ dependencies });
       } catch (error) {
         console.error('[useSupabaseSync] Board load error:', error);

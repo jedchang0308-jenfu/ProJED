@@ -2,9 +2,18 @@
 
 關聯 DEV：DEV-039
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 RD Contract Ready / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 建立日期：2026-07-02
-最新修正：2026-07-03，使用者要求全域任務平台主畫面中「跟過濾器有關的功能只剩一個按鈕」：看板選擇欄位移入 `過濾器` popover 內，popover 內先選看板再調同看板過濾條件；主畫面不常駐顯示看板 select、資料來源摘要、設定路徑、全部看板/計數摘要或卡片 metadata badges。後續 UI 修正：原下方 `已歸位任務` 顯示區改名為 `所有任務排序`，內容包含已歸位任務與未歸位任務，預設依到期日由上到下排序，未設到期日者排在最下面。
+最新修正：
+- 2026-07-03，使用者要求全域任務平台主畫面中「跟過濾器有關的功能只剩一個按鈕」：看板選擇欄位移入 `過濾器` popover 內，popover 內先選看板再調同看板過濾條件；主畫面不常駐顯示看板 select、資料來源摘要、設定路徑、全部看板/計數摘要或卡片 metadata badges。後續 UI 修正：原下方 `已歸位任務` 顯示區改名為 `所有任務排序`，內容包含已歸位任務與未歸位任務，預設依到期日由上到下排序，未設到期日者排在最下面。
+- 2026-07-04，使用者確認目標架構：`所有任務排序` 必須跨所有可見看板顯示任務，不得只顯示目前看板；看板刪除任務後，該任務與其不可見後代不得殘留在 `所有任務排序`。Phase 2 RD contract 補入 `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`effectiveVisibility()` 與 deletion/effective-visibility gate。
+- 2026-07-04，使用者授權執行 DEV-039 Phase 2 開發；本輪完成 cross-board source / deletion effective visibility slice，未包含 visible partial/error summary UI、Supabase RPC/RLS/migration、production deploy 或正式資料修復。
+- 2026-07-04 follow-up，使用者截圖回報已刪除項目仍殘留；補強 `所有任務排序` candidate gate，預設排除 `nodeType: group` 列表/容器，並將 missing-parent orphan task 視為不可見，避免刪除父層或資料正規化後的扁平投影殘留。
+- 2026-07-04 HCS `#引導模式` 決策：使用者選擇 `1C`，因此列表/群組容器改為顯示設定，預設不顯示但可在工作台過濾器 popover 內切換；orphan visibility 採 `2A`，static/browser 驗證採 `3A`。
+- 2026-07-04 UI follow-up，使用者要求任務台排版更密集、去除不必要元素並只保留文字資訊；任務列改為 dense text rows，移除獨立拖曳把手、大卡片與陰影，拖曳由整列承接。
+- 2026-07-04 sticky title follow-up，`未歸位` 與 `所有任務排序` 是 section title，不是任務列；需用 sticky header UI 呈現，區塊捲動後仍停留在各自區塊頂端。
+- 2026-07-04 chevron collapse follow-up，工作台收合狀態需與主側欄使用同類精簡 chevron affordance，rail 寬度縮小 50%，不再使用 Notebook 類大圖示按鈕；展開狀態的收合按鈕也需使用 `ChevronLeft`。
+- 2026-07-04 hierarchy follow-up，使用者要求 `所有任務排序` 可看出不同 level；維持到期日排序，但每列需以縮排、字重與灰階提示階層深度。
 
 ## 背景
 
@@ -36,6 +45,10 @@
 13. 全域任務平台的過濾器控制必須像看板上方過濾器一樣是單一按鈕 + overlay；看板 selector 不得與過濾器按鈕並列常駐在主畫面。
 14. 下方顯示區名稱為 `所有任務排序`，不是 `已歸位任務`；清單必須合併未歸位任務與符合各看板 filter 的已歸位任務。
 15. `所有任務排序` 預設依到期日由早到晚排序；沒有到期日或日期無效的任務排在最下面。
+16. `所有任務排序` 預設只列出 task-like 節點；列表/群組容器必須由 `列表 / 群組` 顯示設定切換後才可出現。
+17. 若任務的 `parentId` 指向不存在且不是合法 root / board root parent，該 orphan 不得出現在看板投影或 `所有任務排序`，且不得被容器顯示設定放行。
+18. 任務台清單必須採密集文字列；不得回復成大卡片、獨立拖曳圖示、日期 chip 或陰影式卡片堆疊。
+19. `所有任務排序` 是扁平排序清單，但必須保留 hierarchy cue：L1 無縮排，子層依 parent chain 增加縮排並降低視覺權重。
 
 設計原因：
 
@@ -87,6 +100,30 @@ AI assumptions：
 - Phase 1C 不改變任務階層資料模型；只補 result projection / hierarchy visibility contract。
 - 若實作中發現現有資料缺少穩定 parent path 或 board membership metadata，RD 應停止並回報需擴 scope，不得自行做 migration。
 
+## Human Decision Brief - 2026-07-04 Cross-Board Source + Effective Visibility
+
+決策來源：使用者以截圖指出 `所有任務排序` 目前不應只顯示現在看板，且任務在看板刪除後仍殘留在 `所有任務排序`；使用者確認目標系統架構以資料層、工作台資料源、投影層與 UI 層分層。
+
+已確認產品決策：
+
+- `所有任務排序` 的目標語意是跨所有可見看板顯示任務，而不是目前 active board 或 filter popover 選中的看板。
+- `過濾器` popover 裡的看板 selector 仍只代表「正在設定哪個看板的 filter state」，不得被解讀成任務來源範圍。
+- 看板刪除任務後，該任務不得留在 `所有任務排序`；若刪除的是父層/list/card，其在看板上已不可見的 descendant 也不得因扁平投影而殘留。
+- `未歸位 lane` 仍顯示未歸位任務；`所有任務排序` 可合併未歸位與已歸位任務，但必須清楚套用相同 effective-visibility 規則。
+- Phase 2 目標架構包含 `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`projectTaskFilterResults by boardId`、`sortTasksByDueDate`，並新增 `effectiveVisibility()` 作為投影前 gate。
+
+已拒絕或不可採用：
+
+- 只把 active board 的 `nodes` 改名為「所有任務」。
+- 只靠 UI filter 隱藏已刪任務，而不修正 source / visibility contract。
+- 只處理被刪除節點本身，不處理 archived ancestor、已刪看板、無權看板或 orphan descendant。
+
+AI assumptions：
+
+- 使用者最新 `執行開發` 指令授權本輪前端 / local-test / Firestore / 既有 Supabase service adapter slice；remote migration、RPC/RLS、production deploy、正式資料修復仍未授權。
+- 若現有 Supabase / Firestore API 沒有可安全取得全部可見任務的查詢，RD 應建立 service adapter；若需要 DB migration / RLS 變更，必須先停下取得授權。本輪使用既有 `supabaseNodeService.listByProject()`，未新增 SQL/RPC/RLS。
+- `unplaced tasks` 目前仍是本機 localStorage 來源；跨裝置同步不屬 Phase 2 本輪 scope，除非另行授權。
+
 ## End-State Architecture
 
 - `src/features/taskFilters` 是任務條件的 canonical core。
@@ -100,7 +137,49 @@ AI assumptions：
 - `matchesTaskFilters` 只判斷單一 task 是否符合條件；跨層級 UI 必須再透過 hierarchy projection 產生 `matchedTaskIds` 與 `visibleContainerIds`。
 - 看板視圖的 hierarchy projection 必須保留 matched task 的祖先欄位 / 卡片作為 context，避免符合條件的子任務被父層 filter 擋掉。
 - 全域任務平台的已歸位任務 lane 必須跨看板列出各看板 canonical `matchedTaskIds`，不得把 context-only ancestors 當成 filter result；若需要路徑，顯示 workspace / board / ancestor path metadata。
-- Phase 1 資料來源為目前已載入任務集合；真正全部可見任務查詢留 Phase 2。
+- Phase 1 資料來源為目前已載入任務集合；Phase 2 cross-board source slice 已升級為依 visible board list 逐 board 載入任務。
+- Phase 2 後，全域任務平台資料來源由 `src/features/taskWorkbench/source.ts` 的 `listWorkbenchTasks()` 或等效 service 提供，不得再依賴 active board sync side effect。
+- Phase 2 的 source pipeline 為：`listWorkbenchTasks()` 依目前可見 board list 逐 board 取已歸位任務；`mergeUnplacedTasks()` 合併未歸位任務；`isTaskEffectivelyVisible()` 排除 archived task 與 archived ancestor；`projectTaskFilterResults()` 依每筆任務所屬 board 套用對應 filter；`sortTasksByDueDate()` 產生 `所有任務排序`。無權 board / 已刪看板透過 `boardOptions` 範圍排除；RPC/RLS/DB role matrix 屬未授權 follow-up。
+- `effectiveVisibility()` 是 source truth gate，不是 UI 裝飾；任何任務若在看板上因刪除或權限不可見，就不得只因扁平排序清單而重新出現。
+
+```mermaid
+flowchart TD
+  subgraph Data["資料層"]
+    A["wbs_items<br/>正式任務"]
+    B["workspaces / boards / memberships<br/>權限與看板範圍"]
+    C["workbench unplaced tasks<br/>目前 localStorage 未歸位任務"]
+  end
+
+  subgraph Source["工作台資料源"]
+    D["listWorkbenchTasks()<br/>跨所有可見看板取任務"]
+    E["mergeUnplacedTasks()<br/>合併未歸位"]
+    X["effectiveVisibility()<br/>排除 archived / archived ancestor / 無權 / 已刪看板"]
+  end
+
+  subgraph Projection["投影層"]
+    F["filtersByBoardId"]
+    G["projectTaskFilterResults by boardId"]
+    H["sortTasksByDueDate"]
+  end
+
+  subgraph UI["UI 層"]
+    I["未歸位 lane"]
+    J["所有任務排序"]
+    K["過濾器 popover"]
+  end
+
+  A --> D
+  B --> D
+  C --> E
+  D --> E
+  E --> X
+  X --> G
+  F --> G
+  G --> H
+  H --> J
+  E --> I
+  K --> F
+```
 
 ## Module Contract
 
@@ -130,7 +209,7 @@ AI assumptions：
 
 ```text
 全域任務平台
-未歸位
+未歸位（sticky section header）
 [新增未歸位任務 input] [+]
 未歸位任務列表（精簡一行；與已歸位任務卡片同核心操作）
 
@@ -139,8 +218,8 @@ AI assumptions：
     [看板 select：設定哪個看板的過濾器]
     [同看板過濾條件]
 
-已歸位任務
-任務列表（跨看板彙總；每筆任務依所屬看板 filter state 顯示，可拖拉；卡片不顯示路徑/狀態/負責人/標籤 badges）
+所有任務排序（sticky section header）
+任務列表（跨看板彙總；每筆任務依所屬看板 filter state 顯示，可拖拉；Phase 1/1C 以目前已載入任務集合為來源，Phase 2 需升級為全部可見看板任務來源；卡片不顯示路徑/狀態/負責人/標籤 badges）
 ```
 
 必備 selectors：
@@ -156,6 +235,10 @@ AI assumptions：
 - `data-task-workbench-unclassified-add="true"`
 - `data-task-workbench-unclassified-list="true"`
 - `data-task-workbench-unclassified-item="true"`
+- `data-task-workbench-section-header="unplaced|all-tasks"`
+- `data-task-workbench-collapsed-toggle="true"`
+- `data-task-workbench-collapsed-count="true"`
+- `data-task-workbench-collapse-toggle="true"`
 - `data-task-workbench-unplaced-lane="true"`
 - `data-task-workbench-placed-board-lane="true"`
 - `data-task-workbench-unplaced-task-card="true"`
@@ -189,7 +272,7 @@ AI assumptions：
 | Phase 1A | Implemented / Historical QC Passed | Workbench Unclassified Add/Display Restore | 先前補回未歸類新增/顯示；已被 Phase 1B 新需求覆蓋為等價任務卡契約 |
 | Phase 1B | Implemented / Local Automated QC Passed | Workbench Placement Lanes Restore | 補回未歸位 / 已歸位看板 lane、雙向拖移、未歸位任務與已歸位任務功能等價 |
 | Phase 1C | Implemented / Local Automated QC Passed | Filter Result Parity | 對齊看板階層式篩選與全域任務平台扁平篩選；同條件 matched task IDs 一致，父層容器只作 context |
-| Phase 2 | RD Contract Ready / Not Authorized | Workbench Data Source Truth | 真正全部可見任務 query/service、權限檢查、partial/error state、資料來源 summary |
+| Phase 2 | Cross-Board Source Slice Implemented / Local Automated QC Passed | Workbench Data Source Truth | cross-board task source、scoped store merge、deletion effective visibility；visible partial/error summary / DB-RLS-RPC follow-up 仍未授權 |
 | Phase 3 | Deferred / Not Authorized | Filter Section Componentization | 將重複的狀態、到期日、負責人、標籤、關鍵字 UI section 元件化；不新增儲存功能 |
 | Phase 4 | Deferred / Not Authorized | Legacy Cleanup Guardrails | 移除 profile 遺留文件/測試/keys、補防回流 gate；不做 profile sync/governance |
 
@@ -357,28 +440,115 @@ Stop conditions：
 
 ## Phase 2 RD Contract
 
-Purpose：讓全域任務平台的資料來源從「目前已載入任務集合」升級為真實可驗證的「全部可見任務」。
+Document status：Cross-Board Source Slice Implemented / Local Automated QC Passed / Partial-Error UI + DB Changes Not Authorized
 
-Scope：
+Purpose：讓全域任務平台的資料來源從「目前已載入任務集合」升級為真實可驗證的「全部可見任務」，並修正刪除後在 `所有任務排序` 殘留的有效可見性缺口。
 
-- 建立 `TaskWorkbenchTaskSource` 或等效 service contract。
-- 以 membership/RLS 或等效權限模型列出使用者可見任務。
-- 支援 workspace/board path metadata、loading、partial result、retry、error summary。
-- UI summary 必須與資料層能力一致。
+Implemented scope（2026-07-04 slice）：
+
+- 建立 `src/features/taskWorkbench/source.ts`，提供 `listWorkbenchTasks()` 與 `mergeUnplacedTasks()`。
+- 建立 backend-neutral `nodeService.listByProject()`，接到 local-test、Firestore 與既有 `supabaseNodeService.listByProject()`。
+- `TaskWorkbenchPanel` 以所有可見 `boardOptions` 載入 task source；`過濾器` popover selected board 不改 source scope。
+- `useWbsStore.setNodes()` 支援 `scopeBoardIds` / `preserveOutOfScope`，active board sync 不再覆蓋 cross-board source。
+- `projectTaskFilterResults()` 新增 `isTaskEffectivelyVisible()`，在 matching 前排除 archived task 與 archived ancestor descendant。
+- local-test browser verifier 覆蓋 active board A/B 切換、A/B 任務同時出現在 `所有任務排序`、跨看板到期日排序、archived task / archived ancestor descendant 排除、刪除後 reload 不復活。
+
+Full Phase 2 contract scope（items not listed above remain follow-up / not authorized in this slice）：
+
+- 建立 `TaskWorkbenchTaskSource` 或等效 service contract，不得讓 `TaskWorkbenchPanel` 直接依賴 active board sync side effect。
+- 建立 `listWorkbenchTasks()` 或等效 API/service：以 membership/RLS 或等效權限模型列出使用者可見 workspace/board 內的未封存任務。
+- 建立 `mergeUnplacedTasks()` 或等效 adapter：將目前 localStorage 未歸位任務併入工作台 view model，但不宣稱已跨裝置同步。
+- 建立 `effectiveVisibility()` 或等效 helper，在投影前排除：
+  - `task.isArchived === true`。
+  - 任一 ancestor `isArchived === true`。
+  - 所屬 board / workspace 已刪除、不可見或使用者無權。
+  - parent chain 斷裂且無法判斷是否應可見的 orphan task；此情況需進入 partial/error summary，不得靜默列入。
+- 產生 `TaskWorkbenchTaskView` 或等效 view model，至少包含 `taskId`、`workspaceId`、`boardId`、workspace title、board title、ancestor path、placement、status、dates、assignee、tags、updatedAt、source status。
+- `filtersByBoardId` 繼續表示「每個看板自己的 filter state」；`projectTaskFilterResults` 必須以每筆任務所屬 board 套用對應 filter。
+- `所有任務排序` 必須由 `effectiveVisibility()` 後的任務集合產生，依到期日由早到晚排序，無效或未設定到期日排最後。
+- 支援 loading、partial result、retry、error summary；當部分 board 查詢失敗時，UI 必須能標示結果不完整，不得假裝全部已載入。本輪只在 source 層保留 failed board cache 並 console warn，尚未實作可見 partial/error summary UI。
+- UI 的 completeness/error summary 必須與資料層能力一致；不得回流成 Phase 1 已取消的常駐資料來源摘要或設定路徑。只有 visible summary follow-up 通過 QA/QC 後，才能宣稱完整 partial-state UX 已完成。
+
+Implementation contract：
+
+- Supabase backend：
+  - 本輪優先使用現有 `supabaseNodeService` / `projedService` 建立 cross-board list adapter；若 RLS 無法以 client-side multi-project reads 安全證明，改設計 RPC，但需另行授權 migration/RLS。
+  - RPC 若被採用，必須由 authenticated user context 與 membership/RLS 限制 tenant/project，不得接受任意 user id 作為信任來源。
+  - Query result 必須只回傳未封存且使用者可見 board 的任務；若 DB 只能取 project-by-project，service 必須逐 board 聚合並回傳 partial status。
+- Firebase backend：
+  - 以 workspace/board membership 能力列舉可見 board，再逐 board 讀取 nodes；不得只讀 active board path。
+  - Firestore partial failure 必須回傳 failed board list 或 error summary。
+- Local-test backend：
+  - 必須支援 2+ boards fixture，驗證 active board 切換不會改變 `所有任務排序` 的完整集合。
+- Store / state：
+  - 不得用 `setNodes(activeBoardNodes)` 覆蓋 cross-board workbench source；若仍共用 `useWbsStore.nodes`，必須有明確 merge / ownership boundary，避免 active board snapshot 把其他 board 任務清掉。
+  - 建議將工作台 source 與 active board renderer source 分離，或在 store 內標示 source scope，避免看板切換造成工作台資料收縮。
+- Deletion / archive：
+  - 看板右鍵刪除、心智圖刪除、回收桶復原/永久刪除與工作台排序清單必須共用相同 effective-visibility 語意。
+  - 若產品語意是刪除父層時 descendants 一併不可見，RD 必須在 archive helper 或 visibility projection 中落實；不得只修單一 UI。
+  - Undo/redo 復原父層後，符合權限與 filter 的 descendants 可重新出現在工作台。
 
 Out of scope：
 
 - 不新增 profile 儲存。
-- 不做跨裝置同步。
-- 不納入私人 InboxItem、外部 calendar-only task 或已封存任務，除非另行授權。
+- 不把未歸位 localStorage 任務升級成跨裝置同步或正式 `wbs_items`，除非另行授權。
+- 不納入私人 InboxItem、外部 calendar-only task、已封存任務或無權 board 任務。
+- 不執行 production deploy、remote migration、資料修復、資料刪除或 RLS 變更，除非使用者明確授權。
+- 不新增 profile/save/copy/sync UI。
+- 不改變 `過濾器` popover 的產品語意；看板 selector 仍只代表正在設定哪個看板的 filter。
 
-Phase 2 仍需使用者或 PM 明確授權。
+Acceptance：
+
+- 在同一 workspace 內建立至少 2 個可見 boards，active board 停留在 A 時，`所有任務排序` 同時顯示 A 與 B 中符合各自 filter 的任務。
+- 切換 active board 後，`所有任務排序` 的 cross-board 集合不得收縮成新 active board。
+- Filter popover 切換 selected board 只改該 board 的 filter state，不改任務來源範圍。
+- 在看板刪除任務後，該 task id 立即從 `所有任務排序` 消失；reload / resubscribe 後不得復活。
+- 刪除父層/list/card 後，其在看板上已不可見的 descendant 不得因工作台扁平投影而留在 `所有任務排序`。
+- 復原任務或父層後，符合權限與 filter 的任務可重新出現在工作台。
+- 使用者無權的 board/task 不得出現在 service result、store、UI、console debug dump 或 test fixture expected output。
+- 若某 board 查詢失敗，UI 顯示 partial/error summary，且不得宣稱目前清單完整。此項是 follow-up gate，本輪尚未交付 visible summary。
+- 未歸位任務仍出現在未歸位 lane；若也出現在 `所有任務排序`，必須只有一筆同 identity，不得與已歸位版本重複。
+- Phase 1 / 1B / 1C 已通過的 no profile/save/copy、placement lanes、matchedTaskIds parity、mobile viewport、drag parity 不得回歸。
+
+QA / QC gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-cross-board-source
+npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser
+npm.cmd run verify:dev-039-filter-result-parity
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+npm.cmd run verify:dev-039-task-filter-core
+npm.cmd run verify:dev-028-cross-mode-task-interactions
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
+
+If Supabase RPC / RLS / migration is introduced, required additional gate：
+
+```powershell
+npm.cmd run verify:supabase:static
+```
+
+並補 owner/admin/member/viewer/anon DB role matrix evidence。
+
+Stop conditions：
+
+- Query 只能列 active board、assigned-to-me、local cached tasks 或部分看板，卻宣稱全部可見任務。
+- 無法證明 membership/RLS 不外洩無權 board/task。
+- 需要新增或修改 Supabase migration/RLS/RPC、production deploy、正式資料修復或資料刪除，但尚未取得明確授權。
+- `setNodes(activeBoardNodes)` 或等效流程仍會覆蓋 cross-board workbench source，導致切換看板後工作台資料縮水。
+- 刪除父層後 descendants 仍可在 `所有任務排序` 出現，或 undo/redo 造成重複。
+- partial failure 被靜默吞掉，UI 仍宣稱清單完整。現況：source 層會保留未成功 board 的既有快取並 warn；可見 summary 尚未交付，不得宣稱該 UX 完成。
+- 修正 Phase 2 時回流 profile/save/copy/sync UI。
+
+Phase 2 remote / DB / visible partial-error UX follow-up 仍需使用者或 PM 明確授權。
 
 ## Deferred Scope Audit
 
 | Deferred / Out-of-scope item | Classification | Tracking target | Required resume condition |
 |---|---|---|---|
-| 真正全部可見任務資料來源 | Same Spec Phase | Phase 2 | Phase 1 QC passed，且使用者或 PM 明確授權 Phase 2 |
+| 真正全部可見任務資料來源 | Same Spec Phase | Phase 2 | Cross-board frontend/service adapter slice 已完成；若需 RPC/RLS/migration 另取授權 |
+| `所有任務排序` 刪除後殘留 / archived ancestor visibility | Same Spec Phase | Phase 2 | Cross-board/deletion slice 已完成；若需資料修復另走 Blocked Human Re-entry |
 | 未歸位 / 已歸位看板 placement lanes | Same Spec Phase | Phase 1B | 已補回並通過本機自動化 QC；後續改動仍須維持 production release 前 QC 規則 |
 | 看板階層式篩選與全域任務平台扁平篩選結果一致性 | Same Spec Phase | Phase 1C | 已實作並通過本機自動化 QC；production release gate 仍需使用者明確部署授權 |
 | Supabase RPC / RLS / DB role matrix | Same Spec Phase | Phase 2 | Phase 2 授權且需要遠端資料層 |
@@ -389,17 +559,17 @@ Phase 2 仍需使用者或 PM 明確授權。
 
 ## All-Phase Coverage Matrix
 
-| Phase | Authorization | Document status | Scope | Out of scope | Acceptance | Evidence |
-|---|---|---|---|---|---|---|
-| Phase 0 | Done | Done | 盤點 filter、第一性原理拆解、HCS 決策 | 不實作產品程式 | 共用核心、不共用 active state 的邊界清楚 | SPEC / QA / PM 文件 |
-| Phase 1 | Authorized | Implemented / Local Automated QC Passed | shared core、五視圖一致性、兩欄工作台、BoardView 左側拖拉 | profile/storage/copy/sync、獨立 route、source scope filter | Phase 1 acceptance 全通 | DEV-039 static/browser、DEV-027D/DEV-028 regression、TS、build |
-| Phase 1A | Authorized | Implemented / Historical QC Passed | 未歸類新增/顯示初版 | 功能等價拖移、雙 lane 定位 | 初版新增/顯示可用 | DEV-039 static/browser historical evidence |
-| Phase 1B | Authorized | Implemented / Local Automated QC Passed | 未歸位 / 已歸位看板 placement lanes、雙向拖移、任務卡功能等價 | profile/storage/copy/sync、production release、DB migration unless separately authorized | 未歸位與已歸位任務同功能且可雙向拖移 | placement lane static/browser、DEV-028 regression、TS、build |
-| Phase 1C | Authorized | Implemented / Local Automated QC Passed | filter result projection、matchedTaskIds 一致、context-only ancestors、負責人選項來源對齊 | profile/storage/sync、schema/RLS/migration、Phase 2 全部可見任務資料來源、production deploy | 使用者授權執行 Phase 1C RD | 同看板同條件下看板與工作台 `matchedTaskIds` 一致 | parity static/browser、Phase 1/1B regression、TS、build |
-| Production Release Gate | Blocked Pending Human Authorization | Must Follow Phase 1C QC | 正式環境發布、production smoke | 未授權部署或跳過 deployment-release-gate | Phase 1C QC passed + 使用者明確 deployment authorization | deployment-release-gate |
-| Phase 2 | Not Authorized | RD Contract Ready | 全部可見任務資料來源、權限、partial/error state | profile storage、production migration before authorization | summary 與資料層一致且不外洩 | Phase 2 verifier、browser、DB role matrix if needed |
-| Phase 3 | Not Authorized | Deferred | filter section componentization | 儲存功能、profile governance | UI 重複減少且行為不變 | static/browser regression |
-| Phase 4 | Not Authorized | Deferred | profile 遺留清理與防回流 gate | profile sync/governance | 舊 profile 概念不再回流 DEV-039 | static guard、docs audit |
+| Phase | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|
+| Phase 0 | Done | Done | 盤點 filter、第一性原理拆解、HCS 決策 | 不實作產品程式 | 使用者要求釐清全域任務平台與既有過濾器關係 | 共用核心、不共用 active state 的邊界清楚 | SPEC / QA / PM 文件 |
+| Phase 1 | Authorized | Implemented / Local Automated QC Passed | shared core、五視圖一致性、兩欄工作台、BoardView 左側拖拉 | profile/storage/copy/sync、獨立 route、source scope filter | Phase 0 決策完成且使用者授權 RD | Phase 1 acceptance 全通 | DEV-039 static/browser、DEV-027D/DEV-028 regression、TS、build |
+| Phase 1A | Authorized | Implemented / Historical QC Passed | 未歸類新增/顯示初版 | 功能等價拖移、雙 lane 定位 | 使用者要求加回未歸類任務新增/顯示 | 初版新增/顯示可用 | DEV-039 static/browser historical evidence |
+| Phase 1B | Authorized | Implemented / Local Automated QC Passed | 未歸位 / 已歸位看板 placement lanes、雙向拖移、任務卡功能等價 | profile/storage/copy/sync、production release、DB migration unless separately authorized | 使用者修正未歸位 / 已歸位為 placement lanes 並授權補回 | 未歸位與已歸位任務同功能且可雙向拖移 | placement lane static/browser、DEV-028 regression、TS、build |
+| Phase 1C | Authorized | Implemented / Local Automated QC Passed | filter result projection、matchedTaskIds 一致、context-only ancestors、負責人選項來源對齊 | profile/storage/sync、schema/RLS/migration、Phase 2 全部可見任務資料來源、production deploy | 使用者指出看板與工作台同 filter 結果不一致並授權 Phase 1C RD | 同看板同條件下看板與工作台 `matchedTaskIds` 一致 | parity static/browser、Phase 1/1B regression、TS、build |
+| Production Release Gate | Blocked Pending Human Authorization | Must Follow Phase 1C QC | 正式環境發布、production smoke | 未授權部署或跳過 deployment-release-gate | Phase 1C QC passed + 使用者明確 deployment authorization | 正式站 smoke 通過且保留 rollback readiness | deployment-release-gate |
+| Phase 2 | Frontend/local slice Authorized | Cross-Board Source Slice Implemented / Local Automated QC Passed | `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`isTaskEffectivelyVisible()`、cross-board task source、scoped store merge、刪除後不殘留 | profile storage、未歸位跨裝置同步、visible partial/error summary UI、production migration/deploy/data repair、RPC/RLS | 使用者授權 Phase 2 RD；若需 RPC/RLS/migration 則另取授權 | active board A/B 時仍顯示所有可見 board 任務；刪除 task/archived ancestor 後不在 `所有任務排序` 殘留；selected board 不改 source scope | cross-board static/browser verifier、parity/placement regression、TS、build:test；DB role matrix if RPC/RLS changed |
+| Phase 3 | Not Authorized | RD Contract Ready / Not Authorized | filter section componentization | 儲存功能、profile governance | Phase 2 或工作台 UI 穩定後，RD 判定重複 UI 已造成維護成本 | UI 重複減少且行為不變 | static/browser regression |
+| Phase 4 | Not Authorized | RD Contract Ready / Not Authorized | profile 遺留清理與防回流 gate | profile sync/governance | 發現舊 profile 概念、keys、文件或測試造成回流風險 | 舊 profile 概念不再回流 DEV-039 | static guard、docs audit |
 
 ## Stop Conditions
 
@@ -407,6 +577,8 @@ Phase 2 仍需使用者或 PM 明確授權。
 - 若全域任務平台新增 profile/save/copy UI，停止。
 - 若全域任務平台篩選條件寫入 workbench profile localStorage，停止。
 - 若 Phase 1 UI 宣稱 `全部可見任務`，但資料層只能提供目前已載入任務，停止。
+- 若 Phase 2 source 仍只依賴 active board sync 或 `useWbsStore.nodes` 的目前載入集合，停止。
+- 若刪除父層後 descendant 仍出現在 `所有任務排序`，停止。
 - 若五視圖沒有共用 predicate，停止。
 - 若未歸位任務被實作成比已歸位任務功能更少的簡化收件匣，停止。
 - 若同看板同條件下看板與全域任務平台的 `matchedTaskIds` 不一致，停止。

@@ -1,5 +1,39 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-07-05
+
+### DEV-041: PWA 更新通知與快取恢復
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-041 | Phase 1 Implemented / Local QC Pending / Production Deploy Pending | 交付點 | P0 production update visibility, P0 stale cache recovery, P1 release-readiness evidence | 在正式部署前建立可見的新版本更新提示與更新按鈕；沿用現有 Vite PWA prompt update 架構，讓 `onNeedRefresh` 通知全域 UI，使用者按更新後才套用；補 stale chunk/cache recovery、reload loop guard、ErrorBoundary recovery 整合與 DEV-034 PWA install guidance regression。 | `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`, `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md` |
+
+驗收重點:
+- 有新版本時，使用者必須看到可見更新提示。
+- 更新提示必須有明確「更新」按鈕；正常更新不得在使用者未按更新時強制刷新。
+- stale chunk / cache failure 必須有 recovery path 與 reload loop guard。
+- cache recovery 不得清除未授權業務資料。
+- 390x844 mobile 與 1440x900 desktop viewport 下提示可見、可點、不溢出。
+- DEV-034 PWA install guidance 不得被破壞。
+- RD implementation 與 production deploy 已授權，但需通過 local QC 與 deployment-release-gate 才能宣稱完成。
+- 強制更新、release notes backend、analytics、push/email notification、DB schema/migration/RLS/RPC 均未授權。
+
+## Backlog Update - 2026-07-04
+
+### DEV-029: 手機 Pan-First 觸控手勢仲裁
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-029 | Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | 交付點 | P0 mobile board pan usability, P1 DEV-028 mobile gesture compatibility | 手機 BoardView 採 pan-first 手勢仲裁：任務卡、L2+ 子任務列、欄位與空白處短滑優先移動畫面並 suppress click-through；L2+ 垂直/水平 pan 已驗證可推動 `scrollTop` / `scrollLeft`；手機 task surface 無位移 tap 仍開任務詳情；長按才觸發任務操作或既有 long press flow；互動控制例外；Phase 2 才處理未來手機非 board modes，H01-H04 真機補充尚未執行。 | `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`, `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md`, `ai-doc/qc/QC-DEV-029-mobile-pan-first-touch-interactions.md`, DEV-028 compatibility note |
+
+驗收重點:
+- 390x844 手機 viewport 下，使用者在任務卡主體、L2+ 子任務列、欄位與空白處短滑都能移動畫面或至少 suppress click-through，不必找卡片縫隙；browser matrix 已驗證 L2+ `scrollTop: 0 -> 38`、`scrollLeft: 0 -> 120`。
+- 短滑不得開 `TaskDetailsModal`、rename input、context menu 或 drag preview。
+- 長按任務卡 / 任務列仍可進入任務操作選單或既有 long press flow。
+- filter、input、button、date、dependency、assignee、tag、popover、modal controls 不得被 pan guard 擋住。
+- Desktop DEV-028 click-to-details 不得被改壞。
+- 手機非 board modes、再次取消或重定義手機 tap-to-details、production deploy、DB/schema/RLS/migration 都不屬於目前授權範圍。
+
 ## Backlog Update - 2026-07-02
 
 ### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構

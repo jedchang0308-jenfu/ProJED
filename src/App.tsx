@@ -29,6 +29,7 @@ import HomeView from './components/HomeView';
 // CardModal 已在 Phase B 移除，改為在清單視圖行內編輯
 import GlobalDialog from './components/GlobalDialog';
 import { AppInstallAssistant } from './components/AppInstallAssistant';
+import { AppUpdatePrompt } from './components/AppUpdatePrompt';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
@@ -267,6 +268,7 @@ function App() {
       <AuthGate>
         <AppContent />
       </AuthGate>
+      <AppUpdatePrompt />
       <AppInstallAssistant />
       <ToastContainer />
     </>

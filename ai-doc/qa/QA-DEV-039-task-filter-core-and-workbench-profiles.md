@@ -2,15 +2,23 @@
 
 關聯 DEV：DEV-039
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
-狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Local Automated QC Passed / Phase 2 QA Contract Ready / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 建立日期：2026-07-02
-最新修正：2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
+最新修正：
+- 2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
+- 2026-07-04，Phase 2 QA contract 補入 cross-board source truth 與 deletion effective-visibility：active board A 時 `所有任務排序` 仍需顯示所有可見 board 任務；任務或父層刪除後，不得在 `所有任務排序` 殘留。
+- 2026-07-04，Phase 2 cross-board source / deletion effective visibility slice 已完成本機 static + browser QC；visible partial/error summary UI、RPC/RLS/migration、DB role matrix 與 production smoke 未納入本輪。
+- 2026-07-04 follow-up，補強使用者截圖殘留情境：`所有任務排序` 預設不得列出 `group/list` 容器；使用者可用 `列表 / 群組` 顯示設定切換容器顯示；missing-parent orphan task 不得因扁平投影留在清單。
+- 2026-07-04 UI follow-up，任務台清單改為密集文字列：不顯示獨立拖曳把手、大卡片、陰影或日期 chip；點選詳情與整列拖移仍需保留。
+- 2026-07-04 hierarchy follow-up，`所有任務排序` 需用縮排與字重/灰階呈現 hierarchy depth；不得因扁平排序讓所有 level 看起來完全相同。
+- 2026-07-04 sticky title follow-up，`未歸位` 與 `所有任務排序` 是 section title，不得呈現得像一般任務列；兩者需為 sticky header，捲動各自區塊時仍可見。
+- 2026-07-04 chevron collapse follow-up，工作台收合狀態需使用精簡 chevron 符號，collapsed rail 寬度由 48px 減半到約 24px；展開狀態的收合按鈕需用 `ChevronLeft`，不得回到 Notebook 或 panel 類圖示卡片。
 
 ## 驗證目標
 
 確認任務過濾器重構後，任務視圖共用同一個過濾語意，顯示設定不被誤算為過濾條件，全域任務平台維持 BoardView 左側跨看板拖拉定位，且工作台主畫面只保留一顆 `過濾器` 按鈕；點開後才在 popover 內選看板並調同看板任務過濾條件。
 
-未歸位與已歸位看板是工作台固定位置區，不是過濾器，也不是看板 selector 的選項。未歸位任務與已歸位任務必須有相同核心任務操作能力。Phase 1C 需確認同一 selected board 與同一組任務 filter 條件下，看板與工作台以相同 `matchedTaskIds` 作為結果真相；看板可額外顯示 context-only ancestor，但不得把它算成符合結果。
+未歸位與已歸位看板是工作台固定位置區，不是過濾器，也不是看板 selector 的選項。未歸位任務與已歸位任務必須有相同核心任務操作能力。Phase 1C 需確認同一 selected board 與同一組任務 filter 條件下，看板與工作台以相同 `matchedTaskIds` 作為結果真相；看板可額外顯示 context-only ancestor，但不得把它算成符合結果。Phase 2 需確認 `所有任務排序` 的來源已從目前已載入任務升級為全部可見看板任務，且刪除 / archived ancestor / 無權 board 不會透過扁平投影殘留。
 
 ## Zero-Tolerance Failures
 
@@ -39,6 +47,19 @@
 - active filter count 把 `showDependencies`、`showStartDate`、`showTags` 算成過濾條件。
 - Mobile viewport 出現過濾 panel 重疊、主要 CTA 裁切或水平 overflow。
 - Phase 2 宣稱 `全部可見任務`，但資料層只能列出目前已載入任務。
+- Phase 2 仍只讀 active board nodes，導致 `所有任務排序` 只剩目前看板。
+- 看板刪除任務後，該 task id 仍留在 `所有任務排序`。
+- 刪除父層/list/card 後，descendant 因本身未 archived 而殘留在 `所有任務排序`。
+- `所有任務排序` 在 `列表 / 群組` 顯示設定關閉時，把 `nodeType: group` 的列表/群組容器當成任務列出。
+- `列表 / 群組` 顯示設定開啟後，missing-parent orphan task 被一起放行。
+- `parentId` 指向不存在父節點的 orphan task 仍出現在看板投影或 `所有任務排序`。
+- 任務台清單回復成大卡片、獨立拖曳把手、日期 chip 或高間距卡片堆疊。
+- 移除拖曳把手後，整列拖移或點選開啟詳情失效。
+- `所有任務排序` 中父層與子層沒有任何縮排或文字權重差異。
+- 階層提示改變原本的到期日排序真相，或把清單改成不可跨看板比較的樹狀分組。
+- `未歸位` 或 `所有任務排序` 標題在區塊捲動後消失、被任務列蓋住、或缺少明確 section header UI。
+- 工作台 collapsed rail 使用 Notebook/clipboard 類大圖示、展開狀態收合按鈕使用 PanelLeftClose 類圖示、寬度回到 48px、或數字 badge 撐出水平 overflow。
+- 使用者無權 board/task 出現在 task source、store、UI 或測試輸出。
 
 ## Phase 1 Static Verification
 
@@ -205,7 +226,7 @@ DEV-028 browser verifier 必須 scope 回目前模式的任務卡，避免左側
 
 ## Phase 2 Verification Contract
 
-Phase 2 仍需使用者或 PM 明確授權。
+Phase 2 cross-board source / deletion effective visibility slice 已由使用者最新 `執行開發` 指令授權並完成本機 QC。Visible partial/error summary UI、Supabase RPC/RLS/migration、DB role matrix、production smoke 與正式資料修復仍需另行授權。
 
 | Case | 檢查項目 | 預期 |
 |---|---|---|
@@ -214,14 +235,57 @@ Phase 2 仍需使用者或 PM 明確授權。
 | QA-039-P2-S03 | Data shape | 每筆任務包含 task id、workspace/board id、status、dates、assignee、tags、updatedAt |
 | QA-039-P2-S04 | Partial state | UI 支援 partial result、loading、retry、error summary |
 | QA-039-P2-S05 | Summary truth | UI 只有在資料層完成時才能宣稱全部可見任務 |
+| QA-039-P2-S06 | Active board independence | Fixture 建立 Board A / Board B，active board 停在 A 時，source result 與 `所有任務排序` 同時包含 A/B 可見任務 |
+| QA-039-P2-S07 | Active board switch stability | 從 A 切到 B 後，`所有任務排序` 不得收縮成 B-only，也不得遺失 A 的可見任務 |
+| QA-039-P2-S08 | Filter selected board semantics | Popover 內切換 selected board 只改該 board filter state，不改 task source scope |
+| QA-039-P2-S09 | Deleted task removal | 在看板刪除單一任務後，該 task id 立即從 `所有任務排序` 消失，reload / resubscribe 後不得復活 |
+| QA-039-P2-S10 | Archived ancestor removal | 刪除父層/list/card 後，descendant 即使本身 `isArchived=false`，也不得留在 `所有任務排序` |
+| QA-039-P2-S11 | Restore behavior | Undo/restore 父層或任務後，符合權限與 filter 的任務可重新出現在工作台，且不重複 |
+| QA-039-P2-S12 | Orphan handling | parent chain 斷裂或 board metadata 缺失時，任務不得靜默列入完整結果；UI 需呈現 partial/error summary |
+| QA-039-P2-S13 | Unplaced merge identity | 未歸位任務與已歸位任務合併後不重複；同 task id 不得同時以兩種 placement 出現在 `所有任務排序` |
+| QA-039-P2-S14 | No source overwrite | active board snapshot / `setNodes(activeBoardNodes)` 或等效同步不會覆蓋 cross-board workbench source |
 
 建議 gate：
 
 ```powershell
-npm.cmd run verify:dev-039-phase2-workbench-task-source
-npm.cmd run verify:dev-039-phase2-workbench-task-source-browser
+npm.cmd run verify:dev-039-task-workbench-cross-board-source
+npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser
+npm.cmd run verify:dev-039-filter-result-parity
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+```
+
+若導入 Supabase RPC / RLS / migration，再加跑：
+
+```powershell
 npm.cmd run verify:supabase:static
 ```
+
+Browser cases：
+
+| Case | 操作 | 預期 |
+|---|---|---|
+| QA-039-P2-B01 | 建立 A/B 兩看板，各有不同到期日任務；active board 停在 A | `所有任務排序` 顯示 A/B 任務，排序依到期日而非 active board |
+| QA-039-P2-B02 | 在 popover 選 B 並關閉某 status filter | 只有 B 中該 status 任務從排序清單移除；A 任務來源不受影響 |
+| QA-039-P2-B03 | 在 A 看板刪除 A 任務 | A 任務從看板與 `所有任務排序` 同步消失；B 任務仍存在 |
+| QA-039-P2-B04 | 刪除包含子任務的父層/card | 父層與 descendant 均不出現在 `所有任務排序`；看板與工作台結果一致 |
+| QA-039-P2-B05 | 復原剛刪除的父層/card | 符合 filter 的父層/descendant 依規則恢復，且不產生重複卡片 |
+| QA-039-P2-B06 | 模擬某 board 查詢失敗 | UI 顯示 partial/error summary 與 retry；不得宣稱清單完整 |
+| QA-039-P2-B07 | 390px mobile viewport | cross-board source / partial summary 不造成水平 overflow、按鈕文字裁切或面板重疊 |
+
+Phase 2 slice QC evidence（2026-07-04）：
+
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source`，22/22 passed。
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser` passed，覆蓋 QA-039-P2-S06/S07/S09/S10/S13/S14 與 QA-039-P2-B01/B03/B04 的核心行為。
+- `npm.cmd run verify:dev-039-filter-result-parity`，26/26 passed。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes`，19/19 passed。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build:test` passed。
+
+Not covered by this slice：
+
+- QA-039-P2-S04/S05/S12 與 QA-039-P2-B06/B07 的 visible partial/error summary UX。
+- Supabase RPC/RLS/migration 與 DB role matrix；本輪只接既有 `supabaseNodeService.listByProject()`。
+- Production smoke / deployment-release-gate。
 
 ## Manual UX Review
 
@@ -256,7 +320,7 @@ QC 回報至少包含：
 | Phase 1 | QA Passed / Historical | 五視圖 filter 不一致、工作台 profile UI 回流 | Static verifier、browser verifier、mobile viewport、DEV-027D/DEV-028 regression、TS/build | `src` 無 Workbench source、未共用 predicate、仍保留 profile/save/copy | QC + RD |
 | Phase 1B | QA Passed / Local Automated QC Passed | 工作台失去跨看板定位本質、未歸位任務功能降級 | Placement lane static/browser、drag proof、task parity proof、DEV-028 regression、TS/build | 無雙 lane、不能雙向拖移、未歸位卡片功能少於已歸位卡片、發布早於 QC | QA + QC + RD |
 | Phase 1C | QA Passed / Local Automated QC Passed | 看板階層式篩選與工作台扁平篩選結果不一致 | Result parity static/browser、matchedTaskIds comparison、assignee option source proof、Phase 1/1B regression、TS/build | `matchedTaskIds` 不一致、符合子任務被父層藏掉、context-only ancestor 被列為結果、發布早於 QC | QA + QC + RD |
-| Phase 2 | QA Contract Ready / Not Authorized | `全部可見任務` 文案與資料層不一致、權限外洩 | Task source service/static verifier、browser cross-board proof、DB role matrix if needed | query 只能列 local/assigned tasks、無權任務洩漏 | QA + QC |
+| Phase 2 | Cross-Board Source Slice QA Passed / Follow-up Not Authorized | `全部可見任務` 文案與資料層不一致、權限外洩、刪除後扁平清單殘留 | Task source service/static verifier、browser cross-board/deletion proof、effectiveVisibility proof、DB role matrix if needed | query 只能列 active/local/assigned tasks、無權任務洩漏、archived ancestor descendant 殘留、visible partial/error summary 未覆蓋卻宣稱完成 | QA + QC |
 | Phase 3 | Deferred / Not Authorized | UI section 元件化造成行為漂移 | Regression verifier、viewport review | 元件化後 filter 結果或 summary 改變 | RD + QC |
 | Phase 4 | Deferred / Not Authorized | 舊 profile 概念回流 | Static guard、docs audit | profile type/storage/UI 重新出現在 DEV-039 | PM + QC |
 
@@ -264,7 +328,8 @@ QC 回報至少包含：
 
 | Deferred verification | Classification | Covered by | Notes |
 |---|---|---|---|
-| Cross-board all-visible task DB proof | Same Spec Phase | Phase 2 | Phase 1 只能驗證 UI 不誤稱資料來源 |
+| Cross-board all-visible task DB proof | Same Spec Phase | Phase 2 | 前端 / local-test / existing service adapter slice 已驗證；若需要 DB/RLS/RPC proof 另行授權 |
+| Deletion effective visibility / archived ancestor proof | Same Spec Phase | Phase 2 | static + browser fixture 已驗證 task 與 archived parent；若涉及正式資料修復則另走 human re-entry |
 | Workbench placement lanes and bidirectional drag | Same Spec Phase | Phase 1B | 已通過本機自動化 QC；production release 後續仍需獨立 deployment gate |
 | Board/workbench filter result parity | Same Spec Phase | Phase 1C | 已通過本機自動化 QC；已比對 canonical matched task IDs 與 context-only ancestors |
 | Filter UI section componentization | Same Spec Phase | Phase 3 | 不改產品語意，不新增儲存 |
@@ -278,7 +343,7 @@ QC 回報至少包含：
 - Phase 1B 是 Phase 1/1A 後的產品修正 gate；已通過本機自動化 QC，但不得因此視為 production release 已完成。
 - Phase 1B 必須同時通過 task parity、雙向拖移與資料不重複/不遺失證據；只有看到兩個 lane 不足以通過。
 - Phase 1C 需同時通過 static/browser parity gate、`matchedTaskIds` 比對、context-only ancestor 檢查與 Phase 1/1B regression；只證明共用 predicate 不足以通過。
-- Phase 2 必須同時有 UI evidence 與資料權限 evidence；只有 browser smoke 不足以通過。
+- Phase 2 cross-board/deletion slice 已有 static + browser evidence；visible partial/error summary、DB role matrix、production smoke 仍不得被宣稱完成。
 - Phase 3 只允許元件化，不得順手新增儲存、profile 或同步。
 - Phase 4 只處理遺留清理與防回流 gate，不得變成 profile governance。
 - 任一 phase 若出現 profile/save/copy UI，直接退回設計決策，不得用「進階功能」名義保留。

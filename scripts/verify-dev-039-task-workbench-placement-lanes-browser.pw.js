@@ -137,6 +137,16 @@ async (page) => {
     const placedLane = workbenchPanel.locator('[data-task-workbench-placed-board-lane="true"]');
     await unplacedLane.waitFor({ state: 'visible', timeout: 10000 });
     await placedLane.waitFor({ state: 'visible', timeout: 10000 });
+    const collapseToggleIconClass = await workbenchPanel
+      .locator('[data-task-workbench-collapse-toggle="true"] svg')
+      .first()
+      .getAttribute('class');
+    assert(
+      collapseToggleIconClass?.includes('lucide-chevron-left') &&
+        !collapseToggleIconClass.includes('lucide-panel-left-close'),
+      'expanded task workbench collapse button should use compact chevron-left affordance',
+      { collapseToggleIconClass },
+    );
     assert(await unplacedLane.getByText('未歸位').count() >= 1, 'unplaced lane should be clearly labelled');
     assert(await placedLane.getByText('所有任務排序').count() >= 1, 'all-task sorted lane should be clearly labelled without the removed cross-board summary text');
     assert(await placedLane.getByText('全部看板').count() === 0, 'placed lane should not render the removed all-boards summary text');
@@ -176,7 +186,7 @@ async (page) => {
     await unplacedLane.locator('[data-task-workbench-unclassified-add="true"]').click();
     const newUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).first();
     await newUnplacedCard.waitFor({ state: 'visible', timeout: 10000 });
-    assert(await newUnplacedCard.locator('[data-task-drag-handle="true"]').count() === 1, 'new unplaced task card should have the same drag affordance');
+    assert(await newUnplacedCard.locator('[data-task-drag-handle="true"]').count() === 0, 'dense text rows should not render a separate drag handle');
     const newUnplacedBox = await newUnplacedCard.boundingBox();
     assert(
       newUnplacedBox && newUnplacedBox.height <= 40,
@@ -185,7 +195,7 @@ async (page) => {
     );
 
     step = 'drag-unplaced-to-placed-board';
-    await dragToCenter(newUnplacedCard.locator('[data-task-drag-handle="true"]'), placedLane);
+    await dragToCenter(newUnplacedCard, placedLane);
     await page.waitForFunction(() => {
       const placedCards = Array.from(document.querySelectorAll('[data-task-workbench-placed-task-card="true"]'));
       return placedCards.some(card => card.textContent?.includes('臨時拜訪客戶'));
@@ -198,7 +208,7 @@ async (page) => {
     assert(await placedMovedCard.count() === 1, 'moved task should appear in placed lane exactly once');
 
     step = 'drag-placed-back-to-unplaced';
-    await dragToCenter(placedMovedCard.locator('[data-task-drag-handle="true"]'), unplacedLane);
+    await dragToCenter(placedMovedCard, unplacedLane);
     await page.waitForFunction(() => {
       const unplacedCards = Array.from(document.querySelectorAll('[data-task-workbench-unplaced-task-card="true"]'));
       return unplacedCards.some(card => card.textContent?.includes('臨時拜訪客戶'));
@@ -235,7 +245,21 @@ async (page) => {
     step = 'mobile-viewport';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('[data-task-workbench-panel="collapsed"]').waitFor({ state: 'visible', timeout: 10000 });
+    const collapsedWorkbench = page.locator('[data-task-workbench-panel="collapsed"]');
+    await collapsedWorkbench.waitFor({ state: 'visible', timeout: 10000 });
+    const collapsedRailBox = await collapsedWorkbench.boundingBox();
+    const collapsedToggleBox = await collapsedWorkbench.locator('[data-task-workbench-collapsed-toggle="true"]').boundingBox();
+    const collapsedCountBox = await collapsedWorkbench.locator('[data-task-workbench-collapsed-count="true"]').boundingBox();
+    assert(
+      collapsedRailBox &&
+        collapsedToggleBox &&
+        collapsedCountBox &&
+        collapsedRailBox.width <= 26 &&
+        collapsedToggleBox.width <= 26 &&
+        collapsedCountBox.width <= 22,
+      'collapsed task workbench rail should use the compact chevron affordance at half width',
+      { collapsedRailBox, collapsedToggleBox, collapsedCountBox },
+    );
     const mobileBoardHasCard = await page.evaluate(() => {
       const task = document.querySelector('.kanban-task-card[data-task-id]');
       const rect = task?.getBoundingClientRect();

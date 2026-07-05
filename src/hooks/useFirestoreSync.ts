@@ -230,7 +230,10 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
                 ...(doc.data() as import('../types').TaskNode)
                 // doc.id already written in data from create() usually
             }));
-            useWbsStore.getState().setNodes(nodes);
+            useWbsStore.getState().setNodes(nodes, {
+              scopeBoardIds: [activeBoardId],
+              preserveOutOfScope: true,
+            });
         },
         (error) => {
             console.error('[useFirestoreSync] Nodes snapshot error:', error);

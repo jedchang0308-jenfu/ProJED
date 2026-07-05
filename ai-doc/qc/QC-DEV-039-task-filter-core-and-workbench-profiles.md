@@ -3,7 +3,7 @@
 關聯 DEV：DEV-039
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
 關聯 QA：`ai-doc/qa/QA-DEV-039-task-filter-core-and-workbench-profiles.md`
-狀態：Phase 1/1A + Phase 1B + Phase 1C Local Automated QC Passed / DB unchanged / Production Release Not Deployed + Requires Explicit Authorization / Phase 2 Requires Separate Authorization
+狀態：Phase 1/1A + Phase 1B + Phase 1C Local Automated QC Passed / Phase 2 Cross-Board Source Slice Local Automated QC Passed / DB unchanged / Production Release Not Deployed + Requires Explicit Authorization
 執行日期：2026-07-02
 
 ## QC 結論
@@ -35,14 +35,29 @@
 - Phase 1C 的產品真相已改為 canonical `matchedTaskIds`；看板可顯示 context-only ancestor，但工作台不得把 ancestor 當成符合結果。
 - 本輪已完成 Phase 1C RD，並通過本機 static/browser/regression/TypeScript/build QC。
 
+2026-07-04 使用者授權執行 Phase 2 cross-board source / deletion effective visibility slice：
+
+- `所有任務排序` 不再只依賴 active board sync；工作台會依所有可見 `boardOptions` 載入任務。
+- `setNodes()` 新增 board-scoped merge boundary，active board snapshot 不會清掉其他 board 的工作台來源。
+- Filter projection 新增 `isTaskEffectivelyVisible()`，排除 archived task 與 archived ancestor descendant。
+- Follow-up hardening：`所有任務排序` 預設只接受 task-like 節點；使用者可在工作台 popover 以 `列表 / 群組` 顯示設定切換有效容器顯示；missing-parent orphan task 視為不可見，避免刪除父層後殘留。
+- UI density follow-up：`未歸位` 與 `所有任務排序` 改為 dense text rows，移除獨立拖曳把手、大卡片陰影與日期 chip；整列仍可拖移與點選開啟詳情。
+- Hierarchy follow-up：`所有任務排序` 保留扁平到期日排序，但每列以 parent chain depth 產生縮排與文字權重差異，讓不同 level 可被快速掃描。
+- Sticky title follow-up：`未歸位` 與 `所有任務排序` 改為 sticky section headers，和任務列視覺分離；browser verifier 需覆蓋實際捲動後 header 仍停在容器頂端。
+- Chevron collapse follow-up：工作台收合 rail 改為 24px 精簡 chevron affordance，展開狀態收合按鈕改用 `ChevronLeft`；browser verifier 覆蓋 rail、toggle、count badge 寬度與 expanded collapse icon。
+- 本輪沒有新增 Supabase RPC/RLS/migration，沒有正式資料修復/刪除，也沒有 production deploy。
+- Visible partial/error summary UI 尚未交付；source 層會保留 failed board 既有快取並 warn，不得宣稱 partial/error UX 完成。
+
 ## 驗證結果
 
 | Gate | 結果 | 證據 |
 |---|---|---|
 | DEV-039 filter result parity static | Pass | `npm.cmd run verify:dev-039-filter-result-parity`，26/26 |
 | DEV-039 filter result parity browser | Pass | `npm.cmd run verify:dev-039-filter-result-parity-browser` |
-| DEV-039 placement static | Pass | `npm.cmd run verify:dev-039-task-workbench-placement-lanes`，19/19 |
-| DEV-039 placement browser | Pass | `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` |
+| DEV-039 cross-board source static | Pass | `npm.cmd run verify:dev-039-task-workbench-cross-board-source`，23/23 |
+| DEV-039 cross-board source browser | Pass | `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser`；覆蓋 cross-board、刪除 reload、group/list 容器預設不顯示與手動切換顯示、missing-parent orphan 不顯示、hierarchy indentation、sticky section headers |
+| DEV-039 placement static | Pass | `npm.cmd run verify:dev-039-task-workbench-placement-lanes`，22/22，包含 sticky section header 與 compact collapsed rail static gate |
+| DEV-039 placement browser | Pass | `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser`；覆蓋 dense text rows、無獨立 drag handle、整列拖移、24px collapsed rail、expanded `ChevronLeft` collapse button |
 | DEV-039 static | Pass | `npm.cmd run verify:dev-039-task-filter-core`，61/61 |
 | DEV-039 browser | Pass | `npm.cmd run verify:dev-039-task-filter-core-browser` |
 | DEV-027D static | Pass | `npm.cmd run verify:dev-027d-mindmap-date-display-filter`，11/11 |
@@ -52,7 +67,7 @@
 | DEV-034 static | Pass | `npm.cmd run verify:dev-034-pwa-install-guidance`，24/24 |
 | DEV-034 browser | Pass | `npm.cmd run verify:dev-034-pwa-install-guidance-browser` |
 | TypeScript | Pass | `npm.cmd exec tsc -- --noEmit` |
-| Build | Pass | `npm.cmd run build` |
+| Build | Pass | `npm.cmd run build`; Phase 2 slice also ran `npm.cmd run build:test` |
 
 ## Browser 覆蓋要求（Phase 1/1A historical）
 
@@ -128,15 +143,46 @@ Current QC finding：
 - Phase 1C local automated QC is closed.
 - Production release remains not executed and must still go through explicit deployment authorization plus `deployment-release-gate`.
 
+## Phase 2 Cross-Board Source Slice QC Gate（Passed）
+
+Phase 2 本輪只驗證 cross-board source 與 deletion/effective visibility slice。DEV-039 仍未部署正式環境；若要發布，需另取得使用者明確部署授權並執行 `deployment-release-gate`。
+
+Executed evidence：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-cross-board-source
+npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser
+npm.cmd run verify:dev-039-filter-result-parity
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build:test
+```
+
+Phase 2 slice QC 結果：
+
+- Active board A 時，`所有任務排序` 同時顯示 Board A / Board B 任務。
+- 切換 active board B 後，`所有任務排序` 不收縮成 B-only。
+- 到期日排序跨看板生效，早到期任務排在較晚到期任務之前。
+- Archived task 不出現在 `所有任務排序`。
+- Archived parent 的 descendant 即使本身未 archived，也不出現在 `所有任務排序`。
+- 任務被標記 archived 後，reload 不會在排序清單復活。
+- 未歸位任務仍透過 localStorage merge，未納入跨裝置同步宣稱。
+
+Not covered / residual：
+
+- Visible partial/error summary UI 未實作；不得宣稱部分 board 讀取失敗時已有完整 UX。
+- Supabase RPC/RLS/migration、DB role matrix、正式資料修復/刪除未執行。
+- Production smoke 未執行。
+
 ## DB / Production 邊界
 
-- 不需要 Supabase DB QC：Phase 1 沒有新增 migration、RLS、membership、profile backend schema 或 RPC。
+- 不需要 Supabase DB QC：Phase 1 與 Phase 2 slice 沒有新增 migration、RLS、membership、profile backend schema 或 RPC；Phase 2 只接既有 `supabaseNodeService.listByProject()`。
 - 未改 `CalendarSubscriptionsView` / DEV-037 行事曆訂閱程式碼；DEV-037 conditional gate 可標示為 not touched。
 - 未部署 production；Phase 1C 本機前置 QC 已完成。若要部署，仍需取得使用者明確授權並另走 `deployment-release-gate`。
 
 ## 殘餘風險
 
-- 全域任務平台 Phase 1 只能處理目前已載入任務集合；Phase 2 需要另行授權補真正全部可見任務資料來源與權限證明。
+- 全域任務平台 Phase 2 cross-board source slice 已完成，但 visible partial/error summary UI 與 DB/RLS/RPC 權限矩陣仍需另行授權。
 - 工作台每看板篩選 state 是當次 UI state，沒有跨重新整理保存；這是使用者最新要求，不是 bug。
 - Phase 1B placement lanes 與 Phase 1C result parity 已實作並通過本機自動化 QC；目前正式環境發布仍需額外部署授權與 production smoke。
 - Phase 1C 未涵蓋 production smoke；正式環境資料、瀏覽器登入狀態與遠端部署結果仍需 deployment gate 驗證。

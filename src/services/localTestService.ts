@@ -63,11 +63,11 @@ const sanitizeNodes = (nodes: Record<string, TaskNode>) => {
     let current: string | null = node.parentId;
 
     while (current) {
+      if (current === 'root' || current === node.boardId) return;
       if (current === id || visited.has(current) || !sanitized[current]) {
         sanitized[id] = {
           ...node,
-          parentId: null,
-          nodeType: node.nodeType === 'milestone' ? 'milestone' : 'group',
+          isArchived: true,
           updatedAt: Date.now(),
         };
         changed = true;
@@ -612,6 +612,11 @@ export const localTestBoardService = {
 };
 
 export const localTestNodeService = {
+  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
+    Object.values(readNodes())
+      .filter(node => node.workspaceId === workspaceId && node.boardId === boardId)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+
   create: async (_workspaceId: string, _boardId: string, node: TaskNode): Promise<TaskNode> => {
     writeNodes({ ...readNodes(), [node.id]: node });
     return node;

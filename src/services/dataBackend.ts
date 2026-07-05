@@ -332,6 +332,13 @@ export const boardInviteService = {
 };
 
 export const nodeService = {
+  listByProject: (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
+    isLocalTestBackend
+      ? localTestNodeService.listByProject(workspaceId, boardId)
+      : isSupabaseBackend
+      ? supabaseNodeService.listByProject(workspaceId, boardId)
+      : firestoreNodeService.listByProject(workspaceId, boardId),
+
   create: (workspaceId: string, boardId: string, node: TaskNode): Promise<void | TaskNode> =>
     isLocalTestBackend
       ? localTestNodeService.create(workspaceId, boardId, node)

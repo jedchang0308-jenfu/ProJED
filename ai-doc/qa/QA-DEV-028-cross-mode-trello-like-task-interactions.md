@@ -16,6 +16,7 @@
 - 右鍵/長按在四模式都開任務操作選單；心智圖關聯線入口不再佔用一般右鍵。
 - ESC 可關閉最上層暫時性 UI；任務詳情、確認對話框、說明 dialog、popover、dropdown、drawer 不得互相穿透關閉。
 - 看板 Level 3+ 與卡片正面資訊密度不得被本 DEV 移除。
+- 2026-07-04 DEV-029 compatibility: 手機 coarse pointer 的任務卡 / 任務列短滑安全由 DEV-029 優先；mobile pan 不得誤開詳情，長按任務操作選單仍需保留。
 
 ## Zero-Tolerance Failures
 
@@ -35,6 +36,7 @@
 | ZT-028-010 | 看板 Level 3+ 被藏到 Card back，或卡片正面既有日期/依賴/標籤/進度被移除 | DOM + screenshot |
 | ZT-028-011 | 桌機或手機 viewport 出現 modal、選取框、右鍵選單、長按選單、拖曳控制重疊或裁切 | Screenshot review |
 | ZT-028-012 | ESC 無法關閉最上層 modal/dialog/popover，或 ESC 穿透關閉父層 UI | Keyboard trace + manual click |
+| ZT-028-013 | DEV-029 實作後，手機任務卡 / 任務列短滑仍開詳情或只能靠縫隙 pan | DEV-029 browser gesture + mobile manual |
 
 ## RD Slice Phase Gates
 
@@ -110,6 +112,7 @@ Phase gate 共通要求:
 | MAN-028-025 | Mobile | 390x844 | 長按任務 | 開任務操作選單，不與上下捲動或拖曳互相誤觸 | 長按後截圖 |
 | MAN-028-026 | 四模式 | 1440x900 / 1024x768 / 390x844 | Visible error sweep | 無 visible runtime error、無不可預期空白、無水平 overflow | 每個 viewport 截圖與 DOM/text 檢查紀錄 |
 | MAN-028-027 | 四模式 / 浮層 | 1440x900 | 開啟任務詳情後按 ESC；任務詳情內開標籤 picker 後按 ESC；開啟分享看板、全域確認、紀錄說明、過濾器 panel、AI 快捷問題、心智圖關聯線樣式 drawer 後按 ESC | ESC 只關閉最上層暫時性 UI；有子浮層時先關子浮層，不穿透關父層 | 操作錄影或逐步截圖 |
+| MAN-028-028 | 看板 / Mobile | 390x844 | 在任務卡主體與子任務列上短滑 | 依 DEV-029，不開詳情、不進 rename、不出現 context menu 或 drag preview；使用者不需找卡片縫隙才能移動畫面 | 短滑前後截圖或錄影、modal/menu/rename/drag negative evidence |
 
 ## FMEA 風險表
 
@@ -123,7 +126,7 @@ Phase gate 共通要求:
 | 右鍵仍進入關聯線模式 | 舊心智圖右鍵流程殘留 | 任務操作選單不可預期，關聯線誤觸 | MAN-028-010、011 | P0 | 右鍵節點與關聯線入口分開驗證 |
 | 看板資訊被不小心降噪 | 實作誤套前一版優化建議 | 使用者明確排除需求被違反 | MAN-028-015 | P0 | 卡片正面資訊與 Level 3+ 必拍截圖 |
 | 甘特 drag/resize 後誤開詳情 | click-after-drag 判斷不足 | 排程操作被 modal 打斷 | MAN-028-020 | P0 | 拖曳與 resize 操作需錄影或前後截圖 |
-| mobile 長按/捲動/命名互相干擾 | coarse pointer flow 與 scroll owner 未分離 | 手機使用者難以操作 | MAN-028-023、024、025 | P1 | 390x844 親自長按、捲動、新增命名 |
+| mobile 長按/捲動/命名互相干擾 | coarse pointer flow 與 scroll owner 未分離 | 手機使用者難以操作 | MAN-028-023、024、025、028 | P1 | 390x844 親自長按、捲動、新增命名與任務卡主體短滑 |
 | visible runtime error 被自動化忽略 | 只看測試命令未看實際畫面 | 使用者看到錯誤仍被判定通過 | MAN-028-026 | P0 | 每個 viewport 執行 visible error sweep |
 | ESC 關閉行為穿透 | 多個 window/document keydown listener 沒有 topmost guard | 使用者想關子選單卻關掉整個任務詳情或工作流 | MAN-028-027 | P0 | 子浮層與父 modal 巢狀場景必測 |
 
@@ -141,6 +144,7 @@ Phase gate 共通要求:
 | AC-028-008 | 甘特 click 與 drag/resize 互斥 | browser smoke | MAN-028-018、019、020 | Manual Pending |
 | AC-028-009 | Desktop / laptop / mobile viewport 無 visible runtime error、重疊、裁切、非預期 overflow | lint/build/browser smoke | MAN-028-022、023、026 | Manual Pending |
 | AC-028-010 | ESC 可關閉最上層暫時性 UI，且不穿透關閉父層 | `verify:dev-028-cross-mode-task-interactions-browser` | MAN-028-027 | Manual Pending |
+| AC-028-011 | DEV-029 實作後，手機任務卡與子任務列短滑採 pan-first，不誤開詳情或任務功能 | `verify:dev-029-mobile-pan-first-interactions-browser` | MAN-028-028 | Not Authorized / Pending |
 
 ## 四模式手動驗證矩陣
 
@@ -169,7 +173,7 @@ Phase gate 共通要求:
 - Level 3+ 下層任務仍顯示在卡片正面。
 - 卡片正面的日期、依賴、標籤、進度等既有資訊仍保留。
 - 桌機卡片拖曳與點擊開詳情互斥；拖曳後不得打開詳情。
-- 手機長按或拖曳把手不得和上下捲動互相誤觸。
+- 手機短滑依 DEV-029 優先 pan，不得開詳情、rename、context menu 或 drag；長按或拖曳把手不得和上下捲動互相誤觸。
 - 會議紀錄任務選取模式下，點卡片仍以插入 task mention 為優先。
 
 ### 甘特

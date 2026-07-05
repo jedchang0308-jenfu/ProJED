@@ -169,23 +169,19 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     ...longPressHandlers,
     onTouchStart: (e: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchStart(e);
-      e.stopPropagation();
       if (isFromTaskDragHandle(e.target)) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchMove(e);
-      e.stopPropagation();
       longPressHandlers.onTouchMove(e);
     },
     onTouchEnd: (e: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchEnd(e);
-      e.stopPropagation();
       longPressHandlers.onTouchEnd(e);
     },
     onTouchCancel: (e: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchCancel(e);
-      e.stopPropagation();
       longPressHandlers.onTouchCancel(e);
     },
     onClickCapture: (e: React.MouseEvent) => {
@@ -299,7 +295,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             disabled={!canEditTask}
             onClick={(event) => onStartEdit(event, child)}
             data-task-interaction-control="true"
-            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+            className="pointer-events-none flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 disabled:opacity-30"
             title="重新命名任務"
           >
             <Pencil size={11} />

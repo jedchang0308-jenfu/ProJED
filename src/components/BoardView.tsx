@@ -14,6 +14,7 @@ import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { useMobilePanBroker } from '../hooks/useMobilePanBroker';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
@@ -39,6 +40,7 @@ export const KanbanDependencyContext = React.createContext<{
 } | null>(null);
 
 const BoardView = () => {
+    const mobilePanSurfaceRef = useMobilePanBroker<HTMLDivElement>();
     const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
     const setDependencySelection = useBoardStore(s => s.setDependencySelection);
@@ -573,6 +575,7 @@ const BoardView = () => {
 
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
+                        ref={mobilePanSurfaceRef}
                         className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}
                         data-mobile-pan-surface="board"
                     >

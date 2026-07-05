@@ -38,11 +38,17 @@ const source = Object.fromEntries(
 assert(
   'result projection exposes canonical matched and context-only sets',
   source.resultProjection.includes('projectTaskFilterResults') &&
+    source.resultProjection.includes('isTaskEffectivelyVisible') &&
     source.resultProjection.includes('matchedTaskIds') &&
     source.resultProjection.includes('visibleContainerIds') &&
     source.resultProjection.includes('contextOnlyContainerIds') &&
     source.resultProjection.includes('visibleTaskIds') &&
     source.resultProjection.includes('currentParentId') &&
+    source.resultProjection.includes('isStructuralRootParent') &&
+    source.resultProjection.includes('if (!parent) return false') &&
+    source.resultProjection.includes('if (parent.isArchived) return false') &&
+    source.resultProjection.includes('if (!isSameBoard(parent, boardId)) return false') &&
+    source.resultProjection.includes('if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return') &&
     source.resultProjection.includes('matchesTaskFilters(node, filters)'),
 );
 
@@ -77,11 +83,13 @@ assert(
 assert(
   'Task Workbench lists filtered placed ids plus unplaced tasks in due-date sorted all task list',
   source.taskWorkbench.includes('projectTaskFilterResults') &&
+    source.taskWorkbench.includes('isTaskEffectivelyVisible') &&
+    source.taskWorkbench.includes('mergeUnplacedTasks') &&
     source.taskWorkbench.includes('filterProjectionByBoardId') &&
     source.taskWorkbench.includes('loadedPlacedTasks') &&
     source.taskWorkbench.includes('visiblePlacedTasks') &&
     source.taskWorkbench.includes('allSortedTasks') &&
-    source.taskWorkbench.includes('sortTasksByDueDate([...visiblePlacedTasks, ...unplacedTasks])') &&
+    source.taskWorkbench.includes('sortTasksByDueDate(mergeUnplacedTasks(visiblePlacedTasks, unplacedTasks))') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
     source.taskWorkbench.includes('data-task-workbench-all-task-card') &&
     source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&

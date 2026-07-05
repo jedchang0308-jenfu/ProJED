@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCw, Home } from 'lucide-react';
+import { clearPwaApplicationCacheAndReload } from '../services/pwaUpdateService';
 
 interface Props {
   children?: ReactNode;
@@ -34,24 +35,9 @@ export default class GlobalErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
-  private handleClearData = () => {
-    // 預防如果是登入資料錯誤導致無限崩潰，提供強制清空的最後手段
-    if (window.confirm('確定要清除所有本地資料並登出嗎？這將會清除您當前裝置上未同步的登入狀態。')) {
-      localStorage.clear();
-      sessionStorage.clear();
-      
-      // 徹底解除註冊所有 Service Workers (破除 PWA 舊版快取死鎖)
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (let registration of registrations) {
-            registration.unregister();
-          }
-          // 強制重新跳轉，觸發向伺服器拉取最新檔案
-          window.location.href = '/';
-        });
-      } else {
-        window.location.href = '/';
-      }
+  private handleClearAppCache = () => {
+    if (window.confirm('確定要清除應用程式快取並重新整理嗎？這不會清除您的任務資料或登入資料。')) {
+      void clearPwaApplicationCacheAndReload();
     }
   };
 
@@ -90,11 +76,11 @@ export default class GlobalErrorBoundary extends Component<Props, State> {
               </button>
               
               <button
-                onClick={this.handleClearData}
+                onClick={this.handleClearAppCache}
                 className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded-lg font-medium transition-colors"
               >
                 <Home className="w-5 h-5" />
-                清除本地快取並回首頁
+                清除應用程式快取並回首頁
               </button>
             </div>
             

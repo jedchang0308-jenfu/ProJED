@@ -2,7 +2,7 @@ import { requireFirebaseDb } from './firebase';
 import { 
   collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs
 } from 'firebase/firestore';
-import type { Workspace, Board, BoardMember, Dependency, KnowledgeRecord, KnowledgeRecordInput, TaskTag, WorkspaceMember } from '../types';
+import type { Workspace, Board, BoardMember, Dependency, KnowledgeRecord, KnowledgeRecordInput, TaskNode, TaskTag, WorkspaceMember } from '../types';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -160,6 +160,22 @@ export const dependencyService = {
 // Node (WBS) Service
 // ==========================
 export const nodeService = {
+  listByProject: async (wsId: string, bId: string): Promise<TaskNode[]> => {
+    const db = requireFirebaseDb();
+    const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', bId, 'nodes'));
+    return snapshot.docs
+      .map(docSnap => {
+        const data = docSnap.data() as TaskNode;
+        return {
+          ...data,
+          id: data.id || docSnap.id,
+          workspaceId: data.workspaceId || wsId,
+          boardId: data.boardId || bId,
+        };
+      })
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  },
+
   create: async (wsId: string, bId: string, node: import('../types').TaskNode): Promise<void> => {
     const db = requireFirebaseDb();
     const nodeRef = doc(db, 'workspaces', wsId, 'boards', bId, 'nodes', node.id);

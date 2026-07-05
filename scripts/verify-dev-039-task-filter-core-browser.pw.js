@@ -66,7 +66,7 @@ async (page) => {
       parentId: null,
       title: '鉦富跨板任務',
       status: 'todo',
-      nodeType: 'group',
+      nodeType: 'task',
       order: 0,
       endDate: '2026-07-20',
       createdAt: 1704067200000,

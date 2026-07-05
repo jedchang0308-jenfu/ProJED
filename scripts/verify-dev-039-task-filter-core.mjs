@@ -250,7 +250,8 @@ assert(
     source.qa.includes('All-Phase QA Coverage Matrix') &&
     source.qa.includes('Phase Exit Decision Rules') &&
     source.devTask.includes('Phase 1 已完成本機自動化 QC') &&
-    source.devTask.includes('Phase 2 仍需使用者或 PM 明確授權') &&
+    source.devTask.includes('Phase 2 cross-board source slice 已完成本機自動化 QC') &&
+    source.devTask.includes('Phase 2 visible partial/error summary、DB/RLS/RPC 與 production deploy 仍需另行授權') &&
     source.documentationMap.includes('All-Phase Coverage Complete') &&
     source.backlog.includes('All-Phase Coverage Matrix'),
 );
@@ -263,6 +264,8 @@ assert(
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes-browser"') &&
     source.packageJson.includes('"verify:dev-039-filter-result-parity"') &&
     source.packageJson.includes('"verify:dev-039-filter-result-parity-browser"') &&
+    source.packageJson.includes('"verify:dev-039-task-workbench-cross-board-source"') &&
+    source.packageJson.includes('"verify:dev-039-task-workbench-cross-board-source-browser"') &&
     source.browserVerifier.includes('task-workbench-board-filter') &&
     source.placementVerifier.includes('placement helper defines local unplaced task identity') &&
     source.placementBrowserVerifier.includes('task-workbench-placement-lanes') &&

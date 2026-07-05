@@ -35,6 +35,11 @@ export interface WbsBoardState {
   error: string | null;
 }
 
+export type SetNodesOptions = {
+  scopeBoardIds?: string[];
+  preserveOutOfScope?: boolean;
+};
+
 export interface WbsBoardActions {
   // ===== 基礎資料操作 (CRUD) =====
   
@@ -42,7 +47,7 @@ export interface WbsBoardActions {
    * 初始化/覆蓋整個節點映射表 (通常用於載入專案時)
    * 需同時重建索引
    */
-  setNodes: (nodes: TaskNode[]) => void;
+  setNodes: (nodes: TaskNode[], options?: SetNodesOptions) => void;
 
   /**
    * 新增單一任務節點
@@ -122,9 +127,23 @@ export type WbsStore = WbsBoardState & WbsBoardActions;
 const mergeLocalUnplacedTasksForSetNodes = (
   incomingNodes: TaskNode[],
   currentNodes: Record<string, TaskNode>,
+  options: SetNodesOptions = {},
 ) => {
   const mergedNodes = new Map<string, TaskNode>();
   incomingNodes.forEach(node => mergedNodes.set(node.id, node));
+  const scopedBoardIds = new Set(options.scopeBoardIds || []);
+
+  if (options.preserveOutOfScope) {
+    const hasScopedBoards = scopedBoardIds.size > 0;
+    Object.values(currentNodes).forEach(task => {
+      if (
+        isTaskWorkbenchUnplacedTask(task) ||
+        (hasScopedBoards && scopedBoardIds.has(task.boardId)) ||
+        mergedNodes.has(task.id)
+      ) return;
+      mergedNodes.set(task.id, task);
+    });
+  }
 
   [
     ...Object.values(currentNodes).filter(isTaskWorkbenchUnplacedTask),
@@ -418,8 +437,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     });
   },
 
-  setNodes: (nodes) => {
-    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes);
+  setNodes: (nodes, options = {}) => {
+    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options);
     const nodesRecord = nodesWithLocalUnplacedTasks.reduce((acc, node) => {
       const normalizedNode = applySmartStatus(node);
       acc[normalizedNode.id] = normalizedNode;

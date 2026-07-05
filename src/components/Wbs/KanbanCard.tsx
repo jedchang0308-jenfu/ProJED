@@ -59,6 +59,9 @@ const statusBorderColorMap: Record<TaskStatus, string> = {
 const isFromTaskDragHandle = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
+const isFromChecklistItem = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('.kanban-checklist-item[data-task-id]'));
+
 export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previewNodes, previewParentIndex, filterProjection }) => {
   const storeNode = useWbsStore(s => s.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
@@ -274,19 +277,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const cardLongPressHandlers = {
     ...longPressHandlers,
     onTouchStart: (e: React.TouchEvent) => {
+      if (isFromChecklistItem(e.target)) return;
       touchTapGuard.handlers.onTouchStart(e);
       if (isFromTaskDragHandle(e.target)) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
+      if (isFromChecklistItem(e.target)) return;
       touchTapGuard.handlers.onTouchMove(e);
       longPressHandlers.onTouchMove(e);
     },
     onTouchEnd: (e: React.TouchEvent) => {
+      if (isFromChecklistItem(e.target)) return;
       touchTapGuard.handlers.onTouchEnd(e);
       longPressHandlers.onTouchEnd(e);
     },
     onTouchCancel: (e: React.TouchEvent) => {
+      if (isFromChecklistItem(e.target)) return;
       touchTapGuard.handlers.onTouchCancel(e);
       longPressHandlers.onTouchCancel(e);
     },
@@ -397,7 +404,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   onClick={handleStartEdit}
                   disabled={!canEditTask}
                   data-task-interaction-control="true"
-                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
+                  className="pointer-events-none flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 disabled:opacity-30"
                   title="重新命名任務"
                 >
                   <Pencil size={13} />

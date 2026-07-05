@@ -1,5 +1,291 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-07-05
+
+### DEV-041: PWA 更新通知與快取恢復
+
+狀態: Phase 1 Implemented / Local QC Pending / Production Deploy Pending
+節點類型: 交付點
+父交付點: Production release readiness / PWA lifecycle reliability
+是否計入產品交付完成: 是，限正式部署前的使用者更新可見性、快取恢復與版本切換可靠性
+建立日期: 2026-07-05
+
+原始需求邊界:
+- 使用者想把新版本部署到正式環境，但擔心使用者不知道有更新，或快取未清造成異常。
+- 使用者詢問是否可像市面 APP 一樣提供更新通知與更新按鈕。
+- HCS/PM 判斷：可以，且應在正式部署前先完成；正常更新應由使用者可見提示與手動更新按鈕承接，cache/chunk-load 類異常才走較強恢復。
+
+Human Decision Brief:
+- 已確認：需要可見的新版本更新通知，不再只依賴 service worker 背景更新。
+- 已確認：需要更新按鈕，讓使用者主動套用新版本。
+- AI 補充契約：正常更新不得在使用者操作中強制刷新；按下更新後才套用。
+- AI 補充契約：stale chunk / cache failure 需要 recovery path 與 reload loop guard。
+- AI 補充契約：Phase 1 不新增後端 schema、release API、push notification、analytics 或 production deploy。
+
+目前授權邊界:
+- Authorized: DEV-041 Phase 1 RD implementation、QA/QC verifier、文件更新、Firebase Hosting production deploy 與 deployment-release-gate execution。
+- Not Authorized: 強制更新政策、release notes 後端、版本 API、analytics、push/email notification、DB schema / migration / RLS / RPC。
+
+End-State Architecture:
+- `pwaUpdateService` 成為 PWA lifecycle 單一資料源，統一管理 update available、offline ready、apply update、cache recovery 與 failed state。
+- 全域 `AppUpdatePrompt` 或等效元件接收 update state，顯示「有新版本」與「更新」按鈕。
+- 使用者按更新後才執行 `updateSW(true)` 或 service 封裝的 `applyUpdate()`。
+- chunk-load failure 與 `GlobalErrorBoundary` 使用同一套 recovery guard，避免無限 reload。
+- production deploy 前必須能驗證新版本提示、更新按鈕、cache recovery 與 DEV-034 PWA install guidance regression。
+
+RD Handoff:
+- Phase 1: Visible PWA Update Prompt & Cache Recovery，Document status 為 `Phase 1 Implemented / Local QC Pending`。
+- Phase 1 scope：擴充 `src/services/pwaUpdateService.ts` update state、掛載全域更新提示 UI、實作更新按鈕、dismiss/later、chunk-load/cache recovery guard、ErrorBoundary recovery 整合、static/browser verifier。
+- Phase 1 touchpoints：`src/services/pwaUpdateService.ts`、`src/main.tsx`、`src/App.tsx` 或全域 layout、`src/components/AppUpdatePrompt.tsx` 或等效新元件、`src/components/GlobalErrorBoundary.tsx`、DEV-041 verifier scripts。
+- Phase 2: Production Release Gate，Document status 為 `Authorized / Pending`；使用者已要求正式部署，必須套用 `deployment-release-gate`。
+- Phase 3: Optional Release Metadata / Mandatory Policy，Document status 為 `RD Contract Ready / Not Authorized`；release notes、版本 API、強制更新與 analytics 另行決策。
+
+Acceptance:
+- `onNeedRefresh` 觸發時，畫面出現可見更新提示。
+- 更新提示包含明確「更新」按鈕，按下後只執行一次套用流程並可 reload 到新版本。
+- dismiss/later 不得讓本 session 反覆被打擾，也不得錯誤遺失已知 update callback。
+- stale chunk / cache failure 有可驗收 recovery path，且具備 reload loop guard。
+- cache recovery 不得清除未授權業務資料。
+- 390x844 mobile 與 1440x900 desktop viewport 下提示可見、可點、不溢出、不遮蔽主要工作流。
+- DEV-034 PWA install guidance 不得被破壞。
+- 不得宣稱 production deploy 或正式站 smoke 完成，除非另走 deployment-release-gate。
+
+QA / QC gate:
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery`
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`
+- `npm.cmd run verify:dev-034-pwa-install-guidance`
+- `npm.cmd run verify:dev-034-pwa-install-guidance-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+
+Deferred Scope Audit:
+- production deploy / Firebase Hosting release: Blocked Human Re-entry，需使用者明確授權並走 deployment-release-gate。
+- mandatory update / forced refresh: RD Contract Ready / Not Authorized，牽涉使用者工作中斷風險。
+- release notes backend / remote version API: Deferred / New DEV Candidate。
+- analytics / update adoption tracking: Deferred / New DEV Candidate。
+- push notification / email notification: No Tracking Until Requested。
+- DB schema / Supabase migration / RLS / RPC: Not In Scope。
+
+All-Phase Coverage Matrix:
+
+| Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
+|---|---|---|---|---|
+| 0 | PM/RD Contract | Complete | Authorized | SPEC/QA/dev_task/documentation_map/backlog updated |
+| 1 | Visible PWA Update Prompt & Cache Recovery | Phase 1 Implemented / QC Pending | Authorized | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
+| 2 | Production Release Gate | Authorized / Pending | Authorized | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
+| 3 | Optional Release Metadata / Mandatory Policy | RD Contract Ready | Not Authorized | separate human decision、SPEC addendum or new DEV |
+
+文件:
+- `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
+- `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md`
+
+## PM Update - 2026-07-04
+
+### DEV-029: 手機 Pan-First 觸控手勢仲裁
+
+狀態: Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed
+節點類型: 交付點
+父交付點: DEV-028 mobile interaction follow-up
+是否計入產品交付完成: 是，限手機看板主要操作可用性
+建立日期: 2026-07-04
+
+原始需求邊界:
+- 使用者指出手機模式下移動畫面只能按任務卡縫隙，不好用。
+- 使用者提出方向：「短按所有畫面都可以移動，長按才觸發其他功能」，並要求用 HCS `#批判 #演算法 #最佳化` 判斷是否適合。
+- HCS 判斷：方向適合，但需精準化為「短滑 / 移動優先」而不是「短按一下即移動畫面」；手機要採 pan-first，長按才進入任務功能。
+- 使用者要求由 Dev PM 寫成開發文件；後續使用者明確要求 Dev PM 指揮 RD 修正，直到 QA 驗證通過，故 DEV-029 Phase 1 RD implementation 已授權並完成。
+
+Human Decision Brief:
+- 已確認：手機主要使用情境是瀏覽、定位與移動畫面，任務卡主體不得成為阻擋 pan 的區域。
+- 已確認：短滑任務卡、子任務列、欄位與空白處不得誤開詳情、rename、context menu 或 drag；無位移 tap 仍開任務詳情，長按才進入任務操作選單。
+- 已確認：按鈕、輸入框、日期、依賴、負責人、標籤、filter popover、modal 內控制與 explicit drag handle 是例外，不得被 pan-first 攔截。
+- AI 補充契約：`touchmove` 位移超過 8-10px 視為 pan，需 suppress compatibility click；長按門檻採 450-550ms 並需低位移容忍。
+- AI 補充契約：DEV-028 的右鍵 / 長按任務操作選單仍有效；若與手機短滑安全衝突，DEV-029 對手機 coarse pointer pan 仲裁優先。
+
+目前授權邊界:
+- Authorized: DEV-029 Phase 1 前端 pan-first RD implementation、static/browser verifier 更新、PM/DEV/SPEC/QA/QC/documentation_map/backlog 文件更新與 DEV-028 相容註記。
+- Not Authorized: production deploy、資料庫 schema / migration / RLS / RPC、手機非 board modes 重新開放、再次取消或重定義手機 tap-to-details。
+
+End-State Architecture:
+- BoardView mobile surface 採集中式 gesture arbitration，而不是各卡片自行堆例外。
+- `useTouchTapGuard` / `useLongPress` / `useDragSensors` / CSS `touch-action` 形成同一條觸控判斷鏈。
+- `KanbanCard`、`KanbanChecklist`、`KanbanColumn`、BoardView scroll surface、TaskWorkbenchPanel mobile overlay 均接受 pan-first 合約。
+- explicit interactive controls 保留原本 click/tap 行為；explicit drag handle 才可比主卡面更積極攔截 touch。
+
+RD Handoff:
+- Phase 1: Board Mobile Pan-First，Document status 為 `Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed`。
+- Phase 1 scope：手機看板任務卡、子任務列、欄位、空白處與任務台 mobile overlay 的短滑 pan safety；長按任務功能；互動控制例外。
+- Phase 1 touchpoints：`src/hooks/useTouchTapGuard.ts`、`src/hooks/useLongPress.ts`、`src/hooks/useDragSensors.ts`、`src/components/BoardView.tsx`、`src/components/Wbs/KanbanCard.tsx`、`src/components/Wbs/KanbanChecklist.tsx`、`src/components/Wbs/KanbanColumn.tsx`、`src/components/TaskWorkbenchPanel.tsx`、`src/index.css`、DEV-029 static/browser verifiers。
+- Phase 2: Future Mobile Non-Board Modes，Document status 為 `RD Contract Ready / Not Authorized`，僅在手機重新開放 list / mindmap / gantt / calendar 時啟動。
+
+RD Implementation 摘要:
+- 2026-07-04 真機回饋修正：手機 pan-first 不應取消任務詳情入口；無位移 tap 需開 `TaskDetailsModal`，短滑 pan 才 suppress click-through。
+- 2026-07-04 L2+ 真機回饋修正：L2+ checklist row 不得成為不可移動的操作 window；手機從子任務列起手垂直 pan 應推動 column `scrollTop`，水平 pan 應推動 board `scrollLeft`。
+- `KanbanCard` / `KanbanChecklist` 保留一般 `selectAndOpenTaskDetails()`；由 `useTouchTapGuard()` 負責短滑後 suppress compatibility click。
+- `BoardView` 掛載 `useMobilePanBroker()`；`KanbanCard` 忽略 checklist row touch；`KanbanChecklist` 移除 touch `stopPropagation()`；隱藏 rename pencil 不可見時不攔截 pointer event。
+- `TaskWorkbenchPanel` 的未歸位與所有任務排序 row 套用 `useTouchTapGuard()`，短滑後 suppress compatibility click，避免 row pan 後誤開詳情。
+- DEV-029 static/browser verifier 補上「tap 開詳情、pan 不開詳情」、L2+ scroll displacement、隱藏控制項 hit-test 與 workbench row tap guard 檢查。
+
+Acceptance:
+- 390x844 手機 viewport 下，在 task card body、checklist row、column body、board empty surface 上短滑，不得開 `TaskDetailsModal`、rename input、context menu 或 drag preview。
+- 任務卡主體不可要求使用者找縫隙才能 pan。
+- 長按任務卡 / 任務列可觸發任務操作選單或既有 long press flow。
+- filter button、add input、date / dependency / assignee / tag control、modal / popover controls 可正常點擊與輸入。
+- Desktop click-to-details 契約不得被一起改壞；DEV-028 桌機語意仍有效。
+- 手機 viewport 不得出現 horizontal overflow、modal 裁切、popover 重疊或 visible runtime error。
+
+QA / QC gate:
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+
+QC evidence（2026-07-04）:
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions` passed，27/27。
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser` passed，wrapper exit code 0。
+- Fixed Playwright session `dev029-l2-scroll-clean` matrix passed，25/25；`QA-029-B07` L2+ vertical pan `scrollTop: 0 -> 38`，`QA-029-B08` L2+ horizontal pan `scrollLeft: 0 -> 120`，`QA-029-D01` mobile quick tap 開啟正確 `TaskDetailsModal`，`QA-029-B06` workbench row pan 不誤開詳情，`QA-029-D03` desktop click-to-details 保留。
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions` passed，35/35。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes` passed，22/22。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` passed。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build:test` passed。
+- `git diff --check` passed with CRLF warnings only。
+- QC report: `ai-doc/qc/QC-DEV-029-mobile-pan-first-touch-interactions.md`。
+
+Stop conditions:
+- 任務卡主體短滑仍開詳情。
+- 只有卡片縫隙可 pan。
+- 長按任務操作選單消失或與 pan 互相誤觸。
+- interactive controls 被 pan guard 擋住。
+- dnd-kit 在短滑時先搶走 touch，造成畫面不能自然移動。
+- 需要恢復手機 tap-to-details、手機拖曳排序優先或 production deploy，但未取得使用者重新授權。
+
+Deferred Scope Audit:
+
+| Deferred / Out-of-scope item | Classification | Tracking target | Resume condition |
+|---|---|---|---|
+| 手機非 board modes pan-first | Same Spec Phase | DEV-029 Phase 2 | 重新開放 mobile list / mindmap / gantt / calendar |
+| Mobile tap-to-details 恢復 | No Tracking | DEV-029 Phase 1 | 已依 2026-07-04 真機回饋恢復；後續若要再次取消或重定義，需重新授權 |
+| 手機任務拖曳排序全面重設計 | New DEV | Backlog after DEV-029 Phase 1 | 使用者要求手機拖曳排序優先於 pan |
+| Production deploy | Blocked Human Re-entry | deployment-release-gate | 使用者明確授權部署 |
+| DB / schema / RLS / migration | No Tracking | None | 本需求為前端手勢，不涉及資料層 |
+
+All-Phase Coverage Matrix:
+
+| Phase / DEV | Authorization | Document status | Scope | Acceptance | Evidence |
+|---|---|---|---|---|---|
+| DEV-029 Phase 1 | Authorized by user 2026-07-04 | Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | Board mobile pan-first gesture arbitration | 任務卡/子任務/欄位/空白短滑可 pan；長按才任務功能；interactive controls 可用 | DEV-029 static/browser、DEV-028 regression、DEV-039 workbench mobile regression、TS、build:test、QC-DEV-029 |
+| DEV-029 Phase 2 | Not Authorized | RD Contract Ready / Not Authorized | Future mobile non-board modes pan-first normalization | 各模式 pan-first 且不破壞模式專屬操作 | mode-specific browser verifiers、DEV-027/028 regression |
+| Production Release Gate | Not Authorized | Blocked Human Re-entry | 正式環境發布與 smoke | production smoke + rollback readiness | deployment-release-gate |
+
+交付文件:
+- `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`
+- `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md`
+- `ai-doc/qc/QC-DEV-029-mobile-pan-first-touch-interactions.md`
+- `ai-doc/documentation_map.md`
+- `ai-doc/backlog.md`
+
+Next condition:
+- 若要宣告完整 physical-phone UX，需補 H01-H04 真機 iOS Safari / Android Chrome 錄影或等效裝置證據。
+- Phase 2、production deploy、再次取消或重定義手機 tap-to-details 仍需另行授權。
+
+### DEV-039 Phase 2 Addendum：全域任務平台跨看板資料來源與刪除有效可見性
+
+狀態: Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / No DB-RLS-Migration / Production Not Deployed
+節點類型: 交付點內 Phase 2 implementation slice
+父交付點: DEV-039
+是否計入產品交付完成: 是，限 `所有任務排序` 跨看板來源與刪除有效可見性 slice；不包含 partial/error summary、remote migration、RLS/RPC、production deploy 或資料修復
+建立日期: 2026-07-04
+
+原始需求邊界:
+- 使用者指出 `所有任務排序` 必須跨越所有看板同時顯示在工作台中，而不是只顯示現在看板。
+- 使用者指出看板將任務刪除後，`所有任務排序` 裡應該同步消失，但目前仍殘留。
+- 使用者要求用 HCS `#系統描繪` 釐清架構後，再由 Dev PM 寫成開發文件。
+- 2026-07-04 follow-up：使用者截圖回報已刪除項目仍在 `所有任務排序`；HCS `#多層次分析` 判定殘留來源包含排序候選未區分 task-like 與 `group/list` 容器，以及缺父節點 orphan 被 effective visibility 放行。
+- 2026-07-04 HCS `#引導模式` 決策：使用者選擇 `1C`，因此列表/群組容器不是永久硬排除，而是預設不顯示、可由工作台顯示設定切換；第 2 / 3 題未指定選項，依建議採 `2A / 3A`，orphan 仍不可見並需 static/browser 驗證。
+- 2026-07-04 UI follow-up：使用者要求排版更密集、去除不必要元素、只保留文字資訊；依 HCS `#效用理論 #批判`，任務台清單改為 dense text rows，移除大卡片、拖曳點圖示、陰影與日期 chip，拖曳能力改由整列承接。
+- 2026-07-04 hierarchy follow-up：使用者指出 `所有任務排序` 將所有 level 放在一起難以辨識階層；依 HCS `#心理成因 #捷思法`，保留日期排序，但用縮排與字重/灰階呈現 parent-child hierarchy。
+- 2026-07-04 sticky title follow-up：使用者指出 `未歸位` 與 `所有任務排序` 是區塊標題，需用不同 UI 呈現且不可因區塊捲動被隱藏；依 UI/UX gate，兩者改為 sticky section headers。
+- 2026-07-04 chevron collapse follow-up：使用者指出折疊 UI 符號需一致，選用精簡 chevron；collapsed rail 寬度縮小 50%，且展開狀態的收合按鈕也需從 panel icon 改成 `ChevronLeft`。
+
+Human Decision Brief:
+- 已確認：`所有任務排序` 的目標來源是所有可見看板任務，不是 active board，也不是 popover selected board。
+- 已確認：`過濾器` popover 裡的看板 selector 只表示正在設定哪個看板的 filter state，不是來源範圍。
+- 已確認：任務在看板刪除後不得留在 `所有任務排序`；若刪除父層/list/card，descendant 不得因扁平投影而殘留。
+- 已確認目標架構：`listWorkbenchTasks()` 跨所有可見看板取任務，`mergeUnplacedTasks()` 合併未歸位，`projectTaskFilterResults by boardId` 依各看板 filter 投影，`sortTasksByDueDate` 排序。
+- AI 補充契約：需新增 `effectiveVisibility()` gate，排除 archived task、archived ancestor、已刪看板、無權看板與 orphan task。
+
+目前授權邊界:
+- Authorized: 使用者最新 `執行開發` 指令授權 DEV-039 Phase 2 前端 / local-test / Firestore / 既有 Supabase service adapter slice；PM 文件、SPEC / QA / QC / dev_task / documentation_map 更新。
+- Not Authorized: Supabase RPC/RLS/migration、production deploy、正式資料修復、正式資料刪除、未歸位任務跨裝置同步、可見 partial/error summary UI。
+
+RD Implementation 摘要:
+- 新增 `src/features/taskWorkbench/source.ts`，提供 `listWorkbenchTasks()` 與 `mergeUnplacedTasks()`。
+- 新增通用 `nodeService.listByProject()`，接到 local-test、Firestore 與既有 `supabaseNodeService.listByProject()`。
+- `TaskWorkbenchPanel` 會以所有 `boardOptions` 載入跨看板 task source，不再只依賴 active board sync side effect。
+- `useWbsStore.setNodes()` 新增 `scopeBoardIds` / `preserveOutOfScope`，避免 active board snapshot 覆蓋 cross-board source；同時允許成功載入的 board 清掉 stale nodes。
+- `projectTaskFilterResults()` 新增 `isTaskEffectivelyVisible()` gate，排除 archived task 與 archived ancestor descendant。
+- `isTaskEffectivelyVisible()` 補強缺父節點 orphan gate；合法 `root` / board root parent 仍視為根，其他 missing parent 不得進入投影。
+- `localTestService.sanitizeNodes()` 不再把 missing-parent / cycle node 自動 re-root 成可見 `group`；改為封存，避免本機測試模式把已刪父層的子節點復活。
+- `所有任務排序` 新增 `列表 / 群組` 顯示偏好，預設關閉時只列 task-like 節點；使用者可在過濾器 popover 內開啟容器顯示。
+- `未歸位` 與 `所有任務排序` 清單列改為密集文字列；不再顯示獨立拖曳把手或大卡片外框，保留點選詳情與整列拖移。
+- `所有任務排序` 每列計算 parent chain depth，透過縮排與較輕字重呈現 L1/L2/L3+ 差異；排序仍維持到期日優先，不改成樹狀分組。
+- `未歸位` 與 `所有任務排序` 標題改為 sticky header band，和任務列視覺分離；未歸位區塊有最大高度與自身捲動，避免大量未歸位任務擠掉下方排序區。
+- 工作台 collapsed rail 從 `w-12` 改為 `w-6`，開啟符號改用 `ChevronRight`，展開狀態的收合按鈕改用 `ChevronLeft`，並保留可點擊開啟與小型任務數 badge。
+- `所有任務排序` 使用 effective visible placed tasks + localStorage 未歸位任務合併後依到期日排序；filter popover selected board 不改來源範圍。
+
+Acceptance:
+- Active board 為 A 時，`所有任務排序` 同時顯示 A/B 等所有可見 board 中符合各自 filter 的任務。
+- 切換 active board 後，cross-board result 不收縮成新 active board。
+- Filter popover 切換 selected board 只影響該 board filter state，不影響來源範圍。
+- 刪除單一任務後，該 task id 立即從看板與 `所有任務排序` 消失，reload 後不得復活。
+- 刪除父層/list/card 後，descendant 不得因本身未 archived 而殘留在 `所有任務排序`。
+- `所有任務排序` 預設不得列出列表/群組容器；使用者開啟 `列表 / 群組` 後才可顯示有效可見容器。
+- 缺父節點 orphan task 不得因扁平投影被當成有效任務，即使開啟容器顯示也不得出現。
+- `未歸位` 與 `所有任務排序` 標題需保持 sticky；在各自區塊捲動後仍可見，且不得被任務列混淆成一般 task row。
+- 工作台 collapsed rail 寬度不得回到 48px，大圖示/Notebook/PanelLeftClose button 不得回流；精簡 chevron pair 與 badge 不得造成水平 overflow。
+- 復原任務或父層後，符合權限與 filter 的任務可重新出現且不重複。
+- 無權 board/task 不得出現在 source、store、UI、console debug 或 verifier expected output。
+
+QA / QC gate:
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source`
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser`
+- `npm.cmd run verify:dev-039-filter-result-parity`
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes`
+- `npm.cmd run verify:dev-039-task-filter-core`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build`
+- 若導入 Supabase RPC/RLS/migration：加跑 `npm.cmd run verify:supabase:static`，並補 owner/admin/member/viewer/anon DB role matrix evidence。
+
+Stop conditions:
+- Query 只能列 active board、assigned-to-me、local cached tasks 或部分看板，卻宣稱全部可見任務。
+- 無法證明 membership/RLS 不外洩無權 board/task。
+- 需要新增或修改 Supabase migration/RLS/RPC、production deploy、正式資料修復或資料刪除，但尚未取得明確授權。
+- active board snapshot / `setNodes(activeBoardNodes)` 仍覆蓋 cross-board workbench source。
+- 刪除父層後 descendants 仍可在 `所有任務排序` 出現，或 undo/redo 造成重複。
+- partial failure 被靜默吞掉，UI 仍宣稱清單完整。
+
+QC evidence（2026-07-04）:
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source`，23/23 passed。
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser` passed，fixture 覆蓋 active board A/B 切換、A/B 任務同時出現在 `所有任務排序`、到期日跨看板排序、archived task / archived ancestor descendant 排除、`group/list` 容器預設不顯示與手動切換顯示、missing-parent orphan 排除、刪除後 reload 不復活、hierarchy indentation 與 sticky section headers。
+- `npm.cmd run verify:dev-039-filter-result-parity`，26/26 passed。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes`，22/22 passed。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build:test` passed。
+
+交付文件:
+- `ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
+- `ai-doc/qa/QA-DEV-039-task-filter-core-and-workbench-profiles.md`
+- `ai-doc/documentation_map.md`
+
+Next condition:
+- 若需要可見 partial/error summary UI，另行授權 Phase 2 follow-up slice。
+- 若需要 remote migration、RLS、RPC、production deploy、正式資料修復或資料刪除，停止並要求明確授權。
+- 正式環境發布仍需使用者明確 deployment authorization 與 `deployment-release-gate`。
+
 ## PM Update - 2026-07-03
 
 ### DEV-040: 正式環境同型 BUG 風險硬化與驗證
@@ -87,7 +373,7 @@ Production release / smoke evidence - 2026-07-03:
 
 ### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構
 
-狀態: Phase 1/1A Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / Phase 2 RD Contract Ready / All-Phase Coverage Complete
+狀態: Phase 1/1A Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 節點類型: 交付點
 優先級: P0 workbench placement drag parity, P1 task focus consistency, P1 workbench UX clarity
 父交付點: 無；與 DEV-027D / DEV-028 / DEV-036 關聯
@@ -122,7 +408,7 @@ HCS / 最新決策:
 - Phase 1 Shared Filter Core + Two-Column Workbench Filter 已授權可進 RD。
 - Phase 1B Workbench Placement Lanes Restore 已實作並通過本機自動化 QC。
 - Phase 1C Filter Result Parity 已實作並通過本機自動化 QC。
-- Phase 2 Workbench Data Source Truth + Cross-Board Query Contract 只到 RD Contract Ready，需 Phase 1 QC passed 並另行授權。
+- Phase 2 Workbench Data Source Truth + Cross-Board Query Contract 已完成 cross-board source / deletion effective visibility slice；`listWorkbenchTasks()`、`mergeUnplacedTasks()`、`effectiveVisibility()` 與 scoped `setNodes()` 已實作並通過本機 QC。Partial/error summary UI、Supabase RPC/RLS/migration、production deploy 與正式資料修復仍未授權。
 - Phase 3 Filter Section Componentization 只到 Deferred / Not Authorized；不得新增儲存功能。
 - Phase 4 Legacy Profile Cleanup Guardrails 只到 Deferred / Not Authorized；不得重啟 profile governance。
 - 正式環境發布 / production deploy 仍需使用者明確 deployment authorization 並另走 `deployment-release-gate`。
@@ -134,7 +420,7 @@ Phase Roadmap:
 - Phase 1A: Workbench Unclassified Inbox Restore，歷史中間狀態；加回未歸類任務新增與顯示，沿用 existing local-first `InboxItem` / quick capture store，不接入過濾器。
 - Phase 1B: Workbench Placement Lanes Restore，補回 `未歸位` / `已歸位看板` 兩個位置區、雙向拖移、未歸位任務與已歸位任務功能等價；已通過本機自動化 QC。
 - Phase 1C: Filter Result Parity，對齊看板階層式篩選與全域任務平台扁平篩選；同看板同條件下 `matchedTaskIds` 一致，父層容器只作 context；已通過本機自動化 QC。
-- Phase 2: Workbench Data Source Truth + Cross-Board Query Contract，讓 `全部可見任務` 成為真實資料來源契約，補跨 workspace/board query、權限檢查、partial/error state 與 DB QC。
+- Phase 2: Workbench Data Source Truth + Cross-Board Query Contract，已完成前端 service adapter 版 cross-board source、scoped store merge、`effectiveVisibility()`、刪除/archived ancestor 不殘留與 local-test browser QC；partial/error summary UI、RPC/RLS/migration 與 DB role matrix 仍為未授權 follow-up。
 - Phase 3: Filter Section Componentization，將重複 UI section 元件化；不新增儲存、profile 或同步。
 - Phase 4: Legacy Profile Cleanup Guardrails，清理 profile 遺留文件/測試/keys 與防回流 gate；不做 profile governance。
 
@@ -266,10 +552,11 @@ Phase 1C QC evidence（2026-07-02）:
 - `npm.cmd exec tsc -- --noEmit` passed。
 - `npm.cmd run build` passed。
 
-Phase 2 RD Contract summary:
-- Scope: 建立 workbench cross-board task source contract、Supabase read query/RPC 或等效 service、membership/RLS 權限檢查、資料來源 summary、partial/error state。
-- Gate: `npm.cmd run verify:dev-039-phase2-workbench-task-source`, `npm.cmd run verify:dev-039-phase2-workbench-task-source-browser`, `npm.cmd run verify:supabase:static`, DB role matrix if RPC/index changed。
-- Stop: query 若只能列 `assigned to me` 不得宣稱全部可見任務；RLS 無法證明不外洩則停止。
+Phase 2 implementation slice summary:
+- Scope done: 建立 workbench cross-board task source adapter、`listWorkbenchTasks()`、`mergeUnplacedTasks()`、`isTaskEffectivelyVisible()`、backend-neutral `nodeService.listByProject()`、scoped `setNodes()` ownership boundary、active board sync preserve-out-of-scope、local-test browser fixture。
+- Acceptance done: active board A/B 切換時 `所有任務排序` 仍顯示 A/B 可見任務；刪除 task 或 archived ancestor 後不在排序清單殘留；popover selected board 只改 filter state，不改 source scope。
+- Gate passed: `npm.cmd run verify:dev-039-task-workbench-cross-board-source`, `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser`, `npm.cmd run verify:dev-039-filter-result-parity`, `npm.cmd run verify:dev-039-task-workbench-placement-lanes`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build:test`。
+- Remaining authorization: visible partial/error summary UI、Supabase RPC/RLS/migration、DB role matrix、production deploy、正式資料修復 / 刪除。
 
 Phase 3 RD Contract summary:
 - Scope: filter UI section componentization，減少工作台與看板 filter UI 重複。
@@ -290,14 +577,14 @@ All-Phase Coverage Matrix:
 | Phase 1B Workbench Placement Lanes Restore | Authorized | Implemented / Local Automated QC Passed | `未歸位` / `已歸位看板` placement lanes、雙向拖移、未歸位任務與已歸位任務功能等價 | profile/storage/copy/sync、production deploy、DB migration unless separately authorized | Phase 1/1A local QC passed + 使用者最新授權 | 任務可雙向移動且資料不重複/不遺失；未歸位與已歸位卡片同功能 | placement lane static/browser verifier、DEV-028 regression、TypeScript、build、Phase 1B QC |
 | Phase 1C Filter Result Parity | Authorized | Implemented / Local Automated QC Passed | filter result projection、matchedTaskIds 一致、context-only ancestors、負責人 option source 對齊 | profile/storage/sync、schema/RLS/migration、Phase 2 全部可見任務資料來源、production deploy | 使用者授權執行 Phase 1C RD | 同看板同條件下看板與工作台 `matchedTaskIds` 一致 | parity static/browser verifier、Phase 1/1B regression、TypeScript、build |
 | Production Release Gate | Blocked Pending Human Authorization | Must Follow Phase 1C QC | 正式環境發布、production smoke、deployment evidence | 未授權部署或跳過 deployment-release-gate | Phase 1C QC passed + 使用者明確 deployment authorization | deployment-release-gate passed | deployment-release-gate evidence、production smoke |
-| Phase 2 Workbench Data Source Truth + Cross-Board Query Contract | Not Authorized | RD Contract Ready / Not Authorized | 真正全部可見任務 query/service/RPC、RLS/membership、partial/error state、source summary | Profile sync、shared defaults、InboxItem/CaptureItem、production migration | Phase 1 QC passed + 明確授權 Phase 2 | 工作台資料來源與 UI summary 一致且不外洩 | Phase 2 verifier、browser verifier、Supabase static、DB role matrix |
+| Phase 2 Workbench Data Source Truth + Cross-Board Query Contract | Frontend/local slice Authorized | Cross-Board Source Slice Implemented / Local Automated QC Passed | `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`effectiveVisibility()`、backend-neutral task list adapter、scoped store merge、刪除後不殘留 | Profile sync、shared defaults、未歸位跨裝置同步、visible partial/error summary UI、production migration/deploy/data repair、RPC/RLS | 使用者授權 Phase 2 RD；不含 remote/DB/deploy | active board A/B 仍顯示所有可見 board 任務；刪除/archived ancestor 後不殘留；selected board 不改 source scope | cross-board static/browser verifier、parity/placement regression、TypeScript、build:test |
 | Phase 3 Filter Section Componentization | Not Authorized | Deferred / Not Authorized | 重複 filter UI section 元件化 | 儲存功能、profile governance | Phase 1 UI 穩定且 RD 判定有維護成本 | 行為不變、重複降低 | Regression verifier、TypeScript、build |
 | Phase 4 Legacy Profile Cleanup Guardrails | Not Authorized | Deferred / Not Authorized | profile 遺留文件/測試/keys 清理、防回流 gate | profile sync/governance | Phase 1/2 穩定後 | 舊 profile 概念不再回流 DEV-039 | static guard、docs audit |
 
 Deferred Scope Audit:
 - Same Spec Phase: Phase 1B 承接未歸位 / 已歸位看板 placement lanes、雙向拖移與任務卡功能等價；已實作並通過本機自動化 QC。
 - Same Spec Phase: Phase 1C 承接看板階層式篩選與全域任務平台扁平篩選結果一致性；已實作並通過本機自動化 QC。
-- Same Spec Phase: Phase 2 承接全部可見任務資料來源、cross-board query、RLS role matrix。
+- Same Spec Phase: Phase 2 已完成前端 / local-test / existing-service adapter 的全部可見任務來源 slice、cross-board query、`effectiveVisibility()` 與刪除後不殘留；RLS role matrix、visible partial/error summary UI、remote migration/RPC 仍需另行授權。
 - Same Spec Phase: Phase 3 承接 filter UI section componentization；不新增儲存功能。
 - Same Spec Phase: Phase 4 承接 profile 遺留清理與防回流 gate。
 - New DEV: 行事曆訂閱 source/filter contract 續接 DEV-037；DEV-004 InboxItem/CaptureItem/通知平台需另行啟動。
@@ -309,10 +596,11 @@ Next condition:
 - Phase 1 已完成本機自動化 QC。
 - Phase 1B 已完成本機自動化 QC；不得宣稱已部署 production。
 - Phase 1C 已完成本機自動化 QC；不得宣稱已部署 production。
+- Phase 2 cross-board source slice 已完成本機自動化 QC；不得宣稱已部署 production 或 DB/RLS/RPC 已完成。
 - Single-Command Mode 若要 production release，仍必須取得使用者明確部署授權並走 `deployment-release-gate`。
-- Single-Command Mode 下一階段不得自動進 Phase 2；Phase 2 仍需使用者或 PM 明確授權。
+- Phase 2 visible partial/error summary、DB/RLS/RPC 與 production deploy 仍需另行授權。
 - Production release 已具備 Phase 1C 前置 QC；仍必須取得使用者明確 deployment authorization。
-- Phase 2 需 Phase 1 QC passed 且使用者或 PM 明確授權。
+- Phase 2 follow-up 需 Phase 2 slice QC passed 且使用者或 PM 明確授權。
 - Phase 3 僅限 filter UI section componentization，不得新增儲存、profile 或同步。
 - Phase 4 僅限 legacy cleanup / guardrails，不得重啟 profile governance。
 

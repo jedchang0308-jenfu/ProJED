@@ -81,6 +81,44 @@ assert(
 );
 
 assert(
+  'Task Workbench task lists use dense text-only rows without separate drag-handle chrome',
+  !source.taskWorkbench.includes('TaskDragHandle') &&
+    !source.taskWorkbench.includes('data-task-drag-handle') &&
+    source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-0.5" data-task-workbench-all-tasks-list="true"') &&
+    source.taskWorkbench.includes('className="mt-2 space-y-0.5" data-task-workbench-unclassified-list="true"') &&
+    source.taskWorkbench.includes('getTaskHierarchyDepth') &&
+    source.taskWorkbench.includes('hierarchyDepth={getTaskHierarchyDepth(task, nodes)}') &&
+    source.taskWorkbench.includes('data-task-workbench-hierarchy-depth') &&
+    source.taskWorkbench.includes('style={{ paddingLeft:') &&
+    source.browserVerifier.includes('dense text rows should not render a separate drag handle'),
+);
+
+assert(
+  'Task Workbench lane titles render as sticky section headers above scrollable task rows',
+  source.taskWorkbench.includes('max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain') &&
+    source.taskWorkbench.includes('data-task-workbench-section-header="unplaced"') &&
+    source.taskWorkbench.includes('data-task-workbench-section-header="all-tasks"') &&
+    source.taskWorkbench.includes('sticky top-0 z-20') &&
+    source.taskWorkbench.includes('data-task-workbench-all-tasks-count="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-unclassified-count="true"'),
+);
+
+assert(
+  'Task Workbench collapsed rail uses the compact chevron affordance at half width',
+  source.taskWorkbench.includes('ChevronLeft') &&
+    source.taskWorkbench.includes('ChevronRight') &&
+    !source.taskWorkbench.includes('PanelLeftClose') &&
+    !source.taskWorkbench.includes('NotebookText') &&
+    source.taskWorkbench.includes('data-task-workbench-collapse-toggle="true"') &&
+    source.taskWorkbench.includes('<ChevronLeft size={16} />') &&
+    source.taskWorkbench.includes('className="flex w-6 shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3"') &&
+    source.taskWorkbench.includes('data-task-workbench-collapsed-toggle="true"') &&
+    source.taskWorkbench.includes('<ChevronRight size={16} />') &&
+    source.taskWorkbench.includes('data-task-workbench-collapsed-count="true"'),
+);
+
+assert(
   'Task Workbench migrates legacy unclassified inbox items into task-equivalent unplaced cards',
   source.taskWorkbench.includes('readTaskWorkbenchUnplacedTasks') &&
     source.taskWorkbench.includes('getUnclassifiedItems(inboxItems)') &&
