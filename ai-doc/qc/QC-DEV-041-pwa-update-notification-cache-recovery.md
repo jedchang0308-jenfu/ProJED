@@ -1,6 +1,6 @@
 # QC-DEV-041: PWA 更新通知與快取恢復
 
-狀態: Production Release Deployed / Local + Production QC Passed
+狀態: Production Release Deployed / Mobile Update Visibility Hotfix Passed
 關聯 DEV: DEV-041
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 關聯 QA: `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md`
@@ -134,3 +134,50 @@ Not fully simulatable on production without an older controlled client:
 - Firebase CLI update-check warning appeared earlier due local config-store access; deploy itself completed successfully.
 - Browserslist database warning is non-blocking and should be handled as routine dependency maintenance.
 
+## Addendum - 2026-07-05 Mobile Update Visibility Hotfix
+
+User feedback:
+- 手機正式環境沒有看到更新提示。
+
+Root cause:
+- 第一版 DEV-041 只保證 `onNeedRefresh` / waiting service worker 時顯示「有新版本可用」。
+- 若手機重新開啟時已直接載入新版 bundle，系統沒有「已更新到新版」確認提示。
+- 若手機仍停在更舊、尚未包含 DEV-041 UI 的程式碼，該舊程式本身不可能顯示新提示；至少需重新載入一次取得 hotfix 後，後續版本才可被此機制接住。
+
+Hotfix implementation:
+- `pwaUpdateService` 新增 `APP_VERSION_KEY = 'projed.pwaUpdate.currentBundle'`，記錄目前 `/assets/index-*.js` bundle hash。
+- App 啟動時若偵測到 bundle hash 變更，顯示 `updated` state。
+- App 啟動、定時與 visibility 回到前景時，使用 `cache: 'no-store'` 讀 `/index.html?projed_update_check=...`，比對正式站最新 bundle；若目前頁面仍在舊 bundle，顯示「有新版本可用」。
+- `AppUpdatePrompt` 新增「已更新到新版 / 目前已是最新版本」提示與 `data-pwa-updated-confirm`。
+- DEV-041 browser verifier 補測 mobile updated confirmation。
+
+Hotfix local evidence:
+- Commit: `f3e926f`
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery`: Pass，22/22。
+- `npm.cmd exec tsc -- --noEmit`: Pass。
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`: Pass。
+- Direct Playwright evidence verified:
+  - mobile update prompt visible and tappable
+  - dismiss keeps queued update state
+  - update button invokes queued callback
+  - recovery prompt exposes cache action
+  - updated prompt confirms newest loaded version
+- `npm.cmd run verify:dev-034-pwa-install-guidance`: Pass，22/22。
+- `npm.cmd run verify:dev-034-pwa-install-guidance-browser`: Pass。
+- `npm.cmd run build:test`: Pass。
+
+Hotfix build / deploy evidence:
+- Production build: Pass。
+- Main JS: `dist/assets/index-BXtRfIba.js`
+- Main CSS: `dist/assets/index-Bz5Y4Esx.css`
+- PWA files: `dist/sw.js`, `dist/workbox-6c1be909.js`, `dist/manifest.webmanifest`
+- Production-like preview smoke: Pass at `http://127.0.0.1:4174/`; loaded `/assets/index-BXtRfIba.js`, service worker ready, no critical console/pageerror/failed request。
+- Firebase deploy: Pass，`npx.cmd firebase deploy --only hosting --project projed-cc78d --non-interactive`。
+- Post-deploy HTTP smoke:
+  - `https://projed-cc78d.web.app/`: HTTP 200, contains `/assets/index-BXtRfIba.js`, does not contain `/assets/index-C2sty1Hz.js`
+  - `https://projed-cc78d.firebaseapp.com/`: HTTP 200, contains `/assets/index-BXtRfIba.js`, does not contain `/assets/index-C2sty1Hz.js`
+- Post-deploy browser smoke: Pass；app shell non-empty, loaded `/assets/index-BXtRfIba.js`, `sw.js` ready, no critical console/pageerror/failed request。
+
+User-facing note:
+- 這次 hotfix 已可讓已載到新版的手機看到「已更新到新版」。
+- 若手機仍完全停在 hotfix 前的舊 bundle，使用者仍需先重新載入一次；取得 `index-BXtRfIba.js` 後，後續版本更新會由 bundle hash check 與 service worker update prompt 雙路徑提示。

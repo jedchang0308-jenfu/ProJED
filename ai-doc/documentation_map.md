@@ -10,7 +10,7 @@
 | `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md` | Local + Production QC Passed / Production Release Deployed | DEV-041 / DEV-034 | 規劃 static/browser QA：`onNeedRefresh` 顯示更新提示、更新按鈕 apply flow、dismiss/later、offline ready、chunk-load recovery、cache clear scope、ErrorBoundary integration、mobile/desktop UI、accessibility、DEV-034 regression、TypeScript/build 與 production deploy evidence 禁止過度宣稱。 |
 | `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md` | Production Release Deployed / Local + Production QC Passed | DEV-041 / DEV-034 / DEV-039 / DEV-029 | 記錄 release boundary、local QC、production build artifact、pre-deploy production-like smoke、Firebase deploy、post-deploy HTTP/browser smoke、authenticated production UI smoke、residual risks 與 rollback target。 |
 
-PM 治理註記：DEV-041 已完成 Phase 1 implementation、local QC 與 Firebase Hosting production release；正式站 `https://projed-cc78d.web.app/` 已載入 `assets/index-C2sty1Hz.js` 並通過 post-deploy browser smoke。強制更新、release notes 後端、版本 API、analytics、push/email notification、DB schema / migration / RLS / RPC 不屬於目前授權範圍。
+PM 治理註記：DEV-041 已完成 Phase 1 implementation、local QC 與 Firebase Hosting production release；正式站 `https://projed-cc78d.web.app/` 已於 hotfix 後載入 `assets/index-BXtRfIba.js` 並通過 post-deploy browser smoke。手機未看到更新提示的缺口已補：app shell bundle hash check、`updated` state 與「已更新到新版」提示。強制更新、release notes 後端、版本 API、analytics、push/email notification、DB schema / migration / RLS / RPC 不屬於目前授權範圍。
 
 ## Documentation Map Update - 2026-07-04
 

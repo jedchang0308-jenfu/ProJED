@@ -77,6 +77,7 @@ QC evidence（2026-07-05）:
 - Post-deploy browser smoke passed：app shell non-empty, `sw.js` ready, no critical console/pageerror/failed request。
 - `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed；temporary Supabase user/tenant cleaned up, project import resolved, task workbench unplaced task persisted after board switch。
 - QC report: `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。
+- 2026-07-05 手機更新提示 hotfix：使用者回報手機正式環境沒看到更新；補上 app shell bundle hash 記錄、no-store `index.html` 比對、`updated` state 與「已更新到新版」提示。Hotfix commit `f3e926f`，production bundle `assets/index-BXtRfIba.js`，post-deploy HTTP/browser smoke passed。
 
 Deferred Scope Audit:
 - production deploy / Firebase Hosting release: Blocked Human Re-entry，需使用者明確授權並走 deployment-release-gate。

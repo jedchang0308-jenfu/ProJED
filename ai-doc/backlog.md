@@ -15,7 +15,7 @@
 - cache recovery 不得清除未授權業務資料。
 - 390x844 mobile 與 1440x900 desktop viewport 下提示可見、可點、不溢出。
 - DEV-034 PWA install guidance 不得被破壞。
-- RD implementation 與 production deploy 已完成，local QC、production artifact smoke、Firebase deploy、post-deploy smoke 與 authenticated production UI smoke 均已通過。
+- RD implementation 與 production deploy 已完成，local QC、production artifact smoke、Firebase deploy、post-deploy smoke 與 authenticated production UI smoke 均已通過；手機更新提示 hotfix 已補上 bundle hash check 與「已更新到新版」提示，正式 bundle `assets/index-BXtRfIba.js`。
 - 強制更新、release notes backend、analytics、push/email notification、DB schema/migration/RLS/RPC 均未授權。
 
 ## Backlog Update - 2026-07-04
