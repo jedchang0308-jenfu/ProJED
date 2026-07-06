@@ -19,22 +19,15 @@ interface MindMapNodeProps {
   direction: MindMapDirection;
   level: number;
   selectedNodeId: string | null;
-  editingNodeId: string | null;
-  editingTitle: string;
   expandedNodeIds: Set<string>;
   dropTarget: MindMapDropTarget | null;
   isRelationshipModeActive?: boolean;
   showStartDate: boolean;
-  canEditTask: boolean;
   canMoveTask: boolean;
   onSelect: (nodeId: string) => void;
   onOpenDetails: (nodeId: string) => void;
   onOpenContextMenu: (nodeId: string, title: string, event: React.MouseEvent) => void;
   onToggleExpanded: (nodeId: string) => void;
-  onEditStart: (nodeId: string, title?: string) => void;
-  onEditingTitleChange: (title: string) => void;
-  onEditCommit: () => void;
-  onEditCancel: () => void;
   onDragStart: (nodeId: string, event: React.DragEvent<HTMLDivElement>) => void;
   onDragMove: (event: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
@@ -56,22 +49,15 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   direction,
   level,
   selectedNodeId,
-  editingNodeId,
-  editingTitle,
   expandedNodeIds,
   dropTarget,
   isRelationshipModeActive = false,
   showStartDate,
-  canEditTask,
   canMoveTask,
   onSelect,
   onOpenDetails,
   onOpenContextMenu,
   onToggleExpanded,
-  onEditStart,
-  onEditingTitleChange,
-  onEditCommit,
-  onEditCancel,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -79,11 +65,9 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   onDropOnNode,
   renderChild,
 }) => {
-  const inputRef = React.useRef<HTMLInputElement>(null);
   const isCoarsePointer = useCoarsePointer();
   const touchTapGuard = useTouchTapGuard();
   const isSelected = selectedNodeId === node.id;
-  const isEditing = editingNodeId === node.id;
   const isExpanded = expandedNodeIds.has(node.id);
   const hasChildren = childrenNodes.length > 0;
   const isLeft = direction === 'left';
@@ -94,14 +78,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
     if (!date.isValid()) return value;
     return date.year() === dayjs().year() ? date.format('MM/DD') : date.format('YY/MM/DD');
   };
-
-  React.useEffect(() => {
-    if (!isEditing) return;
-    window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-  }, [isEditing]);
 
   return (
     <div
@@ -121,7 +97,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           data-mindmap-node-direction={direction}
           data-mindmap-parent-id={node.parentId || ''}
           data-mindmap-node-order={node.order}
-          draggable={canMoveTask && !isEditing && !isCoarsePointer}
+          draggable={canMoveTask && !isCoarsePointer}
           {...touchTapGuard.handlers}
           onClick={(event) => {
             event.stopPropagation();
@@ -130,10 +106,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
               return;
             }
             onOpenDetails(node.id);
-          }}
-          onDoubleClick={(event) => {
-            event.stopPropagation();
-            if (canEditTask) onEditStart(node.id);
           }}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -144,7 +116,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             if (!isRelationshipModeActive) onSelect(node.id);
           }}
           onDragStart={(event) => {
-            if (!canMoveTask || isEditing || isCoarsePointer) {
+            if (!canMoveTask || isCoarsePointer) {
               event.preventDefault();
               return;
             }
@@ -157,7 +129,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
           data-touch-tap-guard="true"
-          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isEditing && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
+          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
         >
           {hasChildren ? (
             <button
@@ -176,48 +148,31 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             <span className="h-[var(--mindmap-toggle-size)] w-[var(--mindmap-toggle-size)] shrink-0" aria-hidden="true" />
           )}
 
-          {isEditing ? (
-            <input
-              ref={inputRef}
-              value={editingTitle}
-              onChange={(event) => onEditingTitleChange(event.target.value)}
-              onBlur={onEditCommit}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.nativeEvent.isComposing) return;
-                if (event.key === 'Enter') onEditCommit();
-                if (event.key === 'Escape') onEditCancel();
-              }}
-              className="min-w-[var(--mindmap-input-min-width)] flex-1 rounded border border-blue-200 bg-white px-1.5 py-0.5 text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-800 outline-none ring-2 ring-blue-100"
-              data-mindmap-title-input
-            />
-          ) : (
-            <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
-              <span className="max-w-full truncate" title={node.title || '未命名任務'}>
-                {node.title || '未命名任務'}
-              </span>
-              {hasVisibleDates ? (
-                <span
-                  className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-[var(--mindmap-date-pad-x)] py-[var(--mindmap-date-pad-y)] text-[length:var(--mindmap-date-font-size)] font-semibold leading-none text-amber-700"
-                  title={`${showStartDate && node.startDate ? node.startDate : ''}${showStartDate && node.startDate && node.endDate ? ' ~ ' : ''}${node.endDate || ''}`}
-                  data-mindmap-node-dates
-                  data-start-date={showStartDate ? node.startDate || '' : ''}
-                  data-end-date={node.endDate || ''}
-                >
-                  <Calendar size="var(--mindmap-date-icon-size)" className="shrink-0" />
-                  <span className="truncate">
-                    {showStartDate && node.startDate ? (
-                      <>
-                        <span>{formatDate(node.startDate)}</span>
-                        {node.endDate ? <span className="px-0.5 text-amber-500">~</span> : null}
-                      </>
-                    ) : null}
-                    {node.endDate ? <span>{formatDate(node.endDate)}</span> : null}
-                  </span>
-                </span>
-              ) : null}
+          <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
+            <span className="max-w-full truncate" title={node.title || '未命名任務'}>
+              {node.title || '未命名任務'}
             </span>
-          )}
+            {hasVisibleDates ? (
+              <span
+                className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-[var(--mindmap-date-pad-x)] py-[var(--mindmap-date-pad-y)] text-[length:var(--mindmap-date-font-size)] font-semibold leading-none text-amber-700"
+                title={`${showStartDate && node.startDate ? node.startDate : ''}${showStartDate && node.startDate && node.endDate ? ' ~ ' : ''}${node.endDate || ''}`}
+                data-mindmap-node-dates
+                data-start-date={showStartDate ? node.startDate || '' : ''}
+                data-end-date={node.endDate || ''}
+              >
+                <Calendar size="var(--mindmap-date-icon-size)" className="shrink-0" />
+                <span className="truncate">
+                  {showStartDate && node.startDate ? (
+                    <>
+                      <span>{formatDate(node.startDate)}</span>
+                      {node.endDate ? <span className="px-0.5 text-amber-500">~</span> : null}
+                    </>
+                  ) : null}
+                  {node.endDate ? <span>{formatDate(node.endDate)}</span> : null}
+                </span>
+              </span>
+            ) : null}
+          </span>
         </div>
       </div>
 

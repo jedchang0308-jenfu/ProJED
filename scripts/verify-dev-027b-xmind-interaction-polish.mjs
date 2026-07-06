@@ -56,8 +56,9 @@ const backlog = read(files.backlog);
 const documentationMap = read(files.documentationMap);
 
 assert(
-  'New task insertion selects without entering rename input',
+  'New task insertion selects and routes naming through task details',
   mindMapView.includes('selectNode(node.id)') &&
+    mindMapView.includes('prepareNewTaskNaming(node.id)') &&
     !mindMapView.includes('setEditingNodeId(node.id)') &&
     !mindMapView.includes('setEditingTitle(node.title)') &&
     !mindMapView.includes('continuousInsertNodeIds') &&
@@ -67,16 +68,17 @@ assert(
 );
 
 assert(
-  'Keyboard selection and direct typing rename match Xmind-style focus behavior',
+  'Keyboard selection keeps task titles outside node rename mode',
   mindMapKeyboard.includes("event.key === 'ArrowUp'") &&
     mindMapKeyboard.includes("event.key === 'ArrowDown'") &&
     mindMapKeyboard.includes("event.key === 'ArrowLeft'") &&
     mindMapKeyboard.includes("event.key === 'ArrowRight'") &&
-    mindMapKeyboard.includes("return { type: 'rename-selected', initialTitle: event.key }") &&
     mindMapView.includes('selected?.focus({ preventScroll: true })') &&
-    mindMapKeyboard.includes('event.key.length === 1') &&
     mindMapView.includes('getMindMapKeyboardAction(event, {') &&
-    mindMapView.includes('startEdit(selectedNodeId, action.initialTitle)'),
+    !mindMapKeyboard.includes("type: 'rename-selected'") &&
+    !mindMapKeyboard.includes('isMindMapPlainTextEditKey') &&
+    !mindMapView.includes('startEdit(selectedNodeId') &&
+    !mindMapView.includes("action.type === 'rename-selected'"),
 );
 
 assert(
@@ -130,10 +132,10 @@ assert(
     mindMapViewport.includes('export const getFitZoomForBounds') &&
     mindMapView.includes('zoomPreviewLevelRef') &&
     mindMapCanvasShell.includes('data-mindmap-zoom-interaction="preview-then-vector-commit"') &&
-    mindMapView.includes('data-mindmap-zoom-preview-active') &&
-    mindMapView.includes('data-mindmap-zoom-preview-transform') &&
+    mindMapZoom.includes('data-mindmap-zoom-preview-active') &&
+    mindMapZoom.includes('data-mindmap-zoom-preview-transform') &&
     mindMapView.includes('zoomLevelText={formatZoomLevel(zoomLevel)}') &&
-    mindMapView.includes("setAttribute('data-mindmap-zoom-preview-level', formatZoomLevel(previewZoom))") &&
+    mindMapZoom.includes("setAttribute('data-mindmap-zoom-preview-level', formatZoomLevel(previewZoom))") &&
     mindMapLayoutStyle.includes("'--mindmap-zoom': zoomLevel") &&
     mindMapLayoutStyle.includes('zoom: zoomLevel') &&
     mindMapLayoutStyle.includes("'--mindmap-node-font-size'") &&
@@ -197,27 +199,28 @@ assert(
 );
 
 assert(
-  'Browser verifier covers selection-first insertion, arrows, direct rename, zoom, tidy connector, and insertion preview',
-  browserVerifier.includes('newly created branch should be selected without opening rename input') &&
-    browserVerifier.includes('Tab-created child should be selected without opening rename input') &&
-    browserVerifier.includes('Enter-created sibling should be selected without opening rename input') &&
+  'Browser verifier covers selection-first detail naming, arrows, blocked outer rename, zoom, tidy connector, and insertion preview',
+  browserVerifier.includes('should focus the task details title input') &&
+    browserVerifier.includes('newly created branch') &&
+    browserVerifier.includes('Tab-created child') &&
+    browserVerifier.includes('Enter-created sibling') &&
     browserVerifier.includes('ArrowUp should move selection to the previous visible sibling') &&
-    browserVerifier.includes('typing on selected branch should rename the selected task') &&
+    browserVerifier.includes('typing on selected branch should not open an outer rename input') &&
     browserVerifier.includes('Delete should select the previous same-level task after removing a branch') &&
     browserVerifier.includes('Delete should select the parent task when no previous same-level task exists') &&
     browserVerifier.includes('mind map should be visible and centered immediately after entering the mode') &&
     browserVerifier.includes('zoom level should change after zoom-in') &&
     browserVerifier.includes('zoom button should only scale the viewport and must not recompute connector or relationship paths') &&
-    browserVerifier.includes('zoom/pan validation fixture should include tasks, date badges, tree connectors, selected relationship line, relationship label, endpoints, and control points') &&
-    browserVerifier.includes('button zoom evidence should still include date badges plus selected relationship label, endpoints, and control points') &&
+    browserVerifier.includes('zoom/pan validation fixture should include tasks, date badges, tree connectors, relationship path, label, and hitboxes') &&
+    browserVerifier.includes('button zoom evidence should still include date badges plus relationship path, label, and hitboxes') &&
     browserVerifier.includes('zoom button changes should keep the mind map visible instead of jumping to blank space') &&
     browserVerifier.includes('fit-to-content should zoom and scroll to visible mind map content, not a blank padded canvas') &&
     browserVerifier.includes('wheel zoom should use transient preview transform during continuous zoom') &&
     browserVerifier.includes('wheel zoom should commit back to zoom layer after idle') &&
     browserVerifier.includes('wheel zoom committed state should remain one zoom layer without path recompute') &&
-    browserVerifier.includes('wheel zoom evidence should still include date badges plus selected relationship label, endpoints, and control points') &&
-    browserVerifier.includes('middle-mouse pan evidence should still include date badges plus selected relationship label, endpoints, and control points') &&
-    browserVerifier.includes('middle-mouse pan should only scroll the viewport and must not rewrite or recompute the selected relationship path') &&
+    browserVerifier.includes('wheel zoom evidence should still include date badges plus relationship path, label, and hitboxes') &&
+    browserVerifier.includes('middle-mouse pan evidence should still include date badges plus relationship path, label, and hitboxes') &&
+    browserVerifier.includes('middle-mouse pan should only scroll the viewport and must not rewrite or recompute the relationship path') &&
     browserVerifier.includes('middle mouse offset should continuously pan faster as the cursor moves farther from the press point') &&
     browserVerifier.includes('child connector paths should share a tidy trunk') &&
     browserVerifier.includes('drag insertion preview should expose sibling metadata or target parent metadata') &&

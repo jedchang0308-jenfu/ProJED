@@ -76,7 +76,7 @@
 | QA-029-E02 | 工作台 filter button | 工作台展開 | tap `過濾器` | filter popover 開啟 | popover screenshot |
 | QA-029-E03 | 未歸位新增 input | 工作台展開 | tap input 並輸入文字 | input 可聚焦與輸入 | input value |
 | QA-029-E04 | 看板欄位新增任務 input | 欄位表單可見 | tap/fill `輸入任務名稱` | input 可聚焦與輸入，不開 details | input value |
-| QA-029-E05 | 隱藏 rename pencil hit-test | 任務卡可見、鉛筆未 hover / focus-visible | 讀取 computed style 與 elementFromPoint | 隱藏控制項 `opacity=0`、`pointer-events=none`，不攔截手機 pan 起手點 | computed style / hit-test |
+| QA-029-E05 | 外層 rename control 移除後 hit-test | 任務卡可見 | 確認外層 rename control/input/menu 不存在，並 tap 卡片 title | 不存在外層 rename 控制項，且手機 tap 仍開啟正確任務詳情 | DOM count / modal task id |
 | QA-029-E06 | checklist 展開/收合 | card 有 child task | tap 展開/收合控制 | 只展開/收合，不開 details | DOM count / screenshot |
 | QA-029-E07 | date / dependency / assignee / tag controls | 對應控制可見 | tap 控制 | 控制自身行為正常，不開 details | control-specific DOM |
 

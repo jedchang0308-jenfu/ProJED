@@ -30,11 +30,12 @@ PM 治理註記：DEV-042 修正的是「手機 collapsed state 不應被桌機 
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | 2026-07-05 Detail-Only Title Edit Addendum RD Contract Ready / Not Authorized | DEV-028 / DEV-029 | 補入任務名稱唯一編輯入口：必須先進入 `TaskDetailsModal` / 任務詳情頁，再點詳情頁任務名稱區編輯；看板卡片、L3+ 待辦列、工作台排序列、清單列、甘特列與心智圖節點不得再提供 pencil、F2、`t`、右鍵重新命名、雙擊標題或直接打字 rename。 |
-| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | Detail-Only Title Edit QA Addendum Ready / Not Executed | DEV-028 / DEV-029 | 更新 Zero-Tolerance、MAN-028、FMEA 與 QC handoff evidence：驗證外層 task surface 無 rename、詳情頁 title edit 有明確可編輯視覺、context menu 無重新命名、新增任務命名導向詳情 title edit，並保留 DEV-029 mobile pan-first regression。 |
-| `ai-doc/dev_task.md` | DEV-028 Addendum Documentation Only / RD Not Authorized | DEV-028 | 記錄授權邊界：本輪只文件化，不做產品程式碼、verifier、QA/QC 實作或正式部署。 |
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Detail-Only Title Edit Addendum Implemented / Local Automated QA Passed / Manual Click QC Pending | DEV-028 / DEV-029 | 任務名稱唯一編輯入口已落到 `TaskDetailsModal` / 任務詳情頁 title input；看板卡片、L3+ 待辦列、工作台排序列、清單列、甘特列與心智圖節點不再提供 pencil、F2、`t`、右鍵重新命名、雙擊標題或直接打字 rename。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | Detail-Only Title Edit QA Updated / Local Automated QA Passed / Manual Click QC Pending | DEV-028 / DEV-029 | 更新 Zero-Tolerance、MAN-028、FMEA 與 QC handoff evidence；自動化已覆蓋外層 task surface 無 rename、詳情頁 title edit、context menu 無重新命名、新增任務導向詳情 title edit、DEV-029 mobile pan-first regression。 |
+| `ai-doc/qc/QC-DEV-028-detail-only-title-edit-addendum.md` | Local Automated QC Passed / Manual Click QC Pending | DEV-028 / DEV-029 | 記錄本輪 RD/QC 事實驗證、通過命令、lint 既有 unrelated blocker、production 未部署與 MAN-028 人工親自點擊未執行邊界。 |
+| `ai-doc/dev_task.md` | DEV-028 Addendum Implemented / Local Automated QA Passed / Production Not Deployed | DEV-028 | 記錄授權邊界：已完成產品碼與 verifier 實作；production deploy、schema/migration、人工親自點擊 QC 另行 gate。 |
 
-PM 治理註記：本 addendum 取代 DEV-028 舊版「明確改名入口 / 桌機直接打字 / 手機命名鍵盤 / 外層 rename」契約。後續 RD 若開發，必須把任務名稱編輯集中到任務詳情頁 title edit；外層任務 surface 只負責開詳情、拖曳、選取與其他非 rename 控制。資料模型、DB schema、production deploy 不在本輪授權範圍。
+PM 治理註記：本 addendum 取代 DEV-028 舊版「明確改名入口 / 桌機直接打字 / 手機命名鍵盤 / 外層 rename」契約。本輪已依使用者授權完成 RD：任務名稱編輯集中到任務詳情頁 title edit；外層任務 surface 只負責開詳情、拖曳、選取與其他非 rename 控制。資料模型、DB schema、production deploy 不在本輪授權範圍。
 
 ### DEV-029 Addendum: 手機精簡任務操作列與長按拖放
 
@@ -161,9 +162,9 @@ PM 治理註記：使用者已要求 `pm-dev 執行開發`，SPEC-034 提升為 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
 | `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Implemented / 2026-07-05 Addendum Supersedes Rename Contract | DEV-028 | 定義清單、心智圖、看板、甘特四模式共用任務操作契約：單擊 = 選取 + 開詳情、保留 `TaskDetailsModal`、右鍵/長按任務選單、保留看板 Level 3+ 正面顯示與卡片資訊密度。2026-07-05 addendum 已取代舊版外層 rename / 直接打字命名契約，任務名稱只能在詳情頁 title edit。 |
-| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA Plan Updated / 2026-07-05 Detail-Only Title Edit Addendum Ready / Manual Click QC Pending | DEV-028 | 定義 DEV-028 Zero-Tolerance failures、四模式手動驗證矩陣、自動化 gate、MAN-028 人工親自點擊測試矩陣、ESC 關閉最上層暫時性 UI 與 QC handoff evidence；2026-07-05 已補外層 rename 移除與詳情頁 title edit 驗證，尚待人工親自點擊 QC。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA Plan Updated / Local Automated QA Passed / Manual Click QC Pending | DEV-028 | 定義 DEV-028 Zero-Tolerance failures、四模式手動驗證矩陣、自動化 gate、MAN-028 人工親自點擊測試矩陣、ESC 關閉最上層暫時性 UI 與 QC handoff evidence；2026-07-06 已完成外層 rename 移除與詳情頁 title edit 自動化驗證，尚待人工親自點擊 QC。 |
 
-DEV-028 已依 HCS 引導決策 1A / 2C / 3A / 4A / 5A / 6A 實作：快捷鍵採模式優先、右鍵/長按統一任務選單、單擊既有任務先選取再開詳情、保留 `TaskDetailsModal`、選取視覺採最小 highlight / ring。2026-07-05 使用者追加決策已取代 2C 與 explicit rename 相關契約：新增任務命名與既有任務改名都不得使用外層 rename，需進入詳情頁 title edit。使用者後續要求補人工親自點擊操作驗證，QA-DEV-028 已新增 MAN-028-001 至 MAN-028-028，下一步交 QC 執行；新 addendum 仍未授權 RD 實作。
+DEV-028 已依 HCS 引導決策 1A / 2C / 3A / 4A / 5A / 6A 實作：快捷鍵採模式優先、右鍵/長按統一任務選單、單擊既有任務先選取再開詳情、保留 `TaskDetailsModal`、選取視覺採最小 highlight / ring。2026-07-05 使用者追加決策已取代 2C 與 explicit rename 相關契約：新增任務命名與既有任務改名都不得使用外層 rename，需進入詳情頁 title edit。2026-07-06 已完成 RD implementation 與本機 automated QC；使用者後續要求補人工親自點擊操作驗證，QA-DEV-028 已新增 MAN-028-001 至 MAN-028-028，下一步交 QC 執行。
 
 ## Documentation Map Update - 2026-06-19
 
@@ -567,7 +568,7 @@ DEV-012 的產品邊界：
 | `ai-doc/qa/QA-DEV-023-record-project-change-import-workflow-step.md` | Ready | DEV-023 | 驗證專案變化匯入作為紀錄流程第一步、預設收合、展開面板、插入/跳過與 DEV-021/022 回歸。 |
 | `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md` | Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged | DEV-024 | 驗證 AI整理不得覆蓋使用者手寫內容、章節結構、task mention 與 project change evidence；本機 verifier 已通過，真實操作測試未執行。 |
 | `ai-doc/qa/QA-DEV-026-trello-like-board-share-ui.md` | Static + Browser Smoke Passed / DB Smoke Pending | DEV-026 | 驗證 Trello-like 分享入口、modal 邀請、複製連結、pending invite、成員 tab、權限不足與 viewport。 |
-| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA Plan Updated / Detail-Only Title Edit Addendum Ready / Manual Click QC Pending | DEV-028 | 驗證四模式單擊選取並開詳情、任務名稱只在詳情頁 title edit、外層 rename 移除、新增任務命名導向詳情、右鍵/長按任務選單無重新命名、看板 Level 3+ 保留、甘特 drag/click 互斥、viewport 與 MAN-028 人工親自點擊操作。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA Plan Updated / Local Automated QA Passed / Manual Click QC Pending | DEV-028 | 驗證四模式單擊選取並開詳情、任務名稱只在詳情頁 title edit、外層 rename 移除、新增任務命名導向詳情、右鍵/長按任務選單無重新命名、看板 Level 3+ 保留、甘特 drag/click 互斥、viewport 與 MAN-028 人工親自點擊操作。 |
 | `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Phase 1B Hotfix Covered | DEV-029 | 驗證手機 pan-first：任務卡、L2+ 子任務、欄位、工作台 row 與手機拖曳把手短滑不誤開詳情且可 pan，L2+ pan 可推動 `scrollTop` / `scrollLeft`，無位移 tap 可開詳情；Phase 1B 覆蓋 compact action rail、長按浮起、拖曳把手長按、touchcancel 退出不卡死、drop target、刪除確認與桌機右鍵不變驗證。 |
 | `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | QA Plan Complete / Local QC Executed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered | DEV-040 | 驗證正式環境同型 BUG 風險：dependencies 匯入、RAG timeout、看板 temp id、member/tag stale response、Google Calendar timeout、MindMap local-only 語意與 production smoke evidence；本輪已完成原始 2 BUG production authenticated UI smoke，延伸矩陣剩餘項需另行驗證。 |
 

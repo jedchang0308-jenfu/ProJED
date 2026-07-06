@@ -1,6 +1,6 @@
 # QA-DEV-028: 四模式一致的 Trello-like 任務操作驗證計畫
 
-狀態: QA Plan Updated / Automated Browser Smoke Passed / Manual Click QC Pending / 2026-07-05 Detail-Only Title Edit Addendum RD Contract Ready
+狀態: QA Plan Updated / Local Automated QA Passed / Manual Click QC Pending / 2026-07-06 Detail-Only Title Edit Addendum Implemented
 對應 DEV: DEV-028
 對應 SPEC: `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`
 建立日期: 2026-06-26
@@ -216,6 +216,21 @@ npm.cmd run build:test
 
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 29/29
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`: Pass
+
+## RD 自動化驗證結果 - 2026-07-06 Detail-Only Title Edit Addendum
+
+以下結果只能作為 QA/QC 輔助證據，不取代 `人工親自點擊測試矩陣`:
+
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 35/35
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`: Pass
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish`: Pass, 32/32
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`: Pass, 32/32
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`: Pass
+- `npm.cmd exec tsc -- --noEmit`: Pass
+- `npm.cmd run build:test`: Pass
+- `npm.cmd run lint -- --quiet`: Not passed due pre-existing unrelated lint failures in `scripts/verify-dev-040-production-auth-ui-smoke.mjs`, `scripts/verify-dev-043-system-page-exit-browser.pw.js`, and `src/components/BoardView.tsx`.
 - `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
 - `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
 - `npm.cmd exec tsc -- --noEmit`: Pass

@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
-import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -14,15 +14,8 @@ import { prepareNewTaskNaming } from '../utils/taskInteractions';
 
 interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
 const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
-    const { canCreateTask, canEditTask, canMoveTask } = useBoardPermissions();
-    const updateNode = useWbsStore(s => s.updateNode);
-    const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
-    const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
-    const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
+    const { canCreateTask, canMoveTask } = useBoardPermissions();
     const selectedTaskId = useBoardStore(s => s.selectedTaskId);
-    const [isTitleEditing, setIsTitleEditing] = useState(false);
-    const [editValue, setEditValue] = useState(item.title || '');
-    const inputRef = useRef<HTMLInputElement>(null);
     const level = Number.isFinite(item.level) ? item.level : 0;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id,
@@ -43,54 +36,6 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     const isTask = item.nodeType === 'task';
     const isMilestone = item.nodeType === 'milestone';
 
-    useEffect(() => {
-        if (!isTitleEditing) setEditValue(item.title || '');
-    }, [item.title, isTitleEditing]);
-
-    useEffect(() => {
-        if (pendingTitleEditNodeId !== item.id || !canEditTask) return;
-
-        const initialValue = pendingTitleEditInitialValue ?? item.title ?? '新任務';
-        setEditValue(initialValue);
-        setIsTitleEditing(true);
-
-        window.requestAnimationFrame(() => {
-            const input = inputRef.current;
-            if (!input) return;
-            input.focus();
-            if (pendingTitleEditInitialValue !== null) {
-                input.setSelectionRange(initialValue.length, initialValue.length);
-            } else {
-                input.select();
-            }
-            setPendingTitleEditNodeId(null);
-        });
-    }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, item.id, item.title, canEditTask, setPendingTitleEditNodeId]);
-
-    const handleTitleSave = () => {
-        if (!canEditTask) {
-            setIsTitleEditing(false);
-            return;
-        }
-        const trimmed = editValue.trim() || '新任務';
-        if (trimmed !== item.title) {
-            updateNode(item.id, { title: trimmed, updatedAt: Date.now() });
-        }
-        setIsTitleEditing(false);
-    };
-
-    const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        event.stopPropagation();
-        if (event.nativeEvent.isComposing) return;
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            handleTitleSave();
-        } else if (event.key === 'Escape') {
-            setEditValue(item.title || '');
-            setIsTitleEditing(false);
-        }
-    };
-    
     const childIds = useWbsStore(s => s.parentNodesIndex[item.id]);
     const hasChildren = childIds && childIds.length > 0;
 
@@ -112,7 +57,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 ${selectedTaskId === item.id ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary/30' : ''}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => {
-                if (!isTitleEditing) onClick(item);
+                onClick(item);
             }}
         >
             <TaskDragHandle
@@ -141,41 +86,9 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 {(isTask || isMilestone) && level <= 1 && <FileText size={12} className="text-slate-400" />}
                 {(isTask || isMilestone) && level > 1 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
             </div>
-            {isTitleEditing ? (
-                <input
-                    ref={inputRef}
-                    value={editValue}
-                    onChange={(event) => setEditValue(event.target.value)}
-                    onBlur={handleTitleSave}
-                    onKeyDown={handleTitleKeyDown}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    disabled={!canEditTask}
-                    data-task-title-input="true"
-                    className={`task-title-text min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 font-medium text-slate-700 outline-none ring-1 ring-primary/30 ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}
-                />
-            ) : (
-                <>
-                    <span className={`task-title-text min-w-0 flex-1 truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
-                        {item.title}
-                    </span>
-                    <button
-                        type="button"
-                        disabled={!canEditTask}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            if (!canEditTask) return;
-                            setEditValue(item.title || '新任務');
-                            setIsTitleEditing(true);
-                        }}
-                        data-task-interaction-control="true"
-                        className="ml-auto flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
-                        title="重新命名任務"
-                    >
-                        <Pencil size={12} />
-                    </button>
-                </>
-            )}
+            <span className={`task-title-text min-w-0 flex-1 truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
+                {item.title}
+            </span>
             {onAddChild && (
                 <button
                     disabled={!canCreateTask}

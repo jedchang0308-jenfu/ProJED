@@ -118,7 +118,7 @@ Out of scope:
 - `BoardView` 掛載 `useMobilePanBroker()`，讓手機從 L2+ checklist row 起手時可直接推動 column `scrollTop` 或 board `scrollLeft`。
 - `KanbanCard` 父卡片忽略來自 checklist row 的 touch handlers，避免父子任務搶同一手勢。
 - `KanbanChecklist` 不再用 touch `stopPropagation()` 阻斷捲動鏈路。
-- 隱藏 rename pencil 改為不可見時 `pointer-events: none`，且只在 hover / focus-visible 時恢復可操作，避免不可見控制項吃掉手機 pan。
+- DEV-028 detail-only title edit addendum 後，外層 rename control 已移除；手機 hit-test 驗證改為確認無外層 rename control/input/menu，且 tap title 仍開任務詳情。
 - DEV-029 static/browser verifiers 已補上 mobile tap-to-details、pan suppression、L2+ scroll displacement 與 workbench row pan case。
 
 ## Gesture Algorithm

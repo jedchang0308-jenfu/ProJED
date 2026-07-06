@@ -70,11 +70,9 @@ assert(
     source.useMobilePanBroker.includes('isTaskPrimaryActionTarget') &&
     source.useMobilePanBroker.includes("state.horizontalSurface.scrollLeft = state.startScrollLeft - deltaX") &&
     source.useMobilePanBroker.includes('handleClickCapture') &&
-    source.kanbanCard.includes('group-hover:pointer-events-auto group-hover:opacity-100') &&
-    source.kanbanChecklist.includes('group-hover:pointer-events-auto group-hover:opacity-100') &&
     source.browserVerifier.includes('L2+ checklist row vertical pan scrolls the column') &&
     source.browserVerifier.includes('L2+ checklist row horizontal pan scrolls the board') &&
-    source.browserVerifier.includes('hidden rename pencil does not intercept mobile hit testing'),
+    source.browserVerifier.includes('removed outer rename control does not intercept mobile hit testing'),
 );
 
 assert(

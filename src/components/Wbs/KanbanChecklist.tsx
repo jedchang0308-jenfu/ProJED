@@ -1,22 +1,20 @@
 /**
  * KanbanChecklist — 遞迴渲染 WBS Level 3+ 子節點為下層任務
  * 設計意圖：在 KanbanCard 內部呈現深層子節點，保留 WBS 階層關係。
- * 每一層透過 depth 增加縮排，左側拖曳把手負責排序，標題支援行內編輯。
+ * 每一層透過 depth 增加縮排，左側拖曳把手負責排序，標題編輯集中在任務詳情頁。
  * 
- * 【編輯功能】下層任務採閱讀優先；鉛筆、右鍵或快捷鍵才行內編輯。
  * 【拖曳功能】每個任務現在是可拖曳元素，支援跨卡片及升級至列表等操作。
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, Link, Pencil } from 'lucide-react';
+import { Check, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanDependencyContext } from '../BoardView';
 import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import dayjs from 'dayjs';
-import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
 import type { TaskStatus, TaskNode } from '../../types';
 import { TaskDragHandle } from './TaskDragHandle';
@@ -58,13 +56,6 @@ const isFromTaskDragHandle = (target: EventTarget | null) =>
 interface ChecklistItemProps {
   child: TaskNode;
   depth: number;
-  editingId: string | null;
-  editValue: string;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onStartEdit: (e: React.MouseEvent, child: TaskNode) => void;
-  onSave: (child: TaskNode) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, child: TaskNode) => void;
-  onEditValueChange: (val: string) => void;
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
   ancestorIds?: string[];
@@ -74,13 +65,6 @@ interface ChecklistItemProps {
 const ChecklistItem: React.FC<ChecklistItemProps> = ({
   child: initialChild,
   depth,
-  editingId,
-  editValue,
-  inputRef,
-  onStartEdit,
-  onSave,
-  onKeyDown,
-  onEditValueChange,
   previewNodes,
   previewParentIndex,
   ancestorIds = [],
@@ -97,11 +81,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const tags = useTagStore(s => s.tags);
   const nodeTags = getNodeTags(child, tags);
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
-  const isEditing = editingId === childId;
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
-  const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const { canMoveTask, canCreateDependency } = useBoardPermissions();
   const touchTapGuard = useTouchTapGuard();
 
   // 看板依賴選取 Context
@@ -231,7 +214,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
               ? isSelfNode
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
                 : 'hover:bg-amber-50/60 cursor-crosshair'
-              : `hover:bg-slate-50 ${isEditing ? 'cursor-default' : 'cursor-pointer'}`
+              : 'cursor-pointer hover:bg-slate-50'
         } ${selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 2}px` }}
         onContextMenu={(e) => {
@@ -254,7 +237,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             insertRecordTaskMention(child.id, child.title || child.id);
             return;
           }
-          if (isEditing || isSelectingMode || isTaskPrimaryActionTarget(e.target)) {
+          if (isSelectingMode || isTaskPrimaryActionTarget(e.target)) {
             e.stopPropagation();
             return;
           }
@@ -271,7 +254,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         <TaskDragHandle
           attributes={attributes}
           listeners={listeners}
-          disabled={!canMoveTask || isEditing || isSelectingMode || isRecordCaptureMode}
+          disabled={!canMoveTask || isSelectingMode || isRecordCaptureMode}
           dragDisabled={mobileActionMode}
           size="xs"
         />
@@ -284,47 +267,19 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           </span>
         ) : null}
 
-        {isEditing ? (
-          <Input
-            ref={inputRef}
-            value={editValue}
-            onChange={(e) => onEditValueChange(e.target.value)}
-            onBlur={() => onSave(child)}
-            onKeyDown={(e) => onKeyDown(e, child)}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            disabled={!canEditTask}
-            data-task-title-input="true"
-            className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1 py-0 text-xs font-medium text-slate-700 outline-none ring-1 ring-primary/30 focus:ring-1 focus:ring-primary/30 focus:ring-offset-0"
-          />
-        ) : (
-          <span
-            className={`task-title-text text-xs font-medium leading-tight flex-1 truncate transition-colors ${statusTextMap[status]}`}
-            onClick={(e) => {
-              if (isRecordCaptureMode) {
-                e.preventDefault();
-                e.stopPropagation();
-                insertRecordTaskMention(child.id, child.title || child.id);
-                return;
-              }
-            }}
-            title={child.title || '未命名任務'}
-          >
-            {child.title || '未命名任務'}
-          </span>
-        )}
-        {!isEditing && !isRecordCaptureMode && (
-          <button
-            type="button"
-            disabled={!canEditTask}
-            onClick={(event) => onStartEdit(event, child)}
-            data-task-interaction-control="true"
-            className="pointer-events-none flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 disabled:opacity-30"
-            title="重新命名任務"
-          >
-            <Pencil size={11} />
-          </button>
-        )}
+        <span
+          className={`task-title-text text-xs font-medium leading-tight flex-1 truncate transition-colors ${statusTextMap[status]}`}
+          onClick={(e) => {
+            if (isRecordCaptureMode) {
+              e.preventDefault();
+              e.stopPropagation();
+              insertRecordTaskMention(child.id, child.title || child.id);
+            }
+          }}
+          title={child.title || '未命名任務'}
+        >
+          {child.title || '未命名任務'}
+        </span>
 
         {/* 日期標籤區 — 選取模式：顯示可點擊按鈕；一般模式：顯示日期 */}
         {isSelectingMode ? (
@@ -359,19 +314,17 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         ) : (
           <>
           {/* 日期區間標籤 */}
-          {!isEditing ? (
-            <TaskDateBadge
-              startDate={child.startDate}
-              endDate={child.endDate}
-              status={status}
-              showStartDate={showStartDate}
-              startLocked={lockStatus.startLocked}
-              endLocked={lockStatus.endLocked}
-              durationLocked={Boolean(child.isDurationLocked)}
-              surface="checklist"
-              className="ml-0.5"
-            />
-          ) : null}
+          <TaskDateBadge
+            startDate={child.startDate}
+            endDate={child.endDate}
+            status={status}
+            showStartDate={showStartDate}
+            startLocked={lockStatus.startLocked}
+            endLocked={lockStatus.endLocked}
+            durationLocked={Boolean(child.isDurationLocked)}
+            surface="checklist"
+            className="ml-0.5"
+          />
           </>
         )}
 
@@ -416,57 +369,6 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   // 訂閱該父節點的子節點 ID 陣列
   const storeChildIds = useWbsStore(s => s.parentNodesIndex[parentId]);
   const childIds = previewParentIndex?.[parentId] || storeChildIds;
-  const updateNode = useWbsStore(s => s.updateNode);
-  const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
-  const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
-  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
-  const { canEditTask } = useBoardPermissions();
-
-  // 行內編輯狀態管理（在容器層統一管理，避免多個 item 同時進入編輯模式）
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // 進入編輯模式時自動聚焦並全選文字
-  useEffect(() => {
-    if (editingId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editingId]);
-
-  /** 開始編輯 */
-  const handleStartEdit = (e: React.MouseEvent, child: TaskNode) => {
-    e.stopPropagation();
-    if (!canEditTask) return;
-    setEditingId(child.id);
-    setEditValue(child.title || '');
-  };
-
-  /** 儲存變更 */
-  const handleSave = (child: TaskNode) => {
-    if (!canEditTask) {
-      setEditingId(null);
-      return;
-    }
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== child.title) {
-      updateNode(child.id, { title: trimmed, updatedAt: Date.now() });
-    }
-    setEditingId(null);
-  };
-
-  /** 鍵盤事件 */
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, child: TaskNode) => {
-    e.stopPropagation();
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSave(child);
-    } else if (e.key === 'Escape') {
-      setEditingId(null);
-    }
-  };
 
   // 取得子節點的完整資料，按 order 排序
   const children = React.useMemo(() => {
@@ -480,22 +382,6 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
       .sort((a, b) => a.order - b.order);
   }, [childIds, filterProjection, previewNodes, nextAncestorKey]);
 
-  useEffect(() => {
-    if (!pendingTitleEditNodeId || !canEditTask) return;
-    const child = children.find(item => item.id === pendingTitleEditNodeId);
-    if (!child) return;
-
-    const initialValue = pendingTitleEditInitialValue ?? child.title ?? '新任務';
-    setEditingId(child.id);
-    setEditValue(initialValue);
-    setPendingTitleEditNodeId(null);
-    window.requestAnimationFrame(() => {
-      const input = inputRef.current;
-      if (!input) return;
-      if (pendingTitleEditInitialValue !== null) input.setSelectionRange(initialValue.length, initialValue.length);
-    });
-  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, children, canEditTask, setPendingTitleEditNodeId]);
-
   // 無子節點則不渲染
   if (isRecursiveParent || children.length === 0) return null;
 
@@ -507,13 +393,6 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
             key={child.id}
             child={child}
             depth={depth}
-            editingId={editingId}
-            editValue={editValue}
-            inputRef={inputRef}
-            onStartEdit={handleStartEdit}
-            onSave={handleSave}
-            onKeyDown={handleKeyDown}
-            onEditValueChange={setEditValue}
             previewNodes={previewNodes}
             previewParentIndex={previewParentIndex}
             ancestorIds={nextAncestorIds}

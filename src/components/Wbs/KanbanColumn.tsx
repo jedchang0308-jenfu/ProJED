@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Link, Pencil } from 'lucide-react';
+import { Plus, Link } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
@@ -28,15 +28,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore((state) => state.getNodeProgress(nodeId));
   const addNode = useWbsStore((state) => state.addNode);
-  const updateNode = useWbsStore((state) => state.updateNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
-  const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
-  const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
-  const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
-  const { canCreateTask, canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
@@ -48,60 +44,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState('');
-  const titleInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditing && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-    }
-  }, [isEditing]);
-
-  useEffect(() => {
-    if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
-    const initialValue = pendingTitleEditInitialValue ?? node.title ?? '新任務';
-    setEditValue(initialValue);
-    setIsEditing(true);
-    setPendingTitleEditNodeId(null);
-    window.requestAnimationFrame(() => {
-      const input = titleInputRef.current;
-      if (!input) return;
-      if (pendingTitleEditInitialValue !== null) input.setSelectionRange(initialValue.length, initialValue.length);
-    });
-  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
-
-  const handleStartEdit = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (!canEditTask) return;
-    setEditValue(node?.title || '');
-    setIsEditing(true);
-  };
-
-  const handleSave = () => {
-    if (!canEditTask) {
-      setIsEditing(false);
-      return;
-    }
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== node?.title) {
-      updateNode(nodeId, { title: trimmed, updatedAt: Date.now() });
-    }
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    event.stopPropagation();
-    if (event.nativeEvent.isComposing) return;
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      handleSave();
-    } else if (event.key === 'Escape') {
-      setIsEditing(false);
-    }
-  };
 
   const storeChildIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
   const childIds = previewParentIndex?.[nodeId] || storeChildIds;
@@ -196,7 +138,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
-    selectAndOpenTaskDetails(newNode.id);
   };
 
   // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
@@ -244,7 +185,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                 : ''
         } ${selectedTaskId === nodeId ? 'ring-2 ring-inset ring-primary/30 bg-primary/[0.04]' : ''}`}
         onClick={(event) => {
-          if (isEditing || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+          if (isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
           selectAndOpenTaskDetails(nodeId);
         }}
         onContextMenu={(event) => {
@@ -265,44 +206,18 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               <TaskDragHandle
                 attributes={columnAttributes}
                 listeners={columnListeners}
-                disabled={!canMoveTask || isEditing || isSelectingMode}
+                disabled={!canMoveTask || isSelectingMode}
                 className="-ml-1"
               />
 
-              {isEditing ? (
-                <input
-                  ref={titleInputRef}
-                  value={editValue}
-                  onChange={(event) => setEditValue(event.target.value)}
-                  onBlur={handleSave}
-                  onKeyDown={handleKeyDown}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                  data-task-title-input="true"
-                  className="task-title-text min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none ring-2 ring-primary/30"
-                />
-              ) : (
-                <h3
-                  className={`task-title-text truncate text-sm font-medium transition-colors hover:text-primary ${
-                    status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
-                  }`}
-                  title={node.title || '未命名任務'}
-                >
-                  {node.title || '未命名任務'}
-                </h3>
-              )}
-              {!isEditing && (
-                <button
-                  type="button"
-                  onClick={handleStartEdit}
-                  disabled={!canEditTask}
-                  data-task-interaction-control="true"
-                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
-                  title="重新命名任務"
-                >
-                  <Pencil size={13} />
-                </button>
-              )}
+              <h3
+                className={`task-title-text truncate text-sm font-medium transition-colors hover:text-primary ${
+                  status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
+                }`}
+                title={node.title || '未命名任務'}
+              >
+                {node.title || '未命名任務'}
+              </h3>
             </div>
           </div>
         </div>

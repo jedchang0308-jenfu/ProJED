@@ -19,7 +19,7 @@
 - `src/hooks/useMobilePanBroker.ts` 掛在 BoardView scroll surface，手機從 L2+ checklist row 起手可推動 column `scrollTop` 或 board `scrollLeft`。
 - `src/components/Wbs/KanbanCard.tsx` 對 checklist row touch event 早退，避免父卡片與子列搶同一手勢。
 - `src/components/Wbs/KanbanChecklist.tsx` 移除 touch handler 內的 `stopPropagation()`，讓手勢可抵達捲動 surface。
-- 看板卡片與 checklist 的隱藏 rename pencil 改為不可見時 `pointer-events: none`，只在 hover / focus-visible 時可操作，避免不可見控制項攔截手機 pan。
+- DEV-028 detail-only title edit addendum 後，外層 rename pencil/control 已移除；DEV-029 E05 改驗證外層 rename control/input/menu 不存在，且手機 tap title 仍開正確任務詳情。
 - `src/components/TaskWorkbenchPanel.tsx` 對 `未歸位` 與 `所有任務排序` row 套用 `useTouchTapGuard()`，短滑後 suppress compatibility click，避免 row pan 後誤開詳情。
 - 2026-07-05 Phase 1B hotfix：手機 `TaskDragHandle` 保留可見把手但停用 dnd-kit touch listener，改為 pan pass-through；把手短滑可移動畫面，把手長按也進入同一個 mobile drag-action mode。
 - 2026-07-05 Phase 1B hotfix：`touchcancel` 改為純取消不提交，並補 `pointercancel`、visibility、blur、pagehide、`Escape` 與 timeout hard-cancel，避免真機長按模式卡住。
@@ -53,7 +53,7 @@ Key cases:
 - `QA-029-B07`: L2+ checklist row vertical pan moved column `scrollTop` from 0 to 38。
 - `QA-029-B08`: L2+ checklist row horizontal pan moved board `scrollLeft` from 0 to 120。
 - `QA-029-D01`: mobile quick tap opens the tapped task's `TaskDetailsModal`。
-- `QA-029-E05`: hidden rename pencil `opacity=0`、`pointer-events=none`，且 hit-test 不落在控制項。
+- `QA-029-E05`: outer rename control/input/menu count = 0，且 tap card title 仍開正確 `TaskDetailsModal`。
 - `QA-029-B06`: workbench row pan suppresses task actions，Pass。
 - `QA-029-D03`: desktop mouse click still opens `TaskDetailsModal`，clicked `qc-card-1` and modal `data-task-id=qc-card-1`。
 - `QA-029-C01` / `QA-029-C02`: card / checklist row long press opens top text compact action rail。

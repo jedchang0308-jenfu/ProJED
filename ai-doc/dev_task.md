@@ -213,17 +213,17 @@ All-Phase Coverage Matrix:
 
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 
-狀態: RD Contract Ready / Not Authorized / Documentation Only
+狀態: Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed
 節點類型: 交付點 addendum / interaction contract
 父交付點: DEV-028 四模式一致的 Trello-like 任務操作契約
-是否計入產品交付完成: 是，限後續 RD 完成後；本輪只文件化不開發
+是否計入產品交付完成: 是；detail-only title edit addendum 已完成本機自動化驗證，人工親自點擊 QC 與 production deploy 另行處理
 建立日期: 2026-07-05
 
 原始需求邊界:
 - 使用者要求刪除「重新命名任務點鉛筆、F2、右鍵選單、長按選單、標題雙擊、外層直接打字」等任務外層 rename gesture。
 - 新規則：任務名稱只能先進入任務詳情頁，再在任務詳情頁的任務名稱區編輯。
 - 任務詳情頁中的任務名稱 UI 必須有不同視覺，引導使用者理解可點選編輯。
-- 使用者明確要求本輪「寫成開發文件，先不開發」。
+- 使用者原先要求先寫成開發文件；2026-07-06 已授權 DEV-028 addendum RD 實作。
 
 Human Decision Brief:
 - 已確認：看板卡片、L3+ 待辦列、全域任務平台排序列、未歸位列、清單列、甘特列與心智圖節點不再承載 rename。
@@ -233,8 +233,8 @@ Human Decision Brief:
 - AI 假設：資料模型不變；此 addendum 是 UI interaction contract 與 verifier 更新，不需要 schema / migration。若既有新增任務流程依賴 inline rename，RD 應改為導向詳情頁 title edit。
 
 目前授權邊界:
-- Authorized: SPEC / QA / dev_task / documentation_map 文件更新。
-- Not Authorized: 產品程式碼修改、verifier 實作、QA/QC 實際操作驗證、production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態。
+- Authorized and completed: 產品程式碼修改、static/browser verifier 更新、DEV-027B / DEV-027E / DEV-029 regression、SPEC / QA / dev_task / documentation_map / QC evidence 更新。
+- Not Authorized / Not Executed: production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態、MAN-028 人工親自點擊 QC。
 
 RD Handoff / Implementation Contract:
 - 移除或停用任務外層 surface 的 rename affordance：pencil、right-click rename、long-press rename、`t`、F2、double-click title、selected task direct typing、outer inline title input。
@@ -266,12 +266,12 @@ Stop Conditions:
 - 詳情頁任務名稱不可辨識為可編輯，或無法完成儲存 / 取消。
 - 新增任務命名流程因移除 inline rename 而斷裂。
 - 改名流程造成任務名稱遺失、空值覆蓋或錯任務更新。
-- 未取得使用者實作授權前，RD 不得修改產品程式碼。
+- 若要 production deploy、資料層變更或重做詳情頁容器型態，需另行取得使用者授權並走對應 gate。
 
 Deferred Scope Audit:
-- Product code implementation: Same Spec Phase / Not Authorized，需使用者明確授權 RD 開發。
-- Automated verifier implementation: Same Spec Phase / Not Authorized，隨 RD implementation 一起開。
-- Manual QA/QC execution: Blocked Human Re-entry，需使用者授權 QA/QC 實際驗證。
+- Product code implementation: Same Spec Phase / Completed，已依使用者授權完成。
+- Automated verifier implementation: Same Spec Phase / Completed，已更新 DEV-028、DEV-027B、DEV-027E、DEV-029 verifier。
+- Manual QA/QC execution: Blocked Human Re-entry，需使用者授權 QA/QC 實際人工親自點擊驗證。
 - Production deploy: Blocked Human Re-entry，需 deployment-release-gate。
 - DB schema / migration / RLS / RPC: No Tracking，UI interaction contract 不需要資料層變更。
 - Task details drawer/page redesign: New DEV Candidate，若要把 `TaskDetailsModal` 改成抽屜或新頁面需另行決策。
@@ -281,13 +281,14 @@ All-Phase Coverage Matrix:
 | Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
 |---|---|---|---|---|
 | 0 | PM/RD Contract Addendum | Complete | Authorized | SPEC-028、QA-DEV-028、dev_task、documentation_map updated |
-| 1 | Detail-Only Title Edit RD Implementation | RD Contract Ready | Not Authorized | product diff、static/browser verifier、TypeScript、build:test |
-| 2 | QA/QC Verification | QA Plan Ready | Not Authorized | MAN-028 updated evidence、browser traces、mobile regression |
+| 1 | Detail-Only Title Edit RD Implementation | Complete | Authorized | product diff、static/browser verifier、TypeScript、build:test |
+| 2 | QA/QC Verification | Local Automated QA Passed / Manual Click QC Pending | Partially Authorized | QC-DEV-028、自動化 browser traces、mobile regression；MAN-028 仍待人工親自點擊 |
 | 3 | Production Release | Not Started | Not Authorized | deployment-release-gate、post-deploy smoke、rollback target |
 
 文件:
 - `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`
 - `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md`
+- `ai-doc/qc/QC-DEV-028-detail-only-title-edit-addendum.md`
 - `ai-doc/documentation_map.md`
 
 ### DEV-029 Addendum: 手機精簡任務操作列與長按拖放
@@ -545,7 +546,7 @@ RD Implementation 摘要:
 - 2026-07-04 真機回饋修正：手機 pan-first 不應取消任務詳情入口；無位移 tap 需開 `TaskDetailsModal`，短滑 pan 才 suppress click-through。
 - 2026-07-04 L2+ 真機回饋修正：L2+ checklist row 不得成為不可移動的操作 window；手機從子任務列起手垂直 pan 應推動 column `scrollTop`，水平 pan 應推動 board `scrollLeft`。
 - `KanbanCard` / `KanbanChecklist` 保留一般 `selectAndOpenTaskDetails()`；由 `useTouchTapGuard()` 負責短滑後 suppress compatibility click。
-- `BoardView` 掛載 `useMobilePanBroker()`；`KanbanCard` 忽略 checklist row touch；`KanbanChecklist` 移除 touch `stopPropagation()`；隱藏 rename pencil 不可見時不攔截 pointer event。
+- `BoardView` 掛載 `useMobilePanBroker()`；`KanbanCard` 忽略 checklist row touch；`KanbanChecklist` 移除 touch `stopPropagation()`；DEV-028 addendum 後外層 rename control 不存在，手機 hit-test 改驗證無外層 rename control 且 tap title 仍開詳情。
 - `TaskWorkbenchPanel` 的未歸位與所有任務排序 row 套用 `useTouchTapGuard()`，短滑後 suppress compatibility click，避免 row pan 後誤開詳情。
 - DEV-029 static/browser verifier 補上「tap 開詳情、pan 不開詳情」、L2+ scroll displacement、隱藏控制項 hit-test 與 workbench row tap guard 檢查。
 
@@ -1438,9 +1439,12 @@ Verified（2026-06-29）:
 
 RD exit gate:
 - Original 2026-06-26 DEV-028 static / browser verifiers covered list, mind map, board, and Gantt click-to-details, selected-state retention, explicit rename, new-task naming, task context menu, and drag/click collision.
-- 2026-07-05 addendum requires future verifier update for detail-only title edit and outer rename removal before this revised interaction contract can be called implemented.
-- `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 29/29
+- 2026-07-06 addendum implemented detail-only title edit and outer rename removal.
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 35/35
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`: Pass
+- `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
+- `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`: Pass
 - `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
 - `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
 - `npm.cmd exec tsc -- --noEmit`: Pass
@@ -2130,12 +2134,12 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-028 Addendum 詳情頁唯一改名入口 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者明確授權後，移除外層 rename gesture，改為詳情頁 title edit，通過 DEV-028 / DEV-029 regression gate。 |
-| 2 | DEV-037 / DEV-038 設定與行事曆來源範圍 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者明確授權後，處理設定中心 scope summary 與行事曆訂閱 source-scope contract。 |
-| 3 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者授權後處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
-| 4 | DEV-044 Phase 2/3 Undo Recovery | RD Contract Ready / Not Authorized / Human Re-entry for destructive recovery | RD / QA / QC | 使用者授權後，才可擴充 batch/cross-view undo 或 durable recovery；DB/cross-device/destructive recovery 需另行 gate。 |
+| 1 | DEV-037 / DEV-038 設定與行事曆來源範圍 RD | RD Contract Ready / Authorized | RD / QA / QC | 處理設定中心 scope summary 與行事曆訂閱 source-scope contract。 |
+| 2 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Authorized | RD / QA / QC | 處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
+| 3 | DEV-044 Phase 2/3 Undo Recovery | RD Contract Ready / Authorized for Phase 2/3 where safe / Human Re-entry for destructive recovery | RD / QA / QC | 擴充 batch/cross-view undo 或 durable recovery；DB/cross-device/destructive recovery 需另行 gate。 |
+| 4 | DEV-028 Addendum 人工親自點擊 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
 | 5 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 6 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
+| 6 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 與第 4 項相同；不得以 automated browser smoke 取代人工親自點擊 QC。 |
 | 7 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
 
 ---
@@ -2159,7 +2163,7 @@ CAPA 來源：
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
-| DEV-028 | 交付點 | Implemented / Browser Smoke Passed / Manual Click QC Pending | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`verify:dev-028-cross-mode-task-interactions`、browser smoke | 依 QA-DEV-028 補人工親自點擊 QC |
+| DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test | 依 QA-DEV-028 補人工親自點擊 QC |
 | DEV-029 | 交付點 | Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed | 是 | 手機 Pan-First 觸控手勢仲裁與 compact action rail | `SPEC-029`、`QA-DEV-029`、`QC-DEV-029`、`verify:dev-029-mobile-pan-first-interactions`、browser matrix | production deploy 與 physical-phone supplemental 需另行授權 |
 | DEV-034 | 交付點 | Done / Browser QC Passed / Local-first scope | 是 | App 快速啟動與加入主畫面 UX | `SPEC-034`、`QC-DEV-034`、browser QC | 正式雲端 Inbox / 跨裝置同步另開後續 |
 | DEV-035 | 交付點 | Implemented / Local Automated QC Passed / Supabase DB QC Pending | 是 | 工作區刪除持久化修正 | `SPEC-035`、`QA-DEV-035`、`QC-DEV-035` | 遠端 Supabase DB role QC 待 migration / DB gate |

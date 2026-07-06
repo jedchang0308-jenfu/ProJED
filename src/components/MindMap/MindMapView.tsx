@@ -96,7 +96,6 @@ import { loadNoteRelationships, sanitizeNoteRelationshipsForBoard, saveNoteRelat
 import {
   DEFAULT_MINDMAP_TASK_TITLE,
   createMindMapTaskNode,
-  getCommittedMindMapTitle,
   getMindMapArchiveTaskPlan,
   getMindMapChildTaskCreatePlan,
   getMindMapSiblingTaskCreatePlan,
@@ -143,7 +142,7 @@ import {
   syncCommittedZoomTelemetry,
   type MindMapZoomAnchor,
 } from './mindMapZoom';
-import { openTaskDetails } from '../../utils/taskInteractions';
+import { openTaskDetails, prepareNewTaskNaming } from '../../utils/taskInteractions';
 
 type RootSideDropTarget = MindMapDirection | null;
 
@@ -181,8 +180,6 @@ const MindMapView: React.FC = () => {
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, isReadOnly } = useBoardPermissions();
 
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
-  const [editingNodeId, setEditingNodeId] = React.useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = React.useState('');
   const [expandedNodeIds, setExpandedNodeIds] = React.useState<Set<string>>(() => new Set());
   const [draggedNodeId, setDraggedNodeId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<MindMapDropTarget | null>(null);
@@ -302,11 +299,6 @@ const MindMapView: React.FC = () => {
     setEditingRelationshipLabel(getMindMapRelationshipLabelDraft(label));
   }, [selectRelationship]);
 
-  const clearNodeEdit = React.useCallback(() => {
-    setEditingNodeId(null);
-    setEditingTitle('');
-  }, []);
-
   const expandNodes = React.useCallback((nodeIds: Array<string | null | undefined>) => {
     setExpandedNodeIds(prev => addMindMapExpandedNodeIds(prev, nodeIds));
   }, []);
@@ -404,13 +396,13 @@ const MindMapView: React.FC = () => {
   }, [nodes, rootNodes, selectNode, selectedNodeId]);
 
   React.useEffect(() => {
-    if (!selectedNodeId || editingNodeId) return;
+    if (!selectedNodeId) return;
     const frame = window.requestAnimationFrame(() => {
       const selected = getMindMapNodeElement(mapContentRef.current, selectedNodeId);
       selected?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [editingNodeId, selectedNodeId]);
+  }, [selectedNodeId]);
 
   React.useEffect(() => {
     if (!editingRelationshipId) return;
@@ -487,7 +479,7 @@ const MindMapView: React.FC = () => {
   React.useLayoutEffect(() => {
     const frame = window.requestAnimationFrame(recomputeConnectors);
     return () => window.cancelAnimationFrame(frame);
-  }, [recomputeConnectors, rootsBySide, expandedNodeIds, editingNodeId, editingTitle, dropTarget, rootSideDropTarget, relationshipToolActive, relationshipDraft]);
+  }, [recomputeConnectors, rootsBySide, expandedNodeIds, dropTarget, rootSideDropTarget, relationshipToolActive, relationshipDraft]);
 
   React.useEffect(() => {
     const surface = mapContentRef.current;
@@ -618,6 +610,7 @@ const MindMapView: React.FC = () => {
     addNode(node);
     selectNode(node.id);
     expandNodes([parentId, node.id]);
+    prepareNewTaskNaming(node.id);
     return node;
   }, [activeWorkspaceId, addNode, boardId, canCreateTask, expandNodes, selectNode]);
 
@@ -790,33 +783,6 @@ const MindMapView: React.FC = () => {
     };
   }, [boardId, centerMindMapContent, recomputeConnectors, rootNodes]);
 
-  const startEdit = React.useCallback((nodeId: string, initialTitle?: string) => {
-    if (!canEditTask) {
-      toast.warning(MINDMAP_MESSAGES.noEditTaskPermission);
-      return;
-    }
-    const node = nodes[nodeId];
-    if (!node) return;
-    selectNode(nodeId);
-    clearRelationshipLabelEdit();
-    setEditingNodeId(nodeId);
-    setEditingTitle(initialTitle ?? node.title ?? '');
-  }, [canEditTask, clearRelationshipLabelEdit, nodes, selectNode]);
-
-  const commitEditForNode = React.useCallback((nodeId: string, title = editingTitle) => {
-    const node = nodes[nodeId];
-    if (!node) return false;
-    const nextTitle = getCommittedMindMapTitle(title);
-    if (nextTitle !== node.title) updateNode(nodeId, { title: nextTitle });
-    return true;
-  }, [editingTitle, nodes, updateNode]);
-
-  const commitEdit = React.useCallback(() => {
-    if (!editingNodeId) return;
-    commitEditForNode(editingNodeId);
-    clearNodeEdit();
-  }, [clearNodeEdit, commitEditForNode, editingNodeId]);
-
   const createSiblingForNode = React.useCallback((nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
     const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId });
@@ -850,8 +816,7 @@ const MindMapView: React.FC = () => {
 
     [plan.selected.id, ...plan.descendantIds].forEach(id => removeNode(id));
     selectNode(plan.nextSelectionId);
-    clearNodeEdit();
-  }, [boardId, canDeleteTask, clearNodeEdit, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectedNodeId]);
+  }, [boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectedNodeId]);
 
   const startRelationshipLabelEdit = React.useCallback((relationshipId: string) => {
     const relationship = noteRelationships.find(item => item.id === relationshipId);
@@ -935,11 +900,11 @@ const MindMapView: React.FC = () => {
   }, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode]);
 
   const handleNodeOpenDetails = React.useCallback((nodeId: string) => {
-    if (relationshipToolActive || editingNodeId || draggedNodeId) return;
+    if (relationshipToolActive || draggedNodeId) return;
     selectNode(nodeId);
     setSelectedTaskId(nodeId);
     openTaskDetails(nodeId);
-  }, [draggedNodeId, editingNodeId, relationshipToolActive, selectNode, setSelectedTaskId]);
+  }, [draggedNodeId, relationshipToolActive, selectNode, setSelectedTaskId]);
 
   const handleNodeContextMenu = React.useCallback((nodeId: string, title: string, event: React.MouseEvent) => {
     event.preventDefault();
@@ -1114,7 +1079,6 @@ const MindMapView: React.FC = () => {
     };
     const action = getMindMapKeyboardAction(event, {
       isEditingText: isMindMapTextEditingTarget(event.target),
-      isEditingNode: Boolean(editingNodeId),
       hasSelectedNode: Boolean(selectedNodeId),
       hasSelectedRelationship: Boolean(selectedRelationshipId),
       hasRelationshipMode: Boolean(relationshipToolActive || relationshipDraft || selectedRelationshipId),
@@ -1189,12 +1153,6 @@ const MindMapView: React.FC = () => {
       return;
     }
 
-    if (action.type === 'rename-selected' && selectedNodeId) {
-      consumeMindMapKeyboardEvent();
-      startEdit(selectedNodeId, action.initialTitle);
-      return;
-    }
-
     if (action.type === 'archive-selected-node' && selectedNodeId) {
       consumeMindMapKeyboardEvent();
       void archiveNode();
@@ -1204,7 +1162,6 @@ const MindMapView: React.FC = () => {
     deactivateRelationshipMode,
     createChildForNode,
     createSiblingForNode,
-    editingNodeId,
     expandNode,
     getChildren,
     nodes,
@@ -1214,7 +1171,6 @@ const MindMapView: React.FC = () => {
     selectNode,
     selectedNodeId,
     selectedRelationshipId,
-    startEdit,
     startRelationshipLabelEdit,
     toggleRelationshipTool,
   ]);
@@ -1366,22 +1322,15 @@ const MindMapView: React.FC = () => {
       direction={direction}
       level={level}
       selectedNodeId={selectedNodeId}
-      editingNodeId={editingNodeId}
-      editingTitle={editingTitle}
       expandedNodeIds={expandedNodeIds}
       dropTarget={dropTarget}
       isRelationshipModeActive={relationshipToolActive}
       showStartDate={showStartDate}
-      canEditTask={canEditTask}
       canMoveTask={canMoveTask}
       onSelect={handleNodeSelect}
       onOpenDetails={handleNodeOpenDetails}
       onOpenContextMenu={handleNodeContextMenu}
       onToggleExpanded={toggleNodeExpansion}
-      onEditStart={startEdit}
-      onEditingTitleChange={setEditingTitle}
-      onEditCommit={commitEdit}
-      onEditCancel={clearNodeEdit}
       onDragStart={handleNodeDragStart}
       onDragMove={handleNodeDragMove}
       onDragEnd={clearDragState}

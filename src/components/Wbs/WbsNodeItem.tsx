@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import type { TaskStatus } from '../../types';
-import { Input } from '../ui/Input';
-import { ChevronRight, ChevronDown, Link, Lock, Unlock, Pencil } from 'lucide-react';
+import { ChevronRight, ChevronDown, Link, Lock, Unlock } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -46,7 +45,6 @@ const getRowStatusAccentClass = (status?: TaskStatus) => {
 export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [] }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
-  const titleInputRef = React.useRef<HTMLInputElement>(null);
   
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
@@ -59,14 +57,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
   const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
-  const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
-  const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
-  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const touchTapGuard = useTouchTapGuard();
 
-  const [localTitle, setLocalTitle] = useState(node?.title || '');
-  const [isTitleEditing, setIsTitleEditing] = useState(false);
   const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
   const [localEndDate, setLocalEndDate] = useState(node?.endDate || '');
 
@@ -84,34 +77,10 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       zIndex: isDragging ? 50 : 1,
   };
 
-  // ✅ 同步 Store 狀態到 Local State (確保 Undo/Redo 發生時畫面能正確更新)
-  React.useEffect(() => {
-      if (!isTitleEditing) setLocalTitle(node?.title || '');
-  }, [node?.title, isTitleEditing]);
-
   React.useEffect(() => {
       setLocalStartDate(node?.startDate || '');
       setLocalEndDate(node?.endDate || '');
   }, [node?.startDate, node?.endDate]);
-
-  React.useEffect(() => {
-      if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
-
-      const initialValue = pendingTitleEditInitialValue ?? node.title ?? '新任務';
-      setLocalTitle(initialValue);
-      setIsTitleEditing(true);
-      window.requestAnimationFrame(() => {
-          const input = titleInputRef.current;
-          if (!input) return;
-          input.focus();
-          if (pendingTitleEditInitialValue !== null) {
-              input.setSelectionRange(initialValue.length, initialValue.length);
-          } else {
-              input.select();
-          }
-          setPendingTitleEditNodeId(null);
-      });
-  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
 
   // 取得全域顯示設定
   const dependencyContext = React.useContext(WbsDependencyContext);
@@ -182,45 +151,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const indentPadding = level * 1.25;
 
   const handleToggle = () => setIsExpanded(!isExpanded);
-
-  // ----- 行內編輯處理 -----
-  const startTitleEdit = (event?: React.MouseEvent) => {
-    event?.preventDefault();
-    event?.stopPropagation();
-    if (!canEditTask || !node) return;
-    setLocalTitle(node.title || '新任務');
-    setIsTitleEditing(true);
-    window.requestAnimationFrame(() => {
-        const input = titleInputRef.current;
-        input?.focus();
-        input?.select();
-    });
-  };
-
-  const handleTitleBlur = () => {
-    if (!canEditTask) {
-        setLocalTitle(node.title || '');
-        setIsTitleEditing(false);
-        return;
-    }
-    if (localTitle.trim() !== node.title) {
-        updateNode(node.id, { title: localTitle.trim() || '未命名任務' });
-    }
-    setIsTitleEditing(false);
-  };
-
-  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
-    e.stopPropagation();
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        (e.target as HTMLInputElement).blur();
-    } else if (e.key === 'Escape') {
-        e.preventDefault();
-        setLocalTitle(node.title || '');
-        setIsTitleEditing(false);
-    }
-  };
 
   // ----- 日期防呆機制 (Date Boundary Protection) -----
   const validateDateBoundary = (fieldType: 'startDate' | 'endDate', newValue: string): boolean => {
@@ -397,7 +327,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
             });
         }}
         onClick={(event) => {
-            if (isTitleEditing || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+            if (isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
             selectAndOpenTaskDetails(node.id);
         }}
         data-task-id={node.id}
@@ -430,41 +360,12 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
               <span className="flex-shrink-0 text-[10px] text-amber-600 border border-amber-300 bg-amber-50 px-1 py-0.5 rounded leading-none mr-1">里程碑</span>
           ) : null}
 
-          {isTitleEditing ? (
-            <Input
-              ref={titleInputRef}
-              type="text"
-              value={localTitle}
-              onChange={(e) => setLocalTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={handleTitleKeyDown}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              disabled={!canEditTask}
-              data-task-title-input="true"
-              className={`task-title-text flex-1 min-w-0 h-auto border-0 border-b border-blue-400 bg-white px-1 py-0 text-sm font-medium transition-all focus:ring-0 focus:ring-offset-0 ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
-              placeholder="任務名稱"
-            />
-          ) : (
-            <>
-              <span
-                className={`task-title-text flex-1 min-w-0 truncate px-1 text-sm font-medium ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
-                title={node.title || '未命名任務'}
-              >
-                {node.title || '未命名任務'}
-              </span>
-              <button
-                type="button"
-                onClick={startTitleEdit}
-                disabled={!canEditTask}
-                data-task-interaction-control="true"
-                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:opacity-100 focus:opacity-100 disabled:opacity-30"
-                title="重新命名任務"
-              >
-                <Pencil size={13} />
-              </button>
-            </>
-          )}
+          <span
+            className={`task-title-text flex-1 min-w-0 truncate px-1 text-sm font-medium ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
+            title={node.title || '未命名任務'}
+          >
+            {node.title || '未命名任務'}
+          </span>
 
           <div className="flex items-center gap-1 flex-shrink-0 w-24">
               <div className={`w-full bg-slate-200 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
@@ -538,7 +439,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfStart ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}
-            onClick={canCreateDependency && isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', localTitle); } : undefined}
+            onClick={canCreateDependency && isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', node.title || '未命名任務'); } : undefined}
         >
             <div className="flex items-center gap-1 flex-1 pr-[10px] whitespace-nowrap overflow-hidden">
                 <input 
@@ -593,7 +494,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                 ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfEnd ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}
-            onClick={canCreateDependency && isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', localTitle); } : undefined}
+            onClick={canCreateDependency && isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', node.title || '未命名任務'); } : undefined}
         >
             <div className="flex items-center gap-1 flex-1 pr-[10px] whitespace-nowrap overflow-hidden">
                 <input 

@@ -1161,12 +1161,10 @@ check(
       "type: 'select-first-child'",
       "type: 'create-sibling'",
       "type: 'create-child'",
-      "type: 'rename-selected'",
       "type: 'archive-selected-node'",
       "event.key === 'Delete' || event.key === 'Backspace'",
       "event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar' || event.code === 'Space'",
       "isMindMapSpaceKey(event) || event.key === 'Enter' || event.key === 'F2'",
-      "event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey",
     ].every(token => keyboard.includes(token)) &&
     [
       'getMindMapKeyboardAction(event, {',
@@ -1175,9 +1173,11 @@ check(
       'isMindMapDeleteKey(event)',
       "action.type === 'toggle-relationship-tool'",
       "action.type === 'select-vertical'",
-      "action.type === 'rename-selected'",
       "action.type === 'archive-selected-node'",
     ].every(token => view.includes(token)) &&
+    !keyboard.includes("type: 'rename-selected'") &&
+    !keyboard.includes('isMindMapPlainTextEditKey') &&
+    !view.includes("action.type === 'rename-selected'") &&
     !view.includes('isMindMapRelationshipToolToggleKey(event)') &&
     !view.includes('hasMindMapShortcutModifier(event)') &&
     !view.includes('isMindMapSpaceKey(event)') &&

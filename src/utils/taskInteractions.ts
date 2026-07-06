@@ -46,10 +46,6 @@ export const selectAndOpenTaskDetails = (taskId: string) => {
 export const prepareNewTaskNaming = (taskId: string) => {
   const boardStore = useBoardStore.getState();
   boardStore.setSelectedTaskId(taskId);
-  if (isCoarsePointer()) {
-    boardStore.setPendingTitleEditNodeId(taskId);
-    boardStore.setPendingDirectTitleEditNodeId(null);
-    return;
-  }
-  boardStore.setPendingDirectTitleEditNodeId(taskId);
+  boardStore.setPendingTitleEditNodeId(taskId);
+  openTaskDetails(taskId);
 };

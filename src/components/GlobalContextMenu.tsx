@@ -21,11 +21,8 @@ import {
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
-  const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
   const setSelectedTaskId = useBoardStore((state) => state.setSelectedTaskId);
-  const pendingDirectTitleEditNodeId = useBoardStore((state) => state.pendingDirectTitleEditNodeId);
-  const setPendingDirectTitleEditNodeId = useBoardStore((state) => state.setPendingDirectTitleEditNodeId);
   const setPendingWorkspaceTitleEditId = useBoardStore((state) => state.setPendingWorkspaceTitleEditId);
   const requestCreateWorkspace = useBoardStore((state) => state.requestCreateWorkspace);
   const setPendingBoardTitleEdit = useBoardStore((state) => state.setPendingBoardTitleEdit);
@@ -163,24 +160,6 @@ export const GlobalContextMenu: React.FC = () => {
       if (event.key === 'Enter') {
         event.preventDefault();
         selectAndOpenTaskDetails(selectedTaskId);
-        return;
-      }
-
-      if (event.key === 'F2' || event.key.toLowerCase() === 't') {
-        event.preventDefault();
-        setPendingDirectTitleEditNodeId(null);
-        setPendingTitleEditNodeId(selectedTaskId);
-        return;
-      }
-
-      if (
-        pendingDirectTitleEditNodeId === selectedTaskId &&
-        event.key.length === 1 &&
-        !event.key.match(/^\s$/)
-      ) {
-        event.preventDefault();
-        setPendingDirectTitleEditNodeId(null);
-        setPendingTitleEditNodeId(selectedTaskId, event.key);
       }
     };
 
@@ -190,10 +169,7 @@ export const GlobalContextMenu: React.FC = () => {
     contextMenuState?.isOpen,
     currentView,
     detailsNodeId,
-    pendingDirectTitleEditNodeId,
     selectedTaskId,
-    setPendingDirectTitleEditNodeId,
-    setPendingTitleEditNodeId,
   ]);
 
   useLayoutEffect(() => {
@@ -440,14 +416,6 @@ export const GlobalContextMenu: React.FC = () => {
     setContextMenuState(null);
   };
 
-  const handleRenameTask = () => {
-    if (!contextMenuState || contextMenuState.kind !== 'task') return;
-    setSelectedTaskId(contextMenuState.nodeId);
-    setPendingDirectTitleEditNodeId(null);
-    setPendingTitleEditNodeId(contextMenuState.nodeId);
-    setContextMenuState(null);
-  };
-
   const handleDelete = () => {
     if (!canDeleteTask) return;
     if (!contextMenuState) return;
@@ -665,15 +633,6 @@ export const GlobalContextMenu: React.FC = () => {
             >
               <FileText size={14} className="flex-shrink-0 text-indigo-500" />
               <span>更多詳情選項</span>
-            </button>
-
-            <button
-              onClick={handleRenameTask}
-              disabled={!canEditTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Pencil size={14} className="flex-shrink-0 text-indigo-500" />
-              <span>重新命名任務</span>
             </button>
 
             <button

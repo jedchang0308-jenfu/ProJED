@@ -3,13 +3,13 @@
  * 設計意圖：取代舊版 Card.tsx，資料來源改為 useWbsStore 的 TaskNode。
  * 卡片內部嵌入 KanbanChecklist 以遞迴呈現 Level 3+ 的下層任務。
  * 
- * 【編輯功能】卡片採閱讀優先；鉛筆、右鍵或快捷鍵才行內編輯任務名稱。
+ * 【標題功能】卡片採閱讀優先；任務名稱編輯集中在任務詳情頁。
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link, Pencil } from 'lucide-react';
+import { Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -17,7 +17,6 @@ import { KanbanChecklist } from './KanbanChecklist';
 import { KanbanDependencyContext } from '../BoardView';
 import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import { Badge } from '../ui/Badge';
-import { Input } from '../ui/Input';
 import { useLongPress } from '../../hooks/useLongPress';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
@@ -68,18 +67,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const storeNode = useWbsStore(s => s.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId));
-  const updateNode = useWbsStore(s => s.updateNode);
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
-  const pendingTitleEditNodeId = useBoardStore(s => s.pendingTitleEditNodeId);
-  const pendingTitleEditInitialValue = useBoardStore(s => s.pendingTitleEditInitialValue);
-  const setPendingTitleEditNodeId = useBoardStore(s => s.setPendingTitleEditNodeId);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const tags = useTagStore(s => s.tags);
-  const { canEditTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const { canMoveTask, canCreateDependency } = useBoardPermissions();
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
 
   // 看板依賴選取 Context
@@ -96,69 +91,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
-  // 行內編輯狀態
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
   const touchTapGuard = useTouchTapGuard();
-
-  // 進入編輯模式時自動聚焦並全選文字
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditing]);
-
-  useEffect(() => {
-    if (pendingTitleEditNodeId !== nodeId || !node || !canEditTask) return;
-    const initialValue = pendingTitleEditInitialValue ?? node.title ?? '新任務';
-    setEditValue(initialValue);
-    setIsEditing(true);
-    setPendingTitleEditNodeId(null);
-    window.requestAnimationFrame(() => {
-      const input = inputRef.current;
-      if (!input) return;
-      if (pendingTitleEditInitialValue !== null) input.setSelectionRange(initialValue.length, initialValue.length);
-    });
-  }, [pendingTitleEditInitialValue, pendingTitleEditNodeId, nodeId, node, canEditTask, setPendingTitleEditNodeId]);
-
-  /** 開始編輯：儲存目前標題做為初始值 */
-  const handleStartEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!canEditTask) return;
-    setEditValue(node?.title || '');
-    setIsEditing(true);
-  };
-
-  /** 儲存變更：trimmed 後若有內容才更新，空字串不儲存 */
-  const handleSave = () => {
-    if (!canEditTask) {
-      setIsEditing(false);
-      return;
-    }
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== node?.title) {
-      updateNode(nodeId, { title: trimmed, updatedAt: Date.now() });
-    }
-    setIsEditing(false);
-  };
-
-  /** 鍵盤事件：Enter 儲存，ESC 取消 */
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSave();
-    } else if (e.key === 'Escape') {
-      setIsEditing(false);
-    }
-  };
 
   // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
   const storeChildIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
@@ -340,7 +277,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           insertRecordTaskMention(nodeId, node.title || nodeId);
           return;
         }
-        if (isEditing || isDragging || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
+        if (isDragging || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
         selectAndOpenTaskDetails(nodeId);
       }}
       onContextMenu={(e) => {
@@ -363,7 +300,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             ? isSelfNode
               ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
               : 'border-slate-200 hover:border-amber-300 hover:shadow-md cursor-crosshair'
-            : `border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md ${isEditing ? 'cursor-default' : 'cursor-pointer'}`
+            : 'cursor-pointer border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md'
       } ${selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
     >
       <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">
@@ -377,7 +314,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               <TaskDragHandle
                 attributes={attributes}
                 listeners={listeners}
-                disabled={!canMoveTask || isEditing || isSelectingMode || isRecordCaptureMode}
+                disabled={!canMoveTask || isSelectingMode || isRecordCaptureMode}
                 dragDisabled={mobileActionMode}
                 size="sm"
                 className="-ml-1"
@@ -391,49 +328,21 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 </span>
               ) : null}
 
-              {isEditing ? (
-                <Input
-                  ref={inputRef}
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleSave}
-                  onKeyDown={handleKeyDown}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  disabled={!canEditTask}
-                  data-task-title-input="true"
-                  className="task-title-text h-auto min-w-0 flex-1 rounded border border-primary bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none ring-2 ring-primary/30 focus:ring-2 focus:ring-primary/30 focus:ring-offset-0"
-                />
-              ) : (
-                <h4
-                  className={`task-title-text text-sm font-medium leading-tight flex-1 truncate transition-colors ${
-                    statusTextColorMap[status as TaskStatus]
-                  }`}
-                  onClick={(e) => {
-                    if (isRecordCaptureMode) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      insertRecordTaskMention(nodeId, node.title || nodeId);
-                      return;
-                    }
-                  }}
-                  title={node.title || '未命名任務'}
-                >
-                  {node.title || '未命名任務'}
-                </h4>
-              )}
-              {!isEditing && !isRecordCaptureMode && (
-                <button
-                  type="button"
-                  onClick={handleStartEdit}
-                  disabled={!canEditTask}
-                  data-task-interaction-control="true"
-                  className="pointer-events-none flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-colors hover:bg-slate-100 hover:text-primary group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 disabled:opacity-30"
-                  title="重新命名任務"
-                >
-                  <Pencil size={13} />
-                </button>
-              )}
+              <h4
+                className={`task-title-text text-sm font-medium leading-tight flex-1 truncate transition-colors ${
+                  statusTextColorMap[status as TaskStatus]
+                }`}
+                onClick={(e) => {
+                  if (isRecordCaptureMode) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    insertRecordTaskMention(nodeId, node.title || nodeId);
+                  }
+                }}
+                title={node.title || '未命名任務'}
+              >
+                {node.title || '未命名任務'}
+              </h4>
             </div>
           </div>
 

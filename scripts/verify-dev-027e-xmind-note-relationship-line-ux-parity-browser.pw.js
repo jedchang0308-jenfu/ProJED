@@ -51,7 +51,7 @@ async (page) => {
 
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
   const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
-  const titleInput = () => page.locator('[data-mindmap-title-input]').first();
+  const detailTitleInput = () => page.locator('[data-task-details-title-input="true"]').first();
   const relationshipGroupByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"]`).first();
   const selectedRelationshipGroupByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"][data-selected="true"]`).first();
   const relationshipPathByLabel = (label) => page.locator(`[data-mindmap-note-relationship-path][data-label="${label}"]`).first();
@@ -80,12 +80,19 @@ async (page) => {
   };
 
   const renameSelectedByTyping = async (title) => {
-    await selectedNode().focus();
-    await page.keyboard.press('D');
-    await titleInput().waitFor({ state: 'visible', timeout: 10000 });
-    await titleInput().fill(title);
-    await titleInput().press('Enter');
+    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await detailTitleInput().waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(() => document.activeElement?.matches('[data-task-details-title-input="true"]'), null, { timeout: 3000 });
+    const focused = await detailTitleInput().evaluate(element => document.activeElement === element);
+    assert(focused, 'new mind map task should focus the task details title input', { title });
+    assert(
+      await page.locator('[data-mindmap-title-input]').count() === 0,
+      'new mind map task should not open an outer title input',
+    );
+    await detailTitleInput().fill(title);
+    await detailTitleInput().press('Enter');
     await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
+    await closeTaskDetailsIfOpen();
   };
 
   const createRoot = async (title) => {
@@ -497,7 +504,11 @@ async (page) => {
   await nodeByTitle(rightClickSource).click();
   await closeTaskDetailsIfOpen();
   await nodeByTitle(rightClickSource).click({ button: 'right' });
-  await page.locator('text=重新命名任務').waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByText('更多詳情選項', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+  assert(
+    await page.getByText('重新命名任務', { exact: true }).count() === 0,
+    'right-clicking a task should not expose an outer rename menu item',
+  );
   assert(
     await page.locator('[data-mindmap-note-relationship-tool]').getAttribute('data-active') === 'false',
     'right-clicking a task should open the task menu and should not start note relationship mode',

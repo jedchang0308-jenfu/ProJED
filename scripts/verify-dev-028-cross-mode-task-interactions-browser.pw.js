@@ -44,6 +44,10 @@ async (page) => {
   };
 
   const closeDetailsWithEsc = async () => {
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
     await page.keyboard.press('Escape');
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 10000 });
   };
@@ -98,10 +102,32 @@ async (page) => {
     }
     const modalTaskId = await modal.getAttribute('data-task-id');
     assert(modalTaskId === taskId, `${mode} single click should open TaskDetailsModal`, { taskId, modalTaskId });
-    await closeDetailsWithEsc();
+    const detailTitleInput = modal.locator('[data-task-details-title-input="true"]');
+    await detailTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await detailTitleInput.count() === 1, `${mode} details title input should be the editable title locus`);
+    await closeDetails();
 
     const selectedCount = await page.locator(`[data-task-id="${taskId}"][data-task-selected="true"]`).count();
-    assert(selectedCount > 0, `${mode} should retain selected task after closing details with Escape`, { taskId, selectedCount });
+    assert(selectedCount > 0, `${mode} should retain selected task after closing details`, { taskId, selectedCount });
+
+    await page.keyboard.press('F2');
+    await page.waitForTimeout(80);
+    await page.keyboard.press('t');
+    await page.waitForTimeout(80);
+    const shortcutRenameInputs = await page.locator(`${titleInputSelector}, [data-mindmap-title-input]`).count();
+    const shortcutModalCount = await page.locator('[data-task-details-modal="true"]').count();
+    assert(shortcutRenameInputs === 0 && shortcutModalCount === 0, `${mode} F2/t should not start outer title rename`, {
+      shortcutRenameInputs,
+      shortcutModalCount,
+    });
+
+    const escapedTaskIdForMenu = taskId.replace(/"/g, '\\"');
+    const menuTask = page.locator(`${selector}[data-task-id="${escapedTaskIdForMenu}"]`).first();
+    await menuTask.click({ button: 'right', position: clickPosition });
+    await page.getByText('更多詳情選項').waitFor({ state: 'visible', timeout: 10000 });
+    const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
+    assert(renameMenuCount === 0, `${mode} context menu should not expose task rename`, { renameMenuCount });
+    await page.keyboard.press('Escape');
 
     const escapedTaskId = taskId.replace(/"/g, '\\"');
     await clickTaskMainSurface(page.locator(`${selector}[data-task-id="${escapedTaskId}"]`).first(), clickPosition);
@@ -122,12 +148,26 @@ async (page) => {
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     const modalTaskId = await modal.getAttribute('data-task-id');
     assert(modalTaskId === taskId, 'mindmap single click should open TaskDetailsModal', { taskId, modalTaskId });
-    await closeDetailsWithEsc();
+    const detailTitleInput = modal.locator('[data-task-details-title-input="true"]');
+    await detailTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await detailTitleInput.count() === 1, 'mindmap details title input should be the editable title locus');
+    await closeDetails();
 
     const selected = await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count();
-    assert(selected === 1, 'mindmap should retain selected node after closing details with Escape', { taskId, selected });
+    assert(selected === 1, 'mindmap should retain selected node after closing details', { taskId, selected });
+    await page.keyboard.press('F2');
+    await page.waitForTimeout(80);
+    await page.keyboard.press('t');
+    await page.waitForTimeout(80);
     const renameInputs = await page.locator('[data-mindmap-title-input]').count();
-    assert(renameInputs === 0, 'mindmap title click should not enter rename input', { renameInputs });
+    const shortcutModalCount = await page.locator('[data-task-details-modal="true"]').count();
+    assert(renameInputs === 0 && shortcutModalCount === 0, 'mindmap F2/t should not enter node rename input', { renameInputs, shortcutModalCount });
+
+    await node.click({ button: 'right' });
+    await page.getByText('更多詳情選項').waitFor({ state: 'visible', timeout: 10000 });
+    const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
+    assert(renameMenuCount === 0, 'mindmap context menu should not expose task rename', { renameMenuCount });
+    await page.keyboard.press('Escape');
   };
 
   let step = 'open-app';

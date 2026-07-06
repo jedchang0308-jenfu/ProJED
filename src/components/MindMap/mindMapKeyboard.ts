@@ -17,12 +17,10 @@ type MindMapKeyboardAction =
   | { type: 'select-first-child' }
   | { type: 'create-sibling' }
   | { type: 'create-child' }
-  | { type: 'rename-selected'; initialTitle?: string }
   | { type: 'archive-selected-node' };
 
 interface MindMapKeyboardState {
   isEditingText: boolean;
-  isEditingNode: boolean;
   hasSelectedNode: boolean;
   hasSelectedRelationship: boolean;
   hasRelationshipMode: boolean;
@@ -49,14 +47,11 @@ export const isMindMapRelationshipToolToggleKey = (event: MindMapKeyboardEventLi
 export const hasMindMapShortcutModifier = (event: MindMapKeyboardEventLike) =>
   Boolean(event.ctrlKey || event.metaKey || event.altKey);
 
-export const isMindMapPlainTextEditKey = (event: MindMapKeyboardEventLike) =>
-  event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey;
-
 export const getMindMapKeyboardAction = (
   event: MindMapKeyboardEventLike,
   state: MindMapKeyboardState,
 ): MindMapKeyboardAction | null => {
-  if (state.isEditingText || state.isEditingNode) return null;
+  if (state.isEditingText) return null;
   if (isMindMapRelationshipToolToggleKey(event)) return { type: 'toggle-relationship-tool' };
   if (hasMindMapShortcutModifier(event)) return null;
 
@@ -71,8 +66,6 @@ export const getMindMapKeyboardAction = (
   if (event.key === 'ArrowRight' && state.hasSelectedNode) return { type: 'select-first-child' };
   if (event.key === 'Enter') return { type: 'create-sibling' };
   if (event.key === 'Tab') return { type: 'create-child' };
-  if (event.key === 'F2' && state.hasSelectedNode) return { type: 'rename-selected' };
   if (isMindMapDeleteKey(event) && state.hasSelectedNode) return { type: 'archive-selected-node' };
-  if (isMindMapPlainTextEditKey(event) && state.hasSelectedNode) return { type: 'rename-selected', initialTitle: event.key };
   return null;
 };

@@ -62,34 +62,38 @@ const spec = read(files.spec);
 const qa = read(files.qa);
 
 assert(
-  'shared task detail event and selected task state are defined',
+  'shared task detail event and detail-title edit signal are defined',
   taskInteractions.includes("OPEN_TASK_DETAILS_EVENT = 'open-task-details'") &&
     taskInteractions.includes('selectAndOpenTaskDetails') &&
     taskInteractions.includes('prepareNewTaskNaming') &&
-    taskInteractions.includes("window.matchMedia('(pointer: coarse)')") &&
+    taskInteractions.includes('openTaskDetails(taskId)') &&
+    taskInteractions.includes('setPendingTitleEditNodeId(taskId)') &&
     boardStore.includes('selectedTaskId: null') &&
-    boardStore.includes('pendingDirectTitleEditNodeId: null') &&
     boardStore.includes('pendingTitleEditInitialValue: null') &&
     types.includes('selectedTaskId: string | null') &&
-    types.includes('pendingDirectTitleEditNodeId: string | null'),
+    !boardStore.includes('pendingDirectTitleEditNodeId') &&
+    !types.includes('pendingDirectTitleEditNodeId'),
 );
 
 assert(
-  'global task details listener is permanent and keyboard contract is mode-aware',
+  'global task details listener is permanent and task keyboard no longer starts outer rename',
   globalContextMenu.includes('document.addEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails)') &&
     globalContextMenu.includes('setDetailsNodeId(customEvent.detail.taskId)') &&
     globalContextMenu.includes("!['list', 'board', 'gantt'].includes(currentView)") &&
     globalContextMenu.includes("event.key === 'Enter'") &&
-    globalContextMenu.includes("event.key === 'F2' || event.key.toLowerCase() === 't'") &&
-    globalContextMenu.includes('pendingDirectTitleEditNodeId === selectedTaskId') &&
-    globalContextMenu.includes('setPendingTitleEditNodeId(selectedTaskId, event.key)') &&
-    globalContextMenu.includes('重新命名任務'),
+    !globalContextMenu.includes("event.key === 'F2' || event.key.toLowerCase() === 't'") &&
+    !globalContextMenu.includes('pendingDirectTitleEditNodeId === selectedTaskId') &&
+    !globalContextMenu.includes('setPendingTitleEditNodeId(selectedTaskId, event.key)') &&
+    !globalContextMenu.includes('重新命名任務'),
 );
 
 assert(
-  'TaskDetailsModal exposes stable verifier selectors',
+  'TaskDetailsModal exposes the only task-title edit locus',
   taskDetailsModal.includes('data-task-details-modal="true"') &&
     taskDetailsModal.includes('data-task-id={node.id}') &&
+    taskDetailsModal.includes('data-task-details-title-input="true"') &&
+    taskDetailsModal.includes('aria-label="編輯任務名稱"') &&
+    taskDetailsModal.includes('border border-slate-200 bg-slate-50/80') &&
     taskDetailsModal.includes('更多詳情選項'),
 );
 
@@ -115,18 +119,19 @@ assert(
 );
 
 assert(
-  'list mode is selection-first and explicit rename only',
+  'list mode is selection-first and has no outer title edit surface',
   wbsNodeItem.includes('selectAndOpenTaskDetails(node.id)') &&
     wbsNodeItem.includes('isTaskPrimaryActionTarget(event.target)') &&
     wbsNodeItem.includes('data-task-selected') &&
     wbsNodeItem.includes('data-task-id={node.id}') &&
-    wbsNodeItem.includes('<Pencil size={13} />') &&
-    wbsNodeItem.includes('pendingTitleEditInitialValue') &&
+    !wbsNodeItem.includes('data-task-title-input="true"') &&
+    !wbsNodeItem.includes('title="重新命名任務"') &&
+    !wbsNodeItem.includes('pendingTitleEditInitialValue') &&
     !wbsNodeItem.includes('title="點擊以編輯任務名稱"'),
 );
 
 assert(
-  'board columns, cards, and Level 3+ checklist keep card front content while using click-to-details',
+  'board columns, cards, and Level 3+ checklist keep card front content while removing outer title edit',
   kanbanColumn.includes('selectAndOpenTaskDetails(nodeId)') &&
     kanbanColumn.includes('prepareNewTaskNaming(newNode.id)') &&
     kanbanColumn.includes('data-task-id={nodeId}') &&
@@ -137,17 +142,26 @@ assert(
     kanbanCard.includes('CheckSquare') &&
     kanbanChecklist.includes('selectAndOpenTaskDetails(child.id)') &&
     kanbanChecklist.includes('data-task-id={child.id}') &&
-    kanbanChecklist.includes('<Pencil size={11} />') &&
+    !kanbanColumn.includes('data-task-title-input="true"') &&
+    !kanbanCard.includes('data-task-title-input="true"') &&
+    !kanbanChecklist.includes('data-task-title-input="true"') &&
+    !kanbanColumn.includes('title="重新命名任務"') &&
+    !kanbanCard.includes('title="重新命名任務"') &&
+    !kanbanChecklist.includes('title="重新命名任務"') &&
     !kanbanCard.includes('title="點擊以編輯任務名稱"') &&
     !kanbanChecklist.includes('title="點擊以編輯任務名稱"'),
 );
 
 assert(
-  'mind map click opens details, right-click opens task menu, and Enter remains create-sibling',
+  'mind map click opens details and no longer exposes node-title rename gestures',
   mindMapView.includes('openTaskDetails(nodeId)') &&
     mindMapView.includes('setContextMenuState({') &&
     mindMapNode.includes('onOpenDetails(node.id)') &&
     mindMapNode.includes('onOpenContextMenu(node.id') &&
+    !mindMapNode.includes('data-mindmap-title-input') &&
+    !mindMapNode.includes('onDoubleClick') &&
+    !mindMapKeyboard.includes("type: 'rename-selected'") &&
+    !mindMapKeyboard.includes("event.key === 'F2' && state.hasSelectedNode") &&
     !mindMapNode.includes('onRelationshipStart') &&
     !mindMapView.includes('const startRelationshipFromNode') &&
     mindMapKeyboard.includes("if (event.key === 'Enter') return { type: 'create-sibling' }") &&
@@ -163,7 +177,9 @@ assert(
     ganttTaskBar.includes('data-task-selected') &&
     sharedTaskSidebar.includes('data-task-id={item.id}') &&
     sharedTaskSidebar.includes('data-task-selected') &&
-    sharedTaskSidebar.includes('prepareNewTaskNaming(newNode.id)'),
+    sharedTaskSidebar.includes('prepareNewTaskNaming(newNode.id)') &&
+    !sharedTaskSidebar.includes('data-task-title-input="true"') &&
+    !sharedTaskSidebar.includes('title="重新命名任務"'),
 );
 
 assert(
@@ -183,14 +199,18 @@ assert(
     browserVerifier.includes("await page.keyboard.press('Escape')") &&
     browserVerifier.includes('data-task-selected="true"') &&
     browserVerifier.includes('single click should open TaskDetailsModal') &&
-    browserVerifier.includes('title click should not enter rename input'),
+    browserVerifier.includes('context menu should not expose task rename') &&
+    browserVerifier.includes('data-task-details-title-input="true"'),
 );
 
 assert(
-  'PM docs preserve exclusions and QA gates',
+  'PM docs preserve detail-only rename addendum and QA gates',
   spec.includes('不降低看板卡片正面資訊密度') &&
     spec.includes('不把 Level 3+ 下層任務預設收進 Card back') &&
+    spec.includes('只能先進入任務詳情') &&
+    spec.includes('TaskDetailsModal') &&
     spec.includes('清單、心智圖、看板、甘特') &&
+    qa.includes('改名只能在任務詳情頁 title edit') &&
     qa.includes('ZT-028-010') &&
     qa.includes('RD Slice Phase Gates') &&
     qa.includes('verify:dev-028-cross-mode-task-interactions-browser'),

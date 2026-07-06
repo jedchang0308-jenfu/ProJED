@@ -69,8 +69,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
   const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
-  const pendingDirectTitleEditNodeId = useBoardStore((state) => state.pendingDirectTitleEditNodeId);
-  const setPendingDirectTitleEditNodeId = useBoardStore((state) => state.setPendingDirectTitleEditNodeId);
   const [size, setSize] = React.useState(readSavedSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
@@ -123,16 +121,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   React.useEffect(() => {
     if (!node || !canEditTask) return;
-    const shouldFocusTitle =
-      pendingTitleEditNodeId === node.id ||
-      pendingDirectTitleEditNodeId === node.id;
+    if (pendingTitleEditNodeId !== node.id) return;
 
-    if (!shouldFocusTitle) return;
-
-    const initialValue = pendingTitleEditNodeId === node.id ? pendingTitleEditInitialValue : null;
+    const initialValue = pendingTitleEditInitialValue;
     if (initialValue !== null) setTitleValue(initialValue);
     setPendingTitleEditNodeId(null);
-    setPendingDirectTitleEditNodeId(null);
 
     window.requestAnimationFrame(() => {
       const input = titleInputRef.current;
@@ -147,10 +140,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, [
     canEditTask,
     node,
-    pendingDirectTitleEditNodeId,
     pendingTitleEditInitialValue,
     pendingTitleEditNodeId,
-    setPendingDirectTitleEditNodeId,
     setPendingTitleEditNodeId,
   ]);
 
@@ -366,7 +357,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
                   aria-label="編輯任務名稱"
-                  className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold text-slate-900 outline-none transition hover:border-slate-200 hover:bg-slate-50 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-slate-50/80 px-2 text-sm font-semibold text-slate-900 outline-none transition hover:border-blue-200 hover:bg-white focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   title={node.title}
                 />
               ) : (

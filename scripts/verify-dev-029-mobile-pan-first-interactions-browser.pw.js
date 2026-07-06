@@ -714,21 +714,27 @@ async (page) => {
       return { beforeCount, afterCount, modalTaskId, titleValue, titleFocused };
     });
 
-    await runCase('QA-029-E05', 'hidden rename pencil does not intercept mobile hit testing', async () => {
+    await runCase('QA-029-E05', 'removed outer rename control does not intercept mobile hit testing', async () => {
       await closeWorkbenchIfOpen();
-      const state = await card().locator('[data-task-interaction-control="true"]').first().evaluate((element) => {
-        const style = getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-        return {
-          opacity: style.opacity,
-          pointerEvents: style.pointerEvents,
-          hitTag: hit?.tagName ?? null,
-          hitIsControl: hit === element,
-        };
-      });
-      assert(state.opacity === '0' && state.pointerEvents === 'none' && state.hitIsControl === false, 'hidden rename control should not intercept mobile hit testing', state);
-      return state;
+      const taskId = await card().getAttribute('data-task-id');
+      const state = {
+        outerRenameControls: await card().locator('[data-task-interaction-control="true"]').count(),
+        outerRenameInputs: await page.locator('[data-task-title-input="true"]').count(),
+        renameMenuItems: await page.getByText('重新命名任務', { exact: true }).count(),
+      };
+      assert(
+        state.outerRenameControls === 0 &&
+          state.outerRenameInputs === 0 &&
+          state.renameMenuItems === 0,
+        'outer rename controls should be absent and unable to intercept mobile hit testing',
+        state,
+      );
+      await dispatchTouchGesture(cardTitle());
+      await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const modalTaskId = await page.locator('[data-task-details-modal="true"]').getAttribute('data-task-id');
+      assert(modalTaskId === taskId, 'mobile card tap should still open details after outer rename removal', { taskId, modalTaskId, state });
+      await cleanupUi();
+      return { taskId, modalTaskId, state };
     });
 
     await runCase('QA-029-F01', 'card body pan does not reorder or start drag action', async () => {
