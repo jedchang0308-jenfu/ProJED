@@ -2080,7 +2080,7 @@ CAPA 來源：
 
 ### DEV-018：會議紀錄防呆 UX/UI 流程重設計
 
-狀態：In Verification
+狀態：Implemented / QC Covered
 節點類型：交付點
 父交付點：DEV-005 / DEV-010 / DEV-011 / DEV-012
 是否計入產品交付完成：是

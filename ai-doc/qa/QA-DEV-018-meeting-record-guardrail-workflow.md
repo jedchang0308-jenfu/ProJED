@@ -1,6 +1,6 @@
 # QA-DEV-018：會議紀錄防呆 UX/UI 流程驗證計畫
 
-狀態：Ready for QC
+狀態：QC Covered
 對應 DEV：DEV-018
 建立日期：2026-06-10
 
@@ -145,3 +145,7 @@ npm.cmd run verify:dev-011-ai-meeting-synthesis
 npm.cmd run verify:dev-012-meeting-record-quality
 npm.cmd run build
 ```
+
+## QC Evidence
+
+DEV-018 的產品行為已由 `ai-doc/dev_task.md` 中 DEV-018 QC 記錄覆蓋：DEV-007 至 DEV-012 verifier、build、1440x950 / 1024x768 viewport smoke 已通過。本 QA 檔案保留作為驗證矩陣，不再代表可直接開工的待 QC 任務。
