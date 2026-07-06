@@ -1,5 +1,18 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-07-06
+
+### DEV-044: 上一步復原範圍擴充與低資料庫成本治理
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-044-undo-recovery-scope-expansion.md` | Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | DEV-044 / DEV-001 / DEV-028 / DEV-039 | 定義 ordinary undo 與 destructive recovery 分流；Phase 1 已擴充低成本 client-side command stack，涵蓋工作區 / 看板標題、看板新增、紀錄庫封存 / 儲存、篩選與顯示設定；不新增 DB history table，不把 workspace delete、權限、匯入覆蓋或 AI 批次改寫納入一般 Ctrl+Z。 |
+| `ai-doc/qa/QA-DEV-044-undo-recovery-scope-expansion.md` | Phase 1 Local Automated QA Passed / Production Not Deployed | DEV-044 | 記錄 Phase 1 undo coverage、async/suppress stack guard、record snapshot restore、board stable id、editor history scope、service write count 與 destructive action exclusion cases；本機 static/browser/regression gate 已通過。 |
+| `ai-doc/qc/QC-DEV-044-undo-recovery-scope-expansion.md` | Phase 1 Local Automated QC Passed / Production Not Deployed | DEV-044 | 記錄 DEV-044 Phase 1 本機 QC 事實：static 19/19、browser board title / suppress / record archive restore、DEV-013/039/006 regression、TypeScript、build:test、diff check。 |
+| `ai-doc/dev_task.md` | DEV-044 Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | DEV-044 | 登錄目前交付邊界：Phase 1 local ordinary undo 已完成；DB migration、production deploy、durable recovery、Phase 2/3 仍未授權。 |
+
+PM 治理註記：DEV-044 不是建立遠端歷史紀錄系統，而是先把既有 `useUndoStore` Command Pattern 擴充到高頻、低成本、可用既有 service 反向操作復原的範圍。Phase 1 已完成本機實作與自動化 gate；資料庫費用 guardrail 仍是本 DEV 的一級驗收：push undo 不得新增遠端寫入；只有使用者真的按 undo / redo 時才執行等同正常操作的反向寫入。Durable recovery、跨裝置 undo、workspace / board delete 完整復原、權限 audit、匯入 rollback、AI 批次版本化與 production deploy 仍需另行授權。
+
 ## Documentation Map Update - 2026-07-05
 
 ### DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas

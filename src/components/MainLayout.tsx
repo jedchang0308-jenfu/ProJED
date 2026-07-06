@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
 import {
-  ArrowLeft,
   BookOpenText,
   BriefcaseBusiness,
   CalendarDays,
@@ -84,6 +83,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const isBoardWorkspaceView = ['list', 'mindmap', 'board', 'gantt', 'calendar', 'records'].includes(currentView);
   const isTaskFilterView = ['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
+  const isSystemPageView = isSettingsScopeView || currentView === 'records';
   const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
   const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar']), []);
 
@@ -92,7 +92,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     setView(nextView);
   };
 
-  const exitSettings = useCallback(() => {
+  const returnToBoard = useCallback(() => {
     setView(activeWorkspace && activeBoard ? 'board' : 'home');
   }, [activeBoard, activeWorkspace, setView]);
 
@@ -155,9 +155,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (isEditable) return;
 
-      if (event.key === 'Escape' && isSettingsScopeView) {
+      if (event.key === 'Escape' && isSystemPageView) {
         event.preventDefault();
-        exitSettings();
+        returnToBoard();
         return;
       }
 
@@ -172,7 +172,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canRedo, canUndo, exitSettings, isSettingsScopeView, redo, undo]);
+  }, [canRedo, canUndo, isSystemPageView, redo, returnToBoard, undo]);
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 text-slate-800" data-mobile-density="compact">
@@ -210,16 +210,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     <span className="font-bold text-slate-500">日曆訂閱</span>
                   </>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={exitSettings}
-                  className="ml-2 inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 shadow-sm transition-colors hover:border-primary/40 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  title="離開設定 (Esc)"
-                >
-                  <ArrowLeft size={13} />
-                  <span className="hidden sm:inline">離開設定</span>
-                  <span className="rounded bg-slate-100 px-1 text-[10px] font-semibold text-slate-500">Esc</span>
-                </button>
               </>
             )}
 

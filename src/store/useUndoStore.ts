@@ -26,6 +26,7 @@ const MAX_STACK_SIZE = 50;
 const useUndoStore = create<UndoStore>((set, get) => ({
   undoStack: [],
   redoStack: [],
+  isApplying: false,
 
   /**
    * pushUndo — 推入一筆可復原指令
@@ -35,6 +36,7 @@ const useUndoStore = create<UndoStore>((set, get) => ({
    */
   pushUndo: (command: UndoCommand) => {
     set((state) => {
+      if (state.isApplying) return state;
       const newStack = [...state.undoStack, command];
       // 超過上限時，移除最舊的紀錄（從頭部 shift）
       if (newStack.length > MAX_STACK_SIZE) {
@@ -55,16 +57,24 @@ const useUndoStore = create<UndoStore>((set, get) => ({
    * - 將該指令推入 redoStack 以供重做
    */
   undo: () => {
-    const { undoStack, redoStack } = get();
-    if (undoStack.length === 0) return;
+    const { undoStack, redoStack, isApplying } = get();
+    if (isApplying || undoStack.length === 0) return;
 
     const command = undoStack[undoStack.length - 1];
-    command.undo(); // 執行反向操作
+    set({ isApplying: true });
 
-    set({
-      undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, command],
-    });
+    Promise.resolve(command.undo())
+      .then(() => {
+        set((state) => ({
+          undoStack: state.undoStack.slice(0, -1),
+          redoStack: [...redoStack, command],
+          isApplying: false,
+        }));
+      })
+      .catch((error) => {
+        console.error('[Undo] undo failed:', error);
+        set({ isApplying: false });
+      });
   },
 
   /**
@@ -75,16 +85,24 @@ const useUndoStore = create<UndoStore>((set, get) => ({
    * - 將該指令推回 undoStack
    */
   redo: () => {
-    const { undoStack, redoStack } = get();
-    if (redoStack.length === 0) return;
+    const { undoStack, redoStack, isApplying } = get();
+    if (isApplying || redoStack.length === 0) return;
 
     const command = redoStack[redoStack.length - 1];
-    command.redo(); // 重新執行正向操作
+    set({ isApplying: true });
 
-    set({
-      undoStack: [...undoStack, command],
-      redoStack: redoStack.slice(0, -1),
-    });
+    Promise.resolve(command.redo())
+      .then(() => {
+        set((state) => ({
+          undoStack: [...undoStack, command],
+          redoStack: state.redoStack.slice(0, -1),
+          isApplying: false,
+        }));
+      })
+      .catch((error) => {
+        console.error('[Undo] redo failed:', error);
+        set({ isApplying: false });
+      });
   },
 
   /**
@@ -92,13 +110,13 @@ const useUndoStore = create<UndoStore>((set, get) => ({
    * 設計意圖：切換看板時應清空 Undo 歷史，
    * 避免在不同看板之間混用操作紀錄，造成資料錯亂。
    */
-  clear: () => set({ undoStack: [], redoStack: [] }),
+  clear: () => set({ undoStack: [], redoStack: [], isApplying: false }),
 
   /** canUndo — 供 UI 決定按鈕是否可點擊 */
-  canUndo: () => get().undoStack.length > 0,
+  canUndo: () => !get().isApplying && get().undoStack.length > 0,
 
   /** canRedo — 供 UI 決定按鈕是否可點擊 */
-  canRedo: () => get().redoStack.length > 0,
+  canRedo: () => !get().isApplying && get().redoStack.length > 0,
 }));
 
 export default useUndoStore;

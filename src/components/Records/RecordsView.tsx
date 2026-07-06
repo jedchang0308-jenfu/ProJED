@@ -1,6 +1,7 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { BookOpenText, BriefcaseBusiness, CalendarClock, FileText, Plus } from 'lucide-react';
+import { ArrowLeft, BookOpenText, BriefcaseBusiness, CalendarClock, FileText, Plus } from 'lucide-react';
+import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
@@ -14,7 +15,11 @@ const RecordsView: React.FC = () => {
   const loading = useRecordStore(state => state.loading);
   const openNewRecord = useRecordStore(state => state.openNewRecord);
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
+  const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
+  const activeBoardId = useBoardStore(state => state.activeBoardId);
+  const setView = useBoardStore(state => state.setView);
   const guardRecordDraft = useRecordDraftGuard();
+  const returnToBoard = () => setView(activeWorkspaceId && activeBoardId ? 'board' : 'home');
 
   const handleNewMeetingRecord = () => {
     void guardRecordDraft(() => openNewRecord('meeting'), {
@@ -34,6 +39,18 @@ const RecordsView: React.FC = () => {
     <div className="flex h-full flex-col bg-slate-50">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={returnToBoard}
+            className="mr-2 inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            title="回到目前看板；也可以按 Esc"
+            data-system-page-return-button="true"
+            data-records-return-button="true"
+          >
+            <ArrowLeft size={15} />
+            回到看板
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Esc</span>
+          </button>
           <BookOpenText size={18} className="text-blue-500" />
           <div>
             <h1 className="text-sm font-semibold text-slate-900">紀錄庫</h1>

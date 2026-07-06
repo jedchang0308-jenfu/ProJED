@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { create } from 'zustand';
 import useAuthStore from './useAuthStore';
+import useUndoStore from './useUndoStore';
 import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
 import {
@@ -91,6 +92,49 @@ const getStoredModal = () => {
         if (stored) return JSON.parse(stored);
     } catch { /* ignore */ }
     return null;
+};
+
+const cloneBoardTaskFilterSnapshot = (state) => ({
+    statusFilters: { ...state.statusFilters },
+    showDependencies: Boolean(state.showDependencies),
+    showStartDate: Boolean(state.showStartDate),
+    showTags: Boolean(state.showTags),
+    dueWithinDays: state.dueWithinDays ?? null,
+    selectedAssigneeIds: [...(state.selectedAssigneeIds || [])],
+});
+
+const writeBoardTaskFilterSnapshot = (snapshot) => writeBoardTaskFilterPrefs({
+    filters: {
+        statusFilters: snapshot.statusFilters,
+        dueWithinDays: snapshot.dueWithinDays,
+        selectedAssigneeIds: snapshot.selectedAssigneeIds,
+    },
+    displaySettings: {
+        showDependencies: snapshot.showDependencies,
+        showStartDate: snapshot.showStartDate,
+        showTags: snapshot.showTags,
+    },
+});
+
+const applyBoardTaskFilterSnapshot = (set, snapshot) => {
+    writeBoardTaskFilterSnapshot(snapshot);
+    set({
+        statusFilters: { ...snapshot.statusFilters },
+        showDependencies: snapshot.showDependencies,
+        showStartDate: snapshot.showStartDate,
+        showTags: snapshot.showTags,
+        dueWithinDays: snapshot.dueWithinDays,
+        selectedAssigneeIds: [...snapshot.selectedAssigneeIds],
+    });
+};
+
+const pushBoardTaskFilterUndo = (set, label, before, after) => {
+    useUndoStore.getState().pushUndo({
+        label,
+        scope: 'filter',
+        undo: () => applyBoardTaskFilterSnapshot(set, before),
+        redo: () => applyBoardTaskFilterSnapshot(set, after),
+    });
 };
 
 const useBoardStore = create<BoardStore>()(
@@ -203,6 +247,9 @@ const useBoardStore = create<BoardStore>()(
         updateWorkspaceTitle: (workspaceId, newTitle) => {
             const title = newTitle.trim();
             if (!title) return;
+            const oldWorkspace = get().workspaces.find(ws => ws.id === workspaceId);
+            const oldTitle = oldWorkspace?.title;
+            if (!oldTitle || oldTitle === title) return;
 
             set((state) => ({
                 workspaces: state.workspaces.map(ws =>
@@ -210,50 +257,71 @@ const useBoardStore = create<BoardStore>()(
                 )
             }));
             workspaceService.update(workspaceId, { title }).catch(console.error);
+
+            useUndoStore.getState().pushUndo({
+                label: '修改工作區名稱',
+                scope: 'workspace',
+                entityIds: [workspaceId],
+                undo: () => get().updateWorkspaceTitle(workspaceId, oldTitle),
+                redo: () => get().updateWorkspaceTitle(workspaceId, title),
+            });
         },
 
-        toggleStatusFilter: (status) => set((state) => {
+        toggleStatusFilter: (status) => {
+            const before = cloneBoardTaskFilterSnapshot(get());
             const newFilters = {
-                ...state.statusFilters,
-                [status]: !state.statusFilters[status]
+                ...before.statusFilters,
+                [status]: !before.statusFilters[status]
             };
-            persistBoardTaskFilters(state, { statusFilters: newFilters });
-            return { statusFilters: newFilters };
-        }),
+            const after = { ...before, statusFilters: newFilters };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '修改篩選條件', before, after);
+        },
 
         // 切換 UI 顯示
-        toggleDependencies: () => set((state) => {
-            const newDeps = !state.showDependencies;
-            persistBoardTaskFilters(state, { showDependencies: newDeps });
-            return { showDependencies: newDeps };
-        }),
-        toggleStartDate: () => set((state) => {
-            const newStart = !state.showStartDate;
-            persistBoardTaskFilters(state, { showStartDate: newStart });
-            return { showStartDate: newStart };
-        }),
-        toggleTags: () => set((state) => {
-            const newTags = !state.showTags;
-            persistBoardTaskFilters(state, { showTags: newTags });
-            return { showTags: newTags };
-        }),
-        setDueWithinDays: (days) => set((state) => {
+        toggleDependencies: () => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            const after = { ...before, showDependencies: !before.showDependencies };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '切換依賴顯示', before, after);
+        },
+        toggleStartDate: () => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            const after = { ...before, showStartDate: !before.showStartDate };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '切換開始時間顯示', before, after);
+        },
+        toggleTags: () => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            const after = { ...before, showTags: !before.showTags };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '切換標籤顯示', before, after);
+        },
+        setDueWithinDays: (days) => {
+            const before = cloneBoardTaskFilterSnapshot(get());
             const nextDays = days === null || days === undefined ? null : Math.max(0, Math.min(365, Math.floor(days)));
-            persistBoardTaskFilters(state, { dueWithinDays: nextDays });
-            return { dueWithinDays: nextDays };
-        }),
-        toggleAssigneeFilter: (assigneeId) => set((state) => {
-            const currentIds = Array.isArray(state.selectedAssigneeIds) ? state.selectedAssigneeIds : [];
+            if (before.dueWithinDays === nextDays) return;
+            const after = { ...before, dueWithinDays: nextDays };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '修改到期篩選', before, after);
+        },
+        toggleAssigneeFilter: (assigneeId) => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            const currentIds = Array.isArray(before.selectedAssigneeIds) ? before.selectedAssigneeIds : [];
             const nextAssigneeIds = currentIds.includes(assigneeId)
                 ? currentIds.filter(id => id !== assigneeId)
                 : [...currentIds, assigneeId];
-            persistBoardTaskFilters(state, { selectedAssigneeIds: nextAssigneeIds });
-            return { selectedAssigneeIds: nextAssigneeIds };
-        }),
-        clearAssigneeFilters: () => set((state) => {
-            persistBoardTaskFilters(state, { selectedAssigneeIds: [] });
-            return { selectedAssigneeIds: [] };
-        }),
+            const after = { ...before, selectedAssigneeIds: nextAssigneeIds };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '修改負責人篩選', before, after);
+        },
+        clearAssigneeFilters: () => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            if (before.selectedAssigneeIds.length === 0) return;
+            const after = { ...before, selectedAssigneeIds: [] };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '清除負責人篩選', before, after);
+        },
 
         // ===== Navigation =====
         showHome: () => {
@@ -303,18 +371,34 @@ const useBoardStore = create<BoardStore>()(
         },
 
         updateBoardTitle: (workspaceId, boardId, newTitle) => {
+            const title = newTitle.trim();
+            if (!title) return;
+            const oldBoard = get().workspaces
+                .find(ws => ws.id === workspaceId)
+                ?.boards.find(board => board.id === boardId);
+            const oldTitle = oldBoard?.title;
+            if (!oldTitle || oldTitle === title) return;
+
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== workspaceId) return ws;
                     return {
                         ...ws,
                         boards: ws.boards.map(b =>
-                            b.id === boardId ? { ...b, title: newTitle } : b
+                            b.id === boardId ? { ...b, title } : b
                         )
                     };
                 })
             }));
-            boardService.update(workspaceId, boardId, { title: newTitle }).catch(console.error);
+            boardService.update(workspaceId, boardId, { title }).catch(console.error);
+
+            useUndoStore.getState().pushUndo({
+                label: '修改看板名稱',
+                scope: 'board',
+                entityIds: [boardId],
+                undo: () => get().updateBoardTitle(workspaceId, boardId, oldTitle),
+                redo: () => get().updateBoardTitle(workspaceId, boardId, title),
+            });
         },
 
         moveBoardToWorkspace: async (workspaceId, boardId, targetWorkspaceId, expectedBoardTitle) => {
@@ -394,6 +478,61 @@ const useBoardStore = create<BoardStore>()(
             }));
             boardService.create(targetWorkspaceId, boardName)
                 .then((createdBoard) => {
+                    const activateCreatedBoard = (board) => {
+                        safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
+                        safeSetItem(BOARD_STORAGE_KEY, board.id);
+                        safeSetItem(VIEW_STORAGE_KEY, 'board');
+                        set((state) => ({
+                            workspaces: state.workspaces.map(ws => {
+                                if (ws.id !== targetWorkspaceId) return ws;
+                                const exists = ws.boards.some(item => item.id === board.id);
+                                return {
+                                    ...ws,
+                                    boards: exists
+                                        ? ws.boards.map(item => item.id === board.id ? board : item)
+                                        : [...ws.boards, board],
+                                };
+                            }),
+                            activeWorkspaceId: targetWorkspaceId,
+                            activeBoardId: board.id,
+                            currentView: 'board',
+                        }));
+                    };
+
+                    const removeCreatedBoard = async (command) => {
+                        const boardId = command.entityIds?.[0];
+                        if (!boardId) return;
+                        await boardService.delete(targetWorkspaceId, boardId);
+                        set((state) => {
+                            const isActiveBoardDeleted = state.activeBoardId === boardId;
+                            const shouldClearEditingItem = state.editingItem?.boardId === boardId;
+                            if (isActiveBoardDeleted) {
+                                safeSetItem(BOARD_STORAGE_KEY, null);
+                                safeSetItem(VIEW_STORAGE_KEY, 'home');
+                            }
+                            if (shouldClearEditingItem) safeSetItem(MODAL_STORAGE_KEY, null);
+
+                            return {
+                                workspaces: state.workspaces.map(ws => {
+                                    if (ws.id !== targetWorkspaceId) return ws;
+                                    return { ...ws, boards: ws.boards.filter(board => board.id !== boardId) };
+                                }),
+                                activeBoardId: isActiveBoardDeleted ? null : state.activeBoardId,
+                                currentView: isActiveBoardDeleted ? 'home' : state.currentView,
+                                editingItem: shouldClearEditingItem ? null : state.editingItem,
+                                pendingBoardTitleEdit: state.pendingBoardTitleEdit?.boardId === boardId
+                                    ? null
+                                    : state.pendingBoardTitleEdit,
+                            };
+                        });
+                    };
+
+                    const recreateCreatedBoard = async (command) => {
+                        const recreatedBoard = await boardService.create(targetWorkspaceId, boardName);
+                        command.entityIds = [recreatedBoard.id];
+                        activateCreatedBoard(recreatedBoard);
+                    };
+
                     set((state) => ({
                         workspaces: state.workspaces.map(ws => {
                     if (ws.id !== targetWorkspaceId) return ws;
@@ -412,6 +551,14 @@ const useBoardStore = create<BoardStore>()(
                     if (get().activeBoardId === createdBoard.id) {
                         safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
                     }
+                    const command = {
+                        label: '新增看板',
+                        scope: 'board',
+                        entityIds: [createdBoard.id],
+                        undo: () => removeCreatedBoard(command),
+                        redo: () => recreateCreatedBoard(command),
+                    };
+                    useUndoStore.getState().pushUndo(command);
                 })
                 .catch(console.error);
             return tempId;

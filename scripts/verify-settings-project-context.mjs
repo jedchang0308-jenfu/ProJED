@@ -13,26 +13,27 @@ const checks = [
       sidebar.includes('const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);'),
   },
   {
-    name: 'Sidebar keeps active project visible as current settings context',
+    name: 'Sidebar keeps active project available as clickable settings context',
     pass:
-      sidebar.includes('const isCurrentSettingsProject = isSettingsScopeView && isCurrentBoard;') &&
-      sidebar.includes('data-sidebar-current-settings-project={isCurrentSettingsProject') &&
-      sidebar.includes('{isCurrentSettingsProject ? (') &&
-      sidebar.includes('border border-primary/20 bg-white'),
+      sidebar.includes('data-sidebar-current-settings-project={isSettingsScopeView && isCurrentBoard') &&
+      sidebar.includes("const boardItemTitle = isSettingsScopeView && isCurrentBoard") &&
+      sidebar.includes("'點擊回到看板'"),
   },
   {
-    name: 'Sidebar blocks project switching while settings scope is open',
+    name: 'Sidebar allows project switching while settings scope is open',
     pass:
-      sidebar.includes('const isBoardSwitchLocked = isSettingsScopeView;') &&
-      sidebar.includes('if (isBoardSwitchLocked) return;') &&
-      sidebar.includes('aria-disabled={isBoardSwitchLocked && !isCurrentBoard}'),
+      !sidebar.includes('const isBoardSwitchLocked = isSettingsScopeView;') &&
+      !sidebar.includes('if (isBoardSwitchLocked) return;') &&
+      !sidebar.includes('aria-disabled={isBoardSwitchLocked && !isCurrentBoard}') &&
+      sidebar.includes('switchBoard(ws.id, board.id);'),
   },
   {
-    name: 'Sidebar uses soft context highlight instead of main project active style in settings',
+    name: 'Sidebar uses normal active board style in settings so the row remains discoverable',
     pass:
       sidebar.includes('isMainBoardActive') &&
-      sidebar.includes('isCurrentSettingsProject') &&
-      sidebar.includes('cursor-default border border-primary/20 bg-primary-light/40 text-primary shadow-sm'),
+      sidebar.includes('BOARD_WORKSPACE_VIEWS.includes(currentView) || isSettingsScopeView') &&
+      !sidebar.includes('cursor-default border border-primary/20 bg-primary-light/40 text-primary shadow-sm') &&
+      !sidebar.includes('設定中'),
   },
   {
     name: 'Settings entry remains active for settings scope views',

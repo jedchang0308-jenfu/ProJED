@@ -50,15 +50,28 @@ const Sidebar = () => {
   const isRecordsView = currentView === 'records';
   const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
 
+  const returnToBoard = React.useCallback(() => {
+    setView(activeBoardId ? 'board' : 'home');
+    if (isNarrowViewport) setSidebarOpen(false);
+  }, [activeBoardId, isNarrowViewport, setSidebarOpen, setView]);
+
   const handleOpenRecords = React.useCallback(() => {
+    if (isRecordsView) {
+      returnToBoard();
+      return;
+    }
     setView('records');
     if (isNarrowViewport) setSidebarOpen(false);
-  }, [isNarrowViewport, setSidebarOpen, setView]);
+  }, [isNarrowViewport, isRecordsView, returnToBoard, setSidebarOpen, setView]);
 
   const handleOpenSettings = React.useCallback(() => {
+    if (isSettingsScopeView) {
+      returnToBoard();
+      return;
+    }
     setView('settings');
     if (isNarrowViewport) setSidebarOpen(false);
-  }, [isNarrowViewport, setSidebarOpen, setView]);
+  }, [isNarrowViewport, isSettingsScopeView, returnToBoard, setSidebarOpen, setView]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -312,17 +325,12 @@ const Sidebar = () => {
               <div className="relative ml-3 space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
                 {ws.boards.map((board) => {
                   const isCurrentBoard = activeBoardId === board.id;
-                  const isMainBoardActive = isCurrentBoard && BOARD_WORKSPACE_VIEWS.includes(currentView);
-                  const isCurrentSettingsProject = isSettingsScopeView && isCurrentBoard;
-                  const isBoardSwitchLocked = isSettingsScopeView;
+                  const isMainBoardActive = isCurrentBoard && (BOARD_WORKSPACE_VIEWS.includes(currentView) || isSettingsScopeView);
                   const isEditingBoard = editingBoard?.workspaceId === ws.id && editingBoard?.boardId === board.id;
-                  const boardItemTitle = isSettingsScopeView
-                    ? isCurrentBoard
-                      ? '目前正在此專案設定中'
-                      : '請先離開設定頁面再切換專案'
+                  const boardItemTitle = isSettingsScopeView && isCurrentBoard
+                    ? '點擊回到看板'
                     : undefined;
                   const handleBoardClick = () => {
-                    if (isBoardSwitchLocked) return;
                     switchBoard(ws.id, board.id);
                     if (isNarrowViewport) setSidebarOpen(false);
                   };
@@ -332,9 +340,8 @@ const Sidebar = () => {
                       key={board.id}
                       role="button"
                       tabIndex={0}
-                      aria-disabled={isBoardSwitchLocked && !isCurrentBoard}
                       data-sidebar-board-row="true"
-                      data-sidebar-current-settings-project={isCurrentSettingsProject ? 'true' : undefined}
+                      data-sidebar-current-settings-project={isSettingsScopeView && isCurrentBoard ? 'true' : undefined}
                       title={boardItemTitle}
                       onClick={handleBoardClick}
                       onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
@@ -355,11 +362,7 @@ const Sidebar = () => {
                       className={`group/item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                         isMainBoardActive
                           ? 'cursor-pointer bg-primary text-white shadow-md'
-                          : isCurrentSettingsProject
-                            ? 'cursor-default border border-primary/20 bg-primary-light/40 text-primary shadow-sm'
-                            : isBoardSwitchLocked
-                              ? 'cursor-not-allowed text-slate-300 opacity-70'
-                              : 'cursor-pointer text-slate-600 hover:bg-slate-100'
+                          : 'cursor-pointer text-slate-600 hover:bg-slate-100'
                       }`}
                     >
                       {isEditingBoard ? (
@@ -392,12 +395,6 @@ const Sidebar = () => {
                           {board.title}
                         </span>
                       )}
-
-                      {isCurrentSettingsProject ? (
-                        <span className="shrink-0 rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[11px] font-bold text-primary">
-                          設定中
-                        </span>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -414,7 +411,7 @@ const Sidebar = () => {
                 ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
                 : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
             }`}
-            title="紀錄庫"
+            title={isRecordsView ? '回到看板' : '紀錄庫'}
             data-sidebar-records-button="true"
           >
             <BookOpenText size={16} className={isRecordsView ? 'text-white/90' : 'text-slate-400'} />
@@ -427,6 +424,8 @@ const Sidebar = () => {
                 ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
                 : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
             }`}
+            title={isSettingsScopeView ? '回到看板' : '設定'}
+            data-sidebar-settings-button="true"
           >
             <Settings size={16} className={isSettingsScopeView ? 'text-white/90' : 'text-slate-400'} />
             <span className="min-w-0 flex-1 truncate text-left">設定</span>

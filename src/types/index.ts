@@ -610,13 +610,17 @@ export type BoardStore = BoardState & BoardActions;
 
 export interface UndoCommand {
   label: string;
-  undo: () => void;
-  redo: () => void;
+  scope?: 'task' | 'board' | 'workspace' | 'record' | 'filter' | 'batch';
+  entityIds?: string[];
+  mergeKey?: string;
+  undo: () => void | Promise<void>;
+  redo: () => void | Promise<void>;
 }
 
 export interface UndoStore {
   undoStack: UndoCommand[];
   redoStack: UndoCommand[];
+  isApplying: boolean;
   pushUndo: (command: UndoCommand) => void;
   undo: () => void;
   redo: () => void;

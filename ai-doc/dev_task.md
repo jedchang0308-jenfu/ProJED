@@ -1,5 +1,116 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-07-06
+
+### DEV-044: 上一步復原範圍擴充與低資料庫成本治理
+
+狀態: Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed
+節點類型: 交付點 / Undo recovery scope
+父交付點: DEV-001 緊湊 UI 系統 / DEV-028 跨模式任務互動 / DEV-039 全域任務平台
+是否計入產品交付完成: 是，本輪完成 Phase 1 local RD implementation + automated QA；production deploy 與 durable recovery 未執行
+建立日期: 2026-07-06
+
+原始需求邊界:
+- 使用者指出目前「上一步」範圍不夠，有些動作不能恢復。
+- 使用者要求評估還能增加哪些復原範圍，且資料庫費用不要增加太多。
+- 後續已完成 Phase 1 low-cost ordinary undo 的本機產品程式碼、verifier 與自動化 QA/QC；DB migration、production deploy、durable recovery 與 Phase 2/3 尚未授權。
+
+Human Decision Brief:
+- 已確認：先擴充普通 undo 的高頻、低成本範圍，不先做遠端歷史紀錄系統。
+- 已確認：push undo command 本身不得造成資料庫寫入；只有使用者真的按 undo / redo 時，才執行等同正常操作的反向寫入。
+- 已確認：高風險、低頻、資料生命週期型能力要和 ordinary Ctrl+Z 分流。
+- 已否決：Phase 1 新增 `undo_logs` / `history` / `versions` 遠端表、把 workspace delete / 權限 / 匯入覆蓋 / AI 批次改寫直接包成普通 undo。
+- AI 假設：Phase 1 可透過既有 Zustand store、service action、記憶體 command payload 與 async/suppress guard 完成，不需要 schema / migration。
+
+目前授權邊界:
+- Authorized / Complete: SPEC、QA plan、QC report、dev_task、documentation_map 文件更新；Phase 1 產品程式碼、package scripts、static/browser verifier、本機 automated QA/QC。
+- RD Contract Ready / Not Authorized: Phase 2 batch / cross-view recovery、Phase 3 destructive recovery lifecycle。
+- Not Authorized / Not Executed: DB schema/migration/RLS/RPC、production deploy、正式資料修復、durable recovery、cross-device persistent undo、workspace / board delete lifecycle recovery、permission / import / AI batch rollback。
+
+End-State Architecture:
+- Ordinary undo 是目前 session 的短期操作復原。
+- Durable recovery 是資料生命週期能力，必須用回收站、soft delete、audit 或版本快照治理。
+- 每個可復原 action 需分類為 `local-only`、`normal-write`、`snapshot-needed` 或 `lifecycle-required`，避免成本與使用者預期混淆。
+
+Phase Roadmap:
+
+| Phase | 狀態 | Scope | 授權 |
+|---|---|---|---|
+| 0 | Complete | 建立 SPEC / QA / dev_task / documentation_map | Authorized |
+| 1 | Implemented / Local Automated QA Passed | 工作區 / 看板標題、看板新增、紀錄封存 / 儲存、篩選與顯示設定、async/suppress undo guard | Authorized / Local Complete |
+| 2 | RD Contract Ready | 批次任務 patch、工作台跨看板 placement、可逆看板移動、drag/reorder coalescing | Not Authorized |
+| 3 | RD Contract Ready / Human Re-entry | workspace / board delete lifecycle、import rollback、permission audit、persistent cross-device history、AI batch rollback | Not Authorized |
+
+RD Handoff / Implementation Contract:
+- 擴充 `UndoCommand` 支援 async `undo` / `redo`、`scope`、`entityIds`、`mergeKey`。
+- `useUndoStore` 增加 `isApplying` 或等效 suppress guard，避免 undo / redo 反向 action 再 push command。
+- `useBoardStore.updateWorkspaceTitle`、`updateBoardTitle`、`addBoard` 納入 undo；`addBoard` 必須等 stable backend id 後才 push。
+- `useRecordStore.saveDraft` 與 `archiveRecord` 納入 undo；archive 前必須保存完整 record snapshot。
+- 篩選器 / 顯示設定 undo 只改 state / localStorage，不得呼叫遠端 service。
+- Workspace delete、permission/member、import overwrite、AI batch rewrite 不得納入 Phase 1 ordinary undo。
+
+Acceptance:
+- 工作區 / 看板重新命名可 undo / redo。
+- 新增看板 undo 不留下 temp id 或 active board 殘留。
+- 紀錄封存後 undo 可完整還原內容、狀態、visibility 與 taskLinks。
+- 既有紀錄儲存後 undo / redo 在 before / after snapshot 間切換。
+- 篩選器 / 顯示設定 undo 不產生遠端 DB write。
+- Editor focus 中的 Ctrl+Z 仍使用 editor history，不觸發全域 undo。
+- Undo / redo 執行期間不污染 undoStack / redoStack。
+
+QA / QC gate:
+- `npm.cmd run verify:dev-044-undo-coverage`
+- `npm.cmd run verify:dev-044-undo-coverage-browser`
+- `npm.cmd run verify:dev-013-task-duplicate`
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser`
+- `npm.cmd run verify:dev-006-browser-input`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+
+QC Evidence - 2026-07-06:
+- `npm.cmd run verify:dev-044-undo-coverage` passed，19/19。
+- `npm.cmd run verify:dev-044-undo-coverage-browser` passed；覆蓋看板標題 undo/redo、suppress guard、紀錄封存 undo restore。
+- `npm.cmd run verify:dev-013-task-duplicate` passed。
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser` passed。
+- `npm.cmd run verify:dev-006-browser-input` passed；覆蓋 editor `Ctrl+Z` / `Ctrl+Y` 與 task chip 操作。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build:test` passed。
+- `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
+
+Stop Conditions:
+- Phase 1 需要新增遠端 history table 才能完成。
+- 普通操作因記錄 undo 額外寫資料庫。
+- Record undo 遺失 content、taskLinks、visibility 或 published/draft 狀態。
+- Board delete 後端會 cascade child data，卻被包裝成普通 undo。
+- 需要 DB migration、RLS/RPC、production deploy、正式資料修復或跨裝置 persistent undo。
+
+Deferred Scope Audit:
+- Product code implementation: Same Spec Phase / Complete for Phase 1；Phase 2/3 未授權。
+- Automated verifier implementation: Same Spec Phase / Complete for Phase 1；`verify:dev-044-undo-coverage` 與 browser verifier 已建立並通過。
+- DB schema / migration / RLS / RPC: Blocked Human Re-entry；Phase 1 明確不做。
+- Production deploy: Blocked Human Re-entry；需 deployment-release-gate。
+- Workspace delete recovery: New DEV Candidate / Human Re-entry。
+- Board delete with full child restore: Same Spec Phase 3；需 lifecycle redesign。
+- Permission / member / role undo: New DEV Candidate。
+- Import overwrite rollback: New DEV Candidate。
+- AI batch rewrite rollback: New DEV Candidate。
+- Persistent cross-device undo: New DEV Candidate。
+
+All-Phase Coverage Matrix:
+
+| Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|
+| Phase 0 | Authorized | Complete | SPEC / QA / dev_task / documentation_map | Product code, verifier, deploy | 使用者要求寫成開發文件 | 文件包含 scope、cost guardrail、RD contract、QA gate | File diff |
+| Phase 1 | Authorized / Local Complete | Implemented / Local Automated QA Passed | Title edits, board create, record save/archive restore, filter/display prefs, async/suppress guard | DB history, workspace delete, permission undo, import rollback | Phase 0 contract complete | DEV-044 static/browser verifier and regressions pass；normal operation 不新增 history write | DEV-044 verifier, DEV-013/039/006 regression, TS, build |
+| Phase 2 | Not Authorized | RD Contract Ready | Batch task patches, cross-view placement, reversible board move, drag coalescing | Destructive cascade restore, persistent history | Phase 1 stable and user authorizes | Batch undo/redo 無重複 / 錯 board | Batch verifier, workbench regression |
+| Phase 3 | Human Re-entry Required | RD Contract Ready / Not Authorized | Workspace/board lifecycle, import rollback, permission/audit, persistent history | Ordinary Ctrl+Z semantics | 使用者確認成本、retention、DB migration | Recovery model documented and gated | ADR/SPEC/QA/QC + migration evidence |
+
+文件:
+- `ai-doc/specs/SPEC-044-undo-recovery-scope-expansion.md`
+- `ai-doc/qa/QA-DEV-044-undo-recovery-scope-expansion.md`
+- `ai-doc/qc/QC-DEV-044-undo-recovery-scope-expansion.md`
+- `ai-doc/documentation_map.md`
+
 ## PM Update - 2026-07-05
 
 ### DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
@@ -2000,6 +2111,7 @@ CAPA 來源：
 - Supabase Edge Function `synthesize_meeting_record` 已部署到正式 Supabase version 2，狀態 `ACTIVE`，並維持 `verify_jwt=true`。
 - 2026-06-09 production backend AI smoke 已通過：匿名請求回 `401`，一次性 Supabase Auth user 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
 - 2026-07-05 DEV-042 已完成 local RD + automated browser QA，commit `aa1fff7`；手機 closed Sidebar / TaskWorkbench 不再佔用 in-flow 左側版面，production deploy 與真機手感仍未執行。
+- 2026-07-06 DEV-044 Phase 1 已完成 local RD + automated QA；採低資料庫成本 ordinary undo 擴充，production deploy、DB migration、durable recovery 與 Phase 2/3 未授權。
 - 目前可由 Codex 直接開工的產品 RD 候選：無。任務板剩餘 RD 候選多數為 `Not Authorized`、`Blocked Human Re-entry`、production deploy、DB/RLS/migration、真機/登入式人工 QC 或手動 UI smoke。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待互動式 production UI smoke，原因是正式前端使用 Google OAuth，CLI 無法非互動完成登入與發布流程。
@@ -2012,9 +2124,10 @@ CAPA 來源：
 | 1 | DEV-028 Addendum 詳情頁唯一改名入口 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者明確授權後，移除外層 rename gesture，改為詳情頁 title edit，通過 DEV-028 / DEV-029 regression gate。 |
 | 2 | DEV-037 / DEV-038 設定與行事曆來源範圍 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者明確授權後，處理設定中心 scope summary 與行事曆訂閱 source-scope contract。 |
 | 3 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Not Authorized | RD / QA / QC | 使用者授權後處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
-| 4 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 5 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
-| 6 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
+| 4 | DEV-044 Phase 2/3 Undo Recovery | RD Contract Ready / Not Authorized / Human Re-entry for destructive recovery | RD / QA / QC | 使用者授權後，才可擴充 batch/cross-view undo 或 durable recovery；DB/cross-device/destructive recovery 需另行 gate。 |
+| 5 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 6 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
+| 7 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
 
 ---
 
@@ -2048,6 +2161,7 @@ CAPA 來源：
 | DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke` | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項需另行驗證 |
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041` | 強制更新、release notes 後端、版本 API、analytics 另行決策 |
 | DEV-042 | 交付點 | Implemented / Local Automated Browser QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、commit `aa1fff7` | production deploy 與 physical-phone supplemental 需另行授權 |
+| DEV-044 | 交付點 | Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke | Phase 2/3、durable recovery、DB migration、production deploy 需另行授權 |
 
 ### 交付點完成率
 
@@ -2061,6 +2175,7 @@ CAPA 來源：
 - Implemented / Local Automated QC Passed / Supabase DB QC Pending：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged：1 個交付點。
 - RD Contract Ready / Not Authorized：2 個交付點。
+- Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed：1 個交付點。
 - Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
@@ -2090,7 +2205,7 @@ CAPA 來源：
 | 項目 | 影響 | 解除方式 |
 |---|---|---|
 | DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過，但完整前端流程尚未以 Google OAuth 登入帳號驗證 | 使用已登入 Google 的正式前端，建立或開啟看板後完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 目前無可直接執行的已授權產品 RD | Dev PM 不能自行開工 `Not Authorized`、production、DB/RLS/migration、真機或人工登入式 QC 項目 | 使用者明確指定並授權下一個方向：DEV-028 addendum、DEV-037/038、DEV-040 Phase 1、production release、或人工/真機 QC。 |
+| 目前無可直接執行的已授權產品 RD | Dev PM 不能自行開工 `Not Authorized`、production、DB/RLS/migration、真機或人工登入式 QC 項目 | 使用者明確指定並授權下一個方向：DEV-028 addendum、DEV-037/038、DEV-040 Phase 1、DEV-044 Phase 2/3、production release、或人工/真機 QC。 |
 
 ---
 

@@ -4,6 +4,7 @@ import { recordService } from '../services/dataBackend';
 import { synthesizeMeetingRecord } from '../services/meetingSynthesisService';
 import useAuthStore from './useAuthStore';
 import useBoardStore from './useBoardStore';
+import useUndoStore from './useUndoStore';
 import {
   extractTaskMentionIds,
   insertTaskMention,
@@ -145,6 +146,30 @@ const createDefaultDraft = (
 };
 
 const uniqueLinks = uniqueRecordTaskLinks;
+
+const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({
+  id: record.id,
+  type: record.type,
+  title: record.title,
+  content: record.content,
+  status: record.status,
+  visibility: record.visibility,
+  participantsText: record.participantsText,
+  occurredAt: record.occurredAt,
+  startedAt: record.startedAt,
+  endedAt: record.endedAt,
+  recordedBy: record.recordedBy,
+  taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+});
+
+const toDraftFromRecordInput = (
+  input: KnowledgeRecordInput,
+  saved: KnowledgeRecord,
+): RecordDraft => ({
+  ...input,
+  id: saved.id,
+  taskLinks: saved.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+});
 
 const syncDraftContentLinks = (draft: RecordDraft, content: string): RecordDraft => ({
   ...draft,
@@ -693,10 +718,15 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       status: draft.status as KnowledgeRecordStatus,
       visibility: draft.visibility as KnowledgeRecordVisibility,
     };
+    const previousRecord = payload.id
+      ? get().records.find(record => record.id === payload.id)
+      : undefined;
+    const previousInput = previousRecord ? toRecordInput(previousRecord) : null;
 
     set({ saving: true, error: null });
     try {
       const saved = await recordService.upsert(activeWorkspaceId, activeBoardId, payload);
+      const savedInput = toRecordInput(saved);
       set(state => ({
         saving: false,
         draft: {
@@ -716,6 +746,65 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           savedAt: Date.now(),
         },
       }));
+
+      const applyRecordInput = async (input: KnowledgeRecordInput) => {
+        set({ saving: true, error: null });
+        try {
+          const restored = await recordService.upsert(activeWorkspaceId, activeBoardId, input);
+          const restoredDraft = toDraftFromRecordInput(input, restored);
+          set(state => ({
+            saving: false,
+            records: [restored, ...state.records.filter(record => record.id !== restored.id)],
+            draft: state.draft?.id === restored.id ? restoredDraft : state.draft,
+            draftBaselineSignature: state.draft?.id === restored.id
+              ? getRecordDraftSignature(restoredDraft)
+              : state.draftBaselineSignature,
+            lastSaveFeedback: {
+              recordId: restored.id,
+              status: restored.status,
+              savedAt: Date.now(),
+            },
+          }));
+        } catch (error) {
+          set({
+            saving: false,
+            error: error instanceof Error ? error.message : String(error),
+            lastSaveFeedback: null,
+          });
+          throw error;
+        }
+      };
+
+      const archiveSavedRecord = async () => {
+        set({ saving: true, error: null });
+        try {
+          await recordService.delete(activeWorkspaceId, activeBoardId, saved.id);
+          set(state => ({
+            saving: false,
+            records: state.records.filter(record => record.id !== saved.id),
+            draft: state.draft?.id === saved.id ? null : state.draft,
+            draftBaselineSignature: state.draft?.id === saved.id ? null : state.draftBaselineSignature,
+            lastSaveFeedback: state.lastSaveFeedback?.recordId === saved.id ? null : state.lastSaveFeedback,
+          }));
+        } catch (error) {
+          set({
+            saving: false,
+            error: error instanceof Error ? error.message : String(error),
+            lastSaveFeedback: null,
+          });
+          throw error;
+        }
+      };
+
+      useUndoStore.getState().pushUndo({
+        label: previousInput
+          ? previousInput.status !== savedInput.status ? '修改紀錄狀態' : '修改紀錄'
+          : '新增紀錄',
+        scope: 'record',
+        entityIds: [saved.id],
+        undo: () => previousInput ? applyRecordInput(previousInput) : archiveSavedRecord(),
+        redo: () => applyRecordInput(savedInput),
+      });
       return saved;
     } catch (error) {
       set({
@@ -730,6 +819,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   archiveRecord: async (recordId) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
     if (!activeWorkspaceId || !activeBoardId) return;
+    const archivedRecord = get().records.find(record => record.id === recordId);
     set({ saving: true, error: null });
     try {
       await recordService.delete(activeWorkspaceId, activeBoardId, recordId);
@@ -740,6 +830,42 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         draftBaselineSignature: state.draft?.id === recordId ? null : state.draftBaselineSignature,
         lastSaveFeedback: state.lastSaveFeedback?.recordId === recordId ? null : state.lastSaveFeedback,
       }));
+      if (archivedRecord) {
+        const restoreInput = toRecordInput(archivedRecord);
+        useUndoStore.getState().pushUndo({
+          label: '封存紀錄',
+          scope: 'record',
+          entityIds: [recordId],
+          undo: async () => {
+            set({ saving: true, error: null });
+            try {
+              const restored = await recordService.upsert(activeWorkspaceId, activeBoardId, restoreInput);
+              const restoredDraft = toDraftFromRecordInput(restoreInput, restored);
+              set(state => ({
+                saving: false,
+                records: [restored, ...state.records.filter(record => record.id !== restored.id)],
+                draft: state.draft?.id === restored.id ? restoredDraft : state.draft,
+                draftBaselineSignature: state.draft?.id === restored.id
+                  ? getRecordDraftSignature(restoredDraft)
+                  : state.draftBaselineSignature,
+                lastSaveFeedback: {
+                  recordId: restored.id,
+                  status: restored.status,
+                  savedAt: Date.now(),
+                },
+              }));
+            } catch (error) {
+              set({
+                saving: false,
+                error: error instanceof Error ? error.message : String(error),
+                lastSaveFeedback: null,
+              });
+              throw error;
+            }
+          },
+          redo: () => get().archiveRecord(recordId),
+        });
+      }
     } catch (error) {
       set({
         saving: false,

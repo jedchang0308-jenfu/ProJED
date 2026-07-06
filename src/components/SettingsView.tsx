@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   CalendarPlus,
   DatabaseBackup,
   Download,
@@ -72,6 +73,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
   const activeMeta = activeWorkspace && activeBoard
     ? `${activeWorkspace.title} / ${activeBoard.title}`
     : '尚未選擇看板';
+  const setView = useBoardStore((state) => state.setView);
+  const returnToBoard = () => setView(activeWorkspace && activeBoard ? 'board' : 'home');
 
   return (
     <div className="h-full overflow-auto bg-slate-50">
@@ -79,6 +82,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
         <header className="border-b border-slate-200 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
+              <button
+                type="button"
+                onClick={returnToBoard}
+                className="mb-3 inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                title="回到目前看板；也可以按 Esc"
+                data-system-page-return-button="true"
+                data-settings-return-button="true"
+              >
+                <ArrowLeft size={15} />
+                回到看板
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Esc</span>
+              </button>
               <div className="mb-2 inline-flex items-center gap-2 text-sm font-bold text-primary">
                 <Settings size={16} />
                 設定中心

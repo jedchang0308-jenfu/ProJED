@@ -48,8 +48,35 @@ async (page) => {
     assert(count === expected, `${label} count mismatch`, { expected, actual: count });
   };
 
-  await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+  const account = {
+    id: 'local-test-user',
+    uid: 'local-test-user',
+    email: 'test@projed.local',
+    displayName: 'ProJED local QA',
+    createdAt: 1704067200000,
+  };
+
+  const seedSession = async () => {
+    await page.evaluate(({ account }) => {
+      localStorage.setItem('projed-local-test.selected-account', account.id);
+      localStorage.setItem('projed-local-test.session', JSON.stringify({
+        uid: account.uid,
+        email: account.email,
+        displayName: account.displayName,
+        createdAt: account.createdAt,
+      }));
+      localStorage.setItem('projed-last-view', 'board');
+    }, { account });
+  };
+
+  await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
   await page.setViewportSize({ width: 1440, height: 950 });
+  await seedSession();
+  await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+  await seedSession();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
     origin: 'http://127.0.0.1:4173',
   });
@@ -59,13 +86,13 @@ async (page) => {
     await page.locator('button', { hasText: /新增會議記錄|會議紀錄/ }).waitFor({ state: 'visible', timeout: 10000 });
   }
 
-  if (!(await page.locator('text=會議中').count())) {
+  if (!(await page.locator('div[contenteditable="true"]').count())) {
     const meetingButton = page.locator('button', { hasText: /新增會議記錄|會議紀錄/ });
     assert((await meetingButton.count()) >= 1, 'meeting entry button missing');
     await meetingButton.first().click();
   }
 
-  await page.locator('text=會議中').waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('div[contenteditable="true"]').waitFor({ state: 'visible', timeout: 10000 });
   await expectCount(page.locator('div[contenteditable="true"]'), 1, 'record content editor');
 
   await focusEditor();
@@ -103,8 +130,13 @@ async (page) => {
 
   await focusEditor();
   await page.keyboard.press('End');
-  const insertTaskButton = page.locator('button', { hasText: '插入任務' }).first();
-  assert((await insertTaskButton.count()) === 1, 'meeting insert task button missing');
+  const linkedTasksToggle = page.locator('[data-record-linked-tasks-toggle="true"]').first();
+  if ((await linkedTasksToggle.count()) === 1) {
+    const expanded = await linkedTasksToggle.getAttribute('aria-expanded');
+    if (expanded !== 'true') await linkedTasksToggle.click();
+  }
+  const insertTaskButton = page.locator('button', { hasText: /插入任務|選取任務/ }).first();
+  assert((await insertTaskButton.count()) === 1, 'meeting insert/select task button missing');
   await insertTaskButton.click();
   const firstTask = page.locator('text=品質驗證測試任務 1').first();
   assert((await firstTask.count()) >= 1, 'first kanban task missing');
