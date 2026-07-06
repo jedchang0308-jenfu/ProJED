@@ -39,7 +39,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // 從全域 Store 取出顯示狀態
   const showDependencies = useBoardStore(s => s.showDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
-  const { dependencies, addDependency, removeDependency, updateDependency, addNode, updateNode } = useWbsStore();
+  const { dependencies, addDependency, removeDependency, updateDependency, addNode, batchUpdateNodes } = useWbsStore();
   const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
 
   // DnD 狀態
@@ -77,13 +77,17 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       if (activeItem.parentId === overItem.parentId) {
           // 同層級交換順序
           const tempOrder = activeItem.order;
-          updateNode(activeItem.id, { order: overItem.order });
-          updateNode(overItem.id, { order: tempOrder });
+          batchUpdateNodes({
+              [activeItem.id]: { order: overItem.order },
+              [overItem.id]: { order: tempOrder },
+          }, { label: '重排任務', mergeKey: `reorder:${activeItem.id}` });
       } else {
           // 跨層級移動
           const nextParentId = overItem.parentId || null;
           if (wouldCreateCycle(activeItem.id, nextParentId)) return;
-          updateNode(activeItem.id, { parentId: nextParentId, order: overItem.order + 0.5 });
+          batchUpdateNodes({
+              [activeItem.id]: { parentId: nextParentId, order: overItem.order + 0.5 },
+          }, { label: '移動任務位置', mergeKey: `move:${activeItem.id}` });
       }
   };
 

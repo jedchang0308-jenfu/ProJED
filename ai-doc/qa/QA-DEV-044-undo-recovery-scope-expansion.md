@@ -2,12 +2,12 @@
 
 關聯 DEV: DEV-044
 關聯 SPEC: `ai-doc/specs/SPEC-044-undo-recovery-scope-expansion.md`
-狀態: Phase 1 Local Automated QA Passed / Production Not Deployed
+狀態: Phase 1 + Phase 2 Safe Slice Local Automated QA Passed / Production Not Deployed
 建立日期: 2026-07-06
 
 ## QA Goal
 
-驗證 DEV-044 Phase 1 擴充後，使用者能復原更多高頻誤操作，同時不因記錄 undo 而增加正常操作的資料庫寫入成本。
+驗證 DEV-044 Phase 1/Phase 2 safe slice 擴充後，使用者能復原更多高頻誤操作，同時不因記錄 undo 而增加正常操作的資料庫寫入成本。
 
 ## Test Strategy
 
@@ -15,15 +15,19 @@
 - Browser verifier: 驗證使用者實際流程中的 undo / redo、toolbar disabled state、keyboard shortcut 與 editor history scope。
 - Regression gate: 保留既有任務 undo / redo、任務複製、工作台跨看板來源、Gmail-like editor undo。
 - Cost gate: Phase 1 push undo 不應觸發遠端 service write；只有按下 undo / redo 時才呼叫既有 service action。
+- Phase 2 static gate: 驗證 `batchUpdateNodes` 只推一筆 `scope: 'batch'` command，並確認 Board/List/Sidebar drag 與工作台 placement caller 不再用多筆 `updateNode` 拆散 undo。
 
 ## Execution Evidence - 2026-07-06
 
-- `npm.cmd run verify:dev-044-undo-coverage` passed，19/19；檢查 async/suppress contract、board/workspace title undo、board create stable id、filter local-only snapshot、record save/archive snapshot、高風險 exclusion 與 browser verifier B03 coverage。
+- `npm.cmd run verify:dev-044-undo-coverage` passed，25/25；檢查 async/suppress contract、board/workspace title undo、board create stable id、filter local-only snapshot、record save/archive snapshot、高風險 exclusion、Phase 2 batch command、drag/reorder/placement caller 與 browser verifier B03 coverage。
 - `npm.cmd run verify:dev-044-undo-coverage-browser` passed；覆蓋 `QA-044-B01` board title undo/redo command label、`QA-044-B02` suppress guard stack behavior、`QA-044-B03` record archive undo restore snapshot。
 - `npm.cmd run verify:dev-013-task-duplicate` passed。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes` passed，27/27；確認工作台 placement lanes 與關閉態 top-nav/null-panel contract。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` passed。
 - `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser` passed。
 - `npm.cmd run verify:dev-006-browser-input` passed；覆蓋 editor `Ctrl+Z` / `Ctrl+Y` 與 task chip copy/cut/paste。
 - `npm.cmd exec tsc -- --noEmit` passed。
+- Targeted ESLint passed with warnings only for existing unrelated issues in `BoardView.tsx`, `WbsListView.tsx`, and `useWbsStore.ts`。
 - `npm.cmd run build:test` passed。
 - `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
 
@@ -33,6 +37,7 @@
 - DB schema / migration / RLS / RPC 未執行且不屬 Phase 1。
 - Cross-device / reload-persistent undo 未執行且不屬 Phase 1。
 - Workspace delete、permission/member、import overwrite、AI batch rewrite recovery 未納入 ordinary undo。
+- Board move between workspaces 未納入 ordinary undo；現有 transfer 會處理 members / invites / tags 等副作用，需 lifecycle / audit gate。
 
 ## FMEA
 
@@ -63,6 +68,17 @@
 | QA-044-P1-011 | Toolbar label clarity | undo stack has filter and data commands | hover undo / redo | title 顯示正確 action label，例如 `復原篩選條件`、`復原紀錄變更` |
 | QA-044-P1-012 | Suppress guard | undo of board/record/title action | 執行 undo / redo 後檢查 stack | 不新增反向 command 到 undoStack，redoStack 行為正常 |
 
+## Phase 2 Safe Slice Acceptance Cases
+
+| ID | Case | Preconditions | Steps | Expected |
+|---|---|---|---|---|
+| QA-044-P2-001 | Board drag batch undo | active board has at least two siblings | 拖曳任務造成 dragged node 與 sibling order 同時更新 | undo stack 只新增一筆 `移動任務位置`，一次 undo 還原所有 affected node |
+| QA-044-P2-002 | WBS list reorder batch undo | list mode has at least two siblings | 同層交換順序 | undo stack 只新增一筆 `重排任務`，不需要按兩次 undo |
+| QA-044-P2-003 | Left sidebar reorder batch undo | task sidebar open | 同層交換或跨層移動 | undo stack 只新增一筆 command，sidebar 與主畫面狀態一致 |
+| QA-044-P2-004 | Task workbench unplaced placement undo | workbench open and draggable task exists | 任務拖到 `未歸位` lane | undo 可回到原 board/workspace/parent/order，不新增遠端 history row |
+| QA-044-P2-005 | Task workbench placed-board placement undo | unplaced task exists and selected board lane exists | 任務拖回看板 | undo 可回到 unplaced local lane；redo 可歸位到看板 |
+| QA-044-P2-006 | Board workspace transfer exclusion | two workspaces exist | 使用看板移動到另一 workspace | 不宣稱 ordinary undo；需 separate lifecycle/audit gate |
+
 ## Negative / Exclusion Cases
 
 | ID | Case | Expected |
@@ -72,6 +88,7 @@
 | QA-044-N-003 | Import overwrite ordinary undo | 不得被 Phase 1 ordinary undo 覆蓋；需 rollback / backup contract |
 | QA-044-N-004 | AI batch rewrite ordinary undo | 不得被 Phase 1 ordinary undo 覆蓋；需 AI output versioning decision |
 | QA-044-N-005 | Page reload persistent undo | Phase 1 reload 後可失去 undo stack；不得宣稱跨 session recovery |
+| QA-044-N-006 | Board workspace transfer ordinary undo | 不得被 Phase 2 safe slice 普通 undo 覆蓋；現有 transfer 具有 permission/tag/invite 副作用 |
 
 ## Cost Verification
 
@@ -82,6 +99,7 @@ Phase 1 verifier 應攔截或 mock service calls，確認:
 - Record save 正常操作只呼叫既有 upsert；記錄 undo 不新增 history upsert。
 - Filter/display undo 不呼叫遠端 service。
 - Undo / redo 呼叫的是既有正常 service action，不另寫 `undo_logs` / `versions` / `history`。
+- Phase 2 batch/reorder/placement 只改變 undo stack 粒度；實際資料寫入仍是既有 node update/create/delete/localStorage path。
 
 ## Recommended Commands
 

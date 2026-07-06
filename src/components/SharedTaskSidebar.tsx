@@ -119,7 +119,7 @@ const SharedTaskSidebar = ({
 }: SharedTaskSidebarProps) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
     const addNode = useWbsStore(s => s.addNode);
-    const updateNode = useWbsStore(s => s.updateNode);
+    const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);
     const { canCreateTask, canMoveTask } = useBoardPermissions();
 
     const sensors = useDragSensors();
@@ -156,13 +156,17 @@ const SharedTaskSidebar = ({
         if (activeItem.parentId === overItem.parentId) {
             // 同層級交換順序
             const tempOrder = activeItem.order;
-            updateNode(activeItem.id, { order: overItem.order });
-            updateNode(overItem.id, { order: tempOrder });
+            batchUpdateNodes({
+                [activeItem.id]: { order: overItem.order },
+                [overItem.id]: { order: tempOrder },
+            }, { label: '重排任務', mergeKey: `sidebar-reorder:${activeItem.id}` });
         } else {
             // 跨層級移動
             const nextParentId = overItem.parentId || null;
             if (wouldCreateCycle(activeItem.id, nextParentId)) return;
-            updateNode(activeItem.id, { parentId: nextParentId, order: overItem.order + 0.5 });
+            batchUpdateNodes({
+                [activeItem.id]: { parentId: nextParentId, order: overItem.order + 0.5 },
+            }, { label: '移動任務位置', mergeKey: `sidebar-move:${activeItem.id}` });
         }
     };
 

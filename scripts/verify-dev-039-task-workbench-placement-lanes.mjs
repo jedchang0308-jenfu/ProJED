@@ -130,8 +130,10 @@ assert(
     !source.taskWorkbench.includes('NotebookText') &&
     source.taskWorkbench.includes('data-task-workbench-collapse-toggle="true"') &&
     source.taskWorkbench.includes('<ChevronLeft size={16} />') &&
-    source.taskWorkbench.includes('data-task-workbench-overlay="true"') &&
+    source.taskWorkbench.includes("data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}") &&
     source.taskWorkbench.includes('data-task-workbench-backdrop="true"') &&
+    source.taskWorkbench.includes('if (!isExpanded) {') &&
+    source.taskWorkbench.includes('return null;') &&
     !source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
     !source.taskWorkbench.includes('data-task-workbench-collapsed-toggle="true"') &&
     !source.taskWorkbench.includes('data-task-workbench-collapsed-count="true"') &&

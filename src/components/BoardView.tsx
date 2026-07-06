@@ -191,6 +191,7 @@ const BoardView = () => {
     const exitRecordTaskSelectionMode = useRecordStore(s => s.exitTaskSelectionMode);
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
+    const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);
     const removeNode = useWbsStore(s => s.removeNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canCreateDependency } = useBoardPermissions();
@@ -769,7 +770,7 @@ const BoardView = () => {
         };
         addNode(newNode);
         selectAndOpenTaskDetails(newNode.id);
-    }, [activeBoardId, activeWorkspaceId, addNode, canCreateTask]);
+    }, [activeBoardId, activeWorkspaceId, addNode, canCreateTask, getAppendOrder]);
 
     const executeMobileTaskAction = React.useCallback(async (action: MobileTaskAction, nodeId: string) => {
         const state = useWbsStore.getState();
@@ -810,7 +811,7 @@ const BoardView = () => {
             if (!confirmed) return;
             removeNode(nodeId);
         }
-    }, [addMobileChildTask, addMobileSiblingTask, canDeleteTask, canEditTask, recalculateAncestorStatus, removeNode, updateNode]);
+    }, [addMobileChildTask, addMobileSiblingTask, canCreateTask, canDeleteTask, canEditTask, recalculateAncestorStatus, removeNode, updateNode]);
 
     const executeMobileTaskDrop = React.useCallback((
         draggedNodeId: string,
@@ -849,10 +850,10 @@ const BoardView = () => {
             updatedAt: Date.now(),
         };
 
-        Object.entries(updates).forEach(([nodeId, nodeUpdates]) => updateNode(nodeId, nodeUpdates));
+        batchUpdateNodes(updates, { label: '移動任務位置', mergeKey: `move:${draggedNode.id}` });
         recalculateAncestorStatus(draggedNode.id);
         recordMobileTaskActionDebug({ type: 'drop:complete', draggedNodeId, targetNodeId, dropPosition, updates });
-    }, [canMoveTask, recalculateAncestorStatus, updateNode]);
+    }, [batchUpdateNodes, canMoveTask, isValidDropIntent, normalizeMovedSiblingOrders, recalculateAncestorStatus]);
 
     const resolveMobileTaskHover = React.useCallback((
         point: { x: number; y: number },
@@ -923,7 +924,7 @@ const BoardView = () => {
                 width: rect.width,
             },
         };
-    }, [canMoveTask]);
+    }, [canMoveTask, isValidDropIntent]);
 
     const startMobileTaskAutoScroll = React.useCallback((point: { x: number; y: number }) => {
         if (typeof window === 'undefined') return;
@@ -1142,25 +1143,25 @@ const BoardView = () => {
             (overData?.source === 'task-workbench' && overData?.placement === 'unplaced');
 
         if (draggedNode && isTaskWorkbenchUnplacedDrop) {
-            updateNode(draggedNode.id, {
+            batchUpdateNodes({ [draggedNode.id]: {
                 boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID,
                 parentId: null,
                 order: getBoardRootAppendOrder(TASK_WORKBENCH_UNPLACED_BOARD_ID, draggedNode.id, state.nodes),
                 updatedAt: Date.now(),
-            });
+            } }, { label: '移到未歸位', mergeKey: `placement:${draggedNode.id}` });
             recalculateAncestorStatus(draggedNode.id);
             return;
         }
 
         if (draggedNode && overData?.type === 'task-workbench-placed-board-lane' && overData.boardId && overData.workspaceId) {
-            updateNode(draggedNode.id, {
+            batchUpdateNodes({ [draggedNode.id]: {
                 workspaceId: overData.workspaceId,
                 boardId: overData.boardId,
                 parentId: null,
                 order: getBoardRootAppendOrder(overData.boardId, draggedNode.id, state.nodes),
                 nodeType: draggedNode.nodeType || 'task',
                 updatedAt: Date.now(),
-            });
+            } }, { label: '歸位任務', mergeKey: `placement:${draggedNode.id}` });
             recalculateAncestorStatus(draggedNode.id);
             return;
         }
@@ -1177,7 +1178,7 @@ const BoardView = () => {
                     nodeType: intent?.parentId ? 'task' : (updates[draggedNode.id]?.nodeType || draggedNode.nodeType),
                 };
             }
-            Object.entries(updates).forEach(([nodeId, nodeUpdates]) => updateNode(nodeId, nodeUpdates));
+            batchUpdateNodes(updates, { label: '移動任務位置', mergeKey: `move:${draggedNode.id}` });
             recalculateAncestorStatus(draggedNode.id);
         }
     };

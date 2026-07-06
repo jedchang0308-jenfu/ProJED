@@ -3,7 +3,7 @@
 關聯 DEV: DEV-044
 父交付點: DEV-001 緊湊 UI 系統 / DEV-028 跨模式任務互動 / DEV-039 全域任務平台
 任務類型: Undo/Redo interaction contract / Recovery scope / Data-cost guardrail
-狀態: Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed
+狀態: Phase 1 + Phase 2 Safe Slice Implemented / Local Automated QA Passed / Production Not Deployed
 優先級: P1 user recovery confidence, P1 database cost guardrail
 建立日期: 2026-07-06
 
@@ -32,6 +32,7 @@ AI assumptions:
 - 本 DEV 的第一個可實作 phase 是低成本、client-side command 擴充；不改 schema、不做 migration、不新增 RLS/RPC。
 - `UndoCommand` 可以在 RD 時擴充為 async-aware command，並加入 suppress guard，避免 undo / redo 執行反向 action 時再次污染 stack。
 - Phase 1 已於 2026-07-06 在本機完成 low-cost ordinary undo implementation、static verifier、browser verifier 與 regression gate；production deploy、DB schema / migration、RLS/RPC、durable recovery 仍未授權。
+- Phase 2 safe slice 已於 2026-07-06 完成本機 batch / cross-view placement ordinary undo：不新增 DB history、不改 schema，只把既有多筆 task update 包成單一 command。可逆看板跨 workspace move 因現有 transfer 會處理 members / invites / tags 等副作用，暫不納入 ordinary undo。
 
 Re-entry triggers:
 
@@ -92,16 +93,17 @@ Phase 1 不納入:
 
 ### Phase 2 - Batch / Cross-View Recovery
 
-狀態: RD Contract Ready / Not Authorized
+狀態: Safe Slice Implemented / Local Automated QA Passed for batch and placement / Board move not implemented
 
 目標: 擴充中高價值、需要 batch patch 或跨 store coordination 的操作。
 
 納入範圍:
 
-- 批次任務狀態 / 日期 / 指派 / 標籤修改：以一個 command 保存每筆 affected node 的 before / after patch。
-- 工作台跨看板或未歸位 placement：保存每個任務的 workspaceId、boardId、parentId、order、status 與 placement metadata。
-- Board move between workspaces：保存來源 workspace、目標 workspace、board metadata；若後端 operation 是 destructive 或 cascade，需停下轉 Phase 3。
-- Drag / reorder coalescing：同一任務連續拖曳在短時間內合併成一個 undo item。
+- 已實作：`useWbsStore.batchUpdateNodes` 以一個 command 保存每筆 affected node 的 before / after patch。
+- 已實作：看板手機拖放、桌機看板拖曳、WBS list drag、左側 task sidebar drag/reorder 改用單一 batch undo。
+- 已實作：工作台跨看板或未歸位 placement 使用單一 ordinary undo，保存 workspaceId、boardId、parentId、order 與 nodeType。
+- 已實作：drag / reorder coalescing 的第一版以每次 drop 結束為一個 undo item；不把同一次 drop 內多筆 sibling order update 拆成多個 undo。
+- 未實作：Board move between workspaces。原因是既有 transfer 不是純 metadata move，會處理 members / invites / tags / records / RAG jobs 等副作用；反向 move 不等同完整還原，需另走 lifecycle / audit gate。
 
 ### Phase 3 - Destructive Recovery / Lifecycle Redesign
 
@@ -156,6 +158,14 @@ interface UndoCommand {
 - 支援 command coalescing：同一 `mergeKey` 在短時間內可合併，例如 title edit blur、drag end、filter batch change。
 - 保留 50 步上限；不得為了擴充範圍無限制成長。
 
+### WBS Batch Update Store
+
+- `batchUpdateNodes(updatesById, options)` 在套用多筆任務 patch 前先計算 before / after patch。
+- 批次套用期間短暫啟用 `useUndoStore.isApplying` suppress guard，讓內部 `updateNode` 不各自 push undo。
+- 批次完成後只 push 一筆 `scope: 'batch'` command，`entityIds` 為所有 affected node。
+- Undo / redo 仍呼叫同一個 `batchUpdateNodes`，只執行既有 normal write path，不新增遠端 history row。
+- 若任務在 placed board 與 task workbench unplaced local lane 之間移動，仍沿用既有 create/delete/localStorage path，不建立新資料表。
+
 ### Board / Workspace Store
 
 - `updateWorkspaceTitle`、`updateBoardTitle` 推入 title before / after command。
@@ -195,6 +205,9 @@ interface UndoCommand {
 - Editor focus 中的 `Ctrl+Z` 仍使用 editor history，不觸發全域 undo。
 - Undo / redo 執行中不會因反向 action 再 push 新 command 而造成 stack 震盪。
 - Phase 1 不新增 DB schema、migration、RLS、RPC 或遠端 history table。
+- 同一次拖曳造成多筆 sibling order update 時，toolbar undo 只出現一筆 `移動任務位置` 或 `重排任務`。
+- 工作台 `未歸位` / 看板歸位 placement undo 可回到原 workspaceId、boardId、parentId、order。
+- Phase 2 safe slice 不把 workspace/board lifecycle delete、permission/member、import overwrite、AI batch rewrite 或 board workspace transfer 納入 ordinary undo。
 
 ## QA / QC Gate
 
@@ -208,6 +221,8 @@ QC evidence: `ai-doc/qc/QC-DEV-044-undo-recovery-scope-expansion.md`
 npm.cmd run verify:dev-044-undo-coverage
 npm.cmd run verify:dev-044-undo-coverage-browser
 npm.cmd run verify:dev-013-task-duplicate
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser
 npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser
 npm.cmd run verify:dev-006-browser-input
 npm.cmd exec tsc -- --noEmit
@@ -216,9 +231,11 @@ npm.cmd run build:test
 
 已通過本機 gate - 2026-07-06:
 
-- `npm.cmd run verify:dev-044-undo-coverage` passed，19/19。
+- `npm.cmd run verify:dev-044-undo-coverage` passed，25/25，含 Phase 2 batch command、drag/reorder/placement caller gate。
 - `npm.cmd run verify:dev-044-undo-coverage-browser` passed；覆蓋 board title undo/redo、suppress guard、record archive undo restore。
 - `npm.cmd run verify:dev-013-task-duplicate` passed。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes` passed，27/27。
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` passed。
 - `npm.cmd run verify:dev-039-task-workbench-cross-board-source-browser` passed。
 - `npm.cmd run verify:dev-006-browser-input` passed；覆蓋 editor Ctrl+Z / Ctrl+Y 與 task chip 操作。
 - `npm.cmd exec tsc -- --noEmit` passed。

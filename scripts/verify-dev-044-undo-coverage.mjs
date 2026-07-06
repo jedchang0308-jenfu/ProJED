@@ -9,8 +9,12 @@ const includesAll = (source, needles) => needles.every((needle) => source.includ
 const files = {
   types: 'src/types/index.ts',
   undoStore: 'src/store/useUndoStore.ts',
+  wbsStore: 'src/store/useWbsStore.ts',
   boardStore: 'src/store/useBoardStore.ts',
   recordStore: 'src/store/useRecordStore.ts',
+  boardView: 'src/components/BoardView.tsx',
+  wbsListView: 'src/components/Wbs/WbsListView.tsx',
+  sharedTaskSidebar: 'src/components/SharedTaskSidebar.tsx',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-044-undo-recovery-scope-expansion.md',
   qa: 'ai-doc/qa/QA-DEV-044-undo-recovery-scope-expansion.md',
@@ -51,6 +55,45 @@ assert(
     'canUndo: () => !get().isApplying',
     'canRedo: () => !get().isApplying',
   ]),
+);
+
+assert(
+  'Phase 2 batch task updates register one scoped undo command',
+  includesAll(source.wbsStore, [
+    'export type BatchNodeUpdates = Record<string, Partial<TaskNode>>;',
+    'batchUpdateNodes: (updatesById: BatchNodeUpdates, options?: BatchUpdateNodesOptions) => void;',
+    'const beforePatches: BatchNodeUpdates = {};',
+    'const afterPatches: BatchNodeUpdates = {};',
+    'if (!wasApplying) useUndoStore.setState({ isApplying: true });',
+    "scope: 'batch'",
+    'entityIds,',
+    'undo: () => get().batchUpdateNodes(beforePatches',
+    'redo: () => get().batchUpdateNodes(afterPatches',
+  ]),
+);
+
+assert(
+  'Phase 2 drag and cross-view placement callers use batch undo',
+  includesAll(source.boardView, [
+    'const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);',
+    "batchUpdateNodes(updates, { label: '移動任務位置'",
+    "batchUpdateNodes({ [draggedNode.id]: {",
+    "label: '移到未歸位'",
+    "label: '歸位任務'",
+  ]) &&
+    includesAll(source.wbsListView, [
+      'batchUpdateNodes({',
+      "label: '重排任務'",
+      "label: '移動任務位置'",
+    ]) &&
+    includesAll(source.sharedTaskSidebar, [
+      'const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);',
+      "label: '重排任務'",
+      "label: '移動任務位置'",
+    ]) &&
+    !source.boardView.includes('Object.entries(updates).forEach(([nodeId, nodeUpdates]) => updateNode(nodeId, nodeUpdates))') &&
+    !source.wbsListView.includes('updateNode(activeItem.id, { order: overItem.order })') &&
+    !source.sharedTaskSidebar.includes('updateNode(activeItem.id, { order: overItem.order })'),
 );
 
 assert(
@@ -147,7 +190,7 @@ assert(
     '"verify:dev-044-undo-coverage-browser"',
   ]) &&
     source.documentationMap.includes('SPEC-044-undo-recovery-scope-expansion') &&
-    source.devTask.includes('DEV-044 Phase 1 已完成 local RD + automated QA') &&
+    source.devTask.includes('DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA') &&
     source.devTask.includes('QC-DEV-044'),
 );
 

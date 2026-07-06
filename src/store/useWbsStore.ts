@@ -40,6 +40,13 @@ export type SetNodesOptions = {
   preserveOutOfScope?: boolean;
 };
 
+export type BatchNodeUpdates = Record<string, Partial<TaskNode>>;
+
+export type BatchUpdateNodesOptions = {
+  label?: string;
+  mergeKey?: string;
+};
+
 export interface WbsBoardActions {
   // ===== 基礎資料操作 (CRUD) =====
   
@@ -58,6 +65,11 @@ export interface WbsBoardActions {
    * 更新任務節點 (部分欄位)
    */
   updateNode: (id: string, updates: Partial<TaskNode>) => void;
+
+  /**
+   * 以單一 undo command 套用多筆任務更新，用於拖曳、重排與跨視圖歸位。
+   */
+  batchUpdateNodes: (updatesById: BatchNodeUpdates, options?: BatchUpdateNodesOptions) => void;
 
   /**
    * 軟刪除任務節點 (只標記 isArchived)
@@ -187,6 +199,24 @@ const normalizeSmartStatusUpdates = (
   const candidate = { ...oldNode, ...updates };
   if (!shouldMarkDelayed(candidate)) return updates;
   return { ...updates, status: 'delayed' };
+};
+
+const buildChangedNodePatch = (
+  oldNode: TaskNode,
+  updates: Partial<TaskNode>
+): { before: Partial<TaskNode>; after: Partial<TaskNode> } | null => {
+  const normalizedUpdates = normalizeSmartStatusUpdates(oldNode, updates);
+  const before: Partial<TaskNode> = {};
+  const after: Partial<TaskNode> = {};
+
+  for (const key of Object.keys(normalizedUpdates) as Array<keyof TaskNode>) {
+    if (normalizedUpdates[key] !== oldNode[key]) {
+      (before as any)[key] = oldNode[key];
+      (after as any)[key] = normalizedUpdates[key];
+    }
+  }
+
+  return Object.keys(after).length > 0 ? { before, after } : null;
 };
 
 const createDependencyId = () =>
@@ -834,6 +864,55 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         label,
         undo: () => get().updateNode(id, oldValues),
         redo: () => get().updateNode(id, normalizedUpdates),
+    });
+  },
+
+  batchUpdateNodes: (updatesById, options = {}) => {
+    const entries = Object.entries(updatesById);
+    if (entries.length === 0) return;
+
+    const state = get();
+    const beforePatches: BatchNodeUpdates = {};
+    const afterPatches: BatchNodeUpdates = {};
+
+    for (const [id, updates] of entries) {
+      const oldNode = state.nodes[id];
+      if (!oldNode) continue;
+
+      const patch = buildChangedNodePatch(oldNode, updates);
+      if (!patch) continue;
+
+      beforePatches[id] = patch.before;
+      afterPatches[id] = patch.after;
+    }
+
+    const changedEntries = Object.entries(afterPatches);
+    if (changedEntries.length === 0) return;
+
+    const undoStore = useUndoStore.getState();
+    const wasApplying = undoStore.isApplying;
+
+    if (!wasApplying) useUndoStore.setState({ isApplying: true });
+    try {
+      changedEntries.forEach(([id, updates]) => {
+        get().updateNode(id, updates);
+      });
+    } finally {
+      if (!wasApplying) useUndoStore.setState({ isApplying: false });
+    }
+
+    if (wasApplying) return;
+
+    const label = options.label || (changedEntries.length > 1 ? '批次修改任務' : '修改任務');
+    const entityIds = changedEntries.map(([id]) => id);
+
+    useUndoStore.getState().pushUndo({
+      label,
+      scope: 'batch',
+      entityIds,
+      mergeKey: options.mergeKey,
+      undo: () => get().batchUpdateNodes(beforePatches, { label, mergeKey: options.mergeKey }),
+      redo: () => get().batchUpdateNodes(afterPatches, { label, mergeKey: options.mergeKey }),
     });
   },
 
