@@ -2347,6 +2347,7 @@ CAPA 來源：
 - 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 只能在 Level 3 smoke path 或 explicit risk acceptance 後進入 remote apply/deploy；否則下一步是文件化 gate blocker 或處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待 production UI smoke；2026-07-07 已新增 read-only readiness gate `verify:dev-011-012-production-ui-smoke-readiness`，確認可重用 authenticated session injection + cleanup pattern 與 local AI整理 browser ROT，但完整正式站流程仍需已登入 Google browser 或顯式允許 production 臨時 fixture 建立/清理。
+- 2026-07-07 PM evidence：新增 read-only 外部 Gate 稽核 `verify:remaining-external-gates`，機械確認 DEV-045 / DEV-025 / DEV-040 / DEV-044 / DEV-028 / DEV-011 / DEV-012 仍停在正確 Supabase、Edge、production、人工 QC 或 human re-entry 邊界；輸出 `mutates_database=false`、`remote_changes=false`，不代表任一外部 Gate 完成。
 - 手機版會議紀錄工作流不列入目前 release gate。
 
 ## 下一步
@@ -2470,6 +2471,12 @@ npm.cmd run verify:dev-017-record-sidebar-resize
 npm.cmd run verify:dev-006-browser-input
 npm.cmd run verify:dev-016-records-list-browser
 npm.cmd run verify:dev-017-record-sidebar-resize-browser
+```
+
+### PM / 外部 Gate 稽核
+
+```powershell
+npm.cmd run verify:remaining-external-gates
 ```
 
 ### 正式部署
