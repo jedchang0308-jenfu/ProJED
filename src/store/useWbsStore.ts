@@ -192,6 +192,36 @@ const normalizeSmartStatusUpdates = (
 const createDependencyId = () =>
   `dep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
+const normalizeImportedDependencies = (
+  dependencies: unknown,
+  importedNodeIds: Set<string>
+): Dependency[] => {
+  if (!Array.isArray(dependencies)) return [];
+  return dependencies
+    .filter((dependency): dependency is Partial<Dependency> & { fromId: string; toId: string } =>
+      Boolean(
+        dependency
+        && typeof dependency === 'object'
+        && 'fromId' in dependency
+        && 'toId' in dependency
+        && typeof dependency.fromId === 'string'
+        && typeof dependency.toId === 'string'
+        && importedNodeIds.has(dependency.fromId)
+        && importedNodeIds.has(dependency.toId)
+      )
+    )
+    .map((dependency) => ({
+      id: typeof dependency.id === 'string' && dependency.id.trim()
+        ? dependency.id
+        : createDependencyId(),
+      fromId: dependency.fromId,
+      fromSide: dependency.fromSide === 'end' ? 'end' : 'start',
+      toId: dependency.toId,
+      toSide: dependency.toSide === 'start' ? 'start' : 'end',
+      offset: typeof dependency.offset === 'number' ? dependency.offset : 0,
+    }));
+};
+
 const createNodeId = () =>
   `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -1296,6 +1326,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   alert('請先選擇一個看板，再進行匯入操作。');
                   return;
               }
+              let importedNodeIds = new Set<string>();
+              let importedDependencies: Dependency[] = [];
 
               alert('開始匯入並同步至雲端，請稍候...(資料量較大時可能需要數十秒，請勿關閉或重整網頁)');
 
@@ -1332,8 +1364,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                       workspaceId: currentWsId,
                       boardId: currentBoardId,
                   }));
+                  importedNodeIds = new Set(nodesArray.map(node => node.id));
                   get().setNodes(nodesArray);
-                  await nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray).catch(console.error);
+                  await nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray);
               }
 
               if (Array.isArray(parsed.tags)) {
@@ -1414,22 +1447,28 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   });
 
                   get().setNodes(newNodes);
-                  await nodeService.replaceAllByProject(currentWsId, currentBoardId, newNodes).catch(console.error);
+                  importedNodeIds = new Set(newNodes.map(node => node.id));
+                  await nodeService.replaceAllByProject(currentWsId, currentBoardId, newNodes);
               }
 
               // 4. Dependencies
-              if (parsed.dependencies && Array.isArray(parsed.dependencies)) {
-                  set({ dependencies: parsed.dependencies });
+              if (importedNodeIds.size > 0) {
+                  importedDependencies = normalizeImportedDependencies(parsed.dependencies, importedNodeIds);
+                  set({ dependencies: importedDependencies });
+
+                  for (const dependency of importedDependencies) {
+                      await dependencyService.set(currentWsId, currentBoardId, dependency);
+                  }
               }
 
-              alert('ProJED 資料已成功匯入並同步至雲端！');
+              alert(`ProJED 資料已成功匯入並同步至雲端！任務 ${importedNodeIds.size} 筆，依賴 ${importedDependencies.length} 筆。`);
               return;
           }
 
           alert('無效的備份檔案格式。只接受 wbs-1.0 或 2.0 資料格式。');
       } catch (e) {
           console.error('Import error:', e);
-          alert('解析備份檔案時發生錯誤。');
+          alert('匯入或同步備份資料時發生錯誤；目前不會宣告匯入成功，請檢查檔案內容或稍後重試。');
       }
   }
 

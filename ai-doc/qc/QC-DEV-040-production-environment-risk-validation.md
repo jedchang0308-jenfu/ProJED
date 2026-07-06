@@ -96,3 +96,29 @@
 - Production release: Deployed.
 - Production QC for original 2 BUG flows: Pass.
 - Extended 7-point risk matrix: Partially covered; remaining items listed above require separate targeted validation.
+
+## DEV-040 P0 addendum - 2026-07-06
+
+本輪依使用者授權補強 Phase 1 P0 的本機 RD 範圍，未執行 production deploy、remote migration、正式資料修復或正式 timeout injection。
+
+已完成：
+- 備份匯入 dependencies persistence：`importData` 在替換 nodes 後會正規化匯入 dependencies，過濾不存在 endpoint 的 dependency，並逐筆呼叫 `dependencyService.set(currentWsId, currentBoardId, dependency)` 重建目前看板依賴；`replaceAllByProject` 失敗不再被 `.catch(console.error)` 吞掉後仍顯示成功。
+- 匯入完成提示會顯示任務數與依賴數，避免 silent partial success。
+- RAG client invoke 增加 `RAG_RETRIEVAL_TIMEOUT_MS`，timeout 轉成 `RAG_TIMEOUT / 504`。
+- `match_project_knowledge` Edge Function source 增加 Gemini embedding、Gemini generation、database RPC、live snapshot timeout；embedding / RPC / snapshot timeout 會回傳 504，generation timeout 會走既有可見 fallback answer。
+- 新增 static gate：`npm.cmd run verify:dev-040-p0-bounded-failure`。
+
+本輪 gate：
+- `npm.cmd run verify:dev-040-p0-bounded-failure`：Passed，15/15。
+- `npm.cmd exec tsc -- --noEmit`：Passed。
+- `npx.cmd eslint src/store/useWbsStore.ts src/services/rag/ragRetrievalService.ts`：0 errors；3 warnings 為既有 unused warnings。
+- `npm.cmd run verify:p9-edge-function`：Passed。
+- `npm.cmd run verify:supabase:static`：Passed。
+- `npm.cmd run verify:dev-020-record-workflow-redesign`：Passed。
+- `npm.cmd run verify:dev-020-project-change-import-browser`：Passed。
+- `npm.cmd run build:test`：Passed。
+
+未完成 / 不得宣稱：
+- 未對 production Supabase 執行完整備份匯入 + `wbs_dependencies` DB count smoke。
+- 未部署 `match_project_knowledge` Edge Function。
+- 未做 production timeout / 401 / 500 browser injection。

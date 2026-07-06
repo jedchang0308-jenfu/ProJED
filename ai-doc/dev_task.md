@@ -797,6 +797,13 @@ Production release / smoke evidence - 2026-07-03:
 - Artifact：正式 `index.html` 載入 `index-CZrWLuKx.js` / `index-CwzdflxX.css`，舊 `index-BCr1zfI2.js` 不存在。
 - `npm run verify:dev-040-production-auth-ui-smoke` 通過：正式站臨時 Supabase user/tenant/2 boards/activity event，專案變化整理產生 1 筆預覽，未歸位任務切換看板後仍存在，cleanup 刪除臨時 tenant/user。
 
+DEV-040 P0 addendum - 2026-07-06:
+- Scope: 備份匯入 dependencies persistence、RAG / knowledge retrieval timeout bounded failure。
+- Implemented: 匯入 nodes 後正規化並重建目前看板 dependencies；`replaceAllByProject` 失敗不再被吞掉；匯入完成提示包含任務 / 依賴數量。
+- Implemented: RAG client invoke 增加 timeout 並回傳 `RAG_TIMEOUT / 504`；`match_project_knowledge` Edge Function source 對 Gemini embedding、Gemini generation、database RPC、live snapshot 增加 timeout / 504 或 fallback。
+- Gate passed: `npm.cmd run verify:dev-040-p0-bounded-failure`、`tsc --noEmit`、targeted ESLint、`verify:p9-edge-function`、`verify:supabase:static`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser`、`build:test`。
+- Limitation: 未套用 / 部署 Edge Function，未做 production timeout injection，未做完整備份匯入 + Supabase `wbs_dependencies` DB count smoke。
+
 ## PM Update - 2026-07-02
 
 ### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構

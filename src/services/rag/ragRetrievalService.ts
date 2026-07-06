@@ -1,6 +1,8 @@
 import { supabase } from '../supabase/client';
 import type { RagRetrievalRequest, RagRetrievalResponse } from './ragContract';
 
+const RAG_RETRIEVAL_TIMEOUT_MS = 45000;
+
 export class RagRetrievalError extends Error {
   public readonly code: string;
   public readonly status: number;
@@ -13,6 +15,12 @@ export class RagRetrievalError extends Error {
   }
 }
 
+const isTimeoutLikeError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const name = error instanceof Error ? error.name : '';
+  return /abort|timeout|timed out/i.test(`${name} ${message}`);
+};
+
 export const queryProjectKnowledge = async (
   request: RagRetrievalRequest
 ): Promise<RagRetrievalResponse> => {
@@ -20,10 +28,19 @@ export const queryProjectKnowledge = async (
     'match_project_knowledge',
     {
       body: request,
+      timeout: RAG_RETRIEVAL_TIMEOUT_MS,
     }
   );
 
   if (error) {
+    if (isTimeoutLikeError(error)) {
+      throw new RagRetrievalError(
+        '知識檢索逾時，請稍後重試或縮小查詢範圍。',
+        'RAG_TIMEOUT',
+        504
+      );
+    }
+
     // Supabase JS wraps the non-2xx responses. 
     // We try to extract our custom error format: { error: { message, code } }
     let code = 'UNKNOWN_ERROR';

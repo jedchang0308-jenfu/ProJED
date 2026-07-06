@@ -14,6 +14,21 @@ const ALLOWED_ORIGINS = [
   'https://projed-cc78d.firebaseapp.com'
 ];
 
+const GEMINI_EMBED_TIMEOUT_MS = 20000;
+const GEMINI_GENERATE_TIMEOUT_MS = 30000;
+const RAG_RPC_TIMEOUT_MS = 20000;
+const LIVE_SNAPSHOT_TIMEOUT_MS = 20000;
+
+class TimeoutError extends Error {
+  public readonly code: string;
+
+  constructor(message: string, code = 'TIMEOUT') {
+    super(message);
+    this.name = 'TimeoutError';
+    this.code = code;
+  }
+}
+
 const getCorsHeaders = (origin: string | null) => {
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -39,6 +54,43 @@ const hashString = async (message: string) => {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 };
+
+const createTimeoutSignal = (timeoutMs: number): AbortSignal | undefined => {
+  if (typeof AbortSignal === 'undefined') return undefined;
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(timeoutMs);
+  if (typeof AbortController === 'undefined') return undefined;
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+};
+
+const withTimeout = <T>(operation: PromiseLike<T>, timeoutMs: number, message: string, code = 'TIMEOUT'): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new TimeoutError(message, code)), timeoutMs);
+    Promise.resolve(operation)
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+
+const fetchWithTimeout = (
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+  message: string,
+  code: string
+) => fetch(input, { ...init, signal: createTimeoutSignal(timeoutMs) })
+  .catch((error) => {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new TimeoutError(message, code);
+    }
+    throw error;
+  });
 
 type LiveWbsItem = {
   id: string;
@@ -368,7 +420,7 @@ serve(async (req) => {
     const dimensions = 3072;
     const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${embeddingModel}:embedContent`;
 
-    const geminiRes = await fetch(geminiEndpoint, {
+    const geminiRes = await fetchWithTimeout(geminiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -379,7 +431,7 @@ serve(async (req) => {
         content: { parts: [{ text: query }] },
         output_dimensionality: dimensions,
       }),
-    });
+    }, GEMINI_EMBED_TIMEOUT_MS, 'Gemini embedding request timed out', 'EMBEDDING_TIMEOUT');
 
     if (geminiRes.status === 429) {
       return createErrorResponse('Gemini API quota exceeded', 'TOO_MANY_REQUESTS', 429, origin);
@@ -401,13 +453,18 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: rpcData, error: rpcError } = await supabase.rpc('match_project_knowledge', {
-      target_tenant_id: tenantId,
-      target_project_id: projectId || null,
-      query_embedding: `[${embedding.join(',')}]`,
-      match_threshold: matchThreshold,
-      match_count: matchCount,
-    });
+    const { data: rpcData, error: rpcError } = await withTimeout(
+      supabase.rpc('match_project_knowledge', {
+        target_tenant_id: tenantId,
+        target_project_id: projectId || null,
+        query_embedding: `[${embedding.join(',')}]`,
+        match_threshold: matchThreshold,
+        match_count: matchCount,
+      }),
+      RAG_RPC_TIMEOUT_MS,
+      'Knowledge database lookup timed out',
+      'RAG_RPC_TIMEOUT'
+    );
 
     if (rpcError) {
       return createErrorResponse(`Database RPC error: ${rpcError.message}`, 'INTERNAL_ERROR', 500, origin);
@@ -435,8 +492,16 @@ serve(async (req) => {
 
     let liveSnapshot: LiveProjectSnapshot;
     try {
-      liveSnapshot = await buildLiveProjectSnapshot(supabase, tenantId, projectId || null);
+      liveSnapshot = await withTimeout(
+        buildLiveProjectSnapshot(supabase, tenantId, projectId || null),
+        LIVE_SNAPSHOT_TIMEOUT_MS,
+        'Live project snapshot timed out',
+        'LIVE_SNAPSHOT_TIMEOUT'
+      );
     } catch (snapshotError: any) {
+      if (snapshotError instanceof TimeoutError) {
+        return createErrorResponse(snapshotError.message, snapshotError.code, 504, origin);
+      }
       console.error('Failed to build live project snapshot:', snapshotError);
       return createErrorResponse(snapshotError.message || 'Failed to read live project data', 'INTERNAL_ERROR', 500, origin);
     }
@@ -472,7 +537,7 @@ ${promptContext}
 使用者問題: ${query}`;
 
       try {
-        const genRes = await fetch(generateEndpoint, {
+        const genRes = await fetchWithTimeout(generateEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -481,7 +546,7 @@ ${promptContext}
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: systemInstruction }] }]
           })
-        });
+        }, GEMINI_GENERATE_TIMEOUT_MS, 'Gemini generation request timed out', 'GENERATION_TIMEOUT');
 
         if (genRes.ok) {
           const genData = await genRes.json();
@@ -543,6 +608,10 @@ ${promptContext}
       headers: { ...getCorsHeaders(origin), 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
+    if (err instanceof TimeoutError) {
+      console.error('Edge Function timeout:', err);
+      return createErrorResponse(err.message, err.code, 504, origin);
+    }
     console.error('Edge Function unhandled error:', err);
     return createErrorResponse('Internal Server Error', 'INTERNAL_ERROR', 500, origin);
   }
