@@ -23,6 +23,7 @@ const files = {
   statusFilterBar: 'src/components/ui/StatusFilterBar.tsx',
   ragSidebar: 'src/components/Rag/RagSidebar.tsx',
   browserVerifier: 'scripts/verify-dev-028-cross-mode-task-interactions-browser.pw.js',
+  manualClickReadiness: 'scripts/verify-dev-028-manual-click-qc-readiness.mjs',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md',
   qa: 'ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md',
@@ -57,6 +58,7 @@ const tagPicker = read(files.tagPicker);
 const statusFilterBar = read(files.statusFilterBar);
 const ragSidebar = read(files.ragSidebar);
 const browserVerifier = read(files.browserVerifier);
+const manualClickReadiness = read(files.manualClickReadiness);
 const pkg = read(files.packageJson);
 const spec = read(files.spec);
 const qa = read(files.qa);
@@ -185,7 +187,18 @@ assert(
 assert(
   'package exposes DEV-028 verifiers',
   pkg.includes('"verify:dev-028-cross-mode-task-interactions"') &&
-    pkg.includes('"verify:dev-028-cross-mode-task-interactions-browser"'),
+    pkg.includes('"verify:dev-028-cross-mode-task-interactions-browser"') &&
+    pkg.includes('"verify:dev-028-manual-click-qc-readiness"'),
+);
+
+assert(
+  'Manual click QC readiness gate is registered and cannot be mistaken for manual pass',
+  manualClickReadiness.includes('manual_qc_completed: false') &&
+    manualClickReadiness.includes('自動化 Playwright browser smoke 只能作為輔助證據，不能取代人工點擊') &&
+    manualClickReadiness.includes('MAN-028-001') &&
+    manualClickReadiness.includes('MAN-028-028') &&
+    manualClickReadiness.includes('Manual Click QC Pending') &&
+    manualClickReadiness.includes('verify:dev-028-manual-click-qc-readiness'),
 );
 
 assert(

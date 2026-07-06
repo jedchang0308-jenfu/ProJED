@@ -1,6 +1,6 @@
 # QA-DEV-028: 四模式一致的 Trello-like 任務操作驗證計畫
 
-狀態: QA Plan Updated / Local Automated QA Passed / Manual Click QC Pending / 2026-07-06 Detail-Only Title Edit Addendum Implemented
+狀態: QA Plan Updated / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / 2026-07-06 Detail-Only Title Edit Addendum Implemented
 對應 DEV: DEV-028
 對應 SPEC: `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`
 建立日期: 2026-06-26
@@ -198,6 +198,7 @@ RD 必須新增或更新以下 verifier:
 ```powershell
 npm.cmd run verify:dev-028-cross-mode-task-interactions
 npm.cmd run verify:dev-028-cross-mode-task-interactions-browser
+npm.cmd run verify:dev-028-manual-click-qc-readiness
 ```
 
 DEV-028 完成前必須同時通過:
@@ -223,6 +224,7 @@ npm.cmd run build:test
 
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions`: Pass, 35/35
 - `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`: Pass
+- `npm.cmd run verify:dev-028-manual-click-qc-readiness`: Pass, read-only readiness gate；確認 MAN-028-001 至 MAN-028-028、證據欄位、viewport、visible error sweep 與「自動化不得取代人工」邊界未被改壞。
 - `npm.cmd run verify:dev-027b-xmind-interaction-polish`: Pass, 32/32
 - `npm.cmd run verify:dev-027b-xmind-interaction-polish-browser`: Pass
 - `npm.cmd run verify:dev-027e-xmind-note-relationship-line-ux-parity-browser`: Pass
@@ -255,3 +257,11 @@ QC 報告至少需附:
 - Desktop 與 390x844 mobile viewport visible-error sweep。
 - 若任一人工親自點擊案例未通過，QC 結論必須是 `未通過`，不可用自動化 pass 覆蓋。
 - 若缺少人工點擊截圖、錄影或逐項紀錄，QC 結論必須是 `未充分驗證`。
+
+## Manual Click QC Readiness Gate
+
+```powershell
+npm.cmd run verify:dev-028-manual-click-qc-readiness
+```
+
+此 gate 預設只讀、`mutates_database=false`、`manual_qc_completed=false`。它只檢查 manual matrix 與 QC handoff 是否完整，不代表 MAN-028-001 至 MAN-028-028 已由人類實際操作通過。若此 gate 通過但人工操作未執行，DEV-028 仍維持 `Manual Click QC Pending`。

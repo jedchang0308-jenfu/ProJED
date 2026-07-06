@@ -371,7 +371,7 @@ All-Phase Coverage Matrix:
 
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 
-狀態: Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed
+狀態: Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / Production Not Deployed
 節點類型: 交付點 addendum / interaction contract
 父交付點: DEV-028 四模式一致的 Trello-like 任務操作契約
 是否計入產品交付完成: 是；detail-only title edit addendum 已完成本機自動化驗證，人工親自點擊 QC 與 production deploy 另行處理
@@ -392,7 +392,7 @@ Human Decision Brief:
 
 目前授權邊界:
 - Authorized and completed: 產品程式碼修改、static/browser verifier 更新、DEV-027B / DEV-027E / DEV-029 regression、SPEC / QA / dev_task / documentation_map / QC evidence 更新。
-- Not Authorized / Not Executed: production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態、MAN-028 人工親自點擊 QC。
+- Not Authorized / Not Executed: production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態、MAN-028 人工親自點擊 QC。`verify:dev-028-manual-click-qc-readiness` 已補 checklist gate，但不代表人工 QC 已完成。
 
 RD Handoff / Implementation Contract:
 - 移除或停用任務外層 surface 的 rename affordance：pencil、right-click rename、long-press rename、`t`、F2、double-click title、selected task direct typing、outer inline title input。
@@ -414,6 +414,7 @@ Acceptance:
 
 QA / QC gate:
 - 更新 `verify:dev-028-cross-mode-task-interactions` 與 browser verifier，新增外層 rename removal、detail-only title edit、new-task title edit case。
+- 執行 `verify:dev-028-manual-click-qc-readiness`，確認 MAN-028-001 至 MAN-028-028、證據欄位、viewport、visible error sweep 與「自動化不得取代人工」邊界仍完整。
 - 執行 DEV-029 mobile pan-first regression，確認手機任務卡與 L2+ 子任務列短滑不被 title edit 改動破壞。
 - 執行 DEV-027B / DEV-027E 心智圖 regression，確認 Enter/Tab/方向鍵仍有效且直接打字不再 rename。
 - 執行 `npm.cmd exec tsc -- --noEmit`、`npm.cmd run build:test`。
@@ -440,7 +441,7 @@ All-Phase Coverage Matrix:
 |---|---|---|---|---|
 | 0 | PM/RD Contract Addendum | Complete | Authorized | SPEC-028、QA-DEV-028、dev_task、documentation_map updated |
 | 1 | Detail-Only Title Edit RD Implementation | Complete | Authorized | product diff、static/browser verifier、TypeScript、build:test |
-| 2 | QA/QC Verification | Local Automated QA Passed / Manual Click QC Pending | Partially Authorized | QC-DEV-028、自動化 browser traces、mobile regression；MAN-028 仍待人工親自點擊 |
+| 2 | QA/QC Verification | Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending | Partially Authorized | QC-DEV-028、自動化 browser traces、mobile regression、manual readiness gate；MAN-028 仍待人工親自點擊 |
 | 3 | Production Release | Not Started | Not Authorized | deployment-release-gate、post-deploy smoke、rollback target |
 
 文件:
@@ -1615,7 +1616,7 @@ Verified（2026-06-29）:
 
 ### DEV-028: 四模式一致的 Trello-like 任務操作契約
 
-狀態: Implemented / Browser Smoke Passed / Manual Click QC Pending (2026-06-26)
+狀態: Implemented / Browser Smoke Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending (2026-06-26)
 節點類型: 交付點
 優先級: P0 UI/UX interaction consistency
 父交付點: 無
@@ -1654,7 +1655,7 @@ RD exit gate:
 - `npm.cmd exec tsc -- --noEmit`: Pass
 - `npm.cmd run lint -- --quiet`: Pass
 - `npm.cmd run build:test`: Pass
-- QA manual click validation plan updated on 2026-07-06; DEV-028 still requires MAN-028-001 to MAN-028-028 human-operated click evidence before calling manual QC complete.
+- QA manual click validation plan updated on 2026-07-06; 2026-07-07 added `verify:dev-028-manual-click-qc-readiness` to protect the manual checklist and evidence boundary. DEV-028 still requires MAN-028-001 to MAN-028-028 human-operated click evidence before calling manual QC complete.
 
 ### DEV-027F: Mind map UI polish after relationship-line QC
 
@@ -2358,7 +2359,7 @@ CAPA 來源：
 | 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，先執行 `verify:dev-025-mutating-qc-readiness` 與 `verify:dev-025-mutating-qc-fixture-readiness` 確認腳本防呆、fixture 標記與最小資料形狀，再執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight + Remote Readiness Static Gate Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
-| 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
+| 5 | DEV-028 人工親自點擊 QC | Manual Click QC Readiness Gate Added / Manual Click QC Pending | 使用者 / QC | 先執行 `verify:dev-028-manual-click-qc-readiness` 確認 checklist 未壞；再依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
 | 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Production UI Smoke Readiness Gate Added / Human Login or Explicit Fixture Gate Required | 使用者 / QC | 先執行 `verify:dev-011-012-production-ui-smoke-readiness`；完整 smoke 需以已登入 Google 的正式前端，或顯式允許 production 臨時 fixture 建立/清理後，完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 
 ---
@@ -2383,7 +2384,7 @@ CAPA 來源：
 | DEV-025 | 交付點 | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`QC-DEV-025`、`verify:dev-025-project-workspace-transfer`、`verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness`、Supabase read-only preflight、TypeScript、build | 安全 fixture 上先跑 execution-readiness + read-only fixture readiness，再執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
-| DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test | 依 QA-DEV-028 補人工親自點擊 QC |
+| DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、`verify:dev-028-manual-click-qc-readiness`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test | 依 QA-DEV-028 補人工親自點擊 QC |
 | DEV-029 | 交付點 | Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed | 是 | 手機 Pan-First 觸控手勢仲裁與 compact action rail | `SPEC-029`、`QA-DEV-029`、`QC-DEV-029`、`verify:dev-029-mobile-pan-first-interactions`、browser matrix | production deploy 與 physical-phone supplemental 需另行授權 |
 | DEV-034 | 交付點 | Done / Browser QC Passed / Local-first scope | 是 | App 快速啟動與加入主畫面 UX | `SPEC-034`、`QC-DEV-034`、browser QC | 正式雲端 Inbox / 跨裝置同步另開後續 |
 | DEV-035 | 交付點 | Implemented / Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed | 是 | 工作區刪除持久化修正 | `SPEC-035`、`QA-DEV-035`、`QC-DEV-035` | production front-end release 需另行授權 |
@@ -2404,7 +2405,7 @@ CAPA 來源：
 - DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending：1 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Static + Browser Smoke Passed：1 個交付點。
-- Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed：1 個交付點。
+- Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / Production Not Deployed：1 個交付點。
 - Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Done / Browser QC Passed / Local-first scope：1 個交付點。
 - Implemented / Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed：1 個交付點。
