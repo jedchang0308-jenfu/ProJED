@@ -11,7 +11,7 @@
 結論:
 - 需要輕量重構任務板，不需要重編 DEV ID、不需要新增 DEV、不需要把所有剩餘工作合併成大型 umbrella。
 - DEV-045 與 DEV-037 有直接重疊：DEV-045 是行事曆訂閱 v2 產品方向，DEV-037 是 v1 source-scope / permission / feed safety substrate。若使用者要走 v2，應先做 DEV-045 Phase 1 Builder，DEV-037 的 DB / Edge / live feed gate 改併入 DEV-045 Phase 2 / 3；只有在使用者明確要求先修正式環境 v1 訂閱來源範圍時，才單獨執行 DEV-037 live gate。
-- DEV-025 當時仍是 `Implemented / DB QC Pending`，先前漏列在交付點總覽與近期 Gate；本輪只修正任務板索引，不新增功能。2026-07-07 已補 production read-only preflight，mutating role-data QC 仍待安全 fixture。
+- DEV-025 當時仍是 `Implemented / DB QC Pending`，先前漏列在交付點總覽與近期 Gate；本輪只修正任務板索引，不新增功能。2026-07-07 已補 production read-only preflight 與 guarded fixture-readiness harness，mutating role-data QC 仍待安全 fixture。
 - 2026-07-07 續接已補 DEV-025 guarded fixture-readiness harness；此為 read-only gate，用來確認 production/staging fixture 有明確 `DEV-025` / `QC-DEV-025` 標記與最小資料形狀，未完成實際 mutating role-data QC。
 - 其他剩餘任務多為 release、DB、Edge、真機、人工登入式 QC 或未授權後續 phase；保持獨立 DEV 較清楚，不應為了 DEV-045 進行大規模重構。
 
@@ -1983,7 +1983,7 @@ Implementation evidence:
 
 ### DEV-025: 受控跨工作區移動專案
 
-狀態: Implemented / DB Read-only Preflight Passed / Mutating QC Pending
+狀態: Implemented / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending
 任務類型: 功能開發 / 權限與資料一致性
 優先級: P1
 關聯需求: 使用者希望專案可在不同工作區之間移動，但擔心權限外洩、資料遺失與稽核斷鏈。
@@ -2002,11 +2002,11 @@ Implementation evidence:
 
 | 階段 | Owner | 狀態 | 輸出 |
 |---|---|---|---|
-| PM/RD 規格 | PM/RD | Implemented / DB Read-only Preflight Passed / Mutating QC Pending | SPEC-025 |
-| QA 驗證計畫 | QA | Static QA Done / DB Read-only Preflight Passed / Mutating QC Pending | QA-DEV-025 |
+| PM/RD 規格 | PM/RD | Implemented / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | SPEC-025 |
+| QA 驗證計畫 | QA | Static QA Done / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | QA-DEV-025 |
 | RD 實作 | RD | Done | Supabase RPC migration + frontend controlled transfer flow + local-test fallback |
 | QA 靜態驗證 | QA | Done | `verify:dev-025-project-workspace-transfer`, TypeScript, production build |
-| QC 事實驗證 | QC | DB Read-only Preflight Passed / Mutating QC Pending | 正式 DB 已具備 RPC / grants / constraints；待安全 fixture 上驗證 RLS、audit log、data consistency、RAG visibility evidence |
+| QC 事實驗證 | QC | DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | 正式 DB 已具備 RPC / grants / constraints；已新增 read-only fixture readiness harness；待安全 fixture 上驗證 RLS、audit log、data consistency、RAG visibility evidence |
 
 Regression gate:
 - `npm.cmd exec tsc -- --noEmit`
@@ -2336,7 +2336,7 @@ CAPA 來源：
 - 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT 與 regression gates；production UI smoke 與 production deploy 未執行。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
 - 2026-07-07 DEV-045 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier 與 local-test browser verifier；Phase 3 已授權並完成 read-only preflight，但因 `ProJED_TEST` inactive 且缺 Level 3 production-like pre-deploy smoke，remote DB/Edge/production live QC 未執行。
-- 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight passed，mutating role-data QC still pending safe fixture。
+- 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight 與 guarded fixture-readiness harness passed，mutating role-data QC still pending safe fixture。
 - 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 只能在 Level 3 smoke path 或 explicit risk acceptance 後進入 remote apply/deploy；否則下一步是文件化 gate blocker 或處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待互動式 production UI smoke，原因是正式前端使用 Google OAuth，CLI 無法非互動完成登入與發布流程。
@@ -2395,7 +2395,7 @@ CAPA 來源：
 
 - Done：10 個交付點。
 - In Verification：2 個交付點。
-- DB Read-only Preflight Passed / Mutating QC Pending：1 個交付點。
+- DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending：1 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Static + Browser Smoke Passed：1 個交付點。
 - Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed：1 個交付點。

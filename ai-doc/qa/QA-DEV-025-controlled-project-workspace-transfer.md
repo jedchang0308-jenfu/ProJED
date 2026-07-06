@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
-狀態: Static QA Done / DB Read-only Preflight Passed / Mutating QC Pending
+狀態: Static QA Done / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending
 建立日期: 2026-06-18
 
 ## 驗證目標

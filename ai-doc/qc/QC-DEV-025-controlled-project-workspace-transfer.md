@@ -3,7 +3,7 @@
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
 關聯 QA: `ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md`
-狀態: DB Read-only Preflight Passed / Mutating Role-Data QC Pending
+狀態: DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating Role-Data QC Pending
 日期: 2026-07-07
 
 ## QC 結論
