@@ -72,6 +72,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
   const activeBoardId = useBoardStore(s => s.activeBoardId);
   const nodes = useWbsStore(s => s.nodes);
   const { canEditTask } = useBoardPermissions();
+  const workspaceMembers = useMemberStore(s => s.workspaceMembers);
   const boardMembers = useMemberStore(s => s.boardMembers);
 
   const tags = useTagStore(s => s.tags);
@@ -124,8 +125,8 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
   const selectedAssigneeSet = useMemo(() => new Set(selectedAssigneeIds), [selectedAssigneeIds]);
   const assigneeOptions = useMemo(
-    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes),
-    [activeBoardId, boardMembers, nodes]
+    () => createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers),
+    [activeBoardId, boardMembers, nodes, workspaceMembers]
   );
   const activeTagCount = selectedTagIds.length;
   const activeAssigneeCount = selectedAssigneeIds.length;

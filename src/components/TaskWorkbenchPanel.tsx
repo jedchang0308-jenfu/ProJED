@@ -597,6 +597,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const nodes = useWbsStore(state => state.nodes);
   const setNodes = useWbsStore(state => state.setNodes);
   const addNode = useWbsStore(state => state.addNode);
+  const workspaceMembers = useMemberStore(state => state.workspaceMembers);
   const boardMembers = useMemberStore(state => state.boardMembers);
   const tags = useTagStore(state => state.tags);
   const inboxItems = useQuickCaptureStore(state => state.items);
@@ -734,8 +735,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const fallbackWorkspaceId = selectedBoardOption?.workspaceId || activeWorkspaceId || boardOptions[0]?.workspaceId || '';
 
   const assigneeOptions = React.useMemo(
-    () => createBoardAssigneeFilterOptions(selectedBoardId, boardMembers, nodes),
-    [boardMembers, nodes, selectedBoardId],
+    () => createBoardAssigneeFilterOptions(selectedBoardId, boardMembers, nodes, workspaceMembers),
+    [boardMembers, nodes, selectedBoardId, workspaceMembers],
   );
   const filterProjectionByBoardId = React.useMemo(() => {
     const lookup = new Map<string, ReturnType<typeof projectTaskFilterResults>>();

@@ -1,4 +1,4 @@
-import type { BoardMember, TaskNode } from '../../types';
+import type { BoardMember, CollaborationMemberProfile, TaskNode, WorkspaceMember } from '../../types';
 
 export type TaskAssigneeFilterOption = {
   id: string;
@@ -8,25 +8,44 @@ export type TaskAssigneeFilterOption = {
 export const createFallbackAssigneeLabel = (userId: string) =>
   userId.length > 8 ? `成員 ${userId.slice(0, 8)}` : userId || '未指派';
 
-const getBoardMemberLabel = (member: BoardMember) =>
-  member.profile?.displayName || member.profile?.email || createFallbackAssigneeLabel(member.userId);
+const getProfileLabel = (profile?: CollaborationMemberProfile | null) =>
+  profile?.displayName?.trim() || profile?.email?.trim() || '';
+
+const createWorkspaceMemberLabels = (workspaceMembers: WorkspaceMember[]) => {
+  const labels = new Map<string, string>();
+
+  workspaceMembers.forEach(member => {
+    const label = getProfileLabel(member.profile);
+    if (label) labels.set(member.userId, label);
+  });
+
+  return labels;
+};
+
+const getBoardMemberLabel = (member: BoardMember, workspaceMemberLabels: Map<string, string>) =>
+  getProfileLabel(member.profile) || workspaceMemberLabels.get(member.userId) || createFallbackAssigneeLabel(member.userId);
 
 export const createBoardAssigneeFilterOptions = (
   boardId: string | null | undefined,
   boardMembers: BoardMember[],
   nodesById: Record<string, TaskNode | null | undefined>,
+  workspaceMembers: WorkspaceMember[] = [],
 ): TaskAssigneeFilterOption[] => {
   const labels = new Map<string, string>();
+  const workspaceMemberLabels = createWorkspaceMemberLabels(workspaceMembers);
 
   boardMembers.forEach(member => {
     if (boardId && member.boardId !== boardId) return;
-    labels.set(member.userId, getBoardMemberLabel(member));
+    labels.set(member.userId, getBoardMemberLabel(member, workspaceMemberLabels));
   });
 
   Object.values(nodesById).forEach(node => {
     if (!node || node.isArchived || node.boardId !== boardId || !node.assigneeId) return;
     if (!labels.has(node.assigneeId)) {
-      labels.set(node.assigneeId, createFallbackAssigneeLabel(node.assigneeId));
+      labels.set(
+        node.assigneeId,
+        workspaceMemberLabels.get(node.assigneeId) || createFallbackAssigneeLabel(node.assigneeId),
+      );
     }
   });
 

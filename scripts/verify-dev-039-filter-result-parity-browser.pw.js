@@ -62,7 +62,7 @@ async (page) => {
       status: 'in_progress',
       nodeType: 'task',
       order: 0,
-      assigneeId: 'member-in-task-only',
+      assigneeId: 'local-test-analyst',
       tagIds: ['dev039-filter-parity-tag'],
       endDate: '2026-07-08',
       createdAt: 1704067200000,
@@ -126,7 +126,7 @@ async (page) => {
     await boardFilterPanel.waitFor({ state: 'visible', timeout: 10000 });
     await boardFilterPanel.getByRole('button', { name: /待辦/ }).click();
 
-    const assigneeLabel = '成員 member-i';
+    const assigneeLabel = '本機測試分析員';
     assert(
       await boardFilterPanel.getByRole('button', { name: new RegExp(assigneeLabel) }).count() === 1,
       'board filter should include task assignee from selected board even when not present as a board member',
@@ -169,15 +169,33 @@ async (page) => {
     step = 'mobile-viewport';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('[data-task-workbench-panel="collapsed"]').waitFor({ state: 'visible', timeout: 10000 });
     const mobileBoardHasContextPath = await page.evaluate(() => {
       const root = document.querySelector('[data-kanban-column-header="true"][data-task-id="dev039-filter-parity-root"]');
       const rect = root?.getBoundingClientRect();
       return rect ? rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth && rect.right > 0 : false;
     });
     assert(mobileBoardHasContextPath, 'mobile board should remain reachable while filter parity context path exists');
-    await page.locator('[data-task-workbench-panel="collapsed"] button[title="開啟全域任務平台"]').click();
-    await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
+
+    const mobileWorkbenchPanel = page.locator('[data-task-workbench-panel="true"]');
+    if (await mobileWorkbenchPanel.count() === 0) {
+      const mobileSidebar = page.locator('[data-sidebar-panel="expanded"]');
+      if (await mobileSidebar.count() === 0) {
+        await page.locator('[data-main-sidebar-toggle="true"]').click();
+      }
+      await mobileSidebar.waitFor({ state: 'visible', timeout: 10000 });
+      await mobileSidebar.locator('[data-sidebar-task-workbench-button="true"]').click();
+    }
+    await mobileWorkbenchPanel.waitFor({ state: 'visible', timeout: 10000 });
+    const mobileFilterToggle = mobileWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]');
+    if (await mobileFilterToggle.getAttribute('aria-expanded') !== 'true') {
+      await mobileFilterToggle.click();
+    }
+    const mobileWorkbenchFilterPanel = mobileWorkbenchPanel.locator('[data-task-workbench-filter-panel="true"]');
+    await mobileWorkbenchFilterPanel.waitFor({ state: 'visible', timeout: 10000 });
+    assert(
+      await mobileWorkbenchFilterPanel.getByRole('button', { name: new RegExp(assigneeLabel) }).count() === 1,
+      'mobile workbench filter should show workspace member display name for task assignee',
+    );
     await page.screenshot({ path: 'output/playwright/dev-039-filter-result-parity-mobile.png', fullPage: true });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     assert(!overflow, 'mobile filter parity flow should not have document-level horizontal overflow');
