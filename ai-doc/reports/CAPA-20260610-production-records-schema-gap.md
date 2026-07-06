@@ -71,7 +71,7 @@ The production database schema did not include the record feature migrations whi
 |---|---|---|---|
 | PA-1 | Add a release gate script that compares local `supabase/migrations` with production `supabase_migrations.schema_migrations` before deploy. | RD | Next release |
 | PA-2 | Add a production/staging smoke checklist for schema-backed features: create, list, reload, and role/RLS verification. | QA | Next release |
-| PA-3 | Update `verify:source` or add `verify:release` so schema parity is checked before Firebase hosting deploy. | RD | Next release |
+| PA-3 | Keep `verify:source` paired with `verify:supabase:p7-release-gate` so schema parity is checked before Firebase hosting deploy. | RD | Next release |
 | PA-4 | Require every DB-backed DEV task to document "migration applied to target environment" as PM evidence. | PM | Immediate |
 | PA-5 | Add UI error regression coverage for record publish failure when backend returns table/schema errors. | QA/RD | Next sprint |
 
