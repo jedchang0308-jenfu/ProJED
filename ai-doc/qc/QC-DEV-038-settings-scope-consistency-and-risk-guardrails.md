@@ -3,7 +3,7 @@
 關聯 DEV：DEV-038
 關聯 SPEC：`ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`
 關聯 QA：`ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md`
-狀態：Local Automated QC Passed / DB unchanged / Production Not Deployed
+狀態：Production Release Deployed / Local + Production QC Passed / DB unchanged
 QC 日期：2026-07-06
 
 ## Scope Verified
@@ -39,9 +39,20 @@ Browser screenshots:
 ## Deferred / Not Executed
 
 - `verify:dev-037-calendar-subscription-source-scope` was not executed. DEV-038 did not modify `CalendarSubscriptionsView` source-scope data contract, DB validation, Edge Function, `scope_type`, or `project_ids`; those remain DEV-037 scope.
-- Production deployment was not executed.
 - Supabase schema, RLS, migration, and production data were not changed.
+
+## Production Release Evidence - 2026-07-06
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Release boundary | Pass | Branch `持續優化1`; release commit `b78540e`; Firebase Hosting project `projed-cc78d`; rollback target is previous Firebase Hosting release in project console. |
+| Build | Pass | `npm.cmd run build`; generated `dist/assets/index-BU14rK7W.js` and `dist/assets/index-CYqvildz.css`; non-blocking Browserslist/caniuse-lite warning only. |
+| Pre-deploy preview smoke | Pass | `http://127.0.0.1:4174/` loaded the expected JS/CSS, root was non-empty, service worker ready, no critical console/pageerror/failed request. |
+| Deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`; 32 files found in `dist`, 17 new uploads, version finalized and released. |
+| Post-deploy HTTP artifact check | Pass | `https://projed-cc78d.web.app/` and `https://projed-cc78d.firebaseapp.com/` returned HTTP 200 and referenced `/assets/index-BU14rK7W.js` + `/assets/index-CYqvildz.css`; old `/assets/index-BXtRfIba.js` absent. |
+| Post-deploy browser smoke | Pass | Production URL `https://projed-cc78d.web.app/`; app shell non-empty login shell; loaded `/assets/index-BU14rK7W.js`; no critical console/pageerror/failed request. |
+| Authenticated production UI smoke | Pass | `npm.cmd run verify:dev-040-production-auth-ui-smoke`; temporary Supabase user/tenant created and cleaned; app loaded after authenticated session injection. |
 
 ## QC Verdict
 
-DEV-038 passes local automated QC for Settings IA scope clarity and high-risk guardrails. Remaining work is DEV-037 source-scope implementation and any future production release gate if the user authorizes deployment.
+DEV-038 passes local automated QC and production release smoke for Settings IA scope clarity and high-risk guardrails. Remaining work is DEV-037 source-scope implementation; DEV-038 did not change DB schema, RLS, migration, or Edge Function behavior.

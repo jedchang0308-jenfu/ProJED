@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-042
 關聯 SPEC：`ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態：Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed
+狀態：Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed
 建立日期：2026-07-05
 
 ## 驗證目標
@@ -130,7 +130,19 @@ QC 回報至少包含：
 | Deferred verification | Classification | Covered by | Notes |
 |---|---|---|---|
 | Physical phone final hand-feel | Blocked Human Re-entry | User/QC supplemental | Browser viewport 可先驗證 layout；真機手感需另行授權或使用者回饋 |
-| Production smoke | Blocked Human Re-entry | deployment-release-gate | 不可由本機 QC 自動宣稱正式站已修正 |
+| Production smoke | Passed | deployment-release-gate | 2026-07-06 Firebase Hosting production release passed artifact/browser/auth smoke |
+
+## Production Release Evidence - 2026-07-06
+
+| Gate | 結果 | 證據 |
+|---|---|---|
+| Release boundary | Pass | Branch `持續優化1`，release commit `b78540e`，Firebase project `projed-cc78d`，public directory `dist` |
+| Production build | Pass | `npm.cmd run build`；main JS `dist/assets/index-BU14rK7W.js`，CSS `dist/assets/index-CYqvildz.css` |
+| Production-like preview smoke | Pass | `http://127.0.0.1:4174/` 載入 expected bundle，root non-empty，service worker ready，無 critical console/pageerror/failed request |
+| Firebase deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`；正式 URL `https://projed-cc78d.web.app` |
+| Post-deploy production smoke | Pass | 正式站 HTTP artifact check 與 browser smoke 均載入 `index-BU14rK7W.js` / `index-CYqvildz.css`；authenticated production UI smoke passed |
+
+限制：production smoke 驗證正式 artifact 與登入後 app flow；DEV-042 真機手感仍需 iOS Safari / Android Chrome 裝置證據，不以 browser viewport 取代。
 | RecordSidebar / RagSidebar mobile redesign | No Tracking | 無 | 非本 DEV scope；只做 regression sweep |
 | DB / RLS / migration proof | No Tracking | 無 | 本 DEV 不碰資料層 |
 

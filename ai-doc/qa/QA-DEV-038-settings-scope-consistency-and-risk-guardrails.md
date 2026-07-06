@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-038
 關聯 SPEC：`ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`
-狀態：QA Passed / Local Automated QC Passed / DB unchanged / Production Not Deployed
+狀態：Production Release Deployed / Local + Production Smoke Passed / DB unchanged
 建立日期：2026-06-29
 QC 日期：2026-07-06
 
@@ -21,6 +21,18 @@ QC 日期：2026-07-06
 | `npm.cmd run verify:dev-026-trello-like-board-share-ui` | Pass | 15/15 checks |
 | `npm.cmd exec tsc -- --noEmit` | Pass | TypeScript clean |
 | `npm.cmd run build:test` | Pass | Vite test build completed |
+
+## Production Release Evidence - 2026-07-06
+
+| Gate | 結果 | 證據 |
+|---|---|---|
+| Release boundary | Pass | Branch `持續優化1`，release commit `b78540e`，Firebase project `projed-cc78d`，public directory `dist` |
+| Production build | Pass | `npm.cmd run build`；main JS `dist/assets/index-BU14rK7W.js`，CSS `dist/assets/index-CYqvildz.css` |
+| Production-like preview smoke | Pass | `http://127.0.0.1:4174/` 載入 `/assets/index-BU14rK7W.js` / `/assets/index-CYqvildz.css`；root non-empty；service worker ready；無 critical console/pageerror/failed request |
+| Firebase deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`；Hosting URL `https://projed-cc78d.web.app` |
+| Post-deploy HTTP artifact check | Pass | `https://projed-cc78d.web.app/` 與 `https://projed-cc78d.firebaseapp.com/` HTTP 200，皆載入 `index-BU14rK7W.js` / `index-CYqvildz.css`，且不再載入上一版 `index-BXtRfIba.js` |
+| Post-deploy browser smoke | Pass | 正式站 app shell non-empty，title `ProJED 3.0 | 專案管理系統`，service worker ready，無 critical console/pageerror/failed request |
+| Authenticated production UI smoke | Pass | `npm.cmd run verify:dev-040-production-auth-ui-smoke`；臨時 Supabase user / tenant 建立後清理，登入後 app loaded，project import resolved，workbench unplaced task board switch 後保留 |
 
 瀏覽器驗證覆蓋：
 

@@ -3,7 +3,7 @@
 關聯 DEV: DEV-044
 父交付點: DEV-001 緊湊 UI 系統 / DEV-028 跨模式任務互動 / DEV-039 全域任務平台
 任務類型: Undo/Redo interaction contract / Recovery scope / Data-cost guardrail
-狀態: Phase 1 + Phase 2 Safe Slice Implemented / Local Automated QA Passed / Production Not Deployed
+狀態: Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed
 優先級: P1 user recovery confidence, P1 database cost guardrail
 建立日期: 2026-07-06
 
@@ -31,7 +31,7 @@ AI assumptions:
 
 - 本 DEV 的第一個可實作 phase 是低成本、client-side command 擴充；不改 schema、不做 migration、不新增 RLS/RPC。
 - `UndoCommand` 可以在 RD 時擴充為 async-aware command，並加入 suppress guard，避免 undo / redo 執行反向 action 時再次污染 stack。
-- Phase 1 已於 2026-07-06 在本機完成 low-cost ordinary undo implementation、static verifier、browser verifier 與 regression gate；production deploy、DB schema / migration、RLS/RPC、durable recovery 仍未授權。
+- Phase 1 已於 2026-07-06 在本機完成 low-cost ordinary undo implementation、static verifier、browser verifier 與 regression gate；2026-07-06 已完成 Firebase Hosting production release；DB schema / migration、RLS/RPC、durable recovery 仍未授權。
 - Phase 2 safe slice 已於 2026-07-06 完成本機 batch / cross-view placement ordinary undo：不新增 DB history、不改 schema，只把既有多筆 task update 包成單一 command。可逆看板跨 workspace move 因現有 transfer 會處理 members / invites / tags 等副作用，暫不納入 ordinary undo。
 
 Re-entry triggers:
@@ -39,7 +39,7 @@ Re-entry triggers:
 - 需要跨裝置或重新整理後仍可復原。
 - 需要 workspace / board 刪除後完整復原子資料。
 - 需要記錄可稽核的永久 undo history。
-- 需要修改 DB schema、RLS、RPC、migration、production deploy 或正式資料修復。
+- 需要修改 DB schema、RLS、RPC、migration 或正式資料修復。
 - 需要把權限、成員、邀請、匯入覆蓋、AI 批次改寫納入一般 undo。
 
 ## Current System Reading
@@ -70,7 +70,7 @@ Re-entry triggers:
 
 ### Phase 1 - Low-Cost Undo Expansion
 
-狀態: Implemented / Local Automated QA Passed / Production Not Deployed
+狀態: Implemented / Local Automated QA Passed / Production Release Deployed
 
 目標: 擴充高頻、低成本、可用既有資料寫入復原的操作。
 
@@ -257,7 +257,7 @@ npm.cmd run build:test
 |---|---|---|
 | Product code implementation | Same Spec Phase / Complete for Phase 1 + Phase 2 safe slice | Phase 1 已完成本機 RD；Phase 2 safe slice 已完成 batch / reorder / placement ordinary undo；Phase 3 destructive recovery 未授權。 |
 | Automated verifier implementation | Same Spec Phase / Complete for Phase 1 + Phase 2 safe slice | 已建立並通過 `verify:dev-044-undo-coverage` 與 `verify:dev-044-undo-coverage-browser`，其中 static gate 覆蓋 Phase 2 batch command、drag / reorder / placement caller。 |
-| Production deploy | Blocked Human Re-entry | 需 deployment-release-gate 與使用者明確授權。 |
+| Production deploy | Same Spec Phase / Complete | 2026-07-06 已由使用者授權並完成 Firebase Hosting production release。 |
 | DB schema / migration / RLS / RPC | Blocked Human Re-entry | Phase 1 明確不需要；Phase 3 若啟動需另行授權。 |
 | Persistent cross-device undo history | New DEV Candidate | 不屬於低成本 ordinary undo；需成本與隱私決策。 |
 | Workspace delete recovery | New DEV Candidate / Human Re-entry | 需資料生命週期、soft delete 或回收站規格。 |
@@ -271,8 +271,8 @@ npm.cmd run build:test
 | Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
 |---|---|---|---|---|---|---|---|
 | Phase 0: PM/RD Contract | Authorized | Complete | SPEC / QA / dev_task / documentation_map | Product code, verifier, deploy | 使用者要求寫成開發文件 | 文件包含 scope、cost guardrail、RD contract、QA gate | File diff |
-| Phase 1: Low-Cost Undo Expansion | Authorized / Local Complete | Implemented / Local Automated QA Passed | Title edits, board create, record save/archive restore, filter/display prefs, async/suppress undo guard | DB history, workspace delete, permission undo, import rollback | Phase 0 contract complete | DEV-044 static/browser verifier and regressions pass；normal operation 不新增 history write | DEV-044 static/browser verifier, DEV-013/039/006 regression, TS, build |
-| Phase 2: Batch / Cross-View Recovery Safe Slice | Authorized / Local Complete for batch, reorder and placement; board workspace transfer not authorized | Safe Slice Implemented / Local Automated QA Passed | Batch task patches, cross-view placement, drag / reorder coalescing | Board move between workspaces, destructive cascade restore, persistent history | Phase 1 stable + user authorized safe slice | Batch / reorder / placement undo is atomic enough; no duplicate entities | `verify:dev-044-undo-coverage`, placement/workbench regression |
+| Phase 1: Low-Cost Undo Expansion | Authorized / Complete | Implemented / Local Automated QA Passed / Production Release Deployed | Title edits, board create, record save/archive restore, filter/display prefs, async/suppress undo guard | DB history, workspace delete, permission undo, import rollback | Phase 0 contract complete | DEV-044 static/browser verifier and regressions pass；normal operation 不新增 history write；production smoke passed | DEV-044 static/browser verifier, DEV-013/039/006 regression, TS, build, production artifact/browser/auth smoke |
+| Phase 2: Batch / Cross-View Recovery Safe Slice | Authorized / Complete for batch, reorder and placement; board workspace transfer not authorized | Safe Slice Implemented / Local Automated QA Passed / Production Release Deployed | Batch task patches, cross-view placement, drag / reorder coalescing | Board move between workspaces, destructive cascade restore, persistent history | Phase 1 stable + user authorized safe slice | Batch / reorder / placement undo is atomic enough; no duplicate entities；production smoke passed | `verify:dev-044-undo-coverage`, placement/workbench regression, production artifact/browser/auth smoke |
 | Phase 3: Destructive Recovery | Human Re-entry Required | RD Contract Ready / Not Authorized | Workspace/board delete lifecycle, import rollback, permission/audit, persistent history | Ordinary Ctrl+Z semantics | 使用者確認成本、retention、DB migration | Recovery model documented and gated by lifecycle tests | ADR/SPEC/QA/QC plus migration evidence |
 
 ## ADR Decision

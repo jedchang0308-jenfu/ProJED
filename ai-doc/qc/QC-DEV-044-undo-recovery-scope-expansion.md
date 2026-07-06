@@ -3,7 +3,7 @@
 關聯 DEV: DEV-044
 關聯 SPEC: `ai-doc/specs/SPEC-044-undo-recovery-scope-expansion.md`
 關聯 QA: `ai-doc/qa/QA-DEV-044-undo-recovery-scope-expansion.md`
-狀態: Phase 1 + Phase 2 Safe Slice Local Automated QC Passed / Production Not Deployed
+狀態: Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production QC Passed
 日期: 2026-07-06
 
 ## QC Scope
@@ -53,7 +53,6 @@
 
 ## Not Executed / Not Claimed
 
-- Production deploy and production smoke were not executed.
 - DB schema, migration, RLS, RPC and remote history service were not executed.
 - Cross-device or reload-persistent undo is not implemented.
 - Workspace delete recovery is not implemented.
@@ -62,6 +61,18 @@
 - Permission/member/role undo, import overwrite rollback and AI batch rewrite rollback are not implemented.
 - Physical-device supplemental QA is not executed.
 
+## Production Release Evidence - 2026-07-06
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Release boundary | Pass | Branch `持續優化1`; release commit `b78540e`; Firebase Hosting project `projed-cc78d`; rollback target is previous Firebase Hosting release in project console. |
+| Build | Pass | `npm.cmd run build`; generated `dist/assets/index-BU14rK7W.js` and `dist/assets/index-CYqvildz.css`; non-blocking Browserslist/caniuse-lite warning only. |
+| Pre-deploy preview smoke | Pass | `http://127.0.0.1:4174/` loaded expected JS/CSS, root was non-empty, service worker ready, no critical console/pageerror/failed request. |
+| Deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`; 32 files found in `dist`, 17 new uploads, version finalized and released. |
+| Post-deploy HTTP artifact check | Pass | `https://projed-cc78d.web.app/` and `https://projed-cc78d.firebaseapp.com/` returned HTTP 200 and referenced `/assets/index-BU14rK7W.js` + `/assets/index-CYqvildz.css`; old `/assets/index-BXtRfIba.js` absent. |
+| Post-deploy browser smoke | Pass | Production URL `https://projed-cc78d.web.app/`; app shell non-empty login shell; loaded `/assets/index-BU14rK7W.js`; no critical console/pageerror/failed request. |
+| Authenticated production UI smoke | Pass | `npm.cmd run verify:dev-040-production-auth-ui-smoke`; temporary Supabase user/tenant created and cleaned; app loaded after authenticated session injection. |
+
 ## QC Conclusion
 
-DEV-044 Phase 1 and Phase 2 safe slice are locally implemented and passed the automated static/browser/regression gates listed above. The completed scope is ordinary, current-session undo expansion only: Phase 2 adds batch/reorder/placement command grouping, not durable recovery. Board workspace transfer, destructive recovery and production release remain separate authorization gates.
+DEV-044 Phase 1 and Phase 2 safe slice are locally implemented, production released, and passed the automated static/browser/regression plus production artifact/browser/auth smoke gates listed above. The completed scope is ordinary, current-session undo expansion only: Phase 2 adds batch/reorder/placement command grouping, not durable recovery. Board workspace transfer and destructive recovery remain separate authorization gates.

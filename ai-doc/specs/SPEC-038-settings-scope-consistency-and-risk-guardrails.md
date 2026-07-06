@@ -4,14 +4,14 @@
 關聯開發點：DEV-037 行事曆訂閱來源範圍清晰化
 父交付點：DEV-036 Trello-like Workspace Governance
 任務類型：Settings IA / Scope taxonomy / Risk guardrails
-狀態：Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed
+狀態：Production Release Deployed / Local + Production Smoke Passed / DB unchanged
 優先級：P0 backup/import/trash risk, P1 settings IA consistency
 建立日期：2026-06-29
 實作日期：2026-07-06
 
 ## Implementation Status - 2026-07-06
 
-DEV-038 已完成本機 RD 與自動化 QC。實作範圍限制在 Settings / Backup / RecycleBin / BoardMembersPanel / AppInstallAssistant 與 verifier，未修改 `exportData` / `importData` 資料格式，未新增 DB schema、RLS、migration 或 production release。
+DEV-038 已完成本機 RD、自動化 QC 與 2026-07-06 Firebase Hosting production release。實作範圍限制在 Settings / Backup / RecycleBin / BoardMembersPanel / AppInstallAssistant 與 verifier，未修改 `exportData` / `importData` 資料格式，未新增 DB schema、RLS 或 migration。
 
 主要交付：
 

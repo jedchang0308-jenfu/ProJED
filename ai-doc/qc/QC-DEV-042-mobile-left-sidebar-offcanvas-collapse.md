@@ -3,14 +3,14 @@
 關聯 DEV: DEV-042
 關聯 SPEC: `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
 關聯 QA: `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態: Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed
+狀態: Production Release Deployed / Local + Production QC Passed / Physical Phone Supplemental Not Executed
 建立日期: 2026-07-05
 
 ## 驗證結論
 
 - 判定：通過，本機 static + browser viewport matrix + regression gate 通過。
 - 範圍：手機與桌機 closed Sidebar / TaskWorkbench zero-width off-canvas、overlay 開啟/關閉、DEV-029 pan-first 與 DEV-039 workbench regression。
-- 限制：未執行 physical-phone 手感驗證、production deploy、正式站 smoke、DB/RLS/migration/RPC 或正式資料修復。
+- 限制：未執行 physical-phone 手感驗證、DB/RLS/migration/RPC 或正式資料修復；production deploy 與正式站 smoke 已於 2026-07-06 完成。
 
 ## RD 修正事實
 
@@ -57,7 +57,17 @@ QC interpretation:
 ## 未執行與殘留風險
 
 - Physical-phone supplemental 未執行：不得宣稱 iOS Safari / Android Chrome 真機手感已簽核。
-- Production deploy 未執行：不得宣稱正式站已修正。
-- Production smoke 未執行：若要發布，需另走 `deployment-release-gate`。
 - DB schema / migration / RLS / RPC 未涉及；本 DEV 為 layout/UI contract。
 - RecordSidebar / RagSidebar mobile redesign 不在本 DEV scope。
+
+## Production Release Evidence - 2026-07-06
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Release boundary | Pass | Branch `持續優化1`; release commit `b78540e`; Firebase Hosting project `projed-cc78d`; rollback target is previous Firebase Hosting release in project console. |
+| Build | Pass | `npm.cmd run build`; generated `dist/assets/index-BU14rK7W.js` and `dist/assets/index-CYqvildz.css`; non-blocking Browserslist/caniuse-lite warning only. |
+| Pre-deploy preview smoke | Pass | `http://127.0.0.1:4174/` loaded expected JS/CSS, root was non-empty, service worker ready, no critical console/pageerror/failed request. |
+| Deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`; 32 files found in `dist`, 17 new uploads, version finalized and released. |
+| Post-deploy HTTP artifact check | Pass | `https://projed-cc78d.web.app/` and `https://projed-cc78d.firebaseapp.com/` returned HTTP 200 and referenced `/assets/index-BU14rK7W.js` + `/assets/index-CYqvildz.css`; old `/assets/index-BXtRfIba.js` absent. |
+| Post-deploy browser smoke | Pass | Production URL `https://projed-cc78d.web.app/`; app shell non-empty login shell; loaded `/assets/index-BU14rK7W.js`; no critical console/pageerror/failed request. |
+| Authenticated production UI smoke | Pass | `npm.cmd run verify:dev-040-production-auth-ui-smoke`; temporary Supabase user/tenant created and cleaned; app loaded after authenticated session injection. |

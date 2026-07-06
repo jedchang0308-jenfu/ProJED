@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-044
 關聯 SPEC: `ai-doc/specs/SPEC-044-undo-recovery-scope-expansion.md`
-狀態: Phase 1 + Phase 2 Safe Slice Local Automated QA Passed / Production Not Deployed
+狀態: Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed
 建立日期: 2026-07-06
 
 ## QA Goal
@@ -31,9 +31,18 @@
 - `npm.cmd run build:test` passed。
 - `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
 
+## Production Release Evidence - 2026-07-06
+
+| Gate | 結果 | 證據 |
+|---|---|---|
+| Release boundary | Pass | Branch `持續優化1`，release commit `b78540e`，Firebase project `projed-cc78d`，public directory `dist` |
+| Production build | Pass | `npm.cmd run build`；main JS `dist/assets/index-BU14rK7W.js`，CSS `dist/assets/index-CYqvildz.css` |
+| Production-like preview smoke | Pass | `http://127.0.0.1:4174/` 載入 expected bundle，root non-empty，service worker ready，無 critical console/pageerror/failed request |
+| Firebase deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`；正式 URL `https://projed-cc78d.web.app` |
+| Post-deploy production smoke | Pass | 正式站 HTTP artifact check 與 browser smoke 均載入 `index-BU14rK7W.js` / `index-CYqvildz.css`；authenticated production UI smoke passed |
+
 未執行 / 不宣稱:
 
-- Production deploy / production smoke 未執行。
 - DB schema / migration / RLS / RPC 未執行且不屬 Phase 1。
 - Cross-device / reload-persistent undo 未執行且不屬 Phase 1。
 - Workspace delete、permission/member、import overwrite、AI batch rewrite recovery 未納入 ordinary undo。
