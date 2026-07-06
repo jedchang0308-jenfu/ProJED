@@ -200,8 +200,11 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   const scopeType = getScopeType(filters);
-  const selectedWorkspaceCount = new Set(filters.workspace_ids).size;
-  const selectedWorkspaceKey = uniq(filters.workspace_ids).join(',');
+  const effectiveMemberWorkspaceIds = builderPayload?.workspace_ids.length
+    ? builderPayload.workspace_ids
+    : filters.workspace_ids;
+  const selectedWorkspaceCount = new Set(effectiveMemberWorkspaceIds).size;
+  const selectedWorkspaceKey = uniq(effectiveMemberWorkspaceIds).join(',');
   const assigneeSelection = useMemo(
     () => getAssigneeSelection(filters.assignee, user?.uid),
     [filters.assignee, user?.uid]
@@ -226,13 +229,13 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [members, user]);
 
   const loadedSelectedWorkspaceMemberCount = useMemo(() => {
-    const selectedWorkspaceIds = new Set(filters.workspace_ids);
+    const selectedWorkspaceIds = new Set(effectiveMemberWorkspaceIds);
     return new Set(
       members
         .filter((member) => selectedWorkspaceIds.has(member.workspaceId))
         .map((member) => member.workspaceId)
     ).size;
-  }, [filters.workspace_ids, members]);
+  }, [effectiveMemberWorkspaceIds, members]);
 
   const hasLoadedSelectedWorkspaceMembers = selectedWorkspaceCount > 0
     && loadedSelectedWorkspaceMemberCount >= selectedWorkspaceCount;
@@ -357,14 +360,14 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [activeBoard?.id, activeWorkspace?.id, editingId]);
 
   useEffect(() => {
-    if (!isSupabaseBackend || filters.workspace_ids.length === 0) {
+    if (!isSupabaseBackend || effectiveMemberWorkspaceIds.length === 0) {
       setMembers([]);
       return;
     }
 
     let cancelled = false;
     setMembers([]);
-    calendarSubscriptionService.listWorkspaceMembers(filters.workspace_ids)
+    calendarSubscriptionService.listWorkspaceMembers(effectiveMemberWorkspaceIds)
       .then((nextMembers) => {
         if (!cancelled) setMembers(nextMembers);
       })
@@ -372,7 +375,7 @@ const CalendarSubscriptionsView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedWorkspaceKey, filters.workspace_ids]);
+  }, [selectedWorkspaceKey, effectiveMemberWorkspaceIds]);
 
   useEffect(() => {
     if (!user || canAssignOthers || !hasLoadedSelectedWorkspaceMembers) return;
@@ -492,9 +495,14 @@ const CalendarSubscriptionsView: React.FC = () => {
   const validate = () => {
     if (!user) return '請先登入';
     if (!name.trim()) return '請輸入訂閱名稱';
-    if (scopeType === 'board' && (filters.project_ids?.length ?? 0) !== 1) return '請選擇目前看板';
-    if (scopeType === 'workspace' && filters.workspace_ids.length === 0) return '請至少選擇一個工作區';
-    if (scopeType === 'custom' && (filters.project_ids?.length ?? 0) === 0) return '請至少選擇一個看板';
+    if (builderPayload) {
+      if (builderPayload.workspace_ids.length === 0) return '新版訂閱至少需要一個工作區';
+      if (builderPayload.project_ids.length === 0) return '新版訂閱至少需要一個看板';
+    } else {
+      if (scopeType === 'board' && (filters.project_ids?.length ?? 0) !== 1) return '請選擇目前看板';
+      if (scopeType === 'workspace' && filters.workspace_ids.length === 0) return '請至少選擇一個工作區';
+      if (scopeType === 'custom' && (filters.project_ids?.length ?? 0) === 0) return '請至少選擇一個看板';
+    }
     if (filters.date_types.length === 0) return '請至少選擇一種日期類型';
     if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
       return '請至少選擇一個負責人或未指派';
@@ -507,6 +515,17 @@ const CalendarSubscriptionsView: React.FC = () => {
     return null;
   };
 
+  const buildSubmissionFilters = (): CalendarSubscriptionFilters => {
+    if (!builderPayload) return filters;
+
+    return {
+      ...builderPayload,
+      scope_type: 'custom',
+      assignee: filters.assignee,
+      date_types: filters.date_types,
+    };
+  };
+
   const submit = async () => {
     const error = validate();
     if (error || !user) {
@@ -516,12 +535,13 @@ const CalendarSubscriptionsView: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const submissionFilters = buildSubmissionFilters();
       if (editingId) {
-        const updated = await calendarSubscriptionService.update(editingId, { name, filters });
+        const updated = await calendarSubscriptionService.update(editingId, { name, filters: submissionFilters });
         setSubscriptions((current) => current.map((item) => item.id === updated.id ? updated : item));
         toast.success('訂閱條件已更新');
       } else {
-        const created = await calendarSubscriptionService.create({ name, filters }, user.uid);
+        const created = await calendarSubscriptionService.create({ name, filters: submissionFilters }, user.uid);
         setSubscriptions((current) => [created.subscription, ...current]);
         setGeneratedUrls((current) => ({ ...current, [created.subscription.id]: created.feedUrl }));
         await copyText(created.feedUrl);
@@ -629,7 +649,7 @@ const CalendarSubscriptionsView: React.FC = () => {
             />
 
             <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-              新版篩選器目前使用本地預覽；實際 `.ics` feed 輸出將在 DEV-045 Phase 2 接上 Supabase / Edge v2 contract。
+              新版篩選器會保存為 v2 訂閱；實際 `.ics` feed 需套用 DEV-045 Phase 2 Supabase migration 與 Edge Function 後才會與預覽一致。
               {builderPayload && (
                 <span className="block pt-1 text-slate-500">
                   v2 snapshot：{builderPayload.workspace_ids.length} 個工作區 / {builderPayload.project_ids.length} 張看板。

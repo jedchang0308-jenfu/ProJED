@@ -1,4 +1,5 @@
 import type {
+  CalendarSubscriptionBoardFilterOverride,
   CalendarSubscriptionAssigneeFilter,
   CalendarSubscriptionDateType,
   CalendarSubscriptionFilters,
@@ -7,6 +8,7 @@ import type {
   Json,
   TenantRole,
 } from './database.types';
+import { normalizeTaskFilters } from '../../features/taskFilters';
 import { configuredSupabaseUrl, isSupabaseConfigured, supabase } from './client';
 
 export type CalendarSubscription = {
@@ -129,6 +131,10 @@ const normalizeScopeType = (
 );
 
 const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  if (filters.version === 2 || filters.v2_scope_type === 'all_accessible_boards_snapshot') {
+    return normalizeV2Filters(filters);
+  }
+
   const scopeType = normalizeScopeType(filters.scope_type);
   const resolvedWorkspaceIds = unique(await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)));
   const projectRefs = await Promise.all(
@@ -167,6 +173,62 @@ const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<C
     ...base,
     scope_type: 'workspace',
     workspace_ids: resolvedWorkspaceIds,
+  };
+};
+
+const normalizeBoardOverrides = async (
+  overrides: CalendarSubscriptionFilters['board_overrides'] | undefined,
+  resolvedWorkspaceIds: string[],
+  resolvedProjectIds: string[],
+): Promise<Record<string, CalendarSubscriptionBoardFilterOverride>> => {
+  const normalized: Record<string, CalendarSubscriptionBoardFilterOverride> = {};
+  if (!overrides) return normalized;
+
+  for (const [boardId, override] of Object.entries(overrides)) {
+    const boardRef = await resolveBoardRef(boardId, resolvedWorkspaceIds);
+    if (!resolvedProjectIds.includes(boardRef.id)) {
+      throw new Error(`看板條件不屬於此訂閱範圍：${boardRef.path}`);
+    }
+
+    if (override.enabled === false) {
+      normalized[boardRef.id] = { enabled: false };
+      continue;
+    }
+
+    normalized[boardRef.id] = {
+      ...normalizeTaskFilters(override),
+      enabled: true,
+    };
+  }
+
+  return normalized;
+};
+
+const normalizeV2Filters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  const resolvedWorkspaceIds = unique(await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)));
+  const projectRefs = await Promise.all(
+    (filters.project_ids ?? []).map((projectId) => resolveBoardRef(projectId, resolvedWorkspaceIds))
+  );
+  const resolvedProjectIds = unique(projectRefs.map((project) => project.id));
+  const projectWorkspaceIds = unique(projectRefs.map((project) => project.workspaceId));
+  const workspaceIds = unique([...resolvedWorkspaceIds, ...projectWorkspaceIds]);
+
+  if (workspaceIds.length === 0 || resolvedProjectIds.length === 0) {
+    throw new Error('新版行事曆訂閱至少需要一個可讀工作區與看板。');
+  }
+
+  const boardOverrides = await normalizeBoardOverrides(filters.board_overrides, workspaceIds, resolvedProjectIds);
+
+  return {
+    version: 2,
+    v2_scope_type: 'all_accessible_boards_snapshot',
+    scope_type: 'custom',
+    workspace_ids: workspaceIds,
+    project_ids: resolvedProjectIds,
+    assignee: normalizeAssigneeFilter(filters.assignee),
+    date_types: normalizeDateTypes(filters.date_types),
+    global_filter: normalizeTaskFilters(filters.global_filter),
+    ...(Object.keys(boardOverrides).length > 0 ? { board_overrides: boardOverrides } : {}),
   };
 };
 

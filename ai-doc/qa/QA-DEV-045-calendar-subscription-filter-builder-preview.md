@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
-狀態：Phase 1 Static QC Passed / Browser and Feed QC Pending
+狀態：Phase 2 Static QC Passed / Remote Live QC Pending
 建立日期：2026-07-06
 
 ## 驗證目標
@@ -89,6 +89,25 @@ Phase 1 local Builder slice 已完成 static/build QC：
 - DEV-045 browser verifier：desktop / mobile Builder、override、exclude、empty preview、visual overflow。
 - DEV-045 feed verifier：Supabase validation、Edge Function v2、preview/feed identity parity。
 - Production live `.ics` smoke。
+
+## Phase 2 QC Update - 2026-07-07
+
+Phase 2 local source slice 已完成 static/source QC：
+
+- `verify:dev-045-calendar-subscription-v2-feed`：Pass，18 pass / 0 fail。
+- `verify:dev-045-calendar-subscription-builder-preview`：Pass，16 pass / 0 fail。
+- DEV-037 calendar subscription source-scope regression：Pass。
+- DEV-039 task filter core regression：Pass。
+- TypeScript noEmit：Pass。
+- Edge Function esbuild bundling check：Pass。
+- production build：Pass。
+
+仍待執行：
+
+- Supabase remote migration apply。
+- Supabase Edge Function deploy。
+- Live `.ics` preview/feed identity smoke。
+- Desktop / mobile browser screenshot QC。
 
 ## Manual UX Review
 
