@@ -169,7 +169,7 @@ const getMeetingWorkflowStepHint = (step: MeetingWorkflowArrowStepItem) => {
   return '發布內容';
 };
 
-const AI_MEETING_SYNTHESIS_TOOLTIP = 'AI整理是建議動作，可跳過。\n直接發布會保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。';
+const AI_MEETING_SYNTHESIS_TOOLTIP = 'AI整理會保留目前手寫內容，並將任務變更與手動紀錄統整成同一份草稿。';
 const PROJECT_CHANGE_IMPORT_TIMEOUT_MS = 45000;
 
 const withProjectChangeImportTimeout = async <T,>(

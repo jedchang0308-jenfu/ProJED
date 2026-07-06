@@ -1815,7 +1815,7 @@ Implementation evidence:
 
 ### DEV-024: AI整理保留手寫內容與章節結構
 
-狀態: Implemented / Browser QC Passed / DB unchanged
+狀態: Implemented / Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged
 節點類型: 開發點
 優先級: P1 AI synthesis guard
 父交付點: DEV-011 / DEV-012 / DEV-020
@@ -1836,19 +1836,27 @@ Implementation evidence:
 主要文件：
 - `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md`
 - `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md`
+- `ai-doc/qc/QC-DEV-024-ai-synthesis-preserve-human-draft.md`
 
 | 階段 | 負責角色 | 狀態 | 交付物 |
 |---|---|---|---|
-| 規格 | PM/RD | Ready | SPEC-024 |
-| 驗證計畫 | QA | Ready | QA-DEV-024 |
-| 實作 | RD | Pending | human-draft merge guard |
-| 事實驗證 | QC/Verifier | Pending | DEV-024 preserve verifier + real operation tests |
+| 規格 | PM/RD | Implemented | SPEC-024 |
+| 驗證計畫 | QA | Static + Deterministic QC Passed / Browser ROT Not Executed | QA-DEV-024 |
+| 實作 | RD | Complete | human-draft merge guard |
+| 事實驗證 | QC/Verifier | Static + Deterministic QC Passed / Browser ROT Not Executed | DEV-024 preserve verifier + regression gates |
 
-驗證證據暫列：
+QC Evidence - 2026-07-06:
 - `SPEC-024`
 - `QA-DEV-024`
-- `verify:dev-024-ai-synthesis-preserve-human-draft`
-- 待 RD 實作後重跑 DEV-011 / DEV-012 / DEV-021 / DEV-022 regression gates。
+- `QC-DEV-024`
+- `npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft` passed。
+- `npm.cmd run verify:dev-021-project-change-ai-preserve` passed。
+- `npm.cmd run verify:dev-022-project-change-single-record` passed。
+- `npm.cmd run verify:dev-011-ai-meeting-synthesis` passed。
+- `npm.cmd run verify:dev-012-meeting-record-quality` passed。
+- `npm.cmd exec tsc -- --noEmit` passed。
+- `npm.cmd run build` passed。
+- Browser ROT-001 至 ROT-004、production deploy、production UI smoke 未執行。
 
 ### DEV-023: 專案變化匯入整併為紀錄流程第一步
 
@@ -2112,6 +2120,7 @@ CAPA 來源：
 - 2026-06-09 production backend AI smoke 已通過：匿名請求回 `401`，一次性 Supabase Auth user 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
 - 2026-07-05 DEV-042 已完成 local RD + automated browser QA，commit `aa1fff7`；手機 closed Sidebar / TaskWorkbench 不再佔用 in-flow 左側版面，production deploy 與真機手感仍未執行。
 - 2026-07-06 DEV-044 Phase 1 已完成 local RD + automated QA；採低資料庫成本 ordinary undo 擴充，production deploy、DB migration、durable recovery 與 Phase 2/3 未授權。
+- 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard 與 regression gates；browser ROT、production UI smoke 與 production deploy 未執行。
 - 目前可由 Codex 直接開工的產品 RD 候選：無。任務板剩餘 RD 候選多數為 `Not Authorized`、`Blocked Human Re-entry`、production deploy、DB/RLS/migration、真機/登入式人工 QC 或手動 UI smoke。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待互動式 production UI smoke，原因是正式前端使用 Google OAuth，CLI 無法非互動完成登入與發布流程。
@@ -2196,7 +2205,7 @@ CAPA 來源：
 | DEV-017 | 開發點 | DEV-005 / DEV-010 | Done | 會議紀錄右側欄可拖拉調整並記憶寬度 | `verify:dev-017-record-sidebar-resize`、browser verifier |
 | DEV-019 | 開發點 | DEV-002 / DEV-005 / DEV-018 | Done | 紀錄類型與會議流程層級重整 | `SPEC-019`、`QA-DEV-019`、`verify:dev-010-action-feedback`、`verify:dev-019-record-type-layering-browser` |
 | DEV-023 | 開發點 | DEV-020 | Implemented / Browser QC Passed / DB unchanged | 專案變化匯入整併為紀錄流程第一步 | `SPEC-023`、`QA-DEV-023`、`QC-DEV-023`、`verify:dev-023-record-project-change-import-workflow-step`、`verify:dev-020-project-change-import-browser` |
-| DEV-024 | 開發點 | DEV-011 / DEV-012 / DEV-020 | Ready | AI整理保留手寫內容與章節結構 | `SPEC-024`、`QA-DEV-024`、`verify:dev-024-ai-synthesis-preserve-human-draft` |
+| DEV-024 | 開發點 | DEV-011 / DEV-012 / DEV-020 | Implemented / Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged | AI整理保留手寫內容與章節結構 | `SPEC-024`、`QA-DEV-024`、`QC-DEV-024`、`verify:dev-024-ai-synthesis-preserve-human-draft` |
 
 ---
 

@@ -1,149 +1,122 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
-const root = process.cwd();
-
-function read(path) {
-  return readFileSync(join(root, path), 'utf8');
-}
-
-const files = {
-  spec: 'ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md',
-  qa: 'ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md',
-  devTask: 'ai-doc/dev_task.md',
-  backlog: 'ai-doc/backlog.md',
-  documentationMap: 'ai-doc/documentation_map.md',
-  packageJson: 'package.json',
-};
-
-const contents = Object.fromEntries(
-  Object.entries(files).map(([key, path]) => [key, read(path)]),
-);
-
-const checks = [
-  {
-    name: 'SPEC-024 is Ready and attached to existing AI/record delivery points',
-    pass:
-      contents.spec.includes('對應 DEV: DEV-024') &&
-      contents.spec.includes('父交付點: DEV-011 / DEV-012 / DEV-020') &&
-      contents.spec.includes('關聯回歸: DEV-021 / DEV-022') &&
-      contents.spec.includes('節點類型: 開發點') &&
-      contents.spec.includes('狀態: Ready') &&
-      contents.spec.includes('是否計入產品交付完成: 否'),
-  },
-  {
-    name: 'SPEC-024 defines the real gap and forbids prompt-only fix',
-    pass:
-      contents.spec.includes('手寫內容') &&
-      contents.spec.includes('章節結構') &&
-      contents.spec.includes('deterministic human-draft merge guard') &&
-      contents.spec.includes('不只靠 prompt') &&
-      contents.spec.includes('Prompt 只能提高 AI 引用機率'),
-  },
-  {
-    name: 'SPEC-024 defines merge algorithm and optimization constraints',
-    pass:
-      contents.spec.includes('mergeHumanDraftWithAiSynthesis') &&
-      contents.spec.includes('Parse preserved draft') &&
-      contents.spec.includes('Fingerprint comparison') &&
-      contents.spec.includes('Deterministic fallback placement') &&
-      contents.spec.includes('Idempotent cleanup') &&
-      contents.spec.includes('fallback 補回只處理 AI 未涵蓋的最小必要段落'),
-  },
-  {
-    name: 'SPEC-024 preserves DEV-021 / DEV-022 and single-record constraints',
-    pass:
-      contents.spec.includes('DEV-021') &&
-      contents.spec.includes('DEV-022') &&
-      contents.spec.includes('不新增第二份會議紀錄') &&
-      contents.spec.includes('最後只能形成一份會議紀錄') &&
-      contents.spec.includes('不改資料庫 schema') &&
-      contents.spec.includes('不改 record content persistence 格式'),
-  },
-  {
-    name: 'QA-DEV-024 covers required human-draft preserve cases',
-    pass:
-      contents.qa.includes('TC-001') &&
-      contents.qa.includes('TC-002') &&
-      contents.qa.includes('TC-003') &&
-      contents.qa.includes('TC-004') &&
-      contents.qa.includes('TC-005') &&
-      contents.qa.includes('task mention') &&
-      contents.qa.includes('idempotent'),
-  },
-  {
-    name: 'QA-DEV-024 includes real operation tests and evidence',
-    pass:
-      contents.qa.includes('## 真實操作測試') &&
-      contents.qa.includes('ROT-001') &&
-      contents.qa.includes('ROT-002') &&
-      contents.qa.includes('ROT-003') &&
-      contents.qa.includes('ROT-004') &&
-      contents.qa.includes('AI整理前後截圖') &&
-      contents.qa.includes('內容節錄'),
-  },
-  {
-    name: 'QA-DEV-024 includes FMEA and failure evidence collection',
-    pass:
-      contents.qa.includes('## FMEA 風險表') &&
-      contents.qa.includes('## 失敗時需收集的證據') &&
-      contents.qa.includes('失效模式') &&
-      contents.qa.includes('可能原因') &&
-      contents.qa.includes('使用者影響') &&
-      contents.qa.includes('偵測方式'),
-  },
-  {
-    name: 'QA-DEV-024 regression commands include DEV-021 / DEV-022 / DEV-011 / DEV-012 gates',
-    pass:
-      contents.qa.includes('verify:dev-024-ai-synthesis-preserve-human-draft') &&
-      contents.qa.includes('verify:dev-021-project-change-ai-preserve') &&
-      contents.qa.includes('verify:dev-022-project-change-single-record') &&
-      contents.qa.includes('verify:dev-011-ai-meeting-synthesis') &&
-      contents.qa.includes('verify:dev-012-meeting-record-quality') &&
-      contents.qa.includes('npm.cmd exec tsc -- --noEmit') &&
-      contents.qa.includes('npm.cmd run build'),
-  },
-  {
-    name: 'PM dev_task registers DEV-024 as Ready',
-    pass:
-      contents.devTask.includes('DEV-024: AI整理保留手寫內容與章節結構') &&
-      contents.devTask.includes('父交付點: DEV-011 / DEV-012 / DEV-020') &&
-      contents.devTask.includes('狀態: Ready') &&
-      contents.devTask.includes('SPEC-024') &&
-      contents.devTask.includes('QA-DEV-024') &&
-      contents.devTask.includes('verify:dev-024-ai-synthesis-preserve-human-draft'),
-  },
-  {
-    name: 'Backlog registers DEV-024 as P1 AI synthesis guard',
-    pass:
-      contents.backlog.includes('DEV-024') &&
-      contents.backlog.includes('Ready') &&
-      contents.backlog.includes('P1 AI synthesis guard') &&
-      contents.backlog.includes('SPEC-024-ai-synthesis-preserve-human-draft.md'),
-  },
-  {
-    name: 'Documentation map registers SPEC / QA',
-    pass:
-      contents.documentationMap.includes('SPEC-024-ai-synthesis-preserve-human-draft.md') &&
-      contents.documentationMap.includes('QA-DEV-024-ai-synthesis-preserve-human-draft.md') &&
-      contents.documentationMap.includes('AI整理保留手寫內容與章節結構'),
-  },
-  {
-    name: 'package.json exposes DEV-024 docs verifier',
-    pass: contents.packageJson.includes(
-      '"verify:dev-024-ai-synthesis-preserve-human-draft": "node scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs"',
-    ),
-  },
+const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-024');
+const sources = [
+  'src/utils/recordContentMentions.ts',
+  'src/utils/projectChangeImport.ts',
+  'src/utils/humanDraftSynthesisMerge.ts',
 ];
 
-const failures = checks.filter((check) => !check.pass);
+rmSync(tempRoot, { recursive: true, force: true });
+
+const rewriteImports = (outputText) =>
+  outputText
+    .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './projectChangeImport'", "from './projectChangeImport.js'");
+
+for (const sourcePath of sources) {
+  const source = readFileSync(sourcePath, 'utf8');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+      verbatimModuleSyntax: false,
+    },
+    fileName: sourcePath,
+  });
+  const outPath = join(tempRoot, sourcePath.replace(/^src[\\/]/, '').replace(/\.tsx?$/, '.js'));
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, rewriteImports(outputText));
+}
+
+const mentions = await import(pathToFileURL(join(tempRoot, 'utils', 'recordContentMentions.js')).href);
+const projectChangeImport = await import(pathToFileURL(join(tempRoot, 'utils', 'projectChangeImport.js')).href);
+const humanDraftMerge = await import(pathToFileURL(join(tempRoot, 'utils', 'humanDraftSynthesisMerge.js')).href);
+
+const failures = [];
+const assert = (label, condition, details = undefined) => {
+  if (!condition) failures.push(details ? `${label}: ${JSON.stringify(details)}` : label);
+};
+const countRegex = (text, pattern) => (text.match(pattern) || []).length;
+
+const { serializeTaskMention, syncTaskLinksFromRecordContent } = mentions;
+const { wrapProjectChangeImportContent } = projectChangeImport;
+const { mergeHumanDraftWithAiSynthesis } = humanDraftMerge;
+
+const aiContent = [
+  '1. 本次會議總結',
+  '- 已整理任務主線。',
+  '',
+  '2. 任務討論與結論',
+  '- 尚無會中補記或任務變更可整理。',
+  '',
+  '3. 其他',
+  '- 請確認上述整理是否符合會議實際發言與操作。',
+].join('\n');
+
+const pureHuman = '客戶要求 6/20 前確認報價風險';
+const pureMerged = mergeHumanDraftWithAiSynthesis(aiContent, pureHuman);
+assert('pure handwritten paragraph is preserved', pureMerged.includes(pureHuman), { pureMerged });
+assert('pure handwritten paragraph is placed once', pureMerged.split(pureHuman).length - 1 === 1);
+
+const customSectionDraft = [
+  '## 會議背景',
+  '本案背景是客戶要先確認量產條件。',
+].join('\n');
+const customMerged = mergeHumanDraftWithAiSynthesis(aiContent, customSectionDraft);
+assert('custom section content is preserved with context', customMerged.includes('會議背景：本案背景是客戶要先確認量產條件。'), { customMerged });
+
+const taskMention = serializeTaskMention('task_human_1', '人工補充任務');
+const taskDraft = `${taskMention} 需要 Jane 在下週一前補齊風險清單。`;
+const taskMerged = mergeHumanDraftWithAiSynthesis(aiContent, taskDraft);
+assert('task mention paragraph is preserved', taskMerged.includes('(task:task_human_1)'), { taskMerged });
+const taskLinks = syncTaskLinksFromRecordContent(taskMerged, [], []);
+assert('task mention updates task links', taskLinks.some(link => link.nodeId === 'task_human_1'), { taskLinks });
+
+const projectChangeBody = [
+  `- ${serializeTaskMention('task_project_1', '專案變化任務')} 狀態改為進行中。`,
+].join('\n');
+const preservedProjectAndHuman = [
+  wrapProjectChangeImportContent(projectChangeBody),
+  '',
+  '使用者補充：供應商需要週五前確認交期。',
+].join('\n');
+const projectMerged = mergeHumanDraftWithAiSynthesis(aiContent, preservedProjectAndHuman);
+assert('project change evidence is still preserved', projectMerged.includes('(task:task_project_1)'), { projectMerged });
+assert('human supplemental evidence is preserved with project change', projectMerged.includes('使用者補充：供應商需要週五前確認交期。'), { projectMerged });
+assert('single meeting summary heading remains single', countRegex(projectMerged, /^1\.\s+/gm) === 1, { projectMerged });
+assert('single task discussion heading remains single', countRegex(projectMerged, /^2\.\s+/gm) === 1, { projectMerged });
+assert('single other heading remains single', countRegex(projectMerged, /^3\.\s+/gm) === 1, { projectMerged });
+
+const repeated = mergeHumanDraftWithAiSynthesis(projectMerged, preservedProjectAndHuman);
+assert('merge is idempotent on repeated synthesis', repeated === projectMerged);
+
+const helperSource = readFileSync('src/utils/humanDraftSynthesisMerge.ts', 'utf8');
+const storeSource = readFileSync('src/store/useRecordStore.ts', 'utf8');
+const sidebarSource = readFileSync('src/components/Records/RecordSidebar.tsx', 'utf8');
+assert('helper exports mergeHumanDraftWithAiSynthesis', helperSource.includes('export const mergeHumanDraftWithAiSynthesis'));
+assert('helper reuses DEV-021 project change merge guard', helperSource.includes('mergeProjectChangeImportBlocks(aiContent, preservedDraftContent)'));
+assert('store imports human draft merge guard', storeSource.includes('mergeHumanDraftWithAiSynthesis'));
+assert('store no longer calls project-only merge directly for AI result', !storeSource.includes('mergeProjectChangeImportBlocks(result.content, preservedDraft.content)'));
+assert('AI synthesis tooltip tells users handwritten content is preserved', sidebarSource.includes('AI整理會保留目前手寫內容'));
+
+for (const docPath of [
+  'ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md',
+  'ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md',
+  'ai-doc/dev_task.md',
+  'ai-doc/documentation_map.md',
+]) {
+  const doc = readFileSync(docPath, 'utf8');
+  assert(`${docPath} references DEV-024`, doc.includes('DEV-024'));
+}
 
 if (failures.length > 0) {
-  console.error('DEV-024 documentation verification failed:');
-  for (const failure of failures) {
-    console.error(`- ${failure.name}`);
-  }
+  console.error('DEV-024 human draft synthesis verification failed:');
+  for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log(`DEV-024 documentation verification passed (${checks.length} checks).`);
+console.log('DEV-024 human draft synthesis verification passed: human paragraphs, custom sections, task mentions, project changes, idempotency, store integration, and docs checked.');

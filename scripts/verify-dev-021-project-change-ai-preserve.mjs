@@ -111,8 +111,17 @@ assert('RecordSidebar wraps project change preview before insertion', sidebarSou
 assert('RecordSidebar no longer inserts raw preview content directly', !sidebarSource.includes('[draft.content.trim(), projectChangeImport.previewContent.trim()]'));
 
 const storeSource = readFileSync('src/store/useRecordStore.ts', 'utf8');
-assert('useRecordStore imports merge guard', storeSource.includes('mergeProjectChangeImportBlocks'));
-assert('AI synthesis result is merged with preserved draft content', storeSource.includes('mergeProjectChangeImportBlocks(result.content, preservedDraft.content)'));
+const humanMergeSource = readFileSync('src/utils/humanDraftSynthesisMerge.ts', 'utf8');
+assert(
+  'useRecordStore imports a synthesis merge guard',
+  storeSource.includes('mergeHumanDraftWithAiSynthesis') || storeSource.includes('mergeProjectChangeImportBlocks'),
+);
+assert(
+  'AI synthesis result is merged with preserved draft content',
+  storeSource.includes('mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content)') ||
+    storeSource.includes('mergeProjectChangeImportBlocks(result.content, preservedDraft.content)'),
+);
+assert('human draft merge guard keeps project change merge', humanMergeSource.includes('mergeProjectChangeImportBlocks(aiContent, preservedDraftContent)'));
 assert('syncDraftContentLinks receives merged content', /syncDraftContentLinks\([\s\S]*mergedContent[\s\S]*\)/.test(storeSource));
 assert('cursor offset uses merged content length', storeSource.includes('contentCursorOffset: mergedContent.length'));
 assert('raw AI content is not used as cursor length', !storeSource.includes('contentCursorOffset: result.content.length'));

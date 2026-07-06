@@ -14,7 +14,7 @@ import {
 import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
 import type { MeetingSynthesisInput } from '../utils/meetingRecordSynthesis';
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
-import { mergeProjectChangeImportBlocks } from '../utils/projectChangeImport';
+import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
 import { useMemberStore } from './useMemberStore';
 import type {
   KnowledgeRecord,
@@ -620,7 +620,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       const result = await synthesizeMeetingRecord(
         createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes),
       );
-      const mergedContent = mergeProjectChangeImportBlocks(result.content, preservedDraft.content);
+      const mergedContent = mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content);
       const nextDraft = syncDraftContentLinks(
         {
           ...preservedDraft,

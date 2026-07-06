@@ -4,7 +4,7 @@
 父交付點: DEV-011 / DEV-012 / DEV-020  
 關聯回歸: DEV-021 / DEV-022  
 節點類型: 開發點  
-狀態: Ready  
+狀態: Implemented / Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged
 優先級: P1  
 是否計入產品交付完成: 否
 
@@ -129,3 +129,29 @@ npm.cmd exec tsc -- --noEmit
 npm.cmd run build
 ```
 
+## Implementation Evidence - 2026-07-06
+
+- `src/utils/humanDraftSynthesisMerge.ts` 新增 deterministic human-draft merge guard，先套用 DEV-021 / DEV-022 project change merge，再抽取 preserved draft 的手寫段落、自訂章節與 task mention evidence。
+- `src/store/useRecordStore.ts` 的 `AI整理` 回寫改用 `mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content)`，並以 merged content 重新同步 taskLinks。
+- `src/components/Records/RecordSidebar.tsx` 的 `AI整理` tooltip 已改為說明會保留目前手寫內容並統整成同一份草稿。
+- `scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs` 已從文件檢查升級為 deterministic verifier，覆蓋手寫純文字、自訂章節、task mention、project change + human draft、single-record heading count、idempotency、store integration 與 docs references。
+- 本輪不改 DB schema、不改 `KnowledgeRecord.content` persistence 格式、不新增遠端 history / version table。
+
+## QC Evidence - 2026-07-06
+
+Passed:
+
+```powershell
+npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft
+npm.cmd run verify:dev-021-project-change-ai-preserve
+npm.cmd run verify:dev-022-project-change-single-record
+npm.cmd run verify:dev-011-ai-meeting-synthesis
+npm.cmd run verify:dev-012-meeting-record-quality
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
+
+Not executed:
+
+- Browser ROT-001 至 ROT-004 未執行；本輪證據是 static / deterministic verifier 與 regression gate，不宣稱完整真實 AI 操作或 browser ROT 通過。
+- Production deploy / production UI smoke 未執行。
