@@ -73,7 +73,7 @@
 
 | DEV | Status | Type | Priority | Scope | Evidence |
 |---|---|---|---|---|---|
-| DEV-038 | Ready for RD / SPEC + QA Ready | 交付點 | P0 backup/import/trash risk, P1 settings IA consistency | 建立設定中心作用範圍 taxonomy，修正全頁 `目前看板` 語境混用；備份頁拆分全域匯出與目前看板匯入，匯入前增加目標確認；回收桶改為目前看板回收桶；看板權限與快速開啟標示各自作用範圍。 | `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`, `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md` |
+| DEV-038 | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | 交付點 | P0 backup/import/trash risk, P1 settings IA consistency | 已建立設定中心作用範圍 taxonomy，修正全頁 `目前看板` 語境混用；備份頁拆分全域匯出與目前看板匯入，匯入前增加目標確認；回收桶改為目前看板回收桶；看板權限與快速開啟標示各自作用範圍。 | `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`, `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md`, `ai-doc/qc/QC-DEV-038-settings-scope-consistency-and-risk-guardrails.md` |
 
 驗收重點:
 - 設定中心頁首不再把所有頁籤都框在目前看板。

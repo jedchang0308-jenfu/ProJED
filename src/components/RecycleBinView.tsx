@@ -8,8 +8,9 @@ import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import dayjs from 'dayjs';
 
 const RecycleBinView = () => {
-    const { getActiveBoard, activeWorkspaceId, activeBoardId } = useBoardStore();
+    const { getActiveBoard, activeWorkspaceId, activeBoardId, workspaces } = useBoardStore();
     const board = getActiveBoard();
+    const workspace = workspaces.find(item => item.id === activeWorkspaceId);
     const updateNode = useWbsStore(s => s.updateNode);
     const removeNode = useWbsStore(s => s.removeNode);
     const { canEditTask, canDeleteTask } = useBoardPermissions();
@@ -28,6 +29,7 @@ const RecycleBinView = () => {
     // 依據封存時間排序 (新的在前)
     archivedItems.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     const canEmptyTrash = canDeleteTask && archivedItems.length > 0;
+    const targetLabel = `${workspace?.title || '未選擇工作區'} / ${board.title}`;
 
     const handleRestore = (item: any) => {
         if (!canEditTask) return;
@@ -47,7 +49,9 @@ const RecycleBinView = () => {
 
     const handleEmptyTrash = async () => {
         if (!canEmptyTrash) return;
-        const confirmed = await useDialogStore.getState().showConfirm('您確定要「清空」資源回收桶嗎？所有項目都會被永久刪除且無法復原！');
+        const confirmed = await useDialogStore.getState().showConfirm(
+            `確定要清空「${board.title}」的目前看板回收桶嗎？將永久刪除 ${archivedItems.length} 筆已刪除任務，且無法復原。`
+        );
         
         if (confirmed) {
             archivedItems.forEach(item => {
@@ -57,7 +61,7 @@ const RecycleBinView = () => {
     };
 
     return (
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden" data-recycle-bin-view="current-board">
             {/* Header / Toolbar */}
             <div className="h-14 border-b border-slate-200 bg-white/50 backdrop-blur-sm flex items-center justify-between px-6 shrink-0 z-10">
                 <div className="flex items-center gap-3">
@@ -65,8 +69,10 @@ const RecycleBinView = () => {
                         <Trash2 size={20} />
                     </div>
                     <div>
-                        <h2 className="font-bold text-slate-800 leading-tight">資源回收桶</h2>
-                        <span className="text-[10px] text-slate-400 font-medium">包含已被刪除的任務。它們將保留於此直到您手動清空。</span>
+                        <h2 className="font-bold text-slate-800 leading-tight">目前看板回收桶</h2>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                            目標：{targetLabel}。包含此看板已被刪除的任務，直到你手動還原或清空。
+                        </span>
                     </div>
                 </div>
 
@@ -90,8 +96,8 @@ const RecycleBinView = () => {
                             <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-4">
                                 <Trash2 size={32} />
                             </div>
-                            <h3 className="text-lg font-bold text-slate-600 mb-2">資源回收桶是空的</h3>
-                            <p className="text-sm text-slate-400">所有被刪除的任務都會寄放在這裡。</p>
+                            <h3 className="text-lg font-bold text-slate-600 mb-2">目前看板沒有已刪除任務。</h3>
+                            <p className="text-sm text-slate-400">只有 {board.title} 的已刪除任務會顯示在這裡。</p>
                         </div>
                     ) : (
                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">

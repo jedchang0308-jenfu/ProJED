@@ -4,9 +4,22 @@
 關聯開發點：DEV-037 行事曆訂閱來源範圍清晰化
 父交付點：DEV-036 Trello-like Workspace Governance
 任務類型：Settings IA / Scope taxonomy / Risk guardrails
-狀態：Ready for RD
+狀態：Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed
 優先級：P0 backup/import/trash risk, P1 settings IA consistency
 建立日期：2026-06-29
+實作日期：2026-07-06
+
+## Implementation Status - 2026-07-06
+
+DEV-038 已完成本機 RD 與自動化 QC。實作範圍限制在 Settings / Backup / RecycleBin / BoardMembersPanel / AppInstallAssistant 與 verifier，未修改 `exportData` / `importData` 資料格式，未新增 DB schema、RLS、migration 或 production release。
+
+主要交付：
+
+- `SettingsView` 頁首改為中性的 `設定中心`，不再以全頁 `目前看板` framing 統包所有設定。
+- `備份與資料` 拆成 `匯出全域快照` 與 `匯入至目前看板`，匯入選檔後需確認目標 Workspace / Board 與檔名，取消不會進入 `importData`。
+- `RecycleBinView` 改為 `目前看板回收桶`，顯示目標 Workspace / Board，清空確認包含 board title 與 archived item count。
+- `看板權限`、`行事曆訂閱`、`快速開啟` 均顯示各自作用範圍摘要。
+- 新增 `verify:dev-038-settings-scope-consistency` 與 `verify:dev-038-settings-scope-consistency-browser`。
 
 ## 背景
 

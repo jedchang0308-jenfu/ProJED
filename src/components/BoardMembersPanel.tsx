@@ -591,6 +591,13 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = () => {
     canManageBoardMembers,
     canConfigureRolePermissions,
   } = useBoardMemberPanelState();
+  const activeWorkspace = useBoardStore(state =>
+    state.workspaces.find(workspace => workspace.id === state.activeWorkspaceId)
+  );
+  const activeBoard = useBoardStore(state => {
+    const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId);
+    return workspace?.boards.find(board => board.id === state.activeBoardId);
+  });
   const [permissionSavingKey, setPermissionSavingKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -659,7 +666,15 @@ export const BoardMembersPanel: React.FC<BoardMembersPanelProps> = () => {
       <header className="border-b border-slate-200 px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
           <ShieldCheck size={16} className="text-primary" />
-          看板權限設定
+          看板權限
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">
+            設定範圍：目前看板
+          </span>
+          <span className="inline-flex min-w-0 items-center rounded border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-600">
+            目標：{activeWorkspace?.title || '未選擇工作區'} / {activeBoard?.title || '未選擇看板'}
+          </span>
         </div>
         <p className="mt-1 text-sm text-slate-500">
           分享邀請已移到看板右上角。此處保留進階成員角色與權限矩陣。

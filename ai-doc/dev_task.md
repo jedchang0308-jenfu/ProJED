@@ -1052,13 +1052,14 @@ Stop conditions:
 
 ### DEV-038: 設定中心作用範圍一致性與高風險防呆
 
-狀態: RD Contract Ready / SPEC + QA Ready
+狀態: Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed
 節點類型: 交付點
 優先級: P0 backup/import/trash risk, P1 settings IA consistency
 父交付點: DEV-036 Trello-like Workspace Governance
 關聯開發點: DEV-037 行事曆訂閱來源範圍清晰化
 是否計入產品交付完成: 是
 建立日期: 2026-06-29
+實作日期: 2026-07-06
 
 關聯需求:
 - 使用者追問：依行事曆訂閱邏輯，設定裡其他頁面是否也有邏輯不一致。
@@ -1079,6 +1080,7 @@ HCS 引導決策（採建議預設）:
 交付文件:
 - `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`
 - `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md`
+- `ai-doc/qc/QC-DEV-038-settings-scope-consistency-and-risk-guardrails.md`
 
 RD 執行範圍:
 - 更新 `SettingsView.tsx` 頁首、頁籤文案與各 section scope summary。
@@ -1116,8 +1118,22 @@ RD exit gate:
 - `npm.cmd exec tsc -- --noEmit`
 - `npm.cmd run build`
 
+QC evidence - 2026-07-06:
+- `npm.cmd run verify:dev-038-settings-scope-consistency`: Pass, 19/19 checks.
+- `npm.cmd run verify:dev-038-settings-scope-consistency-browser`: Pass, desktop + 390px mobile flow; screenshots `output/playwright/dev-038-settings-scope-desktop.png` and `output/playwright/dev-038-settings-scope-mobile.png`.
+- `npm.cmd run verify:settings-project-context`: Pass, 6/6 checks.
+- `npm.cmd run verify:settings-project-context-browser`: Pass.
+- `npm.cmd run verify:dev-036-trello-like-workspace-governance`: Pass, 26/26 checks.
+- `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`: Pass, 22/22 checks.
+- `npm.cmd run verify:dev-026-trello-like-board-share-ui`: Pass, 15/15 checks.
+- `npm.cmd exec tsc -- --noEmit`: Pass.
+- `npm.cmd run build:test`: Pass.
+- DB / RLS / migration / production deploy: not touched.
+
 Conditional gate:
 - 若本輪同步觸及 `CalendarSubscriptionsView` 或 DEV-037 已實作，需加跑 `npm.cmd run verify:dev-037-calendar-subscription-source-scope`；若 DEV-037 尚未實作，QC 記錄為 deferred dependency，不阻塞 DEV-038 的 Settings/Backup/RecycleBin 交付。
+
+本輪 QC 註記：DEV-038 未修改 `CalendarSubscriptionsView` source-scope data contract、Edge Function、DB validation、`scope_type` 或 `project_ids`，因此 DEV-037 gate 保留到 DEV-037 執行。
 
 Stop conditions:
 - 如果 RD 發現匯入實際會覆寫目前看板任務但無法在 UI 前置確認，停止，不得宣告完成。
@@ -2134,13 +2150,14 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-037 / DEV-038 設定與行事曆來源範圍 RD | RD Contract Ready / Authorized | RD / QA / QC | 處理設定中心 scope summary 與行事曆訂閱 source-scope contract。 |
-| 2 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Authorized | RD / QA / QC | 處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
-| 3 | DEV-044 Phase 2/3 Undo Recovery | RD Contract Ready / Authorized for Phase 2/3 where safe / Human Re-entry for destructive recovery | RD / QA / QC | 擴充 batch/cross-view undo 或 durable recovery；DB/cross-device/destructive recovery 需另行 gate。 |
-| 4 | DEV-028 Addendum 人工親自點擊 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
-| 5 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 6 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 與第 4 項相同；不得以 automated browser smoke 取代人工親自點擊 QC。 |
-| 7 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
+| 1 | DEV-037 行事曆訂閱來源範圍 RD | RD Contract Ready / Authorized / Not Started | RD / QA / QC | 處理行事曆訂閱 source-scope contract；若涉及 DB validation、Edge Function 或 migration，需先進入 Supabase / release gate。 |
+| 2 | DEV-038 設定中心 scope summary | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | RD / QA / QC | 已完成設定中心作用範圍與高風險防呆；後續只需 production release 授權時走 deployment gate。 |
+| 3 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Authorized | RD / QA / QC | 處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
+| 4 | DEV-044 Phase 2/3 Undo Recovery | RD Contract Ready / Authorized for Phase 2/3 where safe / Human Re-entry for destructive recovery | RD / QA / QC | 擴充 batch/cross-view undo 或 durable recovery；DB/cross-device/destructive recovery 需另行 gate。 |
+| 5 | DEV-028 Addendum 人工親自點擊 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
+| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 7 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 與第 5 項相同；不得以 automated browser smoke 取代人工親自點擊 QC。 |
+| 8 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
 
 ---
 
@@ -2168,8 +2185,8 @@ CAPA 來源：
 | DEV-034 | 交付點 | Done / Browser QC Passed / Local-first scope | 是 | App 快速啟動與加入主畫面 UX | `SPEC-034`、`QC-DEV-034`、browser QC | 正式雲端 Inbox / 跨裝置同步另開後續 |
 | DEV-035 | 交付點 | Implemented / Local Automated QC Passed / Supabase DB QC Pending | 是 | 工作區刪除持久化修正 | `SPEC-035`、`QA-DEV-035`、`QC-DEV-035` | 遠端 Supabase DB role QC 待 migration / DB gate |
 | DEV-036 | 交付點 | Implemented / Local Automated QC Passed / DB unchanged | 是 | Trello-like Workspace Governance | `ADR-036`、`SPEC-036`、`QA/QC-DEV-036` | production / DB migration 不在 Phase 1 |
-| DEV-037 | 交付點 | RD Contract Ready / Not Authorized | 是 | 行事曆訂閱來源範圍清晰化 | `SPEC-037`、`QA-DEV-037` | 等使用者授權 RD |
-| DEV-038 | 交付點 | RD Contract Ready / Not Authorized | 是 | 設定中心作用範圍一致性與高風險防呆 | `SPEC-038`、`QA-DEV-038` | 等使用者授權 RD |
+| DEV-037 | 交付點 | RD Contract Ready / Authorized / Not Started | 是 | 行事曆訂閱來源範圍清晰化 | `SPEC-037`、`QA-DEV-037` | 可進入 RD；若涉及 DB validation、Edge Function 或 migration，先 gate |
+| DEV-038 | 交付點 | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | 是 | 設定中心作用範圍一致性與高風險防呆 | `SPEC-038`、`QA-DEV-038`、`QC-DEV-038`、static/browser/regression/TypeScript/build gates | production release 需另行授權 |
 | DEV-039 | 交付點 | Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed | 是 | 任務過濾器核心與全域任務平台兩欄篩選重構 | `SPEC-039`、`QA-DEV-039`、`QC-DEV-039`、static/browser gates | production release、RPC/RLS/migration、visible partial/error summary 需另行授權 |
 | DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke` | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項需另行驗證 |
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041` | 強制更新、release notes 後端、版本 API、analytics 另行決策 |
@@ -2187,7 +2204,8 @@ CAPA 來源：
 - Done / Browser QC Passed / Local-first scope：1 個交付點。
 - Implemented / Local Automated QC Passed / Supabase DB QC Pending：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged：1 個交付點。
-- RD Contract Ready / Not Authorized：2 個交付點。
+- RD Contract Ready / Authorized / Not Started：1 個交付點。
+- Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed：1 個交付點。
 - Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed：1 個交付點。
 - Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered：1 個交付點。

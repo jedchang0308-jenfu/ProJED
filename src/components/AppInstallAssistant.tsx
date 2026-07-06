@@ -222,6 +222,11 @@ export const AppInstallAssistant: React.FC<AppInstallAssistantProps> = ({ mode =
             <Smartphone size={16} className="text-primary" />
             App 安裝與快速開啟
           </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs" data-pwa-install-scope="device-account">
+            <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0.5 font-bold text-blue-700">
+              設定範圍：此裝置 / 目前帳號
+            </span>
+          </div>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-[1fr_260px]">
           <AppInstallContent context={context} />

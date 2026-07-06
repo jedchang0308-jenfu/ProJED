@@ -111,10 +111,11 @@ PM 治理註記：DEV-039 採使用者最新一顆按鈕方案。全域任務平
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md` | RD Contract Ready | DEV-038 / DEV-036 / DEV-037 | 定義設定中心共同作用範圍 taxonomy，將目前看板、目前工作區、全域快照、外部連結、此裝置/目前帳號分清楚；特別處理備份全域匯出、目前看板匯入、目前看板回收桶與快速開啟的範圍語意。 |
-| `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md` | RD Contract Ready / QC Pending | DEV-038 | 驗證計畫涵蓋 Settings header、section scope summary、匯入前確認、目前看板回收桶清空確認、看板權限 target、快速開啟裝置/帳號範圍、mobile viewport 與 regression gates。 |
+| `ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md` | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | DEV-038 / DEV-036 / DEV-037 | 定義並已實作設定中心共同作用範圍 taxonomy，將目前看板、目前工作區、全域快照、外部連結、此裝置/目前帳號分清楚；特別處理備份全域匯出、目前看板匯入、目前看板回收桶與快速開啟的範圍語意。 |
+| `ai-doc/qa/QA-DEV-038-settings-scope-consistency-and-risk-guardrails.md` | QA Passed / Local Automated QC Passed / DB unchanged / Production Not Deployed | DEV-038 | 驗證計畫與證據涵蓋 Settings header、section scope summary、匯入前確認、目前看板回收桶清空確認、看板權限 target、快速開啟裝置/帳號範圍、mobile viewport 與 regression gates。 |
+| `ai-doc/qc/QC-DEV-038-settings-scope-consistency-and-risk-guardrails.md` | Local Automated QC Passed / DB unchanged / Production Not Deployed | DEV-038 | 記錄 DEV-038 static/browser/regression/TypeScript/build gates，並標示 DEV-037 source-scope Edge/DB contract 尚未執行。 |
 
-PM 治理註記：DEV-038 是設定中心的橫向 IA 修正，優先保護高風險資料操作。DEV-037 繼續處理行事曆訂閱的資料來源契約；DEV-038 不重複其 Edge Function / DB validation 範圍。
+PM 治理註記：DEV-038 是設定中心的橫向 IA 修正，優先保護高風險資料操作。本輪已完成本機 RD + QC，未修改資料格式、DB schema、RLS、migration 或 production。DEV-037 繼續處理行事曆訂閱的資料來源契約；DEV-038 不重複其 Edge Function / DB validation 範圍。
 
 ### DEV-037: 行事曆訂閱來源範圍清晰化
 

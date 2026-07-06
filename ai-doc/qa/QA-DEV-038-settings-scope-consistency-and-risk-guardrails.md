@@ -2,8 +2,38 @@
 
 關聯 DEV：DEV-038
 關聯 SPEC：`ai-doc/specs/SPEC-038-settings-scope-consistency-and-risk-guardrails.md`
-狀態：Ready for RD / QC Pending
+狀態：QA Passed / Local Automated QC Passed / DB unchanged / Production Not Deployed
 建立日期：2026-06-29
+QC 日期：2026-07-06
+
+## QC Evidence - 2026-07-06
+
+本輪已完成 DEV-038 本機自動化驗證。結果：
+
+| Gate | 結果 | 證據 |
+|---|---|---|
+| `npm.cmd run verify:dev-038-settings-scope-consistency` | Pass | 19/19 checks |
+| `npm.cmd run verify:dev-038-settings-scope-consistency-browser` | Pass | 桌機與 390px mobile flow；截圖 `output/playwright/dev-038-settings-scope-desktop.png`、`output/playwright/dev-038-settings-scope-mobile.png` |
+| `npm.cmd run verify:settings-project-context` | Pass | 6/6 checks |
+| `npm.cmd run verify:settings-project-context-browser` | Pass | Settings return / sidebar context browser smoke |
+| `npm.cmd run verify:dev-036-trello-like-workspace-governance` | Pass | 26/26 checks |
+| `npm.cmd run verify:dev-035-workspace-delete-persistence-fix` | Pass | 22/22 checks |
+| `npm.cmd run verify:dev-026-trello-like-board-share-ui` | Pass | 15/15 checks |
+| `npm.cmd exec tsc -- --noEmit` | Pass | TypeScript clean |
+| `npm.cmd run build:test` | Pass | Vite test build completed |
+
+瀏覽器驗證覆蓋：
+
+- 設定中心 header 不再顯示舊的 `系統設定與管理` 或全頁 `目前看板：...`。
+- 備份頁能同時辨識 `匯出全域快照` 與 `匯入至目前看板`。
+- 選擇 `scripts/fixtures/dev038-backup.json` 後會先出現確認摘要，包含目標 Workspace / Board、檔名與可能覆寫/新增任務；按 `取消匯入` 不會呼叫 `importData` alert path。
+- 回收桶頁顯示 `目前看板回收桶` 與目標 Board，清空確認包含 board title 與 `1 筆已刪除任務`。
+- 看板權限顯示 `設定範圍：目前看板`。
+- 行事曆訂閱在 Settings 外層顯示 `外部連結` 範圍；未實作 DEV-037 Edge Function / DB source-scope contract。
+- 快速開啟顯示 `設定範圍：此裝置 / 目前帳號`，沒有 board target wording。
+- 390px mobile 逐頁切換未偵測到水平 overflow。
+
+Deferred dependency：`verify:dev-037-calendar-subscription-source-scope` 尚未執行，因本輪未修改 `CalendarSubscriptionsView` 資料契約、未新增 `scope_type/project_ids`、未變更 Edge Function / DB validation；該 gate 保留給 DEV-037。
 
 ## 驗證目標
 

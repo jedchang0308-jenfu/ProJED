@@ -13,6 +13,8 @@ import {
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import useDialogStore from '../store/useDialogStore';
+import { toast } from '../store/useToastStore';
 import { BoardMembersPanel } from './BoardMembersPanel';
 import CalendarSubscriptionsView from './CalendarSubscriptionsView';
 import { AppInstallAssistant } from './AppInstallAssistant';
@@ -32,13 +34,13 @@ const SETTINGS_SECTIONS: Array<{
   {
     id: 'backup',
     label: '備份與資料',
-    description: '匯出任務資料、匯入備份與開啟回收桶。',
+    description: '匯出全域快照、匯入至目前看板與開啟目前看板回收桶。',
     icon: DatabaseBackup,
   },
   {
     id: 'permissions',
-    label: '權限設定',
-    description: '管理看板邀請、成員角色與權限表。',
+    label: '看板權限',
+    description: '管理目前看板的成員角色與權限矩陣。',
     icon: ShieldCheck,
   },
   {
@@ -50,10 +52,17 @@ const SETTINGS_SECTIONS: Array<{
   {
     id: 'app',
     label: '快速開啟',
-    description: '將 ProJED 加到桌面，之後直接點圖示開啟。',
+    description: '管理此裝置與目前帳號的快速開啟提示。',
     icon: Smartphone,
   },
 ];
+
+const readFileAsText = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (readerEvent) => resolve(String(readerEvent.target?.result ?? ''));
+  reader.onerror = () => reject(reader.error ?? new Error('讀取備份檔案失敗'));
+  reader.readAsText(file);
+});
 
 const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
@@ -70,14 +79,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
     return workspace?.boards.find((board) => board.id === state.activeBoardId);
   });
 
-  const activeMeta = activeWorkspace && activeBoard
-    ? `${activeWorkspace.title} / ${activeBoard.title}`
-    : '尚未選擇看板';
   const setView = useBoardStore((state) => state.setView);
   const returnToBoard = () => setView(activeWorkspace && activeBoard ? 'board' : 'home');
 
   return (
-    <div className="h-full overflow-auto bg-slate-50">
+    <div className="h-full overflow-auto bg-slate-50" data-settings-view="true">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-4 sm:p-6">
         <header className="border-b border-slate-200 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -98,9 +104,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
                 <Settings size={16} />
                 設定中心
               </div>
-              <h2 className="text-2xl font-bold text-slate-900">系統設定與管理</h2>
+              <h2 className="text-2xl font-bold text-slate-900">設定中心</h2>
               <p className="mt-1 text-sm text-slate-500">
-                目前看板：{activeMeta}
+                依功能管理 ProJED 的看板、資料、外部連結與裝置設定。
               </p>
             </div>
           </div>
@@ -115,6 +121,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
                 key={section.id}
                 type="button"
                 onClick={() => setActiveSection(section.id)}
+                data-settings-section-tab={section.id}
                 className={`flex min-h-[72px] items-start gap-3 border px-3 py-3 text-left transition-colors ${
                   isActive
                     ? 'border-primary bg-white text-slate-900 shadow-sm ring-2 ring-primary/10'
@@ -138,7 +145,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
 
         {activeSection === 'backup' && <BackupSettings />}
         {activeSection === 'permissions' && <PermissionSettings hasActiveBoard={Boolean(activeBoard)} />}
-        {activeSection === 'calendar' && <CalendarSubscriptionsView />}
+        {activeSection === 'calendar' && (
+          <div className="space-y-4">
+            <section className="border border-slate-200 bg-white px-4 py-3" data-calendar-settings-scope="external-link">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400">設定範圍</div>
+              <div className="mt-1 text-sm font-bold text-slate-800">外部連結</div>
+              <p className="mt-1 text-sm text-slate-500">
+                這裡建立的是外部行事曆可讀取的只讀訂閱連結；來源範圍由訂閱條件決定。
+              </p>
+            </section>
+            <CalendarSubscriptionsView />
+          </div>
+        )}
         {activeSection === 'app' && <AppInstallAssistant mode="settings" />}
       </div>
     </div>
@@ -147,6 +165,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
 
 const BackupSettings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const activeWorkspace = useBoardStore((state) =>
     state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)
   );
@@ -156,8 +175,19 @@ const BackupSettings: React.FC = () => {
   });
   const setView = useBoardStore((state) => state.setView);
   const { canEditBoardSettings } = useBoardPermissions();
+  const showActionDialog = useDialogStore((state) => state.showActionDialog);
 
-  const canImport = Boolean(activeWorkspace && activeBoard && canEditBoardSettings);
+  const canImport = Boolean(activeWorkspace && activeBoard && canEditBoardSettings && !isImporting);
+  const targetLabel = activeWorkspace && activeBoard
+    ? `${activeWorkspace.title} / ${activeBoard.title}`
+    : '尚未選擇看板';
+  const importDisabledReason = !activeWorkspace || !activeBoard
+    ? '請先選擇要匯入的工作區與看板。'
+    : !canEditBoardSettings
+      ? '你的角色沒有編輯看板設定權限，不能匯入備份。'
+      : isImporting
+        ? '匯入進行中，請勿關閉或重新整理頁面。'
+        : '';
 
   const handleExport = () => {
     useWbsStore.getState().exportData();
@@ -165,52 +195,93 @@ const BackupSettings: React.FC = () => {
 
   const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !canImport) return;
-
-    const reader = new FileReader();
-    reader.onload = (readerEvent) => {
-      useWbsStore.getState().importData(readerEvent.target?.result as string);
-    };
-    reader.readAsText(file);
     event.target.value = '';
+    if (!file || !canImport || !activeWorkspace || !activeBoard) return;
+
+    void (async () => {
+      try {
+        const fileText = await readFileAsText(file);
+        const decision = await showActionDialog({
+          title: '匯入至目前看板？',
+          message: `目標：${targetLabel}。來源檔案：${file.name}。匯入會把備份中的任務資料套用到目前看板，可能覆寫或新增任務；匯入同步期間請勿關閉或重整頁面。`,
+          actions: [
+            { id: 'cancel', label: '取消匯入', description: '不變更目前看板資料。' },
+            {
+              id: 'import',
+              label: '確認匯入至目前看板',
+              description: `${activeBoard.title} 會成為這次匯入的唯一目標看板。`,
+              variant: 'primary',
+            },
+          ],
+        });
+        if (decision !== 'import') return;
+        setIsImporting(true);
+        await useWbsStore.getState().importData(fileText);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '讀取備份檔案失敗。');
+      } finally {
+        setIsImporting(false);
+      }
+    })();
   };
 
   return (
-    <section className="border border-slate-200 bg-white">
+    <section className="border border-slate-200 bg-white" data-backup-settings-section="true">
       <div className="border-b border-slate-200 px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
           <DatabaseBackup size={16} className="text-primary" />
-          備份與資料管理
+          備份與資料
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-[1fr_280px]">
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">任務備份</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              匯出會下載目前 ProJED 任務、依賴、標籤與工作區快照。匯入會把備份內容套用到目前選取的看板。
-            </p>
+      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_280px]">
+        <div className="border border-slate-200 bg-slate-50 p-4" data-settings-export-scope="global_snapshot">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900">匯出全域快照</h3>
+            <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">
+              全域快照
+            </span>
           </div>
-
-          <div className="flex flex-wrap gap-2">
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            會下載目前 ProJED 的工作區、看板、任務、依賴與標籤快照。
+          </p>
+          <div className="mt-4">
             <button
               type="button"
               onClick={handleExport}
+              data-settings-export-global-snapshot="true"
               className="inline-flex h-10 items-center justify-center gap-2 bg-primary px-3 text-sm font-bold text-white hover:bg-primary-hover"
             >
               <Download size={16} />
-              匯出備份
+              匯出全域快照
             </button>
+          </div>
+        </div>
 
+        <div className="border border-slate-200 bg-slate-50 p-4" data-settings-import-scope="current_board">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900">匯入至目前看板</h3>
+            <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+              目前看板
+            </span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            會把備份中的任務資料套用到目前看板；不會還原 Workspace 結構。
+          </p>
+          <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+            <span className="font-bold text-slate-500">目標：</span>
+            <span className="font-semibold text-slate-800">{targetLabel}</span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               disabled={!canImport}
               onClick={() => fileInputRef.current?.click()}
+              data-settings-import-current-board="true"
               className="inline-flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
             >
               <Upload size={16} />
-              匯入備份
+              {isImporting ? '匯入中' : '選擇檔案並確認匯入'}
             </button>
             <input
               ref={fileInputRef}
@@ -219,18 +290,19 @@ const BackupSettings: React.FC = () => {
               className="hidden"
               disabled={!canImport}
               onChange={handleImportFile}
+              data-settings-import-file-input="true"
             />
           </div>
 
-          {!canImport && (
-            <div className="border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              匯入備份需要先選擇看板，且你的角色必須具備編輯看板設定權限。
+          {importDisabledReason && (
+            <div className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {importDisabledReason}
             </div>
           )}
         </div>
 
-        <div className="border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">目前目標</div>
+        <div className="border border-slate-200 bg-slate-50 p-3" data-settings-trash-scope="current_board">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">目前看板回收桶</div>
           <div className="mt-2 text-sm font-semibold text-slate-800">
             {activeWorkspace?.title || '未選擇工作區'}
           </div>
@@ -240,10 +312,12 @@ const BackupSettings: React.FC = () => {
           <button
             type="button"
             onClick={() => setView('recycle_bin')}
-            className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-rose-600"
+            disabled={!activeBoard}
+            className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
+            data-settings-open-current-board-trash="true"
           >
             <FolderX size={15} />
-            開啟資源回收桶
+            開啟目前看板回收桶
           </button>
         </div>
       </div>
@@ -260,7 +334,7 @@ const PermissionSettings: React.FC<{ hasActiveBoard: boolean }> = ({ hasActiveBo
           <div>
             <h3 className="text-sm font-bold text-slate-900">請先選擇看板</h3>
             <p className="mt-1 text-sm text-slate-500">
-              權限設定以看板為單位管理。請從左側工作區選單選擇一個看板後再回到設定中心。
+              看板權限以目前看板為單位管理。請從左側工作區選單選擇一個看板後再回到設定中心。
             </p>
           </div>
         </div>
