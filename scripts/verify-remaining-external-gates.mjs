@@ -9,6 +9,7 @@ const paths = {
   devTask: 'ai-doc/dev_task.md',
   documentationMap: 'ai-doc/documentation_map.md',
   dev011012Readiness: 'scripts/verify-dev-011-012-production-ui-smoke-readiness.mjs',
+  dev011012Executor: 'scripts/verify-dev-011-012-production-ui-smoke.mjs',
   dev025ExecutionReadiness: 'scripts/verify-dev-025-mutating-qc-readiness.mjs',
   dev025FixtureReadiness: 'scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
   dev028ManualReadiness: 'scripts/verify-dev-028-manual-click-qc-readiness.mjs',
@@ -43,6 +44,8 @@ const requiredScripts = {
   'verify:remaining-external-gates': 'node scripts/verify-remaining-external-gates.mjs',
   'verify:dev-011-012-production-ui-smoke-readiness':
     'node scripts/verify-dev-011-012-production-ui-smoke-readiness.mjs',
+  'verify:dev-011-012-production-ui-smoke':
+    'node scripts/verify-dev-011-012-production-ui-smoke.mjs',
   'verify:dev-025-mutating-qc-readiness':
     'node scripts/verify-dev-025-mutating-qc-readiness.mjs',
   'verify:dev-025-mutating-qc-fixture-readiness':
@@ -138,8 +141,10 @@ add(
   'DEV-011/012 production UI smoke remains login-or-fixture gated',
   includesAll(existing.devTask ?? '', [
     'DEV-011 / DEV-012 production UI smoke',
+    'Production UI Smoke Executor Added',
     'Human Login or Explicit Fixture Gate Required',
     'verify:dev-011-012-production-ui-smoke-readiness',
+    'verify:dev-011-012-production-ui-smoke',
     '已登入 Google 的正式前端',
     'production 臨時 fixture 建立/清理',
   ]),
@@ -164,6 +169,7 @@ add(
   'documentation map preserves the same external-gate boundary',
   includesAll(existing.documentationMap ?? '', [
     'verify:remaining-external-gates',
+    'verify:dev-011-012-production-ui-smoke',
     'Supabase DB / Edge deploy gate',
     '已登入正式前端 UI smoke',
     'DEV-028 人工親自點擊 QC',

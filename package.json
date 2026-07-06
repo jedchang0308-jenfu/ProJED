@@ -38,6 +38,7 @@
     "verify:dev-010-action-feedback": "node scripts/verify-dev-010-action-feedback.mjs",
     "verify:dev-011-ai-meeting-synthesis": "node scripts/verify-dev-011-ai-meeting-synthesis.mjs",
     "verify:dev-011-012-production-ui-smoke-readiness": "node scripts/verify-dev-011-012-production-ui-smoke-readiness.mjs",
+    "verify:dev-011-012-production-ui-smoke": "node scripts/verify-dev-011-012-production-ui-smoke.mjs",
     "verify:dev-012-meeting-record-quality": "node scripts/verify-dev-012-meeting-record-quality.mjs",
     "verify:dev-015-meeting-summary-mainline": "node scripts/verify-dev-015-meeting-summary-mainline.mjs",
     "verify:dev-016-records-list-view": "node scripts/verify-dev-016-records-list-view.mjs",

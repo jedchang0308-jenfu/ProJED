@@ -1,6 +1,6 @@
 # QA-DEV-012 AI 會議紀錄自然語言品質提升驗證計畫
 
-狀態：In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Pending
+狀態：In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added / Production UI Smoke Pending
 關聯 DEV：DEV-012  
 關聯規格：`ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md`  
 建立日期：2026-06-07
@@ -16,6 +16,7 @@ npm.cmd run lint -- --quiet
 npm.cmd run verify:dev-008-task-knowledge
 npm.cmd run verify:dev-011-ai-meeting-synthesis
 npm.cmd run verify:dev-011-012-production-ui-smoke-readiness
+npm.cmd run verify:dev-011-012-production-ui-smoke
 npm.cmd run verify:dev-012-meeting-record-quality
 npm.cmd run build
 ```
@@ -88,7 +89,8 @@ npm.cmd run build
 - 明確設定 `GEMINI_MEETING_SYNTHESIS_MODEL` 且模型 unavailable / not found 時，不自動 fallback；原草稿不被覆蓋，UI 顯示 AI 統整失敗。
 - 確認錯誤訊息能指出模型設定問題，並保留 DEV-011 的重試 AI 統整行為。
 - 正式環境 backend smoke 已通過：`synthesize_meeting_record` 使用授權 user JWT 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
-- Production UI smoke readiness gate 已補：`verify:dev-011-012-production-ui-smoke-readiness` 預設只讀、`mutates_database=false`，確認 session injection + cleanup pattern 與 local AI整理 browser ROT 已可串成正式站 UI smoke runner。完整 UI smoke 仍需 Google OAuth browser session，或顯式允許 production 臨時 fixture 建立/清理後再執行。
+- Production UI smoke readiness gate 已補：`verify:dev-011-012-production-ui-smoke-readiness` 預設只讀、`mutates_database=false`，確認 session injection + cleanup pattern 與 local AI整理 browser ROT 已可串成正式站 UI smoke runner。
+- Production UI smoke guarded executor 已補：`verify:dev-011-012-production-ui-smoke` 預設只跑 self-check，不登入、不建立資料、不呼叫 AI；完整 fixture path 需同時傳入 `--run-production-fixture` 並設定 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1`。完整 UI smoke 仍需 Google OAuth browser session，或顯式允許 production 臨時 fixture 建立/清理後再執行。
 
 ## UI QC
 
