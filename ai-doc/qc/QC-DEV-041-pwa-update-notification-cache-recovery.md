@@ -32,8 +32,8 @@ Excluded / not changed:
 
 | Gate | Result | Evidence |
 |---|---|---|
-| DEV-041 static verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery`, 21/21 |
-| DEV-041 browser verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`; direct Playwright evidence verified mobile prompt visible/tappable, dismiss preserves queued update, update callback invoked, recovery prompt exposes cache action |
+| DEV-041 static verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery`, initial release 21/21；mobile update visibility hotfix addendum 22/22 |
+| DEV-041 browser verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`; direct Playwright evidence verified mobile prompt visible/tappable, dismiss preserves queued update, update callback invoked, recovery prompt exposes cache action；hotfix addendum also verified updated confirmation |
 | TypeScript | Pass | `npm.cmd exec tsc -- --noEmit` |
 | DEV-034 PWA install static | Pass | `npm.cmd run verify:dev-034-pwa-install-guidance`, 22/22 |
 | DEV-034 PWA install browser | Pass | `npm.cmd run verify:dev-034-pwa-install-guidance-browser` |

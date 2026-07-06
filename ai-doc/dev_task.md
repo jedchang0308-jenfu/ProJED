@@ -476,8 +476,8 @@ QA / QC gate:
 - `npm.cmd run build:test`
 
 QC evidence（2026-07-05）:
-- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery` passed，21/21。
-- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser` passed；mobile update prompt visible/tappable、dismiss keeps queued update state、update button invokes callback、recovery prompt exposes cache action。
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery` passed，initial release 21/21；mobile update visibility hotfix 後 22/22。
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser` passed；mobile update prompt visible/tappable、dismiss keeps queued update state、update button invokes callback、recovery prompt exposes cache action；hotfix 後補測 `updated` confirmation。
 - DEV-034 static/browser regression passed。
 - DEV-028 static/browser regression passed；static 35/35。
 - DEV-029 static/browser regression passed；static 27/27。
@@ -497,7 +497,8 @@ QC evidence（2026-07-05）:
 - 2026-07-05 手機更新提示 hotfix：使用者回報手機正式環境沒看到更新；補上 app shell bundle hash 記錄、no-store `index.html` 比對、`updated` state 與「已更新到新版」提示。Hotfix commit `f3e926f`，production bundle `assets/index-BXtRfIba.js`，post-deploy HTTP/browser smoke passed。
 
 Deferred Scope Audit:
-- production deploy / Firebase Hosting release: Blocked Human Re-entry，需使用者明確授權並走 deployment-release-gate。
+- DEV-041 current production deploy / Firebase Hosting release: Same Spec Phase / Complete；2026-07-05 已完成 deployment-release-gate、post-deploy smoke 與 hotfix post-deploy smoke，證據在 `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。
+- Future production deploy / Firebase Hosting release: Blocked Human Re-entry；DEV-041 之後任何新版本部署仍需使用者明確授權並走 deployment-release-gate。
 - mandatory update / forced refresh: RD Contract Ready / Not Authorized，牽涉使用者工作中斷風險。
 - release notes backend / remote version API: Deferred / New DEV Candidate。
 - analytics / update adoption tracking: Deferred / New DEV Candidate。
