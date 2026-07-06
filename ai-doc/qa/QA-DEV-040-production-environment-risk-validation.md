@@ -1,6 +1,6 @@
 # QA-DEV-040: 正式環境同型 BUG 風險驗證計畫
 
-狀態: QA Plan Complete / Local + P0 Addendum QC Executed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered
+狀態: QA Plan Complete / Local + P0 Addendum QC Executed / P0 Remote Read-only Preflight Executed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered
 關聯 DEV: DEV-040
 建立日期: 2026-07-03
 參考規格: `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
@@ -397,3 +397,18 @@ Fail:
 - rollback readiness。
 
 未完成 production smoke 前，只能回報「local / production-like passed」，不得回報「正式環境已修復」。
+
+## P0 Remote Read-only Preflight Addendum - 2026-07-07
+
+本 addendum 只允許 read-only production / Edge / DB evidence，不允許 remote migration、Edge deploy、production timeout injection 或正式資料異動。
+
+Read-only evidence accepted:
+- Supabase project health、Edge Function slug / version / `verify_jwt` / deployed source parity。
+- `wbs_dependencies` table existence、columns、RLS、constraints、policies、indexes、row count。
+- `match_project_knowledge` DB RPC existence、execute grants、tenant/project filter source coverage。
+- Security / performance advisors classification。
+
+Pass / fail interpretation:
+- Pass：production DB substrate exists and is compatible with DEV-040 P0 dependency persistence checks。
+- Fail / pending：deployed Edge Function does not contain the local timeout guard; this blocks claiming RAG timeout is live-protected until Edge deploy + production timeout smoke are executed.
+- Advisor warnings are not auto-fail for this read-only gate, but any DEV-040-related warning must be recorded as a future DB hardening candidate.

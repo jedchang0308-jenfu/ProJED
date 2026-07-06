@@ -1,7 +1,7 @@
 # QC-DEV-040: 正式環境同型 BUG 風險驗證紀錄
 
 日期: 2026-07-03
-狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / P0 Local Addendum QC Passed / Extended 7-Point Matrix Partially Covered
+狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / P0 Local Addendum QC Passed / P0 Remote Read-only Preflight Executed / Extended 7-Point Matrix Partially Covered
 關聯 DEV: DEV-040
 參考文件:
 - `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
@@ -93,7 +93,7 @@
 ## QC 判定
 
 - Local automated QC: Pass.
-- P0 local addendum QC: Pass; Edge deploy、production timeout injection 與完整 DB count smoke 尚未執行。
+- P0 local addendum QC: Pass; 2026-07-07 remote read-only preflight executed; Edge deploy、production timeout injection 與完整 DB count smoke 尚未執行。
 - Production release: Deployed.
 - Production QC for original 2 BUG flows: Pass.
 - Extended 7-point risk matrix: Partially covered; remaining items listed above require separate targeted validation.
@@ -123,3 +123,31 @@
 - 未對 production Supabase 執行完整備份匯入 + `wbs_dependencies` DB count smoke。
 - 未部署 `match_project_knowledge` Edge Function。
 - 未做 production timeout / 401 / 500 browser injection。
+
+## DEV-040 P0 remote read-only preflight - 2026-07-07
+
+本輪只執行 read-only Supabase / Edge / advisor preflight，未套用 migration、未部署 Edge Function、未建立或搬移正式資料。
+
+Production project / Edge facts:
+- Supabase project `ProJED` / ref `knodlkxqpcqyrtgwpdst` status `ACTIVE_HEALTHY`，Postgres `17.6.1.121`。
+- `ProJED_TEST` project `fhisnnufoeulxqrchldf` status `INACTIVE`，不能作為 Level 3 production-like staging。
+- Edge Function `match_project_knowledge` is ACTIVE version 4, `verify_jwt=false`, sha `121f399ef1483eaf2ec08054e88082ab13451b8cc49fd8c774937b2766fdb82d`。
+- Remote deployed source does not contain the local DEV-040 timeout guard constants / helpers: `GEMINI_EMBED_TIMEOUT_MS`, `GEMINI_GENERATE_TIMEOUT_MS`, `RAG_RPC_TIMEOUT_MS`, `LIVE_SNAPSHOT_TIMEOUT_MS`, `fetchWithTimeout`, `withTimeout`。
+
+Production DB read-only facts:
+- `public.wbs_dependencies` exists with RLS enabled.
+- Key columns exist: `tenant_id`, `project_id`, `from_item_id`, `from_side`, `to_item_id`, `to_side`, `offset_days`, `legacy_dependency_id`.
+- Constraints exist: PK, tenant/project/from/to FKs with cascade, no-self-loop check, unique `(tenant_id, project_id, legacy_dependency_id)`.
+- Policies exist for authenticated board readers / writers / managers; row checks require project read/write/manage and endpoint items belonging to the same project.
+- Indexes include primary key, `(tenant_id, project_id)` and legacy dependency unique index.
+- Current production count from read-only SQL: `wbs_dependencies_count = 5`.
+- `public.match_project_knowledge(target_tenant_id uuid, target_project_id uuid, query_embedding vector, match_threshold double precision, match_count integer)` exists; `anon_execute=false`, `authenticated_execute=true`, `service_role_execute=true`; source mentions tenant/project filters and similarity.
+
+Advisor facts:
+- Security advisors still report existing SECURITY DEFINER and search_path warnings. The DEV-040 read-only check did not add DDL and did not change these warnings.
+- Performance advisors include existing unindexed FK warnings for `public.wbs_dependencies` on `from_item_id`, `project_id`, and `to_item_id`; this is a future DB hardening candidate, not a read-only preflight blocker.
+
+QC判定:
+- Production DB substrate for dependency persistence is present.
+- DEV-040 P0 RAG timeout is not live-complete because remote Edge Function still runs the pre-addendum source.
+- The next safe action is either a Level 3 production-like Edge smoke path followed by Edge deploy, or explicit risk acceptance for deploying without Level 3. After deploy, production timeout / 401 / 500 smoke remains required before closing RAG timeout.

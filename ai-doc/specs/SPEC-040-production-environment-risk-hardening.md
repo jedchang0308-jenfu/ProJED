@@ -1,6 +1,6 @@
 # SPEC-040: 正式環境同型 BUG 風險硬化與驗證
 
-狀態: Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / Extended Matrix Partially Covered
+狀態: Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / P0 Remote Read-only Preflight Executed / Extended Matrix Partially Covered
 關聯 DEV: DEV-040
 建立日期: 2026-07-03
 文件責任: Dev PM / RD / QA
@@ -20,6 +20,7 @@
 - Phase 0 原始範圍先建立開發文件與 QA 驗證計畫；後續 hotfix slice 已完成產品程式修正與 local/source/browser automated QC。
 - 使用者後續已授權正式環境驗證；本輪已完成 Firebase Hosting production deploy 與原始 2 BUG flow 的正式站 authenticated UI smoke。
 - 2026-07-06 使用者已授權 Phase 1 P0 bounded-failure local addendum；已完成備份匯入 dependencies persistence 與 RAG / knowledge retrieval timeout/fallback 的本機 RD + automated QC。
+- 2026-07-07 已完成 Phase 1 P0 production read-only preflight：production project `ProJED` healthy；`wbs_dependencies` table / RLS / constraints / policies 存在且目前有資料；`match_project_knowledge` DB RPC 權限符合 authenticated-only 呼叫，但 deployed Edge Function `match_project_knowledge` version 4 尚未包含本地 timeout guard，故 Edge deploy、production timeout injection 與完整 DB count smoke 仍未完成。
 - 本 DEV 仍不得宣稱 7 點延伸矩陣全部關閉；member/tag stale、Google Calendar REST timeout、MindMap 跨裝置語意與完整備份匯入 DB count 仍需後續專項驗證。
 
 AI assumptions:
@@ -130,7 +131,7 @@ Evidence:
 ### Phase 1: P0 Bounded Failure 與資料持久化硬化
 
 Authorization: Authorized / Local implementation complete; Edge deploy and production injection not authorized
-Document status: Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed
+Document status: Implemented / Local Automated QC Passed / Remote Read-only Preflight Executed / Edge Deploy Pending / Production Injection Not Executed
 
 Purpose:
 - 先處理會造成資料遺失或 UI 卡死的最高風險點。
@@ -164,7 +165,9 @@ Data / API / permission impact:
 
 QA/QC gate:
 - Local gate 已通過：`verify:dev-040-p0-bounded-failure`、TypeScript、targeted ESLint、`verify:p9-edge-function`、`verify:supabase:static`、DEV-020 regression 與 `build:test`。
-- Edge deploy、production timeout injection 與完整備份匯入 DB count smoke 尚未執行；不得用 local automated QC 取代 live gate。
+- 2026-07-07 production read-only preflight 已確認 production `wbs_dependencies` 表、RLS、FK/unique constraints、project index、policy 與目前 dependency rows 存在；`match_project_knowledge` DB RPC 已限制 anon execute=false、authenticated/service_role execute=true。
+- Remote Edge parity 未通過：deployed `match_project_knowledge` version 4 尚未包含本地 `GEMINI_*_TIMEOUT_MS`、`RAG_RPC_TIMEOUT_MS`、`LIVE_SNAPSHOT_TIMEOUT_MS` 與 `fetchWithTimeout` / `withTimeout` guard。
+- Edge deploy、production timeout injection 與完整備份匯入 DB count smoke 尚未執行；不得用 local automated QC 或 read-only preflight 取代 live gate。
 
 Stop conditions:
 - 匯入 dependencies 需要 schema/RLS/migration 才能安全保存。
@@ -301,7 +304,7 @@ Evidence:
 | Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
 |---|---|---|---|---|---|---|---|
 | Phase 0 PM / QA Documentation | Authorized | Done | SPEC-040、QA-DEV-040、dev_task、documentation_map | 程式修改、deploy、migration、資料修復 | 使用者要求寫成開發文件 | 文件與索引完成，deferred scope 已分類 | 文件 diff |
-| Phase 1 P0 Bounded Failure + Persistence | Authorized / Local complete | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、模型更換、Edge deploy、production injection、完整 DB count smoke | 使用者授權 RD | 本機 verifier 無資料遺失、無無限 loading；live gate 另行授權 | local verifier、TypeScript、build、Edge source static；live DB count / Network evidence pending |
+| Phase 1 P0 Bounded Failure + Persistence | Authorized / Local complete | Implemented / Local Automated QC Passed / Remote Read-only Preflight Executed / Edge Deploy Pending / Production Injection Not Executed | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、模型更換、Edge deploy、production injection、完整 DB count smoke | 使用者授權 RD | 本機 verifier 無資料遺失、無無限 loading；read-only preflight 確認 production DB substrate；live Edge parity 仍待 deploy gate | local verifier、TypeScript、build、Edge source static、production DB read-only preflight；live DB count / Network evidence pending |
 | Phase 2 P1 Context Race / Stale Response | Not Authorized | RD Contract Ready / Not Authorized | addBoard temp id race、members、tags stale guard | core data model、RLS、deploy | Phase 1 or direct authorization | 切換後 UI state 只屬於當前 context | rapid-switch evidence、DB/localStorage evidence |
 | Phase 3 P2 External / Local-only Semantics | Not Authorized | RD Contract Ready / Not Authorized; MindMap cloud sync Blocked Human Re-entry | Google Calendar timeout、MindMap local-only guardrail | ICS feed、notification、cloud sync without decision | 使用者授權；MindMap 語意需決策 | API timeout 可見結束；local-only 不破壞主資料 | timeout evidence、localStorage clear evidence |
 | Phase 4 Production Release / Smoke | Authorized | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | deploy、formal smoke、rollback readiness | 正式資料修復、完整備份匯入 DB count、member/tag delayed response、Google Calendar REST timeout、MindMap cloud semantics | RD/QC passed + 使用者正式環境驗證授權 | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項明列 | deployment-release-gate evidence、production authenticated UI smoke |

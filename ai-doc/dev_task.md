@@ -873,7 +873,7 @@ Next condition:
 
 ### DEV-040: 正式環境同型 BUG 風險硬化與驗證
 
-狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / Extended 7-Point Matrix Partially Covered
+狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / P0 Remote Read-only Preflight Executed / Extended 7-Point Matrix Partially Covered
 節點類型: 交付點
 優先級: P0 production freeze/data-loss risk, P1 context race/stale response, P2 external timeout/local-only semantics
 父交付點: 無；關聯 DEV-011 / DEV-020 / DEV-027 / DEV-037 / DEV-039
@@ -895,12 +895,13 @@ Human Decision Brief:
 - 已確認：本 DEV 以正式環境同型風險為交付點，範圍包含 7 個風險點。
 - 已確認：本輪 local/source/browser automated QC 已通過；使用者已授權正式環境驗證，production deploy 與正式站 authenticated UI smoke 已完成。
 - 已確認：兩個原始正式 BUG flow 已在正式站通過 smoke；7 點延伸矩陣仍有 member/tag stale、Google Calendar REST timeout、MindMap 跨裝置語意等待專項驗證。
+- 已確認：2026-07-07 已完成 DEV-040 P0 read-only production preflight；production DB 具備 `wbs_dependencies` RLS / constraints / policy substrate，`match_project_knowledge` DB RPC grant matrix 可讀；但 remote `match_project_knowledge` Edge Function 仍未部署本地 timeout guard。
 - AI assumption：正式環境問題主要來自 bounded failure 缺口、source-of-truth 缺口、stale-response 缺口與 localStorage-only 語意缺口。
 - Re-entry：production deploy、遠端 migration、資料修復 / 刪除、心智圖雲端同步語意、付費 / 第三方成本改變需使用者重新授權。
 
 Phase Roadmap:
 - Phase 0: PM / QA Documentation，建立 SPEC-040、QA-DEV-040、dev_task 與 documentation map 索引；本輪完成。
-- Phase 1: P0 Bounded Failure + Persistence，處理備份匯入 dependencies 持久化、RAG / knowledge retrieval timeout / fallback；Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed。
+- Phase 1: P0 Bounded Failure + Persistence，處理備份匯入 dependencies 持久化、RAG / knowledge retrieval timeout / fallback；Implemented / Local Automated QC Passed / Remote Read-only Preflight Executed / Edge Deploy Pending / Production Injection Not Executed。
 - Phase 2: P1 Context Race / Stale Response，處理新增看板 temp id race、member stale response、tag stale response；RD Contract Ready / Not Authorized。
 - Phase 3: P2 External Service Timeout + Local-only Semantics，處理 Google Calendar timeout 與 MindMap localStorage-only 語意；RD Contract Ready / Not Authorized，MindMap 雲端同步為 Blocked Human Re-entry。
 - Phase 4: Production Release / Smoke Gate，部署與正式環境 smoke；Done for original 2 BUG flows，必須保留 deployment-release-gate evidence。
@@ -910,7 +911,7 @@ All-Phase Coverage Matrix:
 | Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
 |---|---|---|---|---|---|---|---|
 | Phase 0 PM / QA Documentation | Authorized | Done | SPEC-040、QA-DEV-040、PM 索引 | 程式修改、deploy、migration、資料修復 | 使用者要求寫成開發文件 | 文件與索引完成 | 文件 diff |
-| Phase 1 P0 Bounded Failure + Persistence | Authorized / Local complete | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、模型更換、Edge deploy、production injection、完整 DB count smoke | 使用者授權 RD | 本機 verifier 無資料遺失、無無限 loading；live gate 另行授權 | local verifier、TypeScript、build、Edge source static；live DB count / Network evidence pending |
+| Phase 1 P0 Bounded Failure + Persistence | Authorized / Local complete | Implemented / Local Automated QC Passed / Remote Read-only Preflight Executed / Edge Deploy Pending / Production Injection Not Executed | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、模型更換、Edge deploy、production injection、完整 DB count smoke | 使用者授權 RD | 本機 verifier 無資料遺失、無無限 loading；production DB substrate 已讀取確認；live Edge parity 仍待 deploy gate | local verifier、TypeScript、build、Edge source static、production DB read-only preflight；live DB count / Network evidence pending |
 | Phase 2 P1 Context Race / Stale Response | Not Authorized | RD Contract Ready / Not Authorized | addBoard temp id、member stale guard、tag stale guard | core data model、RLS、deploy | 使用者授權 RD | 快速切換後只顯示當前 context | rapid-switch evidence、localStorage / DB evidence |
 | Phase 3 P2 External / Local-only Semantics | Not Authorized | RD Contract Ready / Not Authorized; MindMap cloud sync Blocked Human Re-entry | Google Calendar timeout、MindMap local-only guardrail | ICS feed、notification、cloud sync without decision | 使用者授權；MindMap 語意需決策 | 外部 API 失敗可見結束；local-only 不破壞主資料 | timeout evidence、localStorage clear evidence |
 | Phase 4 Production Release / Smoke | Authorized | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | deploy、formal smoke、rollback readiness | 正式資料修復、完整備份匯入 DB count、member/tag delayed response、Google Calendar REST timeout、MindMap cloud semantics | RD/QC passed + 使用者正式環境驗證授權 | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項明列 | deployment-release-gate evidence、production authenticated UI smoke |
@@ -958,6 +959,13 @@ DEV-040 P0 addendum - 2026-07-06:
 - Implemented: RAG client invoke 增加 timeout 並回傳 `RAG_TIMEOUT / 504`；`match_project_knowledge` Edge Function source 對 Gemini embedding、Gemini generation、database RPC、live snapshot 增加 timeout / 504 或 fallback。
 - Gate passed: `npm.cmd run verify:dev-040-p0-bounded-failure`、`tsc --noEmit`、targeted ESLint、`verify:p9-edge-function`、`verify:supabase:static`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser`、`build:test`。
 - Limitation: 未套用 / 部署 Edge Function，未做 production timeout injection，未做完整備份匯入 + Supabase `wbs_dependencies` DB count smoke。
+
+DEV-040 P0 remote read-only preflight - 2026-07-07:
+- Supabase project `ProJED` healthy；`ProJED_TEST` inactive，不能作為 Level 3 staging。
+- `wbs_dependencies` table / RLS / constraints / policies / project index exist；production read-only count = 5。
+- `match_project_knowledge` DB RPC exists；`anon_execute=false`、`authenticated_execute=true`、`service_role_execute=true`。
+- Remote Edge Function `match_project_knowledge` ACTIVE version 4 still lacks local timeout guard constants/helpers, so RAG timeout is not live-complete.
+- Next condition: provide Level 3 production-like Edge smoke path or explicit risk acceptance before Edge deploy; after deploy, run production timeout / 401 / 500 smoke.
 
 ## PM Update - 2026-07-02
 
@@ -2338,7 +2346,7 @@ CAPA 來源：
 |---|---|---|---|---|
 | 1 | DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate | Authorized / Release-Gate Blocked by Missing Level 3 | Supabase / deployment-release-gate / QC | 提供 staging / Supabase branch / local Supabase DB Level 3 smoke，或明確接受無 Level 3 risk 後，才套用 v2 filters validation migration、部署 calendar-feed Edge Function、執行 live `.ics` preview/feed identity smoke。 |
 | 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
-| 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
+| 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight Executed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 已 read-only 確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
 | 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
 | 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
