@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, ChevronRight, ClipboardList, LogOut, Plus, Settings, X } from 'lucide-react';
+import { BookOpenText, ChevronLeft, ChevronRight, ClipboardList, LogOut, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
@@ -32,6 +32,8 @@ const Sidebar = () => {
     setContextMenuState,
     pendingWorkspaceTitleEditId,
     setPendingWorkspaceTitleEditId,
+    pendingWorkspaceCreateRequestId,
+    clearCreateWorkspaceRequest,
     pendingBoardTitleEdit,
     setPendingBoardTitleEdit,
   } = useBoardStore();
@@ -46,15 +48,20 @@ const Sidebar = () => {
   const [isCreatingWorkspace, setIsCreatingWorkspace] = React.useState(false);
   const [isNarrowViewport, setIsNarrowViewport] = React.useState(false);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
+  const isRecordsView = currentView === 'records';
   const isTaskWorkbenchView = false;
-  const { canCreateBoard, canDeleteWorkspace, canEditBoardSettings } = useBoardPermissions();
-  const canOpenWorkspaceContextMenu = canCreateBoard || canDeleteWorkspace;
+  const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
 
   const handleOpenTaskWorkbench = React.useCallback(() => {
     setView(activeBoardId ? 'board' : 'home');
     openTaskWorkbenchPanel();
     if (isNarrowViewport) setSidebarOpen(false);
   }, [activeBoardId, isNarrowViewport, setSidebarOpen, setView]);
+
+  const handleOpenRecords = React.useCallback(() => {
+    setView('records');
+    if (isNarrowViewport) setSidebarOpen(false);
+  }, [isNarrowViewport, setSidebarOpen, setView]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -137,7 +144,6 @@ const Sidebar = () => {
 
   const handleWorkspaceContextMenu = (event, workspace) => {
     event.preventDefault();
-    if (!canOpenWorkspaceContextMenu) return;
     setContextMenuState({
       kind: 'workspace',
       isOpen: true,
@@ -145,6 +151,22 @@ const Sidebar = () => {
       y: event.clientY,
       workspaceId: workspace.id,
       title: workspace.title,
+    });
+  };
+
+  const handleSidebarContextMenu = (event) => {
+    const target = event.target;
+    if (target?.closest?.('[data-sidebar-workspace-group="true"], button, input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+
+    event.preventDefault();
+    setContextMenuState({
+      kind: 'sidebar',
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      title: '工作區',
     });
   };
 
@@ -174,6 +196,12 @@ const Sidebar = () => {
     setNewWorkspaceError('');
     setIsCreateWorkspaceOpen(true);
   }, []);
+
+  React.useEffect(() => {
+    if (!pendingWorkspaceCreateRequestId) return;
+    openCreateWorkspaceDialog();
+    clearCreateWorkspaceRequest();
+  }, [clearCreateWorkspaceRequest, openCreateWorkspaceDialog, pendingWorkspaceCreateRequestId]);
 
   const closeCreateWorkspaceDialog = React.useCallback(() => {
     if (isCreatingWorkspace) return;
@@ -257,6 +285,18 @@ const Sidebar = () => {
             <ClipboardList size={18} />
           </button>
           <button
+            onClick={handleOpenRecords}
+            className={`rounded-full p-1.5 transition-colors ${
+              isRecordsView
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+            }`}
+            title="紀錄庫"
+            data-sidebar-records-button="true"
+          >
+            <BookOpenText size={18} />
+          </button>
+          <button
             onClick={() => setView('settings')}
             className={`mb-3 rounded-full p-1.5 transition-colors ${
               isSettingsScopeView
@@ -270,7 +310,11 @@ const Sidebar = () => {
         </div>
       ) : (
         <div className={`flex h-full ${isMobileOverlay ? 'w-full' : 'w-64'} flex-col`}>
-          <div className="flex-1 space-y-4 overflow-y-auto p-2">
+          <div
+            className="flex-1 space-y-4 overflow-y-auto p-2"
+            onContextMenu={handleSidebarContextMenu}
+            data-sidebar-workspace-list="true"
+          >
             {workspaces.map((ws) => (
               <div key={ws.id} className="space-y-1" data-sidebar-workspace-group="true">
                 <div
@@ -404,20 +448,22 @@ const Sidebar = () => {
                 </div>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={openCreateWorkspaceDialog}
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-500 transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-              title="新增工作區"
-              aria-label="新增工作區"
-              data-sidebar-create-workspace-button="true"
-            >
-              <Plus size={15} className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate">新增工作區</span>
-            </button>
           </div>
 
           <div className="border-t border-slate-100 bg-slate-50/50 p-2">
+            <button
+              onClick={handleOpenRecords}
+              className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                isRecordsView
+                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
+                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
+              }`}
+              title="紀錄庫"
+              data-sidebar-records-button="true"
+            >
+              <BookOpenText size={16} className={isRecordsView ? 'text-white/90' : 'text-slate-400'} />
+              <span className="min-w-0 flex-1 truncate text-left">紀錄庫</span>
+            </button>
             <button
               onClick={() => setView('settings')}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${

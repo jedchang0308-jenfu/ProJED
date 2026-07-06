@@ -77,7 +77,12 @@ async (page) => {
       })}`);
     }
     if (await page.locator('[data-sidebar-workspace-title="true"]').count() === 0) {
-      await page.getByTitle('展開工作區選單').click();
+      const mainSidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+      if (await mainSidebarToggle.count() > 0) {
+        await mainSidebarToggle.click();
+      } else {
+        await page.getByTitle('展開工作區選單').click();
+      }
     }
     await page.locator('[data-sidebar-workspace-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -89,10 +94,19 @@ async (page) => {
     activeView: localStorage.getItem('projed-last-view'),
   }));
 
-  const createWorkspace = async (title) => {
-    await page.locator('[data-sidebar-create-workspace-button="true"]').click();
+  const openCreateWorkspaceDialogFromContextMenu = async () => {
+    assert(await page.locator('[data-sidebar-create-workspace-button="true"]').count() === 0, 'persistent create workspace button should be removed');
+    await page.locator('[data-sidebar-workspace-title="true"]').first().click({ button: 'right' });
+    const createMenuItem = page.locator('[data-context-menu-create-workspace="true"]').first();
+    await createMenuItem.waitFor({ state: 'visible', timeout: 10000 });
+    await createMenuItem.click();
     const dialog = page.locator('[data-workspace-create-dialog="true"]');
     await dialog.waitFor({ state: 'visible', timeout: 10000 });
+    return dialog;
+  };
+
+  const createWorkspace = async (title) => {
+    const dialog = await openCreateWorkspaceDialogFromContextMenu();
     await dialog.locator('input[aria-invalid]').fill(title);
     await dialog.getByText('建立', { exact: true }).click();
     await dialog.waitFor({ state: 'hidden', timeout: 10000 });
@@ -105,9 +119,7 @@ async (page) => {
     await openApp();
 
     step = 'blank-name-disabled';
-    await page.locator('[data-sidebar-create-workspace-button="true"]').click();
-    let dialog = page.locator('[data-workspace-create-dialog="true"]');
-    await dialog.waitFor({ state: 'visible', timeout: 10000 });
+    let dialog = await openCreateWorkspaceDialogFromContextMenu();
     assert(await dialog.getByText('建立', { exact: true }).isDisabled(), 'create button should be disabled for blank workspace title');
     await dialog.getByLabel('取消新增工作區').click();
     await dialog.waitFor({ state: 'hidden', timeout: 10000 });
@@ -162,10 +174,13 @@ async (page) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
-    if (await page.locator('[data-sidebar-create-workspace-button="true"]').count() === 0) {
-      await page.getByTitle('展開工作區選單').click();
+    if (await page.locator('[data-sidebar-workspace-list="true"]').count() === 0) {
+      await page.locator('[data-main-sidebar-toggle="true"]').first().click();
     }
-    await page.locator('[data-sidebar-create-workspace-button="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-sidebar-workspace-list="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await page.locator('[data-sidebar-create-workspace-button="true"]').count() === 0, 'mobile sidebar should not show persistent create workspace button');
+    await page.locator('[data-sidebar-workspace-title="true"]').first().click({ button: 'right' });
+    await page.locator('[data-context-menu-create-workspace="true"]').first().waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-036-workspace-governance-mobile.png', fullPage: true });
     const visibleErrorText = await page.locator('body').innerText();
     assert(!/HTTP 4\d\d|HTTP 5\d\d|Internal Server Error|Not Found/i.test(visibleErrorText), 'mobile viewport should not show visible runtime errors');

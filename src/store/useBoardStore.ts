@@ -109,6 +109,7 @@ const useBoardStore = create<BoardStore>()(
         pendingTitleEditInitialValue: null,
         pendingDirectTitleEditNodeId: null,
         pendingWorkspaceTitleEditId: null,
+        pendingWorkspaceCreateRequestId: null,
         pendingBoardTitleEdit: null,
 
         // ===== 基本 setters =====
@@ -135,6 +136,8 @@ const useBoardStore = create<BoardStore>()(
         }),
         setPendingDirectTitleEditNodeId: (nodeId) => set({ pendingDirectTitleEditNodeId: nodeId }),
         setPendingWorkspaceTitleEditId: (workspaceId) => set({ pendingWorkspaceTitleEditId: workspaceId }),
+        requestCreateWorkspace: () => set({ pendingWorkspaceCreateRequestId: Date.now() }),
+        clearCreateWorkspaceRequest: () => set({ pendingWorkspaceCreateRequestId: null }),
         setPendingBoardTitleEdit: (target) => set({ pendingBoardTitleEdit: target }),
 
         // ===== Workspace CRUD =====

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const files = {
   sidebar: 'src/components/Sidebar.tsx',
+  globalContextMenu: 'src/components/GlobalContextMenu.tsx',
   homeView: 'src/components/HomeView.tsx',
   app: 'src/App.tsx',
   boardStore: 'src/store/useBoardStore.ts',
@@ -63,10 +64,14 @@ assert(
 );
 
 assert(
-  'sidebar exposes title-row create workspace icon with dialog and visible feedback',
-  source.sidebar.includes('data-sidebar-create-workspace-button="true"') &&
-    source.sidebar.includes('title="新增工作區"') &&
-    source.sidebar.includes('aria-label="新增工作區"') &&
+  'sidebar removes persistent create workspace button and exposes context-menu create flow',
+  !source.sidebar.includes('data-sidebar-create-workspace-button="true"') &&
+    source.sidebar.includes('data-sidebar-workspace-list="true"') &&
+    source.sidebar.includes("kind: 'sidebar'") &&
+    source.globalContextMenu.includes('data-context-menu-create-workspace="true"') &&
+    source.globalContextMenu.includes('<span>新增工作區</span>') &&
+    source.globalContextMenu.includes('requestCreateWorkspace()') &&
+    source.boardStore.includes('pendingWorkspaceCreateRequestId') &&
     source.sidebar.includes('data-workspace-create-dialog="true"') &&
     source.sidebar.includes('工作區名稱') &&
     source.sidebar.includes('disabled={isCreatingWorkspace || !newWorkspaceTitle.trim()}') &&

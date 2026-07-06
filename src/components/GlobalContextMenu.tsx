@@ -27,6 +27,7 @@ export const GlobalContextMenu: React.FC = () => {
   const pendingDirectTitleEditNodeId = useBoardStore((state) => state.pendingDirectTitleEditNodeId);
   const setPendingDirectTitleEditNodeId = useBoardStore((state) => state.setPendingDirectTitleEditNodeId);
   const setPendingWorkspaceTitleEditId = useBoardStore((state) => state.setPendingWorkspaceTitleEditId);
+  const requestCreateWorkspace = useBoardStore((state) => state.requestCreateWorkspace);
   const setPendingBoardTitleEdit = useBoardStore((state) => state.setPendingBoardTitleEdit);
   const workspaces = useBoardStore((state) => state.workspaces);
   const activeBoardId = useBoardStore((state) => state.activeBoardId);
@@ -463,6 +464,11 @@ export const GlobalContextMenu: React.FC = () => {
     setContextMenuState(null);
   };
 
+  const handleCreateWorkspace = () => {
+    requestCreateWorkspace();
+    setContextMenuState(null);
+  };
+
   const handleAddBoardToWorkspace = () => {
     if (!contextMenuState || contextMenuState.kind !== 'workspace') return;
     if (!canCreateBoardInWorkspace(contextMenuState.workspaceId)) return;
@@ -564,8 +570,25 @@ export const GlobalContextMenu: React.FC = () => {
               </p>
             </div>
 
-            {menuKind === 'workspace' ? (
+            {menuKind === 'sidebar' ? (
+              <button
+                onClick={handleCreateWorkspace}
+                className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                data-context-menu-create-workspace="true"
+              >
+                <Plus size={14} className="flex-shrink-0 text-sky-500" />
+                <span>新增工作區</span>
+              </button>
+            ) : menuKind === 'workspace' ? (
               <>
+                <button
+                  onClick={handleCreateWorkspace}
+                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                  data-context-menu-create-workspace="true"
+                >
+                  <Plus size={14} className="flex-shrink-0 text-sky-500" />
+                  <span>新增工作區</span>
+                </button>
                 <button
                   onClick={handleRenameWorkspace}
                   className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"

@@ -514,6 +514,13 @@ export type BoardContextMenuState =
       title: string;
     }
   | {
+      kind: 'sidebar';
+      isOpen: boolean;
+      x: number;
+      y: number;
+      title: string;
+    }
+  | {
       kind: 'board';
       isOpen: boolean;
       x: number;
@@ -550,6 +557,7 @@ export interface BoardState {
   pendingTitleEditInitialValue: string | null;
   pendingDirectTitleEditNodeId: string | null;
   pendingWorkspaceTitleEditId: string | null;
+  pendingWorkspaceCreateRequestId: number | null;
   pendingBoardTitleEdit: PendingBoardTitleEdit | null;
 }
 
@@ -590,6 +598,8 @@ export interface BoardActions {
   setPendingTitleEditNodeId: (nodeId: string | null, initialValue?: string | null) => void;
   setPendingDirectTitleEditNodeId: (nodeId: string | null) => void;
   setPendingWorkspaceTitleEditId: (workspaceId: string | null) => void;
+  requestCreateWorkspace: () => void;
+  clearCreateWorkspaceRequest: () => void;
   setPendingBoardTitleEdit: (target: PendingBoardTitleEdit | null) => void;
 
   exportData: () => void;
