@@ -1493,7 +1493,7 @@ RD exit gate:
 - `npm.cmd exec tsc -- --noEmit`: Pass
 - `npm.cmd run lint -- --quiet`: Pass
 - `npm.cmd run build:test`: Pass
-- QA manual click validation plan updated on 2026-06-26; DEV-028 still requires MAN-028-001 to MAN-028-027 human-operated click evidence before calling manual QC complete.
+- QA manual click validation plan updated on 2026-07-06; DEV-028 still requires MAN-028-001 to MAN-028-028 human-operated click evidence before calling manual QC complete.
 
 ### DEV-027F: Mind map UI polish after relationship-line QC
 

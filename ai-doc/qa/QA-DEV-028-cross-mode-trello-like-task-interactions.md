@@ -242,7 +242,7 @@ npm.cmd run build:test
 QC 報告至少需附:
 
 - 人工操作者、日期時間、瀏覽器、URL、viewport 與測試資料說明。
-- MAN-028-001 至 MAN-028-027 的逐項 pass/fail 表；未執行項必須標 `Not Executed`，不得空白帶過。
+- MAN-028-001 至 MAN-028-028 的逐項 pass/fail 表；未執行項必須標 `Not Executed`，不得空白帶過。
 - 四模式單擊開同一 `TaskDetailsModal` 的 DOM selector evidence。
 - 四模式關閉詳情後保留 selected task 的 DOM state 或 screenshot evidence。
 - 清單、看板、甘特 `Enter` 開詳情，以及心智圖 `Enter` 新增同階的 keyboard trace。
