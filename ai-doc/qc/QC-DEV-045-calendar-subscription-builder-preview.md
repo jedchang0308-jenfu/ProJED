@@ -3,7 +3,7 @@
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
 關聯 QA：`ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md`
-狀態：Phase 3 Remote Gate Authorized / Preflight Blocked by Missing Level 3
+狀態：Phase 3 Remote Gate Authorized / Preflight Blocked by Missing Level 3 / Remote Readiness Static Gate Passed
 日期：2026-07-07
 
 ## QC 結論
@@ -16,6 +16,8 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 
 2026-07-07 續接 read-only discovery 補強：Supabase MCP `list_projects` 顯示 production `ProJED` / `knodlkxqpcqyrtgwpdst` 為 `ACTIVE_HEALTHY`、Postgres `17.6.1.121`，`ProJED_TEST` / `fhisnnufoeulxqrchldf` 為 `INACTIVE`。production migration history 尚未包含本地 DEV-037 `20260706091804_calendar_subscription_source_scope.sql` 與 DEV-045 `20260706162052_calendar_subscription_v2_filters.sql`；deployed `calendar-feed` 仍是 version 3，source 仍使用 v1 `getAllowedTenantIds` / workspace-only feed flow，未包含 v2 `matchesV2TaskFilters`、tag join 或 `project_ids` filter。production aggregate count 為 total subscriptions 2、active 2、v2 0。Supabase branch listing MCP call 回 `Project reference is missing when validating permissions`；建立 branch 另需 Supabase cost confirmation，未建立 branch。
 
+2026-07-07 補上 `verify:dev-045-calendar-subscription-remote-readiness`，把 Phase 3 進入遠端 gate 前的本機 artifacts 檢查自動化。此 verifier 只確認 DEV-037 / DEV-045 migration 順序、DEV-045 validation grants、client v2 normalizer、local Edge v2 matcher、package script 防呆、文件 stop condition 與 read-only discovery 邊界；不連線 Supabase、不套 migration、不部署 Edge，也不代表 remote gate 完成。
+
 已完成：
 - 新增 `CalendarSubscriptionBuilderPreview`，提供全域條件、看板沿用 / 自訂 / 排除、本地任務預覽、輸出摘要與外部連結風險提示。
 - `CalendarSubscriptionsView` 已掛載 Builder，並保留 DEV-037 v1 source-scope 相容 UI 與既有訂閱列表。
@@ -23,6 +25,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 - 新增 `verify:dev-045-calendar-subscription-builder-preview` static gate。
 - 新增 `verify:dev-045-calendar-subscription-builder-preview-browser` browser gate，產生 desktop、empty、exclude、mobile 截圖。
 - 新增 `verify:dev-045-calendar-subscription-v2-feed` static gate，覆蓋 v2 DB validation、service normalizer、submit wiring、Edge matcher 與 tag join。
+- 新增 `verify:dev-045-calendar-subscription-remote-readiness` static gate，覆蓋 remote gate 前置 artifacts 與 stop condition。
 - Phase 3 read-only preflight：production project `knodlkxqpcqyrtgwpdst` healthy / Postgres 17，`calendar-feed` current version 3 active，`verify_jwt=false`，rollback source 已可由 Supabase MCP 讀取。
 - Phase 3 DB preflight：正式 DB 目前仍是 v1 validation function；`calendar_subscription_task_filter_allowed(jsonb)` 不存在，`calendar_subscription_filter_allowed(jsonb)` 不含 `project_ids` / `v2_scope_type`；正式訂閱 2 筆、active 2 筆、v2 0 筆。
 - Phase 3 migration history preflight：production 尚未列出 DEV-037 `20260706091804_calendar_subscription_source_scope` 或 DEV-045 `20260706162052_calendar_subscription_v2_filters` migration。
@@ -46,6 +49,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 | `npm.cmd run verify:dev-045-calendar-subscription-builder-preview` | Pass | 16 pass / 0 fail |
 | `npm.cmd run verify:dev-045-calendar-subscription-builder-preview-browser` | Pass | `dev-045-calendar-builder-desktop.png`、`dev-045-calendar-builder-empty.png`、`dev-045-calendar-builder-exclude.png`、`dev-045-calendar-builder-mobile.png` |
 | `npm.cmd run verify:dev-045-calendar-subscription-v2-feed` | Pass | 18 pass / 0 fail |
+| `npm.cmd run verify:dev-045-calendar-subscription-remote-readiness` | Pass | 19 pass / 0 fail；local-only preflight, no Supabase apply/deploy |
 | `npm.cmd run verify:dev-037-calendar-subscription-source-scope` | Pass | 20 pass / 0 fail |
 | `npm.cmd run verify:dev-037-calendar-subscription-source-scope-browser` | Pass | DEV-037 local-test fallback/browser regression passed |
 | Supabase MCP read-only preflight | Pass / blocked for deploy | Production project healthy；current `calendar-feed` version 3 active；DB v2 functions not applied；staging unavailable |
@@ -68,7 +72,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 - Production currently remains on the old calendar subscription feed contract；remote apply/deploy is not a no-op and must keep rollback evidence for `calendar-feed` version 3 and DB validation function state.
 - Edge Function 尚未做 Deno type check；進入 Supabase/Edge deploy gate 前需補 Deno 或 Supabase functions verification。
 - Browser QC 已補 desktop / mobile / empty preview / override / exclude；尚未覆蓋 Supabase live partial/error state，需 remote/staging 或 mocked board-load failure fixture。
-- 既有工作樹中存在 DEV-041 / PWA 相關未提交修改與 `.firebase/hosting.ZGlzdA.cache`，未納入本 QC 範圍。
+- 既有工作樹中存在 `.firebase/hosting.ZGlzdA.cache` 與 `.codex-remote-attachments/`，未納入本 QC 範圍。
 
 ## 下一步
 

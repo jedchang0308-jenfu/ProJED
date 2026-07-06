@@ -320,6 +320,7 @@ RD must add package scripts for:
 - DEV-045 static Builder contract verifier.
 - DEV-045 browser Builder preview verifier.
 - DEV-045 v2 ICS/feed verifier.
+- DEV-045 remote readiness preflight verifier that checks local migration / Edge / governance artifacts without applying remote DB or Edge changes.
 
 Regression gates:
 
@@ -359,5 +360,5 @@ Regression gates:
 | Phase 0 | Authorized | Complete | 開發文件、QA plan、dev_task、documentation_map | Product code, DB, deploy | 使用者要求寫成開發文件 | DEV-045 文件完整且可續接 | file diff |
 | Phase 1 | Authorized | Phase 1 Local RD Implemented / Static QC Passed | Builder UI, global filter, board overrides, live local preview, v1 compatibility | Remote migration, Edge deploy, production | 使用者授權 RD | Builder preview 可操作且不破壞 v1 source-scope UI | DEV-045 static, DEV-037/039/settings regression, TypeScript, build |
 | Phase 2 | Authorized / Local source only | Phase 2 Local Source Implemented / Remote DB-Edge-Production Not Executed | Supabase validation migration source, Edge Function v2 feed source, preview/feed parity static contract | Remote migration apply, Edge deploy, production deploy, formal data repair | Phase 1 passed + local source authorization | `.ics` source matcher uses same allowed task identity semantics as Builder preview | DEV-045 v2 feed static verifier, TypeScript, build |
-| Phase 3 | Authorized / Release-Gate Blocked | RD Contract Ready | Production migration/function/frontend deploy and live smoke | Unscoped feature additions | Phase 2 passed + deployment authorization + Level 3 production-like smoke path or explicit risk acceptance | Production link outputs only allowed previewed tasks | deployment-release-gate, live feed smoke |
+| Phase 3 | Authorized / Release-Gate Blocked | RD Contract Ready / Remote Readiness Static Gate Passed | Production migration/function/frontend deploy and live smoke | Unscoped feature additions | Phase 2 passed + deployment authorization + Level 3 production-like smoke path or explicit risk acceptance | Production link outputs only allowed previewed tasks | remote readiness preflight, deployment-release-gate, live feed smoke |
 | Phase 4 | Not Authorized | RD Contract Ready | duplicate/copy/audit/future dynamic scope | Two-way calendar sync | User re-entry | Governance features have explicit summary and confirmation | future SPEC/QA |
