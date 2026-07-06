@@ -2,6 +2,96 @@
 
 ## PM Update - 2026-07-06
 
+### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
+
+狀態: RD Contract Ready / Not Authorized
+節點類型: 交付點 / Calendar subscription v2
+父交付點: DEV-037 行事曆訂閱來源範圍清晰化 / DEV-039 任務過濾器核心與全域任務平台
+是否計入產品交付完成: 是，這是使用者可直接驗收的行事曆訂閱 UX / 資料契約升級；目前只完成開發文件，不代表 RD 已授權或已實作
+建立日期: 2026-07-06
+
+原始需求邊界:
+- 使用者希望行事曆訂閱設定方式改成像全域任務平台的過濾器一樣直覺。
+- 使用者希望一邊調整條件，一邊立即看到會被訂閱出去的任務。
+- 使用者希望可以將所有看板的篩選條件都設定好，再一次產出一條訂閱連結。
+- 使用者確認訂閱範圍預設是所有工作區所有看板，只是可以篩選要訂閱的內容。
+- 使用者確認每一個產出的訂閱連結就是一個訂閱設定。
+
+Human Decision Brief:
+- 已確認：行事曆訂閱 v2 的心智模型是「一條可保存的跨看板任務查詢」，不是只選單一來源範圍。
+- 已確認：預設涵蓋所有目前可訂閱的工作區 / 看板，使用者再透過篩選器縮小內容。
+- 已確認：Builder 必須有即時預覽，讓使用者在產生 `.ics` 外部連結前看到任務清單。
+- 已確認：每條連結保存自己的訂閱設定；修改訂閱設定後才改變該連結輸出。
+- 已否決：直接把 `TaskWorkbenchPanel` filter UI / state 整包搬到行事曆訂閱；工作台 filter 是 UI 顯示條件，行事曆訂閱是外部長期連結。
+- AI 假設：既有訂閱保存目前可讀取 workspace/project snapshot，未來新增 workspace/board 不自動進入既有連結，除非使用者另行修改訂閱。
+- AI 假設：初始預設條件採保守外流：我的任務、到期日、排除已完成任務；使用者可手動放寬。
+
+End-State Architecture:
+- `CalendarSubscriptionBuilder` 是行事曆訂閱 v2 的主要建立 / 修改入口。
+- Builder 由 subscription name、global filter、per-board overrides、live preview、output summary 與 create/copy action 組成。
+- `filters_json` 演進為 v2 contract，保存 `version: 2`、snapshot scope、`global_filter`、`board_overrides` 與 `date_types`。
+- 即時預覽與 Edge Function `.ics` feed 必須使用同一個 included task identity contract。
+- DEV-037 v1 訂閱仍需可讀取、可修改、可停用、可重生 token。
+
+目前授權邊界:
+- Authorized / Complete: SPEC-045、QA-DEV-045、dev_task、documentation_map 開發文件。
+- Not Authorized / Not Executed: 產品程式碼、DB migration、RLS/RPC、Supabase Edge Function、production deploy、live `.ics` smoke、正式資料修復。
+
+RD Handoff / Implementation Contract:
+- 建立 `CalendarSubscriptionBuilder` 或等效 component，取代目前 v1 建立表單作為主要 UX。
+- 抽出共用任務條件 UI，例如 `TaskConditionFilterControls`，但不得把工作台 placement lane、`列表 / 群組` 顯示設定或未歸位語意帶入行事曆訂閱。
+- 支援 global filter + board override；每張看板可沿用全域條件、自訂條件或排除。
+- 預覽結果需 grouped by workspace / board，顯示任務名稱、狀態、負責人、開始 / 到期日期與輸出摘要。
+- Preview loading / partial / error / empty 狀態必須可見；partial/error 時不得假裝結果完整。
+- 延伸 `CalendarSubscriptionFilters`、`calendarSubscriptionService.normalizeFilters`、DB validation function 與 `calendar-feed` Edge Function 支援 v2。
+- Token regeneration 只更新 token，不得改變 v2 filters。
+
+Acceptance:
+- 使用者進入行事曆訂閱頁時，可用篩選器式 Builder 建立一條訂閱連結。
+- 預設 snapshot 涵蓋所有目前可讀取工作區 / 看板，且畫面顯示 summary。
+- 使用者調整全域條件或單一看板 override 後，預覽任務清單立即更新。
+- 使用者能在產生連結前看到會輸出幾個工作區、幾張看板、幾個任務與哪些日期類型。
+- `.ics` feed 輸出的任務 identity 必須與預覽允許的任務 identity 一致。
+- 既有 DEV-037 v1 訂閱不壞。
+
+QA / QC gate:
+- RD 需新增 DEV-045 static Builder contract verifier。
+- RD 需新增 DEV-045 browser Builder preview verifier。
+- RD 需新增 DEV-045 v2 ICS/feed parity verifier。
+- 必跑 DEV-037 calendar source-scope gates、DEV-039 task filter core/result parity gates、settings project context gates、TypeScript、build。
+- 若涉及 migration / Edge Function，需 Supabase static verification、DB role matrix 與 deployment-release-gate。
+
+Stop Conditions:
+- Preview 與 `.ics` feed 無法證明同源或結果一致。
+- 部分看板查詢失敗但仍允許產生連結。
+- v2 filter 會讓未來新增 workspace/board 自動進入既有外部連結，且使用者未明確同意。
+- 使用者可訂閱無權 board、他人任務或未指派任務而未通過角色檢查。
+- 需要 DB migration、RLS/RPC、Edge deploy、production deploy 或正式資料修復但未取得授權。
+
+Deferred Scope Audit:
+- Product implementation: Same Spec Phase / Phase 1；需使用者授權 RD。
+- Supabase validation / Edge Function v2: Same Spec Phase / Phase 2；需 DB/Edge 授權。
+- Production release / live smoke: Same Spec Phase / Phase 3；需 deployment-release-gate 授權。
+- Future dynamic all-accessible scope: Same Spec Phase / Phase 4；需使用者明確接受未來新看板自動加入既有外部連結。
+- Subscription duplicate / copy / audit governance: Same Spec Phase / Phase 4；需另行啟動。
+- Google Calendar write API / two-way sync: No Tracking；不屬只讀 `.ics` 目標。
+- Realtime/background sync: No Tracking；外部行事曆依自身週期抓取，不建立背景同步服務。
+
+All-Phase Coverage Matrix:
+
+| Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|
+| Phase 0 | Authorized | Complete | SPEC / QA / dev_task / documentation_map | Product code, DB, deploy | 使用者要求寫成開發文件 | DEV-045 文件完整且可續接 | file diff |
+| Phase 1 | Not Authorized | RD Contract Ready | Builder UI、global filter、board overrides、live local preview、v1 compatibility | Remote migration、Edge deploy、production | 使用者授權 RD | Builder preview 可操作且不破壞 v1 | DEV-045 static/browser、DEV-037/039/settings regression |
+| Phase 2 | Not Authorized | RD Contract Ready | Supabase validation、Edge Function v2 feed、preview/feed parity | Production deploy、formal data repair | Phase 1 passed + DB/Edge authorization | `.ics` output equals preview allowed task set | ICS verifier、Supabase static、DB role matrix if needed |
+| Phase 3 | Not Authorized | RD Contract Ready | Production migration/function/frontend deploy and live smoke | Unscoped feature additions | Phase 2 passed + deployment authorization | Production link outputs only allowed previewed tasks | deployment-release-gate、live feed smoke |
+| Phase 4 | Not Authorized | RD Contract Ready | duplicate/copy/audit/future dynamic scope | Two-way calendar sync | User re-entry | Governance features have explicit summary and confirmation | future SPEC/QA |
+
+文件:
+- `ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
+- `ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md`
+- `ai-doc/documentation_map.md`
+
 ### DEV-044: 上一步復原範圍擴充與低資料庫成本治理
 
 狀態: Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed
@@ -2188,6 +2278,7 @@ CAPA 來源：
 - 2026-07-06 DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA 並 production release；採低資料庫成本 ordinary undo 擴充，涵蓋 batch/reorder/placement command grouping；DB migration、durable recovery、board workspace transfer undo 與 destructive recovery 未執行。
 - 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT 與 regression gates；production UI smoke 與 production deploy 未執行。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
+- 2026-07-06 DEV-045 已建立行事曆訂閱篩選器建構器與即時預覽開發文件；目前為 `RD Contract Ready / Not Authorized`，需使用者明確授權後才能進入 RD。
 - 目前可由 Codex 直接開工的產品 RD 候選：無。任務板剩餘 RD 候選多數為 `Not Authorized`、`Blocked Human Re-entry`、DB/RLS/migration、Edge deploy、真機/登入式人工 QC 或手動 UI smoke。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待互動式 production UI smoke，原因是正式前端使用 Google OAuth，CLI 無法非互動完成登入與發布流程。
@@ -2199,11 +2290,12 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-037 行事曆訂閱來源範圍 live gate | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | Supabase / release owner | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
-| 2 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
-| 3 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
-| 4 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
-| 5 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 1 | DEV-045 行事曆訂閱篩選器建構器 RD 授權 | RD Contract Ready / Not Authorized | 使用者 / RD after authorization | 若要開發，需明確授權 Phase 1 Builder UI + local preview；DB/Edge/production 仍分 phase 另行 gate。 |
+| 2 | DEV-037 行事曆訂閱來源範圍 live gate | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | Supabase / release owner | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
+| 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
+| 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
+| 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
+| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 
 ---
 
@@ -2238,6 +2330,7 @@ CAPA 來源：
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041` | 強制更新、release notes 後端、版本 API、analytics 另行決策 |
 | DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、使用者回報真機通過、commit `aa1fff7` | DB/RLS/migration 與正式資料修復不屬於本 DEV |
 | DEV-044 | 交付點 | Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke、production artifact/browser/auth smoke | durable recovery、DB migration、board workspace transfer undo、destructive recovery 需另行授權 |
+| DEV-045 | 交付點 | RD Contract Ready / Not Authorized | 是 | 行事曆訂閱篩選器建構器與即時預覽 | `SPEC-045`、`QA-DEV-045`、dev_task、documentation_map | 授權 Phase 1 Builder UI + local preview 後才能 RD；DB/Edge/production 另行 gate |
 
 ### 交付點完成率
 
@@ -2257,6 +2350,7 @@ CAPA 來源：
 - Production Release Deployed / Local + Production Smoke Passed / DB unchanged：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed：1 個交付點。
 - Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
+- RD Contract Ready / Not Authorized：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。
 
