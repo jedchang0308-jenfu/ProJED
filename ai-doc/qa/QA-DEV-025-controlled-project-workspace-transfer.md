@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
-狀態: Static QA Done / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending
+狀態: Static QA Done / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending
 建立日期: 2026-06-18
 
 ## 驗證目標
@@ -114,6 +114,7 @@ npm.cmd run verify:core-regression-static
 npm.cmd run verify:dev-025-project-workspace-transfer
 npm.cmd run verify:dev-025-mutating-qc-readiness
 npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check
+npm.cmd run verify:dev-025-mutating-qc-execution
 ```
 
 Mutating DB QC fixture readiness gate：
@@ -137,11 +138,20 @@ npm.cmd run verify:dev-025-mutating-qc-readiness
 
 This gate is also read-only. It verifies that package scripts do not directly execute `move_project_to_workspace` or remote Supabase schema/deploy commands, that the fixture-readiness harness remains read-only, and that SPEC / QA / QC / dev_task / documentation_map still require safe fixture IDs, rollback/cleanup, preview and move role-data QC before calling the mutating RPC.
 
+Guarded mutating QC executor self-check：
+
+```powershell
+npm.cmd run verify:dev-025-mutating-qc-execution
+```
+
+The executor defaults to self-check and must not mutate without `-- --run-mutating-fixture`, `DEV025_ALLOW_MUTATING_QC=1`, `DEV025_QC_FIXTURE_DISPOSABLE=1`, fixture IDs, `SUPABASE_ANON_KEY`, service role key and four role tokens: `DEV025_QC_ALLOWED_ACTOR_ACCESS_TOKEN`, `DEV025_QC_SOURCE_MEMBER_ACCESS_TOKEN`, `DEV025_QC_TARGET_MEMBER_ACCESS_TOKEN`, `DEV025_QC_OUTSIDER_ACCESS_TOKEN`. Actual mode is for disposable / production-safe fixture only; it executes allowed preview, denied previews, the guarded move RPC, post-move data consistency checks, audit/activity checks and RLS spot checks, then reports the moved fixture as retained for cleanup by the QC owner.
+
 ## QC 事實驗證重點
 
 - 實際查詢 Supabase，確認所有 project-scoped rows 的 `tenant_id` 一致。
 - 實際使用來源成員、目標成員、非成員三種帳號驗證 RLS。
 - 實際先跑 execution-readiness 與 fixture-readiness，確認安全 fixture 和 rollback/cleanup 計畫後才執行 mutating RPC。
+- 實際 mutating executor 只能用 disposable / production-safe fixture；不得把真實客戶 board 當成 QC fixture。
 - 實際接受舊 invite token，確認已失效。
 - 實際檢查 audit log，確認 source/target 皆有紀錄且沒有敏感資料暴露給不相關工作區。
 - 實際檢查 RAG query，不可從來源工作區檢索到已搬移專案內容。
@@ -152,6 +162,8 @@ Production Supabase read-only preflight passed：正式 DB 已存在 `preview_pr
 
 2026-07-07 已新增 guarded fixture-readiness harness：`verify:dev-025-mutating-qc-fixture-readiness`。此 gate 預設只讀，不會呼叫 `move_project_to_workspace`，用來防止把未標記的真實 workspace/board 當成 mutating QC fixture。
 
-2026-07-07 已新增 execution-readiness static gate：`verify:dev-025-mutating-qc-readiness`。此 gate 預設只讀，檢查 package scripts、fixture harness 與 SPEC / QA / QC / dev_task / documentation_map 是否仍保留 mutation 前置條件、preview/move role-data QC、RAG visibility、rollback/cleanup 與 stop condition。
+2026-07-07 已新增 execution-readiness static gate：`verify:dev-025-mutating-qc-readiness`。此 gate 預設只讀，檢查 package scripts、fixture harness、guarded executor 與 SPEC / QA / QC / dev_task / documentation_map 是否仍保留 mutation 前置條件、preview/move role-data QC、RAG visibility、rollback/cleanup 與 stop condition。
+
+2026-07-07 已新增 guarded mutating executor：`verify:dev-025-mutating-qc-execution`。預設 self-check 不連線、不 mutation；actual mode 需雙重 opt-in 與 disposable fixture guard，仍未在任何正式 fixture 上執行。
 
 仍待執行的是 mutating role-data QC：需要 staging / disposable fixture 或明確 production-safe test workspace/board，才能真的呼叫 move RPC 驗證交易、RLS、audit、invite revoke、RAG visibility 與 cleanup。

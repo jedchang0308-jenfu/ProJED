@@ -12,6 +12,7 @@ const paths = {
   dev011012Executor: 'scripts/verify-dev-011-012-production-ui-smoke.mjs',
   dev025ExecutionReadiness: 'scripts/verify-dev-025-mutating-qc-readiness.mjs',
   dev025FixtureReadiness: 'scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
+  dev025MutatingExecutor: 'scripts/verify-dev-025-mutating-qc-execution.mjs',
   dev028ManualReadiness: 'scripts/verify-dev-028-manual-click-qc-readiness.mjs',
   dev040RemoteReadiness: 'scripts/verify-dev-040-p0-remote-readiness.mjs',
   dev045RemoteReadiness: 'scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs',
@@ -50,6 +51,8 @@ const requiredScripts = {
     'node scripts/verify-dev-025-mutating-qc-readiness.mjs',
   'verify:dev-025-mutating-qc-fixture-readiness':
     'node scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
+  'verify:dev-025-mutating-qc-execution':
+    'node scripts/verify-dev-025-mutating-qc-execution.mjs',
   'verify:dev-028-manual-click-qc-readiness':
     'node scripts/verify-dev-028-manual-click-qc-readiness.mjs',
   'verify:dev-040-p0-remote-readiness':
@@ -97,6 +100,7 @@ add(
     'Mutating QC Pending',
     'verify:dev-025-mutating-qc-readiness',
     'verify:dev-025-mutating-qc-fixture-readiness',
+    'verify:dev-025-mutating-qc-execution',
     'preview_project_workspace_transfer',
     'move_project_to_workspace',
     'RAG visibility',
@@ -173,6 +177,7 @@ add(
     'Supabase DB / Edge deploy gate',
     '已登入正式前端 UI smoke',
     'DEV-028 人工親自點擊 QC',
+    'guarded mutating executor',
     'mutating role-data QC 仍需安全 fixture',
     'remote Edge 仍未部署 timeout guard',
     'DEV-044 durable/destructive recovery 仍需另行 gate',

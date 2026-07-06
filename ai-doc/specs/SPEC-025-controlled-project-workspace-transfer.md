@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-025
 任務類型: 功能開發 / 權限與資料一致性
-狀態: Implemented / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending
+狀態: Implemented / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending
 優先級: P1
 建立日期: 2026-06-18
 
@@ -205,6 +205,7 @@ npm.cmd run build
 npm.cmd run verify:dev-025-project-workspace-transfer
 npm.cmd run verify:dev-025-mutating-qc-readiness
 npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check
+npm.cmd run verify:dev-025-mutating-qc-execution
 npm.cmd run verify:settings-project-context
 npm.cmd run verify:core-regression-static
 ```
@@ -213,5 +214,6 @@ npm.cmd run verify:core-regression-static
 
 - QA 依 `ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md` 建立驗證矩陣。
 - QC 必須先通過 execution-readiness 與 read-only fixture-readiness gate，才能對安全 fixture 呼叫 mutating RPC。
+- `verify:dev-025-mutating-qc-execution` 預設只做 self-check；只有同時提供 `--run-mutating-fixture`、`DEV025_ALLOW_MUTATING_QC=1`、`DEV025_QC_FIXTURE_DISPOSABLE=1` 與角色 token，才可對 disposable / production-safe fixture 執行 preview + move。
 - QC 必須以實際 Supabase 測試資料驗證交易原子性、RLS 邊界、audit log 與 RAG visibility。
 - 若只完成文件與設計，狀態維持 Ready，不得標示 Done。

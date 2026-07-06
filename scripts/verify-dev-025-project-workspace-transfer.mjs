@@ -15,6 +15,7 @@ const files = {
   localTestService: 'src/services/localTestService.ts',
   mutatingQcFixtureReadiness: 'scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
   mutatingQcReadiness: 'scripts/verify-dev-025-mutating-qc-readiness.mjs',
+  mutatingQcExecution: 'scripts/verify-dev-025-mutating-qc-execution.mjs',
   boardStore: 'src/store/useBoardStore.ts',
   permissions: 'src/hooks/useBoardPermissions.ts',
   contextMenu: 'src/components/GlobalContextMenu.tsx',
@@ -130,8 +131,13 @@ const checks = [
       contents.mutatingQcFixtureReadiness.includes('mutates_database: false') &&
       contents.mutatingQcReadiness.includes('mutates_database: false') &&
       contents.mutatingQcReadiness.includes('package scripts do not directly execute the mutating move RPC') &&
+      contents.mutatingQcExecution.includes('mutates_database: mutationAttempted') &&
+      contents.mutatingQcExecution.includes('--run-mutating-fixture') &&
+      contents.mutatingQcExecution.includes('DEV025_ALLOW_MUTATING_QC') &&
+      contents.mutatingQcExecution.includes('DEV025_QC_FIXTURE_DISPOSABLE') &&
       contents.packageJson.includes('verify:dev-025-mutating-qc-readiness') &&
-      contents.packageJson.includes('verify:dev-025-mutating-qc-fixture-readiness'),
+      contents.packageJson.includes('verify:dev-025-mutating-qc-fixture-readiness') &&
+      contents.packageJson.includes('verify:dev-025-mutating-qc-execution'),
   },
 ];
 

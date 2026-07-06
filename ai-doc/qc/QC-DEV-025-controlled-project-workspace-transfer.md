@@ -3,7 +3,7 @@
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
 關聯 QA: `ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md`
-狀態: DB Read-only Preflight Passed / Fixture Readiness Harness Added / Execution Readiness Static Gate Added / Mutating Role-Data QC Pending
+狀態: DB Read-only Preflight Passed / Fixture Readiness Harness Added / Execution Readiness Static Gate Added / Guarded Mutating Executor Added / Mutating Role-Data QC Pending
 日期: 2026-07-07
 
 ## QC 結論
@@ -13,6 +13,8 @@ DEV-025 production Supabase read-only preflight 已通過。正式 DB 已存在 
 2026-07-07 已補 guarded fixture-readiness harness：`scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs` / `npm.cmd run verify:dev-025-mutating-qc-fixture-readiness`。此 harness 預設只讀、`mutates_database=false`，要求 source workspace、target workspace、denied workspace 與 project 都有 `DEV-025` / `QC-DEV-025` 名稱或 metadata 標記，並檢查 QA 要求的最小 fixture shape；未提供安全 fixture IDs 時不得進入 mutating RPC QC。
 
 2026-07-07 已補 execution-readiness static gate：`scripts/verify-dev-025-mutating-qc-readiness.mjs` / `npm.cmd run verify:dev-025-mutating-qc-readiness`。此 gate 預設只讀、`mutates_database=false`，檢查 package scripts 未直接執行 `move_project_to_workspace` 或 remote Supabase schema/deploy command，並確認 SPEC / QA / QC / dev_task / documentation_map 仍要求 safe fixture、preview / move role-data QC、RAG visibility 與 rollback/cleanup。
+
+2026-07-07 已補 guarded mutating executor：`scripts/verify-dev-025-mutating-qc-execution.mjs` / `npm.cmd run verify:dev-025-mutating-qc-execution`。此 executor 預設 self-check、`mutates_database=false`；actual mode 必須同時提供 `--run-mutating-fixture`、`DEV025_ALLOW_MUTATING_QC=1`、`DEV025_QC_FIXTURE_DISPOSABLE=1`、安全 fixture IDs、service role、anon key 與 allowed/source-member/target-member/outsider 四組 actor token。actual mode 會執行 preview role matrix、guarded move RPC、post-move data consistency、audit/activity 與 RLS spot checks，但本輪未提供 fixture，因此未執行 mutation。
 
 本輪未執行任何 production DDL / DML。
 
@@ -55,13 +57,15 @@ Read-only DB checks:
 Local source gate:
 - `npm.cmd run verify:dev-025-project-workspace-transfer`: Pass, 11 checks.
 - `npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check`: Pass, harness contract self-check only；未連線 DB、未讀資料、未 mutation。
-- `npm.cmd run verify:dev-025-mutating-qc-readiness`: Pass, 12 checks；未連線 DB、未讀資料、未 mutation，確認 package scripts 未直接呼叫 `move_project_to_workspace` 或 remote Supabase schema/deploy command，且文件仍保留 safe fixture、preview/move role-data QC、RAG visibility、rollback/cleanup stop condition。
+- `npm.cmd run verify:dev-025-mutating-qc-readiness`: Pass, 14 checks；未連線 DB、未讀資料、未 mutation，確認 package scripts 未直接呼叫 `move_project_to_workspace` 或 remote Supabase schema/deploy command，且文件仍保留 safe fixture、preview/move role-data QC、RAG visibility、rollback/cleanup stop condition。
+- `npm.cmd run verify:dev-025-mutating-qc-execution`: Pass, self-check only；未連線 DB、未讀資料、未 mutation，確認 actual mode 需要 `--run-mutating-fixture`、`DEV025_ALLOW_MUTATING_QC=1`、`DEV025_QC_FIXTURE_DISPOSABLE=1` 與角色 token。
 
 ## Remaining DB QC
 
 Not executed in this read-only pass:
 - Create or identify a safe production/staging test dataset with source workspace, target workspace, target denied workspace, board members, tags, dependencies, records, documents/RAG rows and pending invite.
 - Run `verify:dev-025-mutating-qc-fixture-readiness` with real safe fixture IDs.
+- Run `verify:dev-025-mutating-qc-execution` in self-check mode, then actual mode only with disposable / production-safe fixture and all guard envs.
 - Execute `preview_project_workspace_transfer` as source board manager + target workspace admin.
 - Verify denied cases for source member, target workspace member-only, viewer/outsider and transferLocked project.
 - Execute `move_project_to_workspace` on safe test data and verify transaction result.

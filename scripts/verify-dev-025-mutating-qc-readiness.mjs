@@ -9,6 +9,7 @@ const paths = {
   packageJson: 'package.json',
   projectVerifier: 'scripts/verify-dev-025-project-workspace-transfer.mjs',
   fixtureReadiness: 'scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
+  mutatingExecution: 'scripts/verify-dev-025-mutating-qc-execution.mjs',
   spec: 'ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md',
   qa: 'ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md',
   qc: 'ai-doc/qc/QC-DEV-025-controlled-project-workspace-transfer.md',
@@ -36,6 +37,12 @@ add(
   'package exposes mutating QC execution-readiness static gate',
   packageScripts['verify:dev-025-mutating-qc-readiness'] ===
     'node scripts/verify-dev-025-mutating-qc-readiness.mjs',
+);
+
+add(
+  'package exposes guarded mutating QC executor self-check',
+  packageScripts['verify:dev-025-mutating-qc-execution'] ===
+    'node scripts/verify-dev-025-mutating-qc-execution.mjs',
 );
 
 const packageScriptCommands = Object.entries(packageScripts)
@@ -73,10 +80,28 @@ add(
 );
 
 add(
+  'mutating executor defaults to self-check and requires explicit disposable fixture opt-in',
+  includesAll(contents.mutatingExecution, [
+    'mutates_database: mutationAttempted',
+    '--run-mutating-fixture',
+    'DEV025_ALLOW_MUTATING_QC',
+    'DEV025_QC_FIXTURE_DISPOSABLE',
+    'DEV025_QC_ALLOWED_ACTOR_ACCESS_TOKEN',
+    'DEV025_QC_SOURCE_MEMBER_ACCESS_TOKEN',
+    'DEV025_QC_TARGET_MEMBER_ACCESS_TOKEN',
+    'DEV025_QC_OUTSIDER_ACCESS_TOKEN',
+    'preview_project_workspace_transfer',
+    'move_project_to_workspace',
+    'fixture_disposition',
+  ]),
+);
+
+add(
   'project transfer verifier tracks both DEV-025 DB QC guard scripts',
   includesAll(contents.projectVerifier, [
     'verify-dev-025-mutating-qc-fixture-readiness.mjs',
     'verify-dev-025-mutating-qc-readiness.mjs',
+    'verify-dev-025-mutating-qc-execution.mjs',
     'verify:dev-025-mutating-qc-readiness',
   ]),
 );
@@ -86,6 +111,7 @@ add(
   includesAll(contents.spec, [
     'verify:dev-025-mutating-qc-readiness',
     'verify:dev-025-mutating-qc-fixture-readiness',
+    'verify:dev-025-mutating-qc-execution',
     'QC 必須先通過 execution-readiness',
   ]),
 );
@@ -95,6 +121,7 @@ add(
   includesAll(contents.qa, [
     'verify:dev-025-mutating-qc-readiness',
     'verify:dev-025-mutating-qc-fixture-readiness',
+    'verify:dev-025-mutating-qc-execution',
     'preview_project_workspace_transfer',
     'move_project_to_workspace',
     'rollback/cleanup',
@@ -105,6 +132,7 @@ add(
   'QC report keeps mutation pending and documents resume/cleanup boundaries',
   includesAll(contents.qc, [
     'Execution Readiness Static Gate Added',
+    'Guarded Mutating Executor Added',
     'Mutating Role-Data QC Pending',
     'rollback/cleanup',
     'RAG visibility',
@@ -116,6 +144,7 @@ add(
   'dev_task references the execution-readiness gate without marking mutation complete',
   includesAll(contents.devTask, [
     'verify:dev-025-mutating-qc-readiness',
+    'verify:dev-025-mutating-qc-execution',
     'Mutating QC Pending',
     '安全 fixture',
     'RAG visibility',
@@ -127,6 +156,7 @@ add(
   includesAll(contents.documentationMap, [
     'DEV-025',
     'Execution Readiness Static Gate Added',
+    'guarded mutating executor',
     'mutating role-data QC',
     '安全 fixture',
   ]),
