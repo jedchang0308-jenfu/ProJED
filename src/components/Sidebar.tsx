@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, ChevronRight, ClipboardList, LayoutDashboard, LogOut, Plus, Settings, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardList, Folder, LayoutDashboard, LogOut, Plus, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
@@ -272,11 +272,12 @@ const Sidebar = () => {
         <div className={`flex h-full ${isMobileOverlay ? 'w-full' : 'w-64'} flex-col`}>
           <div className="flex-1 space-y-4 overflow-y-auto p-2">
             {workspaces.map((ws) => (
-              <div key={ws.id} className="space-y-1">
+              <div key={ws.id} className="space-y-1" data-sidebar-workspace-group="true">
                 <div
-                  className="group flex items-center justify-between gap-2 px-3 py-2"
+                  className="group flex items-center justify-between gap-2 px-3 py-1.5"
                   onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
                 >
+                  <Folder size={14} className="shrink-0 text-slate-400" />
                   {editingWorkspaceId === ws.id ? (
                     <input
                       value={workspaceTitleDraft}
@@ -302,7 +303,7 @@ const Sidebar = () => {
                       tabIndex={0}
                       data-sidebar-workspace-title="true"
                       onKeyDown={(event) => handleWorkspaceTitleKeyDown(event, ws)}
-                      className="min-w-0 flex-1 truncate rounded text-left text-xs font-semibold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="min-w-0 flex-1 truncate rounded text-left text-xs font-bold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                       title="右鍵開啟選單，F2 重新命名"
                     >
                       {ws.title}
@@ -310,7 +311,7 @@ const Sidebar = () => {
                   )}
                 </div>
 
-                <div className="space-y-1">
+                <div className="relative ml-[18px] space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
                   {ws.boards.map((board) => {
                     const isCurrentBoard = activeBoardId === board.id;
                     const isMainBoardActive = isCurrentBoard && BOARD_WORKSPACE_VIEWS.includes(currentView);
@@ -352,7 +353,7 @@ const Sidebar = () => {
                             handleBoardClick();
                           }
                         }}
-                        className={`group/item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                        className={`group/item flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                           isMainBoardActive
                             ? 'cursor-pointer bg-primary text-white shadow-md'
                             : isCurrentSettingsProject
