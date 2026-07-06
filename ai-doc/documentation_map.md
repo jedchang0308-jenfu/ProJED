@@ -525,10 +525,14 @@ DEV-012 的產品邊界：
 
 ## 建議 QA / QC 文件位置
 
-當 DEV-002 進入實作前，建議新增：
+DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得把下列歷史建議當成缺漏文件。
 
-- `ai-doc/qa/QA-DEV-002-meeting-work-records.md`
-- `ai-doc/qc/QC-DEV-002-meeting-work-records.md`
+現有 DEV-002 evidence：
+
+- `ai-doc/specs/SPEC-003-meeting-work-records-workflow.md`
+- `ai-doc/reports/PM-DEV-002-meeting-work-records-implementation.md`
+- `ai-doc/archived/dev_task_2026-06-09_before_restructure.md`
+- `verify:dev-002-records`
 
 ## 文件治理備註
 
