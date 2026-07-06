@@ -3,7 +3,7 @@
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
 關聯 QA: `ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md`
-狀態: DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating Role-Data QC Pending
+狀態: DB Read-only Preflight Passed / Fixture Readiness Harness Added / Execution Readiness Static Gate Added / Mutating Role-Data QC Pending
 日期: 2026-07-07
 
 ## QC 結論
@@ -11,6 +11,8 @@
 DEV-025 production Supabase read-only preflight 已通過。正式 DB 已存在 `preview_project_workspace_transfer` / `move_project_to_workspace` RPC、execute grants 與 composite FK constraints；因此下一步不是重複套 migration，而是建立安全測試資料與 rollback/cleanup 流程後，執行實際搬移 role matrix、RLS、audit log、資料一致性與 RAG visibility QC。
 
 2026-07-07 已補 guarded fixture-readiness harness：`scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs` / `npm.cmd run verify:dev-025-mutating-qc-fixture-readiness`。此 harness 預設只讀、`mutates_database=false`，要求 source workspace、target workspace、denied workspace 與 project 都有 `DEV-025` / `QC-DEV-025` 名稱或 metadata 標記，並檢查 QA 要求的最小 fixture shape；未提供安全 fixture IDs 時不得進入 mutating RPC QC。
+
+2026-07-07 已補 execution-readiness static gate：`scripts/verify-dev-025-mutating-qc-readiness.mjs` / `npm.cmd run verify:dev-025-mutating-qc-readiness`。此 gate 預設只讀、`mutates_database=false`，檢查 package scripts 未直接執行 `move_project_to_workspace` 或 remote Supabase schema/deploy command，並確認 SPEC / QA / QC / dev_task / documentation_map 仍要求 safe fixture、preview / move role-data QC、RAG visibility 與 rollback/cleanup。
 
 本輪未執行任何 production DDL / DML。
 
@@ -53,6 +55,7 @@ Read-only DB checks:
 Local source gate:
 - `npm.cmd run verify:dev-025-project-workspace-transfer`: Pass, 11 checks.
 - `npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check`: Pass, harness contract self-check only；未連線 DB、未讀資料、未 mutation。
+- `npm.cmd run verify:dev-025-mutating-qc-readiness`: Pass, 12 checks；未連線 DB、未讀資料、未 mutation，確認 package scripts 未直接呼叫 `move_project_to_workspace` 或 remote Supabase schema/deploy command，且文件仍保留 safe fixture、preview/move role-data QC、RAG visibility、rollback/cleanup stop condition。
 
 ## Remaining DB QC
 
@@ -66,7 +69,7 @@ Not executed in this read-only pass:
 - Verify old pending invite token is revoked.
 - Verify source and target audit logs.
 - Verify RAG visibility no longer exposes moved project through the source workspace.
-- Cleanup/rollback test artifacts or document retained fixture IDs.
+- Complete rollback/cleanup test artifacts or document retained fixture IDs.
 
 ## Resume Condition
 

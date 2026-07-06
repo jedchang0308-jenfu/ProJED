@@ -14,6 +14,7 @@ const files = {
   supabaseService: 'src/services/supabase/projedService.ts',
   localTestService: 'src/services/localTestService.ts',
   mutatingQcFixtureReadiness: 'scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
+  mutatingQcReadiness: 'scripts/verify-dev-025-mutating-qc-readiness.mjs',
   boardStore: 'src/store/useBoardStore.ts',
   permissions: 'src/hooks/useBoardPermissions.ts',
   contextMenu: 'src/components/GlobalContextMenu.tsx',
@@ -121,12 +122,15 @@ const checks = [
       contents.packageJson.includes('verify:dev-025-project-workspace-transfer'),
   },
   {
-    name: 'Mutating DB QC has a guarded fixture-readiness harness',
+    name: 'Mutating DB QC has guarded readiness gates before any move execution',
     pass:
       contents.mutatingQcFixtureReadiness.includes('DEV025_QC_SOURCE_TENANT_ID') &&
       contents.mutatingQcFixtureReadiness.includes('DEV025_QC_MUTATION_CONFIRM') === false &&
       contents.mutatingQcFixtureReadiness.includes('script has no move RPC execution path') &&
       contents.mutatingQcFixtureReadiness.includes('mutates_database: false') &&
+      contents.mutatingQcReadiness.includes('mutates_database: false') &&
+      contents.mutatingQcReadiness.includes('package scripts do not directly execute the mutating move RPC') &&
+      contents.packageJson.includes('verify:dev-025-mutating-qc-readiness') &&
       contents.packageJson.includes('verify:dev-025-mutating-qc-fixture-readiness'),
   },
 ];

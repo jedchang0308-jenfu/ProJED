@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
-狀態: Static QA Done / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending
+狀態: Static QA Done / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending
 建立日期: 2026-06-18
 
 ## 驗證目標
@@ -112,6 +112,7 @@ npm.cmd run verify:core-regression-static
 
 ```powershell
 npm.cmd run verify:dev-025-project-workspace-transfer
+npm.cmd run verify:dev-025-mutating-qc-readiness
 npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check
 ```
 
@@ -128,10 +129,19 @@ npm.cmd run verify:dev-025-mutating-qc-fixture-readiness
 
 This gate is read-only and must pass before any mutating RPC QC. It requires the source workspace、target workspace、denied workspace and project to be explicitly marked as `DEV-025` / `QC-DEV-025` through name or metadata, and validates minimum task、dependency、tag、record、document、RAG、invite and member-shape counts. Optional `-- --actor-preview` may be used with `DEV025_QC_ACTOR_ACCESS_TOKEN` + `SUPABASE_ANON_KEY` to prove the intended actor can call the preview RPC without mutation.
 
+Mutating QC execution-readiness static gate：
+
+```powershell
+npm.cmd run verify:dev-025-mutating-qc-readiness
+```
+
+This gate is also read-only. It verifies that package scripts do not directly execute `move_project_to_workspace` or remote Supabase schema/deploy commands, that the fixture-readiness harness remains read-only, and that SPEC / QA / QC / dev_task / documentation_map still require safe fixture IDs, rollback/cleanup, preview and move role-data QC before calling the mutating RPC.
+
 ## QC 事實驗證重點
 
 - 實際查詢 Supabase，確認所有 project-scoped rows 的 `tenant_id` 一致。
 - 實際使用來源成員、目標成員、非成員三種帳號驗證 RLS。
+- 實際先跑 execution-readiness 與 fixture-readiness，確認安全 fixture 和 rollback/cleanup 計畫後才執行 mutating RPC。
 - 實際接受舊 invite token，確認已失效。
 - 實際檢查 audit log，確認 source/target 皆有紀錄且沒有敏感資料暴露給不相關工作區。
 - 實際檢查 RAG query，不可從來源工作區檢索到已搬移專案內容。
@@ -141,5 +151,7 @@ This gate is read-only and must pass before any mutating RPC QC. It requires the
 Production Supabase read-only preflight passed：正式 DB 已存在 `preview_project_workspace_transfer` / `move_project_to_workspace` RPC，匿名不可執行，`authenticated` / `service_role` 可執行，composite FK constraints 已存在，RPC source 包含權限、transfer lock、name confirmation、pending invite revoke、audit/activity 與 RAG sync job 片段。
 
 2026-07-07 已新增 guarded fixture-readiness harness：`verify:dev-025-mutating-qc-fixture-readiness`。此 gate 預設只讀，不會呼叫 `move_project_to_workspace`，用來防止把未標記的真實 workspace/board 當成 mutating QC fixture。
+
+2026-07-07 已新增 execution-readiness static gate：`verify:dev-025-mutating-qc-readiness`。此 gate 預設只讀，檢查 package scripts、fixture harness 與 SPEC / QA / QC / dev_task / documentation_map 是否仍保留 mutation 前置條件、preview/move role-data QC、RAG visibility、rollback/cleanup 與 stop condition。
 
 仍待執行的是 mutating role-data QC：需要 staging / disposable fixture 或明確 production-safe test workspace/board，才能真的呼叫 move RPC 驗證交易、RLS、audit、invite revoke、RAG visibility 與 cleanup。

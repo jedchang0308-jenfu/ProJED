@@ -1986,7 +1986,7 @@ Implementation evidence:
 
 ### DEV-025: 受控跨工作區移動專案
 
-狀態: Implemented / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending
+狀態: Implemented / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending
 任務類型: 功能開發 / 權限與資料一致性
 優先級: P1
 關聯需求: 使用者希望專案可在不同工作區之間移動，但擔心權限外洩、資料遺失與稽核斷鏈。
@@ -2005,11 +2005,11 @@ Implementation evidence:
 
 | 階段 | Owner | 狀態 | 輸出 |
 |---|---|---|---|
-| PM/RD 規格 | PM/RD | Implemented / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | SPEC-025 |
-| QA 驗證計畫 | QA | Static QA Done / DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | QA-DEV-025 |
+| PM/RD 規格 | PM/RD | Implemented / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | SPEC-025 |
+| QA 驗證計畫 | QA | Static QA Done / DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | QA-DEV-025 |
 | RD 實作 | RD | Done | Supabase RPC migration + frontend controlled transfer flow + local-test fallback |
 | QA 靜態驗證 | QA | Done | `verify:dev-025-project-workspace-transfer`, TypeScript, production build |
-| QC 事實驗證 | QC | DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | 正式 DB 已具備 RPC / grants / constraints；已新增 read-only fixture readiness harness；待安全 fixture 上驗證 RLS、audit log、data consistency、RAG visibility evidence |
+| QC 事實驗證 | QC | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | 正式 DB 已具備 RPC / grants / constraints；已新增 read-only fixture readiness harness 與 execution-readiness static gate；待安全 fixture 上驗證 RLS、audit log、data consistency、RAG visibility evidence |
 
 Regression gate:
 - `npm.cmd exec tsc -- --noEmit`
@@ -2017,6 +2017,8 @@ Regression gate:
 - `npm.cmd run verify:settings-project-context`
 - `npm.cmd run verify:core-regression-static`
 - `npm.cmd run verify:dev-025-project-workspace-transfer`
+- `npm.cmd run verify:dev-025-mutating-qc-readiness`
+- `npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check`
 
 Implementation evidence:
 - Migration: `supabase/migrations/20260618120000_controlled_project_workspace_transfer.sql`
@@ -2024,6 +2026,7 @@ Implementation evidence:
 - Service/store: Supabase RPC integration plus local-test transfer path
 - Verified: `npm.cmd run verify:dev-025-project-workspace-transfer`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`
 - Production read-only preflight 2026-07-07: RPC exists, anon denied, authenticated/service_role allowed, composite FK constraints exist, RPC source contains permission / lock / confirmation / audit / RAG / invite revoke coverage.
+- Mutating QC readiness 2026-07-07: `verify:dev-025-mutating-qc-readiness` added to prevent direct package-level move RPC execution and preserve safe fixture / rollback / cleanup / RAG visibility stop conditions before any mutating DB QC.
 
 ## PM Update - 2026-06-15
 
@@ -2352,7 +2355,7 @@ CAPA 來源：
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
 | 1 | DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate | Authorized / Release-Gate Blocked by Missing Level 3 / Read-only Discovery + Remote Readiness Static Gate Passed | Supabase / deployment-release-gate / QC | 提供 staging / active Supabase branch / local Supabase DB Level 3 smoke，或明確接受無 Level 3 risk 後，才套用 v2 filters validation migration、部署 calendar-feed Edge Function、執行 live `.ics` preview/feed identity smoke。若採 Supabase branch，需先完成 cost confirmation；目前 `ProJED_TEST` inactive，production 仍缺 DEV-037/045 migrations 且 `calendar-feed` version 3 未含 v2 matcher。 |
-| 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，先執行 `verify:dev-025-mutating-qc-fixture-readiness` 確認 fixture 標記與最小資料形狀，再執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
+| 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，先執行 `verify:dev-025-mutating-qc-readiness` 與 `verify:dev-025-mutating-qc-fixture-readiness` 確認腳本防呆、fixture 標記與最小資料形狀，再執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight + Remote Readiness Static Gate Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
 | 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
@@ -2377,7 +2380,7 @@ CAPA 來源：
 | DEV-012 | 交付點 | In Verification | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
-| DEV-025 | 交付點 | DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`QC-DEV-025`、`verify:dev-025-project-workspace-transfer`、`verify:dev-025-mutating-qc-fixture-readiness`、Supabase read-only preflight、TypeScript、build | 安全 fixture 上先跑 read-only fixture readiness，再執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |
+| DEV-025 | 交付點 | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`QC-DEV-025`、`verify:dev-025-project-workspace-transfer`、`verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness`、Supabase read-only preflight、TypeScript、build | 安全 fixture 上先跑 execution-readiness + read-only fixture readiness，再執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
 | DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test | 依 QA-DEV-028 補人工親自點擊 QC |
@@ -2398,7 +2401,7 @@ CAPA 來源：
 
 - Done：10 個交付點。
 - In Verification：2 個交付點。
-- DB Read-only Preflight Passed / Fixture Readiness Harness Added / Mutating QC Pending：1 個交付點。
+- DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending：1 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Static + Browser Smoke Passed：1 個交付點。
 - Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed：1 個交付點。
@@ -2439,7 +2442,7 @@ CAPA 來源：
 | 項目 | 影響 | 解除方式 |
 |---|---|---|
 | DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過，但完整前端流程尚未以 Google OAuth 登入帳號驗證 | 使用已登入 Google 的正式前端，建立或開啟看板後完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| DEV-025 尚缺 mutating Supabase DB QC | 受控跨工作區移動已本機實作並通過靜態 gate，正式 DB read-only preflight 已確認 RPC / grants / constraints；已新增 read-only fixture-readiness harness，但尚未實際搬移測試資料驗證 RLS / audit / RAG visibility | 建立 staging / disposable fixture 或 production-safe test workspace/board 後，先跑 `verify:dev-025-mutating-qc-fixture-readiness`，再執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix 與資料一致性 QC。 |
+| DEV-025 尚缺 mutating Supabase DB QC | 受控跨工作區移動已本機實作並通過靜態 gate，正式 DB read-only preflight 已確認 RPC / grants / constraints；已新增 read-only fixture-readiness harness 與 execution-readiness static gate，但尚未實際搬移測試資料驗證 RLS / audit / RAG visibility | 建立 staging / disposable fixture 或 production-safe test workspace/board 後，先跑 `verify:dev-025-mutating-qc-readiness` 與 `verify:dev-025-mutating-qc-fixture-readiness`，再執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix 與資料一致性 QC。 |
 | 遠端 DB/Edge/production gate 仍需專項流程 | DEV-045 Phase 1 + Phase 2 local source 已完成，但 Phase 3 會套 Supabase migration / Edge feed；DEV-025/037/040 也有 DB/Edge gate | 進入 Supabase skill + deployment-release-gate；不得直接 apply remote migration/deploy。 |
 
 ---

@@ -203,6 +203,8 @@ npm.cmd run build
 
 ```powershell
 npm.cmd run verify:dev-025-project-workspace-transfer
+npm.cmd run verify:dev-025-mutating-qc-readiness
+npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check
 npm.cmd run verify:settings-project-context
 npm.cmd run verify:core-regression-static
 ```
@@ -210,5 +212,6 @@ npm.cmd run verify:core-regression-static
 ## QA / QC Handoff
 
 - QA 依 `ai-doc/qa/QA-DEV-025-controlled-project-workspace-transfer.md` 建立驗證矩陣。
+- QC 必須先通過 execution-readiness 與 read-only fixture-readiness gate，才能對安全 fixture 呼叫 mutating RPC。
 - QC 必須以實際 Supabase 測試資料驗證交易原子性、RLS 邊界、audit log 與 RAG visibility。
 - 若只完成文件與設計，狀態維持 Ready，不得標示 Done。

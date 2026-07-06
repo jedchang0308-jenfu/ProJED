@@ -52,6 +52,7 @@
     "verify:dev-024-ai-synthesis-preserve-human-draft": "node scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs",
     "verify:dev-024-ai-synthesis-preserve-human-draft-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev024-human-draft -Filename scripts/verify-dev-024-ai-synthesis-preserve-human-draft-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-025-project-workspace-transfer": "node scripts/verify-dev-025-project-workspace-transfer.mjs",
+    "verify:dev-025-mutating-qc-readiness": "node scripts/verify-dev-025-mutating-qc-readiness.mjs",
     "verify:dev-025-mutating-qc-fixture-readiness": "node scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs",
     "verify:dev-026-trello-like-board-share-ui": "node scripts/verify-dev-026-trello-like-board-share-ui.mjs",
     "verify:dev-027-xmind-like-mind-map-mode": "node scripts/verify-dev-027-xmind-like-mind-map-mode.mjs",
