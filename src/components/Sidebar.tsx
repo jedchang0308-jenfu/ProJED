@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { ChevronLeft, ChevronRight, ClipboardList, Folder, LayoutDashboard, LogOut, Plus, Settings, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardList, LogOut, Plus, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
@@ -277,7 +277,6 @@ const Sidebar = () => {
                   className="group flex items-center justify-between gap-2 px-3 py-1.5"
                   onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
                 >
-                  <Folder size={14} className="shrink-0 text-slate-400" />
                   {editingWorkspaceId === ws.id ? (
                     <input
                       value={workspaceTitleDraft}
@@ -311,7 +310,7 @@ const Sidebar = () => {
                   )}
                 </div>
 
-                <div className="relative ml-[18px] space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
+                <div className="relative ml-3 space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
                   {ws.boards.map((board) => {
                     const isCurrentBoard = activeBoardId === board.id;
                     const isMainBoardActive = isCurrentBoard && BOARD_WORKSPACE_VIEWS.includes(currentView);
@@ -353,7 +352,7 @@ const Sidebar = () => {
                             handleBoardClick();
                           }
                         }}
-                        className={`group/item flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                        className={`group/item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                           isMainBoardActive
                             ? 'cursor-pointer bg-primary text-white shadow-md'
                             : isCurrentSettingsProject
@@ -363,17 +362,6 @@ const Sidebar = () => {
                                 : 'cursor-pointer text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        <LayoutDashboard
-                          size={16}
-                          className={
-                            isMainBoardActive
-                              ? 'text-white'
-                              : isCurrentSettingsProject
-                                ? 'text-primary'
-                                : 'text-slate-400'
-                          }
-                        />
-
                         {isEditingBoard ? (
                           <input
                             value={boardTitleDraft}
