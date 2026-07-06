@@ -4,7 +4,7 @@
 父交付點: DEV-011 / DEV-012 / DEV-020  
 關聯回歸: DEV-021 / DEV-022  
 節點類型: 開發點  
-狀態: Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged
+狀態: Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Not Executed
 優先級: P1
 
 ## 驗證目標
@@ -82,6 +82,7 @@ RD 完成後至少執行：
 
 ```powershell
 npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft
+npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft-browser
 npm.cmd run verify:dev-021-project-change-ai-preserve
 npm.cmd run verify:dev-022-project-change-single-record
 npm.cmd run verify:dev-011-ai-meeting-synthesis
@@ -90,17 +91,22 @@ npm.cmd exec tsc -- --noEmit
 npm.cmd run build
 ```
 
-2026-07-06 本機自動化 QC 已通過上述全部指令；其中 DEV-024 verifier 覆蓋手寫純文字、自訂章節、task mention、project change + human draft、single-record heading count、idempotency、store integration 與 docs references。
+2026-07-06 本機自動化 QC 已通過上述全部指令；其中 DEV-024 deterministic verifier 覆蓋手寫純文字、自訂章節、task mention、project change + human draft、single-record heading count、idempotency、store integration 與 docs references；browser verifier 覆蓋會議紀錄 composer UI、`AI整理` 操作、專案變化匯入、存草稿後內容驗證與 ROT-001 至 ROT-004。
 
 真實操作測試：
 
 ```powershell
 npm.cmd run dev:test:server
+npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft-browser
 ```
 
-QC 在 browser 開啟 `http://127.0.0.1:4173/`，依 ROT-001 至 ROT-004 收集截圖與內容節錄。
+QC 在 browser 開啟 `http://127.0.0.1:4173/`，依 ROT-001 至 ROT-004 收集截圖與內容節錄。2026-07-06 已留存：
 
-2026-07-06 狀態：ROT-001 至 ROT-004 尚未執行；不得宣稱真實 AI 操作 browser QC passed。
+- ROT-001 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-001.png`
+- ROT-002 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-002.png`
+- ROT-003/004 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-003-004.png`
+
+2026-07-06 狀態：ROT-001 至 ROT-004 已在 local-test browser 通過；因 local-test 使用 deterministic synthesis，仍不得宣稱 production UI smoke 或正式模型前端流程已通過。
 
 ## 失敗時需收集的證據
 
@@ -122,4 +128,4 @@ DEV-024 可進 RD 的條件：
 - Regression gate 包含 DEV-021 / DEV-022。
 - 明確禁止 prompt-only 修補。
 
-2026-07-06 判定：RD implementation 與本機 deterministic verifier 已完成；browser ROT 與 production smoke 仍保留為未執行邊界。
+2026-07-06 判定：RD implementation、本機 deterministic verifier 與 local browser ROT 已完成；production smoke 仍保留為未執行邊界。

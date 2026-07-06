@@ -4,7 +4,7 @@
 父交付點: DEV-011 / DEV-012 / DEV-020  
 關聯回歸: DEV-021 / DEV-022  
 節點類型: 開發點  
-狀態: Implemented / Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged
+狀態: Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Not Executed
 優先級: P1  
 是否計入產品交付完成: 否
 
@@ -121,6 +121,7 @@ RD 完成後至少需通過：
 
 ```powershell
 npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft
+npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft-browser
 npm.cmd run verify:dev-021-project-change-ai-preserve
 npm.cmd run verify:dev-022-project-change-single-record
 npm.cmd run verify:dev-011-ai-meeting-synthesis
@@ -135,6 +136,7 @@ npm.cmd run build
 - `src/store/useRecordStore.ts` 的 `AI整理` 回寫改用 `mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content)`，並以 merged content 重新同步 taskLinks。
 - `src/components/Records/RecordSidebar.tsx` 的 `AI整理` tooltip 已改為說明會保留目前手寫內容並統整成同一份草稿。
 - `scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs` 已從文件檢查升級為 deterministic verifier，覆蓋手寫純文字、自訂章節、task mention、project change + human draft、single-record heading count、idempotency、store integration 與 docs references。
+- `scripts/verify-dev-024-ai-synthesis-preserve-human-draft-browser.pw.js` 新增 local-test browser ROT verifier，覆蓋會議紀錄 composer 內手寫純文字、自訂章節、專案變化匯入 + 手寫補充、再次 `AI整理` 不重複與存草稿內容驗證。
 - 本輪不改 DB schema、不改 `KnowledgeRecord.content` persistence 格式、不新增遠端 history / version table。
 
 ## QC Evidence - 2026-07-06
@@ -143,6 +145,7 @@ Passed:
 
 ```powershell
 npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft
+npm.cmd run verify:dev-024-ai-synthesis-preserve-human-draft-browser
 npm.cmd run verify:dev-021-project-change-ai-preserve
 npm.cmd run verify:dev-022-project-change-single-record
 npm.cmd run verify:dev-011-ai-meeting-synthesis
@@ -151,7 +154,12 @@ npm.cmd exec tsc -- --noEmit
 npm.cmd run build
 ```
 
+Browser ROT evidence:
+
+- ROT-001 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-001.png`
+- ROT-002 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-002.png`
+- ROT-003/004 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-003-004.png`
+
 Not executed:
 
-- Browser ROT-001 至 ROT-004 未執行；本輪證據是 static / deterministic verifier 與 regression gate，不宣稱完整真實 AI 操作或 browser ROT 通過。
-- Production deploy / production UI smoke 未執行。
+- Production deploy / production UI smoke 未執行；local browser ROT 使用 test mode deterministic synthesis，不等同正式模型輸出或已登入 production UI smoke。
