@@ -11,7 +11,7 @@
 | 產品 RD | No Direct Codex Candidate | 不自行開工 Not Authorized、production、DB/RLS/migration、真機或人工登入式 QC。 |
 | DEV-011 / DEV-012 | In Verification / Human Login Required | 使用已登入 Google 的正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 | DEV-028 | Local Automated QA Passed / Manual Click QC Pending | 依 `QA-DEV-028` MAN-028-001 至 MAN-028-028 補人工親自點擊證據。 |
-| DEV-037 / DEV-040 | Local source / P0 guards completed; deploy gates pending | Supabase migration / Edge deploy / live feed 或 production injection 需另行授權並走 release / Supabase gate。 |
+| DEV-035 / DEV-037 / DEV-040 | Local source / P0 guards completed; DB / deploy gates pending | DEV-035 Supabase `delete_workspace` migration role matrix、DEV-037 Supabase migration / Edge deploy / live feed、DEV-040 Edge deploy 或 production injection 需另行授權並走 Supabase / release gate。 |
 | DEV-042 / DEV-044 | Local automated QA passed; production / physical / destructive phases pending | production deploy、真機手感、DB durable recovery、destructive recovery lifecycle 需人類重新授權。 |
 
 ### DEV-044: 上一步復原範圍擴充與低資料庫成本治理

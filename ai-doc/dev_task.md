@@ -2184,13 +2184,14 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-037 行事曆訂閱來源範圍 live gate | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | Supabase / release owner | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
-| 2 | DEV-038 設定中心 production gate | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | release owner | 已完成設定中心作用範圍與高風險防呆；後續只需 production release 授權時走 deployment gate。 |
-| 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
-| 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Implemented / Local Automated QA Passed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view undo 已完成；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
-| 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
-| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 7 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
+| 1 | DEV-035 工作區刪除持久化 Supabase DB role QC | Implemented / Local Automated QC Passed / Supabase DB QC Pending | Supabase / DB owner | migration `20260629113000_workspace_delete_rpc.sql` 套用到目標資料庫後，補 owner/admin/member/viewer/outsider `delete_workspace` role matrix、workspace list reload 與 tenant-scoped data visibility QC。 |
+| 2 | DEV-037 行事曆訂閱來源範圍 live gate | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | Supabase / release owner | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
+| 3 | DEV-038 設定中心 production gate | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | release owner | 已完成設定中心作用範圍與高風險防呆；後續只需 production release 授權時走 deployment gate。 |
+| 4 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
+| 5 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Implemented / Local Automated QA Passed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view undo 已完成；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
+| 6 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
+| 7 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 8 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
 
 ---
 
@@ -2269,7 +2270,7 @@ CAPA 來源：
 | 項目 | 影響 | 解除方式 |
 |---|---|---|
 | DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過，但完整前端流程尚未以 Google OAuth 登入帳號驗證 | 使用已登入 Google 的正式前端，建立或開啟看板後完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 目前無可直接執行的已授權產品 RD | Dev PM 不能自行開工 `Not Authorized`、production、DB/RLS/migration、真機或人工登入式 QC 項目 | 下一步需明確選擇並授權：production release / Supabase migration 或 Edge deploy / DEV-028 人工親自點擊 QC / DEV-011-012 已登入 production UI smoke / DEV-044 destructive recovery lifecycle。 |
+| 目前無可直接執行的已授權產品 RD | Dev PM 不能自行開工 `Not Authorized`、production、DB/RLS/migration、真機或人工登入式 QC 項目 | 下一步需明確選擇並授權：DEV-035 Supabase DB role QC / production release / Supabase migration 或 Edge deploy / DEV-028 人工親自點擊 QC / DEV-011-012 已登入 production UI smoke / DEV-044 destructive recovery lifecycle。 |
 
 ---
 
