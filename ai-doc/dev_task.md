@@ -2345,7 +2345,7 @@ CAPA 來源：
 - 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight 與 guarded fixture-readiness harness passed，mutating role-data QC still pending safe fixture。
 - 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 只能在 Level 3 smoke path 或 explicit risk acceptance 後進入 remote apply/deploy；否則下一步是文件化 gate blocker 或處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
-- DEV-011 / DEV-012 尚待互動式 production UI smoke，原因是正式前端使用 Google OAuth，CLI 無法非互動完成登入與發布流程。
+- DEV-011 / DEV-012 尚待 production UI smoke；2026-07-07 已新增 read-only readiness gate `verify:dev-011-012-production-ui-smoke-readiness`，確認可重用 authenticated session injection + cleanup pattern 與 local AI整理 browser ROT，但完整正式站流程仍需已登入 Google browser 或顯式允許 production 臨時 fixture 建立/清理。
 - 手機版會議紀錄工作流不列入目前 release gate。
 
 ## 下一步
@@ -2359,7 +2359,7 @@ CAPA 來源：
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight + Remote Readiness Static Gate Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
 | 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
-| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Production UI Smoke Readiness Gate Added / Human Login or Explicit Fixture Gate Required | 使用者 / QC | 先執行 `verify:dev-011-012-production-ui-smoke-readiness`；完整 smoke 需以已登入 Google 的正式前端，或顯式允許 production 臨時 fixture 建立/清理後，完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 
 ---
 
@@ -2376,8 +2376,8 @@ CAPA 來源：
 | DEV-008 | 交付點 | Done | 是 | 任務會議細節快速查找 | `SPEC-008`、`verify:dev-008-task-knowledge` | 無 |
 | DEV-009 | 交付點 | Done | 是 | 任務詳情內會議快速補記 | `SPEC-009`、`QA/QC-DEV-009`、`verify:dev-009-task-detail-quick-note` | 無 |
 | DEV-010 | 交付點 | Done | 是 | 會議紀錄操作按鈕狀態溝通 | `SPEC-010`、`QA-DEV-010`、`verify:dev-010-action-feedback` | 無 |
-| DEV-011 | 交付點 | In Verification | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
-| DEV-012 | 交付點 | In Verification | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
+| DEV-011 | 交付點 | In Verification / Production UI Smoke Readiness Gate Added | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、`verify:dev-011-012-production-ui-smoke-readiness`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
+| DEV-012 | 交付點 | In Verification / Production UI Smoke Readiness Gate Added | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`verify:dev-011-012-production-ui-smoke-readiness`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
 | DEV-025 | 交付點 | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Mutating QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`QC-DEV-025`、`verify:dev-025-project-workspace-transfer`、`verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness`、Supabase read-only preflight、TypeScript、build | 安全 fixture 上先跑 execution-readiness + read-only fixture readiness，再執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |
@@ -2441,7 +2441,7 @@ CAPA 來源：
 
 | 項目 | 影響 | 解除方式 |
 |---|---|---|
-| DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過，但完整前端流程尚未以 Google OAuth 登入帳號驗證 | 使用已登入 Google 的正式前端，建立或開啟看板後完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過；read-only readiness gate 已確認 session injection + cleanup pattern 與 local browser ROT 覆蓋，但完整前端流程尚未在正式站完成 | 使用已登入 Google 的正式前端，或顯式允許 production 臨時 fixture 建立/清理後，建立或開啟看板並完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 | DEV-025 尚缺 mutating Supabase DB QC | 受控跨工作區移動已本機實作並通過靜態 gate，正式 DB read-only preflight 已確認 RPC / grants / constraints；已新增 read-only fixture-readiness harness 與 execution-readiness static gate，但尚未實際搬移測試資料驗證 RLS / audit / RAG visibility | 建立 staging / disposable fixture 或 production-safe test workspace/board 後，先跑 `verify:dev-025-mutating-qc-readiness` 與 `verify:dev-025-mutating-qc-fixture-readiness`，再執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix 與資料一致性 QC。 |
 | 遠端 DB/Edge/production gate 仍需專項流程 | DEV-045 Phase 1 + Phase 2 local source 已完成，但 Phase 3 會套 Supabase migration / Edge feed；DEV-025/037/040 也有 DB/Edge gate | 進入 Supabase skill + deployment-release-gate；不得直接 apply remote migration/deploy。 |
 

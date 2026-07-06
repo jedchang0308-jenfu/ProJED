@@ -1,6 +1,6 @@
 # QA-DEV-011 AI 任務導向會議紀錄統整工作流驗證計畫
 
-狀態：In Verification / Production UI Smoke Pending
+狀態：In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Pending
 關聯 DEV：DEV-011  
 關聯規格：`ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md`  
 建立日期：2026-06-07
@@ -18,6 +18,7 @@ npm.cmd run verify:dev-008-task-knowledge
 npm.cmd run verify:dev-009-task-detail-quick-note
 npm.cmd run verify:dev-010-action-feedback
 npm.cmd run verify:dev-011-ai-meeting-synthesis
+npm.cmd run verify:dev-011-012-production-ui-smoke-readiness
 npm.cmd run build
 ```
 
@@ -112,3 +113,11 @@ npm.cmd run build
 - AI 模型回傳格式不穩定：Edge Function 必須解析 JSON，失敗時回傳錯誤而不是覆蓋草稿。
 - 使用者誤以為 AI 已發布：UI 必須明確顯示「請校稿後發布」。
 - 活動流水帳回流正文：verifier 必須檢查 `saveDraft` 不再呼叫 raw activity append path。
+
+## Production UI Smoke Readiness Gate
+
+```powershell
+npm.cmd run verify:dev-011-012-production-ui-smoke-readiness
+```
+
+此 gate 預設只讀、`mutates_database=false`。它不登入、不建立 production 資料、不呼叫 AI；只確認目前 repo 已有可重用的 authenticated session injection + cleanup pattern，以及 local browser ROT 已覆蓋 meeting composer、AI整理、校稿儲存、專案變化匯入與 record persistence。完整 production UI smoke 仍需其一：已登入 Google 的互動式 browser QC，或另行顯式允許建立/清理 production 臨時 user / tenant / board / record fixture。
