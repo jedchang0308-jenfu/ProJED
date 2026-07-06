@@ -28,7 +28,7 @@ AI 補充假設:
 - 嚴重 cache recovery 可比正常更新更積極，但必須有 reload loop guard。
 
 需要人類重新授權的決策:
-- 是否要在正式環境立即部署本功能與後續版本。
+- 目前 DEV-041 production release 已於 2026-07-05 授權並完成；後續版本或再次部署仍需重新授權並走 release gate。
 - 是否要做強制更新 / mandatory update policy。
 - 是否要新增遠端 release notes、版本 API、analytics、通知推播或管理員發布儀表板。
 - 是否允許清除使用者本地資料以外的 cache / storage 範圍。
@@ -216,9 +216,10 @@ UI / RWD 驗收:
 - 現有 task workbench / board interaction verifier 不因全域提示掛載而失敗。
 
 不准宣稱:
-- 不准宣稱 production deploy 完成。
+- Phase 1 local gate 完成前，不准宣稱 production deploy 完成。
+- 2026-07-05 production release 完成後，只能依 `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md` 宣稱該 release 的 production smoke 通過。
 - 不准宣稱所有使用者快取問題永久消失。
-- 不准宣稱正式站已驗證，除非另走 deployment-release-gate 並留下 evidence。
+- 不准宣稱後續版本正式站已驗證，除非另走 deployment-release-gate 並留下 evidence。
 
 ## RD Implementation Summary
 
@@ -267,14 +268,14 @@ Production deploy gate:
 
 | 範圍 | 狀態 | 原因 / 下次入口 |
 |---|---|---|
-| DEV-041 Phase 1 Visible PWA Update Prompt & Cache Recovery | RD Implementation Ready / Not Authorized | 本文件已足以交給 RD；需使用者明確說「執行 RD」才開工。 |
-| DEV-041 Phase 2 Production Release Gate | Blocked Human Re-entry | 需使用者明確授權部署；必須套用 deployment-release-gate。 |
+| DEV-041 Phase 1 Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed / Authorized / Complete | 2026-07-05 已完成 RD、local static/browser QC、DEV-034 regression、TypeScript 與 build gate。 |
+| DEV-041 Phase 2 Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed / Authorized / Complete | 2026-07-05 已完成 Firebase Hosting deploy、post-deploy HTTP/browser smoke 與 authenticated production UI smoke；證據在 `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。 |
 | Mandatory update / forced refresh policy | RD Contract Ready / Not Authorized | 牽涉使用者工作中斷風險，需另行決策。 |
 | Remote release notes / version API | Deferred / New DEV Candidate | 需要後端或 release metadata 來源，目前不是必要 MVP。 |
 | Update adoption analytics | Deferred / New DEV Candidate | 需要 analytics policy 與隱私邊界。 |
 | Push notification / email notification | Deferred / No Tracking Until Requested | 超出 PWA in-app update prompt 範圍。 |
 | DB schema / Supabase migration / RLS | Not In Scope | Phase 1 不需要資料庫變更。 |
-| Production deploy / Firebase Hosting release | Not Authorized | 需使用者另行授權並走 release gate。 |
+| Future production deploy / Firebase Hosting release | Blocked Human Re-entry | 目前 DEV-041 release 已完成；後續任一新版本部署仍需使用者另行授權並走 release gate。 |
 
 ## All-Phase Coverage Matrix
 
@@ -285,11 +286,11 @@ Production deploy gate:
 | 2 | Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed | Authorized / Complete | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
 | 3 | Optional Release Metadata / Mandatory Policy | RD Contract Ready | Not Authorized | separate human decision、SPEC addendum or new DEV |
 
-## RD Start Checklist
+## Historical RD Start Checklist
 
-RD 開工前需確認:
+此清單為 2026-07-05 RD 開工前 gate，已由 RD/QC 與 production release evidence 覆蓋；後續再開 DEV-041 類似修改時需重新套用:
 - 使用者明確授權 DEV-041 Phase 1 implementation。
-- 不把 production deploy 混進本地 implementation。
+- 不把 production deploy 混進本地 implementation；部署需另走 release gate。
 - 若 worktree 有其他未提交變更，需先標示哪些是本 DEV 會觸碰的檔案。
 - 先讀 DEV-034 PWA install guidance，避免更新提示破壞安裝提示。
 - 先建立可測試的 update state injection 或 mock path，讓 browser verifier 能穩定觸發 `update-available`。
