@@ -1,6 +1,6 @@
 # QA-DEV-040: 正式環境同型 BUG 風險驗證計畫
 
-狀態: QA Plan Complete / Local + P0 Addendum QC Executed / P0 Remote Read-only Preflight Executed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered
+狀態: QA Plan Complete / Local + P0 Addendum QC Executed / P0 Remote Read-only Preflight + Remote Readiness Static Gate Passed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered
 關聯 DEV: DEV-040
 建立日期: 2026-07-03
 參考規格: `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
@@ -407,8 +407,10 @@ Read-only evidence accepted:
 - `wbs_dependencies` table existence、columns、RLS、constraints、policies、indexes、row count。
 - `match_project_knowledge` DB RPC existence、execute grants、tenant/project filter source coverage。
 - Security / performance advisors classification。
+- Local-only remote readiness evidence：`verify:dev-040-p0-remote-readiness` must pass before Edge deploy gate, proving local Edge timeout guards, package script safety and stop-condition docs are intact without applying remote changes.
 
 Pass / fail interpretation:
 - Pass：production DB substrate exists and is compatible with DEV-040 P0 dependency persistence checks。
+- Pass：remote readiness static gate confirms local Edge/source governance is ready to enter a supervised deploy gate.
 - Fail / pending：deployed Edge Function does not contain the local timeout guard; this blocks claiming RAG timeout is live-protected until Edge deploy + production timeout smoke are executed.
 - Advisor warnings are not auto-fail for this read-only gate, but any DEV-040-related warning must be recorded as a future DB hardening candidate.

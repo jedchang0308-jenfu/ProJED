@@ -1,7 +1,7 @@
 # QC-DEV-040: 正式環境同型 BUG 風險驗證紀錄
 
 日期: 2026-07-03
-狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / P0 Local Addendum QC Passed / P0 Remote Read-only Preflight Executed / Extended 7-Point Matrix Partially Covered
+狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / P0 Local Addendum QC Passed / P0 Remote Read-only Preflight + Remote Readiness Static Gate Passed / Extended 7-Point Matrix Partially Covered
 關聯 DEV: DEV-040
 參考文件:
 - `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
@@ -93,7 +93,7 @@
 ## QC 判定
 
 - Local automated QC: Pass.
-- P0 local addendum QC: Pass; 2026-07-07 remote read-only preflight executed; Edge deploy、production timeout injection 與完整 DB count smoke 尚未執行。
+- P0 local addendum QC: Pass; 2026-07-07 remote read-only preflight and remote readiness static gate passed; Edge deploy、production timeout injection 與完整 DB count smoke 尚未執行。
 - Production release: Deployed.
 - Production QC for original 2 BUG flows: Pass.
 - Extended 7-point risk matrix: Partially covered; remaining items listed above require separate targeted validation.
@@ -108,9 +108,11 @@
 - RAG client invoke 增加 `RAG_RETRIEVAL_TIMEOUT_MS`，timeout 轉成 `RAG_TIMEOUT / 504`。
 - `match_project_knowledge` Edge Function source 增加 Gemini embedding、Gemini generation、database RPC、live snapshot timeout；embedding / RPC / snapshot timeout 會回傳 504，generation timeout 會走既有可見 fallback answer。
 - 新增 static gate：`npm.cmd run verify:dev-040-p0-bounded-failure`。
+- 新增 remote readiness static gate：`npm.cmd run verify:dev-040-p0-remote-readiness`；此 gate 不連線 Supabase、不部署 Edge、不寫正式資料，只確認本機 Edge timeout guards、package script 防呆、RPC verifier contract 與文件 stop condition 仍完整。
 
 本輪 gate：
 - `npm.cmd run verify:dev-040-p0-bounded-failure`：Passed，15/15。
+- `npm.cmd run verify:dev-040-p0-remote-readiness`：Passed，19/19。
 - `npm.cmd exec tsc -- --noEmit`：Passed。
 - `npx.cmd eslint src/store/useWbsStore.ts src/services/rag/ragRetrievalService.ts`：0 errors；3 warnings 為既有 unused warnings。
 - `npm.cmd run verify:p9-edge-function`：Passed。
@@ -149,5 +151,6 @@ Advisor facts:
 
 QC判定:
 - Production DB substrate for dependency persistence is present.
+- DEV-040 P0 remote readiness static gate passed for local Edge/source governance.
 - DEV-040 P0 RAG timeout is not live-complete because remote Edge Function still runs the pre-addendum source.
 - The next safe action is either a Level 3 production-like Edge smoke path followed by Edge deploy, or explicit risk acceptance for deploying without Level 3. After deploy, production timeout / 401 / 500 smoke remains required before closing RAG timeout.

@@ -100,6 +100,7 @@
     "verify:dev-039-task-workbench-cross-board-source": "node scripts/verify-dev-039-task-workbench-cross-board-source.mjs",
     "verify:dev-039-task-workbench-cross-board-source-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev039-cross-source -Filename scripts/verify-dev-039-task-workbench-cross-board-source-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-040-p0-bounded-failure": "node scripts/verify-dev-040-p0-bounded-failure.mjs",
+    "verify:dev-040-p0-remote-readiness": "node scripts/verify-dev-040-p0-remote-readiness.mjs",
     "verify:dev-040-production-auth-ui-smoke": "node scripts/verify-dev-040-production-auth-ui-smoke.mjs",
     "verify:dev-041-pwa-update-notification-cache-recovery": "node scripts/verify-dev-041-pwa-update-notification-cache-recovery.mjs",
     "verify:dev-041-pwa-update-notification-cache-recovery-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev041-pwa-update -Filename scripts/verify-dev-041-pwa-update-notification-cache-recovery-browser.pw.js -OutputDirectory output/playwright",
