@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-025
 關聯 SPEC: `ai-doc/specs/SPEC-025-controlled-project-workspace-transfer.md`
-狀態: Static QA Done / DB QC Pending
+狀態: Static QA Done / DB Read-only Preflight Passed / Mutating QC Pending
 建立日期: 2026-06-18
 
 ## 驗證目標
@@ -121,3 +121,9 @@ npm.cmd run verify:dev-025-project-workspace-transfer
 - 實際接受舊 invite token，確認已失效。
 - 實際檢查 audit log，確認 source/target 皆有紀錄且沒有敏感資料暴露給不相關工作區。
 - 實際檢查 RAG query，不可從來源工作區檢索到已搬移專案內容。
+
+## QC Update - 2026-07-07
+
+Production Supabase read-only preflight passed：正式 DB 已存在 `preview_project_workspace_transfer` / `move_project_to_workspace` RPC，匿名不可執行，`authenticated` / `service_role` 可執行，composite FK constraints 已存在，RPC source 包含權限、transfer lock、name confirmation、pending invite revoke、audit/activity 與 RAG sync job 片段。
+
+仍待執行的是 mutating role-data QC：需要 staging / disposable fixture 或明確 production-safe test workspace/board，才能真的呼叫 move RPC 驗證交易、RLS、audit、invite revoke、RAG visibility 與 cleanup。
