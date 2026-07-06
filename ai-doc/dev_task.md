@@ -759,7 +759,7 @@ Human Decision Brief:
 
 Phase Roadmap:
 - Phase 0: PM / QA Documentation，建立 SPEC-040、QA-DEV-040、dev_task 與 documentation map 索引；本輪完成。
-- Phase 1: P0 Bounded Failure + Persistence，處理備份匯入 dependencies 持久化、RAG / knowledge retrieval timeout / fallback；RD Contract Ready / Not Authorized。
+- Phase 1: P0 Bounded Failure + Persistence，處理備份匯入 dependencies 持久化、RAG / knowledge retrieval timeout / fallback；Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed。
 - Phase 2: P1 Context Race / Stale Response，處理新增看板 temp id race、member stale response、tag stale response；RD Contract Ready / Not Authorized。
 - Phase 3: P2 External Service Timeout + Local-only Semantics，處理 Google Calendar timeout 與 MindMap localStorage-only 語意；RD Contract Ready / Not Authorized，MindMap 雲端同步為 Blocked Human Re-entry。
 - Phase 4: Production Release / Smoke Gate，部署與正式環境 smoke；Done for original 2 BUG flows，必須保留 deployment-release-gate evidence。
@@ -769,7 +769,7 @@ All-Phase Coverage Matrix:
 | Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
 |---|---|---|---|---|---|---|---|
 | Phase 0 PM / QA Documentation | Authorized | Done | SPEC-040、QA-DEV-040、PM 索引 | 程式修改、deploy、migration、資料修復 | 使用者要求寫成開發文件 | 文件與索引完成 | 文件 diff |
-| Phase 1 P0 Bounded Failure + Persistence | Not Authorized | RD Contract Ready / Not Authorized | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、deploy、模型更換 | 使用者授權 RD | 無資料遺失、無無限 loading | verifier、DB count、UI/Network evidence |
+| Phase 1 P0 Bounded Failure + Persistence | Authorized / Local complete | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | dependencies import persistence、RAG timeout/fallback | schema/RLS/migration、模型更換、Edge deploy、production injection、完整 DB count smoke | 使用者授權 RD | 本機 verifier 無資料遺失、無無限 loading；live gate 另行授權 | local verifier、TypeScript、build、Edge source static；live DB count / Network evidence pending |
 | Phase 2 P1 Context Race / Stale Response | Not Authorized | RD Contract Ready / Not Authorized | addBoard temp id、member stale guard、tag stale guard | core data model、RLS、deploy | 使用者授權 RD | 快速切換後只顯示當前 context | rapid-switch evidence、localStorage / DB evidence |
 | Phase 3 P2 External / Local-only Semantics | Not Authorized | RD Contract Ready / Not Authorized; MindMap cloud sync Blocked Human Re-entry | Google Calendar timeout、MindMap local-only guardrail | ICS feed、notification、cloud sync without decision | 使用者授權；MindMap 語意需決策 | 外部 API 失敗可見結束；local-only 不破壞主資料 | timeout evidence、localStorage clear evidence |
 | Phase 4 Production Release / Smoke | Authorized | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | deploy、formal smoke、rollback readiness | 正式資料修復、完整備份匯入 DB count、member/tag delayed response、Google Calendar REST timeout、MindMap cloud semantics | RD/QC passed + 使用者正式環境驗證授權 | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項明列 | deployment-release-gate evidence、production authenticated UI smoke |

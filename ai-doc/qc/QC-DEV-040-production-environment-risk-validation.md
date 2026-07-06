@@ -1,7 +1,7 @@
 # QC-DEV-040: 正式環境同型 BUG 風險驗證紀錄
 
 日期: 2026-07-03
-狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / Extended 7-Point Matrix Partially Covered
+狀態: Production Release Deployed / Production Authenticated UI Smoke Passed for Original BUG Flows / P0 Local Addendum QC Passed / Extended 7-Point Matrix Partially Covered
 關聯 DEV: DEV-040
 參考文件:
 - `ai-doc/specs/SPEC-040-production-environment-risk-hardening.md`
@@ -93,6 +93,7 @@
 ## QC 判定
 
 - Local automated QC: Pass.
+- P0 local addendum QC: Pass; Edge deploy、production timeout injection 與完整 DB count smoke 尚未執行。
 - Production release: Deployed.
 - Production QC for original 2 BUG flows: Pass.
 - Extended 7-point risk matrix: Partially covered; remaining items listed above require separate targeted validation.
