@@ -3,7 +3,7 @@
 關聯 DEV: DEV-029
 關聯 SPEC: `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`
 關聯 QA: `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md`
-狀態: Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed
+狀態: Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Hotfix Covered
 建立日期: 2026-07-04
 
 ## 驗證結論

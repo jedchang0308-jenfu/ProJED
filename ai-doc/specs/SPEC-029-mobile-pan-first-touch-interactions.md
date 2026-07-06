@@ -401,7 +401,7 @@ Evidence:
 |---|---|---|---|
 | 手機非 board modes pan-first | Same Spec Phase | Phase 2 | 重新開放 mobile list / mindmap / gantt / calendar |
 | Mobile tap-to-details 恢復 | No Tracking | DEV-029 Phase 1 | 已依 2026-07-04 真機回饋恢復；後續若要再次取消或重定義，需重新授權 |
-| 手機任務長按拖曳排序與 compact action rail | Complete | Phase 1B | 2026-07-05 已授權並完成本機自動化驗證 |
+| 手機任務長按拖曳排序與 compact action rail | Same Spec Phase | Phase 1B | 2026-07-05 已授權並完成本機自動化驗證；production / physical-phone supplemental 仍需另行 gate |
 | 手機完整桌機型右鍵清單 | No Tracking | None | 已被 2026-07-05 決策拒絕，手機只保留 compact action rail |
 | 手機 drop 到刪除直接刪除 | No Tracking | None | 已被 2026-07-05 決策拒絕，刪除需二次確認 |
 | 手機加回改名 / 指派 / 複製 / 依賴 / 升降階 | Blocked Human Re-entry | Separate decision | 使用者明確要求重新擴充手機操作清單 |

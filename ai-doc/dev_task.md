@@ -606,7 +606,7 @@ Deferred Scope Audit:
 |---|---|---|---|
 | 手機非 board modes pan-first | Same Spec Phase | DEV-029 Phase 2 | 重新開放 mobile list / mindmap / gantt / calendar |
 | Mobile tap-to-details 恢復 | No Tracking | DEV-029 Phase 1 | 已依 2026-07-04 真機回饋恢復；後續若要再次取消或重定義，需重新授權 |
-| 手機任務長按拖曳排序與 compact action rail | Same Spec Phase | DEV-029 Phase 1B | 使用者已以 HCS `1B 2B 3A` 確認產品決策；需另行授權 RD 開發 |
+| 手機任務長按拖曳排序與 compact action rail | Same Spec Phase | DEV-029 Phase 1B | 2026-07-05 已以 HCS `1B 2B 3A` 授權並完成本機自動化驗證；production / physical-phone supplemental 仍需另行 gate |
 | 手機完整桌機型右鍵清單 | No Tracking | None | 已被 2026-07-05 決策拒絕，手機只保留 compact action rail |
 | 手機 drop 到刪除直接刪除 | No Tracking | None | 已被 2026-07-05 決策拒絕，刪除需二次確認 |
 | 手機加回改名 / 指派 / 複製 / 依賴 / 升降階 | Blocked Human Re-entry | Separate decision | 使用者明確要求重新擴充手機操作清單 |
@@ -618,7 +618,7 @@ All-Phase Coverage Matrix:
 | Phase / DEV | Authorization | Document status | Scope | Acceptance | Evidence |
 |---|---|---|---|---|---|
 | DEV-029 Phase 1 | Authorized by user 2026-07-04 | Phase 1 Implemented / Local Automated QA Passed / Production Not Deployed | Board mobile pan-first gesture arbitration | 任務卡/子任務/欄位/空白短滑可 pan；長按才任務功能；interactive controls 可用 | DEV-029 static/browser、DEV-028 regression、DEV-039 workbench mobile regression、TS、build:test、QC-DEV-029 |
-| DEV-029 Phase 1B | Not Authorized | RD Contract Ready / Not Authorized | Mobile compact action rail and long-press drag-action mode | 手機長按任務浮起並顯示四項 compact action rail；可拖曳排序；刪除只開確認；桌機不變 | DEV-029 static/browser、desktop context menu regression、TS、build:test、mobile screenshots |
+| DEV-029 Phase 1B | Authorized / Complete | Implemented / Local Automated QA Passed / Production Not Deployed | Mobile compact action rail and long-press drag-action mode | 手機長按任務浮起並顯示四項 compact action rail；可拖曳排序；刪除只開確認；桌機不變 | DEV-029 static/browser、desktop context menu regression、TS、build:test、mobile screenshots |
 | DEV-029 Phase 2 | Not Authorized | RD Contract Ready / Not Authorized | Future mobile non-board modes pan-first normalization | 各模式 pan-first 且不破壞模式專屬操作 | mode-specific browser verifiers、DEV-027/028 regression |
 | Production Release Gate | Not Authorized | Blocked Human Re-entry | 正式環境發布與 smoke | production smoke + rollback readiness | deployment-release-gate |
 
