@@ -112,7 +112,21 @@ npm.cmd run verify:core-regression-static
 
 ```powershell
 npm.cmd run verify:dev-025-project-workspace-transfer
+npm.cmd run verify:dev-025-mutating-qc-fixture-readiness -- --self-check
 ```
+
+Mutating DB QC fixture readiness gate：
+
+```powershell
+$env:DEV025_QC_SOURCE_TENANT_ID="<source-workspace-uuid>"
+$env:DEV025_QC_TARGET_TENANT_ID="<target-workspace-uuid>"
+$env:DEV025_QC_DENIED_TENANT_ID="<denied-workspace-uuid>"
+$env:DEV025_QC_PROJECT_ID="<safe-fixture-project-uuid>"
+$env:DEV025_QC_EXPECTED_PROJECT_NAME="<safe-fixture-project-name>"
+npm.cmd run verify:dev-025-mutating-qc-fixture-readiness
+```
+
+This gate is read-only and must pass before any mutating RPC QC. It requires the source workspace、target workspace、denied workspace and project to be explicitly marked as `DEV-025` / `QC-DEV-025` through name or metadata, and validates minimum task、dependency、tag、record、document、RAG、invite and member-shape counts. Optional `-- --actor-preview` may be used with `DEV025_QC_ACTOR_ACCESS_TOKEN` + `SUPABASE_ANON_KEY` to prove the intended actor can call the preview RPC without mutation.
 
 ## QC 事實驗證重點
 
@@ -125,5 +139,7 @@ npm.cmd run verify:dev-025-project-workspace-transfer
 ## QC Update - 2026-07-07
 
 Production Supabase read-only preflight passed：正式 DB 已存在 `preview_project_workspace_transfer` / `move_project_to_workspace` RPC，匿名不可執行，`authenticated` / `service_role` 可執行，composite FK constraints 已存在，RPC source 包含權限、transfer lock、name confirmation、pending invite revoke、audit/activity 與 RAG sync job 片段。
+
+2026-07-07 已新增 guarded fixture-readiness harness：`verify:dev-025-mutating-qc-fixture-readiness`。此 gate 預設只讀，不會呼叫 `move_project_to_workspace`，用來防止把未標記的真實 workspace/board 當成 mutating QC fixture。
 
 仍待執行的是 mutating role-data QC：需要 staging / disposable fixture 或明確 production-safe test workspace/board，才能真的呼叫 move RPC 驗證交易、RLS、audit、invite revoke、RAG visibility 與 cleanup。

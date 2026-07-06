@@ -13,6 +13,7 @@ const files = {
   dataBackend: 'src/services/dataBackend.ts',
   supabaseService: 'src/services/supabase/projedService.ts',
   localTestService: 'src/services/localTestService.ts',
+  mutatingQcFixtureReadiness: 'scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs',
   boardStore: 'src/store/useBoardStore.ts',
   permissions: 'src/hooks/useBoardPermissions.ts',
   contextMenu: 'src/components/GlobalContextMenu.tsx',
@@ -118,6 +119,15 @@ const checks = [
       contents.documentationMap.includes('SPEC-025-controlled-project-workspace-transfer.md') &&
       contents.documentationMap.includes('QA-DEV-025-controlled-project-workspace-transfer.md') &&
       contents.packageJson.includes('verify:dev-025-project-workspace-transfer'),
+  },
+  {
+    name: 'Mutating DB QC has a guarded fixture-readiness harness',
+    pass:
+      contents.mutatingQcFixtureReadiness.includes('DEV025_QC_SOURCE_TENANT_ID') &&
+      contents.mutatingQcFixtureReadiness.includes('DEV025_QC_MUTATION_CONFIRM') === false &&
+      contents.mutatingQcFixtureReadiness.includes('script has no move RPC execution path') &&
+      contents.mutatingQcFixtureReadiness.includes('mutates_database: false') &&
+      contents.packageJson.includes('verify:dev-025-mutating-qc-fixture-readiness'),
   },
 ];
 

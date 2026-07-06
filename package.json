@@ -52,6 +52,7 @@
     "verify:dev-024-ai-synthesis-preserve-human-draft": "node scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs",
     "verify:dev-024-ai-synthesis-preserve-human-draft-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev024-human-draft -Filename scripts/verify-dev-024-ai-synthesis-preserve-human-draft-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-025-project-workspace-transfer": "node scripts/verify-dev-025-project-workspace-transfer.mjs",
+    "verify:dev-025-mutating-qc-fixture-readiness": "node scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs",
     "verify:dev-026-trello-like-board-share-ui": "node scripts/verify-dev-026-trello-like-board-share-ui.mjs",
     "verify:dev-027-xmind-like-mind-map-mode": "node scripts/verify-dev-027-xmind-like-mind-map-mode.mjs",
     "verify:dev-027-xmind-like-mind-map-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=dev027-mindmap open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=dev027-mindmap run-code --filename=scripts/verify-dev-027-xmind-like-mind-map-browser.pw.js\"",
