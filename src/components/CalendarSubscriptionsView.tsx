@@ -29,6 +29,9 @@ import type {
 } from '../services/supabase/database.types';
 import { toast } from '../store/useToastStore';
 import { UNASSIGNED_ASSIGNEE_FILTER } from '../utils/taskFilters';
+import CalendarSubscriptionBuilderPreview, {
+  type CalendarSubscriptionBuilderPayload,
+} from './CalendarSubscriptionBuilderPreview';
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
@@ -191,6 +194,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [filters, setFilters] = useState<CalendarSubscriptionFilters>(() =>
     emptyFilters(activeWorkspace?.id, activeBoard?.id)
   );
+  const [builderPayload, setBuilderPayload] = useState<CalendarSubscriptionBuilderPayload | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -207,6 +211,10 @@ const CalendarSubscriptionsView: React.FC = () => {
     if (assigneeSelection.includeUnassigned) values.push(UNASSIGNED_ASSIGNEE_FILTER);
     return new Set(values);
   }, [assigneeSelection]);
+  const selectedAssigneeIdsForPreview = useMemo(
+    () => Array.from(selectedAssigneeSet),
+    [selectedAssigneeSet]
+  );
 
   const currentUserAdminWorkspaceCount = useMemo(() => {
     if (!user) return 0;
@@ -379,6 +387,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   const resetForm = () => {
     setName('我的工作行事曆');
     setFilters(emptyFilters(activeWorkspace?.id, activeBoard?.id));
+    setBuilderPayload(null);
     setEditingId(null);
   };
 
@@ -611,6 +620,22 @@ const CalendarSubscriptionsView: React.FC = () => {
               className="mt-1 h-10 w-full border border-slate-200 px-3 text-sm outline-none focus:border-primary"
               placeholder="例如：我的兩家公司任務"
             />
+
+            <CalendarSubscriptionBuilderPreview
+              boards={boardOptions}
+              dateTypes={filters.date_types}
+              selectedAssigneeIds={selectedAssigneeIdsForPreview}
+              onPayloadChange={setBuilderPayload}
+            />
+
+            <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+              新版篩選器目前使用本地預覽；實際 `.ics` feed 輸出將在 DEV-045 Phase 2 接上 Supabase / Edge v2 contract。
+              {builderPayload && (
+                <span className="block pt-1 text-slate-500">
+                  v2 snapshot：{builderPayload.workspace_ids.length} 個工作區 / {builderPayload.project_ids.length} 張看板。
+                </span>
+              )}
+            </div>
 
             <div className="mt-4" data-calendar-subscription-scope-form="true">
               <div className="mb-2 text-xs font-bold text-slate-500">訂閱範圍</div>

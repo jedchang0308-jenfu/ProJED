@@ -4,27 +4,28 @@
 
 ### Current Direct-Work Boundary
 
-本輪續接 `[$dev-pm] 完成所有開發任務` 時，`ai-doc/dev_task.md` 是唯一任務排序與授權入口。2026-07-06 目前可由 Codex 直接開工的產品 RD 候選為無；DEV-045 行事曆訂閱篩選器建構器與即時預覽已完成開發文件，狀態為 `RD Contract Ready / Not Authorized`。PM 剩餘任務比對結論：需要輕量任務板重構，不需要重編 DEV；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 已補回交付點總覽與剩餘 Gate。DEV-038 / DEV-042 / DEV-044 safe scope 已發布到 Firebase Hosting production，且 DEV-042 physical-phone supplemental 已由使用者回報通過。剩餘項目需要人類重新授權、Supabase DB / Edge deploy gate、已登入正式前端 UI smoke、DEV-028 人工親自點擊 QC，或其他未完成真機 supplemental。
+本輪續接 `[$dev-pm] 完成所有開發任務` 時，`ai-doc/dev_task.md` 是唯一任務排序與授權入口。2026-07-07 DEV-045 行事曆訂閱篩選器建構器與即時預覽已完成 Phase 1 local Builder slice 與 static QC；後續 Phase 2 會碰 Supabase validation / Edge Function v2 feed / preview-feed parity，需進入 Supabase 與 release gate。PM 剩餘任務比對結論：需要輕量任務板重構，不需要重編 DEV；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 已補回交付點總覽與剩餘 Gate。DEV-038 / DEV-042 / DEV-044 safe scope 已發布到 Firebase Hosting production，且 DEV-042 physical-phone supplemental 已由使用者回報通過。剩餘項目需要 Supabase DB / Edge deploy gate、已登入正式前端 UI smoke、DEV-028 人工親自點擊 QC，或其他未完成真機 supplemental。
 
 | 類別 | 目前狀態 | 下一步 |
 |---|---|---|
-| 產品 RD | No Direct Codex Candidate | 不自行開工 Not Authorized、production、DB/RLS/migration、真機或人工登入式 QC。 |
+| 產品 RD | DEV-045 Phase 1 Local RD Implemented | 下一個產品 RD 為 DEV-045 Phase 2 Supabase / Edge v2 feed；production、DB/RLS/migration、真機或人工登入式 QC 需對應 gate。 |
 | PM task board | Lightweight Refactor Applied | DEV-045 / DEV-037 以行事曆訂閱 workstream 管理；DEV-025 已補回剩餘 Gate；其他 DEV 保持獨立。 |
 | DEV-011 / DEV-012 | In Verification / Human Login Required | 使用已登入 Google 的正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 | DEV-025 | Implemented / DB QC Pending | 取得 Supabase DB gate 授權後套 migration，驗證 RPC、RLS、audit log、資料一致性與 RAG visibility。 |
 | DEV-028 | Local Automated QA Passed / Manual Click QC Pending | 依 `QA-DEV-028` MAN-028-001 至 MAN-028-028 補人工親自點擊證據。 |
 | DEV-035 | Supabase DB Role QC Passed / Production Not Deployed | `delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 已通過；production front-end release 需另行授權。 |
-| DEV-037 / DEV-045 / DEV-040 | Calendar workstream + P0 guards; DB / deploy gates pending | 預設先授權 DEV-045 Phase 1 Builder；DEV-037 DB / Edge / live `.ics` gate 併入 DEV-045 Phase 2 / 3，除非使用者明確要求先跑 v1 live gate。DEV-040 Edge deploy 或 production injection 仍另行授權並走 Supabase / release gate。 |
+| DEV-037 / DEV-045 / DEV-040 | Calendar workstream + P0 guards; DB / deploy gates pending | DEV-045 Phase 1 Builder 已完成；DEV-037 DB / Edge / live `.ics` gate 併入 DEV-045 Phase 2 / 3，除非使用者明確要求先跑 v1 live gate。DEV-040 Edge deploy 或 production injection 仍另行授權並走 Supabase / release gate。 |
 | DEV-038 / DEV-042 / DEV-044 | Production Release Deployed / Local + Production Smoke Passed | Firebase Hosting 正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`；HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed；DEV-042 真機驗證已由使用者回報通過。DEV-044 durable/destructive recovery 仍需另行 gate。 |
-| DEV-045 | RD Contract Ready / Not Authorized | 行事曆訂閱 v2 Builder 文件完成；需使用者明確授權 Phase 1 Builder UI + local preview，DB/Edge/production 分 phase 另行 gate。 |
+| DEV-045 | Phase 1 Local RD Implemented / Static QC Passed / DB-Edge-Production Not Executed | 行事曆訂閱 v2 Builder、本地 preview、board override / exclude 與 static verifier 已完成；Phase 2 需接 Supabase validation、Edge v2 feed 與 preview-feed parity。 |
 
 ### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md` | RD Contract Ready / Not Authorized | DEV-045 / DEV-037 / DEV-039 | 定義行事曆訂閱 v2：訂閱是一條可保存的跨看板查詢；預設所有目前可讀取 workspace/board snapshot，以 global filter + board overrides 篩選內容，調整時即時預覽任務，最後產出一條 `.ics` 訂閱連結。 |
-| `ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md` | QA Plan Ready / RD Not Authorized | DEV-045 | 驗證計畫涵蓋 Builder static contract、browser preview、preview/feed identity parity、v1 legacy compatibility、permission boundary、mobile drawer、partial/error state 與 Supabase/Edge/live smoke 分 phase gate。 |
-| `ai-doc/dev_task.md` | DEV-045 RD Contract Ready / Not Authorized | DEV-045 | 登錄授權邊界：目前只完成開發文件；產品碼、DB migration、RLS/RPC、Edge Function、production deploy、live `.ics` smoke 均未授權。 |
+| `ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md` | Phase 1 Local RD Implemented / Static QC Passed / DB-Edge-Production Not Executed | DEV-045 / DEV-037 / DEV-039 | 定義行事曆訂閱 v2：訂閱是一條可保存的跨看板查詢；Phase 1 已完成本地 Builder、global filter、board overrides 與 preview。 |
+| `ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md` | Phase 1 Static QC Passed / Browser and Feed QC Pending | DEV-045 | 驗證計畫涵蓋 Builder static contract、browser preview、preview/feed identity parity、v1 legacy compatibility、permission boundary、mobile drawer、partial/error state 與 Supabase/Edge/live smoke 分 phase gate。 |
+| `ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md` | Phase 1 Local RD Implemented / Static QC Passed / DB-Edge-Production Not Executed | DEV-045 | 記錄 Phase 1 本機 Builder source、static verifier、DEV-037/039 regression、TypeScript、settings gate、build 與未執行的 DB/Edge/production/browser 截圖邊界。 |
+| `ai-doc/dev_task.md` | DEV-045 Phase 1 Local RD Implemented / Static QC Passed / DB-Edge-Production Not Executed | DEV-045 | 登錄授權邊界：Phase 1 本地 Builder 已完成；DB migration、RLS/RPC、Edge Function v2 feed、production deploy、live `.ics` smoke 與正式資料修復未執行。 |
 
 PM 治理註記：DEV-045 intentionally supersedes DEV-037 v1 的建立表單心智模型，但不刪除 DEV-037 的 source-scope / permission / feed safety contract。DEV-037 仍是 v1 相容與 live DB/Edge gate 的基礎；DEV-045 在其上建立「像篩選器一樣設定、像報表一樣預覽、像外部連結一樣防呆」的 v2 Builder。預設所有工作區 / 看板採建立當下的可讀取 snapshot，未來新增 workspace/board 不自動進入既有外部連結，除非使用者另行修改訂閱。
 

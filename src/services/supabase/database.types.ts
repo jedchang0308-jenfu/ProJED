@@ -1,3 +1,5 @@
+import type { TaskFilterState } from '../../features/taskFilters';
+
 export type Json =
   | string
   | number
@@ -30,16 +32,24 @@ export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
 export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
 export type CalendarSubscriptionScopeType = 'board' | 'workspace' | 'custom';
+export type CalendarSubscriptionV2ScopeType = 'all_accessible_boards_snapshot';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
   | { type: 'user'; user_id: string }
   | { type: 'selected'; user_ids: string[]; include_unassigned?: boolean };
+export type CalendarSubscriptionBoardFilterOverride = Partial<TaskFilterState> & {
+  enabled?: boolean;
+};
 export type CalendarSubscriptionFilters = {
+  version?: 1 | 2;
   workspace_ids: string[];
   project_ids?: string[];
   scope_type?: CalendarSubscriptionScopeType;
   assignee: CalendarSubscriptionAssigneeFilter;
   date_types: CalendarSubscriptionDateType[];
+  v2_scope_type?: CalendarSubscriptionV2ScopeType;
+  global_filter?: TaskFilterState;
+  board_overrides?: Record<string, CalendarSubscriptionBoardFilterOverride>;
 };
 
 type Table<Row> = {

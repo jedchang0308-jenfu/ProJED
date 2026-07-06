@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
-狀態：QA Plan Ready / RD Not Authorized
+狀態：Phase 1 Static QC Passed / Browser and Feed QC Pending
 建立日期：2026-07-06
 
 ## 驗證目標
@@ -73,6 +73,23 @@ RD 實作後需建立 DEV-045 專用 static/browser/feed verifier，並保留下
 - build 或 build:test。
 - Supabase static verification if DB / Edge changes.
 
+## Phase 1 QC Update - 2026-07-07
+
+Phase 1 local Builder slice 已完成 static/build QC：
+
+- `verify:dev-045-calendar-subscription-builder-preview`：Pass，16 pass / 0 fail。
+- `verify:dev-037-calendar-subscription-source-scope`：Pass，20 pass / 0 fail。
+- `verify:dev-039-task-filter-core`：Pass，61 pass / 0 fail。
+- TypeScript noEmit：Pass。
+- settings project context：Pass。
+- production build：Pass。
+
+仍待執行：
+
+- DEV-045 browser verifier：desktop / mobile Builder、override、exclude、empty preview、visual overflow。
+- DEV-045 feed verifier：Supabase validation、Edge Function v2、preview/feed identity parity。
+- Production live `.ics` smoke。
+
 ## Manual UX Review
 
 - 5 秒內能理解：這是在建立一條「只讀行事曆訂閱連結」。
@@ -101,4 +118,3 @@ QC 回報至少包含：
 | Supabase DB / Edge live verification | Same Spec Phase | DEV-045 Phase 2 / 3 | DB/Edge/deploy 授權 |
 | Future dynamic all-accessible scope | Same Spec Phase | DEV-045 Phase 4 | 使用者明確要求未來新看板自動加入既有連結 |
 | Google Calendar write API | No Tracking | None | 不屬只讀 ICS 訂閱 |
-

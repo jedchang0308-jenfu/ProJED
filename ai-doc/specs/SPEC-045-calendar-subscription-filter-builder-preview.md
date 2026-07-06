@@ -3,7 +3,7 @@
 關聯 DEV：DEV-045
 父交付點：DEV-037 行事曆訂閱來源範圍清晰化 / DEV-039 任務過濾器核心與全域任務平台
 任務類型：Calendar subscription v2 / Cross-board filter builder / External link safety
-狀態：RD Contract Ready / Not Authorized
+狀態：Phase 1 Local RD Implemented / Static QC Passed / DB-Edge-Production Not Executed
 建立日期：2026-07-06
 
 ## Problem
@@ -217,7 +217,7 @@ Mobile:
 | Phase | 狀態 | 目的 | 主要輸出 |
 |---|---|---|---|
 | 0 | Complete | PM/RD contract | SPEC / QA / dev_task / documentation_map |
-| 1 | RD Contract Ready / Not Authorized | Builder UI + local preview contract | v2 Builder、global filter、board overrides、local-test preview、v1 compatibility UI |
+| 1 | Phase 1 Local RD Implemented / Static QC Passed | Builder UI + local preview contract | v2 Builder、global filter、board overrides、local-test preview、v1 compatibility UI |
 | 2 | RD Contract Ready / Not Authorized | Supabase preview + feed v2 | filters_json v2 validation、Edge Function v2 query、ICS feed parity |
 | 3 | RD Contract Ready / Not Authorized | Production release and live smoke | migration apply、Edge deploy、Firebase deploy、live `.ics` smoke |
 | 4 | RD Contract Ready / Not Authorized | Advanced subscription governance | duplicate/copy subscription, audit/export, optional future dynamic scope |
@@ -357,8 +357,7 @@ Regression gates:
 | Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
 |---|---|---|---|---|---|---|---|
 | Phase 0 | Authorized | Complete | 開發文件、QA plan、dev_task、documentation_map | Product code, DB, deploy | 使用者要求寫成開發文件 | DEV-045 文件完整且可續接 | file diff |
-| Phase 1 | Not Authorized | RD Contract Ready | Builder UI, global filter, board overrides, live local preview, v1 compatibility | Remote migration, Edge deploy, production | 使用者授權 RD | Builder preview 可操作且不破壞 v1 | DEV-045 static/browser, DEV-037/039/settings regression |
+| Phase 1 | Authorized | Phase 1 Local RD Implemented / Static QC Passed | Builder UI, global filter, board overrides, live local preview, v1 compatibility | Remote migration, Edge deploy, production | 使用者授權 RD | Builder preview 可操作且不破壞 v1 source-scope UI | DEV-045 static, DEV-037/039/settings regression, TypeScript, build |
 | Phase 2 | Not Authorized | RD Contract Ready | Supabase validation, Edge Function v2 feed, preview/feed parity | Production deploy, formal data repair | Phase 1 passed + DB/Edge authorization | `.ics` output equals preview allowed task set | ICS verifier, Supabase static, DB role matrix if needed |
 | Phase 3 | Not Authorized | RD Contract Ready | Production migration/function/frontend deploy and live smoke | Unscoped feature additions | Phase 2 passed + deployment authorization | Production link outputs only allowed previewed tasks | deployment-release-gate, live feed smoke |
 | Phase 4 | Not Authorized | RD Contract Ready | duplicate/copy/audit/future dynamic scope | Two-way calendar sync | User re-entry | Governance features have explicit summary and confirmation | future SPEC/QA |
-
