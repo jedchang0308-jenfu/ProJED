@@ -1,6 +1,6 @@
 # QA-DEV-012 AI 會議紀錄自然語言品質提升驗證計畫
 
-狀態：Ready for RD  
+狀態：In Verification / Production UI Smoke Pending
 關聯 DEV：DEV-012  
 關聯規格：`ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md`  
 建立日期：2026-06-07

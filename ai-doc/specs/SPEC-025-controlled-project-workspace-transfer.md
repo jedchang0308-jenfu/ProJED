@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-025
 任務類型: 功能開發 / 權限與資料一致性
-狀態: Ready
+狀態: Implemented / DB QC Pending
 優先級: P1
 建立日期: 2026-06-18
 

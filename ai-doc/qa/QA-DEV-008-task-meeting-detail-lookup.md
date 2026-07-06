@@ -1,6 +1,6 @@
 # QA-DEV-008 任務會議細節快速查找驗證計畫
 
-狀態：Ready for QC
+狀態：Done / Static QC Covered
 對應 DEV：DEV-008
 建立日期：2026-06-06
 

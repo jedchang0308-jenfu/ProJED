@@ -7,6 +7,8 @@
 QA：`ai-doc/qa/QA-DEV-027-xmind-like-mind-map-mode.md`
 UI reopen：`ai-doc/qc/QC-DEV-027A-xmind-connector-drag-ui.md`
 
+> 2026-07-06 verification maintenance：DEV-028 detail-only title edit 已覆寫舊外層 rename 行為；`verify-dev-027-xmind-like-mind-map-mode` 與 legacy browser smoke 已改為檢查 `TaskDetailsModal` title input，並確認沒有 `data-mindmap-title-input`。
+
 ## QC 結論
 
 DEV-027 驗證通過。心智圖模式已可在 ProJED 以 active board 作為中心主題，將既有 WBS 任務呈現為分支，並支援核心 Xmind-like 操作：新增根分支、`Tab` 新增子分支、滑鼠拖曳調整父子階層、cycle guard 防止拖到自己的子孫節點底下、mobile viewport 可用，以及 viewer 唯讀權限防呆。
@@ -33,7 +35,7 @@ npm.cmd run verify:core-regression-static
 - `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`：Pass
 - `npm.cmd run verify:dev-027-xmind-connector-lines-browser`：Pass
 - `npm.cmd run verify:dev-027-xmind-drag-preview-browser`：Pass
-- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`：Pass，31 checks
+- `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`：Pass，43 checks
 - `npm.cmd exec tsc -- --noEmit`：Pass
 - `npm.cmd run lint -- --quiet`：Pass
 - `npm.cmd run build:test`：Pass；僅既有 Vite dynamic import / chunk size warning

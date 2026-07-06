@@ -1,6 +1,6 @@
 # QA-DEV-007：會議中任務變更納入會議紀錄驗證計畫
 
-狀態：Ready for QC
+狀態：Done / Static QC Covered
 日期：2026-06-06
 關聯：DEV-007、SPEC-007
 

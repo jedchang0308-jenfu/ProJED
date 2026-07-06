@@ -1736,13 +1736,17 @@ Verified:
 是否計入產品交付完成: 是
 關聯需求: 使用者常用 Xmind 心智圖規劃工作計畫，且 Xmind 樹狀分支邏輯與 ProJED WBS 階層相同；希望在 ProJED 新增心智圖模式，讓規劃可直接變成任務。
 
+2026-07-06 maintenance note:
+- DEV-028 detail-only title edit 已覆寫舊心智圖外層 rename 行為；現行命名入口是 `TaskDetailsModal` title input，`data-mindmap-title-input` 不得回復。
+- Legacy DEV-027 static/browser verifier 已對齊後續契約：保留心智圖模式、中心主題、`Enter` / `Tab` / `Delete`、拖曳、cycle guard、viewer 唯讀與 mobile smoke；命名改驗 detail title input。
+
 任務目標:
 - 在現有模式切換列新增 `心智圖` 模式。
 - Active board title 作為中心主題，既有 WBS 任務作為分支節點。
 - 一個任務就是一個分支，第一版節點只顯示任務名稱。
 - 視覺布局與互動高度接近 Xmind 類心智圖，但避免一比一複製品牌細節。
-- 心智圖所有新增、改名、刪除、拖曳調整階層都直接更新既有 WBS 任務資料。
-- 第一版支援核心 MVP：模式切換、分支顯示、展開/收合、拖曳階層、雙擊/鍵盤改名、`Enter` 新增同層、`Tab` 新增子層、`Delete` 刪除。
+- 心智圖所有新增、命名、刪除、拖曳調整階層都直接更新既有 WBS 任務資料；DEV-028 後命名統一在任務詳情 title input。
+- 第一版支援核心 MVP：模式切換、分支顯示、展開/收合、拖曳階層、`Enter` 新增同層、`Tab` 新增子層、`Delete` 刪除。
 
 交付文件:
 - `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md`
@@ -1774,7 +1778,7 @@ Implementation evidence:
 - UI wiring: `ViewMode` 新增 `mindmap`，`MainLayout` topbar 新增 `心智圖`，`App.renderContent` 掛入 `MindMapView`。
 - Components: `src/components/MindMap/MindMapView.tsx`、`src/components/MindMap/MindMapNode.tsx`。
 - Data contract: 直接共用 `useWbsStore` 的 `nodes`、`parentNodesIndex`、`addNode`、`updateNode`、`removeNode`，不新增資料表或獨立草稿。
-- Interaction: owner browser smoke 已驗證新增 root、`Tab` 子任務、`F2` 改名、含子任務 `Delete` 確認、清單跨視圖同步與 cleanup。
+- Interaction: owner browser smoke 已驗證新增 root、`Tab` 子任務、詳情頁 title input 命名、含子任務 `Delete` 確認、清單跨視圖同步與 cleanup。
 - Verified: `npm.cmd run verify:dev-027-xmind-like-mind-map-mode`, `npm.cmd run verify:dev-027-xmind-like-mind-map-browser`, `npm.cmd run verify:dev-027-xmind-connector-lines-browser`, `npm.cmd run verify:dev-027-xmind-drag-preview-browser`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run lint -- --quiet`, `npm.cmd run build:test`, `npm.cmd run verify:core-regression-static`。
 
 ### DEV-026: Trello-like 看板分享體驗
@@ -1839,8 +1843,8 @@ Implementation evidence:
 
 | 階段 | Owner | 狀態 | 輸出 |
 |---|---|---|---|
-| PM/RD 規格 | PM/RD | Ready | SPEC-025 |
-| QA 驗證計畫 | QA | Ready | QA-DEV-025 |
+| PM/RD 規格 | PM/RD | Implemented / DB QC Pending | SPEC-025 |
+| QA 驗證計畫 | QA | Static QA Done / DB QC Pending | QA-DEV-025 |
 | RD 實作 | RD | Done | Supabase RPC migration + frontend controlled transfer flow + local-test fallback |
 | QA 靜態驗證 | QA | Done | `verify:dev-025-project-workspace-transfer`, TypeScript, production build |
 | QC 事實驗證 | QC | DB QC Pending | Apply migration to Supabase target, then verify RLS, audit log, data consistency, RAG visibility evidence |

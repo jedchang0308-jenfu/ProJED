@@ -1,6 +1,6 @@
 # SPEC-010 會議紀錄操作按鈕狀態溝通設計
 
-狀態：Ready  
+狀態：Implemented
 對應 DEV：DEV-010  
 建立日期：2026-06-07  
 承接：DEV-005 / DEV-006 / DEV-007 / DEV-009

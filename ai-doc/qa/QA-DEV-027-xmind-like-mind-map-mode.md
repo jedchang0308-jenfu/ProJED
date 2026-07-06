@@ -5,6 +5,7 @@
 建立日期：2026-06-18
 
 > 2026-06-18 UI Reopen：使用者截圖指出 branch connector line 斷裂；本輪另新增 Xmind-like 拖曳即時預覽動畫與同側拖放需求。新增專門驗證計畫 `ai-doc/qa/QA-DEV-027A-xmind-connector-line-visual-validation.md`；後續 RD 修復前，DEV-027 不得再只用原 browser smoke 判定 Xmind-like UI 通過。
+> 2026-07-06 DEV-028 alignment：心智圖標題命名入口已改為 `TaskDetailsModal` title input；本 QA 的外層雙擊 / `F2` / 直接輸入改名項目由 DEV-028 detail-only title edit addendum 取代，不再要求 `data-mindmap-title-input`。
 
 ## 驗證目標
 
@@ -17,7 +18,7 @@
 - WBS 任務以分支節點顯示，節點只顯示任務名稱。
 - `Enter` 新增同層任務。
 - `Tab` 新增子任務。
-- 雙擊、`F2` 或直接輸入改名。
+- 新增任務後透過 `TaskDetailsModal` title input 命名；外層雙擊、`F2` 或直接輸入 rename 已由 DEV-028 移除。
 - `Delete` / `Backspace` 刪除選取任務。
 - 展開/收合。
 - 拖曳調整同層排序與父子階層。

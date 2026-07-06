@@ -1,6 +1,6 @@
 # QA-DEV-011 AI 任務導向會議紀錄統整工作流驗證計畫
 
-狀態：Ready for QC  
+狀態：In Verification / Production UI Smoke Pending
 關聯 DEV：DEV-011  
 關聯規格：`ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md`  
 建立日期：2026-06-07

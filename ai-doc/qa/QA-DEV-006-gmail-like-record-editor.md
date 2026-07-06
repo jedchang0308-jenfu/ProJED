@@ -1,6 +1,6 @@
 # QA-DEV-006：Gmail-like 會議紀錄輸入器驗證計畫
 
-狀態：Ready for QC
+狀態：Done / Browser Input QC Passed
 日期：2026-06-06
 關聯：DEV-006、SPEC-006
 

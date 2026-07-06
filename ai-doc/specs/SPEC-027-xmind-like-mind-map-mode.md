@@ -6,6 +6,8 @@
 是否計入產品交付完成：是
 建立日期：2026-06-18
 
+> 2026-07-06 interaction addendum：DEV-028 已將任務標題編輯統一為 `TaskDetailsModal` title input；心智圖仍保留 `Enter` 新增同層、`Tab` 新增子任務、`Delete` 刪除、拖曳階層與資料同步，但外層雙擊 / `F2` / 直接打字 rename 不再作為現行驗收條件。舊 DEV-027 verifier 已對齊 detail-only title edit contract。
+
 ## 任務目標
 
 在 ProJED 新增 `心智圖` 模式，讓使用者可以用接近 Xmind 的心智圖操作方式規劃 WBS 任務。此模式不建立獨立資料模型，而是直接讀寫既有 `TaskNode` 樹狀資料：一個任務就是一個分支，畫面只顯示任務名稱。
@@ -183,7 +185,7 @@ flowchart LR
 ## DEV-027A UI Reopen Addendum：connector line and drag interactions
 
 觸發日期：2026-06-18
-狀態：Ready for RD fix
+狀態：Implemented / Browser QC Passed
 
 本 addendum 擴充 DEV-027 的 Xmind-like UI 要求，修復重點不只包含 branch connector line 斷裂，也包含本輪新增的拖曳互動行為。
 

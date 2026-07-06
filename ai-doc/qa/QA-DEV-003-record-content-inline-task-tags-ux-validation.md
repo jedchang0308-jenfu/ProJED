@@ -1,6 +1,6 @@
 # QA-DEV-003：紀錄內容 inline 任務 tag UX 驗證計畫
 
-狀態：Ready for QC  
+狀態：Done / Static QC Covered
 日期：2026-06-04  
 Owner：QA / PM  
 關聯 DEV：DEV-003  

@@ -1,6 +1,6 @@
 # SPEC-011 AI 任務導向會議紀錄統整工作流
 
-狀態：Ready for QC  
+狀態：In Verification / Production UI Smoke Pending
 關聯 DEV：DEV-011  
 建立日期：2026-06-07  
 承接：DEV-005 / DEV-007 / DEV-008 / DEV-009 / DEV-010

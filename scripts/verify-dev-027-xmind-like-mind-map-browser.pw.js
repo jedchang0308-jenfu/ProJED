@@ -59,6 +59,8 @@ async (page) => {
   };
 
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
+  const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
+  const detailTitleInput = () => page.locator('[data-task-details-title-input="true"]').first();
 
   const nodeCount = async () => page.locator('[data-mindmap-node]').count();
 
@@ -85,22 +87,47 @@ async (page) => {
     }, title);
   };
 
+  const assertNoRenameInput = async (label) => {
+    await page.waitForTimeout(120);
+    const count = await page.locator('[data-mindmap-title-input]').count();
+    assert(count === 0, label, { inputCount: count });
+  };
+
+  const closeTaskDetailsIfOpen = async () => {
+    const modal = page.locator('[data-task-details-modal="true"]');
+    if ((await modal.count()) === 0) return;
+    await modal.locator('button[title="關閉"]').click();
+    await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
+  const renameSelectedInTaskDetails = async (title, label) => {
+    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await detailTitleInput().waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(() => document.activeElement?.matches('[data-task-details-title-input="true"]'), null, { timeout: 3000 });
+    const focused = await detailTitleInput().evaluate(element => document.activeElement === element);
+    assert(focused, `${label} should focus the task details title input`, { title });
+    await assertNoRenameInput(`${label} should not open the outer mind map rename input`);
+    await detailTitleInput().fill(title);
+    await detailTitleInput().press('Enter');
+    await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
+    await closeTaskDetailsIfOpen();
+    await assertNoRenameInput(`${label} should keep title editing inside task details only`);
+  };
+
   const createRoot = async (title) => {
     await page.locator('[data-mindmap-create-root]').click();
-    const input = page.locator('[data-mindmap-title-input]').first();
-    await input.waitFor({ state: 'visible', timeout: 10000 });
-    await input.fill(title);
-    await input.press('Enter');
+    await selectedNode().waitFor({ state: 'visible', timeout: 10000 });
+    await renameSelectedInTaskDetails(title, 'newly created branch');
     await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
   };
 
   const createChildViaKeyboard = async (parentTitle, childTitle) => {
     await nodeByTitle(parentTitle).click();
+    await closeTaskDetailsIfOpen();
+    await selectedNode().focus();
     await page.keyboard.press('Tab');
-    const input = page.locator('[data-mindmap-title-input]').first();
-    await input.waitFor({ state: 'visible', timeout: 10000 });
-    await input.fill(childTitle);
-    await input.press('Enter');
+    await selectedNode().waitFor({ state: 'visible', timeout: 10000 });
+    await renameSelectedInTaskDetails(childTitle, 'Tab-created child');
     await nodeByTitle(childTitle).waitFor({ state: 'visible', timeout: 10000 });
   };
 
@@ -124,6 +151,8 @@ async (page) => {
   const deleteNode = async (title) => {
     if ((await nodeByTitle(title).count()) === 0) return;
     await nodeByTitle(title).click();
+    await closeTaskDetailsIfOpen();
+    await selectedNode().focus();
     await page.keyboard.press('Delete');
     if ((await page.locator('.global-dialog-content').count()) > 0) {
       const confirm = page.locator('.global-dialog-content button', { hasText: /刪除|確認|確定/ }).first();
@@ -209,11 +238,13 @@ async (page) => {
   const viewerCountBefore = await nodeCount();
   const createButton = page.locator('[data-mindmap-create-root]').first();
   assert(await createButton.isDisabled(), 'viewer create-root button should be disabled');
-  assert((await page.locator('[data-mindmap-view]', { hasText: '唯讀模式' }).count()) === 1, 'viewer should see read-only mode badge');
+  assert((await page.locator('[data-mindmap-view]', { hasText: '唯讀' }).count()) === 1, 'viewer should see read-only badge');
 
   const firstViewerNode = page.locator('[data-mindmap-node]').first();
   assert(await firstViewerNode.getAttribute('draggable') === 'false', 'viewer branches should not be draggable');
   await firstViewerNode.click();
+  await closeTaskDetailsIfOpen();
+  await selectedNode().focus();
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
   assert(await nodeCount() === viewerCountBefore, 'viewer pressing Enter should not create a sibling branch', {

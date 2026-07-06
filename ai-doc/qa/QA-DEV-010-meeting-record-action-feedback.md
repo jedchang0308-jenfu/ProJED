@@ -1,6 +1,6 @@
 # QA-DEV-010 會議紀錄操作按鈕狀態溝通 UX 驗證計畫
 
-狀態：Ready  
+狀態：Implemented / QC Covered
 對應 DEV：DEV-010  
 關聯規格：`ai-doc/specs/SPEC-010-meeting-record-action-feedback.md`  
 建立日期：2026-06-07

@@ -1,6 +1,6 @@
 # SPEC-013 Task Tree Duplicate Context Menu
 
-Status: Ready for QC
+Status: Implemented / QC Passed
 DEV: DEV-013
 Date: 2026-06-08
 
