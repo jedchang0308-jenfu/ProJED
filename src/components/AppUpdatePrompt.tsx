@@ -44,8 +44,8 @@ export const AppUpdatePrompt: React.FC = () => {
     }
     return {
       title: '有新版本可用',
-      description: '更新後會重新整理畫面，建議先完成正在輸入的內容。',
-      actionLabel: '更新',
+      description: '按下後會一次套用到目前最新版並重新整理畫面；不會清除任務資料或登入資料。',
+      actionLabel: '一鍵更新到最新版',
     };
   }, [isRecovery, isUpdated, state.previousVersion]);
 

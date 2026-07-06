@@ -6,27 +6,50 @@ async (page) => {
     }
   };
 
+  const account = {
+    id: 'local-test-user',
+    uid: 'local-test-user',
+    email: 'test@projed.local',
+    displayName: 'ProJED local QA',
+    createdAt: 1704067200000,
+  };
+
+  const seedSession = async () => {
+    await page.evaluate(({ account }) => {
+      localStorage.setItem('projed-local-test.selected-account', account.id);
+      localStorage.setItem('projed-local-test.session', JSON.stringify({
+        uid: account.uid,
+        email: account.email,
+        displayName: account.displayName,
+        createdAt: account.createdAt,
+      }));
+    }, { account });
+  };
+
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/?qcReset=1', { waitUntil: 'networkidle' });
-    const fixedTestLogin = page.locator('button', { hasText: '使用固定測試環境' }).first();
-    if (await fixedTestLogin.count()) {
-      await fixedTestLogin.click();
-    }
+    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await seedSession();
+    await page.goto('http://127.0.0.1:4173/?qcReset=1', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+    await seedSession();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('nav').waitFor({ state: 'visible', timeout: 10000 });
   };
 
   const ensureSidebarOpen = async () => {
-    const expand = page.locator('button[title="展開工作區選單"]').first();
-    if (await expand.count()) {
-      await expand.click();
+    const settingsButton = page.locator('[data-sidebar-settings-button="true"]').first();
+    if ((await settingsButton.count()) === 0 || !(await settingsButton.isVisible().catch(() => false))) {
+      await page.locator('[data-main-sidebar-toggle="true"]').first().click();
     }
-    await page.locator('button', { hasText: '設定' }).first().waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-sidebar-settings-button="true"]').first().waitFor({ state: 'visible', timeout: 10000 });
   };
 
   const openQuickStartSettings = async () => {
-    await page.locator('button', { hasText: '設定' }).last().click();
-    await page.locator('button', { hasText: '快速開啟' }).click();
+    await page.locator('[data-sidebar-settings-button="true"]').first().click();
+    await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-settings-section-tab="app"]').click();
     await page.locator('[data-pwa-install-settings]').waitFor({ state: 'visible', timeout: 10000 });
   };
 

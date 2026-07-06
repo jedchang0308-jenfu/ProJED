@@ -47,10 +47,10 @@ B01. mock `onNeedRefresh` 或注入 update state。
 - Expected: 畫面出現「有新版本」類提示。
 
 B02. 更新提示包含明確更新按鈕。
-- Expected: 按鈕文字可辨識，不是單純「確定」。
+- Expected: 按鈕文字可辨識，例如「一鍵更新到最新版」，不是單純「確定」。
 
 B03. 更新提示可 dismiss / later。
-- Expected: 本 session 不反覆彈出；service 仍保留已知更新 callback。
+- Expected: 本 session 不反覆彈出；service 仍保留已知更新狀態，且不因 dismiss 清掉 queued callback。
 
 B04. `onOfflineReady` 狀態不與 `update-available` 混淆。
 - Expected: offline-ready 可以低干擾呈現或被記錄，不蓋掉更新提示。
@@ -58,15 +58,15 @@ B04. `onOfflineReady` 狀態不與 `update-available` 混淆。
 ### C. Apply Update Flow
 
 C01. 點擊更新按鈕。
-- Expected: 進入 `applying` state，按鈕 disabled 或顯示處理中。
+- Expected: 進入 `checking` / `applying` state，按鈕 disabled 或顯示處理中；若存在已知更新，應走一鍵 reload 最新 app shell 流程。
 
 C02. 連點更新按鈕。
-- Expected: 不會重複呼叫多次 `updateSW(true)` 或造成多次 reload。
+- Expected: 不會重複呼叫多次 update / cache recovery 或造成多次 reload。
 
-C03. update callback 成功。
-- Expected: 觸發一次可驗收 reload / navigation。
+C03. latest app shell reload 成功。
+- Expected: 不使用 stale queued callback，觸發一次可驗收 reload / navigation；不得清除 local/session 業務資料。
 
-C04. update callback 失敗。
+C04. latest app shell reload / app cache recovery 失敗。
 - Expected: 進入 `failed` 或顯示可恢復訊息，不靜默失敗。
 
 ### D. Stale Chunk / Cache Recovery
@@ -152,7 +152,7 @@ QC 報告不得只寫「看起來可以」；至少需包含:
 - static verifier pass/fail 與檢查項數。
 - browser verifier pass/fail、viewport、截圖或 DOM evidence。
 - mock `update-available` 的觸發方式。
-- 更新按鈕點擊後的 state / callback / reload evidence。
+- 更新按鈕點擊後的 state / latest reload evidence；若有 queued callback，需證明不會套用 stale callback。
 - reload loop guard evidence。
 - cache recovery 不清除未授權 storage 的 evidence。
 - DEV-034 regression evidence。

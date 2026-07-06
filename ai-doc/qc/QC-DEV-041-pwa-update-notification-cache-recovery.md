@@ -1,6 +1,6 @@
 # QC-DEV-041: PWA 更新通知與快取恢復
 
-狀態: Production Release Deployed / Mobile Update Visibility Hotfix Passed
+狀態: Production Release Deployed / Mobile Update Visibility Hotfix Passed / One-Click Latest Local Hotfix Passed
 關聯 DEV: DEV-041
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 關聯 QA: `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md`
@@ -33,7 +33,7 @@ Excluded / not changed:
 | Gate | Result | Evidence |
 |---|---|---|
 | DEV-041 static verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery`, initial release 21/21；mobile update visibility hotfix addendum 22/22 |
-| DEV-041 browser verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`; direct Playwright evidence verified mobile prompt visible/tappable, dismiss preserves queued update, update callback invoked, recovery prompt exposes cache action；hotfix addendum also verified updated confirmation |
+| DEV-041 browser verifier | Pass | `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`; direct Playwright evidence verified mobile prompt visible/tappable, dismiss preserves queued update, update callback invoked, recovery prompt exposes cache action；hotfix addendum also verified updated confirmation；2026-07-07 one-click latest addendum verifies latest reload and stale callback bypass |
 | TypeScript | Pass | `npm.cmd exec tsc -- --noEmit` |
 | DEV-034 PWA install static | Pass | `npm.cmd run verify:dev-034-pwa-install-guidance`, 22/22 |
 | DEV-034 PWA install browser | Pass | `npm.cmd run verify:dev-034-pwa-install-guidance-browser` |
@@ -133,6 +133,7 @@ Not fully simulatable on production without an older controlled client:
 - Browser clients already holding very old service workers may still need one manual refresh; DEV-041 now gives them a visible update/recovery path once the app shell runs.
 - Firebase CLI update-check warning appeared earlier due local config-store access; deploy itself completed successfully.
 - Browserslist database warning is non-blocking and should be handled as routine dependency maintenance.
+- 2026-07-07 one-click latest hotfix 已完成 local QC，但未部署 production；正式站仍是上一個已發布 bundle，後續上線需重新走 deployment-release-gate。
 
 ## Addendum - 2026-07-05 Mobile Update Visibility Hotfix
 
@@ -181,3 +182,26 @@ Hotfix build / deploy evidence:
 User-facing note:
 - 這次 hotfix 已可讓已載到新版的手機看到「已更新到新版」。
 - 若手機仍完全停在 hotfix 前的舊 bundle，使用者仍需先重新載入一次；取得 `index-BXtRfIba.js` 後，後續版本更新會由 bundle hash check 與 service worker update prompt 雙路徑提示。
+
+## Addendum - 2026-07-07 One-Click Latest Local Hotfix
+
+Reason:
+- 既有更新按鈕依賴 queued service worker callback；若 callback 代表的 waiting worker 已 stale，使用者可能按了更新但沒有拿到目前最新 app shell。
+
+Implementation:
+- `AppUpdatePrompt` 更新按鈕文案改為「一鍵更新到最新版」，說明會套用目前最新版並重新整理，不清除任務資料或登入資料。
+- `applyPwaUpdate()` 會重新檢查 app shell；若已有更新，清掉可能 stale 的 `queuedUpdate`，改走 `clearPwaApplicationCacheAndReload()`。
+- `clearPwaApplicationCacheAndReload()` 僅 unregister service worker / 清 Cache Storage，並用 `projed_update_latest` cache-busting query reload 最新 app shell；不清 `localStorage` / `sessionStorage` / IndexedDB 業務資料。
+- DEV-034 browser verifier 改用現行 sidebar data selector 與設定中心文案，避免舊中文文案造成 regression gate 誤判。
+
+Local evidence:
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery`: Pass，23/23。
+- `npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser`: Pass。
+- `npm.cmd run verify:dev-034-pwa-install-guidance`: Pass，22/22。
+- `npm.cmd run verify:dev-034-pwa-install-guidance-browser`: Pass。
+- `npm.cmd exec tsc -- --noEmit`: Pass。
+- `npm.cmd run build`: Pass；產出 `assets/index-Gis551LA.js`、`assets/index-wbfiQlLo.css`、`dist/sw.js`。
+
+Production status:
+- Production deploy not executed for this addendum.
+- Future production release must use `deployment-release-gate`.

@@ -34,6 +34,7 @@ const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 const MAX_AUTO_RECOVERY_ATTEMPTS = 1;
 const APP_VERSION_KEY = 'projed.pwaUpdate.currentBundle';
 const RECOVERY_ATTEMPTS_KEY = 'projed.pwaUpdate.recoveryAttempts';
+const LATEST_RELOAD_PARAM = 'projed_update_latest';
 const STATE_EVENT_NAME = 'projed:pwa-update-state';
 
 const listeners = new Set<PwaUpdateListener>();
@@ -139,6 +140,39 @@ const fetchLatestAppShellVersion = async () => {
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return extractAppShellVersionFromHtml(await response.text());
+};
+
+const buildLatestReloadUrl = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set(LATEST_RELOAD_PARAM, String(Date.now()));
+  return `${url.pathname}${url.search}${url.hash}`;
+};
+
+const stripLatestReloadParam = () => {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(LATEST_RELOAD_PARAM)) return;
+
+  url.searchParams.delete(LATEST_RELOAD_PARAM);
+  window.history.replaceState(null, document.title, `${url.pathname}${url.search}${url.hash}`);
+};
+
+const reloadToLatestAppShell = () => {
+  if (typeof window === 'undefined') return;
+
+  if ((import.meta.env.DEV || import.meta.env.MODE === 'test') && window.__projedPwaUpdateTest) {
+    setUpdateState({
+      status: 'idle',
+      updateAvailable: false,
+      dismissedAt: null,
+      lastAppliedAt: Date.now(),
+      errorMessage: null,
+    });
+    window.dispatchEvent(new CustomEvent('projed:pwa-update-test-latest-reload', { detail: cloneState() }));
+    return;
+  }
+
+  window.location.assign(buildLatestReloadUrl());
 };
 
 const recordLoadedAppVersion = () => {
@@ -373,22 +407,27 @@ export const dismissPwaUpdatePrompt = () => {
 };
 
 export const applyPwaUpdate = async () => {
-  if (!queuedUpdate) {
-    setUpdateState({
-      status: 'checking',
-      lastCheckedAt: Date.now(),
-      errorMessage: null,
-    });
-    const foundAppShellUpdate = await checkForAppShellUpdate();
-    if (!foundAppShellUpdate) {
-      setUpdateState({ status: 'idle' });
-      return false;
-    }
+  const hadQueuedUpdate = Boolean(queuedUpdate || updateState.updateAvailable);
+
+  setUpdateState({
+    status: 'checking',
+    lastCheckedAt: Date.now(),
+    errorMessage: null,
+  });
+
+  const foundAppShellUpdate = await checkForAppShellUpdate();
+  const hasKnownUpdate = hadQueuedUpdate || foundAppShellUpdate || updateState.updateAvailable;
+
+  if (!hasKnownUpdate) {
+    setUpdateState({ status: 'idle' });
+    return false;
   }
-  return runQueuedUpdate();
+
+  return clearPwaApplicationCacheAndReload();
 };
 
 export const clearPwaApplicationCacheAndReload = async () => {
+  queuedUpdate = null;
   setUpdateState({ status: 'applying', errorMessage: null });
 
   try {
@@ -410,7 +449,7 @@ export const clearPwaApplicationCacheAndReload = async () => {
     return false;
   }
 
-  window.location.assign('/');
+  reloadToLatestAppShell();
   return true;
 };
 
@@ -441,6 +480,7 @@ export const setupPwaLifecycle = () => {
   setupDone = true;
 
   if (typeof window === 'undefined') return;
+  stripLatestReloadParam();
   if (import.meta.env.PROD) {
     recordLoadedAppVersion();
     bindAppShellUpdateChecks();

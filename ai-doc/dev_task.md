@@ -561,7 +561,7 @@ All-Phase Coverage Matrix:
 
 ### DEV-041: PWA 更新通知與快取恢復
 
-狀態: Production Release Deployed / Local + Production Smoke Passed
+狀態: Production Release Deployed / Local + Production Smoke Passed / One-Click Latest Local Hotfix Passed / Production Redeploy Not Executed
 節點類型: 交付點
 父交付點: Production release readiness / PWA lifecycle reliability
 是否計入產品交付完成: 是，限正式部署前的使用者更新可見性、快取恢復與版本切換可靠性
@@ -581,12 +581,13 @@ Human Decision Brief:
 
 目前授權邊界:
 - Authorized: DEV-041 Phase 1 RD implementation、QA/QC verifier、文件更新、Firebase Hosting production deploy 與 deployment-release-gate execution。
+- Authorized / Local hotfix only: 2026-07-07 一鍵更新到最新版，將使用者主動更新改為清 app Cache Storage / service worker registration 後 reload 最新 app shell；不部署 production。
 - Not Authorized: 強制更新政策、release notes 後端、版本 API、analytics、push/email notification、DB schema / migration / RLS / RPC。
 
 End-State Architecture:
 - `pwaUpdateService` 成為 PWA lifecycle 單一資料源，統一管理 update available、offline ready、apply update、cache recovery 與 failed state。
 - 全域 `AppUpdatePrompt` 或等效元件接收 update state，顯示「有新版本」與「更新」按鈕。
-- 使用者按更新後才執行 `updateSW(true)` 或 service 封裝的 `applyUpdate()`。
+- 使用者按更新後才執行 service 封裝的 `applyUpdate()`；2026-07-07 起，`applyUpdate()` 可捨棄可能 stale 的 queued worker callback，改以一鍵 reload 最新 app shell。
 - chunk-load failure 與 `GlobalErrorBoundary` 使用同一套 recovery guard，避免無限 reload。
 - production deploy 前必須能驗證新版本提示、更新按鈕、cache recovery 與 DEV-034 PWA install guidance regression。
 
@@ -599,7 +600,7 @@ RD Handoff:
 
 Acceptance:
 - `onNeedRefresh` 觸發時，畫面出現可見更新提示。
-- 更新提示包含明確「更新」按鈕，按下後只執行一次套用流程並可 reload 到新版本。
+- 更新提示包含明確「一鍵更新到最新版」按鈕，按下後只執行一次套用流程並可 reload 到新版本；不得清除任務資料或登入資料。
 - dismiss/later 不得讓本 session 反覆被打擾，也不得錯誤遺失已知 update callback。
 - stale chunk / cache failure 有可驗收 recovery path，且具備 reload loop guard。
 - cache recovery 不得清除未授權業務資料。
@@ -635,6 +636,7 @@ QC evidence（2026-07-05）:
 - `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed；temporary Supabase user/tenant cleaned up, project import resolved, task workbench unplaced task persisted after board switch。
 - QC report: `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。
 - 2026-07-05 手機更新提示 hotfix：使用者回報手機正式環境沒看到更新；補上 app shell bundle hash 記錄、no-store `index.html` 比對、`updated` state 與「已更新到新版」提示。Hotfix commit `f3e926f`，production bundle `assets/index-BXtRfIba.js`，post-deploy HTTP/browser smoke passed。
+- 2026-07-07 一鍵更新到最新版 local hotfix：更新按鈕改為清 app Cache Storage / service worker registration 後 reload 最新 app shell，避免 stale queued worker callback；`verify:dev-041-pwa-update-notification-cache-recovery` pass 23/23、DEV-041 browser pass、DEV-034 static pass 22/22、DEV-034 browser pass、TypeScript pass、`npm.cmd run build` pass。Production redeploy not executed。
 
 Deferred Scope Audit:
 - DEV-041 current production deploy / Firebase Hosting release: Same Spec Phase / Complete；2026-07-05 已完成 deployment-release-gate、post-deploy smoke 與 hotfix post-deploy smoke，證據在 `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。
@@ -650,7 +652,7 @@ All-Phase Coverage Matrix:
 | Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
 |---|---|---|---|---|
 | 0 | PM/RD Contract | Complete | Authorized | SPEC/QA/dev_task/documentation_map/backlog updated |
-| 1 | Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed | Authorized / Complete | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
+| 1 | Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed / One-Click Latest Local Hotfix Passed | Authorized / Complete | local static/browser verifier、TypeScript、build/build:test、DEV-034 regression |
 | 2 | Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed | Authorized / Complete | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
 | 3 | Optional Release Metadata / Mandatory Policy | RD Contract Ready | Not Authorized | separate human decision、SPEC addendum or new DEV |
 
@@ -2382,7 +2384,7 @@ CAPA 來源：
 | DEV-038 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / DB unchanged | 是 | 設定中心作用範圍一致性與高風險防呆 | `SPEC-038`、`QA-DEV-038`、`QC-DEV-038`、static/browser/regression/TypeScript/build gates、production artifact/browser/auth smoke | 觀察正式站；DEV-037 source-scope live gate 仍另行執行 |
 | DEV-039 | 交付點 | Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed | 是 | 任務過濾器核心與全域任務平台兩欄篩選重構 | `SPEC-039`、`QA-DEV-039`、`QC-DEV-039`、static/browser gates | production release、RPC/RLS/migration、visible partial/error summary 需另行授權 |
 | DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / P0 Remote Read-only Preflight Executed / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke`、`verify:dev-040-p0-bounded-failure`、Supabase read-only preflight | 原始 2 BUG 正式站 smoke 通過；P0 local addendum 已完成；production DB substrate 已 read-only 確認；remote Edge 尚未部署 timeout guard，Edge deploy / production injection / 完整 DB count smoke 仍需 gate |
-| DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041` | 強制更新、release notes 後端、版本 API、analytics 另行決策 |
+| DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / One-Click Latest Local Hotfix Passed / Production Redeploy Not Executed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041`、DEV-041/DEV-034 static/browser gates | 強制更新、release notes 後端、版本 API、analytics 另行決策；hotfix 上線需另走 deployment-release-gate |
 | DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、使用者回報真機通過、commit `aa1fff7` | DB/RLS/migration 與正式資料修復不屬於本 DEV |
 | DEV-044 | 交付點 | Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke、production artifact/browser/auth smoke | durable recovery、DB migration、board workspace transfer undo、destructive recovery 需另行授權 |
 | DEV-045 | 交付點 | Phase 3 Remote Gate Authorized / Preflight Blocked | 是 | 行事曆訂閱篩選器建構器與即時預覽 | `SPEC-045`、`QA-DEV-045`、`QC-DEV-045`、`verify:dev-045-calendar-subscription-builder-preview`、`verify:dev-045-calendar-subscription-builder-preview-browser`、`verify:dev-045-calendar-subscription-v2-feed`、Supabase read-only preflight、TypeScript、settings gate、build | Phase 3 需 Level 3 smoke path 或 explicit risk acceptance 後，才套 remote Supabase migration、Edge deploy、live `.ics` smoke |

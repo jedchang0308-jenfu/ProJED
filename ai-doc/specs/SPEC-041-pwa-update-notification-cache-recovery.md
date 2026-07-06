@@ -167,13 +167,13 @@ Phase 1 名稱: Visible PWA Update Prompt & Cache Recovery
   - `recoverable-cache-error`
   - `failed`
 - UI 不得直接散落呼叫 `registerSW()`；service 是單一入口。
-- `update-available` 必須保留 update callback，直到使用者套用、dismiss 或分頁關閉。
+- `update-available` 必須保留已知更新狀態；若有 service worker update callback，dismiss 不得清掉它。使用者主動套用時，可捨棄可能 stale 的 queued callback，改走最新 app shell reload path。
 - `dismiss` 不得把 service worker 已知更新清掉；只能隱藏本 session 或降低提示頻率。
 - `applyUpdate()` 必須具備 applying state、error state 與 reload guard。
 
 UI 契約:
 - 更新提示需在 desktop 與 mobile viewport 可見，不被既有 panel、modal、toast 或 safe area 裁切。
-- 文案須短而具體，例如「有新版本可用」與「更新」。
+- 文案須短而具體，例如「有新版本可用」與「一鍵更新到最新版」。
 - 按鈕名稱不可使用含糊詞，例如只寫「確定」。
 - 更新按鈕需有 disabled / applying state，避免連點造成多次 reload。
 - cache recovery 狀態需明確區分一般更新，不得讓使用者以為資料被刪除。
@@ -183,7 +183,7 @@ UI 契約:
 - stale chunk / dynamic import failure 不得無限 reload。
 - 若已在短時間內嘗試過 reload，第二次應顯示 recovery UI 或 ErrorBoundary，讓使用者手動執行清除快取。
 - `GlobalErrorBoundary` 可以提供「重新整理」與「清除快取後重新整理」，但清除快取必須有明確作用範圍。
-- SW unregister / caches.delete 只能作為 recovery action，不是正常更新的預設路徑。
+- SW unregister / caches.delete 不得自動執行；但 2026-07-07 起，使用者主動按下「一鍵更新到最新版」時，可清除 Cache Storage / service worker registration 後 reload 最新 app shell，以避免 stale queued worker callback。此流程不得清除 `localStorage` / `sessionStorage` / IndexedDB 業務資料。
 
 相容性契約:
 - 不得破壞 DEV-034 PWA install guidance。
@@ -226,11 +226,12 @@ UI / RWD 驗收:
 2026-07-05 Phase 1 已完成前端實作:
 - `src/services/pwaUpdateService.ts` 擴充為 PWA lifecycle 單一資料源，提供 update state、subscription、`projed:pwa-update-state` event、`applyPwaUpdate()`、`dismissPwaUpdatePrompt()`、`clearPwaApplicationCacheAndReload()` 與 `handleRecoverableAppLoadError()`。
 - `onNeedRefresh` 會保留 queued update callback 並發出 `update-available`，不再只有背景套用。
-- 新增 `src/components/AppUpdatePrompt.tsx`，全域顯示「有新版本可用」與「更新」按鈕，支援稍後、applying disabled state、recoverable load failure 與 cache recovery action。
+- 新增 `src/components/AppUpdatePrompt.tsx`，全域顯示「有新版本可用」與「一鍵更新到最新版」按鈕，支援稍後、applying disabled state、recoverable load failure 與 cache recovery action。
 - `src/main.tsx` 的 chunk-load / dynamic import failure 改走 PWA recovery handler，具備 session-level reload loop guard。
 - `src/components/GlobalErrorBoundary.tsx` 的清除入口改為只清除應用程式快取與 service worker registration，不再清除 `localStorage` / `sessionStorage` 業務資料。
 - 新增 DEV-041 static/browser verifiers，並把 script 掛進 `package.json`。
 - 2026-07-05 mobile update visibility hotfix：新增 app shell bundle hash 記錄與 no-store `index.html` 比對；若已載入新版，顯示 `updated` state 與「已更新到新版 / 目前已是最新版本」提示，避免使用者以為沒有更新。
+- 2026-07-07 one-click latest hotfix：更新按鈕不再執行可能 stale 的 queued service worker callback；會重新檢查 app shell、清除 app Cache Storage / service worker registration，並以 `projed_update_latest` cache-busting query reload 最新 app shell。本 hotfix 已完成 local static/browser QC，尚未執行 production deploy。
 
 Production release note:
 - 2026-07-05 已完成 local QC、production artifact smoke、Firebase Hosting deploy、post-deploy browser smoke 與 authenticated production UI smoke。
@@ -268,7 +269,7 @@ Production deploy gate:
 
 | 範圍 | 狀態 | 原因 / 下次入口 |
 |---|---|---|
-| DEV-041 Phase 1 Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed / Authorized / Complete | 2026-07-05 已完成 RD、local static/browser QC、DEV-034 regression、TypeScript 與 build gate。 |
+| DEV-041 Phase 1 Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed / Authorized / Complete | 2026-07-05 已完成 RD、local static/browser QC、DEV-034 regression、TypeScript 與 build gate；2026-07-07 one-click latest hotfix 已完成 local static/browser QC，production deploy 未執行。 |
 | DEV-041 Phase 2 Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed / Authorized / Complete | 2026-07-05 已完成 Firebase Hosting deploy、post-deploy HTTP/browser smoke 與 authenticated production UI smoke；證據在 `ai-doc/qc/QC-DEV-041-pwa-update-notification-cache-recovery.md`。 |
 | Mandatory update / forced refresh policy | RD Contract Ready / Not Authorized | 牽涉使用者工作中斷風險，需另行決策。 |
 | Remote release notes / version API | Deferred / New DEV Candidate | 需要後端或 release metadata 來源，目前不是必要 MVP。 |

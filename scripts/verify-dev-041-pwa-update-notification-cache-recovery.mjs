@@ -61,10 +61,22 @@ assert(
 assert(
   'apply update path is explicit and guarded',
   source.pwaUpdateService.includes('export const applyPwaUpdate') &&
-    source.pwaUpdateService.includes('runQueuedUpdate') &&
+    source.pwaUpdateService.includes('return clearPwaApplicationCacheAndReload();') &&
+    source.pwaUpdateService.includes("const LATEST_RELOAD_PARAM = 'projed_update_latest'") &&
+    source.pwaUpdateService.includes('reloadToLatestAppShell') &&
     source.pwaUpdateService.includes("status: 'applying'") &&
     source.appUpdatePrompt.includes('isLoading={isApplying || state.status === \'applying\'}') &&
-    source.appUpdatePrompt.includes('data-pwa-update-action'),
+    source.appUpdatePrompt.includes('data-pwa-update-action') &&
+    source.appUpdatePrompt.includes('一鍵更新到最新版'),
+);
+
+assert(
+  'update action bypasses stale queued worker and reloads latest app shell',
+  source.pwaUpdateService.includes('const hadQueuedUpdate = Boolean(queuedUpdate || updateState.updateAvailable)') &&
+    source.pwaUpdateService.includes('queuedUpdate = null;') &&
+    source.pwaUpdateService.includes('window.location.assign(buildLatestReloadUrl())') &&
+    source.pwaUpdateService.includes('projed:pwa-update-test-latest-reload') &&
+    !source.pwaUpdateService.includes('return runQueuedUpdate();'),
 );
 
 assert(

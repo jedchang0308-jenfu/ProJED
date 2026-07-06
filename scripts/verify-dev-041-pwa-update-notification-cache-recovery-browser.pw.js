@@ -20,7 +20,7 @@ async (page) => {
 
     const text = await prompt.innerText();
     assert(/有新版本可用/.test(text), 'update prompt should announce a new version', { text });
-    assert(/更新/.test(text), 'update prompt should expose update action text', { text });
+    assert(/一鍵更新到最新版/.test(text), 'update prompt should expose one-click latest-version action text', { text });
 
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
@@ -43,12 +43,20 @@ async (page) => {
     await page.evaluate(() => window.__projedPwaUpdateTest.simulateUpdateAvailable());
     await page.locator('[data-pwa-update-prompt]').waitFor({ state: 'visible', timeout: 10000 });
     const appliedPromise = page.evaluate(() => new Promise((resolve) => {
-      window.addEventListener('projed:pwa-update-test-applied', () => resolve(true), { once: true });
-      window.setTimeout(() => resolve(false), 5000);
+      const result = { queuedCallbackApplied: false, latestReloadApplied: false };
+      window.addEventListener('projed:pwa-update-test-applied', () => {
+        result.queuedCallbackApplied = true;
+      }, { once: true });
+      window.addEventListener('projed:pwa-update-test-latest-reload', () => {
+        result.latestReloadApplied = true;
+        resolve(result);
+      }, { once: true });
+      window.setTimeout(() => resolve(result), 5000);
     }));
     await page.locator('[data-pwa-update-action]').click();
     const applied = await appliedPromise;
-    assert(applied === true, 'update button should invoke queued update callback');
+    assert(applied.latestReloadApplied === true, 'update button should invoke one-click latest reload flow', applied);
+    assert(applied.queuedCallbackApplied === false, 'update button should not invoke stale queued update callback', applied);
     const state = await page.evaluate(() => window.__projedPwaUpdateTest.getState());
     assert(state.updateAvailable === false && state.status === 'idle', 'state should reset after successful simulated update', state);
   };
@@ -95,7 +103,7 @@ async (page) => {
     verified: [
       'mobile update prompt visible and tappable',
       'dismiss keeps queued update state',
-      'update button invokes queued callback',
+      'update button invokes one-click latest reload flow',
       'recovery prompt exposes cache action',
       'updated prompt confirms newest loaded version',
     ],
