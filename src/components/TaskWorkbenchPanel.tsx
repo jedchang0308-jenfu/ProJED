@@ -39,6 +39,7 @@ import { useTouchTapGuard } from '../hooks/useTouchTapGuard';
 import { useLongPress } from '../hooks/useLongPress';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
 import { isMobileTaskActionMode, MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
+import { compactClassNames } from './ui/compactTokens';
 
 const PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
 const OPEN_PANEL_EVENT = 'projed:open-task-workbench-panel';
@@ -894,7 +895,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
               ref={filterToggleRef}
               type="button"
               onClick={() => patchPanelPrefs({ filtersOpen: !panelPrefs.filtersOpen })}
-              className={`inline-flex h-8 min-w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-bold transition ${
+              className={`${compactClassNames.segmentedButtonBase} shrink-0 border ${
                 panelPrefs.filtersOpen
                   ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
                   : selectedBoardActiveFilterCount > 0
