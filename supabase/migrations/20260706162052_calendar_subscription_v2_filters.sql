@@ -345,5 +345,7 @@ exception
 end;
 $$;
 
+revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon;
+revoke execute on function public.calendar_subscription_filter_allowed(jsonb) from public, anon;
 grant execute on function public.calendar_subscription_task_filter_allowed(jsonb) to authenticated;
 grant execute on function public.calendar_subscription_filter_allowed(jsonb) to authenticated;

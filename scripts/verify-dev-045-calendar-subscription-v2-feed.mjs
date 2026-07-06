@@ -68,6 +68,9 @@ assert(
     source.migration.includes("jsonb_each(filters -> 'board_overrides')") &&
     source.migration.includes('board_override.key::uuid <> all(project_ids)') &&
     source.migration.includes('private.current_user_can_read_project') &&
+    source.migration.includes('revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon') &&
+    source.migration.includes('revoke execute on function public.calendar_subscription_filter_allowed(jsonb) from public, anon') &&
+    source.migration.includes('grant execute on function public.calendar_subscription_task_filter_allowed(jsonb) to authenticated') &&
     source.migration.includes('grant execute on function public.calendar_subscription_filter_allowed(jsonb) to authenticated'),
 );
 

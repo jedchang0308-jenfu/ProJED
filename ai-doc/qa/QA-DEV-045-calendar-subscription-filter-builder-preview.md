@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
-狀態：Phase 2 Static QC Passed / Remote Live QC Pending
+狀態：Phase 2 Static QC Passed / Phase 3 Authorized but Release-Gate Blocked
 建立日期：2026-07-06
 
 ## 驗證目標
@@ -108,6 +108,21 @@ Phase 2 local source slice 已完成 static/source QC：
 - Supabase Edge Function deploy。
 - Live `.ics` preview/feed identity smoke。
 - Desktop / mobile browser screenshot QC。
+
+## Phase 3 Preflight Update - 2026-07-07
+
+Phase 3 已被使用者授權，但目前只能完成 read-only preflight，不能宣告 remote release ready：
+
+- Supabase production project `knodlkxqpcqyrtgwpdst` healthy，Postgres 17。
+- `calendar-feed` production Edge Function current version 3 active，`verify_jwt=false`；rollback source/version 已可讀取。
+- Production DB 尚未套用 DEV-045 v2 validation：`calendar_subscription_task_filter_allowed(jsonb)` 不存在，`calendar_subscription_filter_allowed(jsonb)` 不含 `project_ids` / `v2_scope_type`。
+- `ProJED_TEST` Supabase project inactive；無可用 staging / Supabase branch 作為 Level 3 production-like pre-deploy smoke。
+- DEV-045 migration 已補強 function execute grants：revoke `PUBLIC` / `anon`，grant `authenticated`。
+
+Resume condition:
+
+- Preferred：提供可用 staging / Supabase branch / local Supabase DB，先做 Level 3 pre-deploy smoke，再 apply production migration / deploy Edge。
+- Risk-accepted path：使用者明確接受無 Level 3 的 production DB/Edge 變更風險後，才可直接用 Supabase MCP 對 production apply migration / deploy Edge，且必須立即做 live `.ics` smoke 與 rollback evidence。
 
 ## Manual UX Review
 
