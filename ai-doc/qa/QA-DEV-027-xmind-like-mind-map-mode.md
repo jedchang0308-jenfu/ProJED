@@ -57,7 +57,7 @@ local-test active board 至少包含：
 | UX-027-003 | WBS 任務只以任務名稱顯示 | static + browser text sweep | selector evidence | Pass |
 | UX-027-004 | `Enter` 新增同層任務並同步清單 | browser flow | list input value evidence | Pass |
 | UX-027-005 | `Tab` 新增子任務並同步清單 | browser flow | branch level evidence | Pass |
-| UX-027-006 | 雙擊 / F2 / 直接輸入可改名 | browser flow | renamed title evidence | Pass |
+| UX-027-006 | 命名 / 改名改由任務詳情 title input；雙擊 / F2 / 直接輸入不得進入節點外層改名 | DEV-028 aligned browser flow | detail title evidence + no outer rename input | Superseded / Aligned |
 | UX-027-007 | `Delete` 刪除選取任務且含子任務有防呆 | static + browser flow | confirm dialog evidence | Pass |
 | UX-027-008 | 展開/收合只影響視圖不改資料 | static + selector support | n/a | Static Pass |
 | UX-027-009 | 拖曳改排序或階層且不能造成 cycle | static guard | n/a | Static Pass |
@@ -197,7 +197,7 @@ local-test active board 至少包含：
 QA 判定採「資料契約 + 互動流程 + UI 可用性」三層驗證：
 
 1. 資料契約：心智圖不得建立獨立資料模型；新增、改名、刪除、拖曳都必須落在既有 WBS `TaskNode` 與 `useWbsStore`。
-2. 互動流程：驗證 Xmind-like 核心肌肉記憶，包含 `Enter` 同層、`Tab` 子層、`F2` / 雙擊改名、`Delete` 刪除、展開收合、拖曳改階層。
+2. 互動流程：驗證 Xmind-like 核心肌肉記憶，包含 `Enter` 同層、`Tab` 子層、方向鍵選取、詳情頁 title input 命名、`Delete` 刪除、展開收合、拖曳改階層；外層 `F2` / 雙擊 / 直接輸入改名已由 DEV-028 取代。
 3. UI 可用性：在 desktop、laptop、mobile viewport 中驗證節點可讀、可點、可捲動、狀態清楚、無可見錯誤或不可操作重疊。
 
 HCS 驗證思考：
@@ -258,10 +258,10 @@ UI 狀態必測：
 3. 點擊 topbar `心智圖`。
 4. 記錄 `data-mindmap-view`、`data-mindmap-center`、`data-mindmap-node` 數量。
 5. 點選第一個節點，確認 selected/focus 樣式清楚。
-6. 雙擊或按 `F2`，確認 input 進入 editing state 且文字不溢出。
+6. 點擊節點開啟任務詳情，確認 title input 可命名；雙擊、`F2` 或直接輸入不得在節點外層開啟 rename input。
 7. 執行 visible error sweep。
 
-Pass：中心主題可見、節點可讀可點、selected/editing 狀態清楚、無 visible runtime error。
+Pass：中心主題可見、節點可讀可點、selected 狀態清楚、命名入口在任務詳情 title input、無 visible runtime error。
 
 ### UI-027-002：Laptop / 窄桌面可用性
 
@@ -364,7 +364,7 @@ Browser smoke：
 - Desktop viewport：`1440x900`
 - Mobile viewport：`390x844`
 - 入口與中心主題：`data-mindmap-view` 數量 1，中心主題為 `ProJED 品質驗證測試看板`，任務節點 16。
-- Keyboard/edit/delete flow：`DEV027-smoke-*` 測試任務新增 root 後 nodeCount 16 -> 18；`Tab` 建立 child level 2；`F2` 改名成功；刪除 root 顯示 `包含 1 個子任務` 確認文案；確認後 nodeCount 回到 16 且無 smoke title 殘留。
+- Keyboard/edit/delete flow：`DEV027-smoke-*` 測試任務新增 root 後 nodeCount 16 -> 18；`Tab` 建立 child level 2；命名入口已由 DEV-028 對齊到詳情頁 title input；刪除 root 顯示 `包含 1 個子任務` 確認文案；確認後 nodeCount 回到 16 且無 smoke title 殘留。
 - Cross-view sync：`DEV027-sync-*` 任務在心智圖新增後，切到清單模式可於 `input[placeholder="任務名稱"]` value 找到；回心智圖刪除後 nodeCount 回到 16。
 - Mobile geometry：390x844 下內層 canvas `scrollWidth` 1620、`clientWidth` 134，節點維持約 38px 高度，可橫向瀏覽；未偵測 visible `Internal Server Error` / `Not Found` / `HTTP 4xx/5xx` / `TypeError` / `ReferenceError`。
 

@@ -78,8 +78,8 @@
 4. 節點支援選取狀態；選取節點後可使用鍵盤操作。
 5. `Enter`：在目前節點後新增同層任務，標題預設 `新任務`，新增後只選取新任務，不立即進入命名。
 6. `Tab`：在目前節點下新增子任務，標題預設 `新任務`，新增後只選取新任務，不立即進入命名。
-7. 方向鍵：在可見任務間移動選取；選取任務後直接打字才進入命名。
-8. 雙擊、`F2` 或直接開始輸入：進入節點標題編輯。
+7. 方向鍵：在可見任務間移動選取；選取任務後直接打字不得進入外層命名。
+8. 命名 / 改名：DEV-028 後統一開啟任務詳情，使用 `TaskDetailsModal` title input；雙擊、`F2` 或直接開始輸入不再作為節點外層標題編輯入口。
 9. `Delete` / `Backspace`：刪除選取任務；若該任務有子任務，需使用既有確認 dialog 或等價保護文案。
 9. 點擊節點旁的展開/收合控制，可收合或展開子分支。
 10. 拖曳節點可調整同層排序或移到另一個節點底下；必須防止把節點拖到自己的子孫底下。
@@ -153,7 +153,7 @@ flowchart LR
 - [x] 每個現有 WBS 任務都以分支節點顯示，且只顯示任務名稱。
 - [x] `Enter` 可新增同層任務，新增後清單模式可立即看到同一任務。
 - [x] `Tab` 可新增子任務，新增後清單模式可看到正確 parent-child 階層。
-- [x] 雙擊、`F2` 或直接輸入可改名，改名後清單、看板、甘特同步更新。
+- [x] 命名 / 改名已依 DEV-028 改由 `TaskDetailsModal` title input；外層雙擊、`F2` 或直接輸入不得進入節點標題編輯，改名後仍同步清單、看板、甘特。
 - [x] `Delete` 可刪除選取任務；含子任務時有明確防呆，不會靜默刪除整棵子樹。
 - [x] 節點展開/收合不改資料，只改本視圖狀態。
 - [x] 拖曳節點可改變同層順序或父子階層，且不可造成循環 parent chain。
@@ -167,7 +167,7 @@ flowchart LR
 - [x] 新增 `mindmap` view mode 與 topbar 模式選項。
 - [x] 建立 `MindMapView`，從 active board 與 WBS store 取得樹狀資料。
 - [x] 建立 layout helper，輸出節點座標、層級、展開狀態與 branch path。
-- [x] 建立 `MindMapNode`，支援選取、雙擊改名、F2/direct typing 改名、展開/收合。
+- [x] 建立 `MindMapNode`，支援選取、展開/收合；舊雙擊、F2/direct typing 外層改名已由 DEV-028 移除並以詳情頁 title input 取代。
 - [x] 實作 `Enter` / `Tab` / `Delete` keyboard operations，並避免輸入框 focus 中誤觸。
 - [x] 實作拖曳排序與改父層，沿用既有 cycle guard 思路。
 - [x] 補權限 disabled state 與 delete subtree confirm。
@@ -180,7 +180,7 @@ flowchart LR
 - Wiring：`src/types/index.ts`、`src/App.tsx`、`src/components/MainLayout.tsx`、`package.json`。
 - Static gates：`npm.cmd run verify:dev-027-xmind-like-mind-map-mode`、`npm.cmd exec tsc -- --noEmit`、`npm.cmd run lint -- --quiet`、`npm.cmd run build:test`、`npm.cmd run verify:core-regression-static`。
 - Browser smoke：`http://127.0.0.1:4173/`，desktop 1440x900 與 mobile 390x844。
-- Owner interaction evidence：新增 root、`Tab` 建子任務、`F2` 改名、含子任務 `Delete` 確認、清單跨視圖同步、測試資料 cleanup。
+- Owner interaction evidence：新增 root、`Tab` 建子任務、詳情頁 title input 命名、含子任務 `Delete` 確認、清單跨視圖同步、測試資料 cleanup。
 
 ## DEV-027A UI Reopen Addendum：connector line and drag interactions
 

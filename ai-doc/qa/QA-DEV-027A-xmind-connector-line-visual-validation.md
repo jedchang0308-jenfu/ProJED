@@ -143,7 +143,7 @@ RD 與 QC 的自動化或手動量測至少需覆蓋：
 | UI-027A-001 | 1440x900 | 開啟心智圖，置中到 active board | full-page screenshot、connector overlay screenshot |
 | UI-027A-002 | 1440x900 | 展開所有 branch | parent-child pair checklist、無 orphan line screenshot |
 | UI-027A-003 | 1440x900 | 收合 `QC task 1` 後再展開 | 收合時子分支線消失；展開後線條回到正確位置 |
-| UI-027A-004 | 1440x900 | 選取、hover、F2 編輯 `QC task 1.2` | selected/editing 狀態不破壞 connector |
+| UI-027A-004 | 1440x900 | 選取、hover、開啟任務詳情 title input 編輯 `QC task 1.2` | selected/detail editing 狀態不破壞 connector；外層 `F2` 不得開啟節點 rename |
 | UI-027A-005 | 1440x900 | 拖曳 `QC task 2.3` 到 `QC task 1` 底下 | 拖曳後 connector 重新接到新 parent |
 | UI-027A-006 | 1024x768 | hard reload 後開啟心智圖 | laptop viewport 無斷線、無重疊 |
 | UI-027A-007 | 390x844 | 收合 sidebar，水平捲動左右分支 | mobile viewport 分支線可追蹤，不被 toolbar/sidebar 遮住 |

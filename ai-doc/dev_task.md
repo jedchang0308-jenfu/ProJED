@@ -1606,7 +1606,7 @@ RD exit gate:
 - 新增任務後只選取，不立即進入編輯。
 - 可連續按 `Enter` / `Tab` 建立同階或子階任務；此流程不依賴 rename input。
 - 方向鍵可移動選取任務。
-- 選取任務後直接打字才進入 rename mode；rename input 內 `Enter` 只 commit 名稱。
+- DEV-028 detail-only title edit 已覆寫外層 rename：選取任務後直接打字不得進入 rename mode；需要命名或改名時，開啟任務詳情並使用 title input。
 - QC 已依最新 verifier 重新驗證並通過，狀態維持 Browser QC Passed。
 
 狀態: Implemented / Browser QC Passed
@@ -1617,7 +1617,7 @@ RD exit gate:
 關聯需求: 使用者補充心智圖模式仍缺少 Xmind-like 關鍵操作與視覺行為：按 `Enter` 要在選取任務下方新增同階任務；畫布要能縮放且解析度足夠；線條要像參考圖 1 一樣整齊，不能雜亂；任務拖動時的預覽動畫要像參考圖 2 一樣明確畫出預期插入位置。
 
 任務目標:
-- `Enter` keyboard insertion：選取任務後按 `Enter`，必須在該任務正下方建立同 parent、同 level、同 side、order 緊接其後的新任務；新任務建立後直接進入命名編輯。
+- `Enter` keyboard insertion：選取任務後按 `Enter`，必須在該任務正下方建立同 parent、同 level、同 side、order 緊接其後的新任務；新任務建立後只維持選取，不開外層命名編輯，命名需走任務詳情 title input。
 - Zoomable canvas：心智圖工作區提供縮放能力，至少支援 zoom in、zoom out、reset / fit；縮放後節點文字、connector、drag preview 與 hit target 保持清晰、對齊且可操作。
 - Tidy connector topology：同 parent 多子節點以 shared vertical trunk / rounded bracket 或等效整齊拓撲呈現，避免每個 child 各自拉雜亂曲線、交錯線、殘留短線或穿越節點。
 - Drag insertion preview：拖曳任務時顯示明確 insertion placeholder / gap / connector preview / ghost node，能在 mouseup 前判斷會插入哪個 parent、哪個 sibling 前後、哪一側。
@@ -1656,7 +1656,7 @@ Implementation notes for RD:
 
 Implementation evidence:
 - `Enter`：`createSibling` 使用 selected node 的 parent/order 插入，root sibling 會繼承 selected root side。
-- Xmind-like selection-first insert：新增任務後只選取，不立即進入編輯；可連續按 `Enter` / `Tab` 新增同階或子階任務；方向鍵可移動選取；選取任務後直接打字才進入 rename mode。
+- Xmind-like selection-first insert：新增任務後只選取，不立即進入編輯；可連續按 `Enter` / `Tab` 新增同階或子階任務；方向鍵可移動選取；DEV-028 後選取任務直接打字不再進入外層 rename，命名需走任務詳情 title input。
 - Zoom：心智圖 toolbar 新增 zoom in / zoom out / reset / fit controls，工作區提供 `data-mindmap-zoom-level`，connector 座標依 zoomLevel 校正。
 - Tidy connector：parent-child connector 改為 bracket-shaped `H/V/H` path，同 parent children 共用 trunk x；children group 暴露 parent/direction metadata。
 - Drag insertion preview：拖曳 hover node 時顯示 `data-mindmap-insertion-preview`、`data-mindmap-drop-preview`、`data-mindmap-drag-preview`，並提供 target parent、sibling before/after、drop position、direction metadata。

@@ -1,7 +1,7 @@
 # QC-DEV-027B: Xmind-like keyboard, zoom, tidy connector, and drag insertion preview polish
 
 日期: 2026-06-19
-狀態: Browser QC Passed
+狀態: Browser QC Passed / DEV-028 Detail-Only Title Edit Aligned
 對應 DEV: DEV-027B
 規格: `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md`
 QA: `ai-doc/qa/QA-DEV-027B-xmind-interaction-polish.md`
@@ -13,8 +13,8 @@ QA: `ai-doc/qa/QA-DEV-027B-xmind-interaction-polish.md`
 - 新增任務後只選取，不立即進入編輯。
 - 新增後可連續按 `Enter` / `Tab` 新增任務。
 - 方向鍵可移動選取任務。
-- 選取任務後直接打字才進入 rename mode。
-- rename input 內的 `Enter` 只 commit，不建立下一個任務。
+- 2026-07-06 DEV-028 已覆寫外層 rename：選取任務後直接打字、`F2` 或雙擊不得進入節點外層 rename；命名需走任務詳情 title input。
+- 回到心智圖後 `Enter` / `Tab` selection-first flow 不得被 detail title edit 破壞。
 - zoom、tidy connector、drag insertion preview、mobile viewport regression 維持通過。
 
 ## 驗證命令與結果
@@ -54,7 +54,7 @@ npm.cmd run verify:core-regression-static
 | 連續 `Enter` 新增同階任務 | Pass | parent / level / side / y-position metadata |
 | 連續 `Tab` 新增子階任務 | Pass | child / grandchild level + parent metadata |
 | 方向鍵移動選取 | Pass | selected title after arrow operations |
-| 直接打字改名 | Pass | rename input + final title evidence |
+| 直接打字 / F2 / 雙擊外層改名 | Superseded by DEV-028 | `QC-DEV-028-detail-only-title-edit-addendum` 覆蓋無外層 rename 與詳情頁 title input |
 | Zoom controls and endpoint alignment | Pass | zoom state + endpoint distance |
 | Tidy bracket connector | Pass | `H/V/H` path and shared trunk x |
 | Drag insertion preview fidelity | Pass | preview DOM metadata + post-drop state |
