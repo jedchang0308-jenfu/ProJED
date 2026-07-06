@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-035
 關聯 SPEC: `ai-doc/specs/SPEC-035-workspace-delete-persistence-fix.md`
-狀態: Local Automated QC Passed / Supabase DB QC Pending
+狀態: Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed
 建立日期: 2026-06-29
 
 ## 驗證目標
@@ -72,7 +72,7 @@ npm.cmd run verify:dev-035-workspace-delete-browser
 
 ## Supabase DB QC
 
-Migration 套用後執行。
+2026-07-06 已執行 production Supabase target rollback-only DB QC；測試資料未保留。
 
 | Case | 操作者 | 操作 | 預期 |
 |---|---|---|---|
@@ -83,6 +83,14 @@ Migration 套用後執行。
 | QA-035-D05 | Viewer | 呼叫 `delete_workspace(workspace_id)` | 失敗，workspace 保留 |
 | QA-035-D06 | Outsider | 呼叫 `delete_workspace(workspace_id)` | 失敗或不可見 |
 | QA-035-D07 | Owner | 刪除含 projects/tasks/tags/records/documents 的 workspace | tenant-scoped rows 依 FK cascade 移除，普通 authenticated user 不可讀 |
+
+結果摘要：
+
+- QA-035-D01 / D02：Pass。Owner 呼叫 `delete_workspace(workspace_id)` 成功，`tenants` 不再有該 id，owner workspace list 回傳 0。
+- QA-035-D03 / D04 / D05 / D06：Pass。Admin、member、viewer、outsider 呼叫 RPC 均被拒絕，workspace 保留。
+- QA-035-D07：Pass。Rollback-only transaction seeded project、tenant_members、project_members、wbs_items、task_tags、knowledge_records；owner delete 後 tenant-scoped row count 為 0。
+- Grant check：Pass。`authenticated` / `service_role` 可 EXECUTE，`anon` / public 不可 EXECUTE。
+- Migration history note：target DB function 已存在且含 null guard；遠端 migration history 未列本地 `20260629113000_workspace_delete_rpc.sql`，本輪未覆寫 function。
 
 ## Failure-Mode Tests
 
@@ -116,6 +124,7 @@ QC 回報至少包含：
 - Browser verifier 結果。
 - TypeScript/build 結果。
 - Supabase DB QC 若未執行，需明確標示為環境阻塞，不得宣稱正式資料庫驗證完成。
+- 2026-07-06 Supabase DB role QC 已執行並記錄於 `ai-doc/qc/QC-DEV-035-workspace-delete-persistence-fix.md`。
 - 若有截圖，放在 `output/playwright/` 並在 QC 報告引用。
 
 本輪 QC 證據已建立：`ai-doc/qc/QC-DEV-035-workspace-delete-persistence-fix.md`。

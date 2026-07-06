@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-035
 任務類型: Bug fix / Supabase permission / UI state consistency
-狀態: Implemented / Local Automated QC Passed / Supabase DB QC Pending
+狀態: Implemented / Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed
 優先級: P0
 建立日期: 2026-06-29
 
@@ -146,11 +146,13 @@ npm.cmd run build
 
 本輪 local automated QC 已通過；QC 證據記錄於 `ai-doc/qc/QC-DEV-035-workspace-delete-persistence-fix.md`。
 
-Supabase QC 需在 migration 套用到目標資料庫後執行：
+Supabase DB role QC 已於 2026-07-06 在目標 production Supabase DB 以 rollback-only transaction 執行：
 
 - owner 呼叫 RPC 成功，重新 list 不再回傳 workspace。
-- admin/member/viewer 呼叫 RPC 失敗。
-- 刪除後相關 tenant-scoped data 不再可被一般 authenticated user 讀取。
+- admin/member/viewer/outsider 呼叫 RPC 失敗，workspace 保留。
+- 刪除後 projects、tenant_members、project_members、wbs_items、task_tags、knowledge_records 依 FK cascade 移除。
+- function grants confirmed：`authenticated` / `service_role` 可 EXECUTE，`anon` / public 不可 EXECUTE。
+- 目標 DB function 已存在且含 null guard；遠端 migration history 未列本地 `20260629113000_workspace_delete_rpc.sql`，本輪未覆寫 function。
 
 ## ADR 判斷
 
