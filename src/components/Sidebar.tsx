@@ -270,17 +270,6 @@ const Sidebar = () => {
         </div>
       ) : (
         <div className={`flex h-full ${isMobileOverlay ? 'w-full' : 'w-64'} flex-col`}>
-          <div className="flex h-12 items-center justify-end border-b border-slate-200 bg-slate-50 px-3">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(false)}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/40"
-              title="收合工作區選單"
-            >
-              <ChevronLeft size={14} />
-            </button>
-          </div>
-
           <div className="flex-1 space-y-4 overflow-y-auto p-2">
             {workspaces.map((ws) => (
               <div key={ws.id} className="space-y-1">
