@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs';
 const read = file => readFileSync(file, 'utf8');
 const includes = (file, text) => read(file).includes(text);
 const matches = (file, pattern) => pattern.test(read(file));
+const hasInlineSubmitCancelShortcut = file =>
+  /onKeyDown=|handle[A-Za-z]*KeyDown/.test(read(file)) &&
+  /key\s*===\s*['"](?:Enter|Escape)['"]/.test(read(file));
+const hasImeCompositionGuard = file =>
+  includes(file, 'nativeEvent.isComposing') || includes(file, 'event.isComposing') || includes(file, 'e.isComposing');
 
 const checks = [
   {
@@ -32,14 +37,17 @@ const checks = [
   {
     name: 'inline editing handlers ignore IME composition before submit/cancel shortcuts',
     ok: [
-      'src/components/Wbs/KanbanCard.tsx',
-      'src/components/Wbs/KanbanChecklist.tsx',
-      'src/components/Wbs/KanbanColumn.tsx',
-      'src/components/Wbs/WbsNodeItem.tsx',
+      'src/components/TaskDetailsModal.tsx',
       'src/components/Tags/TagPicker.tsx',
       'src/components/Rag/RagSidebar.tsx',
-    ].every(file => includes(file, 'nativeEvent.isComposing')) &&
-      includes('src/components/GlobalDialog.tsx', 'e.isComposing'),
+      'src/components/GlobalDialog.tsx',
+    ].every(file => hasImeCompositionGuard(file)) &&
+      [
+        'src/components/Wbs/KanbanCard.tsx',
+        'src/components/Wbs/KanbanChecklist.tsx',
+        'src/components/Wbs/KanbanColumn.tsx',
+        'src/components/Wbs/WbsNodeItem.tsx',
+      ].every(file => !hasInlineSubmitCancelShortcut(file) || hasImeCompositionGuard(file)),
   },
   {
     name: 'context menu clamps to viewport and listens to visual viewport resize',
