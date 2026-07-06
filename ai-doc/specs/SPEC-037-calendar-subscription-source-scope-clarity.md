@@ -3,9 +3,10 @@
 關聯 DEV：DEV-037
 父交付點：DEV-036 Trello-like Workspace Governance
 任務類型：Settings UX / Calendar subscription / Authorization contract
-狀態：Ready for RD
+狀態：Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed
 優先級：P1 settings IA and data-scope clarity
 建立日期：2026-06-29
+最近更新：2026-07-06
 
 ## 背景
 

@@ -1116,7 +1116,12 @@ RD exit gate:
 - `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`
 - `npm.cmd run verify:dev-026-trello-like-board-share-ui`
 - `npm.cmd exec tsc -- --noEmit`
-- `npm.cmd run build`
+- `npm.cmd run build:test`
+
+QC 結果:
+- 2026-07-06：本機 RD/QC 完成；`CalendarSubscriptionFilters`、service normalizer、CalendarSubscriptionsView、Edge Function source、DB validation migration、static/browser/ICS gates 已更新。
+- Passed：`verify:dev-037-calendar-subscription-source-scope`、`verify:dev-037-calendar-subscription-source-scope-browser`、`verify:calendar-feed-ics`、`verify:settings-project-context`、`verify:settings-project-context-browser`、`verify:dev-036-trello-like-workspace-governance`、`verify:dev-026-trello-like-board-share-ui`、`verify:dev-038-settings-scope-consistency`、`tsc --noEmit`、`build:test`。
+- 限制：browser gate 使用 local-test backend；Supabase migration 尚未 apply、Edge Function 尚未 deploy、真實 `.ics` feed / membership-removal smoke 未執行。
 
 QC evidence - 2026-07-06:
 - `npm.cmd run verify:dev-038-settings-scope-consistency`: Pass, 19/19 checks.
@@ -1143,7 +1148,7 @@ Stop conditions:
 
 ### DEV-037: 行事曆訂閱來源範圍清晰化
 
-狀態: RD Contract Ready / SPEC + QA Ready
+狀態: Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed
 節點類型: 交付點
 優先級: P1 settings IA and data-scope clarity
 父交付點: DEV-036 Trello-like Workspace Governance
@@ -1171,6 +1176,7 @@ HCS 引導補齊:
 交付文件:
 - `ai-doc/specs/SPEC-037-calendar-subscription-source-scope-clarity.md`
 - `ai-doc/qa/QA-DEV-037-calendar-subscription-source-scope-clarity.md`
+- `ai-doc/qc/QC-DEV-037-calendar-subscription-source-scope-clarity.md`
 
 RD 執行範圍:
 - 更新 `CalendarSubscriptionFilters` type、service normalizer 與 create/update payload。
@@ -2150,7 +2156,7 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-037 行事曆訂閱來源範圍 RD | RD Contract Ready / Authorized / Not Started | RD / QA / QC | 處理行事曆訂閱 source-scope contract；若涉及 DB validation、Edge Function 或 migration，需先進入 Supabase / release gate。 |
+| 1 | DEV-037 行事曆訂閱來源範圍 RD | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | RD / QA / QC | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
 | 2 | DEV-038 設定中心 scope summary | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | RD / QA / QC | 已完成設定中心作用範圍與高風險防呆；後續只需 production release 授權時走 deployment gate。 |
 | 3 | DEV-040 Phase 1 P0 正式環境同型風險 RD | RD Contract Ready / Authorized | RD / QA / QC | 處理 dependencies 匯入持久化與 RAG timeout/fallback，通過 QA-DEV-040 P0 gate。 |
 | 4 | DEV-044 Phase 2/3 Undo Recovery | RD Contract Ready / Authorized for Phase 2/3 where safe / Human Re-entry for destructive recovery | RD / QA / QC | 擴充 batch/cross-view undo 或 durable recovery；DB/cross-device/destructive recovery 需另行 gate。 |
@@ -2185,7 +2191,7 @@ CAPA 來源：
 | DEV-034 | 交付點 | Done / Browser QC Passed / Local-first scope | 是 | App 快速啟動與加入主畫面 UX | `SPEC-034`、`QC-DEV-034`、browser QC | 正式雲端 Inbox / 跨裝置同步另開後續 |
 | DEV-035 | 交付點 | Implemented / Local Automated QC Passed / Supabase DB QC Pending | 是 | 工作區刪除持久化修正 | `SPEC-035`、`QA-DEV-035`、`QC-DEV-035` | 遠端 Supabase DB role QC 待 migration / DB gate |
 | DEV-036 | 交付點 | Implemented / Local Automated QC Passed / DB unchanged | 是 | Trello-like Workspace Governance | `ADR-036`、`SPEC-036`、`QA/QC-DEV-036` | production / DB migration 不在 Phase 1 |
-| DEV-037 | 交付點 | RD Contract Ready / Authorized / Not Started | 是 | 行事曆訂閱來源範圍清晰化 | `SPEC-037`、`QA-DEV-037` | 可進入 RD；若涉及 DB validation、Edge Function 或 migration，先 gate |
+| DEV-037 | 交付點 | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | 是 | 行事曆訂閱來源範圍清晰化 | `SPEC-037`、`QA-DEV-037`、`QC-DEV-037`、DEV-037 static/browser、ICS、TypeScript、build:test | 遠端 Supabase migration apply、Edge Function deploy、live feed smoke 需 release gate |
 | DEV-038 | 交付點 | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | 是 | 設定中心作用範圍一致性與高風險防呆 | `SPEC-038`、`QA-DEV-038`、`QC-DEV-038`、static/browser/regression/TypeScript/build gates | production release 需另行授權 |
 | DEV-039 | 交付點 | Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed | 是 | 任務過濾器核心與全域任務平台兩欄篩選重構 | `SPEC-039`、`QA-DEV-039`、`QC-DEV-039`、static/browser gates | production release、RPC/RLS/migration、visible partial/error summary 需另行授權 |
 | DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke` | 原始 2 BUG 正式站 smoke 通過；延伸 7 點剩餘項需另行驗證 |

@@ -3,6 +3,8 @@ import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
 
 type SubscriptionFilters = {
   workspace_ids?: string[];
+  project_ids?: string[];
+  scope_type?: string;
   assignee?: {
     type?: string;
     user_id?: string;
@@ -26,6 +28,18 @@ type TenantMember = {
   user_id: string;
   role: string;
   status: string;
+};
+
+type ProjectMember = {
+  tenant_id: string;
+  project_id: string;
+  user_id: string;
+  role: string;
+};
+
+type ProjectRow = {
+  id: string;
+  tenant_id: string;
 };
 
 type WbsItem = {
@@ -90,6 +104,10 @@ const isExpired = (expiresAt: string | null) =>
 
 const normalizeFilters = (filters: SubscriptionFilters) => ({
   workspaceIds: Array.from(new Set((filters.workspace_ids ?? []).filter(Boolean))),
+  projectIds: Array.from(new Set((filters.project_ids ?? []).filter((item) => UUID_RE.test(item)))),
+  scopeType: ["board", "workspace", "custom"].includes(filters.scope_type ?? "")
+    ? filters.scope_type ?? "workspace"
+    : "workspace",
   assignee: filters.assignee ?? { type: "me" },
   dateTypes: Array.from(new Set((filters.date_types ?? []).filter((item) => DATE_TYPES.has(item)))),
 });
@@ -116,11 +134,13 @@ const normalizeAssigneeSelection = (subscription: CalendarSubscription) => {
   };
 };
 
-const getAllowedTenantIds = async (subscription: CalendarSubscription) => {
-  const { workspaceIds } = normalizeFilters(subscription.filters_json);
-  if (workspaceIds.length === 0) return [];
+const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscription) => {
+  const { workspaceIds, projectIds, scopeType } = normalizeFilters(subscription.filters_json);
+  if (workspaceIds.length === 0) return { tenantIds: [], projectIds: [] };
   const assigneeSelection = normalizeAssigneeSelection(subscription);
-  if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) return [];
+  if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
+    return { tenantIds: [], projectIds: [] };
+  }
 
   const { data: ownerMemberships, error: ownerMembershipsError } = await supabase
     .from("tenant_members")
@@ -131,19 +151,67 @@ const getAllowedTenantIds = async (subscription: CalendarSubscription) => {
   if (ownerMembershipsError) throw ownerMembershipsError;
 
   const memberships = (ownerMemberships ?? []) as TenantMember[];
-  let allowedTenantIds = memberships.map((membership) => membership.tenant_id);
+  const memberTenantIds = Array.from(new Set(memberships.map((membership) => membership.tenant_id)));
+  if (memberTenantIds.length === 0) return { tenantIds: [], projectIds: [] };
 
-  const requiresAdmin = assigneeSelection.includeUnassigned
+  const tenantAdminIds = new Set(
+    memberships
+      .filter((membership) => ADMIN_ROLES.has(membership.role))
+      .map((membership) => membership.tenant_id)
+  );
+
+  const { data: projectRows, error: projectsError } = await supabase
+    .from("projects")
+    .select("id,tenant_id")
+    .in("tenant_id", memberTenantIds);
+  if (projectsError) throw projectsError;
+
+  const projects = (projectRows ?? []) as ProjectRow[];
+  if (projects.length === 0) return { tenantIds: [], projectIds: [] };
+
+  const candidateProjectIds = projects.map((project) => project.id);
+  const { data: projectMembershipRows, error: projectMembershipsError } = await supabase
+    .from("project_members")
+    .select("tenant_id,project_id,user_id,role")
+    .eq("user_id", subscription.owner_user_id)
+    .in("project_id", candidateProjectIds);
+  if (projectMembershipsError) throw projectMembershipsError;
+
+  const projectMemberships = (projectMembershipRows ?? []) as ProjectMember[];
+  const projectMemberIds = new Set(projectMemberships.map((membership) => membership.project_id));
+  const projectManagerIds = new Set(
+    projectMemberships
+      .filter((membership) => ADMIN_ROLES.has(membership.role))
+      .map((membership) => membership.project_id)
+  );
+
+  const requiresManagePermission = assigneeSelection.includeUnassigned
     || assigneeSelection.userIds.some((userId) => userId !== subscription.owner_user_id);
 
-  if (requiresAdmin) {
-    const adminTenantIds = memberships
-      .filter((membership) => ADMIN_ROLES.has(membership.role))
-      .map((membership) => membership.tenant_id);
+  let readableProjects = projects.filter((project) =>
+    tenantAdminIds.has(project.tenant_id) || projectMemberIds.has(project.id)
+  );
 
-    if (adminTenantIds.length === 0) return [];
+  if (requiresManagePermission) {
+    readableProjects = readableProjects.filter((project) =>
+      tenantAdminIds.has(project.tenant_id) || projectManagerIds.has(project.id)
+    );
+  }
 
-    allowedTenantIds = adminTenantIds;
+  if (scopeType === "board") {
+    readableProjects = projectIds.length === 1
+      ? readableProjects.filter((project) => project.id === projectIds[0])
+      : [];
+  } else if (scopeType === "custom" && projectIds.length > 0) {
+    const selectedProjectIds = new Set(projectIds);
+    readableProjects = readableProjects.filter((project) => selectedProjectIds.has(project.id));
+  }
+
+  let allowedTenantIds = Array.from(new Set(readableProjects.map((project) => project.tenant_id)));
+  let allowedProjectIds = Array.from(new Set(readableProjects.map((project) => project.id)));
+
+  if (allowedTenantIds.length === 0 || allowedProjectIds.length === 0) {
+    return { tenantIds: [], projectIds: [] };
   }
 
   if (assigneeSelection.userIds.length > 0) {
@@ -161,16 +229,27 @@ const getAllowedTenantIds = async (subscription: CalendarSubscription) => {
     allowedTenantIds = allowedTenantIds.filter((tenantId) =>
       assigneeSelection.userIds.every((userId) => membershipKeys.has(`${tenantId}:${userId}`))
     );
+    const allowedTenantSet = new Set(allowedTenantIds);
+    allowedProjectIds = allowedProjectIds.filter((projectId) => {
+      const project = readableProjects.find((item) => item.id === projectId);
+      return Boolean(project && allowedTenantSet.has(project.tenant_id));
+    });
   }
 
-  return allowedTenantIds;
+  return {
+    tenantIds: allowedTenantIds,
+    projectIds: allowedProjectIds,
+  };
 };
 
-const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: string[]) => {
+const buildIcs = async (
+  subscription: CalendarSubscription,
+  allowedScope: { tenantIds: string[]; projectIds: string[] }
+) => {
   const { dateTypes } = normalizeFilters(subscription.filters_json);
   const assigneeSelection = normalizeAssigneeSelection(subscription);
 
-  if (allowedTenantIds.length === 0 || dateTypes.length === 0) {
+  if (allowedScope.tenantIds.length === 0 || allowedScope.projectIds.length === 0 || dateTypes.length === 0) {
     return buildCalendarFeedIcs({
       subscription,
       assigneeUserId: assigneeSelection.userIds[0] ?? subscription.owner_user_id,
@@ -182,7 +261,8 @@ const buildIcs = async (subscription: CalendarSubscription, allowedTenantIds: st
     .select("id,tenant_id,project_id,legacy_node_id,title,description,status,assignee_id,start_date,end_date,item_type,updated_at,metadata")
     .eq("is_archived", false)
     .neq("item_type", "group")
-    .in("tenant_id", allowedTenantIds)
+    .in("tenant_id", allowedScope.tenantIds)
+    .in("project_id", allowedScope.projectIds)
     .order("updated_at", { ascending: false })
     .limit(FEED_TASK_LIMIT);
 
@@ -262,8 +342,8 @@ Deno.serve(async (req) => {
       return responseText("Calendar feed is disabled", 410);
     }
 
-    const allowedTenantIds = await getAllowedTenantIds(subscription);
-    const ics = await buildIcs(subscription, allowedTenantIds);
+    const allowedScope = await getAllowedTenantAndProjectScope(subscription);
+    const ics = await buildIcs(subscription, allowedScope);
 
     await supabase
       .from("calendar_subscriptions")

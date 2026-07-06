@@ -2,8 +2,9 @@
 
 關聯 DEV：DEV-037
 關聯 SPEC：`ai-doc/specs/SPEC-037-calendar-subscription-source-scope-clarity.md`
-狀態：Ready for RD / QC Pending
+狀態：Implemented / Local Automated QC Passed / Supabase Live QC Pending
 建立日期：2026-06-29
+最近更新：2026-07-06
 
 ## 驗證目標
 

@@ -168,6 +168,43 @@ unassignedFeed.split('\r\n').forEach((line) => {
   assert.ok(utf8Length(line) <= ICS_LINE_OCTET_LIMIT, `unassigned feed line exceeds ${ICS_LINE_OCTET_LIMIT} octets: ${line}`);
 });
 
+const boardScopeFeed = buildCalendarFeedIcs({
+  subscription: {
+    id: 'board-scope-subscription',
+    name: '只訂閱 A 看板',
+  },
+  items: [
+    {
+      id: 'board-a-task-1',
+      tenant_id: 'workspace-a',
+      project_id: 'project-a',
+      legacy_node_id: null,
+      title: 'A 看板任務',
+      description: null,
+      status: 'todo',
+      assignee_id: 'user-1',
+      start_date: null,
+      end_date: '2026-07-08',
+      metadata: {},
+    },
+  ],
+  dateTypes: ['due_date'],
+  tenantNameById: new Map([['workspace-a', 'A 工作區']]),
+  projectNameById: new Map([
+    ['project-a', 'A 看板'],
+    ['project-b', 'B 看板'],
+  ]),
+  assigneeProfileById: new Map([
+    ['user-1', { display_name: '王小明', email: 'ming@example.com' }],
+  ]),
+  assigneeUserId: 'user-1',
+  now: new Date('2026-05-26T01:02:03.000Z'),
+});
+const unfoldedBoardScopeFeed = unfold(boardScopeFeed);
+assert.ok(unfoldedBoardScopeFeed.includes('看板: A 看板'));
+assert.ok(!unfoldedBoardScopeFeed.includes('看板: B 看板'));
+assert.ok(!unfoldedBoardScopeFeed.includes('project-b'));
+
 const limitItems = Array.from({ length: FEED_TASK_LIMIT }, (_, index) => ({
   id: `limit-task-${index + 1}`,
   tenant_id: 'workspace-limit',

@@ -87,7 +87,7 @@
 
 | DEV | Status | Type | Priority | Scope | Evidence |
 |---|---|---|---|---|---|
-| DEV-037 | Ready for RD / SPEC + QA Ready | 交付點 | P1 settings IA and data-scope clarity | 重構行事曆訂閱的來源範圍語意：預設目前看板、支援工作區全部看板與自訂範圍、每筆訂閱顯示來源/條件 summary，並延伸 filters / Edge Function / DB validation 讓 Board scope 真正只輸出該看板任務。 | `ai-doc/specs/SPEC-037-calendar-subscription-source-scope-clarity.md`, `ai-doc/qa/QA-DEV-037-calendar-subscription-source-scope-clarity.md` |
+| DEV-037 | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | 交付點 | P1 settings IA and data-scope clarity | 已本機實作行事曆訂閱來源範圍語意：預設目前看板、支援工作區全部看板與自訂範圍、每筆訂閱顯示來源/條件 summary，並延伸 filters / Edge Function / DB validation migration 讓 Board scope 以 project_id 限縮任務來源。 | `ai-doc/specs/SPEC-037-calendar-subscription-source-scope-clarity.md`, `ai-doc/qa/QA-DEV-037-calendar-subscription-source-scope-clarity.md`, `ai-doc/qc/QC-DEV-037-calendar-subscription-source-scope-clarity.md` |
 
 驗收重點:
 - 從 active board 進入設定時，新增訂閱預設為 `目前看板`。

@@ -83,6 +83,8 @@
     "verify:dev-035-workspace-delete-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev035-workspace-delete -Filename scripts/verify-dev-035-workspace-delete-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-036-trello-like-workspace-governance": "node scripts/verify-dev-036-trello-like-workspace-governance.mjs",
     "verify:dev-036-trello-like-workspace-governance-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev036-workspace-governance -Filename scripts/verify-dev-036-trello-like-workspace-governance-browser.pw.js -OutputDirectory output/playwright",
+    "verify:dev-037-calendar-subscription-source-scope": "node scripts/verify-dev-037-calendar-subscription-source-scope.mjs",
+    "verify:dev-037-calendar-subscription-source-scope-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev037-calendar-source -Filename scripts/verify-dev-037-calendar-subscription-source-scope-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-038-settings-scope-consistency": "node scripts/verify-dev-038-settings-scope-consistency.mjs",
     "verify:dev-038-settings-scope-consistency-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev038-settings-scope -Filename scripts/verify-dev-038-settings-scope-consistency-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-039-task-filter-core": "node scripts/verify-dev-039-task-filter-core.mjs",

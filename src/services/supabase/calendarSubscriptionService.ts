@@ -2,6 +2,7 @@ import type {
   CalendarSubscriptionAssigneeFilter,
   CalendarSubscriptionDateType,
   CalendarSubscriptionFilters,
+  CalendarSubscriptionScopeType,
   CalendarSubscriptionRow,
   Json,
   TenantRole,
@@ -31,6 +32,16 @@ export type CalendarWorkspaceRef = {
   id: string;
   appWorkspaceId: string;
   name: string;
+};
+
+export type CalendarBoardRef = {
+  id: string;
+  appBoardId: string;
+  name: string;
+  workspaceId: string;
+  appWorkspaceId: string;
+  workspaceName: string;
+  path: string;
 };
 
 export type CalendarSubscriptionInput = {
@@ -107,11 +118,57 @@ const normalizeAssigneeFilter = (
   };
 };
 
-const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => ({
-  workspace_ids: await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)),
-  assignee: normalizeAssigneeFilter(filters.assignee),
-  date_types: normalizeDateTypes(filters.date_types),
-});
+const unique = <T extends string>(items: T[]) => Array.from(new Set(items.filter(Boolean)));
+
+const normalizeScopeType = (
+  scopeType: CalendarSubscriptionScopeType | undefined
+): CalendarSubscriptionScopeType => (
+  scopeType === 'board' || scopeType === 'custom' || scopeType === 'workspace'
+    ? scopeType
+    : 'workspace'
+);
+
+const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  const scopeType = normalizeScopeType(filters.scope_type);
+  const resolvedWorkspaceIds = unique(await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)));
+  const projectRefs = await Promise.all(
+    (filters.project_ids ?? []).map((projectId) => resolveBoardRef(projectId, resolvedWorkspaceIds))
+  );
+  const resolvedProjectIds = unique(projectRefs.map((project) => project.id));
+  const projectWorkspaceIds = unique(projectRefs.map((project) => project.workspaceId));
+  const base = {
+    assignee: normalizeAssigneeFilter(filters.assignee),
+    date_types: normalizeDateTypes(filters.date_types),
+  };
+
+  if (scopeType === 'board') {
+    const project = projectRefs[0];
+    if (!project || resolvedProjectIds.length !== 1) {
+      throw new Error('目前看板訂閱需要剛好選擇一個看板。');
+    }
+    return {
+      ...base,
+      scope_type: 'board',
+      workspace_ids: unique([...resolvedWorkspaceIds, project.workspaceId]),
+      project_ids: [project.id],
+    };
+  }
+
+  if (scopeType === 'custom') {
+    return {
+      ...base,
+      scope_type: 'custom',
+      workspace_ids: unique([...resolvedWorkspaceIds, ...projectWorkspaceIds]),
+      ...(resolvedProjectIds.length > 0 ? { project_ids: resolvedProjectIds } : {}),
+    };
+  }
+
+  return {
+    ...base,
+    scope_type: 'workspace',
+    workspace_ids: resolvedWorkspaceIds,
+  };
+};
 
 const toJson = (filters: CalendarSubscriptionFilters): Json => filters as unknown as Json;
 
@@ -135,6 +192,51 @@ export const resolveWorkspaceId = async (workspaceId: string): Promise<string> =
   assertNoError(error);
   if (!data?.id) throw new Error(`找不到工作區：${workspaceId}`);
   return data.id;
+};
+
+export const resolveBoardRef = async (
+  boardId: string,
+  workspaceIds: string[] = []
+): Promise<CalendarBoardRef> => {
+  requireSupabase();
+  const resolvedWorkspaceIds = unique(await Promise.all(workspaceIds.map(resolveWorkspaceId)));
+
+  let query = supabase
+    .from('projects')
+    .select('id,legacy_board_id,name,tenant_id')
+    .limit(1);
+  query = isUuid(boardId)
+    ? query.eq('id', boardId)
+    : query.eq('legacy_board_id', boardId);
+  if (resolvedWorkspaceIds.length > 0) {
+    query = query.in('tenant_id', resolvedWorkspaceIds);
+  }
+
+  const { data: projectData, error: projectError } = await query.maybeSingle();
+  assertNoError(projectError);
+  if (!projectData?.id) throw new Error(`找不到看板：${boardId}`);
+
+  const { data: workspaceData, error: workspaceError } = await supabase
+    .from('tenants')
+    .select('id,legacy_workspace_id,name')
+    .eq('id', projectData.tenant_id)
+    .maybeSingle();
+  assertNoError(workspaceError);
+
+  const workspaceId = workspaceData?.id ?? projectData.tenant_id;
+  const appWorkspaceId = workspaceData?.legacy_workspace_id || workspaceId;
+  const workspaceName = workspaceData?.name ?? workspaceId.slice(0, 8);
+  const appBoardId = projectData.legacy_board_id || projectData.id;
+
+  return {
+    id: projectData.id,
+    appBoardId,
+    name: projectData.name,
+    workspaceId,
+    appWorkspaceId,
+    workspaceName,
+    path: `${workspaceName} / ${projectData.name}`,
+  };
 };
 
 export const calendarSubscriptionService = {
@@ -182,6 +284,47 @@ export const calendarSubscriptionService = {
       appWorkspaceId: tenant.legacy_workspace_id || tenant.id,
       name: tenant.name,
     }));
+  },
+
+  listBoardRefs: async (workspaceIds: string[] = []): Promise<CalendarBoardRef[]> => {
+    requireSupabase();
+    const resolvedWorkspaceIds = unique(await Promise.all(workspaceIds.map(resolveWorkspaceId)));
+    let projectQuery = supabase
+      .from('projects')
+      .select('id,legacy_board_id,name,tenant_id,sort_order')
+      .order('sort_order', { ascending: true });
+    if (resolvedWorkspaceIds.length > 0) {
+      projectQuery = projectQuery.in('tenant_id', resolvedWorkspaceIds);
+    }
+
+    const { data: projects, error: projectsError } = await projectQuery;
+    assertNoError(projectsError);
+    if (!projects?.length) return [];
+
+    const tenantIds = unique(projects.map((project) => project.tenant_id));
+    const { data: tenants, error: tenantsError } = await supabase
+      .from('tenants')
+      .select('id,legacy_workspace_id,name')
+      .in('id', tenantIds);
+    assertNoError(tenantsError);
+
+    const tenantById = new Map((tenants ?? []).map((tenant) => [tenant.id, tenant]));
+    return projects.map((project) => {
+      const tenant = tenantById.get(project.tenant_id);
+      const workspaceId = tenant?.id ?? project.tenant_id;
+      const appWorkspaceId = tenant?.legacy_workspace_id || workspaceId;
+      const workspaceName = tenant?.name ?? workspaceId.slice(0, 8);
+      const appBoardId = project.legacy_board_id || project.id;
+      return {
+        id: project.id,
+        appBoardId,
+        name: project.name,
+        workspaceId,
+        appWorkspaceId,
+        workspaceName,
+        path: `${workspaceName} / ${project.name}`,
+      };
+    });
   },
 
   create: async (input: CalendarSubscriptionInput, ownerUserId: string): Promise<CalendarSubscriptionWithUrl> => {

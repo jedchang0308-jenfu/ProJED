@@ -29,12 +29,15 @@ export type KnowledgeRecordType = 'meeting' | 'work_log';
 export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
 export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
+export type CalendarSubscriptionScopeType = 'board' | 'workspace' | 'custom';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
   | { type: 'user'; user_id: string }
   | { type: 'selected'; user_ids: string[]; include_unassigned?: boolean };
 export type CalendarSubscriptionFilters = {
   workspace_ids: string[];
+  project_ids?: string[];
+  scope_type?: CalendarSubscriptionScopeType;
   assignee: CalendarSubscriptionAssigneeFilter;
   date_types: CalendarSubscriptionDateType[];
 };
