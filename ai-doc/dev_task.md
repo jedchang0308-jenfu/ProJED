@@ -2,6 +2,46 @@
 
 ## PM Update - 2026-07-06
 
+### PM Restructure Audit: DEV-045 vs Remaining Development Tasks
+
+狀態: Completed / Lightweight Backlog Refactor Applied
+節點類型: PM evidence
+建立日期: 2026-07-06
+
+結論:
+- 需要輕量重構任務板，不需要重編 DEV ID、不需要新增 DEV、不需要把所有剩餘工作合併成大型 umbrella。
+- DEV-045 與 DEV-037 有直接重疊：DEV-045 是行事曆訂閱 v2 產品方向，DEV-037 是 v1 source-scope / permission / feed safety substrate。若使用者要走 v2，應先做 DEV-045 Phase 1 Builder，DEV-037 的 DB / Edge / live feed gate 改併入 DEV-045 Phase 2 / 3；只有在使用者明確要求先修正式環境 v1 訂閱來源範圍時，才單獨執行 DEV-037 live gate。
+- DEV-025 仍是 `Implemented / DB QC Pending`，但先前漏列在交付點總覽與近期 Gate；本輪只修正任務板索引，不新增功能。
+- 其他剩餘任務多為 release、DB、Edge、真機、人工登入式 QC 或未授權後續 phase；保持獨立 DEV 較清楚，不應為了 DEV-045 進行大規模重構。
+
+剩餘任務比對:
+
+| 剩餘 DEV / Gate | 與 DEV-045 關係 | 重構判定 |
+|---|---|---|
+| DEV-037 行事曆訂閱來源範圍 live gate | 高重疊；同屬 `.ics` subscription source / permission / feed contract | 併入行事曆訂閱 workstream 管理；v2 路徑下改排 DEV-045 Phase 2 / 3，v1 緊急修正式環境時才獨立執行 |
+| DEV-039 任務過濾器核心與全域任務平台 | 直接依賴；DEV-045 需借用 filter 語意但不能搬用工作台 UI 狀態 | 不合併；作為 DEV-045 regression / shared filter contract dependency |
+| DEV-040 正式環境同型 BUG 風險硬化 | 只有 Google Calendar timeout 類型相鄰；不是同一 subscription builder scope | 不合併；Edge / production injection 仍走原 gate |
+| DEV-025 受控跨工作區移動專案 | 權限 / workspace 邊界相鄰，但功能不同 | 補回交付點總覽與剩餘 Gate；DB QC 仍獨立 |
+| DEV-035 / DEV-036 Workspace governance | DEV-045 需遵守 workspace / board permission boundary | 不合併；作為 permission regression context |
+| DEV-026 Board share | 權限相鄰但不是行事曆訂閱 | 不合併；DB smoke 仍視 release gate 啟用 |
+| DEV-028 / DEV-029 interaction and mobile gestures | DEV-045 Builder 需要 mobile / interaction regression | 不合併；只作 regression gate |
+| DEV-027 / DEV-034 / DEV-038 / DEV-042 observation or released tails | 已實作或已發布後的觀察、local-first future scope、DB unchanged 或正式資料修復尾端 | 不合併；保留各自觀察 / future re-entry / release gate 邊界 |
+| DEV-044 undo recovery | 無直接產品重疊 | 不合併；destructive recovery 仍需 human re-entry |
+| DEV-011 / DEV-012 / DEV-024 AI records | 無直接產品重疊 | 不合併；production UI smoke 仍獨立 |
+| DEV-041 PWA update | release lifecycle 相鄰但非訂閱設定 | 不合併；強制更新與 release metadata 另行決策 |
+
+PM 重構規則:
+- `下一步` 表以最高優先、最容易造成誤工的 Gate 為主，不再把 DEV-037 v1 live gate 排成 DEV-045 之後的獨立預設路徑。
+- DEV-045 授權時，PM/RD 必須先確認走 v2 Builder；DB / Edge / production 不可被 Phase 1 local preview 偷渡。
+- DEV-037 若被單獨授權，需明確記錄使用者接受「先部署 v1 source-scope fix，之後 DEV-045 v2 可能再改一次」的重工成本。
+- DEV-025 是既有交付點索引修正，不改變授權邊界；DB migration / Supabase QC 仍需另行 gate。
+
+Deferred Scope Audit:
+- DEV-045 / DEV-037 workstream merge: Same Spec Phase；DEV-045 Phase 2 / 3 承接 DB / Edge / live `.ics` feed parity。
+- DEV-025 DB QC: Same DEV gate；不新增 scope，只補回任務板追蹤。
+- 其他剩餘 DEV merge: No Tracking；合併會降低授權邊界清晰度，保留獨立 DEV。
+- 新增 umbrella / renumber DEV IDs: No Tracking；目前輕量索引修正足夠，重編會增加續接成本。
+
 ### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
 
 狀態: RD Contract Ready / Not Authorized
@@ -2279,6 +2319,7 @@ CAPA 來源：
 - 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT 與 regression gates；production UI smoke 與 production deploy 未執行。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
 - 2026-07-06 DEV-045 已建立行事曆訂閱篩選器建構器與即時預覽開發文件；目前為 `RD Contract Ready / Not Authorized`，需使用者明確授權後才能進入 RD。
+- 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate。
 - 目前可由 Codex 直接開工的產品 RD 候選：無。任務板剩餘 RD 候選多數為 `Not Authorized`、`Blocked Human Re-entry`、DB/RLS/migration、Edge deploy、真機/登入式人工 QC 或手動 UI smoke。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待互動式 production UI smoke，原因是正式前端使用 Google OAuth，CLI 無法非互動完成登入與發布流程。
@@ -2286,12 +2327,12 @@ CAPA 來源：
 
 ## 下一步
 
-此表列的是剩餘 Gate / 人工驗證 / release 動作，不代表 Codex 已被授權直接開工產品 RD。若要執行任何 production、DB、Edge、真機或人工登入式 QC，需使用者重新授權並套用對應 gate。
+此表列的是最高優先且最容易造成誤工的剩餘 Gate / 人工驗證 / release 動作，不代表 Codex 已被授權直接開工產品 RD。若要執行任何 production、DB、Edge、真機或人工登入式 QC，需使用者重新授權並套用對應 gate。完整比對見本日 PM Restructure Audit。
 
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-045 行事曆訂閱篩選器建構器 RD 授權 | RD Contract Ready / Not Authorized | 使用者 / RD after authorization | 若要開發，需明確授權 Phase 1 Builder UI + local preview；DB/Edge/production 仍分 phase 另行 gate。 |
-| 2 | DEV-037 行事曆訂閱來源範圍 live gate | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | Supabase / release owner | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
+| 1 | DEV-045 / DEV-037 行事曆訂閱 workstream 授權決策 | PM Restructure Applied / RD Contract Ready / Not Authorized | 使用者 / RD / Supabase after authorization | 預設路徑為先授權 DEV-045 Phase 1 Builder UI + local preview；DEV-037 DB / Edge / live `.ics` gate 併入 DEV-045 Phase 2 / 3。若要先修正式環境 v1 source-scope，需明確授權 DEV-037 standalone live gate 並接受後續 v2 重工成本。 |
+| 2 | DEV-025 受控跨工作區移動專案 DB QC | Implemented / DB QC Pending | Supabase / QC | 對目標 Supabase 套 migration，驗證 `preview_project_workspace_transfer` / `move_project_to_workspace` RPC、RLS、audit log、資料一致性與 RAG visibility。 |
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
 | 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
@@ -2316,6 +2357,7 @@ CAPA 來源：
 | DEV-012 | 交付點 | In Verification | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
+| DEV-025 | 交付點 | Implemented / DB QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`verify:dev-025-project-workspace-transfer`、TypeScript、build | 目標 Supabase migration apply 後執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
 | DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test | 依 QA-DEV-028 補人工親自點擊 QC |
@@ -2336,6 +2378,7 @@ CAPA 來源：
 
 - Done：10 個交付點。
 - In Verification：2 個交付點。
+- Implemented / DB QC Pending：1 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Static + Browser Smoke Passed：1 個交付點。
 - Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed：1 個交付點。
@@ -2376,6 +2419,7 @@ CAPA 來源：
 | 項目 | 影響 | 解除方式 |
 |---|---|---|
 | DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過，但完整前端流程尚未以 Google OAuth 登入帳號驗證 | 使用已登入 Google 的正式前端，建立或開啟看板後完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| DEV-025 尚缺 Supabase DB QC | 受控跨工作區移動已本機實作並通過靜態 gate，但正式目標 DB migration / RPC / RLS / audit / RAG visibility 尚未驗證 | 取得 Supabase DB gate 授權後套 migration，執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix 與資料一致性 QC。 |
 | 目前無可直接執行的已授權產品 RD | Dev PM 不能自行開工 `Not Authorized`、production、DB/RLS/migration、真機或人工登入式 QC 項目 | 下一步需明確選擇並授權：production release / Supabase migration 或 Edge deploy / DEV-028 人工親自點擊 QC / DEV-011-012 已登入 production UI smoke / DEV-044 destructive recovery lifecycle。 |
 
 ---
