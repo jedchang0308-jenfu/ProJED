@@ -3,14 +3,14 @@
 關聯 DEV: DEV-042
 關聯 SPEC: `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
 關聯 QA: `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態: Production Release Deployed / Local + Production QC Passed / Physical Phone Supplemental Not Executed
+狀態: Production Release Deployed / Local + Production + User-Reported Physical Phone QC Passed
 建立日期: 2026-07-05
 
 ## 驗證結論
 
-- 判定：通過，本機 static + browser viewport matrix + regression gate 通過。
+- 判定：通過，本機 static + browser viewport matrix + regression gate 通過；2026-07-06 使用者回報 DEV-042 真機驗證通過。
 - 範圍：手機與桌機 closed Sidebar / TaskWorkbench zero-width off-canvas、overlay 開啟/關閉、DEV-029 pan-first 與 DEV-039 workbench regression。
-- 限制：未執行 physical-phone 手感驗證、DB/RLS/migration/RPC 或正式資料修復；production deploy 與正式站 smoke 已於 2026-07-06 完成。
+- 限制：DB/RLS/migration/RPC 或正式資料修復未執行；production deploy 與正式站 smoke 已於 2026-07-06 完成；真機 supplemental 為使用者回報通過，repo 內未附裝置錄影或瀏覽器裝置 log。
 
 ## RD 修正事實
 
@@ -54,9 +54,14 @@ QC interpretation:
 - Mobile Workbench open：`[data-mobile-task-workbench-overlay="true"]` visible，工作台可從 Sidebar 入口開啟且 Sidebar overlay 會關閉。
 - Desktop collapsed state：Sidebar compact rail 與 TaskWorkbench compact rail 仍保留，符合桌機操作語意。
 
+## Physical Phone Supplemental Evidence - 2026-07-06
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Physical-phone supplemental | Pass | 使用者回報「DEV-042 真機驗證 通過」；DEV-042 physical-phone supplemental gate 解除。 |
+
 ## 未執行與殘留風險
 
-- Physical-phone supplemental 未執行：不得宣稱 iOS Safari / Android Chrome 真機手感已簽核。
 - DB schema / migration / RLS / RPC 未涉及；本 DEV 為 layout/UI contract。
 - RecordSidebar / RagSidebar mobile redesign 不在本 DEV scope。
 

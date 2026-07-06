@@ -1,7 +1,7 @@
 # SPEC-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
 
 關聯 DEV：DEV-042
-狀態：Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed
+狀態：Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed
 建立日期：2026-07-05
 任務類型：UI/UX RWD regression / mobile layout contract
 
@@ -29,7 +29,7 @@
 
 AI assumptions：
 
-- 本輪已完成 local RD implementation、DEV-042 static/browser verifier、DEV-029 / DEV-039 regression verifier 相容更新、本機 automated QA 與 2026-07-06 Firebase Hosting production release。
+- 本輪已完成 local RD implementation、DEV-042 static/browser verifier、DEV-029 / DEV-039 regression verifier 相容更新、本機 automated QA、2026-07-06 Firebase Hosting production release，並於 2026-07-06 由使用者回報 DEV-042 真機驗證通過。
 - 原始程式脈絡：`Sidebar` 在 collapsed 時使用 `w-10`，`TaskWorkbenchPanel` 在 collapsed 時使用 `w-6`；兩者都位於主 layout / BoardView flex flow 內。
 - Mobile 判斷沿用既有慣例並收斂為 `max-width: 767px` 或 coarse pointer 的 narrow branch；未擴大到整站 RWD 重構。
 - 不涉及 DB schema、migration、RLS、RPC、正式資料修復或資料刪除。
@@ -215,7 +215,7 @@ Manual QC evidence required:
 |---|---|---|---|
 | Product code implementation | Same Spec Phase / Complete | DEV-042 Phase 1 | 本輪已完成 local RD |
 | Static/browser verifier implementation | Same Spec Phase / Complete | DEV-042 Phase 1 QA support | 本輪已完成 verifier 與 regression verifier 相容更新 |
-| Manual mobile QC / physical-phone check | Blocked Human Re-entry | DEV-042 Phase 2 | 使用者授權 QA/QC 或提供真機回饋；本輪未宣稱真機手感簽核 |
+| Manual mobile QC / physical-phone check | Same Spec Phase / Complete | DEV-042 Phase 2 | 2026-07-06 使用者回報 DEV-042 真機驗證通過 |
 | Production deploy | Same Spec Phase / Complete | deployment-release-gate | 2026-07-06 已由使用者授權並完成 Firebase Hosting production release |
 | DB schema / migration / RLS / RPC | No Tracking | 無 | 本 DEV 是 layout/UI contract，不需要資料層變更 |
 | Full Sidebar IA redesign | New DEV Candidate | Backlog if requested | 使用者另行要求重整導覽資訊架構 |
@@ -227,5 +227,5 @@ Manual QC evidence required:
 |---|---|---|---|---|---|---|---|
 | Phase 0 PM/RD Contract | Authorized | Complete | 文件化手機零佔寬 collapsed contract、RD/QA gate、stop conditions | 產品程式碼、測試執行、部署 | 使用者要求寫成開發文件 | SPEC / QA / dev_task / documentation_map updated | Git diff / file links |
 | Phase 1 Mobile Zero-Width Collapsed Layout | Authorized / Complete | Implemented | Sidebar mobile off-canvas、TaskWorkbench mobile no in-flow rail、overlay open/close、desktop rail regression | DB、production、資料修復、整站 IA 重構 | 使用者授權 RD 開發 | Mobile closed state no in-flow rails; overlays do not resize main; desktop rails preserved | static/browser verifier、TS、build:test、screenshots |
-| Phase 2 QA/QC Verification | Authorized / Complete | Local + Production Smoke Passed | viewport matrix、visible error sweep、touch/keyboard open-close、DEV-029/DEV-039 regression、production artifact/browser/auth smoke | physical-phone supplemental | Phase 1 implementation complete | automated viewport/regression evidence passed；production smoke passed；真機未執行 | QA-DEV-042 / QC-DEV-042 |
-| Phase 3 Production Release | Authorized / Complete | Production Release Deployed | Deploy and post-deploy smoke | DB/RLS/migration、正式資料修復、真機手感簽核 | 使用者明確部署授權 | production smoke passed and rollback target recorded | deployment-release-gate / QC-DEV-042 |
+| Phase 2 QA/QC Verification | Authorized / Complete | Local + Production Smoke Passed + User-Reported Physical Phone Passed | viewport matrix、visible error sweep、touch/keyboard open-close、DEV-029/DEV-039 regression、production artifact/browser/auth smoke、physical-phone supplemental | 無 | Phase 1 implementation complete | automated viewport/regression evidence passed；production smoke passed；使用者回報真機驗證通過 | QA-DEV-042 / QC-DEV-042 |
+| Phase 3 Production Release | Authorized / Complete | Production Release Deployed | Deploy and post-deploy smoke | DB/RLS/migration、正式資料修復 | 使用者明確部署授權 | production smoke passed and rollback target recorded | deployment-release-gate / QC-DEV-042 |

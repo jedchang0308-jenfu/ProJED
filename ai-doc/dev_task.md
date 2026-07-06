@@ -132,15 +132,15 @@ All-Phase Coverage Matrix:
 
 ### DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
 
-狀態: Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed
+狀態: Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed
 節點類型: 交付點 / UI RWD regression
 父交付點: DEV-039 全域任務平台 / DEV-001 緊湊 UI 系統
-是否計入產品交付完成: 是，本輪完成 local RD implementation + automated QA + production release；physical-phone supplemental 未執行
+是否計入產品交付完成: 是，本輪完成 local RD implementation + automated QA + production release；2026-07-06 使用者回報 physical-phone supplemental 通過
 建立日期: 2026-07-05
 
 原始需求邊界:
 - 使用者以手機截圖指出：左側欄收疊後仍然佔用太多版面，手機版特別明顯。
-- 初始指令為「寫成開發文件」；後續依開發任務執行授權完成產品程式碼、verifier、本機 QA/QC 與 2026-07-06 production release；仍不含 DB/RLS/migration、正式資料修復或真機手感簽核。
+- 初始指令為「寫成開發文件」；後續依開發任務執行授權完成產品程式碼、verifier、本機 QA/QC、2026-07-06 production release 與使用者回報真機驗證通過；仍不含 DB/RLS/migration 或正式資料修復。
 
 Human Decision Brief:
 - 已確認：手機版 collapsed 左側導覽不得保留 in-flow rail。
@@ -151,8 +151,8 @@ Human Decision Brief:
 - AI 假設：不涉及 DB schema、migration、RLS、RPC；現有 `MainLayout` top nav menu 可作為手機 Sidebar 開啟入口；工作台入口可放在 Sidebar overlay 或單一 fixed icon，但不得佔 layout flow。
 
 目前授權邊界:
-- Authorized / Complete: SPEC / QA / dev_task / documentation_map 文件更新；產品程式碼修改；DEV-042 static/browser verifier；DEV-029 / DEV-039 regression verifier 更新；本機 automated QA/QC；production release。
-- Not Authorized / Not Executed: DB schema/migration/RLS/RPC、正式資料修復、physical-phone supplemental 手感驗證。
+- Authorized / Complete: SPEC / QA / dev_task / documentation_map 文件更新；產品程式碼修改；DEV-042 static/browser verifier；DEV-029 / DEV-039 regression verifier 更新；本機 automated QA/QC；production release；使用者回報 physical-phone supplemental 通過。
+- Not Authorized / Not Executed: DB schema/migration/RLS/RPC、正式資料修復。
 
 End-State Architecture:
 - Mobile collapsed state 的語意是 off-canvas / zero-width；desktop collapsed state 的語意才是 compact rail。
@@ -198,6 +198,7 @@ QC Evidence - 2026-07-05:
 - `git diff --check` passed；僅 LF/CRLF warning，無 whitespace error。
 - `npm.cmd run build:test` passed；Vite 僅提示 Browserslist/caniuse-lite 資料偏舊。
 - Production release gate passed：release commit `b78540e`，`npm.cmd run build` 產出 `dist/assets/index-BU14rK7W.js` / `dist/assets/index-CYqvildz.css`，Firebase Hosting `projed-cc78d` deploy complete，post-deploy HTTP artifact check、browser smoke 與 `npm.cmd run verify:dev-040-production-auth-ui-smoke` passed。
+- 2026-07-06 使用者回報 DEV-042 真機驗證通過；此 evidence 解除 DEV-042 physical-phone supplemental gate。
 
 Stop Conditions:
 - Mobile closed state 仍保留 `Sidebar` in-flow rail 或 `TaskWorkbenchPanel` in-flow rail。
@@ -205,12 +206,12 @@ Stop Conditions:
 - Overlay 開啟時 Board canvas 被縮窄，而不是 overlay 覆蓋。
 - 任一 mobile viewport 出現 horizontal overflow。
 - DEV-029 或 DEV-039 主要 regression 失敗。
-- 需要 DB migration、RLS/RPC、正式資料修復或真機簽核時，必須停下取得授權。
+- 需要 DB migration、RLS/RPC 或正式資料修復時，必須停下取得授權。
 
 Deferred Scope Audit:
 - Product code implementation: Same Spec Phase / Complete，本輪已完成 local RD。
 - Static/browser verifier implementation: Same Spec Phase / Complete，本輪已完成 DEV-042 verifier 與 DEV-029/DEV-039 regression verifier 相容更新。
-- Manual mobile QC / physical-phone check: Blocked Human Re-entry，需使用者授權 QA/QC 或提供真機回饋；本輪未宣稱真機手感簽核。
+- Manual mobile QC / physical-phone check: Same Spec Phase / Complete，2026-07-06 使用者回報 DEV-042 真機驗證通過。
 - Production deploy: Same Spec Phase / Complete，2026-07-06 已由使用者授權並完成 Firebase Hosting production release。
 - DB schema / migration / RLS / RPC: No Tracking，本 DEV 是 layout/UI contract。
 - Full Sidebar IA redesign: New DEV Candidate，若要重整導覽資訊架構需另行決策。
@@ -222,8 +223,8 @@ All-Phase Coverage Matrix:
 |---|---|---|---|---|---|---|---|---|
 | 0 | PM/RD Contract | Complete | Authorized | 文件化手機 zero-width collapsed contract、RD/QA gate、stop conditions | 產品程式碼、測試執行、部署 | 使用者要求寫成開發文件 | SPEC/QA/dev_task/documentation_map updated | diff / file links |
 | 1 | Mobile Zero-Width Collapsed Layout | Implemented | Authorized / Complete | Sidebar mobile off-canvas、TaskWorkbench mobile no in-flow rail、overlay open/close、desktop rail regression | DB、production、資料修復、整站 IA 重構 | 使用者授權 RD 開發 | mobile closed no in-flow rails；overlay 不縮 main；desktop rail preserved | static/browser verifier、TS、build:test、screenshots |
-| 2 | QA/QC Verification | Local + Production Smoke Passed | Authorized / Complete | viewport matrix、visible error sweep、touch/keyboard open-close、DEV-029/DEV-039 regression、production artifact/browser/auth smoke | physical-phone supplemental | Phase 1 implementation complete | automated viewport/regression evidence passed；production smoke passed；真機未執行 | QA-DEV-042 / QC-DEV-042 |
-| 3 | Production Release | Production Release Deployed | Authorized / Complete | deploy and post-deploy smoke | DB/RLS/migration、正式資料修復、真機手感簽核 | 使用者明確部署授權 | production smoke passed + rollback target recorded | deployment-release-gate / QC-DEV-042 |
+| 2 | QA/QC Verification | Local + Production Smoke Passed + User-Reported Physical Phone Passed | Authorized / Complete | viewport matrix、visible error sweep、touch/keyboard open-close、DEV-029/DEV-039 regression、production artifact/browser/auth smoke、physical-phone supplemental | 無 | Phase 1 implementation complete | automated viewport/regression evidence passed；production smoke passed；使用者回報真機驗證通過 | QA-DEV-042 / QC-DEV-042 |
+| 3 | Production Release | Production Release Deployed | Authorized / Complete | deploy and post-deploy smoke | DB/RLS/migration、正式資料修復 | 使用者明確部署授權 | production smoke passed + rollback target recorded | deployment-release-gate / QC-DEV-042 |
 
 文件:
 - `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
@@ -2183,7 +2184,7 @@ CAPA 來源：
 - Supabase Edge Function `synthesize_meeting_record` 已部署到正式 Supabase version 2，狀態 `ACTIVE`，並維持 `verify_jwt=true`。
 - 2026-06-09 production backend AI smoke 已通過：匿名請求回 `401`，一次性 Supabase Auth user 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
 - 2026-07-06 DEV-038 / DEV-042 / DEV-044 safe released to Firebase Hosting production：release commit `b78540e`，正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`，HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed。
-- 2026-07-05 DEV-042 已完成 local RD + automated browser QA，commit `aa1fff7`；手機 closed Sidebar / TaskWorkbench 不再佔用 in-flow 左側版面；2026-07-06 已 production release，真機手感仍未執行。
+- 2026-07-05 DEV-042 已完成 local RD + automated browser QA，commit `aa1fff7`；手機 closed Sidebar / TaskWorkbench 不再佔用 in-flow 左側版面；2026-07-06 已 production release，且使用者回報真機驗證通過。
 - 2026-07-06 DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA 並 production release；採低資料庫成本 ordinary undo 擴充，涵蓋 batch/reorder/placement command grouping；DB migration、durable recovery、board workspace transfer undo 與 destructive recovery 未執行。
 - 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT 與 regression gates；production UI smoke 與 production deploy 未執行。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
@@ -2203,7 +2204,6 @@ CAPA 來源：
 | 3 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
 | 4 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
 | 5 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 6 | DEV-042 physical-phone supplemental | Production Release Deployed / Physical Phone Supplemental Not Executed | 使用者 / QC | 若要真機簽核需 iOS Safari / Android Chrome 裝置證據；browser viewport 與 production smoke 已完成。 |
 
 ---
 
@@ -2236,7 +2236,7 @@ CAPA 來源：
 | DEV-039 | 交付點 | Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed | 是 | 任務過濾器核心與全域任務平台兩欄篩選重構 | `SPEC-039`、`QA-DEV-039`、`QC-DEV-039`、static/browser gates | production release、RPC/RLS/migration、visible partial/error summary 需另行授權 |
 | DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke`、`verify:dev-040-p0-bounded-failure` | 原始 2 BUG 正式站 smoke 通過；P0 local addendum 已完成；Edge deploy / production injection / 完整 DB count smoke 仍需 gate |
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041` | 強制更新、release notes 後端、版本 API、analytics 另行決策 |
-| DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、commit `aa1fff7` | physical-phone supplemental 需另行授權 |
+| DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、使用者回報真機通過、commit `aa1fff7` | DB/RLS/migration 與正式資料修復不屬於本 DEV |
 | DEV-044 | 交付點 | Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke、production artifact/browser/auth smoke | durable recovery、DB migration、board workspace transfer undo、destructive recovery 需另行授權 |
 
 ### 交付點完成率
@@ -2255,7 +2255,7 @@ CAPA 來源：
 - Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / Extended Matrix Partially Covered：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed / DB unchanged：1 個交付點。
-- Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed：1 個交付點。
+- Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed：1 個交付點。
 - Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。

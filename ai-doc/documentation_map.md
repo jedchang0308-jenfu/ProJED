@@ -4,7 +4,7 @@
 
 ### Current Direct-Work Boundary
 
-本輪續接 `[$dev-pm] 完成所有開發任務` 時，`ai-doc/dev_task.md` 是唯一任務排序與授權入口。2026-07-06 目前可由 Codex 直接開工的產品 RD 候選為無；DEV-038 / DEV-042 / DEV-044 safe scope 已發布到 Firebase Hosting production。剩餘項目需要人類重新授權、Supabase DB / Edge deploy gate、已登入正式前端 UI smoke、真機 / physical-phone supplemental 或 DEV-028 人工親自點擊 QC。
+本輪續接 `[$dev-pm] 完成所有開發任務` 時，`ai-doc/dev_task.md` 是唯一任務排序與授權入口。2026-07-06 目前可由 Codex 直接開工的產品 RD 候選為無；DEV-038 / DEV-042 / DEV-044 safe scope 已發布到 Firebase Hosting production，且 DEV-042 physical-phone supplemental 已由使用者回報通過。剩餘項目需要人類重新授權、Supabase DB / Edge deploy gate、已登入正式前端 UI smoke、DEV-028 人工親自點擊 QC，或其他未完成真機 supplemental。
 
 | 類別 | 目前狀態 | 下一步 |
 |---|---|---|
@@ -13,7 +13,7 @@
 | DEV-028 | Local Automated QA Passed / Manual Click QC Pending | 依 `QA-DEV-028` MAN-028-001 至 MAN-028-028 補人工親自點擊證據。 |
 | DEV-035 | Supabase DB Role QC Passed / Production Not Deployed | `delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 已通過；production front-end release 需另行授權。 |
 | DEV-037 / DEV-040 | Local source / P0 guards completed; DB / deploy gates pending | DEV-037 Supabase migration / Edge deploy / live feed、DEV-040 Edge deploy 或 production injection 需另行授權並走 Supabase / release gate。 |
-| DEV-038 / DEV-042 / DEV-044 | Production Release Deployed / Local + Production Smoke Passed | Firebase Hosting 正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`；HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed。DEV-042 真機手感、DEV-044 durable/destructive recovery 仍需另行 gate。 |
+| DEV-038 / DEV-042 / DEV-044 | Production Release Deployed / Local + Production Smoke Passed | Firebase Hosting 正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`；HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed；DEV-042 真機驗證已由使用者回報通過。DEV-044 durable/destructive recovery 仍需另行 gate。 |
 
 ### DEV-044: 上一步復原範圍擴充與低資料庫成本治理
 
@@ -32,12 +32,12 @@ PM 治理註記：DEV-044 不是建立遠端歷史紀錄系統，而是先把既
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed | DEV-042 / DEV-039 / DEV-001 | 定義並記錄手機版 collapsed Sidebar / TaskWorkbench 不保留 in-flow rail；手機展開採 overlay / drawer，不推擠主內容；桌機保留受控 compact rail；已發布 production。 |
-| `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed | DEV-042 | 記錄 DEV-042 static/browser viewport gate、overlay open/close、DEV-029 pan-first、DEV-039 workbench regression gate 與 production release evidence；真機未執行。 |
-| `ai-doc/qc/QC-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production QC Passed / Physical Phone Supplemental Not Executed | DEV-042 | 記錄 RD 修正、static/browser screenshots、DEV-029/DEV-039 regression、TypeScript、production build、artifact/browser/auth smoke evidence。 |
-| `ai-doc/dev_task.md` | DEV-042 Production Release Deployed / Local + Production Smoke Passed | DEV-042 | 記錄授權邊界：產品程式碼、verifier、本機 automated QA/QC 與 production release 已完成；DB/RLS/migration、正式資料修復與真機手感未執行。 |
+| `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | DEV-042 / DEV-039 / DEV-001 | 定義並記錄手機版 collapsed Sidebar / TaskWorkbench 不保留 in-flow rail；手機展開採 overlay / drawer，不推擠主內容；桌機保留受控 compact rail；已發布 production 且使用者回報真機通過。 |
+| `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | DEV-042 | 記錄 DEV-042 static/browser viewport gate、overlay open/close、DEV-029 pan-first、DEV-039 workbench regression gate、production release evidence 與使用者回報真機通過。 |
+| `ai-doc/qc/QC-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production + User-Reported Physical Phone QC Passed | DEV-042 | 記錄 RD 修正、static/browser screenshots、DEV-029/DEV-039 regression、TypeScript、production build、artifact/browser/auth smoke 與使用者回報 physical-phone supplemental passed evidence。 |
+| `ai-doc/dev_task.md` | DEV-042 Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | DEV-042 | 記錄授權邊界：產品程式碼、verifier、本機 automated QA/QC、production release 與使用者回報真機通過已完成；DB/RLS/migration 與正式資料修復不屬於本 DEV。 |
 
-PM 治理註記：DEV-042 修正的是「手機 collapsed state 不應被桌機 compact rail 語意綁住」。本輪已同時處理主工作區側欄與全域任務平台：mobile closed 不再渲染 in-flow rail，open state 以 overlay 顯示；desktop compact rail 保留。2026-07-06 已發布 Firebase Hosting production。DB schema、migration、RLS/RPC、完整 Sidebar IA redesign、physical-phone supplemental 不在本輪完成範圍。
+PM 治理註記：DEV-042 修正的是「手機 collapsed state 不應被桌機 compact rail 語意綁住」。本輪已同時處理主工作區側欄與全域任務平台：mobile closed 不再渲染 in-flow rail，open state 以 overlay 顯示；desktop compact rail 保留。2026-07-06 已發布 Firebase Hosting production，且使用者回報真機驗證通過。DB schema、migration、RLS/RPC、完整 Sidebar IA redesign 不在本輪完成範圍。
 
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 

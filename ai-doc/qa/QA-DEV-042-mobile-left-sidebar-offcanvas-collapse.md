@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-042
 關聯 SPEC：`ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態：Production Release Deployed / Local + Production Smoke Passed / Physical Phone Supplemental Not Executed
+狀態：Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed
 建立日期：2026-07-05
 
 ## 驗證目標
@@ -129,7 +129,7 @@ QC 回報至少包含：
 
 | Deferred verification | Classification | Covered by | Notes |
 |---|---|---|---|
-| Physical phone final hand-feel | Blocked Human Re-entry | User/QC supplemental | Browser viewport 可先驗證 layout；真機手感需另行授權或使用者回饋 |
+| Physical phone final hand-feel | Same Spec Phase / Complete | User-reported QC supplemental | 2026-07-06 使用者回報 DEV-042 真機驗證通過 |
 | Production smoke | Passed | deployment-release-gate | 2026-07-06 Firebase Hosting production release passed artifact/browser/auth smoke |
 
 ## Production Release Evidence - 2026-07-06
@@ -142,7 +142,18 @@ QC 回報至少包含：
 | Firebase deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`；正式 URL `https://projed-cc78d.web.app` |
 | Post-deploy production smoke | Pass | 正式站 HTTP artifact check 與 browser smoke 均載入 `index-BU14rK7W.js` / `index-CYqvildz.css`；authenticated production UI smoke passed |
 
-限制：production smoke 驗證正式 artifact 與登入後 app flow；DEV-042 真機手感仍需 iOS Safari / Android Chrome 裝置證據，不以 browser viewport 取代。
+## User-Reported Physical Phone Evidence - 2026-07-06
+
+| Gate | 結果 | 證據 |
+|---|---|---|
+| Physical phone supplemental | Pass | 使用者回報「DEV-042 真機驗證 通過」；此 evidence 解除 DEV-042 physical-phone supplemental gate。 |
+
+限制：production smoke 驗證正式 artifact 與登入後 app flow；真機 supplemental 為使用者回報通過，repo 內未附裝置錄影或瀏覽器裝置 log。
+
+## Out of Scope / No Tracking
+
+| Item | Classification | Covered by | Notes |
+|---|---|---|---|
 | RecordSidebar / RagSidebar mobile redesign | No Tracking | 無 | 非本 DEV scope；只做 regression sweep |
 | DB / RLS / migration proof | No Tracking | 無 | 本 DEV 不碰資料層 |
 
@@ -153,4 +164,5 @@ QC 回報至少包含：
 | Phase 0 | Ready / Documentation Complete | RD 只修單一 rail，漏掉另一條 | SPEC / dev_task scope review | 文件未同時涵蓋 Sidebar 與 TaskWorkbench | PM |
 | Phase 1 | Local Automated Browser QA Passed | Mobile closed state 仍佔寬 | Static + browser viewport matrix | 任一 mobile in-flow rail 非零寬 | RD / QC |
 | Phase 2 | Local Automated Regression QA Passed | 手勢與工作台功能回歸 | DEV-029 / DEV-039 regression gates | pan-first、placement lane、cross-board source 任一失敗 | QA / QC |
-| Phase 3 | Blocked | production 與本機不一致 | deployment-release-gate | 未授權部署卻宣稱 production fixed | release owner |
+| Phase 3 | Passed | production 與本機不一致 | deployment-release-gate | production artifact/browser/auth smoke 失敗 | release owner |
+| Phase 4 | Passed | 真機手感與 browser viewport 不一致 | user-reported physical-phone supplemental | 使用者回報真機不通過 | User/QC |
