@@ -255,8 +255,8 @@ npm.cmd run build:test
 
 | Deferred scope | Classification | Reason / tracking |
 |---|---|---|
-| Product code implementation | Same Spec Phase / Complete for Phase 1 | Phase 1 已完成本機 RD；Phase 2/3 未授權。 |
-| Automated verifier implementation | Same Spec Phase / Complete for Phase 1 | 已建立並通過 `verify:dev-044-undo-coverage` 與 `verify:dev-044-undo-coverage-browser`。 |
+| Product code implementation | Same Spec Phase / Complete for Phase 1 + Phase 2 safe slice | Phase 1 已完成本機 RD；Phase 2 safe slice 已完成 batch / reorder / placement ordinary undo；Phase 3 destructive recovery 未授權。 |
+| Automated verifier implementation | Same Spec Phase / Complete for Phase 1 + Phase 2 safe slice | 已建立並通過 `verify:dev-044-undo-coverage` 與 `verify:dev-044-undo-coverage-browser`，其中 static gate 覆蓋 Phase 2 batch command、drag / reorder / placement caller。 |
 | Production deploy | Blocked Human Re-entry | 需 deployment-release-gate 與使用者明確授權。 |
 | DB schema / migration / RLS / RPC | Blocked Human Re-entry | Phase 1 明確不需要；Phase 3 若啟動需另行授權。 |
 | Persistent cross-device undo history | New DEV Candidate | 不屬於低成本 ordinary undo；需成本與隱私決策。 |
@@ -272,7 +272,7 @@ npm.cmd run build:test
 |---|---|---|---|---|---|---|---|
 | Phase 0: PM/RD Contract | Authorized | Complete | SPEC / QA / dev_task / documentation_map | Product code, verifier, deploy | 使用者要求寫成開發文件 | 文件包含 scope、cost guardrail、RD contract、QA gate | File diff |
 | Phase 1: Low-Cost Undo Expansion | Authorized / Local Complete | Implemented / Local Automated QA Passed | Title edits, board create, record save/archive restore, filter/display prefs, async/suppress undo guard | DB history, workspace delete, permission undo, import rollback | Phase 0 contract complete | DEV-044 static/browser verifier and regressions pass；normal operation 不新增 history write | DEV-044 static/browser verifier, DEV-013/039/006 regression, TS, build |
-| Phase 2: Batch / Cross-View Recovery | Not Authorized | RD Contract Ready | Batch task patches, cross-view placement, board move if reversible, drag coalescing | Destructive cascade restore, persistent history | Phase 1 stable and user authorizes batch/cross-view scope | Batch undo/redo atomic enough; no duplicate entities | Batch verifier, workbench regression |
+| Phase 2: Batch / Cross-View Recovery Safe Slice | Authorized / Local Complete for batch, reorder and placement; board workspace transfer not authorized | Safe Slice Implemented / Local Automated QA Passed | Batch task patches, cross-view placement, drag / reorder coalescing | Board move between workspaces, destructive cascade restore, persistent history | Phase 1 stable + user authorized safe slice | Batch / reorder / placement undo is atomic enough; no duplicate entities | `verify:dev-044-undo-coverage`, placement/workbench regression |
 | Phase 3: Destructive Recovery | Human Re-entry Required | RD Contract Ready / Not Authorized | Workspace/board delete lifecycle, import rollback, permission/audit, persistent history | Ordinary Ctrl+Z semantics | 使用者確認成本、retention、DB migration | Recovery model documented and gated by lifecycle tests | ADR/SPEC/QA/QC plus migration evidence |
 
 ## ADR Decision
