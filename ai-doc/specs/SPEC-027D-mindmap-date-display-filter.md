@@ -1,7 +1,7 @@
 # SPEC-027D: Mind Map Date Display and Filter Integration
 
 日期：2026-06-19
-狀態：Implemented / QC Pending
+狀態：Implemented / Browser QC Passed
 關聯 DEV：DEV-027 / DEV-027B / DEV-027C
 優先級：P1 planning UX parity
 

@@ -1,7 +1,7 @@
 # QA-DEV-027D: Mind Map Date Display and Filter Integration
 
 日期：2026-06-19
-狀態：Ready for QC
+狀態：Browser QC Passed
 關聯規格：`ai-doc/specs/SPEC-027D-mindmap-date-display-filter.md`
 
 ## QA 目標
@@ -41,6 +41,6 @@
 - `npm.cmd run lint -- --quiet`
 - `npm.cmd run build:test`
 
-## QC Evidence 待填
+## QC Evidence
 
-QC 執行後須在 `ai-doc/qc/QC-DEV-027D-mindmap-date-display-filter.md` 記錄每個命令的 Pass/Fail、錯誤摘要、修正 commit boundary 與剩餘風險。
+QC 已記錄於 `ai-doc/qc/QC-DEV-027D-mindmap-date-display-filter.md`，包含 static、browser、type、lint、build 與 DEV-027B / DEV-027C regression gates。

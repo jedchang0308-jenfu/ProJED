@@ -1,7 +1,7 @@
 # QA-DEV-027E: Xmind-like Note Relationship Line UX Parity
 
 日期：2026-06-19
-狀態：Ready
+狀態：Browser QC Passed
 關聯規格：`ai-doc/specs/SPEC-027E-xmind-note-relationship-line-ux-parity.md`
 
 ## QA 目標

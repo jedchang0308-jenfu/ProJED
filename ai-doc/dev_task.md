@@ -1544,7 +1544,7 @@ Verified:
 - `npm.cmd run lint -- --quiet`: Pass
 - `npm.cmd run build:test`: Pass, with existing Vite chunk-size/dynamic-import warnings
 
-狀態：Ready
+狀態：Implemented / Browser QC Passed
 類型：後續開發點 / 心智圖 UI/UX parity
 關聯：DEV-027C
 
@@ -1576,7 +1576,7 @@ RD exit gate:
 
 ### DEV-027D: Mind map date display and existing filter integration
 
-狀態：Implemented / QC Pending
+狀態：Implemented / Browser QC Passed
 類型：功能補強 / 心智圖 UX parity
 關聯：DEV-027 / DEV-027B / DEV-027C
 
@@ -1821,7 +1821,7 @@ Implementation evidence:
 
 ### DEV-025: 受控跨工作區移動專案
 
-狀態: Implemented / QC Pending
+狀態: Implemented / DB QC Pending
 任務類型: 功能開發 / 權限與資料一致性
 優先級: P1
 關聯需求: 使用者希望專案可在不同工作區之間移動，但擔心權限外洩、資料遺失與稽核斷鏈。
@@ -1843,7 +1843,7 @@ Implementation evidence:
 | QA 驗證計畫 | QA | Ready | QA-DEV-025 |
 | RD 實作 | RD | Done | Supabase RPC migration + frontend controlled transfer flow + local-test fallback |
 | QA 靜態驗證 | QA | Done | `verify:dev-025-project-workspace-transfer`, TypeScript, production build |
-| QC 事實驗證 | QC | Pending | Apply migration to Supabase target, then verify RLS, audit log, data consistency, RAG visibility evidence |
+| QC 事實驗證 | QC | DB QC Pending | Apply migration to Supabase target, then verify RLS, audit log, data consistency, RAG visibility evidence |
 
 Regression gate:
 - `npm.cmd exec tsc -- --noEmit`
@@ -1907,7 +1907,7 @@ QC Evidence - 2026-07-06:
 
 ### DEV-023: 專案變化匯入整併為紀錄流程第一步
 
-狀態: Ready
+狀態: Implemented / Browser QC Passed
 節點類型: 開發點
 優先級: P1 UX refinement
 父交付點: DEV-020
@@ -2104,7 +2104,7 @@ CAPA 來源：
 | 項目 | 狀態 | Owner | 說明 |
 |---|---|---|---|
 | DEV-018 RD | Done | RD | workflow helper、RecordSidebar、MainLayout、DialogStore、useRecordStore 已更新。 |
-| DEV-018 QA | Ready | QA | 依 `QA-DEV-018` 執行案例驗證。 |
+| DEV-018 QA | Done | QA | `QA-DEV-018` 已由 DEV-018 QC 覆蓋，含 workflow、離開防呆與 viewport。 |
 | DEV-018 QC | Done | QC | DEV-007 至 DEV-012 verifier、build、1440x950 / 1024x768 viewport smoke 已通過。 |
 
 ### DEV-019：紀錄類型與會議流程層級重整
@@ -2231,7 +2231,6 @@ CAPA 來源：
 - Done / Browser QC Passed / Local-first scope：1 個交付點。
 - Implemented / Local Automated QC Passed / Supabase DB QC Pending：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged：1 個交付點。
-- RD Contract Ready / Authorized / Not Started：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed：1 個交付點。
 - Phase 1 + Phase 2 Safe Slice Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed：1 個交付點。
