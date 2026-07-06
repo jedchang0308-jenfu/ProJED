@@ -1,9 +1,11 @@
 # SPEC-003: 會議紀錄與個人工作紀錄工作流設計
 
-狀態：Draft  
+狀態：Implemented / DEV-002 Done Source Spec
 文件角色：PM project spec  
 建立日期：2026-06-04  
 需求來源：使用者提出 ProJED 需要加入「會議紀錄」與「個人工作紀錄」，並透過任務 node 連結資訊，供 AI 做全域分析。
+
+治理註記：DEV-002 已於 2026-06-04 交付並由 `ai-doc/reports/PM-DEV-002-meeting-work-records-implementation.md` 記錄驗證證據；本文件保留為 DEV-002 主要需求來源與後續 DEV-003/005/006/007/008/009/010/011/012/018/019/020 refinements 的 historical source spec，不代表仍有未授權 RD 範圍。
 
 ---
 
