@@ -2179,16 +2179,17 @@ CAPA 來源：
 
 ## 下一步
 
-| 順序 | 任務 | 狀態 | 負責 | 完成條件 |
+此表列的是剩餘 Gate / 人工驗證 / release 動作，不代表 Codex 已被授權直接開工產品 RD。若要執行任何 production、DB、Edge、真機或人工登入式 QC，需使用者重新授權並套用對應 gate。
+
+| 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-037 行事曆訂閱來源範圍 RD | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | RD / QA / QC | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
-| 2 | DEV-038 設定中心 scope summary | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | RD / QA / QC | 已完成設定中心作用範圍與高風險防呆；後續只需 production release 授權時走 deployment gate。 |
-| 3 | DEV-040 Phase 1 P0 正式環境同型風險 RD | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | RD / QA / QC | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
-| 4 | DEV-044 Phase 2/3 Undo Recovery | Phase 2 Safe Slice Implemented / Local Automated QA Passed / Human Re-entry for destructive recovery | RD / QA / QC | batch/cross-view undo 已完成；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
-| 5 | DEV-028 Addendum 人工親自點擊 QC | Manual Click QC Pending | QC / 使用者 | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep。 |
-| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | QC / 使用者 | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
-| 7 | DEV-028 四模式一致的 Trello-like 任務操作契約 QC | Manual Click QC Pending | QC / 使用者 | 與第 5 項相同；不得以 automated browser smoke 取代人工親自點擊 QC。 |
-| 8 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
+| 1 | DEV-037 行事曆訂閱來源範圍 live gate | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | Supabase / release owner | 本機 source-scope contract 已完成；遠端 Supabase migration apply、Edge Function deploy 與 live feed smoke 需另走 Supabase / release gate。 |
+| 2 | DEV-038 設定中心 production gate | Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed | release owner | 已完成設定中心作用範圍與高風險防呆；後續只需 production release 授權時走 deployment gate。 |
+| 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；Edge Function deploy、production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
+| 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Implemented / Local Automated QA Passed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view undo 已完成；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
+| 5 | DEV-028 人工親自點擊 QC | Manual Click QC Pending | 使用者 / QC | 依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
+| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Human Login Required | 使用者 / QC | 以已登入 Google 的正式前端完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
+| 7 | DEV-042 production / physical-phone supplemental | Blocked Human Re-entry | release owner / 使用者 | 若要發布需走 deployment-release-gate；若要真機簽核需 iOS Safari / Android Chrome 裝置證據。 |
 
 ---
 
@@ -2230,15 +2231,16 @@ CAPA 來源：
 - In Verification：2 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Static + Browser Smoke Passed：1 個交付點。
-- Implemented / Browser Smoke Passed / Manual Click QC Pending：1 個交付點。
+- Implemented / Local Automated QA Passed / Manual Click QC Pending / Production Not Deployed：1 個交付點。
 - Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Done / Browser QC Passed / Local-first scope：1 個交付點。
 - Implemented / Local Automated QC Passed / Supabase DB QC Pending：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged：1 個交付點。
+- Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged / Production Not Deployed：1 個交付點。
 - Phase 1 + Phase 2 Safe Slice Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed：1 個交付點。
-- Production Release Deployed / Original BUG Smoke Passed / Extended Matrix Partially Covered：1 個交付點。
+- Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / Extended Matrix Partially Covered：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
 - Implemented / Local Automated Browser QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
