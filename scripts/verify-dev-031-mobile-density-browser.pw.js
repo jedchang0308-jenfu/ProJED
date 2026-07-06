@@ -77,23 +77,40 @@ async (page) => {
     assert(navHeight <= 36, `${label} main nav should use compact mobile density`, { navHeight });
   };
 
+  const assertMobileNavRedundantInfoHidden = async (label) => {
+    const brandNodeCount = await page.locator('[data-mobile-hidden-brand="true"]').count();
+    const visibleShareButtons = await visibleCount('[data-board-share-open]');
+    const visibleTaskWorkbenchEntries = await visibleCount('[data-mobile-task-workbench-nav-entry="true"]');
+    assert(
+      brandNodeCount === 0,
+      `${label} should remove redundant brand copy from the main nav`,
+      { brandNodeCount },
+    );
+    assert(visibleShareButtons === 0, `${label} should hide share info on mobile`, { visibleShareButtons });
+    assert(
+      visibleTaskWorkbenchEntries === 1,
+      `${label} should expose mobile task workbench entry in the main nav`,
+      { visibleTaskWorkbenchEntries },
+    );
+  };
+
   let step = 'open-app';
   try {
     await openApp();
     await assertMainChromeDensity('initial');
+    await assertMobileNavRedundantInfoHidden('initial');
 
-    step = 'mobile should only expose board mode';
+    step = 'mobile should not render mode switcher controls';
     const boardModeCount = await page.locator('[data-mode-switcher-value="board"]').count();
     const listModeCount = await page.locator('[data-mode-switcher-value="list"]').count();
     const mindMapModeCount = await page.locator('[data-mode-switcher-value="mindmap"]').count();
     const ganttModeCount = await page.locator('[data-mode-switcher-value="gantt"]').count();
     const calendarModeCount = await page.locator('[data-mode-switcher-value="calendar"]').count();
     const recordsModeCount = await page.locator('[data-mode-switcher-value="records"]').count();
-    assert(boardModeCount === 1, 'mobile should expose the board mode entry', { boardModeCount });
     assert(
-      listModeCount + mindMapModeCount + ganttModeCount + calendarModeCount + recordsModeCount === 0,
-      'mobile should hide non-board mode entries',
-      { listModeCount, mindMapModeCount, ganttModeCount, calendarModeCount, recordsModeCount },
+      boardModeCount + listModeCount + mindMapModeCount + ganttModeCount + calendarModeCount + recordsModeCount === 0,
+      'mobile should hide all mode switcher entries',
+      { boardModeCount, listModeCount, mindMapModeCount, ganttModeCount, calendarModeCount, recordsModeCount },
     );
 
     step = 'board density';
@@ -104,6 +121,41 @@ async (page) => {
     assert(boardColumnWidth <= 256, 'board columns should be compact on mobile', { boardColumnWidth });
     assert(boardCardPaddingTop <= 3, 'board card vertical padding should be compact on mobile', { boardCardPaddingTop });
     assert(boardVisibleCards >= 1, 'board visible task density should keep cards visible', { boardVisibleCards });
+
+    step = 'desktop nav removes brand and shows full board title';
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('.app-main-nav').waitFor({ state: 'visible', timeout: 15000 });
+    const desktopBrandNodeCount = await page.locator('[data-mobile-hidden-brand="true"]').count();
+    assert(desktopBrandNodeCount === 0, 'desktop nav should remove the redundant ProJED brand crumb', { desktopBrandNodeCount });
+    const desktopTitle = page.locator('.app-board-title').first();
+    await desktopTitle.waitFor({ state: 'visible', timeout: 15000 });
+    const longBoardTitle = '看板名稱完整呈現驗證';
+    await desktopTitle.evaluate((element, text) => {
+      element.textContent = text;
+    }, longBoardTitle);
+    const titleMetrics = await desktopTitle.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        text: element.textContent || '',
+        width: rect.width,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        overflow: style.overflow,
+        textOverflow: style.textOverflow,
+        whiteSpace: style.whiteSpace,
+      };
+    });
+    assert(
+      titleMetrics.text === longBoardTitle &&
+        titleMetrics.whiteSpace === 'nowrap' &&
+        titleMetrics.textOverflow !== 'ellipsis' &&
+        titleMetrics.scrollWidth <= titleMetrics.clientWidth + 1,
+      'desktop board title should render fully without truncation',
+      titleMetrics,
+    );
+
     await assertNoVisibleErrors(step);
   } catch (error) {
     throw new Error(`${step}: ${error.message}`);

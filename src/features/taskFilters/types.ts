@@ -20,7 +20,7 @@ export type TaskDisplaySettings = {
 };
 
 export type BoardTaskFilterPrefs = {
-  version: 1;
+  version: number;
   filters: TaskFilterState;
   displaySettings: TaskDisplaySettings;
   updatedAt: number;

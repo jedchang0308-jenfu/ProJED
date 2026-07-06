@@ -8,7 +8,6 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { KanbanDependencyContext } from '../BoardView';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
 import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
@@ -52,9 +51,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const addTaskInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isEditing && titleInputRef.current) {
@@ -181,16 +178,15 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     (isOver || overData?.nodeId === nodeId || isOverColumnDescendant)
   );
 
-  const handleAddCard = (title?: string) => {
+  const handleAddCard = () => {
     if (!canCreateTask) return;
     if (!node) return;
-    const trimmedTitle = title?.trim();
     const newNode: TaskNode = {
       id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
       workspaceId: activeWorkspaceId || '',
       boardId: node.boardId,
       parentId: nodeId,
-      title: trimmedTitle || '新任務',
+      title: '新任務',
       status: 'todo',
       nodeType: 'task',
       order: children.length,
@@ -200,13 +196,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
-  };
-
-  const handleAddTaskSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    handleAddCard(newTaskTitle);
-    setNewTaskTitle('');
-    addTaskInputRef.current?.focus();
+    selectAndOpenTaskDetails(newNode.id);
   };
 
   // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
@@ -420,27 +410,21 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           ))}
         </SortableContext>
 
-        <form className="mt-[6px] space-y-[6px]" onSubmit={handleAddTaskSubmit}>
-          <Input
-            ref={addTaskInputRef}
-            value={newTaskTitle}
-            onChange={(event) => setNewTaskTitle(event.target.value)}
-            disabled={!canCreateTask}
-            placeholder="輸入任務名稱"
-            className="h-8 bg-white text-xs"
-          />
+        <div className="mt-[6px]">
           <Button
-            type="submit"
+            type="button"
             variant="dashed"
             size="none"
             fullWidth
             disabled={!canCreateTask}
+            onClick={handleAddCard}
+            data-kanban-add-task-button="true"
             className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold group"
           >
             <Plus size={14} className="transition-transform group-hover:scale-110" />
             新增任務
           </Button>
-        </form>
+        </div>
 
         <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />
       </div>

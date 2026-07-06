@@ -53,6 +53,7 @@ async (page) => {
       status: 'in_progress',
       nodeType: 'task',
       order: 0,
+      startDate: '2026-06-30',
       endDate: '2026-07-08',
       assigneeId: account.id,
       tagIds: ['dev039-placement-tag-focus'],
@@ -61,14 +62,16 @@ async (page) => {
     },
   };
 
-  const dragToCenter = async (sourceLocator, targetLocator) => {
+  const dragToCenter = async (sourceLocator, targetLocator, options = {}) => {
     const sourceBox = await sourceLocator.boundingBox();
     const targetBox = await targetLocator.boundingBox();
     assert(sourceBox && targetBox, 'drag source and target should have visible boxes', { sourceBox, targetBox });
     const startX = sourceBox.x + sourceBox.width / 2;
     const startY = sourceBox.y + sourceBox.height / 2;
     const targetX = targetBox.x + targetBox.width / 2;
-    const targetY = targetBox.y + Math.min(targetBox.height - 12, Math.max(28, targetBox.height / 2));
+    const targetY = targetBox.y + (Number.isFinite(options.targetOffsetY)
+      ? Math.min(targetBox.height - 8, Math.max(8, options.targetOffsetY))
+      : Math.min(targetBox.height - 12, Math.max(28, targetBox.height / 2)));
     await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.mouse.move(startX + 8, startY + 8, { steps: 4 });
@@ -174,14 +177,22 @@ async (page) => {
       .locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="placed"]')
       .filter({ hasText: '已歸位任務 - 國泰發現' })
       .first();
+    const unplacedDateText = await sortedUnplacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null);
+    const placedDateText = await sortedPlacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null);
     assert(
       await sortedUnplacedCard.locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-01"]').count() === 1 &&
         await sortedPlacedCard.locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-08"]').count() === 1,
       'all-task sorted lane should render due date badges from the shared task date module',
       {
-        unplacedDateText: await sortedUnplacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null),
-        placedDateText: await sortedPlacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null),
+        unplacedDateText,
+        placedDateText,
       },
+    );
+    assert(
+      unplacedDateText && !unplacedDateText.includes('→') && !unplacedDateText.includes('...') && unplacedDateText.includes('07/01') &&
+        placedDateText && !placedDateText.includes('→') && !placedDateText.includes('06/30') && placedDateText.includes('07/08'),
+      'workbench due date badges should hide start dates even when global start-date display is enabled',
+      { unplacedDateText, placedDateText },
     );
     const seededUnplacedCompactCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').first();
     const seededUnplacedBox = await seededUnplacedCompactCard.boundingBox();
@@ -195,7 +206,7 @@ async (page) => {
     const seededUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '尚未歸位的採購提醒' }).first();
     await seededUnplacedCard.click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await page.keyboard.press('Escape');
+    await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'detached', timeout: 10000 });
 
     step = 'add-unplaced-task';
@@ -225,11 +236,18 @@ async (page) => {
     assert(await placedMovedCard.count() === 1, 'moved task should appear in placed lane exactly once');
 
     step = 'drag-placed-back-to-unplaced';
-    await dragToCenter(placedMovedCard, unplacedLane);
-    await page.waitForFunction(() => {
-      const unplacedCards = Array.from(document.querySelectorAll('[data-task-workbench-unplaced-task-card="true"]'));
-      return unplacedCards.some(card => card.textContent?.includes('臨時拜訪客戶'));
-    }, null, { timeout: 10000 });
+    const placedBackSourceBox = await placedMovedCard.boundingBox();
+    const unplacedBackTargetBox = await unplacedLane.boundingBox();
+    await dragToCenter(placedMovedCard, unplacedLane, { targetOffsetY: 24 });
+    try {
+      await page.waitForFunction(() => {
+        const unplacedCards = Array.from(document.querySelectorAll('[data-task-workbench-unplaced-task-card="true"]'));
+        return unplacedCards.some(card => card.textContent?.includes('臨時拜訪客戶'));
+      }, null, { timeout: 10000 });
+    } catch (error) {
+      await page.screenshot({ path: `output/playwright/dev-039-placement-drag-back-failure-${Date.now()}.png`, fullPage: true });
+      throw new Error(`drag back did not place task in unplaced lane: ${JSON.stringify({ placedBackSourceBox, unplacedBackTargetBox })}`);
+    }
     assert(
       await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 0,
       'dragging placed task back should remove it from the placed board lane',
@@ -279,10 +297,7 @@ async (page) => {
     const mobileClosedOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     assert(!mobileClosedOverflow, 'mobile closed rails should not create document-level horizontal overflow');
 
-    await page.locator('[data-main-sidebar-toggle="true"]').click();
-    await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-sidebar-task-workbench-button="true"]').click();
-    await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 10000 });
+    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
     await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-unplaced-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });

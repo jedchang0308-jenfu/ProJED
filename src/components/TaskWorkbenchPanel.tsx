@@ -3,7 +3,6 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   Filter,
   RotateCcw,
   Search,
@@ -18,8 +17,10 @@ import useQuickCaptureStore from '../store/useQuickCaptureStore';
 import {
   createBoardAssigneeFilterOptions,
   createDefaultTaskFilters,
+  BOARD_TASK_FILTER_PREFS_VERSION,
   countActiveTaskFilters,
   isTaskEffectivelyVisible,
+  migrateLegacyDefaultTaskFilters,
   normalizeTaskFilters,
   projectTaskFilterResults,
   TASK_STATUS_OPTIONS,
@@ -45,6 +46,7 @@ import { compactClassNames } from './ui/compactTokens';
 const PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
 const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
 const OPEN_PANEL_EVENT = 'projed:open-task-workbench-panel';
+const TOGGLE_PANEL_EVENT = 'projed:toggle-task-workbench-panel';
 
 type PanelPrefs = {
   open: boolean;
@@ -78,17 +80,32 @@ export const openTaskWorkbenchPanel = () => {
   }
 };
 
+export const toggleTaskWorkbenchPanel = () => {
+  try {
+    const current = JSON.parse(window.localStorage.getItem(PANEL_PREFS_KEY) || '{}') as Partial<PanelPrefs>;
+    window.localStorage.setItem(PANEL_PREFS_KEY, JSON.stringify({
+      ...current,
+      open: current.open !== true,
+      filtersOpen: false,
+      showContainersInAllTasks: Boolean(current.showContainersInAllTasks),
+    }));
+  } catch {
+    // Best-effort UI preference.
+  }
+  window.dispatchEvent(new CustomEvent(TOGGLE_PANEL_EVENT));
+};
+
 const readPanelPrefs = (): PanelPrefs => {
-  if (typeof window === 'undefined') return { open: true, filtersOpen: false, showContainersInAllTasks: false };
+  if (typeof window === 'undefined') return { open: false, filtersOpen: false, showContainersInAllTasks: false };
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PANEL_PREFS_KEY) || '{}') as Partial<PanelPrefs>;
     return {
-      open: parsed.open !== false,
+      open: parsed.open === true,
       filtersOpen: Boolean(parsed.filtersOpen),
       showContainersInAllTasks: Boolean(parsed.showContainersInAllTasks),
     };
   } catch {
-    return { open: true, filtersOpen: false, showContainersInAllTasks: false };
+    return { open: false, filtersOpen: false, showContainersInAllTasks: false };
   }
 };
 
@@ -104,10 +121,11 @@ const readWorkbenchFilterPrefs = (): WorkbenchFilterPrefs => {
   if (typeof window === 'undefined') return { selectedBoardId: null, filtersByBoardId: {} };
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(TASK_WORKBENCH_FILTER_PREFS_KEY) || '{}') as Partial<WorkbenchFilterPrefs>;
+    const parsed = JSON.parse(window.localStorage.getItem(TASK_WORKBENCH_FILTER_PREFS_KEY) || '{}') as Partial<WorkbenchFilterPrefs & { version: number }>;
+    const prefsVersion = typeof parsed.version === 'number' ? parsed.version : 1;
     const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterState>>((acc, [boardId, filters]) => {
       if (typeof boardId === 'string' && filters && typeof filters === 'object') {
-        acc[boardId] = normalizeTaskFilters(filters as Partial<TaskFilterState>);
+        acc[boardId] = normalizeTaskFilters(migrateLegacyDefaultTaskFilters(filters as Partial<TaskFilterState>, prefsVersion));
       }
       return acc;
     }, {});
@@ -124,7 +142,7 @@ const readWorkbenchFilterPrefs = (): WorkbenchFilterPrefs => {
 const writeWorkbenchFilterPrefs = (prefs: WorkbenchFilterPrefs) => {
   try {
     window.localStorage.setItem(TASK_WORKBENCH_FILTER_PREFS_KEY, JSON.stringify({
-      version: 1,
+      version: BOARD_TASK_FILTER_PREFS_VERSION,
       selectedBoardId: prefs.selectedBoardId,
       filtersByBoardId: prefs.filtersByBoardId,
       updatedAt: Date.now(),
@@ -315,7 +333,6 @@ const WorkbenchDragCard: React.FC<{
     },
   });
   const touchTapGuard = useTouchTapGuard();
-  const showStartDate = useBoardStore(s => s.showStartDate);
   const dependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(task.id, dependencies);
@@ -429,7 +446,7 @@ const WorkbenchDragCard: React.FC<{
           startDate={task.startDate}
           endDate={task.endDate}
           status={task.status}
-          showStartDate={showStartDate}
+          showStartDate={false}
           startLocked={lockStatus.startLocked}
           endLocked={lockStatus.endLocked}
           durationLocked={Boolean(task.isDurationLocked)}
@@ -679,15 +696,37 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   }, [isNarrowViewport, patchPanelPrefs]);
 
   React.useEffect(() => {
-    if (!isNarrowViewport || !mobileOverlayOpen) return;
+    const toggle = () => {
+      if (isNarrowViewport) {
+        setMobileOverlayOpen(current => !current);
+        return;
+      }
+
+      setPanelPrefs(current => {
+        const next = { ...current, open: !current.open, filtersOpen: false };
+        writePanelPrefs(next);
+        return next;
+      });
+    };
+
+    window.addEventListener(TOGGLE_PANEL_EVENT, toggle);
+    return () => window.removeEventListener(TOGGLE_PANEL_EVENT, toggle);
+  }, [isNarrowViewport]);
+
+  React.useEffect(() => {
+    const panelOpen = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
+    if (!panelOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
+      const hasBlockingOverlay = Boolean(document.querySelector('[data-task-details-modal="true"], [data-filter-menu-panel], [data-mode-switcher-menu="true"], [data-tag-picker-panel], .global-dialog-content'));
+      if (hasBlockingOverlay) return;
       event.preventDefault();
-      setMobileOverlayOpen(false);
+      if (isNarrowViewport) setMobileOverlayOpen(false);
+      else patchPanelPrefs({ open: false });
     };
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [isNarrowViewport, mobileOverlayOpen]);
+  }, [isNarrowViewport, mobileOverlayOpen, panelPrefs.open, patchPanelPrefs]);
 
   React.useEffect(() => {
     if (!panelPrefs.filtersOpen) return;
@@ -888,36 +927,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   });
 
   const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
+  const panelOverlayWidth = isNarrowViewport ? 'min(340px, calc(100vw - 52px))' : '340px';
 
   if (!isExpanded) {
-    if (isNarrowViewport) return null;
-
-    return (
-      <aside
-        className="flex w-6 shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3"
-        data-task-workbench-panel="collapsed"
-        aria-label="全域任務平台"
-      >
-        <button
-          type="button"
-          onClick={() => {
-            if (isNarrowViewport) setMobileOverlayOpen(true);
-            else patchPanelPrefs({ open: true });
-          }}
-          className="flex h-8 w-6 !min-w-0 items-center justify-center rounded-sm text-primary transition-colors hover:bg-primary/5"
-          title="開啟全域任務平台"
-          data-task-workbench-collapsed-toggle="true"
-        >
-          <ChevronRight size={16} />
-        </button>
-        <div
-          className="mt-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-50 px-1 text-[11px] font-bold leading-none text-blue-600"
-          data-task-workbench-collapsed-count="true"
-        >
-          {allSortedTasks.length}
-        </div>
-      </aside>
-    );
+    return null;
   }
 
   return (
@@ -925,21 +938,24 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
       {isNarrowViewport ? (
         <button
           type="button"
-          className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20 md:hidden"
-          style={{ left: 'min(340px, calc(100vw - 52px))' }}
+          className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
+          style={{ left: panelOverlayWidth }}
           onClick={() => setMobileOverlayOpen(false)}
           aria-label="關閉全域任務平台遮罩"
+          data-task-workbench-backdrop="true"
           data-mobile-task-workbench-backdrop="true"
         />
       ) : null}
       <aside
-        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r border-slate-200 bg-white shadow-[8px_0_24px_rgba(15,23,42,0.06)] ${
+        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r border-slate-200 bg-white ${
           isNarrowViewport
-            ? 'fixed bottom-0 left-0 top-10 z-50'
-            : 'w-[340px]'
+            ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_24px_rgba(15,23,42,0.06)]'
+            : 'relative z-10 h-full shadow-none'
         }`}
-        style={isNarrowViewport ? { width: 'min(340px, calc(100vw - 52px))' } : undefined}
+        style={{ width: panelOverlayWidth }}
         data-task-workbench-panel="true"
+        data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
+        data-task-workbench-inline={!isNarrowViewport ? 'true' : undefined}
         data-mobile-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
         aria-label="全域任務平台"
       >

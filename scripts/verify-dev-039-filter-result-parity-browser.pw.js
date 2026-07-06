@@ -178,12 +178,7 @@ async (page) => {
 
     const mobileWorkbenchPanel = page.locator('[data-task-workbench-panel="true"]');
     if (await mobileWorkbenchPanel.count() === 0) {
-      const mobileSidebar = page.locator('[data-sidebar-panel="expanded"]');
-      if (await mobileSidebar.count() === 0) {
-        await page.locator('[data-main-sidebar-toggle="true"]').click();
-      }
-      await mobileSidebar.waitFor({ state: 'visible', timeout: 10000 });
-      await mobileSidebar.locator('[data-sidebar-task-workbench-button="true"]').click();
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
     }
     await mobileWorkbenchPanel.waitFor({ state: 'visible', timeout: 10000 });
     const mobileFilterToggle = mobileWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]');

@@ -19,6 +19,7 @@ for (const [label, file] of Object.entries(files)) {
 }
 
 const source = Object.fromEntries(Object.entries(files).map(([label, file]) => [label, read(file)]));
+const normalizedCss = source.css.replace(/\r\n/g, '\n');
 
 assert(
   'compact tokens expose stable mobile density classes',
@@ -37,23 +38,40 @@ assert(
     source.mainLayout.includes('useCoarsePointer()') &&
     source.mainLayout.includes("window.matchMedia('(max-width: 640px)'") &&
     source.mainLayout.includes('isMobileBoardOnly') &&
-    source.mainLayout.includes("new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar', 'records'])") &&
+    source.mainLayout.includes("new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar'])") &&
     source.mainLayout.includes("setView('board')") &&
-    source.mainLayout.includes("modeSwitcherOptions.filter(option => option.value === 'board')"),
+    source.mainLayout.includes('{!isMobileBoardOnly ? (') &&
+    source.mainLayout.includes('options={modeSwitcherOptions}'),
+);
+
+assert(
+  'mobile nav removes redundant brand/share info and exposes task workbench entry',
+  !source.mainLayout.includes('data-mobile-hidden-brand="true"') &&
+    !source.mainLayout.includes('>ProJED<') &&
+    !source.mainLayout.includes('Layout className=') &&
+    source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('handleToggleMobileTaskWorkbench') &&
+    source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
+    source.mainLayout.includes('ClipboardList') &&
+    source.mainLayout.includes('whitespace-nowrap rounded') &&
+    !source.mainLayout.includes('cursor-text truncate') &&
+    source.mainLayout.includes('data-board-share-open') &&
+    source.mainLayout.includes('btn-outline hidden h-7') &&
+    source.mainLayout.includes('sm:flex sm:h-8'),
 );
 
 assert(
   'mobile CSS reduces major whitespace by about 30 percent',
-  source.css.includes('目標將主要留白壓到約 70%') &&
-    source.css.includes('.app-main-nav') &&
-    source.css.includes('height: 34px !important') &&
-    source.css.includes('.app-compact-toolbar') &&
-    source.css.includes('padding: 7px 8px !important') &&
-    source.css.includes('.app-compact-segmented-button') &&
-    source.css.includes('height: 26px !important') &&
-    source.css.includes('button {\n    min-height: 34px') &&
-    source.css.includes('.task-drag-hitbox') &&
-    source.css.includes('min-width: 44px'),
+  normalizedCss.includes('目標將主要留白壓到約 70%') &&
+    normalizedCss.includes('.app-main-nav') &&
+    normalizedCss.includes('height: 34px !important') &&
+    normalizedCss.includes('.app-compact-toolbar') &&
+    normalizedCss.includes('padding: 7px 8px !important') &&
+    normalizedCss.includes('.app-compact-segmented-button') &&
+    normalizedCss.includes('height: 26px !important') &&
+    normalizedCss.includes('button {\n    min-height: 34px') &&
+    normalizedCss.includes('.task-drag-hitbox') &&
+    normalizedCss.includes('min-width: 44px'),
 );
 
 assert(
@@ -67,11 +85,18 @@ assert(
 
 assert(
   'browser verifier checks mobile board-only contract and board density',
-  source.browserVerifier.includes('setCoarsePointer') &&
-    source.browserVerifier.includes('mobile should only expose board mode') &&
+    source.browserVerifier.includes('setCoarsePointer') &&
+    source.browserVerifier.includes('assertMobileNavRedundantInfoHidden') &&
+    source.browserVerifier.includes('brandNodeCount === 0') &&
+    source.browserVerifier.includes('desktopBrandNodeCount === 0') &&
+    source.browserVerifier.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.browserVerifier.includes('data-board-share-open') &&
+    source.browserVerifier.includes('mobile should not render mode switcher controls') &&
     source.browserVerifier.includes('data-mode-switcher-value="board"') &&
     source.browserVerifier.includes('data-mode-switcher-value="list"') &&
     source.browserVerifier.includes('board density') &&
+    source.browserVerifier.includes('desktop nav removes brand and shows full board title') &&
+    source.browserVerifier.includes('textOverflow !==') &&
     source.browserVerifier.includes('assertNoVisibleErrors') &&
     source.browserVerifier.includes('visible task density'),
 );

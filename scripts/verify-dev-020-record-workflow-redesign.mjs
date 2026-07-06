@@ -19,7 +19,6 @@ const checks = [
       '已開啟會議紀錄；離開請使用右側紀錄欄的離開紀錄。',
       '已開啟個人紀錄；若要新增會議記錄，請先離開目前紀錄。',
       '!isMeetingMode && !isRecordOpen',
-      "label: '紀錄庫'",
       '紀錄中先離開紀錄再切換檢視',
     ],
     forbiddenSnippets: [
@@ -27,6 +26,18 @@ const checks = [
       '<span className="hidden lg:inline">離開會議</span>',
       "label: '紀錄庫(開發中)'",
       '選取模式中無法切換檢視"',
+    ],
+  },
+  {
+    path: 'src/components/Sidebar.tsx',
+    label: 'sidebar records library entry',
+    snippets: [
+      'BookOpenText',
+      'data-sidebar-records-button="true"',
+      "setView('records')",
+      'isRecordsView',
+      '紀錄庫',
+      '設定',
     ],
   },
   {

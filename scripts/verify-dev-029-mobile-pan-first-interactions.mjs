@@ -112,7 +112,7 @@ assert(
     source.mindMapCanvasShell.includes('data-mobile-pan-surface="mindmap"') &&
     source.ganttView.includes('data-mobile-pan-surface="gantt"') &&
     source.ganttTaskBar.includes('const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer') &&
-    source.browserVerifier.includes('mobile exposes only board mode') &&
+    source.browserVerifier.includes('mobile hides mode switcher controls') &&
     source.browserVerifier.includes('data-mode-switcher-value="list"') &&
     source.browserVerifier.includes('data-mode-switcher-value="gantt"'),
 );
@@ -126,7 +126,7 @@ assert(
 assert(
   'browser verifier covers mobile board-only pan-first contract',
   source.browserVerifier.includes('setCoarsePointer') &&
-    source.browserVerifier.includes('mobile exposes only board mode') &&
+    source.browserVerifier.includes('mobile hides mode switcher controls') &&
     source.browserVerifier.includes('dispatchTouchGesture') &&
     source.browserVerifier.includes('card body pan suppresses task actions') &&
     source.browserVerifier.includes('mobile quick tap opens TaskDetailsModal when no pan movement occurs') &&

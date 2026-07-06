@@ -39,6 +39,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
+      startDate: '2026-07-01',
       endDate: '2026-07-08',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
@@ -52,6 +53,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
+      startDate: '2026-06-28',
       endDate: '2026-07-05',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
@@ -78,6 +80,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
+      startDate: '2026-07-02',
       endDate: '2026-07-06',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
@@ -252,6 +255,9 @@ async (page) => {
       .filter({ hasText: 'Board A cross-source task' })
       .first()
       .locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-08"]');
+    const bDateText = await bDateBadge.textContent().catch(() => null);
+    const childDateText = await childDateBadge.textContent().catch(() => null);
+    const aDateText = await aDateBadge.textContent().catch(() => null);
     assert(
       await bDateBadge.count() === 1 &&
         await childDateBadge.count() === 1 &&
@@ -259,10 +265,17 @@ async (page) => {
       'cross-board all-task ordering should show due dates on each sorted task row',
       {
         activeBoardLabel,
-        bDateText: await bDateBadge.textContent().catch(() => null),
-        childDateText: await childDateBadge.textContent().catch(() => null),
-        aDateText: await aDateBadge.textContent().catch(() => null),
+        bDateText,
+        childDateText,
+        aDateText,
       },
+    );
+    assert(
+      bDateText && !bDateText.includes('→') && !bDateText.includes('06/28') && bDateText.includes('07/05') &&
+        childDateText && !childDateText.includes('→') && !childDateText.includes('07/02') && childDateText.includes('07/06') &&
+        aDateText && !aDateText.includes('→') && !aDateText.includes('07/01') && aDateText.includes('07/08'),
+      'cross-board workbench date badges should hide start dates and render due dates only',
+      { bDateText, childDateText, aDateText },
     );
 
     const rootCard = allTaskCards.filter({ hasText: 'Board B cross-source task' }).first();

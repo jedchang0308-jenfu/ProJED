@@ -116,7 +116,7 @@ RD implementation scope：
 
 Existing selectors should be preserved where possible:
 
-- `data-sidebar-task-workbench-button="true"`
+- `data-mobile-task-workbench-nav-entry="true"`
 - `data-task-workbench-panel="true"`
 - `data-task-workbench-panel="collapsed"`
 - `data-task-workbench-collapsed-toggle="true"`

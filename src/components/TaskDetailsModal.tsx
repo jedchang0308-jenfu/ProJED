@@ -8,6 +8,7 @@ import { TagPicker } from './Tags/TagPicker';
 import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskStatus } from '../types';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import useBoardStore from '../store/useBoardStore';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -63,7 +64,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const titleInputRef = React.useRef<HTMLInputElement | null>(null);
   const { canEditTask, canAssignTask } = useBoardPermissions();
+  const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
+  const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
+  const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
+  const pendingDirectTitleEditNodeId = useBoardStore((state) => state.pendingDirectTitleEditNodeId);
+  const setPendingDirectTitleEditNodeId = useBoardStore((state) => state.setPendingDirectTitleEditNodeId);
   const [size, setSize] = React.useState(readSavedSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
@@ -113,6 +120,39 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     );
     skipNextNotesSave.current = true;
   }, [node?.id, node?.title]);
+
+  React.useEffect(() => {
+    if (!node || !canEditTask) return;
+    const shouldFocusTitle =
+      pendingTitleEditNodeId === node.id ||
+      pendingDirectTitleEditNodeId === node.id;
+
+    if (!shouldFocusTitle) return;
+
+    const initialValue = pendingTitleEditNodeId === node.id ? pendingTitleEditInitialValue : null;
+    if (initialValue !== null) setTitleValue(initialValue);
+    setPendingTitleEditNodeId(null);
+    setPendingDirectTitleEditNodeId(null);
+
+    window.requestAnimationFrame(() => {
+      const input = titleInputRef.current;
+      if (!input) return;
+      input.focus();
+      if (initialValue !== null) {
+        input.setSelectionRange(initialValue.length, initialValue.length);
+        return;
+      }
+      input.select();
+    });
+  }, [
+    canEditTask,
+    node,
+    pendingDirectTitleEditNodeId,
+    pendingTitleEditInitialValue,
+    pendingTitleEditNodeId,
+    setPendingDirectTitleEditNodeId,
+    setPendingTitleEditNodeId,
+  ]);
 
   React.useEffect(() => {
     const modal = modalRef.current;
@@ -318,6 +358,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
             <div className="flex min-w-0 items-center gap-2">
               {canEditTask ? (
                 <input
+                  ref={titleInputRef}
                   type="text"
                   value={titleValue}
                   onChange={(event) => setTitleValue(event.target.value)}

@@ -33,6 +33,7 @@ async (page) => {
   };
 
   const switchMode = async (mode) => {
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
     await page.locator(`[data-mode-switcher-value="${mode}"]`).click();
     await page.waitForTimeout(250);
   };
@@ -161,8 +162,8 @@ async (page) => {
     });
 
     step = 'mobile-board-visibility';
-    await page.setViewportSize({ width: 390, height: 844 });
     await switchMode('board');
+    await page.setViewportSize({ width: 390, height: 844 });
     await firstVisibleTask('.kanban-task-card[data-task-id]');
     const hasVisibleCard = await page.evaluate(() => {
       const task = document.querySelector('.kanban-task-card[data-task-id]');

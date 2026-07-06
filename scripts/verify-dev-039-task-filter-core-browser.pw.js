@@ -129,10 +129,11 @@ async (page) => {
     await openApp();
 
     step = 'mindmap-filter-entry';
-    await page.getByText('心智圖', { exact: true }).click();
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator('[data-mode-switcher-value="mindmap"]').click();
     await page.locator('#filter-menu-trigger').waitFor({ state: 'visible', timeout: 10000 });
     const filterCount = await page.locator('#filter-menu-trigger').getAttribute('data-active-task-filter-count');
-    assert(filterCount === '0', 'mindmap filter trigger should use shared active count and start at zero', { filterCount });
+    assert(filterCount === '1', 'mindmap filter trigger should use shared active count and default to hiding completed tasks', { filterCount });
 
     step = 'display-settings-not-active-filter';
     await page.locator('#filter-menu-trigger').click();
@@ -141,10 +142,10 @@ async (page) => {
     await panel.locator('[data-task-display-settings="true"]').getByText('標籤', { exact: true }).click();
     await page.keyboard.press('Escape');
     const countAfterDisplayToggle = await page.locator('#filter-menu-trigger').getAttribute('data-active-task-filter-count');
-    assert(countAfterDisplayToggle === '0', 'display settings should not increment active task filter count', { countAfterDisplayToggle });
+    assert(countAfterDisplayToggle === '1', 'display settings should not increment active task filter count beyond the default completed filter', { countAfterDisplayToggle });
 
     step = 'task-workbench-board-filter';
-    await page.locator('[data-sidebar-task-workbench-button="true"]').first().click();
+    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
     const workbenchPanel = page.locator('[data-task-workbench-panel="true"]');
     await workbenchPanel.waitFor({ state: 'visible', timeout: 10000 });
     assert(await workbenchPanel.locator('[data-task-workbench-source-summary="true"]').count() === 0, 'workbench should not render the removed source summary');
@@ -216,7 +217,7 @@ async (page) => {
     await reloadedFilterPanel.waitFor({ state: 'visible', timeout: 10000 });
     assert(await reloadedFilterPanel.locator('[data-task-workbench-board-select="true"]').inputValue() === 'dev039-board-b', 'workbench selected board should persist after reload');
     assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 0, 'board B todo filter should persist after reload');
-    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').getAttribute('data-active-task-workbench-filter-count') === '1', 'workbench active filter count should persist after reload');
+    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').getAttribute('data-active-task-workbench-filter-count') === '2', 'workbench active filter count should persist after reload');
     await reloadedFilterPanel.getByRole('button', { name: /重設/ }).click();
     assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 1, 'reset should restore board B filter without save/profile controls');
     const reloadedUnclassifiedSection = page.locator('[data-task-workbench-unclassified-section="true"]');
@@ -225,14 +226,14 @@ async (page) => {
     step = 'mobile-viewport';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('[data-task-workbench-panel="collapsed"]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-task-workbench-panel="collapsed"]').waitFor({ state: 'detached', timeout: 10000 });
     const mobileBoardHasCard = await page.evaluate(() => {
       const task = document.querySelector('.kanban-task-card[data-task-id]');
       const rect = task?.getBoundingClientRect();
       return rect ? rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth && rect.right > 0 : false;
     });
-    assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is collapsed');
-    await page.locator('[data-task-workbench-panel="collapsed"] button[title="開啟全域任務平台"]').click();
+    assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is closed');
+    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
     await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-039-task-workbench-mobile.png', fullPage: true });
     const bodyText = await page.locator('body').innerText();

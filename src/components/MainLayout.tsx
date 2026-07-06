@@ -5,8 +5,8 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
+  ClipboardList,
   Columns,
-  Layout,
   LineChart,
   ListChecks,
   Menu,
@@ -30,6 +30,7 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
+import { toggleTaskWorkbenchPanel } from './TaskWorkbenchPanel';
 import { compactIconButtonClass } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
@@ -84,7 +85,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const isTaskFilterView = ['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
-  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar', 'records']), []);
+  const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar']), []);
 
   const handleModeChange = (nextView: ViewMode) => {
     if (isMobileBoardOnly && nextView !== 'board') return;
@@ -94,6 +95,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const exitSettings = useCallback(() => {
     setView(activeWorkspace && activeBoard ? 'board' : 'home');
   }, [activeBoard, activeWorkspace, setView]);
+
+  const handleToggleMobileTaskWorkbench = useCallback(() => {
+    if (isMobileBoardOnly) setSidebarOpen(false);
+    setView(activeWorkspace && activeBoard ? 'board' : 'home');
+    toggleTaskWorkbenchPanel();
+  }, [activeBoard, activeWorkspace, isMobileBoardOnly, setSidebarOpen, setView]);
 
   const handleStartMeetingRecord = () => {
     if (isMeetingMode) {
@@ -124,17 +131,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       icon: <CalendarDays size={13} />,
       title: '日曆功能開發中，內容可能尚未穩定',
     },
-    {
-      value: 'records',
-      label: '紀錄庫',
-      icon: <BookOpenText size={13} />,
-      title: '查看與整理會議紀錄、會後會議紀錄與個人工作紀錄',
-    },
   ];
-  const visibleModeSwitcherOptions = isMobileBoardOnly
-    ? modeSwitcherOptions.filter(option => option.value === 'board')
-    : modeSwitcherOptions;
-
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
     const query = window.matchMedia('(max-width: 640px)');
@@ -191,14 +188,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           >
             <Menu size={18} />
           </button>
+          <button
+            type="button"
+            onClick={handleToggleMobileTaskWorkbench}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            title="開啟全域任務平台"
+            aria-label="開啟全域任務平台"
+            data-mobile-task-workbench-nav-entry="true"
+          >
+            <ClipboardList size={17} />
+          </button>
 
-          <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium sm:gap-2">
-            <Layout className="h-5 w-5 shrink-0 text-primary" />
-            <span className="shrink-0 font-bold text-slate-700">ProJED</span>
-
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium sm:gap-2">
             {isSettingsScopeView && (
               <>
-                <ChevronRight size={14} className="text-slate-300" />
+                <ChevronRight size={14} className="hidden text-slate-300 sm:block" />
                 <span className="font-bold text-slate-700">設定</span>
                 {currentView === 'calendar_subscriptions' ? (
                   <>
@@ -221,32 +225,33 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             {currentView === 'recycle_bin' ? (
               <>
-                <ChevronRight size={14} className="text-slate-300" />
+                <ChevronRight size={14} className="hidden text-slate-300 sm:block" />
                 <span className="font-bold text-slate-700">回收桶</span>
               </>
             ) : null}
 
             {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
               <>
-                <span className="shrink-0 text-slate-300" aria-hidden="true">/</span>
                 <h1
                   contentEditable
                   suppressContentEditableWarning
                   title={`目前位置：${activeWorkspace.title} / ${activeBoard.title}`}
                   onBlur={(event) => updateBoardTitle(activeWorkspace.id, activeBoard.id, event.currentTarget.innerText)}
-                  className="app-board-title min-w-[1.5rem] max-w-[4.5rem] cursor-text truncate rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:max-w-[180px] sm:px-2 sm:text-sm md:max-w-[260px]"
+                  className="app-board-title min-w-[1.5rem] shrink-0 cursor-text whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:px-2 sm:text-sm"
                 >
                   {activeBoard.title}
                 </h1>
 
-                <div className="ml-0 flex items-center gap-1 border-l-0 border-slate-200 pl-0 sm:ml-[10px] sm:gap-[8px] sm:border-l sm:pl-[10px]">
-                  <ModeSwitcher
-                    value={currentView}
-                    options={visibleModeSwitcherOptions}
-                    onChange={handleModeChange}
-                    disabled={isSelectingMode}
-                    disabledTitle={isMeetingMode ? '紀錄中先離開紀錄再切換檢視' : '選取模式中無法切換檢視'}
-                  />
+                <div className="ml-0 flex shrink-0 items-center gap-1 border-l-0 border-slate-200 pl-0 sm:ml-[10px] sm:gap-[8px] sm:border-l sm:pl-[10px]">
+                  {!isMobileBoardOnly ? (
+                    <ModeSwitcher
+                      value={currentView}
+                      options={modeSwitcherOptions}
+                      onChange={handleModeChange}
+                      disabled={isSelectingMode}
+                      disabledTitle={isMeetingMode ? '紀錄中先離開紀錄再切換檢視' : '選取模式中無法切換檢視'}
+                    />
+                  ) : null}
 
                   {isTaskFilterView ? (
                     <StatusFilterBar compactLabel />
@@ -280,7 +285,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             {currentView === 'home' ? (
               <>
-                <ChevronRight size={14} className="text-slate-300" />
+                <ChevronRight size={14} className="hidden text-slate-300 sm:block" />
                 <span className="font-bold text-slate-700">工作區總覽</span>
               </>
             ) : null}
@@ -292,7 +297,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <button
               type="button"
               onClick={() => setShareDialogOpen(true)}
-              className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-blue-400 hover:text-blue-600 sm:h-8 sm:px-3 sm:text-sm"
+              className="btn-outline hidden h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-blue-400 hover:text-blue-600 sm:flex sm:h-8 sm:px-3 sm:text-sm"
               title="分享看板"
               data-board-share-open
             >

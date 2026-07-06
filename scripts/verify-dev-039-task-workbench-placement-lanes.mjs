@@ -5,6 +5,7 @@ const files = {
   placement: 'src/features/taskWorkbench/placement.ts',
   taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
+  mainLayout: 'src/components/MainLayout.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
   boardView: 'src/components/BoardView.tsx',
@@ -107,6 +108,7 @@ assert(
     source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
     source.taskWorkbench.includes("import { TaskDateBadge } from './Wbs/TaskDateBadge'") &&
     source.taskWorkbench.includes('surface="workbench"') &&
+    source.taskWorkbench.includes('showStartDate={false}') &&
     source.browserVerifier.includes('all-task sorted lane should render due date badges from the shared task date module'),
 );
 
@@ -121,17 +123,19 @@ assert(
 );
 
 assert(
-  'Task Workbench collapsed rail uses the compact chevron affordance at half width',
+  'Task Workbench closed state uses top navigation entry instead of an in-flow collapsed rail',
   source.taskWorkbench.includes('ChevronLeft') &&
-    source.taskWorkbench.includes('ChevronRight') &&
+    !source.taskWorkbench.includes('ChevronRight') &&
     !source.taskWorkbench.includes('PanelLeftClose') &&
     !source.taskWorkbench.includes('NotebookText') &&
     source.taskWorkbench.includes('data-task-workbench-collapse-toggle="true"') &&
     source.taskWorkbench.includes('<ChevronLeft size={16} />') &&
-    source.taskWorkbench.includes('className="flex w-6 shrink-0 flex-col items-center border-r border-slate-200 bg-white py-3"') &&
-    source.taskWorkbench.includes('data-task-workbench-collapsed-toggle="true"') &&
-    source.taskWorkbench.includes('<ChevronRight size={16} />') &&
-    source.taskWorkbench.includes('data-task-workbench-collapsed-count="true"'),
+    source.taskWorkbench.includes('data-task-workbench-overlay="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-backdrop="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
+    !source.taskWorkbench.includes('data-task-workbench-collapsed-toggle="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-collapsed-count="true"') &&
+    source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"'),
 );
 
 assert(

@@ -33,9 +33,15 @@ async (page) => {
     await ensureMindMap();
   };
 
+  const selectViewMode = async (mode) => {
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator(`[data-mode-switcher-value="${mode}"]`).click();
+    await page.waitForTimeout(250);
+  };
+
   const ensureMindMap = async () => {
     if ((await page.locator('[data-mindmap-view]').count()) === 0) {
-      await page.locator('[data-mode-switcher-value="mindmap"]').click();
+      await selectViewMode('mindmap');
     }
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -163,8 +169,7 @@ async (page) => {
     sideStorageAfterDrop,
   });
 
-  await page.locator('[data-mode-switcher-value="list"]').click();
-  await page.waitForTimeout(250);
+  await selectViewMode('list');
   await ensureMindMap();
   const directionAfterModeSwitchA = await getDirection(rootA);
   const directionAfterModeSwitchB = await getDirection(rootB);

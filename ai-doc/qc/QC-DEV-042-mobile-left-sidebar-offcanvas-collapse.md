@@ -9,18 +9,18 @@
 ## 驗證結論
 
 - 判定：通過，本機 static + browser viewport matrix + regression gate 通過。
-- 範圍：手機 closed Sidebar / TaskWorkbench zero-width off-canvas、手機 overlay 開啟/關閉、桌機 compact rail 保留、DEV-029 pan-first 與 DEV-039 workbench regression。
+- 範圍：手機與桌機 closed Sidebar / TaskWorkbench zero-width off-canvas、overlay 開啟/關閉、DEV-029 pan-first 與 DEV-039 workbench regression。
 - 限制：未執行 physical-phone 手感驗證、production deploy、正式站 smoke、DB/RLS/migration/RPC 或正式資料修復。
 
 ## RD 修正事實
 
 - `src/components/Sidebar.tsx`：mobile / coarse pointer closed state 不再回傳 in-flow collapsed rail；expanded state 改為 fixed overlay drawer，支援 backdrop click 與 `Escape`。
-- `src/components/Sidebar.tsx`：expanded Sidebar 保留 `全域任務平台` 入口，避免移除 mobile collapsed rail 後失去工作台入口。
-- `src/components/TaskWorkbenchPanel.tsx`：mobile closed state 不再渲染 in-flow `w-6` rail；expanded state 使用 overlay drawer；桌機 collapsed rail 保留。
-- `src/components/MainLayout.tsx`：top nav menu button 補 `aria-label` 與 `data-main-sidebar-toggle="true"`；`main` 補 `data-app-main="true"` 供寬度驗證。
+- `src/components/Sidebar.tsx`：expanded Sidebar 不再保留 `全域任務平台` 重複入口；底部僅保留 `紀錄庫` 與 `設定`。
+- `src/components/TaskWorkbenchPanel.tsx`：closed state 不再渲染 in-flow `w-6` rail；expanded state 使用 overlay drawer。
+- `src/components/MainLayout.tsx`：top nav menu button 補 `aria-label` 與 `data-main-sidebar-toggle="true"`；top nav `data-mobile-task-workbench-nav-entry="true"` 作為全域任務平台唯一入口；`main` 補 `data-app-main="true"` 供寬度驗證。
 - `src/components/Wbs/TaskDragHandle.tsx`：drag disabled / mobile pass-through 模式加上 `touchAction: pan-x pan-y`，避免 DEV-029 手機拖曳把手短滑 pan 回歸。
-- `scripts/verify-dev-039-task-workbench-placement-lanes-browser.pw.js`：mobile section 從舊 collapsed rail 契約更新為 DEV-042 no in-flow rail + Sidebar entry + Workbench overlay 契約。
-- `scripts/verify-dev-029-mobile-pan-first-interactions-browser.pw.js`：mobile workbench 開啟入口改走 Sidebar overlay，並補 sidebar overlay cleanup，避免情境切換時 backdrop 攔截桌機 regression click。
+- `scripts/verify-dev-039-task-workbench-placement-lanes-browser.pw.js`：mobile section 從舊 collapsed rail 契約更新為 DEV-042 no in-flow rail + top nav entry + Workbench overlay 契約。
+- `scripts/verify-dev-029-mobile-pan-first-interactions-browser.pw.js`：mobile workbench 開啟入口改走 top nav entry，避免 Sidebar 內重複入口回流。
 
 ## 執行項目
 

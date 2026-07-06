@@ -50,7 +50,7 @@ async (page) => {
     localStorage.setItem('projed-last-view', 'board');
   }, defaultFilters);
   await page.reload({ waitUntil: 'networkidle' });
-  await page.locator('[data-mode-switcher-value="board"]').waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('[data-mode-switcher-trigger="true"]').waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('#filter-menu-trigger').waitFor({ state: 'visible', timeout: 15000 });
 
   await page.locator('#filter-menu-trigger').click();

@@ -14,7 +14,7 @@ export const createDefaultStatusFilters = (): Record<TaskStatus, boolean> => ({
   todo: true,
   in_progress: true,
   delayed: true,
-  completed: true,
+  completed: false,
   unsure: true,
   onhold: true,
 });

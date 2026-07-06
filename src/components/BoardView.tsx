@@ -265,12 +265,34 @@ const BoardView = () => {
         const pointerCollisions = pointerWithin(args);
         const collisions = pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
         const activeType = args.active?.data.current?.type;
+        const activeSource = args.active?.data.current?.source;
+        const getCollisionContainer = (collision: any) => (
+            typeof args.droppableContainers?.get === 'function'
+                ? args.droppableContainers.get(collision.id)
+                : args.droppableContainers?.find((item: any) => item.id === collision.id)
+        );
+
+        if (activeSource === 'task-workbench') {
+            const taskWorkbenchCollision = collisions.find((collision: any) => {
+                const data = getCollisionContainer(collision)?.data.current;
+                return (
+                    data?.type === 'task-workbench-unplaced-lane' ||
+                    data?.type === 'task-workbench-placed-board-lane' ||
+                    data?.source === 'task-workbench'
+                );
+            });
+
+            if (taskWorkbenchCollision) {
+                return [
+                    taskWorkbenchCollision,
+                    ...collisions.filter((collision: any) => collision.id !== taskWorkbenchCollision.id),
+                ];
+            }
+        }
 
         if (['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '')) {
             const checklistDropCollision = collisions.find((collision: any) => {
-                const container = typeof args.droppableContainers?.get === 'function'
-                    ? args.droppableContainers.get(collision.id)
-                    : args.droppableContainers?.find((item: any) => item.id === collision.id);
+                const container = getCollisionContainer(collision);
                 return container?.data.current?.type === 'wbs-checklist-drop';
             });
 
@@ -1115,8 +1137,11 @@ const BoardView = () => {
         const overData = effectiveOver.data.current;
         const state = useWbsStore.getState();
         const draggedNode = state.nodes[activeData?.nodeId];
+        const isTaskWorkbenchUnplacedDrop =
+            overData?.type === 'task-workbench-unplaced-lane' ||
+            (overData?.source === 'task-workbench' && overData?.placement === 'unplaced');
 
-        if (draggedNode && overData?.type === 'task-workbench-unplaced-lane') {
+        if (draggedNode && isTaskWorkbenchUnplacedDrop) {
             updateNode(draggedNode.id, {
                 boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID,
                 parentId: null,

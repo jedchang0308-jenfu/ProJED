@@ -70,6 +70,7 @@ assert(
     !source.types.includes('TaskWorkbenchFilterProfile') &&
     source.defaults.includes('TASK_STATUS_OPTIONS') &&
     source.defaults.includes('createDefaultTaskFilters') &&
+    source.defaults.includes('completed: false') &&
     !source.defaults.includes('createDefaultTaskWorkbenchProfile') &&
     source.predicates.includes('matchesTaskFilters') &&
     source.predicates.includes('matchesKeywordFilter') &&
@@ -79,6 +80,8 @@ assert(
     source.describe.includes('countActiveTaskFilters') &&
     source.describe.includes('describeTaskFilters') &&
     source.storage.includes("BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1'") &&
+    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 2') &&
+    source.storage.includes('migrateLegacyDefaultTaskFilters') &&
     !source.storage.includes('TASK_WORKBENCH_FILTER_PROFILES_STORAGE_KEY') &&
     !source.storage.includes('readTaskWorkbenchProfiles') &&
     !source.storage.includes('writeTaskWorkbenchProfiles') &&
@@ -163,8 +166,10 @@ assert(
     source.boardView.includes("activeData?.source === 'task-workbench'") &&
     !source.app.includes("case 'task_workbench'") &&
     !source.typesIndex.includes("'task_workbench'") &&
-    source.sidebar.includes('data-sidebar-task-workbench-button="true"') &&
-    source.sidebar.includes('openTaskWorkbenchPanel') &&
+    source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
+    !source.sidebar.includes('data-sidebar-task-workbench-button="true"') &&
+    !source.sidebar.includes('openTaskWorkbenchPanel') &&
     !source.localTestEnvironment.includes("'task_workbench'"),
 );
 
@@ -181,6 +186,8 @@ assert(
     source.taskWorkbench.includes('projed-task-workbench-filters:v1') &&
     source.taskWorkbench.includes('readWorkbenchFilterPrefs') &&
     source.taskWorkbench.includes('writeWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('migrateLegacyDefaultTaskFilters') &&
+    source.taskWorkbench.includes('BOARD_TASK_FILTER_PREFS_VERSION') &&
     source.taskWorkbench.includes('onSelectedBoardChange={handleSelectedBoardChange}'),
 );
 

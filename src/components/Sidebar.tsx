@@ -1,11 +1,10 @@
 // @ts-nocheck
 import React from 'react';
-import { BookOpenText, ChevronLeft, ChevronRight, ClipboardList, LogOut, Settings, X } from 'lucide-react';
+import { BookOpenText, LogOut, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { toast } from '../store/useToastStore';
-import { openTaskWorkbenchPanel } from './TaskWorkbenchPanel';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
@@ -49,17 +48,15 @@ const Sidebar = () => {
   const [isNarrowViewport, setIsNarrowViewport] = React.useState(false);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
   const isRecordsView = currentView === 'records';
-  const isTaskWorkbenchView = false;
   const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
-
-  const handleOpenTaskWorkbench = React.useCallback(() => {
-    setView(activeBoardId ? 'board' : 'home');
-    openTaskWorkbenchPanel();
-    if (isNarrowViewport) setSidebarOpen(false);
-  }, [activeBoardId, isNarrowViewport, setSidebarOpen, setView]);
 
   const handleOpenRecords = React.useCallback(() => {
     setView('records');
+    if (isNarrowViewport) setSidebarOpen(false);
+  }, [isNarrowViewport, setSidebarOpen, setView]);
+
+  const handleOpenSettings = React.useCallback(() => {
+    setView('settings');
     if (isNarrowViewport) setSidebarOpen(false);
   }, [isNarrowViewport, setSidebarOpen, setView]);
 
@@ -73,7 +70,7 @@ const Sidebar = () => {
   }, []);
 
   React.useEffect(() => {
-    if (!isNarrowViewport || !isSidebarOpen) return;
+    if (!isSidebarOpen) return;
     const handleKeyDown = (event) => {
       if (event.key !== 'Escape' || event.isComposing) return;
       event.preventDefault();
@@ -81,7 +78,7 @@ const Sidebar = () => {
     };
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [isNarrowViewport, isSidebarOpen, setSidebarOpen]);
+  }, [isSidebarOpen, setSidebarOpen]);
 
   const startWorkspaceTitleEdit = React.useCallback((workspace) => {
     setEditingBoard(null);
@@ -234,269 +231,227 @@ const Sidebar = () => {
     }
   }, [addWorkspace, newWorkspaceTitle]);
 
-  const isMobileOverlay = isNarrowViewport && isSidebarOpen;
+  const mobileSidebarWidth = 'min(288px, calc(100vw - 48px))';
+  const desktopSidebarWidth = '288px';
+  const sidebarWidth = isNarrowViewport ? mobileSidebarWidth : desktopSidebarWidth;
 
-  if (isNarrowViewport && !isSidebarOpen) {
+  if (!isSidebarOpen) {
     return null;
   }
 
   return (
     <>
-    {isMobileOverlay ? (
+    {isNarrowViewport ? (
       <button
         type="button"
         className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
-        style={{ left: 'min(288px, calc(100vw - 48px))' }}
+        style={{ left: mobileSidebarWidth }}
         onClick={() => setSidebarOpen(false)}
         aria-label="關閉工作區選單遮罩"
+        data-sidebar-backdrop="true"
         data-mobile-sidebar-backdrop="true"
       />
     ) : null}
     <aside
-      className={`flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-300 ease-in-out ${
-        isMobileOverlay
+      className={`flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out ${
+        isNarrowViewport
           ? 'fixed bottom-0 left-0 top-10 z-50 shadow-2xl'
-          : `relative z-30 ${isSidebarOpen ? 'w-64' : 'w-10'}`
+          : 'relative z-10 h-full shadow-none'
       }`}
-      style={isMobileOverlay ? { width: 'min(288px, calc(100vw - 48px))' } : undefined}
-      data-sidebar-panel={isSidebarOpen ? 'expanded' : 'collapsed'}
-      data-mobile-sidebar-overlay={isMobileOverlay ? 'true' : undefined}
+      style={{ width: sidebarWidth }}
+      data-sidebar-panel="expanded"
+      data-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
+      data-sidebar-inline={!isNarrowViewport ? 'true' : undefined}
+      data-mobile-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
     >
-      {!isSidebarOpen ? (
-        <div className="flex h-full flex-1 flex-col items-center gap-4 bg-slate-50/30 pt-4">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-full p-1.5 text-primary transition-colors hover:bg-slate-100"
-            title="展開工作區選單"
-          >
-            <ChevronRight size={18} />
-          </button>
-          <div className="w-px flex-1 bg-slate-100" />
-          <button
-            onClick={handleOpenTaskWorkbench}
-            className={`rounded-full p-1.5 transition-colors ${
-              isTaskWorkbenchView
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
-            }`}
-            title="開啟全域任務平台"
-            data-sidebar-task-workbench-button="true"
-          >
-            <ClipboardList size={18} />
-          </button>
+      <div className="flex h-full w-full flex-col">
+        <div
+          className="flex-1 space-y-4 overflow-y-auto p-2"
+          onContextMenu={handleSidebarContextMenu}
+          data-sidebar-workspace-list="true"
+        >
+          {workspaces.map((ws) => (
+            <div key={ws.id} className="space-y-1" data-sidebar-workspace-group="true">
+              <div
+                className="group flex items-center justify-between gap-2 px-3 py-1.5"
+                onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
+              >
+                {editingWorkspaceId === ws.id ? (
+                  <input
+                    value={workspaceTitleDraft}
+                    autoFocus
+                    onChange={(event) => setWorkspaceTitleDraft(event.target.value)}
+                    onBlur={() => commitWorkspaceTitleEdit(ws)}
+                    onKeyDown={(event) => {
+                      if (event.nativeEvent?.isComposing) return;
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancelWorkspaceTitleEdit();
+                      }
+                    }}
+                    className={TITLE_INPUT_CLASS}
+                    aria-label="編輯工作區名稱"
+                  />
+                ) : (
+                  <span
+                    tabIndex={0}
+                    data-sidebar-workspace-title="true"
+                    onKeyDown={(event) => handleWorkspaceTitleKeyDown(event, ws)}
+                    className="min-w-0 flex-1 truncate rounded text-left text-xs font-bold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    title="右鍵開啟選單，F2 重新命名"
+                  >
+                    {ws.title}
+                  </span>
+                )}
+              </div>
+
+              <div className="relative ml-3 space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
+                {ws.boards.map((board) => {
+                  const isCurrentBoard = activeBoardId === board.id;
+                  const isMainBoardActive = isCurrentBoard && BOARD_WORKSPACE_VIEWS.includes(currentView);
+                  const isCurrentSettingsProject = isSettingsScopeView && isCurrentBoard;
+                  const isBoardSwitchLocked = isSettingsScopeView;
+                  const isEditingBoard = editingBoard?.workspaceId === ws.id && editingBoard?.boardId === board.id;
+                  const boardItemTitle = isSettingsScopeView
+                    ? isCurrentBoard
+                      ? '目前正在此專案設定中'
+                      : '請先離開設定頁面再切換專案'
+                    : undefined;
+                  const handleBoardClick = () => {
+                    if (isBoardSwitchLocked) return;
+                    switchBoard(ws.id, board.id);
+                    if (isNarrowViewport) setSidebarOpen(false);
+                  };
+
+                  return (
+                    <div
+                      key={board.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-disabled={isBoardSwitchLocked && !isCurrentBoard}
+                      data-sidebar-board-row="true"
+                      data-sidebar-current-settings-project={isCurrentSettingsProject ? 'true' : undefined}
+                      title={boardItemTitle}
+                      onClick={handleBoardClick}
+                      onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
+                      onKeyDown={(event) => {
+                        if (isTextInputEvent(event)) return;
+                        if (event.key === 'F2') {
+                          event.preventDefault();
+                          if (canEditBoardSettings) {
+                            startBoardTitleEdit(ws, board);
+                          }
+                          return;
+                        }
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleBoardClick();
+                        }
+                      }}
+                      className={`group/item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                        isMainBoardActive
+                          ? 'cursor-pointer bg-primary text-white shadow-md'
+                          : isCurrentSettingsProject
+                            ? 'cursor-default border border-primary/20 bg-primary-light/40 text-primary shadow-sm'
+                            : isBoardSwitchLocked
+                              ? 'cursor-not-allowed text-slate-300 opacity-70'
+                              : 'cursor-pointer text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isEditingBoard ? (
+                        <input
+                          value={boardTitleDraft}
+                          autoFocus
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => setBoardTitleDraft(event.target.value)}
+                          onBlur={() => commitBoardTitleEdit(ws, board)}
+                          onKeyDown={(event) => {
+                            if (event.nativeEvent?.isComposing) return;
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+                            if (event.key === 'Escape') {
+                              event.preventDefault();
+                              cancelBoardTitleEdit();
+                            }
+                          }}
+                          className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
+                          aria-label="編輯看板名稱"
+                        />
+                      ) : (
+                        <span
+                          data-sidebar-board-title="true"
+                          className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium"
+                          title={canEditBoardSettings ? '點擊開啟看板，右鍵開啟選單，F2 重新命名' : '點擊開啟看板'}
+                        >
+                          {board.title}
+                        </span>
+                      )}
+
+                      {isCurrentSettingsProject ? (
+                        <span className="shrink-0 rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[11px] font-bold text-primary">
+                          設定中
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-slate-100 bg-slate-50/50 p-2">
           <button
             onClick={handleOpenRecords}
-            className={`rounded-full p-1.5 transition-colors ${
+            className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
               isRecordsView
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+                ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
+                : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
             }`}
             title="紀錄庫"
             data-sidebar-records-button="true"
           >
-            <BookOpenText size={18} />
+            <BookOpenText size={16} className={isRecordsView ? 'text-white/90' : 'text-slate-400'} />
+            <span className="min-w-0 flex-1 truncate text-left">紀錄庫</span>
           </button>
           <button
-            onClick={() => setView('settings')}
-            className={`mb-3 rounded-full p-1.5 transition-colors ${
+            onClick={handleOpenSettings}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
               isSettingsScopeView
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-400 hover:bg-slate-100 hover:text-primary'
+                ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
+                : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
             }`}
-            title="設定"
           >
-            <Settings size={18} />
+            <Settings size={16} className={isSettingsScopeView ? 'text-white/90' : 'text-slate-400'} />
+            <span className="min-w-0 flex-1 truncate text-left">設定</span>
           </button>
         </div>
-      ) : (
-        <div className={`flex h-full ${isMobileOverlay ? 'w-full' : 'w-64'} flex-col`}>
-          <div
-            className="flex-1 space-y-4 overflow-y-auto p-2"
-            onContextMenu={handleSidebarContextMenu}
-            data-sidebar-workspace-list="true"
-          >
-            {workspaces.map((ws) => (
-              <div key={ws.id} className="space-y-1" data-sidebar-workspace-group="true">
-                <div
-                  className="group flex items-center justify-between gap-2 px-3 py-1.5"
-                  onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
-                >
-                  {editingWorkspaceId === ws.id ? (
-                    <input
-                      value={workspaceTitleDraft}
-                      autoFocus
-                      onChange={(event) => setWorkspaceTitleDraft(event.target.value)}
-                      onBlur={() => commitWorkspaceTitleEdit(ws)}
-                      onKeyDown={(event) => {
-                        if (event.nativeEvent?.isComposing) return;
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          event.currentTarget.blur();
-                        }
-                        if (event.key === 'Escape') {
-                          event.preventDefault();
-                          cancelWorkspaceTitleEdit();
-                        }
-                      }}
-                      className={TITLE_INPUT_CLASS}
-                      aria-label="編輯工作區名稱"
-                    />
-                  ) : (
-                    <span
-                      tabIndex={0}
-                      data-sidebar-workspace-title="true"
-                      onKeyDown={(event) => handleWorkspaceTitleKeyDown(event, ws)}
-                      className="min-w-0 flex-1 truncate rounded text-left text-xs font-bold text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      title="右鍵開啟選單，F2 重新命名"
-                    >
-                      {ws.title}
-                    </span>
-                  )}
-                </div>
 
-                <div className="relative ml-3 space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
-                  {ws.boards.map((board) => {
-                    const isCurrentBoard = activeBoardId === board.id;
-                    const isMainBoardActive = isCurrentBoard && BOARD_WORKSPACE_VIEWS.includes(currentView);
-                    const isCurrentSettingsProject = isSettingsScopeView && isCurrentBoard;
-                    const isBoardSwitchLocked = isSettingsScopeView;
-                    const isEditingBoard = editingBoard?.workspaceId === ws.id && editingBoard?.boardId === board.id;
-                    const boardItemTitle = isSettingsScopeView
-                      ? isCurrentBoard
-                        ? '目前正在此專案設定中'
-                        : '請先離開設定頁面再切換專案'
-                      : undefined;
-                    const handleBoardClick = () => {
-                      if (isBoardSwitchLocked) return;
-                      switchBoard(ws.id, board.id);
-                    };
-
-                    return (
-                      <div
-                        key={board.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-disabled={isBoardSwitchLocked && !isCurrentBoard}
-                        data-sidebar-board-row="true"
-                        data-sidebar-current-settings-project={isCurrentSettingsProject ? 'true' : undefined}
-                        title={boardItemTitle}
-                        onClick={handleBoardClick}
-                        onContextMenu={(event) => handleBoardContextMenu(event, ws, board)}
-                        onKeyDown={(event) => {
-                          if (isTextInputEvent(event)) return;
-                          if (event.key === 'F2') {
-                            event.preventDefault();
-                            if (canEditBoardSettings) {
-                              startBoardTitleEdit(ws, board);
-                            }
-                            return;
-                          }
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            handleBoardClick();
-                          }
-                        }}
-                        className={`group/item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                          isMainBoardActive
-                            ? 'cursor-pointer bg-primary text-white shadow-md'
-                            : isCurrentSettingsProject
-                              ? 'cursor-default border border-primary/20 bg-primary-light/40 text-primary shadow-sm'
-                              : isBoardSwitchLocked
-                                ? 'cursor-not-allowed text-slate-300 opacity-70'
-                                : 'cursor-pointer text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        {isEditingBoard ? (
-                          <input
-                            value={boardTitleDraft}
-                            autoFocus
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => setBoardTitleDraft(event.target.value)}
-                            onBlur={() => commitBoardTitleEdit(ws, board)}
-                            onKeyDown={(event) => {
-                              if (event.nativeEvent?.isComposing) return;
-                              if (event.key === 'Enter') {
-                                event.preventDefault();
-                                event.currentTarget.blur();
-                              }
-                              if (event.key === 'Escape') {
-                                event.preventDefault();
-                                cancelBoardTitleEdit();
-                              }
-                            }}
-                            className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
-                            aria-label="編輯看板名稱"
-                          />
-                        ) : (
-                          <span
-                            data-sidebar-board-title="true"
-                            className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium"
-                            title={canEditBoardSettings ? '點擊開啟看板，右鍵開啟選單，F2 重新命名' : '點擊開啟看板'}
-                          >
-                            {board.title}
-                          </span>
-                        )}
-
-                        {isCurrentSettingsProject ? (
-                          <span className="shrink-0 rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[11px] font-bold text-primary">
-                            設定中
-                          </span>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-slate-100 bg-slate-50/50 p-2">
-            <button
-              onClick={handleOpenRecords}
-              className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                isRecordsView
-                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
-                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
-              }`}
-              title="紀錄庫"
-              data-sidebar-records-button="true"
-            >
-              <BookOpenText size={16} className={isRecordsView ? 'text-white/90' : 'text-slate-400'} />
-              <span className="min-w-0 flex-1 truncate text-left">紀錄庫</span>
-            </button>
-            <button
-              onClick={() => setView('settings')}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                isSettingsScopeView
-                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
-                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
-              }`}
-            >
-              <Settings size={16} className={isSettingsScopeView ? 'text-white/90' : 'text-slate-400'} />
-              <span className="min-w-0 flex-1 truncate text-left">設定</span>
-            </button>
-          </div>
-
-          <div className="border-t border-slate-100 bg-slate-50/50 p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shadow-sm">
-                {(useAuthStore.getState().user?.displayName || 'U')[0].toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-slate-700">{useAuthStore.getState().user?.displayName || '使用者'}</div>
-                <div className="truncate text-xs text-slate-400">{useAuthStore.getState().user?.email || ''}</div>
-              </div>
-              <button
-                onClick={() => useAuthStore.getState().signOut()}
-                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                title="登出"
-              >
-                <LogOut size={14} />
-              </button>
+        <div className="border-t border-slate-100 bg-slate-50/50 p-4">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shadow-sm">
+              {(useAuthStore.getState().user?.displayName || 'U')[0].toUpperCase()}
             </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-slate-700">{useAuthStore.getState().user?.displayName || '使用者'}</div>
+              <div className="truncate text-xs text-slate-400">{useAuthStore.getState().user?.email || ''}</div>
+            </div>
+            <button
+              onClick={() => useAuthStore.getState().signOut()}
+              className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+              title="登出"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       {isCreateWorkspaceOpen ? (
         <div

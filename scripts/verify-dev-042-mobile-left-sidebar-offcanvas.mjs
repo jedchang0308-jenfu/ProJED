@@ -25,47 +25,78 @@ assert(
   'Sidebar has a mobile/narrow viewport branch',
   source.sidebar.includes("(max-width: 767px), (hover: none) and (pointer: coarse)") &&
     source.sidebar.includes('isNarrowViewport') &&
-    source.sidebar.includes('isMobileOverlay'),
+    source.sidebar.includes('data-mobile-sidebar-overlay={isNarrowViewport ?'),
 );
 
 assert(
   'mobile collapsed Sidebar is removed from layout flow',
-  source.sidebar.includes('if (isNarrowViewport && !isSidebarOpen)') &&
+  source.sidebar.includes('if (!isSidebarOpen)') &&
     source.sidebar.includes('return null;') &&
-    !source.sidebar.includes("isNarrowViewport && !isSidebarOpen ? 'w-10'"),
+    !source.sidebar.includes("'w-10'") &&
+    !source.sidebar.includes('data-sidebar-panel={isSidebarOpen ?'),
 );
 
 assert(
-  'mobile Sidebar opens as dismissible overlay',
-  source.sidebar.includes('data-mobile-sidebar-overlay') &&
+  'Sidebar opens as mobile overlay and desktop inline panel',
+  source.sidebar.includes("data-sidebar-overlay={isNarrowViewport ? 'true' : undefined}") &&
+    source.sidebar.includes("data-sidebar-inline={!isNarrowViewport ? 'true' : undefined}") &&
+    source.sidebar.includes('{isNarrowViewport ? (') &&
+    source.sidebar.includes('data-sidebar-backdrop="true"') &&
+    source.sidebar.includes('data-mobile-sidebar-overlay') &&
     source.sidebar.includes('data-mobile-sidebar-backdrop') &&
     source.sidebar.includes("setSidebarOpen(false)") &&
     source.sidebar.includes("event.key !== 'Escape'"),
 );
 
 assert(
-  'desktop Sidebar collapsed rail is preserved and measurable',
-  source.sidebar.includes("data-sidebar-panel={isSidebarOpen ? 'expanded' : 'collapsed'}") &&
-    source.sidebar.includes("isSidebarOpen ? 'w-64' : 'w-10'"),
+  'desktop Sidebar closed state also removes in-flow rail',
+  source.sidebar.includes('data-sidebar-panel="expanded"') &&
+    source.sidebar.includes('data-sidebar-inline') &&
+    !source.sidebar.includes('data-sidebar-panel="collapsed"') &&
+    !source.sidebar.includes('ChevronRight') &&
+    !source.sidebar.includes('data-sidebar-task-workbench-button="true"'),
 );
 
 assert(
-  'mobile collapsed TaskWorkbenchPanel returns no in-flow rail',
-  source.taskWorkbench.includes('const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;') &&
-    source.taskWorkbench.includes('if (isNarrowViewport) return null;') &&
+  'TaskWorkbenchPanel closed state returns no in-flow rail on mobile and desktop',
+    source.taskWorkbench.includes('const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;') &&
+    source.taskWorkbench.includes('if (!isExpanded)') &&
+    source.taskWorkbench.includes('return null;') &&
+    source.taskWorkbench.includes("data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}") &&
+    source.taskWorkbench.includes("data-task-workbench-inline={!isNarrowViewport ? 'true' : undefined}") &&
+    source.taskWorkbench.includes('{isNarrowViewport ? (') &&
+    source.taskWorkbench.includes('data-task-workbench-backdrop="true"') &&
     source.taskWorkbench.includes('data-mobile-task-workbench-overlay') &&
-    source.taskWorkbench.includes('data-mobile-task-workbench-backdrop'),
+    !source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
+    !source.taskWorkbench.includes('data-task-workbench-collapsed-toggle') &&
+    !source.taskWorkbench.includes('data-task-workbench-collapsed-count'),
 );
 
 assert(
-  'desktop TaskWorkbench collapsed rail is preserved',
-  source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
-    source.taskWorkbench.includes('className="flex w-6 shrink-0'),
+  'desktop TaskWorkbench opens from top navigation without a collapsed rail',
+  source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
+    source.mainLayout.includes('if (isMobileBoardOnly) setSidebarOpen(false);') &&
+    !source.mainLayout.includes('sm:hidden"\n            title="開啟全域任務平台"') &&
+    !source.taskWorkbench.includes('className="flex w-6 shrink-0'),
+);
+
+assert(
+  'desktop Sidebar and TaskWorkbench can stay open side by side',
+  source.sidebar.includes("'relative z-10 h-full shadow-none'") &&
+    source.taskWorkbench.includes("'relative z-10 h-full shadow-none'") &&
+    source.taskWorkbench.includes('style={{ width: panelOverlayWidth }}') &&
+    !source.taskWorkbench.includes('const panelBackdropLeft = shouldOffsetForDesktopSidebar') &&
+    !source.taskWorkbench.includes('panelOverlayLeft') &&
+    source.sidebar.includes('if (isNarrowViewport) setSidebarOpen(false);'),
 );
 
 assert(
   'MainLayout exposes accessible toggle and measurable main surface',
   source.mainLayout.includes('data-main-sidebar-toggle="true"') &&
+    source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
+    source.taskWorkbench.includes('TOGGLE_PANEL_EVENT') &&
     source.mainLayout.includes('aria-label={isSidebarOpen ?') &&
     source.mainLayout.includes('data-app-main="true"'),
 );

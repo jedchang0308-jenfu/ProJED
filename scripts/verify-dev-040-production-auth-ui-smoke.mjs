@@ -278,8 +278,8 @@ async (page) => {
 
   const panel = page.locator('[data-task-workbench-panel="true"]');
   if (!(await panel.count())) {
-    const collapsed = page.locator('[data-task-workbench-panel="collapsed"] button');
-    if (await collapsed.count()) await collapsed.first().click();
+    const navEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]').first();
+    if (await navEntry.count()) await navEntry.click();
   }
   await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 15000 });
   const workbench = page.locator('[data-task-workbench-panel="true"]');

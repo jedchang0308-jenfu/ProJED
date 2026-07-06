@@ -1,5 +1,6 @@
 import { requireFirebaseDb } from '../services/firebase';
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
+import { createDefaultStatusFilters } from '../features/taskFilters';
 import type { Dependency, StatusFilters, TaskNode, Workspace } from '../types';
 import type { LegacyCard, LegacyChecklistItem, LegacyList } from '../types/legacy';
 
@@ -20,14 +21,7 @@ interface LegacyData {
   activeBoardId?: string | null;
 }
 
-const defaultStatusFilters: StatusFilters = {
-  todo: true,
-  in_progress: true,
-  delayed: true,
-  completed: true,
-  unsure: true,
-  onhold: true,
-};
+const defaultStatusFilters: StatusFilters = createDefaultStatusFilters();
 
 export const migrateLegacyData = (): PersistedState['state'] | null => {
   const legacyRaw = localStorage.getItem('projed_data');

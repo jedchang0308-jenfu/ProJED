@@ -87,7 +87,7 @@ async (page) => {
     await page.setViewportSize(viewport);
     await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
     await seedAuxiliaryState();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=36', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -310,21 +310,9 @@ async (page) => {
     const expanded = page.locator('[data-task-workbench-panel="true"]');
     const expandedBox = await expanded.first().boundingBox().catch(() => null);
     if (expandedBox) return expanded;
-    const sidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
-    if (await sidebarToggle.count()) {
-      await sidebarToggle.click({ timeout: 5000 }).catch(() => undefined);
-      const sidebarWorkbenchButton = page.locator('[data-sidebar-task-workbench-button="true"]').first();
-      if (await sidebarWorkbenchButton.count()) {
-        await sidebarWorkbenchButton.waitFor({ state: 'visible', timeout: 5000 });
-        await sidebarWorkbenchButton.click({ timeout: 5000 });
-        await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => undefined);
-        await expanded.waitFor({ state: 'visible', timeout: 5000 });
-        return expanded;
-      }
-    }
-    const toggle = page.locator('[data-task-workbench-collapsed-toggle="true"]').first();
-    await toggle.waitFor({ state: 'visible', timeout: 5000 });
-    await toggle.click({ timeout: 5000 });
+    const navEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]').first();
+    await navEntry.waitFor({ state: 'visible', timeout: 5000 });
+    await navEntry.click({ timeout: 5000 });
     await expanded.waitFor({ state: 'visible', timeout: 5000 });
     return expanded;
   };
@@ -385,7 +373,7 @@ async (page) => {
       return { alertTexts, state };
     });
 
-    await runCase('QA-029-A03', 'mobile exposes only board mode', async () => {
+    await runCase('QA-029-A03', 'mobile hides mode switcher controls', async () => {
       const counts = {
         board: await page.locator('[data-mode-switcher-value="board"]').count(),
         list: await page.locator('[data-mode-switcher-value="list"]').count(),
@@ -394,8 +382,11 @@ async (page) => {
         calendar: await page.locator('[data-mode-switcher-value="calendar"]').count(),
         records: await page.locator('[data-mode-switcher-value="records"]').count(),
       };
-      assert(counts.board === 1, 'board mode should be visible', counts);
-      assert(counts.list + counts.mindmap + counts.gantt + counts.calendar + counts.records === 0, 'non-board mobile modes should be hidden', counts);
+      assert(
+        counts.board + counts.list + counts.mindmap + counts.gantt + counts.calendar + counts.records === 0,
+        'mobile mode switcher entries should be hidden',
+        counts,
+      );
       return counts;
     });
 
@@ -679,10 +670,10 @@ async (page) => {
       return { taskId, modalTaskId };
     });
 
-    await runCase('QA-029-E01', 'workbench collapsed toggle opens panel', async () => {
+    await runCase('QA-029-E01', 'workbench top nav entry opens panel', async () => {
       const panel = await ensureWorkbenchOpen();
       const box = await panel.boundingBox();
-      assert(Boolean(box), 'workbench panel should be visible after collapsed toggle');
+      assert(Boolean(box), 'workbench panel should be visible after top nav entry');
       return { box };
     });
 
@@ -701,13 +692,26 @@ async (page) => {
       return { value };
     });
 
-    await runCase('QA-029-E04', 'kanban add-task input accepts text', async () => {
+    await runCase('QA-029-E04', 'kanban add-task button opens new task details', async () => {
       await cleanupUi();
-      const input = page.getByPlaceholder('輸入任務名稱').first();
-      await input.fill('手機新增任務輸入');
-      const value = await input.inputValue();
-      assert(value === '手機新增任務輸入', 'kanban add-task input should accept text', { value });
-      return { value };
+      const addTaskInputCount = await page.getByPlaceholder('輸入任務名稱').count();
+      assert(addTaskInputCount === 0, 'kanban add-task text input should be removed', { addTaskInputCount });
+
+      const beforeCount = await page.locator('.kanban-task-card[data-task-id]').count();
+      await page.locator('[data-kanban-add-task-button="true"]').first().click({ timeout: 5000 });
+      await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-task-details-title-input') === 'true', null, { timeout: 5000 });
+
+      const afterCount = await page.locator('.kanban-task-card[data-task-id]').count();
+      const modalTaskId = await page.locator('[data-task-details-modal="true"]').getAttribute('data-task-id');
+      const titleValue = await page.locator('[data-task-details-title-input="true"]').inputValue().catch(() => '');
+      const titleFocused = await page.locator('[data-task-details-title-input="true"]').evaluate((element) => document.activeElement === element);
+
+      assert(afterCount >= beforeCount + 1, 'kanban add-task button should create a new task card', { beforeCount, afterCount });
+      assert(Boolean(modalTaskId), 'kanban add-task button should open the new task details modal', { modalTaskId });
+      assert(titleValue.includes('新任務'), 'new task details title should use the default task title', { titleValue });
+      assert(titleFocused, 'new task details title input should be focused for naming', { titleFocused });
+      return { beforeCount, afterCount, modalTaskId, titleValue, titleFocused };
     });
 
     await runCase('QA-029-E05', 'hidden rename pencil does not intercept mobile hit testing', async () => {

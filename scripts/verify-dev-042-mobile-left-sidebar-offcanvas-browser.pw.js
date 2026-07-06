@@ -81,10 +81,34 @@ async (page) => {
       return rect ? { left: rect.left, width: rect.width, right: rect.right } : null;
     })(),
     sidebarCollapsedCount: document.querySelectorAll('[data-sidebar-panel="collapsed"]').length,
+    sidebarOverlayCount: document.querySelectorAll('[data-sidebar-overlay="true"]').length,
+    sidebarInlineCount: document.querySelectorAll('[data-sidebar-inline="true"]').length,
+    sidebarBackdropCount: document.querySelectorAll('[data-sidebar-backdrop="true"]').length,
     workbenchCollapsedCount: document.querySelectorAll('[data-task-workbench-panel="collapsed"]').length,
+    workbenchOverlayCount: document.querySelectorAll('[data-task-workbench-overlay="true"]').length,
+    workbenchInlineCount: document.querySelectorAll('[data-task-workbench-inline="true"]').length,
+    workbenchBackdropCount: document.querySelectorAll('[data-task-workbench-backdrop="true"]').length,
     mobileSidebarOverlayCount: document.querySelectorAll('[data-mobile-sidebar-overlay="true"]').length,
     mobileWorkbenchOverlayCount: document.querySelectorAll('[data-mobile-task-workbench-overlay="true"]').length,
   }));
+
+  const desktopBoardHitTest = async () => page.evaluate(() => {
+    const workbench = document.querySelector('[data-task-workbench-inline="true"]');
+    const workbenchRect = workbench?.getBoundingClientRect();
+    const probeX = workbenchRect ? Math.min(window.innerWidth - 12, workbenchRect.right + 24) : Math.floor(window.innerWidth * 0.55);
+    const probeY = Math.min(window.innerHeight - 80, 180);
+    const element = document.elementFromPoint(probeX, probeY);
+    return {
+      probeX,
+      probeY,
+      tagName: element?.tagName || null,
+      className: typeof element?.className === 'string' ? element.className : '',
+      isBackdrop: Boolean(element?.closest?.('[data-sidebar-backdrop="true"], [data-task-workbench-backdrop="true"]')),
+      isBoardSurface: Boolean(element?.closest?.('[data-mobile-pan-surface="board"]')),
+      isMainSurface: Boolean(element?.closest?.('[data-app-main="true"]')),
+      text: element?.textContent?.trim().slice(0, 80) || '',
+    };
+  });
 
   const assertNoVisibleErrors = async () => {
     const alertTexts = await page.locator('.inline-error, [role="alert"]').evaluateAll((items) =>
@@ -135,6 +159,7 @@ async (page) => {
       const overlayBox = await page.locator('[data-mobile-sidebar-overlay="true"]').boundingBox();
       const after = await layoutMetrics();
       assert(overlayBox && overlayBox.width <= 289, 'mobile Sidebar overlay should use safe drawer width', { overlayBox });
+      assert(await page.locator('[data-sidebar-task-workbench-button="true"]').count() === 0, 'mobile Sidebar overlay should not render duplicate TaskWorkbench entry');
       assert(before.main && after.main && Math.abs(before.main.width - after.main.width) <= 1, 'Sidebar overlay should not resize main width', { before, after });
       assert(after.mobileSidebarOverlayCount === 1, 'mobile Sidebar overlay should be visible exactly once', after);
       const screenshotPath = `${screenshotBase}-mobile-sidebar-overlay.png`;
@@ -146,13 +171,10 @@ async (page) => {
       return { before, after, closed, overlayBox, screenshotPath };
     });
 
-    await runCase('QA-042-B03', 'mobile TaskWorkbench opens from Sidebar as overlay without resizing main', async () => {
+    await runCase('QA-042-B03', 'mobile TaskWorkbench opens from top nav as overlay without resizing main', async () => {
       const before = await layoutMetrics();
-      await page.locator('[data-main-sidebar-toggle="true"]').click();
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      await page.locator('[data-sidebar-task-workbench-button="true"]').click();
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
       await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
       const overlayBox = await page.locator('[data-mobile-task-workbench-overlay="true"]').boundingBox();
       const after = await layoutMetrics();
       assert(overlayBox && overlayBox.width <= 341, 'mobile TaskWorkbench overlay should use safe drawer width', { overlayBox });
@@ -167,15 +189,36 @@ async (page) => {
       return { before, after, closed, overlayBox, screenshotPath };
     });
 
+    await runCase('QA-042-B03A', 'mobile TaskWorkbench toggles from top nav entry while Sidebar is open', async () => {
+      const before = await layoutMetrics();
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const entryBox = await page.locator('[data-mobile-task-workbench-nav-entry="true"]').boundingBox();
+      assert(entryBox && entryBox.width >= 30 && entryBox.height >= 30 && entryBox.y <= 4, 'mobile top nav TaskWorkbench entry should be visible beside menu', { entryBox });
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      const overlayBox = await page.locator('[data-mobile-task-workbench-overlay="true"]').boundingBox();
+      const after = await layoutMetrics();
+      assert(overlayBox && overlayBox.width <= 341, 'mobile top nav TaskWorkbench overlay should use safe drawer width', { overlayBox });
+      assert(before.main && after.main && Math.abs(before.main.width - after.main.width) <= 1, 'top nav TaskWorkbench entry should not resize main width', { before, after });
+      assert(after.mobileWorkbenchOverlayCount === 1 && after.mobileSidebarOverlayCount === 0, 'top nav entry should replace Sidebar overlay with TaskWorkbench overlay', after);
+      const screenshotPath = `${screenshotBase}-mobile-workbench-nav-entry.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      const closed = await layoutMetrics();
+      assert(closed.workbenchCollapsedCount === 0 && closed.main.left <= 4, 'closing top-nav-opened TaskWorkbench overlay should not leave a collapsed rail', closed);
+      return { before, after, closed, entryBox, overlayBox, screenshotPath };
+    });
+
     await runCase('QA-042-B04', 'mobile overlays close with Escape and leave no gutter', async () => {
       await page.locator('[data-main-sidebar-toggle="true"]').click();
       await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.keyboard.press('Escape');
       await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
 
-      await page.locator('[data-main-sidebar-toggle="true"]').click();
-      await page.locator('[data-mobile-sidebar-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
-      await page.locator('[data-sidebar-task-workbench-button="true"]').click();
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
       await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.keyboard.press('Escape');
       await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'detached', timeout: 5000 });
@@ -193,33 +236,102 @@ async (page) => {
 
     await openApp({ width: 1440, height: 900 });
 
-    await runCase('QA-042-B10', 'desktop compact rails remain bounded', async () => {
-      const expandedSidebar = page.locator('[data-sidebar-panel="expanded"]');
-      if (await expandedSidebar.count()) {
+    await runCase('QA-042-B10', 'desktop closed panels leave zero rails and open inline without covering board', async () => {
+      if (await page.locator('[data-sidebar-inline="true"]').count()) {
         await page.locator('[data-main-sidebar-toggle="true"]').click();
+        await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
       }
-      const collapsedSidebar = page.locator('[data-sidebar-panel="collapsed"]').first();
-      await collapsedSidebar.waitFor({ state: 'visible', timeout: 5000 });
-      await page.waitForFunction(() => {
-        const element = document.querySelector('[data-sidebar-panel="collapsed"]');
-        return Boolean(element && element.getBoundingClientRect().width <= 41);
-      }, null, { timeout: 2000 });
-      const collapsedSidebarBox = await collapsedSidebar.boundingBox();
-      const collapsedWorkbench = page.locator('[data-task-workbench-panel="collapsed"]').first();
-      await collapsedWorkbench.waitFor({ state: 'visible', timeout: 5000 });
-      const collapsedWorkbenchBox = await collapsedWorkbench.boundingBox();
-      const collapsedCountBox = await collapsedWorkbench.locator('[data-task-workbench-collapsed-count="true"]').boundingBox();
+      const closed = await layoutMetrics();
+      assert(closed.sidebarCollapsedCount === 0, 'desktop Sidebar closed state should not render a collapsed rail', closed);
+      assert(closed.sidebarInlineCount === 0 && closed.sidebarOverlayCount === 0 && closed.sidebarBackdropCount === 0, 'desktop Sidebar should be absent when closed', closed);
+      assert(closed.main && closed.main.left <= 4, 'desktop main should start at viewport left edge when Sidebar is closed', closed);
+      assert(closed.board && closed.board.left <= 4, 'desktop board should start at viewport left edge when Sidebar is closed', closed);
 
-      assert(collapsedSidebarBox && collapsedSidebarBox.width <= 41, 'desktop Sidebar collapsed rail should stay within 40px rail plus subpixel border tolerance', { collapsedSidebarBox });
-      assert(collapsedWorkbenchBox && collapsedWorkbenchBox.width <= 25, 'desktop TaskWorkbench collapsed rail should stay within 24px rail plus subpixel border tolerance', { collapsedWorkbenchBox });
-      assert(
-        !collapsedCountBox || collapsedCountBox.x + collapsedCountBox.width <= collapsedWorkbenchBox.x + collapsedWorkbenchBox.width + 1,
-        'desktop TaskWorkbench count badge should not widen or overflow rail',
-        { collapsedWorkbenchBox, collapsedCountBox },
-      );
-      const screenshotPath = `${screenshotBase}-desktop-collapsed-rails.png`;
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const sidebarBox = await page.locator('[data-sidebar-inline="true"]').boundingBox();
+      const open = await layoutMetrics();
+      assert(sidebarBox && sidebarBox.x <= 1 && sidebarBox.width <= 289, 'desktop Sidebar inline panel should use the compact panel width', { sidebarBox });
+      assert(open.sidebarInlineCount === 1 && open.sidebarOverlayCount === 0 && open.sidebarBackdropCount === 0, 'desktop Sidebar should open as an inline panel, not an overlay/backdrop', open);
+      assert(closed.main && open.main && sidebarBox && Math.abs(open.main.left - (sidebarBox.x + sidebarBox.width)) <= 2, 'desktop Sidebar should push main surface to the right', { closed, open, sidebarBox });
+      assert(closed.main && open.main && sidebarBox && Math.abs(open.main.width - (closed.main.width - sidebarBox.width)) <= 2, 'desktop Sidebar should reduce available main width instead of covering it', { closed, open, sidebarBox });
+      assert(open.board && open.main && Math.abs(open.board.left - open.main.left) <= 2, 'desktop board should remain visible to the right of inline Sidebar', open);
+
+      const screenshotPath = `${screenshotBase}-desktop-sidebar-inline.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
-      return { collapsedSidebarBox, collapsedWorkbenchBox, collapsedCountBox, screenshotPath };
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      const closedAgain = await layoutMetrics();
+      assert(closedAgain.sidebarCollapsedCount === 0 && closedAgain.main.left <= 4, 'desktop Sidebar close should return to zero-width state', closedAgain);
+
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const workbenchBox = await page.locator('[data-task-workbench-inline="true"]').boundingBox();
+      const workbenchOpen = await layoutMetrics();
+      assert(workbenchBox && workbenchBox.x <= 1 && workbenchBox.width <= 341, 'desktop TaskWorkbench should open as an inline panel from top navigation', { workbenchBox });
+      assert(workbenchOpen.workbenchCollapsedCount === 0, 'desktop TaskWorkbench closed/open states should not use an in-flow collapsed rail', workbenchOpen);
+      assert(workbenchOpen.workbenchInlineCount === 1 && workbenchOpen.workbenchOverlayCount === 0 && workbenchOpen.workbenchBackdropCount === 0, 'desktop TaskWorkbench should be inline, not overlay/backdrop', workbenchOpen);
+      assert(workbenchOpen.board && workbenchBox && Math.abs(workbenchOpen.board.left - (workbenchBox.x + workbenchBox.width)) <= 2, 'desktop board should be laid out to the right of TaskWorkbench', { workbenchOpen, workbenchBox });
+      assert(closedAgain.board && workbenchOpen.board && workbenchOpen.board.width < closedAgain.board.width - 300, 'desktop TaskWorkbench should reduce board width instead of covering it', { closedAgain, workbenchOpen });
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      const workbenchClosed = await layoutMetrics();
+      assert(workbenchClosed.workbenchCollapsedCount === 0 && workbenchClosed.main.left <= 4, 'desktop TaskWorkbench close should return to zero-width state', workbenchClosed);
+
+      return { closed, open, closedAgain, workbenchOpen, workbenchClosed, sidebarBox, workbenchBox, screenshotPath };
+    });
+
+    await runCase('QA-042-B11', 'desktop Sidebar and TaskWorkbench stay inline side by side with board still visible', async () => {
+      if (await page.locator('[data-task-workbench-inline="true"]').count()) {
+        await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+        await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      }
+      if (await page.locator('[data-sidebar-inline="true"]').count()) {
+        await page.locator('[data-main-sidebar-toggle="true"]').click();
+        await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      }
+
+      const closed = await layoutMetrics();
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'visible', timeout: 5000 });
+
+      const sidebarBox = await page.locator('[data-sidebar-inline="true"]').boundingBox();
+      const workbenchBox = await page.locator('[data-task-workbench-inline="true"]').boundingBox();
+      const boardBox = await page.locator('[data-mobile-pan-surface="board"]').boundingBox();
+      const simultaneous = await layoutMetrics();
+      const hitTest = await desktopBoardHitTest();
+      assert(simultaneous.sidebarInlineCount === 1 && simultaneous.workbenchInlineCount === 1, 'desktop Sidebar and TaskWorkbench should both remain visible inline', simultaneous);
+      assert(simultaneous.sidebarOverlayCount === 0 && simultaneous.workbenchOverlayCount === 0, 'desktop dual panels should not use overlay mode', simultaneous);
+      assert(simultaneous.sidebarBackdropCount === 0 && simultaneous.workbenchBackdropCount === 0, 'desktop dual panels should not render dimming backdrops over the task screen', simultaneous);
+      assert(sidebarBox && sidebarBox.x <= 1 && sidebarBox.width <= 289, 'desktop Sidebar should remain at the left edge', { sidebarBox });
+      assert(workbenchBox && workbenchBox.width <= 341, 'desktop TaskWorkbench should keep the safe inline width', { workbenchBox });
+      assert(
+        sidebarBox && workbenchBox && Math.abs(workbenchBox.x - (sidebarBox.x + sidebarBox.width)) <= 2,
+        'desktop TaskWorkbench should be positioned immediately to the right of Sidebar',
+        { sidebarBox, workbenchBox },
+      );
+      assert(boardBox && workbenchBox && Math.abs(boardBox.x - (workbenchBox.x + workbenchBox.width)) <= 2, 'desktop board should start immediately to the right of TaskWorkbench', { boardBox, workbenchBox });
+      assert(boardBox && boardBox.width >= 360, 'desktop board should keep visible task workspace after both panels open', { boardBox });
+      assert(closed.main && simultaneous.main && sidebarBox && Math.abs(simultaneous.main.width - (closed.main.width - sidebarBox.width)) <= 2, 'desktop Sidebar should resize main width in inline mode', { closed, simultaneous, sidebarBox });
+      assert(closed.board && simultaneous.board && simultaneous.board.width < closed.board.width - 600, 'desktop dual inline panels should reduce board width instead of covering it', { closed, simultaneous });
+      assert(!hitTest.isBackdrop && hitTest.isBoardSurface, 'desktop task surface should remain visible and hit-testable, not covered by panels', hitTest);
+
+      const screenshotPath = `${screenshotBase}-desktop-sidebar-workbench-inline-side-by-side.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+      await page.locator('[data-task-workbench-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      const afterWorkbenchClose = await layoutMetrics();
+      assert(afterWorkbenchClose.sidebarInlineCount === 1 && afterWorkbenchClose.workbenchInlineCount === 0, 'closing TaskWorkbench should keep desktop Sidebar open', afterWorkbenchClose);
+
+      await page.locator('[data-main-sidebar-toggle="true"]').click();
+      await page.locator('[data-sidebar-inline="true"]').waitFor({ state: 'detached', timeout: 5000 });
+      const closedAgain = await layoutMetrics();
+      assert(closedAgain.sidebarInlineCount === 0 && closedAgain.workbenchInlineCount === 0, 'desktop dual inline cleanup should leave both closed', closedAgain);
+
+      return { closed, simultaneous, afterWorkbenchClose, closedAgain, sidebarBox, workbenchBox, boardBox, screenshotPath };
     });
 
     const failCount = results.filter(result => result.result !== 'PASS').length;

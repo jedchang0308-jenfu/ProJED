@@ -31,10 +31,16 @@ async (page) => {
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
     if ((await page.locator('[data-mindmap-view]').count()) === 0) {
-      await page.locator('[data-mode-switcher-value="mindmap"]').click();
+      await selectViewMode('mindmap');
     }
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-mindmap-note-relationship-overlay]').waitFor({ state: 'visible', timeout: 15000 });
+  };
+
+  const selectViewMode = async (mode) => {
+    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    await page.locator(`[data-mode-switcher-value="${mode}"]`).click();
+    await page.waitForTimeout(250);
   };
 
   const resetFixture = async () => {
@@ -46,7 +52,7 @@ async (page) => {
     });
     await page.reload({ waitUntil: 'networkidle' });
     if ((await page.locator('[data-mindmap-view]').count()) === 0) {
-      await page.locator('[data-mode-switcher-value="mindmap"]').click();
+      await selectViewMode('mindmap');
     }
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-mindmap-note-relationship-overlay]').waitFor({ state: 'visible', timeout: 15000 });
