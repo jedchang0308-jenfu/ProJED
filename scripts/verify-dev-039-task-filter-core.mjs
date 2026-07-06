@@ -177,7 +177,11 @@ assert(
     source.taskWorkbench.includes('boardOptions: BoardOption[]') &&
     source.taskWorkbench.includes('boardOptions={boardOptions}') &&
     source.taskWorkbench.includes('selectedBoardId={selectedBoardId}') &&
-    source.taskWorkbench.includes('onSelectedBoardChange={setSelectedBoardId}'),
+    source.taskWorkbench.includes('TASK_WORKBENCH_FILTER_PREFS_KEY') &&
+    source.taskWorkbench.includes('projed-task-workbench-filters:v1') &&
+    source.taskWorkbench.includes('readWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('writeWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('onSelectedBoardChange={handleSelectedBoardChange}'),
 );
 
 assert(

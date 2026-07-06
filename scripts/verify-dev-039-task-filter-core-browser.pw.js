@@ -205,10 +205,20 @@ async (page) => {
       await unclassifiedSection.locator('[data-task-workbench-unclassified-item="true"]').count() === 2,
       'unclassified inbox section should not be affected by board task filters',
     );
-    await workbenchFilterPanel.getByRole('button', { name: /重設/ }).click();
-    assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 1, 'reset should restore board B filter without save/profile controls');
+
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const reloadedWorkbenchPanel = page.locator('[data-task-workbench-panel="true"]');
+    if (await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-panel="true"]').count() === 0) {
+      await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').click();
+    }
+    const reloadedFilterPanel = reloadedWorkbenchPanel.locator('[data-task-workbench-filter-panel="true"]');
+    await reloadedFilterPanel.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await reloadedFilterPanel.locator('[data-task-workbench-board-select="true"]').inputValue() === 'dev039-board-b', 'workbench selected board should persist after reload');
+    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 0, 'board B todo filter should persist after reload');
+    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').getAttribute('data-active-task-workbench-filter-count') === '1', 'workbench active filter count should persist after reload');
+    await reloadedFilterPanel.getByRole('button', { name: /重設/ }).click();
+    assert(await reloadedWorkbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 1, 'reset should restore board B filter without save/profile controls');
     const reloadedUnclassifiedSection = page.locator('[data-task-workbench-unclassified-section="true"]');
     assert(await reloadedUnclassifiedSection.getByText('臨時拜訪客戶').count() === 1, 'new unclassified item should remain after reload');
 
