@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useBoardStore from '../store/useBoardStore';
-import { isSupabaseBackend } from '../services/dataBackend';
+import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
 import {
   calendarSubscriptionService,
   type CalendarSubscription,
@@ -49,6 +49,7 @@ const getScopeType = (filters: CalendarSubscriptionFilters): CalendarSubscriptio
   filters.scope_type ?? 'workspace';
 
 const uniq = <T extends string>(items: T[]) => Array.from(new Set(items.filter(Boolean)));
+const LOCAL_TEST_PREVIEW_ASSIGNEE_IDS: string[] = [];
 
 type CalendarBoardOption = {
   id: string;
@@ -598,7 +599,23 @@ const CalendarSubscriptionsView: React.FC = () => {
   if (!isSupabaseBackend) {
     return (
       <div className="h-full overflow-auto bg-slate-50 p-6">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4">
+          {isLocalTestBackend && (
+            <section
+              className="border border-slate-200 bg-white p-4"
+              data-calendar-subscription-local-preview="true"
+            >
+              <div className="text-sm font-bold text-slate-800">本機訂閱條件預覽</div>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                本機測試模式可先驗證篩選器與即時預覽；實際 `.ics` 訂閱連結仍需 Supabase 後端提供。
+              </p>
+              <CalendarSubscriptionBuilderPreview
+                boards={boardOptions}
+                dateTypes={filters.date_types}
+                selectedAssigneeIds={LOCAL_TEST_PREVIEW_ASSIGNEE_IDS}
+              />
+            </section>
+          )}
           <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             自訂行事曆訂閱需要 Supabase 後端，因為 `.ics` 訂閱連結必須由雲端函式對外提供。
           </div>

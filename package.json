@@ -109,6 +109,7 @@
     "verify:dev-044-undo-coverage": "node scripts/verify-dev-044-undo-coverage.mjs",
     "verify:dev-044-undo-coverage-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev044-undo-coverage -Filename scripts/verify-dev-044-undo-coverage-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-045-calendar-subscription-builder-preview": "node scripts/verify-dev-045-calendar-subscription-builder-preview.mjs",
+    "verify:dev-045-calendar-subscription-builder-preview-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev045-calendar-builder -Filename scripts/verify-dev-045-calendar-subscription-builder-preview-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-045-calendar-subscription-v2-feed": "node scripts/verify-dev-045-calendar-subscription-v2-feed.mjs",
     "verify:settings-project-context": "node scripts/verify-settings-project-context.mjs",
     "verify:settings-project-context-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=settings-project-context open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=settings-project-context run-code --filename=scripts/verify-settings-project-context-browser.pw.js\"",

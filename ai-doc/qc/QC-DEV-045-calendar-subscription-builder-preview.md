@@ -10,6 +10,8 @@
 
 DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。DEV-045 Phase 2 local source 已補上 v2 filters_json validation migration source、client normalizer、Edge Function v2 feed matcher 與 static verifier。
 
+2026-07-07 補齊 Phase 1 browser QC：新增 local-test-only Builder 預覽路徑與 `verify:dev-045-calendar-subscription-builder-preview-browser`，以同一個 `CalendarSubscriptionBuilderPreview` 元件覆蓋 desktop / mobile / empty preview / board exclude / board custom override / horizontal overflow。這不建立 `.ics` 訂閱連結，也不套用 remote DB / Edge 變更。
+
 2026-07-07 Phase 3 read-only preflight 已執行。使用者已授權剩餘任務開發，但正式 remote migration / Edge deploy 仍未執行，原因是 deployment-release-gate 缺少 Level 3 production-like pre-deploy smoke 環境。`ProJED_TEST` Supabase project 目前 inactive，不能作為 staging；本地 Supabase Postgres 未啟動，無法執行 local DB lint；Supabase CLI remote token 未提供，CLI path 無法列 remote migration。
 
 已完成：
@@ -17,6 +19,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 - `CalendarSubscriptionsView` 已掛載 Builder，並保留 DEV-037 v1 source-scope 相容 UI 與既有訂閱列表。
 - `CalendarSubscriptionFilters` 已新增 v2 local contract 欄位，但未變更 DEV-037 v1 `scope_type` contract。
 - 新增 `verify:dev-045-calendar-subscription-builder-preview` static gate。
+- 新增 `verify:dev-045-calendar-subscription-builder-preview-browser` browser gate，產生 desktop、empty、exclude、mobile 截圖。
 - 新增 `verify:dev-045-calendar-subscription-v2-feed` static gate，覆蓋 v2 DB validation、service normalizer、submit wiring、Edge matcher 與 tag join。
 - Phase 3 read-only preflight：production project `knodlkxqpcqyrtgwpdst` healthy / Postgres 17，`calendar-feed` current version 3 active，`verify_jwt=false`，rollback source 已可由 Supabase MCP 讀取。
 - Phase 3 DB preflight：正式 DB 目前仍是 v1 validation function；`calendar_subscription_task_filter_allowed(jsonb)` 不存在，`calendar_subscription_filter_allowed(jsonb)` 不含 `project_ids` / `v2_scope_type`；正式訂閱 2 筆、active 2 筆、v2 0 筆。
@@ -27,7 +30,8 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 - `calendar-feed` Edge Function deploy。
 - preview/feed identity parity live verification。
 - Firebase Hosting production deploy。
-- 手機/桌機 Playwright 截圖式 browser QC。
+- Supabase live / production browser screenshot QC。
+- Partial/error board-load fixture browser QC。
 - Deno Edge Function type check；本機未安裝 `deno`，目前以 static verifier 覆蓋 source contract。
 - Supabase local DB lint；`npx --yes supabase db lint --local --fail-on error` 因本地 Postgres 未啟動而無法連線。
 
@@ -36,8 +40,10 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 | Gate | 結果 | 證據 |
 |---|---|---|
 | `npm.cmd run verify:dev-045-calendar-subscription-builder-preview` | Pass | 16 pass / 0 fail |
+| `npm.cmd run verify:dev-045-calendar-subscription-builder-preview-browser` | Pass | `dev-045-calendar-builder-desktop.png`、`dev-045-calendar-builder-empty.png`、`dev-045-calendar-builder-exclude.png`、`dev-045-calendar-builder-mobile.png` |
 | `npm.cmd run verify:dev-045-calendar-subscription-v2-feed` | Pass | 18 pass / 0 fail |
 | `npm.cmd run verify:dev-037-calendar-subscription-source-scope` | Pass | 20 pass / 0 fail |
+| `npm.cmd run verify:dev-037-calendar-subscription-source-scope-browser` | Pass | DEV-037 local-test fallback/browser regression passed |
 | Supabase MCP read-only preflight | Pass / blocked for deploy | Production project healthy；current `calendar-feed` version 3 active；DB v2 functions not applied；staging unavailable |
 | Supabase security advisors | Warn / existing unrelated | Existing SECURITY DEFINER warnings unrelated to DEV-045 migration；no DEV-045 DDL applied |
 | `npm.cmd run verify:dev-039-task-filter-core` | Pass | 61 pass / 0 fail |
@@ -52,10 +58,10 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 - Phase 2 目前是 local source slice；產生 `.ics` 連結需套用 Supabase migration 與部署 Edge Function 後，才能宣告 production preview/feed 一致。
 - Phase 3 目前是 authorized but gated；缺 production-like Level 3 pre-deploy smoke 時，不得宣告 remote DB / Edge / production release safe。
 - Edge Function 尚未做 Deno type check；進入 Supabase/Edge deploy gate 前需補 Deno 或 Supabase functions verification。
-- Browser visual QC 尚未補，需後續建立或執行 DEV-045 browser verifier，覆蓋 desktop / mobile / empty preview / override / exclude。
+- Browser QC 已補 desktop / mobile / empty preview / override / exclude；尚未覆蓋 Supabase live partial/error state，需 remote/staging 或 mocked board-load failure fixture。
 - 既有工作樹中存在 DEV-041 / PWA 相關未提交修改與 `.firebase/hosting.ZGlzdA.cache`，未納入本 QC 範圍。
 
 ## 下一步
 
 - DEV-045 Phase 3：先提供 staging / active Supabase branch / local Supabase DB 或明確接受無 Level 3 release risk，才能套用 Supabase migration、部署 Edge Function、執行 live `.ics` preview/feed identity smoke。
-- DEV-045 browser verifier：補 desktop/mobile Builder 截圖與基本互動證據。
+- DEV-045 live browser verifier：在 Level 3 path 可用後補 Supabase live preview/feed identity 與 partial/error state。

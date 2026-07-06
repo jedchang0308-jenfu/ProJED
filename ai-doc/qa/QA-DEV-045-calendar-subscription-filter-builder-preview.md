@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
-狀態：Phase 2 Static QC Passed / Phase 3 Authorized but Release-Gate Blocked
+狀態：Phase 2 Static + Browser QC Passed / Phase 3 Authorized but Release-Gate Blocked
 建立日期：2026-07-06
 
 ## 驗證目標
@@ -75,10 +75,12 @@ RD 實作後需建立 DEV-045 專用 static/browser/feed verifier，並保留下
 
 ## Phase 1 QC Update - 2026-07-07
 
-Phase 1 local Builder slice 已完成 static/build QC：
+Phase 1 local Builder slice 已完成 static/build/browser QC：
 
 - `verify:dev-045-calendar-subscription-builder-preview`：Pass，16 pass / 0 fail。
+- `verify:dev-045-calendar-subscription-builder-preview-browser`：Pass，覆蓋 desktop Builder、empty preview、board exclude / custom override、mobile viewport 與 horizontal overflow；截圖為 `output/playwright/dev-045-calendar-builder-desktop.png`、`dev-045-calendar-builder-empty.png`、`dev-045-calendar-builder-exclude.png`、`dev-045-calendar-builder-mobile.png`。
 - `verify:dev-037-calendar-subscription-source-scope`：Pass，20 pass / 0 fail。
+- `verify:dev-037-calendar-subscription-source-scope-browser`：Pass，確認 local-test fallback 與 DEV-037 browser gate 未被 DEV-045 local preview 破壞。
 - `verify:dev-039-task-filter-core`：Pass，61 pass / 0 fail。
 - TypeScript noEmit：Pass。
 - settings project context：Pass。
@@ -86,7 +88,7 @@ Phase 1 local Builder slice 已完成 static/build QC：
 
 仍待執行：
 
-- DEV-045 browser verifier：desktop / mobile Builder、override、exclude、empty preview、visual overflow。
+- DEV-045 partial/error browser fixture：需 Supabase 或 mocked board-load failure 才能驗證部分查詢失敗狀態與 disabled create behavior。
 - DEV-045 feed verifier：Supabase validation、Edge Function v2、preview/feed identity parity。
 - Production live `.ics` smoke。
 
@@ -107,7 +109,7 @@ Phase 2 local source slice 已完成 static/source QC：
 - Supabase remote migration apply。
 - Supabase Edge Function deploy。
 - Live `.ics` preview/feed identity smoke。
-- Desktop / mobile browser screenshot QC。
+- Supabase live / production browser screenshot QC。
 
 ## Phase 3 Preflight Update - 2026-07-07
 
