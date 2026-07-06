@@ -270,28 +270,15 @@ const Sidebar = () => {
         </div>
       ) : (
         <div className={`flex h-full ${isMobileOverlay ? 'w-full' : 'w-64'} flex-col`}>
-          <div className="flex h-14 items-center justify-between border-b-2 border-slate-200 bg-slate-50 p-4">
-            <span className="text-xs font-semibold text-slate-500">工作區選單</span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={openCreateWorkspaceDialog}
-                className="rounded p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-                title="新增工作區"
-                aria-label="新增工作區"
-                data-sidebar-create-workspace-button="true"
-              >
-                <Plus size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(false)}
-                className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                title="收合工作區選單"
-              >
-                <ChevronLeft size={14} />
-              </button>
-            </div>
+          <div className="flex h-12 items-center justify-end border-b border-slate-200 bg-slate-50 px-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              title="收合工作區選單"
+            >
+              <ChevronLeft size={14} />
+            </button>
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-2">
@@ -439,22 +426,20 @@ const Sidebar = () => {
                 </div>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={openCreateWorkspaceDialog}
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-500 transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+              title="新增工作區"
+              aria-label="新增工作區"
+              data-sidebar-create-workspace-button="true"
+            >
+              <Plus size={15} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">新增工作區</span>
+            </button>
           </div>
 
           <div className="border-t border-slate-100 bg-slate-50/50 p-2">
-            <button
-              onClick={handleOpenTaskWorkbench}
-              className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                isTaskWorkbenchView
-                  ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
-                  : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
-              }`}
-              title="開啟全域任務平台"
-              data-sidebar-task-workbench-button="true"
-            >
-              <ClipboardList size={16} className={isTaskWorkbenchView ? 'text-white/90' : 'text-slate-400'} />
-              <span className="min-w-0 flex-1 truncate text-left">全域任務平台</span>
-            </button>
             <button
               onClick={() => setView('settings')}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
