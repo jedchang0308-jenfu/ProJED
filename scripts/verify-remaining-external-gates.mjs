@@ -16,6 +16,7 @@ const paths = {
   dev028ManualReadiness: 'scripts/verify-dev-028-manual-click-qc-readiness.mjs',
   dev040RemoteReadiness: 'scripts/verify-dev-040-p0-remote-readiness.mjs',
   dev045RemoteReadiness: 'scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs',
+  dev045LocalDbSmoke: 'scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs',
 };
 
 const checks = [];
@@ -60,6 +61,8 @@ const requiredScripts = {
   'verify:dev-044-undo-coverage': 'node scripts/verify-dev-044-undo-coverage.mjs',
   'verify:dev-045-calendar-subscription-remote-readiness':
     'node scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs',
+  'verify:dev-045-calendar-subscription-local-db-smoke':
+    'node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs',
 };
 
 for (const [scriptName, expectedCommand] of Object.entries(requiredScripts)) {
@@ -84,8 +87,9 @@ add(
   'DEV-045 Phase 3 remains release-gated, not marked complete',
   includesAll(existing.devTask ?? '', [
     'DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate',
-    'Release-Gate Blocked by Missing Level 3',
-    'Level 3 smoke path or explicit risk acceptance',
+    'Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending',
+    'deployment-release-gate / Supabase gate',
+    'verify:dev-045-calendar-subscription-local-db-smoke',
     'Supabase branch path 需 cost confirmation',
     'production 仍缺 DEV-037/045 migrations',
     'calendar-feed` version 3 未含 v2 matcher',
@@ -181,7 +185,8 @@ add(
     'mutating role-data QC 仍需安全 fixture',
     'remote Edge 仍未部署 timeout guard',
     'DEV-044 durable/destructive recovery 仍需另行 gate',
-    'remote apply/deploy/live smoke 需 Level 3 path 或 explicit risk acceptance',
+    'Remote DB-Edge-Live Gate Pending',
+    'remote apply/deploy/live smoke 仍需 Supabase / deployment-release-gate',
   ]),
 );
 

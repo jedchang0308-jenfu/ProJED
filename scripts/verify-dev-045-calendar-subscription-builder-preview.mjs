@@ -105,7 +105,7 @@ assert(
     source.qa.includes('QA-045-B01') &&
     source.qc.includes('Phase 1 local Builder slice 已完成本機實作與 static/build QC') &&
     source.devTask.includes('DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate') &&
-    source.documentationMap.includes('DEV-045 Phase 1 Builder 與 Phase 2 local source 已完成'),
+    source.documentationMap.includes('DEV-045 Phase 1 Builder、Phase 2 local source 與 local DB smoke 已完成'),
 );
 
 const failed = results.filter(result => !result.ok);

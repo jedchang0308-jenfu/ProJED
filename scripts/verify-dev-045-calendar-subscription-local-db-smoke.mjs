@@ -1,0 +1,214 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const args = new Set(process.argv.slice(2));
+const runLocalDb = args.has('--run-local-db');
+const containerName = process.env.DEV045_LOCAL_DB_CONTAINER || 'supabase_db_ProJED';
+
+const files = {
+  workspaceTagsMigration: 'supabase/migrations/20260527064316_workspace_tags.sql',
+  boardCollaborationMigration: 'supabase/migrations/20260528092643_board_level_collaboration_rls.sql',
+  dev037Migration: 'supabase/migrations/20260706091804_calendar_subscription_source_scope.sql',
+  dev045Migration: 'supabase/migrations/20260706162052_calendar_subscription_v2_filters.sql',
+  qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
+  qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
+  devTask: 'ai-doc/dev_task.md',
+};
+
+const results = [];
+const add = (name, ok, details = undefined) => results.push({ name, ok, details });
+const read = file => readFileSync(resolve(file), 'utf8');
+
+for (const [label, file] of Object.entries(files)) {
+  add(`file exists:${label}`, existsSync(resolve(file)), file);
+}
+
+const source = Object.fromEntries(
+  Object.entries(files)
+    .filter(([, file]) => existsSync(resolve(file)))
+    .map(([label, file]) => [label, read(file)]),
+);
+
+add(
+  'DEV-045 local DB smoke uses rollback-only execution',
+  source.dev045Migration?.includes('calendar_subscription_task_filter_allowed') &&
+    source.dev045Migration?.includes('revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon') &&
+    source.dev037Migration?.includes('private.current_user_can_read_project'),
+);
+
+add(
+  'DEV-045 docs keep remote apply/deploy gated after local DB smoke',
+  source.qa?.includes('local Supabase DB smoke 已完成') &&
+    source.qc?.includes('不得宣告 remote DB / Edge / production release safe') &&
+    source.devTask?.includes('deployment-release-gate / Supabase gate'),
+);
+
+const failIfNeeded = () => {
+  const failed = results.filter(result => !result.ok);
+  if (failed.length > 0) {
+    console.log(JSON.stringify({ ok: false, summary: { pass: results.length - failed.length, fail: failed.length }, results }, null, 2));
+    process.exit(1);
+  }
+};
+
+const run = (command, commandArgs, options = {}) => spawnSync(command, commandArgs, {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  ...options,
+});
+
+const psql = sql => run('docker', [
+  'exec',
+  '-i',
+  containerName,
+  'psql',
+  '-U',
+  'postgres',
+  '-d',
+  'postgres',
+  '-v',
+  'ON_ERROR_STOP=1',
+  '-P',
+  'pager=off',
+], { input: sql });
+
+const localSchemaProbeSql = `
+copy (
+select
+  exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'task_tags'
+  ) as has_task_tags,
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.proname = 'current_user_can_read_project'
+  ) as has_project_read_helper
+) to stdout with csv;
+`;
+
+const fixtureSql = `
+insert into auth.users (id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values
+  ('11111111-1111-4111-8111-111111111111', 'authenticated', 'authenticated', 'dev045-owner@example.test', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('22222222-2222-4222-8222-222222222222', 'authenticated', 'authenticated', 'dev045-member@example.test', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('99999999-9999-4999-8999-999999999999', 'authenticated', 'authenticated', 'dev045-outsider@example.test', '{}'::jsonb, '{}'::jsonb, now(), now())
+on conflict (id) do nothing;
+
+insert into public.profiles (id, email, display_name)
+values
+  ('11111111-1111-4111-8111-111111111111', 'dev045-owner@example.test', 'DEV-045 Owner'),
+  ('22222222-2222-4222-8222-222222222222', 'dev045-member@example.test', 'DEV-045 Member'),
+  ('99999999-9999-4999-8999-999999999999', 'dev045-outsider@example.test', 'DEV-045 Outsider')
+on conflict (id) do nothing;
+
+insert into public.tenants (id, name, owner_id, metadata)
+values ('33333333-3333-4333-8333-333333333333', 'DEV-045 local smoke workspace', '11111111-1111-4111-8111-111111111111', '{"qc":"DEV-045"}'::jsonb)
+on conflict (id) do nothing;
+
+insert into public.tenant_members (tenant_id, user_id, role, status)
+values
+  ('33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', 'owner', 'active'),
+  ('33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', 'member', 'active')
+on conflict (tenant_id, user_id) do update set role = excluded.role, status = excluded.status;
+
+insert into public.projects (id, tenant_id, name, metadata, created_by)
+values ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', 'DEV-045 local smoke board', '{"qc":"DEV-045"}'::jsonb, '11111111-1111-4111-8111-111111111111')
+on conflict (id) do nothing;
+
+insert into public.project_members (project_id, tenant_id, user_id, role)
+values
+  ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', 'owner'),
+  ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', 'member')
+on conflict (project_id, user_id) do update set role = excluded.role;
+
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+
+create temporary table dev045_checks(name text primary key, ok boolean not null) on commit drop;
+
+insert into dev045_checks(name, ok)
+values
+  ('task filter allows null', public.calendar_subscription_task_filter_allowed(null::jsonb)),
+  ('task filter allows valid bounded filter', public.calendar_subscription_task_filter_allowed('{"statusFilters":{"todo":true,"completed":false},"dueWithinDays":30,"selectedAssigneeIds":["11111111-1111-4111-8111-111111111111"],"selectedTagIds":[],"keyword":"smoke"}'::jsonb)),
+  ('task filter rejects unknown status key', not public.calendar_subscription_task_filter_allowed('{"statusFilters":{"unknown":true}}'::jsonb)),
+  ('task filter rejects negative dueWithinDays', not public.calendar_subscription_task_filter_allowed('{"dueWithinDays":-1}'::jsonb)),
+  ('v2 filter allows snapshot custom project scope', public.calendar_subscription_filter_allowed('{"version":2,"v2_scope_type":"all_accessible_boards_snapshot","scope_type":"custom","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"date_types":["due_date"],"assignee":{"type":"me"},"global_filter":{"statusFilters":{"todo":true,"completed":false},"dueWithinDays":30,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":"smoke"},"board_overrides":{"44444444-4444-4444-8444-444444444444":{"enabled":false}}}'::jsonb)),
+  ('v2 filter rejects missing project_ids', not public.calendar_subscription_filter_allowed('{"version":2,"v2_scope_type":"all_accessible_boards_snapshot","scope_type":"custom","workspace_ids":["33333333-3333-4333-8333-333333333333"],"date_types":["due_date"],"assignee":{"type":"me"},"global_filter":{}}'::jsonb)),
+  ('v2 filter rejects board override outside project scope', not public.calendar_subscription_filter_allowed('{"version":2,"v2_scope_type":"all_accessible_boards_snapshot","scope_type":"custom","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"date_types":["due_date"],"assignee":{"type":"me"},"global_filter":{},"board_overrides":{"55555555-5555-4555-8555-555555555555":{"enabled":true}}}'::jsonb)),
+  ('authenticated can execute v2 helper', has_function_privilege('authenticated', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
+  ('anon cannot execute v2 helper', not has_function_privilege('anon', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
+  ('anon cannot execute subscription validator', not has_function_privilege('anon', 'public.calendar_subscription_filter_allowed(jsonb)', 'execute'));
+
+select * from dev045_checks order by name;
+
+do $$
+begin
+  if exists (select 1 from dev045_checks where not ok) then
+    raise exception 'DEV-045 local DB smoke failed';
+  end if;
+end $$;
+`;
+
+if (!runLocalDb) {
+  failIfNeeded();
+  console.log(JSON.stringify({
+    ok: true,
+    mode: 'self-check',
+    actualLocalDbSmoke: 'skipped',
+    runActualCommand: 'node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs --run-local-db',
+    summary: { pass: results.length, fail: 0 },
+    results,
+  }, null, 2));
+  process.exit(0);
+}
+
+failIfNeeded();
+
+const dockerProbe = run('docker', ['inspect', '-f', '{{.State.Running}}', containerName]);
+if (dockerProbe.status !== 0 || dockerProbe.stdout.trim() !== 'true') {
+  add('local Supabase DB container is running', false, dockerProbe.stderr || dockerProbe.stdout);
+  failIfNeeded();
+}
+add('local Supabase DB container is running', true, containerName);
+
+const schemaProbe = psql(localSchemaProbeSql);
+if (schemaProbe.status !== 0) {
+  add('local DB schema probe succeeds', false, schemaProbe.stderr || schemaProbe.stdout);
+  failIfNeeded();
+}
+add('local DB schema probe succeeds', true, schemaProbe.stdout.trim());
+
+const [hasTaskTagsValue, hasProjectReadHelperValue] = schemaProbe.stdout.trim().split(/\r?\n/).at(-1)?.split(',') ?? [];
+const hasTaskTags = hasTaskTagsValue === 't';
+const hasProjectReadHelper = hasProjectReadHelperValue === 't';
+const migrationSql = [
+  'begin;',
+  hasTaskTags ? '-- public.task_tags already present in local DB; prerequisite migration not replayed.' : source.workspaceTagsMigration,
+  hasProjectReadHelper ? '-- private.current_user_can_read_project already present in local DB; prerequisite migration not replayed.' : source.boardCollaborationMigration,
+  source.dev037Migration,
+  source.dev045Migration,
+  fixtureSql,
+  'rollback;',
+].join('\n\n');
+
+const smoke = psql(migrationSql);
+add('DEV-045 transaction-scoped local DB smoke passes', smoke.status === 0, {
+  stdout: smoke.stdout,
+  stderr: smoke.stderr,
+});
+
+failIfNeeded();
+
+console.log(JSON.stringify({
+  ok: true,
+  mode: 'local-db-smoke',
+  container: containerName,
+  transaction: 'rolled back',
+  summary: { pass: results.length, fail: 0 },
+  results,
+}, null, 2));

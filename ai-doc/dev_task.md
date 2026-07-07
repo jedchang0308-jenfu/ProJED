@@ -45,7 +45,7 @@ Deferred Scope Audit:
 
 ### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
 
-狀態: Phase 3 Remote Gate Authorized / Preflight Blocked by Missing Level 3
+狀態: Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending
 節點類型: 交付點 / Calendar subscription v2
 父交付點: DEV-037 行事曆訂閱來源範圍清晰化 / DEV-039 任務過濾器核心與全域任務平台
 是否計入產品交付完成: 是，這是使用者可直接驗收的行事曆訂閱 UX / 資料契約升級；目前完成 Phase 1 local Builder 與 Phase 2 local source，不代表 remote DB / Edge / production feed 已完成
@@ -78,9 +78,10 @@ End-State Architecture:
 - Authorized / Complete: SPEC-045、QA-DEV-045、dev_task、documentation_map 開發文件。
 - Authorized / Complete: Phase 1 local Builder source，包括 v2 local type contract、Builder UI、本地 preview、board override / exclude、DEV-045 static/browser verifier、QC report。
 - Authorized / Complete: Phase 2 local source，包括 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 feed matcher、tag join、DEV-045 v2 feed static verifier。
-- Authorized but Not Executed: Supabase remote migration apply、Supabase Edge Function deploy、production deploy、live `.ics` smoke、正式資料修復、Supabase live / production browser screenshot QC；local-test browser QC、read-only preflight 與 remote-readiness static gate 已完成，但缺 Level 3 production-like pre-deploy smoke。
+- Authorized but Not Executed: Supabase remote migration apply、Supabase Edge Function deploy、production deploy、live `.ics` smoke、正式資料修復、Supabase live / production browser screenshot QC；local-test browser QC、read-only preflight、remote-readiness static gate 與 transaction-scoped local DB smoke 已完成。
 - 2026-07-07 續接 read-only discovery：production `ProJED` / `knodlkxqpcqyrtgwpdst` 為 `ACTIVE_HEALTHY`、Postgres `17.6.1.121`；`ProJED_TEST` / `fhisnnufoeulxqrchldf` 為 `INACTIVE`。production migration history 尚未包含 DEV-037 `20260706091804_calendar_subscription_source_scope` 或 DEV-045 `20260706162052_calendar_subscription_v2_filters`；deployed `calendar-feed` version 3 仍是舊 workspace-only feed contract；production aggregate 訂閱 total 2、active 2、v2 0。Supabase branch listing MCP call 失敗，建立 branch 需另走 cost confirmation；未建立 branch、未套 migration、未部署 Edge。
-- 2026-07-07 remote readiness static gate：新增並通過 `verify:dev-045-calendar-subscription-remote-readiness`，19 pass / 0 fail；只驗證本機 migration / Edge / client / governance artifacts 與 stop condition，不連線 Supabase、不套 migration、不部署 Edge。
+- 2026-07-07 remote readiness static gate：新增並通過 `verify:dev-045-calendar-subscription-remote-readiness`，21 pass / 0 fail；只驗證本機 migration / Edge / client / governance artifacts、local DB smoke gate registration 與 stop condition，不連線 Supabase、不套 migration、不部署 Edge。
+- 2026-07-07 local DB smoke：新增並通過 `verify:dev-045-calendar-subscription-local-db-smoke` self-check；actual mode `node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs --run-local-db` 通過 12 pass / 0 fail，transaction + rollback 驗證 DEV-037 / DEV-045 DB validators、v2 snapshot project scope、missing `project_ids` negative case、board override out-of-scope negative case 與 authenticated/anon grants。此 gate 不套 remote migration、不部署 Edge、不代表 live `.ics` parity 完成。
 
 RD Handoff / Implementation Contract:
 - 建立 `CalendarSubscriptionBuilder` 或等效 component，取代目前 v1 建立表單作為主要 UX。
@@ -112,12 +113,12 @@ Stop Conditions:
 - 部分看板查詢失敗但仍允許產生連結。
 - v2 filter 會讓未來新增 workspace/board 自動進入既有外部連結，且使用者未明確同意。
 - 使用者可訂閱無權 board、他人任務或未指派任務而未通過角色檢查。
-- 需要 DB migration、RLS/RPC、Edge deploy、production deploy 或正式資料修復但缺 Level 3 smoke path、explicit risk acceptance 或 rollback evidence。
+- 需要 remote DB migration、RLS/RPC、Edge deploy、production deploy 或正式資料修復但缺 deployment-release-gate、live smoke 或 rollback evidence。
 
 Deferred Scope Audit:
 - Product implementation: Same Spec Phase / Phase 1；需使用者授權 RD。
 - Supabase validation / Edge Function v2: Same Spec Phase / Phase 2；需 DB/Edge 授權。
-- Production release / live smoke: Same Spec Phase / Phase 3；已授權，但需 staging / Supabase branch / local Supabase DB Level 3 smoke，或使用者明確接受無 Level 3 production DB/Edge 變更風險。
+- Production release / live smoke: Same Spec Phase / Phase 3；已授權，local Supabase DB smoke 已完成；remote migration apply、Edge deploy、live `.ics` preview/feed parity 與 rollback evidence 仍需 deployment-release-gate / Supabase gate。
 - Future dynamic all-accessible scope: Same Spec Phase / Phase 4；需使用者明確接受未來新看板自動加入既有外部連結。
 - Subscription duplicate / copy / audit governance: Same Spec Phase / Phase 4；需另行啟動。
 - Google Calendar write API / two-way sync: No Tracking；不屬只讀 `.ics` 目標。
@@ -130,7 +131,7 @@ All-Phase Coverage Matrix:
 | Phase 0 | Authorized | Complete | SPEC / QA / dev_task / documentation_map | Product code, DB, deploy | 使用者要求寫成開發文件 | DEV-045 文件完整且可續接 | file diff |
 | Phase 1 | Authorized | Phase 1 Local RD Implemented / Static + Browser QC Passed | Builder UI、global filter、board overrides、live local preview、v1 compatibility | Remote migration、Edge deploy、production | 使用者授權 RD | Builder preview source 可操作且不破壞 v1 source-scope UI | DEV-045 static/browser、DEV-037/039/settings regression、TypeScript、settings gate、build、QC-DEV-045 |
 | Phase 2 | Authorized / Local source only | Phase 2 Local Source Implemented / Remote DB-Edge-Production Not Executed | Supabase validation migration source、Edge Function v2 feed source、preview/feed parity static contract | Remote migration apply、Edge deploy、production | Phase 1 passed + local source authorization | `.ics` source matcher uses same allowed task identity semantics as Builder preview | DEV-045 v2 feed static、DEV-037/039 regression、TypeScript、build |
-| Phase 3 | Authorized / Release-Gate Blocked | Remote DB-Edge-Production Gate Pending / Read-only Discovery + Remote Readiness Static Gate Passed 2026-07-07 | Remote migration apply、Edge Function deploy、production live smoke | Unscoped feature additions | Phase 2 source passed + Supabase/deployment gate + Level 3 smoke path or explicit risk acceptance；branch path requires Supabase cost confirmation | Production link outputs only allowed previewed tasks | remote readiness preflight、deployment-release-gate、live feed smoke、Supabase MCP read-only evidence |
+| Phase 3 | Authorized / Remote Gate Pending | Remote DB-Edge-Production Gate Pending / Read-only Discovery + Remote Readiness Static + Local DB Smoke Passed 2026-07-07 | Remote migration apply、Edge Function deploy、production live smoke | Unscoped feature additions | Phase 2 source passed + Supabase/deployment gate + local DB smoke passed；branch path requires Supabase cost confirmation | Production link outputs only allowed previewed tasks | remote readiness preflight、local DB smoke、deployment-release-gate、live feed smoke、Supabase MCP read-only evidence |
 | Phase 4 | Not Authorized | RD Contract Ready | duplicate/copy/audit/future dynamic scope | Two-way calendar sync | User re-entry | Governance features have explicit summary and confirmation | future SPEC/QA |
 
 文件:
@@ -2344,9 +2345,9 @@ CAPA 來源：
 - 2026-07-06 DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA 並 production release；採低資料庫成本 ordinary undo 擴充，涵蓋 batch/reorder/placement command grouping；DB migration、durable recovery、board workspace transfer undo 與 destructive recovery 未執行。
 - 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT 與 regression gates；production UI smoke 與 production deploy 未執行。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
-- 2026-07-07 DEV-045 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier、local-test browser verifier 與 remote-readiness static gate；Phase 3 已授權並完成 read-only preflight，但因 `ProJED_TEST` inactive 且缺 Level 3 production-like pre-deploy smoke，remote DB/Edge/production live QC 未執行。
+- 2026-07-07 DEV-045 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier、local-test browser verifier、remote-readiness static gate 與 transaction-scoped local DB smoke；Phase 3 已授權並完成 read-only preflight / local DB smoke，但 `ProJED_TEST` inactive，remote DB/Edge/production live QC 未執行。
 - 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight、guarded fixture-readiness harness、execution-readiness gate 與 guarded mutating executor self-check passed，mutating role-data QC still pending safe fixture。
-- 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 只能在 Level 3 smoke path 或 explicit risk acceptance 後進入 remote apply/deploy；否則下一步是文件化 gate blocker 或處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
+- 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 已補 local DB smoke，下一步只能在 deployment-release-gate / Supabase gate 下進入 remote apply/deploy/live `.ics` smoke；若不進 remote gate，則處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 尚待 production UI smoke；2026-07-07 已新增 read-only readiness gate `verify:dev-011-012-production-ui-smoke-readiness`，確認可重用 authenticated session injection + cleanup pattern 與 local AI整理 browser ROT；同日新增 guarded executor `verify:dev-011-012-production-ui-smoke`，預設 self-check 不登入、不建立 production 資料、不呼叫 AI，完整 fixture path 需 `--run-production-fixture` + `DEV011012_ALLOW_PRODUCTION_FIXTURE=1` 後才會建立/清理臨時 fixture。完整正式站流程仍需已登入 Google browser 或顯式允許 production 臨時 fixture 建立/清理。
 - 2026-07-07 PM evidence：新增 read-only 外部 Gate 稽核 `verify:remaining-external-gates`，機械確認 DEV-045 / DEV-025 / DEV-040 / DEV-044 / DEV-028 / DEV-011 / DEV-012 仍停在正確 Supabase、Edge、production、人工 QC 或 human re-entry 邊界；輸出 `mutates_database=false`、`remote_changes=false`，不代表任一外部 Gate 完成。
@@ -2358,7 +2359,7 @@ CAPA 來源：
 
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate | Authorized / Release-Gate Blocked by Missing Level 3 / Read-only Discovery + Remote Readiness Static Gate Passed | Supabase / deployment-release-gate / QC | 提供 staging / active Supabase branch / local Supabase DB Level 3 smoke，或明確接受無 Level 3 risk 後，才套用 v2 filters validation migration、部署 calendar-feed Edge Function、執行 live `.ics` preview/feed identity smoke。若採 Supabase branch，需先完成 cost confirmation；目前 `ProJED_TEST` inactive，production 仍缺 DEV-037/045 migrations 且 `calendar-feed` version 3 未含 v2 matcher。 |
+| 1 | DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate | Authorized / Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending | Supabase / deployment-release-gate / QC | Local transaction-scoped DB smoke 已通過；下一步在 deployment-release-gate / Supabase gate 下套用 v2 filters validation migration、部署 calendar-feed Edge Function、執行 live `.ics` preview/feed identity smoke 與 rollback evidence。若採 Supabase branch，需先完成 cost confirmation；目前 `ProJED_TEST` inactive，production 仍缺 DEV-037/045 migrations 且 `calendar-feed` version 3 未含 v2 matcher。 |
 | 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，先執行 `verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness` 與 `verify:dev-025-mutating-qc-execution` self-check 確認腳本防呆、fixture 標記、最小資料形狀與 mutation opt-in，再用 actual mode 執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight + Remote Readiness Static Gate Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
@@ -2399,7 +2400,7 @@ CAPA 來源：
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / One-Click Latest Local Hotfix Passed / Production Redeploy Not Executed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041`、DEV-041/DEV-034 static/browser gates | 強制更新、release notes 後端、版本 API、analytics 另行決策；hotfix 上線需另走 deployment-release-gate |
 | DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、使用者回報真機通過、commit `aa1fff7` | DB/RLS/migration 與正式資料修復不屬於本 DEV |
 | DEV-044 | 交付點 | Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke、production artifact/browser/auth smoke | durable recovery、DB migration、board workspace transfer undo、destructive recovery 需另行授權 |
-| DEV-045 | 交付點 | Phase 3 Remote Gate Authorized / Preflight Blocked / Read-only Discovery + Remote Readiness Static Gate Passed | 是 | 行事曆訂閱篩選器建構器與即時預覽 | `SPEC-045`、`QA-DEV-045`、`QC-DEV-045`、`verify:dev-045-calendar-subscription-builder-preview`、`verify:dev-045-calendar-subscription-builder-preview-browser`、`verify:dev-045-calendar-subscription-v2-feed`、`verify:dev-045-calendar-subscription-remote-readiness`、Supabase read-only preflight、TypeScript、settings gate、build | Phase 3 需 Level 3 smoke path 或 explicit risk acceptance 後，才套 remote Supabase migration、Edge deploy、live `.ics` smoke；Supabase branch path 需 cost confirmation |
+| DEV-045 | 交付點 | Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending | 是 | 行事曆訂閱篩選器建構器與即時預覽 | `SPEC-045`、`QA-DEV-045`、`QC-DEV-045`、`verify:dev-045-calendar-subscription-builder-preview`、`verify:dev-045-calendar-subscription-builder-preview-browser`、`verify:dev-045-calendar-subscription-v2-feed`、`verify:dev-045-calendar-subscription-remote-readiness`、`verify:dev-045-calendar-subscription-local-db-smoke`、Supabase read-only preflight、local DB smoke、TypeScript、settings gate、build | 下一步走 Supabase / deployment-release-gate：remote migration、Edge deploy、live `.ics` smoke 與 rollback evidence；Supabase branch path 需 cost confirmation |
 
 ### 交付點完成率
 
@@ -2420,7 +2421,7 @@ CAPA 來源：
 - Production Release Deployed / Local + Production Smoke Passed / DB unchanged：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed：1 個交付點。
 - Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
-- Phase 3 Remote Gate Authorized / Preflight Blocked：1 個交付點。
+- Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。
 

@@ -8,6 +8,7 @@ const files = {
   edgeFunction: 'supabase/functions/calendar-feed/index.ts',
   calendarService: 'src/services/supabase/calendarSubscriptionService.ts',
   databaseTypes: 'src/services/supabase/database.types.ts',
+  localDbSmoke: 'scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs',
   spec: 'ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md',
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
@@ -42,6 +43,7 @@ const localGateScripts = [
   packageJson.scripts?.['verify:dev-045-calendar-subscription-builder-preview'] ?? '',
   packageJson.scripts?.['verify:dev-045-calendar-subscription-builder-preview-browser'] ?? '',
   packageJson.scripts?.['verify:dev-045-calendar-subscription-v2-feed'] ?? '',
+  packageJson.scripts?.['verify:dev-045-calendar-subscription-local-db-smoke'] ?? '',
   packageJson.scripts?.['verify:dev-037-calendar-subscription-source-scope'] ?? '',
   packageJson.scripts?.['verify:dev-037-calendar-subscription-source-scope-browser'] ?? '',
 ];
@@ -50,6 +52,18 @@ assert(
   'Remote readiness package script is a local node verifier, not a deploy command',
   readinessScript === 'node scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs',
   readinessScript,
+);
+
+assert(
+  'DEV-045 local DB smoke gate is registered as rollback-only and local-only',
+  packageJson.scripts?.['verify:dev-045-calendar-subscription-local-db-smoke'] ===
+    'node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs' &&
+    source.localDbSmoke.includes('--run-local-db') &&
+    source.localDbSmoke.includes('rollback;') &&
+    source.localDbSmoke.includes('docker') &&
+    !source.localDbSmoke.includes('supabase db push') &&
+    !source.localDbSmoke.includes('supabase functions deploy') &&
+    !source.localDbSmoke.includes('firebase deploy'),
 );
 
 assert(
@@ -114,12 +128,12 @@ assert(
 
 assert(
   'Governance docs preserve the Phase 3 stop condition before remote apply/deploy',
-  source.spec.includes('Level 3 production-like smoke path or explicit risk acceptance') &&
-    source.qa.includes('Preferred：提供可用 staging / Supabase branch / local Supabase DB') &&
+  source.spec.includes('local DB smoke pass; remote apply/deploy/live smoke still require deployment-release-gate / Supabase gate') &&
+    source.qa.includes('local Supabase DB smoke 已完成') &&
     source.qa.includes('Risk-accepted path：使用者明確接受無 Level 3') &&
-    source.qc.includes('缺少 Level 3 production-like pre-deploy smoke') &&
+    source.qc.includes('local DB smoke 已通過') &&
     source.qc.includes('不得宣告 remote DB / Edge / production release safe') &&
-    source.devTask.includes('Level 3 smoke path or explicit risk acceptance') &&
+    source.devTask.includes('local DB smoke passed') &&
     source.documentationMap.includes('Supabase branch path 需 cost confirmation'),
 );
 
