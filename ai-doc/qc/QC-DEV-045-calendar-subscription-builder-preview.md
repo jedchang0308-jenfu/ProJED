@@ -20,6 +20,8 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 
 2026-07-07 補上並通過 `verify:dev-045-calendar-subscription-local-db-smoke`。預設 self-check 不連 DB；actual mode `node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs --run-local-db` 連本機 Docker Supabase DB `supabase_db_ProJED`，以 transaction-scoped SQL 套 DEV-037 / DEV-045 validators、建立最小 workspace / board / member fixture、驗證 10 個 v2 allow/deny/grant 行為並 `ROLLBACK`。此 gate 是 local DB smoke，不代表 remote migration apply、Edge deploy 或 live `.ics` preview/feed parity 完成。
 
+2026-07-07 release-gate preflight rerun 已完成，但仍停在正確 release blocker。通過項目包含 DEV-045 remote-readiness 21/21、v2 feed 18/18、Builder static 16/16、DEV-037 20/20、DEV-039 61/61、local DB smoke 12/12 rollback、TypeScript noEmit、settings gate、Edge bundle check、production build，以及 production artifact smoke。Artifact smoke 只驗證本機 `dist` build 載入 `assets/index-Gis551LA.js` / `assets/index-wbfiQlLo.css` 並通過 app shell / bundle load 檢查，不代表 Firebase Hosting 已部署。Supabase read-only discovery 再次確認 production 缺 DEV-037/045 migrations、`calendar-feed` version 3 是 rollback target、production active subscriptions 2 / v2 0。`ProJED_TEST` inactive 且 branch listing 仍失敗；Supabase branch creation 需使用者先完成 cost confirmation。因此依 deployment-release-gate，不得自行直接套 production DB/Edge，除非使用者明確選擇 branch/staging path 或 risk-accepted production path。
+
 已完成：
 - 新增 `CalendarSubscriptionBuilderPreview`，提供全域條件、看板沿用 / 自訂 / 排除、本地任務預覽、輸出摘要與外部連結風險提示。
 - `CalendarSubscriptionsView` 已掛載 Builder，並保留 DEV-037 v1 source-scope 相容 UI 與既有訂閱列表。
@@ -33,6 +35,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 - Phase 3 DB preflight：正式 DB 目前仍是 v1 validation function；`calendar_subscription_task_filter_allowed(jsonb)` 不存在，`calendar_subscription_filter_allowed(jsonb)` 不含 `project_ids` / `v2_scope_type`；正式訂閱 2 筆、active 2 筆、v2 0 筆。
 - Phase 3 migration history preflight：production 尚未列出 DEV-037 `20260706091804_calendar_subscription_source_scope` 或 DEV-045 `20260706162052_calendar_subscription_v2_filters` migration。
 - Phase 3 Edge source preflight：production `calendar-feed` version 3 仍是 workspace-only source-scope，尚未部署本地 v2 preview/feed parity matcher。
+- Phase 3 release-gate preflight rerun：production artifact smoke 載入 `assets/index-Gis551LA.js` / `assets/index-wbfiQlLo.css` 通過；臨時 preview server 已清理；此項不代表 production deploy。
 - Migration hardening：DEV-045 migration 已明確 revoke `PUBLIC` / `anon` 對 validation functions 的 execute，再 grant `authenticated`。
 
 未執行：
@@ -62,6 +65,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 | Supabase MCP deployed Edge source read | Pass / confirms pending | Deployed `calendar-feed` version 3 lacks v2 matcher and project-id scoped feed flow |
 | Supabase MCP subscription aggregate | Pass / read-only | total 2 / active 2 / v2 0, no row contents read |
 | Supabase branch discovery | Blocked | `list_branches` returned project reference validation error；new branch creation would require cost confirmation and was not executed |
+| DEV-045 release-gate preflight rerun | Pass / blocked before remote changes | Static/source gates、DEV-037/039 regression、local DB smoke rollback、TypeScript、settings gate、Edge bundle、production build 與 production artifact smoke passed；no remote apply/deploy |
 | Supabase security advisors | Warn / existing unrelated | Existing SECURITY DEFINER warnings unrelated to DEV-045 migration；no DEV-045 DDL applied |
 | `npm.cmd run verify:dev-039-task-filter-core` | Pass | 61 pass / 0 fail |
 | `npm.cmd exec tsc -- --noEmit` | Pass | TypeScript noEmit passed |
@@ -73,7 +77,7 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 ## 殘留風險
 
 - Phase 2 目前是 local source slice；產生 `.ics` 連結需套用 Supabase migration 與部署 Edge Function 後，才能宣告 production preview/feed 一致。
-- Phase 3 目前是 authorized but still gated；local DB smoke 已通過，但缺 remote Edge deploy / live `.ics` preview-feed parity / rollback evidence 時，不得宣告 remote DB / Edge / production release safe。
+- Phase 3 目前是 authorized but still gated；local DB smoke 已通過，release-gate preflight 也已通過，但缺 Level 3 staging/branch 或使用者明確 risk acceptance、remote Edge deploy、live `.ics` preview-feed parity 與 rollback evidence 時，不得宣告 remote DB / Edge / production release safe。
 - Production currently remains on the old calendar subscription feed contract；remote apply/deploy is not a no-op and must keep rollback evidence for `calendar-feed` version 3 and DB validation function state.
 - Edge Function 尚未做 Deno type check；進入 Supabase/Edge deploy gate 前需補 Deno 或 Supabase functions verification。
 - Browser QC 已補 desktop / mobile / empty preview / override / exclude；尚未覆蓋 Supabase live partial/error state，需 remote/staging 或 mocked board-load failure fixture。
@@ -81,5 +85,5 @@ DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。D
 
 ## 下一步
 
-- DEV-045 Phase 3：local DB smoke 已補；下一步需進 deployment-release-gate / Supabase gate，執行 remote migration apply、`calendar-feed` Edge deploy、live `.ics` preview/feed identity smoke 與 rollback evidence。
+- DEV-045 Phase 3：local DB smoke 與 release-gate preflight 已補；下一步需使用者選擇 Supabase branch/staging cost-confirmation path，或明確接受無 Level 3 production risk path，之後才能執行 remote migration apply、`calendar-feed` Edge deploy、live `.ics` preview/feed identity smoke 與 rollback evidence。
 - DEV-045 live browser verifier：在 remote/staging path 可用後補 Supabase live preview/feed identity 與 partial/error state。
