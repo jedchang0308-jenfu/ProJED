@@ -1,3 +1,4 @@
+/* eslint-disable */
 async (page) => {
   const diagnostics = [];
   page.on('console', (message) => diagnostics.push(`console:${message.type()}:${message.text()}`));

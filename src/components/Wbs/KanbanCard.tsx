@@ -23,7 +23,6 @@ import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
-import { TaskDragHandle } from './TaskDragHandle';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
@@ -56,9 +55,6 @@ const statusBorderColorMap: Record<TaskStatus, string> = {
   unsure: 'border-l-purple-500',
   onhold: 'border-l-slate-300',
 };
-
-const isFromTaskDragHandle = (target: EventTarget | null) =>
-  target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
 const isFromChecklistItem = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('.kanban-checklist-item[data-task-id]'));
@@ -124,7 +120,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     isDragging,
   } = useSortable({
     id: nodeId,
-    disabled: !canMoveTask,
+    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || mobileActionMode,
     data: {
       type: 'wbs-card',
       nodeId,
@@ -168,6 +164,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
+    ? {}
+    : { ...attributes, ...listeners };
 
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
@@ -214,7 +214,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       const touch = e.touches[0];
       setContextMenuState({ kind: 'task', isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
     },
-    { delay: 500, tolerance: 8, ignoreTaskDragHandle: !mobileActionMode }
+    { delay: 500, tolerance: 8 }
   );
 
   const cardLongPressHandlers = {
@@ -222,7 +222,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     onTouchStart: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
       touchTapGuard.handlers.onTouchStart(e);
-      if (isFromTaskDragHandle(e.target) && !mobileActionMode) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
@@ -269,6 +268,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     <div
       ref={mergedRef}
       style={style}
+      {...dragSurfaceBindings}
       {...cardLongPressHandlers}
       onClick={(e) => {
         if (isRecordCaptureMode) {
@@ -287,6 +287,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       }}
       data-task-id={nodeId}
       data-mobile-drop-target={nodeId}
+      data-task-drag-surface="true"
+      data-task-drag-surface-kind="kanban-card"
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       data-touch-tap-guard="true"
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
@@ -304,22 +306,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       } ${selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
     >
       <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">
-        {/* 卡片內容 — 只有左側把手可拖曳，避免手機滑動畫面時誤觸 */}
+        {/* 卡片內容 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
         <div className="flex-1 min-w-0">
           {/* 標題列 */}
           <div className="kanban-task-title-row flex items-start justify-between gap-1">
             <div className="kanban-task-title-content flex items-center gap-1 flex-1 min-w-0">
-              {/* 拖曳把手 */}
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
-              <TaskDragHandle
-                attributes={attributes}
-                listeners={listeners}
-                disabled={!canMoveTask || isSelectingMode || isRecordCaptureMode}
-                dragDisabled={mobileActionMode}
-                size="sm"
-                className="-ml-1"
-              />
-
               {isRecordCaptureMode ? (
                 <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                   isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'

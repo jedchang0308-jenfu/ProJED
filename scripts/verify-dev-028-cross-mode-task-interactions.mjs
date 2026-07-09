@@ -96,7 +96,11 @@ assert(
     taskDetailsModal.includes('data-task-details-title-input="true"') &&
     taskDetailsModal.includes('aria-label="編輯任務名稱"') &&
     taskDetailsModal.includes('border border-slate-200 bg-slate-50/80') &&
-    taskDetailsModal.includes('更多詳情選項'),
+    !taskDetailsModal.includes('更多詳情選項') &&
+    !taskDetailsModal.includes('CalendarDays') &&
+    !taskDetailsModal.includes('Pencil') &&
+    !taskDetailsModal.includes('<span>時間設定</span>') &&
+    !taskDetailsModal.includes('<h2 className="text-sm font-semibold text-slate-700">備註欄</h2>'),
 );
 
 assert(

@@ -129,6 +129,43 @@ async (page) => {
     }
   };
 
+  const assertSharedTaskContextMenu = async (taskLocator, message) => {
+    await taskLocator.click({ button: 'right', position: { x: 40, y: 10 } });
+    await page.getByText('更多詳情選項').first().waitFor({ state: 'visible', timeout: 10000 });
+    assert(
+      await page.getByText('重新命名任務', { exact: true }).count() === 0,
+      `${message} without the removed task rename action`,
+    );
+    await page.keyboard.press('Escape');
+    await page.getByText('更多詳情選項').first().waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
+  const assertWorkbenchRowDragSurfaceParity = async (taskLocator, message) => {
+    const dragSurface = await taskLocator.getAttribute('data-task-workbench-drag-surface');
+    assert(dragSurface === 'task-row-root', `${message} should expose the shared row-root drag surface`, { dragSurface });
+    assert(
+      await taskLocator.locator('[data-task-drag-handle="true"]').count() === 0,
+      `${message} should not require a separate drag handle inside the row`,
+    );
+    assert(
+      await taskLocator.getAttribute('data-touch-tap-guard') === 'true',
+      `${message} should keep the shared touch tap guard on the row root`,
+    );
+
+    for (const ratio of [0.15, 0.5, 0.85]) {
+      const sourceBox = await taskLocator.boundingBox();
+      assert(sourceBox, `${message} should have a visible drag surface box`, { ratio });
+
+      const startX = sourceBox.x + Math.min(sourceBox.width - 6, Math.max(6, sourceBox.width * ratio));
+      const startY = sourceBox.y + sourceBox.height / 2;
+      const hitIsInsideRow = await taskLocator.evaluate((row, point) => {
+        const hit = document.elementFromPoint(point.x, point.y);
+        return Boolean(hit && row.contains(hit));
+      }, { x: startX, y: startY });
+      assert(hitIsInsideRow, `${message} sample point should hit inside the row root`, { ratio, sourceBox, startX, startY });
+    }
+  };
+
   let step = 'seed';
   try {
     await seed();
@@ -202,8 +239,37 @@ async (page) => {
       { seededUnplacedBox },
     );
 
-    step = 'unplaced-card-opens-details';
+    step = 'workbench-context-menu';
     const seededUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '尚未歸位的採購提醒' }).first();
+    await assertSharedTaskContextMenu(
+      seededUnplacedCard,
+      'unplaced workbench task should open the shared task context menu',
+    );
+    await assertSharedTaskContextMenu(
+      sortedPlacedCard,
+      'placed workbench task should open the shared task context menu',
+    );
+
+    step = 'drag-surface-parity';
+    await assertWorkbenchRowDragSurfaceParity(
+      seededUnplacedCard,
+      'unplaced workbench task should drag from the shared row-root surface',
+    );
+    await assertWorkbenchRowDragSurfaceParity(
+      sortedPlacedCard,
+      'placed workbench task should drag from the shared row-root surface',
+    );
+    const placedProbeNode = await page.evaluate(() => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return nodes['dev039-placement-card-a'] || null;
+    });
+    assert(
+      placedProbeNode?.parentId === 'dev039-placement-root-a',
+      'drag-surface probes should not mutate placed task hierarchy',
+      { placedProbeNode },
+    );
+
+    step = 'unplaced-card-opens-details';
     await seededUnplacedCard.click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
@@ -264,10 +330,20 @@ async (page) => {
     );
 
     step = 'filter-only-affects-placed-lane';
-    await workbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').click();
-    const filterPanel = workbenchPanel.locator('[data-task-workbench-filter-panel="true"]');
+    const filterToggle = workbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').first();
+    await filterToggle.scrollIntoViewIfNeeded();
+    if ((await filterToggle.getAttribute('aria-expanded')) !== 'true') {
+      await filterToggle.click({ force: true });
+    }
+    await page.waitForFunction(() => {
+      const popover = document.querySelector('[data-task-workbench-filter-popover="true"]');
+      const panel = popover?.querySelector('[data-task-workbench-filter-panel="true"]');
+      const rect = panel?.getBoundingClientRect();
+      return Boolean(rect && rect.width > 0 && rect.height > 0);
+    }, null, { timeout: 10000 });
+    const filterPanel = page.locator('[data-task-workbench-filter-popover="true"] [data-task-workbench-filter-panel="true"]').first();
     await filterPanel.waitFor({ state: 'visible', timeout: 10000 });
-    await filterPanel.getByRole('button', { name: /進行中/ }).click();
+    await filterPanel.getByRole('button', { name: /進行中/ }).click({ force: true });
     assert(
       await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 0,
       'placed board lane should respond to board filters',
@@ -288,12 +364,52 @@ async (page) => {
       await page.locator('[data-sidebar-panel="collapsed"]').count() === 0,
       'mobile closed sidebar should not render an in-flow collapsed rail',
     );
-    const mobileBoardHasCard = await page.evaluate(() => {
-      const task = document.querySelector('.kanban-task-card[data-task-id]');
-      const rect = task?.getBoundingClientRect();
-      return rect ? rect.width > 0 && rect.height > 0 && rect.left < window.innerWidth && rect.right > 0 : false;
+    await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.locator('[data-kanban-column="true"]').first().waitFor({ state: 'visible', timeout: 10000 });
+    const mobileBoardMetrics = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('.kanban-task-card[data-task-id]')).map(card => {
+        const rect = card.getBoundingClientRect();
+        return {
+          id: card.getAttribute('data-task-id'),
+          text: (card.textContent || '').trim(),
+          rect: {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height,
+          },
+        };
+      });
+      const columns = Array.from(document.querySelectorAll('[data-kanban-column="true"]')).map(column => {
+        const rect = column.getBoundingClientRect();
+        return {
+          text: (column.textContent || '').trim().slice(0, 120),
+          rect: {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height,
+          },
+        };
+      });
+      return {
+        cards,
+        columns,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        documentWidth: document.documentElement.scrollWidth,
+        boardFilterPrefs: localStorage.getItem('projed-task-filters:v1'),
+        workbenchFilterPrefs: localStorage.getItem('projed-task-workbench-filters:v1'),
+        bodyText: document.body.innerText.slice(0, 500),
+      };
     });
-    assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is closed');
+    const mobileBoardHasCard = mobileBoardMetrics.cards.some(({ rect }) => (
+      rect.width > 0 && rect.height > 0 && rect.left < mobileBoardMetrics.viewport.width && rect.right > 0
+    ));
+    assert(mobileBoardHasCard, 'mobile board should remain reachable while task workbench is closed', mobileBoardMetrics);
     const mobileClosedOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     assert(!mobileClosedOverflow, 'mobile closed rails should not create document-level horizontal overflow');
 

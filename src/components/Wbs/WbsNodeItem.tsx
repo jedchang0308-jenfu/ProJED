@@ -8,7 +8,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
-import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
@@ -18,6 +17,7 @@ import { matchesTaskFilters } from '../../features/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
+import { isMobileTaskActionMode } from './mobileTaskActionContext';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -59,6 +59,19 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const touchTapGuard = useTouchTapGuard();
+  const mobileActionMode = isMobileTaskActionMode();
+
+  // 取得全域顯示設定與依賴選取狀態
+  const dependencyContext = React.useContext(WbsDependencyContext);
+  const showDependencies = dependencyContext?.showDependencies ?? false;
+  const handleDependencySelect = dependencyContext?.handleDependencySelect;
+  const dependencySelection = dependencyContext?.dependencySelection ?? null;
+  const dependencyMarkers =
+    dependencyContext?.dependencyMarkers ??
+    ({} as NonNullable<React.ContextType<typeof WbsDependencyContext>>['dependencyMarkers']);
+  const isSelectingMode = !!dependencySelection;
+  const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
+  const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
 
   const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
   const [localEndDate, setLocalEndDate] = useState(node?.endDate || '');
@@ -66,7 +79,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   // DnD Sortable Hook
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id: nodeId,
-      disabled: !canMoveTask,
+      disabled: !canMoveTask || isSelectingMode || mobileActionMode,
       data: { item: node }
   });
 
@@ -77,27 +90,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       zIndex: isDragging ? 50 : 1,
   };
 
+  const dragSurfaceBindings = mobileActionMode || isSelectingMode
+    ? {}
+    : { ...attributes, ...listeners };
+
   React.useEffect(() => {
       setLocalStartDate(node?.startDate || '');
       setLocalEndDate(node?.endDate || '');
   }, [node?.startDate, node?.endDate]);
 
-  // 取得全域顯示設定
-  const dependencyContext = React.useContext(WbsDependencyContext);
-  const showDependencies = dependencyContext?.showDependencies ?? false;
-  const handleDependencySelect = dependencyContext?.handleDependencySelect;
-  const dependencySelection = dependencyContext?.dependencySelection ?? null;
-  const dependencyMarkers =
-    dependencyContext?.dependencyMarkers ??
-    ({} as NonNullable<React.ContextType<typeof WbsDependencyContext>>['dependencyMarkers']);
-
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
-
-  // 確認選取狀態
-  const isSelectingMode = !!dependencySelection;
-  const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
-  const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
 
@@ -314,6 +317,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       <div 
         ref={setNodeRef}
         style={dndStyle}
+        {...dragSurfaceBindings}
         {...touchTapGuard.handlers}
         onContextMenu={(e) => {
             e.preventDefault();
@@ -327,10 +331,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
             });
         }}
         onClick={(event) => {
-            if (isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+            if (isDragging || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
             selectAndOpenTaskDetails(node.id);
         }}
         data-task-id={node.id}
+        data-mobile-drop-target={node.id}
+        data-task-drag-surface="true"
+        data-task-drag-surface-kind="wbs-list-row"
         data-task-selected={selectedTaskId === node.id ? 'true' : undefined}
         data-touch-tap-guard="true"
         className={`mobile-pan-item grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${selectedTaskId === node.id ? 'ring-2 ring-inset ring-primary/35 bg-primary/[0.04]' : ''} ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
@@ -338,16 +345,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         
         {/* Col 1: 任務名稱與階層結構 */}
         <div className="flex items-center gap-1 overflow-hidden pr-[10px] relative" style={{ paddingLeft: `${indentPadding}rem` }}>
-          {/* 拖曳手把 */}
-          <TaskDragHandle
-              attributes={attributes}
-              listeners={listeners}
-              disabled={!canMoveTask}
-              size="xs"
-              title="拖曳以排序或移動"
-              className="-ml-2 opacity-0 group-hover:opacity-100"
-          />
-
           <button 
             onClick={handleToggle}
             className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors text-slate-400 ${!hasChildren && 'invisible'}`}
@@ -435,6 +432,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
         {/* Col 3: 開始日期 */}
         {showStartDate && (<div 
+            data-task-interaction-control="true"
             className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
                 ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfStart ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
@@ -489,6 +487,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
         {/* Col 4: 結束日期 */}
         <div 
+            data-task-interaction-control="true"
             className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
                 ${isDueToday ? 'border-orange-300 bg-orange-50/80 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]' : ''}
                 ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}

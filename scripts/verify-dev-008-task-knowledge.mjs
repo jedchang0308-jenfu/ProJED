@@ -150,6 +150,7 @@ const requiredTimelineSnippets = [
 for (const snippet of requiredTimelineSnippets) {
   assert(`TaskRecordTimeline missing snippet: ${snippet}`, timelineSource.includes(snippet));
 }
+assert('TaskRecordTimeline should not render the removed record/snippet count badge', !timelineSource.includes('紀錄 /') && !timelineSource.includes('snippetCount'));
 
 if (failures.length > 0) {
   console.error('DEV-008 task knowledge verification failed.');

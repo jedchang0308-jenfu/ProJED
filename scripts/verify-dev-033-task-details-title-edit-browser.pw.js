@@ -69,6 +69,11 @@ async (page) => {
     const modal = await openTaskDetails(taskId);
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await modal.getByText('更多詳情選項', { exact: true }).count() === 0, 'removed task details subtitle should not be visible');
+    assert(await modal.getByText('時間設定', { exact: true }).count() === 0, 'removed schedule section heading should not be visible');
+    assert(await modal.getByText('備註欄', { exact: true }).count() === 0, 'removed notes section heading should not be visible');
+    assert(await modal.getByText(/\d+\s*紀錄\s*\/\s*\d+\s*片段/).count() === 0, 'removed task knowledge count badge should not be visible');
+    assert(await modal.locator('.lucide-pencil').count() === 0, 'removed title pencil affordance should not be visible');
     const savedTitle = `DEV033 modal rename ${Date.now().toString(36)}`;
     await titleInput.fill(`${savedTitle}   `);
     await titleInput.press('Enter');

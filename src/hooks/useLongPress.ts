@@ -2,8 +2,8 @@
  * useLongPress — 觸控長按識別 Hook
  *
  * 設計意圖：
- *   手機端因 TouchSensor（delay: 250ms）會攔截所有長按事件以啟動拖曳，
- *   導致 onContextMenu 無法在手機端穩定觸發。
+ *   手機端 task surface 採 pan-first: quick tap 開詳情、short pan 捲動、
+ *   long press 進入 compact action rail / drag-action mode。
  *
  *   此 Hook 透過「獨立計時器」識別長按行為：
  *   - touchstart：啟動長按計時器（delay: 500ms，長於拖曳的 250ms）
@@ -22,8 +22,6 @@ interface UseLongPressOptions {
   delay?: number;
   /** 允許的手指位移容差（px），超過此值視為拖曳意圖，取消長按 */
   tolerance?: number;
-  /** 是否忽略拖曳把手上的長按；桌機/舊路徑預設忽略，手機 compact action mode 可關閉。 */
-  ignoreTaskDragHandle?: boolean;
 }
 
 interface LongPressHandlers {
@@ -36,12 +34,9 @@ interface LongPressHandlers {
   onContextMenuCapture: (e: React.MouseEvent) => void;
 }
 
-const isTaskDragHandleEvent = (target: EventTarget | null) =>
-  target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
-
 export function useLongPress(
   onLongPress: (e: React.TouchEvent) => void,
-  { delay = 500, tolerance = 8, ignoreTaskDragHandle = true }: UseLongPressOptions = {}
+  { delay = 500, tolerance = 8 }: UseLongPressOptions = {}
 ): LongPressHandlers {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,11 +65,6 @@ export function useLongPress(
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (ignoreTaskDragHandle && isTaskDragHandleEvent(e.target)) {
-        cancel();
-        return;
-      }
-
       triggeredRef.current = false;
       const touch = e.touches[0];
       startPositionRef.current = { x: touch.clientX, y: touch.clientY };
@@ -92,7 +82,7 @@ export function useLongPress(
         onLongPress(e);
       }, delay);
     },
-    [cancel, onLongPress, delay, ignoreTaskDragHandle]
+    [cancel, onLongPress, delay]
   );
 
   const onTouchMove = useCallback(

@@ -5,6 +5,7 @@ const files = {
   placement: 'src/features/taskWorkbench/placement.ts',
   taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
+  dragSensors: 'src/hooks/useDragSensors.ts',
   mainLayout: 'src/components/MainLayout.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
@@ -78,7 +79,7 @@ assert(
     source.taskWorkbench.includes('data-task-workbench-all-task-card') &&
     source.taskWorkbench.includes('所有任務排序') &&
     source.taskWorkbench.includes('sortTasksByDueDate') &&
-    source.taskWorkbench.includes('data-task-workbench-unplaced-compact-row="true"') &&
+    source.taskWorkbench.includes("data-task-workbench-unplaced-compact-row={unplacedLane ? 'true' : undefined}") &&
     source.taskWorkbench.includes('kanban-checklist-item') &&
     source.taskWorkbench.includes("placement: 'placed'") &&
     source.taskWorkbench.includes("placement: 'unplaced'"),
@@ -94,8 +95,47 @@ assert(
     source.taskWorkbench.includes('getTaskHierarchyDepth') &&
     source.taskWorkbench.includes('hierarchyDepth={getTaskHierarchyDepth(task, nodes)}') &&
     source.taskWorkbench.includes('data-task-workbench-hierarchy-depth') &&
-    source.taskWorkbench.includes('style={{ paddingLeft:') &&
+    source.taskWorkbench.includes('style: { paddingLeft:') &&
     source.browserVerifier.includes('dense text rows should not render a separate drag handle'),
+);
+
+assert(
+  'Task Workbench unplaced and all-task rows share the same root drag surface contract',
+  source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
+    source.taskWorkbench.includes('ref={setNodeRef}') &&
+    source.taskWorkbench.includes('{...draggableBindings}') &&
+    source.taskWorkbench.includes('{...workbenchTouchHandlers}') &&
+    source.taskWorkbench.includes('onClick={(event) => {') &&
+    source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
+    source.taskWorkbench.includes('data-task-workbench-drag-surface="task-row-root"') &&
+    source.taskWorkbench.includes("data-task-workbench-unplaced-task-card={unplacedLane ? 'true' : undefined}") &&
+    source.taskWorkbench.includes("data-task-workbench-all-task-card={isAllTasksCard ? 'true' : undefined}") &&
+    (source.taskWorkbench.match(/renderWorkbenchTaskRow\(\{/g) || []).length >= 2 &&
+    !source.taskWorkbench.includes('data-task-drag-handle') &&
+    source.dragSensors.includes('distance: 8') &&
+    source.dragSensors.includes('delay: 250') &&
+    source.dragSensors.includes('tolerance: 8') &&
+    source.spec.includes('Phase 2A RD Contract - Workbench Drag Trigger Surface Parity') &&
+    source.qa.includes('Phase 2A Drag Trigger Surface Parity Verification') &&
+    source.devTask.includes('DEV-039 Phase 2A Addendum') &&
+    source.browserVerifier.includes('assertWorkbenchRowDragSurfaceParity'),
+);
+
+assert(
+  'Task Workbench task rows open the shared GlobalContextMenu on right click',
+  source.taskWorkbench.includes('const setContextMenuState = useBoardStore(state => state.setContextMenuState)') &&
+    source.taskWorkbench.includes('const handleContextMenu = (event: React.MouseEvent) => {') &&
+    source.taskWorkbench.includes('setContextMenuState({') &&
+    source.taskWorkbench.includes("kind: 'task'") &&
+    source.taskWorkbench.includes('nodeId: task.id') &&
+    source.taskWorkbench.includes("title: task.title || '未命名任務'") &&
+    source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
+    source.taskWorkbench.includes('data-task-workbench-drag-surface="task-row-root"') &&
+    source.taskWorkbench.includes('useBoardStore.getState().contextMenuState?.isOpen') &&
+    !source.taskWorkbench.includes('TaskWorkbenchContextMenu') &&
+    !source.taskWorkbench.includes('data-task-workbench-context-menu') &&
+    source.browserVerifier.includes('unplaced workbench task should open the shared task context menu') &&
+    source.browserVerifier.includes('placed workbench task should open the shared task context menu'),
 );
 
 assert(

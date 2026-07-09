@@ -9,7 +9,6 @@ const files = {
   css: 'src/index.css',
   boardView: 'src/components/BoardView.tsx',
   mobileTaskActionContext: 'src/components/Wbs/mobileTaskActionContext.ts',
-  taskDragHandle: 'src/components/Wbs/TaskDragHandle.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
@@ -33,6 +32,14 @@ for (const [label, file] of Object.entries(files)) {
 }
 
 const source = Object.fromEntries(Object.entries(files).map(([label, file]) => [label, read(file)]));
+const sliceBetween = (text, startMarker, endMarker) => {
+  const start = text.indexOf(startMarker);
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  if (start === -1 || end === -1) return '';
+  return text.slice(start, end);
+};
+const mobileActionItemsSource = sliceBetween(source.boardView, 'const mobileActionItems', 'const MobileTaskActionLayer');
+const mobileActionLayerSource = sliceBetween(source.boardView, 'const MobileTaskActionLayer', 'const recordMobileTaskActionDebug');
 
 assert(
   'coarse pointer hook reuses centralized task interaction detection',
@@ -76,13 +83,11 @@ assert(
 );
 
 assert(
-  'mobile pan css utilities are available and keep drag handles explicit',
+  'mobile pan css utilities are available for whole task surfaces',
   source.css.includes('.mobile-pan-surface') &&
     source.css.includes('.mobile-pan-item') &&
     source.css.includes('.mobile-pan-rail') &&
-    source.css.includes('touch-action: pan-x pan-y') &&
-    source.css.includes('.task-drag-hitbox') &&
-    source.css.includes('touch-action: none'),
+    source.css.includes('touch-action: pan-x pan-y'),
 );
 
 assert(
@@ -140,8 +145,8 @@ assert(
     source.boardView.includes('data-mobile-task-action-text="true"') &&
     source.boardView.includes('data-mobile-task-action-label={label}') &&
     source.boardView.includes('標示完成') &&
-    source.boardView.includes('新增同階') &&
-    source.boardView.includes('新增下層') &&
+    source.boardView.includes('新增同階任務') &&
+    source.boardView.includes('新增下階任務') &&
     source.boardView.includes('刪除任務') &&
     source.boardView.includes('data-mobile-task-action={item.key}') &&
     source.boardView.includes('data-mobile-drag-preview') &&
@@ -156,28 +161,54 @@ assert(
     source.boardView.includes("event.key === 'Escape'") &&
     source.boardView.includes("recordMobileTaskActionDebug({ type: 'cancel:reset'") &&
     source.boardView.includes("showConfirm(`確定要刪除任務") &&
-    source.useLongPress.includes('ignoreTaskDragHandle') &&
-    source.useMobilePanBroker.includes('isMobilePanPassThroughTarget') &&
-    source.taskDragHandle.includes('data-mobile-pan-pass-through') &&
-    source.taskDragHandle.includes('data-mobile-drag-disabled') &&
-    source.kanbanCard.includes('dragDisabled={mobileActionMode}') &&
+    !source.useLongPress.includes('ignoreTaskDragHandle') &&
+    !source.useLongPress.includes('data-task-drag-handle') &&
+    source.kanbanCard.includes('data-task-drag-surface="true"') &&
+    source.kanbanCard.includes('data-task-drag-surface-kind="kanban-card"') &&
+    source.kanbanCard.includes('data-mobile-drop-target={nodeId}') &&
     source.kanbanCard.includes('isMobileTaskActionMode()') &&
     source.kanbanCard.includes('mobileTaskAction?.begin') &&
-    source.kanbanChecklist.includes('dragDisabled={mobileActionMode}') &&
+    source.kanbanChecklist.includes('data-task-drag-surface="true"') &&
+    source.kanbanChecklist.includes('data-task-drag-surface-kind="checklist-row"') &&
+    source.kanbanChecklist.includes('data-mobile-drop-target={child.id}') &&
     source.kanbanChecklist.includes('isMobileTaskActionMode()') &&
     source.kanbanChecklist.includes('mobileTaskAction?.begin') &&
+    source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') &&
+    source.kanbanColumn.includes('mobileTaskAction?.begin') &&
     source.taskWorkbench.includes('mobileActionMode') &&
     source.taskWorkbench.includes('disabled: !canMoveTask || mobileActionMode') &&
     source.taskWorkbench.includes('data-mobile-drop-target={task.id}'),
 );
 
 assert(
+  'mobile compact action rail uses a single-row text-only layout',
+  mobileActionItemsSource.includes('toggle-complete') &&
+    mobileActionItemsSource.includes('add-sibling') &&
+    mobileActionItemsSource.includes('add-child') &&
+    mobileActionItemsSource.includes('delete') &&
+    !mobileActionItemsSource.includes('icon:') &&
+    !mobileActionLayerSource.includes('const Icon = item.icon') &&
+    !mobileActionLayerSource.includes('<Icon') &&
+    !source.boardView.includes('CheckCircle2') &&
+    !source.boardView.includes('ListPlus') &&
+    !source.boardView.includes('Trash2') &&
+    mobileActionLayerSource.includes('flex w-[calc(100vw-0.5rem)]') &&
+    mobileActionLayerSource.includes('max-w-[430px]') &&
+    mobileActionLayerSource.includes('gap-0') &&
+    mobileActionLayerSource.includes('h-10') &&
+    mobileActionLayerSource.includes('text-[12px]') &&
+    mobileActionLayerSource.includes("style={{ top: 'env(safe-area-inset-top, 0px)' }}") &&
+    !mobileActionLayerSource.includes('grid-cols-2') &&
+    !mobileActionLayerSource.includes('gap-2'),
+);
+
+assert(
   'browser verifier covers Phase 1B mobile compact action rail operations',
     source.browserVerifier.includes('card long press enters mobile drag-action mode') &&
     source.browserVerifier.includes('checklist row long press enters mobile drag-action mode') &&
-    source.browserVerifier.includes('mobile drag handle short pan scrolls the board') &&
-    source.browserVerifier.includes('card drag handle long press uses mobile action mode') &&
-    source.browserVerifier.includes('checklist drag handle long press uses mobile action mode') &&
+    source.browserVerifier.includes('former handle zone short pan scrolls the board') &&
+    source.browserVerifier.includes('card former handle zone long press uses mobile action mode') &&
+    source.browserVerifier.includes('checklist former handle zone long press uses mobile action mode') &&
     source.browserVerifier.includes('touchcancel exits mobile drag-action mode without committing') &&
     source.browserVerifier.includes('drag-action near right viewport edge auto-scrolls board') &&
     source.browserVerifier.includes('drag-action near bottom column edge auto-scrolls column') &&
@@ -185,7 +216,10 @@ assert(
     source.browserVerifier.includes('long press drag to another task reorders by task position') &&
     source.browserVerifier.includes('drop on add-child action creates a child and opens details') &&
     source.browserVerifier.includes('drop on complete action toggles task completed state') &&
-    source.browserVerifier.includes('workbench row long press enters mobile drag-action mode'),
+    source.browserVerifier.includes('workbench row long press enters mobile drag-action mode') &&
+    source.browserVerifier.includes('whole task surfaces replace handles and allow pan') &&
+    source.browserVerifier.includes('assertCompactMobileActionRail') &&
+    source.browserVerifier.includes('compact mobile action rail fits 320/390/430 without covering tasks'),
 );
 
 const failed = results.filter(result => !result.ok);

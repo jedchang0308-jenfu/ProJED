@@ -25,6 +25,8 @@ dist-ssr
 .vite
 .playwright-cli/
 output/
+.codex-remote-attachments/
+npx.cmd
 check_nesting.js
 main_app.js
 out.txt

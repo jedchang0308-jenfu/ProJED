@@ -1,5 +1,107 @@
 # ProJED Dev Task Control Board
 
+## PM Update - 2026-07-09
+
+### Release Governance: 固定 `ProJED-TEST` 測試環境與 Level 3 Gate
+
+狀態: Accepted / Fixed Project Rule
+節點類型: PM evidence / Release governance
+關聯文件: `ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md`、`ai-doc/release/LEVEL3-firebase-preview-supabase-test-runbook.md`
+
+Human Decision Brief:
+- 使用者採用 HCS 引導決策 `1B/2B/3B`。
+- `ProJED` 固定為 production Supabase project。
+- `ProJED-TEST` 固定為 staging/test/controlled blast-zone Supabase project。
+- 正式部署前的固定 Level 3 path 是 staging build + Firebase Hosting preview channel `level3-smoke` + Supabase `ProJED-TEST` auth/read-write/reload/cleanup smoke。
+- Supabase Branch 預設不用；只有 `ProJED-TEST` 無法安全隔離 migration/Edge/schema/destructive test 或需要乾淨 DB 時，才在使用者明確批准成本、用途、存活時間與刪除條件後使用。
+
+AI Automation Rule:
+- AI 後續遇到 release、deploy、production readiness、production smoke、Firebase Hosting validation、Supabase/Auth/DB/Edge/env/cache/service-worker/data-write-path 相關任務時，必須自動判斷 Level 3 是 `Required`、`Not Required` 或 `Blocked`。
+- 命中 production deploy、Supabase Auth/RLS/schema/migration/RPC/Edge/Storage/Realtime/public env、Firebase Hosting/cache/routing、或 production-only regression 時，Level 3 預設為 `Required`。
+- docs-only、local-only PM/QA/QC record、或不影響 runtime 的 verifier self-check 可以標為 `Not Required`，但必須記錄 skip reason。
+- AI 可以自動跑 local/static gate、補文件、準備 runbook；不得自動 production deploy、不得自動 mutate `ProJED`、不得自動接受 Supabase Branch 成本、不得在未備份下對 `ProJED-TEST` 執行破壞性或大量資料測試。
+
+Stop Conditions:
+- `ProJED-TEST` inactive、Auth redirect/env/test account 不完整、或測試資料污染未清理。
+- schema/migration/Edge/bulk/destructive 測試缺備份方式、時間、範圍與還原/重置路徑。
+- 任何 production deploy 或 production data mutation 未取得明確授權。
+- AI 無法判斷 release artifact 與 preview/prod artifact provenance。
+
+## PM Update - 2026-07-07
+
+### DEV-046: 全任務表面拖曳一致化與拖曳把手退役
+
+狀態: Implemented / Local Automated QA Passed / Manual Physical-Phone QC Not Executed / Production Not Authorized
+節點類型: 交付點 / Cross-mode task drag interaction
+父交付點: DEV-028 四模式一致的 Trello-like 任務操作契約 / DEV-029 手機 Pan-First 觸控手勢仲裁 / DEV-039 全域任務平台
+是否計入產品交付完成: 是，這是使用者可直接驗收的桌機/手機任務拖曳一致化
+建立日期: 2026-07-07
+
+原始需求邊界:
+- 使用者確認不是只修全域任務平台，而是手機與電腦的所有任務，不論已歸位或未歸位，都應整個任務可拖。
+- 使用者明確列出列表、卡片、待辦清單，並補充是所有階層的任務皆可拖；拖曳把手可以直接刪除。
+- 此需求需保留既有 click-to-details、桌機右鍵、手機 pan-first、手機 compact action rail 與 workbench row-root drag。
+
+Human Decision Brief:
+- 已確認：桌機與手機都要從任務本體整面啟動拖曳，而不是只靠小把手。
+- 已確認：已歸位與未歸位任務行為一致。
+- 已確認：列表列、看板卡片、待辦清單列與全域任務平台任務列都在第一階段範圍內，且父任務、子任務、孫任務、Level 3+ 與更深階層都要整個任務 surface 可拖。
+- 已確認：拖曳把手可退役/刪除，但需保留 keyboard/accessibility 等價能力或明確替代路徑。
+- 已否決：只改 `TaskWorkbenchPanel`、只調整 dnd sensor threshold、保留 handle-only 行為或新增第二套拖曳 UI。
+- AI assumption：手機的「整個任務可拖」採 DEV-029-compatible 語意，也就是 quick tap 開詳情、short pan 捲動、long press 任務本體任一非互動區進入 mobile drag-action mode；不把短滑改成拖曳。
+
+目前授權邊界:
+- Authorized / Complete: DEV-046 開發文件與 QA 真實操作驗證計畫。
+- Authorized / Complete: Phase 1 desktop whole-surface drag。
+- Authorized / Complete: Phase 2 mobile whole-task long-press drag。
+- Authorized / Complete: Phase 3 drag handle retirement cleanup。
+- RD Contract Ready / Not Authorized: Phase 4 MindMap / Gantt future alignment if required。
+- Not Authorized: production deploy、release artifacts、正式環境 smoke、人工真機 supplemental QC。
+
+RD Handoff / Implementation Contract:
+- 建立或整理共用 task drag surface helper，讓 root task surface 承接拖曳，並集中排除 interactive child target。
+- `KanbanCard`、`KanbanChecklist`、`WbsNodeItem`、`TaskWorkbenchPanel` 與 task-backed `KanbanColumn` surface 必須從 root 啟動拖曳，且不得因任務階層深度改回 handle-only。
+- `TaskDragHandle` 不再作為上述 WBS task surfaces 的 visible UI 或唯一 dnd listener host。
+- `useDragSensors` / `useLongPress` / `useTouchTapGuard` 需對齊新語意；不得破壞 DEV-029 pan-first。
+- 桌機右鍵仍走 `GlobalContextMenu` task variant；手機長按仍走 DEV-029 compact action rail。
+
+Acceptance:
+- 桌機所有階層的 list row、kanban card、checklist row、workbench row 都可從任務左側縮排區、中段、右側非互動區拖曳。
+- 手機所有階層的 task surface quick tap 開詳情、short pan 捲動、long press 進入 compact action rail / drag-action mode。
+- 拖曳後不誤開詳情；右鍵選單、interactive controls、viewer/no-edit boundary 不回歸。
+- 可見拖曳把手從 WBS task surfaces 退役，且 keyboard/accessibility 不退化。
+
+QA / QC gate:
+- 開發文件: `ai-doc/specs/SPEC-046-universal-task-surface-drag.md`
+- QA plan: `ai-doc/qa/QA-DEV-046-universal-task-surface-drag.md`
+- Completed local automated gates: `verify:dev-046-universal-task-surface-drag`、`verify:dev-046-universal-task-surface-drag-browser`、`verify:dev-028-cross-mode-task-interactions`、`verify:dev-028-cross-mode-task-interactions-browser`、`verify:dev-029-mobile-pan-first-interactions`、`verify:dev-029-mobile-pan-first-interactions-browser`、`verify:dev-039-task-workbench-placement-lanes`、`verify:dev-039-task-workbench-placement-lanes-browser`、`verify:dev-044-undo-coverage`。
+- Completed final local engineering gates: `npm.cmd exec tsc -- --noEmit`、`npm.cmd run build:test`。
+- Still required before full external sign-off: manual physical-phone supplemental if required, production release gate if deployment is later authorized。
+- QA 計畫已包含人工真實操作矩陣與極限操作測試；人工 QC 與 production deploy 未執行。
+
+Stop Conditions:
+- 任一 task surface 仍只能從拖曳把手拖曳。
+- 手機 short pan 被改成 drag，或 quick tap 不再開詳情。
+- 右鍵 context menu、mobile compact action rail、interactive controls、undo grouping 或 viewer/no-edit 權限回歸。
+- 實作需要 DB/schema/RLS/migration、production deploy 或 release authorization。
+
+Deferred Scope Audit:
+- Product implementation: Same Spec Phase / Phase 1-3；需使用者明確授權 RD。
+- MindMap / Gantt full alignment: Same Spec Phase / Phase 4；需使用者要求或 RD 觸及。
+- Production deploy / release / production smoke: Blocked Human Re-entry / Release Authorization Required。
+- DB / schema / RLS / migration: No Tracking；本 DEV 為前端互動。
+
+All-Phase Coverage Matrix:
+
+| Phase / DEV | Authorization | Document status | Scope | Out of scope | Entry condition | Acceptance | Evidence |
+|---|---|---|---|---|---|---|---|
+| DEV-046 Phase 0 | Authorized | Complete | SPEC / QA / dev_task / documentation_map | Product code, verifier implementation, release artifacts | 使用者要求寫成開發文件 | RD 可接手；QA 包含真實操作與極限操作 | file diff |
+| DEV-046 Phase 1 | Authorized / Complete | Implemented / Local Automated QA Passed | Desktop whole-surface drag for list/card/checklist/workbench/task-backed list header | DB, release | 使用者授權 RD | 桌機整個任務非互動區可拖；click/right-click/controls 不回歸；handle removed | DEV-046 static/browser, DEV-028/039 passed |
+| DEV-046 Phase 2 | Authorized / Complete | Implemented / Local Automated QA Passed / Physical Phone Pending | Mobile whole-task long-press drag for same surfaces | short pan as drag, action rail redesign | Phase 1 passed + 手機 slice 授權 | quick tap/details、short pan、long press drag-action 全通 | DEV-046 browser mobile, DEV-029 passed |
+| DEV-046 Phase 3 | Authorized / Complete | Implemented / Local Automated QA Passed | Drag handle retirement cleanup, selector/test/doc cleanup, accessibility replacement | non-task generic component deletion unless proven unused | Phase 1/2 passed | no task surface handle dependency; keyboard/a11y smoke pass | static gate, browser, DEV-028/029/039 passed |
+| DEV-046 Phase 4 | Not Authorized | RD Contract Ready / Not Authorized | Future MindMap/Gantt alignment if required | changing mode semantics without re-entry | 使用者要求或 RD 觸及 | mode-specific drag semantics preserved | DEV-027/028/Gantt regression |
+| Release Gate | Not Authorized | Blocked Human Re-entry / Release Authorization Required | merge/deploy/production smoke/rollback | 未授權 release artifacts | 使用者明確 release/deploy 授權 | deployment-release-gate pass | future release evidence |
+
 ## PM Update - 2026-07-06
 
 ### PM Restructure Audit: DEV-045 vs Remaining Development Tasks
@@ -785,6 +887,83 @@ Next condition:
 - 若要宣告完整 physical-phone UX，需補 H01-H04 真機 iOS Safari / Android Chrome 錄影或等效裝置證據。
 - Phase 2、production deploy、再次取消或重定義手機 tap-to-details 仍需另行授權。
 
+### DEV-039 Phase 2A Addendum：全域任務平台任務列拖曳觸發窗口一致化
+
+狀態: Implemented / Local Automated QC Passed / Production Not Deployed
+節點類型: 交付點內 interaction addendum
+父交付點: DEV-039
+優先級: P0 workbench drag parity, P1 click/context-menu/mobile regression
+是否計入產品交付完成: 否；這是 DEV-039 既有交付點內的互動一致性修正，已更新 DEV-039 狀態，不新增完成率交付點
+建立日期: 2026-07-07
+
+原始需求邊界:
+- 使用者指出 `已歸位任務` 與 `未歸位任務` 的拖曳觸發窗口不同，希望改成一致，並以 `未歸位任務` 的方式為主。
+- PM 評估後確認適合：目前兩種 row 共用 `useDraggable`，差異主要來自 row DOM / hit area，而不是全域 sensor。
+- 本輪使用者要求寫成開發文件並由 QA 制定真實操作驗證計畫；後續已授權並完成產品碼實作與本機自動化 QC，production deploy 或 release 仍未授權。
+
+Human Decision Brief:
+- 已確認：工作台任務列採「整列可拖」心智模型；未歸位任務與所有任務排序中的已歸位任務都應由 row root 承接拖曳。
+- 已確認：以未歸位任務的簡潔 root row 方式為基準，收斂已歸位任務 row shell / hit area。
+- 已確認：已歸位任務仍保留 hierarchy indentation、字重/灰階與日期 badge。
+- 已確認：左鍵仍開任務詳情、右鍵仍開既有 `GlobalContextMenu`、手機長按仍走 compact action rail。
+- 已拒絕：新增拖曳把手、修改 `useDragSensors` threshold、移除已歸位 row hierarchy/date 資訊、改資料模型或新增工作台專用 menu。
+
+Scope:
+- 修改 `src/components/TaskWorkbenchPanel.tsx` 的 `WorkbenchDragCard`。
+- 讓 `data-task-workbench-unplaced-task-card="true"` 與 `data-task-workbench-all-task-card="true"` 都是同一層可拖曳 root surface。
+- root 同時掛 `setNodeRef`、`draggableBindings`、`workbenchTouchHandlers`、left click details 與 `onContextMenu`。
+- 保留 `TaskDateBadge`、hierarchy depth style、`data-touch-tap-guard`、`data-mobile-drop-target`、`data-task-id` 與 placement selectors。
+- 更新 DEV-039 placement-lanes static/browser verifier，加入 row-root drag-surface parity 與真實操作 gate。
+
+RD Implementation 摘要:
+- `TaskWorkbenchPanel.WorkbenchDragCard` 新增共用 `renderWorkbenchTaskRow`，讓未歸位 row 與所有任務排序 row 都由同一層 root 掛 `setNodeRef`、`draggableBindings`、touch handlers、left click details 與 `onContextMenu`。
+- 工作台任務右鍵沿用 `useBoardStore.setContextMenuState({ kind: 'task' ... })` 與既有 `GlobalContextMenu`，不新增第二套選單。
+- `data-task-workbench-unplaced-task-card` 與 `data-task-workbench-all-task-card` 都在 row root 上暴露 `data-task-workbench-drag-surface="task-row-root"`，並保留 `data-touch-tap-guard`、`data-mobile-drop-target`、`data-task-id`。
+- 已歸位 / 所有任務排序列保留 hierarchy depth padding、文字層級與 `TaskDateBadge`；未歸位列保留 compact dense row。
+
+Out of scope:
+- 不改 `src/hooks/useDragSensors.ts` 的 distance / delay / tolerance。
+- 不新增拖曳把手、大卡片、獨立 handle、工作台專用 context menu 或手機新 action rail。
+- 不改 `GlobalContextMenu`、`MobileTaskActionLayer`、`TaskDateBadge` 功能語意。
+- 不改資料模型、localStorage unplaced storage、Supabase / Firestore service、DB schema、RLS、migration、RPC、production deploy 或正式資料修復。
+- 不處理 visible partial/error summary UI、未歸位跨裝置同步或 release artifacts。
+
+Required docs:
+- `ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
+- `ai-doc/qa/QA-DEV-039-task-filter-core-and-workbench-profiles.md`
+- `ai-doc/dev_task.md`
+- `ai-doc/documentation_map.md`
+
+Acceptance:
+- Desktop viewport 中，未歸位 row 與所有任務排序 row 都能從 left / middle / right 三個水平 sample points 啟動拖曳。
+- 拖曳結束後不得誤開任務詳情；無拖曳的左鍵點擊仍開 `TaskDetailsModal`。
+- 兩種 row 右鍵都開同一套任務 `GlobalContextMenu`，`Escape` 可關閉。
+- 390px mobile viewport 中，長按仍進入既有 compact action rail；不水平 overflow、不裁切。
+- 所有任務排序的 hierarchy cue、到期日排序、日期 badge 不因 row shell 收斂而消失。
+
+Stop conditions:
+- 若方案需要改 sensor threshold 才能達成一致，停止。
+- 若新增拖曳把手或回到大卡片 / handle UI，停止。
+- 若左鍵詳情、右鍵選單、手機長按、touch tap guard、mobile pan-first 任一回歸，停止。
+- 若需要 DB/RLS/migration、production deploy、資料修復或 release gate，停止並回到人類授權。
+
+QC evidence（2026-07-07）:
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes`
+- `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser`
+- `npm.cmd run verify:dev-039-task-workbench-cross-board-source`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions`
+- `npm.cmd run verify:dev-028-cross-mode-task-interactions-browser`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`
+- `npm.cmd exec tsc -- --noEmit`
+- `npm.cmd run build:test`
+- Static gate passed 30/30，覆蓋 row-root shared surface、right-click shared menu、no drag handle / no sensor workaround。
+- Browser gate passed，覆蓋未歸位 / 所有任務排序 row 的 15% / 50% / 85% row-root hit-test、右鍵選單、`Escape` 關閉、左鍵詳情、真實雙向 placement drag 與 390px mobile viewport。
+
+Next condition:
+- 若要 production deploy，仍需使用者明確 deployment authorization 並套用 `deployment-release-gate`。
+- 若要 visible partial/error summary、DB/RLS/RPC、正式資料修復或跨裝置未歸位同步，需另行授權。
+
 ### DEV-039 Phase 2 Addendum：全域任務平台跨看板資料來源與刪除有效可見性
 
 狀態: Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / No DB-RLS-Migration / Production Not Deployed
@@ -983,7 +1162,7 @@ DEV-040 P0 remote read-only preflight - 2026-07-07:
 
 ### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構
 
-狀態: Phase 1/1A Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+狀態: Phase 1/1A Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 節點類型: 交付點
 優先級: P0 workbench placement drag parity, P1 task focus consistency, P1 workbench UX clarity
 父交付點: 無；與 DEV-027D / DEV-028 / DEV-036 關聯
@@ -1188,6 +1367,7 @@ All-Phase Coverage Matrix:
 | Phase 1C Filter Result Parity | Authorized | Implemented / Local Automated QC Passed | filter result projection、matchedTaskIds 一致、context-only ancestors、負責人 option source 對齊 | profile/storage/sync、schema/RLS/migration、Phase 2 全部可見任務資料來源、production deploy | 使用者授權執行 Phase 1C RD | 同看板同條件下看板與工作台 `matchedTaskIds` 一致 | parity static/browser verifier、Phase 1/1B regression、TypeScript、build |
 | Production Release Gate | Blocked Pending Human Authorization | Must Follow Phase 1C QC | 正式環境發布、production smoke、deployment evidence | 未授權部署或跳過 deployment-release-gate | Phase 1C QC passed + 使用者明確 deployment authorization | deployment-release-gate passed | deployment-release-gate evidence、production smoke |
 | Phase 2 Workbench Data Source Truth + Cross-Board Query Contract | Frontend/local slice Authorized | Cross-Board Source Slice Implemented / Local Automated QC Passed | `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`effectiveVisibility()`、backend-neutral task list adapter、scoped store merge、刪除後不殘留 | Profile sync、shared defaults、未歸位跨裝置同步、visible partial/error summary UI、production migration/deploy/data repair、RPC/RLS | 使用者授權 Phase 2 RD；不含 remote/DB/deploy | active board A/B 仍顯示所有可見 board 任務；刪除/archived ancestor 後不殘留；selected board 不改 source scope | cross-board static/browser verifier、parity/placement regression、TypeScript、build:test |
+| Phase 2A Workbench Drag Trigger Surface Parity | Authorized / Complete | Implemented / Local Automated QC Passed | 未歸位 row 與所有任務排序 row 共用 row-root drag surface、右鍵 shared menu、left click details、mobile long press 不回歸 | sensor threshold、拖曳把手、資料模型、DB/RLS/migration、production deploy、手機新手勢 | 使用者確認以未歸位任務方式為主並授權 RD | 兩種 row 三點 sample 都命中 row root；雙向 placement drag、右鍵、詳情與 mobile regression 通過 | DEV-039 placement static/browser、cross-board regression、DEV-028/029 regression、TypeScript、build:test |
 | Phase 3 Filter Section Componentization | Not Authorized | Deferred / Not Authorized | 重複 filter UI section 元件化 | 儲存功能、profile governance | Phase 1 UI 穩定且 RD 判定有維護成本 | 行為不變、重複降低 | Regression verifier、TypeScript、build |
 | Phase 4 Legacy Profile Cleanup Guardrails | Not Authorized | Deferred / Not Authorized | profile 遺留文件/測試/keys 清理、防回流 gate | profile sync/governance | Phase 1/2 穩定後 | 舊 profile 概念不再回流 DEV-039 | static guard、docs audit |
 
@@ -1195,6 +1375,7 @@ Deferred Scope Audit:
 - Same Spec Phase: Phase 1B 承接未歸位 / 已歸位看板 placement lanes、雙向拖移與任務卡功能等價；已實作並通過本機自動化 QC。
 - Same Spec Phase: Phase 1C 承接看板階層式篩選與全域任務平台扁平篩選結果一致性；已實作並通過本機自動化 QC。
 - Same Spec Phase: Phase 2 已完成前端 / local-test / existing-service adapter 的全部可見任務來源 slice、cross-board query、`effectiveVisibility()` 與刪除後不殘留；RLS role matrix、visible partial/error summary UI、remote migration/RPC 仍需另行授權。
+- Same Spec Phase: Phase 2A 已完成工作台任務列 row-root drag surface parity、shared right-click menu 與桌機/手機 regression；production deploy 仍需另行授權。
 - Same Spec Phase: Phase 3 承接 filter UI section componentization；不新增儲存功能。
 - Same Spec Phase: Phase 4 承接 profile 遺留清理與防回流 gate。
 - New DEV: 行事曆訂閱 source/filter contract 續接 DEV-037；DEV-004 InboxItem/CaptureItem/通知平台需另行啟動。
@@ -1207,6 +1388,7 @@ Next condition:
 - Phase 1B 已完成本機自動化 QC；不得宣稱已部署 production。
 - Phase 1C 已完成本機自動化 QC；不得宣稱已部署 production。
 - Phase 2 cross-board source slice 已完成本機自動化 QC；不得宣稱已部署 production 或 DB/RLS/RPC 已完成。
+- Phase 2A drag trigger parity 已完成本機自動化 QC；不得宣稱已部署 production。
 - Single-Command Mode 若要 production release，仍必須取得使用者明確部署授權並走 `deployment-release-gate`。
 - Phase 2 visible partial/error summary、DB/RLS/RPC 與 production deploy 仍需另行授權。
 - Production release 已具備 Phase 1C 前置 QC；仍必須取得使用者明確 deployment authorization。
@@ -2398,12 +2580,13 @@ CAPA 來源：
 | DEV-036 | 交付點 | Implemented / Local Automated QC Passed / DB unchanged | 是 | Trello-like Workspace Governance | `ADR-036`、`SPEC-036`、`QA/QC-DEV-036` | production / DB migration 不在 Phase 1 |
 | DEV-037 | 交付點 | Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed | 是 | 行事曆訂閱來源範圍清晰化 | `SPEC-037`、`QA-DEV-037`、`QC-DEV-037`、DEV-037 static/browser、ICS、TypeScript、build:test | 遠端 Supabase migration apply、Edge Function deploy、live feed smoke 需 release gate |
 | DEV-038 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / DB unchanged | 是 | 設定中心作用範圍一致性與高風險防呆 | `SPEC-038`、`QA-DEV-038`、`QC-DEV-038`、static/browser/regression/TypeScript/build gates、production artifact/browser/auth smoke | 觀察正式站；DEV-037 source-scope live gate 仍另行執行 |
-| DEV-039 | 交付點 | Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed | 是 | 任務過濾器核心與全域任務平台兩欄篩選重構 | `SPEC-039`、`QA-DEV-039`、`QC-DEV-039`、static/browser gates | production release、RPC/RLS/migration、visible partial/error summary 需另行授權 |
+| DEV-039 | 交付點 | Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice + Phase 2A Drag Trigger Parity Implemented / Local Automated QC Passed / Production Not Deployed | 是 | 任務過濾器核心與全域任務平台兩欄篩選重構 | `SPEC-039`、`QA-DEV-039`、`QC-DEV-039`、static/browser gates | Production release、RPC/RLS/migration、visible partial/error summary 仍需另行授權 |
 | DEV-040 | 交付點 | Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / P0 Remote Read-only Preflight + Remote Readiness Static Gate Passed / Extended Matrix Partially Covered | 是 | 正式環境同型 BUG 風險硬化與驗證 | `SPEC-040`、`QA-DEV-040`、`QC-DEV-040`、`verify:dev-040-production-auth-ui-smoke`、`verify:dev-040-p0-bounded-failure`、`verify:dev-040-p0-remote-readiness`、Supabase read-only preflight | 原始 2 BUG 正式站 smoke 通過；P0 local addendum 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，Edge deploy / production injection / 完整 DB count smoke 仍需 gate |
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / One-Click Latest Local Hotfix Passed / Production Redeploy Not Executed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041`、DEV-041/DEV-034 static/browser gates | 強制更新、release notes 後端、版本 API、analytics 另行決策；hotfix 上線需另走 deployment-release-gate |
 | DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、使用者回報真機通過、commit `aa1fff7` | DB/RLS/migration 與正式資料修復不屬於本 DEV |
 | DEV-044 | 交付點 | Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke、production artifact/browser/auth smoke | durable recovery、DB migration、board workspace transfer undo、destructive recovery 需另行授權 |
 | DEV-045 | 交付點 | Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | 是 | 行事曆訂閱篩選器建構器與即時預覽 | `SPEC-045`、`QA-DEV-045`、`QC-DEV-045`、`verify:dev-045-calendar-subscription-builder-preview`、`verify:dev-045-calendar-subscription-builder-preview-browser`、`verify:dev-045-calendar-subscription-v2-feed`、`verify:dev-045-calendar-subscription-remote-readiness`、`verify:dev-045-calendar-subscription-local-db-smoke`、Supabase read-only preflight、local DB smoke、TypeScript、settings gate、Edge bundle、production build、production artifact smoke、branch cost confirmation evidence | 下一步需具 branch create 權限的 Supabase 帳號/OAuth 或已建立的 branch project ref；之後才能 branch migration / Edge deploy / live `.ics` smoke |
+| DEV-046 | 交付點 | Implemented / Local Automated QA Passed / Physical Phone Supplemental Not Executed / Production Not Authorized | 是 | 全任務表面拖曳一致化與拖曳把手退役 | `SPEC-046`、`QA-DEV-046`、`verify:dev-046-universal-task-surface-drag`、`verify:dev-046-universal-task-surface-drag-browser` | 已完成桌機/手機 whole-task surface drag、退役 WBS task drag handle、DEV-028/029/039/044 regression、TypeScript、build:test；production deploy 與手機實機 supplemental 未執行 |
 
 ### 交付點完成率
 
@@ -2418,7 +2601,7 @@ CAPA 來源：
 - Implemented / Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed：1 個交付點。
 - Implemented / Local Automated QC Passed / DB unchanged：1 個交付點。
 - Implemented / Local Automated QC Passed / DB Deploy Pending / Production Not Deployed：1 個交付點。
-- Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice Implemented / Local Automated QC Passed / Production Not Deployed：1 個交付點。
+- Phase 1/1A + 1B + 1C + Phase 2 Cross-Board Source Slice + Phase 2A Drag Trigger Parity Implemented / Local Automated QC Passed / Production Not Deployed：1 個交付點。
 - Production Release Deployed / Original BUG Smoke Passed / P0 Local Addendum Implemented / P0 Remote Read-only Preflight + Remote Readiness Static Gate Passed / Extended Matrix Partially Covered：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed / DB unchanged：1 個交付點。
@@ -2457,6 +2640,15 @@ CAPA 來源：
 
 ## Release Gate 指令
 
+### 固定規則
+
+- 正式部署前預設需要 Level 3：staging build 指向 `ProJED-TEST`，部署到 Firebase Hosting preview channel `level3-smoke`，再執行 HTTPS browser smoke 與手動 auth/read-write/reload/cleanup smoke。
+- AI 必須自動判斷 Level 3 是 `Required`、`Not Required` 或 `Blocked`；若跳過，必須記錄原因。
+- `ProJED-TEST` 是固定 staging/test/controlled blast-zone；破壞性、schema/migration、Edge、bulk data 測試前必須有備份與 cleanup/reset plan。
+- Supabase Branch 預設不用；只有 `ProJED-TEST` 無法安全隔離風險時，才在使用者明確批准成本、用途、存活時間與刪除條件後使用。
+- 此規則不授權 production deploy、不授權直接 mutate `ProJED`、不授權自動接受 Supabase Branch 成本。
+- Canonical docs: `ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md`、`ai-doc/release/LEVEL3-firebase-preview-supabase-test-runbook.md`。
+
 ### 常規自動驗證
 
 ```powershell
@@ -2484,6 +2676,18 @@ npm.cmd run verify:dev-017-record-sidebar-resize-browser
 ```powershell
 npm.cmd run verify:remaining-external-gates
 ```
+
+### Level 3 Firebase Preview + Supabase TEST Smoke
+
+```powershell
+git status --short --branch
+npm.cmd run verify:source
+npx vite build --mode staging
+npx firebase-tools hosting:channel:deploy level3-smoke --project projed-cc78d --expires 1d
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-level3-firebase-preview.ps1 -Url "PASTE_FIREBASE_PREVIEW_URL_HERE"
+```
+
+Manual smoke: open the Firebase preview URL, sign in with the staging/test account, create `LEVEL3-SMOKE-*` workspace/board/task, rename/drag/add note, refresh to verify persistence, delete the smoke workspace, refresh to confirm cleanup.
 
 ### 正式部署
 

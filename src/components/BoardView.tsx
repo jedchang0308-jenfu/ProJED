@@ -9,7 +9,7 @@
  * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { Check, CheckCircle2, ListPlus, Plus, Trash2, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -49,7 +49,6 @@ export const KanbanDependencyContext = React.createContext<{
 const mobileActionItems: Array<{
     key: MobileTaskAction;
     label: string;
-    icon: React.ComponentType<{ size?: number; className?: string }>;
     permission: 'edit' | 'create' | 'delete';
     activeClassName: string;
     idleClassName: string;
@@ -57,34 +56,30 @@ const mobileActionItems: Array<{
     {
         key: 'toggle-complete',
         label: '標示完成',
-        icon: CheckCircle2,
         permission: 'edit',
-        activeClassName: 'border-emerald-500 bg-emerald-500 text-white',
-        idleClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+        activeClassName: 'bg-emerald-500 text-white',
+        idleClassName: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
     },
     {
         key: 'add-sibling',
-        label: '新增同階',
-        icon: Plus,
+        label: '新增同階任務',
         permission: 'create',
-        activeClassName: 'border-sky-500 bg-sky-500 text-white',
-        idleClassName: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100',
+        activeClassName: 'bg-sky-500 text-white',
+        idleClassName: 'bg-sky-50 text-sky-700 hover:bg-sky-100',
     },
     {
         key: 'add-child',
-        label: '新增下層',
-        icon: ListPlus,
+        label: '新增下階任務',
         permission: 'create',
-        activeClassName: 'border-indigo-500 bg-indigo-500 text-white',
-        idleClassName: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
+        activeClassName: 'bg-indigo-500 text-white',
+        idleClassName: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
     },
     {
         key: 'delete',
         label: '刪除任務',
-        icon: Trash2,
         permission: 'delete',
-        activeClassName: 'border-red-500 bg-red-500 text-white',
-        idleClassName: 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100',
+        activeClassName: 'bg-red-500 text-white',
+        idleClassName: 'bg-red-50 text-red-600 hover:bg-red-100',
     },
 ];
 
@@ -128,13 +123,12 @@ const MobileTaskActionLayer: React.FC<{
             ) : null}
 
             <div
-                className="fixed left-1/2 z-[95] grid w-[calc(100vw-1rem)] max-w-[420px] -translate-x-1/2 grid-cols-2 gap-2"
-                style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+                className="fixed left-1/2 z-[95] flex w-[calc(100vw-0.5rem)] max-w-[430px] -translate-x-1/2 gap-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+                style={{ top: 'env(safe-area-inset-top, 0px)' }}
                 data-mobile-task-action-rail="true"
                 data-mobile-task-action-rail-placement="top"
             >
                 {mobileActionItems.map((item) => {
-                    const Icon = item.icon;
                     const active = state.hoverAction === item.key;
                     const enabled = canUseAction(item.permission);
                     const label = item.key === 'toggle-complete' && state.status === 'completed'
@@ -147,14 +141,13 @@ const MobileTaskActionLayer: React.FC<{
                             disabled={!enabled}
                             title={label}
                             aria-label={label}
-                            className={`flex h-12 min-w-0 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-md backdrop-blur transition ${
+                            className={`flex h-10 min-w-0 flex-1 items-center justify-center border-r border-slate-200 px-1 text-center text-[12px] font-semibold leading-tight backdrop-blur transition last:border-r-0 ${
                                 active ? item.activeClassName : item.idleClassName
                             } disabled:cursor-not-allowed disabled:opacity-35`}
                             data-mobile-task-action={item.key}
                             data-mobile-task-action-label={label}
                         >
-                            <Icon size={18} className="shrink-0" />
-                            <span className="min-w-0 truncate" data-mobile-task-action-text="true">
+                            <span className="block w-full min-w-0 truncate" data-mobile-task-action-text="true">
                                 {label}
                             </span>
                         </button>

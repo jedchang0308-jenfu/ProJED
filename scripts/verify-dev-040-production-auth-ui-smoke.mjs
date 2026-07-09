@@ -133,7 +133,7 @@ try {
       .select()
       .single()
   );
-  const projectB = assertOk(
+  assertOk(
     'project B insert',
     await userClient
       .from('projects')

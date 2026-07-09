@@ -23,7 +23,7 @@ export const isTaskPrimaryActionTarget = (target: EventTarget | null) => (
     'a',
     '[contenteditable="true"]',
     '[data-task-interaction-control="true"]',
-    '[data-task-drag-handle="true"]',
+    '[data-task-primary-action-control="true"]',
     '[data-mindmap-toggle]',
     '[data-relationship-control]',
     '[data-task-title-input="true"]',

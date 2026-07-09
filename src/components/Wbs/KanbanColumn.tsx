@@ -11,10 +11,11 @@ import { Button } from '../ui/Button';
 import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
-import { TaskDragHandle } from './TaskDragHandle';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
+import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -33,9 +34,12 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
   const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const touchTapGuard = useTouchTapGuard();
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
+  const mobileTaskAction = React.useContext(MobileTaskActionContext);
+  const mobileActionMode = isMobileTaskActionMode();
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
@@ -67,7 +71,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     isDragging: isColumnDragging,
   } = useSortable({
     id: nodeId,
-    disabled: !canMoveTask,
+    disabled: !canMoveTask || isSelectingMode || mobileActionMode,
     data: {
       type: 'wbs-column',
       nodeId,
@@ -87,6 +91,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     transform: CSS.Transform.toString(columnTransform),
     transition: columnTransition,
   };
+  const columnHeaderDragBindings = mobileActionMode || isSelectingMode
+    ? {}
+    : { ...columnAttributes, ...columnListeners };
 
   const status = node?.status || 'todo';
   const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
@@ -140,12 +147,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     prepareNewTaskNaming(newNode.id);
   };
 
-  // 手機長按開啟右鍵選單（500ms，長於拖曳的 250ms，移動超過 8px 則取消）
+  // 手機長按進入精簡 action rail；非手機觸控保留完整選單 fallback。
   const longPressHandlers = useLongPress(
     (e) => {
+      if (!node) return;
+      if (mobileActionMode) {
+        mobileTaskAction?.begin({ id: nodeId, title: node.title, status: node.status }, e);
+        return;
+      }
       e.preventDefault();
       const touch = e.touches[0];
-      if (!node) return;
       setContextMenuState({
         kind: 'task',
         isOpen: true,
@@ -157,6 +168,46 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     },
     { delay: 500, tolerance: 8 }
   );
+
+  const columnHeaderTouchHandlers = {
+    ...longPressHandlers,
+    onTouchStart: (e: React.TouchEvent) => {
+      touchTapGuard.handlers.onTouchStart(e);
+      longPressHandlers.onTouchStart(e);
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(nodeId)) {
+        mobileTaskAction.move(e);
+        return;
+      }
+      touchTapGuard.handlers.onTouchMove(e);
+      longPressHandlers.onTouchMove(e);
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(nodeId)) {
+        touchTapGuard.handlers.onTouchEnd(e);
+        mobileTaskAction.end(e);
+        longPressHandlers.onTouchEnd(e);
+        return;
+      }
+      touchTapGuard.handlers.onTouchEnd(e);
+      longPressHandlers.onTouchEnd(e);
+    },
+    onTouchCancel: (e: React.TouchEvent) => {
+      if (mobileTaskAction?.isActive(nodeId)) {
+        touchTapGuard.handlers.onTouchCancel(e);
+        mobileTaskAction.cancel(e);
+        longPressHandlers.onTouchCancel(e);
+        return;
+      }
+      touchTapGuard.handlers.onTouchCancel(e);
+      longPressHandlers.onTouchCancel(e);
+    },
+    onClickCapture: (e: React.MouseEvent) => {
+      touchTapGuard.handlers.onClickCapture(e);
+      if (!e.isPropagationStopped()) longPressHandlers.onClickCapture(e);
+    },
+  };
 
   // Keep all hooks above this guard so missing data never changes hook order.
   if (!node) {
@@ -173,9 +224,14 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       }`}
     >
       <div
-        {...longPressHandlers}
+        {...columnHeaderDragBindings}
+        {...columnHeaderTouchHandlers}
         data-task-id={nodeId}
+        data-mobile-drop-target={nodeId}
+        data-task-drag-surface="true"
+        data-task-drag-surface-kind="kanban-column-header"
         data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
+        data-touch-tap-guard="true"
         data-kanban-column-header="true"
         className={`group mobile-pan-item flex flex-col gap-1 border-b border-slate-200/70 bg-white px-[10px] py-[8px] transition-colors hover:bg-primary/[0.02] ${
             isSelectingMode
@@ -203,13 +259,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         <div className="flex items-center gap-1.5">
           <div className="flex flex-1 items-center justify-between">
             <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
-              <TaskDragHandle
-                attributes={columnAttributes}
-                listeners={columnListeners}
-                disabled={!canMoveTask || isSelectingMode}
-                className="-ml-1"
-              />
-
               <h3
                 className={`task-title-text truncate text-sm font-medium transition-colors hover:text-primary ${
                   status === 'completed' ? 'text-emerald-600' : 'text-slate-700'

@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-039
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
-狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 建立日期：2026-07-02
 最新修正：
 - 2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
@@ -14,12 +14,15 @@
 - 2026-07-04 sticky title follow-up，`未歸位` 與 `所有任務排序` 是 section title，不得呈現得像一般任務列；兩者需為 sticky header，捲動各自區塊時仍可見。
 - 2026-07-04 chevron collapse follow-up，工作台收合狀態需使用精簡 chevron 符號，collapsed rail 寬度由 48px 減半到約 24px；展開狀態的收合按鈕需用 `ChevronLeft`，不得回到 Notebook 或 panel 類圖示卡片。
 - 2026-07-05 DEV-042 compatibility follow-up，手機版工作台收合狀態不得再顯示 in-flow collapsed rail；工作台需透過 Sidebar / top-nav 入口開啟 overlay。桌機仍保留約 24px compact rail。
+- 2026-07-07 drag trigger parity addendum，使用者要求 `已歸位任務` 與 `未歸位任務` 的拖曳觸發窗口一致，並以未歸位任務的整列 root 觸發方式為主；QA 新增 Phase 2A 真實操作驗證計畫，覆蓋 row root hit area、left click details、right click menu、mobile long press 與回歸 gate。
 
 ## 驗證目標
 
 確認任務過濾器重構後，任務視圖共用同一個過濾語意，顯示設定不被誤算為過濾條件，全域任務平台維持 BoardView 左側跨看板拖拉定位，且工作台主畫面只保留一顆 `過濾器` 按鈕；點開後才在 popover 內選看板並調同看板任務過濾條件。
 
 未歸位與已歸位看板是工作台固定位置區，不是過濾器，也不是看板 selector 的選項。未歸位任務與已歸位任務必須有相同核心任務操作能力。Phase 1C 需確認同一 selected board 與同一組任務 filter 條件下，看板與工作台以相同 `matchedTaskIds` 作為結果真相；看板可額外顯示 context-only ancestor，但不得把它算成符合結果。Phase 2 需確認 `所有任務排序` 的來源已從目前已載入任務升級為全部可見看板任務，且刪除 / archived ancestor / 無權 board 不會透過扁平投影殘留。
+
+Phase 2A 需確認同一個工作台內的任務列拖曳 hit area 一致：未歸位任務與所有任務排序中的已歸位任務都以同一層 row root 承接拖曳，不因已歸位列的內層 flex、日期徽章或 hierarchy padding 造成可拖區不同。
 
 ## Zero-Tolerance Failures
 
@@ -56,6 +59,10 @@
 - `parentId` 指向不存在父節點的 orphan task 仍出現在看板投影或 `所有任務排序`。
 - 任務台清單回復成大卡片、獨立拖曳把手、日期 chip 或高間距卡片堆疊。
 - 移除拖曳把手後，整列拖移或點選開啟詳情失效。
+- 未歸位任務與所有任務排序中的已歸位任務只有其中一種 row 可由整列 root 啟動拖曳。
+- 已歸位任務只能從 title text 或內層 flex 啟動拖曳，無法從 row 左側縮排區、右側空白或日期附近啟動拖曳。
+- 為了收斂拖曳窗口而修改 `useDragSensors` 的 distance / delay，或新增工作台專用拖曳把手。
+- 拖曳已歸位或未歸位 row 後誤開任務詳情，或右鍵選單、`Escape` 關閉、手機長按 action rail 任一回歸。
 - `所有任務排序` 中父層與子層沒有任何縮排或文字權重差異。
 - 階層提示改變原本的到期日排序真相，或把清單改成不可跨看板比較的樹狀分組。
 - `未歸位` 或 `所有任務排序` 標題在區塊捲動後消失、被任務列蓋住、或缺少明確 section header UI。
@@ -288,6 +295,66 @@ Not covered by this slice：
 - Supabase RPC/RLS/migration 與 DB role matrix；本輪只接既有 `supabaseNodeService.listByProject()`。
 - Production smoke / deployment-release-gate。
 
+## Phase 2A Drag Trigger Surface Parity Verification
+
+Phase 2A 已完成 RD implementation 與本機自動化 QC。QC 證據包含 static row-root contract、browser row-root hit-test、真實雙向拖曳、左鍵詳情、右鍵選單、mobile long press 與 DEV-028/029/039 regression；production release 仍未授權。
+
+Static gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-placement-lanes
+```
+
+Static cases：
+
+| Case | 檢查項目 | 預期 |
+|---|---|---|
+| QA-039-P2A-S01 | Shared draggable root | `WorkbenchDragCard` 中未歸位 row 與所有任務排序 row 都在同一層 root 掛 `ref={setNodeRef}`、`draggableBindings`、touch handlers、left click details 與 `onContextMenu` |
+| QA-039-P2A-S02 | No sensor workaround | `src/hooks/useDragSensors.ts` 不因本 addendum 修改 `MouseSensor.distance`、`TouchSensor.delay` 或 `tolerance` |
+| QA-039-P2A-S03 | No drag handle regression | `TaskWorkbenchPanel` 不新增工作台專用 `data-task-drag-handle`、拖曳 icon、大卡片或獨立 handle UI |
+| QA-039-P2A-S04 | Context menu preserved | 未歸位 row 與所有任務排序 row 都保留 `onContextMenu` 並呼叫既有 `setContextMenuState({ kind: 'task' ... })` |
+| QA-039-P2A-S05 | Hierarchy/date preserved | 所有任務排序 row 仍保留 `hierarchyDepth` / indentation / hierarchy text class 與 `TaskDateBadge` |
+
+Browser gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser
+```
+
+Browser cases：
+
+| Case | 操作 | 預期 |
+|---|---|---|
+| QA-039-P2A-B01 | Desktop viewport 開啟工作台，對未歸位 row 左側 15%、title 中段 50%、右側 85% 三個水平點做 row-root hit-test，並在同一流程執行未歸位 -> 已歸位真實拖曳 | 三個 sample points 都命中同一 row root；placement behavior 可用；drag end 後不誤開詳情 |
+| QA-039-P2A-B02 | 對所有任務排序中的已歸位 row 左側縮排區、title 中段、右側日期附近做 row-root hit-test，並在同一流程執行已歸位 -> 未歸位真實拖曳 | 三個 sample points 都命中同一 row root；不因內層 flex 或日期 badge 造成 dead zone；drag end 後不誤開詳情 |
+| QA-039-P2A-B03 | 分別左鍵點擊未歸位 row 與已歸位 row，且不拖曳 | 兩者都開啟 `TaskDetailsModal`；不受 row shell 收斂影響 |
+| QA-039-P2A-B04 | 分別右鍵未歸位 row 與已歸位 row | 兩者都開啟同一套任務 `GlobalContextMenu`；出現 `更多詳情選項`；不得出現已取消的 `重新命名任務`；`Escape` 可關閉 |
+| QA-039-P2A-B05 | 驗證所有任務排序 row 視覺 | hierarchy indentation、字重/灰階與日期 badge 仍存在；row shell 收斂不破壞 dense text row |
+| QA-039-P2A-B06 | 390px mobile viewport 長按工作台任務 | 仍進入既有 compact action rail；mobile drag bindings 沒有取代長按模式；無水平 overflow 或 overlay 裁切 |
+
+Regression gate：
+
+```powershell
+npm.cmd run verify:dev-039-task-workbench-cross-board-source
+npm.cmd run verify:dev-028-cross-mode-task-interactions
+npm.cmd run verify:dev-028-cross-mode-task-interactions-browser
+npm.cmd run verify:dev-029-mobile-pan-first-interactions
+npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build:test
+```
+
+FMEA：
+
+| 失效模式 | 可能原因 | 使用者影響 | 偵測方式 | 優先級 | 對策 / 建議測試 |
+|---|---|---|---|---|---|
+| 已歸位 row 只有 title 可拖 | draggable bindings 實際落在內層 flex 或樣式 dead zone | 使用者拖曳同一任務列時手感不一致 | QA-039-P2A-B02 多點 hit-test + 雙向拖曳 | P0 | 將 bindings 收斂到 row root，並以三點 hit-test 與真實雙向拖曳驗證 |
+| 未歸位 row 與已歸位 row root 結構再次 drift | 兩個 JSX 分支各自維護 className / event props | 後續改一邊漏一邊，互動又分裂 | QA-039-P2A-S01 | P1 | 抽 shared row shell 或 props helper |
+| 拖曳後誤開詳情 | click / drag arbitration 回歸 | 任務被移動後 modal 突然打開，操作中斷 | QA-039-P2A-B01/B02 | P0 | 維持 `isDragging` 與 touch tap guard 判斷 |
+| 右鍵選單退化 | row shell 重構漏掛 `onContextMenu` | 使用者無法從工作台做任務操作 | QA-039-P2A-B04 | P0 | static + browser 同時驗證 context menu |
+| 手機長按被桌機拖曳邏輯吃掉 | mobileActionMode 判斷或 touch handlers drift | 手機 compact action rail 失效 | QA-039-P2A-B06 + DEV-029 regression | P0 | 不改 sensor，保留 mobileActionMode 停用 draggable bindings |
+| hierarchy/date 視覺遺失 | 為了共用 row shell 過度簡化已歸位 row | 所有任務排序失去層級與日期掃描價值 | QA-039-P2A-S05/B05 | P1 | row shell 只共用 interaction surface，內容 slot 保留 |
+
 ## Manual UX Review
 
 - 5 秒內能看懂工作台只需要先選看板，再調過濾器。
@@ -297,6 +364,7 @@ Not covered by this slice：
 - 使用者能從任務卡能力判斷未歸位任務與已歸位任務是同一種任務，只是位置不同。
 - 工作台仍像側邊工具，不像獨立功能頁。
 - 任務卡仍可拖拉到目前看板定位，且主內容點擊可開任務詳情。
+- 使用者拖曳未歸位任務與所有任務排序任務時，感覺都是「整列可拖」，不需要找 title、日期或特定小區塊。
 
 ## QC Handoff Evidence
 
@@ -311,6 +379,7 @@ QC 回報至少包含：
 - Phase 1A 歷史證據：未歸類任務新增、顯示、reload persistence、且不受過濾器影響。
 - Phase 1B 新增證據：未歸位 / 已歸位看板雙 lane 截圖、雙向拖移證據、任務資料不遺失證據、未歸位與已歸位卡片功能等價證據。
 - Phase 1C 新增證據：同看板同條件下 board/workbench `matchedTaskIds` 比對、context-only ancestor 不列入工作台、負責人選項來源一致證據。
+- Phase 2A 新增證據：未歸位 row 與所有任務排序 row 的三點 row-root hit-test、真實雙向拖曳、drag end 不誤開詳情、右鍵選單與 `Escape` 關閉、mobile long press action rail 證據。
 - Production release ordering evidence：任何正式環境發布文件或 gate 均排在 Phase 1C QC passed 之後。
 
 ## All-Phase QA Coverage Matrix
@@ -322,6 +391,7 @@ QC 回報至少包含：
 | Phase 1B | QA Passed / Local Automated QC Passed | 工作台失去跨看板定位本質、未歸位任務功能降級 | Placement lane static/browser、drag proof、task parity proof、DEV-028 regression、TS/build | 無雙 lane、不能雙向拖移、未歸位卡片功能少於已歸位卡片、發布早於 QC | QA + QC + RD |
 | Phase 1C | QA Passed / Local Automated QC Passed | 看板階層式篩選與工作台扁平篩選結果不一致 | Result parity static/browser、matchedTaskIds comparison、assignee option source proof、Phase 1/1B regression、TS/build | `matchedTaskIds` 不一致、符合子任務被父層藏掉、context-only ancestor 被列為結果、發布早於 QC | QA + QC + RD |
 | Phase 2 | Cross-Board Source Slice QA Passed / Follow-up Not Authorized | `全部可見任務` 文案與資料層不一致、權限外洩、刪除後扁平清單殘留 | Task source service/static verifier、browser cross-board/deletion proof、effectiveVisibility proof、DB role matrix if needed | query 只能列 active/local/assigned tasks、無權任務洩漏、archived ancestor descendant 殘留、visible partial/error summary 未覆蓋卻宣稱完成 | QA + QC |
+| Phase 2A | QA Passed / Local Automated QC Passed | 未歸位與已歸位任務列拖曳 hit area 不一致、row shell 重構造成 click/right-click/mobile 回歸 | Shared root static gate、desktop row multi-point hit-test + true bidirectional drag browser gate、right-click/details/mobile long-press regression、DEV-028/029/039 gates、TS/build | 任一 row 只能局部拖曳、靠 sensor workaround、拖曳誤開詳情、右鍵或手機長按失效、hierarchy/date 遺失 | QA + QC + RD |
 | Phase 3 | Deferred / Not Authorized | UI section 元件化造成行為漂移 | Regression verifier、viewport review | 元件化後 filter 結果或 summary 改變 | RD + QC |
 | Phase 4 | Deferred / Not Authorized | 舊 profile 概念回流 | Static guard、docs audit | profile type/storage/UI 重新出現在 DEV-039 | PM + QC |
 
@@ -332,6 +402,7 @@ QC 回報至少包含：
 | Cross-board all-visible task DB proof | Same Spec Phase | Phase 2 | 前端 / local-test / existing service adapter slice 已驗證；若需要 DB/RLS/RPC proof 另行授權 |
 | Deletion effective visibility / archived ancestor proof | Same Spec Phase | Phase 2 | static + browser fixture 已驗證 task 與 archived parent；若涉及正式資料修復則另走 human re-entry |
 | Workbench placement lanes and bidirectional drag | Same Spec Phase | Phase 1B | 已通過本機自動化 QC；production release 後續仍需獨立 deployment gate |
+| Workbench drag trigger surface parity | Same Spec Phase | Phase 2A | 已通過 static/browser 真實操作 gate；production release 仍需另行授權 |
 | Board/workbench filter result parity | Same Spec Phase | Phase 1C | 已通過本機自動化 QC；已比對 canonical matched task IDs 與 context-only ancestors |
 | Filter UI section componentization | Same Spec Phase | Phase 3 | 不改產品語意，不新增儲存 |
 | Profile backend sync, migration, conflict handling | Cancelled for DEV-039 | No active QA target | 使用者已取消儲存/profile 類功能 |

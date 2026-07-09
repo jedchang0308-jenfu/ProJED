@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CalendarDays, CircleDot, Lock, MessageSquareText, Pencil, Plus, Send, Unlock, UserRound, X } from 'lucide-react';
+import { CircleDot, Lock, MessageSquareText, Plus, Send, Unlock, UserRound, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -365,9 +365,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   {node.title}
                 </p>
               )}
-              {canEditTask ? <Pencil size={14} className="shrink-0 text-slate-400" aria-hidden="true" /> : null}
             </div>
-            <p className="text-xs text-slate-500">更多詳情選項</p>
           </div>
           <button
             type="button"
@@ -381,11 +379,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
         <div className="flex-1 overflow-auto px-4 py-4">
           <section className="border-b border-slate-100 pb-2">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <CalendarDays size={16} className="text-blue-500" />
-              <span>時間設定</span>
-            </div>
-
             <div className="grid gap-2 md:grid-cols-3">
             <div className="min-w-0">
               <label className="text-xs font-medium text-slate-500">
@@ -582,8 +575,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
           ) : null}
 
           <section className="pt-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-slate-700">備註欄</h2>
+            <div className="mb-3 flex justify-end">
               <button
                 type="button"
                 onClick={addNote}

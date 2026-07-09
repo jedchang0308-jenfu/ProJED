@@ -120,6 +120,8 @@
     "verify:dev-045-calendar-subscription-v2-feed": "node scripts/verify-dev-045-calendar-subscription-v2-feed.mjs",
     "verify:dev-045-calendar-subscription-remote-readiness": "node scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs",
     "verify:dev-045-calendar-subscription-local-db-smoke": "node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs",
+    "verify:dev-046-universal-task-surface-drag": "node scripts/verify-dev-046-universal-task-surface-drag.mjs",
+    "verify:dev-046-universal-task-surface-drag-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev046-surface-drag -Filename scripts/verify-dev-046-universal-task-surface-drag-browser.pw.js -OutputDirectory output/playwright",
     "verify:remaining-external-gates": "node scripts/verify-remaining-external-gates.mjs",
     "verify:settings-project-context": "node scripts/verify-settings-project-context.mjs",
     "verify:settings-project-context-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"npx --yes --package @playwright/cli playwright-cli -s=settings-project-context open http://127.0.0.1:4173/; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npx --yes --package @playwright/cli playwright-cli -s=settings-project-context run-code --filename=scripts/verify-settings-project-context-browser.pw.js\"",

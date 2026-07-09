@@ -302,6 +302,7 @@ const WorkbenchDragCard: React.FC<{
   const isAllTasksCard = surface === 'all-tasks';
   const depth = Math.max(0, Math.min(hierarchyDepth, 6));
   const mobileTaskAction = React.useContext(MobileTaskActionContext);
+  const setContextMenuState = useBoardStore(state => state.setContextMenuState);
   const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
   React.useEffect(() => {
     const update = () => setMobileActionMode(isMobileTaskActionMode());
@@ -383,41 +384,29 @@ const WorkbenchDragCard: React.FC<{
     },
   };
   const draggableBindings = mobileActionMode ? {} : { ...attributes, ...listeners };
-
-  if (isUnplacedLaneRow) {
-    return (
-      <div
-        ref={setNodeRef}
-        {...draggableBindings}
-        {...workbenchTouchHandlers}
-        onClick={(event) => {
-          if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
-          selectAndOpenTaskDetails(task.id);
-        }}
-        className={`kanban-checklist-item group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-0.5 transition-colors ${
-          isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-slate-50'
-        }`}
-        data-task-workbench-task-card="true"
-        data-task-workbench-unplaced-task-card="true"
-        data-task-workbench-unclassified-item="true"
-        data-task-workbench-task-placement={placement}
-        data-task-workbench-unplaced-compact-row="true"
-        data-task-workbench-hierarchy-depth={0}
-        data-touch-tap-guard="true"
-        data-task-id={task.id}
-        data-mobile-drop-target={task.id}
-      >
-        <span
-          className="task-title-text min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-slate-700"
-          title={task.title || '未命名任務'}
-        >
-          {task.title || '未命名任務'}
-        </span>
-      </div>
-    );
-  }
-
-  return (
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenuState({
+      kind: 'task',
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: task.id,
+      title: task.title || '未命名任務',
+    });
+  };
+  const renderWorkbenchTaskRow = ({
+    className,
+    style,
+    children,
+    unplacedLane,
+  }: {
+    className: string;
+    style?: React.CSSProperties;
+    children: React.ReactNode;
+    unplacedLane: boolean;
+  }) => (
     <div
       ref={setNodeRef}
       {...draggableBindings}
@@ -426,21 +415,52 @@ const WorkbenchDragCard: React.FC<{
         if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
         selectAndOpenTaskDetails(task.id);
       }}
-      className={`cursor-pointer rounded-md px-1.5 py-1 transition ${
-        isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white/80'
-      }`}
-      style={{ paddingLeft: `${0.375 + depth * 0.75}rem` }}
+      onContextMenu={handleContextMenu}
+      className={className}
+      style={style}
       data-task-workbench-task-card="true"
+      data-task-workbench-drag-surface="task-row-root"
+      data-task-workbench-unplaced-task-card={unplacedLane ? 'true' : undefined}
       data-task-workbench-all-task-card={isAllTasksCard ? 'true' : undefined}
       data-task-workbench-placed-task-card={placement === 'placed' ? 'true' : undefined}
+      data-task-workbench-unclassified-item={unplacedLane ? 'true' : undefined}
       data-task-workbench-task-placement={placement}
-      data-task-workbench-hierarchy-row="true"
-      data-task-workbench-hierarchy-depth={depth}
+      data-task-workbench-unplaced-compact-row={unplacedLane ? 'true' : undefined}
+      data-task-workbench-hierarchy-row={!unplacedLane ? 'true' : undefined}
+      data-task-workbench-hierarchy-depth={unplacedLane ? 0 : depth}
       data-touch-tap-guard="true"
       data-task-id={task.id}
       data-mobile-drop-target={task.id}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      {children}
+    </div>
+  );
+
+  if (isUnplacedLaneRow) {
+    return renderWorkbenchTaskRow({
+      unplacedLane: true,
+      className: `kanban-checklist-item group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-0.5 transition-colors ${
+          isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-slate-50'
+        }`,
+      children: (
+        <span
+          className="task-title-text min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-slate-700"
+          title={task.title || '未命名任務'}
+        >
+          {task.title || '未命名任務'}
+        </span>
+      ),
+    });
+  }
+
+  return renderWorkbenchTaskRow({
+    unplacedLane: false,
+    className: `group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-1 transition-colors ${
+        isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white/80'
+      }`,
+    style: { paddingLeft: `${0.375 + depth * 0.75}rem` },
+    children: (
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <div className={`min-w-0 flex-1 truncate text-sm leading-6 ${hierarchyTextClass}`}>{task.title || '未命名任務'}</div>
         <TaskDateBadge
           startDate={task.startDate}
@@ -453,8 +473,8 @@ const WorkbenchDragCard: React.FC<{
           surface="workbench"
         />
       </div>
-    </div>
-  );
+    ),
+  });
 };
 
 const WorkbenchFilterControls: React.FC<{
@@ -718,7 +738,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     if (!panelOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
-      const hasBlockingOverlay = Boolean(document.querySelector('[data-task-details-modal="true"], [data-filter-menu-panel], [data-mode-switcher-menu="true"], [data-tag-picker-panel], .global-dialog-content'));
+      const hasBlockingOverlay = Boolean(document.querySelector('[data-task-details-modal="true"], [data-filter-menu-panel], [data-mode-switcher-menu="true"], [data-tag-picker-panel], .global-dialog-content'))
+        || Boolean(useBoardStore.getState().contextMenuState?.isOpen);
       if (hasBlockingOverlay) return;
       event.preventDefault();
       if (isNarrowViewport) setMobileOverlayOpen(false);

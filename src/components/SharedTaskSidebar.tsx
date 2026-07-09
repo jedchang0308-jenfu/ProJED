@@ -6,7 +6,6 @@ import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
-import { TaskDragHandle } from './Wbs/TaskDragHandle';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { COMPACT_DIMENSIONS } from './ui/compactTokens';
 import type { TaskNode } from '../types';
@@ -31,6 +30,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
         position: 'relative' as any,
         zIndex: isDragging ? 50 : 1,
     };
+    const dragSurfaceBindings = { ...attributes, ...listeners };
 
     const isGroup = item.nodeType === 'group';
     const isTask = item.nodeType === 'task';
@@ -46,27 +46,24 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
         <div
             ref={setNodeRef}
             style={style}
+            {...dragSurfaceBindings}
             onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
             }}
             data-task-id={item.id}
+            data-task-drag-surface="true"
+            data-task-drag-surface-kind="shared-sidebar-row"
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
             className={`flex items-center px-[10px] border-b border-slate-100 hover:bg-primary/5 transition-colors gap-1 cursor-pointer group
                 task-title-text ${isGroup ? 'font-medium text-slate-700' : isTask && level === 1 ? 'font-medium text-slate-600' : 'font-medium text-slate-500'}
                 ${selectedTaskId === item.id ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary/30' : ''}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => {
+                if (isDragging) return;
                 onClick(item);
             }}
         >
-            <TaskDragHandle
-                attributes={attributes}
-                listeners={listeners}
-                disabled={!canMoveTask}
-                size="xs"
-                className="absolute left-1 opacity-0 group-hover:opacity-100"
-            />
             {hasChildren && onToggleCollapse ? (
                 <button
                     onClick={(e) => {

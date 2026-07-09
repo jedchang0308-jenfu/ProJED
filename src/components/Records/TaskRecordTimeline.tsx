@@ -66,7 +66,6 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
     },
     [detailNotes, query]
   );
-  const snippetCount = knowledgeRecords.reduce((total, item) => total + item.snippets.length, 0);
   const hasResults = knowledgeRecords.length > 0 || noteMatches.length > 0;
   const handleNewRecord = (type: 'meeting' | 'work_log') => {
     void guardRecordDraft(() => openNewRecord(type, nodeId), {
@@ -87,9 +86,6 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
         <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-700">
           <BookOpenText size={16} className="text-blue-500" />
           <span>任務知識</span>
-          <span className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-            {relatedRecords.length} 紀錄 / {snippetCount} 片段
-          </span>
         </div>
         <div className="flex items-center gap-2">
           <button

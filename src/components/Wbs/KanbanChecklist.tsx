@@ -1,7 +1,7 @@
 /**
  * KanbanChecklist — 遞迴渲染 WBS Level 3+ 子節點為下層任務
  * 設計意圖：在 KanbanCard 內部呈現深層子節點，保留 WBS 階層關係。
- * 每一層透過 depth 增加縮排，左側拖曳把手負責排序，標題編輯集中在任務詳情頁。
+ * 每一層透過 depth 增加縮排，整個任務列 root surface 負責排序，標題編輯集中在任務詳情頁。
  * 
  * 【拖曳功能】每個任務現在是可拖曳元素，支援跨卡片及升級至列表等操作。
  */
@@ -17,7 +17,6 @@ import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskAct
 import dayjs from 'dayjs';
 import { useLongPress } from '../../hooks/useLongPress';
 import type { TaskStatus, TaskNode } from '../../types';
-import { TaskDragHandle } from './TaskDragHandle';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
@@ -45,9 +44,6 @@ const statusTextMap: Record<TaskStatus, string> = {
   unsure: 'text-purple-600',
   onhold: 'text-slate-400 line-through',
 };
-
-const isFromTaskDragHandle = (target: EventTarget | null) =>
-  target instanceof Element && Boolean(target.closest('[data-task-drag-handle="true"]'));
 
 // =====================================================
 // ChecklistItem — 單一可拖曳任務（抽出為獨立元件，
@@ -118,7 +114,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     isDragging,
   } = useSortable({
     id: childId,
-    disabled: !canMoveTask,
+    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || mobileActionMode,
     data: {
       type: 'wbs-checklist',
       nodeId: childId,
@@ -130,6 +126,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
+    ? {}
+    : { ...attributes, ...listeners };
 
   // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
   const longPressHandlers = useLongPress(
@@ -151,14 +151,13 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         title: child.title || '未命名任務',
       });
     },
-    { delay: 500, tolerance: 8, ignoreTaskDragHandle: !mobileActionMode }
+    { delay: 500, tolerance: 8 }
   );
 
   const checklistLongPressHandlers = {
     ...longPressHandlers,
     onTouchStart: (e: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchStart(e);
-      if (isFromTaskDragHandle(e.target) && !mobileActionMode) return;
       longPressHandlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
@@ -200,8 +199,9 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 
   return (
     <div ref={setNodeRef} style={style}>
-      {/* 單一待辦項目列 — 拖曳只由左側把手啟動，避免影響手機捲動 */}
+      {/* 單一待辦項目列 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
       <div
+        {...dragSurfaceBindings}
         {...checklistLongPressHandlers}
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
           isDragging
@@ -246,19 +246,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         }}
         data-task-id={child.id}
         data-mobile-drop-target={child.id}
+        data-task-drag-surface="true"
+        data-task-drag-surface-kind="checklist-row"
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
       >
-
-        {/* 拖曳把手 */}
-        <TaskDragHandle
-          attributes={attributes}
-          listeners={listeners}
-          disabled={!canMoveTask || isSelectingMode || isRecordCaptureMode}
-          dragDisabled={mobileActionMode}
-          size="xs"
-        />
-
         {isRecordCaptureMode ? (
           <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
             isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'

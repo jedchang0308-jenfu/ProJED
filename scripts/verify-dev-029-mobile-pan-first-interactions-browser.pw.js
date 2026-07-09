@@ -94,15 +94,74 @@ async (page) => {
 
   const card = () => page.locator('.kanban-task-card[data-touch-tap-guard="true"][data-task-id]').first();
   const cardTitle = () => card().locator('.task-title-text').first();
-  const cardDragHandle = () => card().locator('[data-task-drag-handle="true"]').first();
   const childRow = () => page.locator('.kanban-checklist-item[data-touch-tap-guard="true"][data-task-id]').first();
-  const childDragHandle = () => childRow().locator('[data-task-drag-handle="true"]').first();
   const columnSurface = () => page.locator('[data-mobile-pan-surface="kanban-column"]').first();
   const boardSurface = () => page.locator('[data-mobile-pan-surface="board"]').first();
   const columnRail = () => page.locator('[data-mobile-pan-rail="kanban-column"]').first();
   const mobileActionRail = () => page.locator('[data-mobile-task-action-rail="true"]').first();
   const mobileDragPreview = () => page.locator('[data-mobile-drag-preview="true"]').first();
   const mobileAction = (action) => page.locator(`[data-mobile-task-action="${action}"]`).first();
+
+  const assertCompactMobileActionRail = async (label, taskLocator) => {
+    const taskBox = taskLocator ? await taskLocator.boundingBox() : null;
+    const layout = await page.evaluate(() => {
+      const rail = document.querySelector('[data-mobile-task-action-rail="true"]');
+      const actions = Array.from(document.querySelectorAll('[data-mobile-task-action]'));
+      const railRect = rail?.getBoundingClientRect();
+      const rects = actions.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+          text: item.textContent?.trim() || '',
+          svgCount: item.querySelectorAll('svg').length,
+          scrollWidth: item.scrollWidth,
+          clientWidth: item.clientWidth,
+        };
+      });
+      const top = rects[0]?.top ?? 0;
+      const bottom = rects[0]?.bottom ?? 0;
+      const gaps = rects.slice(1).map((rect, index) => rect.left - rects[index].right);
+      return {
+        viewportWidth: window.innerWidth,
+        rail: railRect ? {
+          left: railRect.left,
+          right: railRect.right,
+          top: railRect.top,
+          bottom: railRect.bottom,
+          width: railRect.width,
+          height: railRect.height,
+        } : null,
+        railScrollWidth: rail?.scrollWidth ?? 0,
+        railClientWidth: rail?.clientWidth ?? 0,
+        actionCount: actions.length,
+        svgCount: actions.reduce((total, item) => total + item.querySelectorAll('svg').length, 0),
+        rects,
+        gaps,
+        maxTopDelta: rects.reduce((max, rect) => Math.max(max, Math.abs(rect.top - top)), 0),
+        maxBottomDelta: rects.reduce((max, rect) => Math.max(max, Math.abs(rect.bottom - bottom)), 0),
+        maxAdjacentGap: gaps.length ? Math.max(...gaps) : 0,
+        minAdjacentGap: gaps.length ? Math.min(...gaps) : 0,
+      };
+    });
+    assert(Boolean(layout.rail), `${label} should render the mobile action rail`, layout);
+    assert(layout.actionCount === 4, `${label} should render exactly four action buttons`, layout);
+    assert(layout.svgCount === 0, `${label} should not render icons inside action buttons`, layout);
+    assert(layout.rail.height <= 48, `${label} should keep rail height compact`, layout);
+    assert(layout.maxTopDelta <= 1.5 && layout.maxBottomDelta <= 1.5, `${label} action buttons should stay on one row`, layout);
+    assert(layout.maxAdjacentGap <= 1.5 && layout.minAdjacentGap >= -1.5, `${label} action buttons should be adjacent without gaps`, layout);
+    assert(layout.rail.left >= -1 && layout.rail.right <= layout.viewportWidth + 1, `${label} rail should not horizontally overflow`, layout);
+    assert(layout.railScrollWidth <= layout.railClientWidth + 1, `${label} rail content should not horizontally scroll`, layout);
+    if (taskBox) {
+      const overlapPx = Math.max(0, layout.rail.bottom - taskBox.y);
+      assert(overlapPx <= 1, `${label} rail should not cover the task surface`, { layout, taskBox, overlapPx });
+    }
+    return layout;
+  };
 
   const uiState = async () => {
     const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
@@ -155,42 +214,42 @@ async (page) => {
     };
   };
 
-  const dispatchDomTouch = async (locator, { dx = 0, dy = 0, holdMs = 0, compatibilityClick = false } = {}) => {
-    await locator.evaluate((element) => {
+  const dispatchDomTouch = async (locator, { dx = 0, dy = 0, holdMs = 0, compatibilityClick = false, ratioX = 0.45, ratioY = 0.5 } = {}) => {
+    await locator.evaluate((element, ratios) => {
       const rect = element.getBoundingClientRect();
-      const point = { clientX: rect.left + Math.max(8, rect.width * 0.45), clientY: rect.top + Math.max(8, rect.height * 0.5) };
+      const point = { clientX: rect.left + Math.max(8, rect.width * ratios.ratioX), clientY: rect.top + Math.max(8, rect.height * ratios.ratioY) };
       const event = new Event('touchstart', { bubbles: true, cancelable: true });
       Object.defineProperty(event, 'touches', { value: [point] });
       Object.defineProperty(event, 'targetTouches', { value: [point] });
       Object.defineProperty(event, 'changedTouches', { value: [point] });
       element.dispatchEvent(event);
-    });
+    }, { ratioX, ratioY });
 
     if (dx || dy) {
       await locator.evaluate((element, movement) => {
         const rect = element.getBoundingClientRect();
-        const start = { clientX: rect.left + Math.max(8, rect.width * 0.45), clientY: rect.top + Math.max(8, rect.height * 0.5) };
+        const start = { clientX: rect.left + Math.max(8, rect.width * movement.ratioX), clientY: rect.top + Math.max(8, rect.height * movement.ratioY) };
         const point = { clientX: start.clientX + movement.dx, clientY: start.clientY + movement.dy };
         const event = new Event('touchmove', { bubbles: true, cancelable: true });
         Object.defineProperty(event, 'touches', { value: [point] });
         Object.defineProperty(event, 'targetTouches', { value: [point] });
         Object.defineProperty(event, 'changedTouches', { value: [point] });
         element.dispatchEvent(event);
-      }, { dx, dy });
+      }, { dx, dy, ratioX, ratioY });
     }
 
     if (holdMs > 0) await page.waitForTimeout(holdMs);
 
     await locator.evaluate((element, movement) => {
       const rect = element.getBoundingClientRect();
-      const start = { clientX: rect.left + Math.max(8, rect.width * 0.45), clientY: rect.top + Math.max(8, rect.height * 0.5) };
+      const start = { clientX: rect.left + Math.max(8, rect.width * movement.ratioX), clientY: rect.top + Math.max(8, rect.height * movement.ratioY) };
       const point = { clientX: start.clientX + movement.dx, clientY: start.clientY + movement.dy };
       const event = new Event('touchend', { bubbles: true, cancelable: true });
       Object.defineProperty(event, 'touches', { value: [] });
       Object.defineProperty(event, 'targetTouches', { value: [] });
       Object.defineProperty(event, 'changedTouches', { value: [point] });
       element.dispatchEvent(event);
-    }, { dx, dy });
+    }, { dx, dy, ratioX, ratioY });
 
     if (compatibilityClick) {
       await locator.click({ timeout: 3000 }).catch((error) => {
@@ -199,8 +258,8 @@ async (page) => {
     }
   };
 
-  const dispatchTouchGesture = async (locator, { dx = 0, dy = 0, holdMs = 0, compatibilityClick = false } = {}) => {
-    const point = await pointFor(locator);
+  const dispatchTouchGesture = async (locator, { dx = 0, dy = 0, holdMs = 0, compatibilityClick = false, ratioX = 0.45, ratioY = 0.5 } = {}) => {
+    const point = await pointFor(locator, ratioX, ratioY);
     try {
       const cdp = await page.context().newCDPSession(page);
       await cdp.send('Input.dispatchTouchEvent', {
@@ -231,7 +290,7 @@ async (page) => {
         await locator.click({ position: { x: point.localX, y: point.localY }, timeout: 3000 });
       }
     } catch (error) {
-      await dispatchDomTouch(locator, { dx, dy, holdMs, compatibilityClick });
+      await dispatchDomTouch(locator, { dx, dy, holdMs, compatibilityClick, ratioX, ratioY });
     }
     await page.waitForTimeout(160);
   };
@@ -441,16 +500,16 @@ async (page) => {
       return { before, after };
     });
 
-    await runCase('QA-029-B09', 'mobile drag handle short pan scrolls the board', async () => {
-      await cardDragHandle().waitFor({ state: 'visible', timeout: 5000 });
+    await runCase('QA-029-B09', 'former handle zone short pan scrolls the board', async () => {
+      await card().waitFor({ state: 'visible', timeout: 5000 });
       await boardSurface().evaluate((element) => { element.scrollLeft = 0; });
       const before = await getScrollState(boardSurface());
-      assert(before.scrollWidth > before.clientWidth + 20, 'board should be horizontally scrollable for drag handle pan scenario', before);
-      await dispatchTouchGesture(cardDragHandle(), { dx: -120, dy: 0 });
+      assert(before.scrollWidth > before.clientWidth + 20, 'board should be horizontally scrollable for former-handle-zone pan scenario', before);
+      await dispatchTouchGesture(card(), { dx: -120, dy: 0, ratioX: 0.12, ratioY: 0.28 });
       const after = await getScrollState(boardSurface());
       const mobilePanDebug = await page.evaluate(() => window.__projedMobilePanDebug || []);
-      assert(after.scrollLeft > before.scrollLeft + 4, 'drag handle short pan should move board scrollLeft on mobile', { before, after, mobilePanDebug });
-      await assertNoTaskAction('drag handle horizontal scroll');
+      assert(after.scrollLeft > before.scrollLeft + 4, 'former handle zone short pan should move board scrollLeft on mobile', { before, after, mobilePanDebug });
+      await assertNoTaskAction('former handle zone horizontal scroll');
       return { before, after, mobilePanDebug };
     });
 
@@ -479,14 +538,15 @@ async (page) => {
         'mobile action rail should expose only compact allowed actions',
         { actionKeys, actionLabels },
       );
-      ['標示完成', '新增同階', '新增下層', '刪除任務'].forEach((label) => {
+      ['標示完成', '新增同階任務', '新增下階任務', '刪除任務'].forEach((label) => {
         assert(actionLabels.includes(label), 'mobile action rail should expose readable text labels', { label, actionLabels });
       });
+      const compactLayout = await assertCompactMobileActionRail('card long press compact rail', card());
       assert(await page.getByText('重新命名任務').count() === 0, 'mobile long press should not open full desktop menu');
       const screenshotPath = `${screenshotBase}-C01-mobile-action-rail-card.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       await heldTouch.end();
-      return { screenshotPath, actionKeys };
+      return { screenshotPath, actionKeys, compactLayout };
     });
 
     await runCase('QA-029-C02', 'checklist row long press enters mobile drag-action mode', async () => {
@@ -494,34 +554,35 @@ async (page) => {
       const heldTouch = await startHeldTouch(childRow());
       await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
+      const compactLayout = await assertCompactMobileActionRail('checklist row compact rail', childRow());
       assert(await page.getByText('重新命名任務').count() === 0, 'mobile child long press should not open full desktop menu');
       const screenshotPath = `${screenshotBase}-C02-mobile-action-rail-child.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       await heldTouch.end();
-      return { screenshotPath };
+      return { screenshotPath, compactLayout };
     });
 
-    await runCase('QA-029-C09', 'card drag handle long press uses mobile action mode', async () => {
-      await cardDragHandle().waitFor({ state: 'visible', timeout: 5000 });
-      const heldTouch = await startHeldTouch(cardDragHandle());
+    await runCase('QA-029-C09', 'card former handle zone long press uses mobile action mode', async () => {
+      await card().waitFor({ state: 'visible', timeout: 5000 });
+      const heldTouch = await startHeldTouch(card(), { ratioX: 0.12, ratioY: 0.28 });
       await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
-      const passThrough = await cardDragHandle().getAttribute('data-mobile-pan-pass-through');
-      assert(passThrough === 'true', 'mobile drag handle should pass through pan and avoid dnd-kit touch drag', { passThrough });
-      assert(await page.getByText('重新命名任務').count() === 0, 'mobile drag handle long press should not open full desktop menu');
+      const handleCount = await page.locator('[data-task-drag-handle="true"]').count();
+      assert(handleCount === 0, 'retired drag handle should not exist on mobile card surfaces', { handleCount });
+      assert(await page.getByText('重新命名任務').count() === 0, 'card former handle zone long press should not open full desktop menu');
       await heldTouch.end();
-      return { passThrough };
+      return { handleCount };
     });
 
-    await runCase('QA-029-C10', 'checklist drag handle long press uses mobile action mode', async () => {
-      await childDragHandle().waitFor({ state: 'visible', timeout: 5000 });
-      const heldTouch = await startHeldTouch(childDragHandle());
+    await runCase('QA-029-C10', 'checklist former handle zone long press uses mobile action mode', async () => {
+      await childRow().waitFor({ state: 'visible', timeout: 5000 });
+      const heldTouch = await startHeldTouch(childRow(), { ratioX: 0.12, ratioY: 0.5 });
       await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
-      const passThrough = await childDragHandle().getAttribute('data-mobile-pan-pass-through');
-      assert(passThrough === 'true', 'mobile checklist drag handle should pass through pan and avoid dnd-kit touch drag', { passThrough });
+      const handleCount = await page.locator('[data-task-drag-handle="true"]').count();
+      assert(handleCount === 0, 'retired drag handle should not exist on checklist surfaces', { handleCount });
       await heldTouch.end();
-      return { passThrough };
+      return { handleCount };
     });
 
     await runCase('QA-029-C11', 'touchcancel exits mobile drag-action mode without committing', async () => {
@@ -627,12 +688,34 @@ async (page) => {
       const rail = mobileActionRail();
       await rail.waitFor({ state: 'visible', timeout: 5000 });
       const box = await rail.boundingBox();
+      const compactLayout = await assertCompactMobileActionRail('mobile viewport compact rail', card());
       assert(Boolean(box), 'mobile action rail should have bounding box');
       const viewport = page.viewportSize();
       assert(box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height, 'mobile action rail should fit viewport', { box, viewport });
       assert(box.y <= viewport.height * 0.2, 'mobile action rail should be placed at the top of the viewport', { box, viewport });
       await heldTouch.end();
-      return { box, viewport };
+      return { box, viewport, compactLayout };
+    });
+
+    await runCase('QA-029-C14', 'compact mobile action rail fits 320/390/430 without covering tasks', async () => {
+      const layouts = [];
+      for (const viewport of [
+        { width: 320, height: 844 },
+        { width: 390, height: 844 },
+        { width: 430, height: 932 },
+      ]) {
+        await openApp(viewport);
+        const heldTouch = await startHeldTouch(card(), { ratioY: 0.12 });
+        try {
+          await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
+          await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
+          const compactLayout = await assertCompactMobileActionRail(`${viewport.width}px compact rail`, card());
+          layouts.push({ viewport, compactLayout });
+        } finally {
+          await heldTouch.end();
+        }
+      }
+      return { layouts };
     });
 
     await runCase('QA-029-C07', 'drop on add-child action creates a child and opens details', async () => {
@@ -751,23 +834,26 @@ async (page) => {
       return { before, after };
     });
 
-    await runCase('QA-029-F02', 'drag handle remains explicit and main card surface allows pan', async () => {
+    await runCase('QA-029-F02', 'whole task surfaces replace handles and allow pan', async () => {
       await closeWorkbenchIfOpen();
-      const handle = card().locator('[data-task-drag-handle="true"]').first();
-      await handle.waitFor({ state: 'visible', timeout: 5000 });
       const styles = await page.evaluate(() => {
         const cardElement = document.querySelector('.kanban-task-card[data-touch-tap-guard="true"][data-task-id]');
-        const handleElement = document.querySelector('.kanban-task-card[data-touch-tap-guard="true"][data-task-id] [data-task-drag-handle="true"]');
+        const checklistElement = document.querySelector('.kanban-checklist-item[data-touch-tap-guard="true"][data-task-id]');
         return {
           cardTouchAction: cardElement ? getComputedStyle(cardElement).touchAction : null,
-          handleTouchAction: handleElement ? getComputedStyle(handleElement).touchAction : null,
-          handlePassThrough: handleElement?.getAttribute('data-mobile-pan-pass-through') ?? null,
-          handleDragDisabled: handleElement?.getAttribute('data-mobile-drag-disabled') ?? null,
+          checklistTouchAction: checklistElement ? getComputedStyle(checklistElement).touchAction : null,
+          cardDragSurface: cardElement?.getAttribute('data-task-drag-surface') ?? null,
+          checklistDragSurface: checklistElement?.getAttribute('data-task-drag-surface') ?? null,
+          cardDropTarget: cardElement?.getAttribute('data-mobile-drop-target') ?? null,
+          checklistDropTarget: checklistElement?.getAttribute('data-mobile-drop-target') ?? null,
+          handleCount: document.querySelectorAll('[data-task-drag-handle="true"]').length,
         };
       });
       assert(styles.cardTouchAction?.includes('pan'), 'card main surface should allow pan touch-action', styles);
-      assert(styles.handleTouchAction?.includes('pan'), 'mobile drag handle should allow pan touch-action', styles);
-      assert(styles.handlePassThrough === 'true' && styles.handleDragDisabled === 'true', 'mobile drag handle should disable dnd-kit drag and pass through pan', styles);
+      assert(styles.checklistTouchAction?.includes('pan'), 'checklist surface should allow pan touch-action', styles);
+      assert(styles.cardDragSurface === 'true' && styles.checklistDragSurface === 'true', 'task surfaces should replace explicit drag handles', styles);
+      assert(Boolean(styles.cardDropTarget) && Boolean(styles.checklistDropTarget), 'task surfaces should remain mobile drop targets', styles);
+      assert(styles.handleCount === 0, 'retired drag handles should not render in mobile board task surfaces', styles);
       return styles;
     });
 
