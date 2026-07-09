@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronLeft,
   Filter,
+  Plus,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -34,7 +35,7 @@ import {
   readTaskWorkbenchUnplacedTasks,
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
 } from '../features/taskWorkbench/placement';
-import { isTaskWorkbenchSortableTask, listWorkbenchTasks, mergeUnplacedTasks } from '../features/taskWorkbench/source';
+import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
 import type { InboxItem, TaskNode, TaskStatus } from '../types';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { useTouchTapGuard } from '../hooks/useTouchTapGuard';
@@ -238,41 +239,45 @@ const WorkbenchUnclassifiedSection: React.FC<{
   return (
     <section
       ref={setNodeRef}
-      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-slate-200 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/5 ring-2 ring-inset ring-primary/20' : 'bg-white'}`}
+      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-sky-100 px-3 pb-3 transition-colors ${isOver ? 'bg-sky-100/60 ring-2 ring-inset ring-primary/20' : 'bg-sky-50/60'}`}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
     >
-      <div
-        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur"
-        data-task-workbench-section-header="unplaced"
-      >
-        <div className="min-w-0 truncate text-[13px] font-black leading-5 text-slate-900">未歸位</div>
-        <span className="shrink-0 text-[11px] font-bold leading-5 text-slate-500" data-task-workbench-unclassified-count="true">
-          {tasks.length}
-        </span>
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex gap-1.5">
+      <form onSubmit={handleSubmit} className="mb-2 mt-2 flex gap-1.5">
         <input
           value={draft}
           onChange={event => setDraft(event.target.value)}
           className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
-          placeholder="新增未歸位任務"
+          placeholder="新增任務"
           data-task-workbench-unclassified-input="true"
         />
         <button
           type="submit"
           disabled={!canAdd}
-          className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-500 transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          title="新增未歸位任務"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          title="新增任務"
+          aria-label="新增任務"
           data-task-workbench-unclassified-add="true"
         >
-          新增
+          <Plus size={14} />
         </button>
       </form>
 
-      <div className="mt-2 space-y-0.5" data-task-workbench-unclassified-list="true">
+      <div
+        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50/95 px-3 py-1.5 backdrop-blur"
+        data-task-workbench-section-header="unplaced"
+      >
+        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-slate-900">
+          <span className="h-3 w-1 shrink-0 rounded-full bg-sky-400" aria-hidden="true" data-task-workbench-header-accent="unplaced" />
+          <span className="min-w-0 truncate">未歸位</span>
+        </div>
+        <span className="sr-only" data-task-workbench-unclassified-count="true">
+          {tasks.length}
+        </span>
+      </div>
+
+      <div className="space-y-0.5" data-task-workbench-unclassified-list="true">
         {tasks.map(task => (
           <WorkbenchDragCard
             key={task.id}
@@ -435,6 +440,30 @@ const WorkbenchDragCard: React.FC<{
       {children}
     </div>
   );
+  const renderWorkbenchTaskContent = ({
+    titleClassName,
+  }: {
+    titleClassName: string;
+  }) => (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div
+        className={titleClassName}
+        title={task.title || '未命名任務'}
+      >
+        {task.title || '未命名任務'}
+      </div>
+      <TaskDateBadge
+        startDate={task.startDate}
+        endDate={task.endDate}
+        status={task.status}
+        showStartDate={false}
+        startLocked={lockStatus.startLocked}
+        endLocked={lockStatus.endLocked}
+        durationLocked={Boolean(task.isDurationLocked)}
+        surface="workbench"
+      />
+    </div>
+  );
 
   if (isUnplacedLaneRow) {
     return renderWorkbenchTaskRow({
@@ -442,14 +471,9 @@ const WorkbenchDragCard: React.FC<{
       className: `kanban-checklist-item group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-0.5 transition-colors ${
           isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-slate-50'
         }`,
-      children: (
-        <span
-          className="task-title-text min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-slate-700"
-          title={task.title || '未命名任務'}
-        >
-          {task.title || '未命名任務'}
-        </span>
-      ),
+      children: renderWorkbenchTaskContent({
+        titleClassName: 'task-title-text min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-slate-700',
+      }),
     });
   }
 
@@ -457,23 +481,11 @@ const WorkbenchDragCard: React.FC<{
     unplacedLane: false,
     className: `group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-1 transition-colors ${
         isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white/80'
-      }`,
+    }`,
     style: { paddingLeft: `${0.375 + depth * 0.75}rem` },
-    children: (
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <div className={`min-w-0 flex-1 truncate text-sm leading-6 ${hierarchyTextClass}`}>{task.title || '未命名任務'}</div>
-        <TaskDateBadge
-          startDate={task.startDate}
-          endDate={task.endDate}
-          status={task.status}
-          showStartDate={false}
-          startLocked={lockStatus.startLocked}
-          endLocked={lockStatus.endLocked}
-          durationLocked={Boolean(task.isDurationLocked)}
-          surface="workbench"
-        />
-      </div>
-    ),
+    children: renderWorkbenchTaskContent({
+      titleClassName: `min-w-0 flex-1 truncate text-sm leading-6 ${hierarchyTextClass}`,
+    }),
   });
 };
 
@@ -891,9 +903,9 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
       (panelPrefs.showContainersInAllTasks || isTaskWorkbenchSortableTask(task))
     ))), [nodes, panelPrefs.showContainersInAllTasks]);
 
-  const allSortedTasks = React.useMemo(
-    () => sortTasksByDueDate(mergeUnplacedTasks(visiblePlacedTasks, unplacedTasks)),
-    [unplacedTasks, visiblePlacedTasks],
+  const sortedPlacedTasks = React.useMemo(
+    () => sortTasksByDueDate(visiblePlacedTasks),
+    [visiblePlacedTasks],
   );
 
   const nextUnplacedOrder = React.useCallback(() => (
@@ -1058,34 +1070,35 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
         <div
           ref={setPlacedBoardLaneRef}
-          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/20' : 'bg-sky-50/70'}`}
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-sky-100 ring-2 ring-inset ring-primary/20' : 'bg-sky-100/70'}`}
           data-task-workbench-placed-board-lane="true"
           data-task-workbench-lane-drop-target="placed-board"
         >
           <div
-            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50/95 px-3 py-2 backdrop-blur"
+            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-sky-200 bg-sky-100/95 px-3 py-2 backdrop-blur"
             data-task-workbench-section-header="all-tasks"
           >
-            <div className="min-w-0 truncate text-[13px] font-black leading-5 text-slate-900">
-              所有任務排序
+            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-sky-950">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500 shadow-[0_0_0_3px_rgba(14,165,233,0.15)]" aria-hidden="true" data-task-workbench-header-accent="placed" />
+              <span className="min-w-0 truncate">已歸位</span>
             </div>
-            <span className="shrink-0 text-[11px] font-bold leading-5 text-slate-500" data-task-workbench-all-tasks-count="true">
-              {allSortedTasks.length}
+            <span className="sr-only" data-task-workbench-all-tasks-count="true">
+              {sortedPlacedTasks.length}
             </span>
           </div>
 
           <div className="space-y-0.5" data-task-workbench-all-tasks-list="true">
-            {allSortedTasks.map(task => (
+            {sortedPlacedTasks.map(task => (
               <WorkbenchDragCard
                 key={`all-${task.id}`}
                 task={task}
                 canMoveTask={canMoveTask}
-                placement={isTaskWorkbenchUnplacedTask(task) ? 'unplaced' : 'placed'}
+                placement="placed"
                 surface="all-tasks"
                 hierarchyDepth={getTaskHierarchyDepth(task, nodes)}
               />
             ))}
-            {allSortedTasks.length === 0 ? (
+            {sortedPlacedTasks.length === 0 ? (
               <div className="px-1 py-1 text-sm font-semibold text-slate-500">
                 目前沒有可排序的任務。
               </div>

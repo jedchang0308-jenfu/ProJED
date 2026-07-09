@@ -8,6 +8,29 @@ async (page) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
 
+  const toLocalDateInput = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const addDays = (days) => {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + days);
+    return toLocalDateInput(date);
+  };
+  const formatWorkbenchDateText = (value) => {
+    const [year, month, day] = value.split('-');
+    return Number(year) === new Date().getFullYear() ? `${month}/${day}` : `${year.slice(-2)}/${month}/${day}`;
+  };
+  const unplacedDueDate = addDays(3);
+  const placedStartDate = addDays(6);
+  const placedDueDate = addDays(10);
+  const unplacedDueLabel = formatWorkbenchDateText(unplacedDueDate);
+  const placedStartLabel = formatWorkbenchDateText(placedStartDate);
+  const placedDueLabel = formatWorkbenchDateText(placedDueDate);
+
   const account = {
     id: 'local-test-user',
     uid: 'local-test-user',
@@ -39,7 +62,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'group',
       order: 0,
-      endDate: '2026-07-07',
+      endDate: addDays(9),
       tagIds: ['dev039-placement-tag-focus'],
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
@@ -53,8 +76,8 @@ async (page) => {
       status: 'in_progress',
       nodeType: 'task',
       order: 0,
-      startDate: '2026-06-30',
-      endDate: '2026-07-08',
+      startDate: placedStartDate,
+      endDate: placedDueDate,
       assigneeId: account.id,
       tagIds: ['dev039-placement-tag-focus'],
       createdAt: 1704067200000,
@@ -80,7 +103,7 @@ async (page) => {
   };
 
   const seed = async () => {
-    await page.evaluate(({ account, workspace, nodes }) => {
+    await page.evaluate(({ account, workspace, nodes, unplacedDueDate }) => {
       localStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify(account));
@@ -103,7 +126,7 @@ async (page) => {
           updatedAt: 1704067200000,
           completedAt: null,
           archivedAt: null,
-          suggestedDueDate: '2026-07-01',
+          suggestedDueDate: unplacedDueDate,
           confirmedDueDate: null,
           promotedTaskNodeId: null,
         },
@@ -114,7 +137,7 @@ async (page) => {
       localStorage.setItem('projed-last-ws', workspace.id);
       localStorage.setItem('projed-last-board', 'dev039-placement-board-a');
       localStorage.setItem('projed-last-view', 'board');
-    }, { account, workspace, nodes });
+    }, { account, workspace, nodes, unplacedDueDate });
   };
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
@@ -188,50 +211,83 @@ async (page) => {
       { collapseToggleIconClass },
     );
     assert(await unplacedLane.getByText('未歸位').count() >= 1, 'unplaced lane should be clearly labelled');
-    assert(await placedLane.getByText('所有任務排序').count() >= 1, 'all-task sorted lane should be clearly labelled without the removed cross-board summary text');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').getAttribute('placeholder') === '新增任務', 'unplaced lane add input should use the simplified new-task placeholder');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-add="true"] svg.lucide-plus').count() === 1, 'unplaced lane add action should use a compact plus icon');
+    assert(await placedLane.getByText('已歸位').count() >= 1, 'placed lane should use the simplified placed-task section title');
+    assert(await placedLane.getByText('所有任務排序').count() === 0, 'placed lane should not render the old all-task sorted section title');
     assert(await placedLane.getByText('全部看板').count() === 0, 'placed lane should not render the removed all-boards summary text');
+    const placementTone = await page.evaluate(() => {
+      const readBg = (selector) => {
+        const element = document.querySelector(selector);
+        return element ? getComputedStyle(element).backgroundColor : null;
+      };
+      return {
+        unplacedLane: readBg('[data-task-workbench-unclassified-section="true"]'),
+        placedLane: readBg('[data-task-workbench-placed-board-lane="true"]'),
+        unplacedHeader: readBg('[data-task-workbench-section-header="unplaced"]'),
+        placedHeader: readBg('[data-task-workbench-section-header="all-tasks"]'),
+        unplacedAccent: readBg('[data-task-workbench-header-accent="unplaced"]'),
+        placedAccent: readBg('[data-task-workbench-header-accent="placed"]'),
+      };
+    });
+    assert(
+      placementTone.unplacedLane !== 'rgb(255, 255, 255)' &&
+        placementTone.placedLane !== 'rgb(255, 255, 255)' &&
+        placementTone.unplacedLane !== placementTone.placedLane,
+      'unplaced and placed task lanes should both use light blue backgrounds with different intensity',
+      placementTone,
+    );
+    assert(
+      placementTone.unplacedHeader !== placementTone.placedHeader &&
+        placementTone.unplacedAccent !== placementTone.placedAccent,
+      'unplaced and placed section headers should keep distinct blue header treatments',
+      placementTone,
+    );
     assert(await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').count() === 1, 'legacy inbox item should be migrated into one unplaced task card');
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 1, 'placed board lane should show existing board task');
     assert(
-      await placedLane.locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="unplaced"]').filter({ hasText: '尚未歸位的採購提醒' }).count() === 1,
-      'all-task sorted lane should include unplaced tasks',
+      await placedLane.locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="unplaced"]').filter({ hasText: '尚未歸位的採購提醒' }).count() === 0,
+      'unplaced tasks should not be repeated in the placed lane',
     );
-    const sortedTexts = await placedLane.locator('[data-task-workbench-all-task-card="true"]').evaluateAll(cards =>
+    const placedLaneTexts = await placedLane.locator('[data-task-workbench-all-task-card="true"]').evaluateAll(cards =>
       cards.map(card => card.textContent || '')
     );
-    const unplacedIndex = sortedTexts.findIndex(text => text.includes('尚未歸位的採購提醒'));
-    const placedIndex = sortedTexts.findIndex(text => text.includes('已歸位任務 - 國泰發現'));
     assert(
-      unplacedIndex >= 0 && placedIndex >= 0 && unplacedIndex < placedIndex,
-      'all-task sorted lane should sort by due date ascending with the earlier unplaced task above later placed tasks',
-      { sortedTexts, unplacedIndex, placedIndex },
+      placedLaneTexts.some(text => text.includes('已歸位任務 - 國泰發現')) &&
+        placedLaneTexts.every(text => !text.includes('尚未歸位的採購提醒')),
+      'placed lane should contain placed tasks only',
+      { placedLaneTexts },
     );
-    const sortedUnplacedCard = placedLane
-      .locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="unplaced"]')
-      .filter({ hasText: '尚未歸位的採購提醒' })
-      .first();
     const sortedPlacedCard = placedLane
       .locator('[data-task-workbench-all-task-card="true"][data-task-workbench-task-placement="placed"]')
       .filter({ hasText: '已歸位任務 - 國泰發現' })
       .first();
-    const unplacedDateText = await sortedUnplacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null);
     const placedDateText = await sortedPlacedCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null);
     assert(
-      await sortedUnplacedCard.locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-01"]').count() === 1 &&
-        await sortedPlacedCard.locator('[data-task-date-surface="workbench"][data-task-due-date="2026-07-08"]').count() === 1,
-      'all-task sorted lane should render due date badges from the shared task date module',
-      {
-        unplacedDateText,
-        placedDateText,
-      },
+      await sortedPlacedCard.locator(`[data-task-date-surface="workbench"][data-task-due-date="${placedDueDate}"]`).count() === 1,
+      'placed lane should render due date badges from the shared task date module',
+      { placedDateText },
     );
     assert(
-      unplacedDateText && !unplacedDateText.includes('→') && !unplacedDateText.includes('...') && unplacedDateText.includes('07/01') &&
-        placedDateText && !placedDateText.includes('→') && !placedDateText.includes('06/30') && placedDateText.includes('07/08'),
-      'workbench due date badges should hide start dates even when global start-date display is enabled',
-      { unplacedDateText, placedDateText },
+      placedDateText && !placedDateText.includes('→') && !placedDateText.includes(placedStartLabel) && placedDateText.includes(placedDueLabel),
+      'placed lane workbench due date badge should hide start dates even when global start-date display is enabled',
+      { placedDateText },
     );
-    const seededUnplacedCompactCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').first();
+    const seededUnplacedCompactCard = workbenchPanel
+      .locator('[data-task-workbench-unplaced-task-card="true"]')
+      .filter({ hasText: '尚未歸位的採購提醒' })
+      .first();
+    const unplacedLaneDateText = await seededUnplacedCompactCard.locator('[data-task-date-surface="workbench"]').textContent().catch(() => null);
+    assert(
+      await seededUnplacedCompactCard.locator(`[data-task-date-surface="workbench"][data-task-due-date="${unplacedDueDate}"]`).count() === 1,
+      'unplaced lane should render the same workbench due date badge module',
+      { unplacedLaneDateText },
+    );
+    assert(
+      unplacedLaneDateText && !unplacedLaneDateText.includes('→') && !unplacedLaneDateText.includes('...') && unplacedLaneDateText.includes(unplacedDueLabel),
+      'unplaced lane workbench due date badge should show due date only',
+      { unplacedLaneDateText },
+    );
     const seededUnplacedBox = await seededUnplacedCompactCard.boundingBox();
     assert(
       seededUnplacedBox && seededUnplacedBox.height <= 40,
@@ -280,7 +336,7 @@ async (page) => {
     await unplacedLane.locator('[data-task-workbench-unclassified-add="true"]').click();
     const newUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).first();
     await newUnplacedCard.waitFor({ state: 'visible', timeout: 10000 });
-    assert(await newUnplacedCard.locator('[data-task-drag-handle="true"]').count() === 0, 'dense text rows should not render a separate drag handle');
+    assert(await newUnplacedCard.locator('[data-task-drag-handle="true"]').count() === 0, 'dense task rows should not render a separate drag handle');
     const newUnplacedBox = await newUnplacedCard.boundingBox();
     assert(
       newUnplacedBox && newUnplacedBox.height <= 40,
@@ -332,18 +388,59 @@ async (page) => {
     step = 'filter-only-affects-placed-lane';
     const filterToggle = workbenchPanel.locator('[data-task-workbench-filter-toggle="true"]').first();
     await filterToggle.scrollIntoViewIfNeeded();
-    if ((await filterToggle.getAttribute('aria-expanded')) !== 'true') {
-      await filterToggle.click({ force: true });
+    let filterPanelOpened = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if ((await filterToggle.getAttribute('aria-expanded')) !== 'true') {
+        await filterToggle.click({ force: true });
+      }
+      try {
+        await page.waitForFunction(() => {
+          const popover = document.querySelector('[data-task-workbench-filter-popover="true"]');
+          const panel = popover?.querySelector('[data-task-workbench-filter-panel="true"]');
+          const rect = panel?.getBoundingClientRect();
+          return Boolean(rect && rect.width > 0 && rect.height > 0);
+        }, null, { timeout: 4000 });
+        filterPanelOpened = true;
+        break;
+      } catch {
+        if ((await filterToggle.getAttribute('aria-expanded')) === 'true') {
+          await filterToggle.click({ force: true }).catch(() => {});
+        }
+      }
     }
-    await page.waitForFunction(() => {
-      const popover = document.querySelector('[data-task-workbench-filter-popover="true"]');
-      const panel = popover?.querySelector('[data-task-workbench-filter-panel="true"]');
-      const rect = panel?.getBoundingClientRect();
-      return Boolean(rect && rect.width > 0 && rect.height > 0);
-    }, null, { timeout: 10000 });
+    assert(filterPanelOpened, 'task workbench filter panel should open before applying filters', {
+      ariaExpanded: await filterToggle.getAttribute('aria-expanded'),
+    });
     const filterPanel = page.locator('[data-task-workbench-filter-popover="true"] [data-task-workbench-filter-panel="true"]').first();
     await filterPanel.waitFor({ state: 'visible', timeout: 10000 });
     await filterPanel.getByRole('button', { name: /進行中/ }).click({ force: true });
+    await page.waitForFunction(() => (
+      document.querySelectorAll('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').length === 0
+    ), null, { timeout: 10000 }).catch(async (error) => {
+      const filterDiagnostics = await page.evaluate(() => {
+        const panel = document.querySelector('[data-task-workbench-filter-panel="true"]');
+        return {
+          selectedBoardId: panel?.querySelector('select')?.value || null,
+          prefs: localStorage.getItem('projed-task-workbench-filters:v1'),
+          statusButtons: Array.from(panel?.querySelectorAll('button') || []).map(button => ({
+            text: (button.textContent || '').trim(),
+            pressed: button.getAttribute('aria-pressed'),
+          })),
+          storedNode: (() => {
+            try {
+              return JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev039-placement-card-a'] || null;
+            } catch {
+              return null;
+            }
+          })(),
+          visiblePlacedCards: Array.from(document.querySelectorAll('[data-task-workbench-placed-task-card="true"]')).map(card => ({
+            id: card.getAttribute('data-task-id'),
+            text: (card.textContent || '').trim(),
+          })),
+        };
+      });
+      throw new Error(`placed board filter did not hide in-progress task: ${error.message}: ${JSON.stringify(filterDiagnostics)}`);
+    });
     assert(
       await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 0,
       'placed board lane should respond to board filters',

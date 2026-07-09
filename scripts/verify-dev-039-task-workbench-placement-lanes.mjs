@@ -77,7 +77,8 @@ assert(
     source.taskWorkbench.includes('data-task-workbench-placed-task-card') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
     source.taskWorkbench.includes('data-task-workbench-all-task-card') &&
-    source.taskWorkbench.includes('所有任務排序') &&
+    source.taskWorkbench.includes('已歸位') &&
+    !source.taskWorkbench.includes('所有任務排序') &&
     source.taskWorkbench.includes('sortTasksByDueDate') &&
     source.taskWorkbench.includes("data-task-workbench-unplaced-compact-row={unplacedLane ? 'true' : undefined}") &&
     source.taskWorkbench.includes('kanban-checklist-item') &&
@@ -86,17 +87,17 @@ assert(
 );
 
 assert(
-  'Task Workbench task lists use dense text-only rows without separate drag-handle chrome',
+  'Task Workbench task lists use dense shared rows without separate drag-handle chrome',
   !source.taskWorkbench.includes('TaskDragHandle') &&
     !source.taskWorkbench.includes('data-task-drag-handle') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
     source.taskWorkbench.includes('className="space-y-0.5" data-task-workbench-all-tasks-list="true"') &&
-    source.taskWorkbench.includes('className="mt-2 space-y-0.5" data-task-workbench-unclassified-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-0.5" data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes('getTaskHierarchyDepth') &&
     source.taskWorkbench.includes('hierarchyDepth={getTaskHierarchyDepth(task, nodes)}') &&
     source.taskWorkbench.includes('data-task-workbench-hierarchy-depth') &&
     source.taskWorkbench.includes('style: { paddingLeft:') &&
-    source.browserVerifier.includes('dense text rows should not render a separate drag handle'),
+    source.browserVerifier.includes('dense task rows should not render a separate drag handle'),
 );
 
 assert(
@@ -139,7 +140,7 @@ assert(
 );
 
 assert(
-  'Task Workbench all-task ordering reuses the board task date badge module',
+  'Task Workbench task rows reuse the board task date badge module',
   source.taskDateBadge.includes('export const TaskDateBadge') &&
     source.taskDateBadge.includes("surface === 'kanban-card'") &&
     source.taskDateBadge.includes("surface === 'checklist'") &&
@@ -147,17 +148,33 @@ assert(
     source.kanbanCard.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
     source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
     source.taskWorkbench.includes("import { TaskDateBadge } from './Wbs/TaskDateBadge'") &&
+    source.taskWorkbench.includes('const renderWorkbenchTaskContent = ({') &&
+    source.taskWorkbench.includes('renderWorkbenchTaskContent({') &&
     source.taskWorkbench.includes('surface="workbench"') &&
     source.taskWorkbench.includes('showStartDate={false}') &&
-    source.browserVerifier.includes('all-task sorted lane should render due date badges from the shared task date module'),
+    source.browserVerifier.includes('unplaced lane should render the same workbench due date badge module') &&
+    source.browserVerifier.includes('placed lane should render due date badges from the shared task date module'),
 );
 
 assert(
   'Task Workbench lane titles render as sticky section headers above scrollable task rows',
   source.taskWorkbench.includes('max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain') &&
+    source.taskWorkbench.includes("isOver ? 'bg-sky-100/60 ring-2 ring-inset ring-primary/20' : 'bg-sky-50/60'") &&
+    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-sky-100 ring-2 ring-inset ring-primary/20' : 'bg-sky-100/70'") &&
+    !source.taskWorkbench.includes("'bg-sky-50/70'") &&
+    source.taskWorkbench.includes('bg-sky-50/95') &&
+    source.taskWorkbench.includes('bg-sky-100/95') &&
+    source.taskWorkbench.includes('data-task-workbench-header-accent="unplaced"') &&
+    source.taskWorkbench.includes('data-task-workbench-header-accent="placed"') &&
+    source.taskWorkbench.includes('placeholder="新增任務"') &&
+    source.taskWorkbench.includes('aria-label="新增任務"') &&
+    source.taskWorkbench.includes('<Plus size={14} />') &&
+    !source.taskWorkbench.includes('新增未歸位任務') &&
     source.taskWorkbench.includes('data-task-workbench-section-header="unplaced"') &&
     source.taskWorkbench.includes('data-task-workbench-section-header="all-tasks"') &&
     source.taskWorkbench.includes('sticky top-0 z-20') &&
+    source.taskWorkbench.includes('className="sr-only" data-task-workbench-all-tasks-count="true"') &&
+    source.taskWorkbench.includes('className="sr-only" data-task-workbench-unclassified-count="true"') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-count="true"') &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-count="true"'),
 );
