@@ -196,12 +196,14 @@ assert(
 );
 
 assert(
-  'Manual click QC readiness gate is registered and cannot be mistaken for manual pass',
-  manualClickReadiness.includes('manual_qc_completed: false') &&
+  'Manual click QC gate is registered with user-reported pass and production boundary',
+  manualClickReadiness.includes("evidence_source: 'user_report'") &&
+    manualClickReadiness.includes('formal_manual_evidence_attached: false') &&
     manualClickReadiness.includes('自動化 Playwright browser smoke 只能作為輔助證據，不能取代人工點擊') &&
     manualClickReadiness.includes('MAN-028-001') &&
     manualClickReadiness.includes('MAN-028-028') &&
-    manualClickReadiness.includes('Manual Click QC Pending') &&
+    manualClickReadiness.includes('User-Reported Manual Click QC Passed') &&
+    manualClickReadiness.includes('production release 需另行授權') &&
     manualClickReadiness.includes('verify:dev-028-manual-click-qc-readiness'),
 );
 

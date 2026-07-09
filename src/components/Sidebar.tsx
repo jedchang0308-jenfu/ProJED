@@ -1,10 +1,11 @@
 // @ts-nocheck
 import React from 'react';
-import { BookOpenText, LogOut, Settings, X } from 'lucide-react';
+import { BookOpenText, ChevronLeft, LogOut, Settings, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { toast } from '../store/useToastStore';
+import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
@@ -83,15 +84,13 @@ const Sidebar = () => {
   }, []);
 
   React.useEffect(() => {
-    if (!isSidebarOpen) return;
-    const handleKeyDown = (event) => {
-      if (event.key !== 'Escape' || event.isComposing) return;
-      event.preventDefault();
-      setSidebarOpen(false);
-    };
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [isSidebarOpen, setSidebarOpen]);
+    if (!isSidebarOpen) {
+      markLeftPanelClosed('workspace-sidebar');
+      return undefined;
+    }
+    markLeftPanelOpened('workspace-sidebar');
+    return () => markLeftPanelClosed('workspace-sidebar');
+  }, [isSidebarOpen]);
 
   const startWorkspaceTitleEdit = React.useCallback((workspace) => {
     setEditingBoard(null);
@@ -266,25 +265,52 @@ const Sidebar = () => {
       />
     ) : null}
     <aside
-      className={`flex-shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out ${
+      className={`flex-shrink-0 overflow-hidden border-r border-slate-300/80 bg-slate-50 transition-all duration-300 ease-in-out ${
         isNarrowViewport
           ? 'fixed bottom-0 left-0 top-10 z-50 shadow-2xl'
-          : 'relative z-10 h-full shadow-none'
+          : 'relative z-10 h-full shadow-[1px_0_0_rgba(15,23,42,0.03)]'
       }`}
       style={{ width: sidebarWidth }}
       data-sidebar-panel="expanded"
+      data-layout-region="workspace-sidebar"
       data-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
       data-sidebar-inline={!isNarrowViewport ? 'true' : undefined}
       data-mobile-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
     >
       <div className="flex h-full w-full flex-col">
         <div
-          className="flex-1 space-y-4 overflow-y-auto p-2"
+          className="relative border-b border-slate-200/90 bg-white/90 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.06)]"
+          data-sidebar-control-area="true"
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="min-w-0 shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 shadow-sm"
+              data-sidebar-title="true"
+            >
+              <div className="whitespace-nowrap text-sm font-black text-slate-700">
+                工作區與看板
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              title="收合工作區與看板側欄"
+              aria-label="收合工作區與看板側欄"
+              data-sidebar-collapse-toggle="true"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div
+          className="flex-1 space-y-4 overflow-y-auto bg-slate-50/90 p-2"
           onContextMenu={handleSidebarContextMenu}
           data-sidebar-workspace-list="true"
         >
           {workspaces.map((ws) => (
-            <div key={ws.id} className="space-y-1" data-sidebar-workspace-group="true">
+            <div key={ws.id} className="space-y-1 rounded-lg" data-sidebar-workspace-group="true">
               <div
                 className="group flex items-center justify-between gap-2 px-3 py-1.5"
                 onContextMenu={(event) => handleWorkspaceContextMenu(event, ws)}
@@ -322,7 +348,7 @@ const Sidebar = () => {
                 )}
               </div>
 
-              <div className="relative ml-3 space-y-1 border-l border-slate-200 pl-3" data-sidebar-board-tree="true">
+              <div className="relative ml-3 space-y-1 border-l border-slate-300/80 pl-3" data-sidebar-board-tree="true">
                 {ws.boards.map((board) => {
                   const isCurrentBoard = activeBoardId === board.id;
                   const isMainBoardActive = isCurrentBoard && (BOARD_WORKSPACE_VIEWS.includes(currentView) || isSettingsScopeView);
@@ -361,8 +387,8 @@ const Sidebar = () => {
                       }}
                       className={`group/item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                         isMainBoardActive
-                          ? 'cursor-pointer bg-primary text-white shadow-md'
-                          : 'cursor-pointer text-slate-600 hover:bg-slate-100'
+                          ? 'cursor-pointer bg-primary text-white shadow-md ring-1 ring-primary/20'
+                          : 'cursor-pointer text-slate-600 hover:bg-white hover:shadow-sm'
                       }`}
                     >
                       {isEditingBoard ? (
@@ -403,7 +429,7 @@ const Sidebar = () => {
           ))}
         </div>
 
-        <div className="border-t border-slate-100 bg-slate-50/50 p-2">
+        <div className="border-t border-slate-200/80 bg-white/80 p-2">
           <button
             onClick={handleOpenRecords}
             className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
@@ -432,7 +458,7 @@ const Sidebar = () => {
           </button>
         </div>
 
-        <div className="border-t border-slate-100 bg-slate-50/50 p-4">
+        <div className="border-t border-slate-200/80 bg-white/80 p-4">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shadow-sm">
               {(useAuthStore.getState().user?.displayName || 'U')[0].toUpperCase()}

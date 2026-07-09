@@ -81,18 +81,21 @@ assert(
 );
 
 assert(
-  'Task Workbench lists filtered placed ids plus unplaced tasks in due-date sorted all task list',
+  'Task Workbench lists filtered placed ids in the due-date sorted placed task list and keeps unplaced separate',
   source.taskWorkbench.includes('projectTaskFilterResults') &&
     source.taskWorkbench.includes('isTaskEffectivelyVisible') &&
-    source.taskWorkbench.includes('mergeUnplacedTasks') &&
     source.taskWorkbench.includes('filterProjectionByBoardId') &&
     source.taskWorkbench.includes('loadedPlacedTasks') &&
     source.taskWorkbench.includes('visiblePlacedTasks') &&
-    source.taskWorkbench.includes('allSortedTasks') &&
-    source.taskWorkbench.includes('sortTasksByDueDate(mergeUnplacedTasks(visiblePlacedTasks, unplacedTasks))') &&
+    source.taskWorkbench.includes('sortedPlacedTasks') &&
+    source.taskWorkbench.includes('sortTasksByDueDate(visiblePlacedTasks)') &&
+    source.taskWorkbench.includes('tasks={unplacedTasks}') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
     source.taskWorkbench.includes('data-task-workbench-all-task-card') &&
+    source.taskWorkbench.includes('placement="placed"') &&
     source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    !source.taskWorkbench.includes('mergeUnplacedTasks') &&
+    !source.taskWorkbench.includes('sortTasksByDueDate(mergeUnplacedTasks') &&
     !source.taskWorkbench.includes('loadedBoardTasks.filter(task => matchesTaskFilters'),
 );
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, ChevronDown, GitBranch, Plus, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
+import { CalendarDays, GitBranch, Plus, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useWbsStore } from '../../store/useWbsStore';
@@ -49,7 +49,7 @@ type StatusFilterBarProps = {
   compactLabel?: boolean;
 };
 
-export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel = false }) => {
+export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState<FilterPanelPosition | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -179,25 +179,19 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({ compactLabel =
         ref={triggerRef}
         id="filter-menu-trigger"
         type="button"
-        aria-label="過濾器"
+        aria-label={hasActiveFilter ? '過濾器已啟用' : '過濾器'}
+        title="過濾器"
         onClick={handleFilterToggle}
-        className={`${compactClassNames.segmentedButtonBase} border ${
+        className={`${compactClassNames.iconButtonBase} border ${
           isOpen
             ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
             : hasActiveFilter
-              ? 'border-amber-200 bg-amber-50 text-amber-700 shadow-sm ring-1 ring-amber-200/70'
-              : 'border-slate-200 bg-white text-slate-600 shadow-sm hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
+              ? 'border-[#a9bbc8] bg-[#e7eef2] text-[#304a5c] shadow-sm ring-1 ring-[#a9bbc8]/50'
+              : 'border-[#c7d1d8] bg-white text-[#536b7b] shadow-sm hover:border-[#a9bbc8] hover:bg-[#edf3f6] hover:text-[#304a5c]'
         }`}
         data-active-task-filter-count={activeFilterCount}
       >
         <SlidersHorizontal size={13} />
-        <span className={compactLabel ? 'hidden sm:inline' : undefined}>過濾器</span>
-        {activeFilterCount > 0 && (
-          <span className="rounded-full bg-amber-400 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
-            {activeFilterCount}
-          </span>
-        )}
-        <ChevronDown size={11} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && panelPosition && createPortal(

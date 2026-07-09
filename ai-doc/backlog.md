@@ -255,7 +255,7 @@ Delivered:
 
 | DEV | 狀態 | 節點類型 | 優先級 | 主題 | 文件 |
 |---|---|---|---|---|---|
-| DEV-024 | Implemented / Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged | 開發點 | P1 AI synthesis guard | 修正 `AI整理` 覆蓋使用者已手寫內容與自訂章節的風險；已新增 deterministic human-draft merge guard，承接 DEV-011 / DEV-012 / DEV-020，並維持 DEV-021 / DEV-022 回歸。 | `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md`, `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md`, `ai-doc/qc/QC-DEV-024-ai-synthesis-preserve-human-draft.md` |
+| DEV-024 | Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed | 開發點 | P1 AI synthesis guard | 修正 `AI整理` 覆蓋使用者已手寫內容與自訂章節的風險；已新增 deterministic human-draft merge guard，承接 DEV-011 / DEV-012 / DEV-020，並維持 DEV-021 / DEV-022 回歸；2026-07-09 production fixture smoke passed。 | `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md`, `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md`, `ai-doc/qc/QC-DEV-024-ai-synthesis-preserve-human-draft.md` |
 
 AI synthesis guard 註記：
 - `AI整理` 必須整理、補強與統整手寫草稿，不得直接覆蓋 preserved draft。
@@ -346,7 +346,7 @@ DEV-020 狀態風險：
 |---|---|---|---|---|---|
 | DEV-019 | Done | DEV-002 / DEV-005 / DEV-018 | P1 | 紀錄類型與會議流程層級重整 | `ai-doc/specs/SPEC-019-record-type-and-meeting-workflow-layering.md` |
 | DEV-023 | Ready | DEV-020 | P1 UX refinement | 專案變化匯入整併為紀錄流程第一步 | `ai-doc/specs/SPEC-023-record-project-change-import-workflow-step.md` |
-| DEV-024 | Implemented / Static + Deterministic QC Passed / Browser ROT Not Executed / DB unchanged | DEV-011 / DEV-012 / DEV-020 | P1 AI synthesis guard | AI整理保留手寫內容與章節結構 | `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md` |
+| DEV-024 | Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed | DEV-011 / DEV-012 / DEV-020 | P1 AI synthesis guard | AI整理保留手寫內容與章節結構 | `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md` |
 
 ## DEV-002 範圍摘要
 

@@ -48,13 +48,3 @@ export const listWorkbenchTasks = async (
     failedBoardIds: results.filter(result => !result.ok).map(result => result.source.boardId),
   };
 };
-
-export const mergeUnplacedTasks = (
-  placedTasks: TaskNode[],
-  unplacedTasks: TaskNode[],
-) => {
-  const mergedById = new Map<string, TaskNode>();
-  placedTasks.forEach(task => mergedById.set(task.id, task));
-  unplacedTasks.forEach(task => mergedById.set(task.id, task));
-  return Array.from(mergedById.values());
-};

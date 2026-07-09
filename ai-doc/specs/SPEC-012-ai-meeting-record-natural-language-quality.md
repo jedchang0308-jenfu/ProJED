@@ -1,6 +1,6 @@
 # SPEC-012 AI 會議紀錄自然語言品質提升
 
-狀態：In Verification / Production UI Smoke Pending
+狀態：Done / Production Release Deployed / Production UI Smoke Passed
 關聯 DEV：DEV-012  
 建立日期：2026-06-07  
 承接：DEV-011 / DEV-008

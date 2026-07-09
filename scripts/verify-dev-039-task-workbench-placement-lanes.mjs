@@ -101,25 +101,27 @@ assert(
 );
 
 assert(
-  'Task Workbench unplaced and all-task rows share the same root drag surface contract',
+  'Task Workbench keeps unplaced rows draggable while placed rows are read-only list entries',
   source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
-    source.taskWorkbench.includes('ref={setNodeRef}') &&
-    source.taskWorkbench.includes('{...draggableBindings}') &&
+    source.taskWorkbench.includes("const canDragTaskFromWorkbench = placement === 'unplaced' && canMoveTask") &&
+    source.taskWorkbench.includes('const canUseWorkbenchDragSurface = canDragTaskFromWorkbench && !mobileActionMode') &&
+    source.taskWorkbench.includes('disabled: !canDragTaskFromWorkbench || mobileActionMode') &&
+    source.taskWorkbench.includes('const draggableBindings = canUseWorkbenchDragSurface ? { ...attributes, ...listeners } : {};') &&
+    source.taskWorkbench.includes('ref={canUseWorkbenchDragSurface ? setNodeRef : undefined}') &&
+    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}") &&
     source.taskWorkbench.includes('{...workbenchTouchHandlers}') &&
     source.taskWorkbench.includes('onClick={(event) => {') &&
     source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
-    source.taskWorkbench.includes('data-task-workbench-drag-surface="task-row-root"') &&
     source.taskWorkbench.includes("data-task-workbench-unplaced-task-card={unplacedLane ? 'true' : undefined}") &&
     source.taskWorkbench.includes("data-task-workbench-all-task-card={isAllTasksCard ? 'true' : undefined}") &&
+    source.taskWorkbench.includes("data-task-workbench-readonly-task-card={placement === 'placed' ? 'true' : undefined}") &&
     (source.taskWorkbench.match(/renderWorkbenchTaskRow\(\{/g) || []).length >= 2 &&
     !source.taskWorkbench.includes('data-task-drag-handle') &&
     source.dragSensors.includes('distance: 8') &&
     source.dragSensors.includes('delay: 250') &&
     source.dragSensors.includes('tolerance: 8') &&
-    source.spec.includes('Phase 2A RD Contract - Workbench Drag Trigger Surface Parity') &&
-    source.qa.includes('Phase 2A Drag Trigger Surface Parity Verification') &&
-    source.devTask.includes('DEV-039 Phase 2A Addendum') &&
-    source.browserVerifier.includes('assertWorkbenchRowDragSurfaceParity'),
+    source.browserVerifier.includes('assertUnplacedWorkbenchRowDragSurface') &&
+    source.browserVerifier.includes('assertPlacedWorkbenchRowReadOnly'),
 );
 
 assert(
@@ -131,8 +133,7 @@ assert(
     source.taskWorkbench.includes('nodeId: task.id') &&
     source.taskWorkbench.includes("title: task.title || '未命名任務'") &&
     source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
-    source.taskWorkbench.includes('data-task-workbench-drag-surface="task-row-root"') &&
-    source.taskWorkbench.includes('useBoardStore.getState().contextMenuState?.isOpen') &&
+    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}") &&
     !source.taskWorkbench.includes('TaskWorkbenchContextMenu') &&
     !source.taskWorkbench.includes('data-task-workbench-context-menu') &&
     source.browserVerifier.includes('unplaced workbench task should open the shared task context menu') &&
@@ -159,11 +160,12 @@ assert(
 assert(
   'Task Workbench lane titles render as sticky section headers above scrollable task rows',
   source.taskWorkbench.includes('max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain') &&
-    source.taskWorkbench.includes("isOver ? 'bg-sky-100/60 ring-2 ring-inset ring-primary/20' : 'bg-sky-50/60'") &&
-    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-sky-100 ring-2 ring-inset ring-primary/20' : 'bg-sky-100/70'") &&
+    source.taskWorkbench.includes("isOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'") &&
+    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'") &&
     !source.taskWorkbench.includes("'bg-sky-50/70'") &&
-    source.taskWorkbench.includes('bg-sky-50/95') &&
-    source.taskWorkbench.includes('bg-sky-100/95') &&
+    source.taskWorkbench.includes('bg-[#e1e9ee]/95') &&
+    !source.taskWorkbench.includes('bg-[#fbfcfc]/85') &&
+    !source.taskWorkbench.includes('bg-[#e8eef2]/95') &&
     source.taskWorkbench.includes('data-task-workbench-header-accent="unplaced"') &&
     source.taskWorkbench.includes('data-task-workbench-header-accent="placed"') &&
     source.taskWorkbench.includes('placeholder="新增任務"') &&

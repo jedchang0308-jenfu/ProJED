@@ -1549,6 +1549,20 @@ const syncRecordRagDocument = async (
     .insert(chunks);
   assertNoError(insertChunksError);
 
+  if (record.source_document_id !== savedDocumentId || !record.rag_enabled) {
+    // Browser clients must establish the record -> document back-reference before RLS allows job enqueue.
+    const { error: updateRecordMirrorError } = await supabase
+      .from('knowledge_records')
+      .update({
+        source_document_id: savedDocumentId,
+        rag_enabled: true,
+      })
+      .eq('tenant_id', tenantId)
+      .eq('project_id', projectId)
+      .eq('id', record.id);
+    assertNoError(updateRecordMirrorError);
+  }
+
   const { error: insertSyncJobError } = await supabase
     .from('rag_sync_jobs')
     .insert({

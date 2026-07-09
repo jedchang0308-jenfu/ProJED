@@ -4,7 +4,7 @@
 父交付點: DEV-011 / DEV-012 / DEV-020  
 關聯回歸: DEV-021 / DEV-022  
 節點類型: 開發點  
-狀態: Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Not Executed
+狀態: Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed
 優先級: P1  
 是否計入產品交付完成: 否
 
@@ -160,6 +160,12 @@ Browser ROT evidence:
 - ROT-002 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-002.png`
 - ROT-003/004 screenshot: `output/playwright/dev-024-ai-synthesis-1783346377975-ROT-003-004.png`
 
-Not executed:
+Production UI Smoke Evidence - 2026-07-09:
 
-- Production deploy / production UI smoke 未執行；local browser ROT 使用 test mode deterministic synthesis，不等同正式模型輸出或已登入 production UI smoke。
+- 使用者已授權 production fixture path，執行 `DEV024_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-024-production-ui-smoke -- --run-production-fixture` 通過。
+- 正式站：`https://projed-cc78d.web.app/`；本輪未重新部署，因目前 production artifact 已含 DEV-024 human-draft merge guard。
+- UI evidence：正式前端完成專案變化匯入、手寫純文字、自訂章節、task mention、手寫補充、連續兩次 `AI整理`、校稿發布流程；第二次 `AI整理` 後 `humanSupplementCount=1`。
+- DB evidence：`published_record_found=true`、`rag_enabled=true`、`source_document_present=true`、手寫任務 `record_task_links` 保留，匯入任務以 published content evidence 查證保留。
+- Cleanup evidence：`tenantDeleted=true`、`userDeleted=true`。
+- Residue audit：production Supabase 只讀查詢確認 DEV-024 fixture `tenants`、`profiles`、`knowledge_records` 與 Auth user 均無殘留。
+- Residual observation：第二次正式 AI 輸出可見少量章節 label 文字殘留，屬模型輸出自然度/格式 polish，不阻擋 DEV-024 preserve/idempotent smoke；Playwright network log 有一次非阻斷 `net::ERR_ABORTED` Edge request，但 UI、發布與 DB proof 均通過。

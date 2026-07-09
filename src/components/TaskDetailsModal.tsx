@@ -1,12 +1,12 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CircleDot, Lock, MessageSquareText, Plus, Send, Unlock, UserRound, X } from 'lucide-react';
+import { CircleDot, Lock, MessageSquareText, Plus, Send, Trash2, Unlock, UserRound, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
 import { TagPicker } from './Tags/TagPicker';
 import TaskRecordTimeline from './Records/TaskRecordTimeline';
-import type { TaskDetailNote, TaskStatus } from '../types';
+import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useBoardStore from '../store/useBoardStore';
 
@@ -58,9 +58,36 @@ const readSavedSize = () => {
   }
 };
 
+const buildAncestorPath = (
+  node: TaskNode | undefined,
+  nodes: Record<string, TaskNode>
+): TaskNode[] => {
+  if (!node?.parentId) return [];
+
+  const ancestors: TaskNode[] = [];
+  const seenAncestorIds = new Set<string>();
+  let currentParentId: string | null = node.parentId;
+
+  while (currentParentId) {
+    if (seenAncestorIds.has(currentParentId)) break;
+    seenAncestorIds.add(currentParentId);
+
+    const parent: TaskNode | undefined = nodes[currentParentId];
+    if (!parent || parent.isArchived) break;
+
+    ancestors.unshift(parent);
+    currentParentId = parent.parentId;
+  }
+
+  return ancestors;
+};
+
 export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
+  const nodes = useWbsStore((state) => state.nodes);
   const updateNode = useWbsStore((state) => state.updateNode);
+  const dependencies = useWbsStore((state) => state.dependencies);
+  const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
@@ -88,6 +115,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     [boardMembers]
   );
   const hasCurrentAssignee = !node?.assigneeId || assigneeOptions.some(option => option.id === node.assigneeId);
+  const currentNodeId = node?.id;
+  const currentNodeTitle = node?.title || '';
+  const currentNodeStartDate = node?.startDate || '';
+  const currentNodeEndDate = node?.endDate || '';
+  const currentNodeDetailNotes = node?.detailNotes;
+  const currentNodeDescription = node?.description || '';
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -106,18 +139,25 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, [onClose]);
 
   React.useEffect(() => {
-    if (!node) return;
+    if (!currentNodeId) return;
 
-    setTitleValue(node.title || '');
-    setStartDate(node.startDate || '');
-    setEndDate(node.endDate || '');
+    setTitleValue(currentNodeTitle);
+    setStartDate(currentNodeStartDate);
+    setEndDate(currentNodeEndDate);
     setNotes(
-      node.detailNotes?.length
-        ? node.detailNotes
-        : [{ id: 'note_default', title: '備註', content: node.description || '' }]
+      currentNodeDetailNotes?.length
+        ? currentNodeDetailNotes
+        : [{ id: 'note_default', title: '備註', content: currentNodeDescription }]
     );
     skipNextNotesSave.current = true;
-  }, [node?.id, node?.title]);
+  }, [
+    currentNodeDescription,
+    currentNodeDetailNotes,
+    currentNodeEndDate,
+    currentNodeId,
+    currentNodeStartDate,
+    currentNodeTitle,
+  ]);
 
   React.useEffect(() => {
     if (!node || !canEditTask) return;
@@ -182,6 +222,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
     return () => window.clearTimeout(timer);
   }, [canEditTask, notes, node, updateNode]);
+
+  const ancestorPath = buildAncestorPath(node, nodes);
 
   if (!node) return null;
 
@@ -313,14 +355,30 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     setNotes((current) => [...current, createNote(current.length + 1)]);
   };
 
+  const deleteNote = (noteId: string) => {
+    if (!canEditTask) return;
+    const note = notes.find((item) => item.id === noteId);
+    const noteLabel = note?.title?.trim() || '此備註欄';
+    const isLastNote = notes.length <= 1;
+    const confirmed = window.confirm(
+      isLastNote
+        ? `刪除「${noteLabel}」後會保留一個空白備註欄。確定刪除內容？`
+        : `確定刪除「${noteLabel}」？`
+    );
+    if (!confirmed) return;
+
+    setNotes((current) => {
+      const nextNotes = current.filter((item) => item.id !== noteId);
+      return nextNotes.length > 0 ? nextNotes : [createNote(1)];
+    });
+  };
+
   const handleAppendMeetingDiscussion = () => {
     if (!canEditTask) return;
     const didAppend = appendTaskDiscussionToMeetingDraft(node.id, node.title || node.id, meetingDiscussion);
     if (didAppend) setMeetingDiscussion('');
   };
 
-  const dependencies = useWbsStore((state) => state.dependencies);
-  const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
   const currentStatus = node.status || 'todo';
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
@@ -344,9 +402,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         }}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
           <div className="min-w-0 flex-1 pr-3">
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-col gap-1.5">
               {canEditTask ? (
                 <input
                   ref={titleInputRef}
@@ -364,6 +422,31 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                 <p className="truncate text-sm font-semibold text-slate-900" title={node.title}>
                   {node.title}
                 </p>
+              )}
+              {ancestorPath.length > 0 && (
+                <nav
+                  aria-label="任務完整位置"
+                  data-task-details-parent-path="true"
+                  className="flex min-w-0 items-center gap-1 overflow-hidden text-[11px] font-medium leading-4 text-slate-500"
+                >
+                  <span className="shrink-0 text-slate-400">位置</span>
+                  {ancestorPath.map((ancestor, index) => (
+                    <React.Fragment key={ancestor.id}>
+                      <span
+                        data-task-details-parent-name="true"
+                        className="min-w-0 max-w-[13rem] truncate rounded bg-slate-100 px-1.5 py-0.5 text-slate-600"
+                        title={ancestor.title || '未命名任務'}
+                      >
+                        {ancestor.title || '未命名任務'}
+                      </span>
+                      {index < ancestorPath.length - 1 && (
+                        <span className="shrink-0 text-slate-300" aria-hidden="true">
+                          /
+                        </span>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </nav>
               )}
             </div>
           </div>
@@ -589,21 +672,40 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
             <div className="grid gap-3">
               {notes.map((note) => (
-                <div key={note.id} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-                  <input
-                    type="text"
-                    value={note.title}
-                    onChange={(event) => updateNote(note.id, { title: event.target.value })}
-                    disabled={!canEditTask}
-                    className="mb-2 h-8 w-full rounded-md border border-transparent bg-white px-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    placeholder="備註標題"
-                  />
+                <div
+                  key={note.id}
+                  className="rounded-lg border border-slate-200 bg-slate-50/70 p-3"
+                  data-task-detail-note-card="true"
+                >
+                  <div className="mb-2 flex min-w-0 items-center gap-2">
+                    <input
+                      type="text"
+                      value={note.title}
+                      onChange={(event) => updateNote(note.id, { title: event.target.value })}
+                      disabled={!canEditTask}
+                      className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-white px-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                      placeholder="備註標題"
+                      data-task-detail-note-title-input="true"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => deleteNote(note.id)}
+                      disabled={!canEditTask}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      title="刪除此備註欄"
+                      aria-label={`刪除備註欄：${note.title || '未命名備註'}`}
+                      data-task-detail-note-delete="true"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                   <textarea
                     value={note.content}
                     onChange={(event) => updateNote(note.id, { content: event.target.value })}
                     disabled={!canEditTask}
                     className="min-h-[120px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                     placeholder="輸入備註內容"
+                    data-task-detail-note-content-input="true"
                   />
                 </div>
               ))}

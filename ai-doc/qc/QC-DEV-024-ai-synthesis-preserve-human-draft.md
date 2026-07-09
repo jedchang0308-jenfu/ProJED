@@ -3,8 +3,8 @@
 對應 DEV: DEV-024
 對應 SPEC: `ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md`
 對應 QA: `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md`
-狀態: Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Not Executed
-日期: 2026-07-06
+狀態: Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed
+日期: 2026-07-09
 
 ## QC Scope
 
@@ -24,7 +24,7 @@
 
 不包含：
 
-- Production deploy / production UI smoke。
+- Production deploy；本輪只補跑目前正式 artifact 上的 production UI smoke。
 - DB schema / migration / RLS / RPC。
 - 模型風格調參或人工校稿品質簽核。
 
@@ -50,6 +50,7 @@ npm.cmd run verify:dev-011-ai-meeting-synthesis
 npm.cmd run verify:dev-012-meeting-record-quality
 npm.cmd exec tsc -- --noEmit
 npm.cmd run build
+DEV024_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-024-production-ui-smoke -- --run-production-fixture
 ```
 
 Browser evidence:
@@ -62,25 +63,36 @@ Build note:
 
 - `npm.cmd run build` 通過；Vite 顯示 Browserslist/caniuse-lite 資料偏舊提示，非 DEV-024 失敗。
 
+Production UI smoke evidence - 2026-07-09:
+
+- `verify:dev-024-production-ui-smoke` production fixture mode passed。
+- 正式站：`https://projed-cc78d.web.app/`；本輪未重新部署，因目前 production artifact 已含 DEV-024 human-draft merge guard。
+- UI proof：`handwrittenPlain=true`、`customSectionBody=true`、`taskMentionTitle=true`、`humanSupplement=true`、`projectChangeTask=true`、第二次 `AI整理` 後 `humanSupplementCount=1`。
+- DB proof：`published_record_found=true`、`rag_enabled=true`、`source_document_present=true`、手寫任務 `record_task_links` 保留；專案變化匯入任務以 published content evidence 保留。
+- Cleanup proof：`tenantDeleted=true`、`userDeleted=true`。
+- Residue audit：production Supabase 只讀查詢確認 DEV-024 fixture `tenants=[]`、`profiles=[]`、`knowledge_records=[]`、`auth_users=[]`。
+- Non-critical observation：Playwright network log 有一次 `synthesize_meeting_record` `net::ERR_ABORTED`，但 AI整理、發布與 DB proof 均成功；第二次正式 AI 輸出有少量章節 label 文字殘留，列為模型格式 polish 觀察，不阻擋 DEV-024 preserve/idempotent gate。
+
 ## QC Result
 
-Pass for local static / deterministic / browser ROT scope.
+Pass for local static / deterministic / browser ROT scope and production UI smoke scope.
 
 DEV-024 可宣稱：
 
 - `AI整理` 回寫路徑已有 deterministic human-draft merge guard。
 - 手寫純文字、自訂章節、task mention 與 project change evidence 在 verifier 覆蓋下可保留。
 - ROT-001 至 ROT-004 已在 local-test browser composer 通過，含截圖與存草稿後內容驗證。
+- 已使用 production fixture 補跑正式前端與模型路徑；`published_record_found=true` 且 cleanup `tenantDeleted=true`、`userDeleted=true`。
 - DEV-021 / DEV-022 / DEV-011 / DEV-012 回歸未退化。
 - DB unchanged。
 
 DEV-024 不可宣稱：
 
-- 真實 AI 模型輸出在 production UI 已驗證。
-- production deploy 已完成。
+- 本輪有重新 production deploy 或新 release；本輪是補跑既有正式 artifact 的 production UI smoke。
+- 模型文風與章節 label polish 已最終簽核。
 
 ## Residual Risk
 
 - Fingerprint 是 deterministic 文字規則，仍無法判斷所有語意等價；若 AI 改寫成完全不同措辭，fallback 可能保守補回原段落。
-- Local browser ROT 使用 test mode deterministic synthesis，因此仍需後續以已登入 production UI smoke 驗證正式前端與模型路徑。
 - 本輪不處理模型品質風格、摘要自然語氣或人工校稿標準。
+- 正式模型第二次整理有少量章節 label 殘留，可另開 polish follow-up；不影響保留手寫內容、任務 evidence 與 idempotent smoke 判定。

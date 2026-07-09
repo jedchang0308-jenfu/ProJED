@@ -3,9 +3,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 
 const PRODUCTION_URL = 'https://projed-cc78d.web.app/';
-const ALLOW_ENV = 'DEV011012_ALLOW_PRODUCTION_FIXTURE';
+const ALLOW_ENV = 'DEV024_ALLOW_PRODUCTION_FIXTURE';
 const RUN_FLAG = '--run-production-fixture';
-const SELF_CHECK_FLAG = '--self-check';
 
 const parseEnvFile = (file) => {
   const env = {};
@@ -208,93 +207,84 @@ const parsePlaywrightJson = (stdout, stderr = '') => {
   }
 };
 
+const includesAll = (source, tokens) => tokens.every(token => source.includes(token));
+
 const assertOk = (label, result) => {
   if (result.error) throw new Error(`${label}: ${result.error.message}`);
   return result.data;
 };
 
+const countOccurrences = (text, needle) => {
+  if (!needle) return 0;
+  return text.split(needle).length - 1;
+};
+
 const runSelfCheck = () => {
-  const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
-  const scriptSource = readFileSync('scripts/verify-dev-011-012-production-ui-smoke.mjs', 'utf8');
-  const readinessSource = readFileSync('scripts/verify-dev-011-012-production-ui-smoke-readiness.mjs', 'utf8');
-  const qa011 = readFileSync('ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md', 'utf8');
-  const qa012 = readFileSync('ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md', 'utf8');
-  const qc = readFileSync('ai-doc/qc/QC-DEV-011-012-production-ai-smoke.md', 'utf8');
+  const packageJson = readFileSync('package.json', 'utf8');
+  const source = readFileSync('scripts/verify-dev-024-production-ui-smoke.mjs', 'utf8');
+  const spec = readFileSync('ai-doc/specs/SPEC-024-ai-synthesis-preserve-human-draft.md', 'utf8');
+  const qa = readFileSync('ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md', 'utf8');
+  const qc = readFileSync('ai-doc/qc/QC-DEV-024-ai-synthesis-preserve-human-draft.md', 'utf8');
   const devTask = readFileSync('ai-doc/dev_task.md', 'utf8');
   const documentationMap = readFileSync('ai-doc/documentation_map.md', 'utf8');
+
   const checks = [];
-  const add = (name, pass, details = undefined) => checks.push({ name, pass, details });
-  const includesAll = (text, tokens) => tokens.every(token => text.includes(token));
+  const add = (name, pass, details = undefined) => checks.push({ name, pass, ...(details === undefined ? {} : { details }) });
 
   add(
-    'package exposes guarded production UI smoke executor as self-check by default',
-    packageJson.scripts?.['verify:dev-011-012-production-ui-smoke'] ===
-      'node scripts/verify-dev-011-012-production-ui-smoke.mjs',
-    packageJson.scripts?.['verify:dev-011-012-production-ui-smoke'],
+    'package exposes guarded DEV-024 production UI smoke',
+    packageJson.includes('"verify:dev-024-production-ui-smoke": "node scripts/verify-dev-024-production-ui-smoke.mjs"'),
   );
-
   add(
-    'executor requires both explicit flag and env opt-in before production mutation',
-    includesAll(scriptSource, [
-      'DEV011012_ALLOW_PRODUCTION_FIXTURE',
+    'executor requires explicit production fixture opt-in and flag',
+    includesAll(source, [
+      'DEV024_ALLOW_PRODUCTION_FIXTURE',
       '--run-production-fixture',
-      "process.env[ALLOW_ENV] !== '1'",
-      'mutates_database: true',
+      'Refusing production fixture smoke',
+      'admin.auth.admin.createUser',
       'admin.auth.admin.deleteUser',
-      "admin.from('tenants').delete()",
+      ".from('tenants').delete()",
     ]),
   );
-
   add(
-    'executor covers meeting mode, AI整理, publish, record persistence, record links, and task knowledge UI',
-    includesAll(scriptSource, [
-      '[data-record-composer-shell]',
-      '[data-meeting-workflow-step="ai_suggestion"]',
-      '[data-meeting-workflow-step="published"]',
-      'knowledge_records',
+    'executor covers DEV-024 production UI risks and DB proof',
+    includesAll(source, [
+      'project_import',
+      'ai_suggestion',
+      'published',
+      'handwrittenPlain',
+      'customSectionBody',
+      'taskMentionSentence',
+      'humanSupplement',
       'record_task_links',
-      'data-task-details-modal',
-      '任務知識',
+      'published_record_found',
     ]),
   );
-
   add(
-    'readiness gate tracks the guarded executor and deployed production smoke pass',
-    includesAll(readinessSource, [
-      'verify:dev-011-012-production-ui-smoke',
-      'verify-dev-011-012-production-ui-smoke.mjs',
-      'Done / Production Release Deployed / Production UI Smoke Passed',
-      'codex/dev011012-rag-order-hotfix',
-      '7704e2f',
+    'docs record DEV-024 production smoke pass with fixture evidence',
+    [spec, qa, qc, devTask, documentationMap].every(doc => includesAll(doc, [
+      'Production UI Smoke Passed',
+      'verify:dev-024-production-ui-smoke',
+      'DEV024_ALLOW_PRODUCTION_FIXTURE=1',
       'published_record_found=true',
-    ]),
-  );
-
-  add(
-    'QA/QC/dev_task/docs reference the guarded executor with passed production fixture evidence',
-    includesAll(qa011, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', 'published_record_found=true']) &&
-      includesAll(qa012, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', 'published_record_found=true']) &&
-      includesAll(qc, ['verify:dev-011-012-production-ui-smoke', 'Backend Pass / Production Release Deployed / Production UI Smoke Passed', 'DB proof：Pass']) &&
-      includesAll(devTask, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', '7704e2f', 'assets/index-BkwGqGCZ.js']) &&
-      includesAll(documentationMap, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', '7704e2f', 'assets/index-BkwGqGCZ.js']),
+      'tenantDeleted=true',
+      'userDeleted=true',
+    ])),
   );
 
   const failures = checks.filter(check => !check.pass);
-  const payload = {
+  console.log(JSON.stringify({
     ok: failures.length === 0,
     mode: 'self-check',
     mutates_database: false,
     production_fixture_allowed: false,
     run_condition: `${RUN_FLAG} and ${ALLOW_ENV}=1`,
     checks,
-  };
-  console.log(JSON.stringify(payload, null, 2));
+  }, null, 2));
   if (failures.length > 0) process.exit(1);
 };
 
-const shouldRunProductionFixture = process.argv.includes(RUN_FLAG);
-
-if (!shouldRunProductionFixture || process.argv.includes(SELF_CHECK_FLAG)) {
+if (!process.argv.includes(RUN_FLAG)) {
   runSelfCheck();
   process.exit(0);
 }
@@ -316,8 +306,8 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
 const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
 const storageKey = `sb-${projectRef}-auth-token`;
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const email = `dev011012-prod-ui-${suffix}@example.invalid`;
-const password = `Dev011012-${suffix}-Aa1!`;
+const email = `dev024-prod-ui-${suffix}@example.invalid`;
+const password = `Dev024-${suffix}-Aa1!`;
 
 const admin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -337,7 +327,7 @@ try {
       email,
       password,
       email_confirm: true,
-      user_metadata: { name: 'DEV-011/012 Production UI Smoke' },
+      user_metadata: { name: 'DEV-024 Production UI Smoke' },
     }),
   );
   const userId = created.user.id;
@@ -352,7 +342,7 @@ try {
     'profile upsert',
     await userClient
       .from('profiles')
-      .upsert({ id: userId, email, display_name: 'DEV-011/012 Production UI Smoke' })
+      .upsert({ id: userId, email, display_name: 'DEV-024 Production UI Smoke' })
       .select()
       .single(),
   );
@@ -360,7 +350,7 @@ try {
   const tenant = assertOk(
     'create_tenant_with_owner',
     await userClient.rpc('create_tenant_with_owner', {
-      tenant_name: `DEV-011/012 Production UI Smoke ${suffix}`,
+      tenant_name: `DEV-024 Production UI Smoke ${suffix}`,
     }),
   );
   cleanup.tenantId = tenant.id;
@@ -371,8 +361,8 @@ try {
       .from('projects')
       .insert({
         tenant_id: tenant.id,
-        legacy_board_id: `dev011012-prod-board-${suffix}`,
-        name: 'DEV-011/012 正式會議看板',
+        legacy_board_id: `dev024-prod-board-${suffix}`,
+        name: 'DEV-024 正式手寫保留看板',
         sort_order: 1,
       })
       .select()
@@ -386,8 +376,8 @@ try {
       .insert({
         tenant_id: tenant.id,
         project_id: project.id,
-        legacy_node_id: `dev011012-prod-root-${suffix}`,
-        title: 'DEV-011/012 正式煙測清單',
+        legacy_node_id: `dev024-prod-root-${suffix}`,
+        title: 'DEV-024 正式煙測清單',
         status: 'todo',
         item_type: 'group',
         sort_order: 1,
@@ -396,16 +386,16 @@ try {
       .single(),
   );
 
-  const taskA = assertOk(
-    'task A insert',
+  const importTask = assertOk(
+    'import task insert',
     await userClient
       .from('wbs_items')
       .insert({
         tenant_id: tenant.id,
         project_id: project.id,
         parent_id: root.id,
-        legacy_node_id: `dev011012-prod-task-a-${suffix}`,
-        title: 'DEV-011 會議統整煙測任務',
+        legacy_node_id: `dev024-prod-task-import-${suffix}`,
+        title: 'DEV-024 匯入任務正式煙測',
         status: 'in_progress',
         item_type: 'task',
         sort_order: 1,
@@ -414,16 +404,16 @@ try {
       .single(),
   );
 
-  const taskB = assertOk(
-    'task B insert',
+  const humanTask = assertOk(
+    'human task insert',
     await userClient
       .from('wbs_items')
       .insert({
         tenant_id: tenant.id,
         project_id: project.id,
         parent_id: root.id,
-        legacy_node_id: `dev011012-prod-task-b-${suffix}`,
-        title: 'DEV-012 自然語言煙測任務',
+        legacy_node_id: `dev024-prod-task-human-${suffix}`,
+        title: 'DEV-024 手寫保留任務正式煙測',
         status: 'todo',
         item_type: 'task',
         sort_order: 2,
@@ -442,10 +432,10 @@ try {
         actor_id: userId,
         event_type: 'task_status_changed',
         entity_table: 'wbs_items',
-        entity_id: taskA.id,
+        entity_id: importTask.id,
         payload: {
-          taskId: taskA.id,
-          taskTitle: taskA.title,
+          taskId: importTask.id,
+          taskTitle: importTask.title,
           before: { status: 'todo' },
           after: { status: 'in_progress' },
           summary: '待辦 -> 進行中',
@@ -455,20 +445,27 @@ try {
       .single(),
   );
 
-  const uniqueNeedle = `DEV-011-012-PROD-SMOKE-${suffix}`;
+  const uniqueNeedle = `DEV-024-PROD-SMOKE-${suffix}`;
+  const expected = {
+    handwrittenPlain: `客戶要求 6/20 前確認報價風險 ${uniqueNeedle}`,
+    customSectionBody: `本案背景是客戶要先確認量產條件 ${uniqueNeedle}`,
+    taskMentionSentence: `@[${humanTask.title}](task:${humanTask.id}) 需要 Jane 在下週一前補齊風險清單 ${uniqueNeedle}`,
+    humanSupplement: `使用者補充：供應商需要週五前確認交期 ${uniqueNeedle}`,
+  };
   const payload = {
     storageKey,
     session: signIn.session,
     workspaceId: tenant.id,
     boardId: project.legacy_board_id || project.id,
     boardName: project.name,
-    taskA: { id: taskA.id, uiId: taskA.legacy_node_id || taskA.id, title: taskA.title },
-    taskB: { id: taskB.id, uiId: taskB.legacy_node_id || taskB.id, title: taskB.title },
+    importTask: { id: importTask.id, uiId: importTask.legacy_node_id || importTask.id, title: importTask.title },
+    humanTask: { id: humanTask.id, uiId: humanTask.legacy_node_id || humanTask.id, title: humanTask.title },
     uniqueNeedle,
+    expected,
     productionUrl: PRODUCTION_URL,
   };
 
-  sessionName = `prod-dev011012-${suffix}`;
+  sessionName = `prod-dev024-${suffix}`;
   const smokeCodeTemplate = String.raw`
 async (page) => {
   const payload = __PROD_SMOKE_PAYLOAD__;
@@ -481,8 +478,11 @@ async (page) => {
   page.on('requestfailed', req => failed.push({ url: req.url(), failure: req.failure()?.errorText }));
   await page.setViewportSize({ width: 1440, height: 900 });
 
+  const countOccurrences = (text, needle) => needle ? text.split(needle).length - 1 : 0;
+  const getEditor = () => page.locator('aside div[contenteditable="true"]').first();
   const getWorkflowDebug = async () => page.evaluate(() => ({
-    asideText: document.querySelector('aside')?.textContent?.slice(0, 2200) || '',
+    asideText: document.querySelector('aside')?.textContent?.slice(0, 2600) || '',
+    editorText: document.querySelector('aside div[contenteditable="true"]')?.textContent?.slice(0, 2600) || '',
     steps: Array.from(document.querySelectorAll('[data-meeting-workflow-step]')).map(button => ({
       stage: button.getAttribute('data-meeting-workflow-step'),
       state: button.getAttribute('data-meeting-workflow-step-state'),
@@ -500,9 +500,40 @@ async (page) => {
     await page.waitForFunction(
       (selector) => !document.querySelector(selector)?.hasAttribute('disabled'),
       selector,
-      { timeout: 10000 },
+      { timeout: 15000 },
     );
     return page.locator(selector).first();
+  };
+
+  const appendEditorContent = async (content) => {
+    const editor = getEditor();
+    const expectedLine = content.split('\n').map(line => line.trim()).filter(Boolean).at(-1) || content.trim();
+    await editor.waitFor({ state: 'visible', timeout: 10000 });
+    await editor.click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.insertText('\n' + content);
+    try {
+      await page.waitForFunction(
+        (expected) => (document.querySelector('aside div[contenteditable="true"]')?.textContent || '').includes(expected),
+        expectedLine,
+        { timeout: 2500 },
+      );
+    } catch {
+      const currentText = await editor.innerText();
+      await editor.fill(currentText.trimEnd() + '\n' + content);
+      await page.waitForFunction(
+        (expected) => (document.querySelector('aside div[contenteditable="true"]')?.textContent || '').includes(expected),
+        expectedLine,
+        { timeout: 5000 },
+      );
+    }
+  };
+
+  const runAiSynthesis = async () => {
+    const aiStep = await waitStepEnabled('ai_suggestion');
+    await aiStep.click();
+    await page.locator('aside', { hasText: 'AI整理完成，請校稿後發布' }).waitFor({ state: 'visible', timeout: 90000 });
+    return getEditor().innerText();
   };
 
   try {
@@ -524,35 +555,66 @@ async (page) => {
     await page.locator('[data-record-composer-shell]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-record-workflow-kind="meeting"]').waitFor({ state: 'visible', timeout: 15000 });
 
-    stage = 'fill_meeting_draft';
-    const title = 'DEV-011/012 production UI smoke ' + payload.uniqueNeedle;
+    stage = 'fill_initial_draft';
+    const title = 'DEV-024 production UI smoke ' + payload.uniqueNeedle;
     await page.locator('aside label', { hasText: '標題' }).locator('input').first().fill(title);
-    const content = [
-      '這是 DEV-011/012 正式前端 UI smoke。',
-      payload.uniqueNeedle,
-      '@[' + payload.taskA.title + '](task:' + payload.taskA.id + ') 已確認會議統整流程。',
-      '@[' + payload.taskB.title + '](task:' + payload.taskB.id + ') 需要輸出自然語言摘要。',
-      '請保留任務連結、結論、待辦與阻塞資訊。'
-    ].join('\n');
-    const editor = page.locator('aside div[contenteditable="true"]').first();
+    const editor = getEditor();
     await editor.waitFor({ state: 'visible', timeout: 10000 });
-    await editor.fill(content);
-    await page.waitForFunction(
-      (needle) => (document.querySelector('aside div[contenteditable="true"]')?.textContent || '').includes(needle),
-      payload.uniqueNeedle,
-      { timeout: 5000 },
-    );
+    await editor.fill('會前先整理本週專案變更。');
 
-    stage = 'run_ai_synthesis';
-    const aiStep = await waitStepEnabled('ai_suggestion');
-    await aiStep.click();
-    await page.locator('aside', { hasText: 'AI整理完成，請校稿後發布' }).waitFor({ state: 'visible', timeout: 90000 });
-    const aiText = await editor.innerText();
-    if (!aiText.includes('1. 本次會議總結') || !aiText.includes(payload.taskA.title) || !aiText.includes(payload.taskB.title)) {
+    stage = 'project_change_import';
+    await page.locator('[data-meeting-workflow-step="project_import"]').first().click();
+    const panel = page.locator('[data-project-change-import-panel]');
+    await panel.waitFor({ state: 'visible', timeout: 10000 });
+    await panel.locator('button', { hasText: '整理專案變化' }).click();
+    await panel.locator('button', { hasText: '插入紀錄並開始撰寫' }).waitFor({ state: 'visible', timeout: 120000 });
+    const previewText = await panel.innerText();
+    if (!previewText.includes(payload.importTask.title)) {
+      return JSON.stringify({ ok: false, stage: 'project_import_preview_missing_task', previewText: previewText.slice(0, 1800) }, null, 2);
+    }
+    await panel.locator('button', { hasText: '插入紀錄並開始撰寫' }).click();
+    await panel.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => undefined);
+
+    stage = 'append_human_draft';
+    const humanDraft = [
+      '## 會議背景',
+      payload.expected.customSectionBody,
+      payload.expected.handwrittenPlain,
+      payload.expected.taskMentionSentence,
+      payload.expected.humanSupplement,
+    ].join('\n');
+    await appendEditorContent(humanDraft);
+
+    stage = 'first_ai_synthesis';
+    const firstAiText = await runAiSynthesis();
+    const requiredTokens = [
+      payload.expected.customSectionBody,
+      payload.expected.handwrittenPlain,
+      payload.humanTask.title,
+      payload.expected.humanSupplement,
+      payload.importTask.title,
+    ];
+    const missingAfterFirst = requiredTokens.filter(token => !firstAiText.includes(token));
+    if (missingAfterFirst.length > 0) {
       return JSON.stringify({
         ok: false,
-        stage: 'ai_text_contract',
-        aiText: aiText.slice(0, 1500),
+        stage: 'first_ai_missing_preserved_content',
+        missingAfterFirst,
+        firstAiText: firstAiText.slice(0, 2600),
+        workflow: await getWorkflowDebug(),
+      }, null, 2);
+    }
+
+    stage = 'second_ai_synthesis_idempotent';
+    const secondAiText = await runAiSynthesis();
+    const missingAfterSecond = requiredTokens.filter(token => !secondAiText.includes(token));
+    if (missingAfterSecond.length > 0 || countOccurrences(secondAiText, payload.expected.humanSupplement) !== 1) {
+      return JSON.stringify({
+        ok: false,
+        stage: 'second_ai_idempotency_or_preserve_failure',
+        missingAfterSecond,
+        humanSupplementCount: countOccurrences(secondAiText, payload.expected.humanSupplement),
+        secondAiText: secondAiText.slice(0, 3000),
         workflow: await getWorkflowDebug(),
       }, null, 2);
     }
@@ -590,51 +652,23 @@ async (page) => {
       }, null, 2);
     }
 
-    stage = 'records_library_ui';
-    const recordsButton = page.locator('[data-sidebar-records-button="true"]').first();
-    if (await recordsButton.count()) {
-      await recordsButton.click();
-      await page.locator('h1', { hasText: '紀錄庫' }).waitFor({ state: 'visible', timeout: 15000 });
-      await page.locator('.record-list-row', { hasText: payload.uniqueNeedle }).waitFor({ state: 'visible', timeout: 15000 });
-    }
-
-    stage = 'task_knowledge_ui';
-    await page.goto(payload.productionUrl, { waitUntil: 'domcontentloaded' });
-    await page.evaluate(({ key, session, workspaceId, boardId }) => {
-      localStorage.setItem(key, JSON.stringify(session));
-      localStorage.setItem('projed-last-view', 'board');
-      localStorage.setItem('projed-last-ws', workspaceId);
-      localStorage.setItem('projed-last-board', boardId);
-    }, {
-      key: payload.storageKey,
-      session: payload.session,
-      workspaceId: payload.workspaceId,
-      boardId: payload.boardId,
-    });
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: new RegExp(payload.boardName) }).first().click();
-    await page.waitForTimeout(1500);
-    await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 20000 });
-    await page.locator('[data-task-id="' + payload.taskA.uiId + '"]').first().click();
-    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 15000 });
-    const taskDetailsText = await page.locator('[data-task-details-modal="true"]').innerText({ timeout: 15000 });
-    if (!taskDetailsText.includes('任務知識') || !taskDetailsText.includes(payload.uniqueNeedle)) {
-      return JSON.stringify({
-        ok: false,
-        stage: 'task_knowledge_ui_missing',
-        taskDetailsText: taskDetailsText.slice(0, 1800),
-      }, null, 2);
-    }
-
     const criticalMessages = messages.filter(m => m.type === 'error' && !/favicon|ResizeObserver/i.test(m.text));
     return JSON.stringify({
       ok: true,
       title,
-      aiTextExcerpt: aiText.slice(0, 700),
+      firstAiExcerpt: firstAiText.slice(0, 900),
+      secondAiExcerpt: secondAiText.slice(0, 900),
+      projectImportUiChecked: true,
+      preserveChecks: {
+        handwrittenPlain: secondAiText.includes(payload.expected.handwrittenPlain),
+        customSectionBody: secondAiText.includes(payload.expected.customSectionBody),
+        taskMentionTitle: secondAiText.includes(payload.humanTask.title),
+        humanSupplement: secondAiText.includes(payload.expected.humanSupplement),
+        projectChangeTask: secondAiText.includes(payload.importTask.title),
+        humanSupplementCount: countOccurrences(secondAiText, payload.expected.humanSupplement),
+      },
       reviewDraftSaved: true,
       publishUiEvidence,
-      recordsUiChecked: true,
-      taskKnowledgeUiChecked: true,
       criticalMessages,
       pageErrors,
       failed: failed.filter(f => !/fonts\.gstatic|googleapis/.test(f.url)),
@@ -653,7 +687,7 @@ async (page) => {
 }`;
   const smokeCode = smokeCodeTemplate.replace('__PROD_SMOKE_PAYLOAD__', JSON.stringify(payload));
   mkdirSync('tmp', { recursive: true });
-  smokeFile = `tmp/dev011012-production-ui-smoke-${suffix}.pw.js`;
+  smokeFile = `tmp/dev024-production-ui-smoke-${suffix}.pw.js`;
   writeFileSync(smokeFile, smokeCode, 'utf8');
 
   const runSmoke = await runPowerShellScript([
@@ -665,16 +699,16 @@ async (page) => {
     '$run = $LASTEXITCODE',
     playwrightCliCommand([`-s=${sessionName}`, 'close']),
     'exit $run',
-  ].join('\n'), {}, 360000);
+  ].join('\n'), {}, 480000);
   if (runSmoke.code !== 0 || /### Error/.test(runSmoke.stdout)) {
-    throw new Error(`DEV-011/012 production UI smoke failed:\n${runSmoke.stdout}\n${runSmoke.stderr}`);
+    throw new Error(`DEV-024 production UI smoke failed:\n${runSmoke.stdout}\n${runSmoke.stderr}`);
   }
 
   const browser = parsePlaywrightJson(runSmoke.stdout, runSmoke.stderr);
   if (!browser.ok) {
     throw new Error(
-      `DEV-011/012 production UI smoke did not pass at ${browser.stage || 'unknown stage'}:\n` +
-      JSON.stringify(browser, null, 2).slice(0, 6000),
+      `DEV-024 production UI smoke did not pass at ${browser.stage || 'unknown stage'}:\n` +
+      JSON.stringify(browser, null, 2).slice(0, 7000),
     );
   }
 
@@ -688,10 +722,22 @@ async (page) => {
       .eq('status', 'published')
       .ilike('title', `%${uniqueNeedle}%`),
   );
-  if (!records?.length) throw new Error('Published knowledge record was not found in production fixture.');
+  if (!records?.length) throw new Error('Published DEV-024 knowledge record was not found in production fixture.');
   const record = records[0];
-  if (!record.content?.includes(taskA.title) || !record.content?.includes(taskB.title)) {
-    throw new Error('Published knowledge record does not contain both fixture task titles.');
+  const content = record.content ?? '';
+  const expectedTokens = [
+    expected.handwrittenPlain,
+    expected.customSectionBody,
+    humanTask.title,
+    expected.humanSupplement,
+    importTask.title,
+  ];
+  const missingRecordTokens = expectedTokens.filter(token => !content.includes(token));
+  if (missingRecordTokens.length > 0) {
+    throw new Error(`Published record lost DEV-024 preserved content: ${JSON.stringify(missingRecordTokens)}\n${content.slice(0, 3000)}`);
+  }
+  if (countOccurrences(content, expected.humanSupplement) !== 1) {
+    throw new Error(`Published record duplicated human supplement ${countOccurrences(content, expected.humanSupplement)} times.`);
   }
 
   const links = assertOk(
@@ -704,8 +750,8 @@ async (page) => {
       .eq('record_id', record.id),
   );
   const linkedIds = new Set((links ?? []).map(link => link.item_id));
-  if (!linkedIds.has(taskA.id) || !linkedIds.has(taskB.id)) {
-    throw new Error('Published record_task_links do not include both fixture tasks.');
+  if (!linkedIds.has(humanTask.id)) {
+    throw new Error(`Published DEV-024 record_task_links do not include the handwritten task mention. Links: ${JSON.stringify(links)}`);
   }
 
   const report = {
@@ -725,8 +771,18 @@ async (page) => {
     database: {
       published_record_found: true,
       record_task_links: links.length,
+      import_task_linked: linkedIds.has(importTask.id),
+      human_task_linked: linkedIds.has(humanTask.id),
       rag_enabled: record.rag_enabled,
       source_document_present: Boolean(record.source_document_id),
+      preserved_content: {
+        handwritten_plain: content.includes(expected.handwrittenPlain),
+        custom_section_body: content.includes(expected.customSectionBody),
+        task_mention_title: content.includes(humanTask.title),
+        project_change_task: content.includes(importTask.title),
+        human_supplement: content.includes(expected.humanSupplement),
+        human_supplement_count: countOccurrences(content, expected.humanSupplement),
+      },
     },
   };
   console.log(JSON.stringify(report, null, 2));

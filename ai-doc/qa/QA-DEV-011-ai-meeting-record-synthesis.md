@@ -1,6 +1,6 @@
 # QA-DEV-011 AI 任務導向會議紀錄統整工作流驗證計畫
 
-狀態：In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added / Production UI Smoke Pending
+狀態：Done / Production Release Deployed / Production UI Smoke Passed
 關聯 DEV：DEV-011  
 關聯規格：`ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md`  
 建立日期：2026-06-07
@@ -124,3 +124,7 @@ npm.cmd run verify:dev-011-012-production-ui-smoke-readiness
 此 gate 預設只讀、`mutates_database=false`。它不登入、不建立 production 資料、不呼叫 AI；只確認目前 repo 已有可重用的 authenticated session injection + cleanup pattern，以及 local browser ROT 已覆蓋 meeting composer、AI整理、校稿儲存、專案變化匯入與 record persistence。完整 production UI smoke 仍需其一：已登入 Google 的互動式 browser QC，或另行顯式允許建立/清理 production 臨時 user / tenant / board / record fixture。
 
 2026-07-07 補上 guarded executor：`verify:dev-011-012-production-ui-smoke` 預設只跑 self-check，不登入、不建立資料、不呼叫 AI；若要執行完整 production fixture path，必須同時傳入 `--run-production-fixture` 並設定 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1`。完整 path 會建立臨時 user / tenant / board / task fixture，操作正式前端 meeting mode、AI整理、發布、紀錄庫與任務知識 UI，再以 `knowledge_records` / `record_task_links` 查證資料鏈並清理 fixture。
+
+2026-07-09 使用者已明確允許 production fixture path。第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求；同日以 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f` 走 release gate 上線，正式站載入 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css`，post-deploy browser smoke 通過。
+
+修正上線後已重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 並通過：production fixture 建立與 cleanup 通過，正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`。DEV-011 production UI smoke 已通過。

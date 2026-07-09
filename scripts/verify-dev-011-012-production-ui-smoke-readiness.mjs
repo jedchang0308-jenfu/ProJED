@@ -9,6 +9,7 @@ const paths = {
   productionSmokeExecutor: 'scripts/verify-dev-011-012-production-ui-smoke.mjs',
   existingProductionAuthSmoke: 'scripts/verify-dev-040-production-auth-ui-smoke.mjs',
   localAiBrowserSmoke: 'scripts/verify-dev-024-ai-synthesis-preserve-human-draft-browser.pw.js',
+  projedService: 'src/services/supabase/projedService.ts',
   qa011: 'ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md',
   qa012: 'ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md',
   qc: 'ai-doc/qc/QC-DEV-011-012-production-ai-smoke.md',
@@ -99,55 +100,93 @@ add(
   ]),
 );
 
+const mirrorBackReferenceIndex = contents.projedService.indexOf('source_document_id: savedDocumentId');
+const ragSyncJobInsertIndex = contents.projedService.indexOf(".from('rag_sync_jobs')");
+
 add(
-  'QA-DEV-011 references this readiness gate and keeps production UI smoke pending',
+  'record RAG mirror writes source_document_id before browser client enqueues rag_sync_jobs',
+  mirrorBackReferenceIndex !== -1 &&
+    ragSyncJobInsertIndex !== -1 &&
+    mirrorBackReferenceIndex < ragSyncJobInsertIndex &&
+    includesAll(contents.projedService, [
+      'Browser clients must establish the record -> document back-reference before RLS allows job enqueue.',
+      'source_document_id: savedDocumentId',
+      "status: 'pending'",
+    ]),
+  {
+    mirrorBackReferenceIndex,
+    ragSyncJobInsertIndex,
+  },
+);
+
+add(
+  'QA-DEV-011 references this readiness gate and records the deployed production smoke pass',
   includesAll(contents.qa011, [
     'verify:dev-011-012-production-ui-smoke-readiness',
-    'Production UI Smoke Readiness Gate Added',
-    'Production UI Smoke Pending',
+    'Done / Production Release Deployed / Production UI Smoke Passed',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'published_record_found=true',
   ]),
 );
 
 add(
-  'QA-DEV-012 references this readiness gate and keeps production UI smoke pending',
+  'QA-DEV-012 references this readiness gate and records the deployed production smoke pass',
   includesAll(contents.qa012, [
     'verify:dev-011-012-production-ui-smoke-readiness',
-    'Production UI Smoke Readiness Gate Added',
-    'Production UI Smoke Pending',
+    'Done / Production Release Deployed / Production UI Smoke Passed',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'published_record_found=true',
   ]),
 );
 
 add(
-  'QC report documents backend pass, readiness gate, and remaining explicit execution boundary',
+  'QC report documents backend pass, release, fixture pass, DB proof, and cleanup',
   includesAll(contents.qc, [
-    'Backend Pass / UI Readiness Gate Added / Production UI Smoke Executor Added / UI Pending',
+    'Backend Pass / Production Release Deployed / Production UI Smoke Passed',
     'verify:dev-011-012-production-ui-smoke-readiness',
     'verify:dev-011-012-production-ui-smoke',
-    'production 臨時 user / tenant / board / record fixture',
+    'Hotfix release',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'Production UI smoke guarded executor actual fixture：Pass',
+    'DB proof：Pass',
+    'published_record_found=true',
+    'tenantDeleted=true',
+    'userDeleted=true',
     'mutates_database=false',
   ]),
 );
 
 add(
-  'dev_task keeps DEV-011/012 in verification and records the remaining production UI smoke gate',
+  'dev_task closes DEV-011/012 with release and production fixture smoke evidence',
   includesAll(contents.devTask, [
-    'Production UI Smoke Readiness Gate Added',
-    'Production UI Smoke Executor Added',
+    'Done / Production Release Deployed / Production UI Smoke Passed',
     'verify:dev-011-012-production-ui-smoke-readiness',
     'verify:dev-011-012-production-ui-smoke',
-    'production UI smoke',
-    'AI整理',
-    '任務知識',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'published_record_found=true',
+    'record_task_links=2',
+    'source_document_present=true',
+    'DEV011012_ALLOW_PRODUCTION_FIXTURE=1',
   ]),
 );
 
 add(
-  'documentation map reflects readiness progress without closing DEV-011/012',
+  'documentation map reflects DEV-011/012 production smoke closure with release evidence',
   includesAll(contents.documentationMap, [
     'DEV-011 / DEV-012',
-    'Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added',
-    'UI Pending',
-    'meeting mode',
+    'Done / Production Release Deployed / Production UI Smoke Passed',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'published_record_found=true',
   ]),
 );
 

@@ -53,6 +53,7 @@
     "verify:dev-023-record-project-change-import-workflow-step": "node scripts/verify-dev-023-record-project-change-import-workflow-step.mjs",
     "verify:dev-024-ai-synthesis-preserve-human-draft": "node scripts/verify-dev-024-ai-synthesis-preserve-human-draft.mjs",
     "verify:dev-024-ai-synthesis-preserve-human-draft-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev024-human-draft -Filename scripts/verify-dev-024-ai-synthesis-preserve-human-draft-browser.pw.js -OutputDirectory output/playwright",
+    "verify:dev-024-production-ui-smoke": "node scripts/verify-dev-024-production-ui-smoke.mjs",
     "verify:dev-025-project-workspace-transfer": "node scripts/verify-dev-025-project-workspace-transfer.mjs",
     "verify:dev-025-mutating-qc-readiness": "node scripts/verify-dev-025-mutating-qc-readiness.mjs",
     "verify:dev-025-mutating-qc-fixture-readiness": "node scripts/verify-dev-025-mutating-qc-fixture-readiness.mjs",

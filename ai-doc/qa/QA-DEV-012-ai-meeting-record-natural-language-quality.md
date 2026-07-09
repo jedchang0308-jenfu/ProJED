@@ -1,6 +1,6 @@
 # QA-DEV-012 AI 會議紀錄自然語言品質提升驗證計畫
 
-狀態：In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added / Production UI Smoke Pending
+狀態：Done / Production Release Deployed / Production UI Smoke Passed
 關聯 DEV：DEV-012  
 關聯規格：`ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md`  
 建立日期：2026-06-07
@@ -90,7 +90,9 @@ npm.cmd run build
 - 確認錯誤訊息能指出模型設定問題，並保留 DEV-011 的重試 AI 統整行為。
 - 正式環境 backend smoke 已通過：`synthesize_meeting_record` 使用授權 user JWT 呼叫回 `200`，實際模型為 `gemini-3.5-flash`。
 - Production UI smoke readiness gate 已補：`verify:dev-011-012-production-ui-smoke-readiness` 預設只讀、`mutates_database=false`，確認 session injection + cleanup pattern 與 local AI整理 browser ROT 已可串成正式站 UI smoke runner。
-- Production UI smoke guarded executor 已補：`verify:dev-011-012-production-ui-smoke` 預設只跑 self-check，不登入、不建立資料、不呼叫 AI；完整 fixture path 需同時傳入 `--run-production-fixture` 並設定 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1`。完整 UI smoke 仍需 Google OAuth browser session，或顯式允許 production 臨時 fixture 建立/清理後再執行。
+- Production UI smoke guarded executor 已補：`verify:dev-011-012-production-ui-smoke` 預設只跑 self-check，不登入、不建立資料、不呼叫 AI；完整 fixture path 需同時傳入 `--run-production-fixture` 並設定 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1`。
+- 2026-07-09 使用者已明確允許 production fixture path。第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求；同日以 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f` 走 release gate 上線，正式站載入 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css`，post-deploy browser smoke 通過。
+- 修正上線後已重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 並通過：production fixture 建立與 cleanup 通過，正式前端完成 AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`。DEV-012 production UI smoke 已通過。
 
 ## UI QC
 

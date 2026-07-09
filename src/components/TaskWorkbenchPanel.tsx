@@ -1,7 +1,6 @@
 import React from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
-  ChevronDown,
   ChevronLeft,
   Filter,
   Plus,
@@ -40,14 +39,13 @@ import type { InboxItem, TaskNode, TaskStatus } from '../types';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { useTouchTapGuard } from '../hooks/useTouchTapGuard';
 import { useLongPress } from '../hooks/useLongPress';
+import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
+import { CLOSE_PANEL_EVENT, OPEN_PANEL_EVENT, TOGGLE_PANEL_EVENT } from './taskWorkbenchPanelCommands';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
 import { isMobileTaskActionMode, MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
-import { compactClassNames } from './ui/compactTokens';
 
 const PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
 const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
-const OPEN_PANEL_EVENT = 'projed:open-task-workbench-panel';
-const TOGGLE_PANEL_EVENT = 'projed:toggle-task-workbench-panel';
 
 type PanelPrefs = {
   open: boolean;
@@ -64,36 +62,6 @@ type BoardOption = {
   workspaceId: string;
   boardId: string;
   path: string;
-};
-
-export const openTaskWorkbenchPanel = () => {
-  try {
-    const current = JSON.parse(window.localStorage.getItem(PANEL_PREFS_KEY) || '{}') as Partial<PanelPrefs>;
-    window.localStorage.setItem(PANEL_PREFS_KEY, JSON.stringify({
-      ...current,
-      open: true,
-      filtersOpen: false,
-      showContainersInAllTasks: Boolean(current.showContainersInAllTasks),
-    }));
-    window.dispatchEvent(new CustomEvent(OPEN_PANEL_EVENT));
-  } catch {
-    // Best-effort UI preference.
-  }
-};
-
-export const toggleTaskWorkbenchPanel = () => {
-  try {
-    const current = JSON.parse(window.localStorage.getItem(PANEL_PREFS_KEY) || '{}') as Partial<PanelPrefs>;
-    window.localStorage.setItem(PANEL_PREFS_KEY, JSON.stringify({
-      ...current,
-      open: current.open !== true,
-      filtersOpen: false,
-      showContainersInAllTasks: Boolean(current.showContainersInAllTasks),
-    }));
-  } catch {
-    // Best-effort UI preference.
-  }
-  window.dispatchEvent(new CustomEvent(TOGGLE_PANEL_EVENT));
 };
 
 const readPanelPrefs = (): PanelPrefs => {
@@ -239,7 +207,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
   return (
     <section
       ref={setNodeRef}
-      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-sky-100 px-3 pb-3 transition-colors ${isOver ? 'bg-sky-100/60 ring-2 ring-inset ring-primary/20' : 'bg-sky-50/60'}`}
+      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-[#cbd5dc] px-3 pb-3 transition-colors ${isOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'}`}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
@@ -265,11 +233,11 @@ const WorkbenchUnclassifiedSection: React.FC<{
       </form>
 
       <div
-        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-sky-100 bg-sky-50/95 px-3 py-1.5 backdrop-blur"
+        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-[#c2d0d8] bg-[#e1e9ee]/95 px-3 py-1.5 backdrop-blur"
         data-task-workbench-section-header="unplaced"
       >
-        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-slate-900">
-          <span className="h-3 w-1 shrink-0 rounded-full bg-sky-400" aria-hidden="true" data-task-workbench-header-accent="unplaced" />
+        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-[#324756]">
+          <span className="h-3 w-1 shrink-0 rounded-full bg-[#7893a4]" aria-hidden="true" data-task-workbench-header-accent="unplaced" />
           <span className="min-w-0 truncate">未歸位</span>
         </div>
         <span className="sr-only" data-task-workbench-unclassified-count="true">
@@ -305,10 +273,12 @@ const WorkbenchDragCard: React.FC<{
 }> = ({ task, canMoveTask, placement, surface = placement === 'unplaced' ? 'unplaced-lane' : 'all-tasks', hierarchyDepth = 0 }) => {
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
+  const canDragTaskFromWorkbench = placement === 'unplaced' && canMoveTask;
   const depth = Math.max(0, Math.min(hierarchyDepth, 6));
   const mobileTaskAction = React.useContext(MobileTaskActionContext);
   const setContextMenuState = useBoardStore(state => state.setContextMenuState);
   const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
+  const canUseWorkbenchDragSurface = canDragTaskFromWorkbench && !mobileActionMode;
   React.useEffect(() => {
     const update = () => setMobileActionMode(isMobileTaskActionMode());
     update();
@@ -327,7 +297,7 @@ const WorkbenchDragCard: React.FC<{
       : 'font-medium text-slate-600';
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `task-workbench-${surface}-${task.id}`,
-    disabled: !canMoveTask || mobileActionMode,
+    disabled: !canDragTaskFromWorkbench || mobileActionMode,
     data: {
       type: 'wbs-card',
       source: 'task-workbench',
@@ -344,7 +314,7 @@ const WorkbenchDragCard: React.FC<{
   const lockStatus = getNodeLockStatus(task.id, dependencies);
   const longPressHandlers = useLongPress(
     (event) => {
-      if (!isMobileTaskActionMode()) return;
+      if (!canDragTaskFromWorkbench || !isMobileTaskActionMode()) return;
       mobileTaskAction?.begin({ id: task.id, title: task.title, status: task.status }, event);
     },
     { delay: 500, tolerance: 8 },
@@ -353,7 +323,7 @@ const WorkbenchDragCard: React.FC<{
     ...longPressHandlers,
     onTouchStart: (event: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchStart(event);
-      longPressHandlers.onTouchStart(event);
+      if (canDragTaskFromWorkbench) longPressHandlers.onTouchStart(event);
     },
     onTouchMove: (event: React.TouchEvent) => {
       if (mobileTaskAction?.isActive(task.id)) {
@@ -361,7 +331,7 @@ const WorkbenchDragCard: React.FC<{
         return;
       }
       touchTapGuard.handlers.onTouchMove(event);
-      longPressHandlers.onTouchMove(event);
+      if (canDragTaskFromWorkbench) longPressHandlers.onTouchMove(event);
     },
     onTouchEnd: (event: React.TouchEvent) => {
       if (mobileTaskAction?.isActive(task.id)) {
@@ -371,7 +341,7 @@ const WorkbenchDragCard: React.FC<{
         return;
       }
       touchTapGuard.handlers.onTouchEnd(event);
-      longPressHandlers.onTouchEnd(event);
+      if (canDragTaskFromWorkbench) longPressHandlers.onTouchEnd(event);
     },
     onTouchCancel: (event: React.TouchEvent) => {
       if (mobileTaskAction?.isActive(task.id)) {
@@ -381,14 +351,14 @@ const WorkbenchDragCard: React.FC<{
         return;
       }
       touchTapGuard.handlers.onTouchCancel(event);
-      longPressHandlers.onTouchCancel(event);
+      if (canDragTaskFromWorkbench) longPressHandlers.onTouchCancel(event);
     },
     onClickCapture: (event: React.MouseEvent) => {
       touchTapGuard.handlers.onClickCapture(event);
-      if (!event.isPropagationStopped()) longPressHandlers.onClickCapture(event);
+      if (canDragTaskFromWorkbench && !event.isPropagationStopped()) longPressHandlers.onClickCapture(event);
     },
   };
-  const draggableBindings = mobileActionMode ? {} : { ...attributes, ...listeners };
+  const draggableBindings = canUseWorkbenchDragSurface ? { ...attributes, ...listeners } : {};
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -413,7 +383,7 @@ const WorkbenchDragCard: React.FC<{
     unplacedLane: boolean;
   }) => (
     <div
-      ref={setNodeRef}
+      ref={canUseWorkbenchDragSurface ? setNodeRef : undefined}
       {...draggableBindings}
       {...workbenchTouchHandlers}
       onClick={(event) => {
@@ -424,10 +394,11 @@ const WorkbenchDragCard: React.FC<{
       className={className}
       style={style}
       data-task-workbench-task-card="true"
-      data-task-workbench-drag-surface="task-row-root"
+      data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}
       data-task-workbench-unplaced-task-card={unplacedLane ? 'true' : undefined}
       data-task-workbench-all-task-card={isAllTasksCard ? 'true' : undefined}
       data-task-workbench-placed-task-card={placement === 'placed' ? 'true' : undefined}
+      data-task-workbench-readonly-task-card={placement === 'placed' ? 'true' : undefined}
       data-task-workbench-unclassified-item={unplacedLane ? 'true' : undefined}
       data-task-workbench-task-placement={placement}
       data-task-workbench-unplaced-compact-row={unplacedLane ? 'true' : undefined}
@@ -702,6 +673,14 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     });
   }, []);
 
+  const closePanel = React.useCallback(() => {
+    if (isNarrowViewport) {
+      setMobileOverlayOpen(false);
+      return;
+    }
+    patchPanelPrefs({ open: false, filtersOpen: false });
+  }, [isNarrowViewport, patchPanelPrefs]);
+
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const media = window.matchMedia('(max-width: 767px)');
@@ -746,20 +725,9 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   }, [isNarrowViewport]);
 
   React.useEffect(() => {
-    const panelOpen = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
-    if (!panelOpen) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.isComposing) return;
-      const hasBlockingOverlay = Boolean(document.querySelector('[data-task-details-modal="true"], [data-filter-menu-panel], [data-mode-switcher-menu="true"], [data-tag-picker-panel], .global-dialog-content'))
-        || Boolean(useBoardStore.getState().contextMenuState?.isOpen);
-      if (hasBlockingOverlay) return;
-      event.preventDefault();
-      if (isNarrowViewport) setMobileOverlayOpen(false);
-      else patchPanelPrefs({ open: false });
-    };
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [isNarrowViewport, mobileOverlayOpen, panelPrefs.open, patchPanelPrefs]);
+    window.addEventListener(CLOSE_PANEL_EVENT, closePanel);
+    return () => window.removeEventListener(CLOSE_PANEL_EVENT, closePanel);
+  }, [closePanel]);
 
   React.useEffect(() => {
     if (!panelPrefs.filtersOpen) return;
@@ -962,6 +930,15 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
   const panelOverlayWidth = isNarrowViewport ? 'min(340px, calc(100vw - 52px))' : '340px';
 
+  React.useEffect(() => {
+    if (!isExpanded) {
+      markLeftPanelClosed('task-workbench');
+      return undefined;
+    }
+    markLeftPanelOpened('task-workbench');
+    return () => markLeftPanelClosed('task-workbench');
+  }, [isExpanded]);
+
   if (!isExpanded) {
     return null;
   }
@@ -973,30 +950,33 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
           type="button"
           className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
           style={{ left: panelOverlayWidth }}
-          onClick={() => setMobileOverlayOpen(false)}
+          onClick={closePanel}
           aria-label="關閉全域任務平台遮罩"
           data-task-workbench-backdrop="true"
           data-mobile-task-workbench-backdrop="true"
         />
       ) : null}
       <aside
-        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r border-slate-200 bg-white ${
+        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r-2 border-[#b7c5cf] bg-gradient-to-b from-[#f7f9fa] via-[#eef3f6] to-[#e4ebef] ${
           isNarrowViewport
-            ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_24px_rgba(15,23,42,0.06)]'
-            : 'relative z-10 h-full shadow-none'
+            ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_28px_rgba(70,92,106,0.22)]'
+            : 'relative z-20 h-full shadow-[4px_0_20px_rgba(70,92,106,0.16)]'
         }`}
         style={{ width: panelOverlayWidth }}
         data-task-workbench-panel="true"
+        data-layout-region="task-command-center"
         data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
         data-task-workbench-inline={!isNarrowViewport ? 'true' : undefined}
         data-mobile-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
         aria-label="全域任務平台"
       >
-        <div className="relative border-b border-slate-200 px-3 py-3" data-task-workbench-filter-control-area="true">
+        <div
+          className="relative border-b border-[#c3ccd2] bg-gradient-to-r from-[#fbfcfc] via-[#f1f5f7] to-[#e8eef2] px-3 py-2.5 shadow-[0_1px_0_rgba(70,92,106,0.12)]"
+          data-task-workbench-filter-control-area="true"
+        >
           <div className="flex items-center gap-2">
-            <div className="min-w-0 shrink-0">
-              <div className="flex items-center gap-2 whitespace-nowrap text-sm font-black text-slate-900">
-                <SlidersHorizontal size={16} className="text-primary" />
+            <div className="min-w-0 shrink-0 rounded-md border border-[#c7d1d8] bg-[#fbfcfc] px-2 py-1 shadow-sm" data-task-command-center-title="true">
+              <div className="whitespace-nowrap text-sm font-black text-[#324756]">
                 全域任務平台
               </div>
             </div>
@@ -1004,34 +984,25 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
               ref={filterToggleRef}
               type="button"
               onClick={() => patchPanelPrefs({ filtersOpen: !panelPrefs.filtersOpen })}
-              className={`${compactClassNames.segmentedButtonBase} shrink-0 border ${
+              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 panelPrefs.filtersOpen
                   ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
                   : selectedBoardActiveFilterCount > 0
-                    ? 'border-amber-200 bg-amber-50 text-amber-700 shadow-sm ring-1 ring-amber-200/70'
-                    : 'border-slate-200 bg-white text-slate-600 shadow-sm hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
+                    ? 'border-[#a9bbc8] bg-[#e7eef2] text-[#304a5c] shadow-sm ring-1 ring-[#a9bbc8]/50'
+                    : 'border-[#c7d1d8] bg-[#fbfcfc] text-[#536b7b] shadow-sm hover:border-[#a9bbc8] hover:bg-[#edf3f6]'
               }`}
               data-task-workbench-filter-toggle="true"
               data-active-task-workbench-filter-count={selectedBoardActiveFilterCount}
               aria-expanded={panelPrefs.filtersOpen}
+              aria-label={selectedBoardActiveFilterCount > 0 ? '過濾器已啟用' : '過濾器'}
               title="調整過濾器"
             >
               <SlidersHorizontal size={13} />
-              <span>過濾器</span>
-              {selectedBoardActiveFilterCount > 0 ? (
-                <span className="rounded-full bg-amber-400 px-1 py-0.5 text-[9px] font-semibold leading-none text-white">
-                  {selectedBoardActiveFilterCount}
-                </span>
-              ) : null}
-              <ChevronDown size={11} className={`transition-transform duration-200 ${panelPrefs.filtersOpen ? 'rotate-180' : ''}`} />
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (isNarrowViewport) setMobileOverlayOpen(false);
-                else patchPanelPrefs({ open: false });
-              }}
-              className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              onClick={closePanel}
+              className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#607789] transition-colors hover:bg-[#e4ecf1] hover:text-[#304a5c]"
               title="收合全域任務平台"
               data-task-workbench-collapse-toggle="true"
             >
@@ -1070,16 +1041,16 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
         <div
           ref={setPlacedBoardLaneRef}
-          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-sky-100 ring-2 ring-inset ring-primary/20' : 'bg-sky-100/70'}`}
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'}`}
           data-task-workbench-placed-board-lane="true"
           data-task-workbench-lane-drop-target="placed-board"
         >
           <div
-            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-sky-200 bg-sky-100/95 px-3 py-2 backdrop-blur"
+            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-[#c2d0d8] bg-[#e1e9ee]/95 px-3 py-2 backdrop-blur"
             data-task-workbench-section-header="all-tasks"
           >
-            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-sky-950">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500 shadow-[0_0_0_3px_rgba(14,165,233,0.15)]" aria-hidden="true" data-task-workbench-header-accent="placed" />
+            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-[#324756]">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#7893a4] shadow-[0_0_0_3px_rgba(120,147,164,0.18)]" aria-hidden="true" data-task-workbench-header-accent="placed" />
               <span className="min-w-0 truncate">已歸位</span>
             </div>
             <span className="sr-only" data-task-workbench-all-tasks-count="true">

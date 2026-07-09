@@ -477,10 +477,10 @@ All-Phase Coverage Matrix:
 
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 
-狀態: Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / Production Not Deployed
+狀態: Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed / Production Not Deployed
 節點類型: 交付點 addendum / interaction contract
 父交付點: DEV-028 四模式一致的 Trello-like 任務操作契約
-是否計入產品交付完成: 是；detail-only title edit addendum 已完成本機自動化驗證，人工親自點擊 QC 與 production deploy 另行處理
+是否計入產品交付完成: 是；detail-only title edit addendum 已完成本機自動化驗證，2026-07-09 使用者回報人工親自點擊 QC 通過，production deploy 另行處理
 建立日期: 2026-07-05
 
 原始需求邊界:
@@ -498,7 +498,7 @@ Human Decision Brief:
 
 目前授權邊界:
 - Authorized and completed: 產品程式碼修改、static/browser verifier 更新、DEV-027B / DEV-027E / DEV-029 regression、SPEC / QA / dev_task / documentation_map / QC evidence 更新。
-- Not Authorized / Not Executed: production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態、MAN-028 人工親自點擊 QC。`verify:dev-028-manual-click-qc-readiness` 已補 checklist gate，但不代表人工 QC 已完成。
+- Not Authorized / Not Executed: production deploy、schema / migration、重做 `TaskDetailsModal` 容器型態。`verify:dev-028-manual-click-qc-readiness` 已補 checklist gate；2026-07-09 使用者回報 MAN-028 人工親自點擊 QC 通過，未附逐項截圖/錄影證據。
 
 RD Handoff / Implementation Contract:
 - 移除或停用任務外層 surface 的 rename affordance：pencil、right-click rename、long-press rename、`t`、F2、double-click title、selected task direct typing、outer inline title input。
@@ -536,7 +536,7 @@ Stop Conditions:
 Deferred Scope Audit:
 - Product code implementation: Same Spec Phase / Completed，已依使用者授權完成。
 - Automated verifier implementation: Same Spec Phase / Completed，已更新 DEV-028、DEV-027B、DEV-027E、DEV-029 verifier。
-- Manual QA/QC execution: Blocked Human Re-entry，需使用者授權 QA/QC 實際人工親自點擊驗證。
+- Manual QA/QC execution: User-Reported Complete，2026-07-09 使用者回報人工親自點擊驗證通過；若後續需要正式稽核證據，需補逐項 MAN-028 截圖/錄影。
 - Production deploy: Blocked Human Re-entry，需 deployment-release-gate。
 - DB schema / migration / RLS / RPC: No Tracking，UI interaction contract 不需要資料層變更。
 - Task details drawer/page redesign: New DEV Candidate，若要把 `TaskDetailsModal` 改成抽屜或新頁面需另行決策。
@@ -547,7 +547,7 @@ All-Phase Coverage Matrix:
 |---|---|---|---|---|
 | 0 | PM/RD Contract Addendum | Complete | Authorized | SPEC-028、QA-DEV-028、dev_task、documentation_map updated |
 | 1 | Detail-Only Title Edit RD Implementation | Complete | Authorized | product diff、static/browser verifier、TypeScript、build:test |
-| 2 | QA/QC Verification | Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending | Partially Authorized | QC-DEV-028、自動化 browser traces、mobile regression、manual readiness gate；MAN-028 仍待人工親自點擊 |
+| 2 | QA/QC Verification | Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed | Authorized / User-Reported Complete | QC-DEV-028、自動化 browser traces、mobile regression、manual readiness gate；2026-07-09 使用者回報 MAN-028 人工親自點擊通過 |
 | 3 | Production Release | Not Started | Not Authorized | deployment-release-gate、post-deploy smoke、rollback target |
 
 文件:
@@ -1802,7 +1802,7 @@ Verified（2026-06-29）:
 
 ### DEV-028: 四模式一致的 Trello-like 任務操作契約
 
-狀態: Implemented / Browser Smoke Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending (2026-06-26)
+狀態: Implemented / Browser Smoke Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed / Production Not Deployed (updated 2026-07-09)
 節點類型: 交付點
 優先級: P0 UI/UX interaction consistency
 父交付點: 無
@@ -1841,7 +1841,7 @@ RD exit gate:
 - `npm.cmd exec tsc -- --noEmit`: Pass
 - `npm.cmd run lint -- --quiet`: Pass
 - `npm.cmd run build:test`: Pass
-- QA manual click validation plan updated on 2026-07-06; 2026-07-07 added `verify:dev-028-manual-click-qc-readiness` to protect the manual checklist and evidence boundary. DEV-028 still requires MAN-028-001 to MAN-028-028 human-operated click evidence before calling manual QC complete.
+- QA manual click validation plan updated on 2026-07-06; 2026-07-07 added `verify:dev-028-manual-click-qc-readiness` to protect the manual checklist and evidence boundary. 2026-07-09 使用者回報 DEV-028 人工親自點擊通過；未附逐項截圖/錄影時，以 user-reported evidence 記錄，不等同 production deploy。
 
 ### DEV-027F: Mind map UI polish after relationship-line QC
 
@@ -2221,7 +2221,7 @@ Implementation evidence:
 
 ### DEV-024: AI整理保留手寫內容與章節結構
 
-狀態: Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Not Executed
+狀態: Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed
 節點類型: 開發點
 優先級: P1 AI synthesis guard
 父交付點: DEV-011 / DEV-012 / DEV-020
@@ -2249,7 +2249,7 @@ Implementation evidence:
 | 規格 | PM/RD | Implemented | SPEC-024 |
 | 驗證計畫 | QA | Static + Deterministic + Local Browser ROT QC Passed | QA-DEV-024 |
 | 實作 | RD | Complete | human-draft merge guard |
-| 事實驗證 | QC/Verifier | Static + Deterministic + Local Browser ROT QC Passed | DEV-024 preserve verifier + browser ROT + regression gates |
+| 事實驗證 | QC/Verifier | Static + Deterministic + Local Browser ROT QC Passed / Production UI Smoke Passed | DEV-024 preserve verifier + browser ROT + regression gates + `verify:dev-024-production-ui-smoke` |
 
 QC Evidence - 2026-07-06:
 - `SPEC-024`
@@ -2263,7 +2263,8 @@ QC Evidence - 2026-07-06:
 - `npm.cmd run verify:dev-012-meeting-record-quality` passed。
 - `npm.cmd exec tsc -- --noEmit` passed。
 - `npm.cmd run build` passed。
-- Production deploy / production UI smoke 未執行；local browser ROT 使用 test mode deterministic synthesis，不等同正式模型輸出或已登入 production UI smoke。
+- 2026-07-09 production UI smoke passed：`DEV024_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-024-production-ui-smoke -- --run-production-fixture`；正式前端完成專案變化匯入、手寫純文字、自訂章節、task mention、手寫補充、連續兩次 `AI整理`、校稿發布與 DB proof；`published_record_found=true`、`rag_enabled=true`、`source_document_present=true`、cleanup `tenantDeleted=true`、`userDeleted=true`；殘留稽核確認 DEV-024 fixture `tenants=[]`、`profiles=[]`、`knowledge_records=[]`、`auth_users=[]`。
+- 本輪未重新 production deploy；目前正式 artifact 已含 DEV-024 human-draft merge guard。殘留觀察：第二次正式 AI 輸出有少量章節 label 文字殘留，屬模型格式 polish，不影響 preserve/idempotent gate。
 
 ### DEV-023: 專案變化匯入整併為紀錄流程第一步
 
@@ -2528,14 +2529,15 @@ CAPA 來源：
 - 2026-07-06 DEV-038 / DEV-042 / DEV-044 safe released to Firebase Hosting production：release commit `b78540e`，正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`，HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed。
 - 2026-07-05 DEV-042 已完成 local RD + automated browser QA，commit `aa1fff7`；手機 closed Sidebar / TaskWorkbench 不再佔用 in-flow 左側版面；2026-07-06 已 production release，且使用者回報真機驗證通過。
 - 2026-07-06 DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA 並 production release；採低資料庫成本 ordinary undo 擴充，涵蓋 batch/reorder/placement command grouping；DB migration、durable recovery、board workspace transfer undo 與 destructive recovery 未執行。
-- 2026-07-06 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT 與 regression gates；production UI smoke 與 production deploy 未執行。
+- 2026-07-09 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT、regression gates 與 production UI smoke；`DEV024_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-024-production-ui-smoke -- --run-production-fixture` 通過，DB 查證 `published_record_found=true`，cleanup `tenantDeleted=true`、`userDeleted=true`。本輪未重新 production deploy，因目前正式 artifact 已含 DEV-024 實作。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
 - 2026-07-07 DEV-045 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier、local-test browser verifier、remote-readiness static gate 與 transaction-scoped local DB smoke；Phase 3 已授權並完成 read-only preflight / local DB smoke，但 `ProJED_TEST` inactive，remote DB/Edge/production live QC 未執行。
 - 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight、guarded fixture-readiness harness、execution-readiness gate 與 guarded mutating executor self-check passed，mutating role-data QC still pending safe fixture。
 - 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 已補 local DB smoke，下一步只能在 deployment-release-gate / Supabase gate 下進入 remote apply/deploy/live `.ics` smoke；若不進 remote gate，則處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
-- DEV-011 / DEV-012 尚待 production UI smoke；2026-07-07 已新增 read-only readiness gate `verify:dev-011-012-production-ui-smoke-readiness`，確認可重用 authenticated session injection + cleanup pattern 與 local AI整理 browser ROT；同日新增 guarded executor `verify:dev-011-012-production-ui-smoke`，預設 self-check 不登入、不建立 production 資料、不呼叫 AI，完整 fixture path 需 `--run-production-fixture` + `DEV011012_ALLOW_PRODUCTION_FIXTURE=1` 後才會建立/清理臨時 fixture。完整正式站流程仍需已登入 Google browser 或顯式允許 production 臨時 fixture 建立/清理。
-- 2026-07-07 PM evidence：新增 read-only 外部 Gate 稽核 `verify:remaining-external-gates`，機械確認 DEV-045 / DEV-025 / DEV-040 / DEV-044 / DEV-028 / DEV-011 / DEV-012 仍停在正確 Supabase、Edge、production、人工 QC 或 human re-entry 邊界；輸出 `mutates_database=false`、`remote_changes=false`，不代表任一外部 Gate 完成。
+- DEV-011 / DEV-012 production UI smoke 已於 2026-07-09 依使用者授權執行 production fixture path；第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求。已建立 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f`，以 release gate 部署 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css` 到 Firebase Hosting，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup `tenantDeleted=true`、`userDeleted=true`。
+- 2026-07-07 PM evidence：新增 read-only 外部 Gate 稽核 `verify:remaining-external-gates`，機械確認 DEV-045 / DEV-025 / DEV-040 / DEV-044 仍停在正確 Supabase、Edge、production 或 human re-entry 邊界；輸出 `mutates_database=false`、`remote_changes=false`，不代表任一外部 Gate 完成。
+- 2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過；後續開發排序不再把 DEV-028 manual QC 當作 active blocker，但 production deploy 仍需另行授權。
 - 手機版會議紀錄工作流不列入目前 release gate。
 
 ## 下一步
@@ -2548,8 +2550,6 @@ CAPA 來源：
 | 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，先執行 `verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness` 與 `verify:dev-025-mutating-qc-execution` self-check 確認腳本防呆、fixture 標記、最小資料形狀與 mutation opt-in，再用 actual mode 執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight + Remote Readiness Static Gate Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
-| 5 | DEV-028 人工親自點擊 QC | Manual Click QC Readiness Gate Added / Manual Click QC Pending | 使用者 / QC | 先執行 `verify:dev-028-manual-click-qc-readiness` 確認 checklist 未壞；再依 QA-DEV-028 補做 MAN-028-001 至 MAN-028-028 人工親自點擊驗證，附 viewport、截圖或錄影、visible error sweep；不得以 automated browser smoke 取代人工親自點擊 QC。 |
-| 6 | DEV-011 / DEV-012 production UI smoke | In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added / Human Login or Explicit Fixture Gate Required | 使用者 / QC | 先執行 `verify:dev-011-012-production-ui-smoke-readiness` 與 `verify:dev-011-012-production-ui-smoke` self-check；完整 smoke 需以已登入 Google 的正式前端，或顯式允許 production 臨時 fixture 建立/清理後，以 `--run-production-fixture` + `DEV011012_ALLOW_PRODUCTION_FIXTURE=1` 完成：開會、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 
 ---
 
@@ -2566,14 +2566,14 @@ CAPA 來源：
 | DEV-008 | 交付點 | Done | 是 | 任務會議細節快速查找 | `SPEC-008`、`verify:dev-008-task-knowledge` | 無 |
 | DEV-009 | 交付點 | Done | 是 | 任務詳情內會議快速補記 | `SPEC-009`、`QA/QC-DEV-009`、`verify:dev-009-task-detail-quick-note` | 無 |
 | DEV-010 | 交付點 | Done | 是 | 會議紀錄操作按鈕狀態溝通 | `SPEC-010`、`QA-DEV-010`、`verify:dev-010-action-feedback` | 無 |
-| DEV-011 | 交付點 | In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
-| DEV-012 | 交付點 | In Verification / Production UI Smoke Readiness Gate Added / Production UI Smoke Executor Added | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke` | production UI smoke |
+| DEV-011 | 交付點 | Done / Production Release Deployed / Production UI Smoke Passed | 是 | AI 任務導向會議紀錄統整工作流 | `SPEC-011`、`QA-DEV-011`、`verify:dev-011-ai-meeting-synthesis`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke`、hotfix commit `7704e2f`、production bundle `assets/index-BkwGqGCZ.js` | 無 |
+| DEV-012 | 交付點 | Done / Production Release Deployed / Production UI Smoke Passed | 是 | AI 會議紀錄自然語言品質提升 | `SPEC-012`、`QA-DEV-012`、`verify:dev-012-meeting-record-quality`、`verify:dev-011-012-production-ui-smoke-readiness`、`verify:dev-011-012-production-ui-smoke`、`QC-DEV-011-012-production-ai-smoke`、hotfix commit `7704e2f`、production bundle `assets/index-BkwGqGCZ.js` | 無 |
 | DEV-013 | 交付點 | Done | 是 | 右鍵任務複製，含子任務與子樹內部依賴 | `SPEC-013`、`QC-DEV-013`、`verify:dev-013-task-duplicate` | 無 |
 | DEV-020 | 交付點 | Done | 是 | 紀錄功能重構與專案變化匯入流程 | `SPEC-020`、`QA-DEV-020`、`verify:dev-020-record-workflow-redesign`、`verify:dev-020-project-change-import-browser` | 無 |
 | DEV-025 | 交付點 | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending | 是 | 受控跨工作區移動專案 | `SPEC-025`、`QA-DEV-025`、`QC-DEV-025`、`verify:dev-025-project-workspace-transfer`、`verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness`、`verify:dev-025-mutating-qc-execution`、Supabase read-only preflight、TypeScript、build | 安全 fixture 上先跑 execution-readiness + read-only fixture readiness + guarded executor self-check，再執行 RPC / RLS / audit / data consistency / RAG visibility DB QC |
 | DEV-026 | 交付點 | Implemented / Browser Smoke Passed | 是 | Trello-like 看板分享體驗 | `SPEC-026`、`QA-DEV-026`、`verify:dev-026-trello-like-board-share-ui`、browser smoke | DB smoke 視 release gate 需要再啟用 |
 | DEV-027 | 交付點 | Implemented / Static + Browser Smoke Passed | 是 | Xmind-like 心智圖模式 | `SPEC-027`、`QA-DEV-027`、`QC-DEV-027` | 觀察實際使用回饋 |
-| DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、`verify:dev-028-manual-click-qc-readiness`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test | 依 QA-DEV-028 補人工親自點擊 QC |
+| DEV-028 | 交付點 | Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed / Production Not Deployed | 是 | 四模式一致的 Trello-like 任務操作契約 | `SPEC-028`、`QA-DEV-028`、`QC-DEV-028`、`verify:dev-028-manual-click-qc-readiness`、DEV-028 static/browser、DEV-027B/027E/DEV-029 regression、TypeScript、build:test、2026-07-09 使用者回報人工親自點擊通過 | production release 需另行授權 |
 | DEV-029 | 交付點 | Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed | 是 | 手機 Pan-First 觸控手勢仲裁與 compact action rail | `SPEC-029`、`QA-DEV-029`、`QC-DEV-029`、`verify:dev-029-mobile-pan-first-interactions`、browser matrix | production deploy 與 physical-phone supplemental 需另行授權 |
 | DEV-034 | 交付點 | Done / Browser QC Passed / Local-first scope | 是 | App 快速啟動與加入主畫面 UX | `SPEC-034`、`QC-DEV-034`、browser QC | 正式雲端 Inbox / 跨裝置同步另開後續 |
 | DEV-035 | 交付點 | Implemented / Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed | 是 | 工作區刪除持久化修正 | `SPEC-035`、`QA-DEV-035`、`QC-DEV-035` | production front-end release 需另行授權 |
@@ -2590,12 +2590,11 @@ CAPA 來源：
 
 ### 交付點完成率
 
-- Done：10 個交付點。
-- In Verification：2 個交付點。
+- Done：12 個交付點。
 - DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending：1 個交付點。
 - Implemented / Browser Smoke Passed：1 個交付點。
 - Implemented / Static + Browser Smoke Passed：1 個交付點。
-- Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / Production Not Deployed：1 個交付點。
+- Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed / Production Not Deployed：1 個交付點。
 - Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed：1 個交付點。
 - Done / Browser QC Passed / Local-first scope：1 個交付點。
 - Implemented / Local Automated QC Passed / Supabase DB Role QC Passed / Production Not Deployed：1 個交付點。
@@ -2624,7 +2623,7 @@ CAPA 來源：
 | DEV-017 | 開發點 | DEV-005 / DEV-010 | Done | 會議紀錄右側欄可拖拉調整並記憶寬度 | `verify:dev-017-record-sidebar-resize`、browser verifier |
 | DEV-019 | 開發點 | DEV-002 / DEV-005 / DEV-018 | Done | 紀錄類型與會議流程層級重整 | `SPEC-019`、`QA-DEV-019`、`verify:dev-010-action-feedback`、`verify:dev-019-record-type-layering-browser` |
 | DEV-023 | 開發點 | DEV-020 | Implemented / Browser QC Passed / DB unchanged | 專案變化匯入整併為紀錄流程第一步 | `SPEC-023`、`QA-DEV-023`、`QC-DEV-023`、`verify:dev-023-record-project-change-import-workflow-step`、`verify:dev-020-project-change-import-browser` |
-| DEV-024 | 開發點 | DEV-011 / DEV-012 / DEV-020 | Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Not Executed | AI整理保留手寫內容與章節結構 | `SPEC-024`、`QA-DEV-024`、`QC-DEV-024`、`verify:dev-024-ai-synthesis-preserve-human-draft`、`verify:dev-024-ai-synthesis-preserve-human-draft-browser` |
+| DEV-024 | 開發點 | DEV-011 / DEV-012 / DEV-020 | Implemented / Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed | AI整理保留手寫內容與章節結構 | `SPEC-024`、`QA-DEV-024`、`QC-DEV-024`、`verify:dev-024-ai-synthesis-preserve-human-draft`、`verify:dev-024-ai-synthesis-preserve-human-draft-browser`、`verify:dev-024-production-ui-smoke` |
 
 ---
 
@@ -2632,7 +2631,6 @@ CAPA 來源：
 
 | 項目 | 影響 | 解除方式 |
 |---|---|---|
-| DEV-011 / DEV-012 尚缺 production UI smoke | 後端 AI 統整已在正式環境通過；read-only readiness gate 已確認 session injection + cleanup pattern 與 local browser ROT 覆蓋；guarded executor 已補，預設 self-check 不 mutation，但完整前端流程尚未在正式站完成 | 使用已登入 Google 的正式前端，或顯式允許 production 臨時 fixture 建立/清理後，以 `--run-production-fixture` + `DEV011012_ALLOW_PRODUCTION_FIXTURE=1` 建立或開啟看板並完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識查找。 |
 | DEV-025 尚缺 mutating Supabase DB QC | 受控跨工作區移動已本機實作並通過靜態 gate，正式 DB read-only preflight 已確認 RPC / grants / constraints；已新增 read-only fixture-readiness harness、execution-readiness static gate 與 guarded mutating executor self-check，但尚未實際搬移測試資料驗證 RLS / audit / RAG visibility | 建立 staging / disposable fixture 或 production-safe test workspace/board 後，先跑 `verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness` 與 `verify:dev-025-mutating-qc-execution` self-check，再以 actual mode 執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix 與資料一致性 QC。 |
 | 遠端 DB/Edge/production gate 仍需專項流程 | DEV-045 Phase 1 + Phase 2 local source 已完成，但 Phase 3 會套 Supabase migration / Edge feed；DEV-025/037/040 也有 DB/Edge gate | 進入 Supabase skill + deployment-release-gate；不得直接 apply remote migration/deploy。 |
 

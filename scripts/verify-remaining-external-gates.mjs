@@ -135,26 +135,29 @@ add(
 );
 
 add(
-  'DEV-028 still requires manual click QC and rejects automated replacement',
+  'DEV-028 manual click QC is closed by user report while production remains gated',
   includesAll(existing.devTask ?? '', [
-    'DEV-028 人工親自點擊 QC',
-    'Manual Click QC Readiness Gate Added',
-    'Manual Click QC Pending',
-    'MAN-028-001 至 MAN-028-028',
-    '不得以 automated browser smoke 取代人工親自點擊 QC',
+    'User-Reported Manual Click QC Passed',
+    '2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過',
+    'production release 需另行授權',
+    '未附逐項截圖/錄影證據',
   ]),
 );
 
 add(
-  'DEV-011/012 production UI smoke remains login-or-fixture gated',
+  'DEV-011/012 production UI smoke is closed by hotfix release and fixture evidence',
   includesAll(existing.devTask ?? '', [
-    'DEV-011 / DEV-012 production UI smoke',
-    'Production UI Smoke Executor Added',
-    'Human Login or Explicit Fixture Gate Required',
+    'Done / Production Release Deployed / Production UI Smoke Passed',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'published_record_found=true',
+    'record_task_links=2',
+    'rag_enabled=true',
+    'source_document_present=true',
     'verify:dev-011-012-production-ui-smoke-readiness',
     'verify:dev-011-012-production-ui-smoke',
-    '已登入 Google 的正式前端',
-    'production 臨時 fixture 建立/清理',
+    'DEV011012_ALLOW_PRODUCTION_FIXTURE=1',
   ]),
 );
 
@@ -163,8 +166,6 @@ const nextStepRows = [
   'DEV-025 受控跨工作區移動專案 DB QC',
   'DEV-040 Phase 1 P0 production/Edge gate',
   'DEV-044 Phase 3 destructive recovery human re-entry',
-  'DEV-028 人工親自點擊 QC',
-  'DEV-011 / DEV-012 production UI smoke',
 ].map(token => lineContaining(existing.devTask ?? '', token));
 
 add(
@@ -179,10 +180,14 @@ add(
     'verify:remaining-external-gates',
     'verify:dev-011-012-production-ui-smoke',
     'Supabase DB / Edge deploy gate',
-    '已登入正式前端 UI smoke',
-    'DEV-028 人工親自點擊 QC',
+    'Done / Production Release Deployed / Production UI Smoke Passed',
+    'codex/dev011012-rag-order-hotfix',
+    '7704e2f',
+    'assets/index-BkwGqGCZ.js',
+    'User-Reported Manual Click QC Passed',
     'guarded mutating executor',
-    'mutating role-data QC 仍需安全 fixture',
+    'Mutating QC Pending',
+    'staging / disposable fixture',
     'remote Edge 仍未部署 timeout guard',
     'DEV-044 durable/destructive recovery 仍需另行 gate',
     'Remote DB-Edge-Live Gate Pending',

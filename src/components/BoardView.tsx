@@ -1215,9 +1215,15 @@ const BoardView = () => {
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
         >
-            <div className="flex-1 flex min-w-0 bg-slate-50 overflow-hidden">
+            <div
+                className="flex-1 flex min-w-0 overflow-hidden bg-slate-100"
+                data-layout-region="board-shell"
+            >
                 <TaskWorkbenchPanel canMoveTask={canMoveTask} />
-                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <div
+                    className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-100"
+                    data-layout-region="board-workspace"
+                >
                     {isRecordTaskSelectionMode && (
                         <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-[10px] py-[6px]">
                             <div className="flex items-center justify-between gap-3">
@@ -1272,8 +1278,9 @@ const BoardView = () => {
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
                         ref={mobilePanSurfaceRef}
-                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent`}
+                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent`}
                         data-mobile-pan-surface="board"
+                        data-layout-region="board-canvas"
                     >
                         <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                             {rootNodes.map(node => (

@@ -163,7 +163,7 @@ async (page) => {
     await page.getByText('更多詳情選項').first().waitFor({ state: 'hidden', timeout: 10000 });
   };
 
-  const assertWorkbenchRowDragSurfaceParity = async (taskLocator, message) => {
+  const assertUnplacedWorkbenchRowDragSurface = async (taskLocator, message) => {
     const dragSurface = await taskLocator.getAttribute('data-task-workbench-drag-surface');
     assert(dragSurface === 'task-row-root', `${message} should expose the shared row-root drag surface`, { dragSurface });
     assert(
@@ -187,6 +187,23 @@ async (page) => {
       }, { x: startX, y: startY });
       assert(hitIsInsideRow, `${message} sample point should hit inside the row root`, { ratio, sourceBox, startX, startY });
     }
+  };
+
+  const assertPlacedWorkbenchRowReadOnly = async (taskLocator, message) => {
+    const dragSurface = await taskLocator.getAttribute('data-task-workbench-drag-surface');
+    assert(dragSurface === null, `${message} should not expose a drag surface`, { dragSurface });
+    assert(
+      await taskLocator.getAttribute('data-task-workbench-readonly-task-card') === 'true',
+      `${message} should expose the read-only workbench contract`,
+    );
+    assert(
+      await taskLocator.locator('[data-task-drag-handle="true"]').count() === 0,
+      `${message} should not render a drag handle`,
+    );
+    assert(
+      await taskLocator.getAttribute('data-touch-tap-guard') === 'true',
+      `${message} should keep click/tap protection for opening task details`,
+    );
   };
 
   let step = 'seed';
@@ -233,14 +250,15 @@ async (page) => {
     assert(
       placementTone.unplacedLane !== 'rgb(255, 255, 255)' &&
         placementTone.placedLane !== 'rgb(255, 255, 255)' &&
-        placementTone.unplacedLane !== placementTone.placedLane,
-      'unplaced and placed task lanes should both use light blue backgrounds with different intensity',
+        placementTone.unplacedLane === placementTone.placedLane,
+      'unplaced and placed task lanes should share one Morandi blue-gray task body tone',
       placementTone,
     );
     assert(
-      placementTone.unplacedHeader !== placementTone.placedHeader &&
-        placementTone.unplacedAccent !== placementTone.placedAccent,
-      'unplaced and placed section headers should keep distinct blue header treatments',
+      placementTone.unplacedHeader === placementTone.placedHeader &&
+        placementTone.unplacedHeader !== placementTone.unplacedLane &&
+        placementTone.unplacedAccent === placementTone.placedAccent,
+      'section headers should use one separate title tone from task bodies',
       placementTone,
     );
     assert(await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').count() === 1, 'legacy inbox item should be migrated into one unplaced task card');
@@ -306,14 +324,14 @@ async (page) => {
       'placed workbench task should open the shared task context menu',
     );
 
-    step = 'drag-surface-parity';
-    await assertWorkbenchRowDragSurfaceParity(
+    step = 'workbench-drag-contract';
+    await assertUnplacedWorkbenchRowDragSurface(
       seededUnplacedCard,
       'unplaced workbench task should drag from the shared row-root surface',
     );
-    await assertWorkbenchRowDragSurfaceParity(
+    await assertPlacedWorkbenchRowReadOnly(
       sortedPlacedCard,
-      'placed workbench task should drag from the shared row-root surface',
+      'placed workbench task should be a read-only workbench list entry',
     );
     const placedProbeNode = await page.evaluate(() => {
       const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
@@ -321,7 +339,7 @@ async (page) => {
     });
     assert(
       placedProbeNode?.parentId === 'dev039-placement-root-a',
-      'drag-surface probes should not mutate placed task hierarchy',
+      'read-only placed-row probes should not mutate placed task hierarchy',
       { placedProbeNode },
     );
 
@@ -357,31 +375,24 @@ async (page) => {
     const placedMovedCard = workbenchPanel.locator('[data-task-workbench-placed-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).first();
     assert(await placedMovedCard.count() === 1, 'moved task should appear in placed lane exactly once');
 
-    step = 'drag-placed-back-to-unplaced';
+    step = 'placed-task-drag-back-blocked';
     const placedBackSourceBox = await placedMovedCard.boundingBox();
     const unplacedBackTargetBox = await unplacedLane.boundingBox();
     await dragToCenter(placedMovedCard, unplacedLane, { targetOffsetY: 24 });
-    try {
-      await page.waitForFunction(() => {
-        const unplacedCards = Array.from(document.querySelectorAll('[data-task-workbench-unplaced-task-card="true"]'));
-        return unplacedCards.some(card => card.textContent?.includes('臨時拜訪客戶'));
-      }, null, { timeout: 10000 });
-    } catch (error) {
-      await page.screenshot({ path: `output/playwright/dev-039-placement-drag-back-failure-${Date.now()}.png`, fullPage: true });
-      throw new Error(`drag back did not place task in unplaced lane: ${JSON.stringify({ placedBackSourceBox, unplacedBackTargetBox })}`);
-    }
+    await page.waitForTimeout(500);
     assert(
-      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 0,
-      'dragging placed task back should remove it from the placed board lane',
+      await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 1,
+      'dragging a placed task back should be blocked and keep it in the placed board lane',
+      { placedBackSourceBox, unplacedBackTargetBox },
     );
     assert(
-      await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 1,
-      'dragging placed task back should show one unplaced task card',
+      await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 0,
+      'blocked placed-task drag should not create an unplaced duplicate',
     );
     const persistedUnplaced = await page.evaluate(() => JSON.parse(localStorage.getItem('projed-task-workbench-unplaced-tasks:v1') || '[]'));
     assert(
-      persistedUnplaced.some((task) => task.title === '臨時拜訪客戶' && task.boardId === '__task_workbench_unplaced__'),
-      'unplaced task should persist with the local unplaced placement id',
+      persistedUnplaced.every((task) => task.title !== '臨時拜訪客戶'),
+      'blocked placed-task drag should not persist the moved task as local unplaced',
       { persistedUnplaced },
     );
 
@@ -446,7 +457,7 @@ async (page) => {
       'placed board lane should respond to board filters',
     );
     assert(
-      await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).count() === 1,
+      await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '尚未歸位的採購提醒' }).count() === 1,
       'unplaced lane should remain visible when placed-board filters change',
     );
 

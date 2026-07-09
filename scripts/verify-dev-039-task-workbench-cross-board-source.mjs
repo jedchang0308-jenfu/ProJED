@@ -33,9 +33,8 @@ const source = Object.fromEntries(
 );
 
 assert(
-  'workbench source exposes cross-board list and unplaced merge helpers',
+  'workbench source exposes cross-board list helpers',
   source.taskWorkbenchSource.includes('listWorkbenchTasks') &&
-    source.taskWorkbenchSource.includes('mergeUnplacedTasks') &&
     source.taskWorkbenchSource.includes('isTaskWorkbenchSortableTask') &&
     source.taskWorkbenchSource.includes("task.nodeType !== 'group'") &&
     source.taskWorkbenchSource.includes('nodeService.listByProject') &&
@@ -85,7 +84,7 @@ assert(
 );
 
 assert(
-  'TaskWorkbenchPanel loads all boardOptions and does not source all-sorted tasks from active board only',
+  'TaskWorkbenchPanel loads all boardOptions and does not source placed tasks from active board only',
   source.taskWorkbench.includes("from '../features/taskWorkbench/source'") &&
     source.taskWorkbench.includes('listWorkbenchTasks(boardOptions)') &&
     source.taskWorkbench.includes('setNodes(workbenchSource.tasks, {') &&
@@ -98,8 +97,11 @@ assert(
     source.taskWorkbench.includes('boardScopeIds') &&
     source.taskWorkbench.includes('boardScopeIdSet.has(task.boardId)') &&
     source.taskWorkbench.includes('isTaskEffectivelyVisible(task, nodes, { boardId: task.boardId })') &&
-    source.taskWorkbench.includes('mergeUnplacedTasks(visiblePlacedTasks, unplacedTasks)') &&
+    source.taskWorkbench.includes('sortTasksByDueDate(visiblePlacedTasks)') &&
+    source.taskWorkbench.includes('tasks={unplacedTasks}') &&
+    source.taskWorkbench.includes('placement="placed"') &&
     source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    !source.taskWorkbench.includes('mergeUnplacedTasks') &&
     !source.taskWorkbench.includes('Object.values(nodes)\n    .filter((task): task is TaskNode => Boolean(task) && !task.isArchived'),
 );
 

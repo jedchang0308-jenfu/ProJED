@@ -1,6 +1,6 @@
 # QA-DEV-028: 四模式一致的 Trello-like 任務操作驗證計畫
 
-狀態: QA Plan Updated / Local Automated QA Passed / Manual Click QC Readiness Gate Added / Manual Click QC Pending / 2026-07-06 Detail-Only Title Edit Addendum Implemented
+狀態: QA Plan Updated / Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed / 2026-07-06 Detail-Only Title Edit Addendum Implemented
 對應 DEV: DEV-028
 對應 SPEC: `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md`
 建立日期: 2026-06-26
@@ -69,7 +69,7 @@ Phase gate 共通要求:
 - QC 操作者必須在真實瀏覽器或 Codex in-app browser 中，用滑鼠、觸控板或觸控模擬逐項操作。
 - 每個主要案例都要記錄 `模式`、`viewport`、`操作步驟`、`預期結果`、`實際結果`、`證據` 與 `判定`。
 - 若操作開啟 modal、context menu、rename input、selected ring、drag ghost、resize handle 或 mobile keyboard/focus，需附截圖或錄影片段。
-- 若任一人工點擊案例未執行，DEV-028 只能判定為 `Automated Browser Smoke Passed / Manual Click QC Pending`，不得宣告人工驗收通過。
+- 2026-07-09 使用者回報人工親自點擊通過；若後續需要正式稽核證據，仍需補 MAN-028-001 至 MAN-028-028 的逐項截圖/錄影或操作紀錄。
 - 若自動化通過但人工點擊失敗，以人工點擊失敗為準，回 RD 修正。
 
 人工點擊執行環境:
@@ -139,17 +139,17 @@ Phase gate 共通要求:
 
 | ID | Acceptance Criteria | Auto Evidence | Manual Evidence | Result |
 |---|---|---|---|---|
-| AC-028-001 | 四模式單擊既有任務都選取並開 `TaskDetailsModal` | `verify:dev-028-cross-mode-task-interactions-browser` | MAN-028-001、007、012、018 | Manual Pending |
-| AC-028-002 | 四模式關閉詳情後保留 selected highlight / ring | browser smoke selected retention | MAN-028-002、008、023 | Manual Pending |
-| AC-028-003 | 單擊任務名稱不直接 rename | static/browser smoke | MAN-028-003、013 | Manual Pending |
-| AC-028-004 | 改名只能在任務詳情頁 title edit 觸發；外層任務 surface 不提供 rename | static verifier + keyboard/context menu smoke | MAN-028-005、006、017、024 | Manual Pending |
-| AC-028-005 | 心智圖保留 `Enter` 新增同階、`Tab` 新增子階與方向鍵導航，但直接打字不得進入外層 rename | DEV-027B/027E regression | MAN-028-008、009 | Manual Pending |
-| AC-028-006 | 右鍵/長按為任務操作選單，心智圖關聯線入口改走明確 action | DEV-027E regression | MAN-028-010、011、025 | Manual Pending |
-| AC-028-007 | 看板 Level 3+ 與卡片正面資訊密度保留 | static verifier | MAN-028-014、015 | Manual Pending |
-| AC-028-008 | 甘特 click 與 drag/resize 互斥 | browser smoke | MAN-028-018、019、020 | Manual Pending |
-| AC-028-009 | Desktop / laptop / mobile viewport 無 visible runtime error、重疊、裁切、非預期 overflow | lint/build/browser smoke | MAN-028-022、023、026 | Manual Pending |
-| AC-028-010 | ESC 可關閉最上層暫時性 UI，且不穿透關閉父層 | `verify:dev-028-cross-mode-task-interactions-browser` | MAN-028-027 | Manual Pending |
-| AC-028-011 | DEV-029 實作後，手機任務卡與子任務列短滑採 pan-first，不誤開詳情或任務功能 | `verify:dev-029-mobile-pan-first-interactions-browser` | MAN-028-028 | Not Authorized / Pending |
+| AC-028-001 | 四模式單擊既有任務都選取並開 `TaskDetailsModal` | `verify:dev-028-cross-mode-task-interactions-browser` | MAN-028-001、007、012、018 | User-Reported Manual Pass |
+| AC-028-002 | 四模式關閉詳情後保留 selected highlight / ring | browser smoke selected retention | MAN-028-002、008、023 | User-Reported Manual Pass |
+| AC-028-003 | 單擊任務名稱不直接 rename | static/browser smoke | MAN-028-003、013 | User-Reported Manual Pass |
+| AC-028-004 | 改名只能在任務詳情頁 title edit 觸發；外層任務 surface 不提供 rename | static verifier + keyboard/context menu smoke | MAN-028-005、006、017、024 | User-Reported Manual Pass |
+| AC-028-005 | 心智圖保留 `Enter` 新增同階、`Tab` 新增子階與方向鍵導航，但直接打字不得進入外層 rename | DEV-027B/027E regression | MAN-028-008、009 | User-Reported Manual Pass |
+| AC-028-006 | 右鍵/長按為任務操作選單，心智圖關聯線入口改走明確 action | DEV-027E regression | MAN-028-010、011、025 | User-Reported Manual Pass |
+| AC-028-007 | 看板 Level 3+ 與卡片正面資訊密度保留 | static verifier | MAN-028-014、015 | User-Reported Manual Pass |
+| AC-028-008 | 甘特 click 與 drag/resize 互斥 | browser smoke | MAN-028-018、019、020 | User-Reported Manual Pass |
+| AC-028-009 | Desktop / laptop / mobile viewport 無 visible runtime error、重疊、裁切、非預期 overflow | lint/build/browser smoke | MAN-028-022、023、026 | User-Reported Manual Pass |
+| AC-028-010 | ESC 可關閉最上層暫時性 UI，且不穿透關閉父層 | `verify:dev-028-cross-mode-task-interactions-browser` | MAN-028-027 | User-Reported Manual Pass |
+| AC-028-011 | DEV-029 實作後，手機任務卡與子任務列短滑採 pan-first，不誤開詳情或任務功能 | `verify:dev-029-mobile-pan-first-interactions-browser` | MAN-028-028 | User-Reported Manual Pass |
 
 ## 四模式手動驗證矩陣
 
@@ -264,4 +264,4 @@ QC 報告至少需附:
 npm.cmd run verify:dev-028-manual-click-qc-readiness
 ```
 
-此 gate 預設只讀、`mutates_database=false`、`manual_qc_completed=false`。它只檢查 manual matrix 與 QC handoff 是否完整，不代表 MAN-028-001 至 MAN-028-028 已由人類實際操作通過。若此 gate 通過但人工操作未執行，DEV-028 仍維持 `Manual Click QC Pending`。
+此 gate 預設只讀、`mutates_database=false`、`manual_qc_completed=false`。它只檢查 manual matrix 與 QC handoff 是否完整，不代表 MAN-028-001 至 MAN-028-028 已由人類實際操作通過。2026-07-09 使用者已回報人工親自點擊通過；後續若要稽核級證據，需補逐項截圖/錄影。

@@ -29,11 +29,12 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
-import { toggleTaskWorkbenchPanel } from './TaskWorkbenchPanel';
+import { closeTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
 import { compactIconButtonClass } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import type { ViewMode } from '../types';
+import { getTopOpenLeftPanel } from '../utils/leftPanelEscapeStack';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -155,6 +156,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       const isEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (isEditable) return;
 
+      if (event.key === 'Escape') {
+        const hasBlockingOverlay = Boolean(document.querySelector([
+          '[data-task-details-modal="true"]',
+          '[data-filter-menu-panel]',
+          '[data-mode-switcher-menu="true"]',
+          '[data-tag-picker-panel]',
+          '[data-workspace-create-dialog="true"]',
+          '.global-dialog-content',
+        ].join(','))) || Boolean(useBoardStore.getState().contextMenuState?.isOpen);
+        const topLeftPanel = hasBlockingOverlay ? null : getTopOpenLeftPanel();
+
+        if (topLeftPanel) {
+          event.preventDefault();
+          if (topLeftPanel === 'task-workbench') {
+            closeTaskWorkbenchPanel();
+          } else {
+            setSidebarOpen(false);
+          }
+          return;
+        }
+      }
+
       if (event.key === 'Escape' && isSystemPageView) {
         event.preventDefault();
         returnToBoard();
@@ -172,16 +195,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canRedo, canUndo, isSystemPageView, redo, returnToBoard, undo]);
+  }, [canRedo, canUndo, isSystemPageView, redo, returnToBoard, setSidebarOpen, undo]);
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-800" data-mobile-density="compact">
-      <nav className="app-main-nav z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-2 shadow-sm sm:px-4">
+    <div className="flex h-screen flex-col bg-slate-100 text-slate-800" data-mobile-density="compact">
+      <nav
+        className="app-main-nav z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-300/80 bg-white/95 px-2 shadow-[0_1px_8px_rgba(15,23,42,0.08)] backdrop-blur sm:px-3"
+        data-layout-region="topbar"
+        data-app-topbar="true"
+      >
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="mr-1 rounded border border-slate-200 p-1 text-slate-500 hover:bg-slate-100 sm:mr-2"
+            className="mr-1 rounded-md border border-slate-200 bg-slate-50 p-1 text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-700 sm:mr-2"
             title={isSidebarOpen ? '收合側欄' : '展開側欄'}
             aria-label={isSidebarOpen ? '收合工作區選單' : '展開工作區選單'}
             data-main-sidebar-toggle="true"
@@ -191,7 +218,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={handleToggleMobileTaskWorkbench}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-200 bg-sky-50 text-sky-700 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-300/40"
             title="開啟全域任務平台"
             aria-label="開啟全域任務平台"
             data-mobile-task-workbench-nav-entry="true"
@@ -199,7 +226,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <ClipboardList size={17} />
           </button>
 
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium sm:gap-2">
+          <div
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-1.5 py-0.5 text-sm font-medium shadow-inner sm:gap-2"
+            data-topbar-context-group="true"
+          >
             {isSettingsScopeView && (
               <>
                 <ChevronRight size={14} className="hidden text-slate-300 sm:block" />
@@ -232,7 +262,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   {activeBoard.title}
                 </h1>
 
-                <div className="ml-0 flex shrink-0 items-center gap-1 border-l-0 border-slate-200 pl-0 sm:ml-[10px] sm:gap-[8px] sm:border-l sm:pl-[10px]">
+                <div
+                  className="ml-0 flex shrink-0 items-center gap-1 rounded-md border border-slate-200/80 bg-white/90 p-0.5 sm:ml-[10px] sm:gap-[6px]"
+                  data-topbar-board-controls="true"
+                >
                   {!isMobileBoardOnly ? (
                     <ModeSwitcher
                       value={currentView}
@@ -282,7 +315,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </div>
         </div>
 
-        <div className="relative z-20 flex shrink-0 items-center gap-1 sm:gap-2">
+        <div
+          className="relative z-20 hidden shrink-0 items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/80 p-0.5 shadow-inner sm:flex"
+          data-topbar-action-group="true"
+        >
           {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
             <button
               type="button"

@@ -87,11 +87,12 @@ add(
 );
 
 add(
-  'QC report keeps manual click QC pending and does not overclaim completion',
+  'QC report records user-reported manual click pass without overclaiming production',
   includesAll(contents.qc, [
-    'Manual Click QC Pending',
-    'MAN-028-001 至 MAN-028-028 人工親自點擊 QC 未執行',
-    '不得宣稱已完成人工親自點擊 QC',
+    'User-Reported Manual Click QC Passed',
+    '2026-07-09 使用者回報人工親自點擊 QC 通過',
+    '未附逐項截圖/錄影',
+    'Production deploy 未執行',
   ]),
 );
 
@@ -107,31 +108,33 @@ add(
 );
 
 add(
-  'DEV-028 cross-mode static verifier tracks this manual readiness gate',
+  'DEV-028 cross-mode static verifier tracks this manual gate and user-reported boundary',
   includesAll(contents.crossModeVerifier, [
     'verify-dev-028-manual-click-qc-readiness.mjs',
     'verify:dev-028-manual-click-qc-readiness',
-    'Manual click QC readiness gate is registered and cannot be mistaken for manual pass',
+    'Manual click QC gate is registered with user-reported pass and production boundary',
   ]),
 );
 
 add(
-  'dev_task records readiness progress while keeping manual click QC pending',
+  'dev_task records user-reported manual click QC pass while keeping production gated',
   includesAll(contents.devTask, [
     'verify:dev-028-manual-click-qc-readiness',
     'Manual Click QC Readiness Gate Added',
-    'Manual Click QC Pending',
-    '不得以 automated browser smoke 取代人工親自點擊 QC',
+    'User-Reported Manual Click QC Passed',
+    '2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過',
+    'production release 需另行授權',
   ]),
 );
 
 add(
-  'documentation map records readiness progress while preserving pending boundary',
+  'documentation map records user-reported pass and evidence boundary',
   includesAll(contents.documentationMap, [
     'DEV-028',
     'Manual Click QC Readiness Gate Added',
-    'Manual Click QC Pending',
+    'User-Reported Manual Click QC Passed',
     'MAN-028-001',
+    '若需稽核級證據仍應補逐項截圖/錄影',
   ]),
 );
 
@@ -139,7 +142,9 @@ const failures = checks.filter(check => !check.pass);
 const payload = {
   ok: failures.length === 0,
   mutates_database: false,
-  manual_qc_completed: false,
+  manual_qc_completed: failures.length === 0,
+  evidence_source: 'user_report',
+  formal_manual_evidence_attached: false,
   checks,
 };
 
