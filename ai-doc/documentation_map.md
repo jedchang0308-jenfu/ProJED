@@ -7,7 +7,7 @@
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
 | `ai-doc/decisions/ADR-040-production-migration-history-reconciliation.md` | Accepted / Source Reconciled / Production Mutation Pending | DEV-045 / Release Governance | 將production 12個remote-only還原為7個comment-only alias與5個原始source migration；定義11筆history-only repair、repair後唯一允許的5筆pending migration、schema hash hard gate與Edge provenance。 |
-| `ai-doc/release/PREPRODUCTION-DEV-045-20260713.md` | Level 3 Execution In Progress / Production Not Authorized | DEV-045 / DEV-037 | 記錄source boundary、TEST backup與38/38 migration對齊、TEST/repo Edge逐檔相同、production Edge較舊、preview/auth/ICS/client剩餘gate。 |
+| `ai-doc/release/PREPRODUCTION-DEV-045-20260713.md` | Level 3 Release Candidate Passed / Production Not Authorized | DEV-045 / DEV-037 | 記錄TEST backup與38/38 migration對齊、TEST Edge v4、Firebase preview artifact provenance、authenticated v3 DOM/ICS exact diff、v1/v2 compatibility、token/task mutation、Google client與cleanup證據；production repair / migration / Edge / Hosting仍待Go / No-Go。 |
 | `scripts/verify-supabase-migration-aliases.mjs` | 65/65 Passed | Release Governance | 鎖定11份comment-only alias、canonical hash、remote evidence與5份production source migration SHA-256。 |
 
 PM治理註記：本輪只對ProJED-TEST套migration，且先完成schema/data backup；production只讀。Production migration repair、DB push、Edge與Firebase live仍須獨立高風險確認。
