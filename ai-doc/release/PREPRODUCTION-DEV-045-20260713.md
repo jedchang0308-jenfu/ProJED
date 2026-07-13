@@ -1,6 +1,6 @@
 # DEV-045 Pre-production Evidence - 2026-07-13
 
-狀態：Level 3 Execution In Progress / Production Mutation Not Authorized
+狀態：Level 3 Partial Pass / Production Mutation Not Authorized
 
 ## Source boundary
 
@@ -14,7 +14,10 @@
 
 ## Completed evidence
 
-- Staging env resolves toProJED-TEST，OAuth mode，無test email/password，auto-login disabled。
+- Release commit：`d69899c`，已推送至`origin/持續優化2`；worktree於QC開始前為clean。
+- `npm run verify:source`通過；lint為0 error / 63既有warning，production build、production auth 5/5、migration provenance 65/65、ICS與核心gate全數通過。
+- Staging artifact由`d69899c`產生，入口為`assets/index-Bp02B5N8.js`與`assets/index-CLsSmPB5.css`；28個artifact檔案未命中test email/password。
+- Staging env resolves to ProJED-TEST，OAuth mode，無test email/password，auto-login disabled。
 - Production migration forensic：12個remote-only statements已下載；source補回後production remote-only為0。
 - Production dry-run：16個local-only已分類為11個history-only repair與5個真實pending migration；未執行production repair/push。
 - TEST backup：schema 136935 bytes / SHA-256 `354BA21865ED82C25D2E85A3A2B4275478CA9B4C9AE579AC6F0C591FF59A5B08`；data 83593 bytes / SHA-256 `1361429E5465D9D5323B5020FCA75233F2EDFF2DECB7ACE15B2B0C32CC2E6A2D`。
@@ -22,13 +25,24 @@
 - Edge source：TEST `calendar-feed`逐檔等於repo；production仍是較舊source，保留作rollback baseline。
 - Migration provenance verifier：65 passed / 0 failed。
 
+## Level 3 execution evidence
+
+- 既有Firebase `level3-smoke` preview仍提供與本次staging artifact相同的`index-Bp02B5N8.js`；公開HTTPS / root / JS / CSS / service worker smoke通過，0 critical console、0 pageerror、0 critical failed request。
+- 以已登入TEST帳號完成真實UI smoke：逐看板條件得到60項任務、113個事件，包含開始53與到期60；展開後113列皆具有task ID、board ID、date與date type，且事件identity不重複。
+- 依日期 / 依看板切換後事件集合維持113；81個缺少所選日期的未產生原因可展開檢視。
+- 建立`LEVEL3-DEV045-20260713-1530`後，live ICS為HTTP 200、`text/calendar`、113個VEVENT，開始53、到期60，與UI摘要一致。
+- Token lifecycle：停用為410；重新啟用後同token恢復200 / 113；重生後舊token為404，新token為200 / 113。
+- Google Calendar外部client成功建立訂閱並完成首次抓取；同一dual-date任務可見獨立開始與到期全天事件。驗證後已取消訂閱並移除外部日曆。
+- TEST fixture已由Supabase dashboard以精確名稱刪除；刪除前matching rows為1，刪除後residual count為0。完整feed token未寫入文件或Git。
+
 ## Remaining Level 3 gates
 
-- 從最終release commit重跑`verify:source`與staging artifact secret scan。
-- 部署新的Firebase `level3-smoke` preview並驗證bundle provenance、HTTPS、console/pageerror/network與service worker。
-- 以staging Google OAuth完成authenticated UI、DEV-045 v3 preview/live ICS identity、token lifecycle、v1/v2 compatibility與cleanup。
-- 至少一個Google Calendar或Outlook外部訂閱client完成首次ingestion；另一client若受同步延遲限制，需保留pending evidence與觀察時間。
+- Firebase CLI refresh token仍無效；必須完成`firebase login --reauth`後，從`d69899c`重新部署新的`level3-smoke` channel。既有preview的bundle-hash-equivalent smoke不能代替fresh deployment provenance。
+- G3-05目前完成事件總數、date-type分布與113筆DOM identity完整性；仍需產出DOM / ICS machine-readable identity diff為0的正式artifact。
+- G3-08 task title / date / status更新後重抓feed、G3-09保留同token修改filters、G3-12 live v1 / defensive v2 feed仍未執行。
+- Outlook無可用登入工作階段，停在Microsoft登入頁；Google已滿足G3-13至少一個外部client，但Google / Outlook雙client parity仍為pending。
+- Fresh preview的authenticated hard reload、service worker controller、1440 / 1024 / 390 / 320實機截圖仍待補；本機browser gates不取代fresh preview evidence。
 
 ## Production stop gate
 
-在Level 3 authenticated/ICS/client evidence未完成，以及release owner未明確核准production mutation前，不執行migration repair、DB push、production Edge deploy或Firebase live deploy。
+在上述Level 3缺口未完成，以及release owner未明確核准production mutation前，不執行migration repair、DB push、production Edge deploy或Firebase live deploy。
