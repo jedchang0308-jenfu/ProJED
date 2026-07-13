@@ -79,29 +79,22 @@ async (page) => {
 
     step = 'calendar settings scope wrapper';
     const wrapperText = await page.locator('[data-calendar-settings-scope="external-link"]').innerText();
+    assert(wrapperText.includes('設定範圍'), 'calendar settings should label the scope summary', { wrapperText });
     assert(wrapperText.includes('外部連結'), 'calendar settings should expose external-link scope', { wrapperText });
-    assert(wrapperText.includes('來源範圍由訂閱條件決定'), 'calendar settings should explain source scope ownership', { wrapperText });
 
-    step = 'calendar source-scope UI or explicit Supabase fallback';
-    const sourceScopeForm = page.locator('[data-calendar-subscription-scope-form="true"]');
-    const sourceScopeFormCount = await sourceScopeForm.count();
-    let supabaseUiSkipped = false;
-    if (sourceScopeFormCount > 0) {
-      const formText = await sourceScopeForm.first().innerText();
-      assert(formText.includes('訂閱範圍'), 'source form should name subscription scope', { formText });
-      assert(formText.includes('目前看板'), 'source form should include board scope', { formText });
-      assert(formText.includes('工作區全部看板'), 'source form should include workspace scope', { formText });
-      assert(formText.includes('自訂範圍'), 'source form should include custom scope', { formText });
-      assert(formText.includes('這個訂閱會包含'), 'source form should show live preview', { formText });
-    } else {
-      const bodyText = await page.locator('body').innerText();
-      assert(
-        bodyText.includes('自訂行事曆訂閱需要 Supabase 後端'),
-        'local-test browser gate should show explicit Supabase backend fallback when source UI is unavailable',
-        { bodyText },
-      );
-      supabaseUiSkipped = true;
-    }
+    step = 'calendar v3 per-board source controls';
+    const builder = page.locator('[data-calendar-subscription-builder="true"]').first();
+    await builder.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await builder.getAttribute('data-calendar-subscription-builder-version') === '3', 'calendar source controls should use the v3 contract');
+    const filterToggle = builder.locator('[data-calendar-subscription-filter-toggle="true"]');
+    assert(await filterToggle.count() === 1, 'calendar source controls should expose the per-board filter entry point');
+    await filterToggle.click();
+    const filterPanel = builder.locator('[data-calendar-subscription-filter-panel="true"]');
+    await filterPanel.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await filterPanel.locator('[data-calendar-subscription-board-select="true"]').count() === 1, 'calendar source controls should select one board at a time');
+    assert(await filterPanel.locator('[data-calendar-subscription-board-date-types="true"]').count() === 1, 'each board should own its event date conditions');
+    assert(await builder.locator('[data-calendar-subscription-event-summary="true"]').count() === 1, 'calendar source controls should expose the resulting event scope');
+    assert(await page.locator('[data-calendar-subscription-scope-form="true"]').count() === 0, 'legacy global source-scope form should remain removed');
     await assertNoHorizontalOverflow('DEV-037 desktop calendar settings');
     await page.screenshot({ path: 'output/playwright/dev-037-calendar-source-scope-desktop.png', fullPage: false });
 
@@ -121,7 +114,7 @@ async (page) => {
 
     return {
       passed: true,
-      supabaseUiSkipped,
+      contractVersion: 3,
       screenshots: [
         'output/playwright/dev-037-calendar-source-scope-desktop.png',
         'output/playwright/dev-037-calendar-source-scope-mobile.png',

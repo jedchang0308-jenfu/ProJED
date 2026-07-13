@@ -1,12 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
 
+const renderCalendarFeedIcs = buildCalendarFeedIcs as unknown as (input: Record<string, unknown>) => string;
+
 type SubscriptionFilters = {
   version?: number;
   workspace_ids?: string[];
   project_ids?: string[];
   scope_type?: string;
   v2_scope_type?: string;
+  v3_scope_type?: string;
   assignee?: {
     type?: string;
     user_id?: string;
@@ -16,6 +19,7 @@ type SubscriptionFilters = {
   date_types?: string[];
   global_filter?: Partial<TaskFilterState>;
   board_overrides?: Record<string, BoardFilterOverride>;
+  board_filters?: Record<string, BoardFilterSnapshot>;
 };
 
 type TaskFilterState = {
@@ -28,6 +32,12 @@ type TaskFilterState = {
 
 type BoardFilterOverride = Partial<TaskFilterState> & {
   enabled?: boolean;
+};
+
+type BoardFilterSnapshot = {
+  included?: boolean;
+  date_types?: string[];
+  filters?: Partial<TaskFilterState>;
 };
 
 type CalendarSubscription = {
@@ -165,20 +175,36 @@ const normalizeBoardOverrides = (value: SubscriptionFilters["board_overrides"] |
   return normalized;
 };
 
+const normalizeBoardFilters = (value: SubscriptionFilters["board_filters"] | undefined) => {
+  const normalized: Record<string, { included: boolean; dateTypes: string[]; filters: TaskFilterState }> = {};
+  for (const [boardId, snapshot] of Object.entries(value ?? {})) {
+    if (!UUID_RE.test(boardId) || typeof snapshot?.included !== "boolean") continue;
+    normalized[boardId] = {
+      included: snapshot.included,
+      dateTypes: Array.from(new Set((snapshot.date_types ?? []).filter((item) => DATE_TYPES.has(item)))),
+      filters: normalizeTaskFilterState(snapshot.filters),
+    };
+  }
+  return normalized;
+};
+
 const normalizeFilters = (filters: SubscriptionFilters) => {
+  const isV3 = filters.version === 3 || filters.v3_scope_type === "per_board_filter_snapshot";
   const isV2 = filters.version === 2 || filters.v2_scope_type === "all_accessible_boards_snapshot";
   return {
-    version: isV2 ? 2 : 1,
+    version: isV3 ? 3 : isV2 ? 2 : 1,
     workspaceIds: Array.from(new Set((filters.workspace_ids ?? []).filter(Boolean))),
     projectIds: Array.from(new Set((filters.project_ids ?? []).filter((item) => UUID_RE.test(item)))),
     scopeType: ["board", "workspace", "custom"].includes(filters.scope_type ?? "")
-      ? filters.scope_type ?? (isV2 ? "custom" : "workspace")
-      : isV2 ? "custom" : "workspace",
+      ? filters.scope_type ?? (isV2 || isV3 ? "custom" : "workspace")
+      : isV2 || isV3 ? "custom" : "workspace",
     v2ScopeType: filters.v2_scope_type,
+    v3ScopeType: filters.v3_scope_type,
     assignee: filters.assignee ?? { type: "me" },
     dateTypes: Array.from(new Set((filters.date_types ?? []).filter((item) => DATE_TYPES.has(item)))),
     globalFilter: normalizeTaskFilterState(filters.global_filter),
     boardOverrides: normalizeBoardOverrides(filters.board_overrides),
+    boardFilters: normalizeBoardFilters(filters.board_filters),
   };
 };
 
@@ -233,17 +259,21 @@ const getEffectiveTaskFilter = (
   filters: ReturnType<typeof normalizeFilters>,
   projectId: string,
 ): TaskFilterState | null => {
+  if (filters.version === 3) {
+    const snapshot = filters.boardFilters[projectId];
+    return snapshot?.included ? snapshot.filters : null;
+  }
   if (filters.version !== 2) return null;
   const override = filters.boardOverrides[projectId];
   if (override?.enabled === false) return null;
   return override ? normalizeTaskFilterState(override) : filters.globalFilter;
 };
 
-const matchesV2TaskFilters = (
+const matchesSubscriptionTaskFilters = (
   item: WbsItemWithTags,
   filters: ReturnType<typeof normalizeFilters>,
 ) => {
-  if (filters.version !== 2) return true;
+  if (filters.version !== 2 && filters.version !== 3) return true;
   const taskFilter = getEffectiveTaskFilter(filters, item.project_id);
   if (!taskFilter) return false;
   return Boolean(taskFilter.statusFilters[item.status || "todo"]) &&
@@ -254,6 +284,14 @@ const matchesV2TaskFilters = (
 };
 
 const getSelectedTagIds = (filters: ReturnType<typeof normalizeFilters>) => {
+  if (filters.version === 3) {
+    const ids = new Set<string>();
+    Object.values(filters.boardFilters).forEach((snapshot) => {
+      if (!snapshot.included) return;
+      snapshot.filters.selectedTagIds.forEach((tagId) => ids.add(tagId));
+    });
+    return Array.from(ids);
+  }
   if (filters.version !== 2) return [];
   const ids = new Set(filters.globalFilter.selectedTagIds);
   for (const override of Object.values(filters.boardOverrides)) {
@@ -312,11 +350,82 @@ const normalizeAssigneeSelection = (subscription: CalendarSubscription) => {
   };
 };
 
+const getEffectiveDateTypes = (
+  filters: ReturnType<typeof normalizeFilters>,
+  projectId: string,
+) => {
+  if (filters.version !== 3) return filters.dateTypes;
+  const snapshot = filters.boardFilters[projectId];
+  return snapshot?.included ? snapshot.dateTypes : [];
+};
+
+type AssigneeQuerySelection = {
+  userIds: string[];
+  includeUnassigned: boolean;
+  unrestricted: boolean;
+};
+
+const getAssigneeQuerySelection = (
+  subscription: CalendarSubscription,
+  projectIds?: string[],
+): AssigneeQuerySelection => {
+  const filters = normalizeFilters(subscription.filters_json);
+  if (filters.version !== 3) {
+    return { ...normalizeAssigneeSelection(subscription), unrestricted: false };
+  }
+
+  const selectedProjectIds = new Set(projectIds ?? filters.projectIds);
+  const userIds = new Set<string>();
+  let includeUnassigned = false;
+  let unrestricted = false;
+  for (const [projectId, snapshot] of Object.entries(filters.boardFilters)) {
+    if (!snapshot.included || !selectedProjectIds.has(projectId)) continue;
+    const selectedIds = snapshot.filters.selectedAssigneeIds;
+    if (selectedIds.length === 0) {
+      unrestricted = true;
+      continue;
+    }
+    selectedIds.forEach((assigneeId) => {
+      if (assigneeId === UNASSIGNED_ASSIGNEE_FILTER) includeUnassigned = true;
+      else if (UUID_RE.test(assigneeId)) userIds.add(assigneeId);
+    });
+  }
+  return { userIds: Array.from(userIds), includeUnassigned, unrestricted };
+};
+
+const projectRequiresManagePermission = (
+  subscription: CalendarSubscription,
+  projectId: string,
+) => {
+  const filters = normalizeFilters(subscription.filters_json);
+  if (filters.version !== 3) {
+    const selection = normalizeAssigneeSelection(subscription);
+    return selection.includeUnassigned
+      || selection.userIds.some((userId) => userId !== subscription.owner_user_id);
+  }
+  const taskFilter = getEffectiveTaskFilter(filters, projectId);
+  if (!taskFilter) return false;
+  return taskFilter.selectedAssigneeIds.length === 0
+    || taskFilter.selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER)
+    || taskFilter.selectedAssigneeIds.some((userId) => userId !== subscription.owner_user_id);
+};
+
+const getProjectSelectedUserIds = (
+  subscription: CalendarSubscription,
+  projectId: string,
+) => {
+  const filters = normalizeFilters(subscription.filters_json);
+  if (filters.version !== 3) return normalizeAssigneeSelection(subscription).userIds;
+  return (getEffectiveTaskFilter(filters, projectId)?.selectedAssigneeIds ?? [])
+    .filter((userId) => UUID_RE.test(userId));
+};
+
 const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscription) => {
-  const { workspaceIds, projectIds, scopeType } = normalizeFilters(subscription.filters_json);
+  const normalizedFilters = normalizeFilters(subscription.filters_json);
+  const { workspaceIds, projectIds, scopeType, version, boardFilters } = normalizedFilters;
   if (workspaceIds.length === 0) return { tenantIds: [], projectIds: [] };
   const assigneeSelection = normalizeAssigneeSelection(subscription);
-  if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
+  if (version !== 3 && assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
     return { tenantIds: [], projectIds: [] };
   }
 
@@ -363,20 +472,26 @@ const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscriptio
       .map((membership) => membership.project_id)
   );
 
-  const requiresManagePermission = assigneeSelection.includeUnassigned
-    || assigneeSelection.userIds.some((userId) => userId !== subscription.owner_user_id);
-
   let readableProjects = projects.filter((project) =>
     tenantAdminIds.has(project.tenant_id) || projectMemberIds.has(project.id)
   );
 
-  if (requiresManagePermission) {
-    readableProjects = readableProjects.filter((project) =>
-      tenantAdminIds.has(project.tenant_id) || projectManagerIds.has(project.id)
-    );
-  }
+  readableProjects = readableProjects.filter((project) =>
+    !projectRequiresManagePermission(subscription, project.id)
+      || tenantAdminIds.has(project.tenant_id)
+      || projectManagerIds.has(project.id)
+  );
 
-  if (scopeType === "board") {
+  if (version === 3) {
+    const includedProjectIds = new Set(
+      Object.entries(boardFilters)
+        .filter(([, snapshot]) => snapshot.included)
+        .map(([projectId]) => projectId)
+    );
+    readableProjects = readableProjects.filter((project) =>
+      includedProjectIds.has(project.id) && projectIds.includes(project.id)
+    );
+  } else if (scopeType === "board") {
     readableProjects = projectIds.length === 1
       ? readableProjects.filter((project) => project.id === projectIds[0])
       : [];
@@ -392,11 +507,12 @@ const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscriptio
     return { tenantIds: [], projectIds: [] };
   }
 
-  if (assigneeSelection.userIds.length > 0) {
+  const assigneeQuerySelection = getAssigneeQuerySelection(subscription, allowedProjectIds);
+  if (assigneeQuerySelection.userIds.length > 0) {
     const { data: assigneeMemberships, error: assigneeMembershipsError } = await supabase
       .from("tenant_members")
       .select("tenant_id,user_id,role,status")
-      .in("user_id", assigneeSelection.userIds)
+      .in("user_id", assigneeQuerySelection.userIds)
       .eq("status", "active")
       .in("tenant_id", allowedTenantIds);
     if (assigneeMembershipsError) throw assigneeMembershipsError;
@@ -404,14 +520,12 @@ const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscriptio
     const membershipKeys = new Set(
       ((assigneeMemberships ?? []) as TenantMember[]).map((item) => `${item.tenant_id}:${item.user_id}`)
     );
-    allowedTenantIds = allowedTenantIds.filter((tenantId) =>
-      assigneeSelection.userIds.every((userId) => membershipKeys.has(`${tenantId}:${userId}`))
+    readableProjects = readableProjects.filter((project) =>
+      getProjectSelectedUserIds(subscription, project.id)
+        .every((userId) => membershipKeys.has(`${project.tenant_id}:${userId}`))
     );
-    const allowedTenantSet = new Set(allowedTenantIds);
-    allowedProjectIds = allowedProjectIds.filter((projectId) => {
-      const project = readableProjects.find((item) => item.id === projectId);
-      return Boolean(project && allowedTenantSet.has(project.tenant_id));
-    });
+    allowedTenantIds = Array.from(new Set(readableProjects.map((project) => project.tenant_id)));
+    allowedProjectIds = Array.from(new Set(readableProjects.map((project) => project.id)));
   }
 
   return {
@@ -420,16 +534,25 @@ const getAllowedTenantAndProjectScope = async (subscription: CalendarSubscriptio
   };
 };
 
+/*
+ * The per-board permission branch above intentionally evaluates access after
+ * resolving each snapshot. A single privileged board must not grant access to
+ * another board in the same workspace.
+ */
+
 const buildIcs = async (
   subscription: CalendarSubscription,
   allowedScope: { tenantIds: string[]; projectIds: string[] }
 ) => {
   const normalizedFilters = normalizeFilters(subscription.filters_json);
   const { dateTypes } = normalizedFilters;
-  const assigneeSelection = normalizeAssigneeSelection(subscription);
+  const assigneeSelection = getAssigneeQuerySelection(subscription, allowedScope.projectIds);
+  const hasConfiguredDateTypes = allowedScope.projectIds.some(
+    (projectId) => getEffectiveDateTypes(normalizedFilters, projectId).length > 0,
+  );
 
-  if (allowedScope.tenantIds.length === 0 || allowedScope.projectIds.length === 0 || dateTypes.length === 0) {
-    return buildCalendarFeedIcs({
+  if (allowedScope.tenantIds.length === 0 || allowedScope.projectIds.length === 0 || !hasConfiguredDateTypes) {
+    return renderCalendarFeedIcs({
       subscription,
       assigneeUserId: assigneeSelection.userIds[0] ?? subscription.owner_user_id,
     });
@@ -445,12 +568,14 @@ const buildIcs = async (
     .order("updated_at", { ascending: false })
     .limit(FEED_TASK_LIMIT);
 
-  if (assigneeSelection.userIds.length > 0 && assigneeSelection.includeUnassigned) {
-    taskQuery = taskQuery.or(`assignee_id.in.(${assigneeSelection.userIds.join(",")}),assignee_id.is.null`);
-  } else if (assigneeSelection.userIds.length > 0) {
-    taskQuery = taskQuery.in("assignee_id", assigneeSelection.userIds);
-  } else if (assigneeSelection.includeUnassigned) {
-    taskQuery = taskQuery.is("assignee_id", null);
+  if (!assigneeSelection.unrestricted) {
+    if (assigneeSelection.userIds.length > 0 && assigneeSelection.includeUnassigned) {
+      taskQuery = taskQuery.or(`assignee_id.in.(${assigneeSelection.userIds.join(",")}),assignee_id.is.null`);
+    } else if (assigneeSelection.userIds.length > 0) {
+      taskQuery = taskQuery.in("assignee_id", assigneeSelection.userIds);
+    } else if (assigneeSelection.includeUnassigned) {
+      taskQuery = taskQuery.is("assignee_id", null);
+    }
   }
 
   const { data: taskRows, error: taskError } = await taskQuery;
@@ -459,11 +584,23 @@ const buildIcs = async (
   const taskLimitReached = (taskRows ?? []).length >= FEED_TASK_LIMIT;
   const itemsWithTags = await attachTaskTags((taskRows ?? []) as WbsItem[], normalizedFilters);
   const items = itemsWithTags.filter((item) =>
-    hasTaskCalendarDate(item, dateTypes) && matchesV2TaskFilters(item, normalizedFilters)
+    hasTaskCalendarDate(item, getEffectiveDateTypes(normalizedFilters, item.project_id)) &&
+      matchesSubscriptionTaskFilters(item, normalizedFilters)
+  );
+
+  const dateTypesByProjectId = new Map(
+    allowedScope.projectIds.map((projectId) => [
+      projectId,
+      getEffectiveDateTypes(normalizedFilters, projectId),
+    ]),
   );
 
   const projectIds = Array.from(new Set(items.map((item) => item.project_id)));
   const tenantIds = Array.from(new Set(items.map((item) => item.tenant_id)));
+  const assigneeProfileIds = Array.from(new Set([
+    ...assigneeSelection.userIds,
+    ...items.map((item) => item.assignee_id).filter((userId): userId is string => Boolean(userId)),
+  ]));
 
   const [tenantResult, projectResult, assigneeResult] = await Promise.all([
     tenantIds.length
@@ -472,8 +609,8 @@ const buildIcs = async (
     projectIds.length
       ? supabase.from("projects").select("id,name").in("id", projectIds)
       : Promise.resolve({ data: [], error: null }),
-    assigneeSelection.userIds.length
-      ? supabase.from("profiles").select("id,email,display_name").in("id", assigneeSelection.userIds)
+    assigneeProfileIds.length
+      ? supabase.from("profiles").select("id,email,display_name").in("id", assigneeProfileIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (tenantResult.error) throw tenantResult.error;
@@ -486,10 +623,11 @@ const buildIcs = async (
     ((assigneeResult.data ?? []) as Array<{ id: string; email: string | null; display_name: string | null }>)
       .map((profile) => [profile.id, { email: profile.email, display_name: profile.display_name }])
   );
-  return buildCalendarFeedIcs({
+  return renderCalendarFeedIcs({
     subscription,
     items,
     dateTypes,
+    dateTypesByProjectId,
     tenantNameById,
     projectNameById,
     assigneeProfileById,

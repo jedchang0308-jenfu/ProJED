@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   packageJson: 'package.json',
   calendarView: 'src/components/CalendarSubscriptionsView.tsx',
+  conversion: 'src/features/calendarSubscriptions/filters.ts',
   service: 'src/services/supabase/calendarSubscriptionService.ts',
   databaseTypes: 'src/services/supabase/database.types.ts',
   edgeFunction: 'supabase/functions/calendar-feed/index.ts',
@@ -30,18 +31,17 @@ const source = Object.fromEntries(
 );
 
 assert(
-  'Frontend submit persists Builder payload as v2 filters without removing v1 compatibility',
+  'Frontend submit persists the canonical v3 Builder payload without restoring the legacy scope form',
   source.calendarView.includes('buildSubmissionFilters') &&
-    source.calendarView.includes('...builderPayload') &&
-    source.calendarView.includes("scope_type: 'custom'") &&
-    source.calendarView.includes('assignee: filters.assignee') &&
-    source.calendarView.includes('date_types: filters.date_types') &&
-    source.calendarView.includes('data-calendar-subscription-scope-form="true"') &&
-    source.calendarView.includes('DEV-045 Phase 2 Supabase migration 與 Edge Function'),
+    source.calendarView.includes('builderPayload ?? filters') &&
+    source.calendarView.includes('filters: submissionFilters') &&
+    source.calendarView.includes('<CalendarSubscriptionBuilderPreview') &&
+    source.calendarView.includes('initialFilters={filters}') &&
+    !source.calendarView.includes('data-calendar-subscription-scope-form="true"'),
 );
 
 assert(
-  'Client service normalizes v2 snapshot filters before writing filters_json',
+  'Client service retains defensive v2 normalization for existing rows',
   source.service.includes('normalizeV2Filters') &&
     source.service.includes("v2_scope_type: 'all_accessible_boards_snapshot'") &&
     source.service.includes("version: 2") &&
@@ -49,6 +49,15 @@ assert(
     source.service.includes('normalizeTaskFilters(filters.global_filter)') &&
     source.service.includes('normalizeBoardOverrides') &&
     source.service.includes('看板條件不屬於此訂閱範圍'),
+);
+
+assert(
+  'Existing v2 rows materialize global and override filters into independent board snapshots',
+  source.conversion.includes("filters.version === 2 || filters.v2_scope_type === 'all_accessible_boards_snapshot'") &&
+    source.conversion.includes('findRecordByAlias(filters.board_overrides, aliases)') &&
+    source.conversion.includes('override?.enabled !== false') &&
+    source.conversion.includes('normalizeTaskFilters(filters.global_filter)') &&
+    source.conversion.includes('date_types: [...legacyDateTypes]'),
 );
 
 assert(
@@ -75,14 +84,15 @@ assert(
 );
 
 assert(
-  'Edge feed applies v2 filters after permission-scoped task query',
+  'Edge feed applies v2 compatibility filters after permission-scoped task query',
   source.edgeFunction.includes('type TaskFilterState') &&
     source.edgeFunction.includes('normalizeTaskFilterState') &&
     source.edgeFunction.includes('normalizeBoardOverrides') &&
-    source.edgeFunction.includes('matchesV2TaskFilters') &&
+    source.edgeFunction.includes('getEffectiveTaskFilter') &&
+    source.edgeFunction.includes('matchesSubscriptionTaskFilters') &&
     source.edgeFunction.includes('attachTaskTags') &&
     source.edgeFunction.includes('.from("wbs_item_tags")') &&
-    source.edgeFunction.includes('hasTaskCalendarDate(item, dateTypes) && matchesV2TaskFilters') &&
+    source.edgeFunction.includes('matchesSubscriptionTaskFilters(item, normalizedFilters)') &&
     source.edgeFunction.includes('getAllowedTenantAndProjectScope'),
 );
 
@@ -98,13 +108,13 @@ assert(
 );
 
 assert(
-  'Package script and governance docs record Phase 2 source boundary',
+  'Package script and governance docs classify v2 as historical compatibility evidence',
   source.packageJson.includes('"verify:dev-045-calendar-subscription-v2-feed"') &&
-    source.spec.includes('Phase 2 Local Source Implemented / Remote DB-Edge-Production Not Executed') &&
-    source.qa.includes('verify:dev-045-calendar-subscription-v2-feed') &&
-    source.qc.includes('DEV-045 Phase 2 local source') &&
-    source.devTask.includes('Phase 2 Local Source Implemented / Remote DB-Edge-Production Not Executed') &&
-    source.documentationMap.includes('DEV-045 Phase 2 local source'),
+    source.spec.includes('### v2 historical local contract') &&
+    source.qa.includes('v1/v2 materialization') &&
+    source.qc.includes('Historical v2 Evidence Preserved') &&
+    source.devTask.includes('Historical v2 Evidence Preserved') &&
+    source.documentationMap.includes('Historical v2 Evidence Preserved'),
 );
 
 const failed = results.filter(result => !result.ok);

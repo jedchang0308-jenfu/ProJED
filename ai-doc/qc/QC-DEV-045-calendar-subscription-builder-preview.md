@@ -3,10 +3,53 @@
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
 關聯 QA：`ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md`
-狀態：Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending
-日期：2026-07-07
+狀態：Per-Board v3 Phase 1-2 Local QC Passed / Historical v2 Evidence Preserved / Remote Release Not Executed
+日期：2026-07-12
 
-## QC 結論
+## Superseded Boundary - 2026-07-12
+
+使用者已決定以「每張看板獨立設定」取代本報告驗證的 `global_filter + board_overrides` v2 模型。此報告保留 2026-07-07 本機實作、preflight、local DB smoke 與 branch blocker 的事實，不撤銷也不改寫當時證據；但下列邊界立即生效：
+
+- 本報告不能作為新版逐看板 `board_filters`、共用條件 UI、state isolation、batch copy、v1/v2 materialization 或 v3 feed matcher 的通過證據。
+- 原 v2 remote migration / Edge deploy / live `.ics` gate 已凍結；不得因本報告的 preflight 通過而繼續部署舊 v2 source。
+- 新方向需依修訂後的 `SPEC-045` 與 `QA-DEV-045` 重新完成 Phase 1/2 本機 RD、QA、QC。
+- remote migration、Edge deploy、production release 與 live smoke 等待新的 release 型指令與 release gate；先前針對舊 payload 的 remote intent 不自動沿用。
+
+## Current v3 QC Addendum - 2026-07-12
+
+DEV-045 Phase 1-2 已依逐看板 v3 契約完成本機 RD、QA 與 QC。Calendar 與全域任務工作台共用 `TaskConditionFilterControls` 的條件順序與互動語法，但 active state、draft 與 persistence 完全隔離。Calendar create/edit path只保留逐看板 selector、included toggle、目前看板 reset、一次性 batch copy 與 live preview；不再顯示 global / inheritance / override UI。
+
+v3 canonical payload為 `version: 3`、`v3_scope_type: per_board_filter_snapshot`與完整 `board_filters` map；每張 snapshot同時保存自己的 `date_types`與 `TaskFilterState`，不再有頂層日期條件。client normalizer會解析 app/storage aliases並拒絕缺漏、額外 snapshot或已納入但無事件日期的看板；v1/v2只在使用者編輯時把舊頂層日期複製到各 board並 materialize成獨立 draft。新 migration source保留v1/v2 validator並新增v3 exact-key、逐看板 date、included board、active membership與 per-board manage permission檢查；Edge matcher逐 project套 task filter與 date types，assignee/tag query只作 coarse union，最終仍逐看板比對。
+
+Browser QC以兩看板 deterministic local fixture實跑1440x900、1024x768、390x844、320x700，通過看板task/date draft isolation、切換保留、清空日期阻擋、排除/恢復、目前看板reset、batch copy條件與日期後不連動、mobile事件預覽與drawer、Escape focus restore及horizontal overflow檢查。截圖：`dev-045-calendar-v3-desktop.png`、`dev-045-calendar-v3-excluded.png`、`dev-045-calendar-v3-tablet.png`、`dev-045-calendar-v3-mobile-events.png`、`dev-045-calendar-v3-mobile.png`、`dev-045-calendar-v3-mobile-320-events.png`、`dev-045-calendar-v3-mobile-320.png`。
+
+使用者於 2026-07-12 以實際畫面指出「設定完成後找不到訂閱按鈕」，因此重新開啟 UI QC。修正後 `訂閱名稱`與 `建立訂閱並複製連結` CTA在任務預覽前的同一列，送出列在捲動時固定於表單頂端；320px使用短版按鈕文字維持同列且不壓垮輸入框。本機模式使用相同位置但保持 disabled，並直接顯示「請到已連接 Supabase 的環境建立訂閱」；Supabase模式則依名稱、預覽完整性、included board與各看板日期決定是否啟用。逐看板事件日期位於過濾器內，不再占用訂閱層級表單。更新後browser gate重新通過，1440x900、1024x768、390x844與320x700均無重疊或水平溢出。
+
+同日使用者再指出原預覽仍是任務卡清單，無法直接判斷外部行事曆實際訂閱內容。修正後預覽以 `task ID + date type`事件為單位：摘要顯示workspace、board、unique task、總事件及開始／到期數；一列只代表一個實際日期事件；預設依日期分組並可切換依看板；raw status改為繁中；缺少所選日期的候選列入可展開的「未產生事件」。預覽預設12列並以頁面捲動展開全部，移除原 `max-h-72 overflow-y-auto` nested scrollbar。Browser gate直接檢查每列task / board / date / date type屬性、逐看板date isolation、分組切換與computed overflow。
+
+本機 DB smoke在 `supabase_db_ProJED` 以 transaction套 DEV-037、v2、v3 validator source後執行22個 allow/deny/grant檢查並 rollback。通過 member own-only、member broad deny、project manager managed-board broad allow、manage permission不得跨 board外溢、non-member assignee deny、exact snapshot key、至少一張included board、included board不可無事件日期與v3拒絕舊頂層 `date_types`。此證據未寫入remote DB。
+
+Current v3 gates：
+
+| Gate | 結果 | 證據 |
+|---|---|---|
+| `verify:dev-045-calendar-subscription-builder-preview` | Pass | 18 pass / 0 fail |
+| `verify:dev-045-calendar-subscription-builder-preview-browser` | Pass | 7 viewport/state screenshots；逐事件identity、分組與nested-scroll檢查；無visible runtime error或overflow |
+| `verify:dev-045-calendar-subscription-v3-model` | Pass | 14 pass / 0 fail；new/v1/v2/v3日期轉換、逐看板日期與獨立物件 fixture |
+| `verify:dev-045-calendar-subscription-v3-feed` | Pass | 13 pass / 0 fail |
+| local DB smoke `--run-local-db` | Pass | 13 gate checks；22 SQL behaviors；transaction rolled back |
+| `npx supabase db lint --local --level warning` | Pass | No schema errors found |
+| `npx --yes deno-bin check supabase/functions/calendar-feed/index.ts` | Pass | Edge TypeScript check passed |
+| `npx tsc --noEmit` | Pass | 0 errors |
+| `npm run build:test` | Pass | Vite test-mode production bundle passed |
+| DEV-037 regression | Pass | static 20/20 + browser |
+| DEV-039 regression | Pass | core 61/61 + browser；filter parity 26/26 + browser |
+
+Current boundary：Phase 1-2 local development已完成；remote Supabase migration apply、Edge deploy、live `.ics` parity、Firebase production release與 rollback artifacts未執行，也未由本次「完成開發」指令授權。舊 v2 remote path維持 frozen；後續 release必須使用 v3 migration / Edge source重新進入 Level 3與 deployment-release-gate。
+
+Residual evidence gap：local browser已實跑所有看板 excluded的恢復狀態，但未強制注入單一 `nodeService.listByProject` reject或 Supabase create/update failure；partial/error分支、save blocking與 draft-preservation wiring已有 static/source coverage，live failure behavior仍需 staging mock或 Phase 3 live gate補證，不計為 production readiness。
+
+## Historical v2 QC 結論
 
 DEV-045 Phase 1 local Builder slice 已完成本機實作與 static/build QC。DEV-045 Phase 2 local source 已補上 v2 filters_json validation migration source、client normalizer、Edge Function v2 feed matcher 與 static verifier。
 

@@ -10,9 +10,10 @@ interface TagPickerProps {
   selectedTagIds: string[];
   onChange: (tagIds: string[]) => void;
   disabled?: boolean;
+  compact?: boolean;
 }
 
-export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagIds, onChange, disabled = false }) => {
+export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagIds, onChange, disabled = false, compact = false }) => {
   const tags = useTagStore(s => s.tags);
   const createTag = useTagStore(s => s.createTag);
   const updateTag = useTagStore(s => s.updateTag);
@@ -97,8 +98,8 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
   };
 
   return (
-    <div className="relative" ref={panelRef}>
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="relative" ref={panelRef} data-tag-picker-compact={compact ? 'true' : undefined}>
+      <div className={`flex flex-wrap items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
         {selectedTags.map(tag => (
           <TagChip key={tag.id} tag={tag} />
         ))}
@@ -106,7 +107,10 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
           disabled={disabled}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+          data-tag-picker-trigger="true"
+          className={`inline-flex items-center rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 ${
+            compact ? 'h-7 gap-1 px-2' : 'h-8 gap-1.5 px-2.5'
+          }`}
         >
           <Tag size={13} />
           標籤

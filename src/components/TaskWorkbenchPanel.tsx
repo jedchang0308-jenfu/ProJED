@@ -2,12 +2,9 @@ import React from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
   ChevronLeft,
-  Filter,
   Plus,
   RotateCcw,
-  Search,
   SlidersHorizontal,
-  UserRound,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
@@ -23,8 +20,6 @@ import {
   migrateLegacyDefaultTaskFilters,
   normalizeTaskFilters,
   projectTaskFilterResults,
-  TASK_STATUS_OPTIONS,
-  UNASSIGNED_ASSIGNEE_FILTER,
   type TaskFilterState,
 } from '../features/taskFilters';
 import {
@@ -35,7 +30,7 @@ import {
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
 } from '../features/taskWorkbench/placement';
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
-import type { InboxItem, TaskNode, TaskStatus } from '../types';
+import type { InboxItem, TaskNode } from '../types';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { useTouchTapGuard } from '../hooks/useTouchTapGuard';
 import { useLongPress } from '../hooks/useLongPress';
@@ -43,6 +38,8 @@ import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEsca
 import { CLOSE_PANEL_EVENT, OPEN_PANEL_EVENT, TOGGLE_PANEL_EVENT } from './taskWorkbenchPanelCommands';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
 import { isMobileTaskActionMode, MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
+import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
+import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 
 const PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
 const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
@@ -120,16 +117,6 @@ const writeWorkbenchFilterPrefs = (prefs: WorkbenchFilterPrefs) => {
     // Best-effort UI preference.
   }
 };
-
-const chipClass = (active: boolean) =>
-  `inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-semibold transition ${
-    active
-      ? 'border-primary/40 bg-primary/10 text-primary ring-1 ring-primary/20'
-      : 'border-slate-200 bg-white text-slate-600 hover:border-primary/25 hover:bg-primary/5 hover:text-primary'
-  }`;
-
-const fieldClass =
-  'h-8 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20';
 
 const compareText = (left: string, right: string) => left.localeCompare(right, 'zh-Hant');
 
@@ -314,7 +301,7 @@ const WorkbenchDragCard: React.FC<{
   const lockStatus = getNodeLockStatus(task.id, dependencies);
   const longPressHandlers = useLongPress(
     (event) => {
-      if (!canDragTaskFromWorkbench || !isMobileTaskActionMode()) return;
+      if (!isMobileTaskActionMode()) return;
       mobileTaskAction?.begin({ id: task.id, title: task.title, status: task.status }, event);
     },
     { delay: 500, tolerance: 8 },
@@ -323,7 +310,7 @@ const WorkbenchDragCard: React.FC<{
     ...longPressHandlers,
     onTouchStart: (event: React.TouchEvent) => {
       touchTapGuard.handlers.onTouchStart(event);
-      if (canDragTaskFromWorkbench) longPressHandlers.onTouchStart(event);
+      if (mobileActionMode) longPressHandlers.onTouchStart(event);
     },
     onTouchMove: (event: React.TouchEvent) => {
       if (mobileTaskAction?.isActive(task.id)) {
@@ -331,7 +318,7 @@ const WorkbenchDragCard: React.FC<{
         return;
       }
       touchTapGuard.handlers.onTouchMove(event);
-      if (canDragTaskFromWorkbench) longPressHandlers.onTouchMove(event);
+      if (mobileActionMode) longPressHandlers.onTouchMove(event);
     },
     onTouchEnd: (event: React.TouchEvent) => {
       if (mobileTaskAction?.isActive(task.id)) {
@@ -341,7 +328,7 @@ const WorkbenchDragCard: React.FC<{
         return;
       }
       touchTapGuard.handlers.onTouchEnd(event);
-      if (canDragTaskFromWorkbench) longPressHandlers.onTouchEnd(event);
+      if (mobileActionMode) longPressHandlers.onTouchEnd(event);
     },
     onTouchCancel: (event: React.TouchEvent) => {
       if (mobileTaskAction?.isActive(task.id)) {
@@ -351,17 +338,18 @@ const WorkbenchDragCard: React.FC<{
         return;
       }
       touchTapGuard.handlers.onTouchCancel(event);
-      if (canDragTaskFromWorkbench) longPressHandlers.onTouchCancel(event);
+      if (mobileActionMode) longPressHandlers.onTouchCancel(event);
     },
     onClickCapture: (event: React.MouseEvent) => {
       touchTapGuard.handlers.onClickCapture(event);
-      if (canDragTaskFromWorkbench && !event.isPropagationStopped()) longPressHandlers.onClickCapture(event);
+      if (mobileActionMode && !event.isPropagationStopped()) longPressHandlers.onClickCapture(event);
     },
   };
   const draggableBindings = canUseWorkbenchDragSurface ? { ...attributes, ...listeners } : {};
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    if (isMobileTaskActionMode()) return;
     setContextMenuState({
       kind: 'task',
       isOpen: true,
@@ -483,31 +471,6 @@ const WorkbenchFilterControls: React.FC<{
   updateFilters,
   resetFilters,
 }) => {
-  const toggleStatus = (status: TaskStatus) => {
-    updateFilters({
-      statusFilters: {
-        ...filters.statusFilters,
-        [status]: !filters.statusFilters[status],
-      },
-    });
-  };
-
-  const toggleAssignee = (assigneeId: string) => {
-    updateFilters({
-      selectedAssigneeIds: filters.selectedAssigneeIds.includes(assigneeId)
-        ? filters.selectedAssigneeIds.filter(id => id !== assigneeId)
-        : [...filters.selectedAssigneeIds, assigneeId],
-    });
-  };
-
-  const toggleTag = (tagId: string) => {
-    updateFilters({
-      selectedTagIds: filters.selectedTagIds.includes(tagId)
-        ? filters.selectedTagIds.filter(id => id !== tagId)
-        : [...filters.selectedTagIds, tagId],
-    });
-  };
-
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-xl" data-task-workbench-filter-panel="true">
       <section className="flex items-center justify-between gap-2">
@@ -528,7 +491,7 @@ const WorkbenchFilterControls: React.FC<{
         <select
           value={selectedBoardId || ''}
           onChange={event => onSelectedBoardChange(event.target.value || null)}
-          className={`${fieldClass} w-full`}
+          className={`${taskFilterFieldClass} w-full`}
           data-task-workbench-board-select="true"
         >
           {boardOptions.map(option => (
@@ -551,96 +514,12 @@ const WorkbenchFilterControls: React.FC<{
         </label>
       </section>
 
-      <section className="space-y-2">
-        <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-          <Filter size={13} />
-          任務狀態
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {TASK_STATUS_OPTIONS.map(status => (
-            <button
-              key={status.key}
-              type="button"
-              onClick={() => toggleStatus(status.key)}
-              className={chipClass(filters.statusFilters[status.key])}
-              aria-pressed={filters.statusFilters[status.key]}
-            >
-              <span className={`h-2 w-2 rounded-full ${status.color}`} />
-              {status.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">到期日與關鍵字</label>
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <input
-            type="number"
-            min={0}
-            max={365}
-            value={filters.dueWithinDays ?? ''}
-            onChange={event => updateFilters({ dueWithinDays: event.target.value === '' ? null : Number(event.target.value) })}
-            className={fieldClass}
-            placeholder="天數"
-          />
-          <button type="button" onClick={() => updateFilters({ dueWithinDays: null })} className="btn-outline h-8 px-2 text-xs font-semibold">
-            清除
-          </button>
-        </div>
-        <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2">
-          <Search size={14} className="text-slate-400" />
-          <input
-            value={filters.keyword}
-            onChange={event => updateFilters({ keyword: event.target.value })}
-            className="h-8 min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none"
-            placeholder="搜尋任務名稱"
-          />
-        </label>
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">負責人</label>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => toggleAssignee(UNASSIGNED_ASSIGNEE_FILTER)}
-            className={chipClass(filters.selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER))}
-          >
-            <UserRound size={13} />
-            未指派
-          </button>
-          {assigneeOptions.map(option => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => toggleAssignee(option.id)}
-              className={chipClass(filters.selectedAssigneeIds.includes(option.id))}
-            >
-              <UserRound size={13} />
-              <span className="max-w-[7rem] truncate">{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">標籤</label>
-        <div className="flex flex-wrap gap-2">
-          {tags.length === 0 ? (
-            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-400">尚無標籤</span>
-          ) : tags.map(tag => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => toggleTag(tag.id)}
-              className={chipClass(filters.selectedTagIds.includes(tag.id))}
-            >
-              {tag.name}
-            </button>
-          ))}
-        </div>
-      </section>
+      <TaskConditionFilterControls
+        assigneeOptions={assigneeOptions}
+        filters={filters}
+        tags={tags}
+        onChange={updateFilters}
+      />
     </div>
   );
 };

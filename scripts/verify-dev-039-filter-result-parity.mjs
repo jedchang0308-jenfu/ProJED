@@ -104,8 +104,8 @@ assert(
     source.taskWorkbench.includes('data-task-workbench-filter-popover="true"') &&
     source.taskWorkbench.includes('aria-expanded={panelPrefs.filtersOpen}') &&
     source.taskWorkbench.includes('data-active-task-workbench-filter-count') &&
-    source.taskWorkbench.includes('relative border-b border-slate-200 px-3 py-3" data-task-workbench-filter-control-area="true"') &&
-    source.taskWorkbench.includes('absolute left-3 right-3 top-full') &&
+    source.taskWorkbench.includes('data-task-workbench-filter-control-area="true"') &&
+    source.taskWorkbench.includes('<TaskConditionFilterControls') &&
     !source.taskWorkbench.includes('relative mt-3 flex justify-end" data-task-workbench-filter-control-area="true"') &&
     !source.taskWorkbench.includes('space-y-3 border-t border-slate-100 p-3" data-task-workbench-filter-panel'),
 );

@@ -15,6 +15,7 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { useMobilePanBroker } from '../hooks/useMobilePanBroker';
+import { useKanbanMousePan } from '../hooks/useKanbanMousePan';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
@@ -173,6 +174,7 @@ const MOBILE_TASK_EDGE_SCROLL_MAX_STEP_PX = 18;
 
 const BoardView = () => {
     const mobilePanSurfaceRef = useMobilePanBroker<HTMLDivElement>();
+    const mousePanSurfaceRef = useKanbanMousePan<HTMLDivElement>();
     const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
     const setDependencySelection = useBoardStore(s => s.setDependencySelection);
@@ -204,6 +206,11 @@ const BoardView = () => {
         }
         mobileTaskAutoScrollFrameRef.current = null;
     }, []);
+
+    const setBoardCanvasRef = React.useCallback((element: HTMLDivElement | null) => {
+        mobilePanSurfaceRef.current = element;
+        mousePanSurfaceRef.current = element;
+    }, [mobilePanSurfaceRef, mousePanSurfaceRef]);
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
@@ -1277,9 +1284,10 @@ const BoardView = () => {
 
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
-                        ref={mobilePanSurfaceRef}
+                        ref={setBoardCanvasRef}
                         className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent`}
                         data-mobile-pan-surface="board"
+                        data-kanban-mouse-pan-surface="true"
                         data-layout-region="board-canvas"
                     >
                         <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>

@@ -1,5 +1,237 @@
 # ProJED Dev Task Control Board
 
+## 總任務清單
+
+此區是 `dev_task.md` 的 canonical index；詳細契約、歷史與完整證據仍保留在各 DEV 章節、交付點總覽及支援開發點總覽。
+
+- ✓ DEV-001 [交付點] [完成] [P2] [已交付] 四模式一致化緊湊 UI 系統
+  - 摘要：建立跨主要任務模式的一致緊湊 UI 基礎。
+  - 證據：`SPEC-001`、舊 dev_task archive
+  - 計入交付：是
+- ✓ DEV-002 [交付點] [完成] [P1] [已交付] 會議紀錄與個人工作紀錄 MVP
+  - 摘要：交付會議紀錄與個人工作紀錄主流程。
+  - 證據：`SPEC-003`、`verify:dev-002-records`
+  - 計入交付：是
+- ✓ DEV-003 [開發點] [完成] [P2] [已交付] 紀錄內容 inline task tag
+  - 摘要：支援 DEV-002 的紀錄內容任務標註。
+  - 父任務：DEV-002
+  - 證據：`verify:dev-003-record-tags`
+  - 計入交付：否
+- ↷ DEV-004 [交付點] [延後] [P3] [等待重啟] 全人個人與團隊待辦平台 MVP
+  - 摘要：待使用者重新啟動的 whole-person 待辦平台 umbrella。
+  - 阻塞 / 恢復條件：使用者重新確認產品範圍
+  - 證據：`SPEC-002`
+  - 計入交付：否
+- ✓ DEV-005 [交付點] [完成] [P1] [已交付] 會議看板主畫面紀錄工作流
+  - 摘要：建立會議看板主要紀錄工作流。
+  - 證據：`SPEC-005`、PM report
+  - 計入交付：是
+- ✓ DEV-006 [交付點] [完成] [P1] [已交付] Gmail-like 會議紀錄輸入器
+  - 摘要：穩定化 Gmail-like 紀錄輸入體驗。
+  - 證據：`SPEC-006`、`QA-DEV-006`
+  - 計入交付：是
+- ✓ DEV-007 [交付點] [完成] [P1] [已交付] 會議中看板編輯與任務活動
+  - 摘要：會議模式保留完整看板編輯與活動捕捉。
+  - 證據：`SPEC-007`、`verify:dev-007-meeting-activity`
+  - 計入交付：是
+- ✓ DEV-008 [交付點] [完成] [P2] [已交付] 任務會議細節快速查找
+  - 摘要：讓任務可快速查找會議知識與細節。
+  - 證據：`SPEC-008`、`verify:dev-008-task-knowledge`
+  - 計入交付：是
+- ✓ DEV-009 [交付點] [完成] [P2] [已交付] 任務詳情會議快速補記
+  - 摘要：提供任務詳情內的快速會議補記流程。
+  - 證據：`SPEC-009`、`QA/QC-DEV-009`
+  - 計入交付：是
+- ✓ DEV-010 [交付點] [完成] [P2] [已交付] 會議紀錄操作狀態溝通
+  - 摘要：改善紀錄操作 CTA 與狀態回饋。
+  - 證據：`SPEC-010`、`verify:dev-010-action-feedback`
+  - 計入交付：是
+- ✓ DEV-011 [交付點] [完成] [P1] [正式環境已交付] AI 任務導向會議紀錄統整
+  - 摘要：交付 AI 任務導向會議紀錄統整與 production smoke。
+  - 證據：`SPEC-011`、`QC-DEV-011-012-production-ai-smoke`
+  - 計入交付：是
+- ✓ DEV-012 [交付點] [完成] [P1] [正式環境已交付] AI 會議紀錄自然語言品質
+  - 摘要：提升 AI 會議紀錄自然語言品質並完成 production smoke。
+  - 證據：`SPEC-012`、`QC-DEV-011-012-production-ai-smoke`
+  - 計入交付：是
+- ✓ DEV-013 [交付點] [完成] [P2] [已交付] 任務子樹複製
+  - 摘要：提供任務與子樹依賴一致的右鍵複製。
+  - 證據：`SPEC-013`、`QC-DEV-013`
+  - 計入交付：是
+- ✓ DEV-014 [開發點] [完成] [P3] [已交付] 會議紀錄階層編號
+  - 摘要：以階層編號改善 AI 會議紀錄結構。
+  - 父任務：DEV-011、DEV-012
+  - 證據：DEV-011/012 regression
+  - 計入交付：否
+- ✓ DEV-015 [開發點] [完成] [P3] [已交付] 會議紀錄主線摘要品質
+  - 摘要：改善 DEV-012 的會議摘要主線品質。
+  - 父任務：DEV-012
+  - 證據：`verify:dev-015-meeting-summary-mainline`
+  - 計入交付：否
+- ✓ DEV-016 [開發點] [完成] [P3] [已交付] 紀錄庫條列清單
+  - 摘要：將紀錄庫改為可掃描的條列清單。
+  - 父任務：DEV-002
+  - 證據：`verify:dev-016-records-list-view`
+  - 計入交付：否
+- ✓ DEV-017 [開發點] [完成] [P3] [已交付] 紀錄側欄寬度調整
+  - 摘要：提供紀錄側欄拖拉與寬度記憶。
+  - 父任務：DEV-005、DEV-010
+  - 證據：`verify:dev-017-record-sidebar-resize`
+  - 計入交付：否
+- ✓ DEV-018 [開發點] [完成] [P2] [已交付] 會議紀錄防呆流程重設計
+  - 摘要：重設會議紀錄工作流與離開防呆。
+  - 父任務：DEV-002、DEV-005
+  - 證據：DEV-018 RD/QA/QC 章節
+  - 計入交付：否
+- ✓ DEV-019 [開發點] [完成] [P2] [已交付] 紀錄類型與會議流程層級
+  - 摘要：整理紀錄類型與會議模式層級。
+  - 父任務：DEV-002、DEV-005、DEV-018
+  - 證據：`SPEC-019`、`QA-DEV-019`
+  - 計入交付：否
+- ✓ DEV-020 [交付點] [完成] [P1] [已交付] 紀錄重構與專案變化匯入
+  - 摘要：交付紀錄流程重構與專案變化匯入主線。
+  - 證據：`SPEC-020`、`QA-DEV-020`
+  - 計入交付：是
+- ✓ DEV-021 [開發點] [完成] [P2] [已交付] 專案變化 AI 整理保留
+  - 摘要：保護專案變化匯入後的 AI 整理內容。
+  - 父任務：DEV-020
+  - 證據：`SPEC-021`、DEV-021 verifier
+  - 計入交付：否
+- ✓ DEV-022 [開發點] [完成] [P2] [已交付] 專案變化單一紀錄整合
+  - 摘要：將專案變化與 AI 整理收斂成單一紀錄。
+  - 父任務：DEV-020
+  - 證據：`SPEC-022`、DEV-022 verifier
+  - 計入交付：否
+- ✓ DEV-023 [開發點] [完成] [P2] [已交付] 專案變化匯入流程第一步
+  - 摘要：把專案變化匯入整合為紀錄流程第一步。
+  - 父任務：DEV-020
+  - 證據：`SPEC-023`、`QA/QC-DEV-023`
+  - 計入交付：否
+- ✓ DEV-024 [開發點] [完成] [P1] [正式環境已驗證] AI 整理保留手寫內容
+  - 摘要：確保 AI 整理保留手寫草稿與章節結構。
+  - 父任務：DEV-011、DEV-012、DEV-020
+  - 證據：`SPEC-024`、`QC-DEV-024`
+  - 計入交付：否
+- ◇ DEV-025 [交付點] [驗證中] [P1] [需受控 DB fixture] 受控跨工作區移動專案
+  - 摘要：產品實作與 read-only preflight 已完成，尚待受控 mutating DB QC。
+  - 下一步：在安全 fixture 執行 role / RLS / audit / consistency matrix
+  - 阻塞 / 恢復條件：需 staging 或 production-safe test workspace
+  - 證據：`SPEC-025`、`QA/QC-DEV-025`
+  - 計入交付：是
+- ✓ DEV-026 [交付點] [完成] [P2] [本機已驗證] Trello-like 看板分享
+  - 摘要：交付看板分享 UI 與 browser smoke。
+  - 證據：`SPEC-026`、`QA-DEV-026`
+  - 計入交付：是
+- ✓ DEV-027 [交付點] [完成] [P2] [本機已驗證] Xmind-like 心智圖模式
+  - 摘要：交付心智圖模式與後續互動改善。
+  - 證據：`SPEC-027`、`QA/QC-DEV-027`
+  - 計入交付：是
+- ✓ DEV-028 [交付點] [完成] [P1] [本機與人工已驗證] 四模式任務操作契約
+  - 摘要：完成跨模式任務操作一致性與人工點擊驗證。
+  - 證據：`SPEC-028`、`QA/QC-DEV-028`
+  - 計入交付：是
+- ✓ DEV-029 [交付點] [完成] [P1] [本機已驗證] 手機 Pan-First 與 compact action rail
+  - 摘要：完成手機捲動優先、長按操作與拖放仲裁。
+  - 證據：`SPEC-029`、`QA/QC-DEV-029`
+  - 計入交付：是
+- ✓ DEV-034 [交付點] [完成] [P2] [本機已驗證] App 快速啟動與加入主畫面
+  - 摘要：交付 PWA 快速啟動與安裝引導。
+  - 證據：`SPEC-034`、`QC-DEV-034`
+  - 計入交付：是
+- ✓ DEV-035 [交付點] [完成] [P1] [DB role QC 已通過] 工作區刪除持久化
+  - 摘要：完成工作區刪除持久化與 Supabase role matrix。
+  - 證據：`SPEC-035`、`QA/QC-DEV-035`
+  - 計入交付：是
+- ✓ DEV-036 [交付點] [完成] [P1] [本機已驗證] Trello-like Workspace Governance
+  - 摘要：建立 workspace / board 治理模型與 UI 契約。
+  - 證據：`ADR-036`、`SPEC-036`、`QA/QC-DEV-036`
+  - 計入交付：是
+- ◇ DEV-037 [交付點] [驗證中] [P1] [併入 DEV-045 release workstream] 行事曆訂閱來源範圍
+  - 摘要：v1 source-scope 本機已驗證，remote DB / Edge gate 由 DEV-045 相容契約承接。
+  - 下一步：依 DEV-045 新方向完成本機相容 gate 後再進 release gate
+  - 證據：`SPEC-037`、`QA/QC-DEV-037`
+  - 計入交付：是
+- ✓ DEV-038 [交付點] [完成] [P1] [正式環境已交付] 設定中心範圍一致性與防呆
+  - 摘要：完成設定中心 IA、資料範圍與高風險防呆。
+  - 證據：`SPEC-038`、`QA/QC-DEV-038`
+  - 計入交付：是
+- ✓ DEV-039 [交付點] [完成] [P1] [本機已驗證] 全域任務工作台與任務過濾器
+  - 摘要：完成任務 filter core、跨看板工作台與 row-root parity。
+  - 證據：`SPEC-039`、`QA/QC-DEV-039`
+  - 計入交付：是
+- ◇ DEV-040 [交付點] [驗證中] [P0] [remote Edge gate pending] 正式環境同型 BUG 風險硬化
+  - 摘要：原始 BUG 已發布驗證，P0 bounded-failure addendum 尚待 remote Edge gate。
+  - 下一步：依專項 release gate 處理 remote Edge / injection evidence
+  - 證據：`SPEC-040`、`QA/QC-DEV-040`
+  - 計入交付：是
+- ✓ DEV-041 [交付點] [完成] [P1] [正式環境已交付] PWA 更新通知與快取恢復
+  - 摘要：完成 PWA 更新通知、快取恢復與 production smoke。
+  - 證據：`SPEC-041`、`QA/QC-DEV-041`
+  - 計入交付：是
+- ✓ DEV-042 [交付點] [完成] [P1] [正式環境與真機已驗證] 手機左側欄 Off-Canvas
+  - 摘要：手機 closed state 零佔寬，展開採 overlay / drawer。
+  - 證據：`SPEC-042`、`QA/QC-DEV-042`
+  - 計入交付：是
+- ✓ DEV-044 [交付點] [完成] [P1] [safe scope 正式環境已交付] 上一步復原範圍擴充
+  - 摘要：完成低成本 ordinary undo 與 safe slice；破壞性 recovery 另行 gate。
+  - 證據：`SPEC-044`、`QA/QC-DEV-044`
+  - 計入交付：是
+- ✓ DEV-045 [交付點] [完成] [P1] [Phase 1-2 本機 QA-QC 通過 / release pending] 行事曆訂閱逐看板篩選器
+  - 摘要：以逐看板獨立 filter snapshot 取代未上線的 global / override v2，並與工作台共用操作語法但隔離 state。
+  - 父任務：DEV-037、DEV-039
+  - 下一步：需要發布時以 v3 migration / Edge source進入 Level 3與 deployment-release-gate
+  - 阻塞 / 恢復條件：remote/release需新的 release型指令、Level 3、live `.ics` parity與 rollback evidence
+  - 證據：`ADR-038`、`SPEC-045`、`QA-DEV-045`、`QC-DEV-045` v3 addendum、v3 static/browser/model/feed、local DB rollback smoke
+  - 計入交付：是
+- ◇ DEV-046 [交付點] [驗證中] [P1] [人工真機 supplemental pending] 全任務表面拖曳一致化
+  - 摘要：桌機 / 手機 whole-task drag 與把手退役已完成本機自動驗證。
+  - 下一步：需要時補人工真機 supplemental；production release另行 gate
+  - 證據：`SPEC-046`、`QA-DEV-046`
+  - 計入交付：是
+
+## PM Update - 2026-07-12
+
+### DEV-045: 逐看板獨立篩選快照取代 v2 繼承模型
+
+狀態：Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Superseded and Frozen / Phase 3-4 Release Gate Required
+節點類型：交付點 / Calendar subscription v3
+執行邊界：Phase 1-2產品程式、migration source、Edge source與本機驗證已完成；remote apply、deploy與 production smoke未執行
+
+Human Decision Brief：
+
+- 使用者要求行事曆訂閱器與全域任務工作台使用相同的逐看板設定與 UI 操作邏輯，取消不必要的全域 / override 層級。
+- HCS 引導題未逐題回覆後，使用者以「繼續」要求依建議推進；採用 `1A / 2A / 3A` 為 AI assumptions。
+- `1A`：只共用 UI、filter 語意與操作邏輯；Calendar / Workbench state 與 persistence 完全獨立。
+- `2A`：新訂閱保存建立當下所有可讀看板的獨立安全預設 snapshot，未來看板不自動加入。
+- `3A`：提供一次性批次複製目前看板條件到選定看板；複製後不連動。
+- 批判修訂：事件日期類型改為逐看板條件，與該看板 `TaskFilterState` 一起保存、預覽與輸出；訂閱名稱、整體預覽、外部風險與最後儲存仍是 subscription-level。
+- 溝通設計修訂：預覽不再顯示需要人工推算的任務卡，而是以 `task ID + date type`投影實際行事曆事件；提供事件總數、開始／到期拆分、依日期／依看板分組與未產生原因。
+
+治理決定：
+
+- 不新增重複 DEV；以 DEV-045 intentional replacement 接續，因 v2 尚未部署且 production v2 rows read-only evidence 為 0。
+- 舊 v2 local implementation / QC 保留歷史證據，但不能當作 v3 acceptance。
+- 舊 Phase 3 remote migration / Edge / live `.ics` gate立即凍結；不得部署 `global_filter / board_overrides` source。
+- Phase 1、Phase 2 已完成本機 RD、QA、QC；Phase 3、Phase 4維持 `Release Gate Required`。
+- Local evidence：v3 Builder static 18/18、browser 1440/1024/390/320、model 14/14、feed static 13/13、DB rollback smoke 22 behaviors、Deno check、DB lint、TypeScript、build與 DEV-037/039 regression皆通過；訂閱名稱與建立 CTA同列且各 viewport無 overflow。
+
+文件與驗收：
+
+- SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
+- ADR：`ai-doc/decisions/ADR-038-calendar-subscription-per-board-filter-snapshot.md`
+- QA：`ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md`
+- Historical QC：`ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md`
+- Current acceptance：shared condition component、state isolation、per-board draft、batch copy preview、v3 payload、v1/v2 materialization、preview/feed identity parity、permission recheck、partial/error 與 320-1440 viewport。
+
+Deferred Scope Audit：
+
+- Phase 1 local UI：Same Spec Phase / Implemented / Automated Browser QC Passed。
+- Phase 2 local service / DB validator / Edge source：Same Spec Phase / Implemented / Local DB and Edge QC Passed。
+- Remote migration / Edge / live `.ics`：Blocked Human Re-entry / Release Gate Required。
+- Production release / smoke / rollback：Blocked Human Re-entry / Release Gate Required。
+- Future-board auto-join、shared active state、global inheritance、Google write API：No Tracking，皆不屬已確認產品方向。
+- Background v1/v2 row rewrite：Blocked Human Re-entry，涉及正式資料改寫。
+
 ## PM Update - 2026-07-09
 
 ### Release Governance: 固定 `ProJED-TEST` 測試環境與 Level 3 Gate
@@ -145,13 +377,15 @@ Deferred Scope Audit:
 - 其他剩餘 DEV merge: No Tracking；合併會降低授權邊界清晰度，保留獨立 DEV。
 - 新增 umbrella / renumber DEV IDs: No Tracking；目前輕量索引修正足夠，重編會增加續接成本。
 
-### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
+### DEV-045 Historical v2 Record: 行事曆訂閱篩選器建構器與即時預覽
 
-狀態: Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending
-節點類型: 交付點 / Calendar subscription v2
+狀態: Historical v2 Evidence Preserved / Superseded by 2026-07-12 Per-Board v3 Contract / Former Remote Gate Frozen
+節點類型: 交付點歷史紀錄 / Calendar subscription v2
 父交付點: DEV-037 行事曆訂閱來源範圍清晰化 / DEV-039 任務過濾器核心與全域任務平台
 是否計入產品交付完成: 是，這是使用者可直接驗收的行事曆訂閱 UX / 資料契約升級；目前完成 Phase 1 local Builder 與 Phase 2 local source，不代表 remote DB / Edge / production feed 已完成
 建立日期: 2026-07-06
+
+2026-07-12 authoritative replacement：本節以下內容保留 v2 `global_filter + board_overrides` 的原始需求、實作、QC 與 release blocker 歷史，不再是目前 RD 契約。現行方向與執行邊界以文件開頭 `PM Update - 2026-07-12`、修訂後 `SPEC-045` 與 `QA-DEV-045` 為準；不得依本節繼續部署舊 v2 migration / Edge source。
 
 原始需求邊界:
 - 使用者希望行事曆訂閱設定方式改成像全域任務平台的過濾器一樣直覺。
@@ -2531,22 +2765,23 @@ CAPA 來源：
 - 2026-07-06 DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA 並 production release；採低資料庫成本 ordinary undo 擴充，涵蓋 batch/reorder/placement command grouping；DB migration、durable recovery、board workspace transfer undo 與 destructive recovery 未執行。
 - 2026-07-09 DEV-024 已完成 local deterministic human-draft merge guard、local browser ROT、regression gates 與 production UI smoke；`DEV024_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-024-production-ui-smoke -- --run-production-fixture` 通過，DB 查證 `published_record_found=true`，cleanup `tenantDeleted=true`、`userDeleted=true`。本輪未重新 production deploy，因目前正式 artifact 已含 DEV-024 實作。
 - 2026-07-06 DEV-035 已完成 production Supabase DB role QC；`delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 均通過。production front-end release 未執行。
-- 2026-07-07 DEV-045 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier、local-test browser verifier、remote-readiness static gate 與 transaction-scoped local DB smoke；Phase 3 已授權並完成 read-only preflight / local DB smoke，但 `ProJED_TEST` inactive，remote DB/Edge/production live QC 未執行。
+- 2026-07-07 DEV-045 v2 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier、local-test browser verifier、remote-readiness static gate 與 transaction-scoped local DB smoke；這些自 2026-07-12 起只屬歷史 v2 evidence，remote gate 已凍結。
+- 2026-07-12 DEV-045 改採逐看板獨立 `board_filters` v3 contract，並完成 Phase 1 shared condition UI / per-board Builder與 Phase 2 local service / validator / Edge source；本機 automated QA-QC通過，remote/release未執行。
 - 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight、guarded fixture-readiness harness、execution-readiness gate 與 guarded mutating executor self-check passed，mutating role-data QC still pending safe fixture。
-- 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 3 已補 local DB smoke，下一步只能在 deployment-release-gate / Supabase gate 下進入 remote apply/deploy/live `.ics` smoke；若不進 remote gate，則處理其他不碰 production DB/Edge 的本機候選。任務板剩餘項目仍多數為 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke，需對應 gate。
+- 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 1 shared condition UI / per-board Builder 是 P1 本機候選；Phase 1 通過後才能進 Phase 2 v3 local service / validator / Edge source。舊 v2 remote apply/deploy/live `.ics` path 已凍結，不再是下一步。其他 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke 仍需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 production UI smoke 已於 2026-07-09 依使用者授權執行 production fixture path；第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求。已建立 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f`，以 release gate 部署 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css` 到 Firebase Hosting，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup `tenantDeleted=true`、`userDeleted=true`。
-- 2026-07-07 PM evidence：新增 read-only 外部 Gate 稽核 `verify:remaining-external-gates`，機械確認 DEV-045 / DEV-025 / DEV-040 / DEV-044 仍停在正確 Supabase、Edge、production 或 human re-entry 邊界；輸出 `mutates_database=false`、`remote_changes=false`，不代表任一外部 Gate 完成。
+- 2026-07-07 PM evidence：`verify:remaining-external-gates` 保留當時 read-only 稽核事實；2026-07-12 後 DEV-045 舊 v2 remote gate 被產品方向修訂凍結，後續 verifier 必須先更新為 v3 contract 才能重新作為 gate evidence。
 - 2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過；後續開發排序不再把 DEV-028 manual QC 當作 active blocker，但 production deploy 仍需另行授權。
 - 手機版會議紀錄工作流不列入目前 release gate。
 
 ## 下一步
 
-此表列的是最高優先且最容易造成誤工的剩餘 Gate / 人工驗證 / release 動作。DEV-045 Phase 1 + Phase 2 local source 已完成；若要執行任何 production、DB、Edge、真機或人工登入式 QC，需套用對應 gate。完整比對見本日 PM Restructure Audit。
+此表列最高優先、可安全續接且最容易造成誤工的工作。DEV-045 舊 v2 Phase 1/2 evidence 已被新方向取代；目前應先做 v3 Phase 1/2 本機 RD/QC，不得跳到舊 remote gate。任何 production、remote DB、Edge、真機或人工登入式 QC 仍需對應 gate。
 
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|
-| 1 | DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate | Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | Supabase / deployment-release-gate / QC / 使用者決策 | Local transaction-scoped DB smoke、static/source gates、TypeScript、settings gate、Edge bundle、production build 與 production artifact smoke 已通過；Supabase branch cost confirmation 已完成，但建立 `dev-045-calendar-subscription-v2-staging` 失敗，MCP 回 branch create 權限不足。下一步需使用具 branch create 權限的 Supabase 帳號/OAuth，或由具權限者先建立 branch 並提供 branch project ref；若使用者改選 risk-accepted path，需明確接受無 Level 3 production DB/Edge 風險後才能直接 apply migration / deploy Edge。 |
+| 1 | DEV-045 Phase 1-2 逐看板篩選器本機 RD / QA / QC | Complete / Local Automated QA-QC Passed | RD / QA / QC | shared `TaskConditionFilterControls`、state isolation、per-board Builder、batch copy、v3 payload、normalizer / validator / Edge source、v1/v2 compatibility與 local DB rollback smoke已完成；舊 v2 remote path維持 frozen。 |
 | 2 | DEV-025 受控跨工作區移動專案 DB QC | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending | Supabase / QC | 建立 staging / disposable fixture 或 production-safe test workspace/board，先執行 `verify:dev-025-mutating-qc-readiness`、`verify:dev-025-mutating-qc-fixture-readiness` 與 `verify:dev-025-mutating-qc-execution` self-check 確認腳本防呆、fixture 標記、最小資料形狀與 mutation opt-in，再用 actual mode 執行 `preview_project_workspace_transfer` / `move_project_to_workspace` role matrix、RLS、audit log、資料一致性與 RAG visibility。 |
 | 3 | DEV-040 Phase 1 P0 production/Edge gate | Implemented / Local Automated QC Passed / Remote Read-only Preflight + Remote Readiness Static Gate Passed / Edge Deploy Pending / Production Injection Not Executed | Supabase / Edge / release owner | dependencies 匯入持久化與 RAG timeout/fallback 已完成；production DB substrate 與本機 Edge/source governance 已確認；remote Edge 尚未部署 timeout guard，production timeout injection、完整備份匯入 DB count smoke 需另行 gate。 |
 | 4 | DEV-044 Phase 3 destructive recovery human re-entry | Phase 2 Safe Slice Production Release Deployed / Human Re-entry for destructive recovery | 使用者 / RD after re-entry | batch/cross-view ordinary undo safe slice 已上線；DB/cross-device/destructive recovery、board workspace transfer undo 需另行 gate。 |
@@ -2585,7 +2820,7 @@ CAPA 來源：
 | DEV-041 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / One-Click Latest Local Hotfix Passed / Production Redeploy Not Executed | 是 | PWA 更新通知與快取恢復 | `SPEC-041`、`QA-DEV-041`、`QC-DEV-041`、DEV-041/DEV-034 static/browser gates | 強制更新、release notes 後端、版本 API、analytics 另行決策；hotfix 上線需另走 deployment-release-gate |
 | DEV-042 | 交付點 | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | 是 | 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas | `SPEC-042`、`QA-DEV-042`、`QC-DEV-042`、`verify:dev-042-mobile-left-sidebar-offcanvas`、browser screenshots、production artifact/browser/auth smoke、使用者回報真機通過、commit `aa1fff7` | DB/RLS/migration 與正式資料修復不屬於本 DEV |
 | DEV-044 | 交付點 | Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed | 是 | 上一步復原範圍擴充與低資料庫成本治理 | `SPEC-044`、`QA-DEV-044`、`QC-DEV-044`、`verify:dev-044-undo-coverage`、browser smoke、production artifact/browser/auth smoke | durable recovery、DB migration、board workspace transfer undo、destructive recovery 需另行授權 |
-| DEV-045 | 交付點 | Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | 是 | 行事曆訂閱篩選器建構器與即時預覽 | `SPEC-045`、`QA-DEV-045`、`QC-DEV-045`、`verify:dev-045-calendar-subscription-builder-preview`、`verify:dev-045-calendar-subscription-builder-preview-browser`、`verify:dev-045-calendar-subscription-v2-feed`、`verify:dev-045-calendar-subscription-remote-readiness`、`verify:dev-045-calendar-subscription-local-db-smoke`、Supabase read-only preflight、local DB smoke、TypeScript、settings gate、Edge bundle、production build、production artifact smoke、branch cost confirmation evidence | 下一步需具 branch create 權限的 Supabase 帳號/OAuth 或已建立的 branch project ref；之後才能 branch migration / Edge deploy / live `.ics` smoke |
+| DEV-045 | 交付點 | Per-Board v3 Phase 1-2 Local Implemented / Automated QA-QC Passed / Release Gate Required | 是 | 行事曆訂閱逐看板篩選器與即時預覽 | `ADR-038`、修訂後 `SPEC-045`、`QA-DEV-045`、`QC-DEV-045` v3 addendum與 automated gates | remote migration / Edge deploy / live `.ics` / production release等待新指令與 release gate |
 | DEV-046 | 交付點 | Implemented / Local Automated QA Passed / Physical Phone Supplemental Not Executed / Production Not Authorized | 是 | 全任務表面拖曳一致化與拖曳把手退役 | `SPEC-046`、`QA-DEV-046`、`verify:dev-046-universal-task-surface-drag`、`verify:dev-046-universal-task-surface-drag-browser` | 已完成桌機/手機 whole-task surface drag、退役 WBS task drag handle、DEV-028/029/039/044 regression、TypeScript、build:test；production deploy 與手機實機 supplemental 未執行 |
 
 ### 交付點完成率
@@ -2606,7 +2841,7 @@ CAPA 來源：
 - Production Release Deployed / Local + Production Smoke Passed / DB unchanged：1 個交付點。
 - Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed：1 個交付點。
 - Phase 1 + Phase 2 Safe Slice Production Release Deployed / Local + Production Smoke Passed：1 個交付點。
-- Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending：1 個交付點。
+- Per-Board v3 Spec Ready / Phase 1-2 RD Implementation Ready / Former v2 Remote Gate Frozen：1 個交付點。
 - Deferred：1 個 umbrella 交付點。
 - 開發點不列入完成率。
 

@@ -176,7 +176,10 @@ assert(
     source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') &&
     source.kanbanColumn.includes('mobileTaskAction?.begin') &&
     source.taskWorkbench.includes('mobileActionMode') &&
-    source.taskWorkbench.includes('disabled: !canMoveTask || mobileActionMode') &&
+    source.taskWorkbench.includes('if (!isMobileTaskActionMode()) return;') &&
+    source.taskWorkbench.includes('if (mobileActionMode) longPressHandlers.onTouchStart(event);') &&
+    source.taskWorkbench.includes('if (isMobileTaskActionMode()) return;') &&
+    source.taskWorkbench.includes('disabled: !canDragTaskFromWorkbench || mobileActionMode') &&
     source.taskWorkbench.includes('data-mobile-drop-target={task.id}'),
 );
 
@@ -217,6 +220,8 @@ assert(
     source.browserVerifier.includes('drop on add-child action creates a child and opens details') &&
     source.browserVerifier.includes('drop on complete action toggles task completed state') &&
     source.browserVerifier.includes('workbench row long press enters mobile drag-action mode') &&
+    source.browserVerifier.includes('placed workbench row long press uses the same compact mobile action rail') &&
+    source.browserVerifier.includes('placed workbench mobile long press should not open the full desktop task menu') &&
     source.browserVerifier.includes('whole task surfaces replace handles and allow pan') &&
     source.browserVerifier.includes('assertCompactMobileActionRail') &&
     source.browserVerifier.includes('compact mobile action rail fits 320/390/430 without covering tasks'),

@@ -49,25 +49,25 @@ assert(
 );
 
 assert(
-  'Calendar UI exposes source-scope controls and summaries',
-  source.view.includes('data-calendar-subscription-scope-form="true"') &&
-    source.view.includes('訂閱範圍') &&
-    source.view.includes('目前看板') &&
-    source.view.includes('工作區全部看板') &&
-    source.view.includes('自訂範圍') &&
+  'Calendar UI exposes v3 per-board source controls and summaries',
+  source.view.includes('<CalendarSubscriptionBuilderPreview') &&
+    source.view.includes('boardOptions') &&
+    source.view.includes('builderPayload?.project_ids') &&
+    !source.view.includes('data-calendar-subscription-scope-form="true"') &&
     source.view.includes('來源：') &&
     source.view.includes('條件：') &&
     source.view.includes('describeSourceFilter') &&
     source.view.includes('describeConditionFilters') &&
-    source.view.includes('describePreview'),
+    source.view.includes('逐看板設定'),
 );
 
 assert(
-  'Calendar UI defaults active-board entry to board scope',
+  'Calendar UI keeps v1 active-board defaults and materializes the v3 Builder payload',
   source.view.includes('emptyFilters(activeWorkspace?.id, activeBoard?.id)') &&
     source.view.includes("scope_type: 'board'") &&
     source.view.includes('project_ids: [boardId]') &&
-    source.view.includes('只輸出目前看板內符合條件的任務。'),
+    source.view.includes('initialFilters={filters}') &&
+    source.view.includes('onPayloadChange={setBuilderPayload}'),
 );
 
 assert(

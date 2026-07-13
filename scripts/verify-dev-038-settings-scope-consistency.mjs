@@ -31,18 +31,22 @@ const source = Object.fromEntries(
 assert(
   'Settings header uses neutral settings-center framing',
   source.settingsView.includes('<h2 className="text-2xl font-bold text-slate-900">設定中心</h2>') &&
-    source.settingsView.includes('依功能管理 ProJED 的看板、資料、外部連結與裝置設定。') &&
+    source.settingsView.includes('看板、資料、外部連結與裝置設定') &&
+    source.settingsView.includes('flex min-w-0 items-center gap-3') &&
     !source.settingsView.includes('系統設定與管理') &&
     !source.settingsView.includes('目前看板：{activeMeta}'),
 );
 
 assert(
-  'Settings tabs describe distinct scopes',
+  'Settings tabs keep distinct labels in a compact description-free toolbar',
   source.settingsView.includes("label: '備份與資料'") &&
-    source.settingsView.includes('匯出全域快照、匯入至目前看板與開啟目前看板回收桶。') &&
     source.settingsView.includes("label: '看板權限'") &&
-    source.settingsView.includes('管理目前看板的成員角色與權限矩陣。') &&
-    source.settingsView.includes('管理此裝置與目前帳號的快速開啟提示。'),
+    source.settingsView.includes("label: '行事曆訂閱'") &&
+    source.settingsView.includes("label: '快速開啟'") &&
+    source.settingsView.includes('grid grid-cols-2 gap-2 sm:grid-cols-4') &&
+    source.settingsView.includes('flex h-11 min-w-0 items-center gap-2') &&
+    !source.settingsView.includes('section.description') &&
+    !source.settingsView.includes('建立可供外部行事曆讀取的任務訂閱連結。'),
 );
 
 assert(

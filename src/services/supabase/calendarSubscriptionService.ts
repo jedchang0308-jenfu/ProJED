@@ -1,5 +1,6 @@
 import type {
   CalendarSubscriptionBoardFilterOverride,
+  CalendarSubscriptionBoardFilterSnapshot,
   CalendarSubscriptionAssigneeFilter,
   CalendarSubscriptionDateType,
   CalendarSubscriptionFilters,
@@ -105,18 +106,21 @@ const mapSubscription = (row: CalendarSubscriptionRow): CalendarSubscription => 
   updatedAt: row.updated_at,
 });
 
-const normalizeDateTypes = (dateTypes: CalendarSubscriptionDateType[]) =>
-  Array.from(new Set(dateTypes));
+const normalizeDateTypes = (dateTypes: CalendarSubscriptionDateType[] | undefined) =>
+  Array.from(new Set((dateTypes ?? []).filter(
+    (dateType): dateType is CalendarSubscriptionDateType => dateType === 'start_date' || dateType === 'due_date'
+  )));
 
 const normalizeAssigneeFilter = (
-  assignee: CalendarSubscriptionAssigneeFilter
+  assignee: CalendarSubscriptionAssigneeFilter | undefined
 ): CalendarSubscriptionAssigneeFilter => {
-  if (assignee.type !== 'selected') return assignee;
+  const normalizedAssignee = assignee ?? { type: 'me' as const };
+  if (normalizedAssignee.type !== 'selected') return normalizedAssignee;
 
   return {
     type: 'selected',
-    user_ids: Array.from(new Set(assignee.user_ids.filter(isUuid))),
-    include_unassigned: Boolean(assignee.include_unassigned),
+    user_ids: Array.from(new Set(normalizedAssignee.user_ids.filter(isUuid))),
+    include_unassigned: Boolean(normalizedAssignee.include_unassigned),
   };
 };
 
@@ -131,6 +135,10 @@ const normalizeScopeType = (
 );
 
 const normalizeFilters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  if (filters.version === 3 || filters.v3_scope_type === 'per_board_filter_snapshot') {
+    return normalizeV3Filters(filters);
+  }
+
   if (filters.version === 2 || filters.v2_scope_type === 'all_accessible_boards_snapshot') {
     return normalizeV2Filters(filters);
   }
@@ -229,6 +237,68 @@ const normalizeV2Filters = async (filters: CalendarSubscriptionFilters): Promise
     date_types: normalizeDateTypes(filters.date_types),
     global_filter: normalizeTaskFilters(filters.global_filter),
     ...(Object.keys(boardOverrides).length > 0 ? { board_overrides: boardOverrides } : {}),
+  };
+};
+
+const normalizeV3Filters = async (filters: CalendarSubscriptionFilters): Promise<CalendarSubscriptionFilters> => {
+  const inputProjectIds = unique(filters.project_ids ?? []);
+  if (inputProjectIds.length === 0 || !filters.board_filters) {
+    throw new Error('逐看板行事曆訂閱至少需要一張看板與完整條件快照。');
+  }
+
+  const resolvedWorkspaceIds = unique(await Promise.all(filters.workspace_ids.map(resolveWorkspaceId)));
+  const projectRefs = await Promise.all(
+    inputProjectIds.map((projectId) => resolveBoardRef(projectId, resolvedWorkspaceIds))
+  );
+  const resolvedProjectIds = unique(projectRefs.map((project) => project.id));
+  if (resolvedProjectIds.length !== inputProjectIds.length) {
+    throw new Error('逐看板行事曆訂閱包含重複看板。');
+  }
+
+  const inputBoardFilters = filters.board_filters;
+  const inputSnapshotKeys = Object.keys(inputBoardFilters);
+  const usedSnapshotKeys = new Set<string>();
+  const normalizedBoardFilters: Record<string, CalendarSubscriptionBoardFilterSnapshot> = {};
+
+  projectRefs.forEach((project, index) => {
+    const inputProjectId = inputProjectIds[index];
+    const snapshotKey = [inputProjectId, project.id, project.appBoardId]
+      .find((candidate) => Boolean(candidate && inputBoardFilters[candidate]));
+    if (!snapshotKey || usedSnapshotKeys.has(snapshotKey)) {
+      throw new Error(`看板缺少獨立條件快照：${project.path}`);
+    }
+    const snapshot = inputBoardFilters[snapshotKey];
+    if (!snapshot || typeof snapshot.included !== 'boolean') {
+      throw new Error(`看板條件快照格式錯誤：${project.path}`);
+    }
+    usedSnapshotKeys.add(snapshotKey);
+    const snapshotDateTypes = normalizeDateTypes(snapshot.date_types);
+    if (snapshot.included && snapshotDateTypes.length === 0) {
+      throw new Error(`看板至少需要一種事件日期：${project.path}`);
+    }
+    normalizedBoardFilters[project.id] = {
+      included: snapshot.included,
+      date_types: snapshotDateTypes,
+      filters: normalizeTaskFilters(snapshot.filters),
+    };
+  });
+
+  if (usedSnapshotKeys.size !== inputSnapshotKeys.length) {
+    throw new Error('逐看板條件快照必須與訂閱看板完全一致。');
+  }
+  if (!Object.values(normalizedBoardFilters).some((snapshot) => snapshot.included)) {
+    throw new Error('逐看板行事曆訂閱至少需要包含一張看板。');
+  }
+
+  return {
+    version: 3,
+    v3_scope_type: 'per_board_filter_snapshot',
+    workspace_ids: unique([
+      ...resolvedWorkspaceIds,
+      ...projectRefs.map((project) => project.workspaceId),
+    ]),
+    project_ids: resolvedProjectIds,
+    board_filters: normalizedBoardFilters,
   };
 };
 

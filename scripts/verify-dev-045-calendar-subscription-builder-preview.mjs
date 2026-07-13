@@ -5,17 +5,19 @@ const files = {
   databaseTypes: 'src/services/supabase/database.types.ts',
   calendarView: 'src/components/CalendarSubscriptionsView.tsx',
   builder: 'src/components/CalendarSubscriptionBuilderPreview.tsx',
+  sharedControls: 'src/components/ui/TaskConditionFilterControls.tsx',
+  workbench: 'src/components/TaskWorkbenchPanel.tsx',
+  conversion: 'src/features/calendarSubscriptions/filters.ts',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md',
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
-  devTask: 'ai-doc/dev_task.md',
-  documentationMap: 'ai-doc/documentation_map.md',
+  adr: 'ai-doc/decisions/ADR-038-calendar-subscription-per-board-filter-snapshot.md',
 };
 
 const read = file => readFileSync(resolve(file), 'utf8');
 const results = [];
-const assert = (name, ok, details = undefined) => results.push({ name, ok, details });
+const assert = (name, ok, details) => results.push({ name, ok, details });
 
 for (const [label, file] of Object.entries(files)) {
   assert(`file exists:${label}`, existsSync(resolve(file)), file);
@@ -28,97 +30,87 @@ const source = Object.fromEntries(
 );
 
 assert(
-  'CalendarSubscriptionFilters exposes DEV-045 v2 local contract without deleting DEV-037 v1 scope type',
-  source.databaseTypes.includes("export type CalendarSubscriptionScopeType = 'board' | 'workspace' | 'custom';") &&
-    source.databaseTypes.includes("export type CalendarSubscriptionV2ScopeType = 'all_accessible_boards_snapshot';") &&
-    source.databaseTypes.includes('CalendarSubscriptionBoardFilterOverride') &&
-    source.databaseTypes.includes('version?: 1 | 2;') &&
-    source.databaseTypes.includes('v2_scope_type?: CalendarSubscriptionV2ScopeType;') &&
-    source.databaseTypes.includes('global_filter?: TaskFilterState;') &&
-    source.databaseTypes.includes('board_overrides?: Record<string, CalendarSubscriptionBoardFilterOverride>;'),
+  'v3 contract is explicit and keeps v1/v2 read compatibility',
+  source.databaseTypes.includes("CalendarSubscriptionV3ScopeType = 'per_board_filter_snapshot'") &&
+    source.databaseTypes.includes('CalendarSubscriptionBoardFilterSnapshot') &&
+    source.databaseTypes.includes('version?: 1 | 2 | 3;') &&
+    source.databaseTypes.includes('board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot>;'),
 );
 
 assert(
-  'CalendarSubscriptionsView mounts the v2 Builder while preserving v1 source-scope compatibility block',
-  source.calendarView.includes("from './CalendarSubscriptionBuilderPreview'") &&
-    source.calendarView.includes('<CalendarSubscriptionBuilderPreview') &&
-    source.calendarView.includes('selectedAssigneeIds={selectedAssigneeIdsForPreview}') &&
-    source.calendarView.includes('dateTypes={filters.date_types}') &&
-    source.calendarView.includes('onPayloadChange={setBuilderPayload}') &&
-    source.calendarView.includes('data-calendar-subscription-scope-form="true"') &&
-    source.calendarView.includes('目前看板') &&
-    source.calendarView.includes('工作區全部看板') &&
-    source.calendarView.includes('自訂範圍'),
+  'Workbench and calendar builder use one shared condition-control component',
+  source.workbench.includes('<TaskConditionFilterControls') &&
+    source.builder.includes('<TaskConditionFilterControls') &&
+    source.sharedControls.includes('data-task-condition-filter-controls="true"'),
 );
 
 assert(
-  'Builder computes local preview from in-memory tasks and shared task filter semantics',
-  source.builder.includes("from '../store/useWbsStore'") &&
-    source.builder.includes("from '../store/useTagStore'") &&
-    source.builder.includes('matchesTaskFilters') &&
-    source.builder.includes('normalizeTaskFilters') &&
-    source.builder.includes('TASK_STATUS_OPTIONS') &&
-    source.builder.includes('hasTaskCalendarDate') &&
-    source.builder.includes('data-calendar-subscription-live-preview="true"') &&
-    source.builder.includes('data-calendar-subscription-builder-preview-count'),
+  'Calendar view has one v3 builder truth and no legacy global scope form',
+  source.calendarView.includes('onValidationChange={setBuilderValidation}') &&
+    source.calendarView.includes('manageableWorkspaceIds={manageableWorkspaceIds}') &&
+  source.calendarView.includes('data-calendar-subscription-submit="true"') &&
+    source.calendarView.includes('grid-cols-[minmax(0,1fr)_auto]') &&
+    source.calendarView.includes('建立訂閱並複製連結') &&
+    source.calendarView.includes('請到已連接 Supabase 的環境建立訂閱') &&
+    !source.calendarView.includes('data-calendar-subscription-scope-form="true"') &&
+    !source.calendarView.includes('selectedAssigneeIds={selectedAssigneeIdsForPreview}'),
 );
 
 assert(
-  'Builder supports global filters and per-board inherit/custom/exclude modes',
-  source.builder.includes('data-calendar-subscription-builder="true"') &&
-    source.builder.includes('data-calendar-subscription-condition-controls="true"') &&
-    source.builder.includes('data-calendar-subscription-board-override="true"') &&
-    source.builder.includes('沿用') &&
-    source.builder.includes('自訂') &&
-    source.builder.includes('排除') &&
-    source.builder.includes('board_overrides') &&
-    source.builder.includes('enabled: false') &&
-    source.builder.includes('useCustomFilter'),
+  'Builder emits complete per-board snapshots and blocks incomplete preview saves',
+  source.builder.includes('version: 3') &&
+    source.builder.includes("v3_scope_type: 'per_board_filter_snapshot'") &&
+    source.builder.includes('board_filters: Object.fromEntries') &&
+    source.builder.includes('failedBoardIds') &&
+    source.builder.includes('missingDateTypeBoardIds') &&
+    source.builder.includes('data-calendar-subscription-board-date-types="true"') &&
+    source.builder.includes('date_types: copiedSnapshot.date_types') &&
+    source.builder.includes('data-calendar-subscription-event-summary="true"') &&
+    source.builder.includes('data-calendar-subscription-preview-event="true"') &&
+    source.builder.includes('data-calendar-subscription-preview-group={mode}') &&
+    source.builder.includes('missingPreviewEvents') &&
+    source.builder.includes('previewEvents: events') &&
+    !source.builder.includes('max-h-72 space-y-3 overflow-y-auto') &&
+    source.builder.includes('includedBoardCount') &&
+    source.builder.includes('data-calendar-subscription-save-block-reason') === false &&
+    source.calendarView.includes('data-calendar-subscription-save-block-reason="true"'),
 );
 
 assert(
-  'Builder captures output summary and external-link risk before future create/feed integration',
-  source.builder.includes('all_accessible_boards_snapshot') &&
-    source.builder.includes('這條連結會輸出') &&
-    source.builder.includes('任何持有此連結的人都能讀取連結中的事件內容') &&
-    source.calendarView.includes('v2 snapshot') &&
-    source.calendarView.includes('DEV-045 Phase 2 Supabase migration 與 Edge Function'),
+  'Per-board edit, reset, exclude, and explicit one-time copy controls exist',
+  source.builder.includes('data-calendar-subscription-board-select') &&
+    source.builder.includes('data-calendar-subscription-board-included') &&
+    source.builder.includes('data-calendar-subscription-copy-panel') &&
+    source.builder.includes('data-calendar-subscription-copy-apply') &&
+    source.builder.includes('cloneCalendarBoardFilterSnapshot') &&
+    source.builder.includes('setCopyTargetIds'),
 );
 
 assert(
-  'Builder stays separate from TaskWorkbench UI state and display settings',
-  !source.builder.includes('TaskWorkbenchPanel') &&
-    !source.builder.includes('WorkbenchFilterControls') &&
-    !source.builder.includes('placement') &&
-    !source.builder.includes('列表') &&
-    !source.builder.includes('群組') &&
-    !source.builder.includes('showDependencies') &&
-    !source.builder.includes('showStartDate') &&
-    !source.builder.includes('showTags'),
+  'New, v1, v2, and v3 records materialize to independent board snapshots',
+  source.conversion.includes('materializeCalendarBoardFilters') &&
+    source.conversion.includes("const isV3 = filters.version === 3") &&
+    source.conversion.includes("const isV2 = filters.version === 2") &&
+    source.conversion.includes("const scopeType = filters.scope_type ?? 'workspace'") &&
+    source.conversion.includes('included: snapshot.included') &&
+    source.conversion.includes('date_types: normalizeDateTypes(snapshot.date_types ?? filters.date_types)') &&
+    source.conversion.includes('createCalendarSafeDefaultTaskFilters'),
 );
 
 assert(
-  'DEV-045 package script and governance docs are discoverable',
-  source.packageJson.includes('"verify:dev-045-calendar-subscription-builder-preview"') &&
-    source.spec.includes('Phase 1 - Builder UI + local preview') &&
-    source.spec.includes('Phase 1 Local RD Implemented / Static QC Passed') &&
-    source.qa.includes('QA-045-B01') &&
-    source.qc.includes('Phase 1 local Builder slice 已完成本機實作與 static/build QC') &&
-    source.devTask.includes('DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate') &&
-    source.documentationMap.includes('DEV-045 Phase 1 Builder、Phase 2 local source 與 local DB smoke 已完成'),
+  'Architecture and QA documents name the immutable per-board model',
+  source.adr.includes('逐看板') &&
+    source.spec.includes('version: 3') &&
+    source.qa.includes('QA-045') &&
+    source.qc.includes('DEV-045') &&
+    source.packageJson.includes('verify:dev-045-calendar-subscription-builder-preview'),
 );
 
 const failed = results.filter(result => !result.ok);
-
 console.log(JSON.stringify({
   ok: failed.length === 0,
-  summary: {
-    pass: results.length - failed.length,
-    fail: failed.length,
-  },
+  summary: { pass: results.length - failed.length, fail: failed.length },
   results,
 }, null, 2));
 
-if (failed.length > 0) {
-  process.exit(1);
-}
+if (failed.length > 0) process.exit(1);

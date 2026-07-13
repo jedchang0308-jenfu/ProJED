@@ -23,14 +23,14 @@ import {
 } from '../services/supabase/calendarSubscriptionService';
 import type {
   CalendarSubscriptionAssigneeFilter,
-  CalendarSubscriptionDateType,
   CalendarSubscriptionFilters,
   CalendarSubscriptionScopeType,
 } from '../services/supabase/database.types';
 import { toast } from '../store/useToastStore';
-import { UNASSIGNED_ASSIGNEE_FILTER } from '../utils/taskFilters';
 import CalendarSubscriptionBuilderPreview, {
+  type CalendarSubscriptionBuilderAssigneeOption,
   type CalendarSubscriptionBuilderPayload,
+  type CalendarSubscriptionBuilderValidation,
 } from './CalendarSubscriptionBuilderPreview';
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'project_manager']);
@@ -49,11 +49,11 @@ const getScopeType = (filters: CalendarSubscriptionFilters): CalendarSubscriptio
   filters.scope_type ?? 'workspace';
 
 const uniq = <T extends string>(items: T[]) => Array.from(new Set(items.filter(Boolean)));
-const LOCAL_TEST_PREVIEW_ASSIGNEE_IDS: string[] = [];
-
 type CalendarBoardOption = {
   id: string;
+  storageId?: string;
   workspaceId: string;
+  storageWorkspaceId?: string;
   boardTitle: string;
   workspaceTitle: string;
   path: string;
@@ -78,19 +78,20 @@ type AssigneeSelection = {
 };
 
 const getAssigneeSelection = (
-  assignee: CalendarSubscriptionAssigneeFilter,
+  assignee: CalendarSubscriptionAssigneeFilter | undefined,
   currentUserId?: string
 ): AssigneeSelection => {
-  if (assignee.type === 'selected') {
+  const normalizedAssignee = assignee ?? { type: 'me' as const };
+  if (normalizedAssignee.type === 'selected') {
     return {
-      userIds: Array.from(new Set(assignee.user_ids.filter(Boolean))),
-      includeUnassigned: Boolean(assignee.include_unassigned),
+      userIds: Array.from(new Set(normalizedAssignee.user_ids.filter(Boolean))),
+      includeUnassigned: Boolean(normalizedAssignee.include_unassigned),
     };
   }
 
-  if (assignee.type === 'user') {
+  if (normalizedAssignee.type === 'user') {
     return {
-      userIds: assignee.user_id ? [assignee.user_id] : [],
+      userIds: normalizedAssignee.user_id ? [normalizedAssignee.user_id] : [],
       includeUnassigned: false,
     };
   }
@@ -101,16 +102,8 @@ const getAssigneeSelection = (
   };
 };
 
-const toSelectedAssigneeFilter = (
-  selection: AssigneeSelection
-): CalendarSubscriptionAssigneeFilter => ({
-  type: 'selected',
-  user_ids: Array.from(new Set(selection.userIds.filter(Boolean))),
-  include_unassigned: selection.includeUnassigned,
-});
-
 const describeAssigneeFilter = (
-  assignee: CalendarSubscriptionAssigneeFilter,
+  assignee: CalendarSubscriptionAssigneeFilter | undefined,
   memberNameById: Map<string, string>,
   currentUserId?: string
 ) => {
@@ -127,6 +120,13 @@ const describeSourceFilter = (
   workspaceNameById: Map<string, string>,
   boardPathById: Map<string, string>
 ) => {
+  if (filters.version === 3 && filters.board_filters) {
+    const includedBoards = Object.entries(filters.board_filters)
+      .filter(([, snapshot]) => snapshot.included)
+      .map(([boardId]) => boardPathById.get(boardId) ?? boardId.slice(0, 8));
+    return `逐看板設定｜${includedBoards.length > 0 ? includedBoards.join('、') : '未包含看板'}`;
+  }
+
   const scopeType = getScopeType(filters);
   const workspaces = filters.workspace_ids
     .map((workspaceId) => workspaceNameById.get(workspaceId) ?? workspaceId.slice(0, 8))
@@ -151,27 +151,86 @@ const describeConditionFilters = (
   memberNameById: Map<string, string>,
   currentUserId?: string,
 ) => {
-  const assignee = describeAssigneeFilter(filters.assignee, memberNameById, currentUserId);
-  const dateTypes = filters.date_types
+  const dateTypes = (filters.date_types ?? [])
     .map((type) => type === 'start_date' ? '開始日' : '到期日')
     .join('、');
+  if (filters.version === 3 && filters.board_filters) {
+    return '每張看板獨立任務條件與事件日期';
+  }
+
+  const assignee = describeAssigneeFilter(filters.assignee, memberNameById, currentUserId);
   return `負責人：${assignee}｜日期：${dateTypes || '未指定'}`;
 };
 
-const describePreview = (
-  filters: CalendarSubscriptionFilters,
-  workspaceNameById: Map<string, string>,
-  boardPathById: Map<string, string>,
-  memberNameById: Map<string, string>,
-  currentUserId?: string
-) => {
-  const source = describeSourceFilter(filters, workspaceNameById, boardPathById);
-  const condition = describeConditionFilters(filters, memberNameById, currentUserId);
-  return `這個訂閱會包含：${source} 中，${condition} 的任務。`;
+type CalendarSubscriptionSubmitBarProps = {
+  name: string;
+  nameInputId: string;
+  namePlaceholder: string;
+  disabled: boolean;
+  isEditing?: boolean;
+  isSaving?: boolean;
+  blockedReason?: string;
+  onNameChange: (value: string) => void;
+  onSubmit?: () => void;
+  onCancel?: () => void;
 };
 
-const toggleArrayValue = <T extends string>(items: T[], value: T) =>
-  items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
+const CalendarSubscriptionSubmitBar: React.FC<CalendarSubscriptionSubmitBarProps> = ({
+  name,
+  nameInputId,
+  namePlaceholder,
+  disabled,
+  isEditing = false,
+  isSaving = false,
+  blockedReason,
+  onNameChange,
+  onSubmit,
+  onCancel,
+}) => (
+  <div className="sticky top-0 z-20 -mx-4 mb-4 border-y border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm" data-calendar-subscription-action-bar="true">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+      <label className="min-w-0 text-xs font-bold text-slate-500" htmlFor={nameInputId}>
+        訂閱名稱
+        <input
+          id={nameInputId}
+          value={name}
+          onChange={(event) => onNameChange(event.target.value)}
+          className="mt-1 h-11 w-full border border-slate-200 px-3 text-sm font-normal text-slate-800 outline-none focus:border-primary"
+          placeholder={namePlaceholder}
+        />
+      </label>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={disabled || isSaving}
+          aria-describedby={blockedReason ? 'calendar-subscription-submit-status' : undefined}
+          className="inline-flex h-11 min-w-20 items-center justify-center gap-2 bg-primary px-3 text-sm font-bold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 sm:min-w-56"
+          data-calendar-subscription-submit="true"
+        >
+          {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CalendarPlus size={16} />}
+          <span className="hidden sm:inline">{isEditing ? '儲存訂閱變更' : '建立訂閱並複製連結'}</span>
+          <span className="sm:hidden">{isEditing ? '儲存' : '建立'}</span>
+        </button>
+        {isEditing && onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-11 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            取消
+          </button>
+        ) : null}
+      </div>
+    </div>
+    {blockedReason ? (
+      <div id="calendar-subscription-submit-status" className="mt-2 flex items-start gap-2 text-xs leading-5 text-slate-600" data-calendar-subscription-save-block-reason="true">
+        <ShieldAlert size={14} className="mt-0.5 shrink-0 text-amber-600" />
+        <span>{blockedReason}</span>
+      </div>
+    ) : null}
+  </div>
+);
 
 const CalendarSubscriptionsView: React.FC = () => {
   const user = useAuthStore((state) => state.user);
@@ -196,95 +255,102 @@ const CalendarSubscriptionsView: React.FC = () => {
     emptyFilters(activeWorkspace?.id, activeBoard?.id)
   );
   const [builderPayload, setBuilderPayload] = useState<CalendarSubscriptionBuilderPayload | null>(null);
+  const [builderValidation, setBuilderValidation] = useState<CalendarSubscriptionBuilderValidation>({
+    isComplete: false,
+    loading: true,
+    failedBoardIds: [],
+    includedBoardCount: 0,
+    missingDateTypeBoardIds: [],
+  });
+  const [builderRevision, setBuilderRevision] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const scopeType = getScopeType(filters);
-  const effectiveMemberWorkspaceIds = builderPayload?.workspace_ids.length
-    ? builderPayload.workspace_ids
-    : filters.workspace_ids;
-  const selectedWorkspaceCount = new Set(effectiveMemberWorkspaceIds).size;
-  const selectedWorkspaceKey = uniq(effectiveMemberWorkspaceIds).join(',');
-  const assigneeSelection = useMemo(
-    () => getAssigneeSelection(filters.assignee, user?.uid),
-    [filters.assignee, user?.uid]
-  );
-  const selectedAssigneeSet = useMemo(() => {
-    const values = [...assigneeSelection.userIds];
-    if (assigneeSelection.includeUnassigned) values.push(UNASSIGNED_ASSIGNEE_FILTER);
-    return new Set(values);
-  }, [assigneeSelection]);
-  const selectedAssigneeIdsForPreview = useMemo(
-    () => Array.from(selectedAssigneeSet),
-    [selectedAssigneeSet]
-  );
-
-  const currentUserAdminWorkspaceCount = useMemo(() => {
-    if (!user) return 0;
-    return new Set(
-      members
-        .filter((member) => member.userId === user.uid && ADMIN_ROLES.has(member.role))
-        .map((member) => member.workspaceId)
-    ).size;
-  }, [members, user]);
-
-  const loadedSelectedWorkspaceMemberCount = useMemo(() => {
-    const selectedWorkspaceIds = new Set(effectiveMemberWorkspaceIds);
-    return new Set(
-      members
-        .filter((member) => selectedWorkspaceIds.has(member.workspaceId))
-        .map((member) => member.workspaceId)
-    ).size;
-  }, [effectiveMemberWorkspaceIds, members]);
-
-  const hasLoadedSelectedWorkspaceMembers = selectedWorkspaceCount > 0
-    && loadedSelectedWorkspaceMemberCount >= selectedWorkspaceCount;
-
-  const canAssignOthers = selectedWorkspaceCount > 0 && currentUserAdminWorkspaceCount >= selectedWorkspaceCount;
-
-  const assignableMembers = useMemo(() => {
-    if (selectedWorkspaceCount === 0) return [];
-    const byUserId = new Map<string, { member: CalendarWorkspaceMember; workspaceIds: Set<string> }>();
-    members.forEach((member) => {
-      const current = byUserId.get(member.userId) ?? { member, workspaceIds: new Set<string>() };
-      current.workspaceIds.add(member.workspaceId);
-      if (!current.member.displayName && member.displayName) current.member = member;
-      byUserId.set(member.userId, current);
-    });
-    return Array.from(byUserId.values())
-      .filter((entry) => entry.workspaceIds.size >= selectedWorkspaceCount)
-      .map((entry) => entry.member)
-      .sort((a, b) => getMemberLabel(a).localeCompare(getMemberLabel(b), 'zh-TW'));
-  }, [members, selectedWorkspaceCount]);
-
   const boardOptions = useMemo<CalendarBoardOption[]>(() => {
     const map = new Map<string, CalendarBoardOption>();
+    const representedStorageIds = new Set<string>();
     workspaces.forEach((workspace) => {
       workspace.boards.forEach((board) => {
+        const boardRef = boardRefs.find((candidate) => candidate.appBoardId === board.id);
         const option = {
           id: board.id,
+          storageId: boardRef?.id,
           workspaceId: workspace.id,
+          storageWorkspaceId: boardRef?.workspaceId,
           boardTitle: board.title,
           workspaceTitle: workspace.title,
           path: `${workspace.title} / ${board.title}`,
         };
-        map.set(board.id, option);
+        map.set(boardRef?.id ?? board.id, option);
+        if (boardRef) representedStorageIds.add(boardRef.id);
       });
     });
     boardRefs.forEach((board) => {
+      if (representedStorageIds.has(board.id)) return;
       const option = {
-        id: board.id,
+        id: board.appBoardId || board.id,
+        storageId: board.id,
         workspaceId: board.appWorkspaceId,
+        storageWorkspaceId: board.workspaceId,
         boardTitle: board.name,
         workspaceTitle: board.workspaceName,
         path: board.path,
       };
-      if (!map.has(board.id)) map.set(board.id, option);
-      if (!map.has(board.appBoardId)) map.set(board.appBoardId, { ...option, id: board.appBoardId });
+      map.set(board.id, option);
     });
     return Array.from(map.values()).sort((a, b) => a.path.localeCompare(b.path, 'zh-TW'));
   }, [boardRefs, workspaces]);
+
+  const effectiveMemberWorkspaceIds = useMemo(
+    () => uniq(boardOptions.flatMap((board) => [board.workspaceId, board.storageWorkspaceId ?? ''])),
+    [boardOptions]
+  );
+  const selectedWorkspaceKey = effectiveMemberWorkspaceIds.join(',');
+
+  const manageableWorkspaceIds = useMemo(() => {
+    if (!user) return [];
+    const ids = new Set<string>();
+    members
+      .filter((member) => member.userId === user.uid && ADMIN_ROLES.has(member.role))
+      .forEach((member) => {
+        ids.add(member.workspaceId);
+        const ref = workspaceRefs.find((workspace) => workspace.id === member.workspaceId);
+        if (ref?.appWorkspaceId) ids.add(ref.appWorkspaceId);
+      });
+    return Array.from(ids);
+  }, [members, user, workspaceRefs]);
+
+  const calendarAssigneeOptions = useMemo<CalendarSubscriptionBuilderAssigneeOption[]>(() => {
+    const byUserId = new Map<string, { member: CalendarWorkspaceMember; workspaceIds: Set<string> }>();
+    members.forEach((member) => {
+      const current = byUserId.get(member.userId) ?? { member, workspaceIds: new Set<string>() };
+      current.workspaceIds.add(member.workspaceId);
+      const ref = workspaceRefs.find((workspace) => workspace.id === member.workspaceId);
+      if (ref?.appWorkspaceId) current.workspaceIds.add(ref.appWorkspaceId);
+      if (!current.member.displayName && member.displayName) current.member = member;
+      byUserId.set(member.userId, current);
+    });
+    if (user && !byUserId.has(user.uid)) {
+      byUserId.set(user.uid, {
+        member: {
+          userId: user.uid,
+          workspaceId: activeWorkspace?.id ?? '',
+          role: 'member',
+          displayName: user.displayName ?? null,
+          email: user.email ?? null,
+        },
+        workspaceIds: new Set(effectiveMemberWorkspaceIds),
+      });
+    }
+    return Array.from(byUserId.values())
+      .map(({ member, workspaceIds }) => ({
+        id: member.userId,
+        label: getMemberLabel(member),
+        workspaceIds: Array.from(workspaceIds),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'zh-TW'));
+  }, [activeWorkspace?.id, effectiveMemberWorkspaceIds, members, user, workspaceRefs]);
 
   const workspaceNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -378,20 +444,18 @@ const CalendarSubscriptionsView: React.FC = () => {
     };
   }, [selectedWorkspaceKey, effectiveMemberWorkspaceIds]);
 
-  useEffect(() => {
-    if (!user || canAssignOthers || !hasLoadedSelectedWorkspaceMembers) return;
-    const selection = getAssigneeSelection(filters.assignee, user.uid);
-    const hasRestrictedSelection = selection.includeUnassigned
-      || selection.userIds.some((userId) => userId !== user.uid);
-    if (hasRestrictedSelection) {
-      setFilters((current) => ({ ...current, assignee: { type: 'me' } }));
-    }
-  }, [canAssignOthers, filters.assignee, hasLoadedSelectedWorkspaceMembers, user]);
-
   const resetForm = () => {
     setName('我的工作行事曆');
     setFilters(emptyFilters(activeWorkspace?.id, activeBoard?.id));
     setBuilderPayload(null);
+    setBuilderValidation({
+      isComplete: false,
+      loading: true,
+      failedBoardIds: [],
+      includedBoardCount: 0,
+      missingDateTypeBoardIds: [],
+    });
+    setBuilderRevision((current) => current + 1);
     setEditingId(null);
   };
 
@@ -400,132 +464,21 @@ const CalendarSubscriptionsView: React.FC = () => {
     toast.success('已複製訂閱連結');
   };
 
-  const setAssigneeSelection = (nextSelection: AssigneeSelection) => {
-    setFilters((current) => ({
-      ...current,
-      assignee: toSelectedAssigneeFilter(nextSelection),
-    }));
-  };
-
-  const toggleAssigneeOption = (optionId: string) => {
-    setFilters((current) => {
-      const currentSelection = getAssigneeSelection(current.assignee, user?.uid);
-      if (optionId === UNASSIGNED_ASSIGNEE_FILTER) {
-        return {
-          ...current,
-          assignee: toSelectedAssigneeFilter({
-            ...currentSelection,
-            includeUnassigned: !currentSelection.includeUnassigned,
-          }),
-        };
-      }
-
-      const userIds = currentSelection.userIds.includes(optionId)
-        ? currentSelection.userIds.filter((userId) => userId !== optionId)
-        : [...currentSelection.userIds, optionId];
-      return {
-        ...current,
-        assignee: toSelectedAssigneeFilter({
-          ...currentSelection,
-          userIds,
-        }),
-      };
-    });
-  };
-
-  const setScopeType = (nextScopeType: CalendarSubscriptionScopeType) => {
-    setFilters((current) => {
-      if (nextScopeType === 'board') {
-        return {
-          ...current,
-          scope_type: 'board',
-          workspace_ids: activeWorkspace?.id ? [activeWorkspace.id] : [],
-          project_ids: activeBoard?.id ? [activeBoard.id] : [],
-        };
-      }
-      if (nextScopeType === 'workspace') {
-        return {
-          ...current,
-          scope_type: 'workspace',
-          workspace_ids: current.workspace_ids.length > 0
-            ? current.workspace_ids
-            : activeWorkspace?.id ? [activeWorkspace.id] : [],
-          project_ids: undefined,
-        };
-      }
-      return {
-        ...current,
-        scope_type: 'custom',
-        workspace_ids: current.workspace_ids.length > 0
-          ? current.workspace_ids
-          : activeWorkspace?.id ? [activeWorkspace.id] : [],
-        project_ids: current.project_ids ?? (activeBoard?.id ? [activeBoard.id] : []),
-      };
-    });
-  };
-
-  const toggleWorkspace = (workspaceId: string) => {
-    setFilters((current) => ({
-      ...current,
-      workspace_ids: toggleArrayValue(current.workspace_ids, workspaceId),
-      ...(getScopeType(current) === 'workspace' ? { project_ids: undefined } : {}),
-    }));
-  };
-
-  const toggleCustomBoard = (board: CalendarBoardOption) => {
-    setFilters((current) => {
-      const projectIds = toggleArrayValue(current.project_ids ?? [], board.id);
-      const nextWorkspaceIds = projectIds.includes(board.id)
-        ? uniq([...current.workspace_ids, board.workspaceId])
-        : uniq(
-          current.workspace_ids.filter((workspaceId) =>
-            projectIds.some((projectId) =>
-              boardOptions.find((option) => option.id === projectId)?.workspaceId === workspaceId
-            )
-          )
-        );
-      return {
-        ...current,
-        scope_type: 'custom',
-        workspace_ids: nextWorkspaceIds,
-        project_ids: projectIds,
-      };
-    });
-  };
-
   const validate = () => {
     if (!user) return '請先登入';
     if (!name.trim()) return '請輸入訂閱名稱';
-    if (builderPayload) {
-      if (builderPayload.workspace_ids.length === 0) return '新版訂閱至少需要一個工作區';
-      if (builderPayload.project_ids.length === 0) return '新版訂閱至少需要一個看板';
-    } else {
-      if (scopeType === 'board' && (filters.project_ids?.length ?? 0) !== 1) return '請選擇目前看板';
-      if (scopeType === 'workspace' && filters.workspace_ids.length === 0) return '請至少選擇一個工作區';
-      if (scopeType === 'custom' && (filters.project_ids?.length ?? 0) === 0) return '請至少選擇一個看板';
-    }
-    if (filters.date_types.length === 0) return '請至少選擇一種日期類型';
-    if (assigneeSelection.userIds.length === 0 && !assigneeSelection.includeUnassigned) {
-      return '請至少選擇一個負責人或未指派';
-    }
-    const hasRestrictedSelection = assigneeSelection.includeUnassigned
-      || assigneeSelection.userIds.some((userId) => userId !== user.uid);
-    if (hasRestrictedSelection && !canAssignOthers) {
-      return '只有管理角色可以訂閱未指派或他人的任務';
-    }
+    if (!builderPayload) return '訂閱條件尚未就緒';
+    if (builderPayload.workspace_ids.length === 0) return '至少需要一個工作區';
+    if (builderPayload.project_ids.length === 0) return '至少需要一個看板';
+    if (builderValidation.loading) return '正在讀取預覽資料，請稍候';
+    if (builderValidation.failedBoardIds.length > 0) return '部分看板預覽讀取失敗，請重試後再儲存';
+    if (builderValidation.includedBoardCount === 0) return '請至少包含一張看板';
+    if (builderValidation.missingDateTypeBoardIds.length > 0) return '每張已納入看板都需要至少一種事件日期';
+    if (!builderValidation.isComplete) return '訂閱條件尚未完整';
     return null;
   };
 
-  const buildSubmissionFilters = (): CalendarSubscriptionFilters => {
-    if (!builderPayload) return filters;
-
-    return {
-      ...builderPayload,
-      scope_type: 'custom',
-      assignee: filters.assignee,
-      date_types: filters.date_types,
-    };
-  };
+  const buildSubmissionFilters = (): CalendarSubscriptionFilters => builderPayload ?? filters;
 
   const submit = async () => {
     const error = validate();
@@ -562,6 +515,18 @@ const CalendarSubscriptionsView: React.FC = () => {
     const displayProjectIds = (subscription.filters.project_ids ?? []).map((projectId) =>
       boardRefs.find((board) => board.id === projectId)?.appBoardId ?? projectId
     );
+    const displayBoardFilters = subscription.filters.board_filters
+      ? Object.fromEntries(Object.entries(subscription.filters.board_filters).map(([projectId, snapshot]) => [
+        boardRefs.find((board) => board.id === projectId)?.appBoardId ?? projectId,
+        snapshot,
+      ]))
+      : undefined;
+    const displayBoardOverrides = subscription.filters.board_overrides
+      ? Object.fromEntries(Object.entries(subscription.filters.board_overrides).map(([projectId, override]) => [
+        boardRefs.find((board) => board.id === projectId)?.appBoardId ?? projectId,
+        override,
+      ]))
+      : undefined;
     setEditingId(subscription.id);
     setName(subscription.name);
     setFilters({
@@ -569,7 +534,10 @@ const CalendarSubscriptionsView: React.FC = () => {
       scope_type: getScopeType(subscription.filters),
       workspace_ids: displayWorkspaceIds,
       ...(displayProjectIds.length > 0 ? { project_ids: displayProjectIds } : {}),
+      ...(displayBoardFilters ? { board_filters: displayBoardFilters } : {}),
+      ...(displayBoardOverrides ? { board_overrides: displayBoardOverrides } : {}),
     });
+    setBuilderRevision((current) => current + 1);
   };
 
   const setSubscriptionActive = async (subscription: CalendarSubscription, isActive: boolean) => {
@@ -596,29 +564,59 @@ const CalendarSubscriptionsView: React.FC = () => {
     }
   };
 
+  const submitBlockedReason = !name.trim()
+    ? '請先輸入訂閱名稱。'
+    : builderValidation.loading
+      ? '正在讀取所有看板的預覽資料，完成後才能建立訂閱。'
+      : builderValidation.failedBoardIds.length > 0
+        ? '部分看板預覽讀取失敗，請重新整理後再建立訂閱。'
+        : builderValidation.includedBoardCount === 0
+          ? '請至少納入一張看板。'
+          : builderValidation.missingDateTypeBoardIds.length > 0
+            ? `有 ${builderValidation.missingDateTypeBoardIds.length} 張已納入看板尚未選擇事件日期。`
+            : !builderValidation.isComplete
+              ? '訂閱條件尚未完整。'
+              : undefined;
+
   if (!isSupabaseBackend) {
     return (
-      <div className="h-full overflow-auto bg-slate-50 p-6">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4">
+      <div className="h-full overflow-auto bg-slate-50 p-4 sm:p-6">
+        <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {isLocalTestBackend && (
             <section
               className="border border-slate-200 bg-white p-4"
               data-calendar-subscription-local-preview="true"
             >
-              <div className="text-sm font-bold text-slate-800">本機訂閱條件預覽</div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                本機測試模式可先驗證篩選器與即時預覽；實際 `.ics` 訂閱連結仍需 Supabase 後端提供。
-              </p>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
+                  <CalendarPlus size={16} className="text-primary" />
+                  建立訂閱
+                </div>
+                <span className="border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">本機預覽</span>
+              </div>
+
+              <CalendarSubscriptionSubmitBar
+                name={name}
+                nameInputId="local-calendar-subscription-name"
+                namePlaceholder="例如：我的跨看板任務"
+                disabled
+                blockedReason="目前只能預覽；請到已連接 Supabase 的環境建立訂閱。"
+                onNameChange={setName}
+              />
+
               <CalendarSubscriptionBuilderPreview
                 boards={boardOptions}
-                dateTypes={filters.date_types}
-                selectedAssigneeIds={LOCAL_TEST_PREVIEW_ASSIGNEE_IDS}
+                allowAllAssignees
+                resetKey={`local:${builderRevision}`}
+                onPayloadChange={setBuilderPayload}
+                onValidationChange={setBuilderValidation}
               />
+
+              <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" data-calendar-subscription-snapshot-summary="true">
+                已納入 {builderValidation.includedBoardCount} / {builderPayload?.project_ids.length ?? boardOptions.length} 張看板
+              </div>
             </section>
           )}
-          <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            自訂行事曆訂閱需要 Supabase 後端，因為 `.ics` 訂閱連結必須由雲端函式對外提供。
-          </div>
         </div>
       </div>
     );
@@ -631,7 +629,7 @@ const CalendarSubscriptionsView: React.FC = () => {
           <div>
             <h2 className="text-xl font-bold text-slate-900">自訂行事曆訂閱</h2>
             <p className="mt-1 text-sm text-slate-500">
-              產生只讀行事曆訂閱連結，先選來源範圍，再依負責人與日期類型輸出任務事件；外部行事曆會依各自週期抓取，更新不會即時出現。
+              產生只讀行事曆訂閱連結；每張看板都有獨立條件，外部行事曆會依各自週期抓取，更新不會即時出現。
             </p>
           </div>
           <button
@@ -650,227 +648,32 @@ const CalendarSubscriptionsView: React.FC = () => {
               {editingId ? '修改訂閱條件' : '建立訂閱'}
             </div>
 
-            <label className="block text-xs font-bold text-slate-500">訂閱名稱</label>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mt-1 h-10 w-full border border-slate-200 px-3 text-sm outline-none focus:border-primary"
-              placeholder="例如：我的兩家公司任務"
+            <CalendarSubscriptionSubmitBar
+              name={name}
+              nameInputId="calendar-subscription-name"
+              namePlaceholder="例如：我的兩家公司任務"
+              disabled={Boolean(submitBlockedReason)}
+              isEditing={Boolean(editingId)}
+              isSaving={isSaving}
+              blockedReason={submitBlockedReason}
+              onNameChange={setName}
+              onSubmit={() => void submit()}
+              onCancel={editingId ? resetForm : undefined}
             />
 
             <CalendarSubscriptionBuilderPreview
               boards={boardOptions}
-              dateTypes={filters.date_types}
-              selectedAssigneeIds={selectedAssigneeIdsForPreview}
+              currentUserId={user?.uid}
+              assigneeOptions={calendarAssigneeOptions}
+              manageableWorkspaceIds={manageableWorkspaceIds}
+              initialFilters={filters}
+              resetKey={`${editingId ?? 'new'}:${builderRevision}`}
               onPayloadChange={setBuilderPayload}
+              onValidationChange={setBuilderValidation}
             />
 
-            <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-              新版篩選器會保存為 v2 訂閱；實際 `.ics` feed 需套用 DEV-045 Phase 2 Supabase migration 與 Edge Function 後才會與預覽一致。
-              {builderPayload && (
-                <span className="block pt-1 text-slate-500">
-                  v2 snapshot：{builderPayload.workspace_ids.length} 個工作區 / {builderPayload.project_ids.length} 張看板。
-                </span>
-              )}
-            </div>
-
-            <div className="mt-4" data-calendar-subscription-scope-form="true">
-              <div className="mb-2 text-xs font-bold text-slate-500">訂閱範圍</div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="訂閱範圍">
-                {[
-                  ['board', '目前看板'],
-                  ['workspace', '工作區全部看板'],
-                  ['custom', '自訂範圍'],
-                ].map(([value, label]) => {
-                  const isBoardScopeUnavailable = value === 'board' && (!activeWorkspace || !activeBoard);
-                  const isActive = scopeType === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      disabled={isBoardScopeUnavailable}
-                      onClick={() => setScopeType(value as CalendarSubscriptionScopeType)}
-                      className={`min-h-10 border px-3 py-2 text-left text-xs font-bold transition-colors ${
-                        isActive
-                          ? 'border-primary bg-primary/5 text-primary ring-2 ring-primary/15'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                      } disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300`}
-                      aria-pressed={isActive}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-3">
-                {scopeType === 'board' && (
-                  <div>
-                    <div className="text-xs font-bold text-slate-500">來源</div>
-                    <div className="mt-1 text-sm font-bold text-slate-800">
-                      {activeWorkspace && activeBoard ? `${activeWorkspace.title} / ${activeBoard.title}` : '尚未選擇看板'}
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      只輸出目前看板內符合條件的任務。
-                    </p>
-                  </div>
-                )}
-
-                {scopeType === 'workspace' && (
-                  <div>
-                    <div className="text-xs font-bold text-slate-500">包含工作區內可讀取的全部看板</div>
-                    <div className="mt-2 space-y-2">
-                      {workspaces.map((workspace) => (
-                        <label key={workspace.id} className="flex items-center gap-2 text-sm text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={filters.workspace_ids.includes(workspace.id)}
-                            onChange={() => toggleWorkspace(workspace.id)}
-                          />
-                          <span>{workspace.title}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {scopeType === 'custom' && (
-                  <div>
-                    <div className="text-xs font-bold text-slate-500">指定看板</div>
-                    <div className="mt-2 max-h-44 space-y-2 overflow-auto pr-1">
-                      {boardOptions.length === 0 ? (
-                        <div className="text-sm text-slate-400">目前沒有可選看板</div>
-                      ) : (
-                        boardOptions.map((board) => (
-                          <label key={`${board.workspaceId}:${board.id}`} className="flex items-start gap-2 text-sm text-slate-700">
-                            <input
-                              type="checkbox"
-                              className="mt-1"
-                              checked={(filters.project_ids ?? []).includes(board.id)}
-                              onChange={() => toggleCustomBoard(board)}
-                            />
-                            <span className="min-w-0">
-                              <span className="block truncate font-medium text-slate-800">{board.boardTitle}</span>
-                              <span className="block truncate text-xs text-slate-500">{board.workspaceTitle}</span>
-                            </span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-3 border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-5 text-slate-700">
-                {describePreview(filters, workspaceNameById, boardPathById, memberNameById, user?.uid)}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-xs font-bold text-slate-500">負責人</div>
-                {(assigneeSelection.userIds.length > 0 || assigneeSelection.includeUnassigned) && (
-                  <button
-                    type="button"
-                    onClick={() => setAssigneeSelection({ userIds: [], includeUnassigned: false })}
-                    className="text-xs font-bold text-slate-400 hover:text-slate-700"
-                  >
-                    清除
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!canAssignOthers}
-                  onClick={() => toggleAssigneeOption(UNASSIGNED_ASSIGNEE_FILTER)}
-                  className={`inline-flex items-center gap-1.5 border bg-white px-2.5 py-1 text-xs font-bold shadow-sm transition-colors ${
-                    selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER)
-                      ? 'border-primary text-primary ring-2 ring-primary/20'
-                      : 'border-slate-200 text-slate-700 hover:border-slate-300'
-                  } disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300`}
-                  aria-pressed={selectedAssigneeSet.has(UNASSIGNED_ASSIGNEE_FILTER)}
-                >
-                  <UserRound size={13} />
-                  未指派
-                </button>
-                {assignableMembers.length === 0 ? (
-                  <div className="inline-flex items-center gap-1.5 border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-400 shadow-sm">
-                    <UserRound size={13} />
-                    {selectedWorkspaceCount === 0 ? '請先選擇工作區' : '尚無可選負責人'}
-                  </div>
-                ) : (
-                  assignableMembers.map((member) => {
-                    const isCurrentUser = member.userId === user?.uid;
-                    const isDisabled = !isCurrentUser && !canAssignOthers;
-                    const isActive = selectedAssigneeSet.has(member.userId);
-                    return (
-                      <button
-                        key={member.userId}
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={() => toggleAssigneeOption(member.userId)}
-                        className={`inline-flex max-w-full items-center gap-1.5 border bg-white px-2.5 py-1 text-xs font-bold shadow-sm transition-colors ${
-                          isActive
-                            ? 'border-primary text-primary ring-2 ring-primary/20'
-                            : 'border-slate-200 text-slate-700 hover:border-slate-300'
-                        } disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300`}
-                        aria-pressed={isActive}
-                      >
-                        <UserRound size={13} />
-                        <span className="max-w-[10rem] truncate">{getMemberLabel(member)}</span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-              {!canAssignOthers && selectedWorkspaceCount > 0 && (
-                <div className="mt-2 flex gap-2 text-xs text-amber-700">
-                  <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-                  你目前只能訂閱自己的任務；未指派或他人任務需要在已選工作區具備擁有者、管理員或專案管理者權限。
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-bold text-slate-500">日期類型</div>
-              <div className="flex flex-col gap-2 text-sm text-slate-700">
-                {[
-                  ['start_date', '開始日'],
-                  ['due_date', '到期日'],
-                ].map(([value, label]) => (
-                  <label key={value} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={filters.date_types.includes(value as CalendarSubscriptionDateType)}
-                      onChange={() => setFilters((current) => ({
-                        ...current,
-                        date_types: toggleArrayValue(current.date_types, value as CalendarSubscriptionDateType),
-                      }))}
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-5 flex gap-2">
-              <button
-                onClick={() => void submit()}
-                disabled={isSaving}
-                className="inline-flex h-10 flex-1 items-center justify-center gap-2 bg-primary px-3 text-sm font-bold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CalendarPlus size={16} />}
-                {editingId ? '儲存變更' : '產生並複製連結'}
-              </button>
-              {editingId && (
-                <button
-                  onClick={resetForm}
-                  className="h-10 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  取消
-                </button>
-              )}
+            <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" data-calendar-subscription-snapshot-summary="true">
+              已納入 {builderValidation.includedBoardCount} / {builderPayload?.project_ids.length ?? boardOptions.length} 張看板
             </div>
           </div>
 

@@ -6,6 +6,8 @@ const files = {
   compactTokens: 'src/components/ui/compactTokens.ts',
   mainLayout: 'src/components/MainLayout.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
+  taskDetailsModal: 'src/components/TaskDetailsModal.tsx',
+  tagPicker: 'src/components/Tags/TagPicker.tsx',
   browserVerifier: 'scripts/verify-dev-031-mobile-density-browser.pw.js',
   packageJson: 'package.json',
 };
@@ -84,6 +86,37 @@ assert(
 );
 
 assert(
+  'task details metadata editor receives compact mobile treatment',
+  source.taskDetailsModal.includes('data-task-details-meta-section="true"') &&
+    source.taskDetailsModal.includes('data-task-details-meta-grid="true"') &&
+    source.taskDetailsModal.includes('data-task-details-date-grid="true"') &&
+    source.taskDetailsModal.includes('data-task-details-meta-label-text="true"') &&
+    source.taskDetailsModal.includes('data-task-details-meta-control-row="true"') &&
+    source.taskDetailsModal.includes('data-task-details-tag-picker-wrap="true"') &&
+    source.taskDetailsModal.includes('compact') &&
+    source.tagPicker.includes('compact?: boolean') &&
+    source.tagPicker.includes('data-tag-picker-trigger="true"') &&
+    source.tagPicker.includes('data-tag-picker-compact={compact ?') &&
+    source.css.includes('[data-task-details-meta-grid="true"]') &&
+    source.css.includes('[data-task-details-meta-label-text="true"]') &&
+    source.css.includes('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(58px, 0.58fr)') &&
+    source.css.includes('[data-task-details-date-grid="true"]') &&
+    source.css.includes('height: 26px !important') &&
+    source.css.includes('[data-task-details-tag-picker-wrap="true"] [data-tag-picker-trigger="true"]'),
+);
+
+assert(
+  'task details add-note action shares the note header row',
+  source.taskDetailsModal.includes('data-task-detail-notes-section="true"') &&
+    source.taskDetailsModal.includes('data-task-detail-notes-grid="true"') &&
+    source.taskDetailsModal.includes('data-task-detail-note-header="true"') &&
+    source.taskDetailsModal.includes('data-task-detail-note-add="true"') &&
+    source.taskDetailsModal.includes('aria-label="新增備註欄"') &&
+    source.taskDetailsModal.includes('noteIndex === 0') &&
+    !source.taskDetailsModal.includes('className="mb-3 flex justify-end"'),
+);
+
+assert(
   'browser verifier checks mobile board-only contract and board density',
     source.browserVerifier.includes('setCoarsePointer') &&
     source.browserVerifier.includes('assertMobileNavRedundantInfoHidden') &&
@@ -98,7 +131,13 @@ assert(
     source.browserVerifier.includes('desktop nav removes brand and shows full board title') &&
     source.browserVerifier.includes('textOverflow !==') &&
     source.browserVerifier.includes('assertNoVisibleErrors') &&
-    source.browserVerifier.includes('visible task density'),
+    source.browserVerifier.includes('visible task density') &&
+    source.browserVerifier.includes('task details meta density') &&
+    source.browserVerifier.includes('metaHeight <= 96') &&
+    source.browserVerifier.includes('maxControlHeight <= 28') &&
+    source.browserVerifier.includes('task details note add action density') &&
+    source.browserVerifier.includes('addButton.width <= 34') &&
+    source.browserVerifier.includes('compact add-note action should still add one note card'),
 );
 
 assert(

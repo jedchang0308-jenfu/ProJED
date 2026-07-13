@@ -876,6 +876,23 @@ async (page) => {
       await heldTouch.end();
     });
 
+    await runCase('QA-029-E07', 'placed workbench row long press uses the same compact mobile action rail', async () => {
+      const panel = await ensureWorkbenchOpen();
+      const placedRow = panel.locator('[data-task-workbench-placed-task-card="true"][data-mobile-drop-target]').first();
+      await placedRow.scrollIntoViewIfNeeded();
+      await placedRow.waitFor({ state: 'visible', timeout: 5000 });
+      const heldTouch = await startHeldTouch(placedRow);
+      await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
+      await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
+      const compactLayout = await assertCompactMobileActionRail('placed workbench long press compact rail', placedRow);
+      assert(await page.getByText('更多詳情選項', { exact: true }).count() === 0, 'placed workbench mobile long press should not open the full desktop task menu');
+      const screenshotPath = `${screenshotBase}-E07-placed-workbench-mobile-action-rail.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+      await heldTouch.end();
+      await mobileActionRail().waitFor({ state: 'hidden', timeout: 5000 });
+      return { compactLayout, screenshotPath };
+    });
+
     await runCase('QA-029-D03', 'desktop mouse click still opens TaskDetailsModal', async () => {
       await closeWorkbenchIfOpen();
       await page.setViewportSize({ width: 1440, height: 900 });

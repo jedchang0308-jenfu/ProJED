@@ -205,6 +205,32 @@ assert.ok(unfoldedBoardScopeFeed.includes('看板: A 看板'));
 assert.ok(!unfoldedBoardScopeFeed.includes('看板: B 看板'));
 assert.ok(!unfoldedBoardScopeFeed.includes('project-b'));
 
+const perBoardDateFeed = buildCalendarFeedIcs({
+  subscription: { id: 'per-board-date-subscription', name: '逐看板事件日期' },
+  items: [
+    {
+      id: 'project-a-task', tenant_id: 'workspace-a', project_id: 'project-a', legacy_node_id: null,
+      title: 'A 看板雙日期任務', description: null, status: 'todo', assignee_id: null,
+      start_date: '2026-09-01', end_date: '2026-09-02', metadata: {},
+    },
+    {
+      id: 'project-b-task', tenant_id: 'workspace-a', project_id: 'project-b', legacy_node_id: null,
+      title: 'B 看板雙日期任務', description: null, status: 'todo', assignee_id: null,
+      start_date: '2026-09-03', end_date: '2026-09-04', metadata: {},
+    },
+  ],
+  dateTypesByProjectId: new Map([
+    ['project-a', ['start_date']],
+    ['project-b', ['due_date']],
+  ]),
+  now: new Date('2026-05-26T01:02:03.000Z'),
+});
+const unfoldedPerBoardDateFeed = unfold(perBoardDateFeed);
+assert.ok(unfoldedPerBoardDateFeed.includes('UID:project-a-task-start_date-per-board-date-subscription@projed'));
+assert.ok(!unfoldedPerBoardDateFeed.includes('UID:project-a-task-due_date-per-board-date-subscription@projed'));
+assert.ok(!unfoldedPerBoardDateFeed.includes('UID:project-b-task-start_date-per-board-date-subscription@projed'));
+assert.ok(unfoldedPerBoardDateFeed.includes('UID:project-b-task-due_date-per-board-date-subscription@projed'));
+
 const limitItems = Array.from({ length: FEED_TASK_LIMIT }, (_, index) => ({
   id: `limit-task-${index + 1}`,
   tenant_id: 'workspace-limit',

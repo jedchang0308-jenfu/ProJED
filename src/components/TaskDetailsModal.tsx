@@ -394,6 +394,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     >
       <div
         ref={modalRef}
+        data-task-details-dialog="true"
         className="flex max-h-[90vh] max-w-[94vw] min-h-[420px] min-w-[360px] flex-col overflow-auto rounded-lg border border-slate-200 bg-white shadow-2xl"
         style={{
           width: size.width,
@@ -461,12 +462,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         </div>
 
         <div className="flex-1 overflow-auto px-4 py-4">
-          <section className="border-b border-slate-100 pb-2">
-            <div className="grid gap-2 md:grid-cols-3">
-            <div className="min-w-0">
-              <label className="text-xs font-medium text-slate-500">
-                狀態
-                <div className="mt-1 flex items-center gap-2">
+          <section className="border-b border-slate-100 pb-2" data-task-details-meta-section="true">
+            <div className="grid gap-2 md:grid-cols-3" data-task-details-meta-grid="true">
+            <div className="min-w-0" data-task-details-meta-field="status">
+              <label className="text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                <span data-task-details-meta-label-text="true">狀態</span>
+                <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                   <span className={`hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-status-${currentStatus}/15 text-slate-500`}>
                     <CircleDot size={15} />
                   </span>
@@ -486,10 +487,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
 
-            <div className="min-w-0">
-              <label className="text-xs font-medium text-slate-500">
-                指派人
-                <div className="mt-1 flex items-center gap-2">
+            <div className="min-w-0" data-task-details-meta-field="assignee">
+              <label className="text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                <span data-task-details-meta-label-text="true">指派人</span>
+                <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                   <span className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-500">
                     <UserRound size={15} />
                   </span>
@@ -519,23 +520,24 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0" data-task-details-meta-field="tags">
               <div className="text-xs font-medium text-slate-500">
-                <div className="mt-5">
+                <div className="mt-5" data-task-details-tag-picker-wrap="true">
                   <TagPicker
                     workspaceId={node.workspaceId}
                     selectedTagIds={node.tagIds || []}
                     onChange={(tagIds) => updateNode(node.id, { tagIds, updatedAt: Date.now() })}
                     disabled={!canEditTask}
+                    compact
                   />
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-2 md:col-span-3 md:grid-cols-3">
-              <label className="text-xs font-medium text-slate-500">
-                開始日期
-                <div className="mt-1 flex items-center gap-2">
+            <div className="grid gap-2 md:col-span-3 md:grid-cols-3" data-task-details-date-grid="true">
+              <label className="text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                <span data-task-details-meta-label-text="true">開始日期</span>
+                <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                   <input
                     type="date"
                     value={startDate}
@@ -559,9 +561,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   </span>
                 </div>
               </label>
-              <label className="text-xs font-medium text-slate-500">
-                結束日期
-                <div className="mt-1 flex items-center gap-2">
+              <label className="text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                <span data-task-details-meta-label-text="true">結束日期</span>
+                <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                   <input
                     type="date"
                     value={endDate}
@@ -587,9 +589,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   </span>
                 </div>
               </label>
-              <label className="text-xs font-medium text-slate-500">
-                工期 (天)
-                <div className="mt-1 flex items-center gap-2">
+              <label className="text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                <span data-task-details-meta-label-text="true">工期 (天)</span>
+                <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                   <button
                     type="button"
                     onClick={handleToggleDurationLock}
@@ -657,27 +659,18 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
             </section>
           ) : null}
 
-          <section className="pt-4">
-            <div className="mb-3 flex justify-end">
-              <button
-                type="button"
-                onClick={addNote}
-                disabled={!canEditTask}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-medium text-white transition hover:bg-slate-700"
-              >
-                <Plus size={13} />
-                新增備註欄
-              </button>
-            </div>
-
-            <div className="grid gap-3">
-              {notes.map((note) => (
+          <section className="pt-4" data-task-detail-notes-section="true">
+            <div className="grid gap-3" data-task-detail-notes-grid="true">
+              {notes.map((note, noteIndex) => (
                 <div
                   key={note.id}
                   className="rounded-lg border border-slate-200 bg-slate-50/70 p-3"
                   data-task-detail-note-card="true"
                 >
-                  <div className="mb-2 flex min-w-0 items-center gap-2">
+                  <div
+                    className="mb-2 flex min-w-0 items-center gap-2"
+                    data-task-detail-note-header="true"
+                  >
                     <input
                       type="text"
                       value={note.title}
@@ -687,6 +680,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       placeholder="備註標題"
                       data-task-detail-note-title-input="true"
                     />
+                    {noteIndex === 0 ? (
+                      <button
+                        type="button"
+                        onClick={addNote}
+                        disabled={!canEditTask}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        title="新增備註欄"
+                        aria-label="新增備註欄"
+                        data-task-detail-note-add="true"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => deleteNote(note.id)}

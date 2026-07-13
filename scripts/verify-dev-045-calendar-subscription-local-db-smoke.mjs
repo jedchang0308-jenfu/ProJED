@@ -11,6 +11,7 @@ const files = {
   boardCollaborationMigration: 'supabase/migrations/20260528092643_board_level_collaboration_rls.sql',
   dev037Migration: 'supabase/migrations/20260706091804_calendar_subscription_source_scope.sql',
   dev045Migration: 'supabase/migrations/20260706162052_calendar_subscription_v2_filters.sql',
+  dev045V3Migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
   devTask: 'ai-doc/dev_task.md',
@@ -33,15 +34,16 @@ const source = Object.fromEntries(
 add(
   'DEV-045 local DB smoke uses rollback-only execution',
   source.dev045Migration?.includes('calendar_subscription_task_filter_allowed') &&
+    source.dev045V3Migration?.includes('calendar_subscription_v3_filter_allowed') &&
     source.dev045Migration?.includes('revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon') &&
     source.dev037Migration?.includes('private.current_user_can_read_project'),
 );
 
 add(
   'DEV-045 docs keep remote apply/deploy gated after local DB smoke',
-  source.qa?.includes('local Supabase DB smoke 已完成') &&
-    source.qc?.includes('不得宣告 remote DB / Edge / production release safe') &&
-    source.devTask?.includes('deployment-release-gate / Supabase gate'),
+  source.qa?.includes('不得 remote apply / deploy') &&
+    source.qc?.includes('remote migration、Edge deploy、production release') &&
+    source.devTask?.includes('Former v2 Remote Gate Superseded and Frozen'),
 );
 
 const failIfNeeded = () => {
@@ -118,13 +120,17 @@ values
 on conflict (tenant_id, user_id) do update set role = excluded.role, status = excluded.status;
 
 insert into public.projects (id, tenant_id, name, metadata, created_by)
-values ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', 'DEV-045 local smoke board', '{"qc":"DEV-045"}'::jsonb, '11111111-1111-4111-8111-111111111111')
+values
+  ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', 'DEV-045 local smoke board', '{"qc":"DEV-045"}'::jsonb, '11111111-1111-4111-8111-111111111111'),
+  ('55555555-5555-4555-8555-555555555555', '33333333-3333-4333-8333-333333333333', 'DEV-045 managed smoke board', '{"qc":"DEV-045"}'::jsonb, '11111111-1111-4111-8111-111111111111')
 on conflict (id) do nothing;
 
 insert into public.project_members (project_id, tenant_id, user_id, role)
 values
   ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', 'owner'),
-  ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', 'member')
+  ('44444444-4444-4444-8444-444444444444', '33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', 'member'),
+  ('55555555-5555-4555-8555-555555555555', '33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', 'owner'),
+  ('55555555-5555-4555-8555-555555555555', '33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', 'project_manager')
 on conflict (project_id, user_id) do update set role = excluded.role;
 
 set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
@@ -140,9 +146,26 @@ values
   ('v2 filter allows snapshot custom project scope', public.calendar_subscription_filter_allowed('{"version":2,"v2_scope_type":"all_accessible_boards_snapshot","scope_type":"custom","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"date_types":["due_date"],"assignee":{"type":"me"},"global_filter":{"statusFilters":{"todo":true,"completed":false},"dueWithinDays":30,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":"smoke"},"board_overrides":{"44444444-4444-4444-8444-444444444444":{"enabled":false}}}'::jsonb)),
   ('v2 filter rejects missing project_ids', not public.calendar_subscription_filter_allowed('{"version":2,"v2_scope_type":"all_accessible_boards_snapshot","scope_type":"custom","workspace_ids":["33333333-3333-4333-8333-333333333333"],"date_types":["due_date"],"assignee":{"type":"me"},"global_filter":{}}'::jsonb)),
   ('v2 filter rejects board override outside project scope', not public.calendar_subscription_filter_allowed('{"version":2,"v2_scope_type":"all_accessible_boards_snapshot","scope_type":"custom","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"date_types":["due_date"],"assignee":{"type":"me"},"global_filter":{},"board_overrides":{"55555555-5555-4555-8555-555555555555":{"enabled":true}}}'::jsonb)),
+  ('v3 filter allows complete own-task snapshot', public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true,"in_progress":true,"delayed":true,"completed":false,"unsure":true,"onhold":true},"dueWithinDays":null,"selectedAssigneeIds":["11111111-1111-4111-8111-111111111111"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 owner can subscribe all assignees', public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 rejects missing board snapshot', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{}}'::jsonb)),
+  ('v3 rejects no included board', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":false,"date_types":[],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["11111111-1111-4111-8111-111111111111"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 rejects included board without event date', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":[],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["11111111-1111-4111-8111-111111111111"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 rejects legacy top-level event dates', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"date_types":["due_date"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["11111111-1111-4111-8111-111111111111"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 rejects non-member assignee', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["99999999-9999-4999-8999-999999999999"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
   ('authenticated can execute v2 helper', has_function_privilege('authenticated', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
+  ('authenticated can execute v3 helper', has_function_privilege('authenticated', 'public.calendar_subscription_v3_filter_allowed(jsonb)', 'execute')),
   ('anon cannot execute v2 helper', not has_function_privilege('anon', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
   ('anon cannot execute subscription validator', not has_function_privilege('anon', 'public.calendar_subscription_filter_allowed(jsonb)', 'execute'));
+
+set local request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
+
+insert into dev045_checks(name, ok)
+values
+  ('v3 member can subscribe own tasks', public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["22222222-2222-4222-8222-222222222222"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 member cannot subscribe all assignees', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 project manager can subscribe broad managed board', public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["55555555-5555-4555-8555-555555555555"],"board_filters":{"55555555-5555-4555-8555-555555555555":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
+  ('v3 manage permission does not spill across boards', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444","55555555-5555-4555-8555-555555555555"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}},"55555555-5555-4555-8555-555555555555":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb));
 
 select * from dev045_checks order by name;
 
@@ -192,6 +215,7 @@ const migrationSql = [
   hasProjectReadHelper ? '-- private.current_user_can_read_project already present in local DB; prerequisite migration not replayed.' : source.boardCollaborationMigration,
   source.dev037Migration,
   source.dev045Migration,
+  source.dev045V3Migration,
   fixtureSql,
   'rollback;',
 ].join('\n\n');

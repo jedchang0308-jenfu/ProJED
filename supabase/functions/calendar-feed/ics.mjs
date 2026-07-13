@@ -86,6 +86,7 @@ export const buildCalendarFeedIcs = ({
   subscription,
   items = [],
   dateTypes = [],
+  dateTypesByProjectId = new Map(),
   tenantNameById = new Map(),
   projectNameById = new Map(),
   assigneeProfileById = new Map(),
@@ -95,7 +96,6 @@ export const buildCalendarFeedIcs = ({
   taskLimitReached = false,
   now = new Date(),
 }) => {
-  const activeDateTypes = new Set(dateTypes);
   const getAssigneeLabel = (item) => {
     if (!item.assignee_id) return "未指派";
     const itemProfile = assigneeProfileById.get(item.assignee_id);
@@ -122,6 +122,7 @@ export const buildCalendarFeedIcs = ({
 
   const nowStamp = toIcsTimestamp(now);
   for (const item of items) {
+    const activeDateTypes = new Set(dateTypesByProjectId.get(item.project_id) ?? dateTypes);
     const workspaceName = tenantNameById.get(item.tenant_id) ?? "ProJED";
     const projectName = projectNameById.get(item.project_id) ?? "";
     const taskUrl = buildTaskUrl(item, appBaseUrl);

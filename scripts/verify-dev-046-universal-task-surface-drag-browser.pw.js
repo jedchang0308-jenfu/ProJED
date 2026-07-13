@@ -56,6 +56,66 @@ async (page) => {
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
+    'dev046-col-c': {
+      id: 'dev046-col-c',
+      workspaceId: workspace.id,
+      boardId: 'dev046-board',
+      parentId: null,
+      title: 'DEV-046 列表 C',
+      status: 'todo',
+      nodeType: 'group',
+      order: 2,
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    'dev046-col-d': {
+      id: 'dev046-col-d',
+      workspaceId: workspace.id,
+      boardId: 'dev046-board',
+      parentId: null,
+      title: 'DEV-046 列表 D',
+      status: 'todo',
+      nodeType: 'group',
+      order: 3,
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    'dev046-col-e': {
+      id: 'dev046-col-e',
+      workspaceId: workspace.id,
+      boardId: 'dev046-board',
+      parentId: null,
+      title: 'DEV-046 列表 E',
+      status: 'todo',
+      nodeType: 'group',
+      order: 4,
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    'dev046-col-f': {
+      id: 'dev046-col-f',
+      workspaceId: workspace.id,
+      boardId: 'dev046-board',
+      parentId: null,
+      title: 'DEV-046 列表 F',
+      status: 'todo',
+      nodeType: 'group',
+      order: 5,
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
+    'dev046-col-g': {
+      id: 'dev046-col-g',
+      workspaceId: workspace.id,
+      boardId: 'dev046-board',
+      parentId: null,
+      title: 'DEV-046 列表 G',
+      status: 'todo',
+      nodeType: 'group',
+      order: 6,
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
     'dev046-card-a': {
       id: 'dev046-card-a',
       workspaceId: workspace.id,
@@ -512,6 +572,81 @@ async (page) => {
       const afterCollapsedRows = await card.locator('.kanban-checklist-item[data-task-id]').count();
       assert(afterCollapsedRows < beforeExpandedRows, 'checklist toggle should remain a button action, not a drag start', { beforeExpandedRows, afterCollapsedRows });
       await assertNoTaskAction('toggle click should not open details, context menu, or mobile rail');
+    });
+
+    await runCase('QA-046-D04', 'desktop board blank canvas supports mouse drag horizontal pan without stealing task drag surfaces', async () => {
+      await openApp({ width: 900, height: 720 }, 'board');
+      const board = page.locator('[data-kanban-mouse-pan-surface="true"]').first();
+      await board.waitFor({ state: 'visible', timeout: 10000 });
+      const overflow = await board.evaluate((element) => ({
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        maxScrollLeft: element.scrollWidth - element.clientWidth,
+        initialState: element.getAttribute('data-kanban-mouse-pan-state'),
+      }));
+      assert(overflow.maxScrollLeft > 220, 'board fixture should overflow horizontally for mouse pan', overflow);
+
+      await board.evaluate((element) => { element.scrollLeft = 80; });
+      const beforePan = await board.evaluate((element) => element.scrollLeft);
+      const gapPoint = await board.evaluate((element) => {
+        const surface = element;
+        const surfaceRect = surface.getBoundingClientRect();
+        const columns = Array.from(surface.querySelectorAll('[data-kanban-column="true"]'))
+          .map((item) => item.getBoundingClientRect())
+          .filter((rect) => rect.right > surfaceRect.left && rect.left < surfaceRect.right)
+          .sort((left, right) => left.left - right.left);
+
+        for (let index = 0; index < columns.length - 1; index += 1) {
+          const left = columns[index];
+          const right = columns[index + 1];
+          if (right.left - left.right < 6) continue;
+          const x = Math.round((left.right + right.left) / 2);
+          const y = Math.round(Math.min(Math.max(left.top + 22, surfaceRect.top + 18), surfaceRect.bottom - 24));
+          const hit = document.elementFromPoint(x, y);
+          const blocked = Boolean(hit?.closest?.('[data-task-drag-surface="true"],button,a,input,textarea,select,[contenteditable="true"]'));
+          if (hit && surface.contains(hit) && !blocked) {
+            return { x, y, hitTag: hit.tagName, hitClassName: String(hit.className || '').slice(0, 80) };
+          }
+        }
+        return null;
+      });
+      assert(Boolean(gapPoint), 'board should expose a non-task gap that can start mouse pan', { gapPoint });
+
+      await page.mouse.move(gapPoint.x, gapPoint.y);
+      await page.mouse.down();
+      await page.mouse.move(gapPoint.x - 260, gapPoint.y + 2, { steps: 16 });
+      await page.mouse.up();
+      await page.waitForTimeout(180);
+      const afterPan = await board.evaluate((element) => ({
+        scrollLeft: element.scrollLeft,
+        state: element.getAttribute('data-kanban-mouse-pan-state'),
+      }));
+      assert(afterPan.scrollLeft > beforePan + 120, 'blank board drag should pan horizontally', { beforePan, afterPan, gapPoint });
+      assert(afterPan.state === 'idle', 'mouse pan state should reset after pointerup', afterPan);
+      await assertNoTaskAction('blank board mouse pan should not open task UI');
+
+      const card = page.locator('.kanban-task-card[data-task-id="dev046-card-a"]').first();
+      const cardPoint = await centerPoint(card, 0.56, 0.36);
+      const beforeCardDrag = await board.evaluate((element) => element.scrollLeft);
+      await page.mouse.move(cardPoint.x, cardPoint.y);
+      await page.mouse.down();
+      await page.mouse.move(cardPoint.x - 120, cardPoint.y + 1, { steps: 10 });
+      await page.mouse.up();
+      await page.waitForTimeout(220);
+      const afterCardDrag = await board.evaluate((element) => element.scrollLeft);
+      const mousePanDebug = await page.evaluate(() => window.__projedKanbanMousePanDebug || []);
+      assert(
+        Math.abs(afterCardDrag - beforeCardDrag) <= 2,
+        'dragging from a kanban card should not become board mouse pan',
+        { beforeCardDrag, afterCardDrag, mousePanDebug: mousePanDebug.slice(-8) },
+      );
+      assert(
+        mousePanDebug.some((entry) => entry.type === 'pointerdown' && entry.blocked === true),
+        'kanban mouse pan should record blocked task-surface pointerdown',
+        { mousePanDebug: mousePanDebug.slice(-12) },
+      );
+      await page.screenshot({ path: `${screenshotBase}-desktop-board-mouse-pan.png`, fullPage: true });
+      return { overflow, beforePan, afterPan, beforeCardDrag, afterCardDrag, gapPoint };
     });
 
     await runCase('QA-046-M01', 'mobile short pan and long press use whole card/checklist/header surfaces', async () => {

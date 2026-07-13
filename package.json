@@ -119,6 +119,8 @@
     "verify:dev-045-calendar-subscription-builder-preview": "node scripts/verify-dev-045-calendar-subscription-builder-preview.mjs",
     "verify:dev-045-calendar-subscription-builder-preview-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev045-calendar-builder -Filename scripts/verify-dev-045-calendar-subscription-builder-preview-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-045-calendar-subscription-v2-feed": "node scripts/verify-dev-045-calendar-subscription-v2-feed.mjs",
+    "verify:dev-045-calendar-subscription-v3-feed": "node scripts/verify-dev-045-calendar-subscription-v3-feed.mjs",
+    "verify:dev-045-calendar-subscription-v3-model": "npx --yes tsx scripts/verify-dev-045-calendar-subscription-v3-model.ts",
     "verify:dev-045-calendar-subscription-remote-readiness": "node scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs",
     "verify:dev-045-calendar-subscription-local-db-smoke": "node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs",
     "verify:dev-046-universal-task-surface-drag": "node scripts/verify-dev-046-universal-task-surface-drag.mjs",

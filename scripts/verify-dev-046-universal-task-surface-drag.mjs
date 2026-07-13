@@ -5,10 +5,12 @@ const files = {
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
+  boardView: 'src/components/BoardView.tsx',
   wbsNodeItem: 'src/components/Wbs/WbsNodeItem.tsx',
   sharedTaskSidebar: 'src/components/SharedTaskSidebar.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
   dragSensors: 'src/hooks/useDragSensors.ts',
+  kanbanMousePan: 'src/hooks/useKanbanMousePan.ts',
   taskInteractions: 'src/utils/taskInteractions.ts',
   useLongPress: 'src/hooks/useLongPress.ts',
   packageJson: 'package.json',
@@ -44,7 +46,7 @@ assert(
   'WBS task surfaces no longer import or render TaskDragHandle',
   taskSurfaceFiles.every(label => !source[label].includes('TaskDragHandle')) &&
     taskSurfaceFiles.every(label => !source[label].includes('data-task-drag-handle')) &&
-    source.taskWorkbench.includes('data-task-workbench-drag-surface="task-row-root"') &&
+    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}") &&
     !source.taskWorkbench.includes('TaskDragHandle') &&
     !source.taskWorkbench.includes('data-task-drag-handle'),
 );
@@ -124,6 +126,18 @@ assert(
 );
 
 assert(
+  'Desktop kanban mouse pan is scoped to the board canvas and excludes task/control surfaces',
+  source.kanbanMousePan.includes("event.pointerType !== 'mouse'") &&
+    source.kanbanMousePan.includes('[data-task-drag-surface="true"]') &&
+    source.kanbanMousePan.includes('isTaskPrimaryActionTarget(target)') &&
+    source.kanbanMousePan.includes('data-kanban-mouse-pan-state') &&
+    source.kanbanMousePan.includes('__projedKanbanMousePanDebug') &&
+    source.boardView.includes('useKanbanMousePan<HTMLDivElement>()') &&
+    source.boardView.includes('setBoardCanvasRef') &&
+    source.boardView.includes('data-kanban-mouse-pan-surface="true"'),
+);
+
+assert(
   'Primary action guards recognize task interaction controls without depending on handles',
   source.taskInteractions.includes('[data-task-interaction-control="true"]') &&
     source.taskInteractions.includes('[data-task-primary-action-control="true"]') &&
@@ -143,7 +157,9 @@ assert(
     source.devTask.includes('DEV-046') &&
     source.packageJson.includes('"verify:dev-046-universal-task-surface-drag"') &&
     source.packageJson.includes('"verify:dev-046-universal-task-surface-drag-browser"') &&
-    source.browserVerifier.includes('DEV-046 universal task surface drag'),
+    source.browserVerifier.includes('DEV-046 universal task surface drag') &&
+    source.browserVerifier.includes('QA-046-D04') &&
+    source.browserVerifier.includes('blank board drag should pan horizontally'),
 );
 
 const failed = results.filter(result => !result.ok);

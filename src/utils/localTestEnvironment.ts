@@ -6,6 +6,7 @@ import type { Board, TaskNode, ViewMode, Workspace } from '../types';
 
 const LOCAL_TEST_WS_ID = 'local-test-workspace';
 const LOCAL_TEST_BOARD_ID = 'local-test-mobile-ui-board';
+const LOCAL_TEST_CALENDAR_SECOND_BOARD_ID = 'local-test-calendar-second-board';
 const LOCAL_TEST_SEEDED_KEY = 'projed-local-test.seeded.v1';
 const LOCAL_TEST_SIZE_KEY = 'projed-local-test.seeded.size';
 const LOCAL_TEST_RESTORABLE_VIEWS = new Set<ViewMode>([
@@ -47,6 +48,11 @@ const getRequestedTaskCount = () => {
   return Number.isFinite(urlSize) && urlSize > 0 ? clampTaskCount(urlSize) : undefined;
 };
 
+const getRequestedCalendarBoardCount = () => {
+  if (typeof window === 'undefined') return 1;
+  return new URLSearchParams(window.location.search).get('qcCalendarBoards') === '2' ? 2 : 1;
+};
+
 const shouldForceSeedFromUrl = () => {
   if (typeof window === 'undefined') return false;
   const params = new URLSearchParams(window.location.search);
@@ -75,18 +81,18 @@ const makeNode = (
   updatedAt: Date.now(),
 });
 
-const makeBoard = (): Board => ({
-  id: LOCAL_TEST_BOARD_ID,
-  title: 'ProJED 品質驗證測試看板',
+const makeBoard = (id = LOCAL_TEST_BOARD_ID, title = 'ProJED 品質驗證測試看板', order = 1): Board => ({
+  id,
+  title,
   dependencies: [],
-  order: 1,
+  order,
   createdAt: Date.now(),
 });
 
-const makeWorkspace = (board: Board): Workspace => ({
+const makeWorkspace = (boards: Board[]): Workspace => ({
   id: LOCAL_TEST_WS_ID,
   title: 'ProJED 固定品質驗證帳號',
-  boards: [board],
+  boards,
   ownerId: 'local-test-user',
   members: ['local-test-user'],
   order: 1,
@@ -131,10 +137,26 @@ export const createLocalTestNodes = (requestedTaskCount = 12): TaskNode[] => {
   return nodes;
 };
 
-const getSeedData = (taskCount = 12) => {
-  const board = makeBoard();
-  const workspace = makeWorkspace(board);
-  const nodes = createLocalTestNodes(taskCount);
+const cloneNodesForBoard = (nodes: TaskNode[], boardId: string, prefix: string): TaskNode[] => {
+  const idMap = new Map(nodes.map(node => [node.id, `${prefix}-${node.id}`]));
+  return nodes.map(node => ({
+    ...node,
+    id: idMap.get(node.id) ?? node.id,
+    boardId,
+    parentId: node.parentId ? idMap.get(node.parentId) ?? null : null,
+    title: `第二看板 ${node.title}`,
+  }));
+};
+
+const getSeedData = (taskCount = 12, calendarBoardCount = 1) => {
+  const boards = [makeBoard()];
+  const primaryNodes = createLocalTestNodes(taskCount);
+  const nodes = [...primaryNodes];
+  if (calendarBoardCount === 2) {
+    boards.push(makeBoard(LOCAL_TEST_CALENDAR_SECOND_BOARD_ID, '第二產品線長名稱驗證看板', 2));
+    nodes.push(...cloneNodesForBoard(primaryNodes, LOCAL_TEST_CALENDAR_SECOND_BOARD_ID, 'dev045-second'));
+  }
+  const workspace = makeWorkspace(boards);
   return { workspace, nodes, taskCount: clampTaskCount(taskCount) };
 };
 
@@ -179,7 +201,7 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
   const existingNodes = localTestStorage.readNodes();
   const hasSeed = existingWorkspaces.some(workspace => workspace.id === LOCAL_TEST_WS_ID);
 
-  const { workspace, nodes } = getSeedData(taskCount);
+  const { workspace, nodes } = getSeedData(taskCount, getRequestedCalendarBoardCount());
   const nextWorkspaces = hasSeed
     ? existingWorkspaces.map(item => item.id === LOCAL_TEST_WS_ID ? workspace : item)
     : [workspace, ...existingWorkspaces];

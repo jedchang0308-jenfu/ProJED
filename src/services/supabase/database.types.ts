@@ -33,6 +33,7 @@ export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | '
 export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
 export type CalendarSubscriptionScopeType = 'board' | 'workspace' | 'custom';
 export type CalendarSubscriptionV2ScopeType = 'all_accessible_boards_snapshot';
+export type CalendarSubscriptionV3ScopeType = 'per_board_filter_snapshot';
 export type CalendarSubscriptionAssigneeFilter =
   | { type: 'me' }
   | { type: 'user'; user_id: string }
@@ -40,16 +41,23 @@ export type CalendarSubscriptionAssigneeFilter =
 export type CalendarSubscriptionBoardFilterOverride = Partial<TaskFilterState> & {
   enabled?: boolean;
 };
+export type CalendarSubscriptionBoardFilterSnapshot = {
+  included: boolean;
+  date_types: CalendarSubscriptionDateType[];
+  filters: TaskFilterState;
+};
 export type CalendarSubscriptionFilters = {
-  version?: 1 | 2;
+  version?: 1 | 2 | 3;
   workspace_ids: string[];
   project_ids?: string[];
   scope_type?: CalendarSubscriptionScopeType;
-  assignee: CalendarSubscriptionAssigneeFilter;
-  date_types: CalendarSubscriptionDateType[];
+  assignee?: CalendarSubscriptionAssigneeFilter;
+  date_types?: CalendarSubscriptionDateType[];
   v2_scope_type?: CalendarSubscriptionV2ScopeType;
   global_filter?: TaskFilterState;
   board_overrides?: Record<string, CalendarSubscriptionBoardFilterOverride>;
+  v3_scope_type?: CalendarSubscriptionV3ScopeType;
+  board_filters?: Record<string, CalendarSubscriptionBoardFilterSnapshot>;
 };
 
 type Table<Row> = {

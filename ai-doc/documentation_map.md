@@ -1,5 +1,20 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-07-12
+
+### DEV-045: 逐看板獨立篩選快照取代 v2 繼承模型
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/decisions/ADR-038-calendar-subscription-per-board-filter-snapshot.md` | Accepted / Human Confirmed / Release Gate Required | DEV-045 / DEV-037 / DEV-039 | 記錄逐看板快照取代 global / override、state isolation、batch copy、v3 data contract、v1/v2 compatibility與舊 remote gate freeze的架構決策。 |
+| `ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md` | Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Frozen | DEV-045 / DEV-037 / DEV-039 | Authoritative v3 contract與已完成本機實作：Calendar / Workbench共用條件 UI語意但隔離 state；每張看板持有獨立 task filters與 `date_types` snapshot；預覽以task + date type呈現實際行事曆事件、開始／到期統計與未產生原因；支援included toggle、一次性批次複製、v1/v2 materialization與per-board permission recheck。 |
+| `ai-doc/qa/QA-DEV-045-pre-production-release-validation.md` | QA Plan Ready / Execution Not Started / Level 3 Required | DEV-045 / DEV-037 | 正式部署前專用Gate：Git與artifact provenance、ProJED-TEST migration / Edge、Firebase level3-smoke、preview / ICS事件identity、v1/v2/v3相容、角色與token安全、外部calendar client、cleanup、rollback與Go / No-Go。 |
+| `ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md` | Revised v3 QA Executed / Phase 1-2 Local Gates Passed / Release Gate Required | DEV-045 | 已執行 shared controls、state isolation、board draft、batch copy、v3 normalization、v1/v2 compatibility、permission matrix、preview/feed fixture與 320-1440 viewport gates。 |
+| `ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md` | Per-Board v3 Phase 1-2 Local QC Passed / Historical v2 Evidence Preserved | DEV-045 | v3 addendum記錄 static/browser/model/feed、local DB 20-behavior rollback smoke、Deno check、DB lint、TypeScript/build與 regression evidence；舊 v2 remote path仍 frozen。 |
+| `ai-doc/dev_task.md` | DEV-045 Phase 1-2 Local Complete / Phase 3-4 Release Gate Required | DEV-045 | 總任務清單與 PM Update已關閉本機 RD/QA/QC；remote migration、Edge deploy、live `.ics`與 production release等待新 release型指令。 |
+
+PM 治理註記：本次不新增重複 DEV，而是 intentional replacement。HCS 引導未逐題回覆後，使用者以「繼續」採建議 `1A / 2A / 3A`：只共用 UI / filter 語意、所有當下可讀看板建立獨立安全預設 snapshot、提供一次性批次複製且複製後不連動。2026-07-12批判修訂再把事件日期類型納入逐看板 snapshot，v3不保留頂層 `date_types`。production尚未部署 DEV-045 v2 migration / Edge matcher，read-only evidence為 v2 rows 0；目前 v3 Phase 1/2本機實作與驗證已完成，remote migration、Edge deploy、production release與 background row rewrite仍需人類重返 / release gate。
+
 ## Documentation Map Update - 2026-07-09
 
 ### Release Governance: Fixed TEST Environment + Level 3 Gate
@@ -29,32 +44,32 @@ PM 治理註記：DEV-046 是新的交付點，不能被視為 DEV-039 Phase 2A 
 
 ### Current Direct-Work Boundary
 
-本輪續接 `[$dev-pm] 完成所有開發任務` 時，`ai-doc/dev_task.md` 是唯一任務排序與授權入口。Current direct-work boundary 仍集中在 DEV-045 remote Supabase / Edge / live `.ics` gate、DEV-025 mutating DB QC、DEV-040 remote Edge / production injection、DEV-044 destructive recovery human re-entry；這些仍需 Supabase、deployment-release-gate、人類授權或受控 production gate。
+本輪續接 `[$dev-pm] 完成DEV-045開發` 時，`ai-doc/dev_task.md` 是唯一任務排序與授權入口。2026-07-12 DEV-045 Phase 1 shared condition UI / per-board Builder與 Phase 2 local v3 service / validator / Edge source已完成本機 RD/QA/QC。DEV-025 mutating DB QC、DEV-040 remote Edge / production injection、DEV-044 destructive recovery與 DEV-045 Phase 3/4仍需 Supabase、deployment-release-gate、人類重返或受控 production gate。
 
 2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過；後續開發排序不再把 DEV-028 manual QC 當作 active blocker，但 production deploy 仍需另行授權。`verify:remaining-external-gates` 是 read-only PM evidence，用來確認剩餘 gate 邊界未被誤關閉，不代表任一外部 Gate 完成。
 
 | 類別 | 目前狀態 | 下一步 |
 |---|---|---|
-| 產品 RD | DEV-045 Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | Branch cost confirmation 已完成，但 branch create 權限不足；下一步需使用具 branch create 權限的 Supabase 帳號/OAuth，或由具權限者建立 branch 並提供 branch project ref，之後才能執行 branch migration、Edge deploy、live `.ics` preview/feed identity smoke 與 rollback evidence。 |
-| PM task board | Lightweight Refactor Applied / Remaining External Gates Audit Added | DEV-045 / DEV-037 以行事曆訂閱 workstream 管理；DEV-025 已補回剩餘 Gate；新增 `verify:remaining-external-gates` 確認 Supabase DB / Edge deploy gate、DEV-028 user-reported manual QC pass 與 DEV-044 durable/destructive recovery 邊界未被誤關閉；其他 DEV 保持獨立。 |
+| 產品 RD | DEV-045 Per-Board v3 Phase 1-2 Local Implemented / Automated QA-QC Passed | 本機開發已完成；舊 v2 remote path frozen。需要發布時以 v3 source進入 Level 3與 deployment-release-gate。 |
+| PM task board | Canonical Index Added / DEV-045 v3 Redirect Applied | `dev_task.md` 已補總任務清單；DEV-045 / DEV-037 維持同一行事曆 workstream，但舊 `verify:remaining-external-gates` 對 DEV-045 只屬歷史 v2 evidence，需等 v3 verifier建立後再更新。其他 DEV 邊界不變。 |
 | DEV-011 / DEV-012 | Done / Production Release Deployed / Production UI Smoke Passed | `verify:dev-011-012-production-ui-smoke-readiness` 與 guarded executor self-check 已通過；2026-07-09 使用者允許 production fixture 後第一次實跑揭露 `rag_sync_jobs` first-publish ordering 問題，已以 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f` 走 release gate 部署。正式站載入 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css`，重跑 production fixture smoke 通過，DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`，cleanup 通過。 |
 | DEV-025 | DB Read-only Preflight Passed / Fixture + Execution Readiness Gates Added / Guarded Mutating Executor Added / Mutating QC Pending | 正式 DB 已具備 RPC / grants / constraints；已新增 read-only fixture-readiness harness、execution-readiness static gate 與 guarded mutating executor self-check。下一步需 staging / disposable fixture 或 production-safe test workspace/board，先驗證腳本防呆、fixture 標記、最小資料形狀與 mutation opt-in，再驗證 RPC、RLS、audit log、資料一致性與 RAG visibility。 |
 | DEV-028 | Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed | `verify:dev-028-manual-click-qc-readiness` 已補 read-only checklist gate；2026-07-09 使用者回報 MAN-028-001 至 MAN-028-028 人工親自點擊通過，若需稽核級證據仍應補逐項截圖/錄影。 |
 | DEV-035 | Supabase DB Role QC Passed / Production Not Deployed | `delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 已通過；production front-end release 需另行授權。 |
-| DEV-037 / DEV-045 / DEV-040 | Calendar workstream + P0 guards; DB / deploy gates pending | DEV-045 Phase 1 Builder、Phase 2 local source 與 local DB smoke 已完成；DEV-037 DB / Edge / live `.ics` gate 併入 DEV-045 Phase 3，除非使用者明確要求先跑 v1 live gate。DEV-040 P0 production read-only preflight 與 remote-readiness static gate 已確認 DB substrate 與本機 Edge/source governance，但 remote Edge 仍未部署 timeout guard；Edge deploy 或 production injection 仍走 Supabase / release gate。 |
+| DEV-037 / DEV-045 / DEV-040 | Calendar workstream + P0 guards | DEV-045 v3 Phase 1/2本機 RD/QA/QC已完成，舊 v2 remote gate frozen；DEV-037 v1 compatibility由 v3 materialization / feed regression承接；DEV-040 remote Edge仍走獨立 Supabase / release gate。 |
 | DEV-038 / DEV-042 / DEV-044 | Production Release Deployed / Local + Production Smoke Passed | Firebase Hosting 正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`；HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed；DEV-042 真機驗證已由使用者回報通過。DEV-044 durable/destructive recovery 仍需另行 gate。 |
-| DEV-045 | Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | 行事曆訂閱 v2 Builder、本地 preview、board override / exclude、client normalizer、Supabase migration source、Edge v2 feed matcher、static verifier、local-test browser verifier、remote-readiness static gate、local DB smoke、Edge bundle、production build 與 production artifact smoke 已完成；production 尚未套 DEV-037/045 migrations，`calendar-feed` version 3 尚未含 v2 matcher；branch cost confirmation 已完成但 branch create 權限不足，remote apply/deploy/live smoke 仍需 Supabase / deployment-release-gate。 |
+| DEV-045 | Per-Board v3 Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Frozen | 逐看板獨立 filter snapshot、shared condition UI、state isolation、batch copy、v3 normalizer / validator / Edge source與本機 gates已完成；remote/release未執行。 |
 
 ### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md` | Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending | DEV-045 / DEV-037 / DEV-039 | 定義行事曆訂閱 v2：訂閱是一條可保存的跨看板查詢；Phase 1/2 已完成本地 Builder、global filter、board overrides、preview、client v2 normalizer、local-test browser verifier、remote-readiness static gate、local DB smoke 與 Edge v2 matcher source；Phase 3 已授權但 remote DB/Edge/live smoke 尚未執行。 |
-| `ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md` | Phase 2 Static + Browser QC Passed / Phase 3 Authorized / Local DB Smoke Passed / Remote Gate Pending | DEV-045 | 驗證計畫涵蓋 Builder static contract、browser preview、remote-readiness preflight、local DB smoke、preview/feed identity parity、v1 legacy compatibility、permission boundary、mobile viewport、partial/error state、Supabase/Edge/live smoke 與 Phase 3 resume condition。 |
-| `ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md` | Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Local Browser QC Passed / Release-Gate Preflight Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | DEV-045 | 記錄 Phase 1/2 本機 source、static/browser verifier、remote-readiness verifier、local DB smoke、DEV-037/039 regression、TypeScript、settings gate、Edge bundle、production build、production artifact smoke、Phase 3 Supabase read-only preflight、production migration/Edge/source discovery、branch cost confirmation 與 branch create permission blocker。 |
-| `ai-doc/dev_task.md` | DEV-045 Phase 3 Remote Gate Authorized / Local DB Smoke Passed / Branch Creation Permission Blocked / Remote DB-Edge-Live Gate Pending | DEV-045 | 登錄授權邊界：Phase 1/2 本地 source、local-test browser QC、remote-readiness static gate 與 local DB smoke 已完成；remote migration apply、Edge deploy、production deploy、live `.ics` smoke 與正式資料修復已授權但需 Supabase / deployment-release-gate；branch cost confirmation 已完成但 branch create 權限不足。 |
+| `ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md` | Per-Board v3 Phase 1-2 Local Implemented / Automated QA-QC Passed / Release Gate Required | DEV-045 / DEV-037 / DEV-039 | 逐看板 `board_filters`、shared controls、state isolation、batch copy、v1/v2 materialization、permission與 preview/feed parity已完成本機實作；v2 inheritance被 intentional replacement。 |
+| `ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md` | Revised v3 QA Executed / Local Gates Passed / Release Gate Required | DEV-045 | 已執行 v3 UI、state、payload、compatibility、DB/Edge source、permission與 viewport驗證；舊 v2 passes維持歷史證據。 |
+| `ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md` | Per-Board v3 Phase 1-2 Local QC Passed / Historical v2 Evidence Preserved | DEV-045 | 保存舊 v2事實，並新增 current v3 automated QC、local DB rollback、Deno與 regression evidence。 |
+| `ai-doc/dev_task.md` | DEV-045 Phase 1-2 Local Complete / Phase 3-4 Release Gate Required | DEV-045 | 登錄完成狀態、current evidence、Deferred Scope Audit與 release re-entry boundary。 |
 
-PM 治理註記：DEV-045 intentionally supersedes DEV-037 v1 的建立表單心智模型，但不刪除 DEV-037 的 source-scope / permission / feed safety contract。DEV-037 仍是 v1 相容與 live DB/Edge gate 的基礎；DEV-045 在其上建立「像篩選器一樣設定、像報表一樣預覽、像外部連結一樣防呆」的 v2 Builder。預設所有工作區 / 看板採建立當下的可讀取 snapshot，未來新增 workspace/board 不自動進入既有外部連結，除非使用者另行修改訂閱。
+PM 治理註記：DEV-045 仍承接 DEV-037 的 source-scope / permission / feed safety，但 v3 不再使用 global / override。v1 rows保持可讀與原 feed；編輯時 materialize 成逐看板 draft，使用者預覽並儲存後才升級。預設所有當下可讀看板進入 snapshot，未來新增看板不自動進入既有外部連結。
 
 ### DEV-044: 上一步復原範圍擴充與低資料庫成本治理
 
