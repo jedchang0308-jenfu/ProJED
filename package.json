@@ -125,6 +125,7 @@
     "verify:dev-045-calendar-subscription-v3-model": "npx --yes tsx scripts/verify-dev-045-calendar-subscription-v3-model.ts",
     "verify:dev-045-calendar-subscription-remote-readiness": "node scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs",
     "verify:dev-045-calendar-subscription-local-db-smoke": "node scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs",
+    "verify:calendar-subscription-lifecycle-rpc": "node scripts/verify-calendar-subscription-lifecycle-rpc.mjs",
     "verify:dev-046-universal-task-surface-drag": "node scripts/verify-dev-046-universal-task-surface-drag.mjs",
     "verify:dev-046-universal-task-surface-drag-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev046-surface-drag -Filename scripts/verify-dev-046-universal-task-surface-drag-browser.pw.js -OutputDirectory output/playwright",
     "verify:remaining-external-gates": "node scripts/verify-remaining-external-gates.mjs",

@@ -96,7 +96,8 @@ assert(
 assert(
   'Token regeneration remains source-scope neutral',
   source.service.includes('regenerateToken: async (subscriptionId: string): Promise<string>') &&
-    source.service.includes('.update({ token_hash: tokenHash, is_active: true })') &&
+    source.service.includes("supabase.rpc('rotate_calendar_subscription_token'") &&
+    source.service.includes('target_token_hash: tokenHash') &&
     !source.service.includes('regenerateToken: async (subscriptionId: string, input'),
 );
 

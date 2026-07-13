@@ -14,6 +14,7 @@ const files = {
   dev045Migration: 'supabase/migrations/20260706162052_calendar_subscription_v2_filters.sql',
   dev045V3Migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
   dev045V3PolicyRebindMigration: 'supabase/migrations/20260713033000_calendar_subscription_v3_rls_policy_rebind.sql',
+  lifecycleRpcMigration: 'supabase/migrations/20260713133307_calendar_subscription_lifecycle_rpc.sql',
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
   devTask: 'ai-doc/dev_task.md',
@@ -38,6 +39,8 @@ add(
   source.dev045Migration?.includes('calendar_subscription_task_filter_allowed') &&
     source.dev045V3Migration?.includes('calendar_subscription_v3_filter_allowed') &&
     source.dev045V3PolicyRebindMigration?.includes('calendar_subscription_filter_allowed(filters_json)') &&
+    source.lifecycleRpcMigration?.includes('set_calendar_subscription_active') &&
+    source.lifecycleRpcMigration?.includes('rotate_calendar_subscription_token') &&
     source.dev045Migration?.includes('revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon') &&
     source.dev037Migration?.includes('private.current_user_can_read_project'),
 );
@@ -145,6 +148,7 @@ on conflict (project_id, user_id) do update set role = excluded.role;
 set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
 
 create temporary table dev045_checks(name text primary key, ok boolean not null) on commit drop;
+grant select, insert on dev045_checks to authenticated;
 
 insert into dev045_checks(name, ok)
 values
@@ -164,8 +168,12 @@ values
   ('v3 rejects non-member assignee', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["99999999-9999-4999-8999-999999999999"],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
   ('authenticated can execute v2 helper', has_function_privilege('authenticated', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
   ('authenticated can execute v3 helper', has_function_privilege('authenticated', 'public.calendar_subscription_v3_filter_allowed(jsonb)', 'execute')),
+  ('authenticated can set subscription lifecycle', has_function_privilege('authenticated', 'public.set_calendar_subscription_active(uuid,boolean)', 'execute')),
+  ('authenticated can rotate subscription token', has_function_privilege('authenticated', 'public.rotate_calendar_subscription_token(uuid,text)', 'execute')),
   ('anon cannot execute v2 helper', not has_function_privilege('anon', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
-  ('anon cannot execute subscription validator', not has_function_privilege('anon', 'public.calendar_subscription_filter_allowed(jsonb)', 'execute'));
+  ('anon cannot execute subscription validator', not has_function_privilege('anon', 'public.calendar_subscription_filter_allowed(jsonb)', 'execute')),
+  ('anon cannot set subscription lifecycle', not has_function_privilege('anon', 'public.set_calendar_subscription_active(uuid,boolean)', 'execute')),
+  ('anon cannot rotate subscription token', not has_function_privilege('anon', 'public.rotate_calendar_subscription_token(uuid,text)', 'execute'));
 
 set local role authenticated;
 insert into public.calendar_subscriptions (
@@ -206,6 +214,100 @@ values
   ('v3 member cannot subscribe all assignees', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
   ('v3 project manager can subscribe broad managed board', public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["55555555-5555-4555-8555-555555555555"],"board_filters":{"55555555-5555-4555-8555-555555555555":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb)),
   ('v3 manage permission does not spill across boards', not public.calendar_subscription_filter_allowed('{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444","55555555-5555-4555-8555-555555555555"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}},"55555555-5555-4555-8555-555555555555":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":[],"selectedTagIds":[],"keyword":""}}}}'::jsonb));
+
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+set local role authenticated;
+insert into public.calendar_subscriptions (
+  id,
+  owner_user_id,
+  name,
+  token_hash,
+  filters_json
+)
+values (
+  '77777777-7777-4777-8777-777777777777',
+  '11111111-1111-4111-8111-111111111111',
+  'Legacy v1 lifecycle regression',
+  '7777777777777777777777777777777777777777777777777777777777777777',
+  '{"workspace_ids":["33333333-3333-4333-8333-333333333333"],"date_types":["due_date"],"assignee":{"type":"me"}}'::jsonb
+);
+reset role;
+
+update public.tenant_members
+set status = 'suspended'
+where tenant_id = '33333333-3333-4333-8333-333333333333'
+  and user_id = '11111111-1111-4111-8111-111111111111';
+
+set local role authenticated;
+insert into dev045_checks(name, ok)
+values (
+  'legacy v1 snapshot becomes invalid after permission drift',
+  not public.calendar_subscription_filter_allowed((
+    select filters_json
+    from public.calendar_subscriptions
+    where id = '77777777-7777-4777-8777-777777777777'
+  ))
+);
+
+insert into dev045_checks(name, ok)
+values (
+  'owner can disable legacy v1 subscription after permission drift',
+  public.set_calendar_subscription_active('77777777-7777-4777-8777-777777777777', false)
+);
+
+insert into dev045_checks(name, ok)
+values (
+  'legacy v1 subscription is disabled without changing filters',
+  exists (
+    select 1
+    from public.calendar_subscriptions
+    where id = '77777777-7777-4777-8777-777777777777'
+      and not is_active
+      and filters_json = '{"workspace_ids":["33333333-3333-4333-8333-333333333333"],"date_types":["due_date"],"assignee":{"type":"me"}}'::jsonb
+  )
+);
+
+insert into dev045_checks(name, ok)
+values (
+  'owner can re-enable legacy v1 subscription after permission drift',
+  public.set_calendar_subscription_active('77777777-7777-4777-8777-777777777777', true)
+);
+
+insert into dev045_checks(name, ok)
+values (
+  'owner can rotate legacy v1 token after permission drift',
+  public.rotate_calendar_subscription_token(
+    '77777777-7777-4777-8777-777777777777',
+    '8888888888888888888888888888888888888888888888888888888888888888'
+  )
+);
+
+set local request.jwt.claim.sub = '99999999-9999-4999-8999-999999999999';
+insert into dev045_checks(name, ok)
+values (
+  'non-owner cannot change another subscription lifecycle',
+  not public.set_calendar_subscription_active('77777777-7777-4777-8777-777777777777', false)
+);
+reset role;
+
+insert into dev045_checks(name, ok)
+values (
+  'legacy lifecycle operations preserve owner, filters, active state, and rotated hash',
+  exists (
+    select 1
+    from public.calendar_subscriptions
+    where id = '77777777-7777-4777-8777-777777777777'
+      and owner_user_id = '11111111-1111-4111-8111-111111111111'
+      and is_active
+      and token_hash = '8888888888888888888888888888888888888888888888888888888888888888'
+      and filters_json = '{"workspace_ids":["33333333-3333-4333-8333-333333333333"],"date_types":["due_date"],"assignee":{"type":"me"}}'::jsonb
+  )
+);
+
+update public.tenant_members
+set status = 'active'
+where tenant_id = '33333333-3333-4333-8333-333333333333'
+  and user_id = '11111111-1111-4111-8111-111111111111';
 
 select * from dev045_checks order by name;
 
@@ -259,6 +361,7 @@ const migrationSql = [
   source.dev045Migration,
   source.dev045V3Migration,
   source.dev045V3PolicyRebindMigration,
+  source.lifecycleRpcMigration,
   fixtureSql,
   'rollback;',
 ].join('\n\n');

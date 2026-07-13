@@ -418,6 +418,20 @@ export interface Database {
         Args: { filters: Json };
         Returns: boolean;
       };
+      set_calendar_subscription_active: {
+        Args: {
+          target_subscription_id: string;
+          target_is_active: boolean;
+        };
+        Returns: boolean;
+      };
+      rotate_calendar_subscription_token: {
+        Args: {
+          target_subscription_id: string;
+          target_token_hash: string;
+        };
+        Returns: boolean;
+      };
       log_activity_event: {
         Args: {
           target_tenant_id: string;

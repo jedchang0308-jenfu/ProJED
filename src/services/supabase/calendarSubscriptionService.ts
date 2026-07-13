@@ -501,31 +501,34 @@ export const calendarSubscriptionService = {
 
   disable: async (subscriptionId: string): Promise<void> => {
     requireSupabase();
-    const { error } = await supabase
-      .from('calendar_subscriptions')
-      .update({ is_active: false })
-      .eq('id', subscriptionId);
+    const { data, error } = await supabase.rpc('set_calendar_subscription_active', {
+      target_subscription_id: subscriptionId,
+      target_is_active: false,
+    });
     assertNoError(error);
+    if (!data) throw new Error('找不到可停用的行事曆訂閱。');
   },
 
   enable: async (subscriptionId: string): Promise<void> => {
     requireSupabase();
-    const { error } = await supabase
-      .from('calendar_subscriptions')
-      .update({ is_active: true })
-      .eq('id', subscriptionId);
+    const { data, error } = await supabase.rpc('set_calendar_subscription_active', {
+      target_subscription_id: subscriptionId,
+      target_is_active: true,
+    });
     assertNoError(error);
+    if (!data) throw new Error('找不到可啟用的行事曆訂閱。');
   },
 
   regenerateToken: async (subscriptionId: string): Promise<string> => {
     requireSupabase();
     const token = generateToken();
     const tokenHash = await sha256Hex(token);
-    const { error } = await supabase
-      .from('calendar_subscriptions')
-      .update({ token_hash: tokenHash, is_active: true })
-      .eq('id', subscriptionId);
+    const { data, error } = await supabase.rpc('rotate_calendar_subscription_token', {
+      target_subscription_id: subscriptionId,
+      target_token_hash: tokenHash,
+    });
     assertNoError(error);
+    if (!data) throw new Error('找不到可重生連結的行事曆訂閱。');
     return getCalendarFeedUrl(token);
   },
 };
