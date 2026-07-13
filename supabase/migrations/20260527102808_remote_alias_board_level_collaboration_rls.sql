@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED-TEST.
+-- Remote version 20260527102808 (board_level_collaboration_rls) is
+-- byte-equivalent after newline normalization to canonical migration
+-- 20260528092643_board_level_collaboration_rls.sql.
+-- Normalized MD5: 346f7b776c39071f91ee89aed07c9df0.
+-- This alias intentionally executes no DDL on fresh databases.

@@ -244,6 +244,7 @@ Human Decision Brief:
 - 使用者採用 HCS 引導決策 `1B/2B/3B`。
 - `ProJED` 固定為 production Supabase project。
 - `ProJED-TEST` 固定為 staging/test/controlled blast-zone Supabase project。
+- `ADR-039`治理TEST歷史version split-brain：只有保存remote statements且證明與canonical migration等價的version可使用comment-only alias與受控`applied` repair；production history不在此授權內。
 - 正式部署前的固定 Level 3 path 是 staging build + Firebase Hosting preview channel `level3-smoke` + Supabase `ProJED-TEST` auth/read-write/reload/cleanup smoke。
 - Supabase Branch 預設不用；只有 `ProJED-TEST` 無法安全隔離 migration/Edge/schema/destructive test 或需要乾淨 DB 時，才在使用者明確批准成本、用途、存活時間與刪除條件後使用。
 

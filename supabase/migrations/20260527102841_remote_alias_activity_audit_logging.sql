@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED-TEST.
+-- Remote version 20260527102841 (activity_audit_logging) is semantically
+-- equivalent to canonical migration 20260528092711_activity_audit_logging.sql.
+-- The only normalized SQL difference is the dependency-version comment.
+-- Remote normalized MD5: 8c2bc64109ae530968d08637ce1ffc77.
+-- This alias intentionally executes no DDL on fresh databases.

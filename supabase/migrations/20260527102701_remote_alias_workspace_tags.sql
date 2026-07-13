@@ -1,0 +1,5 @@
+-- Historical Supabase migration alias for ProJED-TEST.
+-- Remote version 20260527102701 (workspace_tags) is byte-equivalent after
+-- newline normalization to canonical migration 20260527064316_workspace_tags.sql.
+-- Normalized MD5: eff50baf4f2f9a6a2f3d4456360b3427.
+-- This alias intentionally executes no DDL on fresh databases.

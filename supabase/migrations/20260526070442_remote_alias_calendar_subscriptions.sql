@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED-TEST.
+-- Remote version 20260526070442 (calendar_subscriptions) is semantically
+-- equivalent to canonical migration 20260527064347_calendar_subscriptions.sql.
+-- The remote statement hash was a7bb516f3a35ddacbd38a8db2541bba7 (normalized
+-- MD5); the only SQL difference is the canonical auth.uid() scalar-subselect
+-- optimization. This alias intentionally executes no DDL on fresh databases.
