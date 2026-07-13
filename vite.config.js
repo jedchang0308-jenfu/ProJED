@@ -4,7 +4,15 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: mode === 'production'
+    ? {
+        'import.meta.env.VITE_SUPABASE_AUTH_MODE': JSON.stringify('oauth-google'),
+        'import.meta.env.VITE_SUPABASE_AUTO_TEST_LOGIN': JSON.stringify('false'),
+        'import.meta.env.VITE_SUPABASE_TEST_EMAIL': JSON.stringify(''),
+        'import.meta.env.VITE_SUPABASE_TEST_PASSWORD': JSON.stringify(''),
+      }
+    : undefined,
   plugins: [
     react(),
     tailwindcss(),
@@ -97,4 +105,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

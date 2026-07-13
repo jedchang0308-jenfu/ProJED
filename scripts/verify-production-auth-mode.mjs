@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 const read = (file) => readFileSync(file, 'utf8');
 const authService = read('src/services/authService.ts');
 const authGate = read('src/components/AuthGate.tsx');
+const viteConfig = read('vite.config.js');
 
 const checks = [
   {
@@ -23,6 +24,13 @@ const checks = [
     ok: authService.includes('BOARD_INVITE_TOKEN_PARAM') &&
       /new URLSearchParams\(window\.location\.search\)\.get\(BOARD_INVITE_TOKEN_PARAM\)/.test(authService) &&
       /redirectUrl\.searchParams\.set\(BOARD_INVITE_TOKEN_PARAM,\s*boardInviteToken\)/.test(authService),
+  },
+  {
+    name: 'production build overrides local Supabase test credentials and auto-login settings',
+    ok: viteConfig.includes("'import.meta.env.VITE_SUPABASE_TEST_EMAIL': JSON.stringify('')") &&
+      viteConfig.includes("'import.meta.env.VITE_SUPABASE_TEST_PASSWORD': JSON.stringify('')") &&
+      viteConfig.includes("'import.meta.env.VITE_SUPABASE_AUTO_TEST_LOGIN': JSON.stringify('false')") &&
+      viteConfig.includes("'import.meta.env.VITE_SUPABASE_AUTH_MODE': JSON.stringify('oauth-google')"),
   },
 ];
 
