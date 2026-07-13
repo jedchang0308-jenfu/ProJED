@@ -8,6 +8,7 @@ const files = {
   databaseTypes: 'src/services/supabase/database.types.ts',
   edgeFunction: 'supabase/functions/calendar-feed/index.ts',
   migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
+  policyRebindMigration: 'supabase/migrations/20260713033000_calendar_subscription_v3_rls_policy_rebind.sql',
 };
 
 const read = file => readFileSync(resolve(file), 'utf8');
@@ -57,6 +58,14 @@ assert(
     source.migration.includes("selected_assignee <> '__unassigned__'") &&
     source.migration.includes('tm.tenant_id = snapshot_tenant_id') &&
     source.migration.includes('tm.status = \'active\''),
+);
+
+assert(
+  'SQL write policies are rebound to the v3-aware validator after the function rename',
+  source.policyRebindMigration.includes('drop policy if exists "users create own calendar subscriptions"') &&
+    source.policyRebindMigration.includes('drop policy if exists "users update own calendar subscriptions"') &&
+    source.policyRebindMigration.match(/calendar_subscription_filter_allowed\(filters_json\)/g)?.length === 2 &&
+    !source.policyRebindMigration.includes('calendar_subscription_v1_v2_filter_allowed(filters_json)'),
 );
 
 assert(

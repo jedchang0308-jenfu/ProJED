@@ -6,6 +6,7 @@ const files = {
   dev037Migration: 'supabase/migrations/20260706091804_calendar_subscription_source_scope.sql',
   dev045V2Migration: 'supabase/migrations/20260706162052_calendar_subscription_v2_filters.sql',
   dev045V3Migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
+  dev045V3PolicyRebindMigration: 'supabase/migrations/20260713033000_calendar_subscription_v3_rls_policy_rebind.sql',
   edgeFunction: 'supabase/functions/calendar-feed/index.ts',
   calendarService: 'src/services/supabase/calendarSubscriptionService.ts',
   databaseTypes: 'src/services/supabase/database.types.ts',
@@ -87,11 +88,21 @@ assert(
   'DEV-037, DEV-045 v2 compatibility, and DEV-045 v3 migrations preserve release order',
   basename(files.dev037Migration) < basename(files.dev045V2Migration) &&
     basename(files.dev045V2Migration) < basename(files.dev045V3Migration) &&
+    basename(files.dev045V3Migration) < basename(files.dev045V3PolicyRebindMigration) &&
     source.dev037Migration.includes('scope_type') &&
     source.dev037Migration.includes('project_ids') &&
     source.dev037Migration.includes('private.current_user_can_read_project') &&
     source.dev045V2Migration.includes('DEV-045 Phase 2') &&
     source.dev045V3Migration.includes('calendar_subscription_v3_filter_allowed'),
+);
+
+assert(
+  'DEV-045 v3 write policies are rebound after the validator function rename',
+  source.dev045V3PolicyRebindMigration.includes('drop policy if exists "users create own calendar subscriptions"') &&
+    source.dev045V3PolicyRebindMigration.includes('drop policy if exists "users update own calendar subscriptions"') &&
+    source.dev045V3PolicyRebindMigration.match(/calendar_subscription_filter_allowed\(filters_json\)/g)?.length === 2 &&
+    !source.dev045V3PolicyRebindMigration.includes('calendar_subscription_v1_v2_filter_allowed(filters_json)') &&
+    source.localDbSmoke.includes('v3 RLS insert and update policies use the v3-aware validator'),
 );
 
 assert(

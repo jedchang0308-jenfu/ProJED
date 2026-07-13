@@ -9,9 +9,11 @@ const containerName = process.env.DEV045_LOCAL_DB_CONTAINER || 'supabase_db_ProJ
 const files = {
   workspaceTagsMigration: 'supabase/migrations/20260527064316_workspace_tags.sql',
   boardCollaborationMigration: 'supabase/migrations/20260528092643_board_level_collaboration_rls.sql',
+  calendarSubscriptionBaseMigration: 'supabase/migrations/20260527064347_calendar_subscriptions.sql',
   dev037Migration: 'supabase/migrations/20260706091804_calendar_subscription_source_scope.sql',
   dev045Migration: 'supabase/migrations/20260706162052_calendar_subscription_v2_filters.sql',
   dev045V3Migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
+  dev045V3PolicyRebindMigration: 'supabase/migrations/20260713033000_calendar_subscription_v3_rls_policy_rebind.sql',
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
   devTask: 'ai-doc/dev_task.md',
@@ -35,6 +37,7 @@ add(
   'DEV-045 local DB smoke uses rollback-only execution',
   source.dev045Migration?.includes('calendar_subscription_task_filter_allowed') &&
     source.dev045V3Migration?.includes('calendar_subscription_v3_filter_allowed') &&
+    source.dev045V3PolicyRebindMigration?.includes('calendar_subscription_filter_allowed(filters_json)') &&
     source.dev045Migration?.includes('revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon') &&
     source.dev037Migration?.includes('private.current_user_can_read_project'),
 );
@@ -90,7 +93,13 @@ select
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'private'
       and p.proname = 'current_user_can_read_project'
-  ) as has_project_read_helper
+  ) as has_project_read_helper,
+  exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'calendar_subscriptions'
+  ) as has_calendar_subscriptions
 ) to stdout with csv;
 `;
 
@@ -158,6 +167,37 @@ values
   ('anon cannot execute v2 helper', not has_function_privilege('anon', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
   ('anon cannot execute subscription validator', not has_function_privilege('anon', 'public.calendar_subscription_filter_allowed(jsonb)', 'execute'));
 
+set local role authenticated;
+insert into public.calendar_subscriptions (
+  id,
+  owner_user_id,
+  name,
+  token_hash,
+  filters_json
+)
+values (
+  '66666666-6666-4666-8666-666666666666',
+  '11111111-1111-4111-8111-111111111111',
+  'DEV-045 v3 RLS insert smoke',
+  '6666666666666666666666666666666666666666666666666666666666666666',
+  '{"version":3,"v3_scope_type":"per_board_filter_snapshot","workspace_ids":["33333333-3333-4333-8333-333333333333"],"project_ids":["44444444-4444-4444-8444-444444444444"],"board_filters":{"44444444-4444-4444-8444-444444444444":{"included":true,"date_types":["due_date"],"filters":{"statusFilters":{"todo":true},"dueWithinDays":null,"selectedAssigneeIds":["11111111-1111-4111-8111-111111111111"],"selectedTagIds":[],"keyword":""}}}}'::jsonb
+);
+update public.calendar_subscriptions
+set name = 'DEV-045 v3 RLS update smoke'
+where id = '66666666-6666-4666-8666-666666666666';
+reset role;
+
+insert into dev045_checks(name, ok)
+values (
+  'v3 RLS insert and update policies use the v3-aware validator',
+  exists (
+    select 1
+    from public.calendar_subscriptions
+    where id = '66666666-6666-4666-8666-666666666666'
+      and name = 'DEV-045 v3 RLS update smoke'
+  )
+);
+
 set local request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
 
 insert into dev045_checks(name, ok)
@@ -206,16 +246,19 @@ if (schemaProbe.status !== 0) {
 }
 add('local DB schema probe succeeds', true, schemaProbe.stdout.trim());
 
-const [hasTaskTagsValue, hasProjectReadHelperValue] = schemaProbe.stdout.trim().split(/\r?\n/).at(-1)?.split(',') ?? [];
+const [hasTaskTagsValue, hasProjectReadHelperValue, hasCalendarSubscriptionsValue] = schemaProbe.stdout.trim().split(/\r?\n/).at(-1)?.split(',') ?? [];
 const hasTaskTags = hasTaskTagsValue === 't';
 const hasProjectReadHelper = hasProjectReadHelperValue === 't';
+const hasCalendarSubscriptions = hasCalendarSubscriptionsValue === 't';
 const migrationSql = [
   'begin;',
   hasTaskTags ? '-- public.task_tags already present in local DB; prerequisite migration not replayed.' : source.workspaceTagsMigration,
   hasProjectReadHelper ? '-- private.current_user_can_read_project already present in local DB; prerequisite migration not replayed.' : source.boardCollaborationMigration,
+  hasCalendarSubscriptions ? '-- public.calendar_subscriptions already present in local DB; base migration not replayed.' : source.calendarSubscriptionBaseMigration,
   source.dev037Migration,
   source.dev045Migration,
   source.dev045V3Migration,
+  source.dev045V3PolicyRebindMigration,
   fixtureSql,
   'rollback;',
 ].join('\n\n');
