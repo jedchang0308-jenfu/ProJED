@@ -69,6 +69,20 @@
 - Fixture以exact-name、exact-one-row transaction刪除；production residual count為0，刪除後新token亦為404。UI重新整理後fixture消失，原有兩筆訂閱仍存在。
 - 既有v1相容性採read-only觀察：production維持2筆active v1 row；Google Calendar重新載入後`JED個人工作區`仍啟用且可見對應全天到期事件。Google外部client不保證瀏覽器reload立即重新輪詢，因此DB `last_accessed_at`仍為部署前時間，此限制不誤記為新fetch。
 
+## Production lifecycle hotfix - 2026-07-13
+
+- Incident：正式站「我的工作行事曆」停用時回傳`new row violates row-level security policy for table "calendar_subscriptions"`。唯讀診斷確認該列為active v1，且immutable filter snapshot因目前權限範圍改變而不再通過`calendar_subscription_filter_allowed`；原UPDATE policy會在只改`is_active`時重新驗證整份filter，因而誤擋生命週期操作。
+- Fix source：commit `87d6493b350d8f63668bb0cbbd6d4e273d38be06`已推送至`origin/持續優化2`。新增authenticated-only的`set_calendar_subscription_active`與`rotate_calendar_subscription_token` RPC；兩者均為`SECURITY DEFINER`、`search_path=""`、以`auth.uid()`綁定owner，anon無execute。新增／編輯filter仍走原RLS validator，未放寬policy。
+- Local gate：`verify:source`通過；lint 0 error / 63既有warning；lifecycle static 9/9、DEV-037 20/20、local DB transaction smoke 34/34且rollback、TypeScript、production build與local DB lint全數通過。
+- TEST gate：ProJED-TEST為`ACTIVE_HEALTHY`；dry-run只列`20260713133307_calendar_subscription_lifecycle_rpc.sql`，套用後remote up to date。函式contract、security advisor與invalid legacy filter owner/outsider smoke通過，fixture residual為0。
+- Firebase preview：`https://projed-cc78d--level3-smoke-o1na5wft.web.app/`載入`index-smXV8xdX.js`，SHA-256 `6259CE08983506510E8C48A390FF2250A2C3E2657EC7830807F06FB3C500BA22`。公開HTTPS / service worker / console / request smoke通過；authenticated fixture完成啟用、停用、再啟用，browser error為0，exact-name cleanup後residual為0。
+- Production rollback evidence：部署前schema位於ignored `output/preproduction/20260713-calendar-lifecycle-hotfix/production-schema-before.sql`，172479 bytes，SHA-256 `CD576C14D48A16496E87BB9BE05318E1B2A7085D90C19BFE7EEE72634D818890`。部署後schema為175051 bytes，SHA-256 `8C43645E73A90552CD09297CC12536E4A2B8FB84C0B2A503CA05C832B4EADB88`。
+- Production DB：dry-run只列本次migration；套用後local / remote均39筆，latest均為`20260713133307`。函式contract確認authenticated execute、anon denied、definer與empty search path；security advisor與`db lint --schema public,private --level error`均0 issue。
+- Firebase live：部署前入口為`index-DGur8aYq.js`；hotfix live入口為`index-C1qahA5c.js`，SHA-256 `5909C0A6AAFCE73F1E329948987E1ADDAF76CC426AE0421A9B6378C08D378C02`，線上與本機artifact exact match。公開root / JS / CSS / service worker smoke通過，0 critical console、pageerror與failed request。
+- Production authenticated smoke：既有「我的工作行事曆」在`version=1`且validator仍為false的原始失敗條件下，實際UI停用成功並使DB `is_active=false`；再啟用成功並回復`is_active=true`，0 row-level-security browser error。未重生既有token。
+- Final state：production訂閱仍為3筆，2 active / 1 disabled，v1 2筆 / v3 1筆，與部署前一致。TEST fixture為0；production未建立fixture；calendar-feed Edge未變更。
+- Rollback：若frontend回歸，先回退Firebase到部署前`index-DGur8aYq.js`版本；additive RPC可保留且舊frontend不會呼叫。只有RPC本身出現安全缺陷時，才在frontend回退後drop兩個函式並依實際migration state處理；不得猜測或直接repair history。
+
 ## Rollback baseline and residual risk
 
 - Firebase部署前release `1783605313274000` / version `284e7bcc17fe553c`可作frontend rollback。
