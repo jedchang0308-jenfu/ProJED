@@ -2769,16 +2769,17 @@ CAPA 來源：
 - 2026-07-07 DEV-045 v2 Phase 1 + Phase 2 local source 已完成：新增本地篩選器 Builder、v2 local contract、board override / exclude 與 preview；補上 Supabase migration source、client v2 normalizer、Builder submit wiring、Edge Function v2 matcher、static verifier、local-test browser verifier、remote-readiness static gate 與 transaction-scoped local DB smoke；這些自 2026-07-12 起只屬歷史 v2 evidence，remote gate 已凍結。
 - 2026-07-12 DEV-045 改採逐看板獨立 `board_filters` v3 contract，並完成 Phase 1 shared condition UI / per-board Builder與 Phase 2 local service / validator / Edge source；本機 automated QA-QC通過，remote/release未執行。
 - 2026-07-06 PM 剩餘任務比對完成：需要輕量重構任務板；DEV-045 / DEV-037 改以行事曆訂閱 workstream 管理，DEV-025 DB QC Pending 補回交付點總覽與剩餘 Gate；2026-07-07 DEV-025 production read-only preflight、guarded fixture-readiness harness、execution-readiness gate 與 guarded mutating executor self-check passed，mutating role-data QC still pending safe fixture。
-- 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 1 shared condition UI / per-board Builder 是 P1 本機候選；Phase 1 通過後才能進 Phase 2 v3 local service / validator / Edge source。舊 v2 remote apply/deploy/live `.ics` path 已凍結，不再是下一步。其他 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke 仍需對應 gate。
+- 目前沒有可直接續接的 DEV-045 產品 RD 候選：v3 Phase 1-2 本機實作與 QA-QC 已完成。剩餘工作是共用 release gate / human re-entry：production migration provenance、production Edge / live `.ics`、Level 3 authenticated smoke、外部 calendar client parity、rollback evidence 與 release owner authorization；舊 v2 remote apply/deploy/live `.ics` path 已凍結，不得重做。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 production UI smoke 已於 2026-07-09 依使用者授權執行 production fixture path；第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求。已建立 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f`，以 release gate 部署 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css` 到 Firebase Hosting，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup `tenantDeleted=true`、`userDeleted=true`。
 - 2026-07-07 PM evidence：`verify:remaining-external-gates` 保留當時 read-only 稽核事實；2026-07-12 後 DEV-045 舊 v2 remote gate 被產品方向修訂凍結。2026-07-13 已將 verifier 更新為 v3 release-boundary evidence；它仍是 read-only PM evidence，不代表 remote migration、Edge、live `.ics` 或 production release 完成。
+- 2026-07-13 RD release-hygiene 修正：`vite.config.js` 在 production mode 強制 OAuth、關閉 auto test login，並清空 Supabase test email/password，避免被 ignored `.env.local` 帶入 production bundle；`verify:production-auth-mode` 增加此契約檢查。commit `e240db3` 已推送。source/build、production auth `5/5`、staging artifact secret scan `2/2` 通過；此修正不代表 production deploy 已授權。
 - 2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過；後續開發排序不再把 DEV-028 manual QC 當作 active blocker，但 production deploy 仍需另行授權。
 - 手機版會議紀錄工作流不列入目前 release gate。
 
 ## 下一步
 
-此表列最高優先、可安全續接且最容易造成誤工的工作。DEV-045 舊 v2 Phase 1/2 evidence 已被新方向取代；目前應先做 v3 Phase 1/2 本機 RD/QC，不得跳到舊 remote gate。任何 production、remote DB、Edge、真機或人工登入式 QC 仍需對應 gate。
+此表列最高優先、可安全續接且最容易造成誤工的工作。DEV-045 v3 Phase 1-2 本機 RD/QC 已完成；目前不應重做產品功能或跳到舊 v2 remote gate。任何 production、remote DB、Edge、真機或人工登入式 QC 仍需對應 gate。
 
 | 順序 | 任務 | 狀態 | Gate / 負責 | 完成條件 |
 |---|---|---|---|---|

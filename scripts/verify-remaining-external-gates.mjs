@@ -180,8 +180,8 @@ add(
   'documentation map preserves the same external-gate boundary',
   includesAll(existing.documentationMap ?? '', [
     'verify:remaining-external-gates',
-    'DEV-045 Phase 1-2 Local Complete / Phase 3-4 Release Gate Required',
-    'remote migration、Edge deploy、live `.ics`與 production release等待新 release型指令',
+    'DEV-045 Phase 1-2 Local Complete / Release Hygiene Fixed / Phase 3-4 Release Gate Required',
+    'remote migration、Edge deploy、live `.ics`與 production release仍等待 release gate',
     'guarded mutating executor',
     'Mutating QC Pending',
     'staging / disposable fixture',
