@@ -68,7 +68,7 @@
 | E02 Provenance | release branch、commit、upstream與target branch確定；建置工作樹乾淨 | commit SHA、branch、clean status |
 | E03 v3 readiness gate | 舊v2 remote-readiness已更新或由新v3 verifier取代 | verifier pass log |
 | E04 TEST health | `ProJED-TEST`為ACTIVE_HEALTHY；project ref經雙重核對 | read-only project evidence |
-| E05 Staging env | `npm run verify:staging-env`確認Vite staging解析到固定TEST ref且不等於production；不要求特定本機檔名 | redacted verifier result |
+| E05 Staging env | `npm run verify:staging-env`確認Vite staging解析到固定TEST ref、不等於production，且不解析本機測試帳密或自動登入；build後執行`verify:staging-artifact-secrets` | redacted verifier與artifact scan結果 |
 | E06 Auth | Firebase preview redirect與staging測試帳號可用 | Auth設定 / 登入證據 |
 | E07 Backup | TEST migration / Edge前已記錄backup時間、範圍、方式、restore path | backup evidence ID |
 | E08 Rollback baseline | production既有Firebase bundle、Edge version/source、DB functions與subscription版本分布已保存 | rollback evidence package |

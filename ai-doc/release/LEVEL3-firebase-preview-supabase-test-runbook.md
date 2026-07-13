@@ -76,6 +76,10 @@ npm run verify:staging-env
 VITE_DATA_BACKEND=supabase
 VITE_SUPABASE_URL=https://YOUR_PROJED_TEST_REF.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_PROJED_TEST_ANON_KEY
+VITE_SUPABASE_AUTH_MODE=oauth-google
+VITE_SUPABASE_TEST_EMAIL=
+VITE_SUPABASE_TEST_PASSWORD=
+VITE_SUPABASE_AUTO_TEST_LOGIN=false
 VITE_ENABLE_SUPABASE_DIAGNOSTICS=false
 ```
 
@@ -99,6 +103,7 @@ git status --short --branch
 npm run verify:source
 npm run verify:staging-env
 npx vite build --mode staging
+npm run verify:staging-artifact-secrets
 npx firebase-tools hosting:channel:deploy level3-smoke --project projed-cc78d --expires 1d
 ```
 
@@ -130,6 +135,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-level3-fi
 - `git status --short --branch`.
 - `npm run verify:source` result.
 - `npm run verify:staging-env` redacted result, including TEST and production project refs without keys.
+- `npm run verify:staging-artifact-secrets` result proving local test email/password are absent from `dist`.
 - Staging build bundle names from `dist/index.html`.
 - Firebase preview channel URL.
 - `verify-level3-firebase-preview.ps1` output.
