@@ -218,6 +218,7 @@ const mapWbsItemToTaskNode = (
   const metadata = item.metadata as Record<string, any> | null;
   return {
     id: legacyOrId(item.id, item.legacy_node_id),
+    storageId: item.id,
     workspaceId: requestedWorkspaceId || metadata?.firebaseWorkspaceId || item.tenant_id,
     boardId: requestedBoardId || metadata?.firebaseBoardId || item.project_id,
     parentId: item.parent_id ? nodeIdByDbId.get(item.parent_id) ?? item.parent_id : null,

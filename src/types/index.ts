@@ -384,6 +384,7 @@ export interface AuditLogEntry {
 // WBS data model: adjacency-list tree scoped to a board.
 export interface TaskNode {
   id: string;
+  storageId?: string;
   workspaceId: string;
   boardId: string;
   parentId: string | null;

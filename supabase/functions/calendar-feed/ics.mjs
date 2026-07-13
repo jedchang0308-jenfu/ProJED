@@ -140,6 +140,9 @@ export const buildCalendarFeedIcs = ({
     for (const eventSpec of eventSpecs) {
       lines.push("BEGIN:VEVENT");
       lines.push(rawIcsLine("UID", `${item.id}-${eventSpec.type}-${subscription.id}@projed`));
+      lines.push(rawIcsLine("X-PROJED-TASK-ID", item.id));
+      lines.push(rawIcsLine("X-PROJED-BOARD-ID", item.project_id));
+      lines.push(rawIcsLine("X-PROJED-DATE-TYPE", eventSpec.type));
       lines.push(`DTSTAMP:${nowStamp}`);
       lines.push(`DTSTART;VALUE=DATE:${toIcsDate(eventSpec.date)}`);
       lines.push(`DTEND;VALUE=DATE:${toIcsDate(addDays(eventSpec.date, 1))}`);

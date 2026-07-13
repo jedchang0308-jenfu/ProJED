@@ -124,6 +124,10 @@ assert.ok(unfoldedFeed.includes(`X-PROJED-WARNING:Feed task limit reached: ${FEE
 assert.ok(unfoldedFeed.includes('UID:task-1-start_date-subscription-1@projed'));
 assert.ok(unfoldedFeed.includes('UID:task-1-due_date-subscription-1@projed'));
 assert.ok(unfoldedFeed.includes('UID:task-2-due_date-subscription-1@projed'));
+assert.ok(unfoldedFeed.includes('X-PROJED-TASK-ID:task-1'));
+assert.ok(unfoldedFeed.includes('X-PROJED-BOARD-ID:project-a'));
+assert.ok(unfoldedFeed.includes('X-PROJED-DATE-TYPE:start_date'));
+assert.ok(unfoldedFeed.includes('X-PROJED-DATE-TYPE:due_date'));
 assert.ok(unfoldedFeed.includes('DTSTAMP:20260526T010203Z'));
 assert.ok(unfoldedFeed.includes('DTSTART;VALUE=DATE:20260601'));
 assert.ok(unfoldedFeed.includes('DTEND;VALUE=DATE:20260602'));

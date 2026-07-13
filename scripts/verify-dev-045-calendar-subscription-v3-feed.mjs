@@ -7,6 +7,10 @@ const files = {
   service: 'src/services/supabase/calendarSubscriptionService.ts',
   databaseTypes: 'src/services/supabase/database.types.ts',
   edgeFunction: 'supabase/functions/calendar-feed/index.ts',
+  ics: 'supabase/functions/calendar-feed/ics.mjs',
+  builder: 'src/components/CalendarSubscriptionBuilderPreview.tsx',
+  taskTypes: 'src/types/index.ts',
+  projedService: 'src/services/supabase/projedService.ts',
   migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
   policyRebindMigration: 'supabase/migrations/20260713033000_calendar_subscription_v3_rls_policy_rebind.sql',
 };
@@ -86,6 +90,18 @@ assert(
     source.edgeFunction.includes('if (!assigneeSelection.unrestricted)') &&
     source.edgeFunction.includes('getProjectSelectedUserIds') &&
     source.edgeFunction.includes('includedProjectIds.has(project.id)'),
+);
+
+assert(
+  'Preview and ICS expose the same canonical event identity without changing UID',
+  source.taskTypes.includes('storageId?: string') &&
+    source.projedService.includes('storageId: item.id') &&
+    source.builder.includes('event.node.storageId ?? event.node.id') &&
+    source.builder.includes('event.board.storageId ?? event.board.id') &&
+    source.ics.includes('X-PROJED-TASK-ID') &&
+    source.ics.includes('X-PROJED-BOARD-ID') &&
+    source.ics.includes('X-PROJED-DATE-TYPE') &&
+    source.ics.includes('`${item.id}-${eventSpec.type}-${subscription.id}@projed`'),
 );
 
 assert(

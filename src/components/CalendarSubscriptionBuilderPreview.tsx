@@ -746,8 +746,8 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
                       key={`${event.node.id}:${event.dateType}`}
                       className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 bg-white px-2.5 py-2 text-sm"
                       data-calendar-subscription-preview-event="true"
-                      data-preview-event-task-id={event.node.id}
-                      data-preview-event-board-id={event.board.id}
+                      data-preview-event-task-id={event.node.storageId ?? event.node.id}
+                      data-preview-event-board-id={event.board.storageId ?? event.board.id}
                       data-preview-event-date={event.date}
                       data-preview-event-date-type={event.dateType}
                     >
