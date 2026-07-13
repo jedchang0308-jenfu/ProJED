@@ -146,9 +146,8 @@
   - 摘要：建立 workspace / board 治理模型與 UI 契約。
   - 證據：`ADR-036`、`SPEC-036`、`QA/QC-DEV-036`
   - 計入交付：是
-- ◇ DEV-037 [交付點] [驗證中] [P1] [併入 DEV-045 release workstream] 行事曆訂閱來源範圍
-  - 摘要：v1 source-scope 本機已驗證，remote DB / Edge gate 由 DEV-045 相容契約承接。
-  - 下一步：依 DEV-045 新方向完成本機相容 gate 後再進 release gate
+- ✓ DEV-037 [交付點] [完成] [P1] [正式環境已交付] 行事曆訂閱來源範圍
+  - 摘要：v1 source-scope已由DEV-045 v3向後相容契約承接，production DB / Edge與既有Google Calendar v1觀察通過。
   - 證據：`SPEC-037`、`QA/QC-DEV-037`
   - 計入交付：是
 - ✓ DEV-038 [交付點] [完成] [P1] [正式環境已交付] 設定中心範圍一致性與防呆
@@ -176,11 +175,9 @@
   - 摘要：完成低成本 ordinary undo 與 safe slice；破壞性 recovery 另行 gate。
   - 證據：`SPEC-044`、`QA/QC-DEV-044`
   - 計入交付：是
-- ✓ DEV-045 [交付點] [完成] [P1] [Level 3 release candidate通過 / Production未授權] 行事曆訂閱逐看板篩選器
-  - 摘要：以逐看板獨立 filter snapshot 取代未上線的 global / override v2，並與工作台共用操作語法但隔離 state。
+- ✓ DEV-045 [交付點] [完成] [P1] [正式環境已交付 / Level 4通過] 行事曆訂閱逐看板篩選器
+  - 摘要：逐看板獨立filter snapshot、preview / live ICS identity、token lifecycle、v1相容與cleanup已在production通過。
   - 父任務：DEV-037、DEV-039
-  - 下一步：由release owner執行production Go / No-Go、migration / Edge / Hosting部署與G4 post-deploy smoke
-  - 阻塞 / 恢復條件：production repair/push/Edge/Hosting仍需獨立高風險確認
   - 證據：`ADR-038`、`SPEC-045`、`QA-DEV-045`、`QC-DEV-045` v3 addendum、`PREPRODUCTION-DEV-045-20260713.md`
   - 計入交付：是
 - ◇ DEV-046 [交付點] [驗證中] [P1] [人工真機 supplemental pending] 全任務表面拖曳一致化
@@ -191,17 +188,17 @@
 
 ## PM Update - 2026-07-13
 
-### DEV-045: Production migration provenance與Level 3執行
+### DEV-045: Production release與Level 4執行
 
-狀態：Source Reconciled / TEST 38-of-38 Migration Aligned / TEST Edge v4 / Level 3 Release Candidate Passed / Production Mutation Not Authorized
+狀態：Production Released / 38-of-38 Migration Aligned / Edge v4 / Firebase Live / Level 4 Passed
 
 - Production 12個remote-only statements已從history table還原；7個以comment-only alias保存，5個production-only原始migration補回repo，remote-only降為0。
 - `verify:supabase:migration-aliases`擴充為65/65，防止alias含DDL、canonical漂移或production source hash改變。
 - ProJED-TEST已先保存schema/data dump，再套12份缺漏migration；目前38/38 local/remote一致。
-- TEST `calendar-feed`已部署repo current source為version 4；production source較舊，待正式Edge release。
-- Production 16個local-only已分類：11個history-only repair、5個真實pending migration。未執行production repair、DB push、Edge或Firebase live。
+- Production 11個history-only repair已執行且repair前後schema hash一致；5個真實pending migration已套用，最終38/38一致且dry-run up to date。
+- Production `calendar-feed` version 4逐檔等於repo；Firebase live release `1783943465159000`載入`index-DGur8aYq.js`。
 - `2635de9` release candidate已完成Firebase preview、authenticated UI、113/113 DOM/ICS exact identity、token lifecycle、同token filter與task mutation、live v1/v2、Google Calendar、四viewport及cleanup；TEST fixture residual為0。
-- 下一步：production Go / No-Go、ADR-040 history repair與pending migration、production Edge / Firebase live deploy及G4 post-deploy smoke。
+- Level 4 production smoke通過：authenticated v3 UI 4事件與live ICS 4 VEVENT identity一致；disabled / enabled / regenerated token契約通過；random token 404；既有v1 Google Calendar事件可見；fixture residual為0。
 
 文件：`ADR-040`、`PREPRODUCTION-DEV-045-20260713.md`、`QA-DEV-045-pre-production-release-validation.md`。
 

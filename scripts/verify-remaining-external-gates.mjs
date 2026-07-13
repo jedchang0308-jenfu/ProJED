@@ -17,6 +17,7 @@ const paths = {
   dev040RemoteReadiness: 'scripts/verify-dev-040-p0-remote-readiness.mjs',
   dev045RemoteReadiness: 'scripts/verify-dev-045-calendar-subscription-remote-readiness.mjs',
   dev045LocalDbSmoke: 'scripts/verify-dev-045-calendar-subscription-local-db-smoke.mjs',
+  dev045ReleaseEvidence: 'ai-doc/release/PREPRODUCTION-DEV-045-20260713.md',
 };
 
 const checks = [];
@@ -84,13 +85,16 @@ add(
 );
 
 add(
-  'DEV-045 v3 Phase 3-4 remains release-gated after the v2 direction change',
+  'DEV-045 v3 release is closed by production Level 4 and cleanup evidence',
   includesAll(existing.devTask ?? '', [
-    'DEV-045 [交付點] [完成] [P1] [Phase 1-2 QA-QC通過 / Level 3執行中]',
-    'Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Superseded and Frozen / Phase 3-4 Release Gate Required',
-    'Remote migration / Edge / live `.ics`：Blocked Human Re-entry / Release Gate Required。',
-    'Production release / smoke / rollback：Blocked Human Re-entry / Release Gate Required。',
+    'DEV-045 [交付點] [完成] [P1] [正式環境已交付 / Level 4通過]',
+    'Production Released / 38-of-38 Migration Aligned / Edge v4 / Firebase Live / Level 4 Passed',
     'verify:dev-045-calendar-subscription-local-db-smoke',
+  ]) && includesAll(existing.dev045ReleaseEvidence ?? '', [
+    'Production Released / Level 4 Post-deploy Smoke Passed / Cleanup Complete',
+    'Production execution evidence',
+    'production residual count為0',
+    'Rollback baseline and residual risk',
   ]),
 );
 
@@ -160,7 +164,6 @@ add(
 );
 
 const nextStepRows = [
-  'DEV-045 [交付點] [完成] [P1] [Phase 1-2 QA-QC通過 / Level 3執行中]',
   'DEV-025 受控跨工作區移動專案 DB QC',
   'DEV-040 Phase 1 P0 production/Edge gate',
   'DEV-044 Phase 3 destructive recovery human re-entry',
@@ -168,20 +171,19 @@ const nextStepRows = [
 
 add(
   'remaining next-step rows preserve release or pending status for unresolved external gates',
-  nextStepRows.every((row, index) => {
+  nextStepRows.every(row => {
     if (!row) return false;
-    if (index === 0) return /Level 3執行中/i.test(row);
     return /Pending|pending|gate|required|re-entry/i.test(row);
   }),
   nextStepRows,
 );
 
 add(
-  'documentation map preserves the same external-gate boundary',
+  'documentation map closes DEV-045 while preserving unresolved external-gate boundaries',
   includesAll(existing.documentationMap ?? '', [
     'verify:remaining-external-gates',
-    'DEV-045 Phase 1-2 Local Complete / Release Hygiene Fixed / Phase 3-4 Release Gate Required',
-    'remote migration、Edge deploy、live `.ics`與 production release仍等待 release gate',
+    'Production Released / Level 4 Passed / Cleanup Complete',
+    'DEV-037 + DEV-045 Production Delivered',
     'guarded mutating executor',
     'Mutating QC Pending',
     'staging / disposable fixture',
@@ -190,12 +192,14 @@ add(
 );
 
 add(
-  'dev_task records this audit as PM evidence without changing the v3 release boundary',
+  'dev_task records completed DEV-045 release and keeps the remaining-gates audit',
   includesAll(existing.devTask ?? '', [
     'verify:remaining-external-gates',
     'PM evidence',
     'DEV-045 舊 v2 remote gate 被產品方向修訂凍結',
     'v3 contract',
+    '正式環境已交付 / Level 4通過',
+    'fixture residual為0',
   ]),
 );
 

@@ -2,15 +2,18 @@
 
 ## Documentation Map Update - 2026-07-13
 
-### Production migration provenance + Level 3 execution
+### DEV-045 production release + Level 4 execution
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/decisions/ADR-040-production-migration-history-reconciliation.md` | Accepted / Source Reconciled / Production Mutation Pending | DEV-045 / Release Governance | 將production 12個remote-only還原為7個comment-only alias與5個原始source migration；定義11筆history-only repair、repair後唯一允許的5筆pending migration、schema hash hard gate與Edge provenance。 |
-| `ai-doc/release/PREPRODUCTION-DEV-045-20260713.md` | Level 3 Release Candidate Passed / Production Not Authorized | DEV-045 / DEV-037 | 記錄TEST backup與38/38 migration對齊、TEST Edge v4、Firebase preview artifact provenance、authenticated v3 DOM/ICS exact diff、v1/v2 compatibility、token/task mutation、Google client與cleanup證據；production repair / migration / Edge / Hosting仍待Go / No-Go。 |
+| `ai-doc/decisions/ADR-040-production-migration-history-reconciliation.md` | Accepted / Production Executed / 38-of-38 Aligned | DEV-045 / Release Governance | Production 11筆history-only repair經schema hash hard gate證明無DDL；5筆真實migration已套用，DB lint與contract query通過。 |
+| `ai-doc/release/PREPRODUCTION-DEV-045-20260713.md` | Production Released / Level 4 Passed / Cleanup Complete | DEV-045 / DEV-037 | 記錄TEST Level 3、production backup / migration / Edge / Firebase provenance、authenticated v3 preview / ICS identity、token lifecycle、既有v1 client觀察、rollback與0 residual證據。 |
+| `ai-doc/qa/QA-DEV-045-pre-production-release-validation.md` | Executed / Level 3 + Level 4 Passed | DEV-045 / DEV-037 | 正式部署gate已執行；Google Calendar符合外部client要求，Outlook維持non-blocking supplemental。 |
+| `ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md` | Production Released / Level 4 QC Passed | DEV-045 | 保留v2歷史證據並新增production DB / Edge / Hosting、v3 identity、token lifecycle、v1 observation與cleanup事實。 |
+| `ai-doc/dev_task.md` | DEV-037 + DEV-045 Production Delivered | DEV-037 / DEV-045 | 任務狀態已關閉production release gate；正式環境與Level 4證據均已連結。 |
 | `scripts/verify-supabase-migration-aliases.mjs` | 65/65 Passed | Release Governance | 鎖定11份comment-only alias、canonical hash、remote evidence與5份production source migration SHA-256。 |
 
-PM治理註記：本輪只對ProJED-TEST套migration，且先完成schema/data backup；production只讀。Production migration repair、DB push、Edge與Firebase live仍須獨立高風險確認。
+PM治理註記：release owner已核准並完成production DB → Edge → Firebase順序部署；Level 4與cleanup全綠。Outlook為QA明定的non-blocking supplemental，不影響本次release完成判定。
 
 ## Documentation Map Update - 2026-07-12
 
@@ -71,7 +74,7 @@ PM 治理註記：DEV-046 是新的交付點，不能被視為 DEV-039 Phase 2A 
 | DEV-035 | Supabase DB Role QC Passed / Production Not Deployed | `delete_workspace` owner/admin/member/viewer/outsider matrix、workspace list reload、tenant-scoped cascade 與 execute grants 已通過；production front-end release 需另行授權。 |
 | DEV-037 / DEV-045 / DEV-040 | Calendar workstream + P0 guards | DEV-045 v3 Phase 1/2本機 RD/QA/QC已完成，舊 v2 remote gate frozen；DEV-037 v1 compatibility由 v3 materialization / feed regression承接；DEV-040 remote Edge仍走獨立 Supabase / release gate。 |
 | DEV-038 / DEV-042 / DEV-044 | Production Release Deployed / Local + Production Smoke Passed | Firebase Hosting 正式站載入 `assets/index-BU14rK7W.js` / `assets/index-CYqvildz.css`；HTTP artifact check、production browser smoke 與 authenticated production UI smoke passed；DEV-042 真機驗證已由使用者回報通過。DEV-044 durable/destructive recovery 仍需另行 gate。 |
-| DEV-045 | Per-Board v3 Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Frozen | 逐看板獨立 filter snapshot、shared condition UI、state isolation、batch copy、v3 normalizer / validator / Edge source與本機 gates已完成；remote/release未執行。 |
+| DEV-045 | Production Released / Level 4 Passed / Cleanup Complete | 逐看板獨立filter snapshot、v3 DB / Edge、Firebase live、preview / ICS identity、token lifecycle、v1 client觀察與cleanup均已完成。 |
 
 ### DEV-045: 行事曆訂閱篩選器建構器與即時預覽
 

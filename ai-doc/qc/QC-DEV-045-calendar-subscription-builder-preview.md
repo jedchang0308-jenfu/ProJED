@@ -3,8 +3,14 @@
 關聯 DEV：DEV-045
 關聯 SPEC：`ai-doc/specs/SPEC-045-calendar-subscription-filter-builder-preview.md`
 關聯 QA：`ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md`
-狀態：Per-Board v3 Phase 1-2 Local QC Passed / Historical v2 Evidence Preserved / Remote Release Not Executed
+狀態：Per-Board v3 Production Released / Level 4 QC Passed / Historical v2 Evidence Preserved
 日期：2026-07-12
+
+## Production release QC addendum - 2026-07-13
+
+Release owner核准後，QC依Lane 3順序完成production DB migration history reconciliation、5筆migration、`calendar-feed` version 4與Firebase live部署。最終production migration為38/38，DB lint與validator / RLS / grant contract check通過；線上`index-DGur8aYq.js`、`index-CLsSmPB5.css`逐檔hash等於release artifact。
+
+Authenticated Level 4 fixture `LEVEL4-DEV045-20260713-G4`在UI輸出4個到期事件，live ICS為HTTP 200、4個VEVENT，normalize顯示前綴後事件identity完全一致。停用410、重新啟用200、重生後舊token 404 / 新token 200、random token 404均通過且無secret leakage。Exact-one-row cleanup後DB residual為0，刪除後token為404，原有兩筆訂閱未變。Google Calendar post-deploy reload仍可見既有v1 `JED個人工作區`事件；production維持2筆active v1 row。完整release、rollback與hash evidence見`ai-doc/release/PREPRODUCTION-DEV-045-20260713.md`。
 
 ## Superseded Boundary - 2026-07-12
 

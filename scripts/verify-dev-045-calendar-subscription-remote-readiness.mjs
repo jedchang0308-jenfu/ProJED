@@ -15,6 +15,7 @@ const files = {
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   preProductionQa: 'ai-doc/qa/QA-DEV-045-pre-production-release-validation.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
+  releaseEvidence: 'ai-doc/release/PREPRODUCTION-DEV-045-20260713.md',
   devTask: 'ai-doc/dev_task.md',
   documentationMap: 'ai-doc/documentation_map.md',
 };
@@ -154,25 +155,32 @@ assert(
 );
 
 assert(
-  'Governance docs freeze the former v2 gate and require the v3 Level 3 release plan',
+  'Governance docs preserve the frozen v2 boundary and record the completed v3 release path',
   source.spec.includes('Former v2 Remote Gate Superseded and Frozen') &&
     source.spec.includes('### Phase 3 - Level 3 remote gate') &&
     source.qa.includes('QA-DEV-045-pre-production-release-validation.md') &&
     source.qa.includes('Level 3 readiness') &&
     source.qc.includes('後續 release必須使用 v3 migration / Edge source重新進入 Level 3') &&
-    source.devTask.includes('Firebase preview authenticated / live `.ics` / external client Level 3 evidence') &&
+    source.devTask.includes('正式環境已交付 / Level 4通過') &&
+    source.releaseEvidence.includes('Production Released / Level 4 Post-deploy Smoke Passed / Cleanup Complete') &&
     source.documentationMap.includes('QA-DEV-045-pre-production-release-validation.md'),
 );
 
 assert(
-  'Pre-production plan keeps remote mutation gated by TEST health, provenance, backup, and rollback evidence',
-  source.preProductionQa.includes('Execution In Progress / G0-G2 Partial Passed / G3 Pending / Production Deploy Not Authorized') &&
+  'Release evidence proves TEST health, provenance, backup, rollback, Level 4, and cleanup gates',
+  source.preProductionQa.includes('Executed / Level 3 Passed / Production Released / Level 4 Passed') &&
     source.preProductionQa.includes('Firebase Hosting `level3-smoke` + Supabase `ProJED-TEST`') &&
     source.preProductionQa.includes('| E02 Provenance |') &&
     source.preProductionQa.includes('| E04 TEST health |') &&
     source.preProductionQa.includes('| E07 Backup |') &&
     source.preProductionQa.includes('| E08 Rollback baseline |') &&
-    source.preProductionQa.includes('不得部署live channel'),
+    source.preProductionQa.includes('不得部署live channel') &&
+    source.releaseEvidence.includes('Production execution evidence') &&
+    source.releaseEvidence.includes('38/38') &&
+    source.releaseEvidence.includes('Production `calendar-feed`部署為version 4') &&
+    source.releaseEvidence.includes('Level 4 post-deploy evidence') &&
+    source.releaseEvidence.includes('production residual count為0') &&
+    source.releaseEvidence.includes('Rollback baseline and residual risk'),
 );
 
 const failed = results.filter(result => !result.ok);

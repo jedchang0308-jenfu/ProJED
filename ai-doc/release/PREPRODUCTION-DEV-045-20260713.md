@@ -1,12 +1,13 @@
-# DEV-045 Pre-production Evidence - 2026-07-13
+# DEV-045 Release Evidence - 2026-07-13
 
-狀態：Level 3 Release Candidate Passed / Production Mutation Not Authorized
+狀態：Production Released / Level 4 Post-deploy Smoke Passed / Cleanup Complete
 
 ## Source boundary
 
 - Branch：`持續優化2`
 - Starting commit：`437c4cc`
 - Release-candidate source commit：`2635de9`
+- Production deployment source commit：`43313b3`
 - Upstream：`origin/持續優化2`
 - Starting worktree：clean
 - Firebase preview target：`projed-cc78d / level3-smoke`
@@ -50,12 +51,27 @@
 - G3-15 cache gate通過：既有受service worker控制分頁曾保留舊`index-Bp02B5N8.js`；關閉舊分頁並以cache-busted fresh navigation重開後載入`index-BPeJzbQT.js`，後續authenticated parity以新bundle完成。正式發布後仍需依G4再驗證active-client更新流程。
 - 最終cleanup刪除4筆`LEVEL3-DEV045-*`訂閱與1筆任務fixture；精確residual query為0。完整feed token未寫入文件或Git。
 
-## Remaining release gates
+## Production execution evidence
 
-- Level 3 required gates已完成。Outlook因無可用登入session未執行；QA G3-13只要求至少一個外部client，Google Calendar已通過，因此Outlook parity列為non-blocking supplemental。
-- Production尚需release owner執行Go / No-Go：確認production backup與schema hash、依ADR-040處理11筆history-only repair及5筆真實pending migration、部署production Edge與Firebase live artifact。
-- 正式部署後必須執行G4：production bundle / service worker、authenticated v3 preview / live ICS identity、random / disabled / old token、既有v1 feed與fixture cleanup smoke；任一P0失敗立即rollback。
+- Release owner於本task明確要求繼續執行production release；執行順序固定為DB history repair / migrations、Edge、Firebase Hosting、Level 4 smoke。
+- Fresh production rollback evidence位於ignored目錄`output/preproduction/20260713-193800`。部署前schema SHA-256為`B04062CDA34BC406A00F63F67594E7FD2E6FEBDBA26CC8BD949C3A251414E082`，data SHA-256為`B5483351A100F21972F31D3185D3F1849006071C114BDF0EB7F9E3CE6BBFEE91`。
+- 11筆ADR-040 history-only repair全部成功；repair後schema hash仍為`B04062CDA34BC406A00F63F67594E7FD2E6FEBDBA26CC8BD949C3A251414E082`，證明沒有執行DDL。
+- `db push --dry-run --include-all`只列出ADR-040允許的5筆migration；實際套用後production migration history為38/38，後續dry-run回報remote database up to date。
+- 套用後schema SHA-256為`CD576C14D48A16496E87BB9BE05318E1B2A7085D90C19BFE7EEE72634D818890`；`db lint --schema public,private --level error`無錯誤，read-only contract query確認v1/v2/v3 validator、wrapper、RLS與grants正確。
+- Production `calendar-feed`部署為version 4、`verify_jwt=false`。部署後`index.ts` SHA-256為`4161BBBFD6EDABE9085CA6596B7D80199BED8C18AD39CACDDB1D3104D18CA0B5`，`ics.mjs`為`17F1EACC8469DE611AF3775146C5E40502AAD10207C998F10A25EFF9CBC00057`，逐檔等於repo；random token為404且無內部欄位洩漏。
+- Firebase live release `1783943465159000` / version `57c214e8d9503c8c`已發布至`https://projed-cc78d.web.app`。入口`index-DGur8aYq.js` SHA-256為`D8D7DB48C386A12B9970A9EB14BD0C5CBA452C2E5787AB4456C60F9691BF01B9`，CSS `index-CLsSmPB5.css`為`07093090E13992B26AF125089BE46E173ABFE82C27FFFE72CFDA2174A38F904E`；線上與本機artifact完全一致。
 
-## Production stop gate
+## Level 4 post-deploy evidence
 
-在release owner未明確核准production mutation與部署順序前，不執行migration repair、DB push、production Edge deploy或Firebase live deploy。Level 3通過不等於production release已完成。
+- Public production root、JS、CSS與service worker ready smoke通過；authenticated cache-busted navigation仍保持登入並載入`index-DGur8aYq.js`。無可見錯誤、app console error、pageerror或critical failed request；Chrome extension message-channel訊息列為外部extension noise。
+- 以production-safe fixture `LEVEL4-DEV045-20260713-G4`建立canonical v3訂閱：UI為1個workspace、1張看板、4項任務、4個到期事件；live ICS為HTTP 200、`text/calendar`、4個VEVENT。移除ICS顯示前綴後，4個事件名稱與UI完全一致，identity SHA-256為`c95ca153be5a5f3ee388663e7c457f883be03951f7c17287ea500c923d1af32c`。
+- Token lifecycle通過：停用後410；重新啟用後200 / 4事件；重生後舊token 404、新token 200 / 4事件；各錯誤response均未洩漏內部欄位。
+- Fixture以exact-name、exact-one-row transaction刪除；production residual count為0，刪除後新token亦為404。UI重新整理後fixture消失，原有兩筆訂閱仍存在。
+- 既有v1相容性採read-only觀察：production維持2筆active v1 row；Google Calendar重新載入後`JED個人工作區`仍啟用且可見對應全天到期事件。Google外部client不保證瀏覽器reload立即重新輪詢，因此DB `last_accessed_at`仍為部署前時間，此限制不誤記為新fetch。
+
+## Rollback baseline and residual risk
+
+- Firebase部署前release `1783605313274000` / version `284e7bcc17fe553c`可作frontend rollback。
+- Edge部署前source已保存在`output/preproduction/20260713-193800/production-edge-before`；DB schema/data dump保存在同一ignored evidence目錄。
+- DB migration採向前相容validator/function演進；若需rollback，先查v3 row count，再依QA decision tree優先回退frontend或Edge，禁止猜測history repair。
+- Outlook未執行；QA G3-13只要求至少一個外部client，Google Calendar已通過，因此Outlook維持non-blocking supplemental。
