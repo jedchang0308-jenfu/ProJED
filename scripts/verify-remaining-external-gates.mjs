@@ -84,15 +84,13 @@ add(
 );
 
 add(
-  'DEV-045 Phase 3 remains release-gated, not marked complete',
+  'DEV-045 v3 Phase 3-4 remains release-gated after the v2 direction change',
   includesAll(existing.devTask ?? '', [
-    'DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate',
-    'Local DB Smoke Passed / Remote DB-Edge-Live Gate Pending',
-    'deployment-release-gate / Supabase gate',
+    'DEV-045 [交付點] [完成] [P1] [Phase 1-2 本機 QA-QC 通過 / release pending]',
+    'Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Superseded and Frozen / Phase 3-4 Release Gate Required',
+    'Remote migration / Edge / live `.ics`：Blocked Human Re-entry / Release Gate Required。',
+    'Production release / smoke / rollback：Blocked Human Re-entry / Release Gate Required。',
     'verify:dev-045-calendar-subscription-local-db-smoke',
-    'Supabase branch path 需 cost confirmation',
-    'production 仍缺 DEV-037/045 migrations',
-    'calendar-feed` version 3 未含 v2 matcher',
   ]),
 );
 
@@ -162,15 +160,19 @@ add(
 );
 
 const nextStepRows = [
-  'DEV-045 Phase 3 remote Supabase / Edge / live `.ics` gate',
+  'DEV-045 [交付點] [完成] [P1] [Phase 1-2 本機 QA-QC 通過 / release pending]',
   'DEV-025 受控跨工作區移動專案 DB QC',
   'DEV-040 Phase 1 P0 production/Edge gate',
   'DEV-044 Phase 3 destructive recovery human re-entry',
 ].map(token => lineContaining(existing.devTask ?? '', token));
 
 add(
-  'remaining next-step rows avoid closing unresolved external gates as Done or Complete',
-  nextStepRows.every(row => row && !/\|\s*(Done|Complete|Completed)\s*(\/|\|)/i.test(row)),
+  'remaining next-step rows preserve release or pending status for unresolved external gates',
+  nextStepRows.every((row, index) => {
+    if (!row) return false;
+    if (index === 0) return /release pending/i.test(row);
+    return /Pending|pending|gate|required|re-entry/i.test(row);
+  }),
   nextStepRows,
 );
 
@@ -178,31 +180,22 @@ add(
   'documentation map preserves the same external-gate boundary',
   includesAll(existing.documentationMap ?? '', [
     'verify:remaining-external-gates',
-    'verify:dev-011-012-production-ui-smoke',
-    'Supabase DB / Edge deploy gate',
-    'Done / Production Release Deployed / Production UI Smoke Passed',
-    'codex/dev011012-rag-order-hotfix',
-    '7704e2f',
-    'assets/index-BkwGqGCZ.js',
-    'User-Reported Manual Click QC Passed',
+    'DEV-045 Phase 1-2 Local Complete / Phase 3-4 Release Gate Required',
+    'remote migration、Edge deploy、live `.ics`與 production release等待新 release型指令',
     'guarded mutating executor',
     'Mutating QC Pending',
     'staging / disposable fixture',
-    'remote Edge 仍未部署 timeout guard',
     'DEV-044 durable/destructive recovery 仍需另行 gate',
-    'Remote DB-Edge-Live Gate Pending',
-    'remote apply/deploy/live smoke 仍需 Supabase / deployment-release-gate',
   ]),
 );
 
 add(
-  'dev_task records this audit as PM evidence without changing product completion status',
+  'dev_task records this audit as PM evidence without changing the v3 release boundary',
   includesAll(existing.devTask ?? '', [
     'verify:remaining-external-gates',
     'PM evidence',
-    'mutates_database=false',
-    'remote_changes=false',
-    '不代表任一外部 Gate 完成',
+    'DEV-045 舊 v2 remote gate 被產品方向修訂凍結',
+    'v3 contract',
   ]),
 );
 

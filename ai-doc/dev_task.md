@@ -2772,7 +2772,7 @@ CAPA 來源：
 - 目前可由 Codex 續接的產品 RD 候選：DEV-045 Phase 1 shared condition UI / per-board Builder 是 P1 本機候選；Phase 1 通過後才能進 Phase 2 v3 local service / validator / Edge source。舊 v2 remote apply/deploy/live `.ics` path 已凍結，不再是下一步。其他 DB/RLS/migration、Edge deploy、production release、真機/登入式人工 QC 或手動 UI smoke 仍需對應 gate。
 - 會議紀錄工作流仍是已發布產品主線：DEV-005 到 DEV-017 已完成多輪 UX 與 AI 品質改善。
 - DEV-011 / DEV-012 production UI smoke 已於 2026-07-09 依使用者授權執行 production fixture path；第一次實跑揭露 production `rag_sync_jobs` RLS 對 first-publish ordering 的要求。已建立 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f`，以 release gate 部署 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css` 到 Firebase Hosting，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup `tenantDeleted=true`、`userDeleted=true`。
-- 2026-07-07 PM evidence：`verify:remaining-external-gates` 保留當時 read-only 稽核事實；2026-07-12 後 DEV-045 舊 v2 remote gate 被產品方向修訂凍結，後續 verifier 必須先更新為 v3 contract 才能重新作為 gate evidence。
+- 2026-07-07 PM evidence：`verify:remaining-external-gates` 保留當時 read-only 稽核事實；2026-07-12 後 DEV-045 舊 v2 remote gate 被產品方向修訂凍結。2026-07-13 已將 verifier 更新為 v3 release-boundary evidence；它仍是 read-only PM evidence，不代表 remote migration、Edge、live `.ics` 或 production release 完成。
 - 2026-07-09 使用者回報 DEV-028 人工親自點擊 QC 通過；後續開發排序不再把 DEV-028 manual QC 當作 active blocker，但 production deploy 仍需另行授權。
 - 手機版會議紀錄工作流不列入目前 release gate。
 
