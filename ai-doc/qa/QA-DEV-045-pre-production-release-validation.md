@@ -5,7 +5,7 @@
 關聯 ADR：`ADR-037-fixed-test-environment-and-level3-release-gate.md`、`ADR-038-calendar-subscription-per-board-filter-snapshot.md`
 執行環境：Firebase Hosting `level3-smoke` + Supabase `ProJED-TEST`
 正式站：`https://projed-cc78d.web.app/`
-狀態：QA Plan Ready / Execution Not Started / Level 3 Required / Production Deploy Not Authorized
+狀態：Execution In Progress / G0-G2 Partial Passed / G3 Pending / Production Deploy Not Authorized
 日期：2026-07-12
 
 2026-07-13 release scope決策：使用者確認目前工作樹內所有 staged、unstaged與untracked產品、驗證及文件變更均納入同一批release。原「範圍未分類」阻塞已解除；仍須形成乾淨、可追溯的committed HEAD，並為同批DEV-029、DEV-031、DEV-046等變更執行各自回歸gate。
@@ -24,15 +24,15 @@
 
 ## 2. QA目前判定
 
-目前判定：`NO-GO / 尚未具備正式部署資格`。
+目前判定：`NO-GO / Level 3執行中，尚未具備正式部署資格`。
 
 部署前阻塞：
 
-- 本批release scope已確認包含目前所有變更，但尚未形成可追溯且乾淨的committed HEAD。
+- Production migration source已完成reconciliation，仍須把本輪ADR、aliases與recovered migrations形成可追溯且乾淨的committed HEAD。
 - 目前branch為`持續優化2`，production branch仍為`main`；尚未決定merge / release commit與artifact來源。
 - `verify:dev-045-calendar-subscription-remote-readiness`已更新為v3 migration / normalizer / Edge / Level 3契約；仍須從最終committed HEAD重跑並保存通過證據。
-- 既有證據顯示`ProJED-TEST`先前為inactive；必須重新證明ACTIVE_HEALTHY、preview Auth redirect、Vite staging解析結果與測試帳號可用。
-- Level 3尚未對新v3 migration、staging Edge與Firebase preview執行live `.ics` parity。
+- `ProJED-TEST` migration已在新backup後補齊為38/38；staging env解析通過，TEST Edge下載source與repo逐檔相同。仍須完成Firebase preview OAuth與live `.ics` parity。
+- Level 3尚未完成authenticated UI、token lifecycle、v1/v2 compatibility、external calendar client與cleanup。
 - production rollback基準尚未為本次release記錄DB function definition、Edge version/source、subscriptions版本分布與Firebase bundle。
 
 既有本機QA / QC只計為Level 0-1 baseline，必須從最終release commit重跑，不得直接累計成Level 3通過。

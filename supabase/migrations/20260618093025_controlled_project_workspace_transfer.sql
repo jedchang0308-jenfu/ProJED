@@ -1,0 +1,7 @@
+-- Historical Supabase migration alias for ProJED production.
+-- Remote version 20260618093025 is semantically equivalent to canonical
+-- migration 20260618120000_controlled_project_workspace_transfer.sql.
+-- Differences are local variable names, equivalent empty-array syntax,
+-- equivalent project_members_pkey conflict targets, and a redundant semicolon.
+-- Remote source SHA256: 8738F937ED50546FE8A76A4EDABD6C22336780E20B071EA0036371E15349A720.
+-- This alias intentionally executes no DDL on fresh databases.

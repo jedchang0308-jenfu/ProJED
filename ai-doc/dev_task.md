@@ -176,11 +176,11 @@
   - 摘要：完成低成本 ordinary undo 與 safe slice；破壞性 recovery 另行 gate。
   - 證據：`SPEC-044`、`QA/QC-DEV-044`
   - 計入交付：是
-- ✓ DEV-045 [交付點] [完成] [P1] [Phase 1-2 本機 QA-QC 通過 / release pending] 行事曆訂閱逐看板篩選器
+- ✓ DEV-045 [交付點] [完成] [P1] [Phase 1-2 QA-QC通過 / Level 3執行中] 行事曆訂閱逐看板篩選器
   - 摘要：以逐看板獨立 filter snapshot 取代未上線的 global / override v2，並與工作台共用操作語法但隔離 state。
   - 父任務：DEV-037、DEV-039
-  - 下一步：需要發布時以 v3 migration / Edge source進入 Level 3與 deployment-release-gate
-  - 阻塞 / 恢復條件：remote/release需新的 release型指令、Level 3、live `.ics` parity與 rollback evidence
+  - 下一步：完成final commit的Firebase preview authenticated / live `.ics` / external client Level 3 evidence
+  - 阻塞 / 恢復條件：production repair/push/Edge/Hosting需Level 3全綠與獨立高風險確認
   - 證據：`ADR-038`、`SPEC-045`、`QA-DEV-045`、`QC-DEV-045` v3 addendum、v3 static/browser/model/feed、local DB rollback smoke
   - 計入交付：是
 - ◇ DEV-046 [交付點] [驗證中] [P1] [人工真機 supplemental pending] 全任務表面拖曳一致化
@@ -188,6 +188,21 @@
   - 下一步：需要時補人工真機 supplemental；production release另行 gate
   - 證據：`SPEC-046`、`QA-DEV-046`
   - 計入交付：是
+
+## PM Update - 2026-07-13
+
+### DEV-045: Production migration provenance與Level 3執行
+
+狀態：Source Reconciled / TEST 38-of-38 Migration Aligned / TEST Edge Source Matches Repo / Firebase Preview Pending / Production Mutation Not Authorized
+
+- Production 12個remote-only statements已從history table還原；7個以comment-only alias保存，5個production-only原始migration補回repo，remote-only降為0。
+- `verify:supabase:migration-aliases`擴充為65/65，防止alias含DDL、canonical漂移或production source hash改變。
+- ProJED-TEST已先保存schema/data dump，再套12份缺漏migration；目前38/38 local/remote一致。
+- TEST `calendar-feed`下載source與repo逐檔SHA-256相同，不需重部署；production source較舊，待正式Edge release。
+- Production 16個local-only已分類：11個history-only repair、5個真實pending migration。未執行production repair、DB push、Edge或Firebase live。
+- 下一步：形成final release commit、部署新的`level3-smoke` preview，完成authenticated UI、preview/ICS identity、token lifecycle、v1/v2、external client與cleanup。
+
+文件：`ADR-040`、`PREPRODUCTION-DEV-045-20260713.md`、`QA-DEV-045-pre-production-release-validation.md`。
 
 ## PM Update - 2026-07-12
 

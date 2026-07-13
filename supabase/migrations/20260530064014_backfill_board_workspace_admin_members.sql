@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED production.
+-- Remote version 20260530064014 is equivalent to canonical migration
+-- 20260530070000_backfill_board_workspace_admin_members.sql; the only SQL
+-- difference is one redundant semicolon.
+-- Remote source SHA256: 90FDBB9FA943AFE3E6C97CDABA195F9A810E24D68D55EA308AEC6A9F38645BE6.
+-- This alias intentionally executes no DDL on fresh databases.

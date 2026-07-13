@@ -86,7 +86,7 @@ add(
 add(
   'DEV-045 v3 Phase 3-4 remains release-gated after the v2 direction change',
   includesAll(existing.devTask ?? '', [
-    'DEV-045 [交付點] [完成] [P1] [Phase 1-2 本機 QA-QC 通過 / release pending]',
+    'DEV-045 [交付點] [完成] [P1] [Phase 1-2 QA-QC通過 / Level 3執行中]',
     'Phase 1-2 Local Implemented / Automated QA-QC Passed / Former v2 Remote Gate Superseded and Frozen / Phase 3-4 Release Gate Required',
     'Remote migration / Edge / live `.ics`：Blocked Human Re-entry / Release Gate Required。',
     'Production release / smoke / rollback：Blocked Human Re-entry / Release Gate Required。',
@@ -160,7 +160,7 @@ add(
 );
 
 const nextStepRows = [
-  'DEV-045 [交付點] [完成] [P1] [Phase 1-2 本機 QA-QC 通過 / release pending]',
+  'DEV-045 [交付點] [完成] [P1] [Phase 1-2 QA-QC通過 / Level 3執行中]',
   'DEV-025 受控跨工作區移動專案 DB QC',
   'DEV-040 Phase 1 P0 production/Edge gate',
   'DEV-044 Phase 3 destructive recovery human re-entry',
@@ -170,7 +170,7 @@ add(
   'remaining next-step rows preserve release or pending status for unresolved external gates',
   nextStepRows.every((row, index) => {
     if (!row) return false;
-    if (index === 0) return /release pending/i.test(row);
+    if (index === 0) return /Level 3執行中/i.test(row);
     return /Pending|pending|gate|required|re-entry/i.test(row);
   }),
   nextStepRows,

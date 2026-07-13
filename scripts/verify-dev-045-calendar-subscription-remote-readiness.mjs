@@ -160,13 +160,13 @@ assert(
     source.qa.includes('QA-DEV-045-pre-production-release-validation.md') &&
     source.qa.includes('Level 3 readiness') &&
     source.qc.includes('後續 release必須使用 v3 migration / Edge source重新進入 Level 3') &&
-    source.devTask.includes('以 v3 migration / Edge source進入 Level 3') &&
+    source.devTask.includes('Firebase preview authenticated / live `.ics` / external client Level 3 evidence') &&
     source.documentationMap.includes('QA-DEV-045-pre-production-release-validation.md'),
 );
 
 assert(
   'Pre-production plan keeps remote mutation gated by TEST health, provenance, backup, and rollback evidence',
-  source.preProductionQa.includes('QA Plan Ready / Execution Not Started / Level 3 Required / Production Deploy Not Authorized') &&
+  source.preProductionQa.includes('Execution In Progress / G0-G2 Partial Passed / G3 Pending / Production Deploy Not Authorized') &&
     source.preProductionQa.includes('Firebase Hosting `level3-smoke` + Supabase `ProJED-TEST`') &&
     source.preProductionQa.includes('| E02 Provenance |') &&
     source.preProductionQa.includes('| E04 TEST health |') &&

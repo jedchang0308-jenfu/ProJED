@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED production.
+-- Remote version 20260610053318 is equivalent to canonical migration
+-- 20260604100000_meeting_work_records.sql; the only SQL difference is one
+-- redundant semicolon.
+-- Remote source SHA256: E1B1B599E23D2020B28122C6A573B88C611A41A8D380693B2129786BC4C3FC4B.
+-- This alias intentionally executes no DDL on fresh databases.

@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED production.
+-- Remote version 20260529091003 is semantically equivalent to canonical
+-- migration 20260529123000_calendar_subscription_selected_assignees.sql.
+-- Differences are a local variable rename and one redundant semicolon.
+-- Remote source SHA256: 72C600494D3D1EA194F5DAEBF1A935B9793B7FB2B6535AC2CE533FC1E63F3F07.
+-- This alias intentionally executes no DDL on fresh databases.

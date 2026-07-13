@@ -1,6 +1,6 @@
 # ADR-039: Supabase migration version aliases
 
-狀態：Accepted / TEST Reconciliation Authorized / Production Reconciliation Pending
+狀態：Accepted / TEST Reconciliation Complete / Production Superseded by ADR-040
 日期：2026-07-13
 範圍：Supabase migration provenance、ProJED-TEST Level 3 release gate
 
@@ -26,7 +26,7 @@
 - 不在未比對SQL時建立no-op alias。
 - TEST history repair只處理上表四組已證明等價version。
 - 修復後重新執行`migration list`與`db push --dry-run`；任何非預期DDL仍停止。
-- Production migration history另有不同分歧，本ADR不授權production repair或mutation。
+- Production migration history另有不同分歧；production reconciliation由`ADR-040`接管，本ADR不授權production repair或mutation。
 
 ## Recovery
 

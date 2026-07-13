@@ -1,0 +1,6 @@
+-- Historical Supabase migration alias for ProJED production.
+-- Remote version 20260610053408 is equivalent to canonical migration
+-- 20260604104000_record_rag_sync_jobs.sql; the only SQL difference is one
+-- redundant semicolon.
+-- Remote source SHA256: DD03D1E31CDF6C7C126FFFADEE071794C24CAF55EB768568D39B664352FB94E7.
+-- This alias intentionally executes no DDL on fresh databases.
