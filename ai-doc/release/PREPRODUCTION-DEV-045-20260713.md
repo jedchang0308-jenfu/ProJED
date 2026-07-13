@@ -1,6 +1,6 @@
 # DEV-045 Pre-production Evidence - 2026-07-13
 
-狀態：Level 3 Partial Pass / Production Mutation Not Authorized
+狀態：Level 3 Fresh Preview Passed / Compatibility Gates Pending / Production Mutation Not Authorized
 
 ## Source boundary
 
@@ -27,21 +27,25 @@
 
 ## Level 3 execution evidence
 
-- 既有Firebase `level3-smoke` preview仍提供與本次staging artifact相同的`index-Bp02B5N8.js`；公開HTTPS / root / JS / CSS / service worker smoke通過，0 critical console、0 pageerror、0 critical failed request。
+- Firebase CLI reauth已恢復；由clean `dae201d` workspace重新部署`level3-smoke`，release `1783935574738000` / version `bde21a1295b2389c`，有效至`2026-07-14T09:39:31Z`。
+- Fresh preview URL：`https://projed-cc78d--level3-smoke-o1na5wft.web.app/`。公開HTTPS / root / JS / CSS / service worker smoke通過，0 critical console、0 pageerror、0 critical failed request。
+- Deployed JS `index-Bp02B5N8.js` SHA-256 `266BE719E442FA7F972D7ED2149FAEC20D42C3E10AEA8B8752A1942AA77CAD0C`；CSS `index-CLsSmPB5.css` SHA-256 `07093090E13992B26AF125089BE46E173ABFE82C27FFFE72CFDA2174A38F904E`，兩者逐檔等於本機staging artifact。
+- Fresh preview使用既有OAuth session完成authenticated hard reload；重新載入後仍登入TEST，行事曆訂閱v3 builder、預覽與建立CTA可用。
+- Fresh preview於1440x900、1024x768、390x844、320x700驗證無水平overflow；mobile filter drawer在390與320均完整位於viewport內，訂閱名稱與建立CTA同列且文字未裁切。
 - 以已登入TEST帳號完成真實UI smoke：逐看板條件得到60項任務、113個事件，包含開始53與到期60；展開後113列皆具有task ID、board ID、date與date type，且事件identity不重複。
 - 依日期 / 依看板切換後事件集合維持113；81個缺少所選日期的未產生原因可展開檢視。
 - 建立`LEVEL3-DEV045-20260713-1530`後，live ICS為HTTP 200、`text/calendar`、113個VEVENT，開始53、到期60，與UI摘要一致。
 - Token lifecycle：停用為410；重新啟用後同token恢復200 / 113；重生後舊token為404，新token為200 / 113。
 - Google Calendar外部client成功建立訂閱並完成首次抓取；同一dual-date任務可見獨立開始與到期全天事件。驗證後已取消訂閱並移除外部日曆。
 - TEST fixture已由Supabase dashboard以精確名稱刪除；刪除前matching rows為1，刪除後residual count為0。完整feed token未寫入文件或Git。
+- Fresh deployment另建立`LEVEL3-DEV045-FRESH-20260713-1855`，UI為60項任務 / 113事件，live ICS為HTTP 200、113 VEVENT、開始53、到期60；驗證後刪除1筆，residual count為0。
 
 ## Remaining Level 3 gates
 
-- Firebase CLI refresh token仍無效；必須完成`firebase login --reauth`後，從`d69899c`重新部署新的`level3-smoke` channel。既有preview的bundle-hash-equivalent smoke不能代替fresh deployment provenance。
 - G3-05目前完成事件總數、date-type分布與113筆DOM identity完整性；仍需產出DOM / ICS machine-readable identity diff為0的正式artifact。
 - G3-08 task title / date / status更新後重抓feed、G3-09保留同token修改filters、G3-12 live v1 / defensive v2 feed仍未執行。
 - Outlook無可用登入工作階段，停在Microsoft登入頁；Google已滿足G3-13至少一個外部client，但Google / Outlook雙client parity仍為pending。
-- Fresh preview的authenticated hard reload、service worker controller、1440 / 1024 / 390 / 320實機截圖仍待補；本機browser gates不取代fresh preview evidence。
+- Fresh preview service worker已ready且script指向本次origin的`sw.js`，但首次載入controller為false；仍需補controller接管後的可稽核證據。四viewport已完成layout metrics，若release evidence要求像素證據則仍需保留實機截圖。
 
 ## Production stop gate
 
