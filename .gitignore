@@ -38,3 +38,4 @@ outputs/
 .env.*
 !.env.example
 !.env.test.example
+!.env.staging.example

@@ -31,7 +31,7 @@
 - 本批release scope已確認包含目前所有變更，但尚未形成可追溯且乾淨的committed HEAD。
 - 目前branch為`持續優化2`，production branch仍為`main`；尚未決定merge / release commit與artifact來源。
 - `verify:dev-045-calendar-subscription-remote-readiness`已更新為v3 migration / normalizer / Edge / Level 3契約；仍須從最終committed HEAD重跑並保存通過證據。
-- 既有證據顯示`ProJED-TEST`先前為inactive；必須重新證明ACTIVE_HEALTHY、Auth redirect、staging env與測試帳號可用。
+- 既有證據顯示`ProJED-TEST`先前為inactive；必須重新證明ACTIVE_HEALTHY、preview Auth redirect、Vite staging解析結果與測試帳號可用。
 - Level 3尚未對新v3 migration、staging Edge與Firebase preview執行live `.ics` parity。
 - production rollback基準尚未為本次release記錄DB function definition、Edge version/source、subscriptions版本分布與Firebase bundle。
 
@@ -68,7 +68,7 @@
 | E02 Provenance | release branch、commit、upstream與target branch確定；建置工作樹乾淨 | commit SHA、branch、clean status |
 | E03 v3 readiness gate | 舊v2 remote-readiness已更新或由新v3 verifier取代 | verifier pass log |
 | E04 TEST health | `ProJED-TEST`為ACTIVE_HEALTHY；project ref經雙重核對 | read-only project evidence |
-| E05 Staging env | `.env.staging.local`存在且指向TEST；不輸出secret value | env probe redacted result |
+| E05 Staging env | `npm run verify:staging-env`確認Vite staging解析到固定TEST ref且不等於production；不要求特定本機檔名 | redacted verifier result |
 | E06 Auth | Firebase preview redirect與staging測試帳號可用 | Auth設定 / 登入證據 |
 | E07 Backup | TEST migration / Edge前已記錄backup時間、範圍、方式、restore path | backup evidence ID |
 | E08 Rollback baseline | production既有Firebase bundle、Edge version/source、DB functions與subscription版本分布已保存 | rollback evidence package |
@@ -149,7 +149,7 @@ Cleanup必須刪除fixture subscriptions、workspace / board / task、測試memb
 
 ### G3：Firebase Preview + Live UI / ICS Gate
 
-使用`.env.staging.local`建置production artifact，部署到Firebase `level3-smoke` preview channel；不得部署live channel。
+使用已通過`verify:staging-env`的Vite staging mode建置production artifact，部署到Firebase `level3-smoke` preview channel；不得部署live channel。
 
 | ID | 操作 | 預期 |
 |---|---|---|

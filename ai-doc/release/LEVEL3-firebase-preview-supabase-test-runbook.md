@@ -59,20 +59,27 @@ Requires backup evidence before running:
 
 Backup evidence must record method, timestamp, scope, and restore/reset path. Database backups do not cover Storage object contents; if a test touches Storage, record separate Storage backup or state that Storage is out of scope.
 
-If `ProJED-TEST` is inactive, missing Auth redirects, missing staging env, missing test account, or visibly polluted by previous runs, Level 3 is blocked until fixed. Do not downgrade the gate to local-only evidence.
+If `ProJED-TEST` is inactive, Auth redirects do not allow the preview origin, the resolved staging environment is missing or points to production, the test account is unavailable, or the project is visibly polluted by previous runs, Level 3 is blocked until fixed. Do not downgrade the gate to local-only evidence.
 
 ## One-Time Setup
 
-1. Create `C:\VIBE CODING\ProJED\ProJED\.env.staging.local`.
-2. Add staging-only public keys. Do not commit this file.
+1. Run the staging environment verifier. It checks Vite's resolved `staging` mode rather than requiring one specific local filename.
+
+```powershell
+npm run verify:staging-env
+```
+
+2. If it passes, reuse the existing local environment. Do not recreate `.env.staging.local` for every release.
+3. If it fails because values are missing, copy only the required overrides from `.env.staging.example` into the ignored `.env.staging.local`. Do not commit `.env.staging.local`.
 
 ```dotenv
 VITE_DATA_BACKEND=supabase
 VITE_SUPABASE_URL=https://YOUR_PROJED_TEST_REF.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_PROJED_TEST_ANON_KEY
 VITE_ENABLE_SUPABASE_DIAGNOSTICS=false
-VITE_GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
 ```
+
+`VITE_SUPABASE_AUTH_REDIRECT_URL` is optional because the app falls back to the current Firebase preview origin. `VITE_GOOGLE_CLIENT_ID` is required only when the release smoke includes Google Calendar API features; it is not required for Supabase Google OAuth.
 
 3. In Supabase `ProJED-TEST`, allow Firebase preview redirects:
 
@@ -90,6 +97,7 @@ Run these commands from `C:\VIBE CODING\ProJED\ProJED`.
 ```powershell
 git status --short --branch
 npm run verify:source
+npm run verify:staging-env
 npx vite build --mode staging
 npx firebase-tools hosting:channel:deploy level3-smoke --project projed-cc78d --expires 1d
 ```
@@ -121,6 +129,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-level3-fi
 - Branch and commit hash.
 - `git status --short --branch`.
 - `npm run verify:source` result.
+- `npm run verify:staging-env` redacted result, including TEST and production project refs without keys.
 - Staging build bundle names from `dist/index.html`.
 - Firebase preview channel URL.
 - `verify-level3-firebase-preview.ps1` output.
