@@ -432,6 +432,34 @@ export interface Database {
         };
         Returns: boolean;
       };
+      preview_board_backup_v2: {
+        Args: {
+          target_tenant_id: string;
+          target_project_id: string | null;
+          import_mode: string;
+          backup_package: Json;
+        };
+        Returns: Json;
+      };
+      import_board_backup_v2: {
+        Args: {
+          target_tenant_id: string;
+          target_project_id: string | null;
+          import_mode: string;
+          backup_package: Json;
+          target_board_title: string;
+          execution_id: string;
+          expected_target_fingerprint: string | null;
+        };
+        Returns: Json;
+      };
+      get_board_backup_v2_fingerprint: {
+        Args: {
+          target_tenant_id: string;
+          target_project_id: string;
+        };
+        Returns: string;
+      };
       log_activity_event: {
         Args: {
           target_tenant_id: string;

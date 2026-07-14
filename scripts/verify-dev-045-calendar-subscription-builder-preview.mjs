@@ -57,6 +57,16 @@ assert(
 );
 
 assert(
+  'Calendar management and builder tasks use separate focused views',
+  source.calendarView.includes("useState<'list' | 'builder'>('list')") &&
+    source.calendarView.includes('data-calendar-subscription-view-mode="list"') &&
+    source.calendarView.includes('data-calendar-subscription-view-mode="builder"') &&
+    source.calendarView.includes('data-calendar-subscription-create-new="true"') &&
+    source.calendarView.includes("switchView('list')") &&
+    source.calendarView.includes('回到我的訂閱'),
+);
+
+assert(
   'Builder emits complete per-board snapshots and blocks incomplete preview saves',
   source.builder.includes('version: 3') &&
     source.builder.includes("v3_scope_type: 'per_board_filter_snapshot'") &&

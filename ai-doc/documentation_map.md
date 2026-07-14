@@ -1,5 +1,19 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-07-14
+
+### DEV-047: 看板備份套件 V2 與交易式匯入
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/decisions/ADR-041-board-backup-package-v2-transactional-import.md` | Accepted / Human Confirmed / Implemented Locally / Release Pending | DEV-047 / DEV-038 / DEV-040 | 決定第一階段採 board-only `projed-backup` v2、canonical backend read、copy-to-new-board default、same-origin replace、Supabase transaction/fingerprint/idempotency、out-of-package reference blocker與legacy inspect-first。 |
+| `ai-doc/specs/SPEC-047-board-backup-package-transactional-import.md` | Phase 1 Implemented / Local Automated QA-QC Passed / Release Gate Required / Production Not Deployed | DEV-047 / DEV-038 | Authoritative product/engineering contract與完成證據：manifest/checksum/exclusions、package schema、import modes、inspection/plan、ID/tag/member mapping、transaction RPC、error taxonomy、UI communication及future workspace/account capsules。 |
+| `ai-doc/qa/QA-DEV-047-board-backup-package-transactional-import.md` | Local QA-QC Executed and Passed / Level 3 Not Executed / Release Gate Required | DEV-047 | 已驗證 package canonicality、round-trip、transaction failure injection、idempotency、concurrency、role/RLS、record-link blocker、legacy/tamper/oversize、browser communication與viewport；遠端 Level 3 保留。 |
+| `ai-doc/qc/QC-DEV-047-board-backup-package-transactional-import.md` | Local Automated QC Passed / Isolated Supabase Transaction Passed / Production Not Deployed | DEV-047 | 記錄 static `30/30`、model `10/10`、local transaction `9/9`、isolated Supabase RPC matrix、browser/RWD、regression、TypeScript/build與release residual risks。 |
+| `ai-doc/dev_task.md` | DEV-047 Phase 1 Local Complete / Batch Release Pending | DEV-047 | 任務狀態已更新為本機開發與QA/QC完成；記錄Level 3、production、Phase 2/3與release artifact仍需Human Re-entry。 |
+
+PM 治理註記：DEV-047 是 DEV-038 的後續資料架構交付，不回寫或否定 DEV-038 已發布的過渡 UI。Phase 1 產品碼、migration/RPC source 與本機 automated QA/QC 已完成；新流程不再把 Zustand 已載入資料視為完整全域備份，也不讓 legacy global/ambiguous 檔案直接攤平成單一看板。TEST mutation、遠端 migration、Firebase preview、production release與release artifacts均未執行；收到release型指令後才進入固定ProJED-TEST Level 3與deployment-release-gate。Phase 2/3需另行Human Re-entry。
+
 ## Documentation Map Update - 2026-07-13
 
 ### DEV-045 production release + Level 4 execution

@@ -1,15 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   CalendarPlus,
-  Check,
+  CheckCircle2,
+  CirclePause,
   Copy,
   KeyRound,
   Link2,
   Loader2,
+  Pencil,
+  Power,
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
-  UserRound,
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useBoardStore from '../store/useBoardStore';
@@ -187,7 +190,7 @@ const CalendarSubscriptionSubmitBar: React.FC<CalendarSubscriptionSubmitBarProps
   onSubmit,
   onCancel,
 }) => (
-  <div className="sticky top-0 z-20 -mx-4 mb-4 border-y border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm" data-calendar-subscription-action-bar="true">
+  <div className="mb-3" data-calendar-subscription-action-bar="true">
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
       <label className="min-w-0 text-xs font-bold text-slate-500" htmlFor={nameInputId}>
         訂閱名稱
@@ -264,8 +267,10 @@ const CalendarSubscriptionsView: React.FC = () => {
   });
   const [builderRevision, setBuilderRevision] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'builder'>('list');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const boardOptions = useMemo<CalendarBoardOption[]>(() => {
     const map = new Map<string, CalendarBoardOption>();
@@ -459,6 +464,21 @@ const CalendarSubscriptionsView: React.FC = () => {
     setEditingId(null);
   };
 
+  const switchView = (mode: 'list' | 'builder') => {
+    setViewMode(mode);
+    requestAnimationFrame(() => scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }));
+  };
+
+  const startNewSubscription = () => {
+    resetForm();
+    switchView('builder');
+  };
+
+  const closeBuilder = () => {
+    resetForm();
+    switchView('list');
+  };
+
   const copyText = async (value: string) => {
     await navigator.clipboard.writeText(value);
     toast.success('已複製訂閱連結');
@@ -501,6 +521,7 @@ const CalendarSubscriptionsView: React.FC = () => {
         await copyText(created.feedUrl);
       }
       resetForm();
+      switchView('list');
     } catch (saveError) {
       toast.error(saveError instanceof Error ? saveError.message : '儲存訂閱失敗');
     } finally {
@@ -538,6 +559,7 @@ const CalendarSubscriptionsView: React.FC = () => {
       ...(displayBoardOverrides ? { board_overrides: displayBoardOverrides } : {}),
     });
     setBuilderRevision((current) => current + 1);
+    switchView('builder');
   };
 
   const setSubscriptionActive = async (subscription: CalendarSubscription, isActive: boolean) => {
@@ -623,115 +645,125 @@ const CalendarSubscriptionsView: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto bg-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-5 p-4 sm:p-6">
-        <header className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+    <div ref={scrollContainerRef} className="h-full overflow-auto bg-slate-50">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
+        <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">自訂行事曆訂閱</h2>
+            <h2 className="text-xl font-bold text-slate-900">行事曆訂閱</h2>
             <p className="mt-1 text-sm text-slate-500">
-              產生只讀行事曆訂閱連結；每張看板都有獨立條件，外部行事曆會依各自週期抓取，更新不會即時出現。
+              建立只讀連結；外部行事曆會定期抓取符合各看板條件的任務。
             </p>
           </div>
-          <button
-            onClick={() => void loadSubscriptions()}
-            className="inline-flex h-9 items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
-          >
-            <RefreshCw size={15} />
-            重新整理
-          </button>
+          {viewMode === 'list' ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void loadSubscriptions()}
+                className="inline-flex h-9 w-9 items-center justify-center border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                aria-label="重新整理訂閱"
+                title="重新整理訂閱"
+              >
+                <RefreshCw size={15} className={isLoading ? 'animate-spin' : undefined} />
+              </button>
+              <button
+                type="button"
+                onClick={startNewSubscription}
+                className="inline-flex h-9 items-center justify-center gap-2 bg-primary px-3 text-sm font-bold text-white hover:bg-primary-hover"
+                data-calendar-subscription-create-new="true"
+              >
+                <CalendarPlus size={15} />
+                新增訂閱
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={closeBuilder}
+              className="inline-flex h-9 items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+            >
+              <ArrowLeft size={15} />
+              回到我的訂閱
+            </button>
+          )}
         </header>
 
-        <section className="grid gap-5 lg:grid-cols-[minmax(320px,420px)_1fr]">
-          <div className="border border-slate-200 bg-white p-4">
-            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-800">
+        {viewMode === 'builder' ? (
+          <section className="border border-slate-200 bg-white" data-calendar-subscription-view-mode="builder">
+            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-800">
               <SlidersHorizontal size={16} className="text-primary" />
-              {editingId ? '修改訂閱條件' : '建立訂閱'}
+              {editingId ? '修改訂閱' : '建立新訂閱'}
             </div>
 
-            <CalendarSubscriptionSubmitBar
-              name={name}
-              nameInputId="calendar-subscription-name"
-              namePlaceholder="例如：我的兩家公司任務"
-              disabled={Boolean(submitBlockedReason)}
-              isEditing={Boolean(editingId)}
-              isSaving={isSaving}
-              blockedReason={submitBlockedReason}
-              onNameChange={setName}
-              onSubmit={() => void submit()}
-              onCancel={editingId ? resetForm : undefined}
-            />
+            <div className="p-4">
+              <CalendarSubscriptionSubmitBar
+                name={name}
+                nameInputId="calendar-subscription-name"
+                namePlaceholder="例如：我的兩家公司任務"
+                disabled={Boolean(submitBlockedReason)}
+                isEditing={Boolean(editingId)}
+                isSaving={isSaving}
+                blockedReason={submitBlockedReason}
+                onNameChange={setName}
+                onSubmit={() => void submit()}
+                onCancel={editingId ? closeBuilder : undefined}
+              />
 
-            <CalendarSubscriptionBuilderPreview
-              boards={boardOptions}
-              currentUserId={user?.uid}
-              assigneeOptions={calendarAssigneeOptions}
-              manageableWorkspaceIds={manageableWorkspaceIds}
-              initialFilters={filters}
-              resetKey={`${editingId ?? 'new'}:${builderRevision}`}
-              onPayloadChange={setBuilderPayload}
-              onValidationChange={setBuilderValidation}
-            />
-
-            <div className="mt-3 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" data-calendar-subscription-snapshot-summary="true">
-              已納入 {builderValidation.includedBoardCount} / {builderPayload?.project_ids.length ?? boardOptions.length} 張看板
+              <CalendarSubscriptionBuilderPreview
+                boards={boardOptions}
+                currentUserId={user?.uid}
+                assigneeOptions={calendarAssigneeOptions}
+                manageableWorkspaceIds={manageableWorkspaceIds}
+                initialFilters={filters}
+                resetKey={`${editingId ?? 'new'}:${builderRevision}`}
+                onPayloadChange={setBuilderPayload}
+                onValidationChange={setBuilderValidation}
+              />
             </div>
-          </div>
-
-          <div className="border border-slate-200 bg-white">
+          </section>
+        ) : (
+          <section className="border border-slate-200 bg-white" data-calendar-subscription-view-mode="list">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <Link2 size={16} className="text-primary" />
-                我的訂閱
+              <div>
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                  <Link2 size={16} className="text-primary" />
+                  我的訂閱
+                </div>
+                {subscriptions.length > 0 ? (
+                  <div className="mt-1 text-xs text-slate-400">
+                    {subscriptions.length} 個訂閱，{subscriptions.filter((subscription) => subscription.isActive).length} 個啟用
+                  </div>
+                ) : null}
               </div>
               {isLoading && <Loader2 size={16} className="animate-spin text-slate-400" />}
             </div>
 
             {subscriptions.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-500">
-                尚未建立訂閱。
+              <div className="flex flex-col items-center px-4 py-12 text-center">
+                <div className="text-sm font-bold text-slate-700">尚未建立訂閱</div>
+                <button
+                  type="button"
+                  onClick={startNewSubscription}
+                  className="mt-3 inline-flex h-9 items-center gap-2 bg-primary px-3 text-sm font-bold text-white hover:bg-primary-hover"
+                >
+                  <CalendarPlus size={15} />
+                  建立第一個訂閱
+                </button>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
                 {subscriptions.map((subscription) => {
                   const generatedUrl = generatedUrls[subscription.id];
                   return (
-                    <div key={subscription.id} className="px-4 py-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-slate-900">{subscription.name}</span>
-                            <span className={`inline-flex items-center gap-1 border px-2 py-0.5 text-xs ${
-                              subscription.isActive
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-slate-200 bg-slate-50 text-slate-500'
-                            }`}>
-                              {subscription.isActive ? <Check size={12} /> : <ShieldAlert size={12} />}
-                              {subscription.isActive ? '啟用' : '停用'}
-                            </span>
-                          </div>
-                          <div className="mt-2 space-y-1 text-sm text-slate-600">
-                            <div className="min-w-0">
-                              <span className="font-bold text-slate-700">來源：</span>
-                              <span className="break-words">
-                                {describeSourceFilter(subscription.filters, workspaceNameById, boardPathById)}
-                              </span>
-                            </div>
-                            <div className="min-w-0">
-                              <span className="font-bold text-slate-700">條件：</span>
-                              <span className="break-words">
-                                {describeConditionFilters(subscription.filters, memberNameById, user?.uid)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-1 text-xs text-slate-400">
-                            最後同步：{formatDateTime(subscription.lastAccessedAt)}
-                          </div>
-                          {generatedUrl && (
-                            <div className="mt-2 flex min-w-0 items-center gap-2 bg-slate-50 px-2 py-2 text-xs text-slate-600">
-                              <KeyRound size={13} className="shrink-0 text-slate-400" />
-                              <span className="truncate">{generatedUrl}</span>
-                            </div>
-                          )}
+                    <article key={subscription.id} className="px-4 py-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="truncate font-bold text-slate-900">{subscription.name}</span>
+                          <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-semibold ${
+                            subscription.isActive ? 'text-emerald-700' : 'text-slate-400'
+                          }`}>
+                            {subscription.isActive ? <CheckCircle2 size={13} /> : <CirclePause size={13} />}
+                            {subscription.isActive ? '啟用' : '停用'}
+                          </span>
                         </div>
 
                         <div className="flex shrink-0 flex-wrap gap-2">
@@ -748,7 +780,7 @@ const CalendarSubscriptionsView: React.FC = () => {
                             onClick={() => editSubscription(subscription)}
                             className="inline-flex h-8 items-center gap-1 border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
                           >
-                            <SlidersHorizontal size={13} />
+                            <Pencil size={13} />
                             修改
                           </button>
                           <button
@@ -762,18 +794,43 @@ const CalendarSubscriptionsView: React.FC = () => {
                             onClick={() => void setSubscriptionActive(subscription, !subscription.isActive)}
                             className="inline-flex h-8 items-center gap-1 border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
                           >
-                            <UserRound size={13} />
+                            <Power size={13} />
                             {subscription.isActive ? '停用' : '啟用'}
                           </button>
                         </div>
                       </div>
-                    </div>
+
+                      <div className="mt-2 grid gap-x-6 gap-y-1 text-sm text-slate-600 lg:grid-cols-2">
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-700">來源：</span>
+                          <span className="break-words">
+                            {describeSourceFilter(subscription.filters, workspaceNameById, boardPathById)}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-700">條件：</span>
+                          <span className="break-words">
+                            {describeConditionFilters(subscription.filters, memberNameById, user?.uid)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-1.5 text-xs text-slate-400">
+                        最後同步：{formatDateTime(subscription.lastAccessedAt)}
+                      </div>
+                      {generatedUrl && (
+                        <div className="mt-2 flex min-w-0 items-center gap-2 bg-slate-50 px-2 py-2 text-xs text-slate-600">
+                          <KeyRound size={13} className="shrink-0 text-slate-400" />
+                          <span className="truncate">{generatedUrl}</span>
+                        </div>
+                      )}
+                    </article>
                   );
                 })}
               </div>
             )}
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );

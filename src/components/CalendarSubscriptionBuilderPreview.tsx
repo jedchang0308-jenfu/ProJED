@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronDown, ChevronUp, Copy, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronUp, Copy, LockKeyhole, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import {
   countActiveTaskFilters,
   matchesTaskFilters,
@@ -445,7 +445,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
 
   return (
     <section
-      className="relative mt-4 space-y-3 border border-primary/20 bg-primary/5 p-3"
+      className="relative mt-3 space-y-3 border-t border-slate-200 pt-3"
       data-calendar-subscription-builder="true"
       data-calendar-subscription-builder-version="3"
       data-calendar-subscription-builder-preview-count={previewEvents.length}
@@ -456,20 +456,19 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
       data-calendar-subscription-builder-snapshot-board-count={boards.length}
       data-calendar-subscription-preview-source-state={previewSource.loading ? 'loading' : previewSource.failedBoardIds.length ? 'partial' : 'ready'}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-3">
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900">任務條件與事件預覽</div>
-          <p className="mt-0.5 text-xs leading-5 text-slate-600">逐張看板設定條件，確認外部行事曆實際收到的事件。</p>
+          <p className="mt-0.5 text-xs leading-5 text-slate-500" data-calendar-subscription-preview-count-label="true">
+            {previewSource.loading ? '正在整理看板與事件' : `已納入 ${includedBoards.length} / ${boards.length} 張看板`}
+          </p>
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <span className="text-xs font-semibold text-slate-500" data-calendar-subscription-preview-count-label="true">
-            {previewSource.loading ? '載入中' : `${previewEvents.length} 個事件`}
-          </span>
+        <div className="ml-auto flex shrink-0 items-center">
           <button
             ref={filterToggleRef}
             type="button"
             onClick={() => setFiltersOpen(current => !current)}
-            className={`relative inline-flex h-8 w-8 items-center justify-center rounded-md border ${
+            className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold ${
               filtersOpen || activeFilterCount > 0
                 ? 'border-primary/35 bg-primary/10 text-primary'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:text-primary'
@@ -480,8 +479,9 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
             data-calendar-subscription-filter-toggle="true"
           >
             <SlidersHorizontal size={14} />
+            <span>條件</span>
             {activeFilterCount > 0 ? (
-              <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-[9px] font-bold leading-4 text-white">
+              <span className="min-w-4 rounded bg-primary px-1 text-center text-[10px] font-bold leading-4 text-white">
                 {activeFilterCount}
               </span>
             ) : null}
@@ -650,7 +650,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
         </>
       ) : null}
 
-      <div className="border border-slate-200 bg-white" data-calendar-subscription-live-preview="true">
+      <div className="overflow-hidden border border-slate-200 bg-white" data-calendar-subscription-live-preview="true">
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2.5">
           <div className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
             <CalendarDays size={15} className="text-primary" />
@@ -678,20 +678,16 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
           </div>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50 px-3 py-3" data-calendar-subscription-event-summary="true">
+        <div className="border-b border-slate-200 bg-slate-50 px-3 py-2.5" data-calendar-subscription-event-summary="true">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-slate-600">
-            <span>將訂閱</span>
-            <span className="font-bold text-slate-900">{includedWorkspaceCount} 個工作區</span>
-            <span className="text-slate-300">/</span>
-            <span className="font-bold text-slate-900">{includedBoards.length} 張看板</span>
-            <span className="text-slate-300">/</span>
-            <span className="font-bold text-slate-900">{subscribedTaskCount} 項任務</span>
-            <span className="text-slate-300">→</span>
-            <span className="text-base font-bold text-primary">{previewEvents.length} 個行事曆事件</span>
+            <span>外部行事曆會收到</span>
+            <span className="text-base font-bold text-slate-900">{previewEvents.length} 個行事曆事件</span>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="border border-blue-200 bg-blue-50 px-2 py-1 font-semibold text-blue-700">開始 {startEventCount}</span>
-            <span className="border border-rose-200 bg-rose-50 px-2 py-1 font-semibold text-rose-700">到期 {dueEventCount}</span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+            <span>{includedWorkspaceCount} 個工作區 · {includedBoards.length} 張看板 · {subscribedTaskCount} 項任務</span>
+            <span className="hidden text-slate-300 sm:inline">|</span>
+            <span className="font-semibold text-blue-700">開始 {startEventCount}</span>
+            <span className="font-semibold text-rose-700">到期 {dueEventCount}</span>
             {missingPreviewEvents.length > 0 ? (
               <button
                 type="button"
@@ -707,8 +703,9 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
           </div>
         </div>
 
-        <div className="px-3 pt-2 text-xs leading-5 text-amber-700">
-          任何持有此連結的人都能讀取下列事件內容；請只輸出必要任務。
+        <div className="flex items-start gap-1.5 border-b border-slate-100 px-3 py-2 text-xs leading-5 text-amber-700">
+          <LockKeyhole size={13} className="mt-0.5 shrink-0" />
+          <span>任何持有此連結的人都能讀取下列事件內容；請只輸出必要任務。</span>
         </div>
 
         {previewSource.loading ? (

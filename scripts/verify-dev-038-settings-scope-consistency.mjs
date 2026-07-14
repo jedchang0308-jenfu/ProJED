@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const files = {
   settingsView: 'src/components/SettingsView.tsx',
+  backupSettings: 'src/components/BackupSettings.tsx',
   recycleBinView: 'src/components/RecycleBinView.tsx',
   boardMembersPanel: 'src/components/BoardMembersPanel.tsx',
   appInstallAssistant: 'src/components/AppInstallAssistant.tsx',
@@ -39,38 +40,37 @@ assert(
 
 assert(
   'Settings tabs keep distinct labels in a compact description-free toolbar',
-  source.settingsView.includes("label: '備份與資料'") &&
+  source.settingsView.includes("label: '備份、還原與資料移轉'") &&
     source.settingsView.includes("label: '看板權限'") &&
     source.settingsView.includes("label: '行事曆訂閱'") &&
     source.settingsView.includes("label: '快速開啟'") &&
     source.settingsView.includes('grid grid-cols-2 gap-2 sm:grid-cols-4') &&
-    source.settingsView.includes('flex h-11 min-w-0 items-center gap-2') &&
+    source.settingsView.includes('flex min-h-11 min-w-0 items-center gap-2') &&
     !source.settingsView.includes('section.description') &&
     !source.settingsView.includes('建立可供外部行事曆讀取的任務訂閱連結。'),
 );
 
 assert(
-  'Backup settings separates global export and current-board import',
-  source.settingsView.includes('data-settings-export-scope="global_snapshot"') &&
-    source.settingsView.includes('匯出全域快照') &&
-    source.settingsView.includes('全域快照') &&
-    source.settingsView.includes('會下載目前 ProJED 的工作區、看板、任務、依賴與標籤快照。') &&
-    source.settingsView.includes('data-settings-import-scope="current_board"') &&
-    source.settingsView.includes('匯入至目前看板') &&
-    source.settingsView.includes('會把備份中的任務資料套用到目前看板；不會還原 Workspace 結構。') &&
-    source.settingsView.includes('目標：') &&
-    source.settingsView.includes('{targetLabel}'),
+  'Backup settings uses one board-scoped round-trip package for export and import',
+  source.settingsView.includes("import BackupSettings from './BackupSettings'") &&
+    source.backupSettings.includes('data-backup-export-panel="true"') &&
+    source.backupSettings.includes('建立看板備份') &&
+    source.backupSettings.includes('data-backup-import-panel="true"') &&
+    source.backupSettings.includes('匯入或還原') &&
+    source.backupSettings.includes('每份檔案只對應一張看板') &&
+    source.backupSettings.includes('data-backup-source-board-select="true"') &&
+    !source.backupSettings.includes('匯出全域快照'),
 );
 
 assert(
-  'Import file selection requires target confirmation before importData',
-  source.settingsView.includes("title: '匯入至目前看板？'") &&
-    source.settingsView.includes('來源檔案：${file.name}') &&
-    source.settingsView.includes('可能覆寫或新增任務') &&
-    source.settingsView.includes('確認匯入至目前看板') &&
-    source.settingsView.includes("if (decision !== 'import') return;") &&
-    source.settingsView.indexOf("if (decision !== 'import') return;") <
-      source.settingsView.indexOf('await useWbsStore.getState().importData(fileText);'),
+  'Import is inspect-first and plans impact before transactional execution',
+  source.backupSettings.includes('backupApplicationService.inspectFile(file)') &&
+    source.backupSettings.includes('backupApplicationService.planImport') &&
+    source.backupSettings.includes('data-backup-inspection-ready="true"') &&
+    source.backupSettings.includes('data-backup-plan-ready="true"') &&
+    source.backupSettings.includes('preparePreReplacementPackage') &&
+    source.backupSettings.includes('data-backup-replace-confirmation="true"') &&
+    !source.backupSettings.includes('.importData('),
 );
 
 assert(

@@ -10,6 +10,7 @@ export default defineConfig([
     'node_modules',
     'dist',
     'dist-ssr',
+    'output',
     '.vite',
     '*.config.js',
     '**/*.d.ts',

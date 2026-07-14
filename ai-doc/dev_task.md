@@ -185,6 +185,79 @@
   - 下一步：需要時補人工真機 supplemental；production release另行 gate
   - 證據：`SPEC-046`、`QA-DEV-046`
   - 計入交付：是
+- ✓ DEV-047 [交付點] [完成] [P0] [Phase 1 本機開發與 QA/QC 完成 / 待批次發版] 看板備份套件 V2 與交易式匯入
+  - 摘要：單看板 V2 package、canonical export、inspect/plan、copy default、same-origin transactional replace、readback verification 與 RWD UI 已完成本機驗證。
+  - 父任務：DEV-038
+  - 下一步：未來收到 release 指令時進入 ProJED-TEST Level 3 與 production deployment gate；Phase 2/3 需 Human Re-entry
+  - 證據：`ADR-041`、`SPEC-047`、`QA-DEV-047`、`QC-DEV-047`
+  - 計入交付：是
+
+## PM Update - 2026-07-14
+
+### DEV-047: 看板備份套件 V2 與交易式匯入
+
+狀態: Phase 1 Implemented / Local Automated QA-QC Passed / Human Confirmed / Level 3 Not Executed / Production Not Deployed
+節點類型: 交付點
+優先級: P0 資料完整性與破壞性匯入風險
+父交付點: DEV-038 設定中心作用範圍一致性與高風險防呆
+是否計入產品交付完成: 是
+建立日期: 2026-07-14
+
+Human Decision Brief:
+- 使用者指出現有匯出與匯入的邏輯架構不一致，要求優化後寫成開發文件。
+- 已採用第一階段「單看板 Backup Package V2」；不以視覺對稱掩蓋 scope/data/action 差異。
+- 匯入預設為複製成新看板；取代目前看板是進階高風險操作。
+- 舊 global/ambiguous WBS 檔案可辨識與說明，但不能直接攤平成目前看板。
+- 設定中心採「備份、還原與資料移轉」，共用 scope -> package -> inspect -> plan -> execute -> verify 心智模型。
+
+Critical findings:
+- `useWbsStore.exportData()` 匯出前端 store 中的 `nodes/dependencies/tags/workspaces`，完整度受 active/visited data 影響，不能代表 ProJED 全域 canonical backup。
+- `useWbsStore.importData()` 會把多版本/未標版本資料改綁目前 workspace/board，形成跨看板攤平與 ID/關聯風險。
+- `nodeService.replaceAllByProject()` 先刪除再逐筆 best-effort upsert，且 row error 可被吞掉，不能保證 atomic restore。
+- 現有檔案未涵蓋 records、attachments、permissions、calendar subscriptions、audit/activity、RAG 等資料域，「全域快照」有 completeness 誤導。
+
+Architecture Memory Capsule:
+- DEV-038 是 production 已上線的過渡 IA 與風險提示，當時刻意不改資料格式；在 DEV-047 發布前仍為 current behavior truth。
+- DEV-047 新增 `projed-backup` schema v2，只治理單看板 metadata、active/archived tasks、detail notes、dependencies 與 referenced tag definitions。
+- Canonical backend read 取代 Zustand cache；Settings UI 不 parse legacy、不直接寫 store/DB。
+- `src/features/backup` 負責 schema/serializer/validator/legacy adapter/planner/ID map；application service 負責 orchestration；Supabase RPC 負責 permission、fingerprint、idempotency 與 transaction。
+- copy mode 產生新 board/task/dependency IDs，不修改 source；replace 只允許 package source board ID 等於 target board ID。
+- replace 保留 target board identity/title/memberships/calendar subscriptions；out-of-package record link 若會被破壞則阻擋。
+- 任一 mutation 前必須完成 inspect/plan；任一 transaction failure 後 target fingerprint/counts 必須不變。
+
+Phase 1 Implementation Record:
+- 已建立 `src/features/backup` typed domain，包含 V2 JSON manifest/checksum/limits、strict validator、legacy read-only adapter、planner 與 semantic verifier。
+- 已建立 canonical board export service，不從 Zustand 推論完整資料。
+- 已建立 `BackupApplicationService`：export、inspect、plan、execute、verify。
+- 已建立 Supabase transaction RPC 與 local-test all-or-nothing adapter；server-side 檢查 auth、tenant/board role、same-origin、reference、fingerprint、execution ID 與 cross-tenant collision。
+- 已建立 Settings 備份/匯入還原流程，預設 copy；advanced replace 需要 typed board-name confirmation 與 pre-replacement package。
+- client 只在 RPC 成功後 reload backend 並執行 read-after-write report；V2 UI 已退役 legacy direct store path。
+
+Current Phase acceptance:
+- V2 package manifest/count/checksum/exclusions 與 canonical payload 一致。
+- copy round-trip normalized content 等於 package，source before/after fingerprint 相同，task/dependency IDs 不跨看板重用。
+- same-origin replace 可全成或全敗；failure injection、concurrency、duplicate submission、role denial、record-link blocker 全部可證明 0 partial mutation。
+- tampered、unsupported、oversize、legacy ambiguous、cross-origin replace 在 executor 前被阻擋。
+- UI 在 1440/1024/390/320 顯示來源、版本、包含/排除、目標、模式與 create/update/delete/keep counts；danger action 不是 default primary。
+
+QA/QC gates:
+- 已通過 static contract `30/30`、model `10/10` scenario groups、local transaction `9/9`、isolated Supabase migration/RPC matrix 與 DEV-047 browser matrix。
+- 已通過 DEV-038 static `20/20` / browser、settings context `6/6`、targeted ESLint、TypeScript、test build 與 production build。
+- Supabase migration/RPC/RLS 使 Level 3 固定為 Required；remote TEST/preview/production evidence 延後到 release 型指令。
+- 正式事實驗證：`ai-doc/qc/QC-DEV-047-board-backup-package-transactional-import.md`。
+
+Deferred Scope Audit:
+- Phase 1 board package/copy/same-origin replace：Authorized / Implemented / Local Automated QA-QC Passed。
+- Phase 2 workspace package/restore：Future Capsule / Human Re-entry Required；需重新確認 memberships、records、cross-board references、calendar 與 privacy。
+- Phase 3 account/environment recovery：Future Capsule / Human Re-entry Required；需另行治理 encryption、storage、RTO/RPO、operator 權限與跨環境 restore。
+- 加密、排程、雲端保存、大型 server-side import：No Current Authorization。
+- Production migration/deploy/data mutation：Blocked Human Re-entry / deployment-release-gate Required。
+
+Execution Boundary:
+- 已完成產品程式、verifier、Supabase migration/RPC source、本機與 isolated Supabase transaction QC。
+- 未呼叫 TEST/production remote、未套用遠端 migration、未部署 Firebase/Edge、未修改正式資料。
+- 未建立 commit/PR/release/rollback/deploy artifact；批次發版仍需明確 release 指令與 deployment-release-gate。
+- Phase 2 workspace restore 與 Phase 3 account/environment recovery 未授權，不自動啟動。
 
 ## PM Update - 2026-07-13
 

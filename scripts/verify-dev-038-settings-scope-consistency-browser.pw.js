@@ -103,35 +103,31 @@ async (page) => {
     assert(!headerText.includes('系統設定與管理'), 'settings header should not use old global-system wording', { headerText });
     assert(!headerText.includes('目前看板：'), 'settings header should not frame all settings as current board', { headerText });
 
-    step = 'backup split scopes';
+    step = 'board-scoped round-trip backup';
     const target = await getCurrentTarget();
     const backupText = await page.locator('[data-backup-settings-section="true"]').innerText();
-    assert(backupText.includes('匯出全域快照'), 'backup page should expose global snapshot export', { backupText });
-    assert(backupText.includes('全域快照'), 'backup page should show global snapshot scope chip', { backupText });
-    assert(backupText.includes('匯入至目前看板'), 'backup page should expose current-board import', { backupText });
-    assert(backupText.includes(target.targetLabel), 'backup page should show active workspace / board target', { backupText, target });
+    assert(backupText.includes('建立看板備份'), 'backup page should expose board package export', { backupText });
+    assert(backupText.includes('匯入或還原'), 'backup page should expose the matching import task', { backupText });
+    assert(backupText.includes('每份檔案只對應一張看板'), 'backup page should communicate single-board scope', { backupText });
+    assert(!backupText.includes('匯出全域快照'), 'backup page should not claim a global snapshot', { backupText });
+    await page.locator('[data-backup-export-counts="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const sourceOption = await page.locator('[data-backup-source-board-select="true"] option:checked').innerText();
+    assert(sourceOption === target.targetLabel, 'backup selector should show the active board path', { sourceOption, target });
 
-    step = 'import confirmation cancel';
-    await page.evaluate(() => {
-      window.__dev038Alerts = [];
-      window.alert = (message) => window.__dev038Alerts.push(String(message));
-    });
-    await page.waitForFunction(() => {
-      const button = document.querySelector('[data-settings-import-current-board="true"]');
-      return button && !button.disabled;
-    }, null, { timeout: 10000 });
-    await page.locator('[data-settings-import-file-input="true"]').setInputFiles('scripts/fixtures/dev038-backup.json');
-    const dialog = page.locator('.global-dialog-content');
-    await dialog.waitFor({ state: 'visible', timeout: 10000 });
-    const dialogText = await dialog.innerText();
-    assert(dialogText.includes('匯入至目前看板？'), 'import should open target confirmation', { dialogText });
-    assert(dialogText.includes(target.targetLabel), 'import confirmation should include target board path', { dialogText, target });
-    assert(dialogText.includes('dev038-backup.json'), 'import confirmation should include source filename', { dialogText });
-    assert(dialogText.includes('可能覆寫或新增任務'), 'import confirmation should explain potential task changes', { dialogText });
-    await dialog.getByText('取消匯入', { exact: true }).click();
-    await dialog.waitFor({ state: 'hidden', timeout: 10000 });
-    const alertsAfterCancel = await page.evaluate(() => window.__dev038Alerts || []);
-    assert(alertsAfterCancel.length === 0, 'canceling import should not call importData alert path', { alertsAfterCancel });
+    step = 'inspect-first import without mutation';
+    const nodesBefore = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('[data-backup-download-v2="true"]').click();
+    const backupDownload = await downloadPromise;
+    const backupPath = await backupDownload.path();
+    assert(backupPath, 'board package should download to a readable file');
+    await page.locator('[data-backup-file-input="true"]').setInputFiles(backupPath);
+    await page.locator('[data-backup-inspection-ready="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const inspectionText = await page.locator('[data-backup-inspection-ready="true"]').innerText();
+    assert(inspectionText.includes('檔案已通過完整性檢查'), 'selected backup should be inspected before any action', { inspectionText });
+    assert(inspectionText.includes('V2') && inspectionText.includes('SHA-256'), 'inspection should expose version and checksum', { inspectionText });
+    assert(await page.locator('[data-backup-mode-copy="true"]').getAttribute('aria-checked') === 'true', 'copy should remain the safe default');
+    assert(await page.evaluate(() => localStorage.getItem('projed-local-test.nodes')) === nodesBefore, 'inspection must not mutate board data');
 
     step = 'board permissions scope';
     await clickSettingsTab('permissions');

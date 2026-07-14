@@ -1,20 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CalendarPlus,
   DatabaseBackup,
-  Download,
-  FolderX,
   Settings,
   ShieldCheck,
   Smartphone,
-  Upload,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
-import { useWbsStore } from '../store/useWbsStore';
-import { useBoardPermissions } from '../hooks/useBoardPermissions';
-import useDialogStore from '../store/useDialogStore';
-import { toast } from '../store/useToastStore';
+import BackupSettings from './BackupSettings';
 import { BoardMembersPanel } from './BoardMembersPanel';
 import CalendarSubscriptionsView from './CalendarSubscriptionsView';
 import { AppInstallAssistant } from './AppInstallAssistant';
@@ -30,34 +24,11 @@ const SETTINGS_SECTIONS: Array<{
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }> = [
-  {
-    id: 'backup',
-    label: '備份與資料',
-    icon: DatabaseBackup,
-  },
-  {
-    id: 'permissions',
-    label: '看板權限',
-    icon: ShieldCheck,
-  },
-  {
-    id: 'calendar',
-    label: '行事曆訂閱',
-    icon: CalendarPlus,
-  },
-  {
-    id: 'app',
-    label: '快速開啟',
-    icon: Smartphone,
-  },
+  { id: 'backup', label: '備份、還原與資料移轉', icon: DatabaseBackup },
+  { id: 'permissions', label: '看板權限', icon: ShieldCheck },
+  { id: 'calendar', label: '行事曆訂閱', icon: CalendarPlus },
+  { id: 'app', label: '快速開啟', icon: Smartphone },
 ];
-
-const readFileAsText = (file: File) => new Promise<string>((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = (readerEvent) => resolve(String(readerEvent.target?.result ?? ''));
-  reader.onerror = () => reject(reader.error ?? new Error('讀取備份檔案失敗'));
-  reader.readAsText(file);
-});
 
 const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
@@ -73,7 +44,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
     const workspace = state.workspaces.find((item) => item.id === state.activeWorkspaceId);
     return workspace?.boards.find((board) => board.id === state.activeBoardId);
   });
-
   const setView = useBoardStore((state) => state.setView);
   const returnToBoard = () => setView(activeWorkspace && activeBoard ? 'board' : 'home');
 
@@ -99,9 +69,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
                 <Settings size={16} className="shrink-0 text-primary" />
                 <h2 className="text-2xl font-bold text-slate-900">設定中心</h2>
               </div>
-              <p className="mt-0.5 truncate text-xs text-slate-500">
-                看板、資料、外部連結與裝置設定
-              </p>
+              <p className="mt-0.5 text-xs leading-4 text-slate-500">看板、資料、外部連結與裝置設定</p>
             </div>
           </div>
         </header>
@@ -116,7 +84,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
                 type="button"
                 onClick={() => setActiveSection(section.id)}
                 data-settings-section-tab={section.id}
-                className={`flex h-11 min-w-0 items-center gap-2 border px-3 text-left transition-colors ${
+                className={`flex min-h-11 min-w-0 items-center gap-2 border px-3 py-2 text-left transition-colors ${
                   isActive
                     ? 'border-primary bg-white text-slate-900 shadow-sm ring-2 ring-primary/10'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
@@ -128,7 +96,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
                 }`}>
                   <Icon size={16} />
                 </span>
-                <span className="min-w-0 truncate text-sm font-bold">{section.label}</span>
+                <span className="min-w-0 text-xs font-bold leading-4 sm:text-sm">{section.label}</span>
               </button>
             );
           })}
@@ -148,168 +116,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
         {activeSection === 'app' && <AppInstallAssistant mode="settings" />}
       </div>
     </div>
-  );
-};
-
-const BackupSettings: React.FC = () => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
-  const activeWorkspace = useBoardStore((state) =>
-    state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)
-  );
-  const activeBoard = useBoardStore((state) => {
-    const workspace = state.workspaces.find((item) => item.id === state.activeWorkspaceId);
-    return workspace?.boards.find((board) => board.id === state.activeBoardId);
-  });
-  const setView = useBoardStore((state) => state.setView);
-  const { canEditBoardSettings } = useBoardPermissions();
-  const showActionDialog = useDialogStore((state) => state.showActionDialog);
-
-  const canImport = Boolean(activeWorkspace && activeBoard && canEditBoardSettings && !isImporting);
-  const targetLabel = activeWorkspace && activeBoard
-    ? `${activeWorkspace.title} / ${activeBoard.title}`
-    : '尚未選擇看板';
-  const importDisabledReason = !activeWorkspace || !activeBoard
-    ? '請先選擇要匯入的工作區與看板。'
-    : !canEditBoardSettings
-      ? '你的角色沒有編輯看板設定權限，不能匯入備份。'
-      : isImporting
-        ? '匯入進行中，請勿關閉或重新整理頁面。'
-        : '';
-
-  const handleExport = () => {
-    useWbsStore.getState().exportData();
-  };
-
-  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !canImport || !activeWorkspace || !activeBoard) return;
-
-    void (async () => {
-      try {
-        const fileText = await readFileAsText(file);
-        const decision = await showActionDialog({
-          title: '匯入至目前看板？',
-          message: `目標：${targetLabel}。來源檔案：${file.name}。匯入會把備份中的任務資料套用到目前看板，可能覆寫或新增任務；匯入同步期間請勿關閉或重整頁面。`,
-          actions: [
-            { id: 'cancel', label: '取消匯入', description: '不變更目前看板資料。' },
-            {
-              id: 'import',
-              label: '確認匯入至目前看板',
-              description: `${activeBoard.title} 會成為這次匯入的唯一目標看板。`,
-              variant: 'primary',
-            },
-          ],
-        });
-        if (decision !== 'import') return;
-        setIsImporting(true);
-        await useWbsStore.getState().importData(fileText);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : '讀取備份檔案失敗。');
-      } finally {
-        setIsImporting(false);
-      }
-    })();
-  };
-
-  return (
-    <section className="border border-slate-200 bg-white" data-backup-settings-section="true">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-          <DatabaseBackup size={16} className="text-primary" />
-          備份與資料
-        </div>
-      </div>
-
-      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_280px]">
-        <div className="border border-slate-200 bg-slate-50 p-4" data-settings-export-scope="global_snapshot">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-900">匯出全域快照</h3>
-            <span className="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">
-              全域快照
-            </span>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            會下載目前 ProJED 的工作區、看板、任務、依賴與標籤快照。
-          </p>
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={handleExport}
-              data-settings-export-global-snapshot="true"
-              className="inline-flex h-10 items-center justify-center gap-2 bg-primary px-3 text-sm font-bold text-white hover:bg-primary-hover"
-            >
-              <Download size={16} />
-              匯出全域快照
-            </button>
-          </div>
-        </div>
-
-        <div className="border border-slate-200 bg-slate-50 p-4" data-settings-import-scope="current_board">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-900">匯入至目前看板</h3>
-            <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
-              目前看板
-            </span>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            會把備份中的任務資料套用到目前看板；不會還原 Workspace 結構。
-          </p>
-          <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
-            <span className="font-bold text-slate-500">目標：</span>
-            <span className="font-semibold text-slate-800">{targetLabel}</span>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={!canImport}
-              onClick={() => fileInputRef.current?.click()}
-              data-settings-import-current-board="true"
-              className="inline-flex h-10 items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
-            >
-              <Upload size={16} />
-              {isImporting ? '匯入中' : '選擇檔案並確認匯入'}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              className="hidden"
-              disabled={!canImport}
-              onChange={handleImportFile}
-              data-settings-import-file-input="true"
-            />
-          </div>
-
-          {importDisabledReason && (
-            <div className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {importDisabledReason}
-            </div>
-          )}
-        </div>
-
-        <div className="border border-slate-200 bg-slate-50 p-3" data-settings-trash-scope="current_board">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">目前看板回收桶</div>
-          <div className="mt-2 text-sm font-semibold text-slate-800">
-            {activeWorkspace?.title || '未選擇工作區'}
-          </div>
-          <div className="mt-1 text-sm text-slate-500">
-            {activeBoard?.title || '未選擇看板'}
-          </div>
-          <button
-            type="button"
-            onClick={() => setView('recycle_bin')}
-            disabled={!activeBoard}
-            className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-300"
-            data-settings-open-current-board-trash="true"
-          >
-            <FolderX size={15} />
-            開啟目前看板回收桶
-          </button>
-        </div>
-      </div>
-    </section>
   );
 };
 

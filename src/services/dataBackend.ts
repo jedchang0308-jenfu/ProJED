@@ -39,6 +39,7 @@ import {
   supabaseRecordService,
   supabaseTagService,
   supabaseWorkspaceService,
+  supabaseBackupService,
 } from './supabase/projedService';
 import {
   localTestBoardService,
@@ -51,6 +52,8 @@ import {
   localTestTagService,
   localTestWorkspaceService,
 } from './localTestService';
+import { localTestBackupService } from './backup/localTestBackupService';
+import { BackupError, type BackupBackendAdapter } from '../features/backup/types';
 
 export type DataBackend = 'firebase' | 'supabase' | 'local-test';
 
@@ -64,6 +67,27 @@ export const dataBackend: DataBackend =
       : 'firebase';
 export const isSupabaseBackend = dataBackend === 'supabase';
 export const isLocalTestBackend = dataBackend === 'local-test';
+
+const unsupportedBackupBackend: BackupBackendAdapter = {
+  readBoardSource: async () => {
+    throw new BackupError('BACKEND_UNSUPPORTED', '目前資料後端只能檢查備份檔，不能建立或執行 V2 備份。');
+  },
+  planImport: async () => {
+    throw new BackupError('BACKEND_UNSUPPORTED', '目前資料後端尚未提供交易式匯入。');
+  },
+  executeImport: async () => {
+    throw new BackupError('BACKEND_UNSUPPORTED', '目前資料後端尚未提供交易式匯入。');
+  },
+  readBoardFingerprint: async () => {
+    throw new BackupError('BACKEND_UNSUPPORTED', '目前資料後端尚未提供備份 fingerprint。');
+  },
+};
+
+export const backupBackendService: BackupBackendAdapter = isLocalTestBackend
+  ? localTestBackupService
+  : isSupabaseBackend
+    ? supabaseBackupService
+    : unsupportedBackupBackend;
 
 const BOARD_ROLE_PERMISSIONS_KEY = 'projed.boardRolePermissions';
 

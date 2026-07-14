@@ -32,6 +32,15 @@ import { isSupabaseConfigured, supabase } from './client';
 import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
+import {
+  BackupError,
+  type BackupBackendAdapter,
+  type BackupBackendExecuteRequest,
+  type BackupBackendPlanRequest,
+  type BackupExecutionResult,
+  type BackupImportCounts,
+  type BackupImportPlan,
+} from '../../features/backup/types';
 
 type WbsItemInsert = Partial<WbsItemRow>;
 type BoardInviteInsert = Partial<BoardInviteRow>;
@@ -1817,6 +1826,187 @@ export const supabaseEventLogService = {
       audit_after_data: stripUndefinedForJson(afterData),
     });
     assertNoError(error);
+  },
+};
+
+const createBackupExecutionId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `backup-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const asBackupRecord = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new BackupError('IMPORT_ROLLED_BACK', '備份服務回傳了無法辨識的結果。');
+  }
+  return value as Record<string, unknown>;
+};
+
+const asBackupCounts = (value: unknown): BackupImportCounts => {
+  const record = asBackupRecord(value);
+  const numberValue = (key: keyof BackupImportCounts) => {
+    const candidate = record[key];
+    return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : 0;
+  };
+  return {
+    create: numberValue('create'),
+    update: numberValue('update'),
+    delete: numberValue('delete'),
+    keep: numberValue('keep'),
+    dependencies: numberValue('dependencies'),
+    tagsToCreate: numberValue('tagsToCreate'),
+    tagsToReuse: numberValue('tagsToReuse'),
+    unresolvedPeople: numberValue('unresolvedPeople'),
+    blockingRecordLinks: numberValue('blockingRecordLinks'),
+  };
+};
+
+const backupErrorCodes = new Set([
+  'INVALID_FILE',
+  'CHECKSUM_MISMATCH',
+  'UNSUPPORTED_VERSION',
+  'LEGACY_SCOPE_AMBIGUOUS',
+  'PERMISSION_DENIED',
+  'TARGET_CHANGED',
+  'CROSS_BOARD_ID_COLLISION',
+  'OUT_OF_PACKAGE_REFERENCE',
+  'IMPORT_ROLLED_BACK',
+  'VERIFY_MISMATCH',
+  'BACKEND_UNSUPPORTED',
+]);
+
+const mapBackupRpcError = (error: { message: string }): BackupError => {
+  const matchedCode = Array.from(backupErrorCodes).find(code => error.message.includes(code));
+  return new BackupError(
+    (matchedCode ?? 'IMPORT_ROLLED_BACK') as BackupError['code'],
+    error.message.replace(/^[A-Z_]+:\s*/, '') || '備份交易失敗，所有變更已回復。'
+  );
+};
+
+const toJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
+
+const parseBackupPlan = (
+  request: BackupBackendPlanRequest,
+  value: unknown
+): BackupImportPlan => {
+  const record = asBackupRecord(value);
+  const rawBlockers = Array.isArray(record.blockers) ? record.blockers : [];
+  const blockers = rawBlockers.map(item => {
+    const blocker = asBackupRecord(item);
+    const code = String(blocker.code ?? 'IMPORT_ROLLED_BACK');
+    return {
+      code: (backupErrorCodes.has(code) ? code : 'IMPORT_ROLLED_BACK') as BackupImportPlan['blockers'][number]['code'],
+      message: String(blocker.message ?? '匯入前置檢查失敗。'),
+    };
+  });
+  const now = new Date();
+  return {
+    planId: createBackupExecutionId(),
+    executionId: createBackupExecutionId(),
+    packageId: request.package.packageId,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 10 * 60_000).toISOString(),
+    mode: request.mode,
+    target: request.target,
+    allowed: record.allowed === true && blockers.length === 0,
+    expectedTargetFingerprint: typeof record.expectedTargetFingerprint === 'string'
+      ? record.expectedTargetFingerprint
+      : null,
+    counts: asBackupCounts(record.counts),
+    warnings: Array.isArray(record.warnings) ? record.warnings.map(String) : [],
+    blockers,
+    confirmationPhrase: request.mode === 'replace_current_board' ? request.target.boardTitle : undefined,
+  };
+};
+
+export const supabaseBackupService: BackupBackendAdapter = {
+  readBoardSource: async (workspaceId, boardId) => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const [{ data: project, error: projectError }, tasks, dependencies, workspaceTags] = await Promise.all([
+      supabase
+        .from('projects')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('id', projectId)
+        .single(),
+      supabaseNodeService.listByProject(workspaceId, boardId),
+      supabaseDependencyService.listByProject(workspaceId, boardId),
+      supabaseTagService.listByWorkspace(workspaceId),
+    ]);
+    assertNoError(projectError);
+    if (!project) throw new BackupError('INVALID_FILE', '找不到要備份的看板。');
+    const referencedTagIds = new Set(tasks.flatMap(task => task.tagIds ?? []));
+    return {
+      workspaceId,
+      boardId,
+      boardTitle: project.name,
+      tasks,
+      dependencies,
+      tags: workspaceTags.filter(tag => referencedTagIds.has(tag.id)),
+    };
+  },
+
+  planImport: async (request) => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(request.target.workspaceId);
+    const projectId = request.target.boardId
+      ? await resolveProjectId(tenantId, request.target.boardId)
+      : null;
+    const { data, error } = await supabase.rpc('preview_board_backup_v2', {
+      target_tenant_id: tenantId,
+      target_project_id: projectId,
+      import_mode: request.mode,
+      backup_package: toJson(request.package),
+    });
+    if (error) throw mapBackupRpcError(error);
+    return parseBackupPlan(request, data);
+  },
+
+  executeImport: async (request: BackupBackendExecuteRequest) => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(request.plan.target.workspaceId);
+    const projectId = request.plan.target.boardId
+      ? await resolveProjectId(tenantId, request.plan.target.boardId)
+      : null;
+    const { data, error } = await supabase.rpc('import_board_backup_v2', {
+      target_tenant_id: tenantId,
+      target_project_id: projectId,
+      import_mode: request.plan.mode,
+      backup_package: toJson(request.package),
+      target_board_title: request.newBoardTitle?.trim() || request.package.payload.board.title,
+      execution_id: request.plan.executionId,
+      expected_target_fingerprint: request.plan.expectedTargetFingerprint,
+    });
+    if (error) throw mapBackupRpcError(error);
+    const record = asBackupRecord(data);
+    return {
+      executionId: String(record.executionId ?? request.plan.executionId),
+      mode: request.plan.mode,
+      targetWorkspaceId: request.plan.target.workspaceId,
+      targetBoardId: String(record.targetBoardId ?? request.plan.target.boardId ?? ''),
+      targetBoardTitle: String(record.targetBoardTitle ?? request.newBoardTitle ?? request.package.payload.board.title),
+      counts: asBackupCounts(record.counts),
+      warnings: Array.isArray(record.warnings) ? record.warnings.map(String) : [],
+      sourceTaskIdMap: Object.fromEntries(
+        Object.entries(asBackupRecord(record.sourceTaskIdMap)).map(([sourceId, targetId]) => [sourceId, String(targetId)])
+      ),
+      postWriteFingerprint: String(record.postWriteFingerprint ?? ''),
+      idempotentReplay: record.idempotentReplay === true,
+    } satisfies BackupExecutionResult;
+  },
+
+  readBoardFingerprint: async (workspaceId, boardId) => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { data, error } = await supabase.rpc('get_board_backup_v2_fingerprint', {
+      target_tenant_id: tenantId,
+      target_project_id: projectId,
+    });
+    if (error) throw mapBackupRpcError(error);
+    if (typeof data !== 'string' || !data) throw new BackupError('VERIFY_MISMATCH', '後端未回傳看板 fingerprint。');
+    return data;
   },
 };
 
