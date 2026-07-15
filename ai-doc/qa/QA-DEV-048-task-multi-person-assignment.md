@@ -2,7 +2,7 @@
 
 關聯 DEV: DEV-048
 關聯 SPEC: `ai-doc/specs/SPEC-048-task-multi-person-assignment.md`
-狀態: Local DEV-048 QA-QC Executed / Supabase Alias Governance Residual / Release Gate Required
+狀態: DEV-048 QA-QC Executed / TEST + Production Release Gate Passed / Supabase Alias Governance Residual Accepted
 風險等級: P1 任務當責、資料相容、UI 防呆與 migration contract
 建立日期: 2026-07-15
 最近更新: 2026-07-15
@@ -83,9 +83,10 @@ Browser QC must use real rendered UI at `http://127.0.0.1:4173/` and collect:
 
 ## Release Gate Addendum
 
-Before production release:
-- Apply migration to ProJED-TEST and validate trigger behavior with actual UUID arrays.
-- Run authenticated browser smoke against TEST / preview.
-- Confirm DEV-047 remote backup RPC contract either preserves `assignee_ids` or is explicitly blocked/frozen until upgraded.
-- Resolve the existing migration alias hash residual or document a release-owner decision.
-- Run production deploy only through deployment release gate.
+Release execution on 2026-07-15:
+- ProJED-TEST migration applied; schema, trigger, function, disjoint check, GIN index and actual UUID-array trigger probe passed. TEST baseline had 158 rows, 0 legacy assignee rows, 0 overlap rows.
+- Authenticated Level 3 preview passed: signed-in board loaded 158 tasks, task drawer opened, primary/collaborator multi-checkbox sections were visible, two primary members could be selected, and the fixture was restored to `未指派`. No final-owner control exists.
+- Production migration applied and verified: 461 rows retained, 53 `assignee_ids` rows backfilled from `assignee_id`, alias mismatches 0, overlap rows 0; rollback-only trigger probe passed.
+- Firebase production deploy and Level 4 smoke passed at `https://projed-cc78d.web.app`; root, hashed JS/CSS, service worker and critical error/request sweep passed.
+- The five existing migration source hash mismatches remain an explicit release governance residual; this release did not rewrite those baselines. DEV-047 remote backup RPC full multi-primary persistence remains frozen/out of this release.
+- Rollback evidence and exact rollback SQL are recorded in `ai-doc/release/PREPRODUCTION-DEV-048-20260715.md` and the ignored `output/release/` evidence files.

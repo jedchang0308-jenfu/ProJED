@@ -1,6 +1,6 @@
 # SPEC-048: 多人主責與協作指派
 
-狀態: Implemented Locally / Local DEV-048 QA-QC Passed / Release Gate Required / Production Not Deployed
+狀態: Implemented / TEST + Production Migration Verified / Firebase Production Released / Level 4 Passed
 對應 DEV: DEV-048
 節點類型: 交付點
 優先級: P1 任務當責與協作資料契約
@@ -117,15 +117,11 @@ Normalization rules:
 
 ## Release Boundary
 
-本輪只完成 local implementation 與本機 QA/QC。未執行:
-- ProJED-TEST migration。
-- Supabase remote advisor / RLS matrix。
-- Firebase preview 或 production deploy。
-- production smoke。
+原始開發階段只完成 local implementation 與本機 QA/QC；2026-07-15 release gate addendum 已另行完成 TEST / production migration、authenticated Level 3 與 Firebase production Level 4。完整證據見 `ai-doc/release/PREPRODUCTION-DEV-048-20260715.md`。
 
-Release re-entry 時必須:
-- 對 TEST 套用 migration 並驗證 `wbs_items.assignee_ids`、trigger、check 與 legacy alias。
-- 驗證 production-shaped data API read/write。
-- 同步或明確凍結 DEV-047 遠端 backup RPC 的多人主責 contract。
-- 修復或決策處理既有 `verify:supabase:migration-aliases` 5 個舊 production source hash mismatch。
-- 跑 browser smoke、assignment filter/report regression、backup import/export regression。
+Release gate 結果:
+- TEST migration 已套用並驗證 `wbs_items.assignee_ids`、trigger、check、index 與 legacy alias；authenticated Level 3 已通過。
+- Production migration 已套用並驗證 461 筆資料、53 筆 legacy alias 對齊、重疊 0；production REST schema read probe HTTP 200。
+- Firebase production deploy 與 Level 4 post-deploy smoke 已通過；production root、bundle、CSS、service worker 與 critical error sweep 均正常。
+- `verify:supabase:migration-aliases` 仍有 5 個未修改舊 production source hash mismatch，保留為 release governance residual，未改寫 baseline。
+- DEV-047 遠端 backup RPC 完整多人主責保存仍未納入本 release；其風險與 frozen boundary 依既有 release gate 治理。

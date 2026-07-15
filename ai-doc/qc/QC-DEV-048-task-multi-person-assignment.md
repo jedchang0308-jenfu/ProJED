@@ -3,15 +3,15 @@
 關聯 DEV: DEV-048
 關聯 SPEC: `ai-doc/specs/SPEC-048-task-multi-person-assignment.md`
 關聯 QA: `ai-doc/qa/QA-DEV-048-task-multi-person-assignment.md`
-狀態: Local DEV-048 QC Passed / Existing Supabase Alias Gate Residual / Release Gate Required / Production Not Deployed
+狀態: DEV-048 QC Passed / TEST + Production Release Gate Passed / Existing Supabase Alias Gate Residual
 風險等級: P1 任務當責、資料相容、UI 防呆與 migration contract
 驗證日期: 2026-07-15
 
 ## 驗證結論
 
-- 判定：DEV-048 本機 RD implementation、targeted QC 與 browser smoke 通過；一項共用 Supabase alias governance gate 因既有舊 migration hash mismatch 失敗，非本輪檔案 diff。
+- 判定：DEV-048 本機 RD implementation、targeted QC、TEST authenticated Level 3、production migration 與 Firebase Level 4 通過；一項共用 Supabase alias governance gate 因既有舊 migration hash mismatch 失敗，非本輪檔案 diff，已保留為 release residual。
 - 已證明：多位主責、多位協作、互斥、active task last-primary guard、legacy alias、filter/report local contract、local backup contract、Supabase migration static contract與瀏覽器 UI smoke。
-- 未證明：ProJED-TEST migration、production migration、Firebase preview、production smoke、DEV-047 遠端 backup RPC 完整多人主責保存。
+- 已補證明：ProJED-TEST migration、實際 UUID-array trigger probe、authenticated preview Level 3、production migration、production REST schema probe 與 Firebase production Level 4。
 
 ## RD 實作事實
 
@@ -36,6 +36,10 @@
 | Browser UI smoke | Pass | multi primary + collaborator checkbox、互斥、last-primary guard、0 console errors |
 | Screenshot | Captured | `output/playwright/dev048-assignment-picker.png` |
 | Test fixture cleanup | Pass | `qc-card-1` restored to seed `未指派`; undo/redo disabled after reload |
+| TEST remote migration | Pass | 158 rows; schema/trigger/function/check/index present; alias mismatch 0; overlap 0; rollback-only UUID-array probe passed |
+| TEST authenticated Level 3 preview | Pass | signed-in board 158 tasks; task drawer + two multi-select sections; two primary selection and restoration to `未指派` |
+| Production remote migration | Pass | 461 rows; 53 `assignee_ids` backfilled; alias mismatch 0; overlap 0; rollback-only UUID-array probe passed |
+| Production Level 4 | Pass | `https://projed-cc78d.web.app`; hashed JS/CSS, service worker, critical console/page/request sweep passed |
 
 ## Browser Facts
 
@@ -70,14 +74,14 @@ Observed:
 
 ## Residual Risks
 
-- Remote migration was not applied to ProJED-TEST or production.
 - `verify:supabase:migration-aliases` has an existing 5-file production source hash mismatch outside the DEV-048 diff; release gate must resolve or explicitly accept that governance state before deployment.
 - Existing remote DEV-047 backup RPC source may still be first-primary compatible only until a new RPC migration/release updates its package contract.
-- No production deployment or release artifact was created in this turn.
+- Production release artifact and rollback evidence are recorded in `ai-doc/release/PREPRODUCTION-DEV-048-20260715.md`; the ignored `output/release/` files contain the environment baselines.
 - Browser smoke covered desktop current viewport; additional mobile viewport can be added at release gate if this picker becomes a mobile-critical workflow.
 
 ## Release Decision
 
 - DEV-048 local implementation: pass.
-- TEST / production release: not authorized and not executed.
-- Next release action: enter ProJED-TEST migration + Firebase preview + deployment release gate.
+- TEST migration + authenticated Level 3: pass.
+- Production migration + Firebase deploy + Level 4: pass.
+- Release residual: five existing migration source hash mismatches remain unchanged; DEV-047 remote backup RPC full multi-primary persistence remains outside this release.

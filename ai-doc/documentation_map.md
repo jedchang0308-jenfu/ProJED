@@ -15,12 +15,12 @@
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-048-task-multi-person-assignment.md` | Implemented Locally / Local DEV-048 QA-QC Passed / Release Gate Required / Production Not Deployed | DEV-048 | Authoritative contract：任務支援多位主責與多位協作，主責/協作互斥，canonical `assigneeIds` 保留 legacy `assigneeId` alias；明確排除「最終負責人」。 |
-| `ai-doc/qa/QA-DEV-048-task-multi-person-assignment.md` | Local DEV-048 QA-QC Executed / Supabase Alias Governance Residual | DEV-048 | 驗證計畫涵蓋 helper、UI picker、active task guard、filter/report dedupe、backup、Supabase migration static 與 browser visible-error gate。 |
-| `ai-doc/qc/QC-DEV-048-task-multi-person-assignment.md` | Local DEV-048 QC Passed / Existing Supabase Alias Gate Residual / Production Not Deployed | DEV-048 | 記錄 verifier、TypeScript、targeted ESLint、build、browser picker smoke、screenshot 與本機測試資料 cleanup；`verify:supabase:migration-aliases` 失敗於 5 個未改動舊 production source hash。 |
-| `ai-doc/dev_task.md` | DEV-048 Local Complete / Batch Release Pending | DEV-048 | DEV-048 已登錄為交付點；下一步只有收到 release 指令時才進入 ProJED-TEST migration 與 production deployment gate。 |
+| `ai-doc/specs/SPEC-048-task-multi-person-assignment.md` | Implemented / TEST + Production Migration Verified / Firebase Production Released / Level 4 Passed | DEV-048 | Authoritative contract：任務支援多位主責與多位協作，主責/協作互斥，canonical `assigneeIds` 保留 legacy `assigneeId` alias；明確排除「最終負責人」。 |
+| `ai-doc/qa/QA-DEV-048-task-multi-person-assignment.md` | QA-QC Executed / TEST + Production Release Gate Passed / Alias Governance Residual Accepted | DEV-048 | 驗證計畫與 release addendum 涵蓋 helper、UI picker、TEST/production migration、authenticated Level 3、production Level 4 與 rollback evidence。 |
+| `ai-doc/qc/QC-DEV-048-task-multi-person-assignment.md` | QC Passed / TEST + Production Release Gate Passed / Existing Alias Residual | DEV-048 | 記錄 verifier、TypeScript、build、TEST authenticated Level 3、production schema/data checks、Firebase Level 4 與 5 個未改動舊 production source hash residual。 |
+| `ai-doc/dev_task.md` | DEV-048 Released / Level 4 Passed | DEV-048 | DEV-048 已完成 TEST/production migration、Firebase production release 與 Level 4；既有 migration provenance residual 與 DEV-047 RPC boundary 仍保留治理註記。 |
 
-PM 治理註記：本輪依使用者註記不新增「最終負責人」。Release 前必須在 ProJED-TEST 驗證 `wbs_items.assignee_ids` migration、trigger、legacy alias、role/data API 行為；既有 DEV-047 遠端 backup RPC 可能仍是 first-primary compatible，需在 release gate 中同步升級或明確凍結。`verify:supabase:migration-aliases` 目前因 5 個舊 production source hash mismatch 失敗，相關檔案本輪未修改，需作為 release governance residual 另行處理。
+PM 治理註記：本輪依使用者註記不新增「最終負責人」。TEST/production 已驗證 `wbs_items.assignee_ids` migration、trigger、legacy alias、role/data API 行為，並完成 authenticated Level 3 與 Firebase Level 4。既有 DEV-047 遠端 backup RPC 仍可能是 first-primary compatible，維持 frozen boundary。`verify:supabase:migration-aliases` 的 5 個舊 production source hash mismatch 未修改，保留為 release governance residual。
 
 ## Documentation Map Update - 2026-07-14
 
