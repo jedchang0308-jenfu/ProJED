@@ -1496,7 +1496,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                                       startDate: card.startDate || '',
                                       endDate: card.endDate || '',
                                       nodeType: 'task',
-                                      kanbanStageId: list.id,
+                                      kanbanStageId: listNodeId,
                                       order: card.order !== undefined ? card.order : cardIndex,
                                       createdAt: card.createdAt || Date.now(),
                                       updatedAt: Date.now()

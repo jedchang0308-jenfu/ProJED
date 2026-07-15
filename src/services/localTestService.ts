@@ -81,11 +81,66 @@ const sanitizeNodes = (nodes: Record<string, TaskNode>) => {
 
   return changed ? sanitized : nodes;
 };
+const normalizeKanbanStageReferences = (nodes: Record<string, TaskNode>) => {
+  const normalized = { ...nodes };
+  let changed = false;
+  const scopedNodes = new Map<string, TaskNode[]>();
+
+  Object.values(nodes).forEach(node => {
+    const scope = `${node.workspaceId}:${node.boardId}`;
+    const current = scopedNodes.get(scope) ?? [];
+    current.push(node);
+    scopedNodes.set(scope, current);
+  });
+
+  scopedNodes.forEach(scopeNodes => {
+    const byId = new Map(scopeNodes.map(node => [node.id, node]));
+    scopeNodes.forEach(node => {
+      if (!node.kanbanStageId || node.nodeType === 'group') return;
+      const exactStage = byId.get(node.kanbanStageId);
+      if (exactStage) return;
+
+      const legacyStageId = node.kanbanStageId.startsWith('list_')
+        ? node.kanbanStageId
+        : `list_${node.kanbanStageId}`;
+      if (byId.has(legacyStageId)) {
+        normalized[node.id] = {
+          ...node,
+          kanbanStageId: legacyStageId,
+          updatedAt: Date.now(),
+        };
+        changed = true;
+        return;
+      }
+
+      const visited = new Set<string>();
+      let parentId = node.parentId;
+      while (parentId && !visited.has(parentId)) {
+        visited.add(parentId);
+        const parent = byId.get(parentId);
+        if (!parent) break;
+        if (parent.nodeType === 'group' && !parent.parentId) {
+          normalized[node.id] = {
+            ...node,
+            kanbanStageId: parent.id,
+            updatedAt: Date.now(),
+          };
+          changed = true;
+          break;
+        }
+        parentId = parent.parentId;
+      }
+    });
+  });
+
+  return changed ? normalized : nodes;
+};
 const readNodes = () => {
   const nodes = readJson<Record<string, TaskNode>>(NODES_KEY, {});
   const sanitized = sanitizeNodes(nodes);
-  if (sanitized !== nodes) writeJson(NODES_KEY, sanitized);
-  return sanitized;
+  const normalized = normalizeKanbanStageReferences(sanitized);
+  if (normalized !== nodes) writeJson(NODES_KEY, normalized);
+  return normalized;
 };
 const writeNodes = (nodes: Record<string, TaskNode>) => writeJson(NODES_KEY, nodes);
 const readDependencies = () => readJson<Dependency[]>(DEPENDENCIES_KEY, []);

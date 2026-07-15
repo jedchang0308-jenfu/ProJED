@@ -305,10 +305,25 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
     task.workspaceId === source.workspaceId && task.boardId === source.boardId
   );
   const taskIds = new Set(scopedTasks.map(task => task.id));
-  const canonicalStageId = (stageId: string | undefined) => {
+  const taskById = new Map(scopedTasks.map(task => [task.id, task]));
+  const canonicalStageId = (task: TaskNode) => {
+    const stageId = task.kanbanStageId;
     if (!stageId || taskIds.has(stageId)) return stageId;
     const legacyStageId = stageId.startsWith('list_') ? stageId : `list_${stageId}`;
-    return taskIds.has(legacyStageId) ? legacyStageId : stageId;
+    if (taskIds.has(legacyStageId)) return legacyStageId;
+
+    // Older local imports may lose the stage ID while keeping the task tree.
+    // Recover only when the parent chain identifies an unambiguous root group.
+    const visited = new Set<string>();
+    let parentId = task.parentId;
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId);
+      const parent = taskById.get(parentId);
+      if (!parent) break;
+      if (parent.nodeType === 'group' && !parent.parentId) return parent.id;
+      parentId = parent.parentId;
+    }
+    return stageId;
   };
   const referencedTagIds = new Set(scopedTasks.flatMap(task => task.tagIds ?? []));
 
@@ -333,7 +348,7 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
 
   return {
     board: { title: source.boardTitle },
-    tasks: scopedTasks.map(task => toPortableTask(task, canonicalStageId(task.kanbanStageId))),
+    tasks: scopedTasks.map(task => toPortableTask(task, canonicalStageId(task))),
     dependencies: dependencies.map(toPortableDependency),
     tags: tags.map(toPortableTag),
   };
