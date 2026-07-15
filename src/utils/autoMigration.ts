@@ -254,7 +254,7 @@ const convertListsToNodes = (wsId: string, boardId: string, lists: any[]): TaskN
         startDate: card.startDate || undefined,
         endDate: card.endDate || undefined,
         nodeType: 'task',
-        kanbanStageId: list.id,
+        kanbanStageId: listNodeId,
         order: card.order ?? cardIndex,
         createdAt: card.createdAt || Date.now(),
         updatedAt: Date.now(),

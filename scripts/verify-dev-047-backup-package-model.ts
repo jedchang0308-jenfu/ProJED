@@ -88,7 +88,27 @@ const main = async () => {
     assert.equal(inspected.package.payload.tasks[1].isArchived, true);
   });
 
-  await test('MOD-047-003 serializer excludes storage IDs, tokens, and unrelated tags', async () => {
+  await test('MOD-047-003 legacy kanban stage IDs normalize to the scoped list node', async () => {
+    const legacySource: BoardBackupSource = {
+      ...source,
+      tasks: [
+        {
+          ...source.tasks[0], id: 'list_lane-a', title: 'Lane A', nodeType: 'group',
+          tagIds: [], collaboratorIds: [],
+        },
+        {
+          ...source.tasks[1], id: 'card_c1768815829499', parentId: 'list_lane-a',
+          kanbanStageId: 'lane-a', tagIds: [], collaboratorIds: [],
+        },
+      ],
+      dependencies: [],
+      tags: [],
+    };
+    const normalized = await createBackupPackage(legacySource, 'local-test');
+    assert.equal(normalized.payload.tasks[1].kanbanStageSourceId, 'list_lane-a');
+  });
+
+  await test('MOD-047-004 serializer excludes storage IDs, tokens, and unrelated tags', async () => {
     const unsafeSource = structuredClone(source) as BoardBackupSource & { token?: string };
     unsafeSource.token = 'secret-token-value';
     (unsafeSource.tasks[0] as typeof unsafeSource.tasks[0] & { storageId: string; signedUrl: string }).storageId = 'db-row-id';
@@ -100,13 +120,13 @@ const main = async () => {
     assert.equal(text.includes('unused-tag'), false);
   });
 
-  await test('MOD-047-004 tampered payload is blocked', async () => {
+  await test('MOD-047-005 tampered payload is blocked', async () => {
     const tampered = structuredClone(packageValue);
     tampered.payload.tasks[0].title = 'Tampered';
     await expectBackupError('CHECKSUM_MISMATCH', () => inspectBackupText(JSON.stringify(tampered)));
   });
 
-  await test('MOD-047-005 duplicate, dangling, and cyclic trees are blocked', async () => {
+  await test('MOD-047-006 duplicate, dangling, and cyclic trees are blocked', async () => {
     const duplicate = structuredClone(packageValue);
     duplicate.payload.tasks[1].sourceId = duplicate.payload.tasks[0].sourceId;
     await resign(duplicate);
@@ -132,7 +152,7 @@ const main = async () => {
     await expectBackupError('INVALID_FILE', () => inspectBackupText(JSON.stringify(duplicateTagName)));
   });
 
-  await test('MOD-047-006 dangling dependencies are blocked during inspect and export', async () => {
+  await test('MOD-047-007 dangling dependencies are blocked during inspect and export', async () => {
     const dangling = structuredClone(packageValue);
     dangling.payload.dependencies[0].toSourceId = 'missing-task';
     await resign(dangling);
@@ -148,7 +168,7 @@ const main = async () => {
     })));
   });
 
-  await test('MOD-047-007 entity and file limits fail closed', async () => {
+  await test('MOD-047-008 entity and file limits fail closed', async () => {
     const atTaskLimit = structuredClone(packageValue.payload);
     atTaskLimit.tasks = Array.from({ length: BACKUP_MAX_TASKS }, (_, index) => ({
       ...packageValue.payload.tasks[0], sourceId: `limit-task-${index}`, parentSourceId: null, tagSourceIds: [],
@@ -180,7 +200,7 @@ const main = async () => {
     await expectBackupError('INVALID_FILE', () => inspectBackupText(oversizedText));
   });
 
-  await test('MOD-047-008 unsupported schema and manifest count mismatch are blocked', async () => {
+  await test('MOD-047-009 unsupported schema and manifest count mismatch are blocked', async () => {
     const unsupported = structuredClone(packageValue) as BackupPackageV2 & { schemaVersion: number };
     unsupported.schemaVersion = 3;
     await expectBackupError('UNSUPPORTED_VERSION', () => inspectBackupText(JSON.stringify(unsupported)));
@@ -203,7 +223,7 @@ const main = async () => {
     await expectBackupError('INVALID_FILE', () => inspectBackupText(JSON.stringify(invalidIdentity)));
   });
 
-  await test('MOD-047-009 legacy single board converts, multi-board fails closed', async () => {
+  await test('MOD-047-010 legacy single board converts, multi-board fails closed', async () => {
     const legacyNode = { id: 'legacy-a', workspaceId: 'workspace-a', boardId: 'board-a', parentId: null, title: 'Legacy', status: 'todo', order: 0 };
     const single = await inspectBackupText(JSON.stringify({ version: 'wbs-1.2', nodes: [legacyNode] }));
     assert.equal(single.sourceKind, 'legacy-converted');
@@ -214,7 +234,7 @@ const main = async () => {
     })));
   });
 
-  await test('MOD-047-010 semantic read-after-write detects field and graph corruption', async () => {
+  await test('MOD-047-011 semantic read-after-write detects field and graph corruption', async () => {
     const actual: BoardBackupSource = {
       workspaceId: 'workspace-b', boardId: 'board-copy', boardTitle: 'Restored board',
       tasks: [

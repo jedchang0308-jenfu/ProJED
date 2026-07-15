@@ -104,7 +104,7 @@ const convertCardToNode = (
   startDate: card.startDate || undefined,
   endDate: card.endDate || undefined,
   nodeType: 'task' as const,
-  kanbanStageId: list.id,
+  kanbanStageId: createLegacyNodeId('list', list.id),
   order: card.order ?? cardIndex,
   createdAt: card.createdAt || Date.now(),
   updatedAt: Date.now(),

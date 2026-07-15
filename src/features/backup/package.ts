@@ -263,7 +263,7 @@ export const compareBackupSemantics = async (
   return { valid, expectedFingerprint, actualFingerprint };
 };
 
-const toPortableTask = (task: TaskNode): PortableTaskV2 => ({
+const toPortableTask = (task: TaskNode, kanbanStageSourceId = task.kanbanStageId): PortableTaskV2 => ({
   sourceId: task.id,
   parentSourceId: task.parentId && task.parentId !== task.boardId ? task.parentId : null,
   title: task.title,
@@ -277,7 +277,7 @@ const toPortableTask = (task: TaskNode): PortableTaskV2 => ({
   endDate: task.endDate,
   isDurationLocked: Boolean(task.isDurationLocked),
   nodeType: task.nodeType ?? 'task',
-  kanbanStageSourceId: task.kanbanStageId,
+  kanbanStageSourceId,
   order: task.order,
   createdAt: task.createdAt,
   updatedAt: task.updatedAt,
@@ -305,6 +305,11 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
     task.workspaceId === source.workspaceId && task.boardId === source.boardId
   );
   const taskIds = new Set(scopedTasks.map(task => task.id));
+  const canonicalStageId = (stageId: string | undefined) => {
+    if (!stageId || taskIds.has(stageId)) return stageId;
+    const legacyStageId = stageId.startsWith('list_') ? stageId : `list_${stageId}`;
+    return taskIds.has(legacyStageId) ? legacyStageId : stageId;
+  };
   const referencedTagIds = new Set(scopedTasks.flatMap(task => task.tagIds ?? []));
 
   const dependencies = source.dependencies.filter(dependency =>
@@ -328,7 +333,7 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
 
   return {
     board: { title: source.boardTitle },
-    tasks: scopedTasks.map(toPortableTask),
+    tasks: scopedTasks.map(task => toPortableTask(task, canonicalStageId(task.kanbanStageId))),
     dependencies: dependencies.map(toPortableDependency),
     tags: tags.map(toPortableTag),
   };
