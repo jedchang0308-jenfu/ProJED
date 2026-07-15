@@ -16,6 +16,7 @@ import {
   createBackupPackage,
   inspectBackupText,
   stringifyBackupPackage,
+  type BackupFilenameOptions,
   validateBackupFileSize,
 } from './package';
 
@@ -40,6 +41,7 @@ export interface ExecuteBackupImportOutcome {
 
 export interface CreateBoardBackupPackageRequest {
   workspaceId: string;
+  workspaceTitle?: string;
   boardId: string;
 }
 
@@ -62,18 +64,22 @@ const toBatchError = (error: unknown): CreateBoardBackupPackageResult['error'] =
 const createPackageFromBackend = async (
   backend: 'supabase' | 'local-test',
   workspaceId: string,
-  boardId: string
+  boardId: string,
+  workspaceTitle?: string
 ): Promise<BackupPackageV2> => {
   const source = await backupBackendService.readBoardSource(workspaceId, boardId);
-  return createBackupPackage(source, backend, APP_VERSION);
+  return createBackupPackage({
+    ...source,
+    workspaceTitle: workspaceTitle ?? source.workspaceTitle,
+  }, backend, APP_VERSION);
 };
 
-const downloadPackage = (packageValue: BackupPackageV2) => {
+const downloadPackage = (packageValue: BackupPackageV2, filenameOptions?: BackupFilenameOptions) => {
   const blob = new Blob([stringifyBackupPackage(packageValue)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = buildBackupFilename(packageValue);
+  anchor.download = buildBackupFilename(packageValue, filenameOptions);
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -81,9 +87,9 @@ const downloadPackage = (packageValue: BackupPackageV2) => {
 };
 
 export const backupApplicationService = {
-  createBoardPackage: async (workspaceId: string, boardId: string): Promise<BackupPackageV2> => {
+  createBoardPackage: async (workspaceId: string, boardId: string, workspaceTitle?: string): Promise<BackupPackageV2> => {
     const backend = requireSupportedBackend();
-    return createPackageFromBackend(backend, workspaceId, boardId);
+    return createPackageFromBackend(backend, workspaceId, boardId, workspaceTitle);
   },
 
   createBoardPackages: async (
@@ -95,7 +101,7 @@ export const backupApplicationService = {
       try {
         results.push({
           ...request,
-          packageValue: await createPackageFromBackend(backend, request.workspaceId, request.boardId),
+          packageValue: await createPackageFromBackend(backend, request.workspaceId, request.boardId, request.workspaceTitle),
           error: null,
         });
       } catch (error) {
@@ -130,7 +136,7 @@ export const backupApplicationService = {
     if (plan.mode !== 'replace_current_board' || !plan.target.boardId) {
       throw new BackupError('INVALID_FILE', '只有取代目前看板內容時需要建立執行前備份。');
     }
-    return backupApplicationService.createBoardPackage(plan.target.workspaceId, plan.target.boardId);
+    return backupApplicationService.createBoardPackage(plan.target.workspaceId, plan.target.boardId, plan.target.workspaceTitle);
   },
 
   executeImport: async (options: ExecuteBackupImportOptions): Promise<ExecuteBackupImportOutcome> => {
@@ -204,6 +210,27 @@ export const backupApplicationService = {
   downloadPackage,
 
   downloadPackages: (packageValues: BackupPackageV2[]) => {
-    packageValues.forEach(downloadPackage);
+    const titleCounts = new Map<string, number>();
+    const scopeCounts = new Map<string, number>();
+    packageValues.forEach(packageValue => {
+      const titleKey = packageValue.payload.board.title.trim().toLocaleLowerCase();
+      const scopeKey = [
+        packageValue.source.workspaceTitle?.trim().toLocaleLowerCase() ?? packageValue.source.workspaceId,
+        titleKey,
+      ].join('\u001f');
+      titleCounts.set(titleKey, (titleCounts.get(titleKey) ?? 0) + 1);
+      scopeCounts.set(scopeKey, (scopeCounts.get(scopeKey) ?? 0) + 1);
+    });
+    packageValues.forEach(packageValue => {
+      const titleKey = packageValue.payload.board.title.trim().toLocaleLowerCase();
+      const scopeKey = [
+        packageValue.source.workspaceTitle?.trim().toLocaleLowerCase() ?? packageValue.source.workspaceId,
+        titleKey,
+      ].join('\u001f');
+      downloadPackage(packageValue, {
+        includeWorkspace: (titleCounts.get(titleKey) ?? 0) > 1,
+        includeBoardId: (scopeCounts.get(scopeKey) ?? 0) > 1,
+      });
+    });
   },
 };

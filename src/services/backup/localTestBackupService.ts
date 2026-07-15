@@ -104,6 +104,7 @@ const buildBoardSource = (
   const referencedTagIds = new Set(tasks.flatMap(task => task.tagIds ?? []));
   return {
     workspaceId,
+    workspaceTitle: workspace.title,
     boardId,
     boardTitle: board.title,
     tasks,

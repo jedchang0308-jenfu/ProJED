@@ -139,6 +139,7 @@ interface BackupPackageV2 {
     appVersion: string;
     backend: 'supabase' | 'local-test';
     workspaceId: string;
+    workspaceTitle?: string; // optional display metadata; not required for import compatibility
     boardId: string;
     boardTitle: string;
   };
@@ -161,6 +162,8 @@ interface BackupPackageV2 {
 
 Contract rules:
 - Phase 1 的 package scope 只能是 `{ type: 'board' }`；「全部看板」只是 UI 批次操作，不是新的多看板檔案格式。
+- 下載檔名是人類辨識用的 display metadata，不是匯入契約；匯入必須讀取並驗證 JSON 內的 `packageId`、`source.boardId`、schema 與 checksum。
+- 預設檔名只顯示 `projed-{看板名稱}_{YYYYMMDD-HHmmss}.backup.json`；批次遇到同名看板才補工作區名稱，工作區內仍同名才補短 ID。
 - `packageId` 使用 UUID；`createdAt` 使用 UTC ISO-8601。
 - checksum 只涵蓋 canonicalized `payload`；object keys 排序，tasks/dependencies/tags 依 source ID 排序。
 - `storageId`、auth token、service key、email invitation、calendar feed token、signed URL 不得輸出。

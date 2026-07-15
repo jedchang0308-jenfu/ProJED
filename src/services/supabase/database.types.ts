@@ -432,6 +432,12 @@ export interface Database {
         };
         Returns: boolean;
       };
+      delete_calendar_subscription: {
+        Args: {
+          target_subscription_id: string;
+        };
+        Returns: boolean;
+      };
       preview_board_backup_v2: {
         Args: {
           target_tenant_id: string;

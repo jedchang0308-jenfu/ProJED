@@ -15,6 +15,7 @@ const files = {
   dev045V3Migration: 'supabase/migrations/20260711171058_calendar_subscription_v3_per_board_filters.sql',
   dev045V3PolicyRebindMigration: 'supabase/migrations/20260713033000_calendar_subscription_v3_rls_policy_rebind.sql',
   lifecycleRpcMigration: 'supabase/migrations/20260713133307_calendar_subscription_lifecycle_rpc.sql',
+  deleteRpcMigration: 'supabase/migrations/20260715120000_calendar_subscription_delete_rpc.sql',
   qa: 'ai-doc/qa/QA-DEV-045-calendar-subscription-filter-builder-preview.md',
   qc: 'ai-doc/qc/QC-DEV-045-calendar-subscription-builder-preview.md',
   devTask: 'ai-doc/dev_task.md',
@@ -41,6 +42,8 @@ add(
     source.dev045V3PolicyRebindMigration?.includes('calendar_subscription_filter_allowed(filters_json)') &&
     source.lifecycleRpcMigration?.includes('set_calendar_subscription_active') &&
     source.lifecycleRpcMigration?.includes('rotate_calendar_subscription_token') &&
+    source.deleteRpcMigration?.includes('delete_calendar_subscription') &&
+    source.deleteRpcMigration?.includes('owner_user_id = actor_user_id') &&
     source.dev045Migration?.includes('revoke execute on function public.calendar_subscription_task_filter_allowed(jsonb) from public, anon') &&
     source.dev037Migration?.includes('private.current_user_can_read_project'),
 );
@@ -170,10 +173,12 @@ values
   ('authenticated can execute v3 helper', has_function_privilege('authenticated', 'public.calendar_subscription_v3_filter_allowed(jsonb)', 'execute')),
   ('authenticated can set subscription lifecycle', has_function_privilege('authenticated', 'public.set_calendar_subscription_active(uuid,boolean)', 'execute')),
   ('authenticated can rotate subscription token', has_function_privilege('authenticated', 'public.rotate_calendar_subscription_token(uuid,text)', 'execute')),
+  ('authenticated can delete subscription', has_function_privilege('authenticated', 'public.delete_calendar_subscription(uuid)', 'execute')),
   ('anon cannot execute v2 helper', not has_function_privilege('anon', 'public.calendar_subscription_task_filter_allowed(jsonb)', 'execute')),
   ('anon cannot execute subscription validator', not has_function_privilege('anon', 'public.calendar_subscription_filter_allowed(jsonb)', 'execute')),
   ('anon cannot set subscription lifecycle', not has_function_privilege('anon', 'public.set_calendar_subscription_active(uuid,boolean)', 'execute')),
-  ('anon cannot rotate subscription token', not has_function_privilege('anon', 'public.rotate_calendar_subscription_token(uuid,text)', 'execute'));
+  ('anon cannot rotate subscription token', not has_function_privilege('anon', 'public.rotate_calendar_subscription_token(uuid,text)', 'execute')),
+  ('anon cannot delete subscription', not has_function_privilege('anon', 'public.delete_calendar_subscription(uuid)', 'execute'));
 
 set local role authenticated;
 insert into public.calendar_subscriptions (
@@ -287,6 +292,9 @@ insert into dev045_checks(name, ok)
 values (
   'non-owner cannot change another subscription lifecycle',
   not public.set_calendar_subscription_active('77777777-7777-4777-8777-777777777777', false)
+), (
+  'non-owner cannot delete another subscription',
+  not public.delete_calendar_subscription('77777777-7777-4777-8777-777777777777')
 );
 reset role;
 
@@ -303,6 +311,22 @@ values (
       and filters_json = '{"workspace_ids":["33333333-3333-4333-8333-333333333333"],"date_types":["due_date"],"assignee":{"type":"me"}}'::jsonb
   )
 );
+
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+set local role authenticated;
+insert into dev045_checks(name, ok)
+values (
+  'owner can delete subscription and revoke its feed token',
+  public.delete_calendar_subscription('77777777-7777-4777-8777-777777777777')
+), (
+  'deleted subscription no longer has a token row',
+  not exists (
+    select 1
+    from public.calendar_subscriptions
+    where id = '77777777-7777-4777-8777-777777777777'
+  )
+);
+reset role;
 
 update public.tenant_members
 set status = 'active'
@@ -362,6 +386,7 @@ const migrationSql = [
   source.dev045V3Migration,
   source.dev045V3PolicyRebindMigration,
   source.lifecycleRpcMigration,
+  source.deleteRpcMigration,
   fixtureSql,
   'rollback;',
 ].join('\n\n');

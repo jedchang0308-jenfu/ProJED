@@ -385,6 +385,7 @@ export const createBackupPackage = async (
       appVersion,
       backend,
       workspaceId: source.workspaceId,
+      workspaceTitle: source.workspaceTitle,
       boardId: source.boardId,
       boardTitle: source.boardTitle,
     },
@@ -663,6 +664,9 @@ const parseV2Package = async (value: Record<string, unknown>): Promise<BackupPac
       appVersion: readRequiredString(value.source.appVersion, 'source appVersion'),
       backend: value.source.backend,
       workspaceId: readRequiredString(value.source.workspaceId, 'source workspaceId'),
+      workspaceTitle: typeof value.source.workspaceTitle === 'string' && value.source.workspaceTitle.trim()
+        ? value.source.workspaceTitle.trim()
+        : undefined,
       boardId: readRequiredString(value.source.boardId, 'source boardId'),
       boardTitle: sourceBoardTitle,
     },
@@ -810,17 +814,43 @@ export const inspectBackupText = async (text: string): Promise<BackupInspection>
 export const stringifyBackupPackage = (packageValue: BackupPackageV2): string =>
   JSON.stringify(packageValue, null, 2);
 
-export const buildBackupFilename = (packageValue: BackupPackageV2): string => {
-  const safeTitle = packageValue.payload.board.title
+export interface BackupFilenameOptions {
+  includeWorkspace?: boolean;
+  includeBoardId?: boolean;
+}
+
+const sanitizeFilenameSegment = (value: string | undefined, fallback: string, maxLength: number) => {
+  const sanitized = (value ?? '')
     .trim()
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/\s+/g, '-')
-    .slice(0, 48) || 'board';
-  const safeBoardId = packageValue.source.boardId
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, '-')
-    .replace(/\s+/g, '-')
-    .slice(0, 16);
-  const date = packageValue.createdAt.slice(0, 10);
-  return `projed-${safeTitle}-${safeBoardId}-${date}.backup.json`;
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .slice(0, maxLength)
+    .replace(/^[.-]+|[.-]+$/g, '');
+  return sanitized || fallback;
+};
+
+const formatBackupFilenameTimestamp = (createdAt: string) => {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return 'unknown-time';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+};
+
+const shortBoardId = (boardId: string) =>
+  sanitizeFilenameSegment(boardId, 'board', 80).slice(-8);
+
+export const buildBackupFilename = (
+  packageValue: BackupPackageV2,
+  options: BackupFilenameOptions = {}
+): string => {
+  const segments: string[] = [];
+  if (options.includeWorkspace && packageValue.source.workspaceTitle) {
+    segments.push(sanitizeFilenameSegment(packageValue.source.workspaceTitle, 'workspace', 24));
+  }
+  segments.push(sanitizeFilenameSegment(packageValue.payload.board.title, 'board', 40));
+  segments.push(formatBackupFilenameTimestamp(packageValue.createdAt));
+  if (options.includeBoardId) segments.push(shortBoardId(packageValue.source.boardId));
+  return `projed-${segments.join('_')}.backup.json`;
 };

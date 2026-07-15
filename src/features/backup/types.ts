@@ -90,6 +90,8 @@ export interface BackupPackageV2 {
     appVersion: string;
     backend: 'supabase' | 'local-test';
     workspaceId: string;
+    /** Optional display metadata; older V2 packages remain valid without it. */
+    workspaceTitle?: string;
     boardId: string;
     boardTitle: string;
   };
@@ -113,6 +115,7 @@ export interface BackupPackageV2 {
 
 export interface BoardBackupSource {
   workspaceId: string;
+  workspaceTitle?: string;
   boardId: string;
   boardTitle: string;
   tasks: import('../../types').TaskNode[];

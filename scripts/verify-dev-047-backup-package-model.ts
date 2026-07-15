@@ -11,6 +11,7 @@ import {
 import {
   calculateBackupChecksum,
   canonicalizeBackupPayload,
+  buildBackupFilename,
   compareBackupSemantics,
   createBackupPackage,
   inspectBackupText,
@@ -32,6 +33,7 @@ const expectBackupError = async (code: BackupError['code'], run: () => unknown |
 
 const source: BoardBackupSource = {
   workspaceId: 'workspace-a',
+  workspaceTitle: 'Workspace A',
   boardId: 'board-a',
   boardTitle: 'DEV-047 source',
   tasks: [
@@ -70,6 +72,14 @@ const resign = async (packageValue: BackupPackageV2) => {
 
 const main = async () => {
   const packageValue = await createBackupPackage(source, 'local-test', 'dev-047-test');
+
+  await test('MOD-047-014 backup filename stays human-readable and scoped', () => {
+    const filename = buildBackupFilename(packageValue);
+    assert.match(filename, /^projed-DEV-047-source_\d{8}-\d{6}\.backup\.json$/);
+    assert(!filename.includes('board-a'));
+    const disambiguated = buildBackupFilename(packageValue, { includeWorkspace: true, includeBoardId: true });
+    assert.match(disambiguated, /^projed-Workspace-A_DEV-047-source_\d{8}-\d{6}_board-a\.backup\.json$/);
+  });
 
   await test('MOD-047-001 canonical checksum ignores entity and object key order', async () => {
     const reordered = structuredClone(packageValue.payload);

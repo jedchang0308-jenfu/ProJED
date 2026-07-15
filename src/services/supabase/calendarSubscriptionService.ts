@@ -531,4 +531,13 @@ export const calendarSubscriptionService = {
     if (!data) throw new Error('找不到可重生連結的行事曆訂閱。');
     return getCalendarFeedUrl(token);
   },
+
+  delete: async (subscriptionId: string): Promise<void> => {
+    requireSupabase();
+    const { data, error } = await supabase.rpc('delete_calendar_subscription', {
+      target_subscription_id: subscriptionId,
+    });
+    assertNoError(error);
+    if (!data) throw new Error('找不到可刪除的行事曆訂閱。');
+  },
 };

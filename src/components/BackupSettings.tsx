@@ -154,6 +154,7 @@ const BackupSettings: React.FC = () => {
     setExportError('');
     void backupApplicationService.createBoardPackages(selectedExportTargets.map(option => ({
       workspaceId: option.workspaceId,
+      workspaceTitle: option.workspaceTitle,
       boardId: option.boardId,
     })))
       .then(results => {

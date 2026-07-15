@@ -13,6 +13,8 @@ import {
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
+  Trash2,
+  X,
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useBoardStore from '../store/useBoardStore';
@@ -270,6 +272,8 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'builder'>('list');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [subscriptionToDelete, setSubscriptionToDelete] = useState<CalendarSubscription | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const boardOptions = useMemo<CalendarBoardOption[]>(() => {
@@ -586,6 +590,26 @@ const CalendarSubscriptionsView: React.FC = () => {
     }
   };
 
+  const deleteSubscription = async () => {
+    if (!subscriptionToDelete) return;
+    setIsDeleting(true);
+    try {
+      await calendarSubscriptionService.delete(subscriptionToDelete.id);
+      setSubscriptions((current) => current.filter((item) => item.id !== subscriptionToDelete.id));
+      setGeneratedUrls((current) => {
+        const next = { ...current };
+        delete next[subscriptionToDelete.id];
+        return next;
+      });
+      setSubscriptionToDelete(null);
+      toast.success('訂閱已刪除，原訂閱連結已撤銷');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '刪除訂閱失敗');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const submitBlockedReason = !name.trim()
     ? '請先輸入訂閱名稱。'
     : builderValidation.loading
@@ -797,6 +821,14 @@ const CalendarSubscriptionsView: React.FC = () => {
                             <Power size={13} />
                             {subscription.isActive ? '停用' : '啟用'}
                           </button>
+                          <button
+                            onClick={() => setSubscriptionToDelete(subscription)}
+                            className="inline-flex h-8 items-center gap-1 border border-rose-200 bg-white px-2 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                            aria-label={`刪除訂閱 ${subscription.name}`}
+                          >
+                            <Trash2 size={13} />
+                            刪除
+                          </button>
                         </div>
                       </div>
 
@@ -832,6 +864,83 @@ const CalendarSubscriptionsView: React.FC = () => {
           </section>
         )}
       </div>
+
+      {subscriptionToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !isDeleting) setSubscriptionToDelete(null);
+          }}
+        >
+          <section
+            className="w-full max-w-lg border border-slate-200 bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calendar-subscription-delete-title"
+            aria-describedby="calendar-subscription-delete-description"
+            data-calendar-subscription-delete-dialog="true"
+          >
+            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center bg-rose-50 text-rose-700">
+                  <Trash2 size={16} />
+                </div>
+                <div>
+                  <h3 id="calendar-subscription-delete-title" className="text-sm font-bold text-slate-900">刪除訂閱並撤銷連結</h3>
+                  <p id="calendar-subscription-delete-description" className="mt-1 text-xs leading-5 text-slate-500">
+                    刪除後無法恢復，使用此連結的外部行事曆將停止取得更新。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubscriptionToDelete(null)}
+                disabled={isDeleting}
+                className="inline-flex h-8 w-8 items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed"
+                aria-label="取消刪除"
+                title="取消刪除"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 px-4 py-4 text-sm">
+              <div className="border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="font-bold text-slate-900">{subscriptionToDelete.name}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600">
+                  <div>來源：{describeSourceFilter(subscriptionToDelete.filters, workspaceNameById, boardPathById)}</div>
+                  <div>條件：{describeConditionFilters(subscriptionToDelete.filters, memberNameById, user?.uid)}</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-xs leading-5 text-rose-700" role="alert">
+                <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                <span>這會永久刪除訂閱設定並讓舊 ICS 連結失效；若要日後恢復，請改用「停用」。</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setSubscriptionToDelete(null)}
+                disabled={isDeleting}
+                className="h-9 border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteSubscription()}
+                disabled={isDeleting}
+                className="inline-flex h-9 items-center gap-2 bg-rose-700 px-3 text-sm font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                {isDeleting ? '刪除中' : '刪除並撤銷連結'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

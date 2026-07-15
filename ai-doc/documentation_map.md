@@ -1,5 +1,14 @@
 # ProJED Documentation Map
 
+## Active Repository / Cold Start Rule
+
+- Active repo 固定為 `C:\VIBE CODING\ProJED\ProJED`。
+- 不要從 `C:\VIBE CODING\ProJED` 外層遞迴讀取 sibling clone，例如
+  `ProJED-dev011012-hotfix`、`ProJED-main-ai-data-fix` 或備份資料夾。
+- 冷啟動先讀 `ai-doc/dev_task.md` 的 `## 總任務清單` 與本檔最前方最新狀態；選定 DEV 後，只讀該 DEV 直接連結的 SPEC / QA / QC / release 文件。
+- 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
+- Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
+
 ## Documentation Map Update - 2026-07-14
 
 ### DEV-047: 看板備份套件 V2 與交易式匯入
