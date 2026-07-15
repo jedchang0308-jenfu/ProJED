@@ -6,6 +6,7 @@ import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import type { TaskNode } from '../types';
 import { TaskDetailsModal } from './TaskDetailsModal';
+import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { toast } from '../store/useToastStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useDialogStore from '../store/useDialogStore';
@@ -17,6 +18,7 @@ import {
   prepareNewTaskNaming,
   selectAndOpenTaskDetails,
 } from '../utils/taskInteractions';
+import { getTaskAssigneeIds } from '../utils/taskAssignments';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -104,9 +106,12 @@ export const GlobalContextMenu: React.FC = () => {
     label: member.profile?.displayName || member.profile?.email || member.userId,
     role: member.role,
   }));
-  const currentAssigneeLabel =
-    assigneeOptions.find(member => member.id === currentNode?.assigneeId)?.label ||
-    (currentNode?.assigneeId ? '已離開成員' : '未指派');
+  const currentPrimaryIds = getTaskAssigneeIds(currentNode);
+  const currentAssigneeLabel = currentPrimaryIds.length === 0
+    ? '未指派'
+    : currentPrimaryIds.length > 1
+      ? `共同主責 ${currentPrimaryIds.length} 人`
+      : assigneeOptions.find(member => member.id === currentPrimaryIds[0])?.label || `已離開成員 (${currentPrimaryIds[0]})`;
 
   const enterDependencyMode = (side: 'start' | 'end') => {
     if (!canCreateDependency) return;
@@ -308,17 +313,6 @@ export const GlobalContextMenu: React.FC = () => {
     if (!contextMenuState) return;
 
     updateNode(contextMenuState.nodeId, { status: 'completed' });
-    setContextMenuState(null);
-  };
-
-  const handleAssign = (assigneeId?: string) => {
-    if (!canAssignTask) return;
-    if (!contextMenuState) return;
-
-    updateNode(contextMenuState.nodeId, {
-      assigneeId: assigneeId || undefined,
-      updatedAt: Date.now(),
-    });
     setContextMenuState(null);
   };
 
@@ -653,7 +647,7 @@ export const GlobalContextMenu: React.FC = () => {
               >
                 <UserRound size={14} className="flex-shrink-0 text-blue-500" />
                 <span className="min-w-0 flex-1">
-                  <span className="block">指派人</span>
+                  <span className="block">主責／協作</span>
                   <span className="block truncate text-[11px] text-gray-400">{currentAssigneeLabel}</span>
                 </span>
                 <ChevronRight size={14} className={`flex-shrink-0 text-gray-400 transition-transform ${isAssigneeMenuOpen ? 'rotate-90' : ''}`} />
@@ -661,38 +655,20 @@ export const GlobalContextMenu: React.FC = () => {
 
               {isAssigneeMenuOpen && (
                 <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
-                  <button
-                    type="button"
-                    onClick={() => handleAssign(undefined)}
-                    disabled={!canAssignTask}
-                    className={`flex min-h-8 w-full items-center gap-2 px-8 py-1.5 text-left text-xs transition-colors hover:bg-white dark:hover:bg-gray-700 ${
-                      !currentNode?.assigneeId ? 'font-semibold text-blue-600' : 'text-gray-600 dark:text-gray-300'
-                    }`}
-                  >
-                    未指派
-                  </button>
-                  {membersLoading && assigneeOptions.length === 0 && (
-                    <div className="px-8 py-1.5 text-xs text-gray-400">載入成員中...</div>
-                  )}
-                  {!membersLoading && assigneeOptions.length === 0 && (
-                    <div className="px-8 py-1.5 text-xs text-gray-400">沒有可指派成員</div>
-                  )}
-                  {assigneeOptions.map(member => (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => handleAssign(member.id)}
+                  {currentNode ? (
+                    <TaskAssignmentPicker
+                      node={currentNode}
+                      options={assigneeOptions}
+                      membersLoading={membersLoading}
                       disabled={!canAssignTask}
-                      className={`flex min-h-8 w-full items-center gap-2 px-8 py-1.5 text-left text-xs transition-colors hover:bg-white dark:hover:bg-gray-700 ${
-                        currentNode?.assigneeId === member.id ? 'font-semibold text-blue-600' : 'text-gray-600 dark:text-gray-300'
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{member.label}</span>
-                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-300">
-                        {member.role}
-                      </span>
-                    </button>
-                  ))}
+                      inline
+                      onChange={(primaryIds, collaboratorIds) => updateNode(currentNode.id, {
+                        assigneeIds: primaryIds,
+                        collaboratorIds,
+                        updatedAt: Date.now(),
+                      })}
+                    />
+                  ) : null}
                 </div>
               )}
             </div>

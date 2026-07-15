@@ -393,6 +393,8 @@ export interface TaskNode {
   detailNotes?: TaskDetailNote[];
   description?: string;
   status: TaskStatus;
+  /** Canonical multi-person primary assignment. assigneeId is kept as the first-id compatibility alias. */
+  assigneeIds?: string[];
   assigneeId?: string;
   collaboratorIds?: string[];
   tagIds?: string[];

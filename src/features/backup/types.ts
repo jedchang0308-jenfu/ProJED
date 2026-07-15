@@ -44,6 +44,8 @@ export interface PortableTaskV2 {
   detailNotes?: TaskDetailNote[];
   description?: string;
   status: TaskStatus;
+  /** Optional extension; assigneeId remains the first-id compatibility alias. */
+  assigneeIds?: string[];
   assigneeId?: string;
   collaboratorIds: string[];
   tagSourceIds: string[];

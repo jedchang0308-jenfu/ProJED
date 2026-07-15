@@ -33,6 +33,10 @@ import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, Document
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
 import {
+  getTaskAssigneeIds,
+  normalizeTaskAssignmentSelection,
+} from '../../utils/taskAssignments';
+import {
   BackupError,
   type BackupBackendAdapter,
   type BackupBackendExecuteRequest,
@@ -225,6 +229,10 @@ const mapWbsItemToTaskNode = (
   tagIds: string[] = []
 ): TaskNode => {
   const metadata = item.metadata as Record<string, any> | null;
+  const assignment = normalizeTaskAssignmentSelection(
+    item.assignee_ids?.length ? item.assignee_ids : item.assignee_id ? [item.assignee_id] : [],
+    item.collaborator_ids ?? [],
+  );
   return {
     id: legacyOrId(item.id, item.legacy_node_id),
     storageId: item.id,
@@ -235,8 +243,9 @@ const mapWbsItemToTaskNode = (
   detailNotes: Array.isArray(item.detail_notes) ? (item.detail_notes as unknown as TaskNode['detailNotes']) : undefined,
   description: item.description ?? undefined,
   status: item.status,
-  assigneeId: item.assignee_id ?? undefined,
-  collaboratorIds: item.collaborator_ids,
+  assigneeIds: assignment.primaryIds.length ? assignment.primaryIds : undefined,
+  assigneeId: assignment.primaryIds[0] ?? undefined,
+  collaboratorIds: assignment.collaboratorIds,
   startDate: item.start_date ?? undefined,
   endDate: item.end_date ?? undefined,
   isDurationLocked: item.is_duration_locked,
@@ -498,8 +507,12 @@ const taskNodeToInsert = async (tenantId: string, projectId: string, node: TaskN
   description: node.description ?? null,
   detail_notes: (node.detailNotes ?? []) as unknown as Json,
   status: node.status,
-  assignee_id: isUuid(node.assigneeId) ? node.assigneeId : null,
-  collaborator_ids: (node.collaboratorIds ?? []).filter(isUuid),
+  assignee_id: getTaskAssigneeIds(node).filter(isUuid)[0] ?? null,
+  assignee_ids: getTaskAssigneeIds(node).filter(isUuid),
+  collaborator_ids: normalizeTaskAssignmentSelection(
+    getTaskAssigneeIds(node),
+    node.collaboratorIds ?? [],
+  ).collaboratorIds.filter(isUuid),
   start_date: toDate(node.startDate),
   end_date: toDate(node.endDate),
   is_duration_locked: node.isDurationLocked ?? false,
@@ -1103,8 +1116,22 @@ export const supabaseNodeService = {
     if ('description' in updates) updatePayload.description = updates.description ?? null;
     if ('detailNotes' in updates) updatePayload.detail_notes = updates.detailNotes as unknown as Json;
     if ('status' in updates) updatePayload.status = updates.status;
-    if ('assigneeId' in updates) updatePayload.assignee_id = isUuid(updates.assigneeId) ? updates.assigneeId : null;
-    if ('collaboratorIds' in updates) updatePayload.collaborator_ids = (updates.collaboratorIds ?? []).filter(isUuid);
+    if ('assigneeIds' in updates || 'assigneeId' in updates) {
+      const primaryIds = 'assigneeIds' in updates
+        ? (updates.assigneeIds ?? [])
+        : (updates.assigneeId ? [updates.assigneeId] : []);
+      const validPrimaryIds = primaryIds.filter(isUuid);
+      updatePayload.assignee_ids = validPrimaryIds;
+      updatePayload.assignee_id = validPrimaryIds[0] ?? null;
+      if ('collaboratorIds' in updates) {
+        updatePayload.collaborator_ids = normalizeTaskAssignmentSelection(
+          validPrimaryIds,
+          updates.collaboratorIds ?? [],
+        ).collaboratorIds.filter(isUuid);
+      }
+    } else if ('collaboratorIds' in updates) {
+      updatePayload.collaborator_ids = (updates.collaboratorIds ?? []).filter(isUuid);
+    }
     if ('startDate' in updates) updatePayload.start_date = toDate(updates.startDate);
     if ('endDate' in updates) updatePayload.end_date = toDate(updates.endDate);
     if ('isDurationLocked' in updates) updatePayload.is_duration_locked = updates.isDurationLocked;

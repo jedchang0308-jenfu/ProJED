@@ -1,4 +1,5 @@
 import type { Board, BoardMember, Dependency, TaskNode, TaskTag, Workspace } from '../../types';
+import { normalizeTaskAssignmentSelection } from '../../utils/taskAssignments';
 import {
   BackupError,
   type BackupBackendAdapter,
@@ -124,7 +125,8 @@ const getKnownWorkspaceUserIds = async (workspaceId: string) =>
 const getUnresolvedPeople = (request: BackupBackendPlanRequest, knownUserIds: Set<string>) => {
   const referenced = new Set<string>();
   request.package.payload.tasks.forEach(task => {
-    if (task.assigneeId) referenced.add(task.assigneeId);
+    (task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [])
+      .forEach(id => referenced.add(id));
     task.collaboratorIds.forEach(id => referenced.add(id));
   });
   return Array.from(referenced).filter(id => !knownUserIds.has(id));
@@ -384,8 +386,15 @@ const executeImport = async (request: BackupBackendExecuteRequest): Promise<Back
     detailNotes: task.detailNotes?.map(note => ({ ...note })),
     description: task.description,
     status: task.status,
-    assigneeId: task.assigneeId && knownUserIds.has(task.assigneeId) ? task.assigneeId : undefined,
-    collaboratorIds: task.collaboratorIds.filter(id => knownUserIds.has(id)),
+    assigneeIds: (task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [])
+      .filter(id => knownUserIds.has(id)),
+    assigneeId: (task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [])
+      .find(id => knownUserIds.has(id)),
+    collaboratorIds: normalizeTaskAssignmentSelection(
+      (task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [])
+        .filter(id => knownUserIds.has(id)),
+      task.collaboratorIds.filter(id => knownUserIds.has(id)),
+    ).collaboratorIds,
     tagIds: task.tagSourceIds.map(id => tagIdMap.get(id)).filter((id): id is string => Boolean(id)),
     startDate: task.startDate,
     endDate: task.endDate,

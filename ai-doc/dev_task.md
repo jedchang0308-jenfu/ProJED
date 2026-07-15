@@ -199,6 +199,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 下一步：未來收到 release 指令時進入 ProJED-TEST Level 3 與 production deployment gate；Phase 2/3 需 Human Re-entry
   - 證據：`ADR-041`、`SPEC-047`、`QA-DEV-047`、`QC-DEV-047`
   - 計入交付：是
+- ✓ DEV-048 [交付點] [完成] [P1] [本機已驗證 / 待批次發版] 多人主責與協作指派
+  - 摘要：任務可設定多位主責與多位協作，兩種角色互斥；本輪明確不新增最終負責人。
+  - 來源 ID：`USER-20260715-assignment-optimization`
+  - 下一步：未來收到 release 指令時執行 ProJED-TEST migration / browser smoke 與 production deployment gate
+  - 證據：`SPEC-048`、`QA-DEV-048`、`QC-DEV-048`、`verify:dev-048-task-multi-person-assignment`
+  - 計入交付：是
 
 
 ## PM Update 歷史歸檔

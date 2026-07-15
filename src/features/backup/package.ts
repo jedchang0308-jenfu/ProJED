@@ -1,4 +1,5 @@
 import type { Dependency, TagColor, TaskNode, TaskStatus, TaskTag } from '../../types';
+import { getTaskAssigneeIds, normalizeTaskAssignmentSelection } from '../../utils/taskAssignments';
 import {
   BACKUP_FORMAT,
   BACKUP_MAX_DEPENDENCIES,
@@ -162,9 +163,10 @@ export const compareBackupSemantics = async (
   const actualTasks: unknown[] = [];
   packageValue.payload.tasks.forEach(task => {
     const actual = actualTaskBySourceId.get(task.sourceId);
-    const actualAssignee = actual?.assigneeId;
-    if (actualAssignee && actualAssignee !== task.assigneeId) valid = false;
-    recordPersonRetention(task.assigneeId, actualAssignee === task.assigneeId);
+    const expectedPrimaryIds = task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [];
+    const actualPrimaryIds = actual ? getTaskAssigneeIds(actual) : [];
+    if (actualPrimaryIds.some(id => !expectedPrimaryIds.includes(id)) || expectedPrimaryIds.some(id => !actualPrimaryIds.includes(id))) valid = false;
+    expectedPrimaryIds.forEach(id => recordPersonRetention(id, actualPrimaryIds.includes(id)));
     const expectedCollaborators = new Set(task.collaboratorIds);
     const actualCollaborators = [...(actual?.collaboratorIds ?? [])].sort();
     if (actualCollaborators.some(id => !expectedCollaborators.has(id))) valid = false;
@@ -183,7 +185,8 @@ export const compareBackupSemantics = async (
       detailNotes: task.detailNotes ?? [],
       description: task.description ?? null,
       status: task.status,
-      assigneeId: actualAssignee ?? null,
+      assigneeIds: actualPrimaryIds,
+      assigneeId: actualPrimaryIds[0] ?? null,
       collaboratorIds: actualCollaborators,
       tagNames: expectedTagNames,
       startDate: task.startDate ?? null,
@@ -202,7 +205,8 @@ export const compareBackupSemantics = async (
       detailNotes: actual?.detailNotes ?? [],
       description: actual?.description ?? null,
       status: actual?.status,
-      assigneeId: actualAssignee ?? null,
+      assigneeIds: actualPrimaryIds,
+      assigneeId: actualPrimaryIds[0] ?? null,
       collaboratorIds: actualCollaborators,
       tagNames: actualTagNames,
       startDate: actual?.startDate ?? null,
@@ -274,8 +278,12 @@ const toPortableTask = (
   detailNotes: task.detailNotes?.map(note => ({ ...note })),
   description: task.description,
   status: task.status,
-  assigneeId: task.assigneeId,
-  collaboratorIds: [...(task.collaboratorIds ?? [])],
+  assigneeIds: getTaskAssigneeIds(task),
+  assigneeId: getTaskAssigneeIds(task)[0],
+  collaboratorIds: normalizeTaskAssignmentSelection(
+    getTaskAssigneeIds(task),
+    task.collaboratorIds ?? [],
+  ).collaboratorIds,
   tagSourceIds: [...(task.tagIds ?? [])],
   startDate: task.startDate,
   endDate: task.endDate,
@@ -469,6 +477,12 @@ const parsePortableTask = (value: unknown, index: number): PortableTaskV2 => {
     detailNotes: value.detailNotes as PortableTaskV2['detailNotes'],
     description: readOptionalString(value.description, `任務 ${index + 1} description`),
     status,
+    assigneeIds: value.assigneeIds === undefined
+      ? (() => {
+          const legacyAssigneeId = readOptionalString(value.assigneeId, `任務 ${index + 1} assigneeId`);
+          return legacyAssigneeId ? [legacyAssigneeId] : [];
+        })()
+      : readStringArray(value.assigneeIds, `任務 ${index + 1} assigneeIds`),
     assigneeId: readOptionalString(value.assigneeId, `任務 ${index + 1} assigneeId`),
     collaboratorIds: readStringArray(value.collaboratorIds ?? [], `任務 ${index + 1} collaboratorIds`),
     tagSourceIds: readStringArray(value.tagSourceIds ?? [], `任務 ${index + 1} tagSourceIds`),
@@ -582,6 +596,13 @@ export const validateBackupPayload = (payload: BackupPayloadV2): void => {
     }
     if (new Set(task.collaboratorIds).size !== task.collaboratorIds.length) {
       throw new BackupError('INVALID_FILE', `任務 ${task.sourceId} 有重複的協作者引用。`);
+    }
+    const primaryIds = task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [];
+    if (new Set(primaryIds).size !== primaryIds.length) {
+      throw new BackupError('INVALID_FILE', `任務 ${task.sourceId} 有重複的主責成員引用。`);
+    }
+    if (primaryIds.some(id => task.collaboratorIds.includes(id))) {
+      throw new BackupError('INVALID_FILE', `任務 ${task.sourceId} 的主責與協作者不可重複。`);
     }
     if (task.kanbanStageSourceId && !taskIds.has(task.kanbanStageSourceId)) {
       throw new BackupError('INVALID_FILE', `任務 ${task.sourceId} 的看板階段不存在。`);
@@ -697,7 +718,12 @@ const normalizeLegacyNodes = (value: unknown): TaskNode[] => {
     detailNotes: Array.isArray(node.detailNotes) ? node.detailNotes as TaskNode['detailNotes'] : undefined,
     description: isString(node.description) ? node.description : undefined,
     status: TASK_STATUSES.has(node.status as TaskStatus) ? node.status as TaskStatus : 'todo',
-    assigneeId: isString(node.assigneeId) ? node.assigneeId : undefined,
+    assigneeIds: Array.isArray(node.assigneeIds)
+      ? node.assigneeIds.filter(isString)
+      : (isString(node.assigneeId) ? [node.assigneeId] : []),
+    assigneeId: isString(node.assigneeId)
+      ? node.assigneeId
+      : (Array.isArray(node.assigneeIds) && isString(node.assigneeIds[0]) ? node.assigneeIds[0] : undefined),
     collaboratorIds: Array.isArray(node.collaboratorIds) ? node.collaboratorIds.filter(isString) : [],
     tagIds: Array.isArray(node.tagIds) ? node.tagIds.filter(isString) : [],
     startDate: isString(node.startDate) ? node.startDate : undefined,

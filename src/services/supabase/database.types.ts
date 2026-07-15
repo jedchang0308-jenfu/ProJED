@@ -153,6 +153,7 @@ export type WbsItemRow = {
   description: string | null;
   detail_notes: Json;
   status: TaskStatus;
+  assignee_ids: string[];
   assignee_id: string | null;
   collaborator_ids: string[];
   start_date: string | null;

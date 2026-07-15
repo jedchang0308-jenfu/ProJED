@@ -2,7 +2,7 @@ import type { TaskNode, TaskStatus } from '../../types';
 
 export type TaskFilterableNode = Pick<
   TaskNode,
-  'assigneeId' | 'endDate' | 'id' | 'status' | 'tagIds' | 'title'
+  'assigneeId' | 'assigneeIds' | 'endDate' | 'id' | 'status' | 'tagIds' | 'title'
 >;
 
 export type TaskFilterState = {

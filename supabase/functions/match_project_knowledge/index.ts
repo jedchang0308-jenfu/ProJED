@@ -100,6 +100,7 @@ type LiveWbsItem = {
   description: string | null;
   detail_notes: unknown;
   status: string;
+  assignee_ids: string[] | null;
   assignee_id: string | null;
   collaborator_ids: string[] | null;
   start_date: string | null;
@@ -221,6 +222,11 @@ const buildPath = (item: LiveWbsItem, itemById: Map<string, LiveWbsItem>) => {
 };
 
 const formatItemLine = (item: LiveWbsItem, itemById: Map<string, LiveWbsItem>) => {
+  const primaryAssigneeIds = item.assignee_ids?.length
+    ? item.assignee_ids
+    : item.assignee_id
+      ? [item.assignee_id]
+      : [];
   const collaborators = item.collaborator_ids ?? [];
   const notes = summarizeDetailNotes(item.detail_notes);
   const description = truncate(item.description);
@@ -233,7 +239,7 @@ const formatItemLine = (item: LiveWbsItem, itemById: Map<string, LiveWbsItem>) =
     `類型:${formatItemType(item.item_type)}`,
     `狀態:${formatStatus(item.status)}`,
     `期程:${formatDateRange(item)}`,
-    `負責:${shortId(item.assignee_id)}`,
+    `主責:${primaryAssigneeIds.length ? primaryAssigneeIds.map(shortId).join(',') : '未指派'}`,
     `協作者:${collaborators.length}`,
     details,
   ].filter(Boolean).join(' | ');
@@ -279,7 +285,7 @@ const buildLiveProjectSnapshot = async (
 
   let itemQuery = supabase
     .from('wbs_items')
-    .select('id,parent_id,code,title,description,detail_notes,status,assignee_id,collaborator_ids,start_date,end_date,item_type,sort_order,depth,updated_at')
+    .select('id,parent_id,code,title,description,detail_notes,status,assignee_ids,assignee_id,collaborator_ids,start_date,end_date,item_type,sort_order,depth,updated_at')
     .eq('tenant_id', tenantId)
     .eq('is_archived', false)
     .order('sort_order', { ascending: true })
@@ -327,7 +333,7 @@ const buildLiveProjectSnapshot = async (
     .filter((item) => !isCompleted(item) && item.end_date && item.end_date >= today && item.end_date <= sevenDaysLater)
     .sort((a, b) => (a.end_date ?? '').localeCompare(b.end_date ?? ''));
   const blockedItems = wbsItems.filter((item) => ['delayed', 'onhold', 'unsure'].includes(item.status));
-  const missingAssigneeItems = wbsItems.filter((item) => isTaskLike(item) && !item.assignee_id);
+  const missingAssigneeItems = wbsItems.filter((item) => isTaskLike(item) && !(item.assignee_ids?.length || item.assignee_id));
   const missingScheduleItems = wbsItems.filter((item) => isTaskLike(item) && (!item.start_date || !item.end_date));
   const memberRoleCounts = countBy(projectMembers, (member) => member.role);
   const workspaceMemberRoleCounts = countBy(workspaceMembers, (member) => member.role);

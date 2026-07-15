@@ -18,6 +18,7 @@ import { compactClassNames } from '../ui/compactTokens';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { isMobileTaskActionMode } from './mobileTaskActionContext';
+import TaskAssignmentPicker from '../TaskAssignmentPicker';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -127,7 +128,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
     })),
     [boardMembers]
   );
-  const hasCurrentAssignee = !node?.assigneeId || assigneeOptions.some(option => option.id === node.assigneeId);
   
   // ✅ 使用 Stable Selector 訂閱「子節點 ID 陣列」，避免 Zustand 無限 Render Loop
   const childrenIds = useWbsStore(s => s.parentNodesIndex[nodeId]); 
@@ -290,10 +290,13 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       updateNode(nodeId, { status: e.target.value as TaskStatus });
   };
 
-  const handleAssigneeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-      e.stopPropagation();
+  const handleAssignmentChange = (primaryIds: string[], collaboratorIds: string[]) => {
       if (!canAssignTask) return;
-      updateNode(nodeId, { assigneeId: e.target.value || undefined });
+      updateNode(nodeId, {
+        assigneeIds: primaryIds,
+        collaboratorIds,
+        updatedAt: Date.now(),
+      });
   };
 
   // 生成 Native Select 專用 Tailwind Class
@@ -386,30 +389,14 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
         {/* Col 2: 狀態 (原生 Select 偽裝 Badge) */}
         <div className="flex items-center">
-            <select
-                value={node.assigneeId || ''}
-                onChange={handleAssigneeChange}
-                onClick={(e) => e.stopPropagation()}
+            <TaskAssignmentPicker
+                node={node}
+                options={assigneeOptions}
+                membersLoading={membersLoading}
                 disabled={!canAssignTask}
-                className="w-full rounded px-2 py-1 text-xs text-slate-600 bg-transparent border-0 outline-none appearance-none transition-colors hover:bg-slate-100 focus:bg-slate-100"
-                title="指派負責人"
-            >
-                <option value="">未指派</option>
-                {!hasCurrentAssignee && node.assigneeId && (
-                  <option value={node.assigneeId}>已離開成員 ({node.assigneeId})</option>
-                )}
-                {membersLoading && assigneeOptions.length === 0 && (
-                  <option value="" disabled>載入成員中...</option>
-                )}
-                {!membersLoading && assigneeOptions.length === 0 && (
-                  <option value="" disabled>沒有可指派成員</option>
-                )}
-                {assigneeOptions.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.label} · {member.role}
-                  </option>
-                ))}
-            </select>
+                compact
+                onChange={handleAssignmentChange}
+            />
         </div>
 
         <div className="flex items-center">

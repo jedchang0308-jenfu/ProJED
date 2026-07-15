@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CircleDot, Lock, MessageSquareText, Plus, Send, Trash2, Unlock, UserRound, X } from 'lucide-react';
+import { CircleDot, Lock, MessageSquareText, Plus, Send, Trash2, Unlock, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -9,6 +9,7 @@ import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useBoardStore from '../store/useBoardStore';
+import TaskAssignmentPicker from './TaskAssignmentPicker';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -114,7 +115,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     })),
     [boardMembers]
   );
-  const hasCurrentAssignee = !node?.assigneeId || assigneeOptions.some(option => option.id === node.assigneeId);
   const currentNodeId = node?.id;
   const currentNodeTitle = node?.title || '';
   const currentNodeStartDate = node?.startDate || '';
@@ -274,10 +274,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     updateNode(node.id, updates);
   };
 
-  const handleAssigneeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleAssignmentChange = (primaryIds: string[], collaboratorIds: string[]) => {
     if (!canAssignTask) return;
     updateNode(node.id, {
-      assigneeId: event.target.value || undefined,
+      assigneeIds: primaryIds,
+      collaboratorIds,
       updatedAt: Date.now(),
     });
   };
@@ -487,35 +488,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </label>
             </div>
 
-            <div className="min-w-0" data-task-details-meta-field="assignee">
+            <div className="min-w-0" data-task-details-meta-field="assignment">
               <label className="text-xs font-medium text-slate-500" data-task-details-meta-label="true">
-                <span data-task-details-meta-label-text="true">指派人</span>
+                <span data-task-details-meta-label-text="true">主責／協作</span>
                 <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
-                  <span className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-500">
-                    <UserRound size={15} />
-                  </span>
-                  <select
-                    value={node.assigneeId || ''}
-                    onChange={handleAssigneeChange}
+                  <TaskAssignmentPicker
+                    node={node}
+                    options={assigneeOptions}
+                    membersLoading={membersLoading}
                     disabled={!canAssignTask}
-                    className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="">未指派</option>
-                    {!hasCurrentAssignee && node.assigneeId && (
-                      <option value={node.assigneeId}>已離開成員 ({node.assigneeId})</option>
-                    )}
-                    {membersLoading && assigneeOptions.length === 0 && (
-                      <option value="" disabled>載入成員中...</option>
-                    )}
-                    {!membersLoading && assigneeOptions.length === 0 && (
-                      <option value="" disabled>沒有可指派成員</option>
-                    )}
-                    {assigneeOptions.map(member => (
-                      <option key={member.id} value={member.id}>
-                        {member.label} · {member.role}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={handleAssignmentChange}
+                  />
                 </div>
               </label>
             </div>

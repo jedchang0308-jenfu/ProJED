@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import type { TaskFilterState, TaskFilterableNode } from './types';
+import { getTaskAssigneeIds } from '../../utils/taskAssignments';
 
 export const UNASSIGNED_ASSIGNEE_FILTER = '__unassigned__';
 
@@ -18,13 +19,13 @@ export const matchesDueDateFilter = (
 };
 
 export const matchesAssigneeFilter = (
-  node: Pick<TaskFilterableNode, 'assigneeId'> | null | undefined,
+  node: Pick<TaskFilterableNode, 'assigneeId' | 'assigneeIds'> | null | undefined,
   selectedAssigneeIds: string[] | null | undefined,
 ) => {
   if (!selectedAssigneeIds || selectedAssigneeIds.length === 0) return true;
-  const assigneeId = node?.assigneeId;
-  if (!assigneeId) return selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER);
-  return selectedAssigneeIds.includes(assigneeId);
+  const assigneeIds = getTaskAssigneeIds(node);
+  if (assigneeIds.length === 0) return selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER);
+  return assigneeIds.some(assigneeId => selectedAssigneeIds.includes(assigneeId));
 };
 
 export const matchesTagFilters = (

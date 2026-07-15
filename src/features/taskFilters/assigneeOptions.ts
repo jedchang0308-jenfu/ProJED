@@ -1,4 +1,5 @@
 import type { BoardMember, CollaborationMemberProfile, TaskNode, WorkspaceMember } from '../../types';
+import { getTaskAssigneeIds } from '../../utils/taskAssignments';
 
 export type TaskAssigneeFilterOption = {
   id: string;
@@ -40,13 +41,15 @@ export const createBoardAssigneeFilterOptions = (
   });
 
   Object.values(nodesById).forEach(node => {
-    if (!node || node.isArchived || node.boardId !== boardId || !node.assigneeId) return;
-    if (!labels.has(node.assigneeId)) {
-      labels.set(
-        node.assigneeId,
-        workspaceMemberLabels.get(node.assigneeId) || createFallbackAssigneeLabel(node.assigneeId),
-      );
-    }
+    if (!node || node.isArchived || node.boardId !== boardId) return;
+    getTaskAssigneeIds(node).forEach(assigneeId => {
+      if (!labels.has(assigneeId)) {
+        labels.set(
+          assigneeId,
+          workspaceMemberLabels.get(assigneeId) || createFallbackAssigneeLabel(assigneeId),
+        );
+      }
+    });
   });
 
   return Array.from(labels.entries())

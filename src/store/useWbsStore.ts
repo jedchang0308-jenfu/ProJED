@@ -5,6 +5,7 @@ import { nodeService, dependencyService, workspaceService, boardService, tagServ
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
+import { toast } from './useToastStore';
 import { useTagStore } from './useTagStore';
 import {
   isTaskWorkbenchUnplacedTask,
@@ -12,6 +13,12 @@ import {
   removeTaskWorkbenchUnplacedTask,
   upsertTaskWorkbenchUnplacedTask,
 } from '../features/taskWorkbench/placement';
+import {
+  getTaskAssigneeIds,
+  normalizeTaskAssignmentNode,
+  normalizeTaskAssignmentUpdates,
+  requiresPrimaryAssignee,
+} from '../utils/taskAssignments';
 
 /**
  * WbsStore 狀態定義
@@ -375,23 +382,29 @@ const buildTaskUpdateActivities = (
   updates: Partial<TaskNode>
 ): TaskActivityDescriptor[] => {
   const events: TaskActivityDescriptor[] = [];
+  const sameIds = (left: string[], right: string[]) =>
+    left.length === right.length && left.every((id, index) => id === right[index]);
+  const oldPrimaryIds = getTaskAssigneeIds(oldNode);
+  const newPrimaryIds = getTaskAssigneeIds(newNode);
 
-  if ('assigneeId' in updates) {
+  if (('assigneeIds' in updates || 'assigneeId' in updates) && !sameIds(oldPrimaryIds, newPrimaryIds)) {
     events.push({
       eventType: 'task_assigned',
       payload: {
-        before: { assigneeId: oldNode.assigneeId ?? null },
-        after: { assigneeId: newNode.assigneeId ?? null },
+        before: { assigneeIds: oldPrimaryIds, assigneeId: oldPrimaryIds[0] ?? null },
+        after: { assigneeIds: newPrimaryIds, assigneeId: newPrimaryIds[0] ?? null },
       },
     });
   }
 
-  if ('collaboratorIds' in updates) {
+  const oldCollaboratorIds = oldNode.collaboratorIds ?? [];
+  const newCollaboratorIds = newNode.collaboratorIds ?? [];
+  if ('collaboratorIds' in updates && !sameIds(oldCollaboratorIds, newCollaboratorIds)) {
     events.push({
       eventType: 'task_collaborators_changed',
       payload: {
-        before: { collaboratorIds: oldNode.collaboratorIds ?? [] },
-        after: { collaboratorIds: newNode.collaboratorIds ?? [] },
+        before: { collaboratorIds: oldCollaboratorIds },
+        after: { collaboratorIds: newCollaboratorIds },
       },
     });
   }
@@ -500,7 +513,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   setNodes: (nodes, options = {}) => {
     const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options);
     const nodesRecord = nodesWithLocalUnplacedTasks.reduce((acc, node) => {
-      const normalizedNode = applySmartStatus(node);
+      const normalizedNode = applySmartStatus(normalizeTaskAssignmentNode(node));
       acc[normalizedNode.id] = normalizedNode;
 
       if (normalizedNode.status !== node.status && normalizedNode.workspaceId && normalizedNode.boardId) {
@@ -518,7 +531,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   addNode: (node) => {
     const state = get();
-    const normalizedNode = applySmartStatus(node);
+    const normalizedNode = applySmartStatus(normalizeTaskAssignmentNode(node));
     // 使用 Immutable 更新 nodes
     const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
     set({ nodes: updatedNodes });
@@ -538,6 +551,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         after: {
             parentId: normalizedNode.parentId,
             status: normalizedNode.status,
+            assigneeIds: getTaskAssigneeIds(normalizedNode),
             assigneeId: normalizedNode.assigneeId ?? null,
             collaboratorIds: normalizedNode.collaboratorIds ?? [],
             startDate: normalizedNode.startDate ?? null,
@@ -549,6 +563,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         after: {
             parentId: normalizedNode.parentId,
             status: normalizedNode.status,
+            assigneeIds: getTaskAssigneeIds(normalizedNode),
             assigneeId: normalizedNode.assigneeId ?? null,
             collaboratorIds: normalizedNode.collaboratorIds ?? [],
             startDate: normalizedNode.startDate ?? null,
@@ -696,6 +711,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           after: {
             parentId: node.parentId,
             status: node.status,
+            assigneeIds: getTaskAssigneeIds(node),
             assigneeId: node.assigneeId ?? null,
             collaboratorIds: node.collaboratorIds ?? [],
             startDate: node.startDate ?? null,
@@ -709,6 +725,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           after: {
             parentId: node.parentId,
             status: node.status,
+            assigneeIds: getTaskAssigneeIds(node),
             assigneeId: node.assigneeId ?? null,
             collaboratorIds: node.collaboratorIds ?? [],
             startDate: node.startDate ?? null,
@@ -783,7 +800,19 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (!state.nodes[id]) return;
 
     const oldNode = state.nodes[id];
-    const normalizedUpdates = normalizeSmartStatusUpdates(oldNode, updates);
+    const normalizedUpdates = normalizeTaskAssignmentUpdates(
+      oldNode,
+      normalizeSmartStatusUpdates(oldNode, updates),
+    );
+    const candidateNode = { ...oldNode, ...normalizedUpdates };
+    if (
+      ('status' in normalizedUpdates || 'assigneeIds' in normalizedUpdates || 'assigneeId' in normalizedUpdates || 'collaboratorIds' in normalizedUpdates) &&
+      requiresPrimaryAssignee(candidateNode) &&
+      getTaskAssigneeIds(candidateNode).length === 0
+    ) {
+      toast.warning('執行中的任務至少要設定一位主責成員。');
+      return;
+    }
 
     // 比對實質變更，供 undo 使用
     const oldValues: Partial<TaskNode> = {};

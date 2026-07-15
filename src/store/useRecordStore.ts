@@ -200,10 +200,14 @@ const formatDateRange = (value: Record<string, unknown> | undefined) => {
   return `${start} 至 ${end}`;
 };
 
-const getPayloadAssigneeId = (payload: Record<string, unknown>, side: 'before' | 'after') => {
+const getPayloadAssigneeIds = (payload: Record<string, unknown>, side: 'before' | 'after') => {
   const sidePayload = payload[side] as Record<string, unknown> | undefined;
+  const assigneeIds = sidePayload?.assigneeIds;
+  if (Array.isArray(assigneeIds)) {
+    return assigneeIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
+  }
   const assigneeId = sidePayload?.assigneeId;
-  return typeof assigneeId === 'string' && assigneeId ? assigneeId : null;
+  return typeof assigneeId === 'string' && assigneeId ? [assigneeId] : [];
 };
 
 const shortId = (value: string) => value.slice(0, 8);
@@ -218,6 +222,9 @@ const formatAssignee = (assigneeId: string | null) => {
   return `已離開成員（${shortId(assigneeId)}）`;
 };
 
+const formatAssignees = (assigneeIds: string[]) =>
+  assigneeIds.length ? assigneeIds.map(id => formatAssignee(id)).join('、') : '未指派';
+
 const summarizeMeetingActivity = (activity: MeetingTaskActivityInput) => {
   const payload = activity.payload ?? {};
   if (activity.eventType === 'task_status_changed') {
@@ -230,7 +237,7 @@ const summarizeMeetingActivity = (activity: MeetingTaskActivityInput) => {
     return `日期由「${formatDateRange(before)}」改為「${formatDateRange(after)}」。`;
   }
   if (activity.eventType === 'task_assigned') {
-    return `負責人改為「${formatAssignee(getPayloadAssigneeId(payload, 'after'))}」。`;
+    return `主責成員改為「${formatAssignees(getPayloadAssigneeIds(payload, 'after'))}」。`;
   }
   if (activity.eventType === 'task_collaborators_changed') return '協作者已更新。';
   if (activity.eventType === 'task_tags_changed') return '標籤已更新。';
