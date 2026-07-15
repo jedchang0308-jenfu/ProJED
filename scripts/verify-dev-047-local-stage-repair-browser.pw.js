@@ -37,6 +37,7 @@ async (page) => {
     const rootId = 'list_legacy-stage';
     const legacyStageTaskId = 'task_legacy-stage';
     const missingStageTaskId = 'task_missing-stage';
+    const archivedOrphanTaskId = 'task_archived-orphan';
     const now = Date.now();
     nodes[rootId] = {
       id: rootId, workspaceId, boardId, parentId: null, title: 'Legacy stage',
@@ -52,8 +53,13 @@ async (page) => {
       status: 'todo', nodeType: 'task', kanbanStageId: 'missing-stage', order: 1000,
       createdAt: now, updatedAt: now,
     };
+    nodes[archivedOrphanTaskId] = {
+      id: archivedOrphanTaskId, workspaceId, boardId, parentId: 'deleted-parent', title: 'Archived orphan task',
+      status: 'todo', nodeType: 'task', isArchived: false, order: 1001,
+      createdAt: now, updatedAt: now,
+    };
     localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
-    return { workspaceId, boardId, rootId, legacyStageTaskId, missingStageTaskId };
+    return { workspaceId, boardId, rootId, legacyStageTaskId, missingStageTaskId, archivedOrphanTaskId };
   });
 
   await page.evaluate(() => window.history.replaceState(null, '', '/?qcSize=12'));
@@ -63,16 +69,19 @@ async (page) => {
   await page.locator('[data-backup-export-counts="true"]').waitFor({ state: 'visible', timeout: 15000 });
 
   const panelText = await page.locator('[data-backup-export-panel="true"]').innerText();
-  const persisted = await page.evaluate(({ rootId, legacyStageTaskId, missingStageTaskId }) => {
+  const persisted = await page.evaluate(({ rootId, legacyStageTaskId, missingStageTaskId, archivedOrphanTaskId }) => {
     const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
     return {
       legacyStage: nodes[legacyStageTaskId]?.kanbanStageId,
       missingStage: nodes[missingStageTaskId]?.kanbanStageId,
+      orphanParent: nodes[archivedOrphanTaskId]?.parentId,
+      orphanArchived: nodes[archivedOrphanTaskId]?.isArchived,
       rootId,
     };
   }, fixture);
   assert(!panelText.includes('失敗'), 'local all-board export should not report a stage failure', { panelText });
   assert(persisted.legacyStage === fixture.rootId, 'raw legacy stage ID should be normalized', persisted);
   assert(persisted.missingStage === fixture.rootId, 'recoverable missing stage should use the root group', persisted);
+  assert(persisted.orphanArchived === true, 'missing-parent local node should be marked archived', persisted);
   console.log('DEV-047 local stage repair browser: PASS', { fixture, persisted });
 }

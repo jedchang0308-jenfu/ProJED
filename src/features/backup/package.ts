@@ -263,9 +263,13 @@ export const compareBackupSemantics = async (
   return { valid, expectedFingerprint, actualFingerprint };
 };
 
-const toPortableTask = (task: TaskNode, kanbanStageSourceId = task.kanbanStageId): PortableTaskV2 => ({
+const toPortableTask = (
+  task: TaskNode,
+  kanbanStageSourceId = task.kanbanStageId,
+  parentSourceId = task.parentId && task.parentId !== task.boardId ? task.parentId : null,
+): PortableTaskV2 => ({
   sourceId: task.id,
-  parentSourceId: task.parentId && task.parentId !== task.boardId ? task.parentId : null,
+  parentSourceId,
   title: task.title,
   detailNotes: task.detailNotes?.map(note => ({ ...note })),
   description: task.description,
@@ -306,6 +310,15 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
   );
   const taskIds = new Set(scopedTasks.map(task => task.id));
   const taskById = new Map(scopedTasks.map(task => [task.id, task]));
+  const canonicalParentId = (task: TaskNode) => {
+    const parentId = task.parentId && task.parentId !== task.boardId ? task.parentId : null;
+    if (!parentId || taskIds.has(parentId)) return parentId;
+
+    // Local test sanitization marks detached/cyclic nodes archived without
+    // re-rooting them in the visible tree. Preserve their content as archived
+    // roots in a board backup; active orphans still fail closed below.
+    return task.isArchived ? null : parentId;
+  };
   const canonicalStageId = (task: TaskNode) => {
     const stageId = task.kanbanStageId;
     if (!stageId || taskIds.has(stageId)) return stageId;
@@ -348,7 +361,7 @@ export const buildBackupPayload = (source: BoardBackupSource): BackupPayloadV2 =
 
   return {
     board: { title: source.boardTitle },
-    tasks: scopedTasks.map(task => toPortableTask(task, canonicalStageId(task))),
+    tasks: scopedTasks.map(task => toPortableTask(task, canonicalStageId(task), canonicalParentId(task))),
     dependencies: dependencies.map(toPortableDependency),
     tags: tags.map(toPortableTag),
   };
