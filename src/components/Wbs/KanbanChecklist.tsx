@@ -127,6 +127,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const isDragPlaceholder = isDragging || Boolean(mobileTaskAction?.isActive(childId));
 
   const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
@@ -205,7 +206,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         {...dragSurfaceBindings}
         {...checklistLongPressHandlers}
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
-          isDragging
+          isDragPlaceholder
             ? 'kanban-drag-source-placeholder bg-transparent shadow-none ring-0'
             : isRecordCaptureMode
               ? isRecordSelected
@@ -216,7 +217,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
                 : 'hover:bg-amber-50/60 cursor-crosshair'
               : 'cursor-pointer hover:bg-slate-50'
-        } ${!isDragging && selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
+        } ${!isDragPlaceholder && selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 2}px` }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -238,7 +239,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             insertRecordTaskMention(child.id, child.title || child.id);
             return;
           }
-          if (isSelectingMode || isTaskPrimaryActionTarget(e.target)) {
+          if (isDragPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(e.target)) {
             e.stopPropagation();
             return;
           }
@@ -249,11 +250,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-mobile-drop-target={child.id}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
-        data-kanban-drag-source-placeholder={isDragging ? 'true' : undefined}
+        data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
       >
-        {isDragging ? (
+        {isDragPlaceholder ? (
           <KanbanInsertionMarker
             compact
             className="absolute right-1 top-1/2 -translate-y-1/2"
@@ -338,7 +339,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         )}
       </div>
 
-      {!isDragging && showTags && nodeTags.length > 0 && (
+      {!isDragPlaceholder && showTags && nodeTags.length > 0 && (
         <div className="ml-6 mt-px flex flex-wrap gap-0.5">
           {nodeTags.slice(0, 3).map(tag => (
             <TagChip key={tag.id} tag={tag} compact />
@@ -347,7 +348,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       )}
 
       {/* 遞迴渲染更深層的子節點 */}
-      {!isDragging && hasGrandchildren && (
+      {!isDragPlaceholder && hasGrandchildren && (
         <KanbanChecklist
           parentId={child.id}
           depth={depth + 1}

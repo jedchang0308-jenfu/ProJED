@@ -383,6 +383,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
   const currentStatus = node.status || 'todo';
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
+  const currentStatusLabel = STATUS_OPTIONS.find((option) => option.value === currentStatus)?.label || '未設定';
+  const formatMetaDate = (value: string) => (
+    value && dayjs(value).isValid() ? dayjs(value).format('YYYY/MM/DD') : '未設定'
+  );
+  const tagCount = node.tagIds?.length || 0;
+  const primaryCount = node.assigneeIds?.length || (node.assigneeId ? 1 : 0);
+  const collaboratorCount = node.collaboratorIds?.length || 0;
+  const assignmentSummary = primaryCount > 0
+    ? `主責 ${primaryCount} 人${collaboratorCount > 0 ? `・協作 ${collaboratorCount} 人` : ''}`
+    : collaboratorCount > 0
+      ? `協作 ${collaboratorCount} 人`
+      : '未指派';
+  const scheduleSummary = `${formatMetaDate(startDate)} → ${formatMetaDate(endDate)}`;
 
   return (
     <div
@@ -469,8 +482,185 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         <div className="flex-1 overflow-auto px-4 py-4">
           <section className="border-b border-slate-100 pb-3" data-task-details-meta-section="true">
             <div className="grid gap-y-3" data-task-details-meta-grid="true">
+              <details
+                className="group rounded-xl border border-slate-200 bg-slate-50/80 shadow-sm md:hidden"
+                data-task-details-mobile-meta="true"
+              >
+                <summary
+                  className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 outline-none [&::-webkit-details-marker]:hidden"
+                  data-task-details-mobile-meta-summary="true"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      <span className="inline-flex max-w-full items-center rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold leading-5 text-slate-600 ring-1 ring-slate-200">
+                        狀態 {currentStatusLabel}
+                      </span>
+                      <span
+                        className="inline-flex max-w-full truncate rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold leading-5 text-slate-600 ring-1 ring-slate-200"
+                        title={scheduleSummary}
+                      >
+                        {scheduleSummary}
+                      </span>
+                    </div>
+                    <div className="mt-1 truncate text-[11px] leading-5 text-slate-500">
+                      標籤 {tagCount}・{assignmentSummary}
+                    </div>
+                  </div>
+                  <span className="inline-flex h-7 shrink-0 items-center rounded-full border border-blue-100 bg-blue-50 px-2 text-[11px] font-semibold text-blue-600 group-open:hidden">
+                    編輯
+                  </span>
+                  <span className="hidden h-7 shrink-0 items-center rounded-full border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-500 group-open:inline-flex">
+                    收合
+                  </span>
+                </summary>
+
+                <div
+                  className="space-y-2 border-t border-slate-200 bg-white px-3 py-3"
+                  data-task-details-mobile-meta-controls="true"
+                >
+                  <div className="grid grid-cols-2 gap-2" data-task-details-mobile-schedule-controls="true">
+                    <label className="min-w-0 text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                      <span data-task-details-meta-label-text="true">狀態</span>
+                      <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
+                        <select
+                          value={currentStatus}
+                          onChange={(event) => { if (canEditTask) updateNode(node.id, { status: event.target.value as TaskStatus }); }}
+                          disabled={!canEditTask}
+                          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        >
+                          {STATUS_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </label>
+
+                    <div className="min-w-0 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5" data-task-details-mobile-duration="true">
+                      <div className="text-[11px] font-semibold leading-4 text-slate-500">工期</div>
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleToggleDurationLock}
+                          disabled={!canEditTask}
+                          className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border transition-colors ${
+                            node.isDurationLocked
+                              ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
+                              : 'border-slate-200 bg-white text-slate-400 hover:bg-slate-100'
+                          }`}
+                          title={node.isDurationLocked ? '鎖定工期：自動推算結束日期' : '非鎖定：日期獨立計算'}
+                        >
+                          {node.isDurationLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          value={durationDays}
+                          onChange={handleDurationChange}
+                          placeholder="-"
+                          disabled={!canEditTask || !node.isDurationLocked}
+                          aria-label="工期天數"
+                          className={`h-8 min-w-0 flex-1 rounded-md border px-1.5 text-center text-sm outline-none transition ${
+                            !node.isDurationLocked
+                              ? 'border-transparent bg-white text-slate-400'
+                              : 'border-slate-200 bg-white text-slate-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
+                          }`}
+                        />
+                        <span className="shrink-0 text-xs font-medium text-slate-400">天</span>
+                      </div>
+                    </div>
+
+                    <label className="min-w-0 text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                      <span className="flex min-w-0 items-center justify-between gap-1" data-task-details-meta-label-text="true">
+                        <span>開始</span>
+                        {startLocked ? (
+                          <span
+                            className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border border-amber-200 bg-amber-50 text-amber-600"
+                            title="開始日期已有依賴關係鎖定"
+                          >
+                            <Lock size={10} />
+                          </span>
+                        ) : null}
+                      </span>
+                      <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(event) => updateDate('startDate', event.target.value)}
+                          readOnly={!canEditTask || startLocked}
+                          className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
+                            !canEditTask || startLocked
+                              ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
+                              : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
+                          }`}
+                        />
+                      </div>
+                    </label>
+
+                    <label className="min-w-0 text-xs font-medium text-slate-500" data-task-details-meta-label="true">
+                      <span className="flex min-w-0 items-center justify-between gap-1" data-task-details-meta-label-text="true">
+                        <span>結束</span>
+                        {endLocked || node.isDurationLocked ? (
+                          <span
+                            className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border border-amber-200 bg-amber-50 text-amber-600"
+                            title={endLocked ? '結束日期已有依賴關係鎖定' : '因工期鎖定，由開始日期推算'}
+                          >
+                            <Lock size={10} />
+                          </span>
+                        ) : null}
+                      </span>
+                      <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(event) => updateDate('endDate', event.target.value)}
+                          readOnly={!canEditTask || endLocked || node.isDurationLocked}
+                          className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 ${
+                            !canEditTask || endLocked || node.isDurationLocked
+                              ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
+                              : isDueToday
+                              ? 'border border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
+                              : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
+                          }`}
+                        />
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-2" data-task-details-meta-field="tags">
+                    <div className="text-xs font-medium text-slate-500">
+                      <div data-task-details-tag-picker-wrap="true">
+                        <TagPicker
+                          workspaceId={node.workspaceId}
+                          selectedTagIds={node.tagIds || []}
+                          onChange={(tagIds) => updateNode(node.id, { tagIds, updatedAt: Date.now() })}
+                          disabled={!canEditTask}
+                          compact
+                          compactLabel="標籤"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <label className="block text-xs font-medium text-slate-500" data-task-details-meta-field="assignment">
+                    <span data-task-details-meta-label-text="true">主責／協作</span>
+                    <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
+                      <TaskAssignmentPicker
+                        node={node}
+                        options={assigneeOptions}
+                        membersLoading={membersLoading}
+                        disabled={!canAssignTask}
+                        fullSummary
+                        onChange={handleAssignmentChange}
+                      />
+                    </div>
+                  </label>
+                </div>
+              </details>
+
               <div
-                className="grid gap-x-3 gap-y-2 md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start"
+                className="hidden gap-x-3 gap-y-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start"
                 data-task-details-date-grid="true"
                 data-task-details-schedule-row="true"
               >
@@ -589,7 +779,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               </div>
 
               <div
-                className="grid gap-x-3 gap-y-2 md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start"
+                className="hidden gap-x-3 gap-y-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start"
                 data-task-details-assignment-row="true"
               >
                 <div className="min-w-0" data-task-details-meta-field="tags">

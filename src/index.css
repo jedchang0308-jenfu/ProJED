@@ -664,6 +664,82 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 }
 
+@media (max-width: 767.98px) {
+  [data-task-details-meta-grid="true"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    gap: 0 !important;
+  }
+
+  [data-task-details-mobile-meta="true"] {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  [data-task-details-date-grid="true"],
+  [data-task-details-assignment-row="true"] {
+    display: none !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] {
+    margin-top: 3px !important;
+    gap: 6px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] > select,
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] > input,
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] [data-task-assignment-picker="true"] > button {
+    height: 34px !important;
+    min-height: 34px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] > select,
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] > input {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-control-row="true"] > input[type="date"] {
+    font-size: 12px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-mobile-duration="true"] button,
+  [data-task-details-mobile-meta="true"] [data-task-details-mobile-duration="true"] input {
+    height: 32px !important;
+    min-height: 32px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-mobile-duration="true"] button {
+    width: 32px !important;
+    min-width: 32px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-mobile-duration="true"] input {
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 1 1 0% !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-tag-picker-wrap="true"] [data-tag-picker-trigger="true"] {
+    width: auto !important;
+    min-width: 34px !important;
+    justify-content: flex-start !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    gap: 4px !important;
+  }
+
+  [data-task-details-mobile-meta="true"] [data-task-details-meta-field="tags"] {
+    align-self: stretch !important;
+  }
+}
+
 /* ========================================
    動畫效果
    ======================================== */

@@ -87,7 +87,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
           <BookOpenText size={16} className="text-blue-500" />
           <span>任務知識</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 md:flex" data-task-record-timeline-actions="true">
           <button
             type="button"
             onClick={() => handleNewRecord('meeting')}

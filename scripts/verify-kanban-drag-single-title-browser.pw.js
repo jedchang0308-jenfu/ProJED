@@ -1,6 +1,8 @@
 /* eslint-disable */
 async (page) => {
-  const screenshotPath = `output/playwright/kanban-drag-single-title-${Date.now()}.png`;
+  const runId = Date.now();
+  const screenshotPath = `output/playwright/kanban-drag-single-title-${runId}.png`;
+  const mobileScreenshotPath = `output/playwright/kanban-drag-single-title-mobile-${runId}.png`;
 
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
@@ -210,5 +212,135 @@ async (page) => {
     state,
   );
 
-  console.log(JSON.stringify({ ok: true, screenshotPath, state }, null, 2));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    try {
+      Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 });
+    } catch (_) {}
+    if (!window.__projedKanbanSingleTitleMobilePointerPatched) {
+      window.__projedKanbanSingleTitleMobilePointerPatched = true;
+      const nativeMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = (query) => {
+        if (query.includes('pointer: coarse') || query.includes('hover: none')) {
+          return {
+            matches: true,
+            media: query,
+            onchange: null,
+            addListener: () => undefined,
+            removeListener: () => undefined,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+            dispatchEvent: () => false,
+          };
+        }
+        return nativeMatchMedia(query);
+      };
+    }
+  });
+  await page.evaluate(({ nodes }) => {
+    localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
+  }, { nodes });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
+
+  const mobileSource = page.locator('.kanban-checklist-item[data-task-id="ux-child-b"]').first();
+  const mobileTarget = page.locator('.kanban-checklist-item[data-task-id="ux-child-a"]').first();
+  await mobileSource.waitFor({ state: 'visible', timeout: 10000 });
+  await mobileTarget.waitFor({ state: 'visible', timeout: 10000 });
+  const mobileSourceBox = await mobileSource.boundingBox();
+  const mobileTargetBox = await mobileTarget.boundingBox();
+  assert(Boolean(mobileSourceBox && mobileTargetBox), 'mobile source and target should have layout boxes', { mobileSourceBox, mobileTargetBox });
+
+  const mobileStart = {
+    x: Math.round(mobileSourceBox.x + mobileSourceBox.width * 0.62),
+    y: Math.round(mobileSourceBox.y + mobileSourceBox.height * 0.5),
+  };
+  let mobileEnd = {
+    x: Math.round(mobileTargetBox.x + mobileTargetBox.width * 0.62),
+    y: Math.round(mobileTargetBox.y + mobileTargetBox.height * 0.22),
+  };
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: mobileStart.x, y: mobileStart.y, radiusX: 5, radiusY: 5, force: 1, id: 1 }],
+  });
+  await page.waitForTimeout(650);
+  await page.locator('[data-mobile-drag-preview="true"]').waitFor({ state: 'visible', timeout: 5000 });
+  const liveMobileTargetBox = await mobileTarget.boundingBox();
+  assert(Boolean(liveMobileTargetBox), 'mobile target should keep a layout box after source placeholder renders', { liveMobileTargetBox });
+  mobileEnd = {
+    x: Math.round(liveMobileTargetBox.x + liveMobileTargetBox.width * 0.62),
+    y: Math.round(liveMobileTargetBox.y + liveMobileTargetBox.height * 0.28),
+  };
+  for (let step = 1; step <= 8; step += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: Math.round(mobileStart.x + ((mobileEnd.x - mobileStart.x) * step) / 8),
+        y: Math.round(mobileStart.y + ((mobileEnd.y - mobileStart.y) * step) / 8),
+        radiusX: 5,
+        radiusY: 5,
+        force: 1,
+        id: 1,
+      }],
+    });
+    await page.waitForTimeout(25);
+  }
+  await page.locator('[data-mobile-drop-indicator="true"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.waitForTimeout(200);
+
+  const mobileState = await page.evaluate((draggedTitle) => {
+    const source = document.querySelector('.kanban-checklist-item[data-task-id="ux-child-b"]');
+    const sourceTitle = source?.querySelector('.task-title-text');
+    const sourceMarker = source?.querySelector('[data-kanban-insertion-marker="true"]');
+    const sourceDot = sourceMarker?.querySelector('[data-kanban-insertion-dot="true"]');
+    const target = document.querySelector('.kanban-checklist-item[data-task-id="ux-child-a"]');
+    const targetTitle = target?.querySelector('.task-title-text');
+    const indicator = document.querySelector('[data-mobile-drop-indicator="true"]');
+    const indicatorDot = indicator?.querySelector('[data-kanban-insertion-dot="true"]');
+    const indicatorBar = indicator?.querySelector('[data-kanban-insertion-bar="true"]');
+    const preview = document.querySelector('[data-mobile-drag-preview="true"]');
+    const rectOf = (element) => {
+      const rect = element?.getBoundingClientRect();
+      return rect ? { left: rect.left, width: rect.width, height: rect.height } : null;
+    };
+    return {
+      previewText: (preview?.textContent || '').trim(),
+      sourcePlaceholderFlag: source?.getAttribute('data-kanban-drag-source-placeholder') || null,
+      sourceTitleVisibility: sourceTitle ? window.getComputedStyle(sourceTitle).visibility : null,
+      sourceMarkerChildCount: sourceMarker?.children.length || 0,
+      sourceDotRect: rectOf(sourceDot),
+      sourceTitleRect: rectOf(sourceTitle),
+      indicatorTarget: indicator?.getAttribute('data-mobile-drop-target') || null,
+      indicatorPosition: indicator?.getAttribute('data-mobile-drop-position') || null,
+      indicatorDotRect: rectOf(indicatorDot),
+      indicatorBarRect: rectOf(indicatorBar),
+      targetTitleRect: rectOf(targetTitle),
+      draggedTitle,
+    };
+  }, draggedTitle);
+
+  await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }).catch(() => undefined);
+  await cdp.detach().catch(() => undefined);
+
+  assert(mobileState.previewText.includes(draggedTitle), 'mobile drag preview should keep the dragged task title', mobileState);
+  assert(mobileState.sourcePlaceholderFlag === 'true', 'mobile source should become a placeholder', mobileState);
+  assert(mobileState.sourceTitleVisibility === 'hidden', 'mobile source placeholder should hide its original task title', mobileState);
+  assert(mobileState.sourceMarkerChildCount === 2, 'mobile source placeholder should render dot-bar marker', mobileState);
+  assert(
+    Math.abs((mobileState.sourceDotRect?.left || 0) - (mobileState.sourceTitleRect?.left || 0)) <= 2,
+    'mobile source dot should align with the source hierarchy title x-position',
+    mobileState,
+  );
+  assert(mobileState.indicatorTarget === 'ux-child-a', 'mobile drop indicator should target the hovered hierarchy row', mobileState);
+  assert(mobileState.indicatorDotRect?.width > 0 && mobileState.indicatorBarRect?.width > 20, 'mobile drop indicator should render dot-bar marker', mobileState);
+  assert(
+    Math.abs((mobileState.indicatorDotRect?.left || 0) - (mobileState.targetTitleRect?.left || 0)) <= 2,
+    'mobile drop indicator dot should align with the target hierarchy title x-position',
+    mobileState,
+  );
+
+  console.log(JSON.stringify({ ok: true, screenshotPath, mobileScreenshotPath, state, mobileState }, null, 2));
 }

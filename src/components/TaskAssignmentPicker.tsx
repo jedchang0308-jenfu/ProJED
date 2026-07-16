@@ -75,32 +75,9 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
     ? currentSelection.collaboratorIds.map(getMemberLabel).join('、')
     : '未設定';
   const fullSummaryTitle = `主責：${primarySummary}；協作：${collaboratorSummary}`;
-
-  const renderFullRoleRow = (roleLabel: string, ids: string[], emptyText: string, tone: 'primary' | 'collaborator') => (
-    <span className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-1">
-      <span className={`inline-flex h-5 w-10 shrink-0 items-center justify-center rounded text-[10px] font-semibold leading-none ${
-        tone === 'primary'
-          ? 'bg-blue-50 text-blue-700'
-          : 'bg-slate-100 text-slate-500'
-      }`}>
-        {roleLabel}
-      </span>
-      <span className="flex min-w-0 flex-wrap items-center gap-1">
-        {ids.length > 0 ? ids.map(id => (
-          <span
-            key={`${roleLabel}-${id}`}
-            className="inline-flex min-h-5 max-w-full items-center rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] leading-4 text-slate-700"
-          >
-            {getMemberLabel(id)}
-          </span>
-        )) : (
-          <span className="inline-flex h-5 items-center rounded border border-dashed border-slate-200 bg-slate-50 px-2 text-[11px] leading-none text-slate-400">
-            {emptyText}
-          </span>
-        )}
-      </span>
-    </span>
-  );
+  const assignmentSummary = currentSelection.collaboratorIds.length > 0
+    ? `${primarySummary}・協作 ${currentSelection.collaboratorIds.length} 人`
+    : primarySummary;
 
   React.useEffect(() => {
     if (inline || !isOpen) return undefined;
@@ -159,8 +136,10 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
       return (
         <label
           key={`${role}-${option.id}`}
-          className={`flex min-h-8 cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
-            checked ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'
+          className={`flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+            checked
+              ? 'bg-primary/10 text-primary ring-1 ring-primary/15'
+              : 'text-slate-600 hover:bg-primary/5 hover:text-primary'
           } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
         >
           <input
@@ -171,7 +150,6 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
             className="h-4 w-4 flex-shrink-0 accent-blue-600"
           />
           <span className="min-w-0 flex-1 truncate">{option.label}</span>
-          {option.role ? <span className="text-[10px] text-slate-400">{option.role}</span> : null}
         </label>
       );
     });
@@ -179,34 +157,23 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
 
   const panel = (
     <div
-      className={`${inline ? '' : 'absolute left-0 top-full z-[80] mt-1'} w-full min-w-[250px] rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl`}
+      className={`${inline ? '' : 'absolute left-0 top-full z-[80] mt-1'} w-full min-w-[250px] space-y-2 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl`}
       data-task-assignment-picker-panel="true"
       onClick={event => event.stopPropagation()}
     >
-      <div className="mb-2 flex items-start gap-2 rounded-md bg-blue-50 px-2 py-1.5 text-[11px] text-blue-700">
-        <Users size={14} className="mt-0.5 flex-shrink-0" />
-        <span className="min-w-0 flex-1">主責對成果、期限與狀態負責；協作成員提供執行或支援。</span>
-        {currentSelection.primaryIds.length > 3 ? (
-          <span className="flex-shrink-0 font-semibold">共同主責較多</span>
-        ) : null}
+      <div className="space-y-1.5" data-task-assignment-section="primary">
+        <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          主責
+        </div>
+        <div className="max-h-40 overflow-y-auto">{renderMemberList('primary')}</div>
       </div>
-      <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold text-slate-500">
-        <span>主責成員（可複選）</span>
-        {currentSelection.primaryIds.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => commit([], currentSelection.collaboratorIds)}
-            disabled={disabled}
-            className="text-[10px] font-medium text-slate-400 hover:text-slate-700 disabled:cursor-not-allowed"
-          >
-            清除主責
-          </button>
-        ) : null}
+      <div className="border-t border-slate-100" />
+      <div className="space-y-1.5" data-task-assignment-section="collaborator">
+        <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          協作
+        </div>
+        <div className="max-h-40 overflow-y-auto">{renderMemberList('collaborator')}</div>
       </div>
-      <div className="max-h-40 overflow-y-auto">{renderMemberList('primary')}</div>
-      <div className="my-2 border-t border-slate-100" />
-      <div className="mb-1 px-2 text-[11px] font-semibold text-slate-500">協作成員（可複選）</div>
-      <div className="max-h-40 overflow-y-auto">{renderMemberList('collaborator')}</div>
     </div>
   );
 
@@ -233,24 +200,12 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         title={fullSummary ? fullSummaryTitle : undefined}
-        className={`flex w-full min-w-0 gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${
-          fullSummary
-            ? 'h-8 items-center md:h-auto md:min-h-0 md:items-start md:py-1.5'
-            : 'h-8 items-center'
-        } ${compact ? 'text-xs' : ''}`}
+        className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${compact ? 'text-xs' : ''}`}
       >
         <Users size={compact ? 13 : 15} className="flex-shrink-0 text-blue-500" />
-        {fullSummary ? (
-          <>
-            <span className="min-w-0 flex-1 truncate md:hidden">{primarySummary}</span>
-            <span className="hidden min-w-0 flex-1 flex-col gap-1 md:flex" data-task-assignment-summary-rows="true">
-              {renderFullRoleRow('主責', currentSelection.primaryIds, '未指派', 'primary')}
-              {renderFullRoleRow('協作', currentSelection.collaboratorIds, '未設定', 'collaborator')}
-            </span>
-          </>
-        ) : (
-          <span className="min-w-0 flex-1 truncate">{primarySummary}</span>
-        )}
+        <span className="min-w-0 flex-1 truncate">
+          {fullSummary ? assignmentSummary : primarySummary}
+        </span>
         {!fullSummary && currentSelection.primaryIds.length > 1 ? (
           <span className="flex-shrink-0 text-[10px] text-slate-400">{currentSelection.primaryIds.length} 人</span>
         ) : null}

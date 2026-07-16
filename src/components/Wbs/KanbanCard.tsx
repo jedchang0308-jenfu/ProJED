@@ -165,6 +165,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const isDragPlaceholder = isDragging || Boolean(mobileTaskAction?.isActive(nodeId));
 
   const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
@@ -278,7 +279,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           insertRecordTaskMention(nodeId, node.title || nodeId);
           return;
         }
-        if (isDragging || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
+        if (isDragPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
         selectAndOpenTaskDetails(nodeId);
       }}
       onContextMenu={(e) => {
@@ -290,11 +291,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-mobile-drop-target={nodeId}
       data-task-drag-surface="true"
       data-task-drag-surface-kind="kanban-card"
-      data-kanban-drag-source-placeholder={isDragging ? 'true' : undefined}
+      data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       data-touch-tap-guard="true"
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
-        isDragging
+        isDragPlaceholder
           ? 'border-transparent bg-transparent shadow-none'
           : isRecordCaptureMode
             ? isRecordSelected
@@ -305,9 +306,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               ? 'border-amber-400 ring-2 ring-amber-300 shadow-md'
               : 'border-slate-200 hover:border-amber-300 hover:shadow-md cursor-crosshair'
             : 'cursor-pointer border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md'
-      } ${!isDragging && selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
+      } ${!isDragPlaceholder && selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
     >
-      {isDragging ? (
+      {isDragPlaceholder ? (
         <KanbanInsertionMarker className="px-[9px] py-2" />
       ) : (
       <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">

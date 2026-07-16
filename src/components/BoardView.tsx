@@ -24,6 +24,7 @@ import useDialogStore from '../store/useDialogStore';
 import { toast } from '../store/useToastStore';
 import { useTagStore } from '../store/useTagStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
+import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames } from './ui/compactTokens';
 import type { TaskNode, TaskStatus } from '../types';
@@ -112,7 +113,7 @@ const MobileTaskActionLayer: React.FC<{
 
             {state.dropIndicatorRect ? (
                 <div
-                    className="pointer-events-none fixed z-[85] h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_rgba(99,102,241,0.15)]"
+                    className="pointer-events-none fixed z-[85] -translate-y-1/2"
                     style={{
                         left: state.dropIndicatorRect.left,
                         top: state.dropIndicatorRect.top,
@@ -121,7 +122,9 @@ const MobileTaskActionLayer: React.FC<{
                     data-mobile-drop-indicator="true"
                     data-mobile-drop-target={state.hoverTargetId || undefined}
                     data-mobile-drop-position={state.dropPosition || undefined}
-                />
+                >
+                    <KanbanInsertionMarker compact className="py-0" />
+                </div>
             ) : null}
 
             <div
@@ -903,7 +906,8 @@ const BoardView = () => {
             };
         }
 
-        const rect = (targetElement as HTMLElement).getBoundingClientRect();
+        const targetHtmlElement = targetElement as HTMLElement;
+        const rect = targetHtmlElement.getBoundingClientRect();
         const dropPosition: MobileTaskDropPosition = point.y > rect.top + rect.height / 2 ? 'after' : 'before';
         const intent = {
             parentId: targetNode.parentId || null,
@@ -919,14 +923,19 @@ const BoardView = () => {
             };
         }
 
+        const titleElement = targetHtmlElement.querySelector('.task-title-text') as HTMLElement | null;
+        const titleRect = titleElement?.getBoundingClientRect();
+        const indicatorLeft = titleRect?.left ?? rect.left;
+        const indicatorRight = rect.right;
+
         return {
             hoverAction: null,
             hoverTargetId: targetNodeId,
             dropPosition,
             dropIndicatorRect: {
-                left: rect.left,
+                left: indicatorLeft,
                 top: dropPosition === 'after' ? rect.bottom : rect.top,
-                width: rect.width,
+                width: Math.max(24, indicatorRight - indicatorLeft),
             },
         };
     }, [canMoveTask, isValidDropIntent]);

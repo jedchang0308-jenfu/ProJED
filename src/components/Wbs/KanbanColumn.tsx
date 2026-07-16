@@ -9,6 +9,7 @@ import useBoardStore from '../../store/useBoardStore';
 import { KanbanDependencyContext } from '../BoardView';
 import { Button } from '../ui/Button';
 import { KanbanCard } from './KanbanCard';
+import { KanbanInsertionMarker } from './KanbanInsertionMarker';
 import type { TaskNode } from '../../types';
 import { useLongPress } from '../../hooks/useLongPress';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
@@ -91,6 +92,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     transform: CSS.Transform.toString(columnTransform),
     transition: columnTransition,
   };
+  const isColumnPlaceholder = isColumnDragging || Boolean(mobileTaskAction?.isActive(nodeId));
   const columnHeaderDragBindings = mobileActionMode || isSelectingMode
     ? {}
     : { ...columnAttributes, ...columnListeners };
@@ -230,6 +232,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-mobile-drop-target={nodeId}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="kanban-column-header"
+        data-kanban-drag-source-placeholder={isColumnPlaceholder ? 'true' : undefined}
         data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
         data-touch-tap-guard="true"
         data-kanban-column-header="true"
@@ -239,9 +242,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
                     : 'cursor-crosshair hover:bg-amber-50/30'
                 : ''
-        } ${selectedTaskId === nodeId ? 'ring-2 ring-inset ring-primary/30 bg-primary/[0.04]' : ''}`}
+        } ${!isColumnPlaceholder && selectedTaskId === nodeId ? 'ring-2 ring-inset ring-primary/30 bg-primary/[0.04]' : ''}`}
         onClick={(event) => {
-          if (isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+          if (isColumnPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
           selectAndOpenTaskDetails(nodeId);
         }}
         onContextMenu={(event) => {
@@ -256,6 +259,10 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           });
         }}
       >
+        {isColumnPlaceholder ? (
+          <KanbanInsertionMarker className="px-0 py-2" />
+        ) : (
+        <>
         <div className="flex items-center gap-1.5">
           <div className="flex flex-1 items-center justify-between">
             <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
@@ -352,6 +359,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             />
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <div

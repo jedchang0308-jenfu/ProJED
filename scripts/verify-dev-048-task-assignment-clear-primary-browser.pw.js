@@ -77,11 +77,23 @@ async (page) => {
   await modal.waitFor({ state: 'visible', timeout: 10000 });
   const assignmentRow = modal.locator('[data-task-details-assignment-row="true"]');
   await assignmentRow.waitFor({ state: 'visible', timeout: 10000 });
+  assert(
+    await assignmentRow.locator('[data-task-assignment-summary-rows="true"]').count() === 0,
+    'desktop assignment trigger should not render the old two-row summary'
+  );
 
   await assignmentRow.locator('[data-task-assignment-picker="true"] button').first().click();
   const panel = page.locator('[data-task-assignment-picker-panel="true"]');
   await panel.waitFor({ state: 'visible', timeout: 5000 });
-  await panel.getByRole('button', { name: '清除主責' }).click();
+  const panelText = await panel.innerText();
+  assert(panelText.includes('主責'), 'desktop assignment picker should keep primary section', { panelText });
+  assert(panelText.includes('協作'), 'desktop assignment picker should keep collaborator section', { panelText });
+  assert(
+    !/(主責對成果|共同主責較多|可複選|清除主責|owner|project_manager|admin|member|viewer)/.test(panelText),
+    'desktop assignment picker should use the compact filter-like design',
+    { panelText },
+  );
+  await panel.locator('[data-task-assignment-section="primary"] input[type="checkbox"]:checked').first().click();
 
   await page.waitForFunction(() => {
     const stored = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
