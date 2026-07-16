@@ -1,11 +1,9 @@
 import React from 'react';
 import { ChevronDown, Users } from 'lucide-react';
 import type { TaskNode } from '../types';
-import { toast } from '../store/useToastStore';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentSelection,
-  requiresPrimaryAssignee,
 } from '../utils/taskAssignments';
 
 export type TaskAssignmentOption = {
@@ -68,7 +66,6 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
     () => new Map(optionsWithSelected.map(option => [option.id, option])),
     [optionsWithSelected]
   );
-  const primaryRequired = requiresPrimaryAssignee(node);
   const getMemberLabel = React.useCallback(
     (id: string) => optionsById.get(id)?.label || `已離開成員 (${id})`,
     [optionsById]
@@ -124,10 +121,6 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
 
   const commit = (primaryIds: string[], collaboratorIds: string[]) => {
     const selection = normalizeTaskAssignmentSelection(primaryIds, collaboratorIds);
-    if (primaryRequired && selection.primaryIds.length === 0) {
-      toast.warning('執行中的任務至少要保留一位主責成員。');
-      return;
-    }
     onChange(selection.primaryIds, selection.collaboratorIds);
   };
 
@@ -199,7 +192,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
       </div>
       <div className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold text-slate-500">
         <span>主責成員（可複選）</span>
-        {!primaryRequired && currentSelection.primaryIds.length > 0 ? (
+        {currentSelection.primaryIds.length > 0 ? (
           <button
             type="button"
             onClick={() => commit([], currentSelection.collaboratorIds)}

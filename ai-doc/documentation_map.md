@@ -9,30 +9,36 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
-## Documentation Map Update - 2026-07-16
+## Documentation Map Update - 2026-07-16（拖拉回復 main）
 
-### DEV-052：看板拖拉子系統重構與行為穩定化
+目前權威狀態：DEV-051 的 drop-intent／parent-lock 實作已從工作樹撤出；看板拖拉 runtime、
+DEV-029 browser verifier 與 DEV-046 browser verifier回復 `main` 基準。DEV-051 的 SPEC／QA／QC
+改為歷史證據，不得作為目前產品行為；DEV-052 因依賴已撤回基準而延後且不可執行。
 
-| 文件 | 狀態 | 關聯 DEV | 說明 |
-|---|---|---|---|
-| `ai-doc/specs/SPEC-052-kanban-drag-subsystem-refactor.md` | RD Implementation Ready / Not Implemented | DEV-052 / DEV-051 / DEV-046 / DEV-029 | Authoritative internal architecture contract：單一 observation、shared target adapter、session terminal guard、presenter、committer、BoardView exit gate 與分片 extraction；產品行為仍由 SPEC-051 管理。 |
-| `ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md` | QA Plan Ready / Not Executed | DEV-052 | 真實操作計畫：automated browser、desktop 實際滑鼠、physical iOS／Android、第二觀察者 5 秒理解、geometry、single-title／single-line、spacing、undo 與 30 次 mixed drag。 |
-| `ai-doc/backlog.md` | Prepared / RD Implementation Ready | DEV-052 | 登錄 targeted refactor，明確排除整頁重寫、UX 變更、其他模式泛化與 release。 |
-| `ai-doc/dev_task.md` | DEV-052 可執行 / P0 開發點 | DEV-052 | 下一步先做 Slice A characterization，完成後依 B～F gate 推進；不計入產品交付完成率。 |
-
-PM 治理註記：Spec Impact=`Compatible exception`。SPEC-052 只取代 SPEC-051 的內部 implementation architecture，不改同父層立即排序、跨父層 750ms、200ms grace、20px tolerance、text-free line／frame、source removal、preview mode、canonical ordering、single undo 或 mobile pan-first。ADR 不另建；DB/schema/API/release boundary 不變。
-
-### DEV-051: 看板跨父層拖拉停留鎖定與落點定位
+### DEV-052：看板拖拉子系統重構與行為穩定化（Deferred）
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md` | Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed | DEV-051 / DEV-046 / DEV-029 | Authoritative contract：共用 drop-intent 狀態機、750ms parent lock、200ms unlock grace、20px mobile tolerance、empty/collapsed child lane、locked before/after/append、filtered canonical ordering 與 single undo。 |
-| `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md` | QA Plan Updated / Local Automated QA + Browser UI QC Passed / Manual Real Operation Not Executed / Physical Phone Supplemental Not Executed | DEV-051 | 記錄 deterministic 33/33、browser 7-case matrix，並新增 QA-051-R01～R14 人工 desktop/mobile 真實操作腳本、FMEA、證據與 stop-ship gate。 |
-| `ai-doc/qc/QC-DEV-051-kanban-cross-parent-drag-lock.md` | Local Automated + Browser UI QC Passed / Production Not Deployed | DEV-051 | 事實報告：commands、截圖、缺陷修正、visible error/overflow sweep、Git/DB/release boundary。 |
-| `ai-doc/backlog.md` | Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed | DEV-051 / DEV-046 / DEV-029 | 登錄實作完成的同父層排序、750ms lock、group frame、text-free exact insertion／empty lane 與 mobile compatibility；鎖定文字與 floating status 已退役。 |
-| `ai-doc/dev_task.md` | DEV-051 完成 / Local RD + Automated QA/UI QC Passed | DEV-051 | Canonical index 已收斂；production deploy 與 physical phone supplemental 不在本輪完成宣稱。 |
+| `ai-doc/specs/SPEC-052-kanban-drag-subsystem-refactor.md` | Deferred / Not Executable | DEV-052 / DEV-051 / DEV-046 / DEV-029 | 歷史重構提案；依賴的 DEV-051 行為已撤回，不得直接實作。 |
+| `ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md` | Deferred / Not Executed | DEV-052 | 保留真實操作 gate 作未來參考；目前不執行。 |
+| `ai-doc/backlog.md` | Deferred | DEV-052 | 只有重新確認產品行為，或另立以 `main` 為基準的新 DEV 後才可恢復。 |
+| `ai-doc/dev_task.md` | DEV-052 延後 / 不可執行 | DEV-052 | Slice A～F 全部停止；不計入產品交付完成率。 |
 
-PM 治理註記：DEV-051 是 DEV-046 的後續交付點，不否定 whole-task surface drag，只取代看板跨父層 drop-intent；`Intentional replacement` 已落地。1A／2A／3A、DEV-029 手機相容性、DEV-044 undo 與 DEV-048 主責 guard regression 已通過本機 QA/QC。DEV-052 後續只重構 internal architecture；DEV-051 產品行為仍是 authoritative。ADR 不需要；DB/schema/API 未變，commit、PR、production deploy 與 physical phone supplemental 未執行。
+PM 治理註記：Spec Impact=`Intentional replacement`。使用者明確要求回復 `main`，因此
+SPEC-052 不再是 active implementation contract。ADR 不另建；DB/schema/API/release boundary 不變。
+
+### DEV-051: 看板跨父層拖拉停留鎖定與落點定位（Withdrawn / Historical）
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md` | Withdrawn / Historical | DEV-051 / DEV-046 / DEV-029 | 保留已嘗試的 750ms parent-lock 契約，不再描述目前 runtime。 |
+| `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md` | Historical Evidence / Not Current | DEV-051 | 舊測試與人工腳本可作未來研究資料，不得當成目前版本通過證據。 |
+| `ai-doc/qc/QC-DEV-051-kanban-cross-parent-drag-lock.md` | Historical Evidence / Superseded | DEV-051 | 記錄已撤回版本曾執行的 QC；結論不適用目前 runtime。 |
+| `ai-doc/backlog.md` | Deferred / Restored to main | DEV-051 / DEV-046 / DEV-029 | 目前採 `main` 的既有拖拉行為。 |
+| `ai-doc/dev_task.md` | DEV-051 延後 / 已回復 main | DEV-051 | 不宣稱 DEV-051 交付完成。 |
+
+PM 治理註記：`main` 的 DEV-029／046 行為重新成為 active baseline。DEV-051／052 都不得
+在未重新確認需求與 characterization gate 前恢復；既有多人指派與任務卡編輯改善不在回復範圍。
 
 ## Documentation Map Update - 2026-07-15
 

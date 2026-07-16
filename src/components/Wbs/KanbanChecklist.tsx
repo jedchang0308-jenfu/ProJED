@@ -6,7 +6,6 @@
  * 【拖曳功能】每個任務現在是可拖曳元素，支援跨卡片及升級至列表等操作。
  */
 import React from 'react';
-import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, Link } from 'lucide-react';
@@ -26,12 +25,7 @@ import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { TaskDateBadge } from './TaskDateBadge';
-import {
-  KanbanAnchorIndicator,
-  KanbanAppendIndicator,
-  KanbanChildEmptyLane,
-  useKanbanParentGroupFeedback,
-} from './KanbanDropFeedback';
+import { KanbanInsertionMarker } from './KanbanInsertionMarker';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -84,13 +78,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const tags = useTagStore(s => s.tags);
   const nodeTags = getNodeTags(child, tags);
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
-  const visibleGrandchildCount = React.useMemo(() => {
-    const nodes = previewNodes || useWbsStore.getState().nodes;
-    return (grandchildIds || []).filter((id) => {
-      const grandchild = nodes[id];
-      return grandchild && !grandchild.isArchived && (!filterProjection || filterProjection.visibleTaskIds.has(id));
-    }).length;
-  }, [filterProjection, grandchildIds, previewNodes]);
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
@@ -144,7 +131,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
     : { ...attributes, ...listeners };
-  const isDragSourceRemoved = isDragging;
 
   // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
   const longPressHandlers = useLongPress(
@@ -213,19 +199,14 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   if (isInvalidChild || !child) return null;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={isDragSourceRemoved ? 'hidden' : undefined}
-      data-kanban-drag-source-hidden={isDragSourceRemoved ? 'true' : undefined}
-    >
+    <div ref={setNodeRef} style={style}>
       {/* 單一待辦項目列 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
       <div
         {...dragSurfaceBindings}
         {...checklistLongPressHandlers}
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
-          isDragSourceRemoved
-            ? ''
+          isDragging
+            ? 'kanban-drag-source-placeholder bg-transparent shadow-none ring-0'
             : isRecordCaptureMode
               ? isRecordSelected
                 ? 'cursor-pointer bg-blue-50 ring-1 ring-inset ring-blue-400'
@@ -235,7 +216,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
                 : 'hover:bg-amber-50/60 cursor-crosshair'
               : 'cursor-pointer hover:bg-slate-50'
-        } ${selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
+        } ${!isDragging && selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 2}px` }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -268,10 +249,18 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-mobile-drop-target={child.id}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
+        data-kanban-drag-source-placeholder={isDragging ? 'true' : undefined}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
       >
-        <KanbanAnchorIndicator nodeId={child.id} />
+        {isDragging ? (
+          <KanbanInsertionMarker
+            compact
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+            style={{ left: `${depth * 14 + 2}px` }}
+          />
+        ) : null}
+
         {isRecordCaptureMode ? (
           <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
             isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'
@@ -349,7 +338,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         )}
       </div>
 
-      {showTags && nodeTags.length > 0 && (
+      {!isDragging && showTags && nodeTags.length > 0 && (
         <div className="ml-6 mt-px flex flex-wrap gap-0.5">
           {nodeTags.slice(0, 3).map(tag => (
             <TagChip key={tag.id} tag={tag} compact />
@@ -358,7 +347,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       )}
 
       {/* 遞迴渲染更深層的子節點 */}
-      {hasGrandchildren && (
+      {!isDragging && hasGrandchildren && (
         <KanbanChecklist
           parentId={child.id}
           depth={depth + 1}
@@ -368,12 +357,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           filterProjection={filterProjection}
         />
       )}
-
-      {visibleGrandchildCount === 0 ? (
-        <div style={{ marginLeft: `${depth * 14 + 2}px` }}>
-          <KanbanChildEmptyLane parentId={child.id} />
-        </div>
-      ) : null}
     </div>
   );
 };
@@ -382,19 +365,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
 // KanbanChecklist — 主要容器元件
 // =====================================================
 export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, depth = 0, previewNodes, previewParentIndex, ancestorIds = [], filterProjection }) => {
-  const { canMoveTask } = useBoardPermissions();
-  const groupFeedback = useKanbanParentGroupFeedback(parentId);
-  const { setNodeRef: setGroupDropRef } = useDroppable({
-    id: `${parentId}-kanban-parent-group-${depth}`,
-    disabled: !canMoveTask,
-    data: {
-      type: 'wbs-parent-group',
-      nodeId: parentId,
-      parentId,
-      targetKind: 'parent-group',
-      position: 'append',
-    },
-  });
   const isRecursiveParent = ancestorIds.includes(parentId);
   const nextAncestorIds = [...ancestorIds, parentId];
   const nextAncestorKey = nextAncestorIds.join('|');
@@ -418,15 +388,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   if (isRecursiveParent || children.length === 0) return null;
 
   return (
-    <div
-      ref={setGroupDropRef}
-      className={`${depth === 0 ? 'kanban-checklist-root mt-px pt-px border-t border-slate-100' : ''} relative rounded ${groupFeedback.className}`}
-      data-kanban-parent-group={groupFeedback.parentKey}
-      data-kanban-target-parent-id={parentId}
-      data-kanban-parent-lock-state={groupFeedback.phase || undefined}
-      data-kanban-parent-lock-progress={groupFeedback.phase ? groupFeedback.state.progress.toFixed(3) : undefined}
-      data-kanban-drop-parent-id={groupFeedback.phase ? groupFeedback.parentKey : undefined}
-    >
+    <div className={depth === 0 ? 'kanban-checklist-root mt-px pt-px border-t border-slate-100' : ''}>
       <SortableContext items={children.map(child => child.id)} strategy={verticalListSortingStrategy}>
         {children.map(child => (
           <ChecklistItem
@@ -440,7 +402,6 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
           />
         ))}
       </SortableContext>
-      <KanbanAppendIndicator parentId={parentId} />
     </div>
   );
 };

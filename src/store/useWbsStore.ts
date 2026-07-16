@@ -5,7 +5,6 @@ import { nodeService, dependencyService, workspaceService, boardService, tagServ
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
-import { toast } from './useToastStore';
 import { useTagStore } from './useTagStore';
 import {
   isTaskWorkbenchUnplacedTask,
@@ -17,7 +16,6 @@ import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentNode,
   normalizeTaskAssignmentUpdates,
-  requiresPrimaryAssignee,
 } from '../utils/taskAssignments';
 
 /**
@@ -194,16 +192,6 @@ const shouldMarkDelayed = (node: TaskNode): boolean => {
   return dayjs(node.endDate).isValid() && dayjs(node.endDate).isBefore(dayjs(), 'day');
 };
 
-const STRUCTURAL_TASK_UPDATE_KEYS = new Set<keyof TaskNode>([
-  'parentId',
-  'order',
-  'nodeType',
-  'workspaceId',
-  'boardId',
-  'kanbanStageId',
-  'updatedAt',
-]);
-
 const applySmartStatus = (node: TaskNode): TaskNode => {
   if (!shouldMarkDelayed(node)) return node;
   return { ...node, status: 'delayed' };
@@ -213,10 +201,7 @@ const normalizeSmartStatusUpdates = (
   oldNode: TaskNode,
   updates: Partial<TaskNode>
 ): Partial<TaskNode> => {
-  const updateKeys = Object.keys(updates) as Array<keyof TaskNode>;
-  if (updateKeys.length > 0 && updateKeys.every(key => STRUCTURAL_TASK_UPDATE_KEYS.has(key))) {
-    return updates;
-  }
+  if (oldNode.status === 'completed' && updates.status === 'in_progress') return updates;
   const candidate = { ...oldNode, ...updates };
   if (!shouldMarkDelayed(candidate)) return updates;
   return { ...updates, status: 'delayed' };
@@ -818,15 +803,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       oldNode,
       normalizeSmartStatusUpdates(oldNode, updates),
     );
-    const candidateNode = { ...oldNode, ...normalizedUpdates };
-    if (
-      ('status' in normalizedUpdates || 'assigneeIds' in normalizedUpdates || 'assigneeId' in normalizedUpdates || 'collaboratorIds' in normalizedUpdates) &&
-      requiresPrimaryAssignee(candidateNode) &&
-      getTaskAssigneeIds(candidateNode).length === 0
-    ) {
-      toast.warning('執行中的任務至少要設定一位主責成員。');
-      return;
-    }
 
     // 比對實質變更，供 undo 使用
     const oldValues: Partial<TaskNode> = {};

@@ -74,6 +74,16 @@ export const GlobalContextMenu: React.FC = () => {
     const workspace = getWorkspace(workspaceId);
     return Boolean(currentUserId && workspace?.ownerId === currentUserId);
   };
+
+  const reopenCompletedTaskForInsert = (node: TaskNode | null | undefined) => {
+    if (!node || node.status !== 'completed') return;
+    if (!canEditTask) {
+      toast.warning('已新增任務，但你沒有權限自動變更完成狀態。');
+      return;
+    }
+    updateNode(node.id, { status: 'in_progress', updatedAt: Date.now() });
+    toast.info('已將完成任務改為進行中，並新增任務。');
+  };
   const canCreateBoardInWorkspace = (workspaceId: string) => {
     if (currentBoardAccess?.workspaceId === workspaceId && canCreateBoard) return true;
     if (isWorkspaceOwner(workspaceId)) return true;
@@ -241,11 +251,7 @@ export const GlobalContextMenu: React.FC = () => {
     const node = state.nodes[contextMenuState.nodeId];
     if (!node) return;
 
-    if (node.status === 'completed') {
-      toast.warning('已完成的任務不能新增下層任務。');
-      setContextMenuState(null);
-      return;
-    }
+    reopenCompletedTaskForInsert(node);
 
     const childrenIds = state.parentNodesIndex[contextMenuState.nodeId] || [];
     const newNode: TaskNode = {
@@ -275,11 +281,7 @@ export const GlobalContextMenu: React.FC = () => {
     if (!node) return;
 
     const parentNode = node.parentId ? state.nodes[node.parentId] : null;
-    if (parentNode?.status === 'completed') {
-      toast.warning('已完成的父任務不能新增同階任務。');
-      setContextMenuState(null);
-      return;
-    }
+    reopenCompletedTaskForInsert(parentNode);
 
     const siblings = (state.parentNodesIndex[node.parentId || 'root'] || [])
       .map(id => state.nodes[id])

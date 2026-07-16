@@ -6,7 +6,12 @@
 是否計入產品交付完成: 是，限手機看板主要操作可用性
 建立日期: 2026-07-04
 
-## DEV-051 Compatibility Addendum（2026-07-16）
+## DEV-051 Rollback Addendum（2026-07-16）
+
+- DEV-051 實作已撤回；手機拖拉 runtime 回復 `main`，本 SPEC 重新成為 active baseline。
+- 下方 DEV-051 compatibility 內容只保留歷史參考，不是目前跨父層行為。
+
+## DEV-051 Historical Compatibility Addendum（Superseded）
 
 - `SPEC-051` 只接管手機任務完成 long-press lift、進入 drag-action 後的看板 task-position 解析。
 - 本 SPEC 的 short pan、quick tap details、450–550ms long-press entry、compact action rail、edge auto-scroll 與 cancel／blur／visibility／Escape safety 全部保留。

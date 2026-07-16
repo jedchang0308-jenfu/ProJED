@@ -2,10 +2,10 @@
 
 關聯 DEV: DEV-048
 關聯 SPEC: `ai-doc/specs/SPEC-048-task-multi-person-assignment.md`
-狀態: DEV-048 QA-QC Executed / TEST + Production Release Gate Passed / Supabase Alias Governance Residual Accepted
+狀態: DEV-048 QA-QC Executed / TEST + Production Release Gate Passed / Supabase Alias Governance Residual Accepted / 2026-07-16 Active Primary Guard Removed
 風險等級: P1 任務當責、資料相容、UI 防呆與 migration contract
 建立日期: 2026-07-15
-最近更新: 2026-07-15
+最近更新: 2026-07-16
 
 使用思考習慣: #可驗證性、#批判思考、#極限情境
 
@@ -14,7 +14,7 @@
 證明多人主責不是只改 UI，而是資料契約、互斥規則、報表篩選、活動紀錄、備份與 Supabase schema 一致:
 - 多主責與多協作可被設定、保存與顯示。
 - 主責 / 協作角色互斥。
-- active task 不會在新異動後變成無主責。
+- 任務可被刻意清成未指派；active 狀態不再阻擋清空主責。
 - legacy `assigneeId` 仍可服務舊程式，且等於第一位主責。
 - 多主責不造成任務篩選與報表重複計算。
 
@@ -23,7 +23,7 @@
 | Layer | Purpose | Required evidence |
 |---|---|---|
 | Static contract | types、normalizer、store、filter、backup、migration、Edge formatter | verifier output |
-| Model/helper | 去重、互斥、alias、active guard | deterministic assertions |
+| Model/helper | 去重、互斥、alias、清空主責同步 | deterministic assertions |
 | Type/build | TypeScript contract and Vite bundle | `tsc --noEmit`, `build:test` |
 | Lint | changed TS/TSX hygiene | targeted ESLint |
 | Browser UI | picker、checkbox、互斥、guard、visible error sweep | Playwright snapshot/screenshot |
@@ -35,7 +35,7 @@
 |---|---|
 | ZT-048-001 | UI 仍只能設定一位主責 |
 | ZT-048-002 | 同一人可同時存在於主責與協作 |
-| ZT-048-003 | active task 可透過 picker 或 store update 清空最後一位主責 |
+| ZT-048-003 | active task 清空最後一位主責時仍被 toast 或 store guard 阻擋 |
 | ZT-048-004 | `assigneeId` 未同步到第一位主責 |
 | ZT-048-005 | DB trigger 依 UUID 排序打亂使用者選取順序 |
 | ZT-048-006 | 篩選只看 legacy `assigneeId`，漏掉第二位之後主責 |
@@ -50,13 +50,13 @@
 |---|---|---|
 | MOD-048-001 | primary `[A, A, B]`, collaborator `[B, C]` | primary `[A, B]`, collaborator `[C]` |
 | MOD-048-002 | update primary `[A, B]` | `assigneeId === A` |
-| MOD-048-003 | active task clear all primary | update rejected, toast warning |
+| MOD-048-003 | active task clear all primary | accepted; alias cleared |
 | MOD-048-004 | TODO task clear all primary | accepted |
 | MOD-048-005 | completed / group / archived clear all primary | accepted |
 | UI-048-001 | open task detail assignment picker | shows primary and collaborator checkbox sections |
 | UI-048-002 | select two primary members | summary and checkbox state reflect both |
 | UI-048-003 | select collaborator then select same person as primary | person removed from collaborator |
-| UI-048-004 | uncheck until one active primary remains | last primary remains checked |
+| UI-048-004 | uncheck the final primary on an active task | task becomes `未指派`, no blocking toast |
 | UI-048-005 | select more than three primary members | warning visible, save not blocked |
 | FILTER-048-001 | task has primary `[A, B]`, filter by B | task included once |
 | BACKUP-048-001 | local package exports/imports task with `[A, B]` | both primary IDs preserved locally |

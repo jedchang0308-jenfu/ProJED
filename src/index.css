@@ -71,6 +71,10 @@
     font-synthesis-weight: none;
     text-rendering: geometricPrecision;
   }
+
+  .kanban-drag-source-placeholder > :not([data-kanban-insertion-marker]) {
+    visibility: hidden;
+  }
 }
 
 /* ========================================

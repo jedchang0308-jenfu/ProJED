@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import {
   normalizeTaskAssignmentSelection,
   normalizeTaskAssignmentUpdates,
-  requiresPrimaryAssignee,
 } from '../src/utils/taskAssignments';
 
 const baseNode = {
@@ -28,6 +27,19 @@ assert.deepEqual(
 
 assert.deepEqual(
   normalizeTaskAssignmentUpdates(baseNode, {
+    assigneeIds: [],
+    collaboratorIds: ['collaborator-2'],
+  }),
+  {
+    assigneeIds: undefined,
+    assigneeId: undefined,
+    collaboratorIds: ['collaborator-2'],
+  },
+  'active tasks may be left without primary assignees when the user clears them',
+);
+
+assert.deepEqual(
+  normalizeTaskAssignmentUpdates(baseNode, {
     assigneeIds: ['primary-1', 'primary-2'],
     collaboratorIds: ['primary-2', 'collaborator-2'],
   }),
@@ -39,14 +51,10 @@ assert.deepEqual(
   'updates must persist the compatibility alias and remove duplicated roles',
 );
 
-assert.equal(requiresPrimaryAssignee(baseNode), true);
-assert.equal(requiresPrimaryAssignee({ ...baseNode, status: 'todo' }), false);
-assert.equal(requiresPrimaryAssignee({ ...baseNode, status: 'completed' }), false);
-assert.equal(requiresPrimaryAssignee({ ...baseNode, nodeType: 'group' }), false);
-
 const migration = fs.readFileSync('supabase/migrations/20260715143000_task_multi_person_assignment.sql', 'utf8');
 const picker = fs.readFileSync('src/components/TaskAssignmentPicker.tsx', 'utf8');
 const filter = fs.readFileSync('src/features/taskFilters/predicates.ts', 'utf8');
+const store = fs.readFileSync('src/store/useWbsStore.ts', 'utf8');
 assert.match(migration, /assignee_ids uuid\[\]/);
 assert.match(migration, /wbs_items_assignment_roles_disjoint/);
 assert.match(migration, /sync_wbs_item_assignment_roles/);
@@ -55,6 +63,8 @@ assert.doesNotMatch(migration, /array_agg\(distinct id order by id\)/);
 assert.match(picker, /主責成員（可複選）/);
 assert.match(picker, /協作成員（可複選）/);
 assert.match(picker, /共同主責較多/);
+assert.doesNotMatch(picker, /至少要保留一位主責|requiresPrimaryAssignee/);
+assert.doesNotMatch(store, /執行中的任務至少要設定一位主責|requiresPrimaryAssignee/);
 assert.match(filter, /assigneeIds/);
 assert.match(filter, /some\(assigneeId/);
 

@@ -8,7 +8,12 @@
 
 使用思考習慣: #可驗證性、#證據基礎、#極限情境
 
-## DEV-051 Regression Ownership Addendum（2026-07-16）
+## DEV-051 Rollback Addendum（2026-07-16）
+
+- DEV-051 專屬實作與 verifier 已移除；目前以本 QA 的 `main` browser baseline 驗證看板拖拉。
+- 下方 DEV-051 regression ownership 只保留歷史參考。
+
+## DEV-051 Historical Regression Ownership Addendum（Superseded）
 
 - 本 QA 繼續負責 whole-task surface、click／control guard、deep hierarchy、mobile pan-first compatibility 與既有 undo regression。
 - 看板跨父層的 750ms lock、1A empty/collapsed child lane、2A before／after／append、3A filtered canonical order 與新 stable selectors 由 `QA-DEV-051` authoritative 驗證。

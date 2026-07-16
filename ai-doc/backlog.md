@@ -2,15 +2,19 @@
 
 ## Backlog Update - 2026-07-16
 
+> 2026-07-16 回復註記：DEV-051 新拖拉架構已撤回，runtime 回復 `main`；DEV-052 因
+> 依賴該基準而延後。以下 DEV-051／052 內容保留為歷史問題、設計與驗證資料，不代表
+> 目前可執行或已交付。
+
 ### DEV-052：看板拖拉子系統重構與行為穩定化
 
-交付狀態：Prepared / RD Implementation Ready / QA Plan Ready / Not Implemented
+交付狀態：Deferred / Not Executable / Not Implemented
 
 使用思考習慣：#批判、#效用理論、#系統描繪
 
 | DEV | Status | Type | Priority | Scope | Evidence |
 |---|---|---|---|---|---|
-| DEV-052 | RD Implementation Ready / QA Plan Ready / Not Implemented | 開發點 | P0 拖拉穩定性 | 保留 DEV-051 UX，重構看板 drag session、target observation、desktop/mobile adapter、geometry、presenter、single commit 與 cleanup；BoardView 只保留 wiring。 | `SPEC-052`、`QA-DEV-052`、`SPEC-051` |
+| DEV-052 | Deferred / Not Executable | 開發點 | P0 拖拉穩定性 | 原重構基準已撤回；重新確認產品行為或另立以 `main` 為基準的新 DEV 前不得實作。 | `SPEC-052`、`QA-DEV-052`、`SPEC-051` |
 
 #### 問題與決策
 
@@ -41,13 +45,13 @@
 
 ### DEV-051: 看板跨父層拖拉停留鎖定與落點定位
 
-交付狀態：Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed
+交付狀態：Withdrawn / Historical Evidence / Runtime Restored to main
 
 使用思考習慣：#批判思考、#設計思考、#可驗證性
 
 | DEV | Status | Type | Priority | Scope | Evidence |
 |---|---|---|---|---|---|
-| DEV-051 | Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed | 交付點 | P1 看板跨階層拖拉可預期性 | 看板拖拉預設只在同父層立即排序；移往不同父層時，必須停留 750ms 才鎖定。畫面只保留父層鎖定框與 before/after/append 插入線；鎖定文字與 floating status 已移除。filter canonical ordering、mobile action priority 與單次 undo 已實作。 | `SPEC-051`、`QA-DEV-051`、`QC-DEV-051`、`SPEC-046`、`SPEC-029` |
+| DEV-051 | Withdrawn / Runtime Restored to main | 交付點 | P1 看板跨階層拖拉可預期性 | 750ms lock 與 feedback layer 已撤回；目前採 `main` 既有拖拉行為。 | `SPEC-051`、`QA-DEV-051`、`QC-DEV-051`、`SPEC-046`、`SPEC-029` |
 
 #### 問題與使用者價值
 

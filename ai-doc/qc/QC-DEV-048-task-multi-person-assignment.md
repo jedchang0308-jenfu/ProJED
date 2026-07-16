@@ -3,22 +3,22 @@
 關聯 DEV: DEV-048
 關聯 SPEC: `ai-doc/specs/SPEC-048-task-multi-person-assignment.md`
 關聯 QA: `ai-doc/qa/QA-DEV-048-task-multi-person-assignment.md`
-狀態: DEV-048 QC Passed / TEST + Production Release Gate Passed / Existing Supabase Alias Gate Residual
+狀態: DEV-048 QC Passed / TEST + Production Release Gate Passed / Existing Supabase Alias Gate Residual / 2026-07-16 Active Primary Guard Removed
 風險等級: P1 任務當責、資料相容、UI 防呆與 migration contract
 驗證日期: 2026-07-15
 
 ## 驗證結論
 
 - 判定：DEV-048 本機 RD implementation、targeted QC、TEST authenticated Level 3、production migration 與 Firebase Level 4 通過；一項共用 Supabase alias governance gate 因既有舊 migration hash mismatch 失敗，非本輪檔案 diff，已保留為 release residual。
-- 已證明：多位主責、多位協作、互斥、active task last-primary guard、legacy alias、filter/report local contract、local backup contract、Supabase migration static contract與瀏覽器 UI smoke。
+- 已證明：多位主責、多位協作、互斥、active task 可清空主責、legacy alias、filter/report local contract、local backup contract、Supabase migration static contract與瀏覽器 UI smoke。
 - 已補證明：ProJED-TEST migration、實際 UUID-array trigger probe、authenticated preview Level 3、production migration、production REST schema probe 與 Firebase production Level 4。
 
 ## RD 實作事實
 
 - `TaskNode` 新增 canonical `assigneeIds`，保留 `assigneeId` legacy alias。
-- `taskAssignments` helper 統一處理去重、互斥、alias 與 active task guard。
+- `taskAssignments` helper 統一處理去重、互斥、alias 與清空主責同步。
 - `TaskAssignmentPicker` 以 native checkbox 實作主責與協作複選，避免自訂視覺層攔截點擊。
-- `useWbsStore` 在 set/add/update 套用 normalization，並阻擋 active task 清空最後主責。
+- `useWbsStore` 在 set/add/update 套用 normalization，不再阻擋 active task 清空最後主責。
 - `projedService` 讀寫 `assignee_ids` 與 legacy `assignee_id`。
 - migration `20260715143000_task_multi_person_assignment.sql` 增加 `assignee_ids`、order-preserving trigger、互斥 check 與 GIN index。
 - filters、activity formatter、local backup package、local test backup adapter 與 Edge knowledge formatter 均支援多主責。
@@ -27,13 +27,13 @@
 
 | Gate | Result | Evidence |
 |---|---|---|
-| `npm.cmd run verify:dev-048-task-multi-person-assignment` | Pass | helper normalization、active guard、migration static、picker/static filter contract |
+| `npm.cmd run verify:dev-048-task-multi-person-assignment` | Pass | helper normalization、active task unassigned、migration static、picker/static filter contract |
 | `npx tsc --noEmit` | Pass | TypeScript contract |
 | targeted ESLint | Pass with existing warnings only | `_options`、`_legacyTaskLinkNodeIds`、`_source`、`lists`、`dependencies` 既有 unused warnings |
 | `npm.cmd run verify:supabase:static` | Pass | 26 required migration snippets found |
 | `npm.cmd run verify:supabase:migration-aliases` | Fail, existing residual | 5 unmodified old production source hash mismatches: `20260630060610`, `20260630060727`, `20260701005406`, `20260701010144`, `20260702094146` |
 | `npm.cmd run build:test` | Pass | Vite test build generated PWA assets; Browserslist data warning only |
-| Browser UI smoke | Pass | multi primary + collaborator checkbox、互斥、last-primary guard、0 console errors |
+| Browser UI smoke | Pass | multi primary + collaborator checkbox、互斥、active task unassigned allowed、0 console errors |
 | Screenshot | Captured | `output/playwright/dev048-assignment-picker.png` |
 | Test fixture cleanup | Pass | `qc-card-1` restored to seed `未指派`; undo/redo disabled after reload |
 | TEST remote migration | Pass | 158 rows; schema/trigger/function/check/index present; alias mismatch 0; overlap 0; rollback-only UUID-array probe passed |
@@ -53,7 +53,7 @@ Observed:
 - `主責／協作` picker displays `主責成員（可複選）` and `協作成員（可複選）`.
 - Selecting two primary members updates the selected state.
 - Selecting a collaborator, then selecting the same person as primary, removes that person from collaborators.
-- Attempting to uncheck the last primary on an active delayed task is blocked; checkbox remains checked.
+- Unchecking the last primary on an active task is allowed; the task can remain `未指派`.
 - Console errors remained 0 during the flow; only existing warnings were present.
 - After QC, local test fixture `qc-card-1` was restored to `未指派`.
 
@@ -64,7 +64,7 @@ Observed:
 | Multi primary | Pass | UI and helper accept multiple primary IDs |
 | Multi collaborator | Pass | UI and helper accept multiple collaborator IDs |
 | Mutual exclusion | Pass | helper and UI remove collaborator overlap when promoted to primary |
-| Active task primary guard | Pass | store/picker blocks clearing final primary for active statuses |
+| Active task unassigned allowed | Pass | store/picker allow clearing final primary for active statuses |
 | Legacy compatibility | Pass | `assigneeId` mirrors first primary |
 | Order preservation | Pass | helper preserves input order; migration uses `with ordinality` |
 | Filter/report dedupe | Pass | filter predicate checks `assigneeIds.some(...)` and task remains one record |

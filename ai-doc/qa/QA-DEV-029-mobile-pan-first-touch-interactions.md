@@ -5,7 +5,12 @@
 狀態: Phase 1 + Phase 1B Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed
 建立日期: 2026-07-04
 
-## DEV-051 Regression Ownership Addendum（2026-07-16）
+## DEV-051 Rollback Addendum（2026-07-16）
+
+- DEV-051 專屬實作與 verifier 已移除；目前以本 QA 的 `main` browser baseline 驗證手機拖拉。
+- 下方 DEV-051 regression ownership 只保留歷史參考。
+
+## DEV-051 Historical Regression Ownership Addendum（Superseded）
 
 - 本 QA 繼續 authoritative 驗證 quick tap、short pan、long-press entry、compact action rail、edge auto-scroll 與所有 cancel safety。
 - `QA-DEV-051` 另驗證 lift 後跨父層 750ms lock、20px tolerance、empty/collapsed child lane、filter ordering，以及 action rail 與 task move 不得雙重提交。

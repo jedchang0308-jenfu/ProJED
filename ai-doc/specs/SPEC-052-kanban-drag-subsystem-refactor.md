@@ -1,6 +1,6 @@
 # SPEC-052：看板拖拉子系統重構與行為穩定化
 
-狀態：RD Implementation Ready / QA Plan Ready / Not Implemented
+狀態：Deferred / Not Executable / DEV-051 Baseline Withdrawn
 對應 DEV：DEV-052
 節點類型：開發點
 父交付點：DEV-051、DEV-046、DEV-029
@@ -11,6 +11,10 @@
 最近更新：2026-07-16
 
 使用思考習慣：#批判、#效用理論、#系統描繪
+
+> 2026-07-16 回復註記：DEV-052 以 DEV-051 行為為 characterization 基準；該基準已撤回，
+> 因此本 SPEC 不再是 RD Implementation Ready。只有重新確認產品行為，或另立以 `main`
+> 為基準的新 DEV 後，才能重新評估 Slice A～F。
 
 ## 1. 決策摘要
 

@@ -2,8 +2,7 @@ import React from 'react';
 import type { TaskStatus } from '../../types';
 
 export type MobileTaskAction = 'toggle-complete' | 'add-sibling' | 'add-child' | 'delete';
-export type MobileTaskDropPosition = 'before' | 'after' | 'append';
-export type MobileTaskDropTargetKind = 'task-anchor' | 'parent-group' | 'child-empty-lane';
+export type MobileTaskDropPosition = 'before' | 'after';
 
 export type MobileTaskActionState = {
   nodeId: string;
@@ -13,8 +12,6 @@ export type MobileTaskActionState = {
   pointerY: number;
   hoverAction: MobileTaskAction | null;
   hoverTargetId: string | null;
-  hoverParentId: string | null;
-  hoverTargetKind: MobileTaskDropTargetKind | null;
   dropPosition: MobileTaskDropPosition | null;
   dropIndicatorRect: { left: number; top: number; width: number } | null;
 };

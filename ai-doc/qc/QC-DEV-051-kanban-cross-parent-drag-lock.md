@@ -1,11 +1,14 @@
 # QC-DEV-051: 看板跨父層拖拉停留鎖定與落點定位
 
-狀態: Local Automated QC Passed / Browser UI QC Passed / Production Not Deployed / Physical Phone Supplemental Not Executed
+狀態: Historical Evidence / Superseded by main Runtime Restoration
 關聯 DEV: DEV-051
 關聯 SPEC: `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md`
 關聯 QA: `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md`
 執行日期: 2026-07-16
 執行基準: branch `持續優化1`，dirty worktree based on `9efc596`
+
+> 2026-07-16 回復註記：以下 QC 結論屬於已撤回版本，不能作為目前 runtime 的通過證據。
+> 現況是拖拉程式與基準 browser verifier 回復 `main`，DEV-051 專屬模組與 verifier 已移除。
 
 ## 1. QC 結論
 

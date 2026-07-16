@@ -9,7 +9,12 @@
 
 使用思考習慣: #批判思考、#可驗證性
 
-## DEV-051 Authoritative Addendum（2026-07-16）
+## DEV-051 Rollback Addendum（2026-07-16）
+
+- DEV-051 drop-intent／parent-lock 實作已撤回；本 SPEC 與 `main` 看板拖拉重新成為 active baseline。
+- 下方 DEV-051 行為只保留歷史參考，不得作為目前 runtime 驗收契約。
+
+## DEV-051 Historical Authoritative Addendum（Superseded）
 
 - 本 SPEC 的 whole-task surface drag source、click guard、interactive-control exclusion、mobile pan-first compatibility 與 undo grouping 繼續有效。
 - `SPEC-051` 已完成本機實作並取代看板 `wbs-card-drop`／`wbs-checklist-drop` 的跨父層隱性中央／下層 drop-intent：預設同父層即時排序；跨父層需停留 750ms 鎖定，且只以群組框與 before／after／append insertion line 呈現，不顯示 breadcrumb、Level、鎖定文字或 floating status。

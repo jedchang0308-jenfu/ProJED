@@ -1,6 +1,6 @@
 # SPEC-051: 看板跨父層拖拉停留鎖定與落點定位
 
-狀態: Implemented / Local Automated QA Passed / Browser UI QC Passed / Production Not Deployed / Physical Phone Supplemental Not Executed
+狀態: Withdrawn / Historical Contract / Runtime Restored to main
 對應 DEV: DEV-051
 節點類型: 交付點
 風險等級: Medium（主要看板操作、桌機與手機手勢、排序與父層資料一致性）
@@ -9,6 +9,11 @@
 最近更新: 2026-07-16
 
 使用思考習慣: #批判思考、#設計思考、#可驗證性
+
+> 2026-07-16 回復註記：使用者因拖拉定位、預覽與抖動問題反覆發生，明確要求先回復
+> `main`。本文件保留 DEV-051 曾確認與驗證的設計歷史，但不再是目前 runtime 的
+> authoritative contract；不得直接依本文件恢復 `kanbanDropIntent`、parent lock 或
+> feedback layer。
 
 ## 1. Human Decision Brief
 

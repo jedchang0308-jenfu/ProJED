@@ -2,12 +2,15 @@
 
 關聯 DEV: DEV-051
 關聯 SPEC: `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md`
-狀態: QA Plan Updated / Local Automated QA Passed / Browser UI QC Passed / Manual Real Operation Not Executed / Production Not Deployed / Physical Phone Supplemental Not Executed
+狀態: Historical Evidence / Implementation Withdrawn / Runtime Restored to main
 風險等級: Medium
 建立日期: 2026-07-16
 最近更新: 2026-07-16
 
 使用思考習慣: #可驗證性、#批判思考、#極限情境
+
+> 2026-07-16 回復註記：本計畫與既有結果只描述已撤回的 DEV-051 實作。DEV-051 專屬
+> verifier 已移除；目前版本應以 DEV-029、DEV-046 與 `main` 行為回歸作為驗證依據。
 
 ## 1. 驗證目標
 

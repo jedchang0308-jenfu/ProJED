@@ -205,25 +205,27 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - release 結果：ProJED-TEST migration、authenticated Level 3、production migration、Firebase deploy 與 Level 4 已通過；5 個既有 migration provenance hash mismatch 保留為 governance residual
   - 證據：`SPEC-048`、`QA-DEV-048`、`QC-DEV-048`、`verify:dev-048-task-multi-person-assignment`
   - 計入交付：是
-- ✓ DEV-051 [交付點] [完成] [P1] [Local RD + Automated QA/UI QC Passed / Production Not Deployed] 看板跨父層拖拉停留鎖定
-  - 摘要：同父層立即排序；跨父層需在目標父層停留 750ms。空／收合父層提供 text-free 插入線，鎖定後可選 before／after／append；篩選下保留隱藏同層任務相對順序。
+- ↷ DEV-051 [交付點] [延後] [P1] [已回復 main 基準] 看板跨父層拖拉停留鎖定
+  - 摘要：DEV-051 新拖拉架構因反覆出現定位、預覽與抖動問題已撤出；目前看板拖拉
+    回復 `main` 的既有行為，DEV-051 規格與 QA/QC 只保留歷史參考。
   - 來源 ID：`USER-20260716-kanban-cross-parent-drag-lock`
   - 父任務：DEV-046、DEV-029
-  - 結果：共用 drop-intent 狀態機、750ms parent lock、200ms grace、20px mobile tolerance、
-    群組框／exact insertion line、text-free empty lane、canonical ordering 與單次 batch undo 已完成；
-    鎖定文字、breadcrumb／Level、arming progress 與 floating status 已依最新決策退役。
-  - 證據：`SPEC-051`、`QA-DEV-051`、`QC-DEV-051`、DEV-051 static 33/33、
-    browser 7-case matrix、DEV-029／039／044／046／048 regression、TypeScript、build:test
+  - 下一步：若再次啟動，先以 `main` 建立 characterization baseline，經使用者確認後
+    才能重新導入跨父層鎖定；不得直接恢復已撤出的 DEV-051 模組。
+  - 阻塞 / 恢復條件：需有可重現的分層拖拉案例、單一落點權威與真實操作通過標準。
+  - 證據：runtime 與 DEV-029／046 基準檔已對齊 `main`；DEV-029 32/32 + browser、
+    DEV-046 27/27 + browser、DEV-039 26/26 + browser、DEV-044 25/25 + browser、
+    DEV-048、TypeScript 與 `build:test` 均通過。`SPEC-051`、`QA-DEV-051`、
+    `QC-DEV-051` 均標記為歷史／已撤回。
   - 計入交付：是
-- ☐ DEV-052 [開發點] [可執行] [P0] [RD Implementation Ready] 看板拖拉子系統重構與行為穩定化
-  - 摘要：保留 DEV-051 行為，將 drag session、desktop／mobile target、幾何、preview、
-    commit 與 cleanup 從 BoardView 拆成單一權威子系統，消除 stale target、預覽不同步與
-    double-submit 風險。
+- ↷ DEV-052 [開發點] [延後] [P0] [不可執行] 看板拖拉子系統重構與行為穩定化
+  - 摘要：原計畫以 DEV-051 行為為重構基準；該基準已撤回，因此 DEV-052 不再具備
+    可直接實作的產品契約。
   - 來源 ID：`USER-20260716-kanban-drag-refactor`
   - 父任務：DEV-051、DEV-046、DEV-029
-  - 下一步：RD 先執行 Slice A characterization baseline，再依 SPEC-052 的 B～F slice
-    分段 extraction 與驗證
-  - 證據：`SPEC-052`、`QA-DEV-052`；實作與 QC 尚未執行
+  - 下一步：暫停，不進入 Slice A～F。
+  - 阻塞 / 恢復條件：DEV-051 重新確認產品行為，或另立以 `main` 行為為基準的新 DEV。
+  - 證據：`SPEC-052`、`QA-DEV-052`（Deferred / Not Executable）
   - 計入交付：否
 
 

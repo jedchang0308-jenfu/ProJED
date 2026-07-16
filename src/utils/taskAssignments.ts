@@ -71,13 +71,3 @@ export const normalizeTaskAssignmentUpdates = (
       : {}),
   };
 };
-
-/**
- * 待辦與完成狀態可暫時沒有主責；進入實際執行、延遲、暫停或未定狀態後，至少要有一位主責。
- * 既有資料不會被強制回填，只有新異動會套用此 guard。
- */
-export const requiresPrimaryAssignee = (node: Pick<TaskNode, 'nodeType' | 'isArchived' | 'status'>) =>
-  node.nodeType !== 'group' &&
-  !node.isArchived &&
-  node.status !== 'todo' &&
-  node.status !== 'completed';

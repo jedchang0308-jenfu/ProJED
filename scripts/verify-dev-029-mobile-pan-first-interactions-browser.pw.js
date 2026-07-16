@@ -661,9 +661,11 @@ async (page) => {
       await closeWorkbenchIfOpen();
       const cards = page.locator('.kanban-task-card[data-mobile-drop-target="true"], .kanban-task-card[data-mobile-drop-target][data-task-id]');
       const count = await cards.count();
-      assert(count >= 2, 'scenario needs at least two cards', { count });
-      const source = cards.nth(1);
-      const target = cards.nth(0);
+      assert(count >= 4, 'scenario needs at least four cards', { count });
+      // The first two seeded roots are already overdue. Use future-dated siblings so this
+      // case isolates mobile drag ordering from the main baseline's smart-status behavior.
+      const source = cards.nth(3);
+      const target = cards.nth(2);
       const sourceId = await source.getAttribute('data-task-id');
       const targetId = await target.getAttribute('data-task-id');
       const before = await page.locator('.kanban-task-card[data-task-id]').evaluateAll((items) =>
