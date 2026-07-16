@@ -8,6 +8,12 @@
 
 使用思考習慣: #可驗證性、#證據基礎、#極限情境
 
+## DEV-051 Regression Ownership Addendum（2026-07-16）
+
+- 本 QA 繼續負責 whole-task surface、click／control guard、deep hierarchy、mobile pan-first compatibility 與既有 undo regression。
+- 看板跨父層的 750ms lock、1A empty/collapsed child lane、2A before／after／append、3A filtered canonical order 與新 stable selectors 由 `QA-DEV-051` authoritative 驗證。
+- DEV-051 本輪已重跑本 QA：static 27/27 與 browser passed；whole-task surface、deep checklist、desktop controls 與 mobile compatibility 無回歸。
+
 ## 驗證目標
 
 確認電腦與手機上，所有明確納入的 task-backed surface 都從「拖曳把手限定」改為「整個任務本體可拖曳」。這裡的「所有任務」包含所有階層: 父任務、子任務、孫任務、Level 3+ checklist row、Level 4/5 deep row 與全域任務平台中的所有已歸位/未歸位 task row。驗證同時不得破壞:

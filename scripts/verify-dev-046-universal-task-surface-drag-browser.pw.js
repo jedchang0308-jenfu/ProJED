@@ -125,7 +125,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
-      endDate: '2026-07-08',
+      endDate: '2099-07-08',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -138,7 +138,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 1,
-      endDate: '2026-07-09',
+      endDate: '2099-07-09',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -151,7 +151,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
-      endDate: '2026-07-10',
+      endDate: '2099-07-10',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -164,7 +164,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
-      endDate: '2026-07-11',
+      endDate: '2099-07-11',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -177,7 +177,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 1,
-      endDate: '2026-07-12',
+      endDate: '2099-07-12',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -190,7 +190,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
-      endDate: '2026-07-13',
+      endDate: '2099-07-13',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -203,7 +203,7 @@ async (page) => {
       status: 'todo',
       nodeType: 'task',
       order: 0,
-      endDate: '2026-07-14',
+      endDate: '2099-07-14',
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -517,18 +517,34 @@ async (page) => {
       await assertSurfaceSamplePoints(page.locator('[data-kanban-column-header="true"][data-task-id="dev046-col-a"]').first(), 'kanban list header');
 
       const checklistBefore = await checklistOrderInCard('dev046-card-a');
-      await dragBetween(
-        page.locator('.kanban-checklist-item[data-task-id="dev046-child-b"]').first(),
-        page.locator('.kanban-checklist-item[data-task-id="dev046-child-a"]').first(),
-        { startRatioX: 0.7, endRatioY: 0.2 },
-      );
-      await page.waitForFunction(() => {
-        const card = document.querySelector('.kanban-task-card[data-task-id="dev046-card-a"]');
-        const ids = Array.from(card?.querySelectorAll('.kanban-checklist-item[data-task-id]') || [])
-          .map((item) => item.getAttribute('data-task-id'));
-        return ids.indexOf('dev046-child-b') >= 0 && ids.indexOf('dev046-child-b') < ids.indexOf('dev046-child-a');
-      }, null, { timeout: 7000 });
+      const checklistSource = page.locator('.kanban-checklist-item[data-task-id="dev046-child-b"]').first();
+      const checklistTarget = page.locator('.kanban-checklist-item[data-task-id="dev046-child-a"]').first();
+      const checklistStart = await centerPoint(checklistSource, 0.45, 0.45);
+      const checklistEnd = await centerPoint(checklistTarget, 0.5, 0.2);
+      await page.mouse.move(checklistStart.x, checklistStart.y);
+      await page.mouse.down();
+      await page.mouse.move(checklistStart.x + 12, checklistStart.y + 3, { steps: 4 });
+      await page.mouse.move(checklistEnd.x, checklistEnd.y, { steps: 24 });
+      await page.waitForTimeout(120);
+      const checklistIntent = await page.evaluate(() => ({
+        indicator: Array.from(document.querySelectorAll('[data-kanban-drop-indicator="true"]')).map((item) => ({
+          position: item.getAttribute('data-kanban-drop-position'),
+          parentId: item.getAttribute('data-kanban-drop-parent-id'),
+        })),
+        lockStates: Array.from(document.querySelectorAll('[data-kanban-parent-lock-state]')).map((item) => ({
+          phase: item.getAttribute('data-kanban-parent-lock-state'),
+          parentId: item.getAttribute('data-kanban-drop-parent-id'),
+        })),
+      }));
+      await page.mouse.up();
+      await page.waitForTimeout(450);
       const checklistAfter = await checklistOrderInCard('dev046-card-a');
+      const checklistDebug = await page.evaluate(() => (window.__projedKanbanDropDebug || []).slice(-40));
+      assert(
+        checklistAfter.indexOf('dev046-child-b') >= 0 && checklistAfter.indexOf('dev046-child-b') < checklistAfter.indexOf('dev046-child-a'),
+        'same-parent checklist row should commit the visible before indicator',
+        { checklistBefore, checklistAfter, checklistIntent, checklistDebug },
+      );
 
       const cardBefore = await orderInColumn('dev046-col-a');
       await dragBetween(

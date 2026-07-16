@@ -21,6 +21,7 @@ interface TaskAssignmentPickerProps {
   disabled?: boolean;
   compact?: boolean;
   inline?: boolean;
+  fullSummary?: boolean;
   onChange: (primaryIds: string[], collaboratorIds: string[]) => void;
 }
 
@@ -37,6 +38,7 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
   disabled = false,
   compact = false,
   inline = false,
+  fullSummary = false,
   onChange,
 }) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -67,6 +69,41 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
     [optionsWithSelected]
   );
   const primaryRequired = requiresPrimaryAssignee(node);
+  const getMemberLabel = React.useCallback(
+    (id: string) => optionsById.get(id)?.label || `已離開成員 (${id})`,
+    [optionsById]
+  );
+  const primarySummary = formatSelectedLabels(currentSelection.primaryIds, optionsById);
+  const collaboratorSummary = currentSelection.collaboratorIds.length > 0
+    ? currentSelection.collaboratorIds.map(getMemberLabel).join('、')
+    : '未設定';
+  const fullSummaryTitle = `主責：${primarySummary}；協作：${collaboratorSummary}`;
+
+  const renderFullRoleRow = (roleLabel: string, ids: string[], emptyText: string, tone: 'primary' | 'collaborator') => (
+    <span className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-1">
+      <span className={`inline-flex h-5 w-10 shrink-0 items-center justify-center rounded text-[10px] font-semibold leading-none ${
+        tone === 'primary'
+          ? 'bg-blue-50 text-blue-700'
+          : 'bg-slate-100 text-slate-500'
+      }`}>
+        {roleLabel}
+      </span>
+      <span className="flex min-w-0 flex-wrap items-center gap-1">
+        {ids.length > 0 ? ids.map(id => (
+          <span
+            key={`${roleLabel}-${id}`}
+            className="inline-flex min-h-5 max-w-full items-center rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] leading-4 text-slate-700"
+          >
+            {getMemberLabel(id)}
+          </span>
+        )) : (
+          <span className="inline-flex h-5 items-center rounded border border-dashed border-slate-200 bg-slate-50 px-2 text-[11px] leading-none text-slate-400">
+            {emptyText}
+          </span>
+        )}
+      </span>
+    </span>
+  );
 
   React.useEffect(() => {
     if (inline || !isOpen) return undefined;
@@ -189,24 +226,45 @@ export const TaskAssignmentPicker: React.FC<TaskAssignmentPickerProps> = ({
   }
 
   return (
-    <div ref={rootRef} className="relative w-full" data-task-assignment-picker="true" onClick={event => event.stopPropagation()}>
+    <div
+      ref={rootRef}
+      className="relative w-full"
+      data-task-assignment-picker="true"
+      data-task-assignment-full-summary={fullSummary ? 'true' : undefined}
+      onClick={event => event.stopPropagation()}
+    >
       <button
         type="button"
         onClick={() => setIsOpen(current => !current)}
         disabled={disabled}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        className={`flex h-8 w-full min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${compact ? 'text-xs' : ''}`}
+        title={fullSummary ? fullSummaryTitle : undefined}
+        className={`flex w-full min-w-0 gap-2 rounded-md border border-slate-200 bg-white px-2 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${
+          fullSummary
+            ? 'h-8 items-center md:h-auto md:min-h-0 md:items-start md:py-1.5'
+            : 'h-8 items-center'
+        } ${compact ? 'text-xs' : ''}`}
       >
         <Users size={compact ? 13 : 15} className="flex-shrink-0 text-blue-500" />
-        <span className="min-w-0 flex-1 truncate">{formatSelectedLabels(currentSelection.primaryIds, optionsById)}</span>
-        {currentSelection.primaryIds.length > 1 ? (
+        {fullSummary ? (
+          <>
+            <span className="min-w-0 flex-1 truncate md:hidden">{primarySummary}</span>
+            <span className="hidden min-w-0 flex-1 flex-col gap-1 md:flex" data-task-assignment-summary-rows="true">
+              {renderFullRoleRow('主責', currentSelection.primaryIds, '未指派', 'primary')}
+              {renderFullRoleRow('協作', currentSelection.collaboratorIds, '未設定', 'collaborator')}
+            </span>
+          </>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{primarySummary}</span>
+        )}
+        {!fullSummary && currentSelection.primaryIds.length > 1 ? (
           <span className="flex-shrink-0 text-[10px] text-slate-400">{currentSelection.primaryIds.length} 人</span>
         ) : null}
         <ChevronDown size={14} className={`flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen ? panel : null}
-      {currentSelection.collaboratorIds.length > 0 ? (
+      {!fullSummary && currentSelection.collaboratorIds.length > 0 ? (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400" title="協作成員數量">
           <Users size={11} /> 協作 {currentSelection.collaboratorIds.length} 人
         </div>

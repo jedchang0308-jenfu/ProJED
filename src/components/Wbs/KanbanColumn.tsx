@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDndContext, useDroppable } from '@dnd-kit/core';
+import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, Link } from 'lucide-react';
@@ -16,6 +16,12 @@ import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
+import {
+  KanbanAnchorIndicator,
+  KanbanAppendIndicator,
+  KanbanChildEmptyLane,
+  useKanbanParentGroupFeedback,
+} from './KanbanDropFeedback';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -45,9 +51,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
-  const { active, over } = useDndContext();
-  const activeType = active?.data.current?.type;
-  const activeNodeId = active?.data.current?.nodeId;
+  const groupFeedback = useKanbanParentGroupFeedback(nodeId);
 
   const storeChildIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
   const childIds = previewParentIndex?.[nodeId] || storeChildIds;
@@ -78,12 +82,15 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     },
   });
 
-  const { setNodeRef: setDropNodeRef, isOver } = useDroppable({
+  const { setNodeRef: setDropNodeRef } = useDroppable({
     id: `${nodeId}-drop`,
     disabled: !canMoveTask,
     data: {
-      type: 'wbs-column',
+      type: 'wbs-parent-group',
       nodeId,
+      parentId: nodeId,
+      targetKind: 'parent-group',
+      position: 'append',
     },
   });
 
@@ -94,39 +101,10 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const columnHeaderDragBindings = mobileActionMode || isSelectingMode
     ? {}
     : { ...columnAttributes, ...columnListeners };
+  const isDragSourceRemoved = isColumnDragging;
 
   const status = node?.status || 'todo';
   const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
-  const overData = over?.data.current;
-  const overNodeId = overData?.nodeId;
-  const nodes = previewNodes || useWbsStore.getState().nodes;
-  const isOverColumnDescendant = (() => {
-    if (!overNodeId) return false;
-    if (overNodeId === nodeId) return true;
-
-    let current = nodes[overNodeId]?.parentId;
-    const visited = new Set<string>();
-    while (current) {
-      if (current === nodeId) return true;
-      if (visited.has(current)) return false;
-      visited.add(current);
-      current = nodes[current]?.parentId || null;
-    }
-
-    return false;
-  })();
-  const isChecklistLayerTargeted = Boolean(
-    overData?.type === 'wbs-checklist-drop' ||
-    (activeType === 'wbs-checklist' && overData?.type === 'wbs-checklist')
-  );
-  const isCardLayerTargeted = Boolean(
-    active &&
-    activeNodeId !== nodeId &&
-    ['wbs-card', 'wbs-checklist'].includes(activeType || '') &&
-    !isChecklistLayerTargeted &&
-    (isOver || overData?.nodeId === nodeId || isOverColumnDescendant)
-  );
-
   const handleAddCard = () => {
     if (!canCreateTask) return;
     if (!node) return;
@@ -219,8 +197,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       ref={setColumnNodeRef}
       style={columnStyle}
       data-kanban-column="true"
+      data-kanban-drag-source-hidden={isDragSourceRemoved ? 'true' : undefined}
       className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/75 shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition-all ${
-        isColumnDragging ? 'scale-105 rotate-1 opacity-50 shadow-2xl' : ''
+        isDragSourceRemoved ? 'hidden' : ''
       }`}
     >
       <div
@@ -233,7 +212,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
         data-touch-tap-guard="true"
         data-kanban-column-header="true"
-        className={`group mobile-pan-item flex flex-col gap-1 border-b border-slate-200/70 bg-white px-[10px] py-[8px] transition-colors hover:bg-primary/[0.02] ${
+        className={`group mobile-pan-item relative flex flex-col gap-1 border-b border-slate-200/70 bg-white px-[10px] py-[8px] transition-colors hover:bg-primary/[0.02] ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
@@ -256,6 +235,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           });
         }}
       >
+        <KanbanAnchorIndicator nodeId={nodeId} />
         <div className="flex items-center gap-1.5">
           <div className="flex flex-1 items-center justify-between">
             <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
@@ -356,10 +336,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
       <div
         ref={setDropNodeRef}
-        className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-0 mb-0 ${
-          isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
-        }`}
+        className={`scroll-container mobile-pan-surface relative flex-1 overflow-y-auto px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-0 mb-0 border-transparent ${groupFeedback.className}`}
         data-mobile-pan-surface="kanban-column"
+        data-kanban-parent-group={groupFeedback.parentKey}
+        data-kanban-target-parent-id={nodeId}
+        data-kanban-parent-lock-state={groupFeedback.phase || undefined}
+        data-kanban-parent-lock-progress={groupFeedback.phase ? groupFeedback.state.progress.toFixed(3) : undefined}
+        data-kanban-drop-parent-id={groupFeedback.phase ? groupFeedback.parentKey : undefined}
       >
         <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
           {children.map((child) => (
@@ -373,6 +356,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             />
           ))}
         </SortableContext>
+
+        {children.length === 0 ? (
+          <KanbanChildEmptyLane parentId={nodeId} />
+        ) : null}
+        <KanbanAppendIndicator parentId={nodeId} />
 
         <div className="mt-[6px]">
           <Button

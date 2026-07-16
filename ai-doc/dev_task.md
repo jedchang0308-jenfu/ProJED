@@ -205,6 +205,26 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - release 結果：ProJED-TEST migration、authenticated Level 3、production migration、Firebase deploy 與 Level 4 已通過；5 個既有 migration provenance hash mismatch 保留為 governance residual
   - 證據：`SPEC-048`、`QA-DEV-048`、`QC-DEV-048`、`verify:dev-048-task-multi-person-assignment`
   - 計入交付：是
+- ✓ DEV-051 [交付點] [完成] [P1] [Local RD + Automated QA/UI QC Passed / Production Not Deployed] 看板跨父層拖拉停留鎖定
+  - 摘要：同父層立即排序；跨父層需在目標父層停留 750ms。空／收合父層提供 text-free 插入線，鎖定後可選 before／after／append；篩選下保留隱藏同層任務相對順序。
+  - 來源 ID：`USER-20260716-kanban-cross-parent-drag-lock`
+  - 父任務：DEV-046、DEV-029
+  - 結果：共用 drop-intent 狀態機、750ms parent lock、200ms grace、20px mobile tolerance、
+    群組框／exact insertion line、text-free empty lane、canonical ordering 與單次 batch undo 已完成；
+    鎖定文字、breadcrumb／Level、arming progress 與 floating status 已依最新決策退役。
+  - 證據：`SPEC-051`、`QA-DEV-051`、`QC-DEV-051`、DEV-051 static 33/33、
+    browser 7-case matrix、DEV-029／039／044／046／048 regression、TypeScript、build:test
+  - 計入交付：是
+- ☐ DEV-052 [開發點] [可執行] [P0] [RD Implementation Ready] 看板拖拉子系統重構與行為穩定化
+  - 摘要：保留 DEV-051 行為，將 drag session、desktop／mobile target、幾何、preview、
+    commit 與 cleanup 從 BoardView 拆成單一權威子系統，消除 stale target、預覽不同步與
+    double-submit 風險。
+  - 來源 ID：`USER-20260716-kanban-drag-refactor`
+  - 父任務：DEV-051、DEV-046、DEV-029
+  - 下一步：RD 先執行 Slice A characterization baseline，再依 SPEC-052 的 B～F slice
+    分段 extraction 與驗證
+  - 證據：`SPEC-052`、`QA-DEV-052`；實作與 QC 尚未執行
+  - 計入交付：否
 
 
 ## PM Update 歷史歸檔

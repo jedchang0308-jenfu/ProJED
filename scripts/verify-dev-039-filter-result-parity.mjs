@@ -114,7 +114,8 @@ assert(
   'Board and Workbench assignee option source is aligned to selected board context',
   source.assigneeOptions.includes('createBoardAssigneeFilterOptions') &&
     source.assigneeOptions.includes('workspaceMembers.forEach') &&
-    source.assigneeOptions.includes('workspaceMemberLabels.get(node.assigneeId)') &&
+    source.assigneeOptions.includes('getTaskAssigneeIds(node).forEach(assigneeId =>') &&
+    source.assigneeOptions.includes('workspaceMemberLabels.get(assigneeId)') &&
     source.assigneeOptions.includes('member.boardId !== boardId') &&
     source.assigneeOptions.includes('node.boardId !== boardId') &&
     source.statusFilterBar.includes('createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers)') &&
@@ -130,16 +131,16 @@ assert(
 );
 
 assert(
-  'DEV-039 documents record Phase 1C before production release',
+  'DEV-039 documents record Phase 1C and the completed local delivery entry',
   source.spec.includes('Phase 1C RD Contract') &&
     source.spec.includes('matchedTaskIds') &&
     source.spec.includes('context-only') &&
     source.qa.includes('Phase 1C Filter Result Parity Verification') &&
     source.qc.includes('Phase 1C QC Gate') &&
-    source.devTask.includes('Phase 1C Filter Result Parity') &&
+    source.devTask.includes('DEV-039 [交付點] [完成]') &&
     source.documentationMap.includes('Phase 1C') &&
     source.backlog.includes('Phase 1C') &&
-    source.devTask.includes('Production release 已具備 Phase 1C 前置 QC') &&
+    source.devTask.includes('QA/QC-DEV-039') &&
     source.qc.includes('Phase 1C QC Gate（Passed）'),
 );
 

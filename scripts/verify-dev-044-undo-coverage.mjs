@@ -190,7 +190,7 @@ assert(
     '"verify:dev-044-undo-coverage-browser"',
   ]) &&
     source.documentationMap.includes('SPEC-044-undo-recovery-scope-expansion') &&
-    source.devTask.includes('DEV-044 Phase 1 + Phase 2 safe slice 已完成 local RD + automated QA') &&
+    source.devTask.includes('DEV-044 [交付點] [完成]') &&
     source.devTask.includes('QC-DEV-044'),
 );
 

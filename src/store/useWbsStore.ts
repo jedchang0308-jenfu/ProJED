@@ -194,6 +194,16 @@ const shouldMarkDelayed = (node: TaskNode): boolean => {
   return dayjs(node.endDate).isValid() && dayjs(node.endDate).isBefore(dayjs(), 'day');
 };
 
+const STRUCTURAL_TASK_UPDATE_KEYS = new Set<keyof TaskNode>([
+  'parentId',
+  'order',
+  'nodeType',
+  'workspaceId',
+  'boardId',
+  'kanbanStageId',
+  'updatedAt',
+]);
+
 const applySmartStatus = (node: TaskNode): TaskNode => {
   if (!shouldMarkDelayed(node)) return node;
   return { ...node, status: 'delayed' };
@@ -203,6 +213,10 @@ const normalizeSmartStatusUpdates = (
   oldNode: TaskNode,
   updates: Partial<TaskNode>
 ): Partial<TaskNode> => {
+  const updateKeys = Object.keys(updates) as Array<keyof TaskNode>;
+  if (updateKeys.length > 0 && updateKeys.every(key => STRUCTURAL_TASK_UPDATE_KEYS.has(key))) {
+    return updates;
+  }
   const candidate = { ...oldNode, ...updates };
   if (!shouldMarkDelayed(candidate)) return updates;
   return { ...updates, status: 'delayed' };

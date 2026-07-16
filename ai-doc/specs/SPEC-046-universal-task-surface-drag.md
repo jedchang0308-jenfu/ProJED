@@ -9,6 +9,13 @@
 
 使用思考習慣: #批判思考、#可驗證性
 
+## DEV-051 Authoritative Addendum（2026-07-16）
+
+- 本 SPEC 的 whole-task surface drag source、click guard、interactive-control exclusion、mobile pan-first compatibility 與 undo grouping 繼續有效。
+- `SPEC-051` 已完成本機實作並取代看板 `wbs-card-drop`／`wbs-checklist-drop` 的跨父層隱性中央／下層 drop-intent：預設同父層即時排序；跨父層需停留 750ms 鎖定，且只以群組框與 before／after／append insertion line 呈現，不顯示 breadcrumb、Level、鎖定文字或 floating status。
+- DEV-051 明確 child move 只透過拖曳期間出現的「下層空位」，不以卡片中央代表成為 child。
+- DEV-051 static 33/33、browser 7-case matrix 與本 SPEC static/browser regression passed；production runtime 尚未部署。
+
 ## Human Decision Brief
 
 來源:

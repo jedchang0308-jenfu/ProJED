@@ -5,6 +5,12 @@
 狀態: Phase 1 + Phase 1B Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed
 建立日期: 2026-07-04
 
+## DEV-051 Regression Ownership Addendum（2026-07-16）
+
+- 本 QA 繼續 authoritative 驗證 quick tap、short pan、long-press entry、compact action rail、edge auto-scroll 與所有 cancel safety。
+- `QA-DEV-051` 另驗證 lift 後跨父層 750ms lock、20px tolerance、empty/collapsed child lane、filter ordering，以及 action rail 與 task move 不得雙重提交。
+- DEV-051 本輪已重跑本 QA：static 32/32 與 browser operation matrix passed；此證據只涵蓋本機自動化，physical phone／production 仍未執行。
+
 ## 驗證目標
 
 確認手機 coarse pointer 下，BoardView 的主要手勢從 click-first 改為 pan-first：使用者在任務卡、子任務列、欄位與空白處短滑都能移動畫面或至少不觸發任務功能；長按才進入任務操作；互動控制仍可直接點擊。

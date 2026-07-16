@@ -5,11 +5,10 @@
  * 
  * 【標題功能】卡片採閱讀優先；任務名稱編輯集中在任務詳情頁。
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
-import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, CheckSquare, ChevronDown, ChevronRight, ListPlus, Link } from 'lucide-react';
+import { Check, CheckSquare, ChevronDown, ChevronRight, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -28,6 +27,7 @@ import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { TaskDateBadge } from './TaskDateBadge';
+import { KanbanAnchorIndicator, KanbanChildEmptyLane } from './KanbanDropFeedback';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -88,9 +88,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
-  const { active, over } = useDndContext();
-  const activeType = active?.data.current?.type;
-  const activeNodeId = active?.data.current?.nodeId;
   const touchTapGuard = useTouchTapGuard();
 
   // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
@@ -109,6 +106,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     return { total, completed };
   }, [childIds, previewNodes]);
   const hasChildren = childStats.total > 0;
+  const visibleChildCount = React.useMemo(() => {
+    const nodes = previewNodes || useWbsStore.getState().nodes;
+    return (childIds || []).filter((id) => {
+      const child = nodes[id];
+      return child && !child.isArchived && (!filterProjection || filterProjection.visibleTaskIds.has(id));
+    }).length;
+  }, [childIds, filterProjection, previewNodes]);
 
   // dnd-kit 拖動邏輯（此卡片可被拖動）
   const {
@@ -128,38 +132,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     }
   });
 
-  // 此卡片同時是放置區：可接收 wbs-checklist 或 wbs-card 的拖入（降級操作）
-  // 使用獨立 id `${nodeId}-card-drop` 區分「被拖動中的卡片」和「作為放置區的卡片」
-  const { setNodeRef: setDropRef } = useDroppable({
-    id: `${nodeId}-card-drop`,
-    disabled: !canMoveTask || activeType === 'wbs-card',
-    data: {
-      type: 'wbs-card-drop',
-      nodeId,
-      columnId,
-    },
-  });
-
-  const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
-    id: `${nodeId}-checklist-drop`,
-    disabled: !canMoveTask || !['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeNodeId === nodeId,
-    data: {
-      type: 'wbs-checklist-drop',
-      nodeId,
-      columnId,
-    },
-  });
-
-  const { setNodeRef: setChecklistAreaDropRef, isOver: isChecklistAreaDropOver } = useDroppable({
-    id: `${nodeId}-checklist-area-drop`,
-    disabled: !canMoveTask || !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
-    data: {
-      type: 'wbs-checklist-drop',
-      nodeId,
-      columnId,
-    },
-  });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -168,40 +140,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
     : { ...attributes, ...listeners };
+  const isDragSourceRemoved = isDragging;
 
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
-  const canDropIntoChecklist = canMoveTask && ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
-  const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
-  const overData = over?.data.current;
-  const overNodeId = overData?.nodeId;
-  const isOverChecklistDescendant = (() => {
-
-    if (activeType !== 'wbs-checklist' || overData?.type !== 'wbs-checklist' || !overNodeId) {
-      return false;
-    }
-
-    const nodes = previewNodes || useWbsStore.getState().nodes;
-    let current = nodes[overNodeId]?.parentId;
-    const visited = new Set<string>();
-
-    while (current) {
-      if (current === nodeId) return true;
-      if (visited.has(current)) return false;
-      visited.add(current);
-      current = nodes[current]?.parentId || null;
-    }
-
-    return false;
-  })();
-  const isChecklistTargeted = isChecklistAreaDropOver || isChecklistDropOver || isOverChecklistDescendant;
-
-  // 合併兩個 ref：讓同一個 DOM 元素同時具備「可拖動」和「可放置」的能力
-  const mergedRef = useCallback((el: HTMLDivElement | null) => {
-    setNodeRef(el);
-    setDropRef(el);
-  }, [setNodeRef, setDropRef]);
-
   // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
   const longPressHandlers = useLongPress(
     (e) => {
@@ -266,7 +208,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   return (
     <div
-      ref={mergedRef}
+      ref={setNodeRef}
       style={style}
       {...dragSurfaceBindings}
       {...cardLongPressHandlers}
@@ -291,9 +233,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-task-drag-surface-kind="kanban-card"
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       data-touch-tap-guard="true"
+      data-kanban-drag-source-hidden={isDragSourceRemoved ? 'true' : undefined}
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
-        isDragging
-          ? 'opacity-60 shadow-md border-slate-200'
+        isDragSourceRemoved
+          ? 'hidden'
           : isRecordCaptureMode
             ? isRecordSelected
               ? 'cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-300 shadow-md'
@@ -305,6 +248,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             : 'cursor-pointer border-slate-200 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md'
       } ${selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
     >
+      <KanbanAnchorIndicator nodeId={nodeId} />
       <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">
         {/* 卡片內容 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
         <div className="flex-1 min-w-0">
@@ -433,12 +377,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           {/* Level 3+ 下層任務展開區 */}
           {hasChildren && (
             <div
-              ref={setChecklistAreaDropRef}
-              className={`kanban-checklist-section mt-px rounded-md border transition-[background-color,border-color,box-shadow] duration-100 ${
-                isChecklistTargeted
-                  ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]'
-                  : 'border-transparent'
-              }`}
+              className="kanban-checklist-section mt-px rounded-md border border-transparent"
             >
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -466,14 +405,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             </div>
           )}
 
-          <div
-            ref={setChecklistDropRef}
-            className={`kanban-card-dropzone mt-px flex items-center justify-center rounded-md border border-dashed transition-[height,opacity,background-color,border-color,color] duration-100 ${
-              showChecklistDropZone ? 'h-4 opacity-100' : 'h-0 overflow-hidden border-transparent opacity-0'
-            } border-slate-300 bg-slate-50 text-slate-400`}
-          >
-            <ListPlus size={14} />
-          </div>
+          {visibleChildCount === 0 || !isChecklistExpanded ? (
+            <KanbanChildEmptyLane parentId={nodeId} />
+          ) : null}
         </div>
       </div>
     </div>

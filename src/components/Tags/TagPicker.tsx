@@ -11,9 +11,17 @@ interface TagPickerProps {
   onChange: (tagIds: string[]) => void;
   disabled?: boolean;
   compact?: boolean;
+  compactLabel?: string;
 }
 
-export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagIds, onChange, disabled = false, compact = false }) => {
+export const TagPicker: React.FC<TagPickerProps> = ({
+  workspaceId,
+  selectedTagIds,
+  onChange,
+  disabled = false,
+  compact = false,
+  compactLabel,
+}) => {
   const tags = useTagStore(s => s.tags);
   const createTag = useTagStore(s => s.createTag);
   const updateTag = useTagStore(s => s.updateTag);
@@ -97,25 +105,51 @@ export const TagPicker: React.FC<TagPickerProps> = ({ workspaceId, selectedTagId
     await deleteTag(workspaceId, tag.id);
   };
 
-  return (
-    <div className="relative" ref={panelRef} data-tag-picker-compact={compact ? 'true' : undefined}>
-      <div className={`flex flex-wrap items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
-        {selectedTags.map(tag => (
-          <TagChip key={tag.id} tag={tag} />
-        ))}
-        <button
-          type="button"
-          onClick={() => setIsOpen(prev => !prev)}
-          disabled={disabled}
-          data-tag-picker-trigger="true"
-          className={`inline-flex items-center rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 ${
-            compact ? 'h-7 gap-1 px-2' : 'h-8 gap-1.5 px-2.5'
-          }`}
-        >
+  const triggerButton = (
+    <button
+      type="button"
+      onClick={() => setIsOpen(prev => !prev)}
+      disabled={disabled}
+      data-tag-picker-trigger="true"
+      aria-label={compact ? '新增或選擇標籤' : undefined}
+      title={compact ? '新增或選擇標籤' : undefined}
+      className={`inline-flex items-center rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 ${
+        compact ? 'h-7 w-7 justify-center p-0' : 'h-8 gap-1.5 px-2.5'
+      }`}
+    >
+      {compact ? (
+        <Plus size={15} aria-hidden="true" />
+      ) : (
+        <>
           <Tag size={13} />
           標籤
-        </button>
-      </div>
+        </>
+      )}
+    </button>
+  );
+
+  return (
+    <div className="relative" ref={panelRef} data-tag-picker-compact={compact ? 'true' : undefined}>
+      {compact && compactLabel ? (
+        <div className="flex items-center gap-1" data-tag-picker-compact-header="true">
+          <span data-task-details-meta-label-text="true">{compactLabel}</span>
+          {triggerButton}
+        </div>
+      ) : null}
+
+      {(!compactLabel || selectedTags.length > 0) ? (
+        <div
+          className={`flex flex-wrap items-center ${compact ? 'gap-1' : 'gap-1.5'} ${
+            compact && compactLabel ? 'mt-1' : ''
+          }`}
+          data-tag-picker-selected-tags="true"
+        >
+          {selectedTags.map(tag => (
+            <TagChip key={tag.id} tag={tag} />
+          ))}
+          {compact && compactLabel ? null : triggerButton}
+        </div>
+      ) : null}
 
       {isOpen && (
         <div

@@ -6,6 +6,14 @@
 是否計入產品交付完成: 是，限手機看板主要操作可用性
 建立日期: 2026-07-04
 
+## DEV-051 Compatibility Addendum（2026-07-16）
+
+- `SPEC-051` 只接管手機任務完成 long-press lift、進入 drag-action 後的看板 task-position 解析。
+- 本 SPEC 的 short pan、quick tap details、450–550ms long-press entry、compact action rail、edge auto-scroll 與 cancel／blur／visibility／Escape safety 全部保留。
+- 跨父層的 750ms 計時只能在 lift 後 hover 不同 parent 時開始；不得與 long-press entry 計時合併。
+- Action rail target 優先於 task-position target；執行 action 時不得同時提交任務移動。
+- DEV-051 已完成本機實作與 QA/QC；本 SPEC 的 pan-first、quick tap、long-press entry、action rail 與 cancel safety browser regression passed，production／physical phone supplemental 未執行。
+
 ## Human Decision Brief
 
 來源:

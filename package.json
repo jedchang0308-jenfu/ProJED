@@ -131,6 +131,8 @@
     "verify:dev-046-universal-task-surface-drag-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev046-surface-drag -Filename scripts/verify-dev-046-universal-task-surface-drag-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-047-backup-package-contract": "node scripts/verify-dev-047-backup-package-contract.mjs",
     "verify:dev-048-task-multi-person-assignment": "tsx scripts/verify-dev-048-task-multi-person-assignment.ts",
+    "verify:dev-051-kanban-cross-parent-drag-lock": "tsx scripts/verify-dev-051-kanban-cross-parent-drag-lock.mjs",
+    "verify:dev-051-kanban-cross-parent-drag-lock-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev051-kanban-parent-lock -Filename scripts/verify-dev-051-kanban-cross-parent-drag-lock-browser.pw.js -OutputDirectory output/playwright/dev-051-kanban-parent-lock",
     "verify:dev-047-backup-package-model": "tsx scripts/verify-dev-047-backup-package-model.ts",
     "verify:dev-047-backup-transaction-local-db": "tsx scripts/verify-dev-047-backup-transaction-local-db.ts",
     "verify:dev-047-backup-local-supabase": "pwsh.exe -NoProfile -File scripts/verify-dev-047-backup-local-supabase.ps1",

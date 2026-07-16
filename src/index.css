@@ -526,6 +526,27 @@ body[data-kanban-mouse-pan-active="true"] * {
     gap: 4px 5px !important;
   }
 
+  [data-task-details-schedule-controls="true"] {
+    grid-column: 2 / -1 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(68px, 0.72fr) !important;
+    gap: 4px 5px !important;
+    align-items: start !important;
+  }
+
+  [data-task-details-schedule-row="true"],
+  [data-task-details-assignment-row="true"] {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  [data-task-details-assignment-row="true"] {
+    display: grid !important;
+    grid-template-columns: minmax(58px, 0.58fr) minmax(0, 2fr) !important;
+    gap: 4px 5px !important;
+    align-items: start !important;
+  }
+
   [data-task-details-meta-label="true"] {
     display: block !important;
     font-size: 10px !important;
@@ -547,6 +568,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   [data-task-details-meta-control-row="true"] > select,
   [data-task-details-meta-control-row="true"] > input,
   [data-task-details-meta-control-row="true"] > button,
+  [data-task-details-meta-control-row="true"] [data-task-assignment-picker="true"] > button,
   [data-task-details-tag-picker-wrap="true"] [data-tag-picker-trigger="true"] {
     height: 26px !important;
     min-height: 26px !important;
@@ -571,22 +593,62 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 
   [data-task-details-meta-control-row="true"] > button,
+  [data-task-details-meta-control-row="true"] [data-task-assignment-picker="true"],
+  [data-task-details-meta-control-row="true"] [data-task-assignment-picker="true"] > button,
   [data-task-details-tag-picker-wrap="true"] [data-tag-picker-trigger="true"] {
     min-width: 26px !important;
   }
 
   [data-task-details-meta-control-row="true"] > button svg,
+  [data-task-details-meta-control-row="true"] [data-task-assignment-picker="true"] > button svg,
   [data-task-details-tag-picker-wrap="true"] [data-tag-picker-trigger="true"] svg {
     width: 12px !important;
     height: 12px !important;
   }
 
-  [data-task-details-meta-section="true"] [data-tag-picker-trigger="true"] {
-    width: 100% !important;
-    justify-content: center !important;
+  [data-task-details-duration-inline="true"] {
+    height: 26px !important;
+    margin-left: 0 !important;
+    gap: 3px !important;
+    align-items: center !important;
+  }
+
+  [data-task-details-duration-inline="true"] > button,
+  [data-task-details-duration-inline="true"] > input {
+    height: 26px !important;
+    min-height: 26px !important;
+    border-radius: 5px !important;
+    font-size: 12px !important;
+  }
+
+  [data-task-details-duration-inline="true"] > button {
+    width: 26px !important;
+    min-width: 26px !important;
+  }
+
+  [data-task-details-duration-inline="true"] > input {
+    width: 38px !important;
     padding-left: 4px !important;
     padding-right: 4px !important;
-    gap: 3px !important;
+  }
+
+  [data-task-details-duration-inline="true"] > button svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  [data-task-details-meta-section="true"] [data-tag-picker-trigger="true"] {
+    width: 26px !important;
+    justify-content: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    gap: 0 !important;
+  }
+
+  [data-task-details-tag-picker-wrap="true"] [data-tag-picker-compact-header="true"] {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
   }
 
   [data-task-details-tag-picker-wrap="true"] {

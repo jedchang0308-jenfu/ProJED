@@ -1,5 +1,123 @@
 # ProJED Backlog
 
+## Backlog Update - 2026-07-16
+
+### DEV-052：看板拖拉子系統重構與行為穩定化
+
+交付狀態：Prepared / RD Implementation Ready / QA Plan Ready / Not Implemented
+
+使用思考習慣：#批判、#效用理論、#系統描繪
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-052 | RD Implementation Ready / QA Plan Ready / Not Implemented | 開發點 | P0 拖拉穩定性 | 保留 DEV-051 UX，重構看板 drag session、target observation、desktop/mobile adapter、geometry、presenter、single commit 與 cleanup；BoardView 只保留 wiring。 | `SPEC-052`、`QA-DEV-052`、`SPEC-051` |
+
+#### 問題與決策
+
+- 拖拉 BUG 反覆出現的核心不是單一 CSS 或碰撞參數，而是 collision、DOM hit-test、timer、preview、mobile action 與 release revalidation 同時決定同一個 drop。
+- 選擇 targeted subsystem refactor；不整頁重寫 BoardView，也不繼續以單點 patch 擴張狀態組合。
+- SPEC-051 繼續管理產品行為；SPEC-052 只管理 internal architecture 與 migration gates。
+
+#### Current Scope
+
+- 每一幀只接受一個 normalized target observation；線、框、preview、drop 共用同一 target／geometry。
+- 每個 drag session 使用 session id 與 terminal guard，最多只提交一次。
+- desktop／mobile 共用 target priority、intent engine 與 committer；action rail 維持最高優先。
+- Presenter 保證 source 原位移除、moving title ≤1、visible insertion line ≤1、非目標 spacing 穩定。
+- BoardView 移除直接 lock timer、point hit-test、preview state、commit fallback 與 desktop/mobile 分流規則。
+
+#### Out of Scope
+
+- 不改 750ms lock、200ms grace、20px mobile tolerance、同父層即時排序、text-free line／frame 或 canonical ordering。
+- 不改其他模式、資料模型、DB/API、權限、action set 或 release target。
+- 不執行 commit、push、PR、deploy 或 production mutation。
+
+#### Acceptance 與 QA Gate
+
+- DEV-051 33/33、browser 7-case matrix 與 DEV-029／039／044／046／048 regression 必須維持。
+- 完成 gate 需要 automated browser、desktop 真人滑鼠、實體 iOS Safari、Android Chrome 與第二觀察者 5 秒理解。
+- source／preview 名稱重複、有效線超過一條、preview 與線不同步、非目標 spacing 跳動、stale target、double commit 或 cancel 後寫入均為 Stop Ship。
+- 分片依 Characterization → Engine/session → Shared adapter → Presenter → Commit/legacy removal → QA/QC 推進；每片通過才可進下一片。
+
+### DEV-051: 看板跨父層拖拉停留鎖定與落點定位
+
+交付狀態：Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed
+
+使用思考習慣：#批判思考、#設計思考、#可驗證性
+
+| DEV | Status | Type | Priority | Scope | Evidence |
+|---|---|---|---|---|---|
+| DEV-051 | Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed | 交付點 | P1 看板跨階層拖拉可預期性 | 看板拖拉預設只在同父層立即排序；移往不同父層時，必須停留 750ms 才鎖定。畫面只保留父層鎖定框與 before/after/append 插入線；鎖定文字與 floating status 已移除。filter canonical ordering、mobile action priority 與單次 undo 已實作。 | `SPEC-051`、`QA-DEV-051`、`QC-DEV-051`、`SPEC-046`、`SPEC-029` |
+
+#### 問題與使用者價值
+
+- 現有看板可拖動不同階層任務，但使用者不容易判斷目前碰到的是同階排序、跨父層移動，或最終會落在哪個父層與順序。
+- 取消「任務中央代表成為下層」的隱性分類，避免卡片中央、邊緣與下層區域形成多套難記的落點語意。
+- 讓高頻同父層排序維持快速；只有真正跨父層時才增加短暫停留，換取明確意圖與防誤放。
+
+#### Human Confirmed 決策
+
+- 預設行為是同父層排序，不因拖到不同階層任務便立即改變 `parentId`。
+- 同父層目標立即提供任務前／後插入位置，不需等待。
+- 跨父層目標採 750ms 停留鎖定；產品可接受的計時誤差為 700–800ms，不再採 1 秒。
+- 鎖定對象是目標 `parentId` 所代表的父層容器，不只是 L2、L3 等深度數字；相同深度但不同父任務仍屬跨父層。
+- 2026-07-16 最新決策：停留期間與完成後都不顯示文字、breadcrumb、Level、floating status 或進度條；只保留父層框與插入線。
+- 鎖定框線包住整個目標父層／同層任務群組，插入線另外表示目標任務前或後；不可只框單一任務。
+- 未完成鎖定便放開時取消跨父層移動並回到原位，不得猜測使用者意圖。
+- 指標離開鎖定父層超過 200ms 才解除鎖定，避免邊緣抖動；手機停留判定保留約 20px 容錯。
+- `1A`：空父層、可見子任務為空或收合父層，在 active drag 時顯示 text-free 細插入線；停留 750ms 後可鎖定並追加為直接子任務。
+- `2A`：鎖定父層後保持鎖定，使用者可在該父層內選擇目標任務前／後；移到群組空白處則追加到完整同層清單末尾。
+- `3A`：篩選下以可見任務作為前／後錨點，隱藏同層任務保留既有相對順序；若全部子任務被隱藏，追加到完整 canonical sibling list 末尾。
+
+#### 主要流程
+
+1. 使用者從任務非互動區開始拖曳，既有整面拖曳與 click / pan guard 保持不變。
+2. 指標移到同一 `parentId` 的任務時，立即依目標上／下半部顯示前／後插入線。
+3. 指標移到不同 `parentId` 的任務時，該任務作為父層鎖定錨點；開始 750ms transient 計時，但不顯示文字或進度條，也尚不改變預覽父層。
+4. 停留達 750ms 後，以完整父層框鎖定目標父層，不顯示額外狀態文字。
+5. 鎖定後，使用者在該父層任務間選擇前／後插入位置；放開結果必須與插入線預覽一致。
+6. 目的父層沒有可見子任務或目前收合時，顯示細插入線；停留完成後可追加為該任務直接子任務，不使用卡片中央隱性分類。
+7. 指標離開鎖定父層超過 200ms、按 Escape、發生 pointer/touch cancel 或放到無效區域時，解除或取消而不提交錯誤移動。
+
+#### Current Scope
+
+- 桌機與手機看板模式中的 `KanbanColumn`、`KanbanCard`、`KanbanChecklist` 跨父層拖拉定位。
+- 同父層即時前／後排序、跨父層 750ms transient 計時、父層鎖定框與精確插入線。
+- 空父層、收合父層與篩選後可見子任務為空時的 text-free empty lane 插入線及 append 語意。
+- cycle、拖入自己、拖入自己子樹、已完成父層、無移動權限等既有無效落點防呆。
+- 拖曳完成以單一 undo command 還原父層與順序。
+- 手機保留 DEV-029 pan-first、長按後拖曳、edge auto-scroll 與 cancel safety。
+
+#### Out of Scope
+
+- 不恢復「任務中央直接成為該任務下層」的落點分類。
+- 不修改心智圖、清單、甘特、日曆或全域任務平台的模式專屬拖曳語意。
+- 不新增任務階層資料模型、DB schema、migration、RLS、RPC 或後端 API。
+- 不改任務詳情、右鍵選單、手機 compact action rail 的既有功能集合。
+- 不執行 production deploy、remote mutation 或 release；physical phone 保留 supplemental。
+
+#### 驗收方向
+
+- 同父層拖曳不顯示跨父層倒數，並可立即預覽與提交前／後排序。
+- 不同父層停留少於 700ms 不得鎖定；750ms 預設完成鎖定；超過 800ms 尚未鎖定視為失敗。
+- 同深度但不同父任務仍必須經過停留鎖定，不得只比較 Level 數字。
+- 鎖定前放開不得改變 `parentId` 或 `order`；任務回到原位且沒有重複、遺失或 click-through。
+- 鎖定後畫面同時看得到完整父層框線與目標前／後插入線，且看不到鎖定文字或 floating status。
+- 放開後的 `parentId`、前後順序與畫面預覽完全一致；一次 undo 可完整還原。
+- 指標短暫離框不超過 200ms 時保持鎖定，超過門檻後解除；auto-scroll 不得讓鎖定父層跳動。
+- 手機長按與停留期間約 20px 的細微晃動不得反覆重置；短滑仍只 pan，不進入拖曳或鎖定。
+- cycle、無權限及其他無效目標不啟動倒數且不得提交；依最新決策不顯示文字原因。
+- 有任務過濾時，以可見目標任務作為插入錨點，隱藏任務保持原相對順序。
+- 空／收合父層可透過 text-free 插入線完成 750ms 鎖定；目的父層已有但被篩選隱藏的子任務時，新任務加到完整清單末尾。
+- 鎖定後移到群組空白區為 append；移到可見任務上／下半部為 before／after，最終資料與 indicator 一致。
+
+#### Implementation Evidence 與治理邊界
+
+- 開發契約見 `SPEC-051`，執行證據見 `QA-DEV-051` 與 `QC-DEV-051`；deterministic 33/33、browser 7-case matrix、TypeScript、build:test 與相鄰回歸皆通過。
+- Spec Impact 分類維持 `Intentional replacement`：DEV-051 runtime 已取代 SPEC-046 的看板跨父層 drop-intent，但保留 whole-task surface drag；DEV-029 pan-first、long-press、action rail 與 cancel safety regression passed。
+- ADR 不需要：這是局部、可逆、無資料模型影響的看板 UI 行為調整。
+- 本輪已完成產品程式、本機 QA 與 UI QC；commit、push、PR、部署與 release 未執行。
+
 ## Backlog Update - 2026-07-05
 
 ### DEV-041: PWA 更新通知與快取恢復

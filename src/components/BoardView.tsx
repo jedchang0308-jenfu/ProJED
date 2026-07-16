@@ -10,7 +10,7 @@
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import { Check, Plus, X } from 'lucide-react';
-import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
+import { DndContext, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
@@ -36,6 +36,26 @@ import {
     type MobileTaskActionState,
     type MobileTaskDropPosition,
 } from './Wbs/mobileTaskActionContext';
+import {
+    KANBAN_MOBILE_LOCK_TOLERANCE_PX,
+    KANBAN_PARENT_LOCK_DELAY_MS,
+    KANBAN_PARENT_UNLOCK_GRACE_MS,
+    armKanbanTarget,
+    beginKanbanDropIntent,
+    buildKanbanMoveUpdates,
+    createIdleKanbanDropState,
+    getKanbanAppendOrder,
+    invalidateKanbanTarget,
+    isKanbanDropCommittable,
+    kanbanParentKey,
+    lockKanbanTarget,
+    markKanbanLockedOutside,
+    resolveKanbanDropTarget,
+    selectSameParentKanbanTarget,
+    updateArmingKanbanTarget,
+    type KanbanResolvedDropTarget,
+} from './Wbs/kanbanDropIntent';
+import { KanbanDropIntentContext } from './Wbs/kanbanDropIntentContext';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -89,7 +109,8 @@ const MobileTaskActionLayer: React.FC<{
     canEditTask: boolean;
     canCreateTask: boolean;
     canDeleteTask: boolean;
-}> = ({ state, canEditTask, canCreateTask, canDeleteTask }) => {
+    hasValidInsertionPreview: boolean;
+}> = ({ state, canEditTask, canCreateTask, canDeleteTask, hasValidInsertionPreview }) => {
     if (!state) return null;
 
     const canUseAction = (permission: 'edit' | 'create' | 'delete') => {
@@ -97,17 +118,23 @@ const MobileTaskActionLayer: React.FC<{
         if (permission === 'create') return canCreateTask;
         return canDeleteTask;
     };
+    const showPointerPreview = !hasValidInsertionPreview;
 
     return (
         <>
-            <div
-                className="pointer-events-none fixed z-[90] max-w-[240px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-primary/25 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
-                style={{ left: state.pointerX, top: state.pointerY }}
-                data-mobile-drag-preview="true"
-                data-task-id={state.nodeId}
-            >
-                <div className="truncate">{state.title || '未命名任務'}</div>
-            </div>
+            {showPointerPreview ? (
+                <div
+                    className="pointer-events-none fixed z-[90] max-w-[240px] -translate-x-1/2 -translate-y-1/2 rounded-md border border-primary/25 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
+                    style={{ left: state.pointerX, top: state.pointerY }}
+                    data-mobile-drag-preview="true"
+                    data-mobile-pointer-preview-mode="finger"
+                    data-mobile-pointer-x={Math.round(state.pointerX)}
+                    data-mobile-pointer-y={Math.round(state.pointerY)}
+                    data-task-id={state.nodeId}
+                >
+                    <div className="truncate">{state.title || '未命名任務'}</div>
+                </div>
+            ) : null}
 
             {state.dropIndicatorRect ? (
                 <div
@@ -120,6 +147,9 @@ const MobileTaskActionLayer: React.FC<{
                     data-mobile-drop-indicator="true"
                     data-mobile-drop-target={state.hoverTargetId || undefined}
                     data-mobile-drop-position={state.dropPosition || undefined}
+                    data-kanban-drop-indicator="true"
+                    data-kanban-drop-parent-id={kanbanParentKey(state.hoverParentId)}
+                    data-kanban-drop-position={state.dropPosition || undefined}
                 />
             ) : null}
 
@@ -168,6 +198,96 @@ const recordMobileTaskActionDebug = (entry: Record<string, unknown>) => {
     ].slice(-30);
 };
 
+const recordKanbanDropDebug = (entry: Record<string, unknown>) => {
+    if (typeof window === 'undefined' || import.meta.env.MODE !== 'test') return;
+    const debugWindow = window as any;
+    debugWindow.__projedKanbanDropDebug = [
+        ...(debugWindow.__projedKanbanDropDebug || []),
+        { ...entry, at: Date.now() },
+    ].slice(-40);
+};
+
+type KanbanPlacementPreview = {
+    left: number;
+    top: number;
+    width: number;
+    title: string;
+};
+
+type KanbanPointerPreview = KanbanPlacementPreview;
+
+const isSameKanbanPlacementPreview = (
+    left: KanbanPlacementPreview | null,
+    right: KanbanPlacementPreview | null,
+) => {
+    if (!left || !right) return left === right;
+    return (
+        Math.abs(left.left - right.left) < 0.5 &&
+        Math.abs(left.top - right.top) < 0.5 &&
+        Math.abs(left.width - right.width) < 0.5 &&
+        left.title === right.title
+    );
+};
+
+const escapeKanbanSelectorValue = (value: string) => (
+    typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value.replace(/"/g, '\\"')
+);
+
+const getVisibleLineRect = (element: Element | null) => {
+    if (!(element instanceof HTMLElement)) return null;
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0) return null;
+    return rect;
+};
+
+const DRAG_PREVIEW_HIT_TEST_SELECTOR = [
+    '[data-kanban-pointer-drag-preview]',
+    '[data-kanban-placement-preview]',
+    '[data-mobile-drag-preview]',
+].join(',');
+
+const withDragPreviewsHidden = <T,>(read: () => T) => {
+    const hiddenPreviews = Array.from(document.querySelectorAll(DRAG_PREVIEW_HIT_TEST_SELECTOR)) as HTMLElement[];
+    const previousDisplay = hiddenPreviews.map((element) => element.style.display);
+    hiddenPreviews.forEach((element) => {
+        element.style.display = 'none';
+    });
+    try {
+        return read();
+    } finally {
+        hiddenPreviews.forEach((element, index) => {
+            element.style.display = previousDisplay[index] || '';
+        });
+    }
+};
+
+const getDndPointerPoint = (event: any) => {
+    const activator = event?.activatorEvent;
+    const activatorTouch = activator?.touches?.[0] || activator?.changedTouches?.[0];
+    const startX = typeof activator?.clientX === 'number'
+        ? activator.clientX
+        : typeof activatorTouch?.clientX === 'number'
+            ? activatorTouch.clientX
+            : null;
+    const startY = typeof activator?.clientY === 'number'
+        ? activator.clientY
+        : typeof activatorTouch?.clientY === 'number'
+            ? activatorTouch.clientY
+            : null;
+    const deltaX = typeof event?.delta?.x === 'number' ? event.delta.x : 0;
+    const deltaY = typeof event?.delta?.y === 'number' ? event.delta.y : 0;
+    if (typeof startX === 'number' && typeof startY === 'number') {
+        return { x: startX + deltaX, y: startY + deltaY };
+    }
+
+    const rect = event?.active?.rect?.current?.translated || event?.active?.rect?.current?.initial;
+    if (rect) {
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+    return null;
+};
+
 const MOBILE_TASK_ACTION_FAILSAFE_MS = 12000;
 const MOBILE_TASK_EDGE_SCROLL_THRESHOLD_PX = 56;
 const MOBILE_TASK_EDGE_SCROLL_MAX_STEP_PX = 18;
@@ -193,11 +313,234 @@ const BoardView = () => {
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
     const [mobileTaskAction, setMobileTaskAction] = useState<MobileTaskActionState | null>(null);
+    const [desktopPlacementPreview, setDesktopPlacementPreview] = useState<KanbanPlacementPreview | null>(null);
+    const [desktopPointerPreview, setDesktopPointerPreview] = useState<KanbanPointerPreview | null>(null);
+    const [kanbanDropState, setKanbanDropState] = useState(createIdleKanbanDropState);
     const mobileTaskActionRef = React.useRef<MobileTaskActionState | null>(null);
     const mobileTaskActionFailSafeRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const mobileTaskAutoScrollFrameRef = React.useRef<number | null>(null);
     const mobileTaskAutoScrollPointRef = React.useRef<{ x: number; y: number } | null>(null);
     const lastValidOverRef = React.useRef<any>(null);
+    const lastDesktopPointerPointRef = React.useRef<{ x: number; y: number } | null>(null);
+    const kanbanDropStateRef = React.useRef(createIdleKanbanDropState());
+    const pendingKanbanTargetRef = React.useRef<KanbanResolvedDropTarget | null>(null);
+    const kanbanLockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const kanbanProgressTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+    React.useEffect(() => {
+        const capturePointerPoint = (event: MouseEvent | PointerEvent) => {
+            if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return;
+            lastDesktopPointerPointRef.current = { x: event.clientX, y: event.clientY };
+        };
+        window.addEventListener('pointermove', capturePointerPoint, true);
+        window.addEventListener('mousemove', capturePointerPoint, true);
+        return () => {
+            window.removeEventListener('pointermove', capturePointerPoint, true);
+            window.removeEventListener('mousemove', capturePointerPoint, true);
+        };
+    }, []);
+
+    const readDesktopPointerPoint = React.useCallback((event: any) => (
+        lastDesktopPointerPointRef.current || getDndPointerPoint(event)
+    ), []);
+
+    const getVisibleTaskAnchorRect = React.useCallback((nodeId: string | null | undefined) => {
+        if (!nodeId || typeof document === 'undefined') return null;
+        const escapedNodeId = escapeKanbanSelectorValue(nodeId);
+        const anchors = Array.from(document.querySelectorAll(
+            `[data-mobile-drop-target][data-task-id="${escapedNodeId}"]`,
+        )) as HTMLElement[];
+        for (const anchor of anchors) {
+            const rect = anchor.getBoundingClientRect();
+            const style = window.getComputedStyle(anchor);
+            if (
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                rect.width > 0 &&
+                rect.height > 0
+            ) return rect;
+        }
+        return null;
+    }, []);
+
+    const updateDesktopPointerPreview = React.useCallback((event: any, drag: any) => {
+        const eventData = event?.active?.data?.current;
+        const eventNodeId = eventData?.nodeId;
+        const node = drag?.node || (eventNodeId ? useWbsStore.getState().nodes[eventNodeId] : null);
+        if (!node) {
+            setDesktopPointerPreview(null);
+            return;
+        }
+        const point = readDesktopPointerPoint(event);
+        if (!point) {
+            setDesktopPointerPreview(null);
+            return;
+        }
+        const nextPreview: KanbanPointerPreview = {
+            left: Math.round(point.x),
+            top: Math.round(point.y),
+            width: (drag?.type || eventData?.type) === 'wbs-column' ? 270 : 240,
+            title: drag?.title || node.title || '未命名任務',
+        };
+        setDesktopPointerPreview(prev => (
+            isSameKanbanPlacementPreview(prev, nextPreview) ? prev : nextPreview
+        ));
+    }, [readDesktopPointerPoint]);
+    const kanbanUnlockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const commitKanbanDropState = React.useCallback((next: ReturnType<typeof createIdleKanbanDropState>) => {
+        kanbanDropStateRef.current = next;
+        setKanbanDropState(next);
+    }, []);
+
+    const clearKanbanLockTimers = React.useCallback(() => {
+        if (kanbanLockTimerRef.current) clearTimeout(kanbanLockTimerRef.current);
+        if (kanbanProgressTimerRef.current) clearInterval(kanbanProgressTimerRef.current);
+        kanbanLockTimerRef.current = null;
+        kanbanProgressTimerRef.current = null;
+    }, []);
+
+    const clearKanbanUnlockTimer = React.useCallback(() => {
+        if (kanbanUnlockTimerRef.current) clearTimeout(kanbanUnlockTimerRef.current);
+        kanbanUnlockTimerRef.current = null;
+    }, []);
+
+    const resetKanbanDropIntent = React.useCallback((preserveSource = false) => {
+        clearKanbanLockTimers();
+        clearKanbanUnlockTimer();
+        pendingKanbanTargetRef.current = null;
+        const current = kanbanDropStateRef.current;
+        const source = preserveSource && current.sourceNodeId
+            ? useWbsStore.getState().nodes[current.sourceNodeId]
+            : null;
+        commitKanbanDropState(source ? beginKanbanDropIntent(source) : createIdleKanbanDropState());
+    }, [clearKanbanLockTimers, clearKanbanUnlockTimer, commitKanbanDropState]);
+
+    const startKanbanArming = React.useCallback((
+        baseState: ReturnType<typeof createIdleKanbanDropState>,
+        target: KanbanResolvedDropTarget,
+    ) => {
+        clearKanbanLockTimers();
+        clearKanbanUnlockTimer();
+        const startedAt = Date.now();
+        pendingKanbanTargetRef.current = target;
+        commitKanbanDropState(armKanbanTarget(baseState, target, startedAt));
+
+        kanbanProgressTimerRef.current = window.setInterval(() => {
+            const current = kanbanDropStateRef.current;
+            const latestTarget = pendingKanbanTargetRef.current;
+            if (
+                current.phase !== 'arming' ||
+                !latestTarget ||
+                latestTarget.parentKey !== kanbanParentKey(current.candidateParentId)
+            ) return;
+            commitKanbanDropState(updateArmingKanbanTarget(current, latestTarget, Date.now()));
+        }, 50);
+
+        kanbanLockTimerRef.current = window.setTimeout(() => {
+            const current = kanbanDropStateRef.current;
+            const latestTarget = pendingKanbanTargetRef.current;
+            if (
+                current.phase !== 'arming' ||
+                !latestTarget?.valid ||
+                latestTarget.parentKey !== kanbanParentKey(current.candidateParentId)
+            ) return;
+            clearKanbanLockTimers();
+            commitKanbanDropState(lockKanbanTarget(current, latestTarget));
+        }, KANBAN_PARENT_LOCK_DELAY_MS);
+    }, [clearKanbanLockTimers, clearKanbanUnlockTimer, commitKanbanDropState]);
+
+    const updateKanbanDropTarget = React.useCallback((target: KanbanResolvedDropTarget | null) => {
+        const current = kanbanDropStateRef.current;
+        if (!current.sourceNodeId) return;
+        pendingKanbanTargetRef.current = target;
+
+        if (!target) {
+            clearKanbanLockTimers();
+            if (current.phase === 'locked') {
+                commitKanbanDropState(markKanbanLockedOutside(current, Date.now()));
+                if (!kanbanUnlockTimerRef.current) {
+                    kanbanUnlockTimerRef.current = window.setTimeout(() => {
+                        kanbanUnlockTimerRef.current = null;
+                        const latest = kanbanDropStateRef.current;
+                        const source = latest.sourceNodeId ? useWbsStore.getState().nodes[latest.sourceNodeId] : null;
+                        if (latest.phase !== 'locked' || !latest.outsideSince || Date.now() - latest.outsideSince < KANBAN_PARENT_UNLOCK_GRACE_MS) return;
+                        const base = source ? beginKanbanDropIntent(source) : createIdleKanbanDropState();
+                        commitKanbanDropState(base);
+                        const pending = pendingKanbanTargetRef.current;
+                        if (!pending?.valid || !source) return;
+                        if (pending.sameParent) commitKanbanDropState(selectSameParentKanbanTarget(base, pending));
+                        else startKanbanArming(base, pending);
+                    }, KANBAN_PARENT_UNLOCK_GRACE_MS);
+                }
+                return;
+            }
+            clearKanbanUnlockTimer();
+            const source = useWbsStore.getState().nodes[current.sourceNodeId];
+            commitKanbanDropState(source ? beginKanbanDropIntent(source) : createIdleKanbanDropState());
+            return;
+        }
+
+        if (!target.valid) {
+            clearKanbanLockTimers();
+            clearKanbanUnlockTimer();
+            commitKanbanDropState(invalidateKanbanTarget(current, target));
+            return;
+        }
+
+        if (current.phase === 'locked') {
+            if (target.parentKey === kanbanParentKey(current.lockedParentId)) {
+                clearKanbanUnlockTimer();
+                commitKanbanDropState(lockKanbanTarget(current, target));
+                return;
+            }
+            clearKanbanLockTimers();
+            commitKanbanDropState(markKanbanLockedOutside(current, Date.now()));
+            if (!kanbanUnlockTimerRef.current) {
+                kanbanUnlockTimerRef.current = window.setTimeout(() => {
+                    kanbanUnlockTimerRef.current = null;
+                    const latest = kanbanDropStateRef.current;
+                    const source = latest.sourceNodeId ? useWbsStore.getState().nodes[latest.sourceNodeId] : null;
+                    if (latest.phase !== 'locked' || !latest.outsideSince || Date.now() - latest.outsideSince < KANBAN_PARENT_UNLOCK_GRACE_MS) return;
+                    const base = source ? beginKanbanDropIntent(source) : createIdleKanbanDropState();
+                    commitKanbanDropState(base);
+                    const pending = pendingKanbanTargetRef.current;
+                    if (!pending?.valid || !source) return;
+                    if (pending.sameParent) commitKanbanDropState(selectSameParentKanbanTarget(base, pending));
+                    else startKanbanArming(base, pending);
+                }, KANBAN_PARENT_UNLOCK_GRACE_MS);
+            }
+            return;
+        }
+
+        clearKanbanUnlockTimer();
+        if (target.sameParent) {
+            clearKanbanLockTimers();
+            commitKanbanDropState(selectSameParentKanbanTarget(current, target));
+            return;
+        }
+
+        if (
+            current.phase === 'arming' &&
+            target.parentKey === kanbanParentKey(current.candidateParentId)
+        ) {
+            const next = updateArmingKanbanTarget(current, target, Date.now());
+            if (next.progress >= 1) {
+                clearKanbanLockTimers();
+                commitKanbanDropState(lockKanbanTarget(next, target));
+            } else {
+                commitKanbanDropState(next);
+            }
+            return;
+        }
+
+        startKanbanArming(current, target);
+    }, [
+        clearKanbanLockTimers,
+        clearKanbanUnlockTimer,
+        commitKanbanDropState,
+        startKanbanArming,
+    ]);
 
     const stopMobileTaskAutoScroll = React.useCallback(() => {
         mobileTaskAutoScrollPointRef.current = null;
@@ -291,18 +634,19 @@ const BoardView = () => {
             }
         }
 
-        if (['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '')) {
-            const checklistDropCollision = collisions.find((collision: any) => {
-                const container = getCollisionContainer(collision);
-                return container?.data.current?.type === 'wbs-checklist-drop';
+        if (['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeSource === 'task-workbench') {
+            const priority: Record<string, number> = {
+                'wbs-child-empty-lane': 0,
+                'wbs-card': 1,
+                'wbs-checklist': 1,
+                'wbs-parent-group': 2,
+                'wbs-column': 3,
+            };
+            return [...collisions].sort((left, right) => {
+                const leftType = getCollisionContainer(left)?.data.current?.type || '';
+                const rightType = getCollisionContainer(right)?.data.current?.type || '';
+                return (priority[leftType] ?? 10) - (priority[rightType] ?? 10);
             });
-
-            if (checklistDropCollision) {
-                return [
-                    checklistDropCollision,
-                    ...collisions.filter((collision: any) => collision.id !== checklistDropCollision.id),
-                ];
-            }
         }
 
         return collisions;
@@ -354,80 +698,40 @@ const BoardView = () => {
         { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
     ];
 
-    /**
-     * 拖曳結束處理 — 全階層移動引擎
-     * 設計意圖：統一處理所有 DnD 場景，每種場景透過 data.type 識別。
-     *
-     * 支援場景：
-     * 1. wbs-column → wbs-column         : 列表水平排序
-     * 2. wbs-card   → wbs-column (drop)  : 卡片跨列移動
-     * 3. wbs-card   → wbs-card (sortable): 同列排序
-     * 4. wbs-card   → wbs-card-drop      : 卡片降級為目標卡片的子節點 ✨新增
-     * 5. wbs-checklist → wbs-column (drop): 任務升級為列表直接子節點（卡片級別）✨新增
-     * 6. wbs-checklist → wbs-card-drop    : 任務跨卡片移動 ✨新增
-     * 7. wbs-checklist → wbs-checklist    : 同卡片內任務排序 ✨新增
-     */
+    /** 看板拖曳先解析父層與精確位置；跨父層只有 locked 狀態可提交。 */
     const handleDragStart = (event: any) => {
         if (!canMoveTask) return;
         if (isMobileTaskActionMode()) {
             lastValidOverRef.current = null;
             commitMobileTaskActionState(null);
             setActiveDrag(null);
+            setDesktopPointerPreview(null);
             return;
         }
         const { active } = event;
         const nodeId = active.data.current?.nodeId;
         lastValidOverRef.current = null;
-        setActiveDrag({
+        const sourceNode = nodeId ? useWbsStore.getState().nodes[nodeId] : null;
+        lastDesktopPointerPointRef.current = getDndPointerPoint(event);
+        if (sourceNode) commitKanbanDropState(beginKanbanDropIntent(sourceNode));
+        recordKanbanDropDebug({ type: 'start', nodeId, sourceParentId: sourceNode?.parentId || null });
+        const nextDrag = {
             id: active.id,
             type: active.data.current?.type,
             source: active.data.current?.source,
             title: active.data.current?.title,
-            node: nodeId ? useWbsStore.getState().nodes[nodeId] : null,
-        });
+            node: sourceNode,
+        };
+        setActiveDrag(nextDrag);
+        updateDesktopPointerPreview(event, nextDrag);
     };
 
     const handleDragCancel = () => {
+        recordKanbanDropDebug({ type: 'cancel', state: kanbanDropStateRef.current });
         lastValidOverRef.current = null;
         setActiveDrag(null);
-    };
-
-    const buildPreviewParentIndex = (nodesRecord: Record<string, TaskNode>) => {
-        const parentIndex: Record<string, string[]> = {};
-
-        Object.values(nodesRecord).forEach(node => {
-            if (node.isArchived) return;
-            const key = node.parentId || 'root';
-            if (!parentIndex[key]) parentIndex[key] = [];
-            parentIndex[key].push(node.id);
-        });
-
-        Object.keys(parentIndex).forEach(parentId => {
-            parentIndex[parentId].sort((a, b) => {
-                const nodeA = nodesRecord[a];
-                const nodeB = nodesRecord[b];
-                return (nodeA?.order || 0) - (nodeB?.order || 0);
-            });
-        });
-
-        return parentIndex;
-    };
-
-    const getAppendOrder = (
-        parentId: string,
-        excludeId?: string,
-        nodesOverride?: Record<string, TaskNode>,
-        parentIndexOverride?: Record<string, string[]>,
-    ) => {
-        const nodes = nodesOverride || useWbsStore.getState().nodes;
-        const parentIndex = parentIndexOverride || useWbsStore.getState().parentNodesIndex;
-        const siblings = parentIndex[parentId] || [];
-
-        return siblings.reduce((max, id) => {
-            if (id === excludeId) return max;
-            const node = nodes[id];
-            return node ? Math.max(max, node.order) : max;
-        }, -1) + 1;
+        setDesktopPointerPreview(null);
+        resetKanbanDropIntent();
     };
 
     const getBoardRootAppendOrder = (
@@ -443,162 +747,115 @@ const BoardView = () => {
         }, -1) + 1;
     };
 
-    const isDescendantOf = (nodeId: string, possibleAncestorId: string, nodesRecord?: Record<string, TaskNode>) => {
-        const nodes = nodesRecord || useWbsStore.getState().nodes;
-        let current = nodes[nodeId]?.parentId;
-        const visited = new Set<string>();
+    const resolveDesktopKanbanTarget = React.useCallback((active: any, over: any, event?: any) => {
+        const activeData = active?.data.current;
+        const overData = over?.data.current;
+        const draggedNodeId = activeData?.nodeId;
+        if (!draggedNodeId || !overData) return null;
 
-        while (current) {
-            if (current === possibleAncestorId) return true;
-            if (visited.has(current)) return false;
-            visited.add(current);
-            current = nodes[current]?.parentId || null;
-        }
-
-        return false;
-    };
-
-    const getSiblingIds = (
-        parentId: string | null,
-        nodesRecord: Record<string, TaskNode>,
-        parentIndex: Record<string, string[]>,
-        excludeId?: string,
-    ) => {
-        const key = parentId || 'root';
-        return (parentIndex[key] || [])
-            .filter(id => id !== excludeId)
-            .map(id => nodesRecord[id])
-            .filter(node => node && !node.isArchived)
-            .sort((a, b) => a.order - b.order)
-            .map(node => node.id);
-    };
-
-    const buildNodesWithMove = (
-        nodesRecord: Record<string, TaskNode>,
-        draggedNodeId: string,
-        parentId: string | null,
-        order: number,
-        nodeType?: TaskNode['nodeType'],
-    ) => ({
-        ...nodesRecord,
-        [draggedNodeId]: {
-            ...nodesRecord[draggedNodeId],
-            parentId,
-            nodeType,
-            order,
-        },
-    });
-
-    const getReorderOrder = (draggedNode: TaskNode, targetNode: TaskNode) => {
-        const sameParent = (draggedNode.parentId || null) === (targetNode.parentId || null);
-        const isMovingDown = sameParent && draggedNode.order < targetNode.order;
-        return targetNode.order + (isMovingDown ? 0.5 : -0.5);
-    };
-
-    const normalizeMovedSiblingOrders = (
-        draggedNodeId: string,
-        intent: { parentId: string | null; order: number; nodeType?: TaskNode['nodeType'] },
-        nodesRecord: Record<string, TaskNode>,
-    ) => {
-        const parentIndex = buildPreviewParentIndex(nodesRecord);
-        const movedNodes = buildNodesWithMove(
-            nodesRecord,
-            draggedNodeId,
-            intent.parentId,
-            intent.order,
-            intent.nodeType,
-        );
-        const movedParentIndex = buildPreviewParentIndex(movedNodes);
-        const affectedParentIds = Array.from(new Set([
-            nodesRecord[draggedNodeId]?.parentId || 'root',
-            intent.parentId || 'root',
-        ]));
-        const updates: Record<string, Partial<TaskNode>> = {};
-
-        affectedParentIds.forEach(parentKey => {
-            const ids = parentKey === (intent.parentId || 'root')
-                ? getSiblingIds(intent.parentId, movedNodes, movedParentIndex)
-                : (parentIndex[parentKey] || [])
-                    .filter(id => id !== draggedNodeId)
-                    .map(id => nodesRecord[id])
-                    .filter(node => node && !node.isArchived)
-                    .sort((a, b) => a.order - b.order)
-                    .map(node => node.id);
-
-            ids.forEach((id, index) => {
-                updates[id] = {
-                    ...(updates[id] || {}),
-                    order: index,
-                };
-            });
-        });
-
-        updates[draggedNodeId] = {
-            ...(updates[draggedNodeId] || {}),
-            parentId: intent.parentId,
-            nodeType: intent.nodeType,
-            updatedAt: Date.now(),
-        };
-
-        return updates;
-    };
-
-    const getDropIntent = (activeData: any, overData: any, nodesRecord: Record<string, TaskNode>) => {
-        const draggedNode = nodesRecord[activeData?.nodeId];
-        if (!draggedNode || !overData) return null;
-
-        const targetNode = nodesRecord[overData.nodeId];
-        const parentIndex = buildPreviewParentIndex(nodesRecord);
-        const sourceType = activeData.type;
         const targetType = overData.type;
-        const shouldBecomeTask = sourceType === 'wbs-column' && targetType !== 'wbs-column';
+        let targetKind: 'task-anchor' | 'parent-group' | 'child-empty-lane' | null = null;
+        let position: 'before' | 'after' | 'append' = 'append';
+        let targetNodeId: string | null = null;
+        let targetParentId: string | null | undefined;
 
-        if (targetType === 'wbs-column') {
-            const targetParentId = sourceType === 'wbs-column' ? (targetNode?.parentId || null) : overData.nodeId;
-            return {
-                parentId: targetParentId,
-                order: sourceType === 'wbs-column' && targetNode
-                    ? getReorderOrder(draggedNode, targetNode)
-                    : getAppendOrder(overData.nodeId, draggedNode.id, nodesRecord, parentIndex),
-                nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
-            };
+        if (['wbs-column', 'wbs-card', 'wbs-checklist'].includes(targetType || '')) {
+            targetKind = 'task-anchor';
+            targetNodeId = overData.nodeId || null;
+            const activeRect = active.rect.current?.translated || active.rect.current?.initial;
+            const overRect = getVisibleTaskAnchorRect(targetNodeId) || over.rect;
+            const pointerY = readDesktopPointerPoint(event)?.y ?? null;
+            const comparisonY = pointerY ?? (activeRect ? activeRect.top + activeRect.height / 2 : null);
+            position = comparisonY !== null && overRect && comparisonY > overRect.top + overRect.height / 2
+                ? 'after'
+                : 'before';
+        } else if (targetType === 'wbs-parent-group') {
+            targetKind = 'parent-group';
+            targetParentId = overData.parentId ?? null;
+            position = 'append';
+        } else if (targetType === 'wbs-child-empty-lane') {
+            targetKind = 'child-empty-lane';
+            targetParentId = overData.parentId ?? overData.nodeId ?? null;
+            position = 'append';
         }
 
-        if (targetType === 'wbs-card') {
-            if (!targetNode) return null;
-            return {
-                parentId: targetNode.parentId,
-                order: getReorderOrder(draggedNode, targetNode),
-                nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
-            };
+        if (!targetKind) return null;
+        return resolveKanbanDropTarget({
+            draggedNodeId,
+            targetKind,
+            targetNodeId,
+            targetParentId,
+            position,
+            nodes: useWbsStore.getState().nodes,
+            canMove: canMoveTask,
+        });
+    }, [canMoveTask, getVisibleTaskAnchorRect, readDesktopPointerPoint]);
+
+    const isDesktopPointerInsideTaskAnchor = React.useCallback((nodeId: string | null | undefined, point: { x: number; y: number } | null) => {
+        if (!nodeId || !point || typeof document === 'undefined') return false;
+        const rect = getVisibleTaskAnchorRect(nodeId);
+        return Boolean(rect &&
+            point.x >= rect.left &&
+            point.x <= rect.right &&
+            point.y >= rect.top &&
+            point.y <= rect.bottom);
+    }, [getVisibleTaskAnchorRect]);
+
+    const resolveDesktopKanbanTargetAtPoint = React.useCallback((active: any, event: any) => {
+        const draggedNodeId = active?.data.current?.nodeId;
+        const point = readDesktopPointerPoint(event);
+        if (!draggedNodeId || !point) return null;
+        const selector = '[data-kanban-child-empty-lane], [data-mobile-drop-target][data-task-id], [data-kanban-parent-group]';
+        const candidates = withDragPreviewsHidden(() => Array.from(document.elementsFromPoint(point.x, point.y)))
+            .map((element) => element.closest(selector))
+            .filter((element, index, all): element is Element => Boolean(element) && all.indexOf(element) === index)
+            .sort((left, right) => {
+                const priority = (element: Element) => element.hasAttribute('data-kanban-child-empty-lane')
+                    ? 0
+                    : element.hasAttribute('data-mobile-drop-target')
+                      ? 1
+                      : 2;
+                return priority(left) - priority(right);
+            });
+        const nodes = useWbsStore.getState().nodes;
+        let firstInvalidTarget: KanbanResolvedDropTarget | null = null;
+        const resolvedCandidates: KanbanResolvedDropTarget[] = [];
+
+        for (const targetElement of candidates) {
+            const rect = (targetElement as HTMLElement).getBoundingClientRect();
+            const isChildLane = targetElement.hasAttribute('data-kanban-child-empty-lane');
+            const targetNodeId = targetElement.getAttribute('data-task-id');
+            const isTaskAnchor = !isChildLane && Boolean(targetNodeId && targetElement.hasAttribute('data-mobile-drop-target'));
+            const targetKind = isChildLane ? 'child-empty-lane' : isTaskAnchor ? 'task-anchor' : 'parent-group';
+            const targetParentId = targetKind === 'task-anchor'
+                ? undefined
+                : targetElement.getAttribute('data-kanban-target-parent-id');
+            const position = targetKind === 'task-anchor'
+                ? (point.y > rect.top + rect.height / 2 ? 'after' : 'before')
+                : 'append';
+            const target = resolveKanbanDropTarget({
+                draggedNodeId,
+                targetKind,
+                targetNodeId,
+                targetParentId,
+                position,
+                nodes,
+                canMove: canMoveTask,
+            });
+            if (target.valid) resolvedCandidates.push(target);
+            if (!firstInvalidTarget) firstInvalidTarget = target;
         }
-
-        if (targetType === 'wbs-card-drop' || targetType === 'wbs-checklist-drop') {
-            return {
-                parentId: overData.nodeId,
-                order: getAppendOrder(overData.nodeId, draggedNode.id, nodesRecord, parentIndex),
-                nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
+        if (resolvedCandidates.length > 0) {
+            const priority = (target: KanbanResolvedDropTarget) => {
+                if (target.kind === 'task-anchor' && target.sameParent) return 0;
+                if (target.kind === 'child-empty-lane') return 1;
+                if (target.kind === 'task-anchor') return 2;
+                return 3;
             };
+            return [...resolvedCandidates].sort((left, right) => priority(left) - priority(right))[0];
         }
-
-        if (targetType === 'wbs-checklist') {
-            if (!targetNode?.parentId) return null;
-            return {
-                parentId: targetNode.parentId,
-                order: getReorderOrder(draggedNode, targetNode),
-                nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
-            };
-        }
-
-        return null;
-    };
-
-    const isValidDropIntent = (draggedNodeId: string, intent: any, nodesRecord: Record<string, TaskNode>) => {
-        if (!intent) return false;
-        if (intent.parentId === draggedNodeId) return false;
-        if (intent.parentId && isDescendantOf(intent.parentId, draggedNodeId, nodesRecord)) return false;
-        return true;
-    };
+        return firstInvalidTarget;
+    }, [canMoveTask, readDesktopPointerPoint]);
 
     const commitMobileTaskActionState = React.useCallback((next: MobileTaskActionState | null) => {
         if (mobileTaskActionFailSafeRef.current) {
@@ -764,13 +1021,13 @@ const BoardView = () => {
             title: '新任務',
             status: 'todo',
             nodeType: 'task',
-            order: getAppendOrder(sourceNode.id, undefined, state.nodes),
+            order: getKanbanAppendOrder(sourceNode.id, sourceNode.boardId, state.nodes),
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
         addNode(newNode);
         selectAndOpenTaskDetails(newNode.id);
-    }, [activeBoardId, activeWorkspaceId, addNode, canCreateTask, getAppendOrder]);
+    }, [activeBoardId, activeWorkspaceId, addNode, canCreateTask]);
 
     const executeMobileTaskAction = React.useCallback(async (action: MobileTaskAction, nodeId: string) => {
         const state = useWbsStore.getState();
@@ -815,116 +1072,130 @@ const BoardView = () => {
 
     const executeMobileTaskDrop = React.useCallback((
         draggedNodeId: string,
-        targetNodeId: string | null,
-        dropPosition: MobileTaskDropPosition | null,
+        target: KanbanResolvedDropTarget | null,
+        dropState = kanbanDropStateRef.current,
     ) => {
-        recordMobileTaskActionDebug({ type: 'drop:start', draggedNodeId, targetNodeId, dropPosition, canMoveTask });
-        if (!canMoveTask || !targetNodeId || !dropPosition || draggedNodeId === targetNodeId) {
-            recordMobileTaskActionDebug({ type: 'drop:blocked-basic', draggedNodeId, targetNodeId, dropPosition, canMoveTask });
+        recordMobileTaskActionDebug({ type: 'drop:start', draggedNodeId, target, phase: dropState.phase, canMoveTask });
+        if (!canMoveTask || !target?.valid || !isKanbanDropCommittable({ ...dropState, target })) {
+            recordMobileTaskActionDebug({ type: 'drop:blocked-lock', draggedNodeId, target, phase: dropState.phase, canMoveTask });
             return;
         }
         const state = useWbsStore.getState();
         const draggedNode = state.nodes[draggedNodeId];
-        const targetNode = state.nodes[targetNodeId];
-        if (!draggedNode || !targetNode || draggedNode.isArchived || targetNode.isArchived) {
-            recordMobileTaskActionDebug({ type: 'drop:blocked-missing', draggedNodeId, targetNodeId });
+        if (!draggedNode || draggedNode.isArchived) {
+            recordMobileTaskActionDebug({ type: 'drop:blocked-missing', draggedNodeId, target });
             return;
         }
 
-        const intent = {
-            parentId: targetNode.parentId || null,
-            order: (targetNode.order ?? 0) + (dropPosition === 'after' ? 0.5 : -0.5),
-            nodeType: targetNode.parentId ? 'task' : (draggedNode.nodeType || 'task'),
-        };
-        if (!isValidDropIntent(draggedNode.id, intent, state.nodes)) {
-            recordMobileTaskActionDebug({ type: 'drop:blocked-invalid-intent', draggedNodeId, targetNodeId, intent });
+        const refreshedTarget = resolveKanbanDropTarget({
+            draggedNodeId,
+            targetKind: target.kind,
+            targetNodeId: target.anchorNodeId,
+            targetParentId: target.parentId,
+            position: target.position,
+            nodes: state.nodes,
+            canMove: canMoveTask,
+        });
+        const phaseAllowsTarget = dropState.phase === 'same-parent'
+            ? refreshedTarget.sameParent
+            : dropState.phase === 'locked' && refreshedTarget.parentKey === kanbanParentKey(dropState.lockedParentId);
+        if (!refreshedTarget.valid || !phaseAllowsTarget) {
+            recordMobileTaskActionDebug({ type: 'drop:blocked-invalid-intent', draggedNodeId, refreshedTarget, phase: dropState.phase });
             return;
         }
 
-        const updates = normalizeMovedSiblingOrders(draggedNode.id, intent, state.nodes);
-        updates[draggedNode.id] = {
-            ...(updates[draggedNode.id] || {}),
-            workspaceId: targetNode.workspaceId || draggedNode.workspaceId,
-            boardId: targetNode.boardId || draggedNode.boardId,
-            nodeType: intent.nodeType,
-            updatedAt: Date.now(),
-        };
-
+        const updates = buildKanbanMoveUpdates(draggedNode.id, refreshedTarget, state.nodes);
         batchUpdateNodes(updates, { label: '移動任務位置', mergeKey: `move:${draggedNode.id}` });
-        recalculateAncestorStatus(draggedNode.id);
-        recordMobileTaskActionDebug({ type: 'drop:complete', draggedNodeId, targetNodeId, dropPosition, updates });
-    }, [batchUpdateNodes, canMoveTask, isValidDropIntent, normalizeMovedSiblingOrders, recalculateAncestorStatus]);
+        recordMobileTaskActionDebug({ type: 'drop:complete', draggedNodeId, refreshedTarget, updates });
+    }, [batchUpdateNodes, canMoveTask]);
 
     const resolveMobileTaskHover = React.useCallback((
         point: { x: number; y: number },
         activeState: MobileTaskActionState,
-    ): Pick<MobileTaskActionState, 'hoverAction' | 'hoverTargetId' | 'dropPosition' | 'dropIndicatorRect'> => {
-        const element = document.elementFromPoint(point.x, point.y);
+    ) => {
+        const emptyHover = {
+            hoverAction: null,
+            hoverTargetId: null,
+            hoverParentId: null,
+            hoverTargetKind: null,
+            dropPosition: null,
+            dropIndicatorRect: null,
+            kanbanTarget: null as KanbanResolvedDropTarget | null,
+        };
+        const element = withDragPreviewsHidden(() => document.elementFromPoint(point.x, point.y));
         const actionElement = element instanceof Element
             ? element.closest('[data-mobile-task-action]')
             : null;
         if (actionElement) {
             const action = actionElement.getAttribute('data-mobile-task-action') as MobileTaskAction | null;
             return {
+                ...emptyHover,
                 hoverAction: action,
-                hoverTargetId: null,
-                dropPosition: null,
-                dropIndicatorRect: null,
             };
         }
 
-        const targetElement = element instanceof Element
-            ? element.closest('[data-mobile-drop-target][data-task-id]')
+        let targetElement = element instanceof Element
+            ? element.closest('[data-kanban-child-empty-lane], [data-mobile-drop-target][data-task-id], [data-kanban-parent-group]')
             : null;
-        const targetNodeId = targetElement?.getAttribute('data-task-id') || null;
-        if (!targetNodeId || targetNodeId === activeState.nodeId || !canMoveTask) {
-            return {
-                hoverAction: null,
-                hoverTargetId: null,
-                dropPosition: null,
-                dropIndicatorRect: null,
-            };
+
+        if (!targetElement) {
+            const current = kanbanDropStateRef.current;
+            const currentParentId = current.phase === 'locked' ? current.lockedParentId : current.candidateParentId;
+            const parentKey = kanbanParentKey(currentParentId);
+            const escapedKey = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(parentKey) : parentKey;
+            const toleranceElement = document.querySelector(
+                `[data-kanban-parent-group="${escapedKey}"]:not([data-kanban-child-empty-lane])`,
+            );
+            if (toleranceElement) {
+                const rect = (toleranceElement as HTMLElement).getBoundingClientRect();
+                if (
+                    point.x >= rect.left - KANBAN_MOBILE_LOCK_TOLERANCE_PX &&
+                    point.x <= rect.right + KANBAN_MOBILE_LOCK_TOLERANCE_PX &&
+                    point.y >= rect.top - KANBAN_MOBILE_LOCK_TOLERANCE_PX &&
+                    point.y <= rect.bottom + KANBAN_MOBILE_LOCK_TOLERANCE_PX
+                ) targetElement = toleranceElement;
+            }
         }
 
         const nodes = useWbsStore.getState().nodes;
         const draggedNode = nodes[activeState.nodeId];
-        const targetNode = nodes[targetNodeId];
-        if (!draggedNode || !targetNode || draggedNode.isArchived || targetNode.isArchived) {
-            return {
-                hoverAction: null,
-                hoverTargetId: null,
-                dropPosition: null,
-                dropIndicatorRect: null,
-            };
-        }
+        if (!draggedNode || draggedNode.isArchived || !targetElement) return emptyHover;
 
         const rect = (targetElement as HTMLElement).getBoundingClientRect();
-        const dropPosition: MobileTaskDropPosition = point.y > rect.top + rect.height / 2 ? 'after' : 'before';
-        const intent = {
-            parentId: targetNode.parentId || null,
-            order: (targetNode.order ?? 0) + (dropPosition === 'after' ? 0.5 : -0.5),
-            nodeType: targetNode.parentId ? 'task' : (draggedNode.nodeType || 'task'),
-        };
-        if (!isValidDropIntent(draggedNode.id, intent, nodes)) {
-            return {
-                hoverAction: null,
-                hoverTargetId: null,
-                dropPosition: null,
-                dropIndicatorRect: null,
-            };
-        }
+        const isChildLane = targetElement.hasAttribute('data-kanban-child-empty-lane');
+        const targetNodeId = targetElement.getAttribute('data-task-id');
+        const isTaskAnchor = !isChildLane && Boolean(targetNodeId && targetElement.hasAttribute('data-mobile-drop-target'));
+        const targetKind = isChildLane ? 'child-empty-lane' : isTaskAnchor ? 'task-anchor' : 'parent-group';
+        const targetParentId = targetKind === 'task-anchor'
+            ? undefined
+            : targetElement.getAttribute('data-kanban-target-parent-id');
+        const dropPosition: MobileTaskDropPosition = targetKind === 'task-anchor'
+            ? (point.y > rect.top + rect.height / 2 ? 'after' : 'before')
+            : 'append';
+        const resolvedTarget = resolveKanbanDropTarget({
+            draggedNodeId: draggedNode.id,
+            targetKind,
+            targetNodeId,
+            targetParentId,
+            position: dropPosition,
+            nodes,
+            canMove: canMoveTask,
+        });
 
         return {
             hoverAction: null,
-            hoverTargetId: targetNodeId,
+            hoverTargetId: targetNodeId || (resolvedTarget.parentId || null),
+            hoverParentId: resolvedTarget.parentId,
+            hoverTargetKind: targetKind,
             dropPosition,
             dropIndicatorRect: {
                 left: rect.left,
                 top: dropPosition === 'after' ? rect.bottom : rect.top,
                 width: rect.width,
             },
+            kanbanTarget: resolvedTarget,
         };
-    }, [canMoveTask, isValidDropIntent]);
+    }, [canMoveTask]);
 
     const startMobileTaskAutoScroll = React.useCallback((point: { x: number; y: number }) => {
         if (typeof window === 'undefined') return;
@@ -942,18 +1213,28 @@ const BoardView = () => {
 
             const latestState = mobileTaskActionRef.current;
             if (latestState) {
+                const resolved = resolveMobileTaskHover(currentPoint, latestState);
+                const { kanbanTarget, ...hoverState } = resolved;
+                if (resolved.hoverAction) resetKanbanDropIntent(true);
+                else updateKanbanDropTarget(kanbanTarget);
                 commitMobileTaskActionState({
                     ...latestState,
                     pointerX: currentPoint.x,
                     pointerY: currentPoint.y,
-                    ...resolveMobileTaskHover(currentPoint, latestState),
+                    ...hoverState,
                 });
             }
             mobileTaskAutoScrollFrameRef.current = window.requestAnimationFrame(tick);
         };
 
         mobileTaskAutoScrollFrameRef.current = window.requestAnimationFrame(tick);
-    }, [autoScrollMobileTaskSurfaces, commitMobileTaskActionState, resolveMobileTaskHover]);
+    }, [
+        autoScrollMobileTaskSurfaces,
+        commitMobileTaskActionState,
+        resetKanbanDropIntent,
+        resolveMobileTaskHover,
+        updateKanbanDropTarget,
+    ]);
 
     const beginMobileTaskAction = React.useCallback((
         task: { id: string; title?: string; status?: TaskStatus },
@@ -972,6 +1253,7 @@ const BoardView = () => {
         event.stopPropagation();
         useBoardStore.getState().setContextMenuState(null);
         setActiveDrag(null);
+        commitKanbanDropState(beginKanbanDropIntent(node));
 
         commitMobileTaskActionState({
             nodeId: node.id,
@@ -981,11 +1263,13 @@ const BoardView = () => {
             pointerY: point.y,
             hoverAction: null,
             hoverTargetId: null,
+            hoverParentId: null,
+            hoverTargetKind: null,
             dropPosition: null,
             dropIndicatorRect: null,
         });
         return true;
-    }, [canCreateTask, canDeleteTask, canEditTask, canMoveTask, commitMobileTaskActionState]);
+    }, [canCreateTask, canDeleteTask, canEditTask, canMoveTask, commitKanbanDropState, commitMobileTaskActionState]);
 
     const moveMobileTaskAction = React.useCallback((event: React.TouchEvent) => {
         const activeState = mobileTaskActionRef.current;
@@ -994,26 +1278,41 @@ const BoardView = () => {
         if (!point) return;
         event.preventDefault();
         event.stopPropagation();
+        const resolved = resolveMobileTaskHover(point, activeState);
+        const { kanbanTarget, ...hoverState } = resolved;
+        if (resolved.hoverAction) resetKanbanDropIntent(true);
+        else updateKanbanDropTarget(kanbanTarget);
         commitMobileTaskActionState({
             ...activeState,
             pointerX: point.x,
             pointerY: point.y,
-            ...resolveMobileTaskHover(point, activeState),
+            ...hoverState,
         });
         startMobileTaskAutoScroll(point);
-    }, [commitMobileTaskActionState, resolveMobileTaskHover, startMobileTaskAutoScroll]);
+    }, [
+        commitMobileTaskActionState,
+        resetKanbanDropIntent,
+        resolveMobileTaskHover,
+        startMobileTaskAutoScroll,
+        updateKanbanDropTarget,
+    ]);
 
     const getFinalMobileTaskHover = React.useCallback((event: React.TouchEvent | undefined, activeState: MobileTaskActionState) => {
         const previousHover = {
             hoverAction: activeState.hoverAction,
             hoverTargetId: activeState.hoverTargetId,
+            hoverParentId: activeState.hoverParentId,
+            hoverTargetKind: activeState.hoverTargetKind,
             dropPosition: activeState.dropPosition,
             dropIndicatorRect: activeState.dropIndicatorRect,
+            kanbanTarget: kanbanDropStateRef.current.target,
         };
         const point = event ? readTouchPoint(event) : null;
         if (!point) return previousHover;
         const resolvedHover = resolveMobileTaskHover(point, activeState);
-        return resolvedHover.hoverAction || resolvedHover.hoverTargetId ? resolvedHover : previousHover;
+        if (resolvedHover.hoverAction) return resolvedHover;
+        if (resolvedHover.kanbanTarget?.valid) return resolvedHover;
+        return previousHover;
     }, [resolveMobileTaskHover]);
 
     const endMobileTaskAction = React.useCallback((event: React.TouchEvent) => {
@@ -1022,16 +1321,28 @@ const BoardView = () => {
         const finalHover = getFinalMobileTaskHover(event, activeState);
         event.preventDefault();
         event.stopPropagation();
-        commitMobileTaskActionState(null);
 
         if (finalHover.hoverAction) {
+            resetKanbanDropIntent();
+            commitMobileTaskActionState(null);
             recordMobileTaskActionDebug({ type: 'end:action', nodeId: activeState.nodeId, finalHover });
             void executeMobileTaskAction(finalHover.hoverAction, activeState.nodeId);
             return;
         }
+        if (finalHover.kanbanTarget) updateKanbanDropTarget(finalHover.kanbanTarget);
+        const dropState = kanbanDropStateRef.current;
+        commitMobileTaskActionState(null);
         recordMobileTaskActionDebug({ type: 'end:drop', nodeId: activeState.nodeId, finalHover });
-        executeMobileTaskDrop(activeState.nodeId, finalHover.hoverTargetId, finalHover.dropPosition);
-    }, [commitMobileTaskActionState, executeMobileTaskAction, executeMobileTaskDrop, getFinalMobileTaskHover]);
+        executeMobileTaskDrop(activeState.nodeId, finalHover.kanbanTarget, dropState);
+        resetKanbanDropIntent();
+    }, [
+        commitMobileTaskActionState,
+        executeMobileTaskAction,
+        executeMobileTaskDrop,
+        getFinalMobileTaskHover,
+        resetKanbanDropIntent,
+        updateKanbanDropTarget,
+    ]);
 
     const cancelMobileTaskAction = React.useCallback((event?: React.TouchEvent) => {
         const activeState = mobileTaskActionRef.current;
@@ -1041,7 +1352,8 @@ const BoardView = () => {
         }
         recordMobileTaskActionDebug({ type: 'cancel:reset', nodeId: activeState?.nodeId || null });
         commitMobileTaskActionState(null);
-    }, [commitMobileTaskActionState]);
+        resetKanbanDropIntent();
+    }, [commitMobileTaskActionState, resetKanbanDropIntent]);
 
     const mobileTaskActionApi = React.useMemo(() => ({
         state: mobileTaskAction,
@@ -1055,6 +1367,78 @@ const BoardView = () => {
             return nodeId ? activeState.nodeId === nodeId : true;
         },
     }), [beginMobileTaskAction, cancelMobileTaskAction, endMobileTaskAction, mobileTaskAction, moveMobileTaskAction]);
+    const kanbanDropContextValue = React.useMemo(() => ({
+        state: kanbanDropState,
+        isTaskDragActive: Boolean(activeDrag?.node || mobileTaskAction),
+    }), [activeDrag?.node, kanbanDropState, mobileTaskAction]);
+
+    React.useLayoutEffect(() => {
+        if (!activeDrag?.node || mobileTaskAction || !kanbanDropState.target?.valid) {
+            setDesktopPlacementPreview(prev => isSameKanbanPlacementPreview(prev, null) ? prev : null);
+            return;
+        }
+
+        const target = kanbanDropState.target;
+        const phaseCanShowLine = (
+            kanbanDropState.phase === 'same-parent' ||
+            kanbanDropState.phase === 'arming' ||
+            kanbanDropState.phase === 'locked'
+        );
+        if (!phaseCanShowLine) {
+            setDesktopPlacementPreview(prev => isSameKanbanPlacementPreview(prev, null) ? prev : null);
+            return;
+        }
+
+        const readPlacementPreview = () => {
+            let lineElement: Element | null = null;
+            if (target.kind === 'child-empty-lane') {
+                const parentId = escapeKanbanSelectorValue(target.parentId || '');
+                lineElement = document.querySelector(
+                    `[data-kanban-child-empty-lane="true"][data-kanban-target-parent-id="${parentId}"] [data-kanban-empty-lane-line="true"]`,
+                );
+            }
+
+            if (!lineElement) {
+                const parentKey = escapeKanbanSelectorValue(target.parentKey);
+                const position = escapeKanbanSelectorValue(target.position);
+                lineElement = document.querySelector(
+                    `[data-kanban-drop-indicator="true"][data-kanban-drop-position="${position}"][data-kanban-drop-parent-id="${parentKey}"]:not([data-mobile-drop-indicator])`,
+                );
+            }
+
+            const lineRect = getVisibleLineRect(lineElement);
+            if (!lineRect) return null;
+
+            const title = activeDrag.title || activeDrag.node.title || '未命名任務';
+            return {
+                left: Math.round(lineRect.left),
+                top: Math.round(Math.min(lineRect.bottom + 4, Math.max(0, window.innerHeight - 44))),
+                width: Math.round(lineRect.width),
+                title,
+            };
+        };
+
+        let frameId: number | null = null;
+        const applyPreview = () => {
+            const nextPreview = readPlacementPreview();
+            setDesktopPlacementPreview(prev => (
+                isSameKanbanPlacementPreview(prev, nextPreview) ? prev : nextPreview
+            ));
+        };
+
+        applyPreview();
+        frameId = window.requestAnimationFrame(applyPreview);
+        return () => {
+            if (frameId !== null) window.cancelAnimationFrame(frameId);
+        };
+    }, [
+        activeDrag?.id,
+        activeDrag?.node,
+        activeDrag?.title,
+        mobileTaskAction,
+        kanbanDropState.phase,
+        kanbanDropState.target,
+    ]);
 
     React.useEffect(() => {
         const handleMove = (event: TouchEvent) => moveMobileTaskAction(event as any);
@@ -1078,7 +1462,9 @@ const BoardView = () => {
             recordMobileTaskActionDebug({ type: 'hard-cancel', reason, nodeId: activeState?.nodeId || null });
             commitMobileTaskActionState(null);
             setActiveDrag(null);
+            setDesktopPointerPreview(null);
             lastValidOverRef.current = null;
+            resetKanbanDropIntent();
         };
 
         const handleVisibilityChange = () => {
@@ -1104,38 +1490,82 @@ const BoardView = () => {
             window.removeEventListener('blur', handleBlur);
             window.removeEventListener('pagehide', handlePageHide);
         };
-    }, [activeDrag, commitMobileTaskActionState]);
+    }, [activeDrag, commitMobileTaskActionState, resetKanbanDropIntent]);
 
     React.useEffect(() => () => {
         if (mobileTaskActionFailSafeRef.current) {
             clearTimeout(mobileTaskActionFailSafeRef.current);
             mobileTaskActionFailSafeRef.current = null;
         }
+        clearKanbanLockTimers();
+        clearKanbanUnlockTimer();
         stopMobileTaskAutoScroll();
-    }, [stopMobileTaskAutoScroll]);
+    }, [clearKanbanLockTimers, clearKanbanUnlockTimer, stopMobileTaskAutoScroll]);
 
-    const handleDragOver = (event: any) => {
+    const updateDesktopKanbanHover = (event: any) => {
         if (!canMoveTask) return;
         const { active, over } = event;
-        if (over && active?.id !== over.id) {
-            lastValidOverRef.current = over;
-        }
+        updateDesktopPointerPreview(event, activeDrag);
+        if (over) lastValidOverRef.current = over;
+        const hasPointerPoint = Boolean(readDesktopPointerPoint(event));
+        const pointerPoint = readDesktopPointerPoint(event);
+        const pointerTarget = hasPointerPoint ? resolveDesktopKanbanTargetAtPoint(active, event) : null;
+        const collisionTarget = resolveDesktopKanbanTarget(active, over, event);
+        const collisionTaskAnchorUnderPointer = (
+            hasPointerPoint &&
+            collisionTarget?.kind === 'task-anchor' &&
+            isDesktopPointerInsideTaskAnchor(collisionTarget.anchorNodeId, pointerPoint)
+        );
+        const sameParentCollisionAnchorCanCorrectParentGroup = (
+            hasPointerPoint &&
+            collisionTarget?.kind === 'task-anchor' &&
+            collisionTarget.sameParent &&
+            pointerTarget?.kind === 'parent-group' &&
+            pointerTarget.sameParent &&
+            pointerTarget.parentKey === collisionTarget.parentKey
+        );
+        const resolvedTarget = collisionTaskAnchorUnderPointer
+            ? collisionTarget
+            : sameParentCollisionAnchorCanCorrectParentGroup
+                ? collisionTarget
+            : pointerTarget || (!hasPointerPoint ? collisionTarget : null);
+        updateKanbanDropTarget(resolvedTarget);
+        recordKanbanDropDebug({
+            type: 'hover',
+            overType: over?.data.current?.type || null,
+            overNodeId: over?.data.current?.nodeId || null,
+            targetSource: collisionTaskAnchorUnderPointer
+                ? 'collision-anchor-under-pointer'
+                : sameParentCollisionAnchorCanCorrectParentGroup
+                    ? 'collision-same-parent-anchor'
+                    : pointerTarget ? 'pointer' : resolvedTarget ? 'collision' : 'none',
+            phase: kanbanDropStateRef.current.phase,
+            target: kanbanDropStateRef.current.target,
+        });
     };
 
+    const handleDragOver = (event: any) => updateDesktopKanbanHover(event);
+    const handleDragMove = (event: any) => updateDesktopKanbanHover(event);
+
     const handleDragEnd = (event: any) => {
+        const dropState = kanbanDropStateRef.current;
+        recordKanbanDropDebug({ type: 'end:start', dropState, over: event.over?.data.current || null });
         setActiveDrag(null);
+        setDesktopPointerPreview(null);
         if (isMobileTaskActionMode()) {
             lastValidOverRef.current = null;
+            resetKanbanDropIntent();
             return;
         }
-        if (!canMoveTask) return;
+        if (!canMoveTask) {
+            resetKanbanDropIntent();
+            return;
+        }
         const { active, over } = event;
-        const effectiveOver = over && active.id !== over.id ? over : lastValidOverRef.current;
         lastValidOverRef.current = null;
-        if (!effectiveOver || active.id === effectiveOver.id) return;
 
         const activeData = active.data.current;
-        const overData = effectiveOver.data.current;
+        const overData = over?.data.current;
         const state = useWbsStore.getState();
         const draggedNode = state.nodes[activeData?.nodeId];
         const isTaskWorkbenchUnplacedDrop =
@@ -1150,6 +1580,7 @@ const BoardView = () => {
                 updatedAt: Date.now(),
             } }, { label: '移到未歸位', mergeKey: `placement:${draggedNode.id}` });
             recalculateAncestorStatus(draggedNode.id);
+            resetKanbanDropIntent();
             return;
         }
 
@@ -1163,24 +1594,26 @@ const BoardView = () => {
                 updatedAt: Date.now(),
             } }, { label: '歸位任務', mergeKey: `placement:${draggedNode.id}` });
             recalculateAncestorStatus(draggedNode.id);
+            resetKanbanDropIntent();
             return;
         }
 
-        const intent = getDropIntent(activeData, overData, state.nodes);
+        const eventTarget = over ? resolveDesktopKanbanTarget(active, over, event) : null;
+        const pointTarget = resolveDesktopKanbanTargetAtPoint(active, event);
+        const target = dropState.target?.valid ? dropState.target : eventTarget?.valid ? eventTarget : pointTarget;
+        const phaseAllowsTarget = Boolean(target?.valid && (
+            target.sameParent ||
+            (dropState.phase === 'locked' && target.parentKey === kanbanParentKey(dropState.lockedParentId))
+        ));
 
-        if (draggedNode && isValidDropIntent(draggedNode.id, intent, state.nodes)) {
-            const updates = normalizeMovedSiblingOrders(draggedNode.id, intent, state.nodes);
-            if (activeData?.source === 'task-workbench' && activeWorkspaceId && activeBoardId) {
-                updates[draggedNode.id] = {
-                    ...(updates[draggedNode.id] || {}),
-                    workspaceId: activeWorkspaceId,
-                    boardId: activeBoardId,
-                    nodeType: intent?.parentId ? 'task' : (updates[draggedNode.id]?.nodeType || draggedNode.nodeType),
-                };
-            }
+        if (draggedNode && target && phaseAllowsTarget) {
+            const updates = buildKanbanMoveUpdates(draggedNode.id, target, state.nodes);
+            recordKanbanDropDebug({ type: 'end:commit', draggedNodeId: draggedNode.id, target, updates });
             batchUpdateNodes(updates, { label: '移動任務位置', mergeKey: `move:${draggedNode.id}` });
-            recalculateAncestorStatus(draggedNode.id);
+        } else {
+            recordKanbanDropDebug({ type: 'end:blocked', draggedNodeId: draggedNode?.id || null, target, phaseAllowsTarget });
         }
+        resetKanbanDropIntent();
     };
 
 
@@ -1211,13 +1644,30 @@ const BoardView = () => {
         );
     }
 
+    const rootGroupPhase = kanbanDropState.phase === 'arming' && !kanbanDropState.candidateParentId
+        ? 'arming'
+        : kanbanDropState.phase === 'locked' && !kanbanDropState.lockedParentId
+          ? 'locked'
+          : kanbanDropState.phase === 'invalid' && kanbanDropState.target?.parentId === null
+            ? 'invalid'
+            : null;
+    const rootGroupClassName = rootGroupPhase === 'locked'
+        ? 'ring-2 ring-primary/70 ring-inset'
+        : rootGroupPhase === 'arming'
+          ? 'ring-2 ring-amber-400/80 ring-inset'
+          : rootGroupPhase === 'invalid'
+            ? 'ring-2 ring-rose-400/80 ring-inset'
+            : '';
+
     return (
         <KanbanDependencyContext.Provider value={{ dependencySelection, handleKanbanDependencySelect, dependencies }}>
         <MobileTaskActionContext.Provider value={mobileTaskActionApi}>
+        <KanbanDropIntentContext.Provider value={kanbanDropContextValue}>
         <DndContext
             sensors={sensors}
             collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
             onDragOver={handleDragOver}
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
@@ -1285,10 +1735,15 @@ const BoardView = () => {
                     {/* 列表畫布 (Lists Canvas) */}
                     <div
                         ref={setBoardCanvasRef}
-                        className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent`}
+                        className={`scroll-container mobile-pan-surface relative flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent ${rootGroupClassName}`}
                         data-mobile-pan-surface="board"
                         data-kanban-mouse-pan-surface="true"
                         data-layout-region="board-canvas"
+                        data-kanban-parent-group="root"
+                        data-kanban-target-parent-id=""
+                        data-kanban-parent-lock-state={rootGroupPhase || undefined}
+                        data-kanban-parent-lock-progress={rootGroupPhase ? kanbanDropState.progress.toFixed(3) : undefined}
+                        data-kanban-drop-parent-id={rootGroupPhase ? 'root' : undefined}
                     >
                         <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                             {rootNodes.map(node => (
@@ -1314,22 +1769,53 @@ const BoardView = () => {
                     </div>
                 </div>
             </div>
-            <DragOverlay dropAnimation={null}>
-                {activeDrag?.node ? (
-                    <div className={`task-title-text rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
-                        activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
-                    }`}>
-                        {activeDrag.title || activeDrag.node.title || '未命名任務'}
-                    </div>
-                ) : null}
-            </DragOverlay>
+            {desktopPlacementPreview ? (
+                <div
+                    className="pointer-events-none fixed z-[88] rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg ring-1 ring-primary/10"
+                    style={{
+                        left: desktopPlacementPreview.left,
+                        top: desktopPlacementPreview.top,
+                        width: desktopPlacementPreview.width,
+                    }}
+                    data-kanban-placement-preview="true"
+                    data-kanban-placement-preview-title={desktopPlacementPreview.title}
+                >
+                    <div className="truncate">{desktopPlacementPreview.title}</div>
+                </div>
+            ) : null}
+            {activeDrag?.node && !desktopPlacementPreview && desktopPointerPreview ? (
+                <div
+                    className="pointer-events-none fixed z-[90] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg ring-1 ring-primary/10 will-change-transform"
+                    style={{
+                        left: desktopPointerPreview.left,
+                        top: desktopPointerPreview.top,
+                        width: desktopPointerPreview.width,
+                    }}
+                    data-kanban-pointer-drag-preview="true"
+                    data-kanban-pointer-preview-mode="cursor"
+                    data-kanban-pointer-x={desktopPointerPreview.left}
+                    data-kanban-pointer-y={desktopPointerPreview.top}
+                >
+                    <div className="truncate">{desktopPointerPreview.title}</div>
+                </div>
+            ) : null}
             <MobileTaskActionLayer
                 state={mobileTaskAction}
                 canEditTask={canEditTask}
                 canCreateTask={canCreateTask}
                 canDeleteTask={canDeleteTask}
+                hasValidInsertionPreview={Boolean(
+                    mobileTaskAction?.dropIndicatorRect &&
+                    kanbanDropState.target?.valid &&
+                    (
+                        kanbanDropState.phase === 'same-parent' ||
+                        kanbanDropState.phase === 'arming' ||
+                        kanbanDropState.phase === 'locked'
+                    )
+                )}
             />
         </DndContext>
+        </KanbanDropIntentContext.Provider>
         </MobileTaskActionContext.Provider>
         </KanbanDependencyContext.Provider>
     );
