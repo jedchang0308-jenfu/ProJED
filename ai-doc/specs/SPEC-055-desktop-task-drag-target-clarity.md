@@ -1,11 +1,11 @@
 # SPEC-055 電腦版任務拖拉落點清晰化與跨階層定位升級
 
-狀態：Completed / Automated QA-QC + User Desktop Acceptance Passed / Production Not Deployed
+狀態：Production Released / Automated QA-QC + User Desktop Acceptance + Level 4 Passed
 關聯 DEV：DEV-055、DEV-053、DEV-054、DEV-046、DEV-051
 QA 計畫：`ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md`
 風險等級：Medium-to-High（核心任務拖拉、跨階層 parent/order、桌機使用者已核准 baseline）
 是否計入產品交付完成：是
-來源：2026-07-17 使用者確認 DEV-054 手機 Rework 4 成功，且手機跨階層落點清楚度優於桌機，要求將成功經驗評估後寫成下一個桌機升級任務。後續 T01-T08 真實桌機操作回報未通過：同一格定位線會飄，且 L3+ 任務被定位線推開；本文件補入 RD Rework 1 契約與驗證。最新使用者 T01-T08 重驗已通過，DEV-055 本機完成。
+來源：2026-07-17 使用者確認 DEV-054 手機 Rework 4 成功，且手機跨階層落點清楚度優於桌機，要求將成功經驗評估後寫成下一個桌機升級任務。後續 T01-T08 真實桌機操作回報未通過：同一格定位線會飄，且 L3+ 任務被定位線推開；本文件補入 RD Rework 1 契約與驗證。最新使用者 T01-T08 重驗已通過，且已完成 Firebase Hosting production release / Level 4 smoke。
 
 ## 1. 任務目標
 
@@ -251,7 +251,8 @@ RD 必須停止並回報，不得硬做完：
 
 ## 10. 變更紀錄
 
-- 2026-07-17：使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做；DEV-055 本機 completion gate 通過，production deployment 尚未執行。
+- 2026-07-17：依使用者正式部署指令，從 clean release worktree branch `codex/dev055-production-release-20260717-234436` artifact commit `e07ba4b` 發布 Firebase Hosting production。Level 2 local artifact smoke、Level 3 Firebase preview `level3-smoke`、Level 4 production `https://projed-cc78d.web.app` 均通過；正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
+- 2026-07-17：使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做；DEV-055 completion gate 通過。
 - 2026-07-17：RD Rework 1 完成。修正使用者 T01-T08 回報的兩項失敗：同一格定位線漂移、L3+ 任務被定位線推開。實作改為 overlay-only checklist append dropzone、桌機 task drag sortable displacement freeze、fixed overlay indicator rect micro-retain。DEV-055 static 27/27、browser B01-B16 16/16 通過；B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0。DEV-046/053/054 static/browser、TypeScript 與 build 亦通過。
 - 2026-07-17：第一次 Slice A / B 自動化通過（已被後續 T01-T08 Attempt 1 失敗與 RD Rework 1 supersede）：DEV-055 static 25/25、browser 15/15、DEV-046/053/054 指定回歸、TypeScript 與 build 通過。當時 T01-T08 共 38 次使用者真實桌機操作與新版手感主觀確認仍為完成門檻。
 - 2026-07-17：依使用者 `#引導模式` 要求，將 DEV-055 補為 RD Implementation Ready，建立桌機落點清晰化與跨階層定位升級契約。

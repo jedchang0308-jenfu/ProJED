@@ -1,6 +1,6 @@
 # QA-DEV-055 電腦版任務拖拉落點清晰化與跨階層定位升級
 
-狀態：Executed / Automated + T01-T08 User Desktop Acceptance Passed
+狀態：Executed / Automated + T01-T08 User Desktop Acceptance + Production Level 4 Passed
 關聯 DEV：DEV-055、DEV-053、DEV-054、DEV-046、DEV-051
 權威規格：`ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md`
 風險等級：Medium-to-High
@@ -157,10 +157,12 @@ DEV-055 完成前必跑：
 - Evidence base：`output/playwright/dev-055-desktop-drag-1784299443605-*`。
 - Latest current-state revalidation：2026-07-17 於 T01-T08 使用者驗收失敗回送 RD 後再跑 DEV-055 static 27/27、DEV-055 browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser、DEV-054 static/browser、`npx.cmd tsc --noEmit`、`npm.cmd run build`，均 Pass；最新 DEV-055 evidence base：`output/playwright/dev-055-desktop-drag-1784301885366-*`。
 - User revalidation：2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做。
+- Release gate：2026-07-17 使用者要求部署正式環境；release branch `codex/dev055-production-release-20260717-234436`、artifact commit `e07ba4b`。Level 2 local production artifact smoke Pass；Level 3 Firebase preview `https://projed-cc78d--level3-smoke-o1na5wft.web.app` Pass；Level 4 production `https://projed-cc78d.web.app` Pass。正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 artifact 一致。
 - QC report：`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`。
 - Completion gate：RD Rework 1 後的 T01-T08 共 38 次使用者真實桌機操作與新版桌機手感主觀確認已通過；本 QA 宣告 DEV-055 completion gate 通過。
 
 ## 9. 變更紀錄
 
+- 2026-07-17：完成 Firebase Hosting production deployment 與 Level 4 smoke；authenticated production drag smoke 未由 Codex 自動登入執行，需使用者登入正式站後補人工操作證據。
 - 2026-07-17：使用者 T01-T08 Attempt 1 未通過後完成 RD Rework 1，補 B15 鎖定「同格不飄、L3+ 不被推開」；使用者重跑 T01-T08 回報測試通過，最後完成門檻已通過。
 - 2026-07-17：建立 QA plan，將 DEV-055 的自動化、回歸與真實操作驗證納入完成標準。

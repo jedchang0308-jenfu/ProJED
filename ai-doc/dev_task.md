@@ -234,13 +234,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得改變桌機 approved baseline、不得恢復 DEV-051/052、不得讓 Workbench placed row 可拖；任一實機缺席或 wrong commit > 0 不得完成。
   - 證據：四次使用者失敗均保留；R10 修正前以 `636x764` 重現 preview 跳離手指與 parent-card fall-through，修正後 DEV-054 static 34/34、browser R01-R10 與指定回歸通過。使用者已於 2026-07-17 以原路徑確認「成功、效果非常好、跨階層移動非常清楚」。仍缺 physical trial sheet、錄影與 QC report，故目前不得標記完成。
   - 計入交付：是
-- ✓ DEV-055 [交付點] [完成] [P1] [RD Rework 1 + User Desktop Gate Passed / Local Complete] 電腦版任務拖拉落點清晰化與跨階層定位升級
-  - 摘要：第一次自動化通過後，使用者 T01-T08 真實桌機操作回報「同一格定位線會飄」與「L3+ 任務被定位線推開」。RD Rework 1 在保留現有桌機 DragOverlay、8px 起手門檻與滑鼠跟手感的前提下，改為 fixed overlay-only indicator、overlay checklist append hit area、card/checklist sortable displacement freeze、同 target rect micro-retain；Workbench placed row 維持不能拖。2026-07-17 使用者重跑 T01-T08 後回報測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做。
+- ✓ DEV-055 [交付點] [完成] [P1] [正式環境已交付 / Level 4 通過] 電腦版任務拖拉落點清晰化與跨階層定位升級
+  - 摘要：第一次自動化通過後，使用者 T01-T08 真實桌機操作回報「同一格定位線會飄」與「L3+ 任務被定位線推開」。RD Rework 1 在保留現有桌機 DragOverlay、8px 起手門檻與滑鼠跟手感的前提下，改為 fixed overlay-only indicator、overlay checklist append hit area、card/checklist sortable displacement freeze、同 target rect micro-retain；Workbench placed row 維持不能拖。2026-07-17 使用者重跑 T01-T08 後回報測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做；同日 Firebase Hosting production release 與 Level 4 smoke 通過。
   - 來源 ID：`USER-20260717-desktop-task-drag-target-clarity`
   - 父任務：DEV-053、DEV-054
-  - 下一步：本機 DEV-055 已完成；若要 production deploy，需另行授權並執行 release gate。
+  - 下一步：DEV-055 已交付正式環境；若後續要做 authenticated production drag smoke，需使用者在正式站登入後補人工操作證據。
   - 阻塞 / 恢復條件：不得直接移植手機 retain/hysteresis、action rail 或 touch lifecycle；不得改變桌機 overlay、drag start threshold、click/right-click、commit/undo 結果。若任一既有桌機操作回歸，停止並回復該 Slice 設計。
-  - 證據：`ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md`、`ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md`、`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`；RD Rework 1 後 DEV-055 static 27/27、browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser 10/10、DEV-054 static/browser R01-R10、TypeScript、build 均通過。B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0；最新 DEV-055 evidence base 為 `output/playwright/dev-055-desktop-drag-1784301885366-*`。2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過，DEV-055 completion gate 通過；production deployment 尚未執行。
+  - 證據：`ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md`、`ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md`、`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`；RD Rework 1 後 DEV-055 static 27/27、browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser 10/10、DEV-054 static/browser R01-R10、TypeScript、build 均通過。B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0；最新 DEV-055 evidence base 為 `output/playwright/dev-055-desktop-drag-1784301885366-*`。2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過。Production release branch `codex/dev055-production-release-20260717-234436`、artifact commit `e07ba4b`；Firebase preview `level3-smoke` 與 production `https://projed-cc78d.web.app` Level 4 smoke 通過，正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
   - 計入交付：是
 
 
