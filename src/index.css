@@ -121,6 +121,14 @@
   touch-action: pan-x pan-y;
 }
 
+/*
+ * 看板觸控由 pan broker 與 task drag session 仲裁。從 touchstart 就停用瀏覽器原生
+ * gesture takeover，避免長按成立後第一次移動被 pointercancel；短滑仍由 pan broker 捲動。
+ */
+[data-mobile-pan-surface="board"] [data-task-drag-surface="true"] {
+  touch-action: none;
+}
+
 [data-kanban-mouse-pan-surface="true"][data-kanban-mouse-pan-state="active"] {
   cursor: grabbing;
   user-select: none;
@@ -141,6 +149,10 @@ body[data-kanban-mouse-pan-active="true"] * {
 }
 
 .task-drag-hitbox[data-mobile-pan-pass-through="true"] {
+  touch-action: pan-x pan-y;
+}
+
+[data-mobile-pan-pass-through="true"] {
   touch-action: pan-x pan-y;
 }
 

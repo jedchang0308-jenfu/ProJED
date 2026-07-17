@@ -15,6 +15,11 @@
 - 2026-07-04 chevron collapse follow-up，工作台收合狀態需使用精簡 chevron 符號，collapsed rail 寬度由 48px 減半到約 24px；展開狀態的收合按鈕需用 `ChevronLeft`，不得回到 Notebook 或 panel 類圖示卡片。
 - 2026-07-05 DEV-042 compatibility follow-up，手機版工作台收合狀態不得再顯示 in-flow collapsed rail；工作台需透過 Sidebar / top-nav 入口開啟 overlay。桌機仍保留約 24px compact rail。
 - 2026-07-07 drag trigger parity addendum，使用者要求 `已歸位任務` 與 `未歸位任務` 的拖曳觸發窗口一致，並以未歸位任務的整列 root 觸發方式為主；QA 新增 Phase 2A 真實操作驗證計畫，覆蓋 row root hit area、left click details、right click menu、mobile long press 與回歸 gate。
+- 2026-07-17 DEV-053 覆寫註記：使用者確認 Workbench `placed row` 不能拖；本 QA 中要求已歸位 row 可拖或 placed -> unplaced drag 的案例已被 `SPEC-053` 覆寫，保留為歷史測試脈絡，不再作為目前驗收條件。
+
+> Current Supersession Note - 2026-07-17：目前權威產品契約為 `placed row` 不作為
+> placement drag source。未歸位 row 可拖到已歸位 lane；已歸位 row 是 read-only placement
+> list entry，可保留點擊 / 右鍵 / 非 placement 操作。
 
 ## 驗證目標
 

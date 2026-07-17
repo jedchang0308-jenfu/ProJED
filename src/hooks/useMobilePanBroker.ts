@@ -15,6 +15,9 @@ interface MobilePanState {
 
 const PAN_THRESHOLD_PX = 8;
 
+const isTaskDragTouchActive = () =>
+  typeof document !== 'undefined' && document.body.hasAttribute('data-task-drag-touch-active');
+
 const canScrollHorizontally = (element: HTMLElement | null) =>
   Boolean(element && element.scrollWidth > element.clientWidth + 2);
 
@@ -113,17 +116,26 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
       };
     };
 
-    const handleTouchMove = (event: TouchEvent) => {
+    const moveAtPoint = (
+      point: { clientX: number; clientY: number },
+      event: TouchEvent | PointerEvent,
+      input: 'touch' | 'pointer',
+    ) => {
+      if (isTaskDragTouchActive()) {
+        if (event.cancelable) event.preventDefault();
+        recordMobilePanDebug({ type: `${input}move:task-drag-owner` });
+        reset();
+        return;
+      }
       const state = panStateRef.current;
-      const touch = event.touches[0];
-      if (!state || !touch) return;
+      if (!state) return;
 
-      const deltaX = touch.clientX - state.startX;
-      const deltaY = touch.clientY - state.startY;
+      const deltaX = point.clientX - state.startX;
+      const deltaY = point.clientY - state.startY;
       const wantsHorizontalPan = state.canScrollX && Math.abs(deltaX) > PAN_THRESHOLD_PX;
       const wantsVerticalPan = state.canScrollY && Math.abs(deltaY) > PAN_THRESHOLD_PX;
       recordMobilePanDebug({
-        type: 'touchmove',
+        type: `${input}move`,
         deltaX,
         deltaY,
         wantsHorizontalPan,
@@ -147,6 +159,20 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
       }
     };
 
+    const handleTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) moveAtPoint(touch, event, 'touch');
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return;
+      moveAtPoint(event, event, 'pointer');
+    };
+
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') reset();
+    };
+
     const handleClickCapture = (event: MouseEvent) => {
       if (!suppressNextClickRef.current) return;
       event.preventDefault();
@@ -163,6 +189,9 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
     horizontalSurface.addEventListener('touchend', reset, passiveCaptureOptions);
     horizontalSurface.addEventListener('touchcancel', reset, passiveCaptureOptions);
     horizontalSurface.addEventListener('click', handleClickCapture, true);
+    window.addEventListener('pointermove', handlePointerMove, activeCaptureOptions);
+    window.addEventListener('pointerup', handlePointerEnd, true);
+    window.addEventListener('pointercancel', handlePointerEnd, true);
 
     return () => {
       clearSuppressTimer();
@@ -171,6 +200,9 @@ export const useMobilePanBroker = <TElement extends HTMLElement>() => {
       horizontalSurface.removeEventListener('touchend', reset, passiveCaptureOptions);
       horizontalSurface.removeEventListener('touchcancel', reset, passiveCaptureOptions);
       horizontalSurface.removeEventListener('click', handleClickCapture, true);
+      window.removeEventListener('pointermove', handlePointerMove, activeCaptureOptions);
+      window.removeEventListener('pointerup', handlePointerEnd, true);
+      window.removeEventListener('pointercancel', handlePointerEnd, true);
     };
   }, []);
 

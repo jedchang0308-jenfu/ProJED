@@ -13,7 +13,8 @@ import {
 } from '../../features/taskFilters';
 import { getTagDotStyle } from '../../utils/tags';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
-import { compactClassNames } from './compactTokens';
+import { topbarClassNames } from './compactTokens';
+import { cn } from '../../utils/cn';
 
 const filterPillClass = (active: boolean) =>
   `flex h-[26px] items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all ${
@@ -182,13 +183,14 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
         aria-label={hasActiveFilter ? '過濾器已啟用' : '過濾器'}
         title="過濾器"
         onClick={handleFilterToggle}
-        className={`${compactClassNames.iconButtonBase} border ${
+        className={cn(
+          topbarClassNames.iconButton,
           isOpen
             ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
             : hasActiveFilter
               ? 'border-[#a9bbc8] bg-[#e7eef2] text-[#304a5c] shadow-sm ring-1 ring-[#a9bbc8]/50'
               : 'border-[#c7d1d8] bg-white text-[#536b7b] shadow-sm hover:border-[#a9bbc8] hover:bg-[#edf3f6] hover:text-[#304a5c]'
-        }`}
+        )}
         data-active-task-filter-count={activeFilterCount}
       >
         <SlidersHorizontal size={13} />

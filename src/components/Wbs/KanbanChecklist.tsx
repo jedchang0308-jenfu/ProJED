@@ -6,6 +6,7 @@
  * 【拖曳功能】每個任務現在是可拖曳元素，支援跨卡片及升級至列表等操作。
  */
 import React from 'react';
+import { useDndContext } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, Link } from 'lucide-react';
@@ -13,9 +14,7 @@ import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanDependencyContext } from '../BoardView';
-import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import dayjs from 'dayjs';
-import { useLongPress } from '../../hooks/useLongPress';
 import type { TaskStatus, TaskNode } from '../../types';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
@@ -23,9 +22,8 @@ import { TagChip } from '../Tags/TagChip';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
-import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { TaskDateBadge } from './TaskDateBadge';
-import { KanbanInsertionMarker } from './KanbanInsertionMarker';
+import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -82,12 +80,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const showTags = useBoardStore(s => s.showTags);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const { canMoveTask, canCreateDependency } = useBoardPermissions();
-  const touchTapGuard = useTouchTapGuard();
-
+  const { active } = useDndContext();
+  const activeType = active?.data.current?.type;
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
-  const mobileTaskAction = React.useContext(MobileTaskActionContext);
-  const mobileActionMode = isMobileTaskActionMode();
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
@@ -102,6 +98,25 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(childId, wbsDependencies);
+  const taskGesture = useTaskGestureSurface({
+    task: { id: childId, title: child?.title, status: child?.status },
+    sourceKind: 'checklist-row',
+    disabled: isSelectingMode || isRecordCaptureMode,
+    onNonMobileLongPress: (event) => {
+      if (!child) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const touch = event.touches[0];
+      useBoardStore.getState().setContextMenuState({
+        kind: 'task',
+        isOpen: true,
+        x: touch.clientX,
+        y: touch.clientY,
+        nodeId: child.id,
+        title: child.title || '未命名任務',
+      });
+    },
+  });
 
   // 每個任務都是可拖曳元素
   // data.type = 'wbs-checklist' 供 handleDragEnd 辨識
@@ -115,7 +130,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     isDragging,
   } = useSortable({
     id: childId,
-    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || mobileActionMode,
+    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode,
     data: {
       type: 'wbs-checklist',
       nodeId: childId,
@@ -123,91 +138,30 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     },
   });
 
+  const freezeDesktopTaskLayout = Boolean(active && ['wbs-card', 'wbs-checklist'].includes(activeType || ''));
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: freezeDesktopTaskLayout ? undefined : CSS.Transform.toString(transform),
+    transition: freezeDesktopTaskLayout ? undefined : transition,
+    minHeight: taskGesture.activeSurfaceHeight ?? undefined,
   };
-  const isDragPlaceholder = isDragging || Boolean(mobileTaskAction?.isActive(childId));
+  const isDragPlaceholder = isDragging || taskGesture.isActive;
 
-  const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
+  const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
     : { ...attributes, ...listeners };
-
-  // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
-  const longPressHandlers = useLongPress(
-    (e) => {
-      if (!child) return;
-      if (mobileActionMode) {
-        mobileTaskAction?.begin({ id: child.id, title: child.title, status: child.status }, e);
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      const touch = e.touches[0];
-      useBoardStore.getState().setContextMenuState({
-        kind: 'task',
-        isOpen: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        nodeId: child.id,
-        title: child.title || '未命名任務',
-      });
-    },
-    { delay: 500, tolerance: 8 }
-  );
-
-  const checklistLongPressHandlers = {
-    ...longPressHandlers,
-    onTouchStart: (e: React.TouchEvent) => {
-      touchTapGuard.handlers.onTouchStart(e);
-      longPressHandlers.onTouchStart(e);
-    },
-    onTouchMove: (e: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(childId)) {
-        mobileTaskAction.move(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchMove(e);
-      longPressHandlers.onTouchMove(e);
-    },
-    onTouchEnd: (e: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(childId)) {
-        touchTapGuard.handlers.onTouchEnd(e);
-        mobileTaskAction.end(e);
-        longPressHandlers.onTouchEnd(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchEnd(e);
-      longPressHandlers.onTouchEnd(e);
-    },
-    onTouchCancel: (e: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(childId)) {
-        touchTapGuard.handlers.onTouchCancel(e);
-        mobileTaskAction.cancel(e);
-        longPressHandlers.onTouchCancel(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchCancel(e);
-      longPressHandlers.onTouchCancel(e);
-    },
-    onClickCapture: (e: React.MouseEvent) => {
-      touchTapGuard.handlers.onClickCapture(e);
-      if (!e.isPropagationStopped()) longPressHandlers.onClickCapture(e);
-    },
-  };
 
   // Keep hooks above this guard so archived/missing/cyclic nodes do not change hook order.
   if (isInvalidChild || !child) return null;
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className={isDragging ? 'pointer-events-none' : undefined}>
       {/* 單一待辦項目列 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
       <div
         {...dragSurfaceBindings}
-        {...checklistLongPressHandlers}
+        {...taskGesture.handlers}
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
           isDragPlaceholder
-            ? 'kanban-drag-source-placeholder bg-transparent shadow-none ring-0'
+            ? 'kanban-drag-source-placeholder pointer-events-none bg-transparent shadow-none ring-0'
             : isRecordCaptureMode
               ? isRecordSelected
                 ? 'cursor-pointer bg-blue-50 ring-1 ring-inset ring-blue-400'
@@ -248,20 +202,15 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         }}
         data-task-id={child.id}
         data-mobile-drop-target={child.id}
+        data-task-drop-surface-kind="checklist-row"
+        data-desktop-drop-surface="true"
+        data-desktop-drop-id={child.id}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
         data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
       >
-        {isDragPlaceholder ? (
-          <KanbanInsertionMarker
-            compact
-            className="absolute right-1 top-1/2 -translate-y-1/2"
-            style={{ left: `${depth * 14 + 2}px` }}
-          />
-        ) : null}
-
         {isRecordCaptureMode ? (
           <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
             isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'

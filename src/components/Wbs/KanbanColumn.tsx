@@ -9,14 +9,11 @@ import useBoardStore from '../../store/useBoardStore';
 import { KanbanDependencyContext } from '../BoardView';
 import { Button } from '../ui/Button';
 import { KanbanCard } from './KanbanCard';
-import { KanbanInsertionMarker } from './KanbanInsertionMarker';
 import type { TaskNode } from '../../types';
-import { useLongPress } from '../../hooks/useLongPress';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
-import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
-import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
+import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -35,12 +32,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
   const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
-  const touchTapGuard = useTouchTapGuard();
-
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
-  const mobileTaskAction = React.useContext(MobileTaskActionContext);
-  const mobileActionMode = isMobileTaskActionMode();
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
@@ -49,6 +42,24 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
+  const taskGesture = useTaskGestureSurface({
+    task: { id: nodeId, title: node?.title, status: node?.status },
+    sourceKind: 'column-header',
+    disabled: isSelectingMode,
+    onNonMobileLongPress: (event) => {
+      if (!node) return;
+      event.preventDefault();
+      const touch = event.touches[0];
+      setContextMenuState({
+        kind: 'task',
+        isOpen: true,
+        x: touch.clientX,
+        y: touch.clientY,
+        nodeId,
+        title: node.title || '未命名任務',
+      });
+    },
+  });
 
   const storeChildIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
   const childIds = previewParentIndex?.[nodeId] || storeChildIds;
@@ -72,7 +83,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     isDragging: isColumnDragging,
   } = useSortable({
     id: nodeId,
-    disabled: !canMoveTask || isSelectingMode || mobileActionMode,
+    disabled: !canMoveTask || isSelectingMode || taskGesture.mobileActionMode,
     data: {
       type: 'wbs-column',
       nodeId,
@@ -83,7 +94,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     id: `${nodeId}-drop`,
     disabled: !canMoveTask,
     data: {
-      type: 'wbs-column',
+      type: 'wbs-column-drop',
       nodeId,
     },
   });
@@ -91,9 +102,10 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const columnStyle = {
     transform: CSS.Transform.toString(columnTransform),
     transition: columnTransition,
+    minHeight: taskGesture.activeSurfaceHeight ?? undefined,
   };
-  const isColumnPlaceholder = isColumnDragging || Boolean(mobileTaskAction?.isActive(nodeId));
-  const columnHeaderDragBindings = mobileActionMode || isSelectingMode
+  const isColumnPlaceholder = isColumnDragging || taskGesture.isActive;
+  const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode
     ? {}
     : { ...columnAttributes, ...columnListeners };
 
@@ -149,68 +161,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     prepareNewTaskNaming(newNode.id);
   };
 
-  // 手機長按進入精簡 action rail；非手機觸控保留完整選單 fallback。
-  const longPressHandlers = useLongPress(
-    (e) => {
-      if (!node) return;
-      if (mobileActionMode) {
-        mobileTaskAction?.begin({ id: nodeId, title: node.title, status: node.status }, e);
-        return;
-      }
-      e.preventDefault();
-      const touch = e.touches[0];
-      setContextMenuState({
-        kind: 'task',
-        isOpen: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        nodeId,
-        title: node.title || '未命名任務',
-      });
-    },
-    { delay: 500, tolerance: 8 }
-  );
-
-  const columnHeaderTouchHandlers = {
-    ...longPressHandlers,
-    onTouchStart: (e: React.TouchEvent) => {
-      touchTapGuard.handlers.onTouchStart(e);
-      longPressHandlers.onTouchStart(e);
-    },
-    onTouchMove: (e: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(nodeId)) {
-        mobileTaskAction.move(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchMove(e);
-      longPressHandlers.onTouchMove(e);
-    },
-    onTouchEnd: (e: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(nodeId)) {
-        touchTapGuard.handlers.onTouchEnd(e);
-        mobileTaskAction.end(e);
-        longPressHandlers.onTouchEnd(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchEnd(e);
-      longPressHandlers.onTouchEnd(e);
-    },
-    onTouchCancel: (e: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(nodeId)) {
-        touchTapGuard.handlers.onTouchCancel(e);
-        mobileTaskAction.cancel(e);
-        longPressHandlers.onTouchCancel(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchCancel(e);
-      longPressHandlers.onTouchCancel(e);
-    },
-    onClickCapture: (e: React.MouseEvent) => {
-      touchTapGuard.handlers.onClickCapture(e);
-      if (!e.isPropagationStopped()) longPressHandlers.onClickCapture(e);
-    },
-  };
-
   // Keep all hooks above this guard so missing data never changes hook order.
   if (!node) {
     return null;
@@ -222,14 +172,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       style={columnStyle}
       data-kanban-column="true"
       className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/75 shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition-all ${
-        isColumnDragging ? 'scale-105 rotate-1 opacity-50 shadow-2xl' : ''
+        isColumnDragging ? 'pointer-events-none scale-105 rotate-1 opacity-50 shadow-2xl' : ''
       }`}
     >
       <div
         {...columnHeaderDragBindings}
-        {...columnHeaderTouchHandlers}
+        {...taskGesture.handlers}
         data-task-id={nodeId}
         data-mobile-drop-target={nodeId}
+        data-task-drop-surface-kind="column-header"
+        data-desktop-drop-surface="true"
+        data-desktop-drop-id={nodeId}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="kanban-column-header"
         data-kanban-drag-source-placeholder={isColumnPlaceholder ? 'true' : undefined}
@@ -260,7 +213,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         }}
       >
         {isColumnPlaceholder ? (
-          <KanbanInsertionMarker className="px-0 py-2" />
+          <div
+            className="h-[38px] w-full"
+            data-kanban-drag-source-placeholder-neutral="true"
+            aria-hidden="true"
+          />
         ) : (
         <>
         <div className="flex items-center gap-1.5">
@@ -369,6 +326,10 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
         }`}
         data-mobile-pan-surface="kanban-column"
+        data-task-id={nodeId}
+        data-task-drop-surface-kind="column-drop"
+        data-desktop-drop-surface="true"
+        data-desktop-drop-id={`${nodeId}-drop`}
       >
         <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
           {children.map((child) => (
@@ -392,6 +353,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
             disabled={!canCreateTask}
             onClick={handleAddCard}
             data-kanban-add-task-button="true"
+            data-mobile-pan-pass-through="true"
             className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold group"
           >
             <Plus size={14} className="transition-transform group-hover:scale-110" />

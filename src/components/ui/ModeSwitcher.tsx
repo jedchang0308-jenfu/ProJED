@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { topbarClassNames } from './compactTokens';
 
 export type ModeSwitcherOption<T extends string> = {
   value: T;
@@ -105,7 +106,8 @@ export function ModeSwitcher<T extends string>({
         aria-expanded={isOpen}
         data-mode-switcher-trigger="true"
         className={cn(
-          'app-compact-text-button inline-flex h-[30px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-[10px] text-xs font-semibold text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50',
+          topbarClassNames.textButton,
+          'px-[10px] text-xs hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus:ring-primary/30',
           isOpen && 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15',
         )}
       >

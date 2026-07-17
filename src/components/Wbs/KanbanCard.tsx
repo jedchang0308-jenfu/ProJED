@@ -5,7 +5,7 @@
  * 
  * 【標題功能】卡片採閱讀優先；任務名稱編輯集中在任務詳情頁。
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,9 +15,7 @@ import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanChecklist } from './KanbanChecklist';
 import { KanbanDependencyContext } from '../BoardView';
-import { isMobileTaskActionMode, MobileTaskActionContext } from './mobileTaskActionContext';
 import { Badge } from '../ui/Badge';
-import { useLongPress } from '../../hooks/useLongPress';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
@@ -25,10 +23,9 @@ import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
-import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { TaskDateBadge } from './TaskDateBadge';
-import { KanbanInsertionMarker } from './KanbanInsertionMarker';
+import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -76,8 +73,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
-  const mobileTaskAction = React.useContext(MobileTaskActionContext);
-  const mobileActionMode = isMobileTaskActionMode();
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
   const isSelectingMode = !!dependencySelection;
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
@@ -92,7 +87,24 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
-  const touchTapGuard = useTouchTapGuard();
+  const taskGesture = useTaskGestureSurface({
+    task: { id: nodeId, title: node?.title, status: node?.status },
+    sourceKind: 'kanban-card',
+    disabled: isSelectingMode || isRecordCaptureMode,
+    onNonMobileLongPress: (event) => {
+      if (!node) return;
+      event.preventDefault();
+      const touch = event.touches[0];
+      setContextMenuState({
+        kind: 'task',
+        isOpen: true,
+        x: touch.clientX,
+        y: touch.clientY,
+        nodeId,
+        title: node.title,
+      });
+    },
+  });
 
   // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
   const storeChildIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
@@ -121,7 +133,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     isDragging,
   } = useSortable({
     id: nodeId,
-    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || mobileActionMode,
+    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode,
     data: {
       type: 'wbs-card',
       nodeId,
@@ -143,7 +155,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
     id: `${nodeId}-checklist-drop`,
-    disabled: !canMoveTask || !['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType || '') || activeNodeId === nodeId,
+    disabled: !canMoveTask || hasChildren || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
     data: {
       type: 'wbs-checklist-drop',
       nodeId,
@@ -161,20 +173,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     },
   });
 
+  const freezeDesktopTaskLayout = Boolean(active && ['wbs-card', 'wbs-checklist'].includes(activeType || ''));
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: freezeDesktopTaskLayout ? undefined : CSS.Transform.toString(transform),
+    transition: freezeDesktopTaskLayout ? undefined : transition,
+    minHeight: taskGesture.activeSurfaceHeight
+      ?? (isDragging ? active?.rect.current.initial?.height : undefined),
   };
-  const isDragPlaceholder = isDragging || Boolean(mobileTaskAction?.isActive(nodeId));
+  const isDragPlaceholder = isDragging || taskGesture.isActive;
 
-  const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode
+  const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
     : { ...attributes, ...listeners };
 
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
   const canDropIntoChecklist = canMoveTask && ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
-  const showChecklistDropZone = canDropIntoChecklist && !hasChildren;
+  const showChecklistAppendSurface = canDropIntoChecklist && !hasChildren;
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
   const isOverChecklistDescendant = (() => {
@@ -198,68 +213,23 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   })();
   const isChecklistTargeted = isChecklistAreaDropOver || isChecklistDropOver || isOverChecklistDescendant;
 
-  // 合併兩個 ref：讓同一個 DOM 元素同時具備「可拖動」和「可放置」的能力
-  const mergedRef = useCallback((el: HTMLDivElement | null) => {
-    setNodeRef(el);
-    setDropRef(el);
-  }, [setNodeRef, setDropRef]);
-
-  // 手機長按進入精簡 action rail；非手機觸控才保留原本完整選單 fallback。
-  const longPressHandlers = useLongPress(
-    (e) => {
-      if (!node) return;
-      if (mobileActionMode) {
-        mobileTaskAction?.begin({ id: nodeId, title: node.title, status: node.status }, e);
-        return;
-      }
-      e.preventDefault();
-      const touch = e.touches[0];
-      setContextMenuState({ kind: 'task', isOpen: true, x: touch.clientX, y: touch.clientY, nodeId, title: node.title });
-    },
-    { delay: 500, tolerance: 8 }
-  );
-
   const cardLongPressHandlers = {
-    ...longPressHandlers,
+    ...taskGesture.handlers,
     onTouchStart: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
-      touchTapGuard.handlers.onTouchStart(e);
-      longPressHandlers.onTouchStart(e);
+      taskGesture.handlers.onTouchStart(e);
     },
     onTouchMove: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
-      if (mobileTaskAction?.isActive(nodeId)) {
-        mobileTaskAction.move(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchMove(e);
-      longPressHandlers.onTouchMove(e);
+      taskGesture.handlers.onTouchMove(e);
     },
     onTouchEnd: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
-      if (mobileTaskAction?.isActive(nodeId)) {
-        touchTapGuard.handlers.onTouchEnd(e);
-        mobileTaskAction.end(e);
-        longPressHandlers.onTouchEnd(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchEnd(e);
-      longPressHandlers.onTouchEnd(e);
+      taskGesture.handlers.onTouchEnd(e);
     },
     onTouchCancel: (e: React.TouchEvent) => {
       if (isFromChecklistItem(e.target)) return;
-      if (mobileTaskAction?.isActive(nodeId)) {
-        touchTapGuard.handlers.onTouchCancel(e);
-        mobileTaskAction.cancel(e);
-        longPressHandlers.onTouchCancel(e);
-        return;
-      }
-      touchTapGuard.handlers.onTouchCancel(e);
-      longPressHandlers.onTouchCancel(e);
-    },
-    onClickCapture: (e: React.MouseEvent) => {
-      touchTapGuard.handlers.onClickCapture(e);
-      if (!e.isPropagationStopped()) longPressHandlers.onClickCapture(e);
+      taskGesture.handlers.onTouchCancel(e);
     },
   };
 
@@ -268,7 +238,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   return (
     <div
-      ref={mergedRef}
+      ref={setNodeRef}
       style={style}
       {...dragSurfaceBindings}
       {...cardLongPressHandlers}
@@ -289,6 +259,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       }}
       data-task-id={nodeId}
       data-mobile-drop-target={nodeId}
+      data-task-drop-surface-kind="kanban-card"
+      data-desktop-drop-surface="true"
+      data-desktop-drop-id={nodeId}
       data-task-drag-surface="true"
       data-task-drag-surface-kind="kanban-card"
       data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
@@ -296,7 +269,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-touch-tap-guard="true"
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${
         isDragPlaceholder
-          ? 'border-transparent bg-transparent shadow-none'
+          ? 'pointer-events-none border-transparent bg-transparent shadow-none'
           : isRecordCaptureMode
             ? isRecordSelected
               ? 'cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-300 shadow-md'
@@ -309,13 +282,26 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       } ${!isDragPlaceholder && selectedTaskId === nodeId ? 'ring-2 ring-primary/35 bg-primary/[0.03]' : ''}`}
     >
       {isDragPlaceholder ? (
-        <KanbanInsertionMarker className="px-[9px] py-2" />
+        <div
+          className="w-full"
+          data-kanban-drag-source-placeholder-neutral="true"
+          aria-hidden="true"
+        />
       ) : (
       <div className="kanban-task-card-body flex items-start px-[9px] py-[6px]">
         {/* 卡片內容 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
         <div className="flex-1 min-w-0">
-          {/* 標題列 */}
-          <div className="kanban-task-title-row flex items-start justify-between gap-1">
+          <div
+            ref={setDropRef}
+            data-task-id={nodeId}
+            data-task-drop-surface-kind="kanban-card"
+            data-desktop-drop-surface="true"
+            data-desktop-drop-id={activeType === 'wbs-checklist' ? `${nodeId}-card-drop` : nodeId}
+            data-task-card-primary="true"
+            data-mobile-task-card-primary="true"
+          >
+            {/* 標題列 */}
+            <div className="kanban-task-title-row flex items-start justify-between gap-1">
             <div className="kanban-task-title-content flex items-center gap-1 flex-1 min-w-0">
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
               {isRecordCaptureMode ? (
@@ -435,6 +421,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               </div>
             </div>
           )}
+            </div>
 
           {/* Level 3+ 下層任務展開區 */}
           {hasChildren && (
@@ -445,6 +432,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]'
                   : 'border-transparent'
               }`}
+              data-task-id={nodeId}
+              data-task-drop-surface-kind="checklist-drop"
+              data-desktop-drop-surface="true"
+              data-desktop-drop-id={`${nodeId}-checklist-area-drop`}
             >
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -474,12 +465,17 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
           <div
             ref={setChecklistDropRef}
-            className={`kanban-card-dropzone mt-px rounded-md transition-[height,opacity] duration-100 ${
-              showChecklistDropZone ? 'h-6 opacity-100' : 'h-0 overflow-hidden opacity-0'
+            className={`kanban-card-dropzone absolute inset-x-2 bottom-1 h-7 rounded-md opacity-0 ${
+              showChecklistAppendSurface ? 'z-20' : '-z-10 pointer-events-none'
             }`}
-          >
-            {showChecklistDropZone ? <KanbanInsertionMarker compact className="px-1" /> : null}
-          </div>
+            data-task-id={nodeId}
+            data-task-drop-surface-kind="checklist-drop"
+            data-desktop-drop-surface={showChecklistAppendSurface ? 'true' : undefined}
+            data-desktop-drop-id={showChecklistAppendSurface ? `${nodeId}-checklist-drop` : undefined}
+            data-desktop-checklist-append-anchor={showChecklistAppendSurface ? 'true' : undefined}
+            data-desktop-dropzone-layout="overlay"
+            aria-hidden="true"
+          />
         </div>
       </div>
       )}

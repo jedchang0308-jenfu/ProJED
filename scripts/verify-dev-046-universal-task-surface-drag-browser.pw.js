@@ -259,6 +259,12 @@ async (page) => {
     await seed(lastView);
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    await page.keyboard.press('Escape').catch(() => undefined);
+    const modalClose = page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').first();
+    if (await modalClose.count()) {
+      await modalClose.click({ force: true, timeout: 2000 }).catch(() => undefined);
+      await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'detached', timeout: 2000 }).catch(() => undefined);
+    }
   };
 
   const switchMode = async (mode) => {
@@ -269,12 +275,14 @@ async (page) => {
 
   const cleanupUi = async () => {
     await page.mouse.up().catch(() => undefined);
-    await page.keyboard.press('Escape').catch(() => undefined);
-    const closeButton = page.locator('[data-task-details-modal="true"] button[title="關閉"]').first();
-    if (await closeButton.count()) {
-      await closeButton.click({ timeout: 1000 }).catch(() => undefined);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await page.keyboard.press('Escape').catch(() => undefined);
+      const closeButton = page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').first();
+      if (await closeButton.count()) {
+        await closeButton.click({ force: true, timeout: 2000 }).catch(() => undefined);
+      }
+      await page.waitForTimeout(100);
     }
-    await page.waitForTimeout(120);
   };
 
   const centerPoint = async (locator, ratioX = 0.5, ratioY = 0.5) => {
@@ -545,6 +553,25 @@ async (page) => {
       }, null, { timeout: 7000 });
       const cardAfter = await orderInColumn('dev046-col-a');
 
+      const crossColumnBefore = {
+        columnA: await orderInColumn('dev046-col-a'),
+        columnB: await orderInColumn('dev046-col-b'),
+      };
+      await dragBetween(
+        page.locator('.kanban-task-card[data-task-id="dev046-card-b"]').first(),
+        page.locator('.kanban-task-card[data-task-id="dev046-card-c"]').first(),
+        { startRatioX: 0.72, endRatioY: 0.25 },
+      );
+      await page.waitForFunction(() => {
+        const header = document.querySelector('[data-kanban-column-header="true"][data-task-id="dev046-col-b"]');
+        const column = header?.closest('[data-kanban-column="true"]');
+        return Boolean(column?.querySelector('.kanban-task-card[data-task-id="dev046-card-b"]'));
+      }, null, { timeout: 7000 });
+      const crossColumnAfter = {
+        columnA: await orderInColumn('dev046-col-a'),
+        columnB: await orderInColumn('dev046-col-b'),
+      };
+
       const columnBefore = await columnOrder();
       await dragBetween(
         page.locator('[data-kanban-column-header="true"][data-task-id="dev046-col-b"]').first(),
@@ -559,7 +586,7 @@ async (page) => {
       const columnAfter = await columnOrder();
 
       await page.screenshot({ path: `${screenshotBase}-desktop-board.png`, fullPage: true });
-      return { checklistBefore, checklistAfter, cardBefore, cardAfter, columnBefore, columnAfter };
+      return { checklistBefore, checklistAfter, cardBefore, cardAfter, crossColumnBefore, crossColumnAfter, columnBefore, columnAfter };
     });
 
     await runCase('QA-046-D03', 'interactive controls do not become drag handles or open details accidentally', async () => {

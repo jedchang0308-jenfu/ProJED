@@ -138,8 +138,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-028`、`QA/QC-DEV-028`
   - 計入交付：是
 - ✓ DEV-029 [交付點] [完成] [P1] [本機已驗證] 手機 Pan-First 與 compact action rail
-  - 摘要：完成手機捲動優先、長按操作與拖放仲裁。
-  - 證據：`SPEC-029`、`QA/QC-DEV-029`
+  - 摘要：完成手機捲動優先、長按操作、拖放仲裁與大型新增 CTA short-pan pass-through；欄位新增任務、看板尾端新增 CTA、TaskWorkbench 未歸位新增 CTA 不再是平移死角。
+  - 證據：`SPEC-029`、`QA/QC-DEV-029`；2026-07-17 canvas CTA hotfix：DEV-029 static 38/38、browser B10-B12、DEV-054/053/046 static/browser、TypeScript、build 通過。
   - 計入交付：是
 - ✓ DEV-034 [交付點] [完成] [P2] [本機已驗證] App 快速啟動與加入主畫面
   - 摘要：交付 PWA 快速啟動與安裝引導。
@@ -218,18 +218,38 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     DEV-048、TypeScript 與 `build:test` 均通過。`SPEC-051`、`QA-DEV-051`、
     `QC-DEV-051` 均標記為歷史／已撤回。
   - 計入交付：是
-- ↷ DEV-052 [開發點] [延後] [P0] [不可執行] 看板拖拉子系統重構與行為穩定化
-  - 摘要：原計畫以 DEV-051 行為為重構基準；該基準已撤回，因此 DEV-052 不再具備
-    可直接實作的產品契約。
-  - 來源 ID：`USER-20260716-kanban-drag-refactor`
-  - 父任務：DEV-051、DEV-046、DEV-029
-  - 下一步：暫停，不進入 Slice A～F。
-  - 阻塞 / 恢復條件：DEV-051 重新確認產品行為，或另立以 `main` 行為為基準的新 DEV。
-  - 證據：`SPEC-052`、`QA-DEV-052`（Deferred / Not Executable）
-  - 計入交付：否
+- ✓ DEV-053 [交付點] [完成] [P1] [本機 QA True Operation Gate 已通過] 任務拖拉肌肉記憶一致化
+  - 摘要：以目前 main runtime 為基準完整重構任務拖拉子系統，保留已滿意的電腦版拖拉 UI，並明確 Workbench placed row 不能拖。
+  - 來源 ID：`USER-20260717-task-drag-muscle-memory-consistency`
+  - 父任務：DEV-029、DEV-039、DEV-046
+  - 下一步：原 DEV 功能與架構交付維持完成；使用者回報的手機定位精準度缺口另由 DEV-054 執行。若要 production deploy，需另行授權並執行 release gate。
+  - 阻塞 / 恢復條件：不得復活 DEV-052 或 DEV-051 parent-lock baseline；若要改 DB、production 或恢復 placed-row drag 需 Human Re-entry。
+  - 證據：`SPEC-053`、`QA-DEV-053`、`QC-DEV-053`；DEV-053 static 30/30、browser 10/10、DEV-029/046/039/028 browser、DEV-044、TypeScript、`build:test` 與 T01-T14 全數通過；不代表真機定位精準度已簽核。
+  - 計入交付：是
+- ◇ DEV-054 [交付點] [驗證中] [P1] [RD Rework 4 Browser + User Revalidation Passed / Physical Gate Required] 手機任務拖拉定位精準度優化
+  - 摘要：使用者第四次模擬手機證明 Rework 3 將 preview 停靠 indicator 是錯誤補償，且 checklist source 會在 innermost target 無效後誤命中 expanded parent card。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost target ownership、invalid ancestor blocking、card primary bounded geometry，並移除 nearest-target 磁吸；桌機 dnd-kit UI、topbar、action rail 與 placed-row no-drag 契約維持不變。
+  - 來源 ID：`USER-20260717-mobile-task-drag-precision`
+  - 父任務：DEV-053、DEV-029、DEV-046
+  - 下一步：QA/QC 依 `QA-DEV-054` 補齊 B01-B12 正式 trace matrix 與 iOS / Android 各 50 次真機操作；兩台實機 gate 均通過後才可關閉 DEV-054。
+  - 阻塞 / 恢復條件：不得改變桌機 approved baseline、不得恢復 DEV-051/052、不得讓 Workbench placed row 可拖；任一實機缺席或 wrong commit > 0 不得完成。
+  - 證據：四次使用者失敗均保留；R10 修正前以 `636x764` 重現 preview 跳離手指與 parent-card fall-through，修正後 DEV-054 static 34/34、browser R01-R10 與指定回歸通過。使用者已於 2026-07-17 以原路徑確認「成功、效果非常好、跨階層移動非常清楚」。仍缺 physical trial sheet、錄影與 QC report，故目前不得標記完成。
+  - 計入交付：是
+- ✓ DEV-055 [交付點] [完成] [P1] [RD Rework 1 + User Desktop Gate Passed / Local Complete] 電腦版任務拖拉落點清晰化與跨階層定位升級
+  - 摘要：第一次自動化通過後，使用者 T01-T08 真實桌機操作回報「同一格定位線會飄」與「L3+ 任務被定位線推開」。RD Rework 1 在保留現有桌機 DragOverlay、8px 起手門檻與滑鼠跟手感的前提下，改為 fixed overlay-only indicator、overlay checklist append hit area、card/checklist sortable displacement freeze、同 target rect micro-retain；Workbench placed row 維持不能拖。2026-07-17 使用者重跑 T01-T08 後回報測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做。
+  - 來源 ID：`USER-20260717-desktop-task-drag-target-clarity`
+  - 父任務：DEV-053、DEV-054
+  - 下一步：本機 DEV-055 已完成；若要 production deploy，需另行授權並執行 release gate。
+  - 阻塞 / 恢復條件：不得直接移植手機 retain/hysteresis、action rail 或 touch lifecycle；不得改變桌機 overlay、drag start threshold、click/right-click、commit/undo 結果。若任一既有桌機操作回歸，停止並回復該 Slice 設計。
+  - 證據：`ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md`、`ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md`、`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`；RD Rework 1 後 DEV-055 static 27/27、browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser 10/10、DEV-054 static/browser R01-R10、TypeScript、build 均通過。B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0；最新 DEV-055 evidence base 為 `output/playwright/dev-055-desktop-drag-1784301885366-*`。2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過，DEV-055 completion gate 通過；production deployment 尚未執行。
+  - 計入交付：是
 
 
 ## PM Update 歷史歸檔
+
+2026-07-17：DEV-052 已從 active 總任務清單移除；歷史 SPEC / QA 封存至
+`ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md` 與
+`ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md`。DEV-052 不得直接執行；
+未來若需要拖拉子系統重構，需另立以目前 `main` runtime 為基準的新 DEV。
 
 2026-07-15：歷史 `PM Update` 詳細段落已移至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`。
 

@@ -2,46 +2,8 @@
 
 ## Backlog Update - 2026-07-16
 
-> 2026-07-16 回復註記：DEV-051 新拖拉架構已撤回，runtime 回復 `main`；DEV-052 因
-> 依賴該基準而延後。以下 DEV-051／052 內容保留為歷史問題、設計與驗證資料，不代表
-> 目前可執行或已交付。
-
-### DEV-052：看板拖拉子系統重構與行為穩定化
-
-交付狀態：Deferred / Not Executable / Not Implemented
-
-使用思考習慣：#批判、#效用理論、#系統描繪
-
-| DEV | Status | Type | Priority | Scope | Evidence |
-|---|---|---|---|---|---|
-| DEV-052 | Deferred / Not Executable | 開發點 | P0 拖拉穩定性 | 原重構基準已撤回；重新確認產品行為或另立以 `main` 為基準的新 DEV 前不得實作。 | `SPEC-052`、`QA-DEV-052`、`SPEC-051` |
-
-#### 問題與決策
-
-- 拖拉 BUG 反覆出現的核心不是單一 CSS 或碰撞參數，而是 collision、DOM hit-test、timer、preview、mobile action 與 release revalidation 同時決定同一個 drop。
-- 選擇 targeted subsystem refactor；不整頁重寫 BoardView，也不繼續以單點 patch 擴張狀態組合。
-- SPEC-051 繼續管理產品行為；SPEC-052 只管理 internal architecture 與 migration gates。
-
-#### Current Scope
-
-- 每一幀只接受一個 normalized target observation；線、框、preview、drop 共用同一 target／geometry。
-- 每個 drag session 使用 session id 與 terminal guard，最多只提交一次。
-- desktop／mobile 共用 target priority、intent engine 與 committer；action rail 維持最高優先。
-- Presenter 保證 source 原位移除、moving title ≤1、visible insertion line ≤1、非目標 spacing 穩定。
-- BoardView 移除直接 lock timer、point hit-test、preview state、commit fallback 與 desktop/mobile 分流規則。
-
-#### Out of Scope
-
-- 不改 750ms lock、200ms grace、20px mobile tolerance、同父層即時排序、text-free line／frame 或 canonical ordering。
-- 不改其他模式、資料模型、DB/API、權限、action set 或 release target。
-- 不執行 commit、push、PR、deploy 或 production mutation。
-
-#### Acceptance 與 QA Gate
-
-- DEV-051 33/33、browser 7-case matrix 與 DEV-029／039／044／046／048 regression 必須維持。
-- 完成 gate 需要 automated browser、desktop 真人滑鼠、實體 iOS Safari、Android Chrome 與第二觀察者 5 秒理解。
-- source／preview 名稱重複、有效線超過一條、preview 與線不同步、非目標 spacing 跳動、stale target、double commit 或 cancel 後寫入均為 Stop Ship。
-- 分片依 Characterization → Engine/session → Shared adapter → Presenter → Commit/legacy removal → QA/QC 推進；每片通過才可進下一片。
+> 2026-07-17 封存註記：DEV-052 已移出 backlog 與 active dev task；歷史 SPEC / QA
+> 已封存至 `ai-doc/archived/`，不得直接執行或作為新拖拉重構基準。
 
 ### DEV-051: 看板跨父層拖拉停留鎖定與落點定位
 

@@ -32,12 +32,11 @@ import {
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
 import type { InboxItem, TaskNode } from '../types';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../utils/taskInteractions';
-import { useTouchTapGuard } from '../hooks/useTouchTapGuard';
-import { useLongPress } from '../hooks/useLongPress';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
 import { CLOSE_PANEL_EVENT, OPEN_PANEL_EVENT, TOGGLE_PANEL_EVENT } from './taskWorkbenchPanelCommands';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
-import { isMobileTaskActionMode, MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
+import { isMobileTaskActionMode } from './Wbs/mobileTaskActionContext';
+import { useTaskGestureSurface } from './Wbs/taskDrag/useTaskGestureSurface';
 import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 
@@ -214,6 +213,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
           title="新增任務"
           aria-label="新增任務"
           data-task-workbench-unclassified-add="true"
+          data-mobile-pan-pass-through="true"
         >
           <Plus size={14} />
         </button>
@@ -251,101 +251,45 @@ const WorkbenchUnclassifiedSection: React.FC<{
   );
 };
 
-const WorkbenchDragCard: React.FC<{
+type WorkbenchDragCardProps = {
   task: TaskNode;
   canMoveTask: boolean;
   placement: 'unplaced' | 'placed';
   surface?: 'unplaced-lane' | 'all-tasks';
   hierarchyDepth?: number;
-}> = ({ task, canMoveTask, placement, surface = placement === 'unplaced' ? 'unplaced-lane' : 'all-tasks', hierarchyDepth = 0 }) => {
+};
+
+interface WorkbenchTaskRowProps extends WorkbenchDragCardProps {
+  isDragging: boolean;
+  canUseDragSurface: boolean;
+  setNodeRef?: (element: HTMLElement | null) => void;
+  draggableBindings?: Record<string, unknown>;
+  gestureHandlers: ReturnType<typeof useTaskGestureSurface>['handlers'];
+}
+
+const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
+  task,
+  placement,
+  surface = placement === 'unplaced' ? 'unplaced-lane' : 'all-tasks',
+  hierarchyDepth = 0,
+  isDragging,
+  canUseDragSurface,
+  setNodeRef,
+  draggableBindings = {},
+  gestureHandlers,
+}) => {
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
-  const canDragTaskFromWorkbench = placement === 'unplaced' && canMoveTask;
   const depth = Math.max(0, Math.min(hierarchyDepth, 6));
-  const mobileTaskAction = React.useContext(MobileTaskActionContext);
   const setContextMenuState = useBoardStore(state => state.setContextMenuState);
-  const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
-  const canUseWorkbenchDragSurface = canDragTaskFromWorkbench && !mobileActionMode;
-  React.useEffect(() => {
-    const update = () => setMobileActionMode(isMobileTaskActionMode());
-    update();
-    window.addEventListener('resize', update);
-    const query = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
-    query?.addEventListener?.('change', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      query?.removeEventListener?.('change', update);
-    };
-  }, []);
   const hierarchyTextClass = depth === 0
     ? 'font-semibold text-slate-800'
     : depth === 1
       ? 'font-medium text-slate-700'
       : 'font-medium text-slate-600';
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `task-workbench-${surface}-${task.id}`,
-    disabled: !canDragTaskFromWorkbench || mobileActionMode,
-    data: {
-      type: 'wbs-card',
-      source: 'task-workbench',
-      placement,
-      nodeId: task.id,
-      sourceWorkspaceId: task.workspaceId,
-      sourceBoardId: task.boardId,
-      title: task.title,
-    },
-  });
-  const touchTapGuard = useTouchTapGuard();
   const dependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(task.id, dependencies);
-  const longPressHandlers = useLongPress(
-    (event) => {
-      if (!isMobileTaskActionMode()) return;
-      mobileTaskAction?.begin({ id: task.id, title: task.title, status: task.status }, event);
-    },
-    { delay: 500, tolerance: 8 },
-  );
-  const workbenchTouchHandlers = {
-    ...longPressHandlers,
-    onTouchStart: (event: React.TouchEvent) => {
-      touchTapGuard.handlers.onTouchStart(event);
-      if (mobileActionMode) longPressHandlers.onTouchStart(event);
-    },
-    onTouchMove: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
-        mobileTaskAction.move(event);
-        return;
-      }
-      touchTapGuard.handlers.onTouchMove(event);
-      if (mobileActionMode) longPressHandlers.onTouchMove(event);
-    },
-    onTouchEnd: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
-        touchTapGuard.handlers.onTouchEnd(event);
-        mobileTaskAction.end(event);
-        longPressHandlers.onTouchEnd(event);
-        return;
-      }
-      touchTapGuard.handlers.onTouchEnd(event);
-      if (mobileActionMode) longPressHandlers.onTouchEnd(event);
-    },
-    onTouchCancel: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
-        touchTapGuard.handlers.onTouchCancel(event);
-        mobileTaskAction.cancel(event);
-        longPressHandlers.onTouchCancel(event);
-        return;
-      }
-      touchTapGuard.handlers.onTouchCancel(event);
-      if (mobileActionMode) longPressHandlers.onTouchCancel(event);
-    },
-    onClickCapture: (event: React.MouseEvent) => {
-      touchTapGuard.handlers.onClickCapture(event);
-      if (mobileActionMode && !event.isPropagationStopped()) longPressHandlers.onClickCapture(event);
-    },
-  };
-  const draggableBindings = canUseWorkbenchDragSurface ? { ...attributes, ...listeners } : {};
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -371,9 +315,9 @@ const WorkbenchDragCard: React.FC<{
     unplacedLane: boolean;
   }) => (
     <div
-      ref={canUseWorkbenchDragSurface ? setNodeRef : undefined}
+      ref={canUseDragSurface ? setNodeRef : undefined}
       {...draggableBindings}
-      {...workbenchTouchHandlers}
+      {...gestureHandlers}
       onClick={(event) => {
         if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
         selectAndOpenTaskDetails(task.id);
@@ -382,7 +326,9 @@ const WorkbenchDragCard: React.FC<{
       className={className}
       style={style}
       data-task-workbench-task-card="true"
-      data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}
+      data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}
+      data-task-drag-surface={canUseDragSurface ? 'true' : undefined}
+      data-task-drag-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
       data-task-workbench-unplaced-task-card={unplacedLane ? 'true' : undefined}
       data-task-workbench-all-task-card={isAllTasksCard ? 'true' : undefined}
       data-task-workbench-placed-task-card={placement === 'placed' ? 'true' : undefined}
@@ -395,6 +341,7 @@ const WorkbenchDragCard: React.FC<{
       data-touch-tap-guard="true"
       data-task-id={task.id}
       data-mobile-drop-target={task.id}
+      data-task-drop-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
     >
       {children}
     </div>
@@ -447,6 +394,93 @@ const WorkbenchDragCard: React.FC<{
     }),
   });
 };
+
+const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
+  task,
+  canMoveTask,
+  surface = 'unplaced-lane',
+  hierarchyDepth = 0,
+}) => {
+  const setContextMenuState = useBoardStore(state => state.setContextMenuState);
+  const taskGesture = useTaskGestureSurface({
+    task,
+    sourceKind: 'workbench-unplaced-row',
+    mobileActionEnabled: true,
+    onNonMobileLongPress: (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      setContextMenuState({
+        kind: 'task',
+        isOpen: true,
+        x: touch.clientX,
+        y: touch.clientY,
+        nodeId: task.id,
+        title: task.title || '未命名任務',
+      });
+    },
+  });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `task-workbench-${surface}-${task.id}`,
+    disabled: !canMoveTask || taskGesture.mobileActionMode,
+    data: {
+      type: 'wbs-card',
+      source: 'task-workbench',
+      placement: 'unplaced',
+      nodeId: task.id,
+      sourceWorkspaceId: task.workspaceId,
+      sourceBoardId: task.boardId,
+      title: task.title,
+    },
+  });
+  const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode;
+
+  return (
+    <WorkbenchTaskRow
+      task={task}
+      canMoveTask={canMoveTask}
+      placement="unplaced"
+      surface={surface}
+      hierarchyDepth={hierarchyDepth}
+      isDragging={isDragging}
+      canUseDragSurface={canUseDragSurface}
+      setNodeRef={setNodeRef}
+      draggableBindings={canUseDragSurface ? { ...attributes, ...listeners } : {}}
+      gestureHandlers={taskGesture.handlers}
+    />
+  );
+};
+
+const WorkbenchPlacedReadOnlyCard: React.FC<WorkbenchDragCardProps> = ({
+  task,
+  canMoveTask,
+  surface = 'all-tasks',
+  hierarchyDepth = 0,
+}) => {
+  const taskGesture = useTaskGestureSurface({
+    task,
+    sourceKind: null,
+    mobileActionEnabled: false,
+  });
+
+  return (
+    <WorkbenchTaskRow
+      task={task}
+      canMoveTask={canMoveTask}
+      placement="placed"
+      surface={surface}
+      hierarchyDepth={hierarchyDepth}
+      isDragging={false}
+      canUseDragSurface={false}
+      gestureHandlers={taskGesture.handlers}
+    />
+  );
+};
+
+const WorkbenchDragCard: React.FC<WorkbenchDragCardProps> = (props) => (
+  props.placement === 'placed'
+    ? <WorkbenchPlacedReadOnlyCard {...props} />
+    : <WorkbenchUnplacedDragCard {...props} />
+);
 
 const WorkbenchFilterControls: React.FC<{
   assigneeOptions: Array<{ id: string; label: string }>;
@@ -923,6 +957,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
           className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'}`}
           data-task-workbench-placed-board-lane="true"
           data-task-workbench-lane-drop-target="placed-board"
+          data-board-id={selectedBoardOption?.boardId || undefined}
+          data-workspace-id={selectedBoardOption?.workspaceId || undefined}
         >
           <div
             className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-[#c2d0d8] bg-[#e1e9ee]/95 px-3 py-2 backdrop-blur"

@@ -11,9 +11,11 @@ const hasImeCompositionGuard = file =>
 
 const checks = [
   {
-    name: 'touch drag requires 250ms long press',
-    ok: matches('src/hooks/useDragSensors.ts', /delay:\s*250/) &&
-      matches('src/hooks/useDragSensors.ts', /tolerance:\s*8/),
+    name: 'mobile task drag uses dedicated 500ms long press and desktop sensors exclude TouchSensor',
+    ok: !includes('src/hooks/useDragSensors.ts', 'TouchSensor') &&
+      includes('src/hooks/useDragSensors.ts', '手機 task drag 由 useTaskDragSession') &&
+      matches('src/components/Wbs/taskDrag/taskGesturePolicy.ts', /TASK_GESTURE_LONG_PRESS_MS\s*=\s*500/) &&
+      matches('src/components/Wbs/taskDrag/taskGesturePolicy.ts', /TASK_GESTURE_PAN_TOLERANCE_PX\s*=\s*8/),
   },
   {
     name: 'keyboard dnd is blocked for form and contenteditable targets',

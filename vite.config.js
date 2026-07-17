@@ -82,6 +82,11 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ],
+  server: {
+    watch: {
+      ignored: ['**/.playwright-cli/**', '**/output/playwright/**'],
+    },
+  },
   build: {
     rollupOptions: {
       output: {

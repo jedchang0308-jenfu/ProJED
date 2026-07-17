@@ -1,20 +1,23 @@
 # SPEC-052：看板拖拉子系統重構與行為穩定化
 
-狀態：Deferred / Not Executable / DEV-051 Baseline Withdrawn
+狀態：Archived / Historical / Do Not Execute / DEV-051 Baseline Withdrawn
 對應 DEV：DEV-052
 節點類型：開發點
 父交付點：DEV-051、DEV-046、DEV-029
-文件成熟度：RD Implementation Ready
+文件成熟度：Archived Historical / Not Executable
 風險等級：Medium（主要看板操作、桌機／手機手勢、階層與排序一致性）
 是否計入產品交付完成：否
 建立日期：2026-07-16
-最近更新：2026-07-16
+最近更新：2026-07-17
 
 使用思考習慣：#批判、#效用理論、#系統描繪
 
 > 2026-07-16 回復註記：DEV-052 以 DEV-051 行為為 characterization 基準；該基準已撤回，
 > 因此本 SPEC 不再是 RD Implementation Ready。只有重新確認產品行為，或另立以 `main`
 > 為基準的新 DEV 後，才能重新評估 Slice A～F。
+>
+> 2026-07-17 封存註記：本文件已移至 `ai-doc/archived/`，不得作為 active SPEC、
+> RD contract 或實作基準。
 
 ## 1. 決策摘要
 
@@ -292,7 +295,7 @@ interface KanbanDragPresentation {
 
 ## 11. QA、QC 與 Evidence
 
-- QA authoritative plan：`ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md`。
+- QA historical plan：`ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md`。
 - DEV-051 既有 static／browser tests 是 regression baseline，不可因新增 DEV-052 verifier 而刪除。
 - 真實操作是完成 gate：desktop 實際滑鼠、實體 iOS Safari 與 Android Chrome 均需留下錄影／截圖、viewport、操作步驟與資料 snapshot；缺任一類只能標示 `未充分驗證`。
 - QC 只驗證，不修改產品程式；失敗回送 RD 修正後重跑最小相關 slice 與完整 stop-ship regressions。
@@ -318,7 +321,7 @@ interface KanbanDragPresentation {
 
 - `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md`
 - `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md`
-- `ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md`
+- `ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md`
 - `ai-doc/specs/SPEC-046-universal-task-surface-drag.md`
 - `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`
 - `ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
