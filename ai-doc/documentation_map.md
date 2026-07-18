@@ -9,6 +9,23 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-07-18（正式環境手機長按完整選單 hotfix）
+
+使用者提供正式環境手機截圖：任務長按後除了頂部 compact action rail，畫面中央又出現完整 task context menu。Spec Impact=`Compatible exception`：不改手機拖拉定位、不改 action rail 內容、不改桌機右鍵功能；只補 mobile action session 對 `contextmenu` 的事件所有權，避免 Android / Chrome 長按合成事件穿透到桌機選單。
+
+### DEV-056：正式環境手機長按完整選單誤開修正（Hotfix Ready / Deploy Blocked by Firebase Reauth）
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/components/Wbs/taskDrag/useTaskGestureSurface.ts` | Hotfix Implemented | DEV-056 / DEV-029 / DEV-046 | mobile task action mode 的 task surface 在 React capture phase suppress `contextmenu`，不讓完整選單 handler 接到事件。 |
+| `src/components/Wbs/taskDrag/useTaskDragSession.ts` | Hotfix Implemented | DEV-056 / DEV-054 | active mobile drag/action session 期間，以 document capture listener 作第二層防線，關閉 `GlobalContextMenu` 並記錄 `contextmenu:suppressed` debug。 |
+| `src/components/GlobalContextMenu.tsx` | Testability Attribute Added | DEV-056 / DEV-055 | 加上 `data-global-context-menu` 與 kind attribute，讓 browser gate 能可靠驗證 mobile 不出現完整選單，同時保留桌機右鍵測試。 |
+| DEV-029 / DEV-046 browser verifier | Executed / Passed | DEV-056 | 手機卡片、checklist row、欄位 header 長按後合成 `contextmenu`，驗證只保留頂部 action rail；`data-global-context-menu` 與完整選單 signature 為 0。 |
+| DEV-054 / DEV-055 browser regression | Executed / Passed | DEV-056 | DEV-054 R01-R10 確認頂部欄 touch、action rail 點擊與手機定位未回歸；DEV-055 B10 確認桌機右鍵完整選單仍可用。 |
+| `ai-doc/dev_task.md` | DEV-056 Added | DEV-056 | 記錄 hotfix 根因、驗證、release gate 阻塞與 reauth 後續步驟。 |
+
+PM 治理註記：release branch `codex/mobile-action-menu-hotfix-20260718` 已由 clean worktree 建立並推送，runtime hotfix commit 為 `e891f29`。`npx tsc --noEmit`、DEV-029 static 39/39、DEV-046 static 31/31、DEV-053 static 30/30、DEV-054 static 34/34、DEV-055 static 27/27、DEV-029/046/054/055 browser gates、production build 與 Level 2 local artifact smoke 均通過；帶 production env 的 artifact 載入 `assets/index-DKsVgGEA.js` / `assets/index-B8eLAVHK.css`。Firebase Hosting production deploy 尚未完成，阻塞原因是 Firebase CLI credentials 過期並要求 `firebase login --reauth`；在 deploy 與 Level 4 production smoke 通過前，不得宣稱正式環境已修正。
+
 ## Documentation Map Update - 2026-07-17（手機新增 CTA 平移死角修正）
 
 使用者回報手機模式按住「新增任務」時無法移動畫面，表示 pan-first 的可選擇窗口尚未涵蓋全任務畫面。盤點後判定 Spec Impact=`Compatible exception`：精準控制如 input、filter popover、modal、action rail 仍是 pure interactive control；但畫布上的大型新增 CTA 必須同時支援無位移 tap 與 short-pan pass-through。

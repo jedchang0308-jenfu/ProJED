@@ -242,6 +242,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得直接移植手機 retain/hysteresis、action rail 或 touch lifecycle；不得改變桌機 overlay、drag start threshold、click/right-click、commit/undo 結果。若任一既有桌機操作回歸，停止並回復該 Slice 設計。
   - 證據：`ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md`、`ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md`、`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`；RD Rework 1 後 DEV-055 static 27/27、browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser 10/10、DEV-054 static/browser R01-R10、TypeScript、build 均通過。B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0；最新 DEV-055 evidence base 為 `output/playwright/dev-055-desktop-drag-1784301885366-*`。2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過。Production release branch `codex/dev055-production-release-20260717-234436`、artifact commit `e07ba4b`；Firebase preview `level3-smoke` 與 production `https://projed-cc78d.web.app` Level 4 smoke 通過，正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
   - 計入交付：是
+- ◇ DEV-056 [交付點] [驗證中] [P0] [Hotfix Ready / Firebase Reauth Blocked] 正式環境手機長按完整選單誤開修正
+  - 摘要：使用者於 2026-07-18 回報正式環境手機版長按右側任務清單時，同時出現頂部 compact action rail 與完整 task context menu。根因是 Android / Chrome 長按可合成 `contextmenu`，而同一 task surface 仍保留桌機右鍵 handler；手機長按進入 action rail 後，contextmenu 事件仍可能冒泡到 `GlobalContextMenu`。RD hotfix 已改為 mobile task action session 期間由頂部 action rail 作唯一 UI owner，capture phase 與 document phase 都抑制完整選單；桌機右鍵完整選單維持。
+  - 來源 ID：`USER-20260718-production-mobile-long-press-extra-menu`
+  - 父任務：DEV-029、DEV-046、DEV-054、DEV-055
+  - 下一步：完成 Firebase CLI `firebase login --reauth` 後，從 branch `codex/mobile-action-menu-hotfix-20260718` 重新執行 deploy，再跑 Level 4 production smoke；正式登入後需使用者以 Android 手機在右側清單長按確認只出現頂部 action rail。
+  - 阻塞 / 恢復條件：目前 production deploy 被 Firebase CLI 過期 credentials 擋下；不得宣稱正式環境已修正，直到 Firebase deploy 與 Level 4 smoke 通過。若桌機 B10 右鍵選單失效、手機 action rail 不可點、或 mobile 長按仍出現 `data-global-context-menu`，即停止並回送 RD。
+  - 證據：hotfix code commit `e891f29`；`npx tsc --noEmit`、DEV-029 static 39/39、DEV-046 static 31/31、DEV-053 static 30/30、DEV-054 static 34/34、DEV-055 static 27/27、production build 通過。Local browser：DEV-029 mobile pan/action rail passed、DEV-046 universal task surface passed、DEV-054 mobile precision R01-R10 10/10 passed、DEV-055 desktop B01-B16 16/16 passed。Level 2 local production artifact smoke passed with `assets/index-DKsVgGEA.js` / `assets/index-B8eLAVHK.css`; Firebase deploy failed before upload because credentials require `firebase login --reauth`.
+  - 計入交付：是
 
 
 ## PM Update 歷史歸檔
