@@ -415,8 +415,22 @@ async (page) => {
       railCount: await page.locator('[data-mobile-task-action-rail="true"]').count(),
       menuCount: await page.getByText('更多詳情選項').count(),
       renameCount: await page.getByText('重新命名任務', { exact: true }).count(),
+      globalContextMenuCount: await page.locator('[data-global-context-menu="true"]').count(),
+      fullTaskMenuSignatureCount:
+        await page.getByText('更多詳情選項').count() +
+        await page.getByText('主責／協作').count() +
+        await page.getByText('複製任務').count(),
     };
-    assert(state.modalCount === 0 && state.railCount === 0 && state.menuCount === 0 && state.renameCount === 0, message, state);
+    assert(
+      state.modalCount === 0 &&
+        state.railCount === 0 &&
+        state.menuCount === 0 &&
+        state.renameCount === 0 &&
+        state.globalContextMenuCount === 0 &&
+        state.fullTaskMenuSignatureCount === 0,
+      message,
+      state,
+    );
   };
 
   const assertCompactMobileActionRail = async (sourceLocator, message) => {
@@ -468,6 +482,39 @@ async (page) => {
       assert(overlapPx <= 1, `${message} rail should not cover the source task`, { layout, sourceBox, overlapPx });
     }
     return layout;
+  };
+
+  const assertMobileContextMenuSuppressed = async (sourceLocator, message, options = {}) => {
+    const point = await centerPoint(sourceLocator, options.ratioX ?? 0.45, options.ratioY ?? 0.3);
+    await sourceLocator.evaluate((element, coords) => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: coords.x,
+        clientY: coords.y,
+        button: 2,
+      });
+      element.dispatchEvent(event);
+    }, { x: point.x, y: point.y });
+    await page.waitForTimeout(120);
+    const state = {
+      railCount: await page.locator('[data-mobile-task-action-rail="true"]').count(),
+      previewCount: await page.locator('[data-mobile-drag-preview="true"]').count(),
+      globalContextMenuCount: await page.locator('[data-global-context-menu="true"]').count(),
+      fullTaskMenuSignatureCount:
+        await page.getByText('更多詳情選項').count() +
+        await page.getByText('主責／協作').count() +
+        await page.getByText('複製任務').count(),
+    };
+    assert(
+      state.railCount === 1 &&
+        state.previewCount === 1 &&
+        state.globalContextMenuCount === 0 &&
+        state.fullTaskMenuSignatureCount === 0,
+      `${message} should keep only mobile drag UI when contextmenu is synthesized`,
+      state,
+    );
+    return state;
   };
 
   const runCase = async (id, scenario, fn) => {
@@ -695,24 +742,34 @@ async (page) => {
       await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.locator('[data-mobile-drag-preview="true"]').waitFor({ state: 'visible', timeout: 5000 });
       const cardRailLayout = await assertCompactMobileActionRail(card, 'mobile card long press');
+      const cardContextMenuState = await assertMobileContextMenuSuppressed(card, 'mobile card long press', { ratioY: 0.22 });
       await cardHeldTouch.end();
 
       const childHeldTouch = await startHeldTouch(child);
       await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.locator('[data-mobile-drag-preview="true"]').waitFor({ state: 'visible', timeout: 5000 });
       const childRailLayout = await assertCompactMobileActionRail(child, 'mobile checklist long press');
+      const childContextMenuState = await assertMobileContextMenuSuppressed(child, 'mobile checklist long press');
       await childHeldTouch.end();
 
       const headerHeldTouch = await startHeldTouch(header, { ratioY: 0.45 });
       await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.locator('[data-mobile-drag-preview="true"]').waitFor({ state: 'visible', timeout: 5000 });
       const headerRailLayout = await assertCompactMobileActionRail(header, 'mobile header long press');
+      const headerContextMenuState = await assertMobileContextMenuSuppressed(header, 'mobile header long press', { ratioY: 0.45 });
       await headerHeldTouch.end();
 
       const railText = await page.locator('body').innerText();
       assert(!railText.includes('重新命名任務'), 'mobile long press should not open the removed desktop rename menu');
       await page.screenshot({ path: `${screenshotBase}-mobile-surfaces.png`, fullPage: true });
-      return { cardRailLayout, childRailLayout, headerRailLayout };
+      return {
+        cardRailLayout,
+        childRailLayout,
+        headerRailLayout,
+        cardContextMenuState,
+        childContextMenuState,
+        headerContextMenuState,
+      };
     });
 
     const failCount = results.filter((result) => result.result !== 'PASS').length;

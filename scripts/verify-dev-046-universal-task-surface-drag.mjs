@@ -15,6 +15,7 @@ const files = {
   useLongPress: 'src/hooks/useLongPress.ts',
   taskGestureSurface: 'src/components/Wbs/taskDrag/useTaskGestureSurface.ts',
   taskDragSession: 'src/components/Wbs/taskDrag/useTaskDragSession.ts',
+  globalContextMenu: 'src/components/GlobalContextMenu.tsx',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-046-universal-task-surface-drag.md',
   qa: 'ai-doc/qa/QA-DEV-046-universal-task-surface-drag.md',
@@ -91,6 +92,19 @@ assert(
     source.kanbanColumn.includes('data-task-drag-surface="true"') &&
     source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') &&
     source.kanbanColumn.includes('data-mobile-drop-target={nodeId}'),
+);
+
+assert(
+  'Mobile task surfaces suppress full context menu while compact action rail owns long press',
+  source.taskGestureSurface.includes('onContextMenuCapture: shouldBindLongPress ? (event: React.MouseEvent) => {') &&
+    source.taskGestureSurface.includes('if (isMobileTaskActionMode())') &&
+    source.taskGestureSurface.includes('event.preventDefault();') &&
+    source.taskGestureSurface.includes('event.stopPropagation();') &&
+    source.taskDragSession.includes("document.addEventListener('contextmenu', handleContextMenu, true)") &&
+    source.taskDragSession.includes("type: 'contextmenu:suppressed'") &&
+    source.globalContextMenu.includes('data-global-context-menu="true"') &&
+    source.browserVerifier.includes('assertMobileContextMenuSuppressed') &&
+    source.browserVerifier.includes('should keep only mobile drag UI when contextmenu is synthesized'),
 );
 
 assert(

@@ -120,7 +120,14 @@ export const useTaskGestureSurface = ({
       if (shouldBindLongPress) longPressHandlers.onPointerCancel(event);
     },
     onMouseDownCapture: shouldBindLongPress ? longPressHandlers.onMouseDownCapture : undefined,
-    onContextMenuCapture: shouldBindLongPress ? longPressHandlers.onContextMenuCapture : undefined,
+    onContextMenuCapture: shouldBindLongPress ? (event: React.MouseEvent) => {
+      if (isMobileTaskActionMode()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      longPressHandlers.onContextMenuCapture(event);
+    } : undefined,
     onClickCapture: (event: React.MouseEvent) => {
       touchTapGuard.handlers.onClickCapture(event);
       if (shouldBindLongPress && !event.isPropagationStopped()) {

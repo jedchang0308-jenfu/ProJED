@@ -172,7 +172,12 @@ async (page) => {
       modalCount: await page.locator('[data-task-details-modal="true"]').count(),
       actionRailCount: await page.locator('[data-mobile-task-action-rail="true"]').count(),
       previewCount: await page.locator('[data-mobile-drag-preview="true"]').count(),
+      globalContextMenuCount: await page.locator('[data-global-context-menu="true"]').count(),
       menuRenameCount: await page.getByText('重新命名任務').count(),
+      fullTaskMenuSignatureCount:
+        await page.getByText('更多詳情選項').count() +
+        await page.getByText('主責／協作').count() +
+        await page.getByText('複製任務').count(),
       renameInputCount: await page.locator('[data-task-title-input="true"]').count(),
       visibleHttpError: /HTTP\s+[45]\d\d|Not Found|Internal Server Error|\/api\//i.test(bodyText),
     };
@@ -184,12 +189,38 @@ async (page) => {
       state.modalCount === 0 &&
         state.actionRailCount === 0 &&
         state.previewCount === 0 &&
+        state.globalContextMenuCount === 0 &&
         state.menuRenameCount === 0 &&
+        state.fullTaskMenuSignatureCount === 0 &&
         state.renameInputCount === 0 &&
         state.visibleHttpError === false,
       `${label} should not trigger task action`,
       state,
     );
+  };
+
+  const assertMobileContextMenuSuppressed = async (label, locator, options = {}) => {
+    const point = await pointFor(locator, options.ratioX ?? 0.45, options.ratioY ?? 0.5);
+    await locator.evaluate((element, coords) => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: coords.x,
+        clientY: coords.y,
+        button: 2,
+      });
+      element.dispatchEvent(event);
+    }, { x: point.x, y: point.y });
+    await page.waitForTimeout(120);
+    const state = await uiState();
+    assert(
+      state.actionRailCount === 1 &&
+        state.globalContextMenuCount === 0 &&
+        state.fullTaskMenuSignatureCount === 0,
+      `${label} should keep only the top mobile action rail when contextmenu is synthesized`,
+      state,
+    );
+    return state;
   };
 
   const cleanupUi = async () => {
@@ -624,11 +655,11 @@ async (page) => {
         assert(actionLabels.includes(label), 'mobile action rail should expose readable text labels', { label, actionLabels });
       });
       const compactLayout = await assertCompactMobileActionRail('card long press compact rail', card());
-      assert(await page.getByText('重新命名任務').count() === 0, 'mobile long press should not open full desktop menu');
+      const contextMenuState = await assertMobileContextMenuSuppressed('card long press', card(), { ratioY: 0.12 });
       const screenshotPath = `${screenshotBase}-C01-mobile-action-rail-card.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       await heldTouch.end();
-      return { screenshotPath, actionKeys, compactLayout };
+      return { screenshotPath, actionKeys, compactLayout, contextMenuState };
     });
 
     await runCase('QA-029-C02', 'checklist row long press enters mobile drag-action mode', async () => {
@@ -637,11 +668,11 @@ async (page) => {
       await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
       const compactLayout = await assertCompactMobileActionRail('checklist row compact rail', childRow());
-      assert(await page.getByText('重新命名任務').count() === 0, 'mobile child long press should not open full desktop menu');
+      const contextMenuState = await assertMobileContextMenuSuppressed('checklist row long press', childRow());
       const screenshotPath = `${screenshotBase}-C02-mobile-action-rail-child.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       await heldTouch.end();
-      return { screenshotPath, compactLayout };
+      return { screenshotPath, compactLayout, contextMenuState };
     });
 
     await runCase('QA-029-C09', 'card former handle zone long press uses mobile action mode', async () => {
@@ -651,9 +682,9 @@ async (page) => {
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
       const handleCount = await page.locator('[data-task-drag-handle="true"]').count();
       assert(handleCount === 0, 'retired drag handle should not exist on mobile card surfaces', { handleCount });
-      assert(await page.getByText('重新命名任務').count() === 0, 'card former handle zone long press should not open full desktop menu');
+      const contextMenuState = await assertMobileContextMenuSuppressed('card former handle zone long press', card(), { ratioX: 0.12, ratioY: 0.28 });
       await heldTouch.end();
-      return { handleCount };
+      return { handleCount, contextMenuState };
     });
 
     await runCase('QA-029-C10', 'checklist former handle zone long press uses mobile action mode', async () => {
@@ -663,8 +694,9 @@ async (page) => {
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
       const handleCount = await page.locator('[data-task-drag-handle="true"]').count();
       assert(handleCount === 0, 'retired drag handle should not exist on checklist surfaces', { handleCount });
+      const contextMenuState = await assertMobileContextMenuSuppressed('checklist former handle zone long press', childRow(), { ratioX: 0.12, ratioY: 0.5 });
       await heldTouch.end();
-      return { handleCount };
+      return { handleCount, contextMenuState };
     });
 
     await runCase('QA-029-C11', 'touchcancel exits mobile drag-action mode without committing', async () => {

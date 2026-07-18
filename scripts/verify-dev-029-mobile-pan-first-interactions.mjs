@@ -14,6 +14,7 @@ const files = {
   taskDragSession: 'src/components/Wbs/taskDrag/useTaskDragSession.ts',
   taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   taskDragPresenter: 'src/components/Wbs/taskDrag/TaskDragPresenter.tsx',
+  globalContextMenu: 'src/components/GlobalContextMenu.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
@@ -197,6 +198,12 @@ assert(
     source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') &&
     source.kanbanColumn.includes('useTaskGestureSurface') &&
     source.taskGestureSurface.includes('mobileTaskAction?.begin(task, event, sourceKind)') &&
+    source.taskGestureSurface.includes('onContextMenuCapture: shouldBindLongPress ? (event: React.MouseEvent) => {') &&
+    source.taskGestureSurface.includes('if (isMobileTaskActionMode())') &&
+    source.taskGestureSurface.includes('event.stopPropagation();') &&
+    source.taskDragSession.includes("document.addEventListener('contextmenu', handleContextMenu, true)") &&
+    source.taskDragSession.includes("type: 'contextmenu:suppressed'") &&
+    source.globalContextMenu.includes('data-global-context-menu="true"') &&
     source.taskWorkbench.includes("sourceKind: 'workbench-unplaced-row'") &&
     source.taskWorkbench.includes('const WorkbenchPlacedReadOnlyCard') &&
     source.taskWorkbench.includes('mobileActionEnabled: false') &&
@@ -245,6 +252,8 @@ assert(
     source.browserVerifier.includes('placed workbench quick tap should still open task details') &&
     source.browserVerifier.includes('whole task surfaces use broker-owned touch arbitration without handles') &&
     source.browserVerifier.includes('assertCompactMobileActionRail') &&
+    source.browserVerifier.includes('assertMobileContextMenuSuppressed') &&
+    source.browserVerifier.includes('should keep only the top mobile action rail when contextmenu is synthesized') &&
     source.browserVerifier.includes('compact mobile action rail fits 320/390/430 without covering tasks'),
 );
 

@@ -439,6 +439,29 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   }, [endAtPoint, moveAtPoint]);
 
   React.useEffect(() => {
+    const handleContextMenu = (event: MouseEvent) => {
+      if (!isMobileTaskActionMode()) return;
+      const activeState = stateRef.current;
+      if (!activeState) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-mobile-task-action-rail="true"]')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      useBoardStore.getState().setContextMenuState(null);
+      recordTaskDragDebug({
+        type: 'contextmenu:suppressed',
+        sessionId: activeState.sessionId,
+        nodeId: activeState.nodeId,
+        phase: activeState.phase,
+      });
+    };
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, []);
+
+  React.useEffect(() => {
     if (state?.phase !== 'armed') return undefined;
     const dismissIfOutsideRail = (event: Event) => {
       const target = event.target;

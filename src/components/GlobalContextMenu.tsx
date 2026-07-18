@@ -525,6 +525,8 @@ export const GlobalContextMenu: React.FC = () => {
           <div
             ref={menuRef}
             onClick={(event) => event.stopPropagation()}
+            data-global-context-menu="true"
+            data-global-context-menu-kind={menuKind}
             className="fixed z-[9999] flex w-[220px] flex-col overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
             style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: menuPosition.maxHeight }}
           >

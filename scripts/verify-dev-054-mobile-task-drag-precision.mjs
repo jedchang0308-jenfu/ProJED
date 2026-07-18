@@ -77,7 +77,7 @@ check('release cannot fall back to a stale previous target',
   && !source.session.includes("latestObservation.targetKind === 'none'\n      ? stateToObservation"));
 
 check('normal mobile touchend is not prevented without an active drag',
-  source.session.includes("if (stateRef.current?.phase !== 'dragging') return;\n    const point = readTaskTouchPoint(event);"));
+  /if \(stateRef\.current\?\.phase !== 'dragging'\) return;\r?\n\s+const point = readTaskTouchPoint\(event\);/.test(source.session));
 
 check('long press release arms a directly tappable action rail', hasAll(source.session, [
   "phase: 'armed'", "type: 'end:armed'", 'activateAction', "cancelWithReason('armed-outside-tap')",
