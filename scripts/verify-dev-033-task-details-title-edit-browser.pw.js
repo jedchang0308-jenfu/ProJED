@@ -92,6 +92,46 @@ async (page) => {
     const storedTitleAfterEscape = await readStoredTitle(taskId);
     assert(valueAfterEscape === savedTitle, 'Escape in title input should revert to current task title', { valueAfterEscape, savedTitle });
     assert(storedTitleAfterEscape === savedTitle, 'Escape in title input should not persist draft title', { storedTitleAfterEscape, savedTitle });
+
+    step = 'save button sits beside close and confirms save';
+    const saveButton = modal.locator('[data-task-details-save="true"]');
+    const closeButton = modal.locator('button[aria-label="關閉任務詳情"]');
+    await saveButton.waitFor({ state: 'visible', timeout: 10000 });
+    const buttonLayout = await page.evaluate(() => {
+      const save = document.querySelector('[data-task-details-save="true"]')?.getBoundingClientRect();
+      const close = document.querySelector('button[aria-label="關閉任務詳情"]')?.getBoundingClientRect();
+      return save && close ? {
+        saveRight: save.right,
+        closeLeft: close.left,
+        saveCenterY: save.top + save.height / 2,
+        closeCenterY: close.top + close.height / 2,
+      } : null;
+    });
+    assert(buttonLayout && buttonLayout.saveRight <= buttonLayout.closeLeft && Math.abs(buttonLayout.saveCenterY - buttonLayout.closeCenterY) <= 1,
+      'save button should sit directly beside the close button', buttonLayout || {});
+    const firstNote = modal.locator('[data-task-detail-note-card="true"]').first().locator('textarea');
+    const manuallySavedNote = `DEV033 manual save ${Date.now().toString(36)}`;
+    await firstNote.fill(manuallySavedNote);
+    await saveButton.click();
+    await saveButton.getByText('已儲存', { exact: true }).waitFor({ state: 'visible', timeout: 5000 });
+    await page.waitForFunction(({ taskId, manuallySavedNote }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return nodes[taskId]?.detailNotes?.[0]?.content === manuallySavedNote;
+    }, { taskId, manuallySavedNote }, { timeout: 10000 });
+
+    step = 'close flushes pending note immediately';
+    const closeSavedNote = `DEV033 close save ${Date.now().toString(36)}`;
+    await firstNote.fill(closeSavedNote);
+    await closeButton.click();
+    await modal.waitFor({ state: 'hidden', timeout: 5000 });
+    await page.waitForFunction(({ taskId, closeSavedNote }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return nodes[taskId]?.detailNotes?.[0]?.content === closeSavedNote;
+    }, { taskId, closeSavedNote }, { timeout: 10000 });
+
+    const reopenedModal = await openTaskDetails(taskId);
+    const reopenedNoteValue = await reopenedModal.locator('[data-task-detail-note-card="true"]').first().locator('textarea').inputValue();
+    assert(reopenedNoteValue === closeSavedNote, 'close button should preserve the latest pending note', { reopenedNoteValue, closeSavedNote });
   } catch (error) {
     throw new Error(`${step}: ${error.message}`);
   }

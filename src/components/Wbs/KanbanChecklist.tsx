@@ -208,6 +208,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
         data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
+        data-desktop-task-hover-preview={!isDragPlaceholder && !isSelectingMode && !isRecordCaptureMode ? 'true' : undefined}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
       >

@@ -77,6 +77,13 @@
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  body:not(:has([data-kanban-drag-overlay="true"]))
+    [data-desktop-task-hover-preview="true"]:hover:not(:has([data-desktop-task-hover-preview="true"]:hover)) {
+    @apply ring-2 ring-inset ring-blue-300 bg-blue-50/40;
+  }
+}
+
 /* ========================================
    拖動功能樣式（dnd-kit）
    ======================================== */

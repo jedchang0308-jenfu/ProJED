@@ -265,6 +265,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-task-drag-surface="true"
       data-task-drag-surface-kind="kanban-card"
       data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
+      data-desktop-task-hover-preview={!isDragPlaceholder && !isSelectingMode && !isRecordCaptureMode ? 'true' : undefined}
       data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
       data-touch-tap-guard="true"
       className={`kanban-task-card mobile-pan-item relative kanban-scroll-touch bg-white border border-l-[3px] ${statusBorderColorMap[status as TaskStatus] || statusBorderColorMap.todo} rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all group mb-[6px] ${

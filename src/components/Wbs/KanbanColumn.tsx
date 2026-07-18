@@ -186,6 +186,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-task-drag-surface="true"
         data-task-drag-surface-kind="kanban-column-header"
         data-kanban-drag-source-placeholder={isColumnPlaceholder ? 'true' : undefined}
+        data-desktop-task-hover-preview={!isColumnPlaceholder && !isSelectingMode ? 'true' : undefined}
         data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
         data-touch-tap-guard="true"
         data-kanban-column-header="true"
