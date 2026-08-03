@@ -18,6 +18,7 @@ $WatchLogPath = Join-Path $StateRoot "dev-test-server-watch.log"
 $WatchProcessLogPath = Join-Path $StateRoot "dev-test-server-watch-process.log"
 $TaskName = "ProJED Local Test Server"
 $StartupCommandPath = Join-Path ([Environment]::GetFolderPath("Startup")) "ProJED Local Test Server.cmd"
+$StartupScriptPath = Join-Path $StateRoot "start-local-test-server.ps1"
 $Url = "http://${HostName}:${Port}/"
 
 function Ensure-StateRoot {
@@ -114,6 +115,12 @@ function Show-Status {
     Write-Host "startup_command=installed path=$StartupCommandPath"
   } else {
     Write-Host "startup_command=not_installed"
+  }
+
+  if (Test-Path $StartupScriptPath) {
+    Write-Host "startup_script=installed path=$StartupScriptPath"
+  } else {
+    Write-Host "startup_script=not_installed"
   }
 
   Write-Host "log=$LogPath"
@@ -275,21 +282,32 @@ function Install-LoginTask {
 }
 
 function Install-StartupCommand {
-  $content = @"
+  Ensure-StateRoot
+  $escapedProjectRoot = $ProjectRoot.Replace("'", "''")
+  $escapedCommandPath = $PSCommandPath.Replace("'", "''")
+  $scriptContent = @"
+Set-Location -LiteralPath '$escapedProjectRoot'
+& '$escapedCommandPath' watch
+"@
+  Set-Content -Path $StartupScriptPath -Value $scriptContent -Encoding UTF8
+
+  $commandContent = @"
 @echo off
-cd /d "$ProjectRoot"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSCommandPath" watch
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$StartupScriptPath"
 "@
 
-  Set-Content -Path $StartupCommandPath -Value $content -Encoding ASCII
+  Set-Content -Path $StartupCommandPath -Value $commandContent -Encoding ASCII
   Write-Host "INSTALLED startup command: $StartupCommandPath"
+  Write-Host "INSTALLED startup script: $StartupScriptPath"
 }
 
 function Uninstall-LoginTask {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
   Remove-Item $StartupCommandPath -Force -ErrorAction SilentlyContinue
+  Remove-Item $StartupScriptPath -Force -ErrorAction SilentlyContinue
   Write-Host "UNINSTALLED scheduled task: $TaskName"
   Write-Host "UNINSTALLED startup command: $StartupCommandPath"
+  Write-Host "UNINSTALLED startup script: $StartupScriptPath"
 }
 
 switch ($Action) {
