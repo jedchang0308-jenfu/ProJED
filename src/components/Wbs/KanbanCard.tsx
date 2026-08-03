@@ -9,13 +9,12 @@ import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, CheckSquare, ChevronDown, ChevronRight, Link } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanChecklist } from './KanbanChecklist';
 import { KanbanDependencyContext } from '../BoardView';
-import { Badge } from '../ui/Badge';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
@@ -106,22 +105,18 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     },
   });
 
-  // 訂閱子節點 (Level 3) ID 陣列，用於顯示進度統計
+  // 訂閱子節點 (Level 3) ID 陣列，用於進度條與下層任務區。
   const storeChildIds = useWbsStore(s => s.parentNodesIndex[nodeId]);
   const childIds = previewParentIndex?.[nodeId] || storeChildIds;
 
-  // 計算子節點的完成數量
-  const childStats = React.useMemo(() => {
+  const hasChildren = React.useMemo(() => {
     const state = useWbsStore.getState();
     const nodes = previewNodes || state.nodes;
-    const children = (childIds || [])
-      .map(id => nodes[id])
-      .filter(n => n && !n.isArchived);
-    const total = children.length;
-    const completed = children.filter(c => c.status === 'completed').length;
-    return { total, completed };
+    return (childIds || []).some(id => {
+      const child = nodes[id];
+      return Boolean(child && !child.isArchived);
+    });
   }, [childIds, previewNodes]);
-  const hasChildren = childStats.total > 0;
 
   // dnd-kit 拖動邏輯（此卡片可被拖動）
   const {
@@ -393,17 +388,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 endLocked={lockStatus.endLocked}
                 durationLocked={Boolean(node.isDurationLocked)}
               />
-
-              {/* 子節點完成進度 */}
-              {hasChildren && (
-                <Badge
-                  variant={childStats.completed === childStats.total ? 'success' : 'default'}
-                  size="sm"
-                  icon={<CheckSquare size={10} />}
-                >
-                  <span className="font-semibold">{childStats.completed}/{childStats.total}</span>
-                </Badge>
-              )}
               </> /* end normal mode */
               )}
             </div>

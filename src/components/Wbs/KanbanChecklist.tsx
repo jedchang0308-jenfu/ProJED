@@ -280,13 +280,6 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           />
           </>
         )}
-
-        {/* 子項目數量指示器 (僅在有更深子節點時顯示) */}
-        {hasGrandchildren && (
-          <span className="text-[9px] text-slate-400 bg-slate-100 rounded px-1 flex-shrink-0">
-            {grandchildIds.length}
-          </span>
-        )}
       </div>
 
       {!isDragPlaceholder && showTags && nodeTags.length > 0 && (

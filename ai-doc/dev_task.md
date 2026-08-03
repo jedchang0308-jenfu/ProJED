@@ -266,6 +266,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得改變 `collision:source-block`、commit / undo、8px 起手門檻、click / right-click、手機 raw finger / target stability / action rail 或既有正常落點線；來源放開必須零寫入，且畫面任一時間只能有一種 drop feedback。
   - 證據：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`、`ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md`；Rework 2 static：DEV-058 26/26、DEV-054 37/37、DEV-055 27/27、DEV-046 31/31、DEV-053 30/30；browser：DEV-054 R01-R11 11/11、DEV-055 B01-B16 16/16、DEV-053 10/10、DEV-046 全表面回歸；320/390/430 visual、ESLint、TypeScript 與全新 outDir production build 通過。最新手機 evidence base：`output/playwright/dev-054-mobile-drag-1785738932208-*`。Attempt 1 證據僅保留為被取代歷史。
   - 計入交付：是（本機開發交付；未部署）
+- ✓ DEV-059 [開發點] [完成] [P2] [本機自動與視覺驗證通過 / 待使用者確認 / 未部署] 看板階層統計徽章精簡
+  - 摘要：依使用者截圖移除任務卡頂部的下層任務 `完成數/總數` Badge，以及每個下層任務列右側的子項目數量 Badge；保留日期、卡片藍色進度條、階層展開內容與欄位標頭統計。
+  - 來源 ID：`USER-20260803-kanban-hierarchy-count-badge-removal`
+  - 父任務：DEV-028、DEV-058
+  - 下一步：使用者可在 `4173` 確認資訊密度；若確認後要上線，需另走 deployment release gate。
+  - 阻塞 / 恢復條件：不得刪除日期、藍色進度條或欄位標頭的任務數／百分比；不得改變任務資料、階層、拖曳、選取或展開行為。
+  - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint、4173 DOM / screenshot 與 `output/build-dev059-hierarchy-count-cleanup-20260803` production build 通過；桌面 evidence base `output/playwright/dev-055-desktop-drag-1785739442445-*`，手機 evidence base `output/playwright/dev-054-mobile-drag-1785739522598-*`。
+  - 計入交付：是（本機開發交付；未部署）
 
 
 ## PM Update 歷史歸檔

@@ -137,7 +137,7 @@ assert(
 );
 
 assert(
-  'board columns, cards, and Level 3+ checklist keep card front content while removing outer title edit',
+  'board columns, cards, and Level 3+ checklist keep essential card content without redundant hierarchy counts or outer title edit',
   kanbanColumn.includes('selectAndOpenTaskDetails(nodeId)') &&
     kanbanColumn.includes('prepareNewTaskNaming(newNode.id)') &&
     kanbanColumn.includes('data-task-id={nodeId}') &&
@@ -145,9 +145,11 @@ assert(
     kanbanCard.includes('kanban-checklist-section') &&
     kanbanCard.includes('<KanbanChecklist') &&
     kanbanCard.includes('TagChip') &&
-    kanbanCard.includes('CheckSquare') &&
+    !kanbanCard.includes('CheckSquare') &&
+    !kanbanCard.includes('childStats.completed') &&
     kanbanChecklist.includes('selectAndOpenTaskDetails(child.id)') &&
     kanbanChecklist.includes('data-task-id={child.id}') &&
+    !kanbanChecklist.includes('{grandchildIds.length}') &&
     !kanbanColumn.includes('data-task-title-input="true"') &&
     !kanbanCard.includes('data-task-title-input="true"') &&
     !kanbanChecklist.includes('data-task-title-input="true"') &&

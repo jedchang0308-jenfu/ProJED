@@ -9,6 +9,16 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-08-03（看板階層統計徽章精簡）
+
+Spec Impact：對 DEV-028 舊有 `CheckSquare` 子任務完成統計呈現為 `Intentional replacement`；對 DEV-054、DEV-055、DEV-058 為 `No conflict`。只刪除卡片頂部 `完成數/總數` 與下層任務列右側子項目數量兩種重複 Badge，保留日期、藍色進度條、階層展開、欄位標頭統計與所有拖曳契約。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/components/Wbs/KanbanCard.tsx` | Implemented / Local Verified / Not Deployed | DEV-059 / DEV-028 | 移除卡片 metadata 列的下層任務完成數 Badge，保留藍色進度條與下層任務區。 |
+| `src/components/Wbs/KanbanChecklist.tsx` | Implemented / Local Verified / Not Deployed | DEV-059 / DEV-028 | 移除深層任務列右側子項目數量 Badge，保留遞迴階層與日期。 |
+| `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 37/37 | DEV-059 / DEV-028 | 鎖定兩種重複階層數量 Badge 不得重新出現，其他卡片正面內容與詳情入口不變。 |
+
 ## Documentation Map Update - 2026-08-03（跨裝置拖曳原地文字欄位藍色回饋）
 
 Spec Impact：對 DEV-055、DEV-054 為 `Compatible exception`；對 DEV-058 Attempt 1 與 Rework 1 mobile exclusion 為 `Intentional replacement`。桌面與手機都在來源範圍顯示藍底白字原地欄位，但不把來源改成可提交 target；DEV-054 的 raw finger、innermost ownership、target stability、action rail priority 與 zero-write 契約繼續有效。
