@@ -5,6 +5,8 @@ import useBoardStore from '../../../store/useBoardStore';
 import type { MobileTaskActionContextValue } from '../mobileTaskActionContext';
 import { isMobileTaskActionMode } from './taskGesturePolicy';
 import { commitTaskDragObservation, type TaskDragCommitDependencies } from './taskDragCommit';
+import { resolveTaskOriginFieldRect } from './desktopTaskDropPreview';
+import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
 import {
   autoScrollTaskDragSurfaces,
   getTaskIntentPoint,
@@ -47,6 +49,7 @@ const stateToObservation = (state: TaskDragSessionState): TaskDragObservation =>
   action: state.hoverAction,
   dropPosition: state.dropPosition,
   indicatorRect: state.dropIndicatorRect,
+  originFieldRect: state.originFieldRect,
   lockedTargetRect: state.lockedTargetRect,
   pendingTargetId: state.pendingTargetId,
   pendingSince: state.pendingSince,
@@ -66,6 +69,7 @@ const withoutTarget = (observation: TaskDragObservation): TaskDragObservation =>
   action: null,
   dropPosition: null,
   indicatorRect: null,
+  originFieldRect: null,
   lockedTargetRect: null,
   pendingTargetId: null,
   pendingSince: null,
@@ -213,6 +217,13 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
 
     const sessionId = createSessionId();
     lastMoveSampleRef.current = null;
+    const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(sourceKind);
+    const sourceElement = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-task-id]')
+      : null;
+    const initialOriginFieldRect = sourceSurfaceKind && sourceElement
+      ? resolveTaskOriginFieldRect({ sourceElement, sourceSurfaceKind })
+      : null;
     const next: TaskDragSessionState = {
       sessionId,
       sequence: 0,
@@ -240,6 +251,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       targetKind: 'none',
       dropPosition: null,
       dropIndicatorRect: null,
+      originFieldRect: initialOriginFieldRect,
       lockedTargetRect: null,
       pendingTargetId: null,
       pendingSince: null,
@@ -335,6 +347,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
         targetKind: 'none',
         dropPosition: null,
         dropIndicatorRect: null,
+        originFieldRect: null,
         lockedTargetRect: null,
         pendingTargetId: null,
         pendingSince: null,

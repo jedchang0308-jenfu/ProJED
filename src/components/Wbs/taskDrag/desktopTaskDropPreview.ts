@@ -1,5 +1,5 @@
 import type { TaskNode } from '../../../types';
-import type { TaskDragIndicatorRect, TaskDropSurfaceKind } from './taskDragTypes';
+import type { TaskDragIndicatorRect, TaskDragOriginFieldRect, TaskDropSurfaceKind } from './taskDragTypes';
 import {
   desktopTargetTypeToSurfaceKind,
   resolveTaskDropIntent,
@@ -23,7 +23,7 @@ export interface DesktopTaskOriginIndicator {
   sourceNodeId: string;
   sourceTitle: string;
   sourceSurfaceKind: TaskDropSurfaceKind;
-  fieldRect: TaskDragIndicatorRect & { height: number };
+  fieldRect: TaskDragOriginFieldRect;
 }
 
 const escapeAttributeToken = (value: string) => {
@@ -173,13 +173,13 @@ export const resolveDesktopTaskDropPreview = ({
   };
 };
 
-const getOriginFieldRect = ({
+export const resolveTaskOriginFieldRect = ({
   sourceElement,
   sourceSurfaceKind,
 }: {
   sourceElement: HTMLElement;
   sourceSurfaceKind: TaskDropSurfaceKind;
-}): (TaskDragIndicatorRect & { height: number }) | null => {
+}): TaskDragOriginFieldRect | null => {
   const geometryElement = getPrimaryGeometryElement(sourceElement, sourceSurfaceKind);
   const geometryRect = geometryElement.getBoundingClientRect();
   if (geometryRect.width <= 0 || geometryRect.height <= 0) return null;
@@ -236,7 +236,7 @@ export const resolveDesktopTaskOriginIndicator = ({
     return null;
   }
 
-  const fieldRect = getOriginFieldRect({
+  const fieldRect = resolveTaskOriginFieldRect({
     sourceElement,
     sourceSurfaceKind,
   });

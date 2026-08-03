@@ -2,6 +2,8 @@ import React from 'react';
 import { KanbanInsertionMarker } from '../KanbanInsertionMarker';
 import type { MobileTaskAction, TaskDragSessionState } from './taskDragTypes';
 import { MOBILE_PREVIEW_FINGER_CLEARANCE_PX } from './taskDragTargetAdapter';
+import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
+import { TaskOriginTitleField } from './TaskOriginTitleField';
 
 const MOBILE_PREVIEW_HEIGHT_PX = 40;
 const MOBILE_PREVIEW_SAFE_TOP_PX = 48;
@@ -75,6 +77,7 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
     previewMaxTop,
     Math.max(MOBILE_PREVIEW_SAFE_TOP_PX, fingerPreviewTop),
   );
+  const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
 
   const canUseAction = (permission: 'edit' | 'create' | 'delete') => {
     if (permission === 'edit') return canEditTask;
@@ -98,7 +101,28 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
         </div>
       ) : null}
 
-      {state.phase === 'dragging' && state.dropIndicatorRect ? (
+      {state.phase === 'dragging' && state.originFieldRect && sourceSurfaceKind ? (
+        <div
+          className="pointer-events-none fixed z-[90]"
+          style={{
+            left: state.originFieldRect.left,
+            top: state.originFieldRect.top,
+            width: state.originFieldRect.width,
+            height: state.originFieldRect.height,
+          }}
+          data-mobile-drop-origin="true"
+          data-mobile-drop-noop="true"
+          data-mobile-drop-target={state.nodeId}
+          data-mobile-drop-surface-kind={sourceSurfaceKind}
+          data-mobile-drop-feedback-layer="fixed-overlay"
+        >
+          <TaskOriginTitleField
+            title={state.title || '未命名任務'}
+            surfaceKind={sourceSurfaceKind}
+            data-mobile-origin-field="true"
+          />
+        </div>
+      ) : state.phase === 'dragging' && state.dropIndicatorRect ? (
         <div
           className="pointer-events-none fixed z-[90] -translate-y-1/2"
           style={{

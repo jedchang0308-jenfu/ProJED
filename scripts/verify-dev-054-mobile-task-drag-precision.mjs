@@ -8,6 +8,8 @@ const files = {
   session: 'src/components/Wbs/taskDrag/useTaskDragSession.ts',
   commit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   presenter: 'src/components/Wbs/taskDrag/TaskDragPresenter.tsx',
+  originField: 'src/components/Wbs/taskDrag/TaskOriginTitleField.tsx',
+  originPreview: 'src/components/Wbs/taskDrag/desktopTaskDropPreview.ts',
   panBroker: 'src/hooks/useMobilePanBroker.ts',
   context: 'src/components/Wbs/mobileTaskActionContext.ts',
   board: 'src/components/BoardView.tsx',
@@ -100,6 +102,20 @@ check('mobile source placeholders do not impersonate the live drop indicator',
   && !source.checklist.includes("import { KanbanInsertionMarker }")
   && source.presenter.includes('data-mobile-drop-indicator="true"'));
 
+check('mobile source origin is a shared blue no-op title field outside normal flow', hasAll(source.target, [
+  'resolveMobileTaskOriginFieldRect',
+  'findMobileSourcePlaceholder',
+  'originFieldRect,',
+]) && hasAll(source.presenter, [
+  'data-mobile-drop-origin="true"',
+  'data-mobile-drop-noop="true"',
+  'data-mobile-origin-field="true"',
+  'data-mobile-drop-feedback-layer="fixed-overlay"',
+]) && hasAll(source.originField, [
+  'bg-blue-500',
+  'text-white',
+]) && source.originPreview.includes('export const resolveTaskOriginFieldRect'));
+
 check('browser verifier covers finger-centered hit, single live indicator, pan ownership, boundary jitter, and deliberate handover', hasAll(source.browser, [
   'finger-centered point selects canonical same-parent order',
   'adjacent checklist boundary jitter keeps one stable target',
@@ -112,6 +128,11 @@ check('browser verifier covers finger-centered hit, single live indicator, pan o
   'pan broker must not scroll the column after task drag owns the gesture',
   'jitterTargets.every',
   'deliberate movement to the second row must hand over within 100ms',
+  'a checklist source origin must show one blue no-op title field and no insertion marker',
+  'mobile card and column origins reuse the blue title-field feedback',
+  'origin title field must fit the viewport',
+  'mobile action rail must take priority and clear origin feedback while hovered',
+  'card and column origin releases must be zero-write no-ops',
 ]));
 
 const placedStart = source.workbench.indexOf('const WorkbenchPlacedReadOnlyCard');

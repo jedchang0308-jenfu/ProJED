@@ -3,6 +3,7 @@ import {
   resolveTaskDropIntent,
   taskDragSourceKindToSurfaceKind,
 } from './taskDropIntent';
+import { resolveTaskOriginFieldRect } from './desktopTaskDropPreview';
 import type {
   MobileTaskAction,
   MobileTaskDropPosition,
@@ -75,6 +76,7 @@ const emptyObservation = (
   action: null,
   dropPosition: null,
   indicatorRect: null,
+  originFieldRect: null,
   lockedTargetRect: null,
   pendingTargetId: null,
   pendingSince: null,
@@ -95,6 +97,10 @@ const readSurfaceKind = (element: HTMLElement): TaskDropSurfaceKind | null => {
   return null;
 };
 
+const findMobileSourcePlaceholder = (nodeId: string) =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-kanban-drag-source-placeholder="true"][data-task-id]'))
+    .find((element) => element.getAttribute('data-task-id') === nodeId) || null;
+
 const pointInsideRect = (point: Point, rect: TaskDragTargetRect, outset = 0) =>
   point.x >= rect.left - outset
   && point.x <= rect.right + outset
@@ -111,6 +117,19 @@ const pointInsideTargetCore = (point: Point, rect: TaskDragTargetRect) => {
     && point.x <= rect.right - insetX
     && point.y >= rect.top + insetY
     && point.y <= rect.bottom - insetY;
+};
+
+export const resolveMobileTaskOriginFieldRect = (
+  state: TaskDragSessionState,
+  point: Point,
+) => {
+  const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
+  if (!sourceSurfaceKind || sourceSurfaceKind === 'workbench-unplaced-row') return null;
+  const sourceElement = findMobileSourcePlaceholder(state.nodeId);
+  if (!sourceElement) return null;
+  const sourceRect = toTargetRect(sourceElement.getBoundingClientRect());
+  if (!pointInsideRect(point, sourceRect)) return null;
+  return resolveTaskOriginFieldRect({ sourceElement, sourceSurfaceKind });
 };
 
 const buildCandidate = (
@@ -277,6 +296,14 @@ export const resolveTaskDragObservation = ({
     return observation;
   }
 
+  const originFieldRect = resolveMobileTaskOriginFieldRect(state, point);
+  if (originFieldRect) {
+    return {
+      ...observation,
+      originFieldRect,
+    };
+  }
+
   const intentPoint = getTaskIntentPoint(point);
   if (canMoveTask && state.source.kind !== 'workbench-unplaced-row') {
     const directCandidate = collectDirectCandidates(intentPoint, state)[0] || null;
@@ -317,6 +344,7 @@ export const observationToSessionState = (
   targetKind: observation.targetKind,
   dropPosition: observation.dropPosition,
   dropIndicatorRect: observation.indicatorRect,
+  originFieldRect: observation.originFieldRect,
   lockedTargetRect: observation.lockedTargetRect,
   pendingTargetId: observation.pendingTargetId,
   pendingSince: observation.pendingSince,

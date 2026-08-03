@@ -523,14 +523,22 @@ async (page) => {
       const geometry = await page.evaluate(() => {
         const rail = document.querySelector('[data-mobile-task-action-rail="true"]').getBoundingClientRect();
         const preview = document.querySelector('[data-mobile-drag-preview="true"]').getBoundingClientRect();
+        const originField = document.querySelector('[data-mobile-origin-field="true"]')?.getBoundingClientRect();
         return {
           rail: { left: rail.left, right: rail.right, top: rail.top, bottom: rail.bottom },
           preview: { left: preview.left, right: preview.right, top: preview.top, bottom: preview.bottom },
+          originField: originField
+            ? { left: originField.left, right: originField.right, top: originField.top, bottom: originField.bottom }
+            : null,
           overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
         };
       });
       assert(geometry.rail.left >= -1 && geometry.rail.right <= viewport.width + 1, 'action rail must fit the viewport', { viewport, geometry });
       assert(geometry.preview.left >= -1 && geometry.preview.right <= viewport.width + 1, 'preview must fit the viewport', { viewport, geometry });
+      assert(geometry.originField
+        && geometry.originField.left >= -1
+        && geometry.originField.right <= viewport.width + 1,
+      'origin title field must fit the viewport', { viewport, geometry });
       assert(!geometry.overflow, 'drag UI must not create horizontal overflow', { viewport, geometry });
       const screenshotPath = `${screenshotBase}-B05-${viewport.width}x${viewport.height}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
@@ -560,10 +568,18 @@ async (page) => {
     await held.moveExact(sameRowPoint, 40);
     const geometry = await page.evaluate(({ x, y }) => {
       const indicator = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const origin = document.querySelector('[data-mobile-drop-origin="true"]');
+      const originField = origin?.querySelector('[data-mobile-origin-field="true"]');
       const preview = document.querySelector('[data-mobile-drag-preview="true"]');
       const previewRect = preview?.getBoundingClientRect();
       return {
         indicatorTargetId: indicator?.getAttribute('data-mobile-drop-target') || null,
+        originTargetId: origin?.getAttribute('data-mobile-drop-target') || null,
+        originNoop: origin?.getAttribute('data-mobile-drop-noop') === 'true',
+        originSurfaceKind: origin?.getAttribute('data-mobile-drop-surface-kind') || null,
+        originFieldText: originField?.textContent?.trim() || null,
+        originFieldClassName: originField?.getAttribute('class') || null,
+        insertionMarkerCount: document.querySelectorAll('[data-kanban-insertion-marker="true"]').length,
         previewAnchor: preview?.getAttribute('data-mobile-preview-anchor') || null,
         fingerClearance: previewRect ? y - previewRect.bottom : null,
         hitTaskIds: document.elementsFromPoint(x, y).slice(0, 12)
@@ -580,6 +596,15 @@ async (page) => {
         sameRowPoint,
         geometry,
       });
+    assert(geometry.indicatorTargetId === null
+      && geometry.originTargetId === sourceId
+      && geometry.originNoop
+      && geometry.originSurfaceKind === 'checklist-row'
+      && geometry.originFieldText === (await readNode(sourceId)).title
+      && geometry.originFieldClassName.includes('bg-blue-500')
+      && geometry.originFieldClassName.includes('text-white')
+      && geometry.insertionMarkerCount === 0,
+    'a checklist source origin must show one blue no-op title field and no insertion marker', geometry);
     assert(geometry.previewAnchor === 'finger'
       && geometry.fingerClearance !== null
       && Math.abs(geometry.fingerClearance - 12) <= 1,
@@ -590,6 +615,146 @@ async (page) => {
     const after = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     assert(before === after, 'releasing on the source row must be a zero-write no-op', { sourceId, parentCardId });
     return { sourceId, parentCardId, geometry, screenshotPath };
+  });
+
+  await runCase('QA-054-R11', 'mobile card and column origins reuse the blue title-field feedback', async () => {
+    await openApp();
+    const before = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
+    const sourceCard = page.locator('.kanban-task-card[data-task-id]').first();
+    const targetCard = page.locator('.kanban-task-card[data-task-id]').nth(1);
+    const sourceCardId = await sourceCard.getAttribute('data-task-id');
+    const sourceCardNode = await readNode(sourceCardId);
+    const sourceCardPoint = await visiblePointFor(sourceCard.locator('[data-mobile-task-card-primary="true"]'), 0.48, 0.45);
+    const targetCardPoint = await visiblePointFor(targetCard.locator('[data-mobile-task-card-primary="true"]'), 0.5, 0.5);
+    const heldCard = await startHeldTouchAtPoint(sourceCardPoint);
+    const cardOriginPoint = { x: sourceCardPoint.x + 10, y: sourceCardPoint.y };
+    await heldCard.moveExact(cardOriginPoint, 40);
+
+    const readOriginFeedback = (rawY) => page.evaluate(({ rawY: pointerY }) => {
+      const origin = document.querySelector('[data-mobile-drop-origin="true"]');
+      const field = origin?.querySelector('[data-mobile-origin-field="true"]');
+      const preview = document.querySelector('[data-mobile-drag-preview="true"]');
+      const fieldStyle = field ? getComputedStyle(field) : null;
+      const fieldRect = field?.getBoundingClientRect();
+      const previewRect = preview?.getBoundingClientRect();
+      const visibleMarkers = Array.from(document.querySelectorAll('[data-kanban-insertion-marker="true"]'))
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        });
+      return {
+        originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+        targetId: origin?.getAttribute('data-mobile-drop-target') || null,
+        noop: origin?.getAttribute('data-mobile-drop-noop') === 'true',
+        surfaceKind: origin?.getAttribute('data-mobile-drop-surface-kind') || null,
+        fieldText: field?.textContent?.trim() || null,
+        fieldClassName: field?.getAttribute('class') || null,
+        fieldBackground: fieldStyle?.backgroundColor || null,
+        fieldColor: fieldStyle?.color || null,
+        fieldRect: fieldRect ? { left: fieldRect.left, right: fieldRect.right, top: fieldRect.top, bottom: fieldRect.bottom } : null,
+        markerCount: visibleMarkers.length,
+        normalIndicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+        previewAnchor: preview?.getAttribute('data-mobile-preview-anchor') || null,
+        fingerClearance: previewRect ? pointerY - previewRect.bottom : null,
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      };
+    }, { rawY });
+
+    const cardOrigin = await readOriginFeedback(cardOriginPoint.y);
+    assert(cardOrigin.originCount === 1
+      && cardOrigin.targetId === sourceCardId
+      && cardOrigin.noop
+      && cardOrigin.surfaceKind === 'kanban-card'
+      && cardOrigin.fieldText === sourceCardNode.title
+      && cardOrigin.fieldClassName.includes('bg-blue-500')
+      && cardOrigin.fieldClassName.includes('text-white')
+      && cardOrigin.fieldBackground !== 'rgba(0, 0, 0, 0)'
+      && cardOrigin.fieldColor === 'rgb(255, 255, 255)'
+      && cardOrigin.markerCount === 0
+      && cardOrigin.normalIndicatorCount === 0
+      && Math.abs(cardOrigin.fingerClearance - 12) <= 1
+      && !cardOrigin.overflow,
+    'card origin must show the shared blue title field without changing finger coupling', cardOrigin);
+
+    const railAction = page.locator('[data-mobile-task-action="toggle-complete"]').first();
+    const railActionPoint = await visiblePointFor(railAction, 0.5, 0.5);
+    await heldCard.moveTo({ x: railActionPoint.x, y: railActionPoint.y });
+    const actionPriority = await page.evaluate(() => ({
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      activeActionClass: document.querySelector('[data-mobile-task-action="toggle-complete"]')?.getAttribute('class') || '',
+    }));
+    assert(actionPriority.originCount === 0
+      && actionPriority.indicatorCount === 0
+      && actionPriority.activeActionClass.includes('bg-emerald-500'),
+    'mobile action rail must take priority and clear origin feedback while hovered', actionPriority);
+
+    await heldCard.moveTo({ x: targetCardPoint.x, y: targetCardPoint.y });
+    const normalTarget = await page.evaluate(() => ({
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      markerCount: document.querySelectorAll('[data-kanban-insertion-marker="true"]').length,
+    }));
+    assert(normalTarget.originCount === 0 && normalTarget.indicatorCount === 1 && normalTarget.markerCount === 1,
+      'leaving origin for a valid target must restore only the existing insertion marker', normalTarget);
+
+    await heldCard.moveTo(cardOriginPoint);
+    const returnedCardOrigin = await readOriginFeedback(cardOriginPoint.y);
+    assert(returnedCardOrigin.originCount === 1
+      && returnedCardOrigin.targetId === sourceCardId
+      && returnedCardOrigin.markerCount === 0
+      && returnedCardOrigin.normalIndicatorCount === 0,
+    'returning to the source must replace the normal marker with the blue origin field', returnedCardOrigin);
+    const cardScreenshotPath = `${screenshotBase}-B11-card-origin-blue-title-field.png`;
+    await page.screenshot({ path: cardScreenshotPath, fullPage: false });
+    await heldCard.end();
+
+    const sourceColumn = page.locator('[data-kanban-column-header="true"][data-task-id]').first();
+    const sourceColumnId = await sourceColumn.getAttribute('data-task-id');
+    const sourceColumnNode = await readNode(sourceColumnId);
+    const sourceColumnPoint = await visiblePointFor(sourceColumn, 0.45, 0.45);
+    const heldColumn = await startHeldTouchAtPoint(sourceColumnPoint);
+    const columnOriginPoint = { x: sourceColumnPoint.x + 10, y: sourceColumnPoint.y };
+    await heldColumn.moveExact(columnOriginPoint, 40);
+    const columnOrigin = await readOriginFeedback(columnOriginPoint.y);
+    assert(columnOrigin.originCount === 1
+      && columnOrigin.targetId === sourceColumnId
+      && columnOrigin.noop
+      && columnOrigin.surfaceKind === 'column-header'
+      && columnOrigin.fieldText === sourceColumnNode.title
+      && columnOrigin.fieldClassName.includes('bg-blue-500')
+      && columnOrigin.fieldClassName.includes('text-white')
+      && columnOrigin.markerCount === 0
+      && columnOrigin.normalIndicatorCount === 0
+      && columnOrigin.previewAnchor === 'finger'
+      && !columnOrigin.overflow,
+    'column origin must use the same blue no-op title-field contract', columnOrigin);
+    const columnScreenshotPath = `${screenshotBase}-B11-column-origin-blue-title-field.png`;
+    await page.screenshot({ path: columnScreenshotPath, fullPage: false });
+    await heldColumn.end();
+
+    const after = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
+    const transient = await page.evaluate(() => ({
+      rail: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
+      preview: document.querySelectorAll('[data-mobile-drag-preview="true"]').length,
+      origin: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      indicator: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+    }));
+    assert(before === after, 'card and column origin releases must be zero-write no-ops');
+    assert(Object.values(transient).every((count) => count === 0), 'origin releases must clean every transient drag surface', transient);
+    return {
+      sourceCardId,
+      sourceColumnId,
+      cardOrigin,
+      actionPriority,
+      normalTarget,
+      returnedCardOrigin,
+      columnOrigin,
+      transient,
+      cardScreenshotPath,
+      columnScreenshotPath,
+    };
   });
 
   const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));

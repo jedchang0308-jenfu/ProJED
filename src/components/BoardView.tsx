@@ -29,6 +29,7 @@ import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
+import { TaskOriginTitleField } from './Wbs/taskDrag/TaskOriginTitleField';
 import { commitDesktopTaskDrag } from './Wbs/taskDrag/taskDragCommit';
 import {
     desktopTaskDropPreviewMatches,
@@ -673,15 +674,11 @@ const BoardView = () => {
                     data-desktop-drop-indicator-layer="fixed-overlay"
                 >
                     {desktopIndicator.kind === 'origin' ? (
-                        <div
-                            className={`task-title-text flex h-full w-full items-center rounded bg-blue-500 px-1.5 font-medium text-white shadow-[0_0_0_2px_rgba(59,130,246,0.18)] ${
-                                desktopIndicator.surfaceKind === 'checklist-row' ? 'text-xs' : 'text-sm'
-                            }`}
+                        <TaskOriginTitleField
+                            title={desktopIndicator.sourceTitle}
+                            surfaceKind={desktopIndicator.surfaceKind}
                             data-desktop-origin-field="true"
-                            aria-hidden="true"
-                        >
-                            <span className="truncate">{desktopIndicator.sourceTitle}</span>
-                        </div>
+                        />
                     ) : (
                         <KanbanInsertionMarker compact className="py-0" />
                     )}

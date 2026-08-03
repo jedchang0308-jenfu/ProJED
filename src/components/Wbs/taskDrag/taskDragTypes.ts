@@ -37,6 +37,10 @@ export interface TaskDragIndicatorRect {
   width: number;
 }
 
+export interface TaskDragOriginFieldRect extends TaskDragIndicatorRect {
+  height: number;
+}
+
 export interface TaskDragTargetRect {
   left: number;
   top: number;
@@ -59,6 +63,7 @@ export interface TaskDragObservation {
   action: MobileTaskAction | null;
   dropPosition: MobileTaskDropPosition | null;
   indicatorRect: TaskDragIndicatorRect | null;
+  originFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;
   pendingTargetId: string | null;
   pendingSince: number | null;
@@ -89,6 +94,7 @@ export interface TaskDragSessionState {
   targetKind: TaskDragTargetKind;
   dropPosition: MobileTaskDropPosition | null;
   dropIndicatorRect: TaskDragIndicatorRect | null;
+  originFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;
   pendingTargetId: string | null;
   pendingSince: number | null;

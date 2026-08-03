@@ -9,18 +9,21 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
-## Documentation Map Update - 2026-08-03（桌面拖曳原地文字欄位藍色回饋）
+## Documentation Map Update - 2026-08-03（跨裝置拖曳原地文字欄位藍色回饋）
 
-Spec Impact：對 DEV-055 為 `Compatible exception`；對 DEV-058 Attempt 1 為 `Intentional replacement`。DEV-055 的 single fixed-overlay feedback、來源碰撞阻擋、正常落點語意與零 layout shift 契約繼續有效；原地粗插入線因使用者判定不夠直覺，改為來源標題位置的藍底白字欄位，不把來源改成可提交 target，也不觸及 DEV-054 手機拖曳。
+Spec Impact：對 DEV-055、DEV-054 為 `Compatible exception`；對 DEV-058 Attempt 1 與 Rework 1 mobile exclusion 為 `Intentional replacement`。桌面與手機都在來源範圍顯示藍底白字原地欄位，但不把來源改成可提交 target；DEV-054 的 raw finger、innermost ownership、target stability、action rail priority 與 zero-write 契約繼續有效。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md` | Rework 1 Implemented / Local Verified / Not Deployed | DEV-058 / DEV-055 | 定義來源範圍 no-op title field、視覺層級與不可變更邊界。 |
-| `ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md` | Rework 1 Executed / User Revalidation Pending | DEV-058 / DEV-055 | 驗證單一藍色 title field、正常 marker 分離、零寫入與既有拖曳回歸。 |
-| `src/components/BoardView.tsx` | Rework 1 implemented / local verified | DEV-058 | 依實際滑鼠位置切換正常 target indicator 與 origin/no-op 藍色 title field。 |
-| `src/components/Wbs/taskDrag/desktopTaskDropPreview.ts` | Rework 1 implemented / local verified | DEV-058 / DEV-055 | 來源 title field 共用既有 task-title primary geometry，提供 placeholder fallback。 |
+| `ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md` | Rework 2 Complete / Local Verified / User Revalidation Pending / Not Deployed | DEV-058 / DEV-055 / DEV-054 | 定義跨裝置來源範圍 no-op title field、視覺層級與不可變更邊界。 |
+| `ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md` | Rework 2 Executed / Mobile 11/11 / Desktop 16/16 | DEV-058 / DEV-055 / DEV-054 | 驗證單一藍色 title field、正常 marker 分離、零寫入與跨裝置拖曳回歸。 |
+| `src/components/BoardView.tsx` | Rework 2 shared visual / local verified | DEV-058 | 依實際滑鼠位置切換正常 target indicator 與 origin/no-op 藍色 title field。 |
+| `src/components/Wbs/taskDrag/desktopTaskDropPreview.ts` | Rework 2 shared geometry / local verified | DEV-058 / DEV-055 / DEV-054 | 來源 title field 共用既有 task-title primary geometry，提供 placeholder fallback。 |
+| `src/components/Wbs/taskDrag/TaskOriginTitleField.tsx` | Rework 2 implemented / local verified | DEV-058 | 桌面與手機共用既有 `bg-blue-500` / `text-white` 原地標題欄位。 |
 | `src/components/Wbs/KanbanInsertionMarker.tsx` | Baseline restored | DEV-058 / DEV-055 | 移除 Attempt 1 emphasized variant，正常落點 marker 回復既有樣式。 |
-| `scripts/verify-dev-058-desktop-drag-origin-insertion-feedback.mjs` | Rework 1 gate passed 19/19 | DEV-058 | 鎖定 no-op、overlay-only、藍底白字 title field 與 browser 證據契約；DEV-055 browser B01-B16 16/16 通過。 |
+| `scripts/verify-dev-058-desktop-drag-origin-insertion-feedback.mjs` | Rework 2 gate passed 26/26 | DEV-058 | 鎖定 no-op、overlay-only、跨裝置藍底白字 title field 與 browser 證據契約。 |
+| `src/components/Wbs/taskDrag/TaskDragPresenter.tsx` | Rework 2 implemented / local verified | DEV-058 / DEV-054 | 手機 origin/no-op 狀態沿用藍底白字 title field，一般 target marker 不變。 |
+| `src/components/Wbs/taskDrag/taskDragTargetAdapter.ts` | Rework 2 implemented / local verified | DEV-058 / DEV-054 | 以目前 source placeholder rect 判斷手機 origin，不改 canonical target resolver。 |
 
 ## Documentation Map Update - 2026-08-03（低價值會議活動過濾契約同步）
 
