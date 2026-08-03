@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, ChevronDown, ChevronRight, Link } from 'lucide-react';
+import { Check, ChevronRight, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -117,6 +117,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       return Boolean(child && !child.isArchived);
     });
   }, [childIds, previewNodes]);
+  const checklistToggleLabel = isChecklistExpanded ? '收合下層任務' : '展開下層任務';
+  const checklistRegionId = `kanban-checklist-${nodeId}`;
 
   // dnd-kit 拖動邏輯（此卡片可被拖動）
   const {
