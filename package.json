@@ -135,6 +135,7 @@
     "verify:dev-054-mobile-task-drag-precision-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev054-mobile-drag -Filename scripts/verify-dev-054-mobile-task-drag-precision-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-055-desktop-task-drag-target-clarity": "node scripts/verify-dev-055-desktop-task-drag-target-clarity.mjs",
     "verify:dev-055-desktop-task-drag-target-clarity-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev055-desktop-drag -Filename scripts/verify-dev-055-desktop-task-drag-target-clarity-browser.pw.js -OutputDirectory output/playwright",
+    "verify:dev-058-desktop-drag-origin-insertion-feedback": "node scripts/verify-dev-058-desktop-drag-origin-insertion-feedback.mjs",
     "verify:kanban-drag-single-title-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix kanban-drag-single-title -Filename scripts/verify-kanban-drag-single-title-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-047-backup-package-contract": "node scripts/verify-dev-047-backup-package-contract.mjs",
     "verify:dev-048-task-multi-person-assignment": "tsx scripts/verify-dev-048-task-multi-person-assignment.ts",

@@ -4,6 +4,8 @@ async (page) => {
   const diagnostics = [];
   const networkFailures = [];
   const screenshotBase = `output/playwright/dev-055-desktop-drag-${Date.now()}`;
+  const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
+  const appBaseUrl = currentPageOrigin || 'http://127.0.0.1:4173';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
@@ -61,9 +63,9 @@ async (page) => {
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.mouse.up().catch(() => undefined);
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/?qcReset=1&qcSize=72`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-layout-region="board-canvas"]').waitFor({ state: 'visible', timeout: 15000 });
     const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
@@ -124,10 +126,18 @@ async (page) => {
     const indicator = indicators.first();
     const state = await indicator.evaluate((element) => {
       const rect = element.getBoundingClientRect();
+      const marker = element.querySelector('[data-kanban-insertion-marker="true"]');
+      const bar = element.querySelector('[data-kanban-insertion-bar="true"]');
+      const barRect = bar?.getBoundingClientRect();
       return {
         targetNodeId: element.getAttribute('data-desktop-drop-target'),
         position: element.getAttribute('data-desktop-drop-position'),
         surfaceKind: element.getAttribute('data-desktop-drop-surface-kind'),
+        origin: element.getAttribute('data-desktop-drop-origin') === 'true',
+        noop: element.getAttribute('data-desktop-drop-noop') === 'true',
+        emphasis: marker?.getAttribute('data-kanban-insertion-emphasis') || null,
+        barHeight: barRect?.height || 0,
+        barColor: bar ? getComputedStyle(bar).backgroundColor : null,
         rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width },
         viewport: { width: innerWidth, height: innerHeight },
       };
@@ -344,7 +354,7 @@ async (page) => {
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
   });
 
-  await runCase('QA-055-B07', 'expanded card child row owns the pointer and invalid source blocks ancestor fallback', async () => {
+  await runCase('QA-055-B07', 'expanded child owns the pointer and source return exposes one thick no-op origin marker', async () => {
     await openApp();
     const sourceCard = cardsWithChildren().nth(0);
     const targetCard = cardsWithChildren().nth(1);
@@ -357,20 +367,65 @@ async (page) => {
     assert(parentState.indicator.targetNodeId !== childState.indicator.targetNodeId
       && childState.indicator.surfaceKind === 'checklist-row',
     'child row must replace parent ownership when the pointer enters it', { parentState, childState });
-    const screenshotPath = `${screenshotBase}-B07-expanded-child-ownership.png`;
-    await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.mouse.move(sourcePoint.x, sourcePoint.y, { steps: 10 });
     await page.waitForTimeout(140);
-    const invalidIndicatorCount = await page.locator('[data-desktop-drop-indicator="true"]').count();
-    assert(invalidIndicatorCount === 0, 'invalid source row must clear the indicator instead of falling through to its card', { invalidIndicatorCount });
+    const originIndicator = await readIndicator();
+    assert(originIndicator.origin && originIndicator.noop
+      && originIndicator.position === 'origin'
+      && originIndicator.targetNodeId === sourceId
+      && originIndicator.surfaceKind === 'checklist-row',
+    'source row must expose its own explicit no-op origin marker instead of falling through to its card', { originIndicator, sourceId });
+    assert(originIndicator.emphasis === 'strong'
+      && originIndicator.barHeight > childState.indicator.barHeight
+      && originIndicator.barColor === childState.indicator.barColor,
+    'origin marker must reuse the existing blue style with a thicker bar than normal targets', {
+      originIndicator,
+      normalIndicator: childState.indicator,
+    });
+    const screenshotPath = `${screenshotBase}-B07-origin-noop-marker.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.mouse.up();
     await page.waitForTimeout(220);
     const afterInvalidNodes = await readNodes();
     assert(JSON.stringify(beforeNodes) === JSON.stringify(afterInvalidNodes), 'invalid source-row release must be a zero-write no-op', { sourceId });
+    assert(await page.locator('[data-desktop-drop-indicator="true"]').count() === 0,
+      'origin marker must clear after the no-op release');
+
+    const verifyAdditionalOriginSource = async (source, expectedSurfaceKind) => {
+      const sourceNodesBefore = await readNodes();
+      const drag = await beginMouseDrag(source);
+      await page.waitForTimeout(140);
+      const indicator = await readIndicator();
+      assert(indicator.origin && indicator.noop
+        && indicator.position === 'origin'
+        && indicator.targetNodeId === drag.sourceId
+        && indicator.surfaceKind === expectedSurfaceKind
+        && indicator.emphasis === 'strong',
+      'each desktop task source kind must expose the same origin no-op marker contract', {
+        indicator,
+        sourceId: drag.sourceId,
+        expectedSurfaceKind,
+      });
+      await page.mouse.up();
+      await page.waitForTimeout(220);
+      assert(JSON.stringify(sourceNodesBefore) === JSON.stringify(await readNodes()),
+        'additional origin source release must remain a zero-write no-op', { sourceId: drag.sourceId, expectedSurfaceKind });
+      return indicator;
+    };
+
+    await openApp();
+    const cardOriginIndicator = await verifyAdditionalOriginSource(cardsInColumn(0).first(), 'kanban-card');
+    await openApp();
+    const columnOriginIndicator = await verifyAdditionalOriginSource(
+      columns().first().locator('[data-kanban-column-header="true"]'),
+      'column-header',
+    );
     return {
       parentIndicator: parentState.indicator,
       childIndicator: childState.indicator,
-      invalidIndicatorCount,
+      originIndicator,
+      cardOriginIndicator,
+      columnOriginIndicator,
       screenshotPath,
     };
   });
@@ -622,7 +677,7 @@ async (page) => {
   const summary = {
     ok: failCount === 0,
     summary: { pass: results.length - failCount, fail: failCount },
-    route: 'http://127.0.0.1:4173/?qcReset=1&qcSize=72',
+    route: `${appBaseUrl}/?qcReset=1&qcSize=72`,
     viewports: ['1440x900', '1024x768'],
     results,
     diagnostics: diagnostics.slice(-30),

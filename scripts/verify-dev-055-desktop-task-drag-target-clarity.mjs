@@ -38,9 +38,9 @@ check('S01', 'SPEC, QA, task index, and documentation map are linked',
 
 check('S02', 'desktop indicator exposes one canonical target descriptor', hasAll(source.board, [
   'data-desktop-drop-indicator="true"',
-  'data-desktop-drop-target={desktopDropPreview.targetNodeId}',
-  'data-desktop-drop-position={desktopDropPreview.displayPosition}',
-  'data-desktop-drop-surface-kind={desktopDropPreview.targetSurfaceKind}',
+  'data-desktop-drop-target={desktopIndicator.targetNodeId}',
+  'data-desktop-drop-position={desktopIndicator.position}',
+  'data-desktop-drop-surface-kind={desktopIndicator.surfaceKind}',
   'data-desktop-drop-indicator-layer="fixed-overlay"',
 ]) && (source.board.match(/data-desktop-drop-indicator="true"/g) || []).length === 1);
 

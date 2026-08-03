@@ -9,6 +9,19 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-08-03（桌面拖曳原地粗插入線）
+
+Spec Impact=`Compatible exception`：DEV-055 的 single fixed-overlay indicator、來源碰撞阻擋、正常落點語意與零 layout shift 契約繼續有效；DEV-058 只為來源範圍內的 no-op 狀態補一條沿用既有藍色樣式的較粗插入線，不把來源改成可提交 target，也不觸及 DEV-054 手機拖曳。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md` | Active | DEV-058 / DEV-055 | 定義來源範圍 no-op marker、視覺層級與不可變更邊界。 |
+| `ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md` | Active | DEV-058 / DEV-055 | 驗證單一 overlay、粗細差異、同色、零寫入與既有拖曳回歸。 |
+| `src/components/BoardView.tsx` | Implemented / Local verified | DEV-058 | 依實際滑鼠位置切換正常 target indicator 與 origin/no-op indicator。 |
+| `src/components/Wbs/taskDrag/desktopTaskDropPreview.ts` | Implemented / Local verified | DEV-058 / DEV-055 | 來源 marker 共用既有 indicator geometry 計算。 |
+| `src/components/Wbs/KanbanInsertionMarker.tsx` | Implemented / Local verified | DEV-058 | 新增既有 marker 的 emphasized 粗線變體，正常變體不變。 |
+| `scripts/verify-dev-058-desktop-drag-origin-insertion-feedback.mjs` | Passed 19/19 | DEV-058 | 鎖定 no-op、overlay-only、共用幾何與 browser 證據契約；DEV-055 browser B01-B16 16/16 同步通過。 |
+
 ## Documentation Map Update - 2026-08-03（低價值會議活動過濾契約同步）
 
 Spec Impact=`Intentional replacement`：DEV-007 的原生看板操作與有語意活動捕捉仍有效，但「拖曳移動必須收集並逐筆附加正文」已由 DEV-011/012 取代。現行契約在前端 buffer、deterministic fallback、專案變化匯入與 Edge Function 一致排除 `task_moved` 及純位置／排序制式摘要；只有此類事件的任務不得建立段落或 task link。含原因、決議、風險或下一步的人工文字仍需保留。

@@ -19,6 +19,12 @@ export interface DesktopTaskDropPreview {
   indicatorRect: TaskDragIndicatorRect;
 }
 
+export interface DesktopTaskOriginIndicator {
+  sourceNodeId: string;
+  sourceSurfaceKind: TaskDropSurfaceKind;
+  indicatorRect: TaskDragIndicatorRect;
+}
+
 const escapeAttributeToken = (value: string) => {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
   return value.replace(/["\\]/g, '\\$&');
@@ -153,6 +159,37 @@ export const resolveDesktopTaskDropPreview = ({
     targetSurfaceKind: resolved.targetSurfaceKind,
     displayPosition: resolved.intent.displayPosition,
     intent: resolved.intent,
+    indicatorRect,
+  };
+};
+
+export const resolveDesktopTaskOriginIndicator = ({
+  activeData,
+  sourceElement,
+}: {
+  activeData: DesktopDragData;
+  sourceElement: HTMLElement | null;
+}): DesktopTaskOriginIndicator | null => {
+  const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(activeData?.type);
+  if (
+    !sourceElement
+    || !activeData?.nodeId
+    || !sourceSurfaceKind
+    || sourceSurfaceKind === 'workbench-unplaced-row'
+  ) {
+    return null;
+  }
+
+  const indicatorRect = getIndicatorRect({
+    targetElement: sourceElement,
+    targetSurfaceKind: sourceSurfaceKind,
+    displayPosition: 'before',
+  });
+  if (!indicatorRect) return null;
+
+  return {
+    sourceNodeId: activeData.nodeId,
+    sourceSurfaceKind,
     indicatorRect,
   };
 };

@@ -33,8 +33,10 @@ import { commitDesktopTaskDrag } from './Wbs/taskDrag/taskDragCommit';
 import {
     desktopTaskDropPreviewMatches,
     findDesktopTaskDropElement,
+    resolveDesktopTaskOriginIndicator,
     resolveDesktopTaskDropIntent,
     resolveDesktopTaskDropPreview,
+    type DesktopTaskOriginIndicator,
     type DesktopTaskDropPreview,
 } from './Wbs/taskDrag/desktopTaskDropPreview';
 import { useTaskDragSession } from './Wbs/taskDrag/useTaskDragSession';
@@ -90,7 +92,10 @@ const BoardView = () => {
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
     const [desktopDropPreview, setDesktopDropPreview] = useState<DesktopTaskDropPreview | null>(null);
+    const [desktopOriginIndicator, setDesktopOriginIndicator] = useState<DesktopTaskOriginIndicator | null>(null);
     const desktopDropPreviewRef = React.useRef<DesktopTaskDropPreview | null>(null);
+    const desktopDragOriginIndicatorRef = React.useRef<DesktopTaskOriginIndicator | null>(null);
+    const desktopDragActivatorPointRef = React.useRef<{ x: number; y: number } | null>(null);
     const desktopDragSourceRectRef = React.useRef<{
         left: number;
         right: number;
@@ -373,7 +378,18 @@ const BoardView = () => {
         desktopDragSourceRectRef.current = sourceRect
             ? { left: sourceRect.left, right: sourceRect.right, top: sourceRect.top, bottom: sourceRect.bottom }
             : null;
+        const originIndicator = resolveDesktopTaskOriginIndicator({
+            activeData,
+            sourceElement: sourceElement || null,
+        });
+        desktopDragOriginIndicatorRef.current = originIndicator;
+        const activatorEvent = event.activatorEvent;
+        desktopDragActivatorPointRef.current = typeof activatorEvent?.clientX === 'number'
+            && typeof activatorEvent?.clientY === 'number'
+            ? { x: activatorEvent.clientX, y: activatorEvent.clientY }
+            : null;
         updateDesktopDropPreview(null);
+        setDesktopOriginIndicator(desktopDragActivatorPointRef.current ? originIndicator : null);
         setActiveDrag({
             id: active.id,
             type: active.data.current?.type,
@@ -385,7 +401,10 @@ const BoardView = () => {
 
     const handleDragCancel = () => {
         desktopDragSourceRectRef.current = null;
+        desktopDragOriginIndicatorRef.current = null;
+        desktopDragActivatorPointRef.current = null;
         updateDesktopDropPreview(null);
+        setDesktopOriginIndicator(null);
         setActiveDrag(null);
     };
 
@@ -415,12 +434,40 @@ const BoardView = () => {
         updateDesktopDropPreview(preview);
     };
 
+    const handleDragMove = (event: any) => {
+        const sourceRect = desktopDragSourceRectRef.current;
+        const activatorPoint = desktopDragActivatorPointRef.current;
+        const originIndicator = desktopDragOriginIndicatorRef.current;
+        if (!sourceRect || !activatorPoint || !originIndicator) {
+            setDesktopOriginIndicator(null);
+            return;
+        }
+
+        const pointer = {
+            x: activatorPoint.x + event.delta.x,
+            y: activatorPoint.y + event.delta.y,
+        };
+        const pointerInsideSource = pointer.x >= sourceRect.left
+            && pointer.x <= sourceRect.right
+            && pointer.y >= sourceRect.top
+            && pointer.y <= sourceRect.bottom;
+        if (pointerInsideSource) {
+            updateDesktopDropPreview(null);
+            setDesktopOriginIndicator(originIndicator);
+            return;
+        }
+        setDesktopOriginIndicator(null);
+    };
+
     const handleDragEnd = (event: any) => {
         const { active, over } = event;
         const displayedPreview = desktopDropPreviewRef.current;
         const currentPreview = over ? buildDesktopDropPreview(active, over) : null;
         desktopDragSourceRectRef.current = null;
+        desktopDragOriginIndicatorRef.current = null;
+        desktopDragActivatorPointRef.current = null;
         updateDesktopDropPreview(null);
+        setDesktopOriginIndicator(null);
         setActiveDrag(null);
         if (!canMoveTask || !over) return;
 
@@ -477,6 +524,24 @@ const BoardView = () => {
         );
     }
 
+    const desktopIndicator = desktopDropPreview
+        ? {
+            kind: 'target' as const,
+            targetNodeId: desktopDropPreview.targetNodeId,
+            position: desktopDropPreview.displayPosition,
+            surfaceKind: desktopDropPreview.targetSurfaceKind,
+            indicatorRect: desktopDropPreview.indicatorRect,
+        }
+        : desktopOriginIndicator
+            ? {
+                kind: 'origin' as const,
+                targetNodeId: desktopOriginIndicator.sourceNodeId,
+                position: 'origin' as const,
+                surfaceKind: desktopOriginIndicator.sourceSurfaceKind,
+                indicatorRect: desktopOriginIndicator.indicatorRect,
+            }
+            : null;
+
     return (
         <KanbanDependencyContext.Provider value={{ dependencySelection, handleKanbanDependencySelect, dependencies }}>
         <MobileTaskActionContext.Provider value={taskDragSession.contextValue}>
@@ -484,6 +549,7 @@ const BoardView = () => {
             sensors={sensors}
             collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
             onDragOver={handleDragOver}
             onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
@@ -582,21 +648,27 @@ const BoardView = () => {
                     </div>
                 </div>
             </div>
-            {desktopDropPreview ? (
+            {desktopIndicator ? (
                 <div
                     className="pointer-events-none fixed z-[86] -translate-y-1/2"
                     style={{
-                        left: desktopDropPreview.indicatorRect.left,
-                        top: desktopDropPreview.indicatorRect.top,
-                        width: desktopDropPreview.indicatorRect.width,
+                        left: desktopIndicator.indicatorRect.left,
+                        top: desktopIndicator.indicatorRect.top,
+                        width: desktopIndicator.indicatorRect.width,
                     }}
                     data-desktop-drop-indicator="true"
-                    data-desktop-drop-target={desktopDropPreview.targetNodeId}
-                    data-desktop-drop-position={desktopDropPreview.displayPosition}
-                    data-desktop-drop-surface-kind={desktopDropPreview.targetSurfaceKind}
+                    data-desktop-drop-target={desktopIndicator.targetNodeId}
+                    data-desktop-drop-position={desktopIndicator.position}
+                    data-desktop-drop-surface-kind={desktopIndicator.surfaceKind}
+                    data-desktop-drop-origin={desktopIndicator.kind === 'origin' ? 'true' : undefined}
+                    data-desktop-drop-noop={desktopIndicator.kind === 'origin' ? 'true' : undefined}
                     data-desktop-drop-indicator-layer="fixed-overlay"
                 >
-                    <KanbanInsertionMarker compact className="py-0" />
+                    <KanbanInsertionMarker
+                        compact
+                        emphasized={desktopIndicator.kind === 'origin'}
+                        className="py-0"
+                    />
                 </div>
             ) : null}
             <DragOverlay dropAnimation={null}>
