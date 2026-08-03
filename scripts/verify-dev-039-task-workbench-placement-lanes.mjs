@@ -10,6 +10,7 @@ const files = {
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
   boardView: 'src/components/BoardView.tsx',
+  taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   wbsStore: 'src/store/useWbsStore.ts',
   quickCaptureStore: 'src/store/useQuickCaptureStore.ts',
   packageJson: 'package.json',
@@ -103,23 +104,25 @@ assert(
 assert(
   'Task Workbench keeps unplaced rows draggable while placed rows are read-only list entries',
   source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
-    source.taskWorkbench.includes("const canDragTaskFromWorkbench = placement === 'unplaced' && canMoveTask") &&
-    source.taskWorkbench.includes('const canUseWorkbenchDragSurface = canDragTaskFromWorkbench && !mobileActionMode') &&
-    source.taskWorkbench.includes('disabled: !canDragTaskFromWorkbench || mobileActionMode') &&
-    source.taskWorkbench.includes('const draggableBindings = canUseWorkbenchDragSurface ? { ...attributes, ...listeners } : {};') &&
-    source.taskWorkbench.includes('ref={canUseWorkbenchDragSurface ? setNodeRef : undefined}') &&
-    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}") &&
-    source.taskWorkbench.includes('{...workbenchTouchHandlers}') &&
+    source.taskWorkbench.includes('const WorkbenchUnplacedDragCard') &&
+    source.taskWorkbench.includes('const WorkbenchPlacedReadOnlyCard') &&
+    source.taskWorkbench.includes('const { attributes, listeners, setNodeRef, isDragging } = useDraggable({') &&
+    source.taskWorkbench.includes('disabled: !canMoveTask || taskGesture.mobileActionMode') &&
+    source.taskWorkbench.includes('const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode') &&
+    source.taskWorkbench.includes('ref={canUseDragSurface ? setNodeRef : undefined}') &&
+    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
+    source.taskWorkbench.includes('{...gestureHandlers}') &&
+    source.taskWorkbench.includes('mobileActionEnabled: false') &&
+    source.taskWorkbench.includes('sourceKind: null') &&
     source.taskWorkbench.includes('onClick={(event) => {') &&
     source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
     source.taskWorkbench.includes("data-task-workbench-unplaced-task-card={unplacedLane ? 'true' : undefined}") &&
     source.taskWorkbench.includes("data-task-workbench-all-task-card={isAllTasksCard ? 'true' : undefined}") &&
     source.taskWorkbench.includes("data-task-workbench-readonly-task-card={placement === 'placed' ? 'true' : undefined}") &&
-    (source.taskWorkbench.match(/renderWorkbenchTaskRow\(\{/g) || []).length >= 2 &&
+    (source.taskWorkbench.match(/<WorkbenchTaskRow/g) || []).length >= 2 &&
     !source.taskWorkbench.includes('data-task-drag-handle') &&
     source.dragSensors.includes('distance: 8') &&
-    source.dragSensors.includes('delay: 250') &&
-    source.dragSensors.includes('tolerance: 8') &&
+    !source.dragSensors.includes('TouchSensor') &&
     source.browserVerifier.includes('assertUnplacedWorkbenchRowDragSurface') &&
     source.browserVerifier.includes('assertPlacedWorkbenchRowReadOnly'),
 );
@@ -133,7 +136,7 @@ assert(
     source.taskWorkbench.includes('nodeId: task.id') &&
     source.taskWorkbench.includes("title: task.title || '未命名任務'") &&
     source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
-    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}") &&
+    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
     !source.taskWorkbench.includes('TaskWorkbenchContextMenu') &&
     !source.taskWorkbench.includes('data-task-workbench-context-menu') &&
     source.browserVerifier.includes('unplaced workbench task should open the shared task context menu') &&
@@ -210,13 +213,13 @@ assert(
 );
 
 assert(
-  'BoardView handles bidirectional placement lane drops before normal Kanban sorting',
-  source.boardView.includes('TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
-    source.boardView.includes("overData?.type === 'task-workbench-unplaced-lane'") &&
-    source.boardView.includes("overData?.type === 'task-workbench-placed-board-lane'") &&
-    source.boardView.includes('getBoardRootAppendOrder') &&
-    source.boardView.includes('boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
-    source.boardView.includes('boardId: overData.boardId'),
+  'Task drag committer handles placement while rejecting placed workbench sources',
+  source.boardView.includes('commitDesktopTaskDrag') &&
+    source.taskDragCommit.includes("activeData?.source === 'task-workbench' && activeData?.placement !== 'unplaced'") &&
+    source.taskDragCommit.includes("overData?.type === 'task-workbench-unplaced-lane'") &&
+    source.taskDragCommit.includes("overData?.type === 'task-workbench-placed-board-lane'") &&
+    source.taskDragCommit.includes('boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
+    source.taskDragCommit.includes('boardId: overData.boardId'),
 );
 
 assert(
@@ -233,8 +236,10 @@ assert(
 assert(
   'DEV-039 docs and scripts register Phase 1B placement gates before production release',
   source.spec.includes('Phase 1B RD Contract') &&
+    source.spec.includes('DEV-053 覆寫註記') &&
     source.qa.includes('Phase 1B Placement Lane Verification') &&
-    source.devTask.includes('Phase 1B RD 執行範圍') &&
+    source.qa.includes('DEV-053 覆寫註記') &&
+    source.devTask.includes('DEV-053') &&
     source.qc.includes('Phase 1B QC Gate') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes"') &&
     source.packageJson.includes('"verify:dev-039-task-workbench-placement-lanes-browser"') &&

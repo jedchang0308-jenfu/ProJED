@@ -24,13 +24,14 @@ import { useMemberStore } from '../store/useMemberStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
+import { cn } from '../utils/cn';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
 import { closeTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
-import { compactIconButtonClass } from './ui/compactTokens';
+import { topbarClassNames } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import type { ViewMode } from '../types';
@@ -208,7 +209,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="mr-1 rounded-md border border-slate-200 bg-slate-50 p-1 text-slate-500 shadow-sm transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-700 sm:mr-2"
+            className={cn(topbarClassNames.iconButton, 'mr-1 sm:mr-2')}
             title={isSidebarOpen ? '收合側欄' : '展開側欄'}
             aria-label={isSidebarOpen ? '收合工作區選單' : '展開工作區選單'}
             data-main-sidebar-toggle="true"
@@ -218,7 +219,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={handleToggleMobileTaskWorkbench}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-200 bg-sky-50 text-sky-700 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-300/40"
+            className={cn(topbarClassNames.iconButton, 'text-sky-700 hover:text-sky-700')}
             title="開啟全域任務平台"
             aria-label="開啟全域任務平台"
             data-mobile-task-workbench-nav-entry="true"
@@ -227,7 +228,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </button>
 
           <div
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-1.5 py-0.5 text-sm font-medium shadow-inner sm:gap-2"
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium sm:gap-2"
             data-topbar-context-group="true"
           >
             {isSettingsScopeView && (
@@ -263,7 +264,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 </h1>
 
                 <div
-                  className="ml-0 flex shrink-0 items-center gap-1 rounded-md border border-slate-200/80 bg-white/90 p-0.5 sm:ml-[10px] sm:gap-[6px]"
+                  className="ml-0 flex shrink-0 items-center gap-1 sm:ml-[10px]"
                   data-topbar-board-controls="true"
                 >
                   {!isMobileBoardOnly ? (
@@ -280,14 +281,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     <StatusFilterBar compactLabel />
                   ) : null}
 
-                  <div className="ml-0 hidden items-center gap-px border-l border-slate-200 pl-[8px] sm:flex">
+                  <div className="ml-1 hidden items-center gap-1 border-l border-[#c7d1d8] pl-2 sm:flex">
                     <button
                       id="btn-undo"
                       type="button"
                       onClick={undo}
                       disabled={!canUndo()}
                       title={canUndo() ? `復原：${lastUndoLabel}\nCtrl+Z` : '沒有可復原的操作'}
-                      className={canUndo() ? compactIconButtonClass() : `${compactIconButtonClass()} cursor-not-allowed text-slate-300`}
+                      className={cn(topbarClassNames.iconButton, !canUndo() && 'text-slate-300 hover:border-[#c7d1d8] hover:bg-white hover:text-slate-300')}
                     >
                       <Undo2 size={15} />
                     </button>
@@ -297,7 +298,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       onClick={redo}
                       disabled={!canRedo()}
                       title={canRedo() ? `重做：${lastRedoLabel}\nCtrl+Shift+Z` : '沒有可重做的操作'}
-                      className={canRedo() ? compactIconButtonClass() : `${compactIconButtonClass()} cursor-not-allowed text-slate-300`}
+                      className={cn(topbarClassNames.iconButton, !canRedo() && 'text-slate-300 hover:border-[#c7d1d8] hover:bg-white hover:text-slate-300')}
                     >
                       <Redo2 size={15} />
                     </button>
@@ -316,14 +317,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
 
         <div
-          className="relative z-20 hidden shrink-0 items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50/80 p-0.5 shadow-inner sm:flex"
+          className="relative z-20 hidden shrink-0 items-center gap-1 rounded-lg sm:flex"
           data-topbar-action-group="true"
         >
           {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
             <button
               type="button"
               onClick={() => setShareDialogOpen(true)}
-              className="btn-outline hidden h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-blue-400 hover:text-blue-600 sm:flex sm:h-8 sm:px-3 sm:text-sm"
+              className={cn(
+                'btn-outline hidden h-7 shrink-0 px-2 text-xs sm:flex sm:h-8 sm:px-3 sm:text-sm',
+                topbarClassNames.textButton,
+                'hover:border-blue-400 hover:text-blue-600',
+              )}
               title="分享看板"
               data-board-share-open
             >
@@ -340,7 +345,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <div
               role="status"
               data-active-record-kind="meeting"
-              className="btn-outline flex h-7 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap border-blue-200 bg-blue-50 px-2 text-xs text-blue-700 sm:h-8 sm:px-3 sm:text-sm"
+              className={cn(
+                'btn-outline flex h-7 shrink-0 cursor-default px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+                topbarClassNames.textButton,
+                'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700',
+              )}
               title="已開啟會議紀錄；離開請使用右側紀錄欄的離開紀錄。"
             >
               <BookOpenText size={14} className="text-blue-600" />
@@ -350,7 +359,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <div
               role="status"
               data-active-record-kind="work-log"
-              className="btn-outline flex h-7 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap border-blue-200 bg-blue-50 px-2 text-xs text-blue-700 sm:h-8 sm:px-3 sm:text-sm"
+              className={cn(
+                'btn-outline flex h-7 shrink-0 cursor-default px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+                topbarClassNames.textButton,
+                'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700',
+              )}
               title="已開啟個人紀錄；若要新增會議記錄，請先離開目前紀錄。"
             >
               <BookOpenText size={14} className="text-blue-600" />
@@ -360,7 +373,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <button
               type="button"
               onClick={handleStartMeetingRecord}
-              className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-emerald-400 hover:text-emerald-600 sm:h-8 sm:px-3 sm:text-sm"
+              className={cn(
+                'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+                topbarClassNames.textButton,
+                'hover:border-emerald-400 hover:text-emerald-600',
+              )}
               title="新增會議記錄，切到看板並開啟右側紀錄欄"
             >
               <SquarePen size={14} className="text-slate-400" />
@@ -372,7 +389,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <button
               type="button"
               onClick={handleStartWorkLog}
-              className="btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all hover:border-slate-400 hover:text-slate-700 sm:h-8 sm:px-3 sm:text-sm"
+              className={cn(
+                'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+                topbarClassNames.textButton,
+                'hover:border-slate-400 hover:text-slate-700',
+              )}
               title="新增個人紀錄開發中，內容可能尚未穩定"
             >
               <BriefcaseBusiness size={14} className="text-slate-400" />
@@ -383,9 +404,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={toggleRagPanel}
-            className={`btn-outline flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap px-2 text-xs transition-all sm:h-8 sm:px-3 sm:text-sm ${
-              isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600'
-            }`}
+            className={cn(
+              'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+              topbarClassNames.textButton,
+              isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600',
+            )}
             title="開啟 AI 全域分析"
           >
             <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />

@@ -6,21 +6,20 @@
  *   long press 進入 compact action rail / drag-action mode。
  *
  *   此 Hook 透過「獨立計時器」識別長按行為：
- *   - touchstart：啟動長按計時器（delay: 500ms，長於拖曳的 250ms）
- *   - touchmove：若手指位移超過容差值（tolerance: 8px），取消計時器（交由拖曳接管）
+ *   - touchstart：啟動長按計時器（預設 delay: 500ms）
+ *   - touchmove：若手指位移超過容差值（tolerance: 8px），取消計時器並保留 pan-first
  *   - touchend：在計時器觸發前放開手指，視為一般點擊，取消計時器
  *
- *   由於長按時間窗（500ms）> 拖曳啟動時間（250ms），若使用者意圖拖曳，
- *   手指移動會先取消長按計時器，dnd-kit 正常接管。
- *   若使用者靜止長按 500ms，才會觸發 onLongPress 回調（開啟右鍵選單）。
+ *   手機 task drag 由 dedicated long-press session 管理；使用者靜止長按 500ms，
+ *   才會觸發 onLongPress 回調（compact action rail / drag-action mode）。
  */
 
 import { useRef, useCallback, useEffect } from 'react';
 
 interface UseLongPressOptions {
-  /** 長按觸發所需的靜止時間（ms），建議設為 dnd-kit TouchSensor delay 的兩倍 */
+  /** 長按觸發所需的靜止時間（ms） */
   delay?: number;
-  /** 允許的手指位移容差（px），超過此值視為拖曳意圖，取消長按 */
+  /** 允許的手指位移容差（px），超過此值視為 pan 意圖，取消長按 */
   tolerance?: number;
 }
 
@@ -29,6 +28,9 @@ interface LongPressHandlers {
   onTouchMove: (e: React.TouchEvent) => void;
   onTouchEnd: (e: React.TouchEvent) => void;
   onTouchCancel: (e: React.TouchEvent) => void;
+  onPointerMove: (e: React.PointerEvent) => void;
+  onPointerUp: (e: React.PointerEvent) => void;
+  onPointerCancel: (e: React.PointerEvent) => void;
   onMouseDownCapture: (e: React.MouseEvent) => void;
   onClickCapture: (e: React.MouseEvent) => void;
   onContextMenuCapture: (e: React.MouseEvent) => void;
@@ -119,6 +121,25 @@ export function useLongPress(
     [cancel]
   );
 
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType !== 'touch' || !startPositionRef.current) return;
+      const deltaX = Math.abs(e.clientX - startPositionRef.current.x);
+      const deltaY = Math.abs(e.clientY - startPositionRef.current.y);
+      if (deltaX > tolerance || deltaY > tolerance) cancel();
+    },
+    [cancel, tolerance]
+  );
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch') cancel();
+    },
+    [cancel]
+  );
+
+  const onPointerCancel = onPointerUp;
+
   const suppressCompatibilityEvent = useCallback((e: React.MouseEvent) => {
     if (!suppressNextClickRef.current) return;
     e.preventDefault();
@@ -134,6 +155,9 @@ export function useLongPress(
     onTouchMove,
     onTouchEnd,
     onTouchCancel,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
     onMouseDownCapture,
     onClickCapture,
     onContextMenuCapture,

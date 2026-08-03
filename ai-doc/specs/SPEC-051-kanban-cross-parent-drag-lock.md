@@ -57,7 +57,7 @@
 - `SPEC-046` 的 whole-task surface drag 觸發方式繼續有效。
 - 本規格取代 `SPEC-046` 在「看板跨父層 drop-intent」的既有隱性中央／下層 drop 語意。
 - `SPEC-029` 的 mobile pan-first、quick tap、long-press drag-action、compact action rail、edge auto-scroll 與 cancel safety 繼續有效；本規格只接管進入 drag-action 後的看板任務位置解析。
-- `SPEC-052` 是 `Compatible exception`：只取代本文件第 5、11、13 節的 internal implementation architecture；第 1～10、12、14 節產品行為與驗收仍由本文件管理。DEV-052 未完成前，本文件記錄的現行 runtime 繼續有效。
+- `SPEC-052` 已封存為歷史 `Compatible exception` 提案，不再取代本文件任何 active runtime contract；未來若要重啟拖拉重構，需另立以目前 `main` 為基準的新 DEV。
 - DEV-051 已完成本機 runtime 實作與自動化 QA/QC；production runtime 未部署，physical phone supplemental 未執行。
 
 ## 4. Scope
@@ -278,8 +278,8 @@ RD 可補充值，但下列 attributes 不得刪除或改為只靠 CSS class：
 - `ai-doc/backlog.md#dev-051-看板跨父層拖拉停留鎖定與落點定位`
 - `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md`
 - `ai-doc/qc/QC-DEV-051-kanban-cross-parent-drag-lock.md`
-- `ai-doc/specs/SPEC-052-kanban-drag-subsystem-refactor.md`
-- `ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md`
+- `ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md`
+- `ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md`
 - `ai-doc/specs/SPEC-046-universal-task-surface-drag.md`
 - `ai-doc/qa/QA-DEV-046-universal-task-surface-drag.md`
 - `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`

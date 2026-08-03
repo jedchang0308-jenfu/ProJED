@@ -387,7 +387,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.synthesize_meeting_record]
-verify_jwt = false
+verify_jwt = true
 
 [analytics]
 enabled = true

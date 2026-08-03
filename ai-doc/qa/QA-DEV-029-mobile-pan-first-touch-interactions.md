@@ -2,8 +2,14 @@
 
 關聯 DEV: DEV-029
 關聯 SPEC: `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`
-狀態: Phase 1 + Phase 1B Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed
+狀態: Phase 1 + Phase 1B Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Canvas CTA Pass-Through Covered
 建立日期: 2026-07-04
+
+## Canvas CTA Pass-Through Addendum（2026-07-17）
+
+- 使用者回報手機模式按住「新增任務」按鈕時無法移動畫面；此為 pan-first 覆蓋面缺口。
+- 本 QA 將大型畫布 CTA 分為「可 tap 的 action」與「可 short-pan 的 pan surface」雙重語意：無位移 tap 仍執行新增，短滑則必須移動畫面並 suppress click-through。
+- 納入 B10-B12：欄位新增任務水平短滑、欄位新增任務垂直短滑、看板尾端新增 CTA 水平短滑。TaskWorkbench 未歸位新增 CTA 由 static gate 檢查 selector 與 pass-through 契約。
 
 ## DEV-051 Rollback Addendum（2026-07-16）
 
@@ -18,7 +24,7 @@
 
 ## 驗證目標
 
-確認手機 coarse pointer 下，BoardView 的主要手勢從 click-first 改為 pan-first：使用者在任務卡、子任務列、欄位與空白處短滑都能移動畫面或至少不觸發任務功能；長按才進入任務操作；互動控制仍可直接點擊。
+確認手機 coarse pointer 下，BoardView 的主要手勢從 click-first 改為 pan-first：使用者在任務卡、子任務列、欄位、空白處與大型畫布 CTA 短滑都能移動畫面或至少不觸發任務功能；長按才進入任務操作；精準互動控制仍可直接點擊。
 
 2026-07-05 Phase 1B addendum:
 - 只改手機模式，電腦模式不改。
@@ -55,6 +61,9 @@
 | QA-029-B07 | L2+ 子任務列垂直短滑 | checklist row 可見且欄位可垂直捲動 | 在 child task row 上向上短滑 | column `scrollTop` 有可觀察增加，不誤開任務功能 | scrollTop before/after |
 | QA-029-B08 | L2+ 子任務列水平短滑 | checklist row 可見且看板可水平捲動 | 在 child task row 上向左短滑 | board `scrollLeft` 有可觀察增加，不誤開任務功能 | scrollLeft before/after |
 | QA-029-B09 | 手機拖曳把手短滑 | task drag handle 可見且看板可水平捲動 | 從把手向左短滑 | board `scrollLeft` 有可觀察增加，不啟動 dnd-kit drag / action rail | scrollLeft before/after + negative DOM |
+| QA-029-B10 | 欄位新增任務按鈕水平短滑 | `data-kanban-add-task-button` 可見且看板可水平捲動 | 從欄位內「新增任務」向左短滑 | board `scrollLeft` 有可觀察增加，不新增任務、不開 modal、不進 action rail | scrollLeft before/after + node count + negative DOM |
+| QA-029-B11 | 欄位新增任務按鈕垂直短滑 | `data-kanban-add-task-button` 可見且欄位可垂直捲動 | 從欄位內「新增任務」向上短滑 | column `scrollTop` 有可觀察增加，不新增任務、不開 modal、不進 action rail | scrollTop before/after + node count + negative DOM |
+| QA-029-B12 | 看板尾端新增 CTA 水平短滑 | `data-kanban-add-column-button` 可見且看板可水平捲動 | 從看板尾端新增 CTA 向左短滑 | board `scrollLeft` 有可觀察增加，不新增欄位、不開 modal、不進 action rail | scrollLeft before/after + column count + negative DOM |
 
 ### C. 長按與取消情境
 
@@ -239,7 +248,7 @@ npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser
 ```
 
 Coverage note:
-- `verify:dev-029-mobile-pan-first-interactions-browser` 必須覆蓋 A01-A04、B01-B09、C01-C05、C09-C13、D01、D03、E01-E05、F01-F03、I01-I14 的可自動化部分。
+- `verify:dev-029-mobile-pan-first-interactions-browser` 必須覆蓋 A01-A04、B01-B12、C01-C05、C09-C13、D01、D03、E01-E05、F01-F03、I01-I14 的可自動化部分。
 - G02/G03 與 H01-H04 可先列入 manual gate；未執行時不得宣告完整手機 UX 通過。
 - 若既有 verifier 仍期待「手機 tap 任務卡開 details」，該 verifier 已過期，需更新後才能作為 DEV-029 evidence。
 
@@ -274,6 +283,7 @@ Reviewer should verify on a physical phone or equivalent browser touch emulation
 |---|---|---|---|---|---|
 | 短滑仍開詳情 | compatibility click 未 suppress 或 click handler 未分 mobile gesture | 使用者無法安心移動畫面 | B01/B02/B03/B07 | P0 | pan 後主動觸發 click，確認 modal count = 0 |
 | 只有縫隙可 pan | 主卡面 `touch-action` / dnd sensor 攔截 | 使用者仍需找縫隙，原痛點未解 | B01/B04/B05/H01 | P0 | 任務卡主體、title、子任務列、欄位 body 都測 |
+| 大型新增 CTA 成為 pan 死角 | button interactive guard 未區分畫布 CTA 與精準控制 | 使用者按到「新增任務」時無法移動畫面，肌肉記憶中斷 | B10/B11/B12 | P0 | 新增 CTA 必須標示 `data-mobile-pan-pass-through`，並測 horizontal / vertical short pan 不 click-through |
 | 長按失效 | pan guard 永遠攔截 task surface | DEV-029 Phase 1B 任務操作入口消失 | C01/C02/I01/I02 | P0 | 靜止 500-650ms 長按，確認 compact action rail 與 drag preview |
 | pan 後誤開長按 menu | long press timer 未在 movement > tolerance 時取消 | 滑動畫面時突然跳選單 | C03 | P0 | 移動後等待超過 550ms，確認無 menu |
 | 控制項不可點 | interactive target guard 太粗 | filter/input/date 等功能壞掉 | E01-E07 | P0 | 所有例外控制逐一點擊 |
@@ -296,12 +306,37 @@ Reviewer should verify on a physical phone or equivalent browser touch emulation
 - 390x844 screenshot after board pan and after long press menu。
 - Phase 1B screenshot: mobile compact action rail with exactly four options。
 - Phase 1B browser trace: lifted task drag to insertion target and order before/after。
+- Browser trace for B10-B12 large canvas CTA pass-through：新增任務 / 新增 CTA short pan 必須 scroll，且不得新增任務、不得新增欄位、不得開 modal、不得進 action rail。
 - Phase 1B browser trace: drop to complete, add sibling, add child, delete confirmation。
 - Desktop right-click screenshot proving desktop context menu unchanged。
 - 操作情境矩陣逐項 pass/fail，至少列出 A/B/C/D/E/F/G/H/I 分類。
 - 對每個 fail：提供重現步驟、實際結果、預期結果、DOM selector 或 screenshot。
 - Commands and exit codes。
 - Any skipped regression with explicit reason。
+
+## QC Evidence - 2026-07-17 Canvas CTA Pass-Through
+
+判定:
+- 手機大型畫布 CTA pass-through hotfix 已通過本機 static、browser 與鄰近拖拉回歸驗證。
+- Physical-phone H01-H04 supplemental 仍未執行；不得宣告 iOS Safari / Android Chrome 真機手感已最終簽核。
+- Production deploy 未執行。
+
+已通過:
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions`：38/38 passed。
+- `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser`：passed，新增 B10-B12。
+- `npm.cmd run verify:dev-054-mobile-task-drag-precision`：34/34 passed。
+- `npm.cmd run verify:dev-054-mobile-task-drag-precision-browser`：10/10 passed。
+- `npm.cmd run verify:dev-053-task-drag-muscle-memory-consistency`：30/30 passed。
+- `npm.cmd run verify:dev-053-task-drag-muscle-memory-consistency-browser`：10/10 passed。
+- `npm.cmd run verify:dev-046-universal-task-surface-drag`：29/29 passed。
+- `npm.cmd run verify:dev-046-universal-task-surface-drag-browser`：passed。
+- `npx.cmd tsc --noEmit`：passed。
+- `npm.cmd run build`：passed。
+
+Browser matrix 新增覆蓋:
+- `QA-029-B10`：欄位新增任務按鈕水平短滑可推動 board `scrollLeft`，不新增任務、不開 modal、不進 action rail。
+- `QA-029-B11`：欄位新增任務按鈕垂直短滑可推動 column `scrollTop`，不新增任務、不開 modal、不進 action rail。
+- `QA-029-B12`：看板尾端新增 CTA 水平短滑可推動 board `scrollLeft`，不新增欄位、不開 modal、不進 action rail。
 
 ## QC Evidence - 2026-07-05
 

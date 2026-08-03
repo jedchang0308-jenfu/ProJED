@@ -12,7 +12,7 @@
  *   在 Sensor 層直接返回 false，不啟動拖曳行為。
  *   無需在任何元件內加 stopPropagation()，未來新增行內編輯自動安全。
  */
-import { useSensor, useSensors, MouseSensor, TouchSensor, KeyboardSensor } from '@dnd-kit/core';
+import { useSensor, useSensors, MouseSensor, KeyboardSensor } from '@dnd-kit/core';
 import type { SensorDescriptor, SensorOptions } from '@dnd-kit/core';
 
 /**
@@ -55,20 +55,6 @@ class SmartMouseSensor extends MouseSensor {
     })) as typeof MouseSensor.activators;
 }
 
-class SmartTouchSensor extends TouchSensor {
-    static activators = TouchSensor.activators.map((activator) => ({
-        ...activator,
-        handler: (...args: Parameters<typeof activator.handler>) => {
-            const [event] = args;
-            const target = (event as React.SyntheticEvent).target;
-            if (isInteractiveEditingTarget(target)) {
-                return false;
-            }
-            return activator.handler(...args);
-        },
-    })) as typeof TouchSensor.activators;
-}
-
 class SmartKeyboardSensor extends KeyboardSensor {
     static activators = KeyboardSensor.activators.map((activator) => ({
         ...activator,
@@ -94,14 +80,7 @@ export function useDragSensors(): SensorDescriptor<SensorOptions>[] {
             },
         }),
 
-        // 鍵盤無障礙支援（已內建行內編輯保護）
-        useSensor(SmartTouchSensor, {
-            activationConstraint: {
-                delay: 250,
-                tolerance: 8,
-            },
-        }),
-
+        // 手機 task drag 由 useTaskDragSession 的 long-press session 單獨管理。
         useSensor(SmartKeyboardSensor)
     );
 }

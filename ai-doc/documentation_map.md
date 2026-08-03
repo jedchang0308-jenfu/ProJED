@@ -9,23 +9,93 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-07-17（手機新增 CTA 平移死角修正）
+
+使用者回報手機模式按住「新增任務」時無法移動畫面，表示 pan-first 的可選擇窗口尚未涵蓋全任務畫面。盤點後判定 Spec Impact=`Compatible exception`：精準控制如 input、filter popover、modal、action rail 仍是 pure interactive control；但畫布上的大型新增 CTA 必須同時支援無位移 tap 與 short-pan pass-through。
+
+### DEV-029：手機 Pan-First 觸控手勢仲裁（Canvas CTA Pass-Through Covered）
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Phase 1 + Phase 1B Implemented / Canvas CTA Pass-Through Covered | DEV-029 / DEV-053 / DEV-054 / DEV-046 | 補明大型畫布 CTA 的雙重語意：欄位新增任務、看板尾端新增 CTA、TaskWorkbench 未歸位新增 CTA 可 tap，但 short pan 必須交給 mobile pan broker。 |
+| `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QA Passed / B10-B12 Added | DEV-029 | 新增 B10-B12 驗證欄位新增任務水平/垂直短滑與看板尾端新增 CTA 短滑均可 pan，且不新增任務/欄位、不開 modal、不進 action rail。 |
+| `ai-doc/qc/QC-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QC Passed / Canvas CTA Pass-Through Covered | DEV-029 | 記錄 root cause、RD 修正事實、DEV-029 static 38/38、browser B10-B12、DEV-054/053/046 回歸、TypeScript 與 build 證據。 |
+| `ai-doc/dev_task.md` | DEV-029 Complete / Hotfix Evidence Updated | DEV-029 | DEV-029 完成狀態不變，摘要補入大型新增 CTA 平移死角修正；production 與真機 supplemental 仍未執行。 |
+
+PM 治理註記：不得把所有 button 都改為 pan pass-through。只有大型畫布 CTA 可採 `data-mobile-pan-pass-through="true"`；表單、輸入框、select、filter、modal、TaskDetails controls、action rail 與日期/依賴/負責人控制仍維持精準互動優先。DEV-055 桌機驗收已於 2026-07-17 Rework 1 後通過；本手機 hotfix 不回寫或改寫桌機完成證據。
+
+## Documentation Map Update - 2026-07-17（電腦版任務拖拉升級驗證）
+
+使用者確認 DEV-054 Rework 4 成功，手機版跨階層移動的落點呈現甚至比電腦版更清楚。此成功經驗另立 DEV-055；不回開 DEV-054 scope，也不直接將 mobile touch stability 邏輯移植到桌機。
+
+### DEV-055：電腦版任務拖拉落點清晰化與跨階層定位升級（Production Released / Level 4 Passed）
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md` | Production Released / Automated QA-QC + User Desktop Acceptance + Level 4 Passed | DEV-055 / DEV-053 / DEV-054 / DEV-046 / DEV-051 | 使用者 T01-T08 Attempt 1 回報同格定位線漂移與 L3+ 被推開；Rework 1 改為 fixed overlay-only indicator、overlay append hit area、sortable displacement freeze 與 rect micro-retain；2026-07-17 使用者重驗通過並已發布 Firebase production。 |
+| `ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md` | Executed / Automated + T01-T08 User Desktop Acceptance + Production Level 4 Passed | DEV-055 / DEV-053 / DEV-054 / DEV-046 | DEV-055 static 27/27、browser B01-B16 16/16、指定回歸、TypeScript 與 build 通過；T01-T08 共 38 次真實桌機重驗已由使用者回報通過；Firebase preview 與 production smoke 通過。 |
+| `ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md` | QC Passed / Production Released / Level 4 Passed | DEV-055 | 記錄使用者驗收失敗回送 RD、Rework 1 事實、browser/store 證據、representative screenshots、user acceptance pass、release branch `e07ba4b`、Level 3 preview 與 Level 4 production smoke。 |
+| `ai-doc/dev_task.md` | DEV-055 Production Released / Level 4 Passed | DEV-055 / DEV-053 / DEV-054 | RD Rework 1、自動 QC、使用者 T01-T08 重驗、Firebase production deploy 與 Level 4 smoke 均通過。 |
+
+PM 治理註記：DEV-055 為新交付點且計入完成率。第一次自動化 pass 不等於完成，因使用者 T01-T08 Attempt 1 已回報失敗；RD Rework 1 自動 QA/QC 通過後，2026-07-17 使用者回報 T01-T08 重驗通過，並明確要求部署正式環境。Release 走 clean worktree branch `codex/dev055-production-release-20260717-234436`，artifact commit `e07ba4b`，排除主工作樹中會議紀錄 / Supabase Edge 相關未確認變更；production live 於 2026-07-17 23:56:26 發布並通過 Level 4 unauthenticated app-shell smoke。Authenticated production drag smoke 未由 Codex 自動登入執行，需使用者登入正式站後補人工操作證據。不得將手機 retain/hysteresis、action rail 或 touch lifecycle 搬到桌機；不得改變已獲使用者核准的桌機 DragOverlay、起手門檻、click/right-click、commit/undo 契約。任一 displayed/committed mismatch、ancestor fallback、same-cell drift、L3+ push、placed row 可拖或桌機手感回歸皆為 stop condition。
+
+## Documentation Map Update - 2026-07-17（手機任務拖拉定位精準度）
+
+使用者操作回饋：DEV-054 第四次模擬手機證明 Rework 3 的 preview-to-indicator docking 讓拖曳物跳離手指，且 checklist source 在 innermost target 無效後會 fall through 到 expanded parent card。R10 已用 `636x764` 重現。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost ownership、invalid ancestor blocking、bounded card primary rect，並移除 nearest-target 磁吸。使用者已於 2026-07-17 以原失敗路徑重驗通過；DEV-053 歷史完成證據與桌機 frozen baseline 維持，physical gate 仍不可省略。
+
+### DEV-054：手機任務拖拉定位精準度優化（RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending）
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md` | RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Gate Pending | DEV-054 / DEV-053 / DEV-029 / DEV-046 | 保留 desktop approved baseline；preview 永遠跟 raw finger；target 採 innermost exact hit、ancestor blocking、bounded card primary geometry；retain 外 direct handover；mobile source placeholder 不畫 marker；pan / edge-scroll 契約維持。 |
+| `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | RD Rework 4 Automated + User Revalidation Passed / Full Matrix + Physical Not Executed | DEV-054 | 四次使用者失敗與修正證據均保留；DEV-054 static 34/34、browser R01-R10，R06 驗證 bounded card primary，R10 驗證 `636x764` ancestor blocking、finger coupling、zero write。使用者原失敗路徑已重驗通過；B01-B12 與 iOS / Android 各 50 trials 仍為 required。 |
+| `ai-doc/dev_task.md` | DEV-054 Verifying / P1 / Physical Gate Required | DEV-054 | RD rework、browser 與使用者原路徑重驗已通過；physical device gate 與 QC report 通過前不得標記完成。 |
+
+PM 治理註記：Spec Impact=`Compatible exception`。DEV-054 不回寫 DEV-053 QC 歷史結果；使用者原失敗路徑已重驗通過，但 physical iOS / Android 任一未通過，仍不得宣稱手機定位精準度或完整肌肉記憶一致性已完成。Workbench placed row 仍不能拖；desktop drag UI 仍以使用者核准的 DragOverlay / threshold / click-right-click 為 baseline。DEV-055 Rework 1 後 user revalidation 已通過，桌機升級本機完成；仍未 production deploy。
+
+## Documentation Map Update - 2026-07-17（任務拖拉肌肉記憶一致化）
+
+使用者已確認 Workbench `placed row` 不能拖。這是目前權威產品決策，覆寫 DEV-039 舊版
+Phase 1B / Phase 2A 中「已歸位 row 可雙向拖回未歸位」與「已歸位 row 也應共用 draggable
+root」的描述。DEV-039 既有 QA/QC 中對應案例保留為歷史證據，不再作為目前產品契約。
+
+### DEV-053：任務拖拉肌肉記憶一致化（Implemented / QA True Operation Gate Passed）
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-053-task-drag-muscle-memory-consistency.md` | Implemented / Local Static + Browser + QA True Operation Passed / Production Not Deployed | DEV-053 / DEV-029 / DEV-039 / DEV-046 | HCS `1C 2A 3A` 的完整拖拉子系統重構已完成；Workbench placed row 不可拖且手機長按不進 action rail；Desktop Drag UI Freeze 保留使用者核准 baseline。後續真機定位精準度由 DEV-054 處理。 |
+| `ai-doc/qa/QA-DEV-053-task-drag-muscle-memory-consistency.md` | Executed / T01-T14 Passed / Physical Phone Supplemental Not Executed | DEV-053 | static / browser / regression 與真實滑鼠、合成觸控、cancel lifecycle 操作均通過；T01-T14 為 DEV-053 歷史完成 gate，不代表 physical precision 已簽核。 |
+| `ai-doc/qc/QC-DEV-053-task-drag-muscle-memory-consistency.md` | Local QA True Operation Gate Passed / Production Not Deployed | DEV-053 | 記錄 T01-T14 route、viewport、操作前後狀態、截圖、console/network sweep、required command 與 placed-row no-drag 證據。 |
+| `ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md` | Superseded in placed-row drag scope | DEV-039 / DEV-053 | DEV-039 的 placed-row draggable parity / bidirectional drag 描述由 DEV-053 覆寫；placed row 目前應視為 read-only placement list entry。 |
+| `ai-doc/specs/SPEC-046-universal-task-surface-drag.md` | Superseded in workbench placed-row drag scope | DEV-046 / DEV-053 | DEV-046 whole-surface drag 仍適用於看板、清單、checklist 與 workbench unplaced row；workbench placed row 依 DEV-053 不能拖。 |
+| `ai-doc/qa/QA-DEV-046-universal-task-surface-drag.md` | QA cases amended / Regression Passed | DEV-046 / DEV-053 | Workbench placed row 可拖回 unplaced / reorder 的舊案例已改為不可拖驗收方向；DEV-046 static/browser regression 已於 DEV-053 QC 通過。 |
+| `ai-doc/dev_task.md` | DEV-053 Complete / DEV-054 Follow-up Active | DEV-053 / DEV-054 | DEV-053 本機功能與架構交付已完成；手機定位精準度另由 DEV-054 執行。 |
+
+PM 治理註記：Spec Impact=`Intentional replacement`。使用者 HCS 決策為 `1C 2A 3A`：
+完整拖拉子系統重構、placed row 手機長按不進 action rail、static + browser 作為自動化門檻。
+2026-07-17 使用者再確認 QA 真實操作驗證計畫必須通過才算 DEV-053 完成；Physical iOS / Android 仍為 supplemental。
+2026-07-17 使用者補充：電腦版拖拉 UI / 操作方式目前已滿意，DEV-053 RD 只能保留與穩定化，
+不得以重構名義重設計桌機拖拉體驗。
+本輪已完成產品程式重構、static/browser verifier、指定回歸與 QA True Operation Gate；未修改 DB/schema/API，未執行 production release。
+DEV-052 已封存，不得作為 DEV-053 的實作基準；只可作 historical reference。
+
 ## Documentation Map Update - 2026-07-16（拖拉回復 main）
 
 目前權威狀態：DEV-051 的 drop-intent／parent-lock 實作已從工作樹撤出；看板拖拉 runtime、
 DEV-029 browser verifier 與 DEV-046 browser verifier回復 `main` 基準。DEV-051 的 SPEC／QA／QC
-改為歷史證據，不得作為目前產品行為；DEV-052 因依賴已撤回基準而延後且不可執行。
+改為歷史證據，不得作為目前產品行為；DEV-052 因依賴已撤回基準而封存且不可執行。
 
-### DEV-052：看板拖拉子系統重構與行為穩定化（Deferred）
+### DEV-052：看板拖拉子系統重構與行為穩定化（Archived）
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-052-kanban-drag-subsystem-refactor.md` | Deferred / Not Executable | DEV-052 / DEV-051 / DEV-046 / DEV-029 | 歷史重構提案；依賴的 DEV-051 行為已撤回，不得直接實作。 |
-| `ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md` | Deferred / Not Executed | DEV-052 | 保留真實操作 gate 作未來參考；目前不執行。 |
-| `ai-doc/backlog.md` | Deferred | DEV-052 | 只有重新確認產品行為，或另立以 `main` 為基準的新 DEV 後才可恢復。 |
-| `ai-doc/dev_task.md` | DEV-052 延後 / 不可執行 | DEV-052 | Slice A～F 全部停止；不計入產品交付完成率。 |
+| `ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md` | Archived / Historical / Do Not Execute | DEV-052 / DEV-051 / DEV-046 / DEV-029 | 歷史重構提案；依賴的 DEV-051 行為已撤回，不得直接實作。 |
+| `ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md` | Archived / Historical / Not Executed | DEV-052 | 保留真實操作 gate 作未來參考；目前不執行。 |
+| `ai-doc/backlog.md` | DEV-052 removed from backlog | DEV-052 | DEV-052 不再保留為 backlog 候選；若重啟需另立以 `main` 為基準的新 DEV。 |
+| `ai-doc/dev_task.md` | DEV-052 removed from active index / Archived | DEV-052 | Active 總任務清單不再列 DEV-052；不計入產品交付完成率。 |
 
 PM 治理註記：Spec Impact=`Intentional replacement`。使用者明確要求回復 `main`，因此
-SPEC-052 不再是 active implementation contract。ADR 不另建；DB/schema/API/release boundary 不變。
+SPEC-052 已封存且不再是 active implementation contract。ADR 不另建；DB/schema/API/release boundary 不變。
 
 ### DEV-051: 看板跨父層拖拉停留鎖定與落點定位（Withdrawn / Historical）
 
@@ -513,9 +583,9 @@ DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延�
 | `ai-doc/specs/SPEC-026-trello-like-board-share-ui.md` | Implemented / Browser Smoke Passed | DEV-026 | 定義 Trello-like 看板分享入口、分享 modal 與邀請流程 UI/UX。 |
 | `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md` | Implemented / Static + Browser Smoke Passed / DEV-028 Detail-Only Alignment | DEV-027 | 定義 Xmind-like 心智圖模式，讓 WBS 任務以心智圖分支呈現並可用鍵盤與拖曳編輯；任務命名已依 DEV-028 統一到 `TaskDetailsModal` title input，外層 `data-mindmap-title-input` 不得回復。 |
 | `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Implemented / Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed / Production Not Deployed | DEV-028 | 定義清單、心智圖、看板、甘特四模式一致的 Trello-like 任務操作契約；detail-only title edit 與 manual readiness gate 已完成自動化驗證，2026-07-09 使用者回報 MAN-028 人工親自點擊 QC 通過；production deploy 未執行。 |
-| `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed | DEV-029 | 定義手機 BoardView / Kanban / TaskWorkbench pan-first 觸控仲裁，手機 task surface 與拖曳把手短滑不誤開詳情且可 pan，無位移 tap 仍開詳情；Phase 1B compact action rail、長按拖放、edge auto-scroll 與 cancel/blur/Escape/timeout 防卡死已完成本機 QA，production 與真機 supplemental 未執行。 |
+| `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed / Canvas CTA Pass-Through Covered | DEV-029 | 定義手機 BoardView / Kanban / TaskWorkbench pan-first 觸控仲裁，手機 task surface、拖曳把手與大型新增 CTA 短滑不誤開詳情且可 pan，無位移 tap 仍開詳情或執行新增；Phase 1B compact action rail、長按拖放、edge auto-scroll 與 cancel/blur/Escape/timeout 防卡死已完成本機 QA，production 與真機 supplemental 未執行。 |
 | `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md` | Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed | DEV-051 / DEV-046 / DEV-029 | 定義並落地同父層即時排序、跨父層 750ms lock、empty/collapsed child lane、locked before/after/append、filter canonical order、桌機/手機共用 resolver、commit/undo 與取消安全。 |
-| `ai-doc/specs/SPEC-052-kanban-drag-subsystem-refactor.md` | RD Implementation Ready / QA Plan Ready / Not Implemented | DEV-052 / DEV-051 / DEV-046 / DEV-029 | 定義 targeted drag subsystem refactor：單一 observation、shared target adapter、session terminal guard、presenter、committer、BoardView exit gate 與分片 extraction；不改 SPEC-051 UX。 |
+| `ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md` | Archived / Historical / Do Not Execute | DEV-052 / DEV-051 / DEV-046 / DEV-029 | 歷史 targeted drag subsystem refactor 提案；依賴已撤回的 DEV-051 baseline，不得直接實作。 |
 | `ai-doc/specs/SPEC-034-fast-start-pwa-install-guidance.md` | Done / Browser QC Passed / Local-first scope / QuickCaptureShell Retired | DEV-034 | 定義 App 快速啟動、PWA 自動更新、加入主畫面平台分流指引與本機 pending InboxItem queue；QuickCaptureShell 已退役並由 DEV-039 全域任務平台 `未歸位` lane 取代；正式雲端 Inbox、跨裝置同步與轉正式任務接 SPEC-002 後續。 |
 
 ## 目前交付邊界
@@ -754,9 +824,9 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/qa/QA-DEV-024-ai-synthesis-preserve-human-draft.md` | Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed | DEV-024 | 驗證 AI整理不得覆蓋使用者手寫內容、章節結構、task mention 與 project change evidence；本機 verifier、local browser ROT 與 production UI smoke 已通過，`DEV024_ALLOW_PRODUCTION_FIXTURE=1` 實跑後 `published_record_found=true`、cleanup `tenantDeleted=true`、`userDeleted=true`。 |
 | `ai-doc/qa/QA-DEV-026-trello-like-board-share-ui.md` | Static + Browser Smoke Passed / DB Smoke Pending | DEV-026 | 驗證 Trello-like 分享入口、modal 邀請、複製連結、pending invite、成員 tab、權限不足與 viewport。 |
 | `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA Plan Updated / Local Automated QA Passed / Manual Click QC Readiness Gate Added / User-Reported Manual Click QC Passed | DEV-028 | 驗證四模式單擊選取並開詳情、任務名稱只在詳情頁 title edit、外層 rename 移除、新增任務命名導向詳情、右鍵/長按任務選單無重新命名、看板 Level 3+ 保留、甘特 drag/click 互斥、viewport、manual readiness gate 與 2026-07-09 使用者回報 MAN-028 人工親自點擊通過。 |
-| `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Phase 1B Hotfix Covered | DEV-029 | 驗證手機 pan-first：任務卡、L2+ 子任務、欄位、工作台 row 與手機拖曳把手短滑不誤開詳情且可 pan，L2+ pan 可推動 `scrollTop` / `scrollLeft`，無位移 tap 可開詳情；Phase 1B 覆蓋 compact action rail、長按浮起、拖曳把手長按、touchcancel 退出不卡死、drop target、刪除確認與桌機右鍵不變驗證。 |
+| `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Phase 1B Hotfix Covered / B10-B12 Added | DEV-029 | 驗證手機 pan-first：任務卡、L2+ 子任務、欄位、工作台 row、手機拖曳把手與大型新增 CTA 短滑不誤開詳情且可 pan，L2+ pan 可推動 `scrollTop` / `scrollLeft`，無位移 tap 可開詳情或執行新增；Phase 1B 覆蓋 compact action rail、長按浮起、拖曳把手長按、touchcancel 退出不卡死、drop target、刪除確認與桌機右鍵不變驗證。 |
 | `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md` | QA Plan Updated / Local Automated QA + Browser UI QC Passed / Manual Real Operation Not Executed / Physical Phone Supplemental Not Executed | DEV-051 | 驗證 750ms/200ms/20px 邊界、1A/2A/3A、desktop/mobile、filter、cycle、雙 ancestor rollup、undo、stable selectors 與 DEV-029/039/044/046/048 回歸；新增 R01～R14 人工操作腳本。 |
-| `ai-doc/qa/QA-DEV-052-kanban-drag-subsystem-refactor.md` | QA Plan Ready / Not Executed | DEV-052 | 驗證 internal architecture 與 SPEC-051 parity；要求 automated browser、desktop 真人滑鼠、physical iOS／Android、第二觀察者 5 秒理解、geometry、single-title／single-line、spacing、undo 與 30 次 mixed drag。 |
+| `ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md` | Archived / Historical / Not Executed | DEV-052 | 歷史驗證設計；因 DEV-052 已封存，不得作為目前 QA ready 或實作 gate。 |
 | `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | QA Plan Complete / Local + P0 Addendum QC Executed / P0 Remote Read-only Preflight + Remote Readiness Static Gate Passed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered | DEV-040 | 驗證正式環境同型 BUG 風險：dependencies 匯入、RAG timeout、看板 temp id、member/tag stale response、Google Calendar timeout、MindMap local-only 語意與 production smoke evidence；已完成原始 2 BUG production authenticated UI smoke、2026-07-06 P0 local addendum QC、2026-07-07 read-only preflight 與 remote-readiness static gate，延伸矩陣剩餘項需另行驗證。 |
 
 ### QC Fact Reports
@@ -767,5 +837,6 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/qc/QC-DEV-011-012-production-ai-smoke.md` | Backend Pass / Production Release Deployed / Production UI Smoke Passed | DEV-011 / DEV-012 | 正式 Hosting 部署與 Edge Function AI smoke 事實報告；後端正式 AI 統整通過，hotfix `7704e2f` 已部署，production fixture smoke、DB proof 與 cleanup 均通過。 |
 | `ai-doc/qc/QC-DEV-013-task-tree-duplicate-context-menu.md` | Pass | DEV-013 | DEV-013 右鍵任務複製事實驗證報告，確認子樹複製、內部依賴 remap、undo/redo 與 release gate 回歸通過。 |
 | `ai-doc/qc/QC-DEV-024-ai-synthesis-preserve-human-draft.md` | Static + Deterministic + Local Browser ROT QC Passed / DB unchanged / Production UI Smoke Passed | DEV-024 | DEV-024 AI整理保留手寫內容事實驗證報告，確認 helper、store writeback、tooltip、DEV-024 browser ROT、DEV-024/021/022/011/012 verifier、TypeScript、build 與 production fixture smoke 通過；`verify:dev-024-production-ui-smoke` passed。 |
-| `ai-doc/qc/QC-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Hotfix Covered | DEV-029 | DEV-029 手機 pan-first 觸控仲裁事實驗證，記錄 static 32/32、browser matrix 覆蓋 L2+ scroll displacement、手機拖曳把手短滑 pan、把手長按、edge auto-scroll、touchcancel 退出不卡死、DEV-028 regression、TypeScript、build:test 與真機補充未執行邊界。 |
+| `ai-doc/qc/QC-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Hotfix Covered / Canvas CTA Pass-Through Covered | DEV-029 | DEV-029 手機 pan-first 觸控仲裁事實驗證，記錄 static 38/38、browser matrix 覆蓋 L2+ scroll displacement、手機拖曳把手短滑 pan、大型新增 CTA short-pan pass-through、把手長按、edge auto-scroll、touchcancel 退出不卡死、DEV-028 regression、TypeScript、build 與真機補充未執行邊界。 |
 | `ai-doc/qc/QC-DEV-051-kanban-cross-parent-drag-lock.md` | Local Automated + Browser UI QC Passed / Production Not Deployed | DEV-051 | DEV-051 當時的事實驗證報告記錄 static 28/28、browser 6/6、desktop/mobile 截圖與相鄰回歸；後續 DEV-051 baseline 已擴充為 33/33 與 7-case matrix，見最新 SPEC／QA。 |
+| `ai-doc/qc/QC-DEV-053-task-drag-muscle-memory-consistency.md` | Local Static + Browser + QA True Operation Gate Passed / Production Not Deployed | DEV-053 | 記錄 T01-T14 真實滑鼠／觸控操作、桌機核准 baseline、placed row no-drag、10-case DEV-053 browser、指定回歸、viewport 與 console/network evidence；physical phone supplemental 未執行。 |

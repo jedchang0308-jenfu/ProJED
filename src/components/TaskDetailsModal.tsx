@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CircleDot, Lock, MessageSquareText, Plus, Send, Trash2, Unlock, X } from 'lucide-react';
+import { CheckCircle2, CircleDot, Lock, MessageSquareText, Plus, Save, Send, Trash2, Unlock, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -83,6 +83,21 @@ const buildAncestorPath = (
   return ancestors;
 };
 
+const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
+  node?.detailNotes?.length
+    ? node.detailNotes
+    : [{ id: 'note_default', title: '備註', content: node?.description || '' }]
+);
+
+const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) => (
+  left.length === right.length
+  && left.every((note, index) => (
+    note.id === right[index]?.id
+    && note.title === right[index]?.title
+    && note.content === right[index]?.content
+  ))
+);
+
 export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const nodes = useWbsStore((state) => state.nodes);
@@ -107,6 +122,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const skipNextNotesSave = React.useRef(true);
   const skipNextTitleBlurSave = React.useRef(false);
+  const [saveFeedbackVisible, setSaveFeedbackVisible] = React.useState(false);
+  const saveFeedbackTimerRef = React.useRef<number | null>(null);
   const assigneeOptions = React.useMemo(
     () => boardMembers.map(member => ({
       id: member.userId,
@@ -122,6 +139,60 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const currentNodeDetailNotes = node?.detailNotes;
   const currentNodeDescription = node?.description || '';
 
+  const clearSaveFeedback = React.useCallback(() => {
+    if (saveFeedbackTimerRef.current !== null) {
+      window.clearTimeout(saveFeedbackTimerRef.current);
+      saveFeedbackTimerRef.current = null;
+    }
+    setSaveFeedbackVisible(false);
+  }, []);
+
+  const showSaveFeedback = React.useCallback(() => {
+    if (saveFeedbackTimerRef.current !== null) {
+      window.clearTimeout(saveFeedbackTimerRef.current);
+    }
+    setSaveFeedbackVisible(true);
+    saveFeedbackTimerRef.current = window.setTimeout(() => {
+      setSaveFeedbackVisible(false);
+      saveFeedbackTimerRef.current = null;
+    }, 1600);
+  }, []);
+
+  const savePendingTaskDetails = React.useCallback(() => {
+    if (!node || !canEditTask) return;
+
+    const updates: Partial<TaskNode> = {};
+    const trimmedTitle = titleValue.trim();
+    if (!trimmedTitle) {
+      setTitleValue(node.title || '');
+    } else {
+      if (trimmedTitle !== titleValue) setTitleValue(trimmedTitle);
+      if (trimmedTitle !== node.title) updates.title = trimmedTitle;
+    }
+
+    const displayedNotes = getDisplayedDetailNotes(node);
+    const nextDescription = notes[0]?.content || '';
+    if (!areDetailNotesEqual(notes, displayedNotes) || nextDescription !== (node.description || '')) {
+      updates.detailNotes = notes;
+      updates.description = nextDescription;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = Date.now();
+      updateNode(node.id, updates);
+    }
+  }, [canEditTask, node, notes, titleValue, updateNode]);
+
+  const handleSaveDetails = React.useCallback(() => {
+    savePendingTaskDetails();
+    showSaveFeedback();
+  }, [savePendingTaskDetails, showSaveFeedback]);
+
+  const handleClose = React.useCallback(() => {
+    savePendingTaskDetails();
+    onClose();
+  }, [onClose, savePendingTaskDetails]);
+
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
@@ -131,12 +202,18 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      onClose();
+      handleClose();
     };
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [onClose]);
+  }, [handleClose]);
+
+  React.useEffect(() => () => {
+    if (saveFeedbackTimerRef.current !== null) {
+      window.clearTimeout(saveFeedbackTimerRef.current);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (!currentNodeId) return;
@@ -346,6 +423,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
     if (!canEditTask) return;
+    clearSaveFeedback();
     setNotes((current) =>
       current.map((note) => (note.id === noteId ? { ...note, ...updates } : note))
     );
@@ -353,6 +431,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const addNote = () => {
     if (!canEditTask) return;
+    clearSaveFeedback();
     setNotes((current) => [...current, createNote(current.length + 1)]);
   };
 
@@ -368,6 +447,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     );
     if (!confirmed) return;
 
+    clearSaveFeedback();
     setNotes((current) => {
       const nextNotes = current.filter((item) => item.id !== noteId);
       return nextNotes.length > 0 ? nextNotes : [createNote(1)];
@@ -403,7 +483,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       data-task-id={node.id}
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) handleClose();
       }}
     >
       <div
@@ -428,7 +508,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   ref={titleInputRef}
                   type="text"
                   value={titleValue}
-                  onChange={(event) => setTitleValue(event.target.value)}
+                  onChange={(event) => {
+                    clearSaveFeedback();
+                    setTitleValue(event.target.value);
+                  }}
                   onBlur={saveTitle}
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
@@ -468,9 +551,26 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               )}
             </div>
           </div>
+          {canEditTask ? (
+            <button
+              type="button"
+              onClick={handleSaveDetails}
+              className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-100 ${
+                saveFeedbackVisible
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
+              }`}
+              title="儲存目前任務內容"
+              aria-label="儲存目前任務內容"
+              data-task-details-save="true"
+            >
+              {saveFeedbackVisible ? <CheckCircle2 size={16} /> : <Save size={16} />}
+              <span>{saveFeedbackVisible ? '已儲存' : '儲存'}</span>
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
             title="關閉"
             aria-label="關閉任務詳情"

@@ -6,13 +6,16 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-021');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingRecordSynthesis.ts',
   'src/utils/projectChangeImport.ts',
 ];
 
 rmSync(tempRoot, { recursive: true, force: true });
 
 const rewriteImports = (outputText) =>
-  outputText.replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'");
+  outputText
+    .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingRecordSynthesis'", "from './meetingRecordSynthesis.js'");
 
 for (const sourcePath of sources) {
   const source = readFileSync(sourcePath, 'utf8');

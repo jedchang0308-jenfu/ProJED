@@ -1,16 +1,19 @@
 # QA-DEV-052：看板拖拉子系統重構真實操作驗證計畫
 
 關聯 DEV：DEV-052
-關聯 SPEC：`ai-doc/specs/SPEC-052-kanban-drag-subsystem-refactor.md`
-狀態：Deferred / Not Executable / Not Executed
+關聯 SPEC：`ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md`
+狀態：Archived / Historical / Do Not Execute / Not Executed
 風險等級：Medium；P0 資料／手勢／重複提交缺陷為 Stop Ship
 建立日期：2026-07-16
-最近更新：2026-07-16
+最近更新：2026-07-17
 
 使用思考習慣：#可驗證性、#批判、#證據基礎
 
 > 2026-07-16 回復註記：DEV-052 已延後；本計畫只保留為未來驗證設計參考，目前不得據此
 > 啟動重構或宣稱 QA ready。
+>
+> 2026-07-17 封存註記：本文件已移至 `ai-doc/archived/`，不得作為 active QA plan、
+> RD gate 或目前可執行驗證入口。
 
 ## 1. QA 任務與結論邊界
 

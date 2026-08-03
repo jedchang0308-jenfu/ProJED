@@ -13,6 +13,7 @@ const files = {
   boardStore: 'src/store/useBoardStore.ts',
   recordStore: 'src/store/useRecordStore.ts',
   boardView: 'src/components/BoardView.tsx',
+  taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   wbsListView: 'src/components/Wbs/WbsListView.tsx',
   sharedTaskSidebar: 'src/components/SharedTaskSidebar.tsx',
   packageJson: 'package.json',
@@ -76,8 +77,11 @@ assert(
   'Phase 2 drag and cross-view placement callers use batch undo',
   includesAll(source.boardView, [
     'const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);',
+    'commitDesktopTaskDrag({',
+  ]) &&
+    includesAll(source.taskDragCommit, [
     "batchUpdateNodes(updates, { label: '移動任務位置'",
-    "batchUpdateNodes({ [draggedNode.id]: {",
+    'dependencies.batchUpdateNodes({',
     "label: '移到未歸位'",
     "label: '歸位任務'",
   ]) &&

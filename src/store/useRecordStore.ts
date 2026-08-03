@@ -12,7 +12,11 @@ import {
   uniqueRecordTaskLinks,
 } from '../utils/recordContentMentions';
 import { appendTaskDiscussionToRecordContent } from '../utils/meetingTaskDiscussion';
-import type { MeetingSynthesisInput } from '../utils/meetingRecordSynthesis';
+import {
+  filterMeetingSynthesisActivities,
+  isLowValueMeetingActivity,
+  type MeetingSynthesisInput,
+} from '../utils/meetingRecordSynthesis';
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
 import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
 import { useMemberStore } from './useMemberStore';
@@ -41,6 +45,7 @@ type MeetingSynthesisStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
 type SaveDraftOptions = {
   nodes?: Record<string, TaskNode>;
+  status?: KnowledgeRecordStatus;
 };
 
 type RecordSaveFeedback = {
@@ -294,7 +299,7 @@ const getMeetingTaskPath = (
 const createMeetingSynthesisTask = (
   nodeId: string,
   nodes: Record<string, TaskNode>,
-  activities: MeetingTaskActivity[],
+  activities: MeetingSynthesisInput['activities'],
 ): MeetingSynthesisTaskInput => {
   const node = nodes[nodeId];
   const activity = activities.find(item => item.nodeId === nodeId);
@@ -319,13 +324,15 @@ const createMeetingSynthesisInput = (
   activities: MeetingTaskActivity[],
   nodes: Record<string, TaskNode> = {},
 ): MeetingSynthesisInput => {
-  const synthesisActivities = activities.map(activity => createMeetingActivity({
-    eventType: activity.eventType,
-    nodeId: activity.nodeId,
-    title: nodes[activity.nodeId]?.title || activity.title,
-    occurredAt: activity.occurredAt,
-    payload: activity.payload,
-  }));
+  const synthesisActivities = filterMeetingSynthesisActivities(
+    activities.map(activity => createMeetingActivity({
+      eventType: activity.eventType,
+      nodeId: activity.nodeId,
+      title: nodes[activity.nodeId]?.title || activity.title,
+      occurredAt: activity.occurredAt,
+      payload: activity.payload,
+    })),
+  );
   const evidenceNodeIds = Array.from(new Set([
     ...draft.taskLinks.map(link => link.nodeId),
     ...extractTaskMentionIds(draft.content),
@@ -593,6 +600,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   recordMeetingTaskActivity: (activity) => set(state => {
     if (!state.isMeetingMode || state.draft?.type !== 'meeting') return {};
     const nextActivity = createMeetingActivity(activity);
+    if (isLowValueMeetingActivity(nextActivity)) return {};
     return {
       meetingActivities: [...state.meetingActivities, nextActivity],
       ...resetMeetingSynthesisState,
@@ -690,7 +698,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     }));
   },
 
-  saveDraft: async (_options = {}) => {
+  saveDraft: async (options = {}) => {
     const {
       draft: currentDraft,
     } = get();
@@ -699,9 +707,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       set({ error: '請先選擇工作區與看板。' });
       return null;
     }
-    const wantsPublish = currentDraft.status === 'published';
+    const draft = options.status
+      ? { ...currentDraft, status: options.status }
+      : currentDraft;
+    const wantsPublish = draft.status === 'published';
 
-    const draft = currentDraft;
     if (!draft.title.trim()) {
       set({ error: '請先輸入標題。' });
       return null;
@@ -715,7 +725,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       return null;
     }
 
-    const { legacyTaskLinkNodeIds: _legacyTaskLinkNodeIds, ...serializableDraft } = draft;
+    const { legacyTaskLinkNodeIds, ...serializableDraft } = draft;
+    void legacyTaskLinkNodeIds;
     const payload: KnowledgeRecordInput = {
       ...serializableDraft,
       title: draft.title.trim(),

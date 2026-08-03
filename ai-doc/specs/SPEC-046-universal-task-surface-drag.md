@@ -14,6 +14,13 @@
 - DEV-051 drop-intent／parent-lock 實作已撤回；本 SPEC 與 `main` 看板拖拉重新成為 active baseline。
 - 下方 DEV-051 行為只保留歷史參考，不得作為目前 runtime 驗收契約。
 
+## DEV-053 Workbench Placed Row Supersession Addendum（2026-07-17）
+
+- 使用者已確認 Workbench `placed row` 不能拖；這是 DEV-046 whole-surface drag scope 的明確例外。
+- 看板卡片、checklist row、WBS list row、task-backed column/header 與 Workbench `unplaced row` 的 whole-task surface drag 契約仍維持。
+- Workbench `placed row` 應視為 read-only placement list entry：可保留點擊開詳情、右鍵與非 placement 操作，但不得作為 placement drag source，也不得拖回未歸位。
+- 本文件中任何「全域任務平台已歸位 row 也要可拖」的舊描述，已由 `SPEC-053` 覆寫，只保留歷史脈絡。
+
 ## DEV-051 Historical Authoritative Addendum（Superseded）
 
 - 本 SPEC 的 whole-task surface drag source、click guard、interactive-control exclusion、mobile pan-first compatibility 與 undo grouping 繼續有效。
@@ -57,7 +64,7 @@ Re-entry triggers:
 
 目前拖曳觸發窗口分裂:
 
-- 全域任務平台的未歸位/已歸位 row 已在 DEV-039 Phase 2A 收斂到 row root。
+- 全域任務平台的未歸位 row 已在 DEV-039 Phase 2A 收斂到 row root；已歸位 placed row 依 DEV-053 從 drag source scope 移出。
 - 看板卡片、待辦清單列、看板 list/header 與 WBS list row 仍由 `TaskDragHandle` 承接 dnd-kit `attributes/listeners`。
 - 手機長按與 pan-first 邏輯仍有 `data-task-drag-handle` 例外與 handle-only 註解。
 
@@ -287,7 +294,7 @@ Evidence:
 - [ ] 桌機所有階層的列表任務列整列可拖，且沒有可見拖曳把手。
 - [ ] 桌機所有階層的看板卡片整卡非互動區可拖，且沒有可見拖曳把手。
 - [ ] 桌機所有階層的待辦清單列整列非互動區可拖，且沒有可見拖曳把手。
-- [ ] 全域任務平台未歸位與已歸位 row 維持同一 row-root drag surface。
+- [ ] 全域任務平台未歸位 row 維持 row-root drag surface；已歸位 placed row 不暴露 draggable root，且不可拖回未歸位。
 - [ ] 手機 quick tap 任務仍開 `TaskDetailsModal`。
 - [ ] 手機 short pan 任務 surface 仍捲動，不開詳情、不開 menu、不拖曳。
 - [ ] 手機 long press 任一階層任務 surface 任一非互動區都進入 compact action rail / drag-action mode。

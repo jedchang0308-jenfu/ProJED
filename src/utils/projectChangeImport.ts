@@ -1,6 +1,12 @@
 import type { ActivityEvent, ActivityEventType, TaskNode } from '../types';
 import { extractTaskMentionIds } from './recordContentMentions';
-import type { MeetingSynthesisActivity, MeetingSynthesisInput, MeetingSynthesisTask } from './meetingRecordSynthesis';
+import {
+  filterMeetingSynthesisActivities,
+  isLowValueMeetingActivitySummary,
+  type MeetingSynthesisActivity,
+  type MeetingSynthesisInput,
+  type MeetingSynthesisTask,
+} from './meetingRecordSynthesis';
 
 export type ProjectChangeScope = 'board' | 'workspace';
 
@@ -120,17 +126,19 @@ export const createProjectChangeSynthesisInput = (
   events: ActivityEvent[],
   nodes: Record<string, TaskNode>,
 ): MeetingSynthesisInput => {
-  const activities: MeetingSynthesisActivity[] = events.map(event => {
-    const nodeId = getProjectChangeNodeId(event);
-    return {
-      eventType: event.eventType,
-      nodeId,
-      title: getProjectChangeTitle(event, nodes),
-      occurredAt: event.createdAt ?? Date.now(),
-      summary: summarizeProjectChangeEvent(event),
-      payload: event.payload,
-    };
-  });
+  const activities: MeetingSynthesisActivity[] = filterMeetingSynthesisActivities(
+    events.map(event => {
+      const nodeId = getProjectChangeNodeId(event);
+      return {
+        eventType: event.eventType,
+        nodeId,
+        title: getProjectChangeTitle(event, nodes),
+        occurredAt: event.createdAt ?? Date.now(),
+        summary: summarizeProjectChangeEvent(event),
+        payload: event.payload,
+      };
+    }),
+  );
   const taskMap = new Map<string, MeetingSynthesisTask>();
 
   activities.forEach(activity => {
@@ -196,6 +204,7 @@ const normalizeRenderedMeetingLineAsEvidence = (line: string) => {
   if (trimmed === '受保護內容：AI整理不得刪除此區塊。') return '';
   if (isProofreadPlaceholder(trimmed)) return '';
   if (isMeetingSectionHeading(trimmed)) return '';
+  if (isLowValueMeetingActivitySummary(trimmed)) return '';
   return trimmed.replace(/^\d+(?:\.\d+)+\s+/, '- ');
 };
 

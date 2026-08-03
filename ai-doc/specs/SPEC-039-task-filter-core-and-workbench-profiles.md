@@ -17,6 +17,11 @@
 - 2026-07-05 DEV-042 compatibility follow-up：手機版工作台收合契約由「精簡 rail」升級為 no in-flow rail / off-canvas；桌機仍保留約 24px compact rail。手機開啟工作台需透過 Sidebar / top-nav 入口進入 overlay，不得再用 in-flow collapsed rail 佔用 BoardView 寬度。
 - 2026-07-07 drag trigger parity addendum：使用者指出 `已歸位任務` 與 `未歸位任務` 的拖曳觸發窗口感受不同，PM 評估後採用「未歸位任務」方式為標準；兩者都應由同一層任務列 root 承接拖曳、點擊、右鍵與手機長按，已歸位列保留 hierarchy cue 與日期資訊，但不得因內層結構造成拖曳 hit area 不一致。
 - 2026-07-07 Phase 2A completed：`WorkbenchDragCard` 已收斂共用 row-root surface，補上工作台任務右鍵 `GlobalContextMenu`、未歸位 / 所有任務排序列 root hit area parity gate、DEV-028/DEV-029 回歸、TypeScript 與 `build:test`；未執行 DB/RLS/migration、production deploy 或手機新手勢。
+- 2026-07-17 DEV-053 覆寫註記：使用者確認 Workbench `placed row` 不能拖。本文中 Phase 1B / Phase 2A 關於 `已歸位任務` 可拖回 `未歸位`、或已歸位 row 應共用 draggable root 的描述，已由 `SPEC-053` 覆寫；目前 placed row 是 read-only placement list entry，可保留點擊 / 右鍵 / 非 placement 操作，但不得作為 placement drag source。
+
+> Current Supersession Note - 2026-07-17：`SPEC-053` 是 placed-row drag scope 的最新權威來源。
+> `placed row 不能拖` 為 Human Confirmed 決策；DEV-039 既有 Phase 1B / Phase 2A
+> 雙向拖移與 draggable parity 文字只作歷史脈絡，不得作為新 RD 驗收條件。
 
 ## 背景
 

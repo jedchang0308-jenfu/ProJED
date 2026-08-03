@@ -13,6 +13,9 @@ const files = {
   kanbanMousePan: 'src/hooks/useKanbanMousePan.ts',
   taskInteractions: 'src/utils/taskInteractions.ts',
   useLongPress: 'src/hooks/useLongPress.ts',
+  taskGestureSurface: 'src/components/Wbs/taskDrag/useTaskGestureSurface.ts',
+  taskDragSession: 'src/components/Wbs/taskDrag/useTaskDragSession.ts',
+  globalContextMenu: 'src/components/GlobalContextMenu.tsx',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-046-universal-task-surface-drag.md',
   qa: 'ai-doc/qa/QA-DEV-046-universal-task-surface-drag.md',
@@ -46,15 +49,16 @@ assert(
   'WBS task surfaces no longer import or render TaskDragHandle',
   taskSurfaceFiles.every(label => !source[label].includes('TaskDragHandle')) &&
     taskSurfaceFiles.every(label => !source[label].includes('data-task-drag-handle')) &&
-    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseWorkbenchDragSurface ? 'task-row-root' : undefined}") &&
+    source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
     !source.taskWorkbench.includes('TaskDragHandle') &&
     !source.taskWorkbench.includes('data-task-drag-handle'),
 );
 
 assert(
   'Kanban cards expose root task drag surface bindings',
-  source.kanbanCard.includes('const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode') &&
-    source.kanbanCard.includes('disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || mobileActionMode') &&
+  source.kanbanCard.includes('const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode') &&
+    source.kanbanCard.includes('disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode') &&
+    source.kanbanCard.includes('useTaskGestureSurface') &&
     source.kanbanCard.includes('{...dragSurfaceBindings}') &&
     source.kanbanCard.includes('data-task-drag-surface="true"') &&
     source.kanbanCard.includes('data-task-drag-surface-kind="kanban-card"') &&
@@ -66,8 +70,9 @@ assert(
 
 assert(
   'Checklist rows expose root task drag surface bindings for all recursive depths',
-  source.kanbanChecklist.includes('const dragSurfaceBindings = mobileActionMode || isSelectingMode || isRecordCaptureMode') &&
-    source.kanbanChecklist.includes('disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || mobileActionMode') &&
+  source.kanbanChecklist.includes('const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode') &&
+    source.kanbanChecklist.includes('disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode') &&
+    source.kanbanChecklist.includes('useTaskGestureSurface') &&
     source.kanbanChecklist.includes('{...dragSurfaceBindings}') &&
     source.kanbanChecklist.includes('data-task-drag-surface="true"') &&
     source.kanbanChecklist.includes('data-task-drag-surface-kind="checklist-row"') &&
@@ -79,14 +84,27 @@ assert(
 
 assert(
   'Kanban list/header tasks expose a root header drag surface and mobile action rail path',
-  source.kanbanColumn.includes('const columnHeaderDragBindings = mobileActionMode || isSelectingMode') &&
-    source.kanbanColumn.includes('disabled: !canMoveTask || isSelectingMode || mobileActionMode') &&
+  source.kanbanColumn.includes('const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode') &&
+    source.kanbanColumn.includes('disabled: !canMoveTask || isSelectingMode || taskGesture.mobileActionMode') &&
+    source.kanbanColumn.includes('useTaskGestureSurface') &&
     source.kanbanColumn.includes('{...columnHeaderDragBindings}') &&
-    source.kanbanColumn.includes('{...columnHeaderTouchHandlers}') &&
+    source.kanbanColumn.includes('{...taskGesture.handlers}') &&
     source.kanbanColumn.includes('data-task-drag-surface="true"') &&
     source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') &&
-    source.kanbanColumn.includes('data-mobile-drop-target={nodeId}') &&
-    source.kanbanColumn.includes('mobileTaskAction?.begin({ id: nodeId'),
+    source.kanbanColumn.includes('data-mobile-drop-target={nodeId}'),
+);
+
+assert(
+  'Mobile task surfaces suppress full context menu while compact action rail owns long press',
+  source.taskGestureSurface.includes('onContextMenuCapture: shouldBindLongPress ? (event: React.MouseEvent) => {') &&
+    source.taskGestureSurface.includes('if (isMobileTaskActionMode())') &&
+    source.taskGestureSurface.includes('event.preventDefault();') &&
+    source.taskGestureSurface.includes('event.stopPropagation();') &&
+    source.taskDragSession.includes("document.addEventListener('contextmenu', handleContextMenu, true)") &&
+    source.taskDragSession.includes("type: 'contextmenu:suppressed'") &&
+    source.globalContextMenu.includes('data-global-context-menu="true"') &&
+    source.browserVerifier.includes('assertMobileContextMenuSuppressed') &&
+    source.browserVerifier.includes('should keep only mobile drag UI when contextmenu is synthesized'),
 );
 
 assert(
@@ -114,15 +132,14 @@ assert(
 assert(
   'Drag sensors protect interactive descendants now that the whole task surface is draggable',
   source.dragSensors.includes('class SmartMouseSensor extends MouseSensor') &&
-    source.dragSensors.includes('class SmartTouchSensor extends TouchSensor') &&
     source.dragSensors.includes('class SmartKeyboardSensor extends KeyboardSensor') &&
     source.dragSensors.includes('useSensor(SmartMouseSensor') &&
-    source.dragSensors.includes('useSensor(SmartTouchSensor') &&
+    !source.dragSensors.includes('TouchSensor') &&
+    source.taskDragSession.includes("window.addEventListener('touchmove'") &&
+    source.taskDragSession.includes("window.addEventListener('pointermove'") &&
     source.dragSensors.includes('[data-task-interaction-control="true"]') &&
     source.dragSensors.includes('[data-task-primary-action-control="true"]') &&
-    source.dragSensors.includes('distance: 8') &&
-    source.dragSensors.includes('delay: 250') &&
-    source.dragSensors.includes('tolerance: 8'),
+    source.dragSensors.includes('distance: 8'),
 );
 
 assert(

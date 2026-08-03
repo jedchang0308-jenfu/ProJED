@@ -9,6 +9,10 @@ interface TouchTapGuardHandlers {
   onTouchMove: React.TouchEventHandler;
   onTouchEnd: React.TouchEventHandler;
   onTouchCancel: React.TouchEventHandler;
+  onPointerDown: React.PointerEventHandler;
+  onPointerMove: React.PointerEventHandler;
+  onPointerUp: React.PointerEventHandler;
+  onPointerCancel: React.PointerEventHandler;
   onClickCapture: React.MouseEventHandler;
 }
 
@@ -34,37 +38,56 @@ export const useTouchTapGuard = ({ threshold = 10 }: UseTouchTapGuardOptions = {
 
   React.useEffect(() => () => clearSuppressTimer(), [clearSuppressTimer]);
 
-  const onTouchStart = React.useCallback<React.TouchEventHandler>((event) => {
-    const touch = event.touches[0];
-    if (!touch) return;
+  const startAt = React.useCallback((x: number, y: number) => {
     pannedRef.current = false;
-    startPositionRef.current = { x: touch.clientX, y: touch.clientY };
+    startPositionRef.current = { x, y };
   }, []);
 
-  const onTouchMove = React.useCallback<React.TouchEventHandler>((event) => {
+  const moveAt = React.useCallback((x: number, y: number) => {
     if (!startPositionRef.current) return;
-    const touch = event.touches[0];
-    if (!touch) return;
-    const deltaX = Math.abs(touch.clientX - startPositionRef.current.x);
-    const deltaY = Math.abs(touch.clientY - startPositionRef.current.y);
+    const deltaX = Math.abs(x - startPositionRef.current.x);
+    const deltaY = Math.abs(y - startPositionRef.current.y);
     if (deltaX <= threshold && deltaY <= threshold) return;
     pannedRef.current = true;
     suppressNextTapRef.current = true;
   }, [threshold]);
 
-  const onTouchEnd = React.useCallback<React.TouchEventHandler>(() => {
+  const finish = React.useCallback(() => {
     startPositionRef.current = null;
     if (!pannedRef.current) return;
     suppressNextTapRef.current = true;
     scheduleSuppressReset();
   }, [scheduleSuppressReset]);
 
-  const onTouchCancel = React.useCallback<React.TouchEventHandler>(() => {
-    startPositionRef.current = null;
-    if (!pannedRef.current) return;
-    suppressNextTapRef.current = true;
-    scheduleSuppressReset();
-  }, [scheduleSuppressReset]);
+  const onTouchStart = React.useCallback<React.TouchEventHandler>((event) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    startAt(touch.clientX, touch.clientY);
+  }, [startAt]);
+
+  const onTouchMove = React.useCallback<React.TouchEventHandler>((event) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    moveAt(touch.clientX, touch.clientY);
+  }, [moveAt]);
+
+  const onTouchEnd = React.useCallback<React.TouchEventHandler>(() => finish(), [finish]);
+
+  const onTouchCancel = React.useCallback<React.TouchEventHandler>(() => finish(), [finish]);
+
+  const onPointerDown = React.useCallback<React.PointerEventHandler>((event) => {
+    if (event.pointerType === 'touch') startAt(event.clientX, event.clientY);
+  }, [startAt]);
+
+  const onPointerMove = React.useCallback<React.PointerEventHandler>((event) => {
+    if (event.pointerType === 'touch') moveAt(event.clientX, event.clientY);
+  }, [moveAt]);
+
+  const onPointerUp = React.useCallback<React.PointerEventHandler>((event) => {
+    if (event.pointerType === 'touch') finish();
+  }, [finish]);
+
+  const onPointerCancel = onPointerUp;
 
   const onClickCapture = React.useCallback<React.MouseEventHandler>((event) => {
     if (!suppressNextTapRef.current) return;
@@ -81,12 +104,15 @@ export const useTouchTapGuard = ({ threshold = 10 }: UseTouchTapGuardOptions = {
     onTouchMove,
     onTouchEnd,
     onTouchCancel,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
     onClickCapture,
-  }), [onClickCapture, onTouchCancel, onTouchEnd, onTouchMove, onTouchStart]);
+  }), [onClickCapture, onPointerCancel, onPointerDown, onPointerMove, onPointerUp, onTouchCancel, onTouchEnd, onTouchMove, onTouchStart]);
 
   return {
     handlers,
     shouldSuppressTap,
   };
 };
-

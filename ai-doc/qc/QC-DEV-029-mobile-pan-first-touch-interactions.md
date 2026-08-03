@@ -3,13 +3,13 @@
 關聯 DEV: DEV-029
 關聯 SPEC: `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`
 關聯 QA: `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md`
-狀態: Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Hotfix Covered
+狀態: Local Automated Browser QC Passed / Physical Phone Supplemental Not Executed / Production Not Deployed / Hotfix Covered / Canvas CTA Pass-Through Covered
 建立日期: 2026-07-04
 
 ## 驗證結論
 
 - 判定：通過，本機 automated + real browser gesture matrix 通過。
-- 範圍：DEV-029 Phase 1 + Phase 1B BoardView / KanbanCard / KanbanChecklist / TaskWorkbench mobile overlay pan-first 觸控仲裁、compact action rail、手機拖曳把手 pass-through、長按卡死復原與 drag-action edge auto-scroll。
+- 範圍：DEV-029 Phase 1 + Phase 1B BoardView / KanbanCard / KanbanChecklist / TaskWorkbench mobile overlay pan-first 觸控仲裁、compact action rail、手機拖曳把手 pass-through、大型畫布 CTA short-pan pass-through、長按卡死復原與 drag-action edge auto-scroll。
 - 限制：H01-H04 physical-phone 補充案例未在本機環境執行；不得宣稱 iOS Safari / Android Chrome 真機手感已完成簽核。
 
 ## RD 修正事實
@@ -24,15 +24,22 @@
 - 2026-07-05 Phase 1B hotfix：手機 `TaskDragHandle` 保留可見把手但停用 dnd-kit touch listener，改為 pan pass-through；把手短滑可移動畫面，把手長按也進入同一個 mobile drag-action mode。
 - 2026-07-05 Phase 1B hotfix：`touchcancel` 改為純取消不提交，並補 `pointercancel`、visibility、blur、pagehide、`Escape` 與 timeout hard-cancel，避免真機長按模式卡住。
 - 2026-07-05 Phase 1B hotfix：mobile drag-action mode 補 edge auto-scroll；拖曳靠近 board 右邊緣會自動增加 `scrollLeft`，靠近 column 底部會自動增加 `scrollTop`。
-- `scripts/verify-dev-029-mobile-pan-first-interactions.mjs` 補強 static gate，檢查 mobile tap-to-details、pan suppression、task workbench row touch tap guard、compact action rail、手機把手 pass-through 與 hard-cancel 退出路徑。
+- 2026-07-17 Canvas CTA pass-through hotfix：`useMobilePanBroker` 原本將所有 button 視為 primary action target，導致欄位新增任務、看板尾端新增 CTA 與 TaskWorkbench 未歸位新增 CTA 成為平移死角；已在三處加上 `data-mobile-pan-pass-through="true"`，並補 CSS `touch-action: pan-x pan-y`。
+- `scripts/verify-dev-029-mobile-pan-first-interactions.mjs` 補強 static gate，檢查 mobile tap-to-details、pan suppression、task workbench row touch tap guard、compact action rail、手機把手 pass-through、canvas CTA pass-through 與 hard-cancel 退出路徑。
 
 ## 執行項目
 
 | Gate | Result | Evidence |
 |---|---|---|
-| `npm.cmd run verify:dev-029-mobile-pan-first-interactions` | Pass, 32/32 | static gate 覆蓋 touch tap guard、mobile tap-to-details、L2+ pan broker、hidden control hit-test、workbench row guard、compact action rail、手機把手 pass-through、hard-cancel 退出路徑 |
+| `npm.cmd run verify:dev-029-mobile-pan-first-interactions` | Pass, 38/38 | static gate 覆蓋 touch tap guard、mobile tap-to-details、L2+ pan broker、hidden control hit-test、workbench row guard、compact action rail、手機把手 pass-through、canvas CTA pass-through、hard-cancel 退出路徑 |
 | `npm.cmd run verify:dev-029-mobile-pan-first-interactions-browser` | Pass | wrapper exit code 0 |
-| Fixed-session browser matrix | Pass | 新增覆蓋手機拖曳把手短滑 pan、父/子任務把手長按、drag-action 右邊緣 / 底部邊緣 auto-scroll、`touchcancel` 退出不卡死 |
+| Fixed-session browser matrix | Pass | 覆蓋手機拖曳把手短滑 pan、父/子任務把手長按、drag-action 右邊緣 / 底部邊緣 auto-scroll、`touchcancel` 退出不卡死，以及 B10-B12 新增 CTA horizontal / vertical short-pan pass-through |
+| `npm.cmd run verify:dev-054-mobile-task-drag-precision` | Pass, 34/34 | 手機定位精準度 static regression |
+| `npm.cmd run verify:dev-054-mobile-task-drag-precision-browser` | Pass, 10/10 | 手機定位精準度 browser regression |
+| `npm.cmd run verify:dev-053-task-drag-muscle-memory-consistency` | Pass, 30/30 | 任務拖拉肌肉記憶 static regression |
+| `npm.cmd run verify:dev-053-task-drag-muscle-memory-consistency-browser` | Pass, 10/10 | 任務拖拉肌肉記憶 browser regression |
+| `npm.cmd run verify:dev-046-universal-task-surface-drag` | Pass, 29/29 | 全任務表面拖曳 static regression |
+| `npm.cmd run verify:dev-046-universal-task-surface-drag-browser` | Pass | 全任務表面拖曳 browser regression |
 | `npm.cmd run verify:dev-028-cross-mode-task-interactions` | Pass, 35/35 | desktop/cross-mode contract static regression |
 | `npm.cmd run verify:dev-039-task-workbench-placement-lanes` | Pass, 22/22 | task workbench placement/static regression |
 | `npm.cmd run verify:dev-039-task-workbench-placement-lanes-browser` | Pass | task workbench browser regression |
@@ -41,6 +48,17 @@
 | `git diff --check` | Pass with CRLF warnings only | no whitespace error |
 
 ## Browser Matrix Evidence
+
+Latest session（2026-07-17 canvas CTA pass-through）:
+
+Summary:
+- `ok`: `true`
+- `fail`: `0`
+
+Key added cases:
+- `QA-029-B10`: column add-task button horizontal short pan scrolls board and does not create a task。
+- `QA-029-B11`: column add-task button vertical short pan scrolls column and does not create a task。
+- `QA-029-B12`: board add-column CTA horizontal short pan scrolls board and does not create a column。
 
 固定 session: `dev029-l2-scroll-clean`
 

@@ -831,8 +831,7 @@ const RecordSidebar: React.FC = () => {
   };
 
   const handleSave = async (status: KnowledgeRecordStatus) => {
-    updateDraft({ status });
-    await saveDraft({ nodes });
+    await saveDraft({ nodes, status });
   };
 
   const handleSynthesizeMeetingDraft = async () => {

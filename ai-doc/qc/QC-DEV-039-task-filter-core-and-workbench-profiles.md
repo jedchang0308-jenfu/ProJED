@@ -6,6 +6,10 @@
 狀態：Phase 1/1A + Phase 1B + Phase 1C Local Automated QC Passed / Phase 2 Cross-Board Source Slice Local Automated QC Passed / Phase 2A Drag Trigger Parity Local Automated QC Passed / DB unchanged / Production Release Not Deployed + Requires Explicit Authorization
 執行日期：2026-07-02；Phase 2A evidence added 2026-07-07
 
+> Current Supersession Note - 2026-07-17：使用者確認 Workbench `placed row` 不能拖。
+> 本 QC 中 Phase 1B / Phase 2A 對 placed row draggable parity 與 placed -> unplaced
+> drag 的通過證據保留為歷史事實，不再作為目前產品契約；最新契約見 `SPEC-053`。
+
 ## QC 結論
 
 本文件取代早先的「全域任務平台設定檔」QC 結論。依使用者最新決策，全域任務平台不再提供設定檔、儲存、另存、複製、全域 profile 或看板專屬 profile。

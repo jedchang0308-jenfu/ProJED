@@ -67,6 +67,35 @@ const stripTaskMentions = (value: string) => {
   return value.replace(TASK_MENTION_PATTERN, '');
 };
 
+const LOW_VALUE_MEETING_ACTIVITY_PATTERNS = [
+  /^(任務)?位置已調整[。.]?$/,
+  /^(任務)?順序已調整[。.]?$/,
+  /^(任務)?已移動[。.]?$/,
+  /^(任務)?已重新排列[。.]?$/,
+  /^區塊已更新[。.]?$/,
+];
+
+export const isLowValueMeetingActivitySummary = (value: string | undefined) => {
+  const normalized = normalizeText(
+    stripTaskMentions(value ?? '')
+      .replace(/^[-*]\s*/, '')
+      .replace(/^\d+(?:\.\d+)*(?:\.)?\s+/, '')
+      .replace(/^\d{1,2}:\d{2}\s*/, '')
+      .replace(/^[：:，,、\s]+/, ''),
+  );
+  if (!normalized) return false;
+  return LOW_VALUE_MEETING_ACTIVITY_PATTERNS.some(pattern => pattern.test(normalized));
+};
+
+export const isLowValueMeetingActivity = (
+  activity: Pick<MeetingSynthesisActivity, 'eventType' | 'summary'>,
+) =>
+  activity.eventType === 'task_moved' ||
+  isLowValueMeetingActivitySummary(activity.summary);
+
+export const filterMeetingSynthesisActivities = (activities: MeetingSynthesisActivity[]) =>
+  activities.filter(activity => !isLowValueMeetingActivity(activity));
+
 const collectMentionedTaskIds = (content: string) => {
   const ids: string[] = [];
   TASK_MENTION_PATTERN.lastIndex = 0;
@@ -104,12 +133,13 @@ const cleanHumanMeetingLine = (line: string) => {
   const trimmed = line.trim();
   if (isCleanDraftScaffoldLine(trimmed)) return '';
 
-  return normalizeText(
+  const cleaned = normalizeText(
     stripTaskMentions(trimmed)
       .replace(/^[-*]\s*/, '')
       .replace(/^\d{1,2}:\d{2}\s*/, '')
       .replace(/^[：:，,、\s]+/, ''),
   );
+  return isLowValueMeetingActivitySummary(cleaned) ? '' : cleaned;
 };
 
 const extractCleanHumanMeetingLines = (content: string) =>
@@ -362,17 +392,21 @@ const renderSynthesisTreeNode = (
 export const buildDeterministicMeetingSynthesis = (
   input: MeetingSynthesisInput,
 ): MeetingSynthesisResponse => {
-  const taskById = new Map(input.tasks.map(task => [task.id, task]));
-  const evidenceTaskIds = getEvidenceTaskOrder(input);
-  const evidenceTasks = evidenceTaskIds.map(nodeId => taskById.get(nodeId) ?? createTaskFallback(nodeId, input));
+  const normalizedInput = {
+    ...input,
+    activities: filterMeetingSynthesisActivities(input.activities),
+  };
+  const taskById = new Map(normalizedInput.tasks.map(task => [task.id, task]));
+  const evidenceTaskIds = getEvidenceTaskOrder(normalizedInput);
+  const evidenceTasks = evidenceTaskIds.map(nodeId => taskById.get(nodeId) ?? createTaskFallback(nodeId, normalizedInput));
   const linkedTaskIds: string[] = [];
   const rootNodes: SynthesisTreeNode[] = [];
   const rootIds = new Set<string>();
   const nodeMap = new Map<string, SynthesisTreeNode>();
 
   for (const [evidenceIndex, task] of evidenceTasks.entries()) {
-    const taskActivities = input.activities.filter(activity => activity.nodeId === task.id);
-    const summary = summarizeCleanTaskDiscussion(task, input, taskActivities);
+    const taskActivities = normalizedInput.activities.filter(activity => activity.nodeId === task.id);
+    const summary = summarizeCleanTaskDiscussion(task, normalizedInput, taskActivities);
     if (!summary.hasMeetingEvidence) continue;
 
     const path = getTaskPath(task);
@@ -408,7 +442,7 @@ export const buildDeterministicMeetingSynthesis = (
     .map((node, nodeIndex) => renderSynthesisTreeNode(node, `2.${nodeIndex + 1}`, linkedTaskIds).join('\n'))
     .filter(Boolean);
 
-  const generalSummaryLines = buildMainlineSummaryLines(input, sortedRootNodes);
+  const generalSummaryLines = buildMainlineSummaryLines(normalizedInput, sortedRootNodes);
 
   const content = [
     '1. 本次會議總結',
