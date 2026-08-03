@@ -38,7 +38,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-006`、`QA-DEV-006`
   - 計入交付：是
 - ✓ DEV-007 [交付點] [完成] [P1] [已交付] 會議中看板編輯與任務活動
-  - 摘要：會議模式保留完整看板編輯與活動捕捉。
+  - 摘要：會議模式保留完整看板編輯與有語意活動捕捉；逐筆 append 與純位置活動已由 DEV-011/012 現行契約取代。
   - 證據：`SPEC-007`、`verify:dev-007-meeting-activity`
   - 計入交付：是
 - ✓ DEV-008 [交付點] [完成] [P2] [已交付] 任務會議細節快速查找
@@ -58,7 +58,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-011`、`QC-DEV-011-012-production-ai-smoke`
   - 計入交付：是
 - ✓ DEV-012 [交付點] [完成] [P1] [正式環境已交付] AI 會議紀錄自然語言品質
-  - 摘要：提升 AI 會議紀錄自然語言品質並完成 production smoke。
+  - 摘要：提升 AI 會議紀錄自然語言品質並完成 production smoke；`持續優化3` 補上純位置／排序活動過濾契約與本機驗證，尚未重新部署。
   - 證據：`SPEC-012`、`QC-DEV-011-012-production-ai-smoke`
   - 計入交付：是
 - ✓ DEV-013 [交付點] [完成] [P2] [已交付] 任務子樹複製
@@ -99,8 +99,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：交付紀錄流程重構與專案變化匯入主線。
   - 證據：`SPEC-020`、`QA-DEV-020`
   - 計入交付：是
-- ✓ DEV-021 [開發點] [完成] [P2] [已交付] 專案變化 AI 整理保留
-  - 摘要：保護專案變化匯入後的 AI 整理內容。
+- ✓ DEV-021 [開發點] [完成] [P2] [已交付] 專案變化 AI整理保留
+  - 摘要：保護專案變化匯入後的 AI整理內容。
   - 父任務：DEV-020
   - 證據：`SPEC-021`、DEV-021 verifier
   - 計入交付：否

@@ -15,6 +15,7 @@
 - 人類只做最後校稿與發布。
 - AI 僅更新 meeting draft content，不自動建立、修改、移動或刪除任務。
 - published 正文不附加原始 activity 流水帳。
+- `task_moved` 或只有制式位置／排序摘要的 activity 不得進入 AI source package，也不得單獨建立任務段落或 task link。
 - 保留 `@[title](task:id)` token，確保 `record_task_links` 與 DEV-008 任務知識查找仍可用。
 
 ## 使用者工作流
@@ -36,7 +37,7 @@
 - participants
 - raw draft content
 - task discussion notes
-- meeting activities
+- meeting activities；送出前先排除純位置、排序、拖曳、重新排列與區塊更新等低價值操作
 - linked task ids / titles / status / description / detail notes / schedule metadata
 
 ## AI Output

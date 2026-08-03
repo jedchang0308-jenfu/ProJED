@@ -9,6 +9,17 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-08-03（低價值會議活動過濾契約同步）
+
+Spec Impact=`Intentional replacement`：DEV-007 的原生看板操作與有語意活動捕捉仍有效，但「拖曳移動必須收集並逐筆附加正文」已由 DEV-011/012 取代。現行契約在前端 buffer、deterministic fallback、專案變化匯入與 Edge Function 一致排除 `task_moved` 及純位置／排序制式摘要；只有此類事件的任務不得建立段落或 task link。含原因、決議、風險或下一步的人工文字仍需保留。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Historical contract amended | DEV-007 / DEV-011 / DEV-012 | 保留原生看板與有語意活動捕捉，標示逐筆 append 與純位置 activity 已被取代。 |
+| `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Source package contract amended | DEV-011 / DEV-012 | AI source package 送出前排除純位置／排序 activity。 |
+| `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Active quality contract amended | DEV-012 | 定義低價值事件、跨邊界一致過濾、task section / linkedTaskIds 與人工內容保留規則。 |
+| `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | QA matrix amended | DEV-012 | 新增 GS-005，驗證純位置事件不成文、有效活動不受影響、人工實質文字不誤刪。 |
+
 ## Documentation Map Update - 2026-07-18（正式環境手機長按完整選單 hotfix）
 
 使用者提供正式環境手機截圖：任務長按後除了頂部 compact action rail，畫面中央又出現完整 task context menu。Spec Impact=`Compatible exception`：不改手機拖拉定位、不改 action rail 內容、不改桌機右鍵功能；只補 mobile action session 對 `contextmenu` 的事件所有權，避免 Android / Chrome 長按合成事件穿透到桌機選單。

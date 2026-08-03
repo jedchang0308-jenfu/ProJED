@@ -1,9 +1,9 @@
 # SPEC-007：會議中保留原生看板編輯與任務變更紀錄
 
-狀態：Implemented
+狀態：Implemented / Activity content contract partially superseded by DEV-011 / DEV-012
 Owner：PM
 建立日期：2026-06-06
-關聯：DEV-007、DEV-005、DEV-006
+關聯：DEV-007、DEV-005、DEV-006、DEV-011、DEV-012
 
 ---
 
@@ -59,3 +59,14 @@ DEV-005 將會議主畫面調整為看板，DEV-006 修正會議紀錄輸入器�
 - activity 文字含 task inline token，儲存後 `record_task_links` 會包含該任務。
 - 多次儲存不重複附加已寫入的 activity。
 - DEV-002、DEV-003、DEV-006 回歸通過。
+
+## 7. 現行契約修訂（2026-08-03）
+
+Spec Impact：`Intentional replacement`。
+
+- 本規格保留「會議模式維持原生看板操作」與「捕捉有語意的任務變更」契約。
+- DEV-011 已取代「`saveDraft` 前逐筆 append activity」：正式正文改由 AI / deterministic fallback 統整，不得回復原始 activity 流水帳。
+- DEV-012 進一步排除不具會議決策價值的純位置事件。`task_moved`，以及只有「位置已調整」「順序已調整」「已移動」「已重新排列」「區塊已更新」等制式摘要的事件，不進入 meeting activity buffer、AI source package 或專案變化匯入證據。
+- 只因低價值位置事件被提及的任務，不得因此產生會議紀錄段落或 `linkedTaskIds`。
+- 狀態、日期、負責人、協作者、標籤、建立、封存與還原等有語意變更仍可作為統整來源。
+- 過濾只針對純制式操作摘要；若人工速記包含實際原因、決議、風險或下一步，不得因文字提及移動或排序而整段刪除。
