@@ -51,6 +51,11 @@ type BoardInviteInsert = Partial<BoardInviteRow>;
 type BoardRolePermissionInsert = Partial<BoardRolePermissionRow>;
 type TaskTagInsert = Partial<TaskTagRow>;
 type KnowledgeRecordInsert = Partial<KnowledgeRecordRow>;
+type RecordTaskLinkInsert = Partial<RecordTaskLinkRow>;
+type ResolvedRecordTaskLink = {
+  nodeId: string;
+  insert: RecordTaskLinkInsert;
+};
 type WbsDependencyWithNodes = WbsDependencyRow & {
   from_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
   to_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
@@ -420,6 +425,23 @@ const requireNodeId = async (tenantId: string, projectId: string, nodeId: string
   const resolved = await resolveNodeId(tenantId, projectId, nodeId);
   if (!resolved) throw new Error('Supabase WBS item id is required.');
   return resolved;
+};
+
+const resolveRecordTaskLinkItemId = async (
+  tenantId: string,
+  projectId: string,
+  nodeId: string
+): Promise<string | null> => {
+  const query = supabase
+    .from('wbs_items')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('project_id', projectId);
+  const { data, error } = await (isUuid(nodeId)
+    ? query.eq('id', nodeId).maybeSingle()
+    : query.eq('legacy_node_id', nodeId).maybeSingle());
+  assertNoError(error);
+  return data?.id ?? null;
 };
 
 const resolveTagId = async (tenantId: string, tagId: string): Promise<string> => {
@@ -1621,6 +1643,33 @@ const syncRecordRagDocument = async (
   return savedDocumentId;
 };
 
+const disableRecordRagMirrorAfterFailure = async (
+  tenantId: string,
+  projectId: string,
+  recordId: string,
+  updatedBy: string | null,
+  fallbackSourceDocumentId: string | null,
+): Promise<string | null> => {
+  let sourceDocumentId = fallbackSourceDocumentId;
+  const { data, error } = await supabase
+    .from('documents')
+    .update({ rag_enabled: false, updated_by: updatedBy })
+    .eq('tenant_id', tenantId)
+    .eq('project_id', projectId)
+    .eq('source_table', 'knowledge_records')
+    .eq('source_id', recordId)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[supabaseRecordService] Failed to disable record RAG document after sync failure:', error);
+    return sourceDocumentId;
+  }
+
+  if (data?.id) sourceDocumentId = data.id;
+  return sourceDocumentId;
+};
+
 const knowledgeRecordToInsert = async (
   tenantId: string,
   projectId: string,
@@ -1713,13 +1762,30 @@ export const supabaseRecordService = {
     const uniqueLinks = input.taskLinks.filter((link, index, links) =>
       links.findIndex(item => item.nodeId === link.nodeId && item.role === link.role) === index
     );
-    const resolvedLinks = await Promise.all(uniqueLinks.map(async link => ({
-      tenant_id: tenantId,
-      project_id: projectId,
-      record_id: saved.id,
-      item_id: await requireNodeId(tenantId, projectId, link.nodeId),
-      role: link.role,
-    })));
+    const resolvedLinkResults = (await Promise.all(uniqueLinks.map(async (link): Promise<ResolvedRecordTaskLink | null> => {
+      try {
+        const itemId = await resolveRecordTaskLinkItemId(tenantId, projectId, link.nodeId);
+        if (!itemId) {
+          console.warn('[supabaseRecordService] Skipping unresolved record task link:', link.nodeId);
+          return null;
+        }
+        return {
+          nodeId: link.nodeId,
+          insert: {
+            tenant_id: tenantId,
+            project_id: projectId,
+            record_id: saved.id,
+            item_id: itemId,
+            role: link.role,
+          },
+        };
+      } catch (error) {
+        console.warn('[supabaseRecordService] Skipping record task link after resolution failure:', link.nodeId, error);
+        return null;
+      }
+    }))).filter((link): link is ResolvedRecordTaskLink => Boolean(link));
+    const resolvedLinks = resolvedLinkResults.map(link => link.insert);
+    const resolvedLinkedTaskIds = resolvedLinkResults.map(link => link.nodeId);
 
     if (resolvedLinks.length > 0) {
       const { error: insertLinksError } = await supabase
@@ -1728,23 +1794,39 @@ export const supabaseRecordService = {
       assertNoError(insertLinksError);
     }
 
-    const sourceDocumentId = await syncRecordRagDocument(
-      tenantId,
-      projectId,
-      saved,
-      uniqueLinks.map(link => link.nodeId)
-    );
-    if (sourceDocumentId !== saved.source_document_id || saved.rag_enabled !== insert.rag_enabled) {
+    let sourceDocumentId = saved.source_document_id;
+    let ragEnabled = Boolean(insert.rag_enabled);
+    try {
+      sourceDocumentId = await syncRecordRagDocument(
+        tenantId,
+        projectId,
+        saved,
+        resolvedLinkedTaskIds
+      );
+    } catch (error) {
+      ragEnabled = false;
+      console.warn('[supabaseRecordService] Record saved, but RAG mirror sync failed. Continuing with rag_enabled=false:', error);
+      sourceDocumentId = await disableRecordRagMirrorAfterFailure(
+        tenantId,
+        projectId,
+        saved.id,
+        saved.updated_by,
+        saved.source_document_id
+      );
+    }
+    if (sourceDocumentId !== saved.source_document_id || saved.rag_enabled !== ragEnabled) {
       const { error: updateSourceError } = await supabase
         .from('knowledge_records')
         .update({
           source_document_id: sourceDocumentId,
-          rag_enabled: insert.rag_enabled,
+          rag_enabled: ragEnabled,
         })
         .eq('tenant_id', tenantId)
         .eq('project_id', projectId)
         .eq('id', saved.id);
-      assertNoError(updateSourceError);
+      if (updateSourceError) {
+        console.warn('[supabaseRecordService] Record saved, but RAG status update failed:', updateSourceError);
+      }
     }
 
     const { data: reloaded, error: reloadError } = await supabase

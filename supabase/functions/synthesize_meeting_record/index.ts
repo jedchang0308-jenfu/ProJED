@@ -75,6 +75,32 @@ const truncate = (value: string | undefined, maxLength: number) => {
 const safeString = (value: unknown, fallback = '') =>
   typeof value === 'string' ? value.trim() : fallback;
 
+const LOW_VALUE_ACTIVITY_PATTERNS = [
+  /^(任務)?位置已調整[。.]?$/,
+  /^(任務)?順序已調整[。.]?$/,
+  /^(任務)?已移動[。.]?$/,
+  /^(任務)?已重新排列[。.]?$/,
+  /^區塊已更新[。.]?$/,
+];
+
+const stripTaskTags = (value: string) =>
+  value.replace(/@\[([^\]]+)\]\(task:[^)]+\)/g, '');
+
+const isLowValueActivitySummary = (value: unknown) => {
+  const normalized = stripTaskTags(safeString(value))
+    .replace(/^[-*]\s*/, '')
+    .replace(/^\d+(?:\.\d+)*(?:\.)?\s+/, '')
+    .replace(/^\d{1,2}:\d{2}\s*/, '')
+    .replace(/^[：:，,、\s]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return true;
+  return LOW_VALUE_ACTIVITY_PATTERNS.some(pattern => pattern.test(normalized));
+};
+
+const isLowValueActivity = (activity: MeetingSynthesisActivity) =>
+  activity.eventType === 'task_moved' || isLowValueActivitySummary(activity.summary);
+
 const isValidInput = (input: unknown): input is MeetingSynthesisInput => {
   if (!input || typeof input !== 'object') return false;
   const value = input as Record<string, unknown>;
@@ -124,7 +150,6 @@ const normalizeInput = (input: MeetingSynthesisInput): MeetingSynthesisInput => 
     })),
   activities: input.activities
     .filter(activity => safeString(activity.nodeId))
-    .slice(-200)
     .map(activity => ({
       eventType: truncate(activity.eventType, 80),
       nodeId: safeString(activity.nodeId),
@@ -132,7 +157,9 @@ const normalizeInput = (input: MeetingSynthesisInput): MeetingSynthesisInput => 
       occurredAt: Number.isFinite(activity.occurredAt) ? activity.occurredAt : Date.now(),
       summary: truncate(activity.summary, 240),
       payload: activity.payload && typeof activity.payload === 'object' ? activity.payload : {},
-    })),
+    }))
+    .filter(activity => !isLowValueActivity(activity))
+    .slice(-200),
 });
 
 const buildPrompt = (input: MeetingSynthesisInput) => {
@@ -161,6 +188,7 @@ const buildPrompt = (input: MeetingSynthesisInput) => {
 19. 總結可以整理任務樹脈絡，但不能補出人類沒有講過的決策、下一步或風險。
 
 20. 子層任務 heading 必須顯示完整任務路徑 task tags，而不是只顯示目前任務；例如卡片層使用「2.1.1 @[列表](task:list-id) @[卡片](task:card-id)」，子任務層使用「2.1.1.1 @[列表](task:list-id) @[卡片](task:card-id) @[子任務](task:child-id)」。
+21. 不要把位置、排序、拖曳、重新排列、區塊更新這類低價值操作寫入會議紀錄正文；例如「位置已調整」「任務位置已調整」不得出現在 content。
 
 JSON schema:
 {
