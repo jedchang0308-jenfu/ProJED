@@ -299,6 +299,30 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             {/* 標題列 */}
             <div className="kanban-task-title-row flex items-start justify-between gap-1">
             <div className="kanban-task-title-content flex items-center gap-1 flex-1 min-w-0">
+              {hasChildren ? (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsChecklistExpanded(current => !current);
+                  }}
+                  className="kanban-checklist-toggle relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors after:absolute after:-inset-1 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-expanded={isChecklistExpanded}
+                  aria-controls={checklistRegionId}
+                  aria-label={checklistToggleLabel}
+                  title={checklistToggleLabel}
+                  data-kanban-checklist-toggle="true"
+                  data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
+                >
+                  <ChevronRight
+                    size={16}
+                    aria-hidden="true"
+                    className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
+                  />
+                </button>
+              ) : null}
+
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
               {isRecordCaptureMode ? (
                 <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
@@ -406,6 +430,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           {/* Level 3+ 下層任務展開區 */}
           {hasChildren && (
             <div
+              id={checklistRegionId}
               ref={setChecklistAreaDropRef}
               className={`kanban-checklist-section mt-px rounded-md border transition-[background-color,border-color,box-shadow] duration-100 ${
                 isChecklistTargeted
@@ -417,18 +442,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               data-desktop-drop-surface="true"
               data-desktop-drop-id={`${nodeId}-checklist-area-drop`}
             >
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsChecklistExpanded(!isChecklistExpanded);
-                }}
-                className="kanban-checklist-toggle flex items-center gap-0.5 px-1 py-0 text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                {isChecklistExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <span>{isChecklistExpanded ? '收合' : '展開'}下層任務</span>
-              </button>
-
               {isChecklistExpanded && (
                 <div className="kanban-checklist-body px-0.5 pb-0">
                   <KanbanChecklist
