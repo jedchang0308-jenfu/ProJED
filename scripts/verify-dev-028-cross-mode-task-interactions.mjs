@@ -145,10 +145,12 @@ assert(
     kanbanCard.includes('kanban-checklist-section') &&
     kanbanCard.includes('<KanbanChecklist') &&
     kanbanCard.includes('TagChip') &&
+    kanbanCard.includes('surface="checklist"') &&
     !kanbanCard.includes('CheckSquare') &&
     !kanbanCard.includes('childStats.completed') &&
     kanbanChecklist.includes('selectAndOpenTaskDetails(child.id)') &&
     kanbanChecklist.includes('data-task-id={child.id}') &&
+    kanbanChecklist.includes('surface="checklist"') &&
     !kanbanChecklist.includes('{grandchildIds.length}') &&
     !kanbanColumn.includes('data-task-title-input="true"') &&
     !kanbanCard.includes('data-task-title-input="true"') &&

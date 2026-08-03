@@ -9,6 +9,16 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-08-03（L2 / L3+ 看板日期顯示一致化）
+
+Spec Impact：對 DEV-028、DEV-054、DEV-055、DEV-059 為 `No conflict`。L2 不新增日期樣式，直接使用 L3+ 的 `TaskDateBadge surface="checklist"`；只統一可見樣式與密度，不改日期內容、篩選、警示、鎖定、資料或拖曳契約。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/components/Wbs/KanbanCard.tsx` | Implemented / Local Verified / Not Deployed | DEV-060 / DEV-028 | L2 日期改用既有 L3+ checklist surface，移除較大的 calendar Badge 差異。 |
+| `src/components/Wbs/TaskDateBadge.tsx` | Reused / Unchanged | DEV-060 | 沿用既有 checklist 日期 token、今日到期 warning 與鎖定樣式，未新增分支。 |
+| `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 37/37 | DEV-060 / DEV-028 | 鎖定 KanbanCard 與 KanbanChecklist 都必須使用同一 checklist 日期 surface。 |
+
 ## Documentation Map Update - 2026-08-03（看板階層統計徽章精簡）
 
 Spec Impact：對 DEV-028 舊有 `CheckSquare` 子任務完成統計呈現為 `Intentional replacement`；對 DEV-054、DEV-055、DEV-058 為 `No conflict`。只刪除卡片頂部 `完成數/總數` 與下層任務列右側子項目數量兩種重複 Badge，保留日期、藍色進度條、階層展開、欄位標頭統計與所有拖曳契約。

@@ -387,6 +387,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 startLocked={lockStatus.startLocked}
                 endLocked={lockStatus.endLocked}
                 durationLocked={Boolean(node.isDurationLocked)}
+                surface="checklist"
               />
               </> /* end normal mode */
               )}

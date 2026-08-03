@@ -274,6 +274,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得刪除日期、藍色進度條或欄位標頭的任務數／百分比；不得改變任務資料、階層、拖曳、選取或展開行為。
   - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint、4173 DOM / screenshot 與 `output/build-dev059-hierarchy-count-cleanup-20260803` production build 通過；桌面 evidence base `output/playwright/dev-055-desktop-drag-1785739442445-*`，手機 evidence base `output/playwright/dev-054-mobile-drag-1785739522598-*`。
   - 計入交付：是（本機開發交付；未部署）
+- ✓ DEV-060 [開發點] [完成] [P2] [本機自動與視覺驗證通過 / 待使用者確認 / 未部署] L2 / L3+ 看板日期顯示一致化
+  - 摘要：L2 任務卡日期改用 L3+ 已有的緊湊 `TaskDateBadge checklist` surface；兩者同為 9px、無日曆圖示、相同邊框與色彩，日期值、今日到期警示與日期鎖定語意不變。
+  - 來源 ID：`USER-20260803-kanban-l2-l3-date-parity`
+  - 父任務：DEV-028、DEV-059
+  - 下一步：使用者可在 `4173` 確認 L2 日期資訊密度；若確認後要上線，需另走 deployment release gate。
+  - 阻塞 / 恢復條件：不得複製新日期樣式、刪除日期、改變 `showStartDate`、到期警示、依賴／工期鎖定、任務資料或拖曳 geometry。
+  - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint 與 `output/build-dev060-l2-date-parity-20260803` production build 通過；4173 source probe 確認由目前工作樹提供，DOM 比對 L2/L3+ 均為 `9px`、無 calendar icon、無水平 overflow。桌面 evidence base `output/playwright/dev-055-desktop-drag-1785740714354-*`，手機 evidence base `output/playwright/dev-054-mobile-drag-1785740641001-*`。
+  - 計入交付：是（本機開發交付；未部署）
 
 
 ## PM Update 歷史歸檔
