@@ -324,9 +324,22 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 {node.title || '未命名任務'}
               </h4>
             </div>
+            {!isSelectingMode && (
+              <TaskDateBadge
+                startDate={node.startDate}
+                endDate={node.endDate}
+                status={status}
+                showStartDate={showStartDate}
+                startLocked={lockStatus.startLocked}
+                endLocked={lockStatus.endLocked}
+                durationLocked={Boolean(node.isDurationLocked)}
+                surface="checklist"
+                className="ml-0.5"
+              />
+            )}
           </div>
 
-          {/* 日期與進度指標 */}
+          {/* 標籤與進度指標 */}
           {showTags && nodeTags.length > 0 && (
             <div className="mt-px flex max-w-full flex-wrap gap-0.5">
               {nodeTags.slice(0, 4).map(tag => (
@@ -340,57 +353,38 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             </div>
           )}
 
-          {(isSelectingMode || node.startDate || node.endDate || hasChildren) && (
+          {isSelectingMode && (
             <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta flex flex-wrap items-center gap-1 mt-px text-[10px] text-slate-400">
 
               {/* 選取模式：始終顯示兩顆日期按鈕（無日期時顯示 "..."） */}
-              {isSelectingMode ? (
-                <>
-                  {/* 開始日按鈕 — 始終顯示 */}
-                  <button
-                    disabled={!canCreateDependency}
-                    onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
-                    className={`flex items-center gap-1 px-1.5 py-0 rounded-full border text-[10px] font-semibold transition-all ${
-                      isSelfStart
-                        ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                        : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 hover:border-blue-400 hover:shadow-sm cursor-crosshair'
-                    }`}
-                    title="點擊選取此開始日作為依賴目標"
-                  >
-                    <Link size={9} />
-                    <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
-                  </button>
-                  {/* 結束日按鈕 — 始終顯示 */}
-                  <button
-                    disabled={!canCreateDependency}
-                    onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
-                    className={`flex items-center gap-1 px-1.5 py-0 rounded-full border text-[10px] font-semibold transition-all ${
-                      isSelfEnd
-                        ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                        : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 hover:border-purple-400 hover:shadow-sm cursor-crosshair'
-                    }`}
-                    title="點擊選取此結束日作為依賴目標"
-                  >
-                    <Link size={9} />
-                    <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
-                  </button>
-                </>
-              ) : (
-                // 一般模式：原始日期 Badge 顯示
-                <>
-              {/* 日期區間 */}
-              <TaskDateBadge
-                startDate={node.startDate}
-                endDate={node.endDate}
-                status={status}
-                showStartDate={showStartDate}
-                startLocked={lockStatus.startLocked}
-                endLocked={lockStatus.endLocked}
-                durationLocked={Boolean(node.isDurationLocked)}
-                surface="checklist"
-              />
-              </> /* end normal mode */
-              )}
+              {/* 開始日按鈕 — 始終顯示 */}
+              <button
+                disabled={!canCreateDependency}
+                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+                className={`flex items-center gap-1 px-1.5 py-0 rounded-full border text-[10px] font-semibold transition-all ${
+                  isSelfStart
+                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                    : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 hover:border-blue-400 hover:shadow-sm cursor-crosshair'
+                }`}
+                title="點擊選取此開始日作為依賴目標"
+              >
+                <Link size={9} />
+                <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
+              </button>
+              {/* 結束日按鈕 — 始終顯示 */}
+              <button
+                disabled={!canCreateDependency}
+                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+                className={`flex items-center gap-1 px-1.5 py-0 rounded-full border text-[10px] font-semibold transition-all ${
+                  isSelfEnd
+                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                    : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 hover:border-purple-400 hover:shadow-sm cursor-crosshair'
+                }`}
+                title="點擊選取此結束日作為依賴目標"
+              >
+                <Link size={9} />
+                <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
+              </button>
             </div>
           )}
 

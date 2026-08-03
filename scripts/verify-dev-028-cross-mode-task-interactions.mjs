@@ -62,6 +62,10 @@ const manualClickReadiness = read(files.manualClickReadiness);
 const pkg = read(files.packageJson);
 const spec = read(files.spec);
 const qa = read(files.qa);
+const kanbanCardTitleSection = kanbanCard.slice(
+  kanbanCard.indexOf('kanban-task-title-row'),
+  kanbanCard.indexOf('{showTags &&'),
+);
 
 assert(
   'shared task detail event and detail-title edit signal are defined',
@@ -160,6 +164,13 @@ assert(
     !kanbanChecklist.includes('title="重新命名任務"') &&
     !kanbanCard.includes('title="點擊以編輯任務名稱"') &&
     !kanbanChecklist.includes('title="點擊以編輯任務名稱"'),
+);
+
+assert(
+  'Level 2 card date shares the Level 3+ title-row placement and checklist surface',
+  kanbanCardTitleSection.includes('<TaskDateBadge') &&
+    kanbanCardTitleSection.includes('surface="checklist"') &&
+    kanbanCardTitleSection.includes('className="ml-0.5"'),
 );
 
 assert(

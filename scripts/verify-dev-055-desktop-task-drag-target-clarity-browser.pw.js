@@ -209,9 +209,9 @@ async (page) => {
     return state;
   };
 
-  const beginMouseDrag = async (source, sourceRatio = { x: 0.55, y: 0.35 }) => {
+  const beginMouseDrag = async (source, sourceRatio = { x: 0.55, y: 0.35 }, startTarget = source) => {
     const sourceId = await source.getAttribute('data-task-id');
-    const point = await pointFor(source, sourceRatio.x, sourceRatio.y);
+    const point = await pointFor(startTarget, sourceRatio.x, sourceRatio.y);
     await page.mouse.move(point.x, point.y);
     await page.mouse.down();
     await page.mouse.move(point.x + 14, point.y + 3, { steps: 4 });
@@ -434,9 +434,9 @@ async (page) => {
     assert(await page.locator('[data-desktop-drop-indicator="true"]').count() === 0,
       'origin marker must clear after the no-op release');
 
-    const verifyAdditionalOriginSource = async (source, expectedSurfaceKind) => {
+    const verifyAdditionalOriginSource = async (source, expectedSurfaceKind, startTarget = source) => {
       const sourceNodesBefore = await readNodes();
-      const drag = await beginMouseDrag(source);
+      const drag = await beginMouseDrag(source, { x: 0.55, y: 0.5 }, startTarget);
       await page.waitForTimeout(140);
       const indicator = await readIndicator();
       assert(indicator.origin && indicator.noop
@@ -462,7 +462,12 @@ async (page) => {
     };
 
     await openApp();
-    const cardOriginIndicator = await verifyAdditionalOriginSource(cardsInColumn(0).first(), 'kanban-card');
+    const cardSource = cardsInColumn(0).first();
+    const cardOriginIndicator = await verifyAdditionalOriginSource(
+      cardSource,
+      'kanban-card',
+      cardSource.locator('.kanban-task-title-row'),
+    );
     await openApp();
     const columnOriginIndicator = await verifyAdditionalOriginSource(
       columns().first().locator('[data-kanban-column-header="true"]'),

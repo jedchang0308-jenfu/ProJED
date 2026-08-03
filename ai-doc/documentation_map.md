@@ -11,13 +11,14 @@
 
 ## Documentation Map Update - 2026-08-03（L2 / L3+ 看板日期顯示一致化）
 
-Spec Impact：對 DEV-028、DEV-054、DEV-055、DEV-059 為 `No conflict`。L2 不新增日期樣式，直接使用 L3+ 的 `TaskDateBadge surface="checklist"`；只統一可見樣式與密度，不改日期內容、篩選、警示、鎖定、資料或拖曳契約。
+Spec Impact：對 DEV-028、DEV-054、DEV-055、DEV-059 為 `No conflict`。L2 不新增日期樣式，直接使用 L3+ 的 `TaskDateBadge surface="checklist"`，並同樣放在標題列右側；只統一可見樣式、位置與密度，不改日期內容、篩選、警示、鎖定、資料或拖曳契約。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `src/components/Wbs/KanbanCard.tsx` | Implemented / Local Verified / Not Deployed | DEV-060 / DEV-028 | L2 日期改用既有 L3+ checklist surface，移除較大的 calendar Badge 差異。 |
+| `src/components/Wbs/KanbanCard.tsx` | Implemented / Local Verified / Not Deployed | DEV-060 / DEV-028 | L2 日期改用既有 L3+ checklist surface，並移到標題列右側，統一樣式與位置。 |
 | `src/components/Wbs/TaskDateBadge.tsx` | Reused / Unchanged | DEV-060 | 沿用既有 checklist 日期 token、今日到期 warning 與鎖定樣式，未新增分支。 |
-| `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 37/37 | DEV-060 / DEV-028 | 鎖定 KanbanCard 與 KanbanChecklist 都必須使用同一 checklist 日期 surface。 |
+| `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 38/38 | DEV-060 / DEV-028 | 鎖定 KanbanCard 與 KanbanChecklist 都必須使用同一 checklist 日期 surface，且 L2 日期必須位於標題列。 |
+| `scripts/verify-dev-055-desktop-task-drag-target-clarity-browser.pw.js` | Updated / Passed 16/16 | DEV-060 / DEV-055 | 卡片原地拖曳驗證明確從標題列起拖，不再依賴會受卡片高度影響的百分比座標。 |
 
 ## Documentation Map Update - 2026-08-03（看板階層統計徽章精簡）
 
