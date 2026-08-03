@@ -21,8 +21,9 @@ export interface DesktopTaskDropPreview {
 
 export interface DesktopTaskOriginIndicator {
   sourceNodeId: string;
+  sourceTitle: string;
   sourceSurfaceKind: TaskDropSurfaceKind;
-  indicatorRect: TaskDragIndicatorRect;
+  fieldRect: TaskDragIndicatorRect & { height: number };
 }
 
 const escapeAttributeToken = (value: string) => {
@@ -70,6 +71,17 @@ const getPrimaryGeometryElement = (
   return targetElement.querySelector<HTMLElement>('[data-task-card-primary="true"]') || targetElement;
 };
 
+const getTaskTitleElement = (
+  targetElement: HTMLElement,
+  targetSurfaceKind: TaskDropSurfaceKind,
+) => {
+  const geometryElement = getPrimaryGeometryElement(targetElement, targetSurfaceKind);
+  return geometryElement.querySelector<HTMLElement>('.task-title-text')
+    || targetElement.closest<HTMLElement>('[data-task-drop-surface-kind="kanban-card"]')
+      ?.querySelector<HTMLElement>('.task-title-text')
+    || null;
+};
+
 const getAppendAnchor = (
   targetElement: HTMLElement,
   targetSurfaceKind: TaskDropSurfaceKind,
@@ -101,9 +113,7 @@ const getIndicatorRect = ({
   if (geometryRect.width <= 0 || geometryRect.height < 0) return null;
 
   const columnRect = targetElement.closest<HTMLElement>('[data-kanban-column="true"]')?.getBoundingClientRect();
-  const titleElement = geometryElement.querySelector<HTMLElement>('.task-title-text')
-    || targetElement.closest<HTMLElement>('[data-task-drop-surface-kind="kanban-card"]')
-      ?.querySelector<HTMLElement>('.task-title-text');
+  const titleElement = getTaskTitleElement(targetElement, targetSurfaceKind);
   const titleRect = titleElement?.getBoundingClientRect();
   const horizontalInset = 4;
   const visibleLeft = columnRect ? columnRect.left + horizontalInset : geometryRect.left;
@@ -163,12 +173,58 @@ export const resolveDesktopTaskDropPreview = ({
   };
 };
 
+const getOriginFieldRect = ({
+  sourceElement,
+  sourceSurfaceKind,
+}: {
+  sourceElement: HTMLElement;
+  sourceSurfaceKind: TaskDropSurfaceKind;
+}): (TaskDragIndicatorRect & { height: number }) | null => {
+  const geometryElement = getPrimaryGeometryElement(sourceElement, sourceSurfaceKind);
+  const geometryRect = geometryElement.getBoundingClientRect();
+  if (geometryRect.width <= 0 || geometryRect.height <= 0) return null;
+
+  const titleRect = getTaskTitleElement(sourceElement, sourceSurfaceKind)?.getBoundingClientRect();
+  if (!titleRect) {
+    const horizontalInset = sourceSurfaceKind === 'column-header' ? 10
+      : sourceSurfaceKind === 'kanban-card' ? 9 : 0;
+    const topInset = sourceSurfaceKind === 'column-header' ? 8
+      : sourceSurfaceKind === 'kanban-card' ? 6 : 0;
+    const height = Math.min(sourceSurfaceKind === 'checklist-row' ? geometryRect.height : 20, geometryRect.height - topInset);
+    const width = geometryRect.width - horizontalInset * 2;
+    if (width < 24 || height < 12) return null;
+    return {
+      left: geometryRect.left + horizontalInset,
+      top: geometryRect.top + topInset,
+      width,
+      height,
+    };
+  }
+
+  const horizontalPadding = 4;
+  const verticalPadding = 2;
+  const left = Math.max(geometryRect.left, titleRect.left - horizontalPadding);
+  const right = geometryRect.right;
+  const top = Math.max(geometryRect.top, titleRect.top - verticalPadding);
+  const bottom = Math.min(geometryRect.bottom, titleRect.bottom + verticalPadding);
+  if (right - left < 24 || bottom - top < 12) return null;
+
+  return {
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
+  };
+};
+
 export const resolveDesktopTaskOriginIndicator = ({
   activeData,
   sourceElement,
+  sourceTitle,
 }: {
   activeData: DesktopDragData;
   sourceElement: HTMLElement | null;
+  sourceTitle?: string;
 }): DesktopTaskOriginIndicator | null => {
   const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(activeData?.type);
   if (
@@ -180,17 +236,17 @@ export const resolveDesktopTaskOriginIndicator = ({
     return null;
   }
 
-  const indicatorRect = getIndicatorRect({
-    targetElement: sourceElement,
-    targetSurfaceKind: sourceSurfaceKind,
-    displayPosition: 'before',
+  const fieldRect = getOriginFieldRect({
+    sourceElement,
+    sourceSurfaceKind,
   });
-  if (!indicatorRect) return null;
+  if (!fieldRect) return null;
 
   return {
     sourceNodeId: activeData.nodeId,
+    sourceTitle: sourceTitle?.trim() || '未命名任務',
     sourceSurfaceKind,
-    indicatorRect,
+    fieldRect,
   };
 };
 

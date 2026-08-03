@@ -30,11 +30,11 @@ check('S01', 'DEV-058 documentation is linked',
   && source.devTask.includes('QA-DEV-058-desktop-drag-origin-insertion-feedback.md')
   && source.map.includes('SPEC-058-desktop-drag-origin-insertion-feedback.md'));
 
-check('S02', 'origin geometry reuses the desktop indicator geometry path', hasAll(source.preview, [
+check('S02', 'origin field geometry reuses the desktop task title geometry path', hasAll(source.preview, [
   'export const resolveDesktopTaskOriginIndicator',
   'taskDragSourceKindToSurfaceKind(activeData?.type)',
-  'const indicatorRect = getIndicatorRect({',
-  "displayPosition: 'before'",
+  'const getTaskTitleElement = (',
+  'const fieldRect = getOriginFieldRect({',
 ]));
 
 check('S03', 'mouse movement gates the origin indicator to the captured source rect', hasAll(source.board, [
@@ -52,14 +52,13 @@ check('S04', 'origin feedback is explicit no-op metadata in the single fixed ove
   'data-desktop-drop-indicator-layer="fixed-overlay"',
 ]) && (source.board.match(/data-desktop-drop-indicator="true"/g) || []).length === 1);
 
-check('S05', 'origin marker is an emphasized variant of the existing blue marker', hasAll(source.board, [
-  "emphasized={desktopIndicator.kind === 'origin'}",
-  '<KanbanInsertionMarker',
-]) && hasAll(source.marker, [
-  'emphasized?: boolean;',
-  "data-kanban-insertion-emphasis={emphasized ? 'strong' : 'standard'}",
-  "emphasized || !compact ? 'h-2' : 'h-1.5'",
-]));
+check('S05', 'origin feedback fills the exact title field blue while normal targets keep the existing marker', hasAll(source.board, [
+  'data-desktop-origin-field="true"',
+  'bg-blue-500',
+  'text-white',
+  '<span className="truncate">{desktopIndicator.sourceTitle}</span>',
+  '<KanbanInsertionMarker compact className="py-0" />',
+]) && !source.marker.includes('emphasized'));
 
 check('S06', 'source collision remains blocked and origin release cannot enter commit', hasAll(source.board, [
   "type: 'collision:source-block'",
@@ -76,11 +75,13 @@ check('S08', 'workbench source is excluded and mobile drag code is untouched',
   source.preview.includes("sourceSurfaceKind === 'workbench-unplaced-row'")
   && !/useTaskDragSession|TouchEvent|mobile-task-action-rail/.test(source.preview));
 
-check('S09', 'browser contract proves one thick same-color no-op marker and zero writes', hasAll(source.browser, [
+check('S09', 'browser contract proves one blue title-field no-op state and zero writes', hasAll(source.browser, [
   "originIndicator.position === 'origin'",
-  "originIndicator.emphasis === 'strong'",
-  'originIndicator.barHeight > childState.indicator.barHeight',
-  'originIndicator.barColor === childState.indicator.barColor',
+  "originIndicator.feedbackKind === 'origin-field'",
+  "originIndicator.fieldClassName.includes('bg-blue-500')",
+  "originIndicator.fieldClassName.includes('text-white')",
+  "originIndicator.fieldColor === 'rgb(255, 255, 255)'",
+  'originIndicator.fieldText === beforeNodes[sourceId].title',
   'zero-write no-op',
 ]));
 

@@ -381,6 +381,7 @@ const BoardView = () => {
         const originIndicator = resolveDesktopTaskOriginIndicator({
             activeData,
             sourceElement: sourceElement || null,
+            sourceTitle: nodeId ? useWbsStore.getState().nodes[nodeId]?.title : undefined,
         });
         desktopDragOriginIndicatorRef.current = originIndicator;
         const activatorEvent = event.activatorEvent;
@@ -531,6 +532,8 @@ const BoardView = () => {
             position: desktopDropPreview.displayPosition,
             surfaceKind: desktopDropPreview.targetSurfaceKind,
             indicatorRect: desktopDropPreview.indicatorRect,
+            fieldHeight: undefined,
+            sourceTitle: undefined,
         }
         : desktopOriginIndicator
             ? {
@@ -538,7 +541,9 @@ const BoardView = () => {
                 targetNodeId: desktopOriginIndicator.sourceNodeId,
                 position: 'origin' as const,
                 surfaceKind: desktopOriginIndicator.sourceSurfaceKind,
-                indicatorRect: desktopOriginIndicator.indicatorRect,
+                indicatorRect: desktopOriginIndicator.fieldRect,
+                fieldHeight: desktopOriginIndicator.fieldRect.height,
+                sourceTitle: desktopOriginIndicator.sourceTitle,
             }
             : null;
 
@@ -650,11 +655,14 @@ const BoardView = () => {
             </div>
             {desktopIndicator ? (
                 <div
-                    className="pointer-events-none fixed z-[86] -translate-y-1/2"
+                    className={`pointer-events-none fixed z-[86] ${
+                        desktopIndicator.kind === 'origin' ? '' : '-translate-y-1/2'
+                    }`}
                     style={{
                         left: desktopIndicator.indicatorRect.left,
                         top: desktopIndicator.indicatorRect.top,
                         width: desktopIndicator.indicatorRect.width,
+                        height: desktopIndicator.fieldHeight,
                     }}
                     data-desktop-drop-indicator="true"
                     data-desktop-drop-target={desktopIndicator.targetNodeId}
@@ -664,11 +672,19 @@ const BoardView = () => {
                     data-desktop-drop-noop={desktopIndicator.kind === 'origin' ? 'true' : undefined}
                     data-desktop-drop-indicator-layer="fixed-overlay"
                 >
-                    <KanbanInsertionMarker
-                        compact
-                        emphasized={desktopIndicator.kind === 'origin'}
-                        className="py-0"
-                    />
+                    {desktopIndicator.kind === 'origin' ? (
+                        <div
+                            className={`task-title-text flex h-full w-full items-center rounded bg-blue-500 px-1.5 font-medium text-white shadow-[0_0_0_2px_rgba(59,130,246,0.18)] ${
+                                desktopIndicator.surfaceKind === 'checklist-row' ? 'text-xs' : 'text-sm'
+                            }`}
+                            data-desktop-origin-field="true"
+                            aria-hidden="true"
+                        >
+                            <span className="truncate">{desktopIndicator.sourceTitle}</span>
+                        </div>
+                    ) : (
+                        <KanbanInsertionMarker compact className="py-0" />
+                    )}
                 </div>
             ) : null}
             <DragOverlay dropAnimation={null}>

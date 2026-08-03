@@ -258,14 +258,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得將這個樣式套用到拖曳預覽，不得讓父子 task surface 同時顯示 hover 框，不得使 X 關閉遺失最後輸入。
   - 證據：artifact commit `1c7c060`；release branch `codex/task-save-hover-release-20260718-151753`；DEV-033 browser 通過；desktop hover parent / child / column exact ownership 通過；DEV-055 browser B01-B16 16/16 通過；production build、Level 2 local artifact smoke、Firebase Level 3 preview 與 Level 4 production smoke 通過。正式站已登入抽查儲存鈕與 X 同列，實際下層任務游標預選僅顯示一個 `2px inset` 藍框。完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260718-task-save-hover.md`。
   - 計入交付：是
-- ✓ DEV-058 [開發點] [完成] [P2] [本機已驗證 / 未部署] 桌面拖曳原地粗插入線回饋
-  - 摘要：桌面滑鼠拖曳回到來源任務範圍時，以既有藍色 `KanbanInsertionMarker` 與 fixed overlay 顯示較粗的原地插入線，補足 no-op 狀態的非語言回饋；其他有效落點維持既有一般插入線。
+- ✓ DEV-058 [開發點] [完成] [P2] [本機自動驗證通過 / 待使用者確認 / 未部署] 桌面拖曳原地文字欄位藍色回饋
+  - 摘要：Attempt 1 原地粗插入線通過自動化但使用者判定不夠直覺。Rework 1 改為桌面滑鼠拖曳回到來源任務範圍時，在原始標題位置顯示藍底白字任務名稱；其他有效落點維持既有一般插入線。
   - 來源 ID：`USER-20260803-desktop-drag-origin-insertion-feedback`
   - 父任務：DEV-055
   - 下一步：已可由使用者在 `持續優化3` 本機 preview 操作；若確認手感後要上線，需另走 deployment release gate。
   - 阻塞 / 恢復條件：不得改變 `collision:source-block`、commit / undo、8px 起手門檻、click / right-click、手機拖曳或既有正常落點線；來源放開必須零寫入，且畫面任一時間只能有一條 fixed overlay marker。
-  - 證據：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`、`ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md`；DEV-058 static 19/19、DEV-055 static 27/27、DEV-046 31/31、DEV-053 30/30、DEV-054 34/34、TypeScript、ESLint、production build（1970 modules）通過。DEV-055 browser B01-B16 16/16 通過；B07 量測一般 bar 6px、origin bar 8px、同色 `rgb(99, 102, 241)`，checklist/card/column 來源放開皆零寫入。截圖：`output/playwright/dev-055-desktop-drag-1785730332191-B07-origin-noop-marker.png`。
-  - 計入交付：是（本機開發完成；尚未正式部署）
+  - 證據：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`、`ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md`；Rework 1 static：DEV-058 19/19、DEV-055 27/27、DEV-046 31/31、DEV-053 30/30、DEV-054 34/34；browser B01-B16 16/16；ESLint、TypeScript、全新 outDir production build 與藍色原地欄位截圖檢查通過。Attempt 1 證據僅保留為被取代歷史。
+  - 計入交付：是（本機開發與自動驗證完成；使用者確認與 production deploy 未執行）
 
 
 ## PM Update 歷史歸檔

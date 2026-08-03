@@ -128,6 +128,7 @@ async (page) => {
       const rect = element.getBoundingClientRect();
       const marker = element.querySelector('[data-kanban-insertion-marker="true"]');
       const bar = element.querySelector('[data-kanban-insertion-bar="true"]');
+      const originField = element.querySelector('[data-desktop-origin-field="true"]');
       const barRect = bar?.getBoundingClientRect();
       return {
         targetNodeId: element.getAttribute('data-desktop-drop-target'),
@@ -135,9 +136,13 @@ async (page) => {
         surfaceKind: element.getAttribute('data-desktop-drop-surface-kind'),
         origin: element.getAttribute('data-desktop-drop-origin') === 'true',
         noop: element.getAttribute('data-desktop-drop-noop') === 'true',
-        emphasis: marker?.getAttribute('data-kanban-insertion-emphasis') || null,
+        feedbackKind: originField ? 'origin-field' : marker ? 'insertion-marker' : null,
         barHeight: barRect?.height || 0,
         barColor: bar ? getComputedStyle(bar).backgroundColor : null,
+        fieldBackground: originField ? getComputedStyle(originField).backgroundColor : null,
+        fieldColor: originField ? getComputedStyle(originField).color : null,
+        fieldClassName: originField?.className || null,
+        fieldText: originField?.textContent?.trim() || null,
         rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width },
         viewport: { width: innerWidth, height: innerHeight },
       };
@@ -166,8 +171,41 @@ async (page) => {
           })(),
         }));
     });
-    assert(markerState.length === 1 && markerState[0].insideDesktopIndicator && !markerState[0].insideSourcePlaceholder,
-      'desktop drag must render exactly one visible insertion marker and it must be the fixed overlay', { markerState });
+    const originFieldState = await page.evaluate(() => {
+      const visible = (element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      };
+      return Array.from(document.querySelectorAll('[data-desktop-origin-field="true"]'))
+        .filter(visible)
+        .map((element) => ({
+          insideDesktopIndicator: Boolean(element.closest('[data-desktop-drop-indicator="true"]')),
+          insideSourcePlaceholder: Boolean(element.closest('[data-kanban-drag-source-placeholder="true"]')),
+        }));
+    });
+    if (state.origin) {
+      assert(state.feedbackKind === 'origin-field' && markerState.length === 0
+        && originFieldState.length === 1
+        && originFieldState[0].insideDesktopIndicator
+        && !originFieldState[0].insideSourcePlaceholder,
+      'origin no-op feedback must be one fixed-overlay title field with no visible insertion marker', {
+        state,
+        markerState,
+        originFieldState,
+      });
+    } else {
+      assert(state.feedbackKind === 'insertion-marker'
+        && markerState.length === 1
+        && markerState[0].insideDesktopIndicator
+        && !markerState[0].insideSourcePlaceholder
+        && originFieldState.length === 0,
+      'normal desktop target must render exactly one fixed-overlay insertion marker and no origin field', {
+        state,
+        markerState,
+        originFieldState,
+      });
+    }
     return state;
   };
 
@@ -354,7 +392,7 @@ async (page) => {
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
   });
 
-  await runCase('QA-055-B07', 'expanded child owns the pointer and source return exposes one thick no-op origin marker', async () => {
+  await runCase('QA-055-B07', 'expanded child owns the pointer and source return fills its title field blue', async () => {
     await openApp();
     const sourceCard = cardsWithChildren().nth(0);
     const targetCard = cardsWithChildren().nth(1);
@@ -374,15 +412,20 @@ async (page) => {
       && originIndicator.position === 'origin'
       && originIndicator.targetNodeId === sourceId
       && originIndicator.surfaceKind === 'checklist-row',
-    'source row must expose its own explicit no-op origin marker instead of falling through to its card', { originIndicator, sourceId });
-    assert(originIndicator.emphasis === 'strong'
-      && originIndicator.barHeight > childState.indicator.barHeight
-      && originIndicator.barColor === childState.indicator.barColor,
-    'origin marker must reuse the existing blue style with a thicker bar than normal targets', {
+    'source row must expose its own explicit no-op origin field instead of falling through to its card', { originIndicator, sourceId });
+    assert(originIndicator.feedbackKind === 'origin-field'
+      && originIndicator.barHeight === 0
+      && originIndicator.fieldClassName.includes('bg-blue-500')
+      && originIndicator.fieldClassName.includes('text-white')
+      && originIndicator.fieldBackground !== 'rgba(0, 0, 0, 0)'
+      && originIndicator.fieldColor === 'rgb(255, 255, 255)'
+      && originIndicator.fieldText === beforeNodes[sourceId].title,
+    'origin feedback must fill the original title field blue with the correct white task title', {
       originIndicator,
       normalIndicator: childState.indicator,
+      expectedTitle: beforeNodes[sourceId].title,
     });
-    const screenshotPath = `${screenshotBase}-B07-origin-noop-marker.png`;
+    const screenshotPath = `${screenshotBase}-B07-origin-blue-title-field.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.mouse.up();
     await page.waitForTimeout(220);
@@ -400,8 +443,13 @@ async (page) => {
         && indicator.position === 'origin'
         && indicator.targetNodeId === drag.sourceId
         && indicator.surfaceKind === expectedSurfaceKind
-        && indicator.emphasis === 'strong',
-      'each desktop task source kind must expose the same origin no-op marker contract', {
+        && indicator.feedbackKind === 'origin-field'
+        && indicator.fieldClassName.includes('bg-blue-500')
+        && indicator.fieldClassName.includes('text-white')
+        && indicator.fieldBackground !== 'rgba(0, 0, 0, 0)'
+        && indicator.fieldColor === 'rgb(255, 255, 255)'
+        && indicator.fieldText === sourceNodesBefore[drag.sourceId].title,
+      'each desktop task source kind must expose the same blue origin title-field contract', {
         indicator,
         sourceId: drag.sourceId,
         expectedSurfaceKind,

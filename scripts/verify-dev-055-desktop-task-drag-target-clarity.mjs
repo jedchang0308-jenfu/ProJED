@@ -98,7 +98,8 @@ check('S11', 'displayed preview and final commit must match and revalidate lates
 ]));
 
 check('S12', 'desktop task drag indicator is overlay-only and does not create a layout marker',
-  source.board.includes('className="pointer-events-none fixed z-[86] -translate-y-1/2"')
+  source.board.includes('className={`pointer-events-none fixed z-[86]')
+  && source.board.includes("desktopIndicator.kind === 'origin' ? '' : '-translate-y-1/2'")
   && source.card.includes('data-desktop-dropzone-layout="overlay"')
   && source.card.includes("showChecklistAppendSurface ? 'z-20' : '-z-10 pointer-events-none'")
   && !source.card.includes("showChecklistDropZone ? 'h-6 opacity-100'")
