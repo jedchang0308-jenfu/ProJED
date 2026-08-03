@@ -167,6 +167,21 @@ async (page) => {
     }, title, { timeout: 10000 });
   };
 
+  const publishMeetingRecord = async (title) => {
+    const publishStep = page.locator('[data-meeting-workflow-step="published"]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-meeting-workflow-step="published"]')?.hasAttribute('disabled'),
+      null,
+      { timeout: 10000 },
+    );
+    await publishStep.click();
+    await page.waitForFunction((expectedTitle) => {
+      const records = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
+      return records.some(record => record.title === expectedTitle && record.status === 'published');
+    }, title, { timeout: 10000 });
+    await page.locator('aside', { hasText: '會議紀錄已發布' }).waitFor({ state: 'visible', timeout: 10000 });
+  };
+
   const getSavedRecordContent = async (title) => page.evaluate((expectedTitle) => {
     const records = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
     const record = records.find(item => item.title === expectedTitle);
@@ -278,6 +293,34 @@ async (page) => {
       const screenshotPath = `${screenshotBase}-ROT-003-004.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       return { title, screenshotPath, contentExcerpt: content.slice(0, 700) };
+    });
+
+    await runCase('ROT-005', 'saved review draft can still publish as a formal meeting record', async () => {
+      await seed();
+      const title = `DEV-024 ROT-005 ${Date.now()}`;
+      await openMeetingComposer(title, '校稿後發布路徑驗證：使用者已確認會議結論。');
+      await runAiSynthesis();
+      await saveReviewDraft(title);
+      await publishMeetingRecord(title);
+      const proof = await page.evaluate((expectedTitle) => {
+        const records = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
+        const record = records.find(item => item.title === expectedTitle);
+        const statusSummary = document.querySelector('[data-record-status-summary]')?.textContent || '';
+        const publishState = document.querySelector('[data-meeting-workflow-step="published"]')?.getAttribute('data-meeting-workflow-step-state') || '';
+        return {
+          recordStatus: record?.status,
+          ragEnabled: record?.ragEnabled,
+          statusSummary,
+          publishState,
+        };
+      }, title);
+      assert(proof.recordStatus === 'published', 'saved review draft should publish instead of staying draft', proof);
+      assert(proof.ragEnabled === true, 'published local-test record should enable RAG mirror flag', proof);
+      assert(proof.statusSummary.includes('已發布'), 'sidebar status summary should show published state', proof);
+      assert(proof.publishState === 'complete', 'publish workflow step should be complete', proof);
+      const screenshotPath = `${screenshotBase}-ROT-005.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+      return { title, screenshotPath, proof };
     });
   } finally {
     const failed = results.filter(result => result.result !== 'PASS');

@@ -6,13 +6,16 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-022');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingRecordSynthesis.ts',
   'src/utils/projectChangeImport.ts',
 ];
 
 rmSync(tempRoot, { recursive: true, force: true });
 
 const rewriteImports = (outputText) =>
-  outputText.replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'");
+  outputText
+    .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingRecordSynthesis'", "from './meetingRecordSynthesis.js'");
 
 for (const sourcePath of sources) {
   const source = readFileSync(sourcePath, 'utf8');
@@ -54,6 +57,7 @@ const importedRenderedMeetingRecord = [
   '2. 任務討論與結論',
   '2.1 @[Done（副本）](task:node_done_copy)',
   '任務已封存。',
+  '位置已調整。',
   '',
   '2.1.1 @[Done（副本）](task:node_done_copy) @[QC task 3](task:node_qc3)',
   '新增任務。',
@@ -100,6 +104,7 @@ const evidence = normalizeProjectChangeImportEvidence(importedRenderedMeetingRec
 assert('evidence strips summary heading', !/^1\.\s+本次會議總結/m.test(evidence));
 assert('evidence strips task discussion heading', !/^2\.\s+任務討論與結論/m.test(evidence));
 assert('evidence strips other heading', !/^3\.\s+其他/m.test(evidence));
+assert('evidence strips low-value position adjustment line', !evidence.includes('位置已調整'));
 assert('evidence keeps task mention', evidence.includes('(task:node_qc3)'));
 
 const repeated = mergeProjectChangeImportBlocks(merged, preservedContent);

@@ -59,6 +59,8 @@ const checks = [
       "visibility: 'tenant'",
       'insertTaskMentionAtCursor',
       'syncTaskLinksFromRecordContent',
+      'status?: KnowledgeRecordStatus',
+      'options.status',
     ],
   },
   {
@@ -72,6 +74,12 @@ const checks = [
       ".from('rag_sync_jobs')",
       "status: 'pending'",
       'RAG_EMBEDDING_PROVIDER',
+      'resolveRecordTaskLinkItemId',
+      'Skipping unresolved record task link',
+      'resolvedLinkedTaskIds',
+      'disableRecordRagMirrorAfterFailure',
+      'Record saved, but RAG mirror sync failed',
+      'ragEnabled = false',
     ],
   },
   {
@@ -93,6 +101,7 @@ const checks = [
       'aria-expanded={isLinkedTasksOpen}',
       'data-record-linked-tasks-list',
       'saveDraft',
+      'saveDraft({ nodes, status })',
     ],
   },
   {

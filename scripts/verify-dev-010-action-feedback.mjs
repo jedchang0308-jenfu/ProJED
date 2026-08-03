@@ -80,6 +80,7 @@ const checks = [
       'AI整理',
       '直接發布會保存目前編輯器內容',
       '目前狀態',
+      'saveDraft({ nodes, status })',
     ],
     forbiddenSnippets: [
       'MEETING_TERMS.action.exit',
@@ -117,6 +118,7 @@ const checks = [
       'await get().synthesizeMeetingDraft',
       'meetingSynthesisStatus !==',
       'appendMeetingActivitiesToDraft(currentDraft',
+      'updateDraft({ status })',
     ],
   },
   {

@@ -47,12 +47,14 @@ const taskA = mentions.serializeTaskMention('task_a', '任務 A');
 const taskB = mentions.serializeTaskMention('task_b', '任務 B');
 const taskC = mentions.serializeTaskMention('task_c', '任務 C');
 const taskD = mentions.serializeTaskMention('task_d', '任務 D');
+const taskE = mentions.serializeTaskMention('task_e', '任務 E');
 const result = synthesis.buildDeterministicMeetingSynthesis({
   title: '產品週會',
   participantsText: 'PM, RD, QA',
   rawContent: [
     '## 任務討論',
     '- 待 AI 統整。',
+    `- 08:55 ${taskA} 位置已調整。`,
     '今天先看 A 的設計，再回來補 B 的 QA。',
     `- 09:00 ${taskA} 設計方向確認，RD 先改資料流，不要動資料表。`,
     `- 09:04 ${taskB} QA case 要補實際輸入測試，尤其是貼上和中文輸入。`,
@@ -71,6 +73,7 @@ const result = synthesis.buildDeterministicMeetingSynthesis({
     { id: 'task_b', title: '任務 B', status: 'todo', description: '補 UX 驗證計畫。' },
     { id: 'task_c', title: '任務 C', status: 'todo', description: '專案既有背景不應寫入。' },
     { id: 'task_d', title: '任務 D', status: 'completed', description: '補測結果不應被當成下一步。' },
+    { id: 'task_e', title: '任務 E', status: 'todo' },
   ],
   activities: [
     { eventType: 'task_status_changed', nodeId: 'task_a', title: '任務 A', occurredAt: 1780800000000, summary: '狀態由「待辦」改為「進行中」。' },
@@ -78,6 +81,7 @@ const result = synthesis.buildDeterministicMeetingSynthesis({
     { eventType: 'task_dates_changed', nodeId: 'task_b', title: '任務 B', occurredAt: 1780800600000, summary: '日期由「2026-06-07 至 2026-06-08」改為「2026-06-09 至 2026-06-10」。' },
     { eventType: 'task_assigned', nodeId: 'task_b', title: '任務 B', occurredAt: 1780800700000, summary: '負責人改為「王小明」。' },
     { eventType: 'task_created', nodeId: 'task_c', title: '任務封存', occurredAt: 1780800800000, summary: '新增任務「任務封存」。' },
+    { eventType: 'task_moved', nodeId: 'task_e', title: '任務 E', occurredAt: 1780800900000, summary: '位置已調整。' },
   ],
 });
 
@@ -97,6 +101,8 @@ assert('natural synthesis should not say meeting change prefix', !result.content
 assert('assignee change includes target assignee', result.content.includes('負責人改為「王小明」'));
 assert('created task includes concrete task title', result.content.includes('新增任務「任務封存」'));
 assert('created task does not use empty system phrase', !result.content.includes('新任務：新增任務') && !result.content.includes('新增任務：新增任務'));
+assert('low-value position activity is filtered from content', !result.content.includes('位置已調整') && !result.content.includes('任務位置已調整'));
+assert('task with only position activity is not promoted to meeting section', !result.content.includes(taskE) && !result.linkedTaskIds.includes('task_e'));
 assert('natural synthesis should not use system task labels', !result.content.includes('本任務') && !result.content.includes('子任務：'));
 const summarySection = result.content.split('\n\n2. 任務討論與結論')[0] || '';
 assert('summary should not become activity log', (summarySection.match(/新增任務「/g) || []).length <= 1);
@@ -175,6 +181,7 @@ assert('edge prompt bans AI meta intro', edgeSource.includes('不要在開頭寫
 assert('edge prompt restricts next steps to human content', edgeSource.includes('「下一步」只能整理 rawContent 中人類明確講到'));
 assert('edge prompt bans markdown headings', edgeSource.includes('不得有任何行以 #'));
 assert('edge prompt requires numbered headings', edgeSource.includes('1. / 2.1 / 2.1.1'));
+assert('edge prompt bans low-value position activity in content', edgeSource.includes('位置已調整') && edgeSource.includes('不得出現在 content'));
 assert('edge prompt bans system task labels', edgeSource.includes('不要加「本任務」或「子任務：」'));
 assert('edge prompt requires assignee target', edgeSource.includes('負責人變更必須說明變為誰'));
 assert('edge model error is explicit', edgeSource.includes('請檢查 GEMINI_MEETING_SYNTHESIS_MODEL'));
