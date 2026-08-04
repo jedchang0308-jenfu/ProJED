@@ -79,9 +79,10 @@ const productionSources = [
   ['supabase/migrations/20260702094146_dev_042_workbench_staging.sql', 'C434A993DB477B48330CFAC49A51084E2E1C5C12243F6C3BDD6DE7188FC94EB7'],
 ];
 
-const normalize = (value) => value.replace(/\r\n?/g, '\n').trim();
+const normalizeLineEndings = (value) => value.replace(/\r\n?/g, '\n');
+const normalize = (value) => normalizeLineEndings(value).trim();
 const md5 = (value) => createHash('md5').update(normalize(value)).digest('hex');
-const sha256 = (value) => createHash('sha256').update(value).digest('hex').toUpperCase();
+const sha256 = (value) => createHash('sha256').update(normalizeLineEndings(value)).digest('hex').toUpperCase();
 const results = [];
 const assert = (name, ok, details = undefined) => results.push({ name, ok, details });
 
@@ -114,7 +115,7 @@ for (const [path, expectedSha256] of productionSources) {
   if (!existsSync(sourcePath)) continue;
   assert(
     `production source hash is stable:${path}`,
-    sha256(readFileSync(sourcePath)) === expectedSha256,
+    sha256(readFileSync(sourcePath, 'utf8')) === expectedSha256,
   );
 }
 
