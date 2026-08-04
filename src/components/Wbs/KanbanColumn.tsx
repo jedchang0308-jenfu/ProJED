@@ -14,6 +14,7 @@ import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
+import { TaskDateBadge } from './TaskDateBadge';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -26,6 +27,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const storeNode = useWbsStore((state) => state.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
   const progress = useWbsStore((state) => state.getNodeProgress(nodeId));
+  const wbsDependencies = useWbsStore((state) => state.dependencies);
+  const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
+  const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const addNode = useWbsStore((state) => state.addNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const showStartDate = useBoardStore((state) => state.showStartDate);
@@ -110,7 +114,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     : { ...columnAttributes, ...columnListeners };
 
   const status = node?.status || 'todo';
-  const isDueToday = status !== 'completed' && !!node?.endDate && dayjs(node.endDate).isSame(dayjs(), 'day');
   const overData = over?.data.current;
   const overNodeId = overData?.nodeId;
   const nodes = previewNodes || useWbsStore.getState().nodes;
@@ -221,30 +224,33 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           />
         ) : (
         <>
-        <div className="flex items-center gap-1.5">
-          <div className="flex flex-1 items-center justify-between">
-            <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
-              <h3
-                className={`task-title-text truncate text-sm font-medium transition-colors hover:text-primary ${
-                  status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
-                }`}
-                title={node.title || '未命名任務'}
-              >
-                {node.title || '未命名任務'}
-              </h3>
-            </div>
-          </div>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3
+            className={`task-title-text min-w-0 flex-1 truncate text-sm font-medium transition-colors hover:text-primary ${
+              status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
+            }`}
+            title={node.title || '未命名任務'}
+          >
+            {node.title || '未命名任務'}
+          </h3>
+          {!isSelectingMode && (
+            <TaskDateBadge
+              startDate={node.startDate}
+              endDate={node.endDate}
+              status={status}
+              showStartDate={showStartDate}
+              startLocked={lockStatus.startLocked}
+              endLocked={lockStatus.endLocked}
+              durationLocked={Boolean(node.isDurationLocked)}
+              surface="checklist"
+              className="ml-0.5"
+            />
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
-          <div className="flex items-center gap-1">
-            <span className="font-bold">{children.length}</span>
-            <span>任務</span>
-          </div>
-
-          {/* 日期區 — 選取模式顯示可點擊按鈕，一般模式顯示原始日期標籤 */}
-          {isSelectingMode ? (
-            <div className="flex items-center gap-1.5 flex-wrap">
+        {/* 日期依賴選取模式維持原有互動；一般模式由標題列的共用日期徽章呈現。 */}
+        {isSelectingMode && (
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
               {/* 開始日按鈕 */}
               <button
                 disabled={!canCreateDependency}
@@ -273,42 +279,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                 <Link size={9} />
                 <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
               </button>
-            </div>
-          ) : (
-          <>{( (showStartDate && node.startDate) || node.endDate) && (
-            <div className={`flex items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium ${
-              isDueToday
-                ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
-                : 'bg-slate-200/50 text-slate-500'
-            }`}>
-              {showStartDate && (
-                  <>
-                      <span>
-                        {node.startDate
-                          ? dayjs(node.startDate).year() !== dayjs().year()
-                            ? dayjs(node.startDate).format('YY/MM/DD')
-                            : dayjs(node.startDate).format('MM/DD')
-                          : '...'}
-                      </span>
-                      <span className="opacity-50">至</span>
-                  </>
-              )}
-              <span>
-                {node.endDate
-                  ? dayjs(node.endDate).year() !== dayjs().year()
-                    ? dayjs(node.endDate).format('YY/MM/DD')
-                    : dayjs(node.endDate).format('MM/DD')
-                  : '...'}
-              </span>
-            </div>
-          )}</>
-          )}
-
-          <div className="flex items-center gap-1">
-            <span className="font-bold">{Math.round(progress)}%</span>
           </div>
+        )}
 
-          <div className="h-1 max-w-[80px] flex-1 overflow-hidden rounded-full bg-slate-200">
+        {/* 與 L2 相同：有下層任務時只呈現一條滿寬細進度條。 */}
+        {children.length > 0 && (
+          <div className="kanban-task-progress mt-px">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
             <div
               className={`h-full rounded-full transition-all duration-300 ${
                 progress === 100 ? 'bg-emerald-400' : progress > 0 ? 'bg-blue-400' : 'bg-slate-200'
@@ -316,7 +293,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               style={{ width: `${progress}%` }}
             />
           </div>
-        </div>
+          </div>
+        )}
         </>
         )}
       </div>
