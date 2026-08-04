@@ -110,6 +110,7 @@ export const readBoardTaskFilterPrefs = (): BoardTaskFilterPrefs => {
         showDependencies: legacy.showDependencies as boolean | undefined,
         showStartDate: legacy.showStartDate as boolean | undefined,
         showTags: legacy.showTags as boolean | undefined,
+        showTagNames: legacy.showTagNames as boolean | undefined,
       },
     );
   }
@@ -141,6 +142,7 @@ export const writeBoardTaskFilterPrefs = (
     showDependencies: next.displaySettings.showDependencies,
     showStartDate: next.displaySettings.showStartDate,
     showTags: next.displaySettings.showTags,
+    showTagNames: next.displaySettings.showTagNames,
     dueWithinDays: next.filters.dueWithinDays,
     selectedAssigneeIds: next.filters.selectedAssigneeIds,
     selectedTagIds: next.filters.selectedTagIds,

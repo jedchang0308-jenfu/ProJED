@@ -78,6 +78,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
+  const showTagNames = useBoardStore(s => s.showTagNames);
+  const toggleTagNames = useBoardStore(s => s.toggleTagNames);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const { canMoveTask, canCreateDependency } = useBoardPermissions();
   const { active } = useDndContext();
@@ -285,7 +287,13 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       {!isDragPlaceholder && showTags && nodeTags.length > 0 && (
         <div className="ml-6 mt-px flex flex-wrap gap-0.5">
           {nodeTags.slice(0, 3).map(tag => (
-            <TagChip key={tag.id} tag={tag} compact />
+            <TagChip
+              key={tag.id}
+              tag={tag}
+              compact
+              collapsed={!showTagNames}
+              onToggleCollapsed={toggleTagNames}
+            />
           ))}
         </div>
       )}

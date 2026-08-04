@@ -550,6 +550,7 @@ export interface BoardState {
   showDependencies: boolean;
   showStartDate: boolean;
   showTags: boolean;
+  showTagNames: boolean;
   dueWithinDays: number | null;
   selectedAssigneeIds: string[];
 
@@ -590,6 +591,7 @@ export interface BoardActions {
   toggleDependencies: () => void;
   toggleStartDate: () => void;
   toggleTags: () => void;
+  toggleTagNames: () => void;
   setDueWithinDays: (days: number | null) => void;
   toggleAssigneeFilter: (assigneeId: string) => void;
   clearAssigneeFilters: () => void;

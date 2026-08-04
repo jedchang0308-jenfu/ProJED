@@ -9,6 +9,19 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-08-04（Trello 式看板標籤收疊）
+
+Spec Impact：對 DEV-028「卡片正面保留標籤」為 `Compatible exception`。標籤仍留在卡片正面；使用者可點任一標籤全看板切換名稱展開／收疊，收疊後每個標籤保留單一實色圓點與「顏色＋標題」懸浮資訊。此變更不改標籤資料、篩選、TagPicker、任務詳情、拖曳或手機 pan-first 契約。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-061 Addendum / Local QC Passed | DEV-061 / DEV-028 | 定義全看板名稱收疊、單一實色圓點、hover disclosure、鍵盤操作與不可變更邊界；acceptance 7/7。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA-061 Passed 8/8 | DEV-061 / DEV-028 | 已覆蓋點擊、tooltip、持久化、鍵盤、詳情／拖曳隔離、手機 viewport 與 visible-error sweep。 |
+| `src/components/Tags/TagChip.tsx` | Implemented / Local QC Passed | DEV-061 | 沿用共用 TagChip，僅在看板傳入收疊控制時改為可操作的名稱／圓點切換。 |
+| `src/components/Wbs/KanbanCard.tsx`、`KanbanChecklist.tsx` | Implemented / Local QC Passed | DEV-061 / DEV-028 | L2 與 L3+ 共用同一 `showTagNames` 偏好與 toggle。 |
+| `src/store/useBoardStore.ts`、`src/features/taskFilters/*` | Implemented / Local QC Passed | DEV-061 / DEV-039 | 在既有本機顯示偏好中保存 `showTagNames`，預設展開並支援 undo。 |
+| `scripts/verify-dev-061-kanban-tag-collapse.mjs`、`verify-dev-061-kanban-tag-collapse-browser.pw.js` | Passed 18/18 + 8/8 | DEV-061 | Static contract 與本機實際 UI 驗證已通過，測試資料已清理。 |
+
 ## Documentation Map Update - 2026-08-04（持續優化3正式發布）
 
 `持續優化3` 已快轉合併至 `main`，artifact commit `339bf27` 已部署 Firebase Hosting production。Level 2、Level 3 preview、Level 4 production smoke、正式產物 SHA-256 與登入後唯讀 UI 抽查均通過；本次未部署 Supabase migration、Edge Function 或資料變更。

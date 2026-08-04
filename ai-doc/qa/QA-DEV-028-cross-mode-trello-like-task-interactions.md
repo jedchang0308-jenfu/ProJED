@@ -265,3 +265,30 @@ npm.cmd run verify:dev-028-manual-click-qc-readiness
 ```
 
 此 gate 預設只讀、`mutates_database=false`、`manual_qc_completed=false`。它只檢查 manual matrix 與 QC handoff 是否完整，不代表 MAN-028-001 至 MAN-028-028 已由人類實際操作通過。2026-07-09 使用者已回報人工親自點擊通過；後續若要稽核級證據，需補逐項截圖/錄影。
+
+## DEV-061 看板標籤收疊 QA / QC 增補（2026-08-04）
+
+驗證資料使用 local-test 固定帳號與暫時藍色標籤；browser verifier 結束時移除測試標籤並將名稱顯示偏好恢復為展開。不得在正式環境建立或刪除標籤。
+
+| ID | Viewport / 操作 | 預期結果 | 證據 |
+|---|---|---|---|
+| QA-061-001 | 1440x900，標籤名稱展開 | 看板標籤沿用名稱 chip，`data-tag-chip-collapsed=false` | expanded screenshot、DOM |
+| QA-061-002 | 點任一 L2／L3+ 標籤 | 全部可見看板標籤同步變成單一實色圓點，且圓點等寬高、沒有局部不同步 | DOM state、geometry、collapsed screenshot |
+| QA-061-003 | hover 收疊標籤 | `title` 為繁中顏色＋完整標題，aria 說明可展開 | title / aria evidence |
+| QA-061-004 | 點收疊／展開標籤 | 不開 `TaskDetailsModal`，不出現 drag preview / context menu | negative DOM evidence |
+| QA-061-005 | 收疊後讀本機偏好 | `projed-task-filters:v1.displaySettings.showTagNames=false` | localStorage evidence |
+| QA-061-006 | 聚焦標籤後按 Enter，再按 Space | Enter 展開、Space 收疊；focus 不跳入卡片詳情 | keyboard trace |
+| QA-061-007 | 收疊後重新整理 | 標籤仍為收疊，點擊可恢復展開 | reload DOM evidence |
+| QA-061-008 | 390x844，點圓點展開並做 visible-error sweep | 名稱可展開、不開詳情，document 無水平 overflow、無可見 error | mobile screenshot、DOM measurement |
+
+FMEA：若 click 冒泡會誤開任務詳情；若 pointerdown 冒泡可能啟動拖曳；若狀態未持久化會讓重整前後不一致；若只改 L2 或只改 L3+ 會造成階層語意分裂；若 tooltip 只有名稱會失去 Trello 色彩語意；若圓點非正圓、過小難以操作或手機造成卡片溢出即屬失敗。上述任一項發生即判定 `未通過`。
+
+QC 必須執行實際瀏覽器驗證並附 1440x900 展開／收疊與 390x844 截圖；TypeScript、ESLint、build 與 static verifier 只能作為輔助證據。
+
+### DEV-061 QC 結果（2026-08-04）
+
+- 結論：`通過`，QA-061-001～008 共 8/8；收疊標籤為 10x10 單一正圓，桌面展開／收疊、390x844、native title、aria、Enter／Space、重新整理持久化與 modal negative assertion 均符合預期。
+- 證據：`output/playwright/dev-061-kanban-tag-collapse-1785814721324-expanded.png`、`-collapsed.png`、`-mobile.png`；browser console 0 errors。
+- 輔助 gate：DEV-061 static 18/18、DEV-028 static 38/38、DEV-029 static 39/39、DEV-055 static 27/27、TypeScript 與 targeted ESLint 通過。
+- 測試衛生：`DEV-061 驗證標籤` 與人工 `研究案` 標籤已刪除，`showTagNames` 偏好已還原為 `true`。
+- Build 註記：`vite build --minify false`、PWA 92-entry precache 與逐 chunk esbuild minify 通過；標準 `build:test` 在此 Windows 工作樹完成 1971 modules transform 後無錯誤訊息退出，因此須在 release gate 的乾淨環境重跑，未將其誤記為 pass。

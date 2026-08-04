@@ -31,4 +31,5 @@ export const createDefaultTaskDisplaySettings = (): TaskDisplaySettings => ({
   showDependencies: true,
   showStartDate: true,
   showTags: true,
+  showTagNames: true,
 });

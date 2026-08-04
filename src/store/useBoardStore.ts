@@ -29,6 +29,7 @@ const getDefaultFilters = () => ({
     showDependencies: createDefaultTaskDisplaySettings().showDependencies,
     showStartDate: createDefaultTaskDisplaySettings().showStartDate,
     showTags: createDefaultTaskDisplaySettings().showTags,
+    showTagNames: createDefaultTaskDisplaySettings().showTagNames,
     dueWithinDays: createDefaultTaskFilters().dueWithinDays,
     selectedAssigneeIds: createDefaultTaskFilters().selectedAssigneeIds,
 });
@@ -42,6 +43,7 @@ const getStoredFilters = () => {
             showDependencies: prefs.displaySettings.showDependencies,
             showStartDate: prefs.displaySettings.showStartDate,
             showTags: prefs.displaySettings.showTags,
+            showTagNames: prefs.displaySettings.showTagNames,
             dueWithinDays: prefs.filters.dueWithinDays,
             selectedAssigneeIds: prefs.filters.selectedAssigneeIds,
         };
@@ -59,6 +61,7 @@ const persistBoardTaskFilters = (state, updates = {}) => writeBoardTaskFilterPre
         showDependencies: updates.showDependencies ?? state.showDependencies,
         showStartDate: updates.showStartDate ?? state.showStartDate,
         showTags: updates.showTags ?? state.showTags,
+        showTagNames: updates.showTagNames ?? state.showTagNames,
     },
 });
 
@@ -99,6 +102,7 @@ const cloneBoardTaskFilterSnapshot = (state) => ({
     showDependencies: Boolean(state.showDependencies),
     showStartDate: Boolean(state.showStartDate),
     showTags: Boolean(state.showTags),
+    showTagNames: Boolean(state.showTagNames),
     dueWithinDays: state.dueWithinDays ?? null,
     selectedAssigneeIds: [...(state.selectedAssigneeIds || [])],
 });
@@ -113,6 +117,7 @@ const writeBoardTaskFilterSnapshot = (snapshot) => writeBoardTaskFilterPrefs({
         showDependencies: snapshot.showDependencies,
         showStartDate: snapshot.showStartDate,
         showTags: snapshot.showTags,
+        showTagNames: snapshot.showTagNames,
     },
 });
 
@@ -123,6 +128,7 @@ const applyBoardTaskFilterSnapshot = (set, snapshot) => {
         showDependencies: snapshot.showDependencies,
         showStartDate: snapshot.showStartDate,
         showTags: snapshot.showTags,
+        showTagNames: snapshot.showTagNames,
         dueWithinDays: snapshot.dueWithinDays,
         selectedAssigneeIds: [...snapshot.selectedAssigneeIds],
     });
@@ -293,6 +299,12 @@ const useBoardStore = create<BoardStore>()(
             const after = { ...before, showTags: !before.showTags };
             applyBoardTaskFilterSnapshot(set, after);
             pushBoardTaskFilterUndo(set, '切換標籤顯示', before, after);
+        },
+        toggleTagNames: () => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            const after = { ...before, showTagNames: !before.showTagNames };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '切換標籤名稱顯示', before, after);
         },
         setDueWithinDays: (days) => {
             const before = cloneBoardTaskFilterSnapshot(get());

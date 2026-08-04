@@ -282,6 +282,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得複製新日期樣式、刪除日期、改變 `showStartDate`、到期警示、依賴／工期鎖定、任務資料或拖曳 geometry。
   - 證據：DEV-028 static 38/38、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint 與 production build 通過；4173 與登入後正式站均確認 L2 日期使用 L3+ 相同箭頭格式。Artifact commit `339bf27` 已部署；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
   - 計入交付：是
+- ✓ DEV-061 [開發點] [完成] [P2] [持續優化3本機已驗證 / 未部署] Trello 式看板標籤收疊
+  - 摘要：點任一看板標籤即可全看板切換名稱展開／收疊；收疊後每個標籤只保留單一實色圓點，懸浮顯示顏色與標題，且不開任務詳情或啟動拖曳。
+  - 來源 ID：`USER-20260804-kanban-trello-label-collapse`
+  - 父任務：DEV-028、DEV-059、DEV-060
+  - 下一步：功能已可本機交付；若要發布，須另走 deployment release gate，並在 release 環境重跑標準 minified build。
+  - 阻塞 / 恢復條件：不得改標籤資料、標籤篩選、TagPicker 編輯流程、任務詳情／拖曳契約；收疊狀態必須可鍵盤操作、可重新整理保留，且手機不可新增水平溢出。
+  - 證據：DEV-061 static 18/18、browser QA-061-001～008 8/8、DEV-028 static 38/38、DEV-029 static 39/39、DEV-055 static 27/27、TypeScript、targeted ESLint、1440x900 展開／收疊與 390x844 screenshot 均通過；console 0 errors，暫時測試標籤與顯示偏好已清理／還原。`vite build --minify false` 與逐 chunk esbuild minify 通過；標準 `build:test` 在此 Windows 工作樹完成 1971 modules transform 後無錯誤訊息退出，列為 release 前環境 gate，不影響本機 UI QC 結論。
+  - 計入交付：是
 
 
 ## PM Update 歷史歸檔

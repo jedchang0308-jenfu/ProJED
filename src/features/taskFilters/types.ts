@@ -17,6 +17,7 @@ export type TaskDisplaySettings = {
   showDependencies: boolean;
   showStartDate: boolean;
   showTags: boolean;
+  showTagNames: boolean;
 };
 
 export type BoardTaskFilterPrefs = {

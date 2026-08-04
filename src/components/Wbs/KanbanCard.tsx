@@ -65,6 +65,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
+  const showTagNames = useBoardStore(s => s.showTagNames);
+  const toggleTagNames = useBoardStore(s => s.toggleTagNames);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const tags = useTagStore(s => s.tags);
   const { canMoveTask, canCreateDependency } = useBoardPermissions();
@@ -369,7 +371,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           {showTags && nodeTags.length > 0 && (
             <div className="mt-px flex max-w-full flex-wrap gap-0.5">
               {nodeTags.slice(0, 4).map(tag => (
-                <TagChip key={tag.id} tag={tag} compact />
+                <TagChip
+                  key={tag.id}
+                  tag={tag}
+                  compact
+                  collapsed={!showTagNames}
+                  onToggleCollapsed={toggleTagNames}
+                />
               ))}
               {nodeTags.length > 4 && (
                 <span className="rounded-sm bg-slate-100 px-1 py-0 text-[9px] font-semibold text-slate-500">

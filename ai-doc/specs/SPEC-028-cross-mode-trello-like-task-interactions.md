@@ -268,3 +268,31 @@ ADR 判定:
 - 心智圖基線: `ai-doc/specs/SPEC-027-xmind-like-mind-map-mode.md`
 - 心智圖鍵盤/拖曳基線: `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md`
 - 心智圖關聯線基線: `ai-doc/specs/SPEC-027E-xmind-note-relationship-line-ux-parity.md`
+
+## DEV-061 看板標籤 Trello 式收疊增補（2026-08-04）
+
+### Spec Impact
+
+對本規格「看板卡片正面既有標籤不得被移除」為 `Compatible exception`：標籤仍常駐卡片正面，但名稱可依使用者選擇收疊成單一實色圓點。收疊不是隱藏標籤，使用者仍可辨識色彩並透過 hover 取得完整資訊。
+
+### UX Contract
+
+- 預設顯示標籤名稱，保留目前畫面資訊量與既有使用者習慣。
+- 點任一 L2 或 L3+ 看板標籤時，全看板標籤名稱同步切換展開／收疊；不得逐張卡產生不同狀態。
+- 展開狀態沿用既有文字 chip；收疊狀態每個標籤只顯示一個實色圓點，不顯示名稱。
+- 收疊狀態的 native hover tooltip 必須顯示 `顏色：<繁中顏色>，標題：「<標籤名稱>」`。
+- 標籤控制必須是鍵盤可聚焦的 button，Enter／Space 可切換，並提供 `aria-label`、`aria-pressed` 與 focus-visible。
+- 點擊或鍵盤操作標籤不得開任務詳情、選取任務、啟動拖曳、開 context menu 或改變標籤資料。
+- 名稱展開狀態沿用既有本機看板顯示偏好保存；重新整理後必須維持，並可由既有 undo 還原。
+- `TagPicker` 的建立、套用、重新命名、改色與刪除流程不套用收疊顯示；清單、甘特、心智圖與篩選條件不因本增補改變。
+- 390x844 手機可點圓點展開，且不得造成水平 overflow、重疊或破壞 DEV-029 pan-first。
+
+### Acceptance Criteria
+
+- [x] 初始／偏好為展開時，標籤顯示名稱與既有色彩。
+- [x] 點任一看板標籤後，L2 與 L3+ 所有可見標籤同步收疊成單一實色圓點。
+- [x] 收疊標籤具備完整繁中顏色與標題 tooltip。
+- [x] 點標籤不開任務詳情、不啟動拖曳、不改標籤資料。
+- [x] Enter／Space 可展開與收疊，focus state 可見。
+- [x] 重新整理後保留名稱收疊狀態；再次點擊可恢復展開。
+- [x] 1440x900 與 390x844 無 visible runtime error、裁切、重疊或非預期水平 overflow。

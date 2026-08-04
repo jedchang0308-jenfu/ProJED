@@ -16,6 +16,22 @@ export const TAG_COLORS: TagColor[] = [
 
 export const DEFAULT_TAG_COLOR: TagColor = 'green';
 
+const TAG_COLOR_LABELS: Record<TagColor, string> = {
+  green: '綠色',
+  yellow: '黃色',
+  orange: '橘色',
+  red: '紅色',
+  purple: '紫色',
+  blue: '藍色',
+  sky: '天空藍',
+  lime: '萊姆綠',
+  pink: '粉紅色',
+  black: '黑色',
+  gray: '灰色',
+};
+
+export const getTagColorLabel = (color: TagColor) => TAG_COLOR_LABELS[color];
+
 export const createTagId = () =>
   `tag_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
