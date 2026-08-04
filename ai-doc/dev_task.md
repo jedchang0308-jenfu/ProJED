@@ -258,30 +258,30 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得將這個樣式套用到拖曳預覽，不得讓父子 task surface 同時顯示 hover 框，不得使 X 關閉遺失最後輸入。
   - 證據：artifact commit `1c7c060`；release branch `codex/task-save-hover-release-20260718-151753`；DEV-033 browser 通過；desktop hover parent / child / column exact ownership 通過；DEV-055 browser B01-B16 16/16 通過；production build、Level 2 local artifact smoke、Firebase Level 3 preview 與 Level 4 production smoke 通過。正式站已登入抽查儲存鈕與 X 同列，實際下層任務游標預選僅顯示一個 `2px inset` 藍框。完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260718-task-save-hover.md`。
   - 計入交付：是
-- ✓ DEV-058 [開發點] [完成] [P2] [本機自動與視覺驗證通過 / 待使用者確認 / 未部署] 跨裝置拖曳原地文字欄位藍色回饋
+- ✓ DEV-058 [開發點] [完成] [P2] [正式環境已交付 / Level 4 通過] 跨裝置拖曳原地文字欄位藍色回饋
   - 摘要：Attempt 1 原地粗插入線通過自動化但使用者判定不夠直覺。Rework 1 已完成桌面藍底白字原地欄位；Rework 2 依使用者要求將同樣設計套用手機長按拖曳，其他有效落點維持既有一般插入線。
   - 來源 ID：`USER-20260803-desktop-drag-origin-insertion-feedback`
   - 父任務：DEV-055、DEV-054
-  - 下一步：使用者可在 `4173` 實際確認手機 checklist / card / column 原地藍色欄位；若確認手感後要上線，需另走 deployment release gate。
+  - 下一步：已交付正式環境；手機正式資料拖曳提交未由 Codex 執行，後續可由使用者補真機操作證據。
   - 阻塞 / 恢復條件：不得改變 `collision:source-block`、commit / undo、8px 起手門檻、click / right-click、手機 raw finger / target stability / action rail 或既有正常落點線；來源放開必須零寫入，且畫面任一時間只能有一種 drop feedback。
-  - 證據：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`、`ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md`；Rework 2 static：DEV-058 26/26、DEV-054 37/37、DEV-055 27/27、DEV-046 31/31、DEV-053 30/30；browser：DEV-054 R01-R11 11/11、DEV-055 B01-B16 16/16、DEV-053 10/10、DEV-046 全表面回歸；320/390/430 visual、ESLint、TypeScript 與全新 outDir production build 通過。最新手機 evidence base：`output/playwright/dev-054-mobile-drag-1785738932208-*`。Attempt 1 證據僅保留為被取代歷史。
-  - 計入交付：是（本機開發交付；未部署）
-- ✓ DEV-059 [開發點] [完成] [P2] [本機自動與視覺驗證通過 / 待使用者確認 / 未部署] 看板階層統計徽章精簡
+  - 證據：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`、`ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md`；Rework 2 static：DEV-058 26/26、DEV-054 37/37、DEV-055 27/27、DEV-046 31/31、DEV-053 30/30；browser：DEV-054 R01-R11 11/11、DEV-055 B01-B16 16/16、DEV-053 10/10、DEV-046 全表面回歸；320/390/430 visual、ESLint、TypeScript 與 production build 通過。Artifact commit `339bf27` 已部署，Level 3 preview、Level 4 production smoke 與線上 hash provenance 通過；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
+  - 計入交付：是
+- ✓ DEV-059 [開發點] [完成] [P2] [正式環境已交付 / Level 4 通過] 看板階層統計徽章精簡
   - 摘要：依使用者截圖移除任務卡頂部的下層任務 `完成數/總數` Badge，以及每個下層任務列右側的子項目數量 Badge；保留日期、卡片藍色進度條、階層展開內容與欄位標頭統計。
   - 來源 ID：`USER-20260803-kanban-hierarchy-count-badge-removal`
   - 父任務：DEV-028、DEV-058
-  - 下一步：使用者可在 `4173` 確認資訊密度；若確認後要上線，需另走 deployment release gate。
+  - 下一步：已交付正式環境；後續若調整卡片 metadata，需重跑 DEV-028 與登入後視覺抽查。
   - 阻塞 / 恢復條件：不得刪除日期、藍色進度條或欄位標頭的任務數／百分比；不得改變任務資料、階層、拖曳、選取或展開行為。
-  - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint、4173 DOM / screenshot 與 `output/build-dev059-hierarchy-count-cleanup-20260803` production build 通過；桌面 evidence base `output/playwright/dev-055-desktop-drag-1785739442445-*`，手機 evidence base `output/playwright/dev-054-mobile-drag-1785739522598-*`。
-  - 計入交付：是（本機開發交付；未部署）
-- ✓ DEV-060 [開發點] [完成] [P2] [本機自動與視覺驗證通過 / 待使用者確認 / 未部署] L2 / L3+ 看板日期顯示一致化
+  - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint、4173 DOM / screenshot 與 production build 通過。Artifact commit `339bf27` 已部署，登入後正式站確認重複數量徽章已移除；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
+  - 計入交付：是
+- ✓ DEV-060 [開發點] [完成] [P2] [正式環境已交付 / Level 4 通過] L2 / L3+ 看板日期顯示一致化
   - 摘要：L2 任務卡日期改用 L3+ 已有的緊湊 `TaskDateBadge checklist` surface，並移到標題列右側，與 L3+ 同為「任務名在左、日期在右」；兩者同為 9px、無日曆圖示、相同邊框與色彩，日期值、今日到期警示與日期鎖定語意不變。
   - 來源 ID：`USER-20260803-kanban-l2-l3-date-parity`
   - 父任務：DEV-028、DEV-059
-  - 下一步：使用者可在 `4173` 確認 L2 日期資訊密度；若確認後要上線，需另走 deployment release gate。
+  - 下一步：已交付正式環境；後續若調整 L2/L3+ 日期 surface，需保持同一 `TaskDateBadge` 契約。
   - 阻塞 / 恢復條件：不得複製新日期樣式、刪除日期、改變 `showStartDate`、到期警示、依賴／工期鎖定、任務資料或拖曳 geometry。
-  - 證據：DEV-028 static 38/38、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint 與 `output/build-dev060-l2-date-layout-correction-20260803` production build 通過；4173 DOM 確認 L2 日期位於標題列、與標題同列且靠右，無水平 overflow。桌面 evidence base `output/playwright/dev-055-desktop-drag-1785744966137-*`，手機 evidence base `output/playwright/dev-054-mobile-drag-1785745069577-*`。
-  - 計入交付：是（本機開發交付；未部署）
+  - 證據：DEV-028 static 38/38、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint 與 production build 通過；4173 與登入後正式站均確認 L2 日期使用 L3+ 相同箭頭格式。Artifact commit `339bf27` 已部署；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
+  - 計入交付：是
 
 
 ## PM Update 歷史歸檔

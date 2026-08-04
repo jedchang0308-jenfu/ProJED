@@ -9,13 +9,22 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
+## Documentation Map Update - 2026-08-04（持續優化3正式發布）
+
+`持續優化3` 已快轉合併至 `main`，artifact commit `339bf27` 已部署 Firebase Hosting production。Level 2、Level 3 preview、Level 4 production smoke、正式產物 SHA-256 與登入後唯讀 UI 抽查均通過；本次未部署 Supabase migration、Edge Function 或資料變更。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md` | Production Released / Level 4 Passed | DEV-058 / DEV-059 / DEV-060 / DEV-057 | 記錄 merge、來源驗證、Level 3 preview、production artifact provenance、登入後儲存鈕／日期／徽章／hover 抽查、非阻塞風險與 rollback。 |
+| `ai-doc/dev_task.md` | Production Released / Level 4 Passed | DEV-058 / DEV-059 / DEV-060 | 三個開發點已由未部署更新為正式環境交付；手機正式資料拖曳仍保留為補充人工驗證。 |
+
 ## Documentation Map Update - 2026-08-03（L2 / L3+ 看板日期顯示一致化）
 
 Spec Impact：對 DEV-028、DEV-054、DEV-055、DEV-059 為 `No conflict`。L2 不新增日期樣式，直接使用 L3+ 的 `TaskDateBadge surface="checklist"`，並同樣放在標題列右側；只統一可見樣式、位置與密度，不改日期內容、篩選、警示、鎖定、資料或拖曳契約。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `src/components/Wbs/KanbanCard.tsx` | Implemented / Local Verified / Not Deployed | DEV-060 / DEV-028 | L2 日期改用既有 L3+ checklist surface，並移到標題列右側，統一樣式與位置。 |
+| `src/components/Wbs/KanbanCard.tsx` | Production Released / Level 4 Passed | DEV-060 / DEV-028 | L2 日期改用既有 L3+ checklist surface，並移到標題列右側，統一樣式與位置。 |
 | `src/components/Wbs/TaskDateBadge.tsx` | Reused / Unchanged | DEV-060 | 沿用既有 checklist 日期 token、今日到期 warning 與鎖定樣式，未新增分支。 |
 | `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 38/38 | DEV-060 / DEV-028 | 鎖定 KanbanCard 與 KanbanChecklist 都必須使用同一 checklist 日期 surface，且 L2 日期必須位於標題列。 |
 | `scripts/verify-dev-055-desktop-task-drag-target-clarity-browser.pw.js` | Updated / Passed 16/16 | DEV-060 / DEV-055 | 卡片原地拖曳驗證明確從標題列起拖，不再依賴會受卡片高度影響的百分比座標。 |
@@ -26,8 +35,8 @@ Spec Impact：對 DEV-028 舊有 `CheckSquare` 子任務完成統計呈現為 `I
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `src/components/Wbs/KanbanCard.tsx` | Implemented / Local Verified / Not Deployed | DEV-059 / DEV-028 | 移除卡片 metadata 列的下層任務完成數 Badge，保留藍色進度條與下層任務區。 |
-| `src/components/Wbs/KanbanChecklist.tsx` | Implemented / Local Verified / Not Deployed | DEV-059 / DEV-028 | 移除深層任務列右側子項目數量 Badge，保留遞迴階層與日期。 |
+| `src/components/Wbs/KanbanCard.tsx` | Production Released / Level 4 Passed | DEV-059 / DEV-028 | 移除卡片 metadata 列的下層任務完成數 Badge，保留藍色進度條與下層任務區。 |
+| `src/components/Wbs/KanbanChecklist.tsx` | Production Released / Level 4 Passed | DEV-059 / DEV-028 | 移除深層任務列右側子項目數量 Badge，保留遞迴階層與日期。 |
 | `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 37/37 | DEV-059 / DEV-028 | 鎖定兩種重複階層數量 Badge 不得重新出現，其他卡片正面內容與詳情入口不變。 |
 
 ## Documentation Map Update - 2026-08-03（跨裝置拖曳原地文字欄位藍色回饋）
@@ -36,7 +45,7 @@ Spec Impact：對 DEV-055、DEV-054 為 `Compatible exception`；對 DEV-058 Att
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md` | Rework 2 Complete / Local Verified / User Revalidation Pending / Not Deployed | DEV-058 / DEV-055 / DEV-054 | 定義跨裝置來源範圍 no-op title field、視覺層級與不可變更邊界。 |
+| `ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md` | Rework 2 Complete / Production Released / Level 4 Passed | DEV-058 / DEV-055 / DEV-054 | 定義跨裝置來源範圍 no-op title field、視覺層級與不可變更邊界。 |
 | `ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md` | Rework 2 Executed / Mobile 11/11 / Desktop 16/16 | DEV-058 / DEV-055 / DEV-054 | 驗證單一藍色 title field、正常 marker 分離、零寫入與跨裝置拖曳回歸。 |
 | `src/components/BoardView.tsx` | Rework 2 shared visual / local verified | DEV-058 | 依實際滑鼠位置切換正常 target indicator 與 origin/no-op 藍色 title field。 |
 | `src/components/Wbs/taskDrag/desktopTaskDropPreview.ts` | Rework 2 shared geometry / local verified | DEV-058 / DEV-055 / DEV-054 | 來源 title field 共用既有 task-title primary geometry，提供 placeholder fallback。 |
