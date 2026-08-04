@@ -15,12 +15,13 @@ Spec Impact：對 DEV-028「卡片正面保留標籤」為 `Compatible exception
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-061 Addendum / Local QC Passed | DEV-061 / DEV-028 | 定義全看板名稱收疊、單一實色圓點、hover disclosure、鍵盤操作與不可變更邊界；acceptance 7/7。 |
-| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA-061 Passed 8/8 | DEV-061 / DEV-028 | 已覆蓋點擊、tooltip、持久化、鍵盤、詳情／拖曳隔離、手機 viewport 與 visible-error sweep。 |
-| `src/components/Tags/TagChip.tsx` | Implemented / Local QC Passed | DEV-061 | 沿用共用 TagChip，僅在看板傳入收疊控制時改為可操作的名稱／圓點切換。 |
-| `src/components/Wbs/KanbanCard.tsx`、`KanbanChecklist.tsx` | Implemented / Local QC Passed | DEV-061 / DEV-028 | L2 與 L3+ 共用同一 `showTagNames` 偏好與 toggle。 |
-| `src/store/useBoardStore.ts`、`src/features/taskFilters/*` | Implemented / Local QC Passed | DEV-061 / DEV-039 | 在既有本機顯示偏好中保存 `showTagNames`，預設展開並支援 undo。 |
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-061 Addendum / Production Released | DEV-061 / DEV-028 | 定義全看板名稱收疊、單一實色圓點、hover disclosure、鍵盤操作與不可變更邊界；acceptance 7/7。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA-061 Passed 8/8 / Level 4 Passed | DEV-061 / DEV-028 | 已覆蓋點擊、tooltip、持久化、鍵盤、詳情／拖曳隔離、手機 viewport 與 visible-error sweep。 |
+| `src/components/Tags/TagChip.tsx` | Implemented / Production Released | DEV-061 | 沿用共用 TagChip，僅在看板傳入收疊控制時改為可操作的名稱／圓點切換。 |
+| `src/components/Wbs/KanbanCard.tsx`、`KanbanChecklist.tsx` | Implemented / Production Released | DEV-061 / DEV-028 | L2 與 L3+ 共用同一 `showTagNames` 偏好與 toggle。 |
+| `src/store/useBoardStore.ts`、`src/features/taskFilters/*` | Implemented / Production Released | DEV-061 / DEV-039 | 在既有本機顯示偏好中保存 `showTagNames`，預設展開並支援 undo。 |
 | `scripts/verify-dev-061-kanban-tag-collapse.mjs`、`verify-dev-061-kanban-tag-collapse-browser.pw.js` | Passed 18/18 + 8/8 | DEV-061 | Static contract 與本機實際 UI 驗證已通過，測試資料已清理。 |
+| `ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md` | DEV-061 Production Released / Level 4 Passed | DEV-061 | 記錄 commit `8713481`、乾淨 minified artifact、Firebase preview／production smoke、35/35 線上雜湊、feature evidence 與 rollback。 |
 
 ## Documentation Map Update - 2026-08-04（持續優化3正式發布）
 

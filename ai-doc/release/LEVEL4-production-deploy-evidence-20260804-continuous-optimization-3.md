@@ -73,3 +73,46 @@ Production HTML loads:
 ## Rollback
 
 若確認正式環境回歸，將 Firebase Hosting 回滾至 `64313a96859616981c780c758b02b4b269dc5525` 對應版本，並重跑 Level 4 app-shell、artifact hash 與登入後唯讀 UI smoke。
+
+---
+
+## DEV-061 Production Addendum - 2026-08-04
+
+### 結論
+
+DEV-061「Trello 式看板標籤收疊」已由 `持續優化3` commit `8713481521a7c18346685f1315521480764df838` 直接發布至 Firebase Hosting production。這是 Lane 1 純前端 UI／本機顯示偏好變更；未修改或部署 Supabase schema、RLS、migration、Edge Function、遠端資料或環境變數。
+
+### Verification And Deployment
+
+- DEV-061 static: 18/18 passed。
+- DEV-028 regression static: 38/38 passed。
+- Production auth mode: 5/5 passed。
+- TypeScript、targeted ESLint、本機 browser QA-061-001～008: passed。
+- 本機 browser 功能證據：桌面與 390x844、點擊、Enter／Space、重新整理持久化、tooltip／aria、modal negative assertion 均通過；圓點為 10x10，透明 button hit area 為 14x14。
+- Production build：先將舊 `dist` 移出 worktree，再以 Vite 預設 production minifier 從空目錄產生 35 個檔案；PWA precache 40 entries。
+- Level 2 local artifact smoke：app shell、production Google OAuth 入口、JS/CSS、Service Worker 通過；critical console errors、page errors、critical failed requests 均為 0。
+- Level 3 Firebase preview：`https://projed-cc78d--dev061-tag-collapse-4to6go0n.web.app`，瀏覽器 smoke 通過；preview 35/35 檔案 SHA-256 與本機 `dist` 一致。
+- Level 4 production：`https://projed-cc78d.web.app`，app shell、JS/CSS、Service Worker 通過；critical console errors、page errors、critical failed requests 均為 0；production 35/35 檔案 SHA-256 與本機 `dist` 一致。
+
+### Artifact Provenance
+
+- Source / artifact commit: `8713481521a7c18346685f1315521480764df838`
+- JS: `assets/index-ujoYxB3D.js`
+  - SHA-256: `1c759a1286c7aa01aedd6f749d84201222bd00b6b0767dd5dd06f4e5c0780021`
+- CSS: `assets/index-BHWKS0qR.css`
+  - SHA-256: `1d8f9f6359b50c8458c13a272a993a70945d96857d835a1a088e1375140129a6`
+- Board chunk: `assets/BoardView-Cmayr-sN.js`
+  - SHA-256: `219fa22db971b9792084a000ad6d9e7f710303e9b19a2a3c57ab95f32173afdc`
+- Service Worker: `sw.js`
+  - SHA-256: `2563c0c3ca674c303124d43db90ca8737dd8aa81c399ab98157340417285ff9e`
+
+本機已登入 browser verifier 對 exact source snapshot 完成 8/8 功能互動；正式站公開入口 smoke 與逐檔雜湊證明相同 production artifact 已上線。Chrome 既有頁籤在補充互動檢查尾端位於 4173，因此未將該段過度宣稱為 authenticated production feature smoke。
+
+### Known Non-Blocking Risks
+
+- Vite 7.3.6 在此 Windows worktree 執行內建 `emptyOutDir` 時，於 1971 modules transformed 後無診斷退出；將既有 `dist` 可復原地移出 worktree，再以 `--emptyOutDir false` 從不存在的 `dist` 建置可產生乾淨、完整且預設壓縮的正式 artifact。此問題不影響來源驗證、artifact smoke 或線上 35/35 雜湊一致性。
+- 未在 production 寫入、建立或刪除標籤；正式資料保持不變。
+
+### Rollback
+
+若 DEV-061 發生正式環境回歸，將 Firebase Hosting 回滾至本 addendum 前一個 production release（artifact commit `339bf27482e2239d653b4f0e0511c86eca4fc4ee`／release evidence commit `7ee352a`），再重跑 Level 4 app shell、35-file hash 與標籤收疊本機 browser gate。
