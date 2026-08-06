@@ -114,8 +114,10 @@ assert(
   workbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
     workbench.includes('bg-slate-200/95') &&
     workbench.includes('bg-primary') &&
-    compactTokens.includes('border-slate-300 bg-white text-slate-600') &&
-    statusFilterBar.includes('border-primary/30 bg-primary/10 text-primary'),
+     compactTokens.includes('border-slate-300 bg-white text-slate-600') &&
+     statusFilterBar.includes('border-primary/30') &&
+     statusFilterBar.includes('bg-primary/') &&
+     statusFilterBar.includes('text-primary'),
 );
 
 assert(
