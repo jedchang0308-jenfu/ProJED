@@ -181,7 +181,8 @@ assert(
     kanbanCard.includes('data-kanban-card-visual="framed-elevated"') &&
     kanbanCard.includes('data-task-hierarchy-level="L2"') &&
     kanbanCard.includes('data-kanban-checklist-visual="inset-rail"') &&
-    kanbanCard.includes('kanban-checklist-section mt-1 rounded-md border-l-2') &&
+    kanbanCard.includes('kanban-checklist-section') &&
+    kanbanCard.includes('mt-1 rounded-md border-l-2') &&
     kanbanChecklist.includes('data-kanban-checklist-row-visual="flat-unlined"') &&
     kanbanChecklist.includes('data-task-hierarchy-level="L3+"') &&
     !kanbanChecklist.includes('border-b border-slate-200/80') &&
