@@ -31,6 +31,7 @@ const getDefaultFilters = () => ({
     showTags: createDefaultTaskDisplaySettings().showTags,
     showTagNames: createDefaultTaskDisplaySettings().showTagNames,
     dueWithinDays: createDefaultTaskFilters().dueWithinDays,
+    overdueOnly: createDefaultTaskFilters().overdueOnly,
     selectedAssigneeIds: createDefaultTaskFilters().selectedAssigneeIds,
 });
 
@@ -45,6 +46,7 @@ const getStoredFilters = () => {
             showTags: prefs.displaySettings.showTags,
             showTagNames: prefs.displaySettings.showTagNames,
             dueWithinDays: prefs.filters.dueWithinDays,
+            overdueOnly: prefs.filters.overdueOnly,
             selectedAssigneeIds: prefs.filters.selectedAssigneeIds,
         };
     } catch { /* ignore */ }
@@ -55,6 +57,7 @@ const persistBoardTaskFilters = (state, updates = {}) => writeBoardTaskFilterPre
     filters: {
         statusFilters: updates.statusFilters ?? state.statusFilters,
         dueWithinDays: updates.dueWithinDays ?? state.dueWithinDays,
+        overdueOnly: updates.overdueOnly ?? state.overdueOnly,
         selectedAssigneeIds: updates.selectedAssigneeIds ?? state.selectedAssigneeIds,
     },
     displaySettings: {
@@ -104,6 +107,7 @@ const cloneBoardTaskFilterSnapshot = (state) => ({
     showTags: Boolean(state.showTags),
     showTagNames: Boolean(state.showTagNames),
     dueWithinDays: state.dueWithinDays ?? null,
+    overdueOnly: Boolean(state.overdueOnly),
     selectedAssigneeIds: [...(state.selectedAssigneeIds || [])],
 });
 
@@ -111,6 +115,7 @@ const writeBoardTaskFilterSnapshot = (snapshot) => writeBoardTaskFilterPrefs({
     filters: {
         statusFilters: snapshot.statusFilters,
         dueWithinDays: snapshot.dueWithinDays,
+        overdueOnly: snapshot.overdueOnly,
         selectedAssigneeIds: snapshot.selectedAssigneeIds,
     },
     displaySettings: {
@@ -130,6 +135,7 @@ const applyBoardTaskFilterSnapshot = (set, snapshot) => {
         showTags: snapshot.showTags,
         showTagNames: snapshot.showTagNames,
         dueWithinDays: snapshot.dueWithinDays,
+        overdueOnly: snapshot.overdueOnly,
         selectedAssigneeIds: [...snapshot.selectedAssigneeIds],
     });
 };
@@ -165,15 +171,15 @@ const useBoardStore = create<BoardStore>()(
         setWorkspaces: (workspaces) => set({ workspaces }),
         setActiveWorkspace: (id) => {
             safeSetItem(WS_STORAGE_KEY, id);
-            set({ activeWorkspaceId: id });
+            set({ activeWorkspaceId: id, selectedTaskId: null });
         },
         setActiveBoard: (id) => {
             safeSetItem(BOARD_STORAGE_KEY, id);
-            set({ activeBoardId: id });
+            set({ activeBoardId: id, selectedTaskId: null });
         },
         setView: (view) => {
             safeSetItem(VIEW_STORAGE_KEY, view);
-            set({ currentView: view });
+            set({ currentView: view, selectedTaskId: null });
         },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
@@ -313,6 +319,12 @@ const useBoardStore = create<BoardStore>()(
             const after = { ...before, dueWithinDays: nextDays };
             applyBoardTaskFilterSnapshot(set, after);
             pushBoardTaskFilterUndo(set, '修改到期篩選', before, after);
+        },
+        toggleOverdueFilter: () => {
+            const before = cloneBoardTaskFilterSnapshot(get());
+            const after = { ...before, overdueOnly: !before.overdueOnly };
+            applyBoardTaskFilterSnapshot(set, after);
+            pushBoardTaskFilterUndo(set, '切換逾期篩選', before, after);
         },
         toggleAssigneeFilter: (assigneeId) => {
             const before = cloneBoardTaskFilterSnapshot(get());

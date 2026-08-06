@@ -3,6 +3,9 @@
 關聯 DEV：DEV-039
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
 狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+
+2026-08-04 DEV-062 addendum：狀態 filter 依 `SPEC-062` 只暴露待辦、進行中、暫緩、完成；legacy delayed／unsure 在前端收斂為待辦。「逾期」是到期日衍生條件，位於到期日區，不是第五種人工狀態。
+2026-08-04 status-filter refresh addendum：使用者變更任務狀態時，任務資料與持久化仍立即更新；只有變更前後在目前篩選條件下跨越「命中／未命中」邊界時，才保留變更前的任務篩選投影並顯示待更新控制。兩個狀態都命中或都不命中時，篩選結果沒有改變，不得顯示 `更新`。影響判斷需涵蓋直接任務與此次狀態變更造成的祖先 roll-up，但 badge 只計唯一直接操作任務。工具列在確有待套用結果時，將過濾器與 `更新` 呈現為同一個複合式控制：共用外框、零間距、中間分隔線，並位於復原／重做左側；點擊 `更新` 後才以最新狀態重算所有共用任務篩選結果。若後續狀態使篩選 membership 回到既有投影，即使狀態值不完全相同，該筆也不再計數。手機只顯示更新圖示與數量，並保留完整 `aria-label`。
 建立日期：2026-07-02
 最新修正：
 - 2026-07-03，使用者要求全域任務平台主畫面中「跟過濾器有關的功能只剩一個按鈕」：看板選擇欄位移入 `過濾器` popover 內，popover 內先選看板再調同看板過濾條件；主畫面不常駐顯示看板 select、資料來源摘要、設定路徑、全部看板/計數摘要或卡片 metadata badges。後續 UI 修正：原下方 `已歸位任務` 顯示區改名為 `所有任務排序`，內容包含已歸位任務與未歸位任務，預設依到期日由上到下排序，未設到期日者排在最下面。
@@ -59,6 +62,7 @@
 19. `所有任務排序` 是扁平排序清單，但必須保留 hierarchy cue：L1 無縮排，子層依 parent chain 增加縮排並降低視覺權重。
 20. DEV-042 生效後，手機版全域任務平台 closed state 不再保留 in-flow collapsed rail；桌機版才保留 compact rail。手機 workbench open state 是 overlay，不推擠 BoardView。
 21. 工作台任務列的拖曳觸發窗口需一致化：未歸位任務與所有任務排序中的已歸位任務都以任務列 root 作為整列拖曳 surface；實作以未歸位任務的簡潔 row shell 為標準，並保留已歸位任務的縮排、字重/灰階與日期徽章。
+22. 任務狀態變更只有在直接任務或此次 roll-up 祖先的目前 filter membership 確實改變時，才建立待更新投影；資料照常即時儲存，filter projection 暫以變更前狀態計算，直到工具列 `更新` 被點擊。若變更前後皆命中或皆不命中目前篩選，篩選結果不變，更新區必須保持隱藏；後續變更使 membership 回到既有投影時也要取消待更新。有待更新項目時，過濾器與更新區必須共用外框並以內部分隔線形成複合控制，不能看成兩顆不相關按鈕。badge 計算唯一直接變更任務，不重複計算祖先 roll-up。
 
 設計原因：
 
@@ -702,3 +706,7 @@ Stop conditions：
 - 若未歸位任務與所有任務排序任務的 drag start surface 再次分裂，或只靠修改 dnd sensor threshold 掩蓋 row hit area 不一致，停止。
 - 若同看板同條件下看板與全域任務平台的 `matchedTaskIds` 不一致，停止。
 - 若正式環境發布被排在 Phase 1C QC 之前，停止。
+
+## Assignment Filter Addendum - 2026-08-06
+
+Board 與 Workbench 的 assignee filter label 統一為「負責人/協作」，filter match identity 使用 `assigneeIds ∪ collaboratorIds`；「未指派」仍依沒有 primary assignee 判定。選項來源需從 selected board 的 active tasks 同時收集主責與協作，避免協作人只存在於資料卻無法被 UI 選取。這項語意由 DEV-048 filter follow-up browser QC 驗證。

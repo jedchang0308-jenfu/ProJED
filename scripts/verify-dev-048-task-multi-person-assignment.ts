@@ -66,6 +66,7 @@ assert.doesNotMatch(picker, /主責對成果|共同主責較多|主責成員（�
 assert.doesNotMatch(picker, /至少要保留一位主責|requiresPrimaryAssignee/);
 assert.doesNotMatch(store, /執行中的任務至少要設定一位主責|requiresPrimaryAssignee/);
 assert.match(filter, /assigneeIds/);
-assert.match(filter, /some\(assigneeId/);
+assert.match(filter, /getTaskAssignmentIds/);
+assert.match(filter, /some\(assignmentId/);
 
 console.log('DEV-048 multi-person assignment verification passed.');

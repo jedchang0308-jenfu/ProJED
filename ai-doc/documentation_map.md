@@ -1,5 +1,37 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-05（任務子樹 hover 與拖曳影響範圍預覽）
+
+Spec Impact：對 DEV-057 exact-innermost 單任務 hover 框為 `Intentional replacement`；保留 innermost 來源 ownership，但把可見提示擴張為來源任務的完整子樹，實際拖曳 overlay 另顯示 canonical 非封存後代數量。DEV-055 drop target、origin no-op、commit／undo、手機與資料契約不變。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-065-task-subtree-hover-preview.md` | RD Rework 13 Implemented / Card + List Two-Layer QC Passed | DEV-065 | L1 欄位標頭與卡片內容區、L2 卡片最外層來源與子任務區、L3+ recursive scope 共用 primary-500 source／primary-400 group 語意；標題列不另加框；title color／cursor 穩定且移除原生 tooltip。 |
+| `ai-doc/qa/QA-DEV-065-task-subtree-hover-preview.md` | Static 27/27 + Browser 13/13 Passed | DEV-065 | L1／L2／L3+ 統一拖動範圍框、L1 卡片內容完整群組 overlay、L2 卡片最外層來源框＋子任務第二層、title text/cursor 穩定、native tooltip 移除、geometry、interaction 與 visible-error gate 通過。 |
+| `KanbanColumn`、`KanbanCard`、`KanbanChecklist`、`BoardView`、`taskDragScope` | Rework 13 Local QC Passed | DEV-065 | L1 card lane overlay、L2 card-root source marker 與 subtree scope、L3+ 完整 inset group frame；標題列沒有額外內框、沒有原生黑色 tooltip、大片填色或第三層巢狀框。 |
+
+## Documentation Map Update - 2026-08-04（全系統品牌藍統一）
+
+Spec Impact：對 DEV-062 一般藍色與工作台 Morandi 藍灰為 `Intentional replacement`；對 DEV-058 legacy `bg-blue-500` class 為 `Compatible exception`，runtime 由 theme alias 轉為品牌藍。全系統主要操作、選取、focus、資訊、進行中、拖曳與心智圖藍色統一到 `#6366F1` 品牌色階；成功、警告、危險、逾期與中性灰不變。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-064-brand-blue-unification.md` | RD Implemented / Local QC Passed | DEV-064 | 品牌藍 50–950、legacy alias、SVG／持久化色值、功能色與 out-of-scope 的 authoritative contract。 |
+| `ai-doc/qa/QA-DEV-064-brand-blue-unification.md` | Static + Browser QC Passed | DEV-064 | 驗證 theme、看板、詳情、工作台、心智圖、手機與 visible-error gate；6/6、console 0 errors。 |
+| `src/index.css`、`brandColors.ts` | Local Implemented / QC Passed | DEV-064 | CSS 與非 CSS 的品牌藍入口；blue／sky／indigo／cyan legacy utility 對應同一色階。 |
+| `TaskWorkbenchPanel`、`compactTokens`、`StatusFilterBar` | Local Implemented / Browser QC Passed | DEV-064 / DEV-039 | 藍灰容器收斂為 slate；active、drop 與 filter 使用品牌藍。 |
+| `MindMapRelationshipOverlay`、`mindMapGeometry`、`MindMapDragPreviewLayer` | Local Implemented / Browser QC Passed | DEV-064 / DEV-027E | SVG 與 legacy 關係線色收斂至 `BRAND_BLUE`。 |
+
+## Documentation Map Update - 2026-08-04（看板 L2／L3+ 視覺層級強化）
+
+Spec Impact：對 SPEC-028 先前「L2 無框、L3+ 無容器框」為 `Intentional replacement`，並依最新指示維持同層任務無逐列分隔線。L2 使用完整中性外框與陰影；L3+ 使用內嵌左導軌與無線條扁平列。互動、資料、日期、標籤、狀態與部署邊界不變。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-063 Addendum / RD Implemented | DEV-063 / DEV-028 | L2／L3+ 新視覺層級 authoritative contract。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | DEV-063 Browser QC Passed | DEV-063 | 驗證框線、陰影、左導軌、扁平列、geometry 與三 viewport。 |
+| `KanbanCard`、`KanbanChecklist` | Local Implemented / Browser QC Passed | DEV-063 | 實作 framed-elevated L2 與 inset flat-unlined L3+；三 viewport 重驗通過。 |
+
 ## Active Repository / Cold Start Rule
 
 - Active repo 固定為 `C:\VIBE CODING\ProJED\ProJED`。
@@ -9,9 +41,57 @@
 - 歷史 PM Update 已歸檔至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`；只有追查特定 DEV 歷史、release evidence 或 cross-task consistency 時才搜尋該檔。
 - Spec Impact Preflight：修改產品程式前，若已知 DEV，先讀該 DEV 直接連結的 active SPEC / ADR / QA；若未知 DEV，先以功能名、component、route、API、table、status、permission 或錯誤訊息搜尋本檔與 `dev_task.md`，只讀命中項。結論需分類為 `No conflict`、`Compatible exception`、`Intentional replacement` 或 `Unresolved conflict`；`Unresolved conflict` 不得直接改碼。
 
-## Documentation Map Update - 2026-08-04（Trello 式看板標籤收疊）
+## Documentation Map Update - 2026-08-04（任務狀態精簡與截止日衍生逾期）
 
-Spec Impact：對 DEV-028「卡片正面保留標籤」為 `Compatible exception`。標籤仍留在卡片正面；使用者可點任一標籤全看板切換名稱展開／收疊，收疊後每個標籤保留單一實色圓點與「顏色＋標題」懸浮資訊。此變更不改標籤資料、篩選、TagPicker、任務詳情、拖曳或手機 pan-first 契約。
+Spec Impact：對 DEV-028「保留狀態刻痕」與 DEV-039 六種狀態 filter UI 為 `Intentional replacement`；對 Supabase legacy enum、備份與歷史資料為 `Compatible exception`。人工狀態只保留待辦、進行中、暫緩、完成；逾期由截止日自動判斷且不回寫 status。狀態 UI 使用純文字與深灰／藍／淺灰，逾期另用橘紅警示。正式資料 migration 與 production deploy 不在本輪。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-062-simplified-task-status-and-derived-overdue.md` | RD Implemented / Local QC Passed | DEV-062 | 四種人工狀態、legacy compatibility、逾期公式、視覺與部署邊界的 authoritative source。 |
+| `ai-doc/qa/QA-DEV-062-simplified-task-status-and-derived-overdue.md` | Static + Browser QC Passed | DEV-062 | 覆蓋狀態正規化、逾期邊界、純文字 UI、三 viewport 與 visible-error sweep。 |
+| `src/utils/taskStatus.ts`、`src/store/useWbsStore.ts` | Local Implemented | DEV-062 | 共用人工狀態正規化與逾期判斷；停止自動 delayed 持久化。 |
+| `TaskDetailsModal`、`WbsNodeItem`、`StatusFilterBar`、`TaskConditionFilterControls` | Local Implemented / Browser QC Passed | DEV-062 | 只顯示四種人工狀態，移除狀態圖示／圓點並套用三色角色。 |
+| `TaskDateBadge`、`taskFilters/*`、`useBoardStore` | Local Implemented / Browser QC Passed | DEV-062 / DEV-039 / DEV-060 | 逾期日期以橘紅色呈現但只顯示日期；提供只讀逾期篩選並保存本機偏好版本 3。 |
+| `scripts/verify-dev-062-simplified-task-status*` | Static + Browser Passed | DEV-062 | 驗證契約、邊界、三 viewport 與 screenshot evidence。 |
+
+## Documentation Map Update - 2026-08-04（看板任務日期僅顯示到期日）
+
+Spec Impact：對 DEV-060 原「L2／L3+ 顯示開始日 → 到期日並受 `showStartDate` 控制」為 `Intentional replacement`；對 DEV-028 卡片正面保留日期為 `Compatible exception`。看板 L1／L2／L3+ 固定只顯示格式化 `endDate`，沒有到期日就不顯示日期；開始日與到期日資料、排程、依賴、鎖定、警示、其他檢視與日期設定不變。舊 production 日期區間 evidence 保留為歷史，不代表本機到期日單值版已發布。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-060 Replacement Addendum / Local Implemented | DEV-060 / DEV-028 | 定義所有看板階層只顯示到期日、無到期日不顯示、舊偏好隔離與不可變更資料邊界；acceptance 5/5。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA-060 Browser QC Passed 5/5 | DEV-060 / DEV-028 | 已驗 L2／L3+ 到期日文字、舊偏好 true／false parity、三 viewport、無 overflow 與 console 0 errors。 |
+| `src/components/Wbs/KanbanColumn.tsx`、`KanbanCard.tsx`、`KanbanChecklist.tsx` | Local Implemented / Browser QC Passed | DEV-060 | L1／L2／L3+ 固定傳入 `showStartDate={false}`，不再訂閱看板的 `showStartDate`。 |
+| `src/components/Wbs/TaskDateBadge.tsx` | Reused / Unchanged | DEV-060 | 沿用既有到期格式、今日警示、end/duration lock 與 `data-task-due-date`。 |
+| `scripts/verify-dev-060-kanban-due-date-browser.pw.js`、`verify-dev-028-cross-mode-task-interactions.mjs` | Browser 5/5 + Static 42/42 | DEV-060 / DEV-028 | 驗證日期只等於到期日、無箭頭、偏好隔離及三 viewport；static 鎖定所有看板 surface。 |
+
+## Documentation Map Update - 2026-08-04（看板標籤堆疊式尾標貼紙）
+
+Spec Impact：對 DEV-061 先前「全看板名稱收疊、單一實色圓點與 `showTagNames` 控制」為 `Intentional replacement`；對 DEV-028 卡片正面保留標籤為 `Compatible exception`。L2／L3+ 改用相同單行堆疊貼紙，貼在名稱尾端的預留安全區，點擊／鍵盤 focus 只開該任務完整標籤 popover。標籤資料、篩選、TagPicker、其他檢視、詳情與拖曳不變；舊 production evidence 保留為歷史，不代表本機替代版已發布。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-061 Replacement Addendum / Local Implemented | DEV-061 / DEV-028 | 定義一致貼紙、名稱安全區、最多兩層、`+N`、task-local popover、鍵盤與互動隔離契約；acceptance 7/7。 |
+| `ai-doc/qa/QA-DEV-028-cross-mode-trello-like-task-interactions.md` | QA-061 Replaced / Browser QC Passed 8/8 | DEV-061 / DEV-028 | 已驗 L2／L3 parity、單行 geometry、popover、舊偏好隔離與 1440／1024／390 viewport。 |
+| `src/components/Tags/KanbanTagSticker.tsx` | Local Implemented / Browser QC Passed | DEV-061 | 新增共用看板貼紙、viewport-safe task-local popover 與 Escape 回焦抑制。 |
+| `src/components/Wbs/KanbanCard.tsx`、`KanbanChecklist.tsx` | Local Implemented / Browser QC Passed | DEV-061 / DEV-028 | 將 L2／L3+ 標籤移入同一標題列，移除獨立 wrap 標籤列與全看板 toggle wiring。 |
+| `scripts/verify-dev-061-kanban-tag-collapse.mjs`、`verify-dev-061-kanban-tag-collapse-browser.pw.js` | Passed 20/20 + 8/8 | DEV-061 | 檔名為歷史相容入口；內容已改驗堆疊貼紙替代契約與清理 local-test fixture。 |
+
+## Documentation Map Update - 2026-08-04（看板進度條與巢狀框線精簡）
+
+Spec Impact：對 DEV-059「保留藍色進度條」與 DEV-028「不做卡片正面降噪」為 `Intentional replacement`。依使用者最新明示決策，移除看板 L1 列表與 L2 卡片的可見進度條，以及標題、卡片、L3+ 容器／列、新增任務、日期與可展開標籤的非必要常駐框線；改以 L1 淡外框、L2 無框陰影、L3+ 淡底與間距分層。進度資料、清單模式百分比欄、必要資訊、狀態刻痕與所有互動不變。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Compact UI Addendum / Local Implemented | DEV-028 / DEV-059 / DEV-060 / DEV-061 | 新決策取代進度條與巢狀常駐框線限制，其他卡片必要資訊與互動維持。 |
+| `src/components/BoardView.tsx`、`src/components/Wbs/KanbanColumn.tsx`、`KanbanCard.tsx`、`KanbanChecklist.tsx` | Local Implemented | DEV-028 / DEV-059 | 移除進度條、標題／卡片／L3+／兩層新增任務入口的常駐框線，以色面、陰影與間距維持階層。 |
+| `src/components/Wbs/TaskDateBadge.tsx`、`src/components/Tags/KanbanTagSticker.tsx` | Local Implemented | DEV-060 / DEV-061 | 看板日期維持無描邊淡底；標籤已由後續堆疊貼紙決策取代。 |
+| `scripts/verify-dev-028-cross-mode-task-interactions.mjs` | Updated / Passed 42/42 + Browser QC Passed | DEV-028 / DEV-059 / DEV-060 / DEV-061 | 鎖定進度條與非必要框線不得重新出現，並納入 `KanbanTagSticker`；1440×900、1024×768、390×844 無頁面溢出或可見錯誤。 |
+
+## Historical Documentation Map - 2026-08-04（Trello 式看板標籤收疊，已被貼紙契約取代）
+
+本節只記錄 commit `8713481` 的歷史 production 狀態；全看板收疊與圓點已被本檔最上方堆疊貼紙契約取代，不再是目前 source contract。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
@@ -416,6 +496,8 @@ PM 治理註記：DEV-040 是正式環境同型 BUG 風險硬化交付點，來�
 ## Documentation Map Update - 2026-07-02
 
 ### DEV-039: 任務過濾器核心與全域任務平台兩欄篩選重構
+
+2026-08-04 status-filter refresh addendum：狀態資料立即儲存；只有直接任務或此次 ancestor roll-up 在目前 filter 下的 membership 確實改變時，共用 filter projection 才保留變更前狀態，直到使用者點擊工具列 `更新`。變更前後都命中或都不命中時不顯示更新；membership 回到既有投影時取消 pending。過濾器與更新區以共同外框、零間距及內部分隔線形成複合控制，整組位於復原／重做左側，並以唯一直接變更任務數 badge 溝通。無待更新項目時隱藏更新區，手機使用圖示 + badge。此項是對「任何狀態變更都顯示更新」的 `Intentional replacement`，未修改資料格式、schema 或 production。
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|

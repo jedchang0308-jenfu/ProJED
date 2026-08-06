@@ -26,13 +26,11 @@ interface KanbanColumnProps {
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes, previewParentIndex, filterProjection }) => {
   const storeNode = useWbsStore((state) => state.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
-  const progress = useWbsStore((state) => state.getNodeProgress(nodeId));
   const wbsDependencies = useWbsStore((state) => state.dependencies);
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const addNode = useWbsStore((state) => state.addNode);
   const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
-  const showStartDate = useBoardStore((state) => state.showStartDate);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
   const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
@@ -174,7 +172,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       ref={setColumnNodeRef}
       style={columnStyle}
       data-kanban-column="true"
-      className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/75 shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition-all ${
+      data-desktop-task-hover-scope="true"
+      data-task-hover-scope-kind="column"
+      data-task-hover-scope-source-id={nodeId}
+      data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
+      className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all ${
         isColumnDragging ? 'pointer-events-none scale-105 rotate-1 opacity-50 shadow-2xl' : ''
       }`}
     >
@@ -188,18 +190,20 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-desktop-drop-id={nodeId}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="kanban-column-header"
+        data-task-surface-source="true"
         data-kanban-drag-source-placeholder={isColumnPlaceholder ? 'true' : undefined}
         data-desktop-task-hover-preview={!isColumnPlaceholder && !isSelectingMode ? 'true' : undefined}
         data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
         data-touch-tap-guard="true"
         data-kanban-column-header="true"
-        className={`group mobile-pan-item flex flex-col gap-1 border-b border-slate-200/70 bg-white px-[10px] py-[8px] transition-colors hover:bg-primary/[0.02] ${
+        data-kanban-header-visual="tonal-borderless"
+        className={`group mobile-pan-item flex flex-col gap-1 bg-slate-50 px-[10px] py-[8px] transition-colors hover:bg-white ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
                     : 'cursor-crosshair hover:bg-amber-50/30'
                 : ''
-        } ${!isColumnPlaceholder && selectedTaskId === nodeId ? 'ring-2 ring-inset ring-primary/30 bg-primary/[0.04]' : ''}`}
+        }`}
         onClick={(event) => {
           if (isColumnPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
           selectAndOpenTaskDetails(nodeId);
@@ -226,19 +230,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         <>
         <div className="flex min-w-0 items-center gap-1.5">
           <h3
-            className={`task-title-text min-w-0 flex-1 truncate text-sm font-medium transition-colors hover:text-primary ${
-              status === 'completed' ? 'text-emerald-600' : 'text-slate-700'
-            }`}
-            title={node.title || '未命名任務'}
+            className="task-title-text relative min-w-0 flex-1 text-sm font-semibold text-slate-800"
+            aria-label={node.title || '未命名任務'}
           >
-            {node.title || '未命名任務'}
+            <span className="block truncate">{node.title || '未命名任務'}</span>
           </h3>
           {!isSelectingMode && (
             <TaskDateBadge
               startDate={node.startDate}
               endDate={node.endDate}
               status={status}
-              showStartDate={showStartDate}
+              showStartDate={false}
               startLocked={lockStatus.startLocked}
               endLocked={lockStatus.endLocked}
               durationLocked={Boolean(node.isDurationLocked)}
@@ -258,7 +260,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
                   isSelfStart
                     ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                    : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 cursor-crosshair'
+                    : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
                 }`}
                 title="點擊選取此列表的開始日為依賴目標"
               >
@@ -272,7 +274,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
                   isSelfEnd
                     ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                    : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 cursor-crosshair'
+                    : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
                 }`}
                 title="點擊選取此列表的結束日為依賴目標"
               >
@@ -281,28 +283,14 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               </button>
           </div>
         )}
-
-        {/* 與 L2 相同：有下層任務時只呈現一條滿寬細進度條。 */}
-        {children.length > 0 && (
-          <div className="kanban-task-progress mt-px">
-            <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                progress === 100 ? 'bg-emerald-400' : progress > 0 ? 'bg-blue-400' : 'bg-slate-200'
-              }`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          </div>
-        )}
         </>
         )}
       </div>
 
       <div
         ref={setDropNodeRef}
-        className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-200 border rounded-md transition-[background-color,border-color,box-shadow] duration-100 mx-0 mb-0 ${
-          isCardLayerTargeted ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(59,130,246,0.25)]' : 'border-transparent'
+        className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto rounded-md px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-300 transition-[background-color,box-shadow] duration-100 mx-0 mb-0 bg-surface-panel ${
+          isCardLayerTargeted ? 'bg-primary/10 ring-1 ring-inset ring-primary/30' : ''
         }`}
         data-mobile-pan-surface="kanban-column"
         data-task-id={nodeId}
@@ -310,30 +298,36 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-desktop-drop-surface="true"
         data-desktop-drop-id={`${nodeId}-drop`}
       >
-        <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
-          {children.map((child) => (
-            <KanbanCard
-              key={child.id}
-              nodeId={child.id}
-              columnId={nodeId}
-              previewNodes={previewNodes}
-              previewParentIndex={previewParentIndex}
-              filterProjection={filterProjection}
-            />
-          ))}
-        </SortableContext>
+        <div
+          data-kanban-column-subtree-scope={children.length > 0 ? 'true' : undefined}
+          className={children.length > 0 ? 'rounded-md' : undefined}
+        >
+          <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
+            {children.map((child) => (
+              <KanbanCard
+                key={child.id}
+                nodeId={child.id}
+                columnId={nodeId}
+                previewNodes={previewNodes}
+                previewParentIndex={previewParentIndex}
+                filterProjection={filterProjection}
+              />
+            ))}
+          </SortableContext>
+        </div>
 
         <div className="mt-[6px]">
           <Button
             type="button"
-            variant="dashed"
+            variant="ghost"
             size="none"
             fullWidth
             disabled={!canCreateTask}
             onClick={handleAddCard}
             data-kanban-add-task-button="true"
+            data-kanban-add-task-visual="borderless"
             data-mobile-pan-pass-through="true"
-            className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold group"
+            className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold text-slate-400 hover:bg-white/70 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/40 group"
           >
             <Plus size={14} className="transition-transform group-hover:scale-110" />
             新增任務

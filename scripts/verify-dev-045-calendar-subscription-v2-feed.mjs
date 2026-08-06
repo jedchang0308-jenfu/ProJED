@@ -108,12 +108,25 @@ assert(
 );
 
 assert(
+  'Edge assignee filtering includes primary and collaborator assignments in coarse and exact matching',
+  source.edgeFunction.includes('assignee_ids,assignee_id,collaborator_ids') &&
+    source.edgeFunction.includes('getTaskAssignmentIds') === false &&
+    source.edgeFunction.includes('...primaryIds') &&
+    source.edgeFunction.includes('...(item.collaborator_ids ?? [])') &&
+    source.edgeFunction.includes('buildAssigneeQueryClauses') &&
+    source.edgeFunction.includes('assignee_ids.ov.') &&
+    source.edgeFunction.includes('collaborator_ids.ov.') &&
+    source.edgeFunction.includes('assignee_id.is.null'),
+);
+
+assert(
   'Package script and governance docs classify v2 as historical compatibility evidence',
   source.packageJson.includes('"verify:dev-045-calendar-subscription-v2-feed"') &&
     source.spec.includes('### v2 historical local contract') &&
     source.qa.includes('v1/v2 materialization') &&
     source.qc.includes('Historical v2 Evidence Preserved') &&
-    source.devTask.includes('Historical v2 Evidence Preserved') &&
+    source.devTask.includes('DEV-045') &&
+    source.devTask.includes('v1相容') &&
     source.documentationMap.includes('Historical v2 Evidence Preserved'),
 );
 

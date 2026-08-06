@@ -10,6 +10,7 @@ interface MindMapKeyboardEventLike {
 type MindMapKeyboardAction =
   | { type: 'toggle-relationship-tool' }
   | { type: 'deactivate-relationship-mode' }
+  | { type: 'clear-selection' }
   | { type: 'remove-selected-relationship' }
   | { type: 'edit-selected-relationship-label' }
   | { type: 'select-vertical'; direction: 'up' | 'down' }
@@ -56,7 +57,7 @@ export const getMindMapKeyboardAction = (
   if (hasMindMapShortcutModifier(event)) return null;
 
   if (event.key === 'Escape') {
-    return state.hasRelationshipMode ? { type: 'deactivate-relationship-mode' } : null;
+    return state.hasRelationshipMode ? { type: 'deactivate-relationship-mode' } : { type: 'clear-selection' };
   }
   if (isMindMapDeleteKey(event) && state.hasSelectedRelationship) return { type: 'remove-selected-relationship' };
   if (isMindMapSpaceKey(event) && state.hasSelectedRelationship) return { type: 'edit-selected-relationship-label' };

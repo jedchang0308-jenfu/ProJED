@@ -107,7 +107,7 @@ async (page) => {
   assert(metrics.topHitInsidePanel, 'filter panel should be the topmost element at its visible content point', metrics);
   assert(metrics.text.includes('任務狀態') && metrics.text.includes('負責人'), 'filter panel should expose full filter content', metrics);
 
-  await panel.getByRole('button', { name: '延遲' }).click();
+  await panel.getByRole('button', { name: '逾期' }).click();
   await panel.waitFor({ state: 'visible', timeout: 3000 });
 
   await page.screenshot({ path: 'output/playwright/filter-menu-portal.png', fullPage: false });

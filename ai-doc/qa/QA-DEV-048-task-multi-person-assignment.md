@@ -90,3 +90,25 @@ Release execution on 2026-07-15:
 - Firebase production deploy and Level 4 smoke passed at `https://projed-cc78d.web.app`; root, hashed JS/CSS, service worker and critical error/request sweep passed.
 - The five existing migration source hash mismatches remain an explicit release governance residual; this release did not rewrite those baselines. DEV-047 remote backup RPC full multi-primary persistence remains frozen/out of this release.
 - Rollback evidence and exact rollback SQL are recorded in `ai-doc/release/PREPRODUCTION-DEV-048-20260715.md` and the ignored `output/release/` evidence files.
+
+## Filter Follow-up QA Plan - 2026-08-06
+
+本追補專門驗證「負責人/協作」不是只換 label，而是真的以主責與協作的聯集過濾任務。
+
+| ID | Real operation | Expected |
+|---|---|---|
+| FILTER-048-002 | 建立「主責 A＋協作 B」任務，點選 B | 任務出現一次；點選無關人員不出現 |
+| FILTER-048-003 | 建立「僅協作 C、無主責」任務，點選 C | 任務出現；點選「未指派」亦出現 |
+| FILTER-048-004 | 建立真正無主責/無協作任務，點選「未指派」 | 任務出現；有主責的任務不出現 |
+| FILTER-048-005 | 同時點選 B 與另一任務的協作人 D | 兩筆命中，各只呈現一次，採 OR semantics |
+| FILTER-048-006 | 在看板與全域任務平台重做 B、C、未指派操作 | 同一條件的 matched task IDs 一致 |
+| FILTER-048-007 | 390×844 重新開啟過濾 popover | 「負責人/協作」可見、無水平溢位、無 visible error |
+
+可重跑命令：
+
+```powershell
+npm.cmd run verify:dev-048-task-filter-collaborators
+npm.cmd run verify:dev-048-task-filter-collaborators-browser
+```
+
+Browser fixture 使用本機固定測試環境與獨立 session；資料由 verifier 建立，過濾器按鈕與成員 chip 由 rendered UI 實際點選。不得以只檢查 localStorage 或只改文案代替本驗證。

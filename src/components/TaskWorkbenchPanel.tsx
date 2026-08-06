@@ -193,7 +193,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
   return (
     <section
       ref={setNodeRef}
-      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-[#cbd5dc] px-3 pb-3 transition-colors ${isOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'}`}
+      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-slate-300 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'}`}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
@@ -220,11 +220,11 @@ const WorkbenchUnclassifiedSection: React.FC<{
       </form>
 
       <div
-        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-[#c2d0d8] bg-[#e1e9ee]/95 px-3 py-1.5 backdrop-blur"
+        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-200/95 px-3 py-1.5 backdrop-blur"
         data-task-workbench-section-header="unplaced"
       >
-        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-[#324756]">
-          <span className="h-3 w-1 shrink-0 rounded-full bg-[#7893a4]" aria-hidden="true" data-task-workbench-header-accent="unplaced" />
+        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-slate-700">
+          <span className="h-3 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" data-task-workbench-header-accent="unplaced" />
           <span className="min-w-0 truncate">未歸位</span>
         </div>
         <span className="sr-only" data-task-workbench-unclassified-count="true">
@@ -870,10 +870,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
         />
       ) : null}
       <aside
-        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r-2 border-[#b7c5cf] bg-gradient-to-b from-[#f7f9fa] via-[#eef3f6] to-[#e4ebef] ${
+        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r-2 border-slate-300 bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 ${
           isNarrowViewport
-            ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_28px_rgba(70,92,106,0.22)]'
-            : 'relative z-20 h-full shadow-[4px_0_20px_rgba(70,92,106,0.16)]'
+            ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_28px_rgba(15,23,42,0.18)]'
+            : 'relative z-20 h-full shadow-[4px_0_20px_rgba(15,23,42,0.12)]'
         }`}
         style={{ width: panelOverlayWidth }}
         data-task-workbench-panel="true"
@@ -884,12 +884,12 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
         aria-label="全域任務平台"
       >
         <div
-          className="relative border-b border-[#c3ccd2] bg-gradient-to-r from-[#fbfcfc] via-[#f1f5f7] to-[#e8eef2] px-3 py-2.5 shadow-[0_1px_0_rgba(70,92,106,0.12)]"
+          className="relative border-b border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.08)]"
           data-task-workbench-filter-control-area="true"
         >
           <div className="flex items-center gap-2">
-            <div className="min-w-0 shrink-0 rounded-md border border-[#c7d1d8] bg-[#fbfcfc] px-2 py-1 shadow-sm" data-task-command-center-title="true">
-              <div className="whitespace-nowrap text-sm font-black text-[#324756]">
+            <div className="min-w-0 shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm" data-task-command-center-title="true">
+              <div className="whitespace-nowrap text-sm font-black text-slate-700">
                 全域任務平台
               </div>
             </div>
@@ -901,8 +901,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
                 panelPrefs.filtersOpen
                   ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
                   : selectedBoardActiveFilterCount > 0
-                    ? 'border-[#a9bbc8] bg-[#e7eef2] text-[#304a5c] shadow-sm ring-1 ring-[#a9bbc8]/50'
-                    : 'border-[#c7d1d8] bg-[#fbfcfc] text-[#536b7b] shadow-sm hover:border-[#a9bbc8] hover:bg-[#edf3f6]'
+                    ? 'border-primary/30 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
+                    : 'border-slate-300 bg-white text-slate-600 shadow-sm hover:border-slate-400 hover:bg-slate-100'
               }`}
               data-task-workbench-filter-toggle="true"
               data-active-task-workbench-filter-count={selectedBoardActiveFilterCount}
@@ -915,7 +915,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
             <button
               type="button"
               onClick={closePanel}
-              className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#607789] transition-colors hover:bg-[#e4ecf1] hover:text-[#304a5c]"
+              className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
               title="收合全域任務平台"
               data-task-workbench-collapse-toggle="true"
             >
@@ -954,18 +954,18 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
         <div
           ref={setPlacedBoardLaneRef}
-          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'}`}
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'}`}
           data-task-workbench-placed-board-lane="true"
           data-task-workbench-lane-drop-target="placed-board"
           data-board-id={selectedBoardOption?.boardId || undefined}
           data-workspace-id={selectedBoardOption?.workspaceId || undefined}
         >
           <div
-            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-[#c2d0d8] bg-[#e1e9ee]/95 px-3 py-2 backdrop-blur"
+            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-200/95 px-3 py-2 backdrop-blur"
             data-task-workbench-section-header="all-tasks"
           >
-            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-[#324756]">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#7893a4] shadow-[0_0_0_3px_rgba(120,147,164,0.18)]" aria-hidden="true" data-task-workbench-header-accent="placed" />
+            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-slate-700">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary shadow-[0_0_0_3px_rgba(99,102,241,0.18)]" aria-hidden="true" data-task-workbench-header-accent="placed" />
               <span className="min-w-0 truncate">已歸位</span>
             </div>
             <span className="sr-only" data-task-workbench-all-tasks-count="true">

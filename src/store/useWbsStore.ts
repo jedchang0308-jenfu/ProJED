@@ -17,6 +17,13 @@ import {
   normalizeTaskAssignmentNode,
   normalizeTaskAssignmentUpdates,
 } from '../utils/taskAssignments';
+import { normalizeManualTaskStatus } from '../utils/taskStatus';
+import {
+  getDeferredTaskStatusForFilters,
+  useDeferredTaskFilterRefreshStore,
+} from '../features/taskFilters/deferredRefresh';
+import { matchesTaskFiltersWithStatus } from '../features/taskFilters/predicates';
+import type { TaskFilterState } from '../features/taskFilters/types';
 
 /**
  * WbsStore 狀態定義
@@ -187,31 +194,51 @@ const getStatusProgress = (status: TaskStatus): number => {
 };
 
 
-const shouldMarkDelayed = (node: TaskNode): boolean => {
-  if (node.isArchived || !node.endDate || node.status === 'completed' || node.status === 'unsure') return false;
-  return dayjs(node.endDate).isValid() && dayjs(node.endDate).isBefore(dayjs(), 'day');
+const normalizeTaskStatusNode = (node: TaskNode): TaskNode => {
+  const status = normalizeManualTaskStatus(node.status);
+  return status === node.status ? node : { ...node, status };
 };
 
-const applySmartStatus = (node: TaskNode): TaskNode => {
-  if (!shouldMarkDelayed(node)) return node;
-  return { ...node, status: 'delayed' };
+const normalizeTaskStatusUpdates = (updates: Partial<TaskNode>): Partial<TaskNode> => {
+  if (updates.status === undefined) return updates;
+  const status = normalizeManualTaskStatus(updates.status);
+  return status === updates.status ? updates : { ...updates, status };
 };
 
-const normalizeSmartStatusUpdates = (
-  oldNode: TaskNode,
-  updates: Partial<TaskNode>
-): Partial<TaskNode> => {
-  if (oldNode.status === 'completed' && updates.status === 'in_progress') return updates;
-  const candidate = { ...oldNode, ...updates };
-  if (!shouldMarkDelayed(candidate)) return updates;
-  return { ...updates, status: 'delayed' };
+const getTaskAndAncestorIds = (
+  taskId: string,
+  nodes: Record<string, TaskNode>,
+) => {
+  const ids: string[] = [];
+  const visited = new Set<string>();
+  let currentId: string | null | undefined = taskId;
+
+  while (currentId && currentId !== 'root' && nodes[currentId] && !visited.has(currentId)) {
+    visited.add(currentId);
+    ids.push(currentId);
+    currentId = nodes[currentId].parentId;
+  }
+
+  return ids;
+};
+
+const getCurrentTaskFilters = (): TaskFilterState => {
+  const boardState = useBoardStore.getState();
+  return {
+    statusFilters: boardState.statusFilters,
+    dueWithinDays: boardState.dueWithinDays,
+    overdueOnly: boardState.overdueOnly,
+    selectedAssigneeIds: boardState.selectedAssigneeIds,
+    selectedTagIds: useTagStore.getState().selectedTagIds,
+    keyword: '',
+  };
 };
 
 const buildChangedNodePatch = (
   oldNode: TaskNode,
   updates: Partial<TaskNode>
 ): { before: Partial<TaskNode>; after: Partial<TaskNode> } | null => {
-  const normalizedUpdates = normalizeSmartStatusUpdates(oldNode, updates);
+  const normalizedUpdates = normalizeTaskStatusUpdates(updates);
   const before: Partial<TaskNode> = {};
   const after: Partial<TaskNode> = {};
 
@@ -512,14 +539,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   setNodes: (nodes, options = {}) => {
     const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options);
     const nodesRecord = nodesWithLocalUnplacedTasks.reduce((acc, node) => {
-      const normalizedNode = applySmartStatus(normalizeTaskAssignmentNode(node));
+      const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
       acc[normalizedNode.id] = normalizedNode;
-
-      if (normalizedNode.status !== node.status && normalizedNode.workspaceId && normalizedNode.boardId) {
-        nodeService.update(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode.id, {
-          status: normalizedNode.status,
-        }).catch(console.error);
-      }
 
       return acc;
     }, {} as Record<string, TaskNode>);
@@ -530,7 +551,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   addNode: (node) => {
     const state = get();
-    const normalizedNode = applySmartStatus(normalizeTaskAssignmentNode(node));
+    const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
     // 使用 Immutable 更新 nodes
     const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
     set({ nodes: updatedNodes });
@@ -657,7 +678,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         isArchived: false,
       };
 
-      return applySmartStatus(copiedNode);
+      return normalizeTaskStatusNode(copiedNode);
     });
 
     const copiedDependencies = includeInternalDependencies
@@ -801,7 +822,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const oldNode = state.nodes[id];
     const normalizedUpdates = normalizeTaskAssignmentUpdates(
       oldNode,
-      normalizeSmartStatusUpdates(oldNode, updates),
+      normalizeTaskStatusUpdates(updates),
     );
 
     // 比對實質變更，供 undo 使用
@@ -817,6 +838,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     const newNode = { ...oldNode, ...normalizedUpdates, updatedAt: Date.now() };
     const updatedNodes = { ...state.nodes, [id]: newNode };
+    const statusChanged = 'status' in normalizedUpdates && normalizedUpdates.status !== oldNode.status;
+    const statusChainIds = statusChanged ? getTaskAndAncestorIds(id, state.nodes) : [];
+    const baselineStatusesByTaskId = new Map(
+      statusChainIds.map(taskId => [
+        taskId,
+        getDeferredTaskStatusForFilters(taskId, state.nodes[taskId].status),
+      ]),
+    );
     
     set({ nodes: updatedNodes });
 
@@ -832,9 +861,35 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     }
 
     // 若狀態改變，觸發 Roll-up
-    if ('status' in normalizedUpdates && normalizedUpdates.status !== oldNode.status) {
+    if (statusChanged) {
         // 同步執行，確保父節點狀態可以立即在目前的 Render Cycle 被更新
         get().recalculateAncestorStatus(id);
+
+        const currentNodes = get().nodes;
+        const activeBoardId = useBoardStore.getState().activeBoardId;
+        const taskFilters = getCurrentTaskFilters();
+        const statusChanges = statusChainIds.flatMap(taskId => {
+          const currentNode = currentNodes[taskId];
+          const baselineStatus = baselineStatusesByTaskId.get(taskId);
+          if (!currentNode || baselineStatus === undefined) return [];
+          return [{
+            taskId,
+            baselineStatus,
+            currentStatus: currentNode.status,
+          }];
+        });
+        const affectsFilterResult = Boolean(activeBoardId) && statusChanges.some(change => {
+          const currentNode = currentNodes[change.taskId];
+          if (!currentNode || currentNode.isArchived || currentNode.boardId !== activeBoardId) return false;
+          return matchesTaskFiltersWithStatus(currentNode, taskFilters, change.baselineStatus)
+            !== matchesTaskFiltersWithStatus(currentNode, taskFilters, change.currentStatus);
+        });
+
+        useDeferredTaskFilterRefreshStore.getState().reconcileStatusOperation(
+          id,
+          statusChanges,
+          affectsFilterResult,
+        );
     }
 
     const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
@@ -1039,7 +1094,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         newStatus = 'todo';
       }
 
-      const normalizedParent = applySmartStatus({ ...parentNode, status: newStatus });
+      const normalizedParent = normalizeTaskStatusNode({ ...parentNode, status: newStatus });
 
       if (normalizedParent.status !== parentNode.status) {
         updatedNodes[currentParentId] = { ...parentNode, status: normalizedParent.status, updatedAt: Date.now() };
@@ -1263,7 +1318,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   }
               }
 
-              const scheduledNode = applySmartStatus({ ...toNode, ...nodeUpdates });
+              const scheduledNode = normalizeTaskStatusNode({ ...toNode, ...nodeUpdates });
               const persistedUpdates: Partial<TaskNode> = { ...nodeUpdates };
               if (scheduledNode.status !== toNode.status) {
                   persistedUpdates.status = scheduledNode.status;

@@ -59,6 +59,19 @@ async (page) => {
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
+    'dev039-hidden-child-a': {
+      id: 'dev039-hidden-child-a',
+      workspaceId: workspace.id,
+      boardId: 'dev039-board-a',
+      parentId: 'dev039-child-a',
+      title: '已完成且被篩選隱藏的下層任務',
+      status: 'completed',
+      nodeType: 'task',
+      order: 0,
+      endDate: '2026-07-08',
+      createdAt: 1704067200000,
+      updatedAt: 1704067200000,
+    },
     'dev039-root-b': {
       id: 'dev039-root-b',
       workspaceId: workspace.id,
@@ -125,6 +138,157 @@ async (page) => {
 
   let step = 'seed';
   try {
+    await seed();
+    await openApp();
+
+    step = 'board-hidden-children-toggle';
+    const filteredParentCard = page.locator('.kanban-task-card[data-task-id="dev039-child-a"]');
+    await filteredParentCard.waitFor({ state: 'visible', timeout: 10000 });
+    assert(
+      await filteredParentCard.locator('[data-kanban-checklist-toggle="true"]').count() === 0,
+      'card should not show a checklist toggle when all direct children are hidden by the active filter',
+    );
+
+    step = 'status-filter-refresh';
+    assert(
+      await page.locator('[data-task-filter-update-button="true"]').count() === 0,
+      'filter refresh action should stay hidden without pending status changes',
+    );
+    const filterControlGroup = page.locator('[data-task-filter-control-group="true"]');
+    assert(
+      await filterControlGroup.locator(':scope > button').count() === 1,
+      'filter control group should contain only the filter trigger before a refresh is pending',
+    );
+    await filteredParentCard.click();
+    const taskDetailsModal = page.locator('[data-task-details-modal="true"]');
+    await taskDetailsModal.waitFor({ state: 'visible', timeout: 10000 });
+    await taskDetailsModal.locator('[data-task-details-meta-field="status"] select').selectOption('onhold');
+    await page.keyboard.press('Escape');
+    await taskDetailsModal.waitFor({ state: 'detached', timeout: 10000 });
+    assert(
+      await page.locator('[data-task-filter-update-button="true"]').count() === 0,
+      'changing between two statuses included by the current filter should not show refresh',
+    );
+    assert(
+      await filteredParentCard.isVisible(),
+      'a membership-neutral status change should keep the task visible without a pending refresh',
+    );
+
+    await filteredParentCard.click();
+    await taskDetailsModal.waitFor({ state: 'visible', timeout: 10000 });
+    await taskDetailsModal.locator('[data-task-details-meta-field="status"] select').selectOption('completed');
+    await page.keyboard.press('Escape');
+    await taskDetailsModal.waitFor({ state: 'detached', timeout: 10000 });
+
+    const pendingRefreshButton = page.locator('[data-task-filter-update-button="true"]');
+    await pendingRefreshButton.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await filteredParentCard.isVisible(), 'status-changed card should remain visible until filter results are refreshed');
+    assert(
+      await pendingRefreshButton.locator('[data-task-filter-update-count="true"]').innerText() === '1',
+      'direct status change should count once even when an ancestor status rolls up',
+    );
+    assert(
+      (await pendingRefreshButton.getAttribute('aria-label')) === '更新篩選結果（1）',
+      'refresh action should expose the full accessible label and count',
+    );
+    assert(
+      await filterControlGroup.locator(':scope > button').count() === 2 &&
+        await pendingRefreshButton.evaluate(element => element.parentElement?.getAttribute('data-task-filter-control-group') === 'true'),
+      'filter and refresh actions should share one compound control region',
+    );
+
+    await filteredParentCard.click();
+    await taskDetailsModal.waitFor({ state: 'visible', timeout: 10000 });
+    await taskDetailsModal.locator('[data-task-details-meta-field="status"] select').selectOption('onhold');
+    await page.keyboard.press('Escape');
+    await taskDetailsModal.waitFor({ state: 'detached', timeout: 10000 });
+    await pendingRefreshButton.waitFor({ state: 'detached', timeout: 10000 });
+    assert(
+      await filteredParentCard.isVisible(),
+      'returning to the existing filter membership should cancel the pending refresh without losing the card',
+    );
+
+    await filteredParentCard.click();
+    await taskDetailsModal.waitFor({ state: 'visible', timeout: 10000 });
+    await taskDetailsModal.locator('[data-task-details-meta-field="status"] select').selectOption('completed');
+    await page.keyboard.press('Escape');
+    await taskDetailsModal.waitFor({ state: 'detached', timeout: 10000 });
+    await pendingRefreshButton.waitFor({ state: 'visible', timeout: 10000 });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(100);
+    assert(
+      !(await pendingRefreshButton.getByText('更新', { exact: true }).isVisible()),
+      'mobile refresh action should hide the full text label',
+    );
+    assert(
+      await pendingRefreshButton.locator('svg').isVisible(),
+      'mobile refresh action should retain a compact update icon',
+    );
+    const mobileOverflow = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+    }));
+    assert(
+      mobileOverflow.bodyScrollWidth <= mobileOverflow.viewportWidth + 1 &&
+        mobileOverflow.documentScrollWidth <= mobileOverflow.viewportWidth + 1,
+      'mobile refresh action should not create horizontal overflow',
+      mobileOverflow,
+    );
+    await page.screenshot({ path: 'output/playwright/dev-039-status-filter-refresh-mobile.png', fullPage: false });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(100);
+    const [groupBounds, filterBounds, refreshBounds, undoBounds] = await Promise.all([
+      filterControlGroup.boundingBox(),
+      page.locator('#filter-menu-trigger').boundingBox(),
+      pendingRefreshButton.boundingBox(),
+      page.locator('#btn-undo').boundingBox(),
+    ]);
+    const compoundControlStyles = await page.evaluate(() => {
+      const group = document.querySelector('[data-task-filter-control-group="true"]');
+      const filter = document.querySelector('#filter-menu-trigger');
+      const refresh = document.querySelector('[data-task-filter-update-button="true"]');
+      if (!group || !filter || !refresh) return null;
+      const groupStyle = getComputedStyle(group);
+      const filterStyle = getComputedStyle(filter);
+      const refreshStyle = getComputedStyle(refresh);
+      return {
+        groupBorderTopWidth: groupStyle.borderTopWidth,
+        groupBorderRadius: groupStyle.borderTopLeftRadius,
+        filterBorderTopWidth: filterStyle.borderTopWidth,
+        refreshBorderTopWidth: refreshStyle.borderTopWidth,
+        refreshDividerWidth: refreshStyle.borderLeftWidth,
+      };
+    });
+    assert(
+      groupBounds && filterBounds && refreshBounds && undoBounds &&
+        Math.abs(filterBounds.x + filterBounds.width - refreshBounds.x) <= 1 &&
+        groupBounds.x <= filterBounds.x &&
+        groupBounds.x + groupBounds.width >= refreshBounds.x + refreshBounds.width &&
+        refreshBounds.x + refreshBounds.width <= undoBounds.x + 2,
+      'desktop filter and refresh actions should be contiguous inside one group before undo controls',
+      { groupBounds, filterBounds, refreshBounds, undoBounds },
+    );
+    assert(
+      compoundControlStyles?.groupBorderTopWidth !== '0px' &&
+        compoundControlStyles?.groupBorderRadius !== '0px' &&
+        compoundControlStyles?.filterBorderTopWidth === '0px' &&
+        compoundControlStyles?.refreshBorderTopWidth === '0px' &&
+        compoundControlStyles?.refreshDividerWidth !== '0px',
+      'compound control should use one outer border and one internal divider',
+      { compoundControlStyles },
+    );
+    await page.screenshot({ path: 'output/playwright/dev-039-status-filter-refresh-desktop.png', fullPage: false });
+
+    await pendingRefreshButton.click();
+    await filteredParentCard.waitFor({ state: 'detached', timeout: 10000 });
+    assert(
+      await page.locator('[data-task-filter-update-button="true"]').count() === 0,
+      'refresh action should hide after applying the latest task statuses',
+    );
+
     await seed();
     await openApp();
 

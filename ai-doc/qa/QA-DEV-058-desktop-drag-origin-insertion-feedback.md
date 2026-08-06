@@ -5,6 +5,8 @@
 權威規格：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`
 風險等級：Medium
 
+DEV-064 相容註記：`bg-blue-500` class 名保留供既有拖曳 verifier 使用，但 runtime computed color 必須等於品牌藍 500 `#6366F1`。
+
 ## 1. Stop Ship 條件
 
 - 來源範圍同時顯示 origin 與一般 target 兩條 marker。

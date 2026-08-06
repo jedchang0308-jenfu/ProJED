@@ -25,15 +25,17 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+  const overdueOnly = useBoardStore(s => s.overdueOnly);
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const taskFilters = React.useMemo(() => ({
     statusFilters,
     dueWithinDays,
+    overdueOnly,
     selectedAssigneeIds,
     selectedTagIds,
     keyword: '',
-  }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+  }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   // 從全域 Store 取出顯示狀態
@@ -232,7 +234,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                   </div>
                   <span>
                       選取模式：已選取 <strong className="text-amber-800">[{dependencySelection.title}]</strong> 的
-                      <span className={`mx-1 px-1.5 py-0 rounded-full text-[10px] font-semibold ${dependencySelection.side === 'start' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-purple-100 text-purple-700 border border-purple-200'}`}>
+                      <span className="mx-1 rounded-full border border-primary/30 bg-primary-light px-1.5 py-0 text-[10px] font-semibold text-primary">
                           {dependencySelection.side === 'start' ? '開始日期' : '結束日期'}
                       </span>
                       — 請點擊清單中任一任務的「日期」作為依賴目標
@@ -257,9 +259,9 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col overflow-hidden bg-white border border-slate-200 rounded-lg shadow-[0_10px_24px_rgba(15,23,42,0.05)] relative">
+          <div className="relative flex flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-task shadow-[0_4px_12px_rgba(15,23,42,0.05)]">
             {/* Header Column Titles (Tree Grid) */}
-            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[32px] py-[6px] px-[10px] bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
+            <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[32px] py-[6px] px-[10px] bg-surface-panel border-b border-border-strong text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
                 <div className="flex items-center pl-[28px]">任務名稱</div>
                 <div className="flex items-center">負責人</div>
                 <div className="flex items-center">狀態</div>

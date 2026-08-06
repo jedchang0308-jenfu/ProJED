@@ -15,15 +15,16 @@ import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { KanbanDependencyContext } from '../BoardView';
 import dayjs from 'dayjs';
-import type { TaskStatus, TaskNode } from '../../types';
+import type { TaskNode } from '../../types';
 import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
-import { TagChip } from '../Tags/TagChip';
+import { KanbanTagSticker } from '../Tags/KanbanTagSticker';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { TaskDateBadge } from './TaskDateBadge';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
+import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -33,16 +34,6 @@ interface KanbanChecklistProps {
   ancestorIds?: string[];
   filterProjection?: TaskFilterResultProjection | null;
 }
-
-/** 狀態對應的文字色 */
-const statusTextMap: Record<TaskStatus, string> = {
-  todo: 'text-slate-600',
-  in_progress: 'text-blue-600',
-  completed: 'text-emerald-600 line-through',
-  delayed: 'text-orange-600',
-  unsure: 'text-purple-600',
-  onhold: 'text-slate-400 line-through',
-};
 
 // =====================================================
 // ChecklistItem — 單一可拖曳任務（抽出為獨立元件，
@@ -76,10 +67,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const tags = useTagStore(s => s.tags);
   const nodeTags = getNodeTags(child, tags);
   const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
-  const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
-  const showTagNames = useBoardStore(s => s.showTagNames);
-  const toggleTagNames = useBoardStore(s => s.toggleTagNames);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
   const { canMoveTask, canCreateDependency } = useBoardPermissions();
   const { active } = useDndContext();
@@ -156,25 +144,34 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   if (isInvalidChild || !child) return null;
 
   return (
-    <div ref={setNodeRef} style={style} className={isDragging ? 'pointer-events-none' : undefined}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-task-surface-scope="true"
+      data-desktop-task-hover-scope="true"
+      data-task-hover-scope-kind="checklist"
+      data-task-hover-scope-source-id={child.id}
+      data-task-hover-has-descendants={hasGrandchildren ? 'true' : undefined}
+      className={isDragging ? 'pointer-events-none' : undefined}
+    >
       {/* 單一待辦項目列 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
       <div
         {...dragSurfaceBindings}
         {...taskGesture.handlers}
-        className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[18px] items-center gap-1 py-0 group rounded transition-colors ${
+        className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[20px] items-center gap-1 py-0.5 group transition-colors ${
           isDragPlaceholder
             ? 'kanban-drag-source-placeholder pointer-events-none bg-transparent shadow-none ring-0'
             : isRecordCaptureMode
               ? isRecordSelected
-                ? 'cursor-pointer bg-blue-50 ring-1 ring-inset ring-blue-400'
-                : 'cursor-pointer hover:bg-blue-50/60'
+                ? 'cursor-pointer bg-primary-light ring-1 ring-inset ring-primary/50'
+                : 'cursor-pointer hover:bg-primary/[0.05]'
             : isSelectingMode
               ? isSelfNode
                 ? 'bg-amber-50 ring-1 ring-inset ring-amber-400 cursor-crosshair'
                 : 'hover:bg-amber-50/60 cursor-crosshair'
-              : 'cursor-pointer hover:bg-slate-50'
-        } ${!isDragPlaceholder && selectedTaskId === child.id ? 'bg-primary/[0.05] ring-1 ring-inset ring-primary/30' : ''}`}
-        style={{ paddingLeft: `${depth * 14 + 2}px` }}
+              : 'cursor-pointer hover:bg-white'
+        }`}
+        style={{ paddingLeft: `${depth * 14 + 4}px` }}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -209,21 +206,25 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-desktop-drop-id={child.id}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
+        data-task-surface-source="true"
         data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
         data-desktop-task-hover-preview={!isDragPlaceholder && !isSelectingMode && !isRecordCaptureMode ? 'true' : undefined}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}
         data-touch-tap-guard="true"
+        data-kanban-checklist-row-visual="flat-unlined"
+        data-task-hierarchy-level="L3+"
       >
         {isRecordCaptureMode ? (
           <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-            isRecordSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-blue-300 bg-white'
+            isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
           }`}>
             {isRecordSelected ? <Check size={9} /> : null}
           </span>
         ) : null}
 
         <span
-          className={`task-title-text text-xs font-medium leading-tight flex-1 truncate transition-colors ${statusTextMap[status]}`}
+          className={`task-title-text relative min-w-0 flex-1 pr-2 text-xs font-medium leading-tight transition-colors ${taskStatusTitleClass[status]}`}
+          aria-label={child.title || '未命名任務'}
           onClick={(e) => {
             if (isRecordCaptureMode) {
               e.preventDefault();
@@ -231,10 +232,13 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
               insertRecordTaskMention(child.id, child.title || child.id);
             }
           }}
-          title={child.title || '未命名任務'}
         >
-          {child.title || '未命名任務'}
+          <span className="block truncate">{child.title || '未命名任務'}</span>
         </span>
+
+        {!isDragPlaceholder && showTags && nodeTags.length > 0 ? (
+          <KanbanTagSticker tags={nodeTags} compact />
+        ) : null}
 
         {/* 日期標籤區 — 選取模式：顯示可點擊按鈕；一般模式：顯示日期 */}
         {isSelectingMode ? (
@@ -246,7 +250,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
               className={`flex items-center gap-0.5 px-1 py-0 rounded-full border text-[9px] font-semibold transition-all ${
                 isSelfStart
                   ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
-                  : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100 cursor-crosshair'
+                  : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
               }`}
             >
               <Link size={8} />
@@ -259,7 +263,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
               className={`flex items-center gap-0.5 px-1 py-0 rounded-full border text-[9px] font-semibold transition-all ${
                 isSelfEnd
                   ? 'bg-amber-100 border-amber-400 text-amber-700 ring-1 ring-amber-300'
-                  : 'bg-purple-50 border-purple-300 text-purple-600 hover:bg-purple-100 cursor-crosshair'
+                  : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
               }`}
             >
               <Link size={8} />
@@ -268,12 +272,12 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           </div>
         ) : (
           <>
-          {/* 日期區間標籤 */}
+          {/* 到期日標籤 */}
           <TaskDateBadge
             startDate={child.startDate}
             endDate={child.endDate}
             status={status}
-            showStartDate={showStartDate}
+            showStartDate={false}
             startLocked={lockStatus.startLocked}
             endLocked={lockStatus.endLocked}
             durationLocked={Boolean(child.isDurationLocked)}
@@ -284,30 +288,18 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         )}
       </div>
 
-      {!isDragPlaceholder && showTags && nodeTags.length > 0 && (
-        <div className="ml-6 mt-px flex flex-wrap gap-0.5">
-          {nodeTags.slice(0, 3).map(tag => (
-            <TagChip
-              key={tag.id}
-              tag={tag}
-              compact
-              collapsed={!showTagNames}
-              onToggleCollapsed={toggleTagNames}
-            />
-          ))}
-        </div>
-      )}
-
       {/* 遞迴渲染更深層的子節點 */}
       {!isDragPlaceholder && hasGrandchildren && (
-        <KanbanChecklist
-          parentId={child.id}
-          depth={depth + 1}
-          previewNodes={previewNodes}
-          previewParentIndex={previewParentIndex}
-          ancestorIds={ancestorIds}
-          filterProjection={filterProjection}
-        />
+        <div data-task-surface-subtree="true">
+          <KanbanChecklist
+            parentId={child.id}
+            depth={depth + 1}
+            previewNodes={previewNodes}
+            previewParentIndex={previewParentIndex}
+            ancestorIds={ancestorIds}
+            filterProjection={filterProjection}
+          />
+        </div>
       )}
     </div>
   );
@@ -340,7 +332,7 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, dept
   if (isRecursiveParent || children.length === 0) return null;
 
   return (
-    <div className={depth === 0 ? 'kanban-checklist-root mt-px pt-px border-t border-slate-100' : ''}>
+    <div className={depth === 0 ? 'kanban-checklist-root mt-px' : ''}>
       <SortableContext items={children.map(child => child.id)} strategy={verticalListSortingStrategy}>
         {children.map(child => (
           <ChecklistItem

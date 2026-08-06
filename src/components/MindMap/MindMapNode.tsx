@@ -39,8 +39,8 @@ interface MindMapNodeProps {
 const getDropClasses = (target: MindMapDropTarget | null, nodeId: string) => {
   if (!target || target.nodeId !== nodeId) return '';
   if (target.mode === 'child') return 'ring-2 ring-blue-300 ring-offset-2 bg-blue-50';
-  if (target.mode === 'before') return 'before:absolute before:left-1 before:right-1 before:top-[-10px] before:h-1 before:rounded-full before:bg-blue-500 before:shadow-[0_0_0_3px_rgba(59,130,246,0.14)]';
-  return 'after:absolute after:bottom-[-10px] after:left-1 after:right-1 after:h-1 after:rounded-full after:bg-blue-500 after:shadow-[0_0_0_3px_rgba(59,130,246,0.14)]';
+  if (target.mode === 'before') return 'before:absolute before:left-1 before:right-1 before:top-[-10px] before:h-1 before:rounded-full before:bg-blue-500 before:shadow-[0_0_0_3px_rgba(99,102,241,0.14)]';
+  return 'after:absolute after:bottom-[-10px] after:left-1 after:right-1 after:h-1 after:rounded-full after:bg-blue-500 after:shadow-[0_0_0_3px_rgba(99,102,241,0.14)]';
 };
 
 export const MindMapNode: React.FC<MindMapNodeProps> = ({
@@ -129,7 +129,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
           data-touch-tap-guard="true"
-          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
+          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-primary-500 ring-2 ring-primary-100' : 'border-slate-200 hover:border-primary-300 hover:bg-primary-50/30'} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
         >
           {hasChildren ? (
             <button
@@ -149,8 +149,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           )}
 
           <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
-            <span className="max-w-full truncate" title={node.title || '未命名任務'}>
-              {node.title || '未命名任務'}
+            <span className="relative inline-block max-w-full">
+              <span className="block truncate" title={node.title || '未命名任務'}>
+                {node.title || '未命名任務'}
+              </span>
             </span>
             {hasVisibleDates ? (
               <span

@@ -171,7 +171,7 @@ async (page) => {
     const taskId = await locator.getAttribute('data-task-id');
     const point = await pointFor(locator, 0.58, 0.42);
     await page.mouse.click(point.x, point.y, { button: 'right' });
-    await page.getByText('更多詳情選項', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 });
+    await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 5000 });
     assert(await page.locator('[data-task-details-modal="true"]').count() === 0, `${label} right click should not open details`, { taskId });
     await page.keyboard.press('Escape');
     return { taskId };

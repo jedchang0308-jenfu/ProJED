@@ -164,7 +164,7 @@ const describeConditionFilters = (
   }
 
   const assignee = describeAssigneeFilter(filters.assignee, memberNameById, currentUserId);
-  return `負責人：${assignee}｜日期：${dateTypes || '未指定'}`;
+  return `負責人/協作：${assignee}｜日期：${dateTypes || '未指定'}`;
 };
 
 type CalendarSubscriptionSubmitBarProps = {

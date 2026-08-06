@@ -552,6 +552,7 @@ export interface BoardState {
   showTags: boolean;
   showTagNames: boolean;
   dueWithinDays: number | null;
+  overdueOnly: boolean;
   selectedAssigneeIds: string[];
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
@@ -593,6 +594,7 @@ export interface BoardActions {
   toggleTags: () => void;
   toggleTagNames: () => void;
   setDueWithinDays: (days: number | null) => void;
+  toggleOverdueFilter: () => void;
   toggleAssigneeFilter: (assigneeId: string) => void;
   clearAssigneeFilters: () => void;
 

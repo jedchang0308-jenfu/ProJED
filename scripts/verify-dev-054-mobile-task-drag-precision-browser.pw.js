@@ -207,7 +207,7 @@ async (page) => {
     const card = page.locator('.kanban-task-card[data-task-id]').first();
     const nodeId = await card.getAttribute('data-task-id');
     const before = await readNode(nodeId);
-    const held = await startHeldTouch(card.locator('[data-mobile-task-card-primary="true"]'));
+    const held = await startHeldTouch(card.locator(':scope > [data-task-surface-source="true"]'));
     const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
     await rail.waitFor({ state: 'visible', timeout: 5000 });
     await held.end();
@@ -231,8 +231,8 @@ async (page) => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
     const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
-    const sourceSurface = source.locator('[data-mobile-task-card-primary="true"]');
-    const targetSurface = target.locator('[data-mobile-task-card-primary="true"]');
+    const sourceSurface = source.locator(':scope > [data-task-surface-source="true"]');
+    const targetSurface = target.locator(':scope > [data-task-surface-source="true"]');
     const sourceId = await source.getAttribute('data-task-id');
     const targetId = await target.getAttribute('data-task-id');
     const beforeSource = await readNode(sourceId);
@@ -282,7 +282,7 @@ async (page) => {
     const secondId = await secondTarget.getAttribute('data-task-id');
     assert(firstId && secondId && firstId !== secondId, 'fixture must expose two adjacent checklist targets', { firstId, secondId });
 
-    const sourcePoint = await visiblePointFor(source.locator('[data-mobile-task-card-primary="true"]'), 0.48, 0.45);
+    const sourcePoint = await visiblePointFor(source.locator(':scope > [data-task-surface-source="true"]'), 0.48, 0.45);
     const firstPoint = await visiblePointFor(firstTarget, 0.5, 0.5);
     const secondPoint = await visiblePointFor(secondTarget, 0.5, 0.5);
     const boundaryY = Math.round((firstPoint.box.y + firstPoint.box.height + secondPoint.box.y) / 2);
@@ -416,9 +416,9 @@ async (page) => {
     const firstTargetId = await firstTarget.getAttribute('data-task-id');
     const farTargetId = await farTarget.getAttribute('data-task-id');
     const sourceId = await source.getAttribute('data-task-id');
-    const sourcePoint = await visiblePointFor(source.locator('[data-mobile-task-card-primary="true"]'), 0.48, 0.45);
+    const sourcePoint = await visiblePointFor(source.locator(':scope > [data-task-surface-source="true"]'), 0.48, 0.45);
     const firstPoint = await visiblePointFor(firstTarget, 0.5, 0.5);
-    const farPoint = await visiblePointFor(farTarget, 0.5, 0.03);
+    const farPoint = await visiblePointFor(farTarget.locator(':scope > [data-task-surface-source="true"]'), 0.5, 0.03);
     assert(sourceId && firstTargetId && farTargetId, 'fixture must expose source, first, and far targets', {
       sourceId,
       firstTargetId,
@@ -441,7 +441,9 @@ async (page) => {
         ? document.querySelector(`[data-mobile-drop-target][data-task-id="${indicatorTargetId}"]`)
         : null;
       const selectedRect = selectedTarget?.getBoundingClientRect();
-      const selectedPrimaryRect = selectedTarget?.querySelector('[data-mobile-task-card-primary="true"]')?.getBoundingClientRect();
+      const selectedSourceRect = selectedTarget?.matches('[data-task-surface-source="true"]')
+        ? selectedTarget.getBoundingClientRect()
+        : selectedTarget?.querySelector('[data-task-surface-source="true"]')?.getBoundingClientRect();
       const distanceToSelectedRect = selectedRect
         ? Math.hypot(
           Math.max(selectedRect.left - x, 0, x - selectedRect.right),
@@ -459,7 +461,7 @@ async (page) => {
         previewAnchor: preview?.getAttribute('data-mobile-preview-anchor') || null,
         fingerClearance: previewRect ? y - previewRect.bottom : null,
         indicatorY,
-        selectedPrimaryBottom: selectedPrimaryRect?.bottom ?? null,
+        selectedSourceBottom: selectedSourceRect?.bottom ?? null,
         debug: (window.__projedMobileTaskActionDebug || []).slice(-12),
       };
     }, { x: farPoint.x, y: farPoint.y, firstTargetId, farTargetId });
@@ -473,9 +475,9 @@ async (page) => {
       && Math.abs(handover.fingerClearance - 12) <= 1,
     'a tall target must not pull the preview away from the finger', handover);
     assert(handover.indicatorY !== null
-      && handover.selectedPrimaryBottom !== null
-      && Math.abs(handover.indicatorY - handover.selectedPrimaryBottom) <= 2,
-    'a tall card indicator must use the bounded primary surface rather than the expanded outer card', handover);
+      && handover.selectedSourceBottom !== null
+      && Math.abs(handover.indicatorY - handover.selectedSourceBottom) <= 2,
+    'a tall card indicator must use the bounded source surface rather than the neutral outer scope', handover);
     const screenshotPath = `${screenshotBase}-B06-no-distant-stale-indicator.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await held.end();
@@ -492,8 +494,8 @@ async (page) => {
     const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
     const invalid = page.locator('[data-kanban-add-task-button="true"]').first();
     const before = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
-    const held = await startHeldTouch(source.locator('[data-mobile-task-card-primary="true"]'));
-    const targetPoint = await pointFor(target.locator('[data-mobile-task-card-primary="true"]'));
+    const held = await startHeldTouch(source.locator(':scope > [data-task-surface-source="true"]'));
+    const targetPoint = await pointFor(target.locator(':scope > [data-task-surface-source="true"]'));
     await held.moveTo({ x: targetPoint.x, y: targetPoint.y });
     await page.locator('[data-mobile-drop-indicator="true"]').waitFor({ state: 'visible', timeout: 5000 });
     await held.moveTo(await pointFor(invalid));
@@ -515,7 +517,7 @@ async (page) => {
     for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
       await openApp(viewport);
       const card = page.locator('.kanban-task-card[data-task-id]').first();
-      const held = await startHeldTouch(card.locator('[data-mobile-task-card-primary="true"]'));
+      const held = await startHeldTouch(card.locator(':scope > [data-task-surface-source="true"]'));
       const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
       const preview = page.locator('[data-mobile-drag-preview="true"]').first();
       await rail.waitFor({ state: 'visible', timeout: 5000 });
@@ -620,12 +622,14 @@ async (page) => {
   await runCase('QA-054-R11', 'mobile card and column origins reuse the blue title-field feedback', async () => {
     await openApp();
     const before = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
-    const sourceCard = page.locator('.kanban-task-card[data-task-id]').first();
+    // Use a card below the top safe-area clamp so this case can verify the exact
+    // 12px finger coupling independently of the presenter's viewport guard.
+    const sourceCard = page.locator('.kanban-task-card[data-task-id]').nth(2);
     const targetCard = page.locator('.kanban-task-card[data-task-id]').nth(1);
     const sourceCardId = await sourceCard.getAttribute('data-task-id');
     const sourceCardNode = await readNode(sourceCardId);
-    const sourceCardPoint = await visiblePointFor(sourceCard.locator('[data-mobile-task-card-primary="true"]'), 0.48, 0.45);
-    const targetCardPoint = await visiblePointFor(targetCard.locator('[data-mobile-task-card-primary="true"]'), 0.5, 0.5);
+    const sourceCardPoint = await visiblePointFor(sourceCard.locator(':scope > [data-task-surface-source="true"]'), 0.48, 0.45);
+    const targetCardPoint = await visiblePointFor(targetCard.locator(':scope > [data-task-surface-source="true"]'), 0.5, 0.5);
     const heldCard = await startHeldTouchAtPoint(sourceCardPoint);
     const cardOriginPoint = { x: sourceCardPoint.x + 10, y: sourceCardPoint.y };
     await heldCard.moveExact(cardOriginPoint, 40);

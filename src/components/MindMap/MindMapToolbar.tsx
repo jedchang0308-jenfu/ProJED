@@ -58,7 +58,7 @@ const MindMapToolbar: React.FC<MindMapToolbarProps> = ({
           onClick={onToggleRelationshipTool}
           disabled={!canEditTask}
           title={relationshipToolActive ? '取消關聯線' : '建立筆記型關聯線'}
-          className={`flex h-[30px] items-center gap-1.5 px-[10px] py-[5px] text-xs ${relationshipToolActive ? 'border-sky-300 bg-sky-50 text-sky-700 shadow-[0_0_0_3px_rgba(125,211,252,0.22)]' : ''}`}
+          className={`flex h-[30px] items-center gap-1.5 px-[10px] py-[5px] text-xs ${relationshipToolActive ? 'border-sky-300 bg-sky-50 text-sky-700 shadow-[0_0_0_3px_rgba(99,102,241,0.22)]' : ''}`}
           data-mindmap-note-relationship-tool
           data-active={relationshipToolActive ? 'true' : 'false'}
           data-source-node-id={relationshipDraftFromId}

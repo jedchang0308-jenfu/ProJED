@@ -1,5 +1,6 @@
 export * from './assigneeOptions';
 export * from './defaults';
+export * from './deferredRefresh';
 export * from './describe';
 export * from './predicates';
 export * from './resultProjection';

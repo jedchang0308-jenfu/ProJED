@@ -5,6 +5,7 @@
 狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 建立日期：2026-07-02
 最新修正：
+- 2026-08-04 status-filter refresh follow-up：狀態更新需立即寫入任務；只有直接任務或此次 ancestor roll-up 在目前 filter 下跨越命中／未命中邊界時，篩選結果才保持在變更前投影並顯示待更新。兩個狀態都命中或都不命中時不得出現 `更新`；membership 回到既有投影時需取消待更新。工具列將過濾器與最短文案 `更新`／唯一任務數 badge 合併為共用外框、零間距與內部分隔線的複合控制，點擊才重算。驗證需覆蓋無影響狀態變更、結果受影響的狀態變更、祖先 roll-up 不重複計數、共同區域、桌機位置、手機圖示／`aria-label` 與無水平 overflow。
 - 2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
 - 2026-07-04，Phase 2 QA contract 補入 cross-board source truth 與 deletion effective-visibility：active board A 時 `所有任務排序` 仍需顯示所有可見 board 任務；任務或父層刪除後，不得在 `所有任務排序` 殘留。
 - 2026-07-04，Phase 2 cross-board source / deletion effective visibility slice 已完成本機 static + browser QC；visible partial/error summary UI、RPC/RLS/migration、DB role matrix 與 production smoke 未納入本輪。
@@ -73,6 +74,10 @@ Phase 2A 需確認同一個工作台內的任務列拖曳 hit area 一致：未�
 - `未歸位` 或 `所有任務排序` 標題在區塊捲動後消失、被任務列蓋住、或缺少明確 section header UI。
 - 桌機工作台 collapsed rail 使用 Notebook/clipboard 類大圖示、展開狀態收合按鈕使用 PanelLeftClose 類圖示、寬度回到 48px、或數字 badge 撐出水平 overflow；手機版仍顯示任何 in-flow collapsed rail。
 - 使用者無權 board/task 出現在 task source、store、UI 或測試輸出。
+- 狀態變更後，任務在使用者點擊 `更新` 前就被既有狀態／逾期 filter 移除。
+- 狀態變更前後都命中或都不命中目前篩選，篩選結果實際未變，工具列卻仍顯示 `更新`。
+- `更新` 沒有與過濾器共用外框、兩區之間仍有外部間距、缺少內部分隔線／數量 badge、無待更新項目時仍常駐，或祖先 roll-up 被重複計數。
+- 手機版顯示完整 `更新` 文案而擠壓工具列、缺少完整可存取名稱，或產生水平 overflow。
 
 ## Phase 1 Static Verification
 
@@ -93,6 +98,8 @@ Phase 2A 需確認同一個工作台內的任務列拖曳 hit area 一致：未�
 | QA-039-S13 | Placement lane selectors | 工作台存在 `data-task-workbench-unplaced-lane`、`data-task-workbench-placed-board-lane`、`data-task-workbench-lane-drop-target` |
 | QA-039-S14 | Task card parity contract | 未歸位與已歸位任務卡共用同一個 task card 元件或等效 interaction contract，不存在功能降級分支 |
 | QA-039-S15 | Release ordering guard | PM 文件明確標示 production release gate 必須排在 Phase 1C QC passed 之後 |
+| QA-039-S16 | Conditional deferred status projection | 共用 predicate 可用指定狀態做純判斷；WBS 狀態更新比較直接任務與 ancestor roll-up 在目前 filter 下的 baseline/current membership，只有結果不同才建立 pending operation；套用後觸發所有共用檢視重算 |
+| QA-039-S17 | Refresh control contract | `StatusFilterBar` 在 pending count 大於 0 時，以共同外框、零間距與內部分隔線容納 filter trigger、`更新`、badge、mobile icon 與完整 `aria-label`；整組位於 undo/redo 左側 |
 
 Gate：
 
@@ -115,6 +122,10 @@ npm.cmd run verify:dev-039-task-filter-core
 | QA-039-B09 | 新增未歸位任務 | 新增後立即以完整任務卡顯示在未歸位 lane，且 reload 後仍可見 |
 | QA-039-B10 | 切換看板與套用過濾器 | 未歸位 lane 不受看板 selector 或過濾器隱藏；過濾器只作用於已歸位看板 lane |
 | QA-039-B11 | 390px mobile viewport | 工作台 closed state 不顯示 in-flow rail；透過 Sidebar / top-nav 入口開啟 overlay 後不水平 overflow |
+| QA-039-B12A | 將目前可見任務由一個命中狀態改為另一個命中狀態 | 任務資料與狀態視覺立即更新、卡片仍可見，工具列不出現 `更新` |
+| QA-039-B12 | 再將目前可見任務改為已被 filter 排除的狀態 | 任務資料狀態已更新，但卡片仍留在原結果；工具列出現 `更新` 與 badge `1` |
+| QA-039-B13 | 檢查複合控制並點擊工具列 `更新` | 過濾器與更新共用外框、兩區相接且只有內部分隔線；點擊後更新區消失，任務依最新狀態被篩除；整組位於 undo 左側 |
+| QA-039-B14 | 390px 狀態變更待更新 | 使用更新圖示 + 數量 badge，`aria-label` 包含完整動作與數量，工具列無水平 overflow |
 
 ## Phase 1B Placement Lane Verification
 

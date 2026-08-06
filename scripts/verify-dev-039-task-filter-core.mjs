@@ -5,6 +5,7 @@ const files = {
   types: 'src/features/taskFilters/types.ts',
   defaults: 'src/features/taskFilters/defaults.ts',
   predicates: 'src/features/taskFilters/predicates.ts',
+  deferredRefresh: 'src/features/taskFilters/deferredRefresh.ts',
   resultProjection: 'src/features/taskFilters/resultProjection.ts',
   assigneeOptions: 'src/features/taskFilters/assigneeOptions.ts',
   describe: 'src/features/taskFilters/describe.ts',
@@ -12,6 +13,7 @@ const files = {
   index: 'src/features/taskFilters/index.ts',
   utilsTaskFilters: 'src/utils/taskFilters.ts',
   boardStore: 'src/store/useBoardStore.ts',
+  wbsStore: 'src/store/useWbsStore.ts',
   tagStore: 'src/store/useTagStore.ts',
   statusFilterBar: 'src/components/ui/StatusFilterBar.tsx',
   mainLayout: 'src/components/MainLayout.tsx',
@@ -80,7 +82,7 @@ assert(
     source.describe.includes('countActiveTaskFilters') &&
     source.describe.includes('describeTaskFilters') &&
     source.storage.includes("BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1'") &&
-    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 2') &&
+    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 3') &&
     source.storage.includes('migrateLegacyDefaultTaskFilters') &&
     !source.storage.includes('TASK_WORKBENCH_FILTER_PROFILES_STORAGE_KEY') &&
     !source.storage.includes('readTaskWorkbenchProfiles') &&
@@ -94,6 +96,41 @@ assert(
   'legacy task filter utils re-export shared core',
   source.utilsTaskFilters.includes("from '../features/taskFilters'") &&
     source.utilsTaskFilters.includes('matchesTaskFilters'),
+);
+
+const filterTriggerIndex = source.mainLayout?.indexOf('<StatusFilterBar') ?? -1;
+const undoButtonIndex = source.mainLayout?.indexOf('id="btn-undo"') ?? -1;
+
+assert(
+  'only status changes that alter current filter membership defer projection until refresh',
+  source.deferredRefresh.includes('deferredStatusesByTaskId') &&
+    source.deferredRefresh.includes('pendingOperationsByTaskId') &&
+    source.deferredRefresh.includes('baselineStatus') &&
+    source.deferredRefresh.includes('reconcileStatusOperation') &&
+    source.deferredRefresh.includes('applyPendingStatusChanges') &&
+    source.predicates.includes('getDeferredTaskStatusForFilters') &&
+    source.predicates.includes('matchesTaskFiltersWithStatus') &&
+    source.wbsStore.includes('const affectsFilterResult') &&
+    source.wbsStore.includes('matchesTaskFiltersWithStatus(currentNode, taskFilters, change.baselineStatus)') &&
+    source.wbsStore.includes('reconcileStatusOperation(') &&
+    source.mainLayout.includes('selectPendingTaskFilterRefreshCount') &&
+    source.mainLayout.includes("useWbsStore.setState(state => ({ nodes: { ...state.nodes } }))") &&
+    source.mainLayout.includes("useBoardStore.setState(state => ({ statusFilters: { ...state.statusFilters } }))"),
+);
+
+assert(
+  'toolbar refresh is a compound filter control with minimal copy, badge and mobile icon',
+  filterTriggerIndex >= 0 &&
+    undoButtonIndex > filterTriggerIndex &&
+    source.mainLayout.includes('pendingUpdateCount={pendingTaskFilterRefreshCount}') &&
+    source.mainLayout.includes('onApplyPendingUpdate={handleApplyTaskFilterRefresh}') &&
+    source.statusFilterBar.includes('data-task-filter-control-group="true"') &&
+    source.statusFilterBar.includes('data-task-filter-control-pending=') &&
+    source.statusFilterBar.includes('border-l border-primary/25') &&
+    source.statusFilterBar.includes('<span className="hidden sm:inline">更新</span>') &&
+    source.statusFilterBar.includes('data-task-filter-update-count="true"') &&
+    source.statusFilterBar.includes('className="sm:hidden"') &&
+    source.statusFilterBar.includes('aria-label={`更新篩選結果（${pendingUpdateCount}）`}'),
 );
 
 assert(
@@ -260,9 +297,8 @@ assert(
     source.spec.includes('Deferred Scope Audit') &&
     source.qa.includes('All-Phase QA Coverage Matrix') &&
     source.qa.includes('Phase Exit Decision Rules') &&
-    source.devTask.includes('Phase 1 已完成本機自動化 QC') &&
-    source.devTask.includes('Phase 2 cross-board source slice 已完成本機自動化 QC') &&
-    source.devTask.includes('Phase 2 visible partial/error summary、DB/RLS/RPC 與 production deploy 仍需另行授權') &&
+    source.devTask.includes('DEV-039 [交付點] [完成]') &&
+    source.devTask.includes('完成任務 filter core、跨看板工作台、row-root parity') &&
     source.documentationMap.includes('All-Phase Coverage Complete') &&
     source.backlog.includes('All-Phase Coverage Matrix'),
 );

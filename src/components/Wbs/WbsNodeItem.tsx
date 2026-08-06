@@ -19,29 +19,14 @@ import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { isMobileTaskActionMode } from './mobileTaskActionContext';
 import TaskAssignmentPicker from '../TaskAssignmentPicker';
+import { getTaskProgressFillClass, getTaskStatusSelectClass, taskStatusTitleClass } from '../ui/taskStatusStyles';
+import { normalizeManualTaskStatus } from '../../utils/taskStatus';
 
 interface WbsNodeItemProps {
   nodeId: string;
   level?: number;
   ancestorIds?: string[];
 }
-
-const getRowStatusAccentClass = (status?: TaskStatus) => {
-  switch (status) {
-    case 'completed':
-      return 'border-l-emerald-400';
-    case 'in_progress':
-      return 'border-l-blue-500';
-    case 'delayed':
-      return 'border-l-orange-500';
-    case 'unsure':
-      return 'border-l-purple-500';
-    case 'onhold':
-      return 'border-l-slate-300';
-    default:
-      return 'border-l-slate-300';
-  }
-};
 
 export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [] }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
@@ -108,16 +93,18 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+  const overdueOnly = useBoardStore(s => s.overdueOnly);
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const tags = useTagStore(s => s.tags);
   const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const taskFilters = React.useMemo(() => ({
     statusFilters,
     dueWithinDays,
+    overdueOnly,
     selectedAssigneeIds,
     selectedTagIds,
     keyword: '',
-  }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+  }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
   const boardMembers = useMemberStore(s => s.boardMembers);
   const membersLoading = useMemberStore(s => s.loading);
   const assigneeOptions = React.useMemo(
@@ -299,19 +286,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       });
   };
 
-  // 生成 Native Select 專用 Tailwind Class
-  const getStatusSelectClass = (status: string) => {
-    const baseClass = "w-20 text-[11px] py-1 px-1.5 rounded-full border outline-none cursor-pointer appearance-none text-center font-semibold transition-colors shadow-[0_1px_1px_rgba(15,23,42,0.04)]";
-    switch (status) {
-      case 'completed': return `${baseClass} bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 focus:ring-1 focus:ring-emerald-400`;
-      case 'in_progress': return `${baseClass} bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 focus:ring-1 focus:ring-blue-400`;
-      case 'delayed': return `${baseClass} bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 focus:ring-1 focus:ring-orange-400`;
-      case 'onhold': return `${baseClass} bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 focus:ring-1 focus:ring-amber-400`;
-      case 'unsure': return `${baseClass} bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 focus:ring-1 focus:ring-purple-400`;
-      default: return `${baseClass} bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 focus:ring-1 focus:ring-slate-400`;
-    }
-  };
-
   // Keep all hooks above this guard so missing/cyclic data never changes hook order.
   if (!node || isRecursiveNode) return null;
 
@@ -341,13 +315,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         data-mobile-drop-target={node.id}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="wbs-list-row"
+        data-task-surface-source="true"
         data-task-selected={selectedTaskId === node.id ? 'true' : undefined}
         data-touch-tap-guard="true"
-        className={`mobile-pan-item grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-b-slate-100 ${getRowStatusAccentClass(node.status)} group hover:bg-primary/5 transition-colors bg-white ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${selectedTaskId === node.id ? 'ring-2 ring-inset ring-primary/35 bg-primary/[0.04]' : ''} ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
+        className={`mobile-pan-item grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-l-transparent ${level === 0 ? 'border-b-slate-200 bg-surface-panel/80' : level === 1 ? 'border-b-slate-100 bg-white' : 'border-b-slate-100 bg-slate-50/40'} group hover:bg-primary/5 transition-colors ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
         {/* Col 1: 任務名稱與階層結構 */}
-        <div className="flex items-center gap-1 overflow-hidden pr-[10px] relative" style={{ paddingLeft: `${indentPadding}rem` }}>
+        <div
+          className="relative flex items-center gap-1 overflow-hidden pr-[10px]"
+          style={{ paddingLeft: `${indentPadding}rem` }}
+        >
           <button 
             onClick={handleToggle}
             className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors text-slate-400 ${!hasChildren && 'invisible'}`}
@@ -361,20 +339,20 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
           ) : null}
 
           <span
-            className={`task-title-text flex-1 min-w-0 truncate px-1 text-sm font-medium ${node.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
-            title={node.title || '未命名任務'}
+            className={`task-title-text relative flex-1 min-w-0 px-1 text-sm ${level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`}
+            aria-label={node.title || '未命名任務'}
           >
-            {node.title || '未命名任務'}
+            <span className="block truncate">{node.title || '未命名任務'}</span>
           </span>
 
           <div className="flex items-center gap-1 flex-shrink-0 w-24">
               <div className={`w-full bg-slate-200 overflow-hidden ${hasChildren ? 'h-1.5 rounded-full' : 'h-1 rounded-sm opacity-70'}`}>
                   <div 
-                  className={`h-full ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'} transition-all`} 
+                  className={`h-full ${getTaskProgressFillClass(progress)} transition-all`}
                   style={{ width: `${progress}%` }} 
                   />
               </div>
-              <span className={`text-[10px] min-w-[2.5ch] text-right font-medium ${progress === 100 ? 'text-green-600' : 'text-slate-500'}`}>
+              <span className={`text-[10px] min-w-[2.5ch] text-right font-medium ${progress === 100 ? 'text-slate-400' : 'text-slate-500'}`}>
                   {progress}%
               </span>
           </div>
@@ -401,39 +379,38 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
         <div className="flex items-center">
             <select
-                value={node.status}
+                value={normalizeManualTaskStatus(node.status)}
                 onChange={handleStatusChange}
                 onClick={(e) => e.stopPropagation()}
                 disabled={!canEditTask}
-                className={getStatusSelectClass(node.status)}
+                className={getTaskStatusSelectClass(node.status)}
                 title="修改狀態"
             >
                 <option value="todo">待辦</option>
                 <option value="in_progress">進行中</option>
-                <option value="delayed">延遲</option>
-                <option value="onhold">暫停</option>
+                <option value="onhold">暫緩</option>
                 <option value="completed">完成</option>
-                <option value="unsure">未定</option>
             </select>
         </div>
 
         {/* Col 3: 開始日期 */}
         {showStartDate && (<div 
             data-task-interaction-control="true"
-            className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
+            className={`flex h-8 items-center group/date relative w-36 flex-shrink-0 px-1.5 transition-all border border-transparent rounded-md
                 ${isSelfStart ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfStart ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}
+            data-wbs-list-date-control="start"
             onClick={canCreateDependency && isSelectingMode && !isSelfStart && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'start', node.title || '未命名任務'); } : undefined}
         >
-            <div className="flex items-center gap-1 flex-1 pr-[10px] whitespace-nowrap overflow-hidden">
+            <div className="flex h-full min-w-0 flex-1 items-center gap-1 pr-1 whitespace-nowrap overflow-hidden">
                 <input 
                     type="date" 
                     value={localStartDate}
                     onChange={handleStartDateChange}
                     readOnly={isStartDateReadOnly}
-                    className={`w-28 text-xs rounded px-1 min-h-[22px] cursor-pointer transition-all
-                        ${isStartDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
+                    className={`h-full min-h-0 min-w-0 flex-1 rounded-md px-2 text-xs cursor-pointer transition-all
+                        ${isStartDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 focus:border-primary focus:outline-none'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={lockStatus.startLocked ? '此日期受依賴關係鎖定，請至甘特圖追蹤' : ''}
                 />
@@ -475,21 +452,22 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         {/* Col 4: 結束日期 */}
         <div 
             data-task-interaction-control="true"
-            className={`flex items-center group/date relative w-36 flex-shrink-0 px-2 transition-all border border-transparent rounded
+            className={`flex h-8 items-center group/date relative w-36 flex-shrink-0 px-1.5 transition-all border border-transparent rounded-md
                 ${isDueToday ? 'border-orange-300 bg-orange-50/80 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]' : ''}
                 ${isSelfEnd ? 'bg-amber-100/50 ring-2 ring-inset ring-amber-400' : ''}
                 ${isSelectingMode && !isSelfEnd ? 'hover:bg-amber-50 cursor-crosshair outline-dashed outline-1 outline-amber-300 -outline-offset-1' : ''}
             `}
+            data-wbs-list-date-control="end"
             onClick={canCreateDependency && isSelectingMode && !isSelfEnd && handleDependencySelect ? (e) => { e.stopPropagation(); handleDependencySelect(nodeId, 'end', node.title || '未命名任務'); } : undefined}
         >
-            <div className="flex items-center gap-1 flex-1 pr-[10px] whitespace-nowrap overflow-hidden">
+            <div className="flex h-full min-w-0 flex-1 items-center gap-1 pr-1 whitespace-nowrap overflow-hidden">
                 <input 
                     type="date" 
                     value={localEndDate}
                     onChange={handleEndDateChange}
                     readOnly={isEndDateReadOnly}
-                    className={`w-28 text-xs rounded px-1 min-h-[22px] cursor-pointer transition-all
-                        ${isEndDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'bg-transparent border border-transparent hover:border-slate-300 focus:border-primary focus:bg-white focus:outline-none text-slate-600'}
+                    className={`h-full min-h-0 min-w-0 flex-1 rounded-md px-2 text-xs cursor-pointer transition-all
+                        ${isEndDateReadOnly ? 'border border-dashed border-slate-300 bg-slate-50/50 text-slate-700 pointer-events-none' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 focus:border-primary focus:outline-none'}
                         ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                     title={isEndDateEffectivelyLocked ? (node.isDurationLocked ? '因工期鎖定，請調整開始日期或修改工期' : '此日期受依賴關係鎖定，請至甘特圖追蹤') : ''}
                 />
@@ -535,12 +513,17 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
 
         {/* Col 5: 工期(天) */}
-        <div className="flex items-center px-[8px] gap-1">
+        <div
+            className={`flex h-8 items-stretch overflow-hidden rounded-md border px-0 ${
+                node.isDurationLocked ? 'border-amber-200 bg-amber-50/70' : 'border-slate-200 bg-slate-50/80'
+            }`}
+            data-wbs-list-duration-control="true"
+        >
              <button
                  type="button"
                  onClick={handleToggleDurationLock}
                  disabled={!canEditTask}
-                 className={`p-1 rounded flex-shrink-0 transition-colors ${node.isDurationLocked ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                 className={`flex h-full w-8 flex-shrink-0 items-center justify-center rounded-none border-r p-0 transition-colors ${node.isDurationLocked ? 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100' : 'border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
                  title={node.isDurationLocked ? '鎖定工期：開始日期變動時同步推動結束日期' : '非鎖定工期：日期各自獨立，自動計算天數'}
              >
                  {node.isDurationLocked ? <Lock size={12} /> : <Unlock size={12} />}
@@ -552,7 +535,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
                  onChange={handleDurationChange}
                  placeholder="-"
                  disabled={!canEditTask || !node.isDurationLocked}
-                 className={`w-10 text-center text-xs bg-transparent border border-transparent focus:outline-none rounded py-0.5 ${!node.isDurationLocked ? 'pointer-events-none text-slate-400 opacity-70' : 'hover:border-slate-300 focus:border-primary focus:bg-white text-slate-600'} ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
+                 className={`h-full w-12 border-0 bg-transparent px-1 text-center text-xs focus:outline-none ${!node.isDurationLocked ? 'pointer-events-none text-slate-400 opacity-70' : 'text-slate-600 focus:bg-white'} ${isSelectingMode ? 'pointer-events-none text-slate-400' : ''}`}
                  title={node.isDurationLocked ? "輸入工期天數自動推算結束日期" : "請先點擊鎖頭以鎖定工期，才能手動修改"}
              />
         </div>

@@ -1,6 +1,8 @@
 import dayjs from 'dayjs';
 import type { TaskFilterState, TaskFilterableNode } from './types';
-import { getTaskAssigneeIds } from '../../utils/taskAssignments';
+import { getTaskAssigneeIds, getTaskAssignmentIds } from '../../utils/taskAssignments';
+import { isTaskOverdue, normalizeManualTaskStatus } from '../../utils/taskStatus';
+import { getDeferredTaskStatusForFilters } from './deferredRefresh';
 
 export const UNASSIGNED_ASSIGNEE_FILTER = '__unassigned__';
 
@@ -19,13 +21,14 @@ export const matchesDueDateFilter = (
 };
 
 export const matchesAssigneeFilter = (
-  node: Pick<TaskFilterableNode, 'assigneeId' | 'assigneeIds'> | null | undefined,
+  node: Pick<TaskFilterableNode, 'assigneeId' | 'assigneeIds' | 'collaboratorIds'> | null | undefined,
   selectedAssigneeIds: string[] | null | undefined,
 ) => {
   if (!selectedAssigneeIds || selectedAssigneeIds.length === 0) return true;
-  const assigneeIds = getTaskAssigneeIds(node);
-  if (assigneeIds.length === 0) return selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER);
-  return assigneeIds.some(assigneeId => selectedAssigneeIds.includes(assigneeId));
+  const primaryIds = getTaskAssigneeIds(node);
+  const assignmentIds = getTaskAssignmentIds(node);
+  if (primaryIds.length === 0 && selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER)) return true;
+  return assignmentIds.some(assignmentId => selectedAssigneeIds.includes(assignmentId));
 };
 
 export const matchesTagFilters = (
@@ -46,14 +49,30 @@ export const matchesKeywordFilter = (
   return (node?.title || '').toLocaleLowerCase().includes(trimmed.toLocaleLowerCase());
 };
 
+export const matchesTaskFiltersWithStatus = (
+  node: TaskFilterableNode | null | undefined,
+  filters: TaskFilterState,
+  status: TaskFilterableNode['status'],
+) => {
+  if (!node) return false;
+  const manualStatus = normalizeManualTaskStatus(status);
+  const filterNode = manualStatus === node.status ? node : { ...node, status: manualStatus };
+  return Boolean(filters.statusFilters[manualStatus]) &&
+    matchesDueDateFilter(node, filters.dueWithinDays) &&
+    (!filters.overdueOnly || isTaskOverdue(filterNode)) &&
+    matchesAssigneeFilter(node, filters.selectedAssigneeIds) &&
+    matchesTagFilters(node, filters.selectedTagIds) &&
+    matchesKeywordFilter(node, filters.keyword);
+};
+
 export const matchesTaskFilters = (
   node: TaskFilterableNode | null | undefined,
   filters: TaskFilterState,
 ) => {
   if (!node) return false;
-  return Boolean(filters.statusFilters[node.status || 'todo']) &&
-    matchesDueDateFilter(node, filters.dueWithinDays) &&
-    matchesAssigneeFilter(node, filters.selectedAssigneeIds) &&
-    matchesTagFilters(node, filters.selectedTagIds) &&
-    matchesKeywordFilter(node, filters.keyword);
+  return matchesTaskFiltersWithStatus(
+    node,
+    filters,
+    getDeferredTaskStatusForFilters(node.id, node.status),
+  );
 };

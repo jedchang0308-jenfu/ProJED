@@ -175,7 +175,6 @@ async (page) => {
       globalContextMenuCount: await page.locator('[data-global-context-menu="true"]').count(),
       menuRenameCount: await page.getByText('重新命名任務').count(),
       fullTaskMenuSignatureCount:
-        await page.getByText('更多詳情選項').count() +
         await page.getByText('主責／協作').count() +
         await page.getByText('複製任務').count(),
       renameInputCount: await page.locator('[data-task-title-input="true"]').count(),

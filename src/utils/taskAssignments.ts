@@ -12,6 +12,13 @@ export type TaskAssignmentSelection = {
 export const getTaskAssigneeIds = (node: Pick<TaskNode, 'assigneeId' | 'assigneeIds'> | null | undefined) =>
   uniqueNonEmptyIds(node?.assigneeIds?.length ? node.assigneeIds : node?.assigneeId ? [node.assigneeId] : []);
 
+export const getTaskAssignmentIds = (
+  node: Pick<TaskNode, 'assigneeId' | 'assigneeIds' | 'collaboratorIds'> | null | undefined,
+) => uniqueNonEmptyIds([
+  ...getTaskAssigneeIds(node),
+  ...(node?.collaboratorIds ?? []),
+]);
+
 export const normalizeTaskAssignmentSelection = (
   primaryIds: readonly (string | null | undefined)[] = [],
   collaboratorIds: readonly (string | null | undefined)[] = [],

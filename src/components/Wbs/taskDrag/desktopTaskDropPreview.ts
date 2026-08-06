@@ -63,21 +63,15 @@ export const resolveDesktopTaskDropIntent = ({
   return { intent, sourceSurfaceKind, targetSurfaceKind };
 };
 
-const getPrimaryGeometryElement = (
-  targetElement: HTMLElement,
-  targetSurfaceKind: TaskDropSurfaceKind,
-) => {
-  if (targetSurfaceKind !== 'kanban-card') return targetElement;
-  return targetElement.querySelector<HTMLElement>('[data-task-card-primary="true"]') || targetElement;
+const getPrimaryGeometryElement = (targetElement: HTMLElement) => {
+  if (targetElement.matches('[data-task-surface-source="true"]')) return targetElement;
+  return targetElement.querySelector<HTMLElement>('[data-task-surface-source="true"]') || targetElement;
 };
 
-const getTaskTitleElement = (
-  targetElement: HTMLElement,
-  targetSurfaceKind: TaskDropSurfaceKind,
-) => {
-  const geometryElement = getPrimaryGeometryElement(targetElement, targetSurfaceKind);
+const getTaskTitleElement = (targetElement: HTMLElement) => {
+  const geometryElement = getPrimaryGeometryElement(targetElement);
   return geometryElement.querySelector<HTMLElement>('.task-title-text')
-    || targetElement.closest<HTMLElement>('[data-task-drop-surface-kind="kanban-card"]')
+    || targetElement.closest<HTMLElement>('[data-task-surface-scope="true"]')
       ?.querySelector<HTMLElement>('.task-title-text')
     || null;
 };
@@ -90,9 +84,9 @@ const getAppendAnchor = (
     return targetElement.querySelector<HTMLElement>('[data-kanban-add-task-button="true"]') || targetElement;
   }
   if (targetSurfaceKind === 'checklist-drop') {
-    const card = targetElement.matches('[data-task-drop-surface-kind="kanban-card"]')
+    const card = targetElement.matches('[data-task-surface-scope="true"]')
       ? targetElement
-      : targetElement.closest<HTMLElement>('[data-task-drop-surface-kind="kanban-card"]');
+      : targetElement.closest<HTMLElement>('[data-task-surface-scope="true"]');
     return card?.querySelector<HTMLElement>('[data-desktop-checklist-append-anchor="true"]')
       || targetElement;
   }
@@ -108,12 +102,12 @@ const getIndicatorRect = ({
   targetSurfaceKind: TaskDropSurfaceKind;
   displayPosition: TaskDropIntent['displayPosition'];
 }): TaskDragIndicatorRect | null => {
-  const geometryElement = getPrimaryGeometryElement(targetElement, targetSurfaceKind);
+  const geometryElement = getPrimaryGeometryElement(targetElement);
   const geometryRect = geometryElement.getBoundingClientRect();
   if (geometryRect.width <= 0 || geometryRect.height < 0) return null;
 
   const columnRect = targetElement.closest<HTMLElement>('[data-kanban-column="true"]')?.getBoundingClientRect();
-  const titleElement = getTaskTitleElement(targetElement, targetSurfaceKind);
+  const titleElement = getTaskTitleElement(targetElement);
   const titleRect = titleElement?.getBoundingClientRect();
   const horizontalInset = 4;
   const visibleLeft = columnRect ? columnRect.left + horizontalInset : geometryRect.left;
@@ -180,11 +174,11 @@ export const resolveTaskOriginFieldRect = ({
   sourceElement: HTMLElement;
   sourceSurfaceKind: TaskDropSurfaceKind;
 }): TaskDragOriginFieldRect | null => {
-  const geometryElement = getPrimaryGeometryElement(sourceElement, sourceSurfaceKind);
+  const geometryElement = getPrimaryGeometryElement(sourceElement);
   const geometryRect = geometryElement.getBoundingClientRect();
   if (geometryRect.width <= 0 || geometryRect.height <= 0) return null;
 
-  const titleRect = getTaskTitleElement(sourceElement, sourceSurfaceKind)?.getBoundingClientRect();
+  const titleRect = getTaskTitleElement(sourceElement)?.getBoundingClientRect();
   if (!titleRect) {
     const horizontalInset = sourceSurfaceKind === 'column-header' ? 10
       : sourceSurfaceKind === 'kanban-card' ? 9 : 0;

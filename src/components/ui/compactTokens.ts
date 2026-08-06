@@ -28,9 +28,9 @@ export const compactClassNames = {
 
 export const topbarClassNames = {
   iconButton:
-    'app-topbar-control app-topbar-icon-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#c7d1d8] bg-white text-[#536b7b] shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all hover:border-[#a9bbc8] hover:bg-[#edf3f6] hover:text-[#304a5c] focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50',
+    'app-topbar-control app-topbar-icon-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50',
   textButton:
-    'app-topbar-control app-topbar-text-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[#c7d1d8] bg-white px-3 text-sm font-semibold text-[#536b7b] shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all hover:border-[#a9bbc8] hover:bg-[#edf3f6] hover:text-[#304a5c] focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50',
+    'app-topbar-control app-topbar-text-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50',
 };
 
 export const compactSegmentedButtonClass = (active: boolean) =>

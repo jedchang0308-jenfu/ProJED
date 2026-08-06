@@ -133,9 +133,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：交付心智圖模式與後續互動改善。
   - 證據：`SPEC-027`、`QA/QC-DEV-027`
   - 計入交付：是
-- ✓ DEV-028 [交付點] [完成] [P1] [本機與人工已驗證] 四模式任務操作契約
-  - 摘要：完成跨模式任務操作一致性與人工點擊驗證。
-  - 證據：`SPEC-028`、`QA/QC-DEV-028`
+- ◇ DEV-028 [交付點] [驗證中] [P1] [本機 QC 通過 / 選取生命週期增補待人工補證] 四模式任務操作契約
+  - 摘要：原跨模式任務操作一致性已完成；本輪依使用者回饋增補選取生命週期，詳情關閉、ESC、空白點擊與切換檢視後不得殘留選取框，心智圖清除後不得自動回選根節點。
+  - 來源 ID：`USER-20260805-SELECTION-LIFECYCLE-CLEAR`
+  - 下一步：若要上正式環境，另走 release gate；本輪未獲部署授權。
+  - 阻塞 / 恢復條件：不得改變 click-to-details、拖曳／關聯線／會議紀錄選取模式；若後續再調整選取視覺，需維持 close、ESC、空白點擊與切換檢視後零殘留。
+  - 證據：`SPEC-028`、`QA-DEV-028`（Selection Lifecycle Addendum）；DEV-028 static 45/45、browser 四模式 click-to-details + close／ESC selected count = 0 + mindmap blank/Escape 皆通過，console 0 errors、TypeScript、ESLint、test build、1440／390 viewport smoke 與截圖通過；1024／人工點擊仍依 QA 矩陣待補。
   - 計入交付：是
 - ✓ DEV-029 [交付點] [完成] [P1] [本機已驗證] 手機 Pan-First 與 compact action rail
   - 摘要：完成手機捲動優先、長按操作、拖放仲裁與大型新增 CTA short-pan pass-through；欄位新增任務、看板尾端新增 CTA、TaskWorkbench 未歸位新增 CTA 不再是平移死角。
@@ -162,8 +165,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-038`、`QA/QC-DEV-038`
   - 計入交付：是
 - ✓ DEV-039 [交付點] [完成] [P1] [本機已驗證] 全域任務工作台與任務過濾器
-  - 摘要：完成任務 filter core、跨看板工作台與 row-root parity。
-  - 證據：`SPEC-039`、`QA/QC-DEV-039`
+  - 摘要：完成任務 filter core、跨看板工作台、row-root parity；狀態變更採資料即時儲存，只有目前 filter membership 確實改變時才顯示 `更新` 並延後重算篩選結果。
+  - 證據：`SPEC-039`、`QA/QC-DEV-039`、status-filter refresh static／browser QC
   - 計入交付：是
 - ◇ DEV-040 [交付點] [驗證中] [P0] [remote Edge gate pending] 正式環境同型 BUG 風險硬化
   - 摘要：原始 BUG 已發布驗證，P0 bounded-failure addendum 尚待 remote Edge gate。
@@ -267,28 +270,60 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`ai-doc/specs/SPEC-058-desktop-drag-origin-insertion-feedback.md`、`ai-doc/qa/QA-DEV-058-desktop-drag-origin-insertion-feedback.md`；Rework 2 static：DEV-058 26/26、DEV-054 37/37、DEV-055 27/27、DEV-046 31/31、DEV-053 30/30；browser：DEV-054 R01-R11 11/11、DEV-055 B01-B16 16/16、DEV-053 10/10、DEV-046 全表面回歸；320/390/430 visual、ESLint、TypeScript 與 production build 通過。Artifact commit `339bf27` 已部署，Level 3 preview、Level 4 production smoke 與線上 hash provenance 通過；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
   - 計入交付：是
 - ✓ DEV-059 [開發點] [完成] [P2] [正式環境已交付 / Level 4 通過] 看板階層統計徽章精簡
-  - 摘要：依使用者截圖移除任務卡頂部的下層任務 `完成數/總數` Badge，以及每個下層任務列右側的子項目數量 Badge；保留日期、卡片藍色進度條、階層展開內容與欄位標頭統計。
+  - 摘要：依使用者截圖移除任務卡頂部的下層任務 `完成數/總數` Badge，以及每個下層任務列右側的子項目數量 Badge；當時保留日期、卡片藍色進度條、階層展開內容與欄位標頭統計。2026-08-04 後續明示決策已再移除 L1／L2 進度條與非必要巢狀框線，改以 L1 淡外框、L2 無框陰影、L3+ 淡底與間距分層。
   - 來源 ID：`USER-20260803-kanban-hierarchy-count-badge-removal`
   - 父任務：DEV-028、DEV-058
-  - 下一步：已交付正式環境；後續若調整卡片 metadata，需重跑 DEV-028 與登入後視覺抽查。
-  - 阻塞 / 恢復條件：不得刪除日期、藍色進度條或欄位標頭的任務數／百分比；不得改變任務資料、階層、拖曳、選取或展開行為。
-  - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint、4173 DOM / screenshot 與 production build 通過。Artifact commit `339bf27` 已部署，登入後正式站確認重複數量徽章已移除；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
+  - 下一步：既有 DEV 已交付正式環境；本輪進度條與框線精簡目前僅完成本機實作與 QC，尚未部署。後續若調整卡片 metadata，需重跑 DEV-028 與登入後視覺抽查。
+  - 阻塞 / 恢復條件：2026-08-04 使用者已明示移除 L1／L2 進度條及標題、卡片、L3+ 容器／列、新增任務、看板日期與標籤的非必要描邊，取代本 DEV 的舊限制；仍不得刪除日期、標籤或欄位標頭統計，也不得改變進度資料、任務階層、拖曳、選取、focus 或展開行為。
+  - 證據：DEV-028 static 37/37、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint、4173 DOM / screenshot 與 production build 通過。Artifact commit `339bf27` 已部署，登入後正式站確認重複數量徽章已移除；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。最新本機框線精簡另通過 DEV-028 41/41、DEV-029 39/39、DEV-031 17/17、DEV-055 27/27、DEV-061 18/18、TypeScript、ESLint、test build 與 1440／1024／390 browser QC。
   - 計入交付：是
-- ✓ DEV-060 [開發點] [完成] [P2] [正式環境已交付 / Level 4 通過] L2 / L3+ 看板日期顯示一致化
-  - 摘要：L2 任務卡日期改用 L3+ 已有的緊湊 `TaskDateBadge checklist` surface，並移到標題列右側，與 L3+ 同為「任務名在左、日期在右」；兩者同為 9px、無日曆圖示、相同邊框與色彩，日期值、今日到期警示與日期鎖定語意不變。
-  - 來源 ID：`USER-20260803-kanban-l2-l3-date-parity`
+- ✓ DEV-060 [開發點] [完成] [P2] [到期日單值本機 QC 通過 / 尚未部署] 看板任務日期僅顯示到期日
+  - 摘要：看板 L1／L2／L3+ 共用緊湊無描邊淡底 `TaskDateBadge checklist` surface，正面只顯示 `endDate`；不顯示開始日、箭頭或空到期日 placeholder。開始日與到期日資料、排程、依賴、工期鎖定、今日到期警示及其他檢視不變。
+  - 來源 ID：`USER-20260803-kanban-l2-l3-date-parity`、`USER-20260804-kanban-due-date-only`
   - 父任務：DEV-028、DEV-059
-  - 下一步：已交付正式環境；後續若調整 L2/L3+ 日期 surface，需保持同一 `TaskDateBadge` 契約。
-  - 阻塞 / 恢復條件：不得複製新日期樣式、刪除日期、改變 `showStartDate`、到期警示、依賴／工期鎖定、任務資料或拖曳 geometry。
-  - 證據：DEV-028 static 38/38、DEV-055 static 27/27 + browser B01-B16 16/16、DEV-054 static 37/37 + browser R01-R11 11/11、TypeScript、ESLint 與 production build 通過；4173 與登入後正式站均確認 L2 日期使用 L3+ 相同箭頭格式。Artifact commit `339bf27` 已部署；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
+  - 下一步：若要上正式環境，另走 release gate；本輪未獲部署授權。後續調整看板日期需維持所有階層同一到期日單值契約。
+  - 阻塞 / 恢復條件：本輪明示決策只取代看板的 `showStartDate` 顯示控制；不得複製新日期樣式、刪除 `startDate`／`endDate` 資料、移除到期警示或依賴／工期鎖定，也不得改變其他檢視、日期編輯或拖曳 geometry。
+  - 證據：本輪 DEV-060 browser QA-060-001～005 5/5、DEV-028 42/42、DEV-061 20/20、DEV-029 39/39、DEV-031 17/17、DEV-055 27/27、TypeScript、ESLint 0 errors（55 個既存 warnings）、test build、1440／1024／390 screenshot 與 console 0 errors 通過；`output/playwright/dev-060-kanban-due-date-only-1785827955188-*.png`。歷史箭頭區間版本 commit `339bf27` 與 Level 4 evidence 只代表既有 production。
   - 計入交付：是
-- ✓ DEV-061 [開發點] [完成] [P2] [TEST + production 已驗證 / Level 4通過] Trello 式看板標籤收疊
-  - 摘要：點任一看板標籤即可全看板切換名稱展開／收疊；收疊後每個標籤只保留單一實色圓點，懸浮顯示顏色與標題，且不開任務詳情或啟動拖曳。
-  - 來源 ID：`USER-20260804-kanban-trello-label-collapse`
+- ✓ DEV-061 [開發點] [完成] [P2] [堆疊貼紙本機 QC 通過 / 尚未部署] 看板標籤堆疊式尾標貼紙
+  - 摘要：使用者以堆疊式尾標貼紙取代全看板名稱收疊與圓點；L2／L3+ 在任務名稱尾端使用同一單行貼紙，第一標籤顯示名稱，後續最多露出兩層並以 `+N` 計數，點擊／鍵盤 focus 只開該任務完整標籤 popover，不再造成全看板排版跳動。
+  - 來源 ID：`USER-20260804-kanban-trello-label-collapse`、`USER-20260804-kanban-stacked-tag-sticker-replacement`
   - 父任務：DEV-028、DEV-059、DEV-060
-  - 下一步：已交付正式環境；後續若調整標籤收疊，需維持全看板一致切換、10x10 圓點、tooltip、鍵盤與任務詳情／拖曳隔離契約。
-  - 阻塞 / 恢復條件：不得改標籤資料、標籤篩選、TagPicker 編輯流程、任務詳情／拖曳契約；收疊狀態必須可鍵盤操作、可重新整理保留，且手機不可新增水平溢出。
-  - 證據：功能 commit `8713481`；DEV-061 static 18/18、browser QA-061-001～008 8/8、DEV-028 static 38/38、production auth mode 5/5、TypeScript、targeted ESLint、1440x900 展開／收疊與 390x844 screenshot 均通過。乾淨 production minified build、Level 2 local artifact smoke、Firebase Level 3 preview 與 Level 4 production smoke 通過；preview／production 35/35 檔案 SHA-256 均與本機 `dist` 一致。正式站載入 `assets/index-ujoYxB3D.js` / `assets/index-BHWKS0qR.css`；完整證據：`ai-doc/release/LEVEL4-production-deploy-evidence-20260804-continuous-optimization-3.md`。
+  - 下一步：若要上正式環境，另走 release gate；本輪未獲部署授權。
+  - 阻塞 / 恢復條件：不得改標籤資料、標籤篩選、TagPicker 編輯流程、任務詳情／拖曳契約；貼紙不得遮字、另占一列或因舊 `showTagNames` 偏好跳版，手機不可新增水平溢出。
+  - 證據：本輪 DEV-061 static 20/20 + browser QA-061-001～008 8/8、DEV-028 42/42、DEV-029 39/39、DEV-031 17/17、DEV-055 27/27、TypeScript、ESLint 0 errors、test build 與 1440／1024／390 screenshot 通過；`output/playwright/dev-061-kanban-tag-sticker-1785827105925-*.png`。歷史圓點版 commit `8713481` 與 Level 4 evidence 只代表既有 production。
+  - 計入交付：是
+- ✓ DEV-062 [開發點] [完成] [P1] [本機 QC 通過 / 尚未部署] 任務狀態精簡與截止日衍生逾期
+  - 摘要：人工狀態收斂為待辦、進行中、暫緩、完成；逾期改由截止日自動判斷，狀態 UI 移除圖示與彩色圓點並收斂為深灰、藍、淺灰。
+  - 來源 ID：`USER-20260804-SIMPLIFIED-TASK-STATUS-DERIVED-OVERDUE`
+  - 父任務：DEV-028、DEV-039、DEV-060
+  - 下一步：若要上正式環境，另走 release gate；本輪未獲部署授權。
+  - 阻塞 / 恢復條件：不得自動回寫遠端 legacy status 或執行 enum migration；正式部署需先確認既有 delayed／unsure 資料轉換策略。
+  - 證據：`SPEC-062`、`QA-DEV-062`、DEV-062 static／browser、DEV-039、DEV-045、DEV-028、DEV-061、TypeScript 與三 viewport screenshot 通過。
+  - 計入交付：是
+- ✓ DEV-063 [交付點] [完成] [P1] [本機 QC 通過 / 尚未部署] 看板 L2／L3+ 視覺層級強化
+  - 摘要：L2 使用完整中性外框與陰影；L3+ 使用內嵌左導軌與無線條扁平列，以結構而非同層分隔或新增色相強化父子層級。
+  - 來源 ID：`USER-20260804-KANBAN-L2-L3-HIERARCHY-VISUAL`
+  - 父任務：DEV-028、DEV-060、DEV-061
+  - 下一步：若要上正式環境，另走 release gate；本輪未獲部署授權。
+  - 阻塞 / 恢復條件：不得改拖曳、點擊、標籤、日期、狀態、資料或 schema 契約；手機不得新增水平 overflow。
+  - 證據：`SPEC-028 DEV-063 增補`、`QA-DEV-028 DEV-063 增補`、DEV-028 42/42、DEV-060 browser、DEV-061 static／browser、TypeScript、targeted ESLint、test build 與三 viewport screenshot 通過。
+  - 計入交付：是
+- ✓ DEV-064 [交付點] [完成] [P1] [本機 QC 通過 / 尚未部署] 全系統品牌藍統一
+  - 摘要：以既有 `#6366F1` 建立品牌藍 50–950 色階，讓主要操作、選取、focus、進行中、拖曳與心智圖共用同一色相；工作台藍灰容器改為中性 slate，保留成功／警告／危險功能色。
+  - 來源 ID：`USER-20260804-SYSTEM-BRAND-BLUE-UNIFICATION`
+  - 父任務：DEV-027E、DEV-039、DEV-057、DEV-058、DEV-062
+  - 下一步：若要上正式環境，另走 release gate；本輪未獲部署授權。
+  - 阻塞 / 恢復條件：不得把成功、警告、危險、逾期或自訂非藍色改成品牌藍；不得改互動、資料、schema、權限或拖曳 commit。
+  - 證據：`SPEC-064`、`QA-DEV-064`；DEV-064 static 20/20、browser 6/6、DEV-039 31/31、DEV-047、DEV-062、DEV-058 26/26、DEV-027E 24/24、TypeScript、targeted ESLint、test build 與四張 viewport／surface screenshot 通過。
+  - 計入交付：是
+  - ✓ DEV-065 [交付點] [已完成] [P1] [Rework 13 Card + List Two-Layer QC 通過 / 不部署] 任務子樹 hover 與拖曳影響範圍預覽
+  - 摘要：統一 L1／L2／L3+ 游標預選為「來源任務＋完整可見後代」的子樹範圍；L1 卡片內容區補上完整群組 overlay，L2 來源框放在整張卡片最外層，標題列不另加框，子任務區保留第二層完整範圍框，並在實際拖曳 overlay 揭露 canonical 後代數量，讓使用者在移動前知道連帶影響。
+  - 來源 ID：`USER-20260805-TASK-SUBTREE-HOVER-PREVIEW`
+  - 父任務：DEV-057、DEV-055、DEV-028
+  - 下一步：若要處理既有 DEV-055 B06 checklist drop hit-cache 回歸，另立 DEV；若要上正式環境，另走 release gate。
+  - 阻塞 / 恢復條件：不得改變 click、right-click、8px threshold、drag commit／undo、cycle guard、手機 long-press、資料或 schema；本輪沒有部署授權。
+  - 證據：`SPEC-065`、`QA-DEV-065`；Rework 13 依使用者示意將 L2 source marker 放回卡片 root，整張卡片使用 `primary-500` outer source frame，標題列不另加框，子任務區維持 `primary-400` 完整 group frame；Rework 10 新增 L1 卡片內容區完整 `primary-400` overlay；Rework 9 的雙層範圍語意、Rework 7 native tooltip、Rework 6 text/cursor、Rework 5 框線強度與 L3+ 完整 inset group frame 均保留。DEV-065 static 27/27、browser QA-065-001～013 13/13、DEV-028 45/45、DEV-046 31/31、DEV-055 static 27/27、TypeScript、ESLint、test build 與新截圖通過。
   - 計入交付：是
 
 

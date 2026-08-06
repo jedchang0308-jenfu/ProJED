@@ -4,6 +4,7 @@ import {
   type MindMapRelationshipPath,
 } from './mindMapGeometry';
 import type { MindMapRelationshipPointerHandle } from './mindMapRelationshipCommands';
+import { BRAND_BLUE } from '../ui/brandColors';
 
 interface MindMapRelationshipOverlayProps {
   relationshipPaths: MindMapRelationshipPath[];
@@ -50,7 +51,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M 1 1 L 8 4.5 L 1 8 z" fill="#0284c7" />
+          <path d="M 1 1 L 8 4.5 L 1 8 z" fill={BRAND_BLUE[500]} />
         </marker>
       </defs>
       {relationshipPaths.map(path => {
@@ -91,7 +92,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
             <path
               d={path.d}
               fill="none"
-              stroke={active ? '#0ea5e9' : path.style.strokeColor}
+              stroke={active ? BRAND_BLUE[500] : path.style.strokeColor}
               strokeWidth={selected ? Math.max(path.style.strokeWidth + 1, 3.5) : hovered ? Math.max(path.style.strokeWidth + 0.75, 3) : path.style.strokeWidth}
               strokeDasharray={path.style.strokeDasharray}
               strokeLinecap="round"
@@ -124,7 +125,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   y1={path.c1Y}
                   x2={path.c2X}
                   y2={path.c2Y}
-                  stroke="#bae6fd"
+                  stroke={BRAND_BLUE[200]}
                   strokeDasharray="4 4"
                   strokeWidth={1.5}
                   style={{ pointerEvents: 'none' }}
@@ -135,7 +136,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   y1={path.fromY}
                   x2={path.c1X}
                   y2={path.c1Y}
-                  stroke="#38bdf8"
+                  stroke={BRAND_BLUE[400]}
                   strokeWidth={1.75}
                   strokeLinecap="round"
                   style={{ pointerEvents: 'none' }}
@@ -147,7 +148,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   y1={path.toY}
                   x2={path.c2X}
                   y2={path.c2Y}
-                  stroke="#38bdf8"
+                  stroke={BRAND_BLUE[400]}
                   strokeWidth={1.75}
                   strokeLinecap="round"
                   style={{ pointerEvents: 'none' }}
@@ -159,7 +160,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   cy={path.fromY}
                   r={6.5}
                   fill="#ffffff"
-                  stroke="#0ea5e9"
+                  stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
                   style={{ pointerEvents: 'all' }}
@@ -172,7 +173,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   cy={path.toY}
                   r={6.5}
                   fill="#ffffff"
-                  stroke="#0ea5e9"
+                  stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
                   style={{ pointerEvents: 'all' }}
@@ -187,7 +188,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   height={12}
                   rx={2}
                   fill="#ffffff"
-                  stroke="#0ea5e9"
+                  stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
                   style={{ pointerEvents: 'all' }}
@@ -202,7 +203,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   height={12}
                   rx={2}
                   fill="#ffffff"
-                  stroke="#0ea5e9"
+                  stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
                   style={{ pointerEvents: 'all' }}
@@ -256,13 +257,13 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
             orient="auto"
             markerUnits="userSpaceOnUse"
           >
-            <path d="M 1 1 L 8 4.5 L 1 8 z" fill="#0ea5e9" />
+            <path d="M 1 1 L 8 4.5 L 1 8 z" fill={BRAND_BLUE[500]} />
           </marker>
         </defs>
         <path
           d={relationshipDraftPreview.d}
           fill="none"
-          stroke="#0ea5e9"
+          stroke={BRAND_BLUE[500]}
           strokeWidth={2}
           strokeDasharray="6 5"
           strokeLinecap="round"

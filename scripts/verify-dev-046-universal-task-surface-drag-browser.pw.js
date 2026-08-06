@@ -413,11 +413,10 @@ async (page) => {
     const state = {
       modalCount: await page.locator('[data-task-details-modal="true"]').count(),
       railCount: await page.locator('[data-mobile-task-action-rail="true"]').count(),
-      menuCount: await page.getByText('更多詳情選項').count(),
+      menuCount: await page.locator('[data-global-context-menu="true"]').count(),
       renameCount: await page.getByText('重新命名任務', { exact: true }).count(),
       globalContextMenuCount: await page.locator('[data-global-context-menu="true"]').count(),
       fullTaskMenuSignatureCount:
-        await page.getByText('更多詳情選項').count() +
         await page.getByText('主責／協作').count() +
         await page.getByText('複製任務').count(),
     };
@@ -502,7 +501,6 @@ async (page) => {
       previewCount: await page.locator('[data-mobile-drag-preview="true"]').count(),
       globalContextMenuCount: await page.locator('[data-global-context-menu="true"]').count(),
       fullTaskMenuSignatureCount:
-        await page.getByText('更多詳情選項').count() +
         await page.getByText('主責／協作').count() +
         await page.getByText('複製任務').count(),
     };

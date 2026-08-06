@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, Copy, FileText, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound, Pencil, LayoutDashboard, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Copy, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound, Pencil, LayoutDashboard, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -13,6 +13,7 @@ import useDialogStore from '../store/useDialogStore';
 import useAuthStore from '../store/useAuthStore';
 import { boardService } from '../services/dataBackend';
 import {
+  clearTaskSelection,
   OPEN_TASK_DETAILS_EVENT,
   isTextInputTarget,
   prepareNewTaskNaming,
@@ -128,7 +129,13 @@ export const GlobalContextMenu: React.FC = () => {
     if (!contextMenuState) return;
     if (!showStartDate) toggleStartDate();
     setDependencySelection({ id: contextMenuState.nodeId, side, title: contextMenuState.title });
+    closeContextMenu();
+  };
+
+  const closeContextMenu = (options: { preserveTaskSelection?: boolean } = {}) => {
+    const wasTaskMenu = useBoardStore.getState().contextMenuState?.kind === 'task';
     setContextMenuState(null);
+    if (wasTaskMenu && !options.preserveTaskSelection) clearTaskSelection();
   };
 
   useEffect(() => {
@@ -150,7 +157,7 @@ export const GlobalContextMenu: React.FC = () => {
   useEffect(() => {
     if (!contextMenuState) return;
 
-    const close = () => setContextMenuState(null);
+    const close = () => closeContextMenu({ preserveTaskSelection: Boolean(detailsNodeId) });
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') close();
     };
@@ -162,7 +169,7 @@ export const GlobalContextMenu: React.FC = () => {
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('keydown', handleKey);
     };
-  }, [contextMenuState, setContextMenuState]);
+  }, [contextMenuState, detailsNodeId, setContextMenuState]);
 
   useEffect(() => {
     const handleTaskShortcut = (event: KeyboardEvent) => {
@@ -240,7 +247,7 @@ export const GlobalContextMenu: React.FC = () => {
       return;
     }
 
-    setContextMenuState(null);
+    closeContextMenu({ preserveTaskSelection: Boolean(detailsNodeId) });
   };
 
   const handleAddChild = () => {
@@ -269,7 +276,7 @@ export const GlobalContextMenu: React.FC = () => {
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
-    setContextMenuState(null);
+    closeContextMenu({ preserveTaskSelection: true });
   };
 
   const handleAddSibling = () => {
@@ -307,15 +314,7 @@ export const GlobalContextMenu: React.FC = () => {
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
-    setContextMenuState(null);
-  };
-
-  const handleMarkCompleted = () => {
-    if (!canEditTask) return;
-    if (!contextMenuState) return;
-
-    updateNode(contextMenuState.nodeId, { status: 'completed' });
-    setContextMenuState(null);
+    closeContextMenu({ preserveTaskSelection: true });
   };
 
   const handleMoveUp = () => {
@@ -326,7 +325,7 @@ export const GlobalContextMenu: React.FC = () => {
 
     if (!node || !node.parentId) {
       toast.warning('已經是最上層任務，無法再往上移動。');
-      setContextMenuState(null);
+      closeContextMenu();
       return;
     }
 
@@ -338,7 +337,7 @@ export const GlobalContextMenu: React.FC = () => {
       order: parentNode.order + 0.1,
     });
 
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleMoveDown = () => {
@@ -357,7 +356,7 @@ export const GlobalContextMenu: React.FC = () => {
 
     if (currentIndex <= 0) {
       toast.warning('沒有前一個相鄰的任務，無法往下移動成為其下層任務。');
-      setContextMenuState(null);
+      closeContextMenu();
       return;
     }
 
@@ -365,7 +364,7 @@ export const GlobalContextMenu: React.FC = () => {
 
     if (prevSibling.status === 'completed') {
       toast.warning('無法移動到已完成的任務之下。');
-      setContextMenuState(null);
+      closeContextMenu();
       return;
     }
 
@@ -380,7 +379,7 @@ export const GlobalContextMenu: React.FC = () => {
       order: maxOrder + 1,
     });
 
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleDuplicate = async () => {
@@ -401,15 +400,8 @@ export const GlobalContextMenu: React.FC = () => {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '複製任務失敗。');
     } finally {
-      setContextMenuState(null);
+      closeContextMenu();
     }
-  };
-
-  const handleOpenDetails = () => {
-    if (!contextMenuState) return;
-
-    selectAndOpenTaskDetails(contextMenuState.nodeId);
-    setContextMenuState(null);
   };
 
   const handleDelete = () => {
@@ -419,18 +411,18 @@ export const GlobalContextMenu: React.FC = () => {
     if (window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`)) {
       removeNode(contextMenuState.nodeId);
     }
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleRenameWorkspace = () => {
     if (!contextMenuState || contextMenuState.kind !== 'workspace') return;
     setPendingWorkspaceTitleEditId(contextMenuState.workspaceId);
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleCreateWorkspace = () => {
     requestCreateWorkspace();
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleAddBoardToWorkspace = () => {
@@ -440,7 +432,7 @@ export const GlobalContextMenu: React.FC = () => {
     if (boardId) {
       setPendingBoardTitleEdit({ workspaceId: contextMenuState.workspaceId, boardId });
     }
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleDeleteWorkspace = async () => {
@@ -460,13 +452,13 @@ export const GlobalContextMenu: React.FC = () => {
         setIsDeletingWorkspace(false);
       }
     }
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleOpenBoard = () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
     switchBoard(contextMenuState.workspaceId, contextMenuState.boardId);
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleRenameBoard = () => {
@@ -475,7 +467,7 @@ export const GlobalContextMenu: React.FC = () => {
       workspaceId: contextMenuState.workspaceId,
       boardId: contextMenuState.boardId,
     });
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleAddSiblingBoard = () => {
@@ -485,7 +477,7 @@ export const GlobalContextMenu: React.FC = () => {
     if (boardId) {
       setPendingBoardTitleEdit({ workspaceId: contextMenuState.workspaceId, boardId });
     }
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleOpenTransferBoard = () => {
@@ -496,7 +488,7 @@ export const GlobalContextMenu: React.FC = () => {
       boardId: contextMenuState.boardId,
       title: contextMenuState.title,
     });
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   const handleDeleteBoard = async () => {
@@ -510,7 +502,7 @@ export const GlobalContextMenu: React.FC = () => {
         showHome();
       }
     }
-    setContextMenuState(null);
+    closeContextMenu();
   };
 
   return (
@@ -626,20 +618,30 @@ export const GlobalContextMenu: React.FC = () => {
             ) : (
               <>
             <button
-              onClick={handleOpenDetails}
+              onClick={handleAddSibling}
+              disabled={!canCreateTask}
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              <FileText size={14} className="flex-shrink-0 text-indigo-500" />
-              <span>更多詳情選項</span>
+              <Plus size={14} className="flex-shrink-0 text-sky-500" />
+              <span>新增同階任務</span>
             </button>
 
             <button
-              onClick={handleMarkCompleted}
-              disabled={!canEditTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-emerald-50 dark:text-gray-200 dark:hover:bg-gray-700"
+              onClick={handleAddChild}
+              disabled={!canCreateTask}
+              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              <CheckCircle2 size={14} className="flex-shrink-0 text-emerald-500" />
-              <span>標示為已完成</span>
+              <Plus size={14} className="flex-shrink-0 text-blue-500" />
+              <span>新增下層任務</span>
+            </button>
+
+            <button
+              onClick={() => void handleDuplicate()}
+              disabled={!canCreateTask}
+              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Copy size={14} className="flex-shrink-0 text-slate-500" />
+              <span>複製任務</span>
             </button>
 
             <div>
@@ -676,33 +678,6 @@ export const GlobalContextMenu: React.FC = () => {
                 </div>
               )}
             </div>
-
-            <button
-              onClick={handleAddSibling}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Plus size={14} className="flex-shrink-0 text-sky-500" />
-              <span>新增同階任務</span>
-            </button>
-
-            <button
-              onClick={handleAddChild}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Plus size={14} className="flex-shrink-0 text-blue-500" />
-              <span>新增下層任務</span>
-            </button>
-
-            <button
-              onClick={() => void handleDuplicate()}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Copy size={14} className="flex-shrink-0 text-slate-500" />
-              <span>複製任務</span>
-            </button>
 
             {isDependencySupportedView && (
               <>
@@ -761,7 +736,13 @@ export const GlobalContextMenu: React.FC = () => {
       )}
 
       {detailsNodeId && (
-        <TaskDetailsModal nodeId={detailsNodeId} onClose={() => setDetailsNodeId(null)} />
+        <TaskDetailsModal
+          nodeId={detailsNodeId}
+          onClose={() => {
+            setDetailsNodeId(null);
+            clearTaskSelection();
+          }}
+        />
       )}
       {transferBoardTarget && (
         <BoardWorkspaceTransferDialog

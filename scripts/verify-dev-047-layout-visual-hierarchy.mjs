@@ -55,10 +55,10 @@ assert(
 assert(
   'task workbench is promoted as the task command center',
   source.taskWorkbench.includes('data-layout-region="task-command-center"') &&
-    source.taskWorkbench.includes('border-r-2 border-[#b7c5cf] bg-gradient-to-b from-[#f7f9fa] via-[#eef3f6] to-[#e4ebef]') &&
-    source.taskWorkbench.includes('shadow-[4px_0_20px_rgba(70,92,106,0.16)]') &&
+    source.taskWorkbench.includes('border-r-2 border-slate-300 bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200') &&
+    source.taskWorkbench.includes('shadow-[4px_0_20px_rgba(15,23,42,0.12)]') &&
     source.taskWorkbench.includes('data-task-command-center-title="true"') &&
-    source.taskWorkbench.includes('border border-[#c7d1d8] bg-[#fbfcfc]'),
+    source.taskWorkbench.includes('border border-slate-300 bg-white'),
 );
 
 assert(
@@ -69,19 +69,19 @@ assert(
 );
 
 assert(
-  'task command center controls use the muted Morandi task hub treatment',
+  'task command center controls use neutral slate surfaces and the shared brand-blue active state',
   source.taskWorkbench.includes('data-task-workbench-filter-control-area="true"') &&
-    source.taskWorkbench.includes('border-b border-[#c3ccd2] bg-gradient-to-r from-[#fbfcfc] via-[#f1f5f7] to-[#e8eef2]') &&
-    source.taskWorkbench.includes('border-[#c7d1d8] bg-[#fbfcfc] text-[#536b7b]') &&
-    source.taskWorkbench.includes('hover:bg-[#e4ecf1] hover:text-[#304a5c]') &&
-    source.statusFilterBar.includes('border-[#a9bbc8] bg-[#e7eef2] text-[#304a5c]'),
+    source.taskWorkbench.includes('border-b border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100') &&
+    source.taskWorkbench.includes('border-slate-300 bg-white text-slate-600') &&
+    source.taskWorkbench.includes('hover:bg-slate-200 hover:text-slate-700') &&
+    source.statusFilterBar.includes('border-primary/30 bg-primary/10 text-primary'),
 );
 
 assert(
-  'unplaced and placed task bodies share one Morandi blue-gray task tone while headers use a separate title tone',
-  source.taskWorkbench.includes("isOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'") &&
-    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'") &&
-    source.taskWorkbench.includes('bg-[#e1e9ee]/95') &&
+  'unplaced and placed task bodies share one neutral slate tone while headers use a separate title tone',
+  source.taskWorkbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
+    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
+    source.taskWorkbench.includes('bg-slate-200/95') &&
     !source.taskWorkbench.includes('bg-[#fbfcfc]/85') &&
     !source.taskWorkbench.includes('bg-[#e8eef2]/95'),
 );

@@ -21,6 +21,7 @@ const GanttView = () => {
         activeWorkspaceId,
         statusFilters,
         dueWithinDays,
+        overdueOnly,
         selectedAssigneeIds,
         isSidebarOpen,
         setSidebarOpen,
@@ -30,10 +31,11 @@ const GanttView = () => {
     const taskFilters = useMemo(() => ({
         statusFilters,
         dueWithinDays,
+        overdueOnly,
         selectedAssigneeIds,
         selectedTagIds,
         keyword: '',
-    }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());

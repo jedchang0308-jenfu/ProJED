@@ -142,7 +142,12 @@ import {
   syncCommittedZoomTelemetry,
   type MindMapZoomAnchor,
 } from './mindMapZoom';
-import { openTaskDetails, prepareNewTaskNaming } from '../../utils/taskInteractions';
+import {
+  clearTaskSelection,
+  CLEAR_TASK_SELECTION_EVENT,
+  openTaskDetails,
+  prepareNewTaskNaming,
+} from '../../utils/taskInteractions';
 
 type RootSideDropTarget = MindMapDirection | null;
 
@@ -172,6 +177,7 @@ const MindMapView: React.FC = () => {
   const removeNode = useWbsStore(state => state.removeNode);
   const statusFilters = useBoardStore(state => state.statusFilters);
   const dueWithinDays = useBoardStore(state => state.dueWithinDays);
+  const overdueOnly = useBoardStore(state => state.overdueOnly);
   const selectedAssigneeIds = useBoardStore(state => state.selectedAssigneeIds);
   const showStartDate = useBoardStore(state => state.showStartDate);
   const setSelectedTaskId = useBoardStore(state => state.setSelectedTaskId);
@@ -213,6 +219,8 @@ const MindMapView: React.FC = () => {
   const zoomSuppressReleaseTimerRef = React.useRef<number | null>(null);
   const zoomSuppressTokenRef = React.useRef(0);
   const autoCenteredBoardRef = React.useRef<string | null>(null);
+  const selectionBoardRef = React.useRef<string | null>(null);
+  const initialSelectionBoardRef = React.useRef<string | null>(null);
   const suppressZoomScrollRecomputeRef = React.useRef(false);
   const connectorRecomputeCountRef = React.useRef(0);
   const connectorRecomputeFrameRef = React.useRef<number | null>(null);
@@ -281,6 +289,13 @@ const MindMapView: React.FC = () => {
     setSelectedRelationshipId(null);
   }, []);
 
+  const clearSelection = React.useCallback(() => {
+    selectNode(null);
+    clearSelectedRelationship();
+    clearRelationshipDraft();
+    clearRelationshipHover();
+  }, [clearRelationshipDraft, clearRelationshipHover, clearSelectedRelationship, selectNode]);
+
   const beginRelationshipDraftSelection = React.useCallback((nodeId: string) => {
     startRelationshipDraftFromNode(nodeId);
     selectNode(nodeId);
@@ -331,10 +346,11 @@ const MindMapView: React.FC = () => {
   const mindMapFilters = React.useMemo(() => ({
     statusFilters,
     dueWithinDays,
+    overdueOnly,
     selectedAssigneeIds,
     selectedTagIds,
     keyword: '',
-  }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+  }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
 
   const rootNodes = React.useMemo(() => {
     return getMindMapRootNodes(nodes, parentNodesIndex, boardId, mindMapFilters);
@@ -360,6 +376,26 @@ const MindMapView: React.FC = () => {
     setNoteRelationshipsLoadedBoardId(boardId);
     deactivateRelationshipMode({ clearPointerDrag: true });
   }, [boardId, deactivateRelationshipMode]);
+
+  React.useEffect(() => {
+    const handleClearTaskSelection = () => clearSelection();
+    document.addEventListener(CLEAR_TASK_SELECTION_EVENT, handleClearTaskSelection);
+    return () => document.removeEventListener(CLEAR_TASK_SELECTION_EVENT, handleClearTaskSelection);
+  }, [clearSelection]);
+
+  React.useEffect(() => {
+    if (selectionBoardRef.current === boardId) return;
+    selectionBoardRef.current = boardId;
+    setSelectedNodeId(null);
+    clearSelectedRelationship();
+    clearRelationshipDraft();
+  }, [boardId, clearRelationshipDraft, clearSelectedRelationship]);
+
+  React.useEffect(() => {
+    if (!boardId || rootNodes.length === 0 || initialSelectionBoardRef.current === boardId) return;
+    initialSelectionBoardRef.current = boardId;
+    selectNode(rootNodes[0].id);
+  }, [boardId, rootNodes, selectNode]);
 
   React.useEffect(() => {
     if (!boardId) return;
@@ -391,9 +427,11 @@ const MindMapView: React.FC = () => {
   }, [expandNodes, nodes]);
 
   React.useEffect(() => {
-    if (selectedNodeId && nodes[selectedNodeId] && !nodes[selectedNodeId].isArchived) return;
-    selectNode(rootNodes[0]?.id ?? null);
-  }, [nodes, rootNodes, selectNode, selectedNodeId]);
+    if (!selectedNodeId) return;
+    const selectedNode = nodes[selectedNodeId];
+    if (selectedNode && selectedNode.boardId === boardId && !selectedNode.isArchived) return;
+    selectNode(null);
+  }, [boardId, nodes, selectNode, selectedNodeId]);
 
   React.useEffect(() => {
     if (!selectedNodeId) return;
@@ -925,10 +963,10 @@ const MindMapView: React.FC = () => {
     if (isMindMapRelationshipInteractionElement(event.target)) {
       return;
     }
-    selectNode(null);
+    clearTaskSelection();
+    clearSelection();
     clearRelationshipLabelEdit();
-    clearRelationshipDraft();
-  }, [clearRelationshipDraft, clearRelationshipLabelEdit, selectNode]);
+  }, [clearRelationshipLabelEdit, clearSelection]);
 
   const updateRelationshipDraftPreview = React.useCallback((clientX: number, clientY: number) => {
     const fromId = relationshipDraft?.fromId;
@@ -1072,6 +1110,9 @@ const MindMapView: React.FC = () => {
   }, [clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit]);
 
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && document.querySelector('[data-global-context-menu="true"]')) {
+      return;
+    }
     const consumeMindMapKeyboardEvent = () => {
       event.preventDefault();
       event.stopPropagation();
@@ -1094,6 +1135,13 @@ const MindMapView: React.FC = () => {
     if (action.type === 'deactivate-relationship-mode') {
       consumeMindMapKeyboardEvent();
       deactivateRelationshipMode();
+      return;
+    }
+
+    if (action.type === 'clear-selection') {
+      consumeMindMapKeyboardEvent();
+      clearTaskSelection();
+      clearSelection();
       return;
     }
 
@@ -1162,6 +1210,7 @@ const MindMapView: React.FC = () => {
     deactivateRelationshipMode,
     createChildForNode,
     createSiblingForNode,
+    clearSelection,
     expandNode,
     getChildren,
     nodes,

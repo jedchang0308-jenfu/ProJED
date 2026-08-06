@@ -114,8 +114,8 @@ assert(
   'Board and Workbench assignee option source is aligned to selected board context',
   source.assigneeOptions.includes('createBoardAssigneeFilterOptions') &&
     source.assigneeOptions.includes('workspaceMembers.forEach') &&
-    source.assigneeOptions.includes('getTaskAssigneeIds(node).forEach(assigneeId =>') &&
-    source.assigneeOptions.includes('workspaceMemberLabels.get(assigneeId)') &&
+    source.assigneeOptions.includes('getTaskAssignmentIds(node).forEach(assignmentId =>') &&
+    source.assigneeOptions.includes('workspaceMemberLabels.get(assignmentId)') &&
     source.assigneeOptions.includes('member.boardId !== boardId') &&
     source.assigneeOptions.includes('node.boardId !== boardId') &&
     source.statusFilterBar.includes('createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers)') &&

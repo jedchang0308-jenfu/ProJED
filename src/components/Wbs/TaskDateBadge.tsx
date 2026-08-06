@@ -4,6 +4,7 @@ import { Calendar } from 'lucide-react';
 import type { TaskStatus } from '../../types';
 import { cn } from '../../utils/cn';
 import { Badge } from '../ui/Badge';
+import { isTaskOverdue } from '../../utils/taskStatus';
 
 type TaskDateBadgeSurface = 'kanban-card' | 'checklist' | 'workbench';
 
@@ -45,6 +46,10 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
   if (!hasVisibleTaskDate(startDate, endDate, showStartDate)) return null;
 
   const isDueToday = status !== 'completed' && Boolean(endDate) && dayjs(endDate).isSame(dayjs(), 'day');
+  const isOverdue = isTaskOverdue({ endDate: endDate || undefined, status: status || 'todo' });
+  const accessibilityLabel = endDate
+    ? `截止日 ${formatTaskDate(endDate)}${isOverdue ? '，已逾期' : ''}`
+    : undefined;
   const isEndDateEffectivelyLocked = endLocked || durationLocked;
   const lockTitle = isEndDateEffectivelyLocked
     ? (durationLocked ? '因工期鎖定，由開始日期推算' : '此日期由依賴推算')
@@ -74,12 +79,14 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
   if (surface === 'kanban-card') {
     return (
       <Badge
-        variant={isDueToday ? 'warning' : 'default'}
+        variant={isDueToday || isOverdue ? 'warning' : 'default'}
         size="sm"
         icon={<Calendar size={10} />}
         className={className}
         data-task-date-badge="true"
         data-task-due-date={endDate || ''}
+        data-task-overdue={isOverdue ? 'true' : 'false'}
+        aria-label={accessibilityLabel}
       >
         {content}
       </Badge>
@@ -91,14 +98,21 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
       <span
         className={cn(
           'flex flex-shrink-0 items-center gap-0.5 rounded px-1 py-0 text-[9px]',
-          isDueToday
-            ? 'border border-orange-300 bg-orange-50 text-orange-600 shadow-[0_0_0_1px_rgba(251,146,60,0.25)]'
-            : `border ${isEndDateEffectivelyLocked ? 'border-dashed border-slate-400 bg-slate-50 text-slate-500 opacity-80' : 'border-slate-200 bg-white text-slate-400'}`,
+          isOverdue
+            ? 'bg-orange-50 text-orange-700'
+            : isDueToday
+              ? 'bg-orange-50 text-orange-600'
+            : isEndDateEffectivelyLocked
+              ? 'bg-slate-100 text-slate-500 opacity-80'
+              : 'bg-slate-100/80 text-slate-500',
           className,
         )}
         title={lockTitle}
         data-task-date-badge="true"
         data-task-due-date={endDate || ''}
+        data-task-overdue={isOverdue ? 'true' : 'false'}
+        data-task-date-visual="borderless"
+        aria-label={accessibilityLabel}
       >
         {content}
       </span>
@@ -109,8 +123,10 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
     <span
       className={cn(
         'inline-flex h-5 flex-shrink-0 items-center gap-0.5 rounded border px-1 text-[10px] font-semibold leading-none',
-        isDueToday
-          ? 'border-orange-200 bg-orange-50 text-orange-600'
+        isOverdue
+          ? 'border-orange-300 bg-orange-50 text-orange-700'
+          : isDueToday
+            ? 'border-orange-200 bg-orange-50 text-orange-600'
           : 'border-slate-200 bg-white/80 text-slate-500',
         className,
       )}
@@ -118,6 +134,8 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
       data-task-date-badge="true"
       data-task-due-date={endDate || ''}
       data-task-date-surface="workbench"
+      data-task-overdue={isOverdue ? 'true' : 'false'}
+      aria-label={accessibilityLabel}
     >
       {content}
     </span>

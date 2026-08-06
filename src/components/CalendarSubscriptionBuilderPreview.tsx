@@ -7,6 +7,7 @@ import {
   TASK_STATUS_OPTIONS,
   type TaskFilterState,
 } from '../features/taskFilters';
+import { normalizeManualTaskStatus } from '../utils/taskStatus';
 import {
   cloneCalendarBoardFilterSnapshot,
   createCalendarSafeDefaultTaskFilters,
@@ -598,6 +599,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
                   tags={tags}
                   unassignedDisabled={!canManageSelectedBoard}
                   unassignedDisabledReason="你只能訂閱自己負責的任務。"
+                  showOverdueFilter={false}
                   onChange={updateSelectedFilters}
                 />
 
@@ -756,7 +758,7 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
                         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-slate-500">
                           <span className="min-w-0 break-words sm:truncate">{previewGroupMode === 'date' ? event.board.path : formatCalendarDate(event.date)}</span>
                           <span className="text-slate-300">·</span>
-                          <span>{statusLabelByKey.get(event.node.status) ?? event.node.status}</span>
+                          <span>{statusLabelByKey.get(normalizeManualTaskStatus(event.node.status))}</span>
                         </div>
                       </div>
                     </div>

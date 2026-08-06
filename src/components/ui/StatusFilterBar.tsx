@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, GitBranch, Plus, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
+import { CalendarDays, GitBranch, Plus, RefreshCw, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useWbsStore } from '../../store/useWbsStore';
@@ -13,8 +13,8 @@ import {
 } from '../../features/taskFilters';
 import { getTagDotStyle } from '../../utils/tags';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
-import { topbarClassNames } from './compactTokens';
 import { cn } from '../../utils/cn';
+import { getTaskStatusFilterChipClass } from './taskStatusStyles';
 
 const filterPillClass = (active: boolean) =>
   `flex h-[26px] items-center gap-1.5 rounded-full border bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all ${
@@ -48,9 +48,14 @@ const getFilterPanelPosition = (trigger: HTMLButtonElement): FilterPanelPosition
 
 type StatusFilterBarProps = {
   compactLabel?: boolean;
+  pendingUpdateCount?: number;
+  onApplyPendingUpdate?: () => void;
 };
 
-export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
+export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
+  pendingUpdateCount = 0,
+  onApplyPendingUpdate,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState<FilterPanelPosition | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -67,6 +72,8 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
   const toggleTags = useBoardStore(s => s.toggleTags);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
   const setDueWithinDays = useBoardStore(s => s.setDueWithinDays);
+  const overdueOnly = useBoardStore(s => s.overdueOnly);
+  const toggleOverdueFilter = useBoardStore(s => s.toggleOverdueFilter);
   const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const toggleAssigneeFilter = useBoardStore(s => s.toggleAssigneeFilter);
   const clearAssigneeFilters = useBoardStore(s => s.clearAssigneeFilters);
@@ -132,14 +139,17 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
   const activeTagCount = selectedTagIds.length;
   const activeAssigneeCount = selectedAssigneeIds.length;
   const hasDueFilter = dueWithinDays !== null && dueWithinDays !== undefined;
+  const hasAnyDueFilter = hasDueFilter || overdueOnly;
   const activeFilterCount = countActiveTaskFilters({
     statusFilters,
     dueWithinDays,
+    overdueOnly,
     selectedAssigneeIds,
     selectedTagIds,
     keyword: '',
   });
   const hasActiveFilter = activeFilterCount > 0;
+  const hasPendingUpdate = pendingUpdateCount > 0;
 
   const handleDueDaysChange = (value: string) => {
     if (value === '') {
@@ -176,25 +186,53 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
 
   return (
     <div className={`relative ${isOpen ? 'z-[10000]' : 'z-10'}`}>
-      <button
-        ref={triggerRef}
-        id="filter-menu-trigger"
-        type="button"
-        aria-label={hasActiveFilter ? '過濾器已啟用' : '過濾器'}
-        title="過濾器"
-        onClick={handleFilterToggle}
+      <div
         className={cn(
-          topbarClassNames.iconButton,
-          isOpen
-            ? 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
-            : hasActiveFilter
-              ? 'border-[#a9bbc8] bg-[#e7eef2] text-[#304a5c] shadow-sm ring-1 ring-[#a9bbc8]/50'
-              : 'border-[#c7d1d8] bg-white text-[#536b7b] shadow-sm hover:border-[#a9bbc8] hover:bg-[#edf3f6] hover:text-[#304a5c]'
+          'inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-md border shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-colors',
+          isOpen || hasActiveFilter || hasPendingUpdate
+            ? 'border-primary/30 bg-primary/[0.04] text-primary ring-1 ring-primary/15'
+            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700',
         )}
-        data-active-task-filter-count={activeFilterCount}
+        data-task-filter-control-group="true"
+        data-task-filter-control-pending={hasPendingUpdate ? 'true' : 'false'}
       >
-        <SlidersHorizontal size={13} />
-      </button>
+        <button
+          ref={triggerRef}
+          id="filter-menu-trigger"
+          type="button"
+          aria-label={hasActiveFilter ? '過濾器已啟用' : '過濾器'}
+          title="過濾器"
+          onClick={handleFilterToggle}
+          className={cn(
+            'inline-flex h-full w-8 shrink-0 items-center justify-center border-0 bg-transparent text-inherit transition-colors hover:bg-primary/10 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/35',
+            isOpen && 'bg-primary/10',
+          )}
+          data-active-task-filter-count={activeFilterCount}
+        >
+          <SlidersHorizontal size={13} />
+        </button>
+
+        {hasPendingUpdate ? (
+          <button
+            type="button"
+            onClick={onApplyPendingUpdate}
+            className="inline-flex h-full min-w-8 items-center justify-center gap-1 border-0 border-l border-primary/25 bg-primary/[0.07] px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/35 sm:px-2"
+            title={`更新篩選結果（${pendingUpdateCount}）`}
+            aria-label={`更新篩選結果（${pendingUpdateCount}）`}
+            data-task-filter-update-button="true"
+          >
+            <RefreshCw size={13} className="sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">更新</span>
+            <span
+              className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 py-0.5 text-[10px] font-bold leading-none text-white"
+              data-task-filter-update-count="true"
+              aria-hidden="true"
+            >
+              {pendingUpdateCount > 99 ? '99+' : pendingUpdateCount}
+            </span>
+          </button>
+        ) : null}
+      </div>
 
       {isOpen && panelPosition && createPortal(
         <div
@@ -220,10 +258,9 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
                     key={status.key}
                     type="button"
                     onClick={() => toggleStatusFilter(status.key)}
-                    className={filterPillClass(isActive)}
+                    className={getTaskStatusFilterChipClass(status.key, isActive)}
                     aria-pressed={isActive}
                   >
-                    <span className={`h-2 w-2 flex-shrink-0 rounded-full ${status.color}`} />
                     {status.label}
                   </button>
                 );
@@ -236,10 +273,13 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
           <div className="px-3 pt-2 pb-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-[10px] font-semibold text-slate-500">到期日</p>
-              {hasDueFilter && (
+              {hasAnyDueFilter && (
                 <button
                   type="button"
-                  onClick={() => setDueWithinDays(null)}
+                  onClick={() => {
+                    setDueWithinDays(null);
+                    if (overdueOnly) toggleOverdueFilter();
+                  }}
                   className="text-[10px] font-semibold text-slate-400 hover:text-slate-700"
                 >
                   清除
@@ -247,6 +287,19 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleOverdueFilter}
+                className={`flex h-[26px] items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                  overdueOnly
+                    ? 'border-orange-300 bg-orange-50 text-orange-700 ring-1 ring-orange-200'
+                    : 'border-orange-200 bg-white text-orange-600 hover:bg-orange-50'
+                }`}
+                aria-pressed={overdueOnly}
+                data-overdue-filter="true"
+              >
+                逾期
+              </button>
               <button
                 type="button"
                 onClick={() => setDueWithinDays(hasDueFilter ? null : 7)}
@@ -365,7 +418,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = () => {
 
           <div className="px-3 pt-2 pb-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold text-slate-500">負責人</p>
+              <p className="text-[10px] font-semibold text-slate-500">負責人/協作</p>
               {activeAssigneeCount > 0 && (
                 <button
                   type="button"

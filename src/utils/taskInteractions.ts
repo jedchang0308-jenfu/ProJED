@@ -1,6 +1,7 @@
 import useBoardStore from '../store/useBoardStore';
 
 export const OPEN_TASK_DETAILS_EVENT = 'open-task-details';
+export const CLEAR_TASK_SELECTION_EVENT = 'clear-task-selection';
 
 export const isCoarsePointer = () => (
   typeof window !== 'undefined' &&
@@ -36,6 +37,13 @@ export const openTaskDetails = (taskId: string) => {
 
 export const selectTask = (taskId: string | null) => {
   useBoardStore.getState().setSelectedTaskId(taskId);
+};
+
+export const clearTaskSelection = () => {
+  useBoardStore.getState().setSelectedTaskId(null);
+  if (typeof document !== 'undefined') {
+    document.dispatchEvent(new CustomEvent(CLEAR_TASK_SELECTION_EVENT));
+  }
 };
 
 export const selectAndOpenTaskDetails = (taskId: string) => {

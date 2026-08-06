@@ -41,6 +41,7 @@ import {
     type DesktopTaskDropPreview,
 } from './Wbs/taskDrag/desktopTaskDropPreview';
 import { useTaskDragSession } from './Wbs/taskDrag/useTaskDragSession';
+import { collectTaskDragDescendantIds } from './Wbs/taskDrag/taskDragScope';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -103,6 +104,12 @@ const BoardView = () => {
         top: number;
         bottom: number;
     } | null>(null);
+    const activeDragDescendantCount = React.useMemo(() => {
+        const sourceNodeId = activeDrag?.node?.id;
+        if (!sourceNodeId) return 0;
+        const state = useWbsStore.getState();
+        return collectTaskDragDescendantIds(sourceNodeId, state.parentNodesIndex, state.nodes).length;
+    }, [activeDrag]);
     const updateDesktopDropPreview = React.useCallback((preview: DesktopTaskDropPreview | null) => {
         const currentPreview = desktopDropPreviewRef.current;
         const nextPreview = currentPreview
@@ -316,15 +323,17 @@ const BoardView = () => {
     const storeNodes = useWbsStore(s => s.nodes);
     const statusFilters = useBoardStore(s => s.statusFilters);
     const dueWithinDays = useBoardStore(s => s.dueWithinDays);
+    const overdueOnly = useBoardStore(s => s.overdueOnly);
     const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
     const selectedTagIds = useTagStore(s => s.selectedTagIds);
     const taskFilters = useMemo(() => ({
         statusFilters,
         dueWithinDays,
+        overdueOnly,
         selectedAssigneeIds,
         selectedTagIds,
         keyword: '',
-    }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
     const filterProjection = useMemo(
         () => projectTaskFilterResults(storeNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, storeNodes, taskFilters],
@@ -370,11 +379,8 @@ const BoardView = () => {
             .filter((element) => element.getAttribute('data-task-id') === nodeId);
         const sourceElement = activeData?.source === 'task-workbench'
             ? sourceCandidates.find((element) => element.hasAttribute('data-task-workbench-drag-surface'))
-            : activeData?.type === 'wbs-checklist'
-                ? sourceCandidates.find((element) => element.classList.contains('kanban-checklist-item'))
-                : activeData?.type === 'wbs-column'
-                    ? sourceCandidates.find((element) => element.hasAttribute('data-kanban-column-header'))
-                    : sourceCandidates.find((element) => element.hasAttribute('data-task-card-primary'));
+            : sourceCandidates.find((element) => element.hasAttribute('data-task-surface-source'))
+                || sourceCandidates.find((element) => element.hasAttribute('data-task-drag-surface'));
         const sourceRect = sourceElement?.getBoundingClientRect();
         desktopDragSourceRectRef.current = sourceRect
             ? { left: sourceRect.left, right: sourceRect.right, top: sourceRect.top, bottom: sourceRect.bottom }
@@ -643,9 +649,10 @@ const BoardView = () => {
                             <button
                                 onClick={handleAddColumn}
                                 disabled={!canCreateTask}
-                                className="w-full py-[8px] border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                                className="w-full rounded-lg py-[8px] flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:text-primary hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
                                 data-mobile-pan-pass-through="true"
                                 data-kanban-add-column-button="true"
+                                data-kanban-add-column-visual="borderless"
                             >
                                 <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
                                 <span>新增任務</span>
@@ -686,10 +693,25 @@ const BoardView = () => {
             ) : null}
             <DragOverlay dropAnimation={null}>
                 {activeDrag?.node ? (
-                    <div data-kanban-drag-overlay="true" className={`task-title-text pointer-events-none translate-x-4 translate-y-4 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
+                    <div
+                        data-kanban-drag-overlay="true"
+                        data-task-drag-source-id={activeDrag.node.id}
+                        data-task-drag-descendant-count={activeDragDescendantCount}
+                        className={`task-title-text pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
                         activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
-                    }`}>
-                        {activeDrag.title || activeDrag.node.title || '未命名任務'}
+                    }`}
+                    >
+                        <span className="min-w-0 flex-1 truncate">
+                            {activeDrag.title || activeDrag.node.title || '未命名任務'}
+                        </span>
+                        {activeDragDescendantCount > 0 ? (
+                            <span
+                                data-task-drag-scope-summary="true"
+                                className="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700"
+                            >
+                                含 {activeDragDescendantCount} 個子任務
+                            </span>
+                        ) : null}
                     </div>
                 ) : null}
             </DragOverlay>

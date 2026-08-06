@@ -93,6 +93,15 @@ assert(
 );
 
 assert(
+  'Edge v3 assignee filtering preserves collaborator matches through query and exact matching',
+  source.edgeFunction.includes('assignee_ids,assignee_id,collaborator_ids') &&
+    source.edgeFunction.includes('buildAssigneeQueryClauses') &&
+    source.edgeFunction.includes('assignee_ids.ov.') &&
+    source.edgeFunction.includes('collaborator_ids.ov.') &&
+    source.edgeFunction.includes('...(item.collaborator_ids ?? [])'),
+);
+
+assert(
   'Preview and ICS expose the same canonical event identity without changing UID',
   source.taskTypes.includes('storageId?: string') &&
     source.projedService.includes('storageId: item.id') &&

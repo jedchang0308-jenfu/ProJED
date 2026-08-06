@@ -85,3 +85,26 @@ Observed:
 - TEST migration + authenticated Level 3: pass.
 - Production migration + Firebase deploy + Level 4: pass.
 - Release residual: five existing migration source hash mismatches remain unchanged; DEV-047 remote backup RPC full multi-primary persistence remains outside this release.
+
+## Filter Follow-up QC - 2026-08-06
+
+判定：Pass。這次追補未執行 remote migration、Edge deploy 或 production data mutation；僅驗證本地前端與 Edge source contract。
+
+| Gate | Result | Evidence |
+|---|---|---|
+| `npm.cmd run verify:dev-048-task-filter-collaborators` | Pass | 7 deterministic checks；主責＋協作、僅協作、未指派、負向、多選 OR、active option source |
+| `npm.cmd run verify:dev-039-filter-result-parity` | Pass | 26 pass / 0 fail；Board/Workbench option source 使用 assignment union |
+| `npm.cmd run verify:dev-048-task-multi-person-assignment` | Pass | existing multi-person contract regression |
+| `npm.cmd run verify:dev-045-calendar-subscription-v2-feed` | Pass | 21 pass / 0 fail；coarse query 與 exact matcher 包含 collaborator IDs |
+| `npm.cmd run verify:dev-045-calendar-subscription-v3-feed` | Pass | 21 pass / 0 fail；v3 feed collaborator preservation |
+| `npx.cmd tsc --noEmit` | Pass | TypeScript contract |
+| `npm.cmd run verify:dev-048-task-filter-collaborators-browser` | Pass | real rendered UI；Board + Workbench；14 checks；console/page errors 0 |
+
+Browser facts：
+
+- URL：`http://127.0.0.1:4173/`；desktop `1440×900`、mobile `390×844`。
+- Fixture：`QA-F-01 主責A協作B`、`QA-F-02 主責C協作D`、`QA-F-03 僅協作E`、`QA-F-04 真正未指派`、`QA-F-05 無關任務`。
+- 實際 UI 操作驗證 B、D、E、未指派與 B+D 多選；Board 與全域任務平台均通過相同結果集合。
+- Screenshot：`output/playwright/dev-048-filter-collaborators-mobile.png`。
+- RWD：mobile popover 重新開啟後 label 可見，`documentScrollWidth` 與 `bodyScrollWidth` 均等於 viewport，無 horizontal overflow。
+- visible error banner：0；console error/page error：0。瀏覽器僅保留既有 calendar fallback warnings，不列為 error。

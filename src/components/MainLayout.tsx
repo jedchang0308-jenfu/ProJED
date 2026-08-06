@@ -36,6 +36,12 @@ import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import type { ViewMode } from '../types';
 import { getTopOpenLeftPanel } from '../utils/leftPanelEscapeStack';
+import {
+  selectPendingTaskFilterRefreshCount,
+  useDeferredTaskFilterRefreshStore,
+} from '../features/taskFilters/deferredRefresh';
+import { useWbsStore } from '../store/useWbsStore';
+import { clearTaskSelection } from '../utils/taskInteractions';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -54,6 +60,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   } = useBoardStore();
 
   const { undo, redo, canUndo, canRedo, undoStack, redoStack } = useUndoStore();
+  const pendingTaskFilterRefreshCount = useDeferredTaskFilterRefreshStore(selectPendingTaskFilterRefreshCount);
   const { isOpen: isRagOpen, togglePanel: toggleRagPanel } = useRagStore();
   const {
     isPanelOpen: isRecordOpen,
@@ -93,6 +100,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     if (isMobileBoardOnly && nextView !== 'board') return;
     setView(nextView);
   };
+
+  const handleApplyTaskFilterRefresh = useCallback(() => {
+    const appliedCount = useDeferredTaskFilterRefreshStore.getState().applyPendingStatusChanges();
+    if (appliedCount === 0) return;
+
+    // Refresh both node-driven projections and list roots whose memoization is
+    // keyed by the active filter object.
+    useWbsStore.setState(state => ({ nodes: { ...state.nodes } }));
+    useBoardStore.setState(state => ({ statusFilters: { ...state.statusFilters } }));
+  }, []);
 
   const returnToBoard = useCallback(() => {
     setView(activeWorkspace && activeBoard ? 'board' : 'home');
@@ -176,6 +193,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             setSidebarOpen(false);
           }
           return;
+        }
+
+        if (!hasBlockingOverlay) {
+          clearTaskSelection();
         }
       }
 
@@ -278,17 +299,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   ) : null}
 
                   {isTaskFilterView ? (
-                    <StatusFilterBar compactLabel />
+                    <StatusFilterBar
+                      compactLabel
+                      pendingUpdateCount={pendingTaskFilterRefreshCount}
+                      onApplyPendingUpdate={handleApplyTaskFilterRefresh}
+                    />
                   ) : null}
 
-                  <div className="ml-1 hidden items-center gap-1 border-l border-[#c7d1d8] pl-2 sm:flex">
+                  <div className="ml-1 hidden items-center gap-1 border-l border-slate-300 pl-2 sm:flex">
                     <button
                       id="btn-undo"
                       type="button"
                       onClick={undo}
                       disabled={!canUndo()}
                       title={canUndo() ? `復原：${lastUndoLabel}\nCtrl+Z` : '沒有可復原的操作'}
-                      className={cn(topbarClassNames.iconButton, !canUndo() && 'text-slate-300 hover:border-[#c7d1d8] hover:bg-white hover:text-slate-300')}
+                      className={cn(topbarClassNames.iconButton, !canUndo() && 'text-slate-300 hover:border-slate-300 hover:bg-white hover:text-slate-300')}
                     >
                       <Undo2 size={15} />
                     </button>
@@ -298,7 +323,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       onClick={redo}
                       disabled={!canRedo()}
                       title={canRedo() ? `重做：${lastRedoLabel}\nCtrl+Shift+Z` : '沒有可重做的操作'}
-                      className={cn(topbarClassNames.iconButton, !canRedo() && 'text-slate-300 hover:border-[#c7d1d8] hover:bg-white hover:text-slate-300')}
+                      className={cn(topbarClassNames.iconButton, !canRedo() && 'text-slate-300 hover:border-slate-300 hover:bg-white hover:text-slate-300')}
                     >
                       <Redo2 size={15} />
                     </button>

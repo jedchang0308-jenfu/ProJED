@@ -318,12 +318,12 @@ async (page) => {
     const second = cardsInColumn(0).nth(1);
     const moveAfter = await dragAndCommit({
       source: first,
-      target: second.locator('[data-task-card-primary="true"]'),
+      target: second.locator(':scope > [data-task-surface-source="true"]'),
       screenshotSuffix: 'B01-card-after',
     });
     const moveBefore = await dragAndCommit({
       source: taskById(moveAfter.sourceId),
-      target: page.locator(`.kanban-task-card[data-task-id="${moveAfter.indicator.targetNodeId}"] [data-task-card-primary="true"]`).first(),
+      target: page.locator(`.kanban-task-card[data-task-id="${moveAfter.indicator.targetNodeId}"] > [data-task-surface-source="true"]`).first(),
       screenshotSuffix: 'B01-card-before',
     });
     assert(moveAfter.indicator.position === 'after' && moveBefore.indicator.position === 'before',
@@ -335,7 +335,7 @@ async (page) => {
     await openApp();
     const result = await dragAndCommit({
       source: cardsInColumn(0).nth(0),
-      target: cardsInColumn(1).nth(0).locator('[data-task-card-primary="true"]'),
+      target: cardsInColumn(1).nth(0).locator(':scope > [data-task-surface-source="true"]'),
       screenshotSuffix: 'B02-card-cross-column',
     });
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
@@ -370,7 +370,7 @@ async (page) => {
     const targetCard = cardsWithChildren().nth(1);
     const result = await dragAndCommit({
       source: sourceCard.locator('.kanban-checklist-item[data-task-id]').first(),
-      target: targetCard.locator('[data-task-card-primary="true"]'),
+      target: targetCard.locator(':scope > [data-task-surface-source="true"]'),
       screenshotSuffix: 'B05-checklist-cross-parent',
     });
     assert(result.indicator.surfaceKind === 'checklist-drop' && result.indicator.position === 'append',
@@ -383,8 +383,9 @@ async (page) => {
     const targetCard = cardsWithChildren().nth(1);
     const result = await dragAndCommit({
       source: cardsInColumn(0).nth(0),
-      target: targetCard.locator('.kanban-checklist-toggle'),
-      targetRatio: { x: 0.85, y: 0.5 },
+      target: targetCard.locator(':scope > [data-task-surface-subtree="true"]'),
+      // Hit the subtree surface's own left rail instead of a nested child row.
+      targetRatio: { x: 0.005, y: 0.5 },
       screenshotSuffix: 'B06-card-checklist-append',
     });
     assert(result.indicator.surfaceKind === 'checklist-drop' && result.indicator.position === 'append',
@@ -400,7 +401,7 @@ async (page) => {
     const targetRow = targetCard.locator('.kanban-checklist-item[data-task-id]').first();
     const beforeNodes = await readNodes();
     const { sourceId, point: sourcePoint } = await beginMouseDrag(source);
-    const parentState = await moveDragTo(targetCard.locator('[data-task-card-primary="true"]'));
+    const parentState = await moveDragTo(targetCard.locator(':scope > [data-task-surface-source="true"]'));
     const childState = await moveDragTo(targetRow);
     assert(parentState.indicator.targetNodeId !== childState.indicator.targetNodeId
       && childState.indicator.surfaceKind === 'checklist-row',
@@ -487,12 +488,12 @@ async (page) => {
     await openApp({ width: 1024, height: 768 });
     const same = await dragAndCommit({
       source: cardsInColumn(0).nth(0),
-      target: cardsInColumn(0).nth(1).locator('[data-task-card-primary="true"]'),
+      target: cardsInColumn(0).nth(1).locator(':scope > [data-task-surface-source="true"]'),
       screenshotSuffix: 'B08-1024-same-column',
     });
     const cross = await dragAndCommit({
       source: taskById(same.sourceId),
-      target: cardsInColumn(1).nth(0).locator('[data-task-card-primary="true"]'),
+      target: cardsInColumn(1).nth(0).locator(':scope > [data-task-surface-source="true"]'),
       screenshotSuffix: 'B08-1024-cross-column',
     });
     const sweep = await visibleErrorSweep('1024x768 desktop drag');
@@ -530,7 +531,20 @@ async (page) => {
       const point = await pointFor(target, 0.55, 0.35);
       taskIds.push(await target.getAttribute('data-task-id'));
       await page.mouse.click(point.x, point.y, { button: 'right' });
-      await page.getByText('更多詳情選項', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 5000 });
+      const removedActionCount = await page.getByText(/更多詳情選項|標示為已完成/, { exact: true }).count();
+      assert(removedActionCount === 0, 'task context menu must not restore the removed detail or completion actions', {
+        removedActionCount,
+      });
+      const firstFourActionLabels = await page.locator('[data-global-context-menu="true"] button').evaluateAll(buttons => (
+        buttons.slice(0, 4).map(button => button.innerText.trim().split(/\r?\n/)[0]?.trim())
+      ));
+      assert(JSON.stringify(firstFourActionLabels) === JSON.stringify([
+        '新增同階任務',
+        '新增下層任務',
+        '複製任務',
+        '主責／協作',
+      ]), 'task context menu must keep assignment as the fourth action', { firstFourActionLabels });
       assert(await page.locator('[data-kanban-drag-overlay="true"],[data-desktop-drop-indicator="true"]').count() === 0,
         'right-click must not start drag UI');
       await page.keyboard.press('Escape');
@@ -601,7 +615,7 @@ async (page) => {
   await runCase('QA-055-B13', 'one undo restores one cross-hierarchy move', async () => {
     await openApp();
     const source = cardsWithChildren().nth(0).locator('.kanban-checklist-item[data-task-id]').first();
-    const target = cardsWithChildren().nth(1).locator('[data-task-card-primary="true"]');
+    const target = cardsWithChildren().nth(1).locator(':scope > [data-task-surface-source="true"]');
     const beforeNodes = await readNodes();
     const result = await dragAndCommit({ source, target, screenshotSuffix: 'B13-before-undo' });
     await page.waitForFunction(() => !document.querySelector('#btn-undo')?.hasAttribute('disabled'), null, { timeout: 5000 });
@@ -627,7 +641,7 @@ async (page) => {
       const targetCard = page.locator(`.kanban-task-card[data-task-id="${targetId}"]`).first();
       const trace = await dragAndCommit({
         source: taskById(firstCardId),
-        target: targetCard.locator('[data-task-card-primary="true"]'),
+        target: targetCard.locator(':scope > [data-task-surface-source="true"]'),
       });
       traces.push({ index, kind: 'card', indicator: trace.indicator });
     }
@@ -639,7 +653,7 @@ async (page) => {
     for (let index = 0; index < 5; index += 1) {
       const targetId = targetCardIds[index % 2];
       const targetCard = page.locator(`.kanban-task-card[data-task-id="${targetId}"]`).first();
-      const trace = await dragAndCommit({ source: taskById(sourceChecklistId), target: targetCard.locator('[data-task-card-primary="true"]') });
+      const trace = await dragAndCommit({ source: taskById(sourceChecklistId), target: targetCard.locator(':scope > [data-task-surface-source="true"]') });
       traces.push({ index: index + 5, kind: 'checklist', indicator: trace.indicator });
     }
     const screenshotPath = `${screenshotBase}-B14-ten-mixed-drags.png`;

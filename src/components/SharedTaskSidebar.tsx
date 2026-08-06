@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useWbsStore } from '../store/useWbsStore';
 import useBoardStore from '../store/useBoardStore';
-import { ChevronLeft, ChevronRight, ChevronDown, Folder, FileText, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -34,8 +34,6 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
 
     const isGroup = item.nodeType === 'group';
     const isTask = item.nodeType === 'task';
-    const isMilestone = item.nodeType === 'milestone';
-
     const childIds = useWbsStore(s => s.parentNodesIndex[item.id]);
     const hasChildren = childIds && childIds.length > 0;
 
@@ -78,13 +76,8 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
             ) : (
                 <div className="flex-shrink-0 w-[18px]" />
             )}
-            <div className="flex-shrink-0">
-                {isGroup && <Folder size={14} className="text-primary/70" />}
-                {(isTask || isMilestone) && level <= 1 && <FileText size={12} className="text-slate-400" />}
-                {(isTask || isMilestone) && level > 1 && <div className="w-1.5 h-1.5 rounded-full bg-slate-300 ml-1" />}
-            </div>
-            <span className={`task-title-text min-w-0 flex-1 truncate ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
-                {item.title}
+            <span className={`task-title-text relative min-w-0 flex-1 ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
+                <span className="block truncate">{item.title}</span>
             </span>
             {onAddChild && (
                 <button

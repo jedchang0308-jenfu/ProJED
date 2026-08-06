@@ -177,7 +177,7 @@ assert(
   'approved desktop drag UI baseline remains frozen',
   includesAll(source.boardView, [
     'data-kanban-drag-overlay="true"',
-    'pointer-events-none translate-x-4 translate-y-4 rounded-lg',
+    'pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg',
     'border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg',
     "activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'",
   ]) &&

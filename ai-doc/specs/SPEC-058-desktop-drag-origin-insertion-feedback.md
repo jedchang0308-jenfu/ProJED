@@ -25,7 +25,7 @@ DEV-058 的目標是在桌面滑鼠與手機長按拖曳的來源範圍，把原
 ## 3. UX Contract
 
 1. 桌面滑鼠拖曳或手機長按拖曳啟動且 pointer 仍在來源任務範圍時，在原始標題位置顯示同標題的藍底白字欄位。
-2. 原地欄位沿用既有 `bg-blue-500`、`text-white`、`task-title-text` 與小圓角語言；不新增說明文字、圖示或新的色彩系統。
+2. 原地欄位沿用既有 `bg-blue-500`、`text-white`、`task-title-text` 與小圓角語言；DEV-064 起 `bg-blue-500` 由 theme alias 對應品牌藍 500，不再形成獨立藍色色相。
 3. 桌面原地欄位保留 `data-desktop-origin-field="true"`、`data-desktop-drop-origin="true"`、`data-desktop-drop-noop="true"`、`data-desktop-drop-position="origin"`；手機使用對應的 `data-mobile-origin-field="true"`、`data-mobile-drop-origin="true"`、`data-mobile-drop-noop="true"`。
 4. 游標移到有效新落點時，原地藍色欄位消失並由既有一般插入線取代；畫面不得同時出現兩種回饋。
 5. 游標回到來源範圍時，一般落點線清除並恢復原地藍色標題欄位。
@@ -46,7 +46,7 @@ DEV-058 的目標是在桌面滑鼠與手機長按拖曳的來源範圍，把原
 ## 5. Acceptance Criteria
 
 - 來源範圍內恰有一個 origin/no-op fixed overlay title field，文字等於來源任務標題。
-- origin field 使用既有 `bg-blue-500`、`text-white` token，computed background 不透明且文字為白色；可見 insertion marker 數為 0。
+- origin field 使用既有 `bg-blue-500` 相容 class、品牌藍 500 computed background 與 `text-white`；背景不透明且可見 insertion marker 數為 0。
 - 移往其他有效落點後只顯示既有一般 marker，origin field 數為 0。
 - 回到來源放開後 nodes snapshot 完全不變，origin field 清除。
 - source placeholder 內可見 marker / origin field 數均為 0，任務與 sibling geometry 不因 overlay 改變。

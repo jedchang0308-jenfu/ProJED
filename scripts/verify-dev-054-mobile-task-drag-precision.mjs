@@ -147,7 +147,7 @@ check('workbench placed row remains non-draggable',
 
 check('desktop approved presenter and collision path remain present', hasAll(source.board, [
   '<DragOverlay dropAnimation={null}>',
-  'pointer-events-none translate-x-4 translate-y-4 rounded-lg',
+  'pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg',
   'collisionDetection={collisionDetection}',
 ]));
 

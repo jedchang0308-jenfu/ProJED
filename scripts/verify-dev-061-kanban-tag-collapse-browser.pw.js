@@ -1,11 +1,16 @@
 /* eslint-disable */
 async (page) => {
-  const tagName = 'DEV-061 驗證標籤';
-  const screenshotBase = `output/playwright/dev-061-kanban-tag-collapse-${Date.now()}`;
+  const runId = Date.now();
+  const validationTags = [
+    { name: 'QA重要', color: 'green' },
+    { name: 'QA等待', color: 'sky' },
+    { name: 'QA風險', color: 'purple' },
+  ];
+  const screenshotBase = `output/playwright/dev-061-kanban-tag-sticker-${runId}`;
   const screenshots = {
-    expanded: `${screenshotBase}-expanded.png`,
-    collapsed: `${screenshotBase}-collapsed.png`,
-    mobile: `${screenshotBase}-mobile.png`,
+    desktop: `${screenshotBase}-1440.png`,
+    laptop: `${screenshotBase}-1024.png`,
+    mobile: `${screenshotBase}-390.png`,
     failure: `${screenshotBase}-failure.png`,
   };
   const account = {
@@ -15,16 +20,19 @@ async (page) => {
     displayName: 'ProJED local QA',
     createdAt: 1704067200000,
   };
-  const result = {
-    ok: false,
-    cases: [],
-    screenshots,
-  };
+  const result = { ok: false, cases: [], screenshots };
+  const browserErrors = [];
+  page.on('console', message => {
+    if (message.type() === 'error') browserErrors.push(message.text());
+  });
+  page.on('pageerror', error => browserErrors.push(error.message));
+
   const record = (id, ok, details = {}) => {
     result.cases.push({ id, ok, details });
     if (!ok) throw new Error(`${id}: ${JSON.stringify(details)}`);
   };
-  const setDisplayPreference = async (showTagNames) => {
+
+  const setLegacyPreference = async (showTagNames) => {
     await page.evaluate((nextShowTagNames) => {
       for (const key of ['projed-task-filters:v1', 'projed-filters']) {
         let value = {};
@@ -47,6 +55,7 @@ async (page) => {
       }
     }, showTagNames);
   };
+
   const switchToBoard = async () => {
     const trigger = page.locator('[data-mode-switcher-trigger="true"]');
     await trigger.waitFor({ state: 'visible', timeout: 15000 });
@@ -54,35 +63,75 @@ async (page) => {
     await page.locator('[data-mode-switcher-value="board"]').click();
     await page.locator('.kanban-task-card[data-task-id]').first().waitFor({ state: 'visible', timeout: 15000 });
   };
-  const openTaskDetails = async () => {
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
-    const taskId = await card.getAttribute('data-task-id');
+
+  const openTaskDetails = async (taskId) => {
     await page.evaluate((id) => {
       document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId: id } }));
     }, taskId);
     const modal = page.locator('[data-task-details-modal="true"]');
     await modal.waitFor({ state: 'visible', timeout: 10000 });
-    return { modal, taskId };
-  };
-  const cleanupValidationTag = async () => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const cleanupOpened = await openTaskDetails();
-    await cleanupOpened.modal.locator('[data-tag-picker-trigger="true"]:visible').first().click();
-    const cleanupPanel = cleanupOpened.modal.locator('[data-tag-picker-panel]');
-    await cleanupPanel.getByPlaceholder('搜尋或建立標籤').fill(tagName);
-    const removeButton = cleanupPanel.getByRole('button', { name: `移除 ${tagName}` });
-    if (await removeButton.count()) await removeButton.click();
-    const deleteButton = cleanupPanel.getByRole('button', { name: `刪除 ${tagName}` });
-    if (await deleteButton.count()) {
-      page.once('dialog', dialog => dialog.accept());
-      await deleteButton.click({ force: true });
-    }
-    await cleanupOpened.modal.getByRole('button', { name: '關閉任務詳情' }).click();
+    return modal;
   };
 
-  let createdTag = false;
-  let assignedInitially = false;
-  let taskId = null;
+  const assignValidationTags = async (taskId) => {
+    const modal = await openTaskDetails(taskId);
+    const trigger = modal.locator('[data-tag-picker-trigger="true"]:visible').first();
+
+    for (const tag of validationTags) {
+      await trigger.click();
+      const panel = modal.locator('[data-tag-picker-panel]');
+      await panel.waitFor({ state: 'visible', timeout: 10000 });
+      const search = panel.getByPlaceholder('搜尋或建立標籤');
+      await search.fill(tag.name);
+      const createButton = panel.getByRole('button', { name: `建立「${tag.name}」` });
+      if (await createButton.count()) {
+        await panel.locator(`button[title="${tag.color}"]`).click();
+        await createButton.click();
+      } else {
+        const applyButton = panel.getByRole('button', { name: `套用 ${tag.name}` });
+        if (await applyButton.count()) await applyButton.click();
+      }
+      await page.waitForTimeout(120);
+      await page.keyboard.press('Escape');
+      await panel.waitFor({ state: 'hidden', timeout: 5000 });
+    }
+
+    await modal.getByRole('button', { name: '關閉任務詳情' }).click();
+    await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  };
+
+  const cleanupValidationTags = async () => {
+    await page.evaluate((validationTagNames) => {
+      const tagsKey = 'projed-local-test.tags';
+      const nodesKey = 'projed-local-test.nodes';
+      const tags = JSON.parse(localStorage.getItem(tagsKey) || '[]');
+      const removedIds = new Set(tags
+        .filter(tag => validationTagNames.includes(tag.name) || tag.name?.startsWith('DEV061貼紙'))
+        .map(tag => tag.id));
+      localStorage.setItem(tagsKey, JSON.stringify(tags.filter(tag => !removedIds.has(tag.id))));
+
+      const nodes = JSON.parse(localStorage.getItem(nodesKey) || '{}');
+      Object.keys(nodes).forEach(nodeId => {
+        nodes[nodeId] = {
+          ...nodes[nodeId],
+          tagIds: (nodes[nodeId].tagIds || []).filter(tagId => !removedIds.has(tagId)),
+        };
+      });
+      localStorage.setItem(nodesKey, JSON.stringify(nodes));
+    }, validationTags.map(tag => tag.name));
+  };
+
+  const visibleErrorSweep = async () => page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    bodyWidth: document.body.scrollWidth,
+    visibleErrors: Array.from(document.querySelectorAll('.inline-error, [role="alert"]'))
+      .filter(element => element instanceof HTMLElement && element.offsetParent !== null)
+      .map(element => element.textContent?.trim()).filter(Boolean),
+  }));
+
+  let l2TaskId = null;
+  let l3TaskId = null;
 
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -96,139 +145,192 @@ async (page) => {
         createdAt: fixedAccount.createdAt,
       }));
     }, account);
-    await setDisplayPreference(true);
+    await cleanupValidationTags();
+    await setLegacyPreference(false);
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
     await switchToBoard();
 
-    const opened = await openTaskDetails();
-    taskId = opened.taskId;
-    await opened.modal.locator('[data-tag-picker-trigger="true"]:visible').first().click();
-    const panel = opened.modal.locator('[data-tag-picker-panel]');
-    await panel.waitFor({ state: 'visible', timeout: 10000 });
-    const search = panel.getByPlaceholder('搜尋或建立標籤');
-    await search.fill(tagName);
-    const createButton = panel.getByRole('button', { name: `建立「${tagName}」` });
-    if (await createButton.count()) {
-      await panel.locator('button[title="blue"]').click();
-      await createButton.click();
-      createdTag = true;
-    } else {
-      const removeButton = panel.getByRole('button', { name: `移除 ${tagName}` });
-      assignedInitially = await removeButton.count() > 0;
-      if (!assignedInitially) {
-        await panel.getByRole('button', { name: `套用 ${tagName}` }).click();
-      }
-    }
-    await page.waitForTimeout(200);
-    await opened.modal.getByRole('button', { name: '關閉任務詳情' }).click();
-    await opened.modal.waitFor({ state: 'hidden', timeout: 10000 });
+    const l2Card = page.locator('.kanban-task-card[data-task-id]').filter({
+      has: page.locator('.kanban-checklist-item[data-task-id]'),
+    }).first();
+    await l2Card.waitFor({ state: 'visible', timeout: 10000 });
+    l2TaskId = await l2Card.getAttribute('data-task-id');
+    const l3Row = l2Card.locator('.kanban-checklist-item[data-task-id]').first();
+    await l3Row.waitFor({ state: 'visible', timeout: 10000 });
+    l3TaskId = await l3Row.getAttribute('data-task-id');
+    if (!l2TaskId || !l3TaskId) throw new Error('找不到可驗證的 L2 / L3 任務');
 
-    let chip = page.locator(`[data-kanban-tag-chip="true"][data-tag-name="${tagName}"]`).first();
-    await chip.waitFor({ state: 'visible', timeout: 10000 });
-    const expandedState = await chip.getAttribute('data-tag-chip-collapsed');
-    const expandedText = (await chip.textContent())?.trim();
-    record('QA-061-001', expandedState === 'false' && expandedText === tagName, { expandedState, expandedText });
-    await page.screenshot({ path: screenshots.expanded, fullPage: false });
+    await assignValidationTags(l2TaskId);
+    await assignValidationTags(l3TaskId);
 
-    await chip.click();
-    await page.waitForTimeout(120);
-    chip = page.locator(`[data-kanban-tag-chip="true"][data-tag-name="${tagName}"]`).first();
-    const collapsedStates = await page.locator('[data-kanban-tag-chip="true"]').evaluateAll(elements => (
-      elements.map(element => element.getAttribute('data-tag-chip-collapsed'))
-    ));
-    const collapsedDotGeometry = await page.locator('[data-kanban-tag-dot="true"]').evaluateAll(elements => (
-      elements.map(element => {
-        const rect = element.getBoundingClientRect();
-        return { width: rect.width, height: rect.height };
-      })
-    ));
+    const currentL2Card = page.locator(`.kanban-task-card[data-task-id="${l2TaskId}"]`);
+    const currentL3Row = page.locator(`.kanban-checklist-item[data-task-id="${l3TaskId}"]`);
+    const l2Sticker = currentL2Card.locator('[data-kanban-tag-sticker="true"]').first();
+    const l3Sticker = currentL3Row.locator('[data-kanban-tag-sticker="true"]').first();
+    await l2Sticker.waitFor({ state: 'visible', timeout: 10000 });
+    await l3Sticker.waitFor({ state: 'visible', timeout: 10000 });
+
+    const l2Geometry = await page.evaluate((taskId) => {
+      const card = document.querySelector(`.kanban-task-card[data-task-id="${taskId}"]`);
+      const sticker = card?.querySelector('[data-kanban-tag-sticker="true"]');
+      const titleRow = sticker?.closest('.kanban-task-title-content');
+      if (!(sticker instanceof HTMLElement) || !(titleRow instanceof HTMLElement)) return null;
+      const stickerRect = sticker.getBoundingClientRect();
+      const rowRect = titleRow.getBoundingClientRect();
+      return {
+        sticker: { top: stickerRect.top, bottom: stickerRect.bottom, height: stickerRect.height },
+        row: { top: rowRect.top, bottom: rowRect.bottom, height: rowRect.height },
+        tagCount: sticker.dataset.tagCount,
+        layers: sticker.querySelectorAll('[data-kanban-tag-layer="true"]').length,
+        frontText: sticker.querySelector('[data-kanban-tag-front="true"]')?.textContent?.trim(),
+        legacyChipCount: card.querySelectorAll('[data-kanban-tag-chip="true"]').length,
+      };
+    }, l2TaskId);
+    record(
+      'QA-061-001',
+      Boolean(l2Geometry && l2Geometry.sticker.top >= l2Geometry.row.top - 3 && l2Geometry.sticker.bottom <= l2Geometry.row.bottom + 3 && l2Geometry.legacyChipCount === 0),
+      { l2Geometry },
+    );
+
+    const l3Geometry = await page.evaluate((taskId) => {
+      const row = document.querySelector(`.kanban-checklist-item[data-task-id="${taskId}"]`);
+      const sticker = row?.querySelector('[data-kanban-tag-sticker="true"]');
+      if (!(sticker instanceof HTMLElement) || !(row instanceof HTMLElement)) return null;
+      const stickerRect = sticker.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      return {
+        sticker: { top: stickerRect.top, bottom: stickerRect.bottom, height: stickerRect.height },
+        row: { top: rowRect.top, bottom: rowRect.bottom, height: rowRect.height },
+        tagCount: sticker.dataset.tagCount,
+        layers: sticker.querySelectorAll('[data-kanban-tag-layer="true"]').length,
+        legacyChipCount: row.parentElement?.querySelectorAll(':scope > [data-kanban-tag-chip="true"]').length ?? 0,
+      };
+    }, l3TaskId);
     record(
       'QA-061-002',
-      collapsedStates.length > 0 &&
-        collapsedStates.every(value => value === 'true') &&
-        collapsedDotGeometry.length === collapsedStates.length &&
-        collapsedDotGeometry.every(({ width, height }) => width === height && width > 0 && width <= 12),
-      { collapsedStates, collapsedDotGeometry },
+      Boolean(l3Geometry && l3Geometry.sticker.height === l2Geometry?.sticker.height && l3Geometry.sticker.top >= l3Geometry.row.top - 3 && l3Geometry.sticker.bottom <= l3Geometry.row.bottom + 3 && l3Geometry.legacyChipCount === 0),
+      { l2Geometry, l3Geometry },
     );
-    const tooltip = await chip.getAttribute('title');
-    const ariaLabel = await chip.getAttribute('aria-label');
-    record('QA-061-003', tooltip === `顏色：藍色，標題：「${tagName}」` && ariaLabel?.includes('點擊展開所有標籤名稱'), { tooltip, ariaLabel });
-    record('QA-061-004', await page.locator('[data-task-details-modal="true"]').count() === 0, { modalCount: await page.locator('[data-task-details-modal="true"]').count() });
-    const persistedCollapsed = await page.evaluate(() => {
-      const prefs = JSON.parse(localStorage.getItem('projed-task-filters:v1') || '{}');
-      return prefs.displaySettings?.showTagNames;
-    });
-    record('QA-061-005', persistedCollapsed === false, { persistedCollapsed });
-    await chip.hover();
-    await page.screenshot({ path: screenshots.collapsed, fullPage: false });
+    record(
+      'QA-061-003',
+      l2Geometry?.tagCount === '3' && l2Geometry?.layers === 2 && l2Geometry?.frontText?.includes('+2') === true,
+      { l2Geometry },
+    );
 
-    await chip.focus();
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
-    chip = page.locator(`[data-kanban-tag-chip="true"][data-tag-name="${tagName}"]`).first();
-    const afterEnter = await chip.getAttribute('data-tag-chip-collapsed');
-    await chip.focus();
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(100);
-    chip = page.locator(`[data-kanban-tag-chip="true"][data-tag-name="${tagName}"]`).first();
-    const afterSpace = await chip.getAttribute('data-tag-chip-collapsed');
-    const keyboardModalCount = await page.locator('[data-task-details-modal="true"]').count();
-    record('QA-061-006', afterEnter === 'false' && afterSpace === 'true' && keyboardModalCount === 0, {
-      afterEnter,
-      afterSpace,
-      keyboardModalCount,
-    });
+    const selectedBefore = await page.locator('[data-task-selected="true"]').evaluateAll(elements => elements.map(element => element.getAttribute('data-task-id')));
+    const title = await l2Sticker.getAttribute('title');
+    await l2Sticker.click();
+    const popover = page.locator('[data-kanban-tag-popover="true"]');
+    await popover.waitFor({ state: 'visible', timeout: 5000 });
+    const popoverNames = await popover.locator('[data-kanban-tag-popover-item="true"]').evaluateAll(elements => elements.map(element => element.getAttribute('data-tag-name')));
+    record(
+      'QA-061-004',
+      validationTags.every(tag => title?.includes(tag.name) && popoverNames.includes(tag.name)) && await popover.count() === 1,
+      { title, popoverNames, popoverCount: await popover.count() },
+    );
 
+    const selectedAfter = await page.locator('[data-task-selected="true"]').evaluateAll(elements => elements.map(element => element.getAttribute('data-task-id')));
+    const interactionState = {
+      modalCount: await page.locator('[data-task-details-modal="true"]').count(),
+      dragPreviewCount: await page.locator('[data-kanban-drag-overlay], [data-kanban-drag-source-placeholder="true"]').count(),
+      contextMenuCount: await page.locator('[data-context-menu]').count(),
+      selectedBefore,
+      selectedAfter,
+    };
+    record(
+      'QA-061-005',
+      interactionState.modalCount === 0 && interactionState.dragPreviewCount === 0 && JSON.stringify(selectedBefore) === JSON.stringify(selectedAfter),
+      interactionState,
+    );
+
+    await page.keyboard.press('Escape');
+    await popover.waitFor({ state: 'hidden', timeout: 5000 });
+    await page.locator('[data-mode-switcher-trigger="true"]').focus();
+    await l2Sticker.focus();
+    await popover.waitFor({ state: 'visible', timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await popover.waitFor({ state: 'hidden', timeout: 5000 });
+    const activeSticker = await page.evaluate(() => document.activeElement?.getAttribute('data-kanban-tag-sticker'));
+    record('QA-061-006', activeSticker === 'true', { activeSticker });
+
+    const beforeReload = { l2Height: l2Geometry?.row.height, l3Height: l3Geometry?.row.height };
+    await setLegacyPreference(true);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
-    chip = page.locator(`[data-kanban-tag-chip="true"][data-tag-name="${tagName}"]`).first();
-    await chip.waitFor({ state: 'visible', timeout: 10000 });
-    const afterReload = await chip.getAttribute('data-tag-chip-collapsed');
-    record('QA-061-007', afterReload === 'true', { afterReload });
+    await page.locator('[data-kanban-tag-sticker="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
+    const afterReload = await page.evaluate(({ l2TaskId, l3TaskId }) => ({
+      l2Count: document.querySelectorAll(`.kanban-task-card[data-task-id="${l2TaskId}"] .kanban-task-title-content > [data-kanban-tag-sticker="true"]`).length,
+      l3Count: document.querySelectorAll(`.kanban-checklist-item[data-task-id="${l3TaskId}"] [data-kanban-tag-sticker="true"]`).length,
+      l2Height: document.querySelector(`.kanban-task-card[data-task-id="${l2TaskId}"] .kanban-task-title-content`)?.getBoundingClientRect().height,
+      l3Height: document.querySelector(`.kanban-checklist-item[data-task-id="${l3TaskId}"]`)?.getBoundingClientRect().height,
+      legacyChipCount: document.querySelectorAll('[data-kanban-tag-chip="true"], [data-kanban-tag-dot="true"]').length,
+    }), { l2TaskId, l3TaskId });
+    record(
+      'QA-061-007',
+      afterReload.l2Count === 1 && afterReload.l3Count === 1 && afterReload.legacyChipCount === 0 && afterReload.l2Height === beforeReload.l2Height && afterReload.l3Height === beforeReload.l3Height,
+      { beforeReload, afterReload },
+    );
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    const mobileSidebar = page.locator('[data-mobile-sidebar-overlay="true"]');
-    if (await mobileSidebar.isVisible() && await mobileSidebar.getAttribute('data-sidebar-panel') === 'expanded') {
-      await page.locator('[data-main-sidebar-toggle="true"]').click();
-      await mobileSidebar.waitFor({ state: 'hidden', timeout: 5000 });
+    const viewportEvidence = {};
+    for (const viewport of [
+      { key: 'desktop', width: 1440, height: 900, screenshot: screenshots.desktop },
+      { key: 'laptop', width: 1024, height: 768, screenshot: screenshots.laptop },
+      { key: 'mobile', width: 390, height: 844, screenshot: screenshots.mobile },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const mobileSidebar = page.locator('[data-mobile-sidebar-overlay="true"]');
+      if (viewport.width === 390 && await mobileSidebar.isVisible() && await mobileSidebar.getAttribute('data-sidebar-panel') === 'expanded') {
+        await page.locator('[data-main-sidebar-toggle="true"]').click();
+        await mobileSidebar.waitFor({ state: 'hidden', timeout: 5000 });
+      }
+      const sticker = page.locator(`.kanban-task-card[data-task-id="${l2TaskId}"] [data-kanban-tag-sticker="true"]`).first();
+      await sticker.scrollIntoViewIfNeeded();
+      await sticker.click();
+      await popover.waitFor({ state: 'visible', timeout: 5000 });
+      await page.waitForTimeout(150);
+      await page.evaluate(() => {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+      const bounds = await popover.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      });
+      const sweep = await visibleErrorSweep();
+      viewportEvidence[viewport.key] = { bounds, sweep };
+      await page.screenshot({ path: viewport.screenshot, fullPage: false });
+      await page.keyboard.press('Escape');
     }
-    await chip.scrollIntoViewIfNeeded();
-    const mobileBefore = await page.evaluate(() => ({
-      viewport: window.innerWidth,
-      documentWidth: document.documentElement.scrollWidth,
-      bodyWidth: document.body.scrollWidth,
-      visibleErrors: Array.from(document.querySelectorAll('.inline-error, [role="alert"]'))
-        .filter(element => element instanceof HTMLElement && element.offsetParent !== null)
-        .map(element => element.textContent?.trim()).filter(Boolean),
-    }));
-    await chip.click();
-    await page.waitForTimeout(100);
-    chip = page.locator(`[data-kanban-tag-chip="true"][data-tag-name="${tagName}"]`).first();
-    const mobileExpanded = await chip.getAttribute('data-tag-chip-collapsed');
-    const mobileModalCount = await page.locator('[data-task-details-modal="true"]').count();
     record(
       'QA-061-008',
-      mobileExpanded === 'false' && mobileModalCount === 0 && mobileBefore.documentWidth <= mobileBefore.viewport && mobileBefore.visibleErrors.length === 0,
-      { mobileExpanded, mobileModalCount, mobileBefore },
+      Object.values(viewportEvidence).every(({ bounds, sweep }) => (
+        bounds.left >= 0 && bounds.right <= sweep.viewport && bounds.top >= 0 &&
+        sweep.documentWidth <= sweep.viewport && sweep.bodyWidth <= sweep.viewport && sweep.visibleErrors.length === 0
+      )) && browserErrors.length === 0,
+      { viewportEvidence, browserErrors },
     );
-    await page.screenshot({ path: screenshots.mobile, fullPage: false });
 
-    await cleanupValidationTag();
-
-    await setDisplayPreference(true);
+    await cleanupValidationTags();
+    await setLegacyPreference(true);
     result.ok = true;
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
+    console.log(JSON.stringify({
+      phase: 'DEV-061 browser failure before cleanup',
+      error: error?.message || String(error),
+      cases: result.cases,
+      l2TaskId,
+      l3TaskId,
+      browserErrors,
+    }, null, 2));
     await page.screenshot({ path: screenshots.failure, fullPage: false }).catch(() => undefined);
-    await cleanupValidationTag().catch(() => undefined);
-    await setDisplayPreference(true).catch(() => undefined);
+    await cleanupValidationTags().catch(() => undefined);
+    await setLegacyPreference(true).catch(() => undefined);
     throw new Error(JSON.stringify({
       ...result,
       error: error?.message || String(error),
-      taskId,
-      createdTag,
-      assignedInitially,
+      l2TaskId,
+      l3TaskId,
+      browserErrors,
     }, null, 2));
   }
 }

@@ -154,13 +154,14 @@ async (page) => {
 
   const assertSharedTaskContextMenu = async (taskLocator, message) => {
     await taskLocator.click({ button: 'right', position: { x: 40, y: 10 } });
-    await page.getByText('更多詳情選項').first().waitFor({ state: 'visible', timeout: 10000 });
+    const contextMenu = page.locator('[data-global-context-menu="true"]');
+    await contextMenu.waitFor({ state: 'visible', timeout: 10000 });
     assert(
       await page.getByText('重新命名任務', { exact: true }).count() === 0,
       `${message} without the removed task rename action`,
     );
     await page.keyboard.press('Escape');
-    await page.getByText('更多詳情選項').first().waitFor({ state: 'hidden', timeout: 10000 });
+    await contextMenu.waitFor({ state: 'hidden', timeout: 10000 });
   };
 
   const assertUnplacedWorkbenchRowDragSurface = async (taskLocator, message) => {
@@ -251,7 +252,7 @@ async (page) => {
       placementTone.unplacedLane !== 'rgb(255, 255, 255)' &&
         placementTone.placedLane !== 'rgb(255, 255, 255)' &&
         placementTone.unplacedLane === placementTone.placedLane,
-      'unplaced and placed task lanes should share one Morandi blue-gray task body tone',
+      'unplaced and placed task lanes should share one neutral slate task body tone',
       placementTone,
     );
     assert(

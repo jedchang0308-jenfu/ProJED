@@ -1,4 +1,5 @@
 import type { MindMapDirection } from './MindMapNode';
+import { BRAND_BLUE, normalizeLegacyBrandBlue } from '../ui/brandColors';
 
 export interface MindMapConnectorPath {
   id: string;
@@ -93,7 +94,7 @@ export interface MindMapRelationshipDraftPreview {
 }
 
 const defaultRelationshipStyle: Required<MindMapRelationshipStyle> = {
-  strokeColor: '#0284c7',
+  strokeColor: BRAND_BLUE[500],
   strokeWidth: 2.25,
   strokeDasharray: '7 6',
   arrowStart: false,
@@ -102,7 +103,7 @@ const defaultRelationshipStyle: Required<MindMapRelationshipStyle> = {
   labelFontSize: 12,
 };
 
-export const relationshipColorOptions = ['#0284c7', '#0f172a', '#16a34a', '#dc2626', '#9333ea', '#f97316'];
+export const relationshipColorOptions = [BRAND_BLUE[500], '#0f172a', '#16a34a', '#dc2626', '#9333ea', '#f97316'];
 export const relationshipWidthOptions = [1.5, 2.25, 3.5];
 export const relationshipDashOptions = [
   { label: '??', value: '' },
@@ -112,6 +113,7 @@ export const relationshipDashOptions = [
 const mergeRelationshipStyle = (style?: MindMapRelationshipStyle): Required<MindMapRelationshipStyle> => ({
   ...defaultRelationshipStyle,
   ...style,
+  strokeColor: normalizeLegacyBrandBlue(style?.strokeColor),
 });
 
 export const clampRatio = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0.5));

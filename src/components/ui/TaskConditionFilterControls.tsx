@@ -1,11 +1,12 @@
 import React from 'react';
-import { Filter, Search, UserRound } from 'lucide-react';
+import { Search, UserRound } from 'lucide-react';
 import {
   TASK_STATUS_OPTIONS,
   UNASSIGNED_ASSIGNEE_FILTER,
   type TaskFilterState,
 } from '../../features/taskFilters';
 import { taskFilterFieldClass } from './taskConditionFilterStyles';
+import { getTaskStatusFilterChipClass } from './taskStatusStyles';
 
 export type TaskConditionAssigneeOption = {
   id: string;
@@ -26,6 +27,7 @@ type Props = {
   onChange: (updates: Partial<TaskFilterState>) => void;
   unassignedDisabled?: boolean;
   unassignedDisabledReason?: string;
+  showOverdueFilter?: boolean;
 };
 
 const taskFilterChipClass = (active: boolean, disabled = false) =>
@@ -42,6 +44,7 @@ const TaskConditionFilterControls: React.FC<Props> = ({
   onChange,
   unassignedDisabled = false,
   unassignedDisabledReason,
+  showOverdueFilter = true,
 }) => {
   const toggleStatus = (status: keyof TaskFilterState['statusFilters']) => {
     onChange({
@@ -71,20 +74,16 @@ const TaskConditionFilterControls: React.FC<Props> = ({
   return (
     <div className="space-y-3" data-task-condition-filter-controls="true">
       <section className="space-y-2">
-        <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-slate-400">
-          <Filter size={13} />
-          任務狀態
-        </label>
+        <label className="text-[11px] font-bold uppercase text-slate-400">任務狀態</label>
         <div className="flex flex-wrap gap-2">
           {TASK_STATUS_OPTIONS.map(status => (
             <button
               key={status.key}
               type="button"
               onClick={() => toggleStatus(status.key)}
-              className={taskFilterChipClass(filters.statusFilters[status.key])}
+              className={getTaskStatusFilterChipClass(status.key, filters.statusFilters[status.key])}
               aria-pressed={filters.statusFilters[status.key]}
             >
-              <span className={`h-2 w-2 rounded-full ${status.color}`} />
               {status.label}
             </button>
           ))}
@@ -93,6 +92,21 @@ const TaskConditionFilterControls: React.FC<Props> = ({
 
       <section className="space-y-2">
         <label className="text-[11px] font-bold uppercase text-slate-400">到期日與關鍵字</label>
+        {showOverdueFilter ? (
+          <button
+            type="button"
+            onClick={() => onChange({ overdueOnly: !filters.overdueOnly })}
+            className={`inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-semibold transition-colors ${
+              filters.overdueOnly
+                ? 'border-orange-300 bg-orange-50 text-orange-700 ring-1 ring-orange-200'
+                : 'border-orange-200 bg-white text-orange-600 hover:bg-orange-50'
+            }`}
+            aria-pressed={filters.overdueOnly}
+            data-overdue-filter="true"
+          >
+            逾期
+          </button>
+        ) : null}
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <input
             type="number"
@@ -124,7 +138,7 @@ const TaskConditionFilterControls: React.FC<Props> = ({
       </section>
 
       <section className="space-y-2">
-        <label className="text-[11px] font-bold uppercase text-slate-400">負責人</label>
+        <label className="text-[11px] font-bold uppercase text-slate-400">負責人/協作</label>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

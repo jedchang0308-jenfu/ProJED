@@ -1,5 +1,6 @@
 import React from 'react';
 import type { MindMapDirection, MindMapDropMode } from './MindMapNode';
+import { BRAND_BLUE } from '../ui/brandColors';
 
 export interface MindMapDragPreviewModel {
   nodeId: string;
@@ -37,7 +38,7 @@ const MindMapDragPreviewLayer: React.FC<MindMapDragPreviewLayerProps> = ({ dragP
           <path
             d={dragPreview.connectorPath}
             fill="none"
-            stroke="#2563eb"
+            stroke={BRAND_BLUE[600]}
             strokeWidth={2}
             strokeDasharray="6 6"
             strokeLinecap="round"
@@ -55,7 +56,7 @@ const MindMapDragPreviewLayer: React.FC<MindMapDragPreviewLayerProps> = ({ dragP
 
       {dragPreview.insertionPreview ? (
         <div
-          className="pointer-events-none absolute z-[75] rounded-full bg-sky-300/80 shadow-[0_0_0_4px_rgba(125,211,252,0.28)] ring-1 ring-sky-400/60"
+          className="pointer-events-none absolute z-[75] rounded-full bg-sky-300/80 shadow-[0_0_0_4px_rgba(99,102,241,0.24)] ring-1 ring-sky-400/60"
           style={{
             left: `${dragPreview.insertionPreview.left}px`,
             top: `${dragPreview.insertionPreview.top}px`,

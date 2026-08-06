@@ -504,7 +504,7 @@ async (page) => {
   await nodeByTitle(rightClickSource).click();
   await closeTaskDetailsIfOpen();
   await nodeByTitle(rightClickSource).click({ button: 'right' });
-  await page.getByText('更多詳情選項', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 10000 });
   assert(
     await page.getByText('重新命名任務', { exact: true }).count() === 0,
     'right-clicking a task should not expose an outer rename menu item',

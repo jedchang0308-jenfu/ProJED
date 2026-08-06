@@ -41,28 +41,16 @@ const MAX_VISIBLE_LANES = 3;   // 超過此數顯示「+N 更多」
 // 狀態→樣式對照（靜態字典，確保 Tailwind 能掃描到）
 const STATUS_STYLES = {
     todo: {
-        bar: 'bg-status-todo/20 border-l-2 border-status-todo text-status-todo',
-        dot: 'bg-status-todo',
+        bar: 'bg-slate-100 border-l-2 border-slate-600 text-slate-800',
     },
     in_progress: {
-        bar: 'bg-blue-500/15 border-l-2 border-blue-500 text-blue-700',
-        dot: 'bg-blue-500',
-    },
-    delayed: {
-        bar: 'bg-status-delayed/20 border-l-2 border-status-delayed text-status-delayed',
-        dot: 'bg-status-delayed',
+        bar: 'bg-blue-50 border-l-2 border-blue-600 text-blue-700',
     },
     completed: {
-        bar: 'bg-status-completed/20 border-l-2 border-status-completed text-status-completed',
-        dot: 'bg-status-completed',
-    },
-    unsure: {
-        bar: 'bg-status-unsure/20 border-l-2 border-status-unsure text-status-unsure',
-        dot: 'bg-status-unsure',
+        bar: 'bg-slate-50 border-l-2 border-slate-300 text-slate-400',
     },
     onhold: {
-        bar: 'bg-status-onhold/20 border-l-0 border border-status-onhold/40 text-status-onhold',
-        dot: 'bg-status-onhold',
+        bar: 'bg-slate-50 border-l-2 border-slate-300 text-slate-400',
     },
 };
 
@@ -70,6 +58,7 @@ import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { matchesTaskFilters } from '../features/taskFilters';
 import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass } from './ui/compactTokens';
+import { normalizeManualTaskStatus } from '../utils/taskStatus';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -177,6 +166,7 @@ const CalendarView = () => {
         activeWorkspaceId,
         statusFilters,
         dueWithinDays,
+        overdueOnly,
         selectedAssigneeIds,
         isSidebarOpen,
         setSidebarOpen,
@@ -187,10 +177,11 @@ const CalendarView = () => {
     const taskFilters = useMemo(() => ({
         statusFilters,
         dueWithinDays,
+        overdueOnly,
         selectedAssigneeIds,
         selectedTagIds,
         keyword: '',
-    }), [dueWithinDays, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
@@ -207,14 +198,6 @@ const CalendarView = () => {
 
     // (workspaces 已不再需要)
     // (activeBoard 已不再需要)
-
-    const statuses = [
-        { key: 'todo', label: '待辦', color: 'bg-status-todo' },
-        { key: 'delayed', label: '延遲', color: 'bg-status-delayed' },
-        { key: 'completed', label: '完成', color: 'bg-status-completed' },
-        { key: 'unsure', label: '未定', color: 'bg-status-unsure' },
-        { key: 'onhold', label: '暫緩', color: 'bg-status-onhold' },
-    ];
 
     // ── 資料扁平化（與 GanttView 一致）──────────────────
     const flattenedItems = useMemo(() => {
@@ -452,7 +435,7 @@ const CalendarView = () => {
                                     {segsThisWeek
                                         .filter(seg => seg.lane < MAX_VISIBLE_LANES)
                                         .map((seg, sIdx) => {
-                                            const styles = STATUS_STYLES[seg.item.status || 'todo'] || STATUS_STYLES.todo;
+                                            const styles = STATUS_STYLES[normalizeManualTaskStatus(seg.item.status)];
 
                                             // 橫向：col/7 ~ (col+span)/7
                                             const leftPct = (seg.col / 7) * 100;

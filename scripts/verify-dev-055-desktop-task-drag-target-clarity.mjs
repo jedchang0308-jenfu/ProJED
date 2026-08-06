@@ -59,10 +59,12 @@ check('S04', 'desktop source placeholders are neutral and cannot impersonate the
   && !source.card.includes('showSourceInsertionMarker')
   && !source.column.includes('<KanbanInsertionMarker'));
 
-check('S05', 'card primary geometry is shared without removing the mobile marker',
-  source.card.includes('data-task-card-primary="true"')
+check('S05', 'generic source geometry owns card targeting while legacy mobile aliases remain compatible',
+  source.card.includes('data-task-surface-source="true"')
+  && source.card.includes('data-task-card-primary="true"')
   && source.card.includes('data-mobile-task-card-primary="true"')
-  && source.preview.includes("'[data-task-card-primary=\"true\"]'"));
+  && source.preview.includes("'[data-task-surface-source=\"true\"]'")
+  && !source.preview.includes('data-task-card-primary'));
 
 check('S06', 'exact innermost ownership blocks invalid ancestor fallback', hasAll(source.board, [
   'data-desktop-drop-surface="true"',

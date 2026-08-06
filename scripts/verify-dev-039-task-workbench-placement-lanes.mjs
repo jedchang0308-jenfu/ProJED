@@ -163,10 +163,10 @@ assert(
 assert(
   'Task Workbench lane titles render as sticky section headers above scrollable task rows',
   source.taskWorkbench.includes('max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain') &&
-    source.taskWorkbench.includes("isOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'") &&
-    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-[#e6edf2] ring-2 ring-inset ring-[#a9bbc8]/60' : 'bg-[#f2f5f7]'") &&
+    source.taskWorkbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
+    source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
     !source.taskWorkbench.includes("'bg-sky-50/70'") &&
-    source.taskWorkbench.includes('bg-[#e1e9ee]/95') &&
+    source.taskWorkbench.includes('bg-slate-200/95') &&
     !source.taskWorkbench.includes('bg-[#fbfcfc]/85') &&
     !source.taskWorkbench.includes('bg-[#e8eef2]/95') &&
     source.taskWorkbench.includes('data-task-workbench-header-accent="unplaced"') &&

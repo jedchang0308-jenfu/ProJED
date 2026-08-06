@@ -37,7 +37,7 @@ const MindMapRootLayout: React.FC<MindMapRootLayoutProps> = ({
     </div>
 
     <div
-      className="relative z-20 flex min-h-[64px] max-w-[300px] items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center text-base font-bold text-blue-800 shadow-[0_14px_28px_rgba(37,99,235,0.12)] ring-4 ring-blue-100/70"
+      className="relative z-20 flex min-h-[64px] max-w-[300px] items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center text-base font-bold text-blue-800 shadow-[0_14px_28px_rgba(99,102,241,0.12)] ring-4 ring-blue-100/70"
       data-mindmap-center
       onDragOver={onDragOverCenter}
       onDrop={onDropOnCenter}

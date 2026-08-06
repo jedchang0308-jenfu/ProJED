@@ -155,9 +155,9 @@ const buildCandidate = (
   });
   if (!intent) return null;
 
-  const geometryElement = domSurfaceKind === 'kanban-card'
-    ? targetElement.querySelector<HTMLElement>('[data-mobile-task-card-primary="true"]') || targetElement
-    : targetElement;
+  const geometryElement = targetElement.matches('[data-task-surface-source="true"]')
+    ? targetElement
+    : targetElement.querySelector<HTMLElement>('[data-task-surface-source="true"]') || targetElement;
   const domRect = geometryElement.getBoundingClientRect();
   const rect = toTargetRect(domRect);
   if (!pointInsideRect(point, rect)) return null;

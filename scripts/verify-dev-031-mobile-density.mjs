@@ -99,7 +99,7 @@ assert(
     source.tagPicker.includes('data-tag-picker-compact={compact ?') &&
     source.css.includes('[data-task-details-meta-grid="true"]') &&
     source.css.includes('[data-task-details-meta-label-text="true"]') &&
-    source.css.includes('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(58px, 0.58fr)') &&
+    source.css.includes('grid-template-columns: minmax(0, 1fr) !important') &&
     source.css.includes('[data-task-details-date-grid="true"]') &&
     source.css.includes('height: 26px !important') &&
     source.css.includes('[data-task-details-tag-picker-wrap="true"] [data-tag-picker-trigger="true"]'),
@@ -133,8 +133,8 @@ assert(
     source.browserVerifier.includes('assertNoVisibleErrors') &&
     source.browserVerifier.includes('visible task density') &&
     source.browserVerifier.includes('task details meta density') &&
-    source.browserVerifier.includes('metaHeight <= 96') &&
-    source.browserVerifier.includes('maxControlHeight <= 28') &&
+    source.browserVerifier.includes('metaHeight <= 320') &&
+    source.browserVerifier.includes('maxControlHeight <= 34') &&
     source.browserVerifier.includes('task details note add action density') &&
     source.browserVerifier.includes('addButton.width <= 34') &&
     source.browserVerifier.includes('compact add-note action should still add one note card'),

@@ -74,24 +74,24 @@ export const GANTT_COLOR_MAP: Record<string, Record<string, string>> = {
         checklist: 'bg-blue-50 border border-blue-300 text-blue-700'
     },
     delayed: {
-        list: 'bg-status-delayed brightness-75 saturate-150 text-white',
-        card: 'bg-white border-2 border-status-delayed text-status-delayed font-extrabold',
-        checklist: 'bg-white border border-status-delayed/30 text-status-delayed'
+        list: 'bg-slate-600 text-white',
+        card: 'bg-white border-2 border-slate-500 text-slate-700 font-extrabold',
+        checklist: 'bg-white border border-slate-300 text-slate-600'
     },
     completed: {
-        list: 'bg-status-completed brightness-75 saturate-150 text-white',
-        card: 'bg-white border-2 border-status-completed text-status-completed font-extrabold',
-        checklist: 'bg-white border border-status-completed/30 text-status-completed'
+        list: 'bg-slate-200 text-slate-500',
+        card: 'bg-white border-2 border-slate-300 text-slate-400 font-extrabold',
+        checklist: 'bg-white border border-slate-200 text-slate-400'
     },
     unsure: {
-        list: 'bg-status-unsure brightness-75 saturate-150 text-white',
-        card: 'bg-white border-2 border-status-unsure text-status-unsure font-extrabold',
-        checklist: 'bg-white border border-status-unsure/30 text-status-unsure'
+        list: 'bg-slate-600 text-white',
+        card: 'bg-white border-2 border-slate-500 text-slate-700 font-extrabold',
+        checklist: 'bg-white border border-slate-300 text-slate-600'
     },
     onhold: {
-        list: 'bg-status-onhold brightness-75 saturate-150 text-white',
-        card: 'bg-white border-2 border-status-onhold text-status-onhold font-extrabold',
-        checklist: 'bg-white border border-status-onhold/30 text-status-onhold'
+        list: 'bg-slate-200 text-slate-500',
+        card: 'bg-white border-2 border-slate-300 text-slate-400 font-extrabold',
+        checklist: 'bg-white border border-slate-200 text-slate-400'
     }
 };
 

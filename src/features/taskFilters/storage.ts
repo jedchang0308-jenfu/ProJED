@@ -12,7 +12,7 @@ import type { TaskStatus } from '../../types';
 
 export const LEGACY_BOARD_FILTER_STORAGE_KEY = 'projed-filters';
 export const BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1';
-export const BOARD_TASK_FILTER_PREFS_VERSION = 2;
+export const BOARD_TASK_FILTER_PREFS_VERSION = 3;
 
 const canUseStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage);
 
@@ -64,6 +64,7 @@ export const normalizeTaskFilters = (value?: Partial<TaskFilterState> | null): T
       ...(value?.statusFilters || {}),
     },
     dueWithinDays: value?.dueWithinDays === undefined ? defaults.dueWithinDays : value.dueWithinDays,
+    overdueOnly: typeof value?.overdueOnly === 'boolean' ? value.overdueOnly : defaults.overdueOnly,
     selectedAssigneeIds: normalizeStringArray(value?.selectedAssigneeIds),
     selectedTagIds: normalizeStringArray(value?.selectedTagIds),
     keyword: typeof value?.keyword === 'string' ? value.keyword : '',
@@ -102,6 +103,7 @@ export const readBoardTaskFilterPrefs = (): BoardTaskFilterPrefs => {
       migrateLegacyDefaultTaskFilters({
         statusFilters: legacy.statusFilters as TaskFilterState['statusFilters'] | undefined,
         dueWithinDays: legacy.dueWithinDays as number | null | undefined,
+        overdueOnly: legacy.overdueOnly as boolean | undefined,
         selectedAssigneeIds: legacy.selectedAssigneeIds as string[] | undefined,
         selectedTagIds: legacy.selectedTagIds as string[] | undefined,
         keyword: legacy.keyword as string | undefined,
@@ -144,6 +146,7 @@ export const writeBoardTaskFilterPrefs = (
     showTags: next.displaySettings.showTags,
     showTagNames: next.displaySettings.showTagNames,
     dueWithinDays: next.filters.dueWithinDays,
+    overdueOnly: next.filters.overdueOnly,
     selectedAssigneeIds: next.filters.selectedAssigneeIds,
     selectedTagIds: next.filters.selectedTagIds,
     keyword: next.filters.keyword,

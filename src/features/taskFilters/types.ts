@@ -2,12 +2,13 @@ import type { TaskNode, TaskStatus } from '../../types';
 
 export type TaskFilterableNode = Pick<
   TaskNode,
-  'assigneeId' | 'assigneeIds' | 'endDate' | 'id' | 'status' | 'tagIds' | 'title'
+  'assigneeId' | 'assigneeIds' | 'collaboratorIds' | 'endDate' | 'id' | 'status' | 'tagIds' | 'title'
 >;
 
 export type TaskFilterState = {
   statusFilters: Record<TaskStatus, boolean>;
   dueWithinDays: number | null;
+  overdueOnly: boolean;
   selectedAssigneeIds: string[];
   selectedTagIds: string[];
   keyword: string;

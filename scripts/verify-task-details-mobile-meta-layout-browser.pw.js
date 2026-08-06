@@ -205,35 +205,41 @@ async (page) => {
     const modal = page.locator('[data-task-details-modal="true"]');
     assert(await modal.isVisible(), 'task details modal should be visible');
 
-    step = 'mobile-summary-collapsed';
+    step = 'mobile-shared-controls-visible';
     const mobileMeta = page.locator('[data-task-details-mobile-meta="true"]');
     await mobileMeta.waitFor({ state: 'visible', timeout: 10000 });
-    assert(!(await mobileMeta.evaluate((element) => element.hasAttribute('open'))), 'mobile meta should be collapsed by default');
+    assert(await mobileMeta.locator('[data-task-details-mobile-meta-summary="true"]').count() === 0, 'mobile metadata should not render a separate collapse summary');
+    const primaryRowLayout = await page.evaluate(() => {
+      const status = document.querySelector('[data-task-details-assignment-row="true"] [data-task-details-meta-field="status"]');
+      const assignment = document.querySelector('[data-task-details-assignment-row="true"] [data-task-details-meta-field="assignment"]');
+      const statusRect = status?.getBoundingClientRect();
+      const assignmentRect = assignment?.getBoundingClientRect();
+      return {
+        status: statusRect ? { top: statusRect.top, width: statusRect.width } : null,
+        assignment: assignmentRect ? { top: assignmentRect.top, width: assignmentRect.width } : null,
+      };
+    });
+    assert(primaryRowLayout.status && primaryRowLayout.assignment, 'status and assignment fields should both render in the primary row', primaryRowLayout);
+    assert(Math.abs(primaryRowLayout.status.top - primaryRowLayout.assignment.top) <= 1, 'status and assignment fields should share one row', primaryRowLayout);
+    assert(primaryRowLayout.status.width < primaryRowLayout.assignment.width, 'status should use less width than assignment', primaryRowLayout);
     const desktopDateState = await getVisibilityState('[data-task-details-date-grid="true"]');
     const desktopAssignmentState = await getVisibilityState('[data-task-details-assignment-row="true"]');
-    assert(!desktopDateState.visible, 'desktop date grid should be hidden on mobile', desktopDateState);
-    assert(!desktopAssignmentState.visible, 'desktop assignment row should be hidden on mobile', desktopAssignmentState);
+    assert(desktopDateState.visible, 'shared date grid should be directly visible on mobile', desktopDateState);
+    assert(desktopAssignmentState.visible, 'shared assignment row should be directly visible on mobile', desktopAssignmentState);
     await page.locator('[data-task-record-timeline-actions="true"]').waitFor({ state: 'attached', timeout: 10000 });
     assert(
       !(await page.locator('[data-task-record-timeline-actions="true"]').isVisible()),
       'task record quick-add actions should be hidden on mobile'
     );
-    const summaryText = await page.locator('[data-task-details-mobile-meta-summary="true"]').innerText();
-    assert(!summaryText.includes('任務屬性'), 'summary should not show the removed task attributes label', { summaryText });
-    assert(summaryText.includes('狀態'), 'summary should include status', { summaryText });
-    assert(summaryText.includes('標籤 2'), 'summary should include tag count', { summaryText });
-    assert(summaryText.includes('主責 5 人'), 'summary should include primary assignee count', { summaryText });
     await assertNoHorizontalOverflow('[data-task-details-dialog="true"]', 'mobile task details dialog');
-    await assertNoHorizontalOverflow('[data-task-details-mobile-meta="true"]', 'mobile collapsed meta card');
+    await assertNoHorizontalOverflow('[data-task-details-mobile-meta="true"]', 'shared mobile metadata surface');
     await assertNoVisibleErrors();
 
-    step = 'mobile-expanded-controls';
-    await page.locator('[data-task-details-mobile-meta-summary="true"]').click();
+    step = 'mobile-shared-controls-interaction';
     await page.locator('[data-task-details-mobile-meta-controls="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    assert(await mobileMeta.evaluate((element) => element.hasAttribute('open')), 'mobile meta should open after tapping summary');
-    assert(await page.locator('[data-task-details-mobile-schedule-controls="true"]').isVisible(), 'mobile schedule controls should be visible after expanding');
-    assert(await page.locator('[data-task-details-mobile-duration="true"]').isVisible(), 'mobile duration block should be visible after expanding');
-    assert(await page.locator('[data-task-details-mobile-meta-controls="true"] [data-task-assignment-picker="true"]').isVisible(), 'mobile assignment picker should be visible after expanding');
+    assert(await page.locator('[data-task-details-mobile-schedule-controls="true"]').isVisible(), 'shared schedule controls should be visible on mobile');
+    assert(await page.locator('[data-task-details-mobile-duration="true"]').isVisible(), 'shared duration control should be visible on mobile');
+    assert(await page.locator('[data-task-details-mobile-meta-controls="true"] [data-task-assignment-picker="true"]').isVisible(), 'shared assignment picker should be visible on mobile');
     await page.locator('[data-task-details-mobile-meta-controls="true"] [data-task-assignment-picker="true"] button').first().click();
     const assignmentPanel = page.locator('[data-task-assignment-picker-panel="true"]').last();
     await assignmentPanel.waitFor({ state: 'visible', timeout: 5000 });
@@ -245,9 +251,9 @@ async (page) => {
       'assignment picker should remove non-essential helper and role text',
       { assignmentPanelText },
     );
-    await assertNoHorizontalOverflow('[data-task-details-dialog="true"]', 'expanded mobile task details dialog');
-    await assertNoHorizontalOverflow('[data-task-details-mobile-meta="true"]', 'expanded mobile meta card');
-    await assertNoHorizontalOverflow('[data-task-details-mobile-meta-controls="true"]', 'expanded mobile controls');
+    await assertNoHorizontalOverflow('[data-task-details-dialog="true"]', 'shared mobile task details dialog');
+    await assertNoHorizontalOverflow('[data-task-details-mobile-meta="true"]', 'shared mobile metadata surface');
+    await assertNoHorizontalOverflow('[data-task-details-mobile-meta-controls="true"]', 'shared mobile metadata controls');
     await assertNoHorizontalOverflow('[data-task-assignment-picker-panel="true"]', 'mobile assignment picker panel');
     await assertMobileMetaChildrenWithinBounds();
     await assertNoVisibleErrors();

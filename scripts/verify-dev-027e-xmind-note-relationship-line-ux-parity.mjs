@@ -5,6 +5,11 @@ const files = {
   mindMapView: 'src/components/MindMap/MindMapView.tsx',
   mindMapNode: 'src/components/MindMap/MindMapNode.tsx',
   mindMapGeometry: 'src/components/MindMap/mindMapGeometry.ts',
+  relationshipOverlay: 'src/components/MindMap/MindMapRelationshipOverlay.tsx',
+  relationshipInteraction: 'src/components/MindMap/MindMapRelationshipInteractionLayer.tsx',
+  relationshipStyleLayer: 'src/components/MindMap/MindMapRelationshipStyleLayer.tsx',
+  relationshipStyleDrawer: 'src/components/MindMap/MindMapRelationshipStyleDrawer.tsx',
+  mindMapToolbar: 'src/components/MindMap/MindMapToolbar.tsx',
   browserVerifier: 'scripts/verify-dev-027e-xmind-note-relationship-line-ux-parity-browser.pw.js',
   spec: 'ai-doc/specs/SPEC-027E-xmind-note-relationship-line-ux-parity.md',
   qa: 'ai-doc/qa/QA-DEV-027E-xmind-note-relationship-line-ux-parity.md',
@@ -22,6 +27,19 @@ for (const [label, file] of Object.entries(files)) {
 const mindMapView = read(files.mindMapView);
 const mindMapNode = read(files.mindMapNode);
 const mindMapGeometry = read(files.mindMapGeometry);
+const relationshipOverlay = read(files.relationshipOverlay);
+const relationshipInteraction = read(files.relationshipInteraction);
+const relationshipStyleLayer = read(files.relationshipStyleLayer);
+const relationshipStyleDrawer = read(files.relationshipStyleDrawer);
+const mindMapToolbar = read(files.mindMapToolbar);
+const relationshipUi = [
+  mindMapView,
+  relationshipOverlay,
+  relationshipInteraction,
+  relationshipStyleLayer,
+  relationshipStyleDrawer,
+  mindMapToolbar,
+].join('\n');
 const browserVerifier = read(files.browserVerifier);
 const spec = read(files.spec);
 const qa = read(files.qa);
@@ -45,27 +63,25 @@ assert(
 assert(
   'Creation main flow uses inline label editing instead of a modal prompt',
   mindMapView.includes('createNoteRelationshipInline') &&
-    inlineFunction.includes('setEditingRelationshipId(relationship.id)') &&
-    inlineFunction.includes('setEditingRelationshipLabel(relationship.label)') &&
+    inlineFunction.includes('openRelationshipLabelEdit(relationship.id, relationship.label)') &&
     !inlineFunction.includes('showPrompt') &&
-    mindMapView.includes('data-mindmap-note-relationship-label-input'),
+    relationshipInteraction.includes('data-mindmap-note-relationship-label-input'),
 );
 
 assert(
   'Line body, label, keyboard deletion, Escape, and Space edit are selectable object interactions',
-    mindMapView.includes('data-mindmap-note-relationship-hitbox') &&
-    mindMapView.includes('data-mindmap-note-relationship-click-target') &&
-    mindMapView.includes('hoveredRelationshipId') &&
-    mindMapView.includes('setHoveredRelationshipId(path.id)') &&
-    mindMapView.includes('data-hovered={hovered ? \'true\' : \'false\'}') &&
-    mindMapView.includes('getRelationshipCurveHitSegments') &&
-    mindMapView.includes('data-mindmap-note-relationship-curve-click-target') &&
-    mindMapView.includes('startRelationshipLabelEdit') &&
-    mindMapView.includes("event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar' || event.code === 'Space'") &&
+    relationshipOverlay.includes('data-mindmap-note-relationship-hitbox') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-click-target') &&
+    relationshipInteraction.includes('hoveredRelationshipId') &&
+    relationshipInteraction.includes('hoverRelationship(path.id)') &&
+    relationshipInteraction.includes("data-hovered={hoveredRelationshipId === path.id ? 'true' : 'false'}") &&
+    relationshipInteraction.includes('getRelationshipCurveHitSegments') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-curve-click-target') &&
+    relationshipUi.includes('startRelationshipLabelEdit') &&
     mindMapView.includes('handleRelationshipHotkey') &&
-    mindMapView.includes("event.key === 'Delete'") &&
-    mindMapView.includes("event.key === 'Backspace'") &&
-    mindMapView.includes("event.key === 'Escape'"),
+    mindMapView.includes('isMindMapRelationshipLabelEditKey(event)') &&
+    mindMapView.includes('isMindMapDeleteKey(event)') &&
+    relationshipInteraction.includes("event.key === 'Escape'"),
 );
 
 assert(
@@ -73,36 +89,36 @@ assert(
   mindMapGeometry.includes('export interface MindMapRelationshipDraftPreview') &&
     mindMapGeometry.includes('export const makeRelationshipDraftPreview') &&
     mindMapView.includes('updateRelationshipDraftPreview') &&
-    mindMapView.includes('data-mindmap-note-relationship-draft-preview') &&
-    mindMapView.includes('data-mindmap-note-relationship-draft-preview-path') &&
-    mindMapView.includes('markerEnd="url(#mindmap-note-relationship-draft-arrow)"') &&
-    mindMapView.includes('strokeDasharray="6 5"'),
+    relationshipOverlay.includes('data-mindmap-note-relationship-draft-preview') &&
+    relationshipOverlay.includes('data-mindmap-note-relationship-draft-preview-path') &&
+    relationshipOverlay.includes('markerEnd="url(#mindmap-note-relationship-draft-arrow)"') &&
+    relationshipOverlay.includes('strokeDasharray="6 5"'),
 );
 
 assert(
   'Relationship label is rendered directly on the line instead of offset beside it',
   mindMapGeometry.includes('const labelX = (c1X + c2X) / 2;') &&
-    mindMapView.includes('textAnchor="middle"'),
+    relationshipOverlay.includes('textAnchor="middle"'),
 );
 
 assert(
   'Selected relationships expose Xmind-like endpoint and Bezier control handles',
-  mindMapView.includes('startRelationshipPointerDrag') &&
+    mindMapView.includes('startRelationshipPointerDrag') &&
     mindMapView.includes("handle: RelationshipPointerDragState['handle']") &&
-    mindMapView.includes("relationshipPointerDrag.handle === 'control-1'") &&
-    mindMapView.includes("relationshipPointerDrag.handle === 'control-2'") &&
-    mindMapView.includes('data-mindmap-note-relationship-endpoint="from"') &&
-    mindMapView.includes('data-mindmap-note-relationship-endpoint="to"') &&
-    mindMapView.includes('data-mindmap-note-relationship-control-arm="from"') &&
-    mindMapView.includes('data-mindmap-note-relationship-control-arm="to"') &&
-    mindMapView.includes('data-mindmap-note-relationship-control-arm-overlay') &&
-    mindMapView.includes('data-mindmap-note-relationship-screen-control-arm="from"') &&
-    mindMapView.includes('data-mindmap-note-relationship-screen-control-arm="to"') &&
-    mindMapView.includes('data-mindmap-note-relationship-screen-control-point="1"') &&
-    mindMapView.includes('data-mindmap-note-relationship-screen-control-point="2"') &&
-    mindMapView.includes('rounded-full border-[3px] border-white bg-sky-500') &&
-    mindMapView.includes('data-mindmap-note-relationship-control-point="1"') &&
-    mindMapView.includes('data-mindmap-note-relationship-control-point="2"'),
+    mindMapView.includes('const handle = relationshipPointerDrag.handle;') &&
+    mindMapView.includes("handle === 'control-1' || handle === 'control-2'") &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-endpoint="from"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-endpoint="to"') &&
+    relationshipOverlay.includes('data-mindmap-note-relationship-control-arm="from"') &&
+    relationshipOverlay.includes('data-mindmap-note-relationship-control-arm="to"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-control-arm-overlay') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-arm="from"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-arm="to"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-point="1"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-point="2"') &&
+    relationshipInteraction.includes('rounded-full border-2 border-sky-500') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-control-point="1"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-control-point="2"'),
 );
 
 assert(
@@ -117,28 +133,28 @@ assert(
 
 assert(
   'Relationship style panel exposes color, width, dash, arrows, label size, and reset',
-  mindMapView.includes('relationshipColorOptions') &&
-    mindMapView.includes('relationshipWidthOptions') &&
-    mindMapView.includes('relationshipDashOptions') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-panel') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-drawer="true"') &&
-    mindMapView.includes('right-0 top-[88px]') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-color') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-width') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-dash') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-arrow') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-label-size') &&
-    mindMapView.includes('data-mindmap-note-relationship-style-reset'),
+  relationshipStyleLayer.includes('relationshipColorOptions') &&
+    relationshipStyleLayer.includes('relationshipWidthOptions') &&
+    relationshipStyleLayer.includes('relationshipDashOptions') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-panel') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-drawer="true"') &&
+    relationshipStyleDrawer.includes('right-0 top-[88px]') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-color') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-width') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-dash') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-arrow') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-label-size') &&
+    relationshipStyleDrawer.includes('data-mindmap-note-relationship-style-reset'),
 );
 
 assert(
-  'Toolbar, shortcut, and right-click start relationship creation from a selected node',
-  mindMapView.includes("event.key.toLowerCase() === 'r'") &&
+  'Toolbar and shortcut start relationship creation while right-click preserves the shared task menu',
+  mindMapView.includes("action.type === 'toggle-relationship-tool'") &&
     mindMapView.includes('toggleRelationshipTool()') &&
-    mindMapView.includes('startRelationshipFromNode') &&
+    mindMapToolbar.includes('onToggleRelationshipTool') &&
     mindMapNode.includes('onContextMenu') &&
-    mindMapNode.includes('onRelationshipStart(node.id)') &&
-    mindMapView.includes('data-source-node-id={relationshipDraft?.fromId || \'\'}'),
+    mindMapView.includes("kind: 'task'") &&
+    mindMapToolbar.includes('data-source-node-id={relationshipDraftFromId}'),
 );
 
 assert(
@@ -170,7 +186,7 @@ assert(
     browserVerifier.includes('dragging a control point should update Bezier geometry') &&
     browserVerifier.includes('dragging endpoint to another task should reconnect the note relationship') &&
     browserVerifier.includes('Ctrl+Shift+R should start note relationship mode') &&
-    browserVerifier.includes('right-clicking a task should start note relationship mode from that task') &&
+    browserVerifier.includes('right-clicking a task should open the task menu and should not start note relationship mode') &&
     browserVerifier.includes('legacy screen-space relationship control points should stay stable near 43% zoom') &&
     browserVerifier.includes('relationship geometry should remain finite after zoom') &&
     browserVerifier.includes('zooming should not recompute or rewrite relationship path geometry or local interaction coordinates'),

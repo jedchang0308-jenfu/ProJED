@@ -125,3 +125,10 @@ Release gate 結果:
 - Firebase production deploy 與 Level 4 post-deploy smoke 已通過；production root、bundle、CSS、service worker 與 critical error sweep 均正常。
 - `verify:supabase:migration-aliases` 仍有 5 個未修改舊 production source hash mismatch，保留為 release governance residual，未改寫 baseline。
 - DEV-047 遠端 backup RPC 完整多人主責保存仍未納入本 release；其風險與 frozen boundary 依既有 release gate 治理。
+
+## Filter Semantics Addendum - 2026-08-06
+
+- 任務過濾器的顯示文案統一為「負責人/協作」；其 selected member 語意是 `primary assignee IDs ∪ collaborator IDs`，同一任務只算一次。
+- 協作人可命中含主責的任務，也可命中只有協作人、沒有主責的任務；「未指派」仍專指沒有主責，協作人不會使任務變成已指派。
+- 看板與全域任務平台必須共用相同的 assignment union predicate 與選項來源；行事曆 v1/v2/v3 feed 的 coarse query 與 exact matcher 也不得漏掉 collaborator IDs。
+- 驗收邊界：必須以真實 rendered browser 操作建立主責/協作 fixture，驗證正向、負向、僅協作、未指派、多選 OR、跨介面 parity、390px RWD 與 visible error sweep。

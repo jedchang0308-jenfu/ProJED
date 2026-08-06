@@ -76,7 +76,9 @@ type WbsItem = {
   title: string;
   description: string | null;
   status: string;
+  assignee_ids: string[] | null;
   assignee_id: string | null;
+  collaborator_ids: string[] | null;
   start_date: string | null;
   end_date: string | null;
   item_type: string;
@@ -240,8 +242,28 @@ const matchesDueDateFilter = (item: WbsItem, dueWithinDays: number | null) => {
 
 const matchesAssigneeFilter = (item: WbsItem, selectedAssigneeIds: string[]) => {
   if (selectedAssigneeIds.length === 0) return true;
-  if (!item.assignee_id) return selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER);
-  return selectedAssigneeIds.includes(item.assignee_id);
+  const primaryIds = Array.from(new Set([
+    ...(item.assignee_ids ?? []),
+    ...(item.assignee_id ? [item.assignee_id] : []),
+  ]));
+  const assignmentIds = Array.from(new Set([
+    ...primaryIds,
+    ...(item.collaborator_ids ?? []),
+  ]));
+  if (primaryIds.length === 0 && selectedAssigneeIds.includes(UNASSIGNED_ASSIGNEE_FILTER)) return true;
+  return assignmentIds.some((assignmentId) => selectedAssigneeIds.includes(assignmentId));
+};
+
+const buildAssigneeQueryClauses = (selection: AssigneeQuerySelection) => {
+  const clauses: string[] = [];
+  if (selection.userIds.length > 0) {
+    const ids = selection.userIds.join(",");
+    clauses.push(`assignee_id.in.(${ids})`);
+    clauses.push(`assignee_ids.ov.{${ids}}`);
+    clauses.push(`collaborator_ids.ov.{${ids}}`);
+  }
+  if (selection.includeUnassigned) clauses.push("assignee_id.is.null");
+  return clauses;
 };
 
 const matchesTagFilter = (item: WbsItemWithTags, selectedTagIds: string[]) => {
@@ -560,7 +582,7 @@ const buildIcs = async (
 
   let taskQuery = supabase
     .from("wbs_items")
-    .select("id,tenant_id,project_id,legacy_node_id,title,description,status,assignee_id,start_date,end_date,item_type,updated_at,metadata")
+    .select("id,tenant_id,project_id,legacy_node_id,title,description,status,assignee_ids,assignee_id,collaborator_ids,start_date,end_date,item_type,updated_at,metadata")
     .eq("is_archived", false)
     .neq("item_type", "group")
     .in("tenant_id", allowedScope.tenantIds)
@@ -569,13 +591,8 @@ const buildIcs = async (
     .limit(FEED_TASK_LIMIT);
 
   if (!assigneeSelection.unrestricted) {
-    if (assigneeSelection.userIds.length > 0 && assigneeSelection.includeUnassigned) {
-      taskQuery = taskQuery.or(`assignee_id.in.(${assigneeSelection.userIds.join(",")}),assignee_id.is.null`);
-    } else if (assigneeSelection.userIds.length > 0) {
-      taskQuery = taskQuery.in("assignee_id", assigneeSelection.userIds);
-    } else if (assigneeSelection.includeUnassigned) {
-      taskQuery = taskQuery.is("assignee_id", null);
-    }
+    const assigneeQueryClauses = buildAssigneeQueryClauses(assigneeSelection);
+    if (assigneeQueryClauses.length > 0) taskQuery = taskQuery.or(assigneeQueryClauses.join(","));
   }
 
   const { data: taskRows, error: taskError } = await taskQuery;

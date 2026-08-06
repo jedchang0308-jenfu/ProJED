@@ -198,10 +198,14 @@ async (page) => {
     await page.locator('.kanban-task-card[data-task-id="dev031-task-a"]').click();
     const modal = page.locator('[data-task-details-modal="true"]');
     await modal.waitFor({ state: 'visible', timeout: 10000 });
+    const mobileMeta = modal.locator('[data-task-details-mobile-meta="true"]');
+    assert(await mobileMeta.locator('[data-task-details-mobile-meta-summary="true"]').count() === 0, 'task details mobile metadata should share the desktop surface without a collapse summary');
+    await modal.locator('[data-task-details-mobile-meta-controls="true"]').waitFor({ state: 'visible', timeout: 10000 });
     const metaMetrics = await modal.evaluate((element) => {
       const meta = element.querySelector('[data-task-details-meta-section="true"]');
       const metaGrid = element.querySelector('[data-task-details-meta-grid="true"]');
       const dateGrid = element.querySelector('[data-task-details-date-grid="true"]');
+      const scheduleControls = element.querySelector('[data-task-details-mobile-schedule-controls="true"]');
       const controlRows = Array.from(element.querySelectorAll('[data-task-details-meta-control-row="true"]'));
       const tagTrigger = element.querySelector('[data-tag-picker-trigger="true"]');
       const controls = [
@@ -236,19 +240,22 @@ async (page) => {
         maxLabelHeight,
         gridColumns: metaGrid ? getComputedStyle(metaGrid).gridTemplateColumns : '',
         dateGridColumns: dateGrid ? getComputedStyle(dateGrid).gridTemplateColumns : '',
+        scheduleGridColumns: scheduleControls ? getComputedStyle(scheduleControls).gridTemplateColumns : '',
         controlRects,
         labelRects,
         viewportWidth: window.innerWidth,
       };
     });
-    assert(metaMetrics.controlCount >= 6, 'task details meta should expose all compact controls', metaMetrics);
-    assert(metaMetrics.labelCount >= 5, 'task details meta should keep labels visible', metaMetrics);
-    assert(metaMetrics.metaHeight <= 96, 'task details metadata stack should be compressed to roughly 30 percent height on mobile', metaMetrics);
-    assert(metaMetrics.maxControlHeight <= 28, 'task details compact controls should stay below 28px on mobile', metaMetrics);
+    assert(metaMetrics.controlCount >= 5, 'task details meta should expose all compact controls', metaMetrics);
+    assert(metaMetrics.labelCount >= 4, 'task details meta should keep canonical labels visible', metaMetrics);
+    assert(metaMetrics.metaHeight <= 320, 'task details metadata editor should stay compact on mobile', metaMetrics);
+    assert(metaMetrics.maxControlHeight <= 34, 'task details compact controls should stay below 34px on mobile', metaMetrics);
     assert(metaMetrics.maxLabelHeight <= 14, 'task details compact labels should stay dense on mobile', metaMetrics);
     assert(
-      metaMetrics.gridColumns.split(' ').length >= 3 && metaMetrics.dateGridColumns.split(' ').length >= 3,
-      'task details metadata should use compact multi-column mobile grids',
+      metaMetrics.gridColumns.split(' ').length === 1
+        && metaMetrics.dateGridColumns.split(' ').length === 1
+        && metaMetrics.scheduleGridColumns.split(' ').length >= 4,
+      'task details metadata should use a single canonical stack with the same four-column schedule group on mobile',
       metaMetrics,
     );
     await page.screenshot({ path: 'output/playwright/dev-031-task-details-mobile-density.png', fullPage: true });

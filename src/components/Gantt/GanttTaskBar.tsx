@@ -378,7 +378,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     `}
                     style={textStyles}
                 >
-                    {item.title}
+                    <span>{item.title}</span>
                 </span>
             );
         } else {
@@ -396,7 +396,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                                 : `${GANTT_COLOR_MAP[status]?.checklist.match(/text-status-\w+/)?.[0] || 'text-status-todo'} opacity-80`}
                     `}
                 >
-                    {item.title} {isInfiniteFallback && "(尚未設定日期)"}
+                    <span>{item.title} {isInfiniteFallback && "(尚未設定日期)"}</span>
                 </div>
             );
         }
