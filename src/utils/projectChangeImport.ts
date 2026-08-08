@@ -208,15 +208,33 @@ const normalizeRenderedMeetingLineAsEvidence = (line: string) => {
   return trimmed.replace(/^\d+(?:\.\d+)+\s+/, '- ');
 };
 
-export const normalizeProjectChangeImportEvidence = (content: string) =>
-  normalizeProjectChangeText(
-    content
-      .replace(/\r\n?/g, '\n')
-      .split('\n')
-      .map(normalizeRenderedMeetingLineAsEvidence)
-      .filter(Boolean)
-      .join('\n'),
-  );
+export const normalizeProjectChangeImportEvidence = (content: string) => {
+  const sourceLines = content.replace(/\r\n?/g, '\n').split('\n');
+  const evidenceLines: string[] = [];
+
+  for (let index = 0; index < sourceLines.length; index += 1) {
+    const sourceLine = sourceLines[index];
+    const isTaskHeading = /^2\.\d+(?:\.\d+)*\s+/.test(sourceLine.trim()) && sourceLine.includes('](task:');
+    if (!isTaskHeading) {
+      const normalized = normalizeRenderedMeetingLineAsEvidence(sourceLine);
+      if (normalized) evidenceLines.push(normalized);
+      continue;
+    }
+
+    const taskEvidence = [normalizeRenderedMeetingLineAsEvidence(sourceLine)].filter(Boolean);
+    while (index + 1 < sourceLines.length) {
+      const nextLine = sourceLines[index + 1];
+      const nextTrimmed = nextLine.trim();
+      if (/^2\.\d+(?:\.\d+)*\s+/.test(nextTrimmed) || isMeetingSectionHeading(nextTrimmed)) break;
+      index += 1;
+      const normalized = normalizeRenderedMeetingLineAsEvidence(nextLine);
+      if (normalized) taskEvidence.push(normalized.replace(/^[-*]\s*/, ''));
+    }
+    if (taskEvidence.length > 0) evidenceLines.push(taskEvidence.join(' '));
+  }
+
+  return normalizeProjectChangeText(evidenceLines.join('\n'));
+};
 
 const uniqueBlocks = (blocks: string[]) => {
   const seen = new Set<string>();

@@ -13,6 +13,7 @@ interface TagState {
 
 interface TagActions {
   setTags: (tags: TaskTag[]) => void;
+  hydrateSelectedTagFilter: () => void;
   loadTags: (workspaceId: string | null | undefined) => Promise<void>;
   createTag: (workspaceId: string, name: string, color?: TagColor) => Promise<TaskTag | null>;
   updateTag: (workspaceId: string, tagId: string, updates: Partial<TaskTag>) => Promise<void>;
@@ -34,6 +35,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
   error: null,
 
   setTags: (tags) => set({ tags: sortTags(tags) }),
+  hydrateSelectedTagFilter: () => set({ selectedTagIds: getStoredSelectedTagIds() }),
 
   loadTags: async (workspaceId) => {
     if (!workspaceId) {

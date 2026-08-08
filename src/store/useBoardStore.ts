@@ -155,7 +155,10 @@ const useBoardStore = create<BoardStore>()(
         activeWorkspaceId: getStoredId(WS_STORAGE_KEY),
         activeBoardId: getStoredId(BOARD_STORAGE_KEY),
         currentView: getStoredView(),
-        isSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
+        // The global task workbench is the default left-side workspace.
+        // Keep the workspace/board navigator available from the top-left menu
+        // without competing with the task workbench on initial load.
+        isSidebarOpen: false,
         editingItem: getStoredModal(),
         ...getStoredFilters(),
         dependencySelection: null,
@@ -183,7 +186,14 @@ const useBoardStore = create<BoardStore>()(
         },
         setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
         setDependencySelection: (state) => set({ dependencySelection: state }),
-        setContextMenuState: (state) => set({ contextMenuState: state }),
+        // Opening a task menu moves the pointer onto the full-screen outside-click
+        // layer, so the task's hover preview would otherwise disappear immediately.
+        // Keep the menu target selected while the menu is open; closeContextMenu
+        // remains responsible for clearing it when the menu is dismissed.
+        setContextMenuState: (state) => set({
+            contextMenuState: state,
+            selectedTaskId: state?.kind === 'task' ? state.nodeId : get().selectedTaskId,
+        }),
         setSelectedTaskId: (nodeId) => set({ selectedTaskId: nodeId }),
         setPendingTitleEditNodeId: (nodeId, initialValue = null) => set({
             pendingTitleEditNodeId: nodeId,
@@ -343,6 +353,7 @@ const useBoardStore = create<BoardStore>()(
             applyBoardTaskFilterSnapshot(set, after);
             pushBoardTaskFilterUndo(set, '清除負責人篩選', before, after);
         },
+        hydrateTaskFilterPrefs: () => set(getStoredFilters()),
 
         // ===== Navigation =====
         showHome: () => {

@@ -204,7 +204,7 @@ assert(
     !source.app.includes("case 'task_workbench'") &&
     !source.typesIndex.includes("'task_workbench'") &&
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
-    source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
+    source.mainLayout.includes('openTaskWorkbenchPanel') &&
     !source.sidebar.includes('data-sidebar-task-workbench-button="true"') &&
     !source.sidebar.includes('openTaskWorkbenchPanel') &&
     !source.localTestEnvironment.includes("'task_workbench'"),
@@ -219,12 +219,9 @@ assert(
     source.taskWorkbench.includes('boardOptions: BoardOption[]') &&
     source.taskWorkbench.includes('boardOptions={boardOptions}') &&
     source.taskWorkbench.includes('selectedBoardId={selectedBoardId}') &&
-    source.taskWorkbench.includes('TASK_WORKBENCH_FILTER_PREFS_KEY') &&
-    source.taskWorkbench.includes('projed-task-workbench-filters:v1') &&
-    source.taskWorkbench.includes('readWorkbenchFilterPrefs') &&
-    source.taskWorkbench.includes('writeWorkbenchFilterPrefs') &&
-    source.taskWorkbench.includes('migrateLegacyDefaultTaskFilters') &&
-    source.taskWorkbench.includes('BOARD_TASK_FILTER_PREFS_VERSION') &&
+    source.taskWorkbench.includes('readTaskWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('writeTaskWorkbenchFilterPrefs') &&
+    source.taskWorkbench.includes('readTaskWorkbenchPanelPrefs') &&
     source.taskWorkbench.includes('onSelectedBoardChange={handleSelectedBoardChange}'),
 );
 

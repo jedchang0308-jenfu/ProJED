@@ -2,6 +2,8 @@ import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 import {
   buildDeterministicMeetingSynthesis,
+  MEETING_SYNTHESIS_CONTRACT_VERSION,
+  validateMeetingSynthesisOutput,
   type MeetingSynthesisInput,
   type MeetingSynthesisResponse,
 } from '../utils/meetingRecordSynthesis';
@@ -44,6 +46,67 @@ const buildTimeoutFallbackSynthesis = (input: MeetingSynthesisInput): MeetingSyn
   };
 };
 
+const assertMeetingSynthesisResponse = (
+  input: MeetingSynthesisInput,
+  data: MeetingSynthesisResponse | null,
+): MeetingSynthesisResponse => {
+  if (!data?.content?.trim()) {
+    throw new MeetingSynthesisError('AI 整理未回傳會議紀錄草稿。', 'EMPTY_SYNTHESIS', 502);
+  }
+
+  if (data.contractVersion !== MEETING_SYNTHESIS_CONTRACT_VERSION) {
+    throw new MeetingSynthesisError(
+      'AI 整理服務版本尚未同步，原始草稿已保留，請稍後重試。',
+      'CONTRACT_VERSION_MISMATCH',
+      409,
+    );
+  }
+
+  if (
+    !data.runId?.trim() ||
+    !data.functionVersion?.trim() ||
+    !data.provider?.trim() ||
+    !data.generatedAt?.trim() ||
+    !data.normalization ||
+    typeof data.normalization.receivedActivityCount !== 'number' ||
+    typeof data.normalization.acceptedActivityCount !== 'number' ||
+    typeof data.normalization.droppedActivityCount !== 'number'
+  ) {
+    throw new MeetingSynthesisError(
+      'AI 整理結果缺少執行追溯資訊，原始草稿已保留，請重試。',
+      'SYNTHESIS_TRACE_MISSING',
+      502,
+    );
+  }
+
+  if (!data.quality?.passed) {
+    throw new MeetingSynthesisError(
+      'AI 整理結果未通過品質檢查，原始草稿已保留，請重試。',
+      'QUALITY_GATE_FAILED',
+      502,
+    );
+  }
+
+  const normalizedResponse = {
+    ...data,
+    warnings: Array.isArray(data.warnings) ? data.warnings : [],
+    linkedTaskIds: Array.isArray(data.linkedTaskIds) ? data.linkedTaskIds.filter(Boolean) : [],
+  };
+  const clientQuality = validateMeetingSynthesisOutput(input, normalizedResponse);
+  if (!clientQuality.passed) {
+    throw new MeetingSynthesisError(
+      'AI 整理結果未通過本機品質檢查，原始草稿已保留，請重試。',
+      'QUALITY_GATE_FAILED',
+      502,
+    );
+  }
+
+  return {
+    ...normalizedResponse,
+    quality: clientQuality,
+  };
+};
+
 const parseFunctionError = async (error: unknown) => {
   let code = 'SYNTHESIS_ERROR';
   let status = 500;
@@ -72,12 +135,18 @@ export const synthesizeMeetingRecord = async (
   input: MeetingSynthesisInput,
 ): Promise<MeetingSynthesisResponse> => {
   if (isLocalTestBackend || !isSupabaseBackend || !isSupabaseConfigured) {
-    return buildDeterministicMeetingSynthesis(input);
+    return assertMeetingSynthesisResponse(input, buildDeterministicMeetingSynthesis(input));
   }
 
   const invokeResponse = await supabase.functions.invoke<MeetingSynthesisResponse>(
     'synthesize_meeting_record',
-    { body: input, timeout: MEETING_SYNTHESIS_TIMEOUT_MS },
+    {
+      body: {
+        ...input,
+        requiredContractVersion: MEETING_SYNTHESIS_CONTRACT_VERSION,
+      },
+      timeout: MEETING_SYNTHESIS_TIMEOUT_MS,
+    },
   ).catch(async error => {
     if (isTimeoutOrAbortError(error)) {
       return {
@@ -97,14 +166,5 @@ export const synthesizeMeetingRecord = async (
     throw await parseFunctionError(error);
   }
 
-  if (!data?.content?.trim()) {
-    throw new MeetingSynthesisError('AI 統整未回傳會議紀錄草稿。', 'EMPTY_SYNTHESIS', 502);
-  }
-
-  return {
-    content: data.content,
-    warnings: Array.isArray(data.warnings) ? data.warnings : [],
-    linkedTaskIds: Array.isArray(data.linkedTaskIds) ? data.linkedTaskIds : [],
-    provider: data.provider,
-  };
+  return assertMeetingSynthesisResponse(input, data);
 };

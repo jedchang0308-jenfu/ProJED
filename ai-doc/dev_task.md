@@ -57,10 +57,11 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：交付 AI 任務導向會議紀錄統整與 production smoke。
   - 證據：`SPEC-011`、`QC-DEV-011-012-production-ai-smoke`
   - 計入交付：是
-- ✓ DEV-012 [交付點] [完成] [P1] [正式環境已交付] AI 會議紀錄自然語言品質
-  - 摘要：提升 AI 會議紀錄自然語言品質並完成 production smoke；`持續優化3` 補上純位置／排序活動過濾契約與本機驗證，尚未重新部署。
-  - 證據：`SPEC-012`、`QC-DEV-011-012-production-ai-smoke`
-  - 計入交付：是
+- ◇ DEV-012 [交付點] [驗證中] [P1] [Contract v2 本機 QA/QC 通過／正式環境待驗證] AI 會議紀錄自然語言品質
+  - 摘要：使用者已確實執行 AI整理；重開後完成 `meeting-synthesis-v2` 握手、Edge/client 雙重品質閘門、執行追溯與 metadata persistence、AI／規則整理來源揭露、直接證據與 merge idempotency 修正。本機 verifier、TypeScript、真實瀏覽器 5/5 已通過；尚未部署或驗證 production v2。
+  - 證據：`SPEC-012`、`QA-DEV-012`、`QC-DEV-011-012-production-ai-smoke` 的 2026-08-07 addendum、`CAPA-20260807-dev-012-ai-synthesis-verification-gap`
+  - 下一關：同一 commit 部署 frontend + Edge，production UI/DB/Edge trace run ID 一致，並以同型失敗案例完成前後對照與連續整理驗證。
+  - 計入交付：否
 - ✓ DEV-013 [交付點] [完成] [P2] [已交付] 任務子樹複製
   - 摘要：提供任務與子樹依賴一致的右鍵複製。
   - 證據：`SPEC-013`、`QC-DEV-013`
@@ -165,8 +166,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-038`、`QA/QC-DEV-038`
   - 計入交付：是
 - ✓ DEV-039 [交付點] [完成] [P1] [本機已驗證] 全域任務工作台與任務過濾器
-  - 摘要：完成任務 filter core、跨看板工作台、row-root parity；狀態變更採資料即時儲存，只有目前 filter membership 確實改變時才顯示 `更新` 並延後重算篩選結果。
-  - 證據：`SPEC-039`、`QA/QC-DEV-039`、status-filter refresh static／browser QC
+  - 摘要：完成任務 filter core、跨看板工作台、row-root parity 與跨看板 `所有任務排序`；狀態變更採資料即時儲存，只有目前 filter membership 確實改變時才顯示 `更新` 並延後重算篩選結果。
+  - 證據：`SPEC-039`、`QA/QC-DEV-039`、status-filter refresh static／browser QC；cross-board source gate 覆蓋 `setNodes(activeBoardNodes)` 不得覆蓋工作台來源的回歸條件
   - 計入交付：是
 - ◇ DEV-040 [交付點] [驗證中] [P0] [remote Edge gate pending] 正式環境同型 BUG 風險硬化
   - 摘要：原始 BUG 已發布驗證，P0 bounded-failure addendum 尚待 remote Edge gate。

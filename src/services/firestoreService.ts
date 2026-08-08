@@ -288,6 +288,7 @@ export const recordService = {
       startedAt: input.startedAt,
       endedAt: input.endedAt,
       recordedBy: input.recordedBy,
+      metadata: input.metadata,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       ragEnabled: input.status === 'published' && input.visibility !== 'private',

@@ -4,6 +4,7 @@
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
 狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 
+2026-08-07 account-scoped filter memory addendum：使用者要求過濾器狀態改為每個登入帳號各自記憶。本 addendum 覆寫本文中「工作台篩選只存在當次元件 state、不得保存」的舊決策，但不引入 profile、儲存按鈕、另存、複製、跨裝置同步或團隊共用設定。看板與工作台的狀態篩選、到期／逾期、負責人/協作、標籤、關鍵字、顯示設定及工作台選定看板，均以登入帳號 uid 作為 localStorage scope；既有未分帳號 key 只在首次登入時遷移給當前帳號，遷移後刪除共用 key。行事曆訂閱篩選仍由 Supabase `owner_user_id` 與 RLS 隔離，不改其資料模型。
 2026-08-04 DEV-062 addendum：狀態 filter 依 `SPEC-062` 只暴露待辦、進行中、暫緩、完成；legacy delayed／unsure 在前端收斂為待辦。「逾期」是到期日衍生條件，位於到期日區，不是第五種人工狀態。
 2026-08-04 status-filter refresh addendum：使用者變更任務狀態時，任務資料與持久化仍立即更新；只有變更前後在目前篩選條件下跨越「命中／未命中」邊界時，才保留變更前的任務篩選投影並顯示待更新控制。兩個狀態都命中或都不命中時，篩選結果沒有改變，不得顯示 `更新`。影響判斷需涵蓋直接任務與此次狀態變更造成的祖先 roll-up，但 badge 只計唯一直接操作任務。工具列在確有待套用結果時，將過濾器與 `更新` 呈現為同一個複合式控制：共用外框、零間距、中間分隔線，並位於復原／重做左側；點擊 `更新` 後才以最新狀態重算所有共用任務篩選結果。若後續狀態使篩選 membership 回到既有投影，即使狀態值不完全相同，該筆也不再計數。手機只顯示更新圖示與數量，並保留完整 `aria-label`。
 建立日期：2026-07-02

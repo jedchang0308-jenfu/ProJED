@@ -5,6 +5,7 @@
 狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
 建立日期：2026-07-02
 最新修正：
+- 2026-08-07 account-scoped filter memory follow-up：新增看板與工作台篩選狀態的帳號隔離驗證；以兩個本機測試帳號實際點選「負責人/協作」，確認看板與工作台各自寫入帳號 uid scope，帳號 B 不繼承帳號 A，切回帳號 A 可恢復。舊版共用 key 的一次性遷移與行事曆訂閱 owner/RLS 邊界另以 static gate 驗證。
 - 2026-08-04 status-filter refresh follow-up：狀態更新需立即寫入任務；只有直接任務或此次 ancestor roll-up 在目前 filter 下跨越命中／未命中邊界時，篩選結果才保持在變更前投影並顯示待更新。兩個狀態都命中或都不命中時不得出現 `更新`；membership 回到既有投影時需取消待更新。工具列將過濾器與最短文案 `更新`／唯一任務數 badge 合併為共用外框、零間距與內部分隔線的複合控制，點擊才重算。驗證需覆蓋無影響狀態變更、結果受影響的狀態變更、祖先 roll-up 不重複計數、共同區域、桌機位置、手機圖示／`aria-label` 與無水平 overflow。
 - 2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
 - 2026-07-04，Phase 2 QA contract 補入 cross-board source truth 與 deletion effective-visibility：active board A 時 `所有任務排序` 仍需顯示所有可見 board 任務；任務或父層刪除後，不得在 `所有任務排序` 殘留。
@@ -21,6 +22,24 @@
 > Current Supersession Note - 2026-07-17：目前權威產品契約為 `placed row` 不作為
 > placement drag source。未歸位 row 可拖到已歸位 lane；已歸位 row 是 read-only placement
 > list entry，可保留點擊 / 右鍵 / 非 placement 操作。
+
+## 2026-08-07 Account-scoped Filter Memory Addendum
+
+本次需求將「自動記憶」限定為登入帳號範圍，不新增 profile/save/copy UI，也不宣稱跨裝置同步。
+
+| Case | 操作 | 預期 |
+|---|---|---|
+| QA-039-ACCOUNT-S01 | 檢查 board/workbench storage adapter、auth uid、legacy migration、calendar subscription RLS | 看板與工作台只寫入 uid-scoped key；舊共用 key 只遷移一次後移除；行事曆訂閱仍由 owner/RLS 隔離 |
+| QA-039-ACCOUNT-B01 | 用帳號 A 實際點選看板「負責人/協作」與工作台協作人，再切到帳號 B | B 不繼承 A 的兩組篩選；切回 A 時兩組篩選均恢復 |
+
+執行 gate：
+
+```powershell
+npm.cmd run verify:account-scoped-filter-prefs
+npm.cmd run verify:account-scoped-filter-prefs-browser
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
 
 ## 驗證目標
 

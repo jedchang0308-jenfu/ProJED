@@ -172,6 +172,25 @@ const getMeetingWorkflowStepHint = (step: MeetingWorkflowArrowStepItem) => {
 const AI_MEETING_SYNTHESIS_TOOLTIP = 'AI整理會保留目前手寫內容，並將任務變更與手動紀錄統整成同一份草稿。';
 const PROJECT_CHANGE_IMPORT_TIMEOUT_MS = 45000;
 
+type MeetingSynthesisTraceView = {
+  runId?: string;
+  contractVersion?: string;
+  functionVersion?: string;
+  provider?: string;
+  model?: string;
+  quality?: { passed?: boolean };
+};
+
+const getMeetingSynthesisTrace = (metadata?: Record<string, unknown>): MeetingSynthesisTraceView | null => {
+  const trace = metadata?.meetingSynthesis;
+  return trace && typeof trace === 'object' && !Array.isArray(trace)
+    ? trace as MeetingSynthesisTraceView
+    : null;
+};
+
+const isRuleBasedSynthesisProvider = (provider: string | null | undefined) =>
+  Boolean(provider?.startsWith('deterministic'));
+
 const withProjectChangeImportTimeout = async <T,>(
   promise: Promise<T>,
   timeoutMessage: string,
@@ -508,97 +527,90 @@ const ProjectChangeImportPanel: React.FC<{
   onPreview: () => void;
   onInsert: () => void;
   onSkip: () => void;
-}> = ({ state, disabled, onChange, onPreview, onInsert, onSkip }) => (
-  <section data-project-change-import-panel className="rounded-md border border-blue-200 bg-blue-50 p-2">
-    <div className="mb-2 flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <div className="text-xs font-semibold text-blue-800">專案變化匯入</div>
-        <div className="mt-0.5 text-[11px] leading-4 text-blue-700">
-          預設整理一週前到今日的任務變更，先預覽，確認後才插入紀錄。
-        </div>
-      </div>
-      <button type="button" onClick={onSkip} className="shrink-0 rounded border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">
-        跳過
-      </button>
-    </div>
-    <div className="grid gap-2 sm:grid-cols-2">
-      <label className="text-[11px] font-semibold text-blue-800">
-        起始日期
+}> = ({ state, disabled, onChange, onPreview, onInsert }) => {
+  return (
+    <section data-project-change-import-panel className="@container rounded-md border border-blue-200 bg-blue-50 p-1.5">
+      <div className="mt-1.5 grid grid-cols-2 items-center gap-1.5 @min-[480px]:grid-cols-4">
+        <label className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 text-[10px] font-semibold text-blue-800">起始</span>
         <input
+          aria-label="起始日期"
           type="date"
           value={state.startedAt}
           onChange={event => onChange({ startedAt: event.target.value })}
-          className="mt-1 h-8 w-full rounded border border-blue-200 bg-white px-2 text-xs text-slate-800 outline-none focus:border-blue-400"
+          className="h-7 min-w-0 flex-1 rounded border border-blue-200 bg-white px-1.5 text-[11px] text-slate-800 outline-none focus:border-blue-400"
         />
-      </label>
-      <label className="text-[11px] font-semibold text-blue-800">
-        結束日期
+        </label>
+        <label className="flex min-w-0 items-center gap-1">
+          <span className="shrink-0 text-[10px] font-semibold text-blue-800">結束</span>
         <input
+          aria-label="結束日期"
           type="date"
           value={state.endedAt}
           onChange={event => onChange({ endedAt: event.target.value })}
-          className="mt-1 h-8 w-full rounded border border-blue-200 bg-white px-2 text-xs text-slate-800 outline-none focus:border-blue-400"
+          className="h-7 min-w-0 flex-1 rounded border border-blue-200 bg-white px-1.5 text-[11px] text-slate-800 outline-none focus:border-blue-400"
         />
-      </label>
-    </div>
-    <div className="mt-2 grid grid-cols-2 gap-2">
-      {([
-        ['board', '整個看板'],
-        ['workspace', '整個工作區'],
-      ] as Array<[ProjectChangeScope, string]>).map(([scope, label]) => (
-        <button
-          key={scope}
-          type="button"
-          onClick={() => onChange({ scope })}
-          className={`h-8 rounded border text-xs font-semibold ${
-            state.scope === scope
-              ? 'border-blue-400 bg-white text-blue-700 ring-2 ring-blue-100'
-              : 'border-blue-100 bg-white/70 text-slate-600 hover:bg-white'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-    <div className="mt-2 flex items-center gap-2">
-      <button
-        type="button"
-        disabled={disabled || state.status === 'loading'}
-        onClick={onPreview}
-        className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-200"
-      >
-        {state.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-        整理專案變化
-      </button>
-      {state.status === 'ready' ? (
+        </label>
+        {([
+          ['board', '整個看板'],
+          ['workspace', '整個工作區'],
+        ] as Array<[ProjectChangeScope, string]>).map(([scope, label]) => (
+          <button
+            key={scope}
+            type="button"
+            onClick={() => onChange({ scope })}
+            className={`h-7 rounded border text-[11px] font-semibold ${
+              state.scope === scope
+                ? 'border-blue-400 bg-white text-blue-700 ring-1 ring-blue-100'
+                : 'border-blue-100 bg-white/70 text-slate-600 hover:bg-white'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className={`mt-1.5 grid gap-1.5 ${state.status === 'ready' ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <button
           type="button"
-          onClick={onInsert}
-          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-700"
+          disabled={disabled || state.status === 'loading'}
+          onClick={onPreview}
+          className="inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md bg-blue-600 px-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-200"
         >
-          <Plus size={13} />
-          插入紀錄並開始撰寫
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white/20 px-0.5 text-[10px]">2</span>
+          {state.status === 'loading' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          整理專案變化
         </button>
+        {state.status === 'ready' ? (
+          <button
+            type="button"
+            onClick={onInsert}
+            className="inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md bg-slate-900 px-1.5 text-[11px] font-semibold text-white hover:bg-slate-700"
+          >
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white/15 px-0.5 text-[10px]">3</span>
+            <Plus size={12} />
+            插入紀錄並開始撰寫
+          </button>
+        ) : null}
+      </div>
+      {state.message ? (
+        <div className={`mt-1.5 rounded border px-1.5 py-1 text-[10px] leading-4 ${
+          state.status === 'error'
+            ? 'border-red-200 bg-red-50 text-red-700'
+            : state.status === 'empty'
+              ? 'border-slate-200 bg-white text-slate-500'
+              : 'border-blue-100 bg-white text-blue-700'
+        }`}>
+          {state.message}
+        </div>
       ) : null}
-    </div>
-    {state.message ? (
-      <div className={`mt-2 rounded border px-2 py-1.5 text-[11px] leading-4 ${
-        state.status === 'error'
-          ? 'border-red-200 bg-red-50 text-red-700'
-          : state.status === 'empty'
-            ? 'border-slate-200 bg-white text-slate-500'
-            : 'border-blue-100 bg-white text-blue-700'
-      }`}>
-        {state.message}
-      </div>
-    ) : null}
-    {state.previewContent ? (
-      <div className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap rounded border border-blue-100 bg-white p-2 text-[11px] leading-5 text-slate-700">
-        {state.previewContent}
-      </div>
-    ) : null}
-  </section>
-);
+      {state.previewContent ? (
+        <div className="mt-1.5 max-h-36 overflow-auto whitespace-pre-wrap rounded border border-blue-100 bg-white p-1.5 text-[10px] leading-4 text-slate-700">
+          {state.previewContent}
+        </div>
+      ) : null}
+    </section>
+  );
+};
 
 const RecordListItem: React.FC<{ record: KnowledgeRecord; onOpen: () => void }> = ({ record, onOpen }) => (
   <button
@@ -662,6 +674,8 @@ const RecordSidebar: React.FC = () => {
   const synthesizeMeetingDraft = useRecordStore(state => state.synthesizeMeetingDraft);
   const saveDraft = useRecordStore(state => state.saveDraft);
   const archiveRecord = useRecordStore(state => state.archiveRecord);
+  const meetingSynthesisTrace = getMeetingSynthesisTrace(draft?.metadata);
+  const meetingSynthesisUsedRules = isRuleBasedSynthesisProvider(meetingSynthesisProvider);
 
   React.useEffect(() => {
     const handleOpenRecord = (event: Event) => {
@@ -1266,7 +1280,15 @@ const RecordSidebar: React.FC = () => {
               </div>
 
               {isMeetingMode && meetingSynthesisStatus !== 'idle' ? (
-                <div className={`rounded-md border px-3 py-2 text-xs leading-5 ${
+                <div
+                  data-meeting-synthesis-status={meetingSynthesisStatus}
+                  data-meeting-synthesis-provider={meetingSynthesisProvider ?? undefined}
+                  data-meeting-synthesis-contract={meetingSynthesisTrace?.contractVersion}
+                  data-meeting-synthesis-function={meetingSynthesisTrace?.functionVersion}
+                  data-meeting-synthesis-run-id={meetingSynthesisTrace?.runId}
+                  data-meeting-synthesis-model={meetingSynthesisTrace?.model}
+                  data-meeting-synthesis-quality={meetingSynthesisTrace?.quality?.passed === true ? 'passed' : undefined}
+                  className={`rounded-md border px-3 py-2 text-xs leading-5 ${
                   isPublished
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     : meetingSynthesisStatus === 'error'
@@ -1274,7 +1296,8 @@ const RecordSidebar: React.FC = () => {
                     : meetingSynthesisStatus === 'ready'
                       ? 'border-blue-200 bg-blue-50 text-blue-700'
                       : 'border-amber-200 bg-amber-50 text-amber-800'
-                }`}>
+                }`}
+                >
                   <div className="flex items-center gap-2 font-semibold">
                     {isPublished ? <CheckCircle2 size={14} /> : <Sparkles size={14} />}
                     {isPublished
@@ -1282,7 +1305,9 @@ const RecordSidebar: React.FC = () => {
                       : meetingSynthesisStatus === 'synthesizing'
                         ? 'AI整理中'
                         : meetingSynthesisStatus === 'ready'
-                          ? 'AI整理完成，請校稿後發布'
+                          ? meetingSynthesisUsedRules
+                            ? '規則整理完成，請校稿後發布'
+                            : 'AI整理完成，請校稿後發布'
                         : meetingSynthesisStatus === 'error'
                           ? 'AI整理失敗，原草稿已保留'
                             : 'AI整理是建議動作，可跳過'}
@@ -1291,7 +1316,9 @@ const RecordSidebar: React.FC = () => {
                     {isPublished
                       ? '已儲存為正式紀錄，可在紀錄庫與任務相關紀錄中查找。'
                       : meetingSynthesisStatus === 'ready'
-                        ? `草稿來源：${meetingSynthesisProvider || 'meeting synthesis'}。請確認結論、決議、待辦與阻塞。`
+                        ? meetingSynthesisUsedRules
+                          ? '草稿來源：規則整理。請確認結論、決議、待辦與阻塞。'
+                          : '草稿來源：AI 整理。請確認結論、決議、待辦與阻塞。'
                       : meetingSynthesisStatus === 'error'
                           ? meetingSynthesisError
                           : '直接發布會保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。'}

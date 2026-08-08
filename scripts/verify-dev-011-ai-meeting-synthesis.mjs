@@ -155,15 +155,19 @@ const treeResult = synthesis.buildDeterministicMeetingSynthesis({
   ],
 });
 
-assert('tree synthesis has one numbered list section', treeResult.content.includes(`2.1 ${listTask}`));
-assert('tree synthesis has card section with full path', treeResult.content.includes(`2.1.1 ${listTask} ${parentTask}`));
-assert('tree synthesis does not flatten child as parent numbered section', !treeResult.content.includes(`2.2 ${listTask} ${parentTask} ${childTask}`));
-assert('tree synthesis does not flatten grandchild as parent numbered section', !treeResult.content.includes(`2.2 ${listTask} ${parentTask} ${siblingTask} ${grandchildTask}`));
-assert('tree synthesis includes child subsection with full path', treeResult.content.includes(`2.1.1.1 ${listTask} ${parentTask} ${childTask}`));
-assert('tree synthesis includes sibling container with full path', treeResult.content.includes(`2.1.1.2 ${listTask} ${parentTask} ${siblingTask}`));
-assert('tree synthesis includes deep task with full path', treeResult.content.includes(`2.1.1.2.1 ${listTask} ${parentTask} ${siblingTask} ${grandchildTask}`));
+const listPath = `${listTask}／${parentTask}`;
+const childPath = `${listPath}／${childTask}`;
+const siblingPath = `${listPath}／${siblingTask}`;
+const grandchildPath = `${siblingPath}／${grandchildTask}`;
+assert('tree synthesis has one numbered evidence section', treeResult.content.includes(`2.1 ${listPath}`));
+assert('tree synthesis keeps complete path on one heading line', treeResult.content.includes(`2.1 ${listPath}`));
+assert('tree synthesis flattens child evidence after hiding structural-only parents', treeResult.content.includes(`2.2 ${childPath}`));
+assert('tree synthesis keeps deep evidence after hiding structural-only parents', treeResult.content.includes(`2.3 ${grandchildPath}`));
+assert('tree synthesis separates path tags with slash', treeResult.content.includes(`${listTask}／${parentTask}`));
+assert('tree synthesis does not create an empty structural-only heading', !treeResult.content.includes(`2.3 ${siblingPath}\n`));
 assert('tree synthesis does not use system task labels', !treeResult.content.includes('本任務') && !treeResult.content.includes('子任務：'));
 assert('tree synthesis does not use markdown headings', !/^#{1,6}\s+/m.test(treeResult.content));
+assert('tree synthesis omits empty other section', !treeResult.content.includes('3. 其他'));
 assert('tree synthesis keeps child activity in child group', treeResult.content.includes('待辦 -> 進行中'));
 assert('tree linked ids include list tag', treeResult.linkedTaskIds.includes('list_research'));
 assert('tree linked ids include card tag', treeResult.linkedTaskIds.includes('parent_a'));
@@ -221,8 +225,9 @@ for (const snippet of [
   '不得要求建立、修改、移動、刪除任務',
   '自然語言',
   'tasks[].path',
-  '2.x 是列表層',
-  '不要加「本任務」或「子任務：」',
+  '完整路徑',
+  '不要產生「本任務」或「子任務：」',
+  '獨立的「所屬：」',
   '不得有任何行以 #',
   '容器節點若沒有 rawContent 或 activities 直接指向它',
 ]) {

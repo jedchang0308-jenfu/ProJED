@@ -85,6 +85,85 @@ const result = synthesis.buildDeterministicMeetingSynthesis({
   ],
 });
 
+assert('synthesis contract is v2', result.contractVersion === 'meeting-synthesis-v2');
+assert('synthesis has a trace run id', typeof result.runId === 'string' && result.runId.length >= 8);
+assert('synthesis has a function version', typeof result.functionVersion === 'string' && result.functionVersion.length > 0);
+assert('synthesis has a generated timestamp', !Number.isNaN(Date.parse(result.generatedAt)));
+assert('synthesis exposes normalization counts', result.normalization.receivedActivityCount === 6 && result.normalization.droppedActivityCount >= 2);
+assert(`valid deterministic output passes the quality gate (${result.quality.violations.join(', ')})`, result.quality.passed && result.quality.violations.length === 0);
+
+const gateParent = mentions.serializeTaskMention('gate_parent', '結構父任務');
+const gateChild = mentions.serializeTaskMention('gate_child', '有證據子任務');
+const gateInput = {
+  title: '品質閘門測試',
+  rawContent: `${gateChild} RD 已確認資料流。`,
+  taskLinks: [{ nodeId: 'gate_child', role: 'main' }],
+  tasks: [
+    { id: 'gate_parent', title: '結構父任務', path: [{ id: 'gate_parent', title: '結構父任務' }] },
+    {
+      id: 'gate_child',
+      title: '有證據子任務',
+      parentId: 'gate_parent',
+      path: [
+        { id: 'gate_parent', title: '結構父任務' },
+        { id: 'gate_child', title: '有證據子任務' },
+      ],
+    },
+  ],
+  activities: [],
+};
+const structuralOnlyQuality = synthesis.validateMeetingSynthesisOutput(gateInput, {
+  content: [
+    '1. 本次會議總結',
+    '- 已確認資料流。',
+    '',
+    '2. 任務討論與結論',
+    `2.1 ${gateParent}`,
+    '',
+    `2.2 ${gateParent}／${gateChild}`,
+    'RD 已確認資料流。',
+  ].join('\n'),
+  linkedTaskIds: ['gate_parent', 'gate_child'],
+});
+assert('quality gate rejects structural-only task headings', structuralOnlyQuality.violations.includes('STRUCTURAL_ONLY_TASK_HEADING'));
+assert('quality gate rejects empty task bodies', structuralOnlyQuality.violations.includes('EMPTY_TASK_BODY'));
+
+const validGateResult = synthesis.buildDeterministicMeetingSynthesis(gateInput);
+const missingLinkQuality = synthesis.validateMeetingSynthesisOutput(gateInput, {
+  content: validGateResult.content,
+  linkedTaskIds: [],
+});
+assert('quality gate rejects missing linked task ids', missingLinkQuality.violations.includes('LINKED_TASK_IDS_INCOMPLETE'));
+
+const noisyQuality = synthesis.validateMeetingSynthesisOutput(gateInput, {
+  content: [
+    '1. 本次會議總結',
+    '- 已確認資料流。',
+    '',
+    '2. 任務討論與結論',
+    `2.1 ${gateParent}／${gateChild}`,
+    '位置已調整。',
+    '這一段重複敘述用來驗證品質閘門是否生效。',
+    '這一段重複敘述用來驗證品質閘門是否生效。',
+  ].join('\n'),
+  linkedTaskIds: ['gate_parent', 'gate_child'],
+});
+assert('quality gate rejects low-value activity text', noisyQuality.violations.includes('LOW_VALUE_ACTIVITY_IN_CONTENT'));
+assert('quality gate rejects duplicate narrative', noisyQuality.violations.includes('DUPLICATE_NARRATIVE'));
+
+const orphanAndPathOnlyQuality = synthesis.validateMeetingSynthesisOutput(gateInput, {
+  content: [
+    '1. 本次會議總結',
+    '- 已確認資料流。',
+    '',
+    `2.1 ${gateParent}／${gateChild}`,
+    '／',
+  ].join('\n'),
+  linkedTaskIds: ['gate_parent', 'gate_child'],
+});
+assert('quality gate rejects orphan task headings', orphanAndPathOnlyQuality.violations.includes('ORPHAN_TASK_HEADING'));
+assert('quality gate treats path separators as an empty body', orphanAndPathOnlyQuality.violations.includes('EMPTY_TASK_BODY'));
+
 for (const snippet of [
   '1. 本次會議總結',
   '2. 任務討論與結論',
@@ -159,6 +238,47 @@ assert('task A snippet excludes B discussion', !snippetsA[0]?.text.includes('QA 
 assert('task B snippet keeps B discussion', snippetsB[0]?.text.includes('QA case'));
 assert('task B snippet excludes A second discussion', !snippetsB[0]?.text.includes('PM 明天確認'));
 
+const dateTask = mentions.serializeTaskMention('date_task', '電腦文書作業環境建置');
+const dateResult = synthesis.buildDeterministicMeetingSynthesis({
+  title: '日期整理',
+  rawContent: `${dateTask} 期限確認。`,
+  taskLinks: [{ nodeId: 'date_task', role: 'related' }],
+  tasks: [{ id: 'date_task', title: '電腦文書作業環境建置' }],
+  activities: [
+    {
+      eventType: 'task_dates_changed',
+      nodeId: 'date_task',
+      title: '電腦文書作業環境建置',
+      occurredAt: 1780801000000,
+      summary: '日期由「未設定 至 2026-08-31」改為「未設定 至 未設定」。',
+      payload: {
+        before: { startDate: null, endDate: '2026-08-31' },
+        after: { startDate: null, endDate: null },
+      },
+    },
+  ],
+});
+assert('date change is written in human language', dateResult.content.includes('到期日已取消（原為「2026-08-31」）。'));
+assert('date change does not expose raw unset range', !dateResult.content.includes('未設定 至 未設定'));
+
+const noopResult = synthesis.buildDeterministicMeetingSynthesis({
+  title: '無變更整理',
+  rawContent: '',
+  taskLinks: [{ nodeId: 'noop_task', role: 'related' }],
+  tasks: [{ id: 'noop_task', title: '無變更任務' }],
+  activities: [
+    {
+      eventType: 'task_status_changed',
+      nodeId: 'noop_task',
+      title: '無變更任務',
+      occurredAt: 1780801100000,
+      summary: '狀態由「待辦」改為「待辦」。',
+      payload: { before: { status: 'todo' }, after: { status: 'todo' } },
+    },
+  ],
+});
+assert('no-op activity does not create a task section', !noopResult.content.includes('無變更任務'));
+
 const storeSource = readFileSync('src/store/useRecordStore.ts', 'utf8');
 for (const forbiddenSource of [
   'status: node?.status',
@@ -169,8 +289,40 @@ for (const forbiddenSource of [
 ]) {
   assert(`source package should not pass static task metadata: ${forbiddenSource}`, !storeSource.includes(forbiddenSource));
 }
+assert('store persists meeting synthesis trace metadata', storeSource.includes('meetingSynthesis: createMeetingSynthesisTraceMetadata('));
+assert('store reuses original source for idempotent repeat synthesis', storeSource.includes('getMeetingSynthesisSourceDraft(preservedDraft)'));
+assert('store blocks post-merge integrity regressions', storeSource.includes('getMeetingSynthesisMergeViolations(result.content, mergedContent)'));
+
+const serviceSource = readFileSync('src/services/meetingSynthesisService.ts', 'utf8');
+assert('client sends required contract version', serviceSource.includes('requiredContractVersion: MEETING_SYNTHESIS_CONTRACT_VERSION'));
+assert('client rejects contract mismatch', serviceSource.includes("'CONTRACT_VERSION_MISMATCH'"));
+assert('client rejects missing trace metadata', serviceSource.includes("'SYNTHESIS_TRACE_MISSING'"));
+assert('client executes local quality validation', serviceSource.includes('validateMeetingSynthesisOutput(input, normalizedResponse)'));
+
+const sidebarSource = readFileSync('src/components/Records/RecordSidebar.tsx', 'utf8');
+assert('UI distinguishes deterministic rule output', sidebarSource.includes('規則整理完成，請校稿後發布'));
+assert('UI exposes synthesis run trace for QC', sidebarSource.includes('data-meeting-synthesis-run-id'));
+assert('UI exposes contract and quality result for QC', sidebarSource.includes('data-meeting-synthesis-contract') && sidebarSource.includes('data-meeting-synthesis-quality'));
+
+const supabaseRecordSource = readFileSync('src/services/supabase/projedService.ts', 'utf8');
+assert('Supabase record metadata persists synthesis trace', supabaseRecordSource.includes('...(input.metadata ?? {})'));
+
+const projectChangeSource = readFileSync('src/utils/projectChangeImport.ts', 'utf8');
+assert('project-change evidence joins task path and narrative', projectChangeSource.includes("evidenceLines.push(taskEvidence.join(' '))"));
 
 const edgeSource = readFileSync('supabase/functions/synthesize_meeting_record/index.ts', 'utf8');
+const edgeTranspile = ts.transpileModule(edgeSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ES2022,
+    target: ts.ScriptTarget.ES2022,
+  },
+  fileName: 'supabase/functions/synthesize_meeting_record/index.ts',
+  reportDiagnostics: true,
+});
+assert(
+  'edge function TypeScript syntax parses without errors',
+  !(edgeTranspile.diagnostics ?? []).some(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error),
+);
 assert('edge default model is gemini-3.5-flash', edgeSource.includes("configuredModel || 'gemini-3.5-flash'"));
 assert('edge fallback model is explicit', edgeSource.includes("'gemini-3.1-flash-lite'"));
 assert('edge fallback warning is surfaced', edgeSource.includes('不可用，已改用'));
@@ -182,9 +334,14 @@ assert('edge prompt restricts next steps to human content', edgeSource.includes(
 assert('edge prompt bans markdown headings', edgeSource.includes('不得有任何行以 #'));
 assert('edge prompt requires numbered headings', edgeSource.includes('1. / 2.1 / 2.1.1'));
 assert('edge prompt bans low-value position activity in content', edgeSource.includes('位置已調整') && edgeSource.includes('不得出現在 content'));
-assert('edge prompt bans system task labels', edgeSource.includes('不要加「本任務」或「子任務：」'));
+assert('edge prompt bans system task labels', edgeSource.includes('不要產生「本任務」或「子任務：」') && edgeSource.includes('獨立的「所屬：」'));
+assert('edge prompt requires one-line task path', edgeSource.includes('完整任務路徑') && edgeSource.includes('以「／」分隔'));
 assert('edge prompt requires assignee target', edgeSource.includes('負責人變更必須說明變為誰'));
 assert('edge model error is explicit', edgeSource.includes('請檢查 GEMINI_MEETING_SYNTHESIS_MODEL'));
+assert('edge enforces meeting synthesis v2 contract', edgeSource.includes("MEETING_SYNTHESIS_CONTRACT_VERSION = 'meeting-synthesis-v2'"));
+assert('edge rejects contract mismatch', edgeSource.includes("'CONTRACT_VERSION_MISMATCH'"));
+assert('edge executes output quality gate', edgeSource.includes('validateGeneratedOutput(input, content, linkedTaskIds)'));
+assert('edge emits trace run id', edgeSource.includes('const runId = crypto.randomUUID()'));
 
 for (const docPath of [
   'ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md',
@@ -201,4 +358,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('DEV-012 meeting record quality verification passed: natural language synthesis, task snippets, model default, and docs checked.');
+console.log('DEV-012 meeting record quality verification passed: contract v2 handshake, trace metadata, fail-closed quality gate, natural language synthesis, task snippets, model default, and docs checked.');

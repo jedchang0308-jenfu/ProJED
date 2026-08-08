@@ -14,6 +14,8 @@
 
 本文件取代早先的「全域任務平台設定檔」QC 結論。依使用者最新決策，全域任務平台不再提供設定檔、儲存、另存、複製、全域 profile 或看板專屬 profile。
 
+2026-08-07 account-scoped filter memory addendum：上述「不提供儲存」僅指 profile/save/copy 與團隊共用設定；本次使用者明確要求的「每個登入帳號自動記憶篩選狀態」已另行實作並通過 static/browser gate。看板與工作台均使用 uid-scoped localStorage；舊共用 key 只遷移一次給首次登入帳號後移除。行事曆訂閱篩選維持 Supabase owner/RLS 隔離。
+
 本輪修正後的目標：
 
 - 全域任務平台維持 BoardView 左側跨看板拖拉中繼站。
@@ -63,6 +65,8 @@
 
 | Gate | 結果 | 證據 |
 |---|---|---|
+| Account-scoped filter persistence static | Pass | `npm.cmd run verify:account-scoped-filter-prefs`，7/7 |
+| Account-scoped filter persistence browser | Pass | `npm.cmd run verify:account-scoped-filter-prefs-browser`；實際操作帳號 A/B 的看板「負責人/協作」與工作台協作篩選，確認隔離與恢復 |
 | DEV-039 filter result parity static | Pass | `npm.cmd run verify:dev-039-filter-result-parity`，26/26 |
 | DEV-039 filter result parity browser | Pass | `npm.cmd run verify:dev-039-filter-result-parity-browser` |
 | DEV-039 cross-board source static | Pass | `npm.cmd run verify:dev-039-task-workbench-cross-board-source`，23/23 |
@@ -223,7 +227,7 @@ Phase 2A QC 結果：
 ## 殘餘風險
 
 - 全域任務平台 Phase 2 cross-board source slice 與 Phase 2A drag trigger parity 已完成，但 visible partial/error summary UI 與 DB/RLS/RPC 權限矩陣仍需另行授權。
-- 工作台每看板篩選 state 是當次 UI state，沒有跨重新整理保存；這是使用者最新要求，不是 bug。
+- 工作台每看板篩選 state 現已依登入帳號保存；帳號 A/B 真實瀏覽器切換驗證通過，未發現跨帳號繼承。未歸位任務資料仍是另一個 localStorage source，未因此升級成跨裝置同步。
 - Phase 1B placement lanes、Phase 1C result parity 與 Phase 2A drag trigger parity 已實作並通過本機自動化 QC；目前正式環境發布仍需額外部署授權與 production smoke。
 - Phase 1C 未涵蓋 production smoke；正式環境資料、瀏覽器登入狀態與遠端部署結果仍需 deployment gate 驗證。
 - 若未來重新要求設定檔、跨裝置同步或團隊預設，需新增 DEV，不能回填到 DEV-039。

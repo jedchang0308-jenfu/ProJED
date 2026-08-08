@@ -11,10 +11,11 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
+import { useTagStore } from './store/useTagStore';
 import useRecordStore from './store/useRecordStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
@@ -81,6 +82,13 @@ function AppContent() {
 
   // 啟動目前資料後端的同步監聽
   useDataSync();
+
+  // Zustand store 會在模組載入時先建立；登入帳號確定後重新載入帳號範圍的篩選，避免沿用前一個帳號的記憶。
+  useLayoutEffect(() => {
+    if (!userId) return;
+    useBoardStore.getState().hydrateTaskFilterPrefs();
+    useTagStore.getState().hydrateSelectedTagFilter();
+  }, [userId]);
 
   useEffect(() => {
     if (!userId || !activeWorkspaceId || !activeBoardId) return;

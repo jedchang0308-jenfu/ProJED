@@ -30,7 +30,7 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
-import { closeTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
+import { closeTaskWorkbenchPanel, openTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
 import { topbarClassNames } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
@@ -118,7 +118,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const handleToggleMobileTaskWorkbench = useCallback(() => {
     if (isMobileBoardOnly) setSidebarOpen(false);
     setView(activeWorkspace && activeBoard ? 'board' : 'home');
-    toggleTaskWorkbenchPanel();
+    openTaskWorkbenchPanel();
   }, [activeBoard, activeWorkspace, isMobileBoardOnly, setSidebarOpen, setView]);
 
   const handleStartMeetingRecord = () => {

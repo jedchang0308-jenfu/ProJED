@@ -350,6 +350,7 @@ export interface KnowledgeRecord {
   updatedAt?: number;
   ragEnabled?: boolean;
   sourceDocumentId?: string | null;
+  metadata?: Record<string, unknown>;
   taskLinks: RecordTaskLink[];
 }
 
@@ -365,6 +366,7 @@ export interface KnowledgeRecordInput {
   startedAt?: number;
   endedAt?: number;
   recordedBy?: string | null;
+  metadata?: Record<string, unknown>;
   taskLinks: Array<Pick<RecordTaskLink, 'nodeId' | 'role'>>;
 }
 
@@ -597,6 +599,7 @@ export interface BoardActions {
   toggleOverdueFilter: () => void;
   toggleAssigneeFilter: (assigneeId: string) => void;
   clearAssigneeFilters: () => void;
+  hydrateTaskFilterPrefs: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: BoardContextMenuState | null) => void;

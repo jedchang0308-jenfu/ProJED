@@ -815,6 +815,7 @@ export const localTestRecordService = {
       startedAt: input.startedAt,
       endedAt: input.endedAt,
       recordedBy: input.recordedBy ?? actorId,
+      metadata: input.metadata,
       createdBy: existing?.createdBy ?? actorId,
       updatedBy: actorId,
       createdAt: existing?.createdAt ?? now,

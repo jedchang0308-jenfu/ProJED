@@ -9,31 +9,20 @@ import type {
   TaskFilterState,
 } from './types';
 import type { TaskStatus } from '../../types';
+import useAuthStore from '../../store/useAuthStore';
+import {
+  getAccountScopedStorageKey,
+  readStorageJson,
+  removeStorageKey,
+  writeStorageJson,
+} from '../../utils/accountScopedStorage';
 
 export const LEGACY_BOARD_FILTER_STORAGE_KEY = 'projed-filters';
 export const BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1';
+export const ACCOUNT_BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v2';
 export const BOARD_TASK_FILTER_PREFS_VERSION = 3;
 
-const canUseStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage);
-
-const readJson = <T>(key: string): T | null => {
-  if (!canUseStorage()) return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) as T : null;
-  } catch {
-    return null;
-  }
-};
-
-const writeJson = (key: string, value: unknown) => {
-  if (!canUseStorage()) return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Local persistence is best-effort only.
-  }
-};
+const getCurrentAccountId = () => useAuthStore.getState().user?.uid ?? null;
 
 const normalizeStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -88,18 +77,36 @@ const createPrefs = (
   updatedAt: Date.now(),
 });
 
-export const readBoardTaskFilterPrefs = (): BoardTaskFilterPrefs => {
-  const versioned = readJson<Partial<BoardTaskFilterPrefs>>(BOARD_TASK_FILTER_STORAGE_KEY);
-  if (versioned) {
+export const readBoardTaskFilterPrefs = (
+  accountId = getCurrentAccountId(),
+): BoardTaskFilterPrefs => {
+  const scopedKey = getAccountScopedStorageKey(ACCOUNT_BOARD_TASK_FILTER_STORAGE_KEY, accountId);
+  if (!scopedKey) return createPrefs();
+
+  const scoped = readStorageJson<Partial<BoardTaskFilterPrefs>>(scopedKey);
+  if (scoped) {
     return createPrefs(
-      migrateLegacyDefaultTaskFilters(versioned.filters, typeof versioned.version === 'number' ? versioned.version : 1),
-      versioned.displaySettings,
+      migrateLegacyDefaultTaskFilters(scoped.filters, typeof scoped.version === 'number' ? scoped.version : 1),
+      scoped.displaySettings,
     );
   }
 
-  const legacy = readJson<Record<string, unknown>>(LEGACY_BOARD_FILTER_STORAGE_KEY);
+  // 一次性承接舊版未分帳號設定到目前登入帳號，之後移除共用 key，避免下一個帳號再讀到。
+  const versioned = readStorageJson<Partial<BoardTaskFilterPrefs>>(BOARD_TASK_FILTER_STORAGE_KEY);
+  if (versioned) {
+    const migrated = createPrefs(
+      migrateLegacyDefaultTaskFilters(versioned.filters, typeof versioned.version === 'number' ? versioned.version : 1),
+      versioned.displaySettings,
+    );
+    writeStorageJson(scopedKey, migrated);
+    removeStorageKey(BOARD_TASK_FILTER_STORAGE_KEY);
+    removeStorageKey(LEGACY_BOARD_FILTER_STORAGE_KEY);
+    return migrated;
+  }
+
+  const legacy = readStorageJson<Record<string, unknown>>(LEGACY_BOARD_FILTER_STORAGE_KEY);
   if (legacy) {
-    return createPrefs(
+    const migrated = createPrefs(
       migrateLegacyDefaultTaskFilters({
         statusFilters: legacy.statusFilters as TaskFilterState['statusFilters'] | undefined,
         dueWithinDays: legacy.dueWithinDays as number | null | undefined,
@@ -115,6 +122,10 @@ export const readBoardTaskFilterPrefs = (): BoardTaskFilterPrefs => {
         showTagNames: legacy.showTagNames as boolean | undefined,
       },
     );
+    writeStorageJson(scopedKey, migrated);
+    removeStorageKey(BOARD_TASK_FILTER_STORAGE_KEY);
+    removeStorageKey(LEGACY_BOARD_FILTER_STORAGE_KEY);
+    return migrated;
   }
 
   return createPrefs();
@@ -125,8 +136,9 @@ export const writeBoardTaskFilterPrefs = (
     filters?: Partial<TaskFilterState>;
     displaySettings?: Partial<TaskDisplaySettings>;
   },
+  accountId = getCurrentAccountId(),
 ) => {
-  const current = readBoardTaskFilterPrefs();
+  const current = readBoardTaskFilterPrefs(accountId);
   const next = createPrefs(
     {
       ...current.filters,
@@ -138,19 +150,7 @@ export const writeBoardTaskFilterPrefs = (
     },
   );
 
-  writeJson(BOARD_TASK_FILTER_STORAGE_KEY, next);
-  writeJson(LEGACY_BOARD_FILTER_STORAGE_KEY, {
-    statusFilters: next.filters.statusFilters,
-    showDependencies: next.displaySettings.showDependencies,
-    showStartDate: next.displaySettings.showStartDate,
-    showTags: next.displaySettings.showTags,
-    showTagNames: next.displaySettings.showTagNames,
-    dueWithinDays: next.filters.dueWithinDays,
-    overdueOnly: next.filters.overdueOnly,
-    selectedAssigneeIds: next.filters.selectedAssigneeIds,
-    selectedTagIds: next.filters.selectedTagIds,
-    keyword: next.filters.keyword,
-  });
+  writeStorageJson(getAccountScopedStorageKey(ACCOUNT_BOARD_TASK_FILTER_STORAGE_KEY, accountId), next);
 
   return next;
 };

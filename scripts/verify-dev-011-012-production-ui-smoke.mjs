@@ -259,24 +259,23 @@ const runSelfCheck = () => {
   );
 
   add(
-    'readiness gate tracks the guarded executor and deployed production smoke pass',
+    'readiness gate tracks historical v1 proof and the pending contract v2 production gate',
     includesAll(readinessSource, [
       'verify:dev-011-012-production-ui-smoke',
       'verify-dev-011-012-production-ui-smoke.mjs',
-      'Done / Production Release Deployed / Production UI Smoke Passed',
-      'codex/dev011012-rag-order-hotfix',
-      '7704e2f',
-      'published_record_found=true',
+      'pending contract v2 production gate',
+      'meeting-synthesis-v2',
+      'production effectiveness pending',
     ]),
   );
 
   add(
-    'QA/QC/dev_task/docs reference the guarded executor with passed production fixture evidence',
+    'QA/QC/dev_task/docs preserve v1 evidence while keeping DEV-012 v2 production verification open',
     includesAll(qa011, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', 'published_record_found=true']) &&
-      includesAll(qa012, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', 'published_record_found=true']) &&
-      includesAll(qc, ['verify:dev-011-012-production-ui-smoke', 'Backend Pass / Production Release Deployed / Production UI Smoke Passed', 'DB proof：Pass']) &&
-      includesAll(devTask, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', '7704e2f', 'assets/index-BkwGqGCZ.js']) &&
-      includesAll(documentationMap, ['verify:dev-011-012-production-ui-smoke', 'Done / Production Release Deployed / Production UI Smoke Passed', '7704e2f', 'assets/index-BkwGqGCZ.js']),
+      includesAll(qa012, ['verify:dev-011-012-production-ui-smoke', 'Production v2 Stop-Ship Gate', 'meeting-synthesis-v2']) &&
+      includesAll(qc, ['verify:dev-011-012-production-ui-smoke', 'Production v2 Release Gate（Pending）', 'Historical v1 Production Pass']) &&
+      includesAll(devTask, ['DEV-012 [交付點] [驗證中]', 'meeting-synthesis-v2', 'production v2']) &&
+      includesAll(documentationMap, ['Contract v2 source updated / not deployed', 'production effectiveness pending', 'Browser QC 5/5 passed']),
   );
 
   const failures = checks.filter(check => !check.pass);
@@ -546,7 +545,33 @@ async (page) => {
     stage = 'run_ai_synthesis';
     const aiStep = await waitStepEnabled('ai_suggestion');
     await aiStep.click();
-    await page.locator('aside', { hasText: 'AI整理完成，請校稿後發布' }).waitFor({ state: 'visible', timeout: 90000 });
+    const synthesisStatus = page.locator('[data-meeting-synthesis-status="ready"]');
+    await synthesisStatus.waitFor({ state: 'visible', timeout: 90000 });
+    const synthesisProof = await synthesisStatus.evaluate((element) => ({
+      text: element.textContent || '',
+      provider: element.getAttribute('data-meeting-synthesis-provider'),
+      contract: element.getAttribute('data-meeting-synthesis-contract'),
+      functionVersion: element.getAttribute('data-meeting-synthesis-function'),
+      runId: element.getAttribute('data-meeting-synthesis-run-id'),
+      model: element.getAttribute('data-meeting-synthesis-model'),
+      quality: element.getAttribute('data-meeting-synthesis-quality'),
+    }));
+    if (
+      !synthesisProof.text.includes('AI整理完成，請校稿後發布') ||
+      synthesisProof.provider !== 'gemini' ||
+      synthesisProof.contract !== 'meeting-synthesis-v2' ||
+      !synthesisProof.functionVersion ||
+      !synthesisProof.runId ||
+      !synthesisProof.model ||
+      synthesisProof.quality !== 'passed'
+    ) {
+      return JSON.stringify({
+        ok: false,
+        stage: 'ai_trace_contract',
+        synthesisProof,
+        workflow: await getWorkflowDebug(),
+      }, null, 2);
+    }
     const aiText = await editor.innerText();
     if (!aiText.includes('1. 本次會議總結') || !aiText.includes(payload.taskA.title) || !aiText.includes(payload.taskB.title)) {
       return JSON.stringify({
@@ -631,6 +656,7 @@ async (page) => {
       ok: true,
       title,
       aiTextExcerpt: aiText.slice(0, 700),
+      synthesisProof,
       reviewDraftSaved: true,
       publishUiEvidence,
       recordsUiChecked: true,
@@ -682,7 +708,7 @@ async (page) => {
     'knowledge_records select',
     await userClient
       .from('knowledge_records')
-      .select('id,title,status,content,source_document_id,rag_enabled')
+      .select('id,title,status,content,source_document_id,rag_enabled,metadata')
       .eq('tenant_id', tenant.id)
       .eq('project_id', project.id)
       .eq('status', 'published')
@@ -692,6 +718,17 @@ async (page) => {
   const record = records[0];
   if (!record.content?.includes(taskA.title) || !record.content?.includes(taskB.title)) {
     throw new Error('Published knowledge record does not contain both fixture task titles.');
+  }
+  const persistedSynthesisTrace = record.metadata?.meetingSynthesis;
+  if (
+    !persistedSynthesisTrace ||
+    persistedSynthesisTrace.contractVersion !== 'meeting-synthesis-v2' ||
+    persistedSynthesisTrace.provider !== 'gemini' ||
+    persistedSynthesisTrace.quality?.passed !== true ||
+    !persistedSynthesisTrace.runId ||
+    persistedSynthesisTrace.runId !== browser.synthesisProof?.runId
+  ) {
+    throw new Error('Published record synthesis metadata does not match the browser v2 trace.');
   }
 
   const links = assertOk(
@@ -727,6 +764,10 @@ async (page) => {
       record_task_links: links.length,
       rag_enabled: record.rag_enabled,
       source_document_present: Boolean(record.source_document_id),
+      synthesis_contract: persistedSynthesisTrace.contractVersion,
+      synthesis_provider: persistedSynthesisTrace.provider,
+      synthesis_quality_passed: persistedSynthesisTrace.quality.passed,
+      synthesis_trace_match: true,
     },
   };
   console.log(JSON.stringify(report, null, 2));

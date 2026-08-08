@@ -84,6 +84,13 @@ async (page) => {
         'projed-last-ws',
         'projed-last-board',
         'projed-last-view',
+        'projed-task-filters:v2:account:local-test-user',
+        'projed-task-workbench-panel:v2:account:local-test-user',
+        'projed-task-workbench-filters:v2:account:local-test-user',
+        'projed-filters',
+        'projed-task-filters:v1',
+        'projed-task-workbench-panel:v1',
+        'projed-task-workbench-filters:v1',
       ].forEach(key => localStorage.removeItem(key));
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify(account));
@@ -207,12 +214,16 @@ async (page) => {
   await boardTrigger.click();
 
   const workbenchEntry = page.getByRole('button', { name: '開啟全域任務平台', exact: true });
-  await workbenchEntry.waitFor({ state: 'visible', timeout: 5000 });
-  await workbenchEntry.click();
   const workbench = page.locator('[data-task-workbench-panel="true"]');
+  if (await workbench.count() === 0) {
+    await workbenchEntry.waitFor({ state: 'visible', timeout: 5000 });
+    await workbenchEntry.click();
+  }
   await workbench.waitFor({ state: 'visible', timeout: 10000 });
-  await workbench.locator('[data-task-workbench-filter-toggle="true"]').click();
   const workbenchPopover = workbench.locator('[data-task-workbench-filter-popover="true"]');
+  if (await workbenchPopover.count() === 0) {
+    await workbench.locator('[data-task-workbench-filter-toggle="true"]').click();
+  }
   await workbenchPopover.waitFor({ state: 'visible', timeout: 5000 });
   const conditionControls = workbenchPopover.locator('[data-task-condition-filter-controls="true"]');
   const workbenchText = await conditionControls.innerText();

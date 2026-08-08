@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import useAuthStore from '../store/useAuthStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useTagStore } from '../store/useTagStore';
@@ -14,14 +15,19 @@ import useQuickCaptureStore from '../store/useQuickCaptureStore';
 import {
   createBoardAssigneeFilterOptions,
   createDefaultTaskFilters,
-  BOARD_TASK_FILTER_PREFS_VERSION,
   countActiveTaskFilters,
   isTaskEffectivelyVisible,
-  migrateLegacyDefaultTaskFilters,
   normalizeTaskFilters,
   projectTaskFilterResults,
   type TaskFilterState,
 } from '../features/taskFilters';
+import {
+  readTaskWorkbenchFilterPrefs,
+  readTaskWorkbenchPanelPrefs,
+  writeTaskWorkbenchFilterPrefs,
+  writeTaskWorkbenchPanelPrefs,
+  type TaskWorkbenchPanelPrefs,
+} from '../features/taskWorkbench/preferences';
 import {
   createNewUnplacedTaskNode,
   createUnplacedTaskNodeFromInboxItem,
@@ -40,81 +46,12 @@ import { useTaskGestureSurface } from './Wbs/taskDrag/useTaskGestureSurface';
 import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 
-const PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
-const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
-
-type PanelPrefs = {
-  open: boolean;
-  filtersOpen: boolean;
-  showContainersInAllTasks: boolean;
-};
-
-type WorkbenchFilterPrefs = {
-  selectedBoardId: string | null;
-  filtersByBoardId: Record<string, TaskFilterState>;
-};
+type PanelPrefs = TaskWorkbenchPanelPrefs;
 
 type BoardOption = {
   workspaceId: string;
   boardId: string;
   path: string;
-};
-
-const readPanelPrefs = (): PanelPrefs => {
-  if (typeof window === 'undefined') return { open: false, filtersOpen: false, showContainersInAllTasks: false };
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(PANEL_PREFS_KEY) || '{}') as Partial<PanelPrefs>;
-    return {
-      open: parsed.open === true,
-      filtersOpen: Boolean(parsed.filtersOpen),
-      showContainersInAllTasks: Boolean(parsed.showContainersInAllTasks),
-    };
-  } catch {
-    return { open: false, filtersOpen: false, showContainersInAllTasks: false };
-  }
-};
-
-const writePanelPrefs = (prefs: PanelPrefs) => {
-  try {
-    window.localStorage.setItem(PANEL_PREFS_KEY, JSON.stringify(prefs));
-  } catch {
-    // Best-effort UI preference.
-  }
-};
-
-const readWorkbenchFilterPrefs = (): WorkbenchFilterPrefs => {
-  if (typeof window === 'undefined') return { selectedBoardId: null, filtersByBoardId: {} };
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(TASK_WORKBENCH_FILTER_PREFS_KEY) || '{}') as Partial<WorkbenchFilterPrefs & { version: number }>;
-    const prefsVersion = typeof parsed.version === 'number' ? parsed.version : 1;
-    const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterState>>((acc, [boardId, filters]) => {
-      if (typeof boardId === 'string' && filters && typeof filters === 'object') {
-        acc[boardId] = normalizeTaskFilters(migrateLegacyDefaultTaskFilters(filters as Partial<TaskFilterState>, prefsVersion));
-      }
-      return acc;
-    }, {});
-
-    return {
-      selectedBoardId: typeof parsed.selectedBoardId === 'string' ? parsed.selectedBoardId : null,
-      filtersByBoardId,
-    };
-  } catch {
-    return { selectedBoardId: null, filtersByBoardId: {} };
-  }
-};
-
-const writeWorkbenchFilterPrefs = (prefs: WorkbenchFilterPrefs) => {
-  try {
-    window.localStorage.setItem(TASK_WORKBENCH_FILTER_PREFS_KEY, JSON.stringify({
-      version: BOARD_TASK_FILTER_PREFS_VERSION,
-      selectedBoardId: prefs.selectedBoardId,
-      filtersByBoardId: prefs.filtersByBoardId,
-      updatedAt: Date.now(),
-    }));
-  } catch {
-    // Best-effort UI preference.
-  }
 };
 
 const compareText = (left: string, right: string) => left.localeCompare(right, 'zh-Hant');
@@ -559,11 +496,16 @@ const WorkbenchFilterControls: React.FC<{
 };
 
 const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask = false }) => {
-  const [panelPrefs, setPanelPrefs] = React.useState<PanelPrefs>(() => readPanelPrefs());
-  const [isNarrowViewport, setIsNarrowViewport] = React.useState(false);
-  const [mobileOverlayOpen, setMobileOverlayOpen] = React.useState(false);
-  const [selectedBoardId, setSelectedBoardId] = React.useState<string | null>(() => readWorkbenchFilterPrefs().selectedBoardId);
-  const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterState>>(() => readWorkbenchFilterPrefs().filtersByBoardId);
+  const accountId = useAuthStore(state => state.user?.uid ?? null);
+  const [panelPrefs, setPanelPrefs] = React.useState<PanelPrefs>(() => readTaskWorkbenchPanelPrefs(accountId));
+  const [isNarrowViewport, setIsNarrowViewport] = React.useState(() => (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(max-width: 767px)').matches
+  ));
+  const [mobileOverlayOpen, setMobileOverlayOpen] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).open);
+  const [selectedBoardId, setSelectedBoardId] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).selectedBoardId);
+  const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterState>>(() => readTaskWorkbenchFilterPrefs(accountId).filtersByBoardId);
   const filterToggleRef = React.useRef<HTMLButtonElement>(null);
   const filterPopoverRef = React.useRef<HTMLDivElement>(null);
   const workspaces = useBoardStore(state => state.workspaces);
@@ -581,10 +523,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const patchPanelPrefs = React.useCallback((updates: Partial<PanelPrefs>) => {
     setPanelPrefs(current => {
       const next = { ...current, ...updates };
-      writePanelPrefs(next);
+      writeTaskWorkbenchPanelPrefs(next, accountId);
       return next;
     });
-  }, []);
+  }, [accountId]);
 
   const closePanel = React.useCallback(() => {
     if (isNarrowViewport) {
@@ -593,6 +535,15 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     }
     patchPanelPrefs({ open: false, filtersOpen: false });
   }, [isNarrowViewport, patchPanelPrefs]);
+
+  React.useEffect(() => {
+    const nextPanelPrefs = readTaskWorkbenchPanelPrefs(accountId);
+    setPanelPrefs(nextPanelPrefs);
+    setMobileOverlayOpen(nextPanelPrefs.open);
+    const filterPrefs = readTaskWorkbenchFilterPrefs(accountId);
+    setSelectedBoardId(filterPrefs.selectedBoardId);
+    setFiltersByBoardId(filterPrefs.filtersByBoardId);
+  }, [accountId]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -628,14 +579,14 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
       setPanelPrefs(current => {
         const next = { ...current, open: !current.open, filtersOpen: false };
-        writePanelPrefs(next);
+        writeTaskWorkbenchPanelPrefs(next, accountId);
         return next;
       });
     };
 
     window.addEventListener(TOGGLE_PANEL_EVENT, toggle);
     return () => window.removeEventListener(TOGGLE_PANEL_EVENT, toggle);
-  }, [isNarrowViewport]);
+  }, [accountId, isNarrowViewport]);
 
   React.useEffect(() => {
     window.addEventListener(CLOSE_PANEL_EVENT, closePanel);
@@ -697,8 +648,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     if (selectedBoardId && boardOptions.some(option => option.boardId === selectedBoardId)) return;
     const nextSelectedBoardId = activeBoardId || boardOptions[0]?.boardId || null;
     setSelectedBoardId(nextSelectedBoardId);
-    writeWorkbenchFilterPrefs({ selectedBoardId: nextSelectedBoardId, filtersByBoardId });
-  }, [activeBoardId, boardOptions, filtersByBoardId, selectedBoardId]);
+    writeTaskWorkbenchFilterPrefs({ selectedBoardId: nextSelectedBoardId, filtersByBoardId }, accountId);
+  }, [accountId, activeBoardId, boardOptions, filtersByBoardId, selectedBoardId]);
 
   const selectedFilters = React.useMemo(
     () => selectedBoardId ? (filtersByBoardId[selectedBoardId] || createDefaultTaskFilters()) : createDefaultTaskFilters(),
@@ -707,8 +658,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
   const handleSelectedBoardChange = React.useCallback((boardId: string | null) => {
     setSelectedBoardId(boardId);
-    writeWorkbenchFilterPrefs({ selectedBoardId: boardId, filtersByBoardId });
-  }, [filtersByBoardId]);
+    writeTaskWorkbenchFilterPrefs({ selectedBoardId: boardId, filtersByBoardId }, accountId);
+  }, [accountId, filtersByBoardId]);
 
   const updateSelectedFilters = React.useCallback((updates: Partial<TaskFilterState>) => {
     if (!selectedBoardId) return;
@@ -724,10 +675,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
             : currentFilters.statusFilters,
         }),
       };
-      writeWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId });
+      writeTaskWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId }, accountId);
       return nextFiltersByBoardId;
     });
-  }, [selectedBoardId]);
+  }, [accountId, selectedBoardId]);
 
   const resetSelectedFilters = React.useCallback(() => {
     if (!selectedBoardId) return;
@@ -736,10 +687,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
         ...current,
         [selectedBoardId]: createDefaultTaskFilters(),
       };
-      writeWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId });
+      writeTaskWorkbenchFilterPrefs({ selectedBoardId, filtersByBoardId: nextFiltersByBoardId }, accountId);
       return nextFiltersByBoardId;
     });
-  }, [selectedBoardId]);
+  }, [accountId, selectedBoardId]);
 
   const selectedBoardActiveFilterCount = React.useMemo(() => countActiveTaskFilters(selectedFilters), [selectedFilters]);
   const selectedBoardOption = React.useMemo(

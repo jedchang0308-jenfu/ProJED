@@ -160,6 +160,20 @@ Spec Impact=`Intentional replacement`：DEV-007 的原生看板操作與有語�
 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Active quality contract amended | DEV-012 | 定義低價值事件、跨邊界一致過濾、task section / linkedTaskIds 與人工內容保留規則。 |
 | `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | QA matrix amended | DEV-012 | 新增 GS-005，驗證純位置事件不成文、有效活動不受影響、人工實質文字不誤刪。 |
 
+## Documentation Map Update - 2026-08-07（會議整理文字密度最佳化）
+
+Spec Impact=`Intentional replacement`：依使用者回饋，任務完整路徑改為同一標題行以「／」串接；只有階層用途的父節點不再獨立輸出，activity 先做 no-op 與 fingerprint 去重，日期變更改用自然語言呈現。進一步重開 DEV-012，新增 `meeting-synthesis-v2` 握手、Edge/client 雙重品質閘門、run trace、既有 metadata persistence、AI／規則整理來源揭露、source snapshot 與 merge integrity gate。資料庫 schema 與 record content persistence 格式未變；本機 verifier、TypeScript 與真實瀏覽器 5/5 通過，尚未部署或驗證 production v2。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/utils/meetingRecordSynthesis.ts` / `src/utils/projectChangeImport.ts` | Contract v2 local implementation verified | DEV-012 | 單行完整路徑、直接證據節點、匯入 path + narrative evidence、activity 去重/no-op、日期自然語言化與 fail-closed quality report。 |
+| `src/services/meetingSynthesisService.ts` / `src/store/useRecordStore.ts` | Contract + merge gate local implementation verified | DEV-012 | request version handshake、trace validation、source snapshot、merge integrity gate；不合格時保留原稿。 |
+| `src/components/Records/RecordSidebar.tsx` / record services | Trace UI + persistence local verified | DEV-012 | UI 區分 AI／規則整理，提供 QC data attributes；trace 存入既有 `knowledge_records.metadata`。 |
+| `supabase/functions/synthesize_meeting_record/index.ts` | Contract v2 source updated / not deployed | DEV-012 | Edge 強制 v2、執行輸出品質閘門並回傳／記錄 run trace；production 尚未部署。 |
+| `scripts/verify-dev-012-meeting-record-quality.mjs` | Negative contract/quality verification passed | DEV-012 | 驗證 mismatch、trace missing source gate、空父節點／正文、task link 缺漏、重複與低價值內容。 |
+| `scripts/verify-dev-024-ai-synthesis-preserve-human-draft-browser.pw.js` | Browser QC 5/5 passed | DEV-012 / DEV-024 | 真實操作驗證規則整理標示、v2/run ID/quality、metadata persistence、連續整理 idempotency 與發布。 |
+| `ai-doc/reports/CAPA-20260807-dev-012-ai-synthesis-verification-gap.md` | Corrective action local done / production effectiveness pending | DEV-012 | 界定使用者操作無誤；根因為成功判定、契約、追溯、direct evidence 與跨版本結案證據缺口。 |
+
 ## Documentation Map Update - 2026-07-18（正式環境手機長按完整選單 hotfix）
 
 使用者提供正式環境手機截圖：任務長按後除了頂部 compact action rail，畫面中央又出現完整 task context menu。Spec Impact=`Compatible exception`：不改手機拖拉定位、不改 action rail 內容、不改桌機右鍵功能；只補 mobile action session 對 `contextmenu` 的事件所有權，避免 Android / Chrome 長按合成事件穿透到桌機選單。

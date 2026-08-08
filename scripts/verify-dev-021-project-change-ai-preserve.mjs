@@ -122,8 +122,10 @@ assert(
 assert(
   'AI synthesis result is merged with preserved draft content',
   storeSource.includes('mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content)') ||
-    storeSource.includes('mergeProjectChangeImportBlocks(result.content, preservedDraft.content)'),
+    storeSource.includes('mergeProjectChangeImportBlocks(result.content, preservedDraft.content)') ||
+    storeSource.includes('mergeHumanDraftWithAiSynthesis(result.content, synthesisSourceDraft.content)'),
 );
+assert('repeat synthesis source snapshot remains guarded', storeSource.includes('getMeetingSynthesisSourceDraft(preservedDraft)'));
 assert('human draft merge guard keeps project change merge', humanMergeSource.includes('mergeProjectChangeImportBlocks(aiContent, preservedDraftContent)'));
 assert('syncDraftContentLinks receives merged content', /syncDraftContentLinks\([\s\S]*mergedContent[\s\S]*\)/.test(storeSource));
 assert('cursor offset uses merged content length', storeSource.includes('contentCursorOffset: mergedContent.length'));

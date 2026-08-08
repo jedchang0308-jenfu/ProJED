@@ -375,6 +375,9 @@ const mapKnowledgeRecord = (
     updatedAt: toTimestamp(row.updated_at),
     ragEnabled: row.rag_enabled,
     sourceDocumentId: row.source_document_id,
+    metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+      ? row.metadata as Record<string, unknown>
+      : undefined,
     taskLinks: (row.record_task_links ?? []).map(link =>
       mapRecordTaskLink(link, recordId, requestedWorkspaceId, requestedBoardId)
     ),
@@ -1695,6 +1698,7 @@ const knowledgeRecordToInsert = async (
     visibility: input.visibility,
     rag_enabled: input.status === 'published' && input.visibility !== 'private',
     metadata: stripUndefinedForJson({
+      ...(input.metadata ?? {}),
       legacyRecordId: input.id && !isUuid(input.id) ? input.id : null,
     }) ?? {},
     updated_by: userId,

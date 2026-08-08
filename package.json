@@ -100,6 +100,8 @@
     "verify:dev-038-settings-scope-consistency-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev038-settings-scope -Filename scripts/verify-dev-038-settings-scope-consistency-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-039-task-filter-core": "node scripts/verify-dev-039-task-filter-core.mjs",
     "verify:dev-039-task-filter-core-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev039-task-filter-core -Filename scripts/verify-dev-039-task-filter-core-browser.pw.js -OutputDirectory output/playwright",
+    "verify:account-scoped-filter-prefs": "node scripts/verify-account-scoped-filter-prefs.mjs",
+    "verify:account-scoped-filter-prefs-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix account-scoped-filter-prefs -Filename scripts/verify-account-scoped-filter-prefs-browser.pw.js -OutputDirectory output/playwright",
     "verify:filter-menu-portal-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix filter-menu-portal -Filename scripts/verify-filter-menu-portal-browser.pw.js -OutputDirectory output/playwright",
     "verify:dev-039-task-workbench-placement-lanes": "node scripts/verify-dev-039-task-workbench-placement-lanes.mjs",
     "verify:dev-039-task-workbench-placement-lanes-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev039-placement-lanes -Filename scripts/verify-dev-039-task-workbench-placement-lanes-browser.pw.js -OutputDirectory output/playwright",

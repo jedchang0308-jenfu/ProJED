@@ -296,6 +296,11 @@ async (page) => {
     const menuTask = page.locator(`${selector}[data-task-id="${escapedTaskIdForMenu}"]`).first();
     await menuTask.click({ button: 'right', position: clickPosition });
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const contextMenuSelectedCount = await page.locator(`[data-task-id="${taskId}"][data-task-selected="true"]`).count();
+    assert(contextMenuSelectedCount >= 1, `${mode} context menu should preserve the target selection preview`, {
+      taskId,
+      contextMenuSelectedCount,
+    });
     const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
     assert(renameMenuCount === 0, `${mode} context menu should not expose task rename`, { renameMenuCount });
     await page.keyboard.press('Escape');
@@ -342,6 +347,11 @@ async (page) => {
     assert(Boolean(contextBox), 'mindmap context node should remain measurable after clearing selection');
     await page.mouse.click(contextBox.x + Math.min(24, contextBox.width / 2), contextBox.y + Math.min(16, contextBox.height / 2), { button: 'right' });
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const contextMenuSelectedCount = await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count();
+    assert(contextMenuSelectedCount === 1, 'mindmap context menu should preserve the target selection preview', {
+      taskId,
+      contextMenuSelectedCount,
+    });
     const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
     assert(renameMenuCount === 0, 'mindmap context menu should not expose task rename', { renameMenuCount });
     await page.keyboard.press('Escape');

@@ -16,6 +16,7 @@ import {
   filterMeetingSynthesisActivities,
   isLowValueMeetingActivity,
   type MeetingSynthesisInput,
+  type MeetingSynthesisResponse,
 } from '../utils/meetingRecordSynthesis';
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
 import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
@@ -164,6 +165,7 @@ const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({
   startedAt: record.startedAt,
   endedAt: record.endedAt,
   recordedBy: record.recordedBy,
+  metadata: record.metadata,
   taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
 });
 
@@ -205,6 +207,28 @@ const formatDateRange = (value: Record<string, unknown> | undefined) => {
   return `${start} 至 ${end}`;
 };
 
+const formatDateChange = (before: Record<string, unknown> | undefined, after: Record<string, unknown> | undefined) => {
+  const beforeStart = typeof before?.startDate === 'string' && before.startDate ? before.startDate : '';
+  const afterStart = typeof after?.startDate === 'string' && after.startDate ? after.startDate : '';
+  const beforeEnd = typeof before?.endDate === 'string' && before.endDate ? before.endDate : '';
+  const afterEnd = typeof after?.endDate === 'string' && after.endDate ? after.endDate : '';
+  const startChanged = beforeStart !== afterStart;
+  const endChanged = beforeEnd !== afterEnd;
+
+  if (!startChanged && !endChanged) return '';
+  if (startChanged && !endChanged) {
+    if (!afterStart) return `開始日已取消（原為「${beforeStart || '未設定'}」）。`;
+    if (!beforeStart) return `開始日設定為「${afterStart}」。`;
+    return `開始日由「${beforeStart}」改為「${afterStart}」。`;
+  }
+  if (!startChanged && endChanged) {
+    if (!afterEnd) return `到期日已取消（原為「${beforeEnd || '未設定'}」）。`;
+    if (!beforeEnd) return `到期日設定為「${afterEnd}」。`;
+    return `到期日由「${beforeEnd}」改為「${afterEnd}」。`;
+  }
+  return `日期由「${formatDateRange(before)}」改為「${formatDateRange(after)}」。`;
+};
+
 const getPayloadAssigneeIds = (payload: Record<string, unknown>, side: 'before' | 'after') => {
   const sidePayload = payload[side] as Record<string, unknown> | undefined;
   const assigneeIds = sidePayload?.assigneeIds;
@@ -239,7 +263,7 @@ const summarizeMeetingActivity = (activity: MeetingTaskActivityInput) => {
   if (activity.eventType === 'task_dates_changed') {
     const before = payload.before as Record<string, unknown> | undefined;
     const after = payload.after as Record<string, unknown> | undefined;
-    return `日期由「${formatDateRange(before)}」改為「${formatDateRange(after)}」。`;
+    return formatDateChange(before, after);
   }
   if (activity.eventType === 'task_assigned') {
     return `主責成員改為「${formatAssignees(getPayloadAssigneeIds(payload, 'after'))}」。`;
@@ -269,6 +293,65 @@ const resetMeetingSynthesisState = {
   meetingSynthesisError: null,
   meetingSynthesisWarnings: [],
   meetingSynthesisProvider: null,
+};
+
+type MeetingSynthesisTraceMetadata = ReturnType<typeof createMeetingSynthesisTraceMetadata>;
+
+const createMeetingSynthesisTraceMetadata = (
+  result: MeetingSynthesisResponse,
+  sourceContent: string,
+  outputContent: string,
+) => ({
+  runId: result.runId,
+  contractVersion: result.contractVersion,
+  functionVersion: result.functionVersion,
+  provider: result.provider,
+  model: result.model,
+  generatedAt: result.generatedAt,
+  normalization: result.normalization,
+  quality: result.quality,
+  sourceContent,
+  outputContent,
+});
+
+const getMeetingSynthesisTraceMetadata = (draft: RecordDraft): MeetingSynthesisTraceMetadata | null => {
+  const trace = draft.metadata?.meetingSynthesis;
+  return trace && typeof trace === 'object' && !Array.isArray(trace)
+    ? trace as MeetingSynthesisTraceMetadata
+    : null;
+};
+
+const normalizeSynthesisContentForComparison = (content: string) =>
+  content.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').trim();
+
+const getMeetingSynthesisSourceDraft = (draft: RecordDraft): RecordDraft => {
+  const trace = getMeetingSynthesisTraceMetadata(draft);
+  if (
+    trace &&
+    typeof trace.sourceContent === 'string' &&
+    typeof trace.outputContent === 'string' &&
+    normalizeSynthesisContentForComparison(trace.outputContent) === normalizeSynthesisContentForComparison(draft.content)
+  ) {
+    return { ...draft, content: trace.sourceContent };
+  }
+  return draft;
+};
+
+const getMeetingSynthesisMergeViolations = (aiContent: string, mergedContent: string) => {
+  const violations: string[] = [];
+  for (const heading of ['1. 本次會議總結', '2. 任務討論與結論', '3. 其他']) {
+    if (!aiContent.includes(heading)) continue;
+    const occurrenceCount = mergedContent.split(heading).length - 1;
+    if (occurrenceCount !== 1) violations.push(`SECTION_COUNT:${heading}:${occurrenceCount}`);
+  }
+  const mergedTaskIds = new Set(extractTaskMentionIds(mergedContent));
+  if (extractTaskMentionIds(aiContent).some(taskId => !mergedTaskIds.has(taskId))) {
+    violations.push('TASK_MENTION_LOST');
+  }
+  if (/^2\.\d+(?:\.\d+)*\s+/m.test(mergedContent) && !mergedContent.includes('2. 任務討論與結論')) {
+    violations.push('ORPHAN_TASK_HEADING');
+  }
+  return violations;
 };
 
 type MeetingSynthesisTaskInput = MeetingSynthesisInput['tasks'][number];
@@ -450,6 +533,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       startedAt: record.startedAt,
       endedAt: record.endedAt,
       recordedBy: record.recordedBy,
+      metadata: record.metadata,
       taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
       legacyTaskLinkNodeIds: record.taskLinks
         .map(link => link.nodeId)
@@ -632,14 +716,27 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     });
 
     try {
+      const synthesisSourceDraft = getMeetingSynthesisSourceDraft(preservedDraft);
       const result = await synthesizeMeetingRecord(
-        createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes),
+        createMeetingSynthesisInput(synthesisSourceDraft, meetingActivities, nodes),
       );
-      const mergedContent = mergeHumanDraftWithAiSynthesis(result.content, preservedDraft.content);
+      const mergedContent = mergeHumanDraftWithAiSynthesis(result.content, synthesisSourceDraft.content);
+      const mergeViolations = getMeetingSynthesisMergeViolations(result.content, mergedContent);
+      if (mergeViolations.length > 0) {
+        throw new Error('AI 整理結果在合併後未通過完整性檢查，原始草稿已保留，請重試。');
+      }
       const nextDraft = syncDraftContentLinks(
         {
           ...preservedDraft,
           status: 'draft',
+          metadata: {
+            ...(preservedDraft.metadata ?? {}),
+            meetingSynthesis: createMeetingSynthesisTraceMetadata(
+              result,
+              synthesisSourceDraft.content,
+              mergedContent,
+            ),
+          },
           legacyTaskLinkNodeIds: Array.from(new Set([
             ...(preservedDraft.legacyTaskLinkNodeIds ?? []),
             ...result.linkedTaskIds,
