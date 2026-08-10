@@ -112,9 +112,10 @@ assert(
   'spec and dev task record the Phase 2B cross-device contract',
   source.spec.includes('## Phase 2B：未歸位任務帳號同步') &&
     source.spec.includes('task_workbench_unplaced_items') &&
-    source.spec.includes('同帳號跨裝置一致') &&
-    source.devTask.includes('本機實作完成 / Supabase migration與正式環境待驗證') &&
-    source.devTask.includes('migration readback'),
+    source.spec.includes('同一 Supabase 帳號') &&
+    source.spec.includes('跨裝置') &&
+    source.devTask.includes('正式環境已交付 / authenticated two-device smoke待補') &&
+    source.devTask.includes('migration history/readback'),
 );
 
 assert(

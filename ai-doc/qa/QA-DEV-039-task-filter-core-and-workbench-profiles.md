@@ -2,7 +2,7 @@
 
 關聯 DEV：DEV-039
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
-狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Phase 2B Release Gate Passed / Authenticated Smoke Pending / Local Automated QC Passed / All-Phase Coverage Complete
 建立日期：2026-07-02
 最新修正：
 - 2026-08-07 account-scoped filter memory follow-up：新增看板與工作台篩選狀態的帳號隔離驗證；以兩個本機測試帳號實際點選「負責人/協作」，確認看板與工作台各自寫入帳號 uid scope，帳號 B 不繼承帳號 A，切回帳號 A 可恢復。舊版共用 key 的一次性遷移與行事曆訂閱 owner/RLS 邊界另以 static gate 驗證。
@@ -332,7 +332,7 @@ Not covered by this slice：
 
 ## Phase 2B QA Addendum：未歸位任務帳號同步
 
-狀態：本機實作與 static gate 完成；Supabase migration 尚未套用遠端，authenticated readback、雙裝置 smoke 與 production deploy 待 release gate。
+狀態：Production migration/readback、release gate 與 app-shell smoke 通過；authenticated two-device smoke 待補。
 
 - 同一登入帳號在桌機與手機載入工作台時，`未歸位` 任務應以 `owner_id + task id` 取得同一組資料；新增、修改、刪除與移入/移出未歸位 lane 需保持 CRUD parity。
 - 不同登入帳號不得讀取或寫入彼此的未歸位任務；RLS readback 需確認 select/insert/update/delete 均受 `auth.uid() = owner_id` 限制。

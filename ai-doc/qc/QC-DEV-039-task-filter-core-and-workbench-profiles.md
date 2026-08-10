@@ -3,7 +3,7 @@
 關聯 DEV：DEV-039
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
 關聯 QA：`ai-doc/qa/QA-DEV-039-task-filter-core-and-workbench-profiles.md`
-狀態：Phase 1/1A + Phase 1B + Phase 1C Local Automated QC Passed / Phase 2 Cross-Board Source Slice Local Automated QC Passed / Phase 2A Drag Trigger Parity Local Automated QC Passed / DB unchanged / Production Release Not Deployed + Requires Explicit Authorization
+狀態：Phase 1/1A + Phase 1B + Phase 1C Local Automated QC Passed / Phase 2 Cross-Board Source Slice Local Automated QC Passed / Phase 2A Drag Trigger Parity Local Automated QC Passed / Phase 2B Production Migration and Deploy Passed / Authenticated Smoke Pending
 執行日期：2026-07-02；Phase 2A evidence added 2026-07-07
 
 > Current Supersession Note - 2026-07-17：使用者確認 Workbench `placed row` 不能拖。
@@ -220,18 +220,18 @@ Phase 2A QC 結果：
 
 ## DB / Production 邊界
 
-- Phase 1、Phase 2 slice 與 Phase 2A 沒有新增 Supabase schema；Phase 2B 已新增未歸位任務 migration/RLS/service，但本輪僅完成本機 static contract，remote readback 與正式套用仍待 release gate。
+- Phase 1、Phase 2 slice 與 Phase 2A 沒有新增 Supabase schema；Phase 2B 已新增未歸位任務 migration/RLS/service，production readback 與正式套用已完成。
 - 未改 `CalendarSubscriptionsView` / DEV-037 行事曆訂閱程式碼；DEV-037 conditional gate 可標示為 not touched。
-- 未部署 production；Phase 1C 本機前置 QC 已完成。若要部署，仍需取得使用者明確授權並另走 `deployment-release-gate`。
+- production migration 與 Firebase Hosting deploy 已完成；Level 4 app-shell/artifact provenance smoke 通過。Authenticated two-device feature smoke 仍需使用者登入正式站後補做。
 
 ## 殘餘風險
 
 - 全域任務平台 Phase 2 cross-board source slice 與 Phase 2A drag trigger parity 已完成，但 visible partial/error summary UI 與 DB/RLS/RPC 權限矩陣仍需另行授權。
-- 工作台每看板篩選 state 與 Supabase backend 的未歸位任務均依登入帳號隔離；Phase 2B 的正式跨裝置一致性仍待 migration readback、authenticated two-device smoke 與 production deploy。
-- Phase 1B placement lanes、Phase 1C result parity 與 Phase 2A drag trigger parity 已實作並通過本機自動化 QC；目前正式環境發布仍需額外部署授權與 production smoke。
-- Phase 1C 未涵蓋 production smoke；正式環境資料、瀏覽器登入狀態與遠端部署結果仍需 deployment gate 驗證。
+- 工作台每看板篩選 state 與 Supabase backend 的未歸位任務均依登入帳號隔離；正式 migration/readback 與 production deploy 已完成，authenticated two-device smoke 仍待補。
+- Phase 1B placement lanes、Phase 1C result parity 與 Phase 2A drag trigger parity 已實作並通過本機自動化 QC；Phase 2B production release gate 與 app-shell/artifact smoke 已通過，authenticated two-device smoke 仍待補。
+- Phase 1C 本身未涵蓋 production smoke；本次 Phase 2B release gate 已補上正式環境部署與 artifact provenance，正式資料修復仍不在本輪範圍。
 - 設定檔、團隊預設與 profile/save/copy UI 仍不在本 DEV；未歸位任務帳號同步已由 Phase 2B 明確承接，不得退回舊的全域 localStorage 語意。
 
 ## Phase 2B QC Addendum：未歸位任務帳號同步
 
-本機已通過 `verify:dev-039-task-workbench-cross-device` 20/20、TypeScript、lint 與 build；證據涵蓋 account-owned migration、RLS policies/grants、Supabase service CRUD、一次性 local merge、remote failure fallback、WBS hydration 與 account isolation guard。正式 Supabase migration、RLS SQL readback、authenticated two-device smoke 與 production deploy 尚未執行，因此本 addendum 不宣稱正式環境已具備跨裝置一致性。
+本機已通過 `verify:dev-039-task-workbench-cross-device` 20/20、TypeScript、lint 與 build；證據涵蓋 account-owned migration、RLS policies/grants、Supabase service CRUD、一次性 local merge、remote failure fallback、WBS hydration 與 account isolation guard。Production `20260715143000` / `20260810093403` migration、RLS table/policy/grant readback、Firebase Hosting deploy 與 Level 4 app-shell/artifact provenance smoke 已通過。Authenticated two-device smoke 尚待使用者登入正式站後補做，因目前自動化環境沒有 production OAuth 測試帳號。

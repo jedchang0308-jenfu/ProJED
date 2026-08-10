@@ -2,10 +2,10 @@
 
 關聯 DEV：DEV-039
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Production Release Not Deployed + Requires Explicit Authorization / All-Phase Coverage Complete
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / All-Phase Coverage Complete
 
 2026-08-07 account-scoped filter memory addendum：使用者要求過濾器狀態改為每個登入帳號各自記憶。本 addendum 覆寫本文中「工作台篩選只存在當次元件 state、不得保存」的舊決策，但不引入 profile、儲存按鈕、另存、複製或團隊共用設定。看板與工作台的狀態篩選、到期／逾期、負責人/協作、標籤、關鍵字、顯示設定及工作台選定看板，均以登入帳號 uid 作為 localStorage scope；既有未分帳號 key 只在首次登入時遷移給當前帳號，遷移後刪除共用 key。行事曆訂閱篩選仍由 Supabase `owner_user_id` 與 RLS 隔離，不改其資料模型。
-2026-08-10 cross-device unplaced-task addendum：使用者指出同一帳號手機與電腦的「未歸位」任務不一致，並確認「請執行」。本 addendum 覆寫本文中「未歸位跨裝置同步不在 scope」的舊決策：Supabase backend 的未歸位任務改存 `task_workbench_unplaced_items`，以登入帳號 `owner_id` + 任務 `id` 隔離；首次載入時將既有本機 localStorage 任務以 updatedAt 合併到雲端，成功後清除本機 staging cache。Firebase / local-test backend 保留原有本機 fallback 語意，正式 migration / deploy 仍需另走 release gate。
+2026-08-10 cross-device unplaced-task addendum：使用者指出同一帳號手機與電腦的「未歸位」任務不一致，並確認「請執行」。本 addendum 覆寫本文中「未歸位跨裝置同步不在 scope」的舊決策：Supabase backend 的未歸位任務改存 `task_workbench_unplaced_items`，以登入帳號 `owner_id` + 任務 `id` 隔離；首次載入時將既有本機 localStorage 任務以 updatedAt 合併到雲端，成功後清除本機 staging cache。Firebase / local-test backend 保留原有本機 fallback 語意；正式 migration / deploy 已完成，authenticated two-device smoke 待補。
 2026-08-04 DEV-062 addendum：狀態 filter 依 `SPEC-062` 只暴露待辦、進行中、暫緩、完成；legacy delayed／unsure 在前端收斂為待辦。「逾期」是到期日衍生條件，位於到期日區，不是第五種人工狀態。
 2026-08-04 status-filter refresh addendum：使用者變更任務狀態時，任務資料與持久化仍立即更新；只有變更前後在目前篩選條件下跨越「命中／未命中」邊界時，才保留變更前的任務篩選投影並顯示待更新控制。兩個狀態都命中或都不命中時，篩選結果沒有改變，不得顯示 `更新`。影響判斷需涵蓋直接任務與此次狀態變更造成的祖先 roll-up，但 badge 只計唯一直接操作任務。工具列在確有待套用結果時，將過濾器與 `更新` 呈現為同一個複合式控制：共用外框、零間距、中間分隔線，並位於復原／重做左側；點擊 `更新` 後才以最新狀態重算所有共用任務篩選結果。若後續狀態使篩選 membership 回到既有投影，即使狀態值不完全相同，該筆也不再計數。手機只顯示更新圖示與數量，並保留完整 `aria-label`。
 建立日期：2026-07-02
@@ -136,7 +136,7 @@ AI assumptions：
 
 AI assumptions：
 
-- 使用者 2026-08-10 明確授權本輪補上 Supabase 未歸位任務帳號同步；正式環境 migration、production deploy 與正式資料修復仍未執行。
+- 使用者 2026-08-10 明確授權本輪補上 Supabase 未歸位任務帳號同步；正式環境 migration 與 production deploy 已由 release gate 完成，既有帳號正式資料修復未執行，authenticated two-device smoke 待補。
 - 若現有 Supabase / Firestore API 沒有可安全取得全部可見任務的查詢，RD 應建立 service adapter；若需要 DB migration / RLS 變更，必須先停下取得授權。本輪使用既有 `supabaseNodeService.listByProject()`，未新增 SQL/RPC/RLS。
 - `unplaced tasks` 的 legacy fallback 仍使用本機 localStorage；Supabase backend 由 Phase 2B 提供帳號歸屬與跨裝置同步，Firebase / local-test backend 暫保留本機語意。
 
@@ -678,11 +678,11 @@ Stop conditions：
 | Filter UI section 元件化 | Same Spec Phase | Phase 3 | 兩欄工作台穩定後，RD 判定重複 UI 已造成維護成本 |
 | Profile / 設定檔 / 儲存 / 複製 / 同步 | Cancelled for DEV-039 | No active target | 使用者已明確取消；若未來重啟需新增 DEV 並重新決策 |
 | Calendar subscription filters | New DEV | DEV-037 | 依 DEV-037 source-scope contract 處理 |
-| Production deploy / remote migration / data repair | Blocked Human Re-entry | deployment-release-gate / Supabase gate | Phase 1C QC passed 後，使用者明確授權 production 或 DB operation |
+| Production deploy / remote migration / data repair | Production deploy and migration complete / data repair blocked | deployment-release-gate / Supabase gate | 使用者已明確授權並完成 production 與 DB operation；資料修復仍需另行授權 |
 
 ## Phase 2B：未歸位任務帳號同步
 
-Document status：Local Implementation / TypeScript Passed / Remote Migration and Production Deploy Pending
+Document status：Production Migration and Deploy Complete / Authenticated Two-Device Smoke Pending
 
 Purpose：讓同一登入帳號在手機、電腦與不同瀏覽器看到一致的「未歸位」任務，同時保留既有 localStorage 的離線與 migration fallback。
 
@@ -694,9 +694,15 @@ Implemented scope：
 - 未歸位新增、修改、刪除與移入已歸位看板都同步更新 Supabase；遠端失敗時保留本機 fallback，避免使用者當下資料消失。
 - Supabase backend 不再由全域未分帳號 localStorage 直接併入 store，避免不同帳號在同一瀏覽器互相看到資料。
 
+Release evidence：
+
+- Production Supabase project `knodlkxqpcqyrtgwpdst` 已套用 `20260715143000` 與 `20260810093403`；remote readback 確認 table、RLS、4 policies、authenticated/service_role grants 與 migration history。
+- Release commit：`963befe171e3f393cde0c41ecf5d9591ebf8f239`；Firebase Hosting production：`https://projed-cc78d.web.app`；Level 4 app-shell 與 artifact provenance smoke 通過，production bundle 為 `assets/index-DiYPWj3V.js` / `assets/index-CwBhkroa.css`。
+- Authenticated two-device smoke 尚待使用者登入正式站後補做；自動化環境沒有 production OAuth 測試帳號。
+
 Out of scope：
 
-- 正式環境 migration、production deploy、既有帳號正式資料修復與即時 Realtime 推播；需另行執行 release gate。
+- 既有帳號正式資料修復與即時 Realtime 推播；兩者需另行執行對應 gate。
 - Firebase backend 與 local-test backend 的跨裝置同步；兩者維持各自既有資料後端契約。
 
 Acceptance：
@@ -715,10 +721,10 @@ Acceptance：
 | Phase 1A | Authorized | Implemented / Historical QC Passed | 未歸類新增/顯示初版 | 功能等價拖移、雙 lane 定位 | 使用者要求加回未歸類任務新增/顯示 | 初版新增/顯示可用 | DEV-039 static/browser historical evidence |
 | Phase 1B | Authorized | Implemented / Local Automated QC Passed | 未歸位 / 已歸位看板 placement lanes、雙向拖移、任務卡功能等價 | profile/storage/copy/sync、production release、DB migration unless separately authorized | 使用者修正未歸位 / 已歸位為 placement lanes 並授權補回 | 未歸位與已歸位任務同功能且可雙向拖移 | placement lane static/browser、DEV-028 regression、TS、build |
 | Phase 1C | Authorized | Implemented / Local Automated QC Passed | filter result projection、matchedTaskIds 一致、context-only ancestors、負責人選項來源對齊 | profile/storage/sync、schema/RLS/migration、Phase 2 全部可見任務資料來源、production deploy | 使用者指出看板與工作台同 filter 結果不一致並授權 Phase 1C RD | 同看板同條件下看板與工作台 `matchedTaskIds` 一致 | parity static/browser、Phase 1/1B regression、TS、build |
-| Production Release Gate | Blocked Pending Human Authorization | Must Follow Phase 1C QC | 正式環境發布、production smoke | 未授權部署或跳過 deployment-release-gate | Phase 1C QC passed + 使用者明確 deployment authorization | 正式站 smoke 通過且保留 rollback readiness | deployment-release-gate |
+| Production Release Gate | Human Authorized / Level 4 Passed | Production release evidence recorded | 正式環境發布、production smoke、artifact provenance | 未授權部署或跳過 deployment-release-gate；authenticated feature smoke 若無安全測試帳號則保留 manual pending | Phase 1C QC passed + 使用者明確 deployment authorization | 正式站 smoke 通過且保留 rollback reference；特定功能需補 authenticated smoke | deployment-release-gate、release commit `963befe` |
 | Phase 2 | Frontend/local slice Authorized | Cross-Board Source Slice Implemented / Local Automated QC Passed | `listWorkbenchTasks()`、`mergeUnplacedTasks()`、`isTaskEffectivelyVisible()`、cross-board task source、scoped store merge、刪除後不殘留 | profile storage、未歸位跨裝置同步（由 Phase 2B 覆寫）、visible partial/error summary UI、production migration/deploy/data repair、RPC/RLS | 使用者授權 Phase 2 RD；若需 RPC/RLS/migration 則另取授權 | active board A/B 時仍顯示所有可見 board 任務；刪除 task/archived ancestor 後不在 `所有任務排序` 殘留；selected board 不改 source scope | cross-board static/browser verifier、parity/placement regression、TS、build:test；DB role matrix if RPC/RLS changed |
 | Phase 2A | Authorized / Complete | Implemented / Local Automated QC Passed | 統一未歸位任務與所有任務排序列的 row root drag surface | sensor 調整、拖曳把手、資料模型、DB/RLS/migration、production deploy、手機新手勢 | 使用者確認以未歸位任務方式為主，且要求寫成開發文件、QA 計畫並完成 RD | 兩種 row 都共用 row-root drag surface；左鍵詳情、右鍵選單、手機長按與 hierarchy cue 不回歸 | Phase 2A static/browser drag-surface gate、DEV-028/029/039 regression、TS、build:test |
-| Phase 2B | Authorized by user / In implementation | Supabase account-owned unplaced persistence implemented / Local verification pending | 未歸位任務 Supabase table、RLS、首次 local migration、跨裝置 CRUD contract | production migration、production deploy、Realtime、Firebase/local-test cross-device sync | 使用者 2026-08-10 確認「請執行」；migration file、service、fallback、acceptance 已具備 | 同帳號跨裝置一致、跨帳號隔離、migration 失敗不遺失 local staging | migration static、RLS SQL readback、TypeScript、build、authenticated two-device smoke |
+| Phase 2B | Authorized by user / Production Migration and Deploy Complete | Supabase account-owned unplaced persistence deployed / Authenticated Smoke Pending | 未歸位任務 Supabase table、RLS、首次 local migration、跨裝置 CRUD contract | Realtime、Firebase/local-test cross-device sync；authenticated smoke 需安全測試帳號或使用者人工補測 | 使用者 2026-08-10 確認「請執行」；migration、service、fallback、acceptance、release gate 已具備 | 同帳號跨裝置一致、跨帳號隔離、migration 失敗不遺失 local staging | migration history/readback、RLS table/policy/grant readback、TypeScript、build、Level 4 artifact smoke；authenticated two-device smoke pending |
 | Phase 3 | Not Authorized | RD Contract Ready / Not Authorized | filter section componentization | 儲存功能、profile governance | Phase 2 或工作台 UI 穩定後，RD 判定重複 UI 已造成維護成本 | UI 重複減少且行為不變 | static/browser regression |
 | Phase 4 | Not Authorized | RD Contract Ready / Not Authorized | profile 遺留清理與防回流 gate | profile sync/governance | 發現舊 profile 概念、keys、文件或測試造成回流風險 | 舊 profile 概念不再回流 DEV-039 | static guard、docs audit |
 
