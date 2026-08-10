@@ -34,7 +34,7 @@ import {
   createNewUnplacedTaskNode,
   createUnplacedTaskNodeFromInboxItem,
   isTaskWorkbenchUnplacedTask,
-  readTaskWorkbenchUnplacedTasks,
+  loadTaskWorkbenchUnplacedTasks,
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
 } from '../features/taskWorkbench/placement';
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
@@ -520,6 +520,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const nodes = useWbsStore(state => state.nodes);
   const setNodes = useWbsStore(state => state.setNodes);
+  const hydrateUnplacedTasks = useWbsStore(state => state.hydrateUnplacedTasks);
   const addNode = useWbsStore(state => state.addNode);
   const workspaceMembers = useMemberStore(state => state.workspaceMembers);
   const boardMembers = useMemberStore(state => state.boardMembers);
@@ -789,34 +790,40 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
   React.useEffect(() => {
     if (!fallbackWorkspaceId) return;
-    const storedTasks = readTaskWorkbenchUnplacedTasks();
-    const legacyItems = getUnclassifiedItems(inboxItems);
-    const existingNodes = useWbsStore.getState().nodes;
-    const existingIds = new Set(Object.keys(existingNodes));
-    const hydratedTasks: TaskNode[] = [];
-    let nextOrder = Math.max(
-      -1,
-      ...storedTasks.map(task => task.order ?? 0),
-      ...Object.values(existingNodes)
-        .filter(isTaskWorkbenchUnplacedTask)
-        .map(task => task.order ?? 0),
-    ) + 1;
+    let cancelled = false;
+    const hydrate = async () => {
+      const storedTasks = await loadTaskWorkbenchUnplacedTasks(accountId);
+      if (cancelled) return;
+      hydrateUnplacedTasks(storedTasks);
 
-    storedTasks.forEach(task => {
-      if (!existingIds.has(task.id)) hydratedTasks.push(task);
-    });
+      const legacyItems = getUnclassifiedItems(inboxItems);
+      const existingNodes = useWbsStore.getState().nodes;
+      const existingIds = new Set(Object.keys(existingNodes));
+      const hydratedTasks: TaskNode[] = [];
+      let nextOrder = Math.max(
+        -1,
+        ...Object.values(existingNodes)
+          .filter(isTaskWorkbenchUnplacedTask)
+          .map(task => task.order ?? 0),
+        ...storedTasks.map(task => task.order ?? 0),
+      ) + 1;
 
-    legacyItems.forEach(item => {
-      const taskId = item.promotedTaskNodeId || createUnplacedTaskNodeFromInboxItem(item, fallbackWorkspaceId, nextOrder).id;
-      if (existingIds.has(taskId) || storedTasks.some(task => task.id === taskId)) return;
-      const task = createUnplacedTaskNodeFromInboxItem({ ...item, promotedTaskNodeId: taskId }, fallbackWorkspaceId, nextOrder);
-      hydratedTasks.push(task);
-      markInboxPromoted(item.id, task.id);
-      nextOrder += 1;
-    });
+      legacyItems.forEach(item => {
+        const taskId = item.promotedTaskNodeId || createUnplacedTaskNodeFromInboxItem(item, fallbackWorkspaceId, nextOrder).id;
+        if (existingIds.has(taskId) || storedTasks.some(task => task.id === taskId)) return;
+        const task = createUnplacedTaskNodeFromInboxItem({ ...item, promotedTaskNodeId: taskId }, fallbackWorkspaceId, nextOrder);
+        hydratedTasks.push(task);
+        markInboxPromoted(item.id, task.id);
+        nextOrder += 1;
+      });
 
-    hydratedTasks.forEach(task => addNode(task));
-  }, [addNode, fallbackWorkspaceId, inboxItems, markInboxPromoted]);
+      hydratedTasks.forEach(task => addNode(task));
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, addNode, fallbackWorkspaceId, hydrateUnplacedTasks, inboxItems, markInboxPromoted]);
 
   const handleCreateUnplacedTask = React.useCallback(() => {
     if (!canCreateTask || !fallbackWorkspaceId) return;

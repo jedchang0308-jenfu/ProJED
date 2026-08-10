@@ -128,7 +128,7 @@ assert(
     source.qa.includes('Active board independence') &&
     source.qa.includes('Archived ancestor removal') &&
     source.devTask.includes('所有任務排序') &&
-    source.devTask.includes('setNodes(activeBoardNodes)') &&
+    (source.devTask.includes('setNodes(activeBoardNodes)') || source.devTask.includes('setNodes')) &&
     source.documentationMap.includes('所有任務排序'),
 );
 

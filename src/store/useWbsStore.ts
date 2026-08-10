@@ -1,16 +1,17 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
 import type { ActivityEventType, Dependency, KanbanViewConfig, TaskNode, TaskStatus } from '../types';
-import { nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
+import { isSupabaseBackend, nodeService, dependencyService, workspaceService, boardService, tagService, eventLogService } from '../services/dataBackend';
 import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
+import useAuthStore from './useAuthStore';
 import { useTagStore } from './useTagStore';
 import {
   isTaskWorkbenchUnplacedTask,
+  persistRemoveTaskWorkbenchUnplacedTask,
+  persistTaskWorkbenchUnplacedTask,
   readTaskWorkbenchUnplacedTasks,
-  removeTaskWorkbenchUnplacedTask,
-  upsertTaskWorkbenchUnplacedTask,
 } from '../features/taskWorkbench/placement';
 import {
   getTaskAssigneeIds,
@@ -67,6 +68,9 @@ export interface WbsBoardActions {
    * 需同時重建索引
    */
   setNodes: (nodes: TaskNode[], options?: SetNodesOptions) => void;
+
+  /** Merge remotely hydrated unplaced tasks without writing them back during hydration. */
+  hydrateUnplacedTasks: (tasks: TaskNode[]) => void;
 
   /**
    * 新增單一任務節點
@@ -171,7 +175,7 @@ const mergeLocalUnplacedTasksForSetNodes = (
 
   [
     ...Object.values(currentNodes).filter(isTaskWorkbenchUnplacedTask),
-    ...readTaskWorkbenchUnplacedTasks(),
+    ...(isSupabaseBackend ? [] : readTaskWorkbenchUnplacedTasks()),
   ].forEach(task => {
     if (task.isArchived || mergedNodes.has(task.id)) return;
     mergedNodes.set(task.id, task);
@@ -549,6 +553,20 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(nodesRecord);
   },
 
+  hydrateUnplacedTasks: (tasks) => {
+    if (tasks.length === 0) return;
+    const currentNodes = get().nodes;
+    const nextNodes = { ...currentNodes };
+    tasks.forEach(task => {
+      const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(task));
+      if (!normalizedNode.isArchived && isTaskWorkbenchUnplacedTask(normalizedNode)) {
+        nextNodes[normalizedNode.id] = normalizedNode;
+      }
+    });
+    set({ nodes: nextNodes });
+    get()._buildIndices(nextNodes);
+  },
+
   addNode: (node) => {
     const state = get();
     const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
@@ -561,7 +579,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
-        upsertTaskWorkbenchUnplacedTask(normalizedNode);
+        void persistTaskWorkbenchUnplacedTask(normalizedNode, useAuthStore.getState().user?.uid);
     } else if (normalizedNode.workspaceId && normalizedNode.boardId) {
         nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).catch(console.error);
     }
@@ -897,13 +915,17 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     // 非同步寫入資料來源；跨看板/未歸位移動使用 create/delete，避免只 update 新路徑造成舊路徑殘留。
     if (newIsUnplaced) {
-        upsertTaskWorkbenchUnplacedTask(newNode);
+        if (newNode.isArchived) {
+            void persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid);
+        } else {
+            void persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid);
+        }
         if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
             nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
         }
     } else if (newNode.workspaceId && newNode.boardId) {
         if (oldWasUnplaced) {
-            removeTaskWorkbenchUnplacedTask(id);
+            void persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid);
             nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
         } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
             nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);

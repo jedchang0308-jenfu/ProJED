@@ -359,6 +359,16 @@ export type CalendarSubscriptionRow = {
   updated_at: string;
 };
 
+export type TaskWorkbenchUnplacedItemRow = {
+  owner_id: string;
+  id: string;
+  workspace_id: string;
+  task: Json;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -384,6 +394,7 @@ export interface Database {
       rag_sync_jobs: Table<RagSyncJobRow>;
       external_rag_objects: Table<ExternalRagObjectRow>;
       calendar_subscriptions: Table<CalendarSubscriptionRow>;
+      task_workbench_unplaced_items: Table<TaskWorkbenchUnplacedItemRow>;
     };
     Views: Record<string, never>;
     Functions: {

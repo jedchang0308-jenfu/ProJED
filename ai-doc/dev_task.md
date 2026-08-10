@@ -165,9 +165,10 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：完成設定中心 IA、資料範圍與高風險防呆。
   - 證據：`SPEC-038`、`QA/QC-DEV-038`
   - 計入交付：是
-- ✓ DEV-039 [交付點] [完成] [P1] [本機已驗證] 全域任務工作台與任務過濾器
-  - 摘要：完成任務 filter core、跨看板工作台、row-root parity 與跨看板 `所有任務排序`；狀態變更採資料即時儲存，只有目前 filter membership 確實改變時才顯示 `更新` 並延後重算篩選結果。
-  - 證據：`SPEC-039`、`QA/QC-DEV-039`、status-filter refresh static／browser QC；cross-board source gate 覆蓋 `setNodes(activeBoardNodes)` 不得覆蓋工作台來源的回歸條件
+- ◇ DEV-039 [交付點] [驗證中] [P1] [本機實作完成 / Supabase migration與正式環境待驗證] 全域任務工作台與任務過濾器
+  - 摘要：完成任務 filter core、跨看板工作台、row-root parity、跨看板 `所有任務排序`，並新增 Supabase 帳號歸屬的未歸位任務同步與本機一次性合併；正式環境 migration / deploy 尚未執行。
+  - 下一步：執行 migration readback、Supabase authenticated 跨裝置 smoke，再依 release gate 部署。
+  - 證據：`SPEC-039` Phase 2B、`QA/QC-DEV-039`、status-filter refresh static／browser QC；本輪追加 task-workbench migration/service static、TypeScript、build 與 cross-device acceptance，並保留 `setNodes(activeBoardNodes)` 不得覆蓋工作台來源的回歸條件。
   - 計入交付：是
 - ◇ DEV-040 [交付點] [驗證中] [P0] [remote Edge gate pending] 正式環境同型 BUG 風險硬化
   - 摘要：原始 BUG 已發布驗證，P0 bounded-failure addendum 尚待 remote Edge gate。

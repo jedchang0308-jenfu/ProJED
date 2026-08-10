@@ -59,8 +59,8 @@ assert(
     source.wbsStore.includes('isTaskWorkbenchUnplacedTask') &&
     source.wbsStore.includes('readTaskWorkbenchUnplacedTasks') &&
     source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes') &&
-    source.wbsStore.includes('upsertTaskWorkbenchUnplacedTask') &&
-    source.wbsStore.includes('removeTaskWorkbenchUnplacedTask') &&
+    source.wbsStore.includes('persistTaskWorkbenchUnplacedTask') &&
+    source.wbsStore.includes('persistRemoveTaskWorkbenchUnplacedTask') &&
     source.wbsStore.includes('oldWasUnplaced') &&
     source.wbsStore.includes('newIsUnplaced') &&
     source.wbsStore.includes('nodeService.create(newNode.workspaceId, newNode.boardId, newNode)') &&
@@ -207,7 +207,7 @@ assert(
 
 assert(
   'Task Workbench migrates legacy unclassified inbox items into task-equivalent unplaced cards',
-  source.taskWorkbench.includes('readTaskWorkbenchUnplacedTasks') &&
+  (source.taskWorkbench.includes('loadTaskWorkbenchUnplacedTasks') || source.taskWorkbench.includes('readTaskWorkbenchUnplacedTasks')) &&
     source.taskWorkbench.includes('getUnclassifiedItems(inboxItems)') &&
     source.taskWorkbench.includes('createUnplacedTaskNodeFromInboxItem') &&
     source.taskWorkbench.includes('markInboxPromoted') &&

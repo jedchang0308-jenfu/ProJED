@@ -137,7 +137,7 @@
 - 下方顯示區名稱為 `所有任務排序`，合併未歸位任務與符合 filter 的已歸位任務；預設依到期日由早到晚排序，未設到期日者排最後。
 - 全域任務平台過濾器必須是按鈕 + overlay，視覺上不可像第二個下拉欄位。
 - `未歸位 / 已歸位看板` 已以 placement lanes 補回；它們不是過濾器、不是任務狀態，也不是看板 selector 選項。
-- 未歸位任務與已歸位任務功能必須一樣，僅位置不同。
+- 未歸位任務與已歸位任務功能必須一樣，僅位置不同；Supabase backend 的未歸位資料需跟隨登入帳號跨裝置一致。
 - 任務可藉由拖移在未歸位與已歸位看板間雙向移動，且不得遺失或重複資料。
 - 同一 selected board、同一組 status / due / assignee / tag / keyword filter 下，看板與全域任務平台的 `matchedTaskIds` 必須一致。
 - 看板可顯示不符合 filter 的父層欄位 / 卡片作為 context-only container，但不得把它算成符合結果；全域任務平台只列真正符合條件的任務 identity。
@@ -193,7 +193,7 @@
 - 內建瀏覽器先提示用 Safari / Chrome 開啟，不用 403 或瀏覽器政策作主說明。
 - 使用者可選稍後或不再提示，且設定頁可重新顯示提示。
 - 右下角 QuickCaptureShell 浮窗不得再渲染；舊 `InboxItem` localStorage 僅保留為全域任務平台 `未歸位` lane 的遷移來源。
-- 正式雲端 Inbox、跨裝置同步、今日區塊與轉正式任務仍接 SPEC-002 後續交付，不在本輪宣告完成。
+- 正式雲端 Inbox、今日區塊與轉正式任務仍接 SPEC-002 後續交付；未歸位任務的帳號同步由 SPEC-039 Phase 2B 承接，正式 migration / deploy 仍須 release gate。
 
 ## Backlog Update - 2026-06-26
 

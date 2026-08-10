@@ -330,6 +330,15 @@ Not covered by this slice：
 - Supabase RPC/RLS/migration 與 DB role matrix；本輪只接既有 `supabaseNodeService.listByProject()`。
 - Production smoke / deployment-release-gate。
 
+## Phase 2B QA Addendum：未歸位任務帳號同步
+
+狀態：本機實作與 static gate 完成；Supabase migration 尚未套用遠端，authenticated readback、雙裝置 smoke 與 production deploy 待 release gate。
+
+- 同一登入帳號在桌機與手機載入工作台時，`未歸位` 任務應以 `owner_id + task id` 取得同一組資料；新增、修改、刪除與移入/移出未歸位 lane 需保持 CRUD parity。
+- 不同登入帳號不得讀取或寫入彼此的未歸位任務；RLS readback 需確認 select/insert/update/delete 均受 `auth.uid() = owner_id` 限制。
+- 首次載入時，legacy global/account localStorage 以任務 `updatedAt` 與遠端合併；遠端成功後清除 local staging，migration 失敗或資料表尚未部署時不得清除本機任務。
+- Firebase / local-test backend 仍維持本機 fallback，不把本 Phase 的 Supabase cross-device 結果套用到其他 backend。
+
 ## Phase 2A Drag Trigger Surface Parity Verification
 
 Phase 2A 已完成 RD implementation 與本機自動化 QC。QC 證據包含 static row-root contract、browser row-root hit-test、真實雙向拖曳、左鍵詳情、右鍵選單、mobile long press 與 DEV-028/029/039 regression；production release 仍未授權。

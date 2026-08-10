@@ -220,14 +220,18 @@ Phase 2A QC 結果：
 
 ## DB / Production 邊界
 
-- 不需要 Supabase DB QC：Phase 1、Phase 2 slice 與 Phase 2A 沒有新增 migration、RLS、membership、profile backend schema 或 RPC；Phase 2 只接既有 `supabaseNodeService.listByProject()`，Phase 2A 只改前端 row interaction surface。
+- Phase 1、Phase 2 slice 與 Phase 2A 沒有新增 Supabase schema；Phase 2B 已新增未歸位任務 migration/RLS/service，但本輪僅完成本機 static contract，remote readback 與正式套用仍待 release gate。
 - 未改 `CalendarSubscriptionsView` / DEV-037 行事曆訂閱程式碼；DEV-037 conditional gate 可標示為 not touched。
 - 未部署 production；Phase 1C 本機前置 QC 已完成。若要部署，仍需取得使用者明確授權並另走 `deployment-release-gate`。
 
 ## 殘餘風險
 
 - 全域任務平台 Phase 2 cross-board source slice 與 Phase 2A drag trigger parity 已完成，但 visible partial/error summary UI 與 DB/RLS/RPC 權限矩陣仍需另行授權。
-- 工作台每看板篩選 state 現已依登入帳號保存；帳號 A/B 真實瀏覽器切換驗證通過，未發現跨帳號繼承。未歸位任務資料仍是另一個 localStorage source，未因此升級成跨裝置同步。
+- 工作台每看板篩選 state 與 Supabase backend 的未歸位任務均依登入帳號隔離；Phase 2B 的正式跨裝置一致性仍待 migration readback、authenticated two-device smoke 與 production deploy。
 - Phase 1B placement lanes、Phase 1C result parity 與 Phase 2A drag trigger parity 已實作並通過本機自動化 QC；目前正式環境發布仍需額外部署授權與 production smoke。
 - Phase 1C 未涵蓋 production smoke；正式環境資料、瀏覽器登入狀態與遠端部署結果仍需 deployment gate 驗證。
-- 若未來重新要求設定檔、跨裝置同步或團隊預設，需新增 DEV，不能回填到 DEV-039。
+- 設定檔、團隊預設與 profile/save/copy UI 仍不在本 DEV；未歸位任務帳號同步已由 Phase 2B 明確承接，不得退回舊的全域 localStorage 語意。
+
+## Phase 2B QC Addendum：未歸位任務帳號同步
+
+本機已通過 `verify:dev-039-task-workbench-cross-device` 20/20、TypeScript、lint 與 build；證據涵蓋 account-owned migration、RLS policies/grants、Supabase service CRUD、一次性 local merge、remote failure fallback、WBS hydration 與 account isolation guard。正式 Supabase migration、RLS SQL readback、authenticated two-device smoke 與 production deploy 尚未執行，因此本 addendum 不宣稱正式環境已具備跨裝置一致性。
