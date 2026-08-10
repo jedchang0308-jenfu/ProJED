@@ -522,8 +522,12 @@ export const GlobalContextMenu: React.FC = () => {
             className="fixed z-[9999] flex w-[220px] flex-col overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
             style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: menuPosition.maxHeight }}
           >
-            <div className="mb-1 border-b border-gray-100 px-3 py-1.5 dark:border-gray-700/50">
-              <p className="truncate text-xs font-semibold text-gray-500" title={contextMenuState.title}>
+            <div className="mb-1 border-b border-gray-100 px-3 py-2 dark:border-gray-700/50">
+              <p
+                className="truncate text-sm font-bold text-gray-800 dark:text-gray-100"
+                title={contextMenuState.title}
+                data-context-menu-current-task-title="true"
+              >
                 {contextMenuState.title}
               </p>
             </div>
@@ -620,19 +624,23 @@ export const GlobalContextMenu: React.FC = () => {
             <button
               onClick={handleAddSibling}
               disabled={!canCreateTask}
+              title="與目前任務同層新增"
+              data-context-menu-add-sibling="true"
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <Plus size={14} className="flex-shrink-0 text-sky-500" />
-              <span>新增同階任務</span>
+              <span>新增並列任務</span>
             </button>
 
             <button
               onClick={handleAddChild}
               disabled={!canCreateTask}
+              title="放在目前任務底下新增"
+              data-context-menu-add-child="true"
               className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              <Plus size={14} className="flex-shrink-0 text-blue-500" />
-              <span>新增下層任務</span>
+              <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />
+              <span>新增子任務</span>
             </button>
 
             <button

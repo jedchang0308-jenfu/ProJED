@@ -2,17 +2,16 @@ import React from 'react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Link } from 'lucide-react';
+import { Link } from 'lucide-react';
 import dayjs from 'dayjs';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
 import { KanbanDependencyContext } from '../BoardView';
-import { Button } from '../ui/Button';
 import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
-import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import { TaskDateBadge } from './TaskDateBadge';
 
@@ -29,11 +28,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const wbsDependencies = useWbsStore((state) => state.dependencies);
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
-  const addNode = useWbsStore((state) => state.addNode);
-  const activeWorkspaceId = useBoardStore((state) => state.activeWorkspaceId);
   const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
-  const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const { canMoveTask, canCreateDependency } = useBoardPermissions();
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
@@ -141,26 +138,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     !isChecklistLayerTargeted &&
     (isOver || overData?.nodeId === nodeId || isOverColumnDescendant)
   );
-
-  const handleAddCard = () => {
-    if (!canCreateTask) return;
-    if (!node) return;
-    const newNode: TaskNode = {
-      id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
-      workspaceId: activeWorkspaceId || '',
-      boardId: node.boardId,
-      parentId: nodeId,
-      title: '新任務',
-      status: 'todo',
-      nodeType: 'task',
-      order: children.length,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    addNode(newNode);
-    prepareNewTaskNaming(newNode.id);
-  };
 
   // Keep all hooks above this guard so missing data never changes hook order.
   if (!node) {
@@ -314,24 +291,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               />
             ))}
           </SortableContext>
-        </div>
-
-        <div className="mt-[6px]">
-          <Button
-            type="button"
-            variant="ghost"
-            size="none"
-            fullWidth
-            disabled={!canCreateTask}
-            onClick={handleAddCard}
-            data-kanban-add-task-button="true"
-            data-kanban-add-task-visual="borderless"
-            data-mobile-pan-pass-through="true"
-            className="gap-1.5 px-[10px] py-[5px] text-xs font-semibold text-slate-400 hover:bg-white/70 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/40 group"
-          >
-            <Plus size={14} className="transition-transform group-hover:scale-110" />
-            新增任務
-          </Button>
         </div>
 
         <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />

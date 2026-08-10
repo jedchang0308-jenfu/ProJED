@@ -32,12 +32,15 @@ const checks = [
     path: 'src/components/Sidebar.tsx',
     label: 'sidebar records library entry',
     snippets: [
-      'BookOpenText',
       'data-sidebar-records-button="true"',
       "setView('records')",
       'isRecordsView',
       '紀錄庫',
       '設定',
+    ],
+    forbiddenSnippets: [
+      'BookOpenText',
+      '<Settings size={16}',
     ],
   },
   {

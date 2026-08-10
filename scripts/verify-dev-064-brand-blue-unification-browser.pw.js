@@ -108,13 +108,9 @@ async (page) => {
       return {
         unplacedLane: readBackground('[data-task-workbench-unclassified-section="true"]'),
         placedLane: readBackground('[data-task-workbench-placed-board-lane="true"]'),
-        unplacedAccent: readBackground('[data-task-workbench-header-accent="unplaced"]'),
-        placedAccent: readBackground('[data-task-workbench-header-accent="placed"]'),
       };
     });
     record('QA-064-003', statusBackground === tokenEvidence.primary['600'] &&
-      workbenchEvidence.unplacedAccent === tokenEvidence.primary['500'] &&
-      workbenchEvidence.placedAccent === tokenEvidence.primary['500'] &&
       workbenchEvidence.unplacedLane === workbenchEvidence.placedLane,
     { statusBackground, workbenchEvidence });
     await page.screenshot({ path: screenshots.board, fullPage: false });

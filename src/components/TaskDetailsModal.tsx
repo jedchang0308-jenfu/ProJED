@@ -11,6 +11,7 @@ import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useBoardStore from '../store/useBoardStore';
 import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { MANUAL_TASK_STATUSES, normalizeManualTaskStatus, TASK_STATUS_LABELS } from '../utils/taskStatus';
+import { buildAncestorPath } from '../utils/taskHierarchy';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 
 interface TaskDetailsModalProps {
@@ -72,30 +73,6 @@ const readSavedSize = () => {
   } catch {
     return defaultSize;
   }
-};
-
-const buildAncestorPath = (
-  node: TaskNode | undefined,
-  nodes: Record<string, TaskNode>
-): TaskNode[] => {
-  if (!node?.parentId) return [];
-
-  const ancestors: TaskNode[] = [];
-  const seenAncestorIds = new Set<string>();
-  let currentParentId: string | null = node.parentId;
-
-  while (currentParentId) {
-    if (seenAncestorIds.has(currentParentId)) break;
-    seenAncestorIds.add(currentParentId);
-
-    const parent: TaskNode | undefined = nodes[currentParentId];
-    if (!parent || parent.isArchived) break;
-
-    ancestors.unshift(parent);
-    currentParentId = parent.parentId;
-  }
-
-  return ancestors;
 };
 
 const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
@@ -505,7 +482,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
           data-task-details-header="true"
         >
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-1">
               {canEditTask ? (
                 <input
                   ref={titleInputRef}
@@ -531,14 +508,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                 <nav
                   aria-label="任務完整位置"
                   data-task-details-parent-path="true"
-                  className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs font-medium leading-5 text-slate-500"
+                  className="flex min-w-0 items-center gap-x-1 overflow-hidden whitespace-nowrap text-[11px] font-medium leading-4 text-slate-500"
                 >
-                  <span className="shrink-0 font-semibold text-slate-400">位置</span>
                   {ancestorPath.map((ancestor, index) => (
                     <React.Fragment key={ancestor.id}>
                       <span
                         data-task-details-parent-name="true"
-                        className="inline-flex min-w-0 max-w-[min(13rem,42vw)] truncate rounded-md border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-slate-600"
+                        className="min-w-0 max-w-[min(11rem,30vw)] truncate text-slate-600"
                         title={ancestor.title || '未命名任務'}
                       >
                         {ancestor.title || '未命名任務'}

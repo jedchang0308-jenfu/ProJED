@@ -108,7 +108,7 @@ async (page) => {
   const card = page.locator('[data-task-id="completed-insert-parent"]').first();
   await card.waitFor({ state: 'visible', timeout: 10000 });
   await card.click({ button: 'right' });
-  await page.getByText('新增下層任務').click();
+  await page.getByText('新增子任務').click();
 
   await page.waitForFunction(() => {
     const stored = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');

@@ -283,8 +283,13 @@ async (page) => {
   }
   await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 15000 });
   const workbench = page.locator('[data-task-workbench-panel="true"]');
-  await workbench.locator('[data-task-workbench-unclassified-input="true"]').fill('DEV-040 正式未歸位任務');
-  await workbench.locator('[data-task-workbench-unclassified-add="true"]').click();
+  await workbench.locator('[data-task-workbench-unclassified-modal-add="true"]').click();
+  const createdTaskModal = page.locator('[data-task-details-modal="true"]');
+  await createdTaskModal.waitFor({ state: 'visible', timeout: 10000 });
+  await createdTaskModal.locator('[data-task-details-title-input="true"]').fill('DEV-040 正式未歸位任務');
+  await createdTaskModal.locator('[data-task-details-save="true"]').click();
+  await createdTaskModal.locator('button[title="關閉"]').click();
+  await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
   await workbench.locator('[data-task-workbench-unplaced-task-card="true"]', { hasText: 'DEV-040 正式未歸位任務' }).waitFor({ state: 'visible', timeout: 10000 });
 
   const boardButtons = page.locator('aside button, nav button').filter({ hasText: /DEV-040 [AB] 看板/ });

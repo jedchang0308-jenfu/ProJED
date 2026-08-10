@@ -310,6 +310,34 @@ body[data-kanban-mouse-pan-active="true"] * {
   background: #94a3b8;
 }
 
+/* 側欄內容區的低干擾垂直滾動條：保留可發現性，不搶走任務內容焦點 */
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.42) transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.42);
+  border-radius: 999px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.64);
+}
+
+.scrollbar-subtle::-webkit-scrollbar-button {
+  display: none;
+}
+
 /* 甘特圖專用大型藍色滾動條 */
 .scrollbar-gantt::-webkit-scrollbar {
   width: 12px;

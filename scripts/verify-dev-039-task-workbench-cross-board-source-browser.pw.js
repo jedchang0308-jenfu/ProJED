@@ -285,8 +285,8 @@ async (page) => {
     const rootPadding = await rootCard.evaluate(element => parseFloat(getComputedStyle(element).paddingLeft));
     const childPadding = await childCard.evaluate(element => parseFloat(getComputedStyle(element).paddingLeft));
     assert(
-      rootDepth === '0' && childDepth === '1' && childPadding > rootPadding,
-      'hierarchy should be visible through dense text row indentation',
+      rootDepth === '0' && childDepth === '1' && Math.abs(childPadding - rootPadding) <= 0.5,
+      'hierarchy task rows should align to one shared left edge regardless of depth',
       { activeBoardLabel, rootDepth, childDepth, rootPadding, childPadding },
     );
 

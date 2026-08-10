@@ -73,6 +73,7 @@ export type ProfileRow = {
   display_name: string | null;
   external_auth_provider: string | null;
   external_auth_id: string | null;
+  ui_preferences: Json;
   created_at: string;
   updated_at: string;
 };

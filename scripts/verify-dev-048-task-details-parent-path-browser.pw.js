@@ -135,9 +135,12 @@ async (page) => {
       modalTaskId: modal?.getAttribute('data-task-id') || '',
       titleValue: titleInput?.value || '',
       pathText: (path?.textContent || '').replace(/\s+/g, ' ').trim(),
+      pathAriaLabel: path?.getAttribute('aria-label') || '',
       names,
       titleRect: titleRect ? { top: titleRect.top, bottom: titleRect.bottom, left: titleRect.left, right: titleRect.right } : null,
-      pathRect: pathRect ? { top: pathRect.top, bottom: pathRect.bottom, left: pathRect.left, right: pathRect.right } : null,
+      pathRect: pathRect ? { top: pathRect.top, bottom: pathRect.bottom, left: pathRect.left, right: pathRect.right, height: pathRect.height } : null,
+      pathClassName: path?.getAttribute('class') || '',
+      pathLineHeight: path ? getComputedStyle(path).lineHeight : '',
       modalBox: modalBox ? { left: modalBox.left, right: modalBox.right, width: modalBox.width } : null,
       visibleAlerts,
     };
@@ -151,8 +154,13 @@ async (page) => {
     result,
   );
   assert(!result.names.includes('任務卡名稱位置顯示'), 'parent path should not duplicate the current task title', result);
-  assert(result.pathText.startsWith('位置'), 'parent path should be labeled as position context', result);
+  assert(!result.pathText.startsWith('位置') && result.pathAriaLabel === '任務完整位置', 'parent path should omit the redundant visible position label while keeping accessible context', result);
   assert(result.titleRect && result.pathRect && result.pathRect.top >= result.titleRect.bottom - 1, 'parent path should render below the title field', result);
+  assert(
+    result.pathRect && result.pathRect.height <= 20 && result.pathClassName.includes('overflow-hidden') && result.pathLineHeight === '16px',
+    'parent path should use a compact single-line presentation',
+    result,
+  );
   assert(
     result.modalBox && result.pathRect && result.pathRect.right <= result.modalBox.right - 40,
     'parent path should stay inside the modal header',

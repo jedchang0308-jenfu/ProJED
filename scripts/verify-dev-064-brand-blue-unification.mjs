@@ -111,8 +111,11 @@ assert(
 
 assert(
   'task workbench and shared topbar use neutral slate surfaces with brand-blue active states',
-  workbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'") &&
-    workbench.includes('bg-slate-200/95') &&
+  workbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
+    workbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
+    workbench.includes('rounded-md border border-slate-600 bg-slate-700') &&
+    workbench.includes('text-white') &&
+    !workbench.includes('bg-slate-200/95') &&
     workbench.includes('bg-primary') &&
      compactTokens.includes('border-slate-300 bg-white text-slate-600') &&
      statusFilterBar.includes('border-primary/30') &&

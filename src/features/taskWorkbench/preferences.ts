@@ -16,11 +16,24 @@ export const TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v2';
 export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
 export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v2';
 const TASK_WORKBENCH_OPEN_PREFS_VERSION = 1;
+export const DEFAULT_TASK_WORKBENCH_WIDTH = 340;
+export const MIN_TASK_WORKBENCH_WIDTH = 182;
+export const MAX_TASK_WORKBENCH_WIDTH = 560;
+
+export const clampTaskWorkbenchPanelWidth = (value: number) => {
+  const viewportWidth = typeof window === 'undefined' ? 1365 : window.innerWidth;
+  const viewportMaxWidth = Math.max(
+    MIN_TASK_WORKBENCH_WIDTH,
+    Math.min(MAX_TASK_WORKBENCH_WIDTH, viewportWidth - 48),
+  );
+  return Math.round(Math.min(Math.max(value, MIN_TASK_WORKBENCH_WIDTH), viewportMaxWidth));
+};
 
 export type TaskWorkbenchPanelPrefs = {
   open: boolean;
   filtersOpen: boolean;
   showContainersInAllTasks: boolean;
+  width: number;
   openPreferenceVersion: number;
 };
 
@@ -33,6 +46,7 @@ const DEFAULT_PANEL_PREFS: TaskWorkbenchPanelPrefs = {
   open: true,
   filtersOpen: false,
   showContainersInAllTasks: false,
+  width: DEFAULT_TASK_WORKBENCH_WIDTH,
   openPreferenceVersion: TASK_WORKBENCH_OPEN_PREFS_VERSION,
 };
 
@@ -72,6 +86,9 @@ export const readTaskWorkbenchPanelPrefs = (
         : DEFAULT_PANEL_PREFS.open,
       filtersOpen: Boolean(scoped.filtersOpen),
       showContainersInAllTasks: Boolean(scoped.showContainersInAllTasks),
+      width: clampTaskWorkbenchPanelWidth(
+        typeof scoped.width === 'number' ? scoped.width : DEFAULT_TASK_WORKBENCH_WIDTH,
+      ),
       openPreferenceVersion: TASK_WORKBENCH_OPEN_PREFS_VERSION,
     };
   }
@@ -83,6 +100,9 @@ export const readTaskWorkbenchPanelPrefs = (
       open: typeof legacy.open === 'boolean' ? legacy.open : DEFAULT_PANEL_PREFS.open,
       filtersOpen: Boolean(legacy.filtersOpen),
       showContainersInAllTasks: Boolean(legacy.showContainersInAllTasks),
+      width: clampTaskWorkbenchPanelWidth(
+        typeof legacy.width === 'number' ? legacy.width : DEFAULT_TASK_WORKBENCH_WIDTH,
+      ),
     };
     writeStorageJson(scopedKey, migrated);
     removeStorageKey(LEGACY_TASK_WORKBENCH_PANEL_PREFS_KEY);

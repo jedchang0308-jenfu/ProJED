@@ -650,7 +650,7 @@ async (page) => {
         'mobile action rail should expose only compact allowed actions',
         { actionKeys, actionLabels },
       );
-      ['標示完成', '新增同階任務', '新增下階任務', '刪除任務'].forEach((label) => {
+      ['標示完成', '新增並列任務', '新增子任務', '刪除任務'].forEach((label) => {
         assert(actionLabels.includes(label), 'mobile action rail should expose readable text labels', { label, actionLabels });
       });
       const compactLayout = await assertCompactMobileActionRail('card long press compact rail', card());
@@ -907,13 +907,19 @@ async (page) => {
       await panel.locator('[data-task-workbench-filter-popover="true"]').waitFor({ state: 'visible', timeout: 5000 });
     });
 
-    await runCase('QA-029-E03', 'workbench unplaced input accepts text', async () => {
+    await runCase('QA-029-E03', 'workbench unplaced lane exposes the modal creation entry', async () => {
       const panel = await ensureWorkbenchOpen();
-      const input = panel.locator('[data-task-workbench-unclassified-input="true"]').first();
-      await input.fill('手機未歸位輸入');
-      const value = await input.inputValue();
-      assert(value === '手機未歸位輸入', 'workbench input should accept text', { value });
-      return { value };
+      assert(await panel.locator('[data-task-workbench-unclassified-input="true"]').count() === 0, 'workbench should not expose the removed inline unplaced input');
+      assert(await panel.locator('[data-task-workbench-unclassified-add="true"]').count() === 0, 'workbench should not expose the removed inline plus action');
+      const modalButton = panel.locator('[data-task-workbench-unclassified-modal-add="true"]').first();
+      await modalButton.click();
+      const modal = page.locator('[data-task-details-modal="true"]');
+      await modal.waitFor({ state: 'visible', timeout: 5000 });
+      const title = await modal.locator('[data-task-details-title-input="true"]').inputValue();
+      await modal.locator('button[title="關閉"]').click();
+      await modal.waitFor({ state: 'detached', timeout: 5000 });
+      assert(title === '新任務', 'workbench modal creation should use the default new-task title', { title });
+      return { title };
     });
 
     await runCase('QA-029-E04', 'kanban add-task button opens new task details', async () => {

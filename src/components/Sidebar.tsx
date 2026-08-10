@@ -1,16 +1,34 @@
 // @ts-nocheck
 import React from 'react';
-import { BookOpenText, ChevronLeft, LogOut, Settings, X } from 'lucide-react';
+import { ChevronLeft, LogOut, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { toast } from '../store/useToastStore';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
+import {
+  clampWorkspaceSidebarWidth,
+  MAX_WORKSPACE_SIDEBAR_WIDTH,
+  MIN_WORKSPACE_SIDEBAR_WIDTH,
+  readWorkspaceSidebarWidth,
+  writeWorkspaceSidebarWidth,
+} from '../features/layout/preferences';
+import {
+  hydrateAccountLayoutPreferences,
+  persistAccountLayoutPreferences,
+} from '../services/accountPreferencesService';
+import { usePanelPreview } from './panelPreviewContext';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
 const TITLE_INPUT_CLASS =
   'min-w-0 flex-1 rounded border border-primary/30 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+
+const persistWorkspaceSidebarWidth = (width: number, accountId: string | null) => {
+  const clampedWidth = clampWorkspaceSidebarWidth(width);
+  writeWorkspaceSidebarWidth(clampedWidth, accountId);
+  persistAccountLayoutPreferences(accountId, { workspaceSidebarWidth: clampedWidth });
+};
 
 const isTextInputEvent = (event) => {
   const target = event.target;
@@ -18,6 +36,8 @@ const isTextInputEvent = (event) => {
 };
 
 const Sidebar = () => {
+  const accountId = useAuthStore(state => state.user?.uid ?? null);
+  const { previewedPanel } = usePanelPreview();
   const {
     workspaces,
     activeBoardId,
@@ -47,6 +67,12 @@ const Sidebar = () => {
   const [newWorkspaceError, setNewWorkspaceError] = React.useState('');
   const [isCreatingWorkspace, setIsCreatingWorkspace] = React.useState(false);
   const [isNarrowViewport, setIsNarrowViewport] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(() => (
+    readWorkspaceSidebarWidth(accountId)
+  ));
+  const [isResizing, setIsResizing] = React.useState(false);
+  const sidebarWidthRef = React.useRef(sidebarWidth);
+  const resizeCleanupRef = React.useRef<(() => void) | null>(null);
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
   const isRecordsView = currentView === 'records';
   const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
@@ -82,6 +108,45 @@ const Sidebar = () => {
     media.addEventListener?.('change', syncViewport);
     return () => media.removeEventListener?.('change', syncViewport);
   }, []);
+
+  React.useEffect(() => {
+    const nextWidth = readWorkspaceSidebarWidth(accountId);
+    sidebarWidthRef.current = nextWidth;
+    setSidebarWidth(nextWidth);
+
+    let cancelled = false;
+    void hydrateAccountLayoutPreferences(accountId).then(preferences => {
+      if (cancelled || typeof preferences.workspaceSidebarWidth !== 'number') return;
+      const hydratedWidth = clampWorkspaceSidebarWidth(preferences.workspaceSidebarWidth);
+      sidebarWidthRef.current = hydratedWidth;
+      setSidebarWidth(hydratedWidth);
+      writeWorkspaceSidebarWidth(hydratedWidth, accountId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  React.useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
+
+  React.useEffect(() => {
+    const handleViewportResize = () => {
+      setSidebarWidth(previousWidth => {
+        const nextWidth = clampWorkspaceSidebarWidth(previousWidth);
+        sidebarWidthRef.current = nextWidth;
+        persistWorkspaceSidebarWidth(nextWidth, accountId);
+        return nextWidth;
+      });
+    };
+
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, [accountId]);
+
+  React.useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   React.useEffect(() => {
     if (!isSidebarOpen) {
@@ -243,9 +308,57 @@ const Sidebar = () => {
     }
   }, [addWorkspace, newWorkspaceTitle]);
 
-  const mobileSidebarWidth = 'min(288px, calc(100vw - 48px))';
-  const desktopSidebarWidth = '288px';
-  const sidebarWidth = isNarrowViewport ? mobileSidebarWidth : desktopSidebarWidth;
+  const sidebarWidthStyle = isNarrowViewport
+    ? `min(${sidebarWidth}px, calc(100vw - 48px))`
+    : `${sidebarWidth}px`;
+
+  const applySidebarWidth = (nextWidth: number, persist = false) => {
+    const clampedWidth = clampWorkspaceSidebarWidth(nextWidth);
+    sidebarWidthRef.current = clampedWidth;
+    setSidebarWidth(clampedWidth);
+    if (persist) persistWorkspaceSidebarWidth(clampedWidth, accountId);
+  };
+
+  const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCleanupRef.current?.();
+
+    const startX = event.clientX;
+    const startWidth = sidebarWidthRef.current;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      applySidebarWidth(startWidth + moveEvent.clientX - startX);
+    };
+
+    const cleanup = () => {
+      setIsResizing(false);
+      persistWorkspaceSidebarWidth(sidebarWidthRef.current, accountId);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+      resizeCleanupRef.current = null;
+    };
+
+    resizeCleanupRef.current = cleanup;
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    applySidebarWidth(sidebarWidth + (event.key === 'ArrowRight' ? 24 : -24), true);
+  };
 
   if (!isSidebarOpen) {
     return null;
@@ -257,7 +370,7 @@ const Sidebar = () => {
       <button
         type="button"
         className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
-        style={{ left: mobileSidebarWidth }}
+        style={{ left: sidebarWidthStyle }}
         onClick={() => setSidebarOpen(false)}
         aria-label="關閉工作區選單遮罩"
         data-sidebar-backdrop="true"
@@ -265,26 +378,45 @@ const Sidebar = () => {
       />
     ) : null}
     <aside
-      className={`flex-shrink-0 overflow-hidden border-r border-slate-300/80 bg-slate-50 transition-all duration-300 ease-in-out ${
+      className={`flex-shrink-0 overflow-hidden bg-slate-50 ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${
         isNarrowViewport
           ? 'fixed bottom-0 left-0 top-10 z-50 shadow-2xl'
           : 'relative z-10 h-full shadow-[1px_0_0_rgba(15,23,42,0.03)]'
       }`}
-      style={{ width: sidebarWidth }}
+     style={{ width: sidebarWidthStyle }}
       data-sidebar-panel="expanded"
       data-layout-region="workspace-sidebar"
       data-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
       data-sidebar-inline={!isNarrowViewport ? 'true' : undefined}
       data-mobile-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
-    >
-      <div className="flex h-full w-full flex-col">
+     data-panel-previewed={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
+   >
+      <div
+        role="separator"
+        aria-label="調整工作區與看板側欄寬度"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_WORKSPACE_SIDEBAR_WIDTH}
+        aria-valuemax={MAX_WORKSPACE_SIDEBAR_WIDTH}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        onPointerDown={handleResizeStart}
+        onKeyDown={handleResizeKeyDown}
+        title="拖拉調整工作區與看板側欄寬度；方向鍵也可微調"
+        className="workspace-sidebar-resize-handle absolute right-0 top-0 z-20 h-full w-3 translate-x-0 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        data-sidebar-resize-handle="true"
+      />
+      <div
+        className={previewedPanel === 'workspace-sidebar' ? 'flex h-full w-full flex-col ring-2 ring-inset ring-primary-400/95' : 'flex h-full w-full flex-col'}
+        data-panel-preview-subtree={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
+      >
         <div
-          className="relative border-b border-slate-200/90 bg-white/90 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.06)]"
+          className={previewedPanel === 'workspace-sidebar' ? 'relative border border-primary-500 bg-primary-50/70 px-3 py-2.5 ring-2 ring-inset ring-primary-500' : 'relative border border-slate-200/90 bg-white/90 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.06)]'}
           data-sidebar-control-area="true"
+          data-panel-preview-source={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
         >
           <div className="flex items-center gap-2">
             <div
-              className="min-w-0 shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 shadow-sm"
+              className="min-w-0 shrink-0 px-1 py-1"
               data-sidebar-title="true"
             >
               <div className="whitespace-nowrap text-sm font-black text-slate-700">
@@ -305,7 +437,7 @@ const Sidebar = () => {
         </div>
 
         <div
-          className="flex-1 space-y-4 overflow-y-auto bg-slate-50/90 p-2"
+          className="scrollbar-subtle flex-1 space-y-4 overflow-y-auto bg-slate-50/90 p-2"
           onContextMenu={handleSidebarContextMenu}
           data-sidebar-workspace-list="true"
         >
@@ -432,7 +564,7 @@ const Sidebar = () => {
         <div className="border-t border-slate-200/80 bg-white/80 p-2">
           <button
             onClick={handleOpenRecords}
-            className={`mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+            className={`mb-1 flex w-full items-center rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
               isRecordsView
                 ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
                 : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
@@ -440,12 +572,11 @@ const Sidebar = () => {
             title={isRecordsView ? '回到看板' : '紀錄庫'}
             data-sidebar-records-button="true"
           >
-            <BookOpenText size={16} className={isRecordsView ? 'text-white/90' : 'text-slate-400'} />
             <span className="min-w-0 flex-1 truncate text-left">紀錄庫</span>
           </button>
           <button
             onClick={handleOpenSettings}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+            className={`flex w-full items-center rounded-lg px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
               isSettingsScopeView
                 ? 'bg-primary text-sm font-bold tracking-wide text-white shadow-md'
                 : 'text-sm font-medium text-slate-600 hover:bg-white hover:text-primary hover:shadow-sm'
@@ -453,7 +584,6 @@ const Sidebar = () => {
             title={isSettingsScopeView ? '回到看板' : '設定'}
             data-sidebar-settings-button="true"
           >
-            <Settings size={16} className={isSettingsScopeView ? 'text-white/90' : 'text-slate-400'} />
             <span className="min-w-0 flex-1 truncate text-left">設定</span>
           </button>
         </div>

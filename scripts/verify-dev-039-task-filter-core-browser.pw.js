@@ -336,13 +336,19 @@ async (page) => {
       'workbench should show seeded unclassified inbox item outside board filters',
     );
     assert(await unclassifiedSection.getByText('尚未歸類的採購提醒').count() === 1, 'seeded unclassified item should be visible');
-    await unclassifiedSection.locator('[data-task-workbench-unclassified-input="true"]').fill('臨時拜訪客戶');
-    await unclassifiedSection.locator('[data-task-workbench-unclassified-add="true"]').click();
+    await unclassifiedSection.locator('[data-task-workbench-unclassified-modal-add="true"]').click();
+    const createdTaskModal = page.locator('[data-task-details-modal="true"]');
+    await createdTaskModal.waitFor({ state: 'visible', timeout: 10000 });
+    const createdTaskTitleInput = createdTaskModal.locator('[data-task-details-title-input="true"]');
+    await createdTaskTitleInput.fill('臨時拜訪客戶');
+    await createdTaskModal.locator('[data-task-details-save="true"]').click();
+    await createdTaskModal.locator('button[title="關閉"]').click();
+    await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
     assert(
       await unclassifiedSection.locator('[data-task-workbench-unclassified-item="true"]').count() === 2,
-      'adding unclassified item should append to the workbench inbox section',
+      'modal-created unclassified task should append to the workbench inbox section',
     );
-    assert(await unclassifiedSection.getByText('臨時拜訪客戶').count() === 1, 'new unclassified item should be visible immediately');
+    assert(await unclassifiedSection.getByText('臨時拜訪客戶').count() === 1, 'modal-created unclassified task should be visible immediately');
 
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-child-a"]').count() === 1, 'cross-board task list should show board A task');
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-root-b"]').count() === 1, 'cross-board task list should also show board B task');

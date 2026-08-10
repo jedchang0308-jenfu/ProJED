@@ -229,8 +229,9 @@ async (page) => {
       { collapseToggleIconClass },
     );
     assert(await unplacedLane.getByText('未歸位').count() >= 1, 'unplaced lane should be clearly labelled');
-    assert(await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').getAttribute('placeholder') === '新增任務', 'unplaced lane add input should use the simplified new-task placeholder');
-    assert(await unplacedLane.locator('[data-task-workbench-unclassified-add="true"] svg.lucide-plus').count() === 1, 'unplaced lane add action should use a compact plus icon');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').count() === 0, 'unplaced lane should remove the inline new-task input');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-add="true"]').count() === 0, 'unplaced lane should remove the inline plus action');
+    assert(await unplacedLane.locator('[data-task-workbench-unclassified-modal-add="true"]').count() === 1, 'unplaced lane should keep one modal-based new-task entry');
     assert(await placedLane.getByText('已歸位').count() >= 1, 'placed lane should use the simplified placed-task section title');
     assert(await placedLane.getByText('所有任務排序').count() === 0, 'placed lane should not render the old all-task sorted section title');
     assert(await placedLane.getByText('全部看板').count() === 0, 'placed lane should not render the removed all-boards summary text');
@@ -244,8 +245,8 @@ async (page) => {
         placedLane: readBg('[data-task-workbench-placed-board-lane="true"]'),
         unplacedHeader: readBg('[data-task-workbench-section-header="unplaced"]'),
         placedHeader: readBg('[data-task-workbench-section-header="all-tasks"]'),
-        unplacedAccent: readBg('[data-task-workbench-header-accent="unplaced"]'),
-        placedAccent: readBg('[data-task-workbench-header-accent="placed"]'),
+        unplacedAccentCount: document.querySelectorAll('[data-task-workbench-header-accent="unplaced"]').length,
+        placedAccentCount: document.querySelectorAll('[data-task-workbench-header-accent="placed"]').length,
       };
     });
     assert(
@@ -258,9 +259,31 @@ async (page) => {
     assert(
       placementTone.unplacedHeader === placementTone.placedHeader &&
         placementTone.unplacedHeader !== placementTone.unplacedLane &&
-        placementTone.unplacedAccent === placementTone.placedAccent,
-      'section headers should use one separate title tone from task bodies',
+        placementTone.unplacedAccentCount === 0 &&
+        placementTone.placedAccentCount === 0,
+      'section headers should use one shared dark tone without decorative accent icons',
       placementTone,
+    );
+    const readTaskTitleTypography = async locator => locator.evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+        color: style.color,
+      };
+    });
+    const unplacedTitleTypography = await readTaskTitleTypography(
+      unplacedLane.locator('[data-task-workbench-task-title="true"]').first(),
+    );
+    const placedRootTitleTypography = await readTaskTitleTypography(
+      placedLane.locator('[data-task-workbench-hierarchy-row="true"][data-task-workbench-hierarchy-depth="0"] [data-task-workbench-task-title="true"]').first(),
+    );
+    assert(
+      JSON.stringify(unplacedTitleTypography) === JSON.stringify(placedRootTitleTypography),
+      'unplaced task titles should match placed root-task typography',
+      { unplacedTitleTypography, placedRootTitleTypography },
     );
     assert(await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').count() === 1, 'legacy inbox item should be migrated into one unplaced task card');
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 1, 'placed board lane should show existing board task');
@@ -350,9 +373,15 @@ async (page) => {
     await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'detached', timeout: 10000 });
 
-    step = 'add-unplaced-task';
-    await unplacedLane.locator('[data-task-workbench-unclassified-input="true"]').fill('臨時拜訪客戶');
-    await unplacedLane.locator('[data-task-workbench-unclassified-add="true"]').click();
+    step = 'modal-create-entry';
+    await unplacedLane.locator('[data-task-workbench-unclassified-modal-add="true"]').click();
+    const createdTaskModal = page.locator('[data-task-details-modal="true"]');
+    await createdTaskModal.waitFor({ state: 'visible', timeout: 10000 });
+    const createdTaskTitleInput = createdTaskModal.locator('[data-task-details-title-input="true"]');
+    assert(await createdTaskTitleInput.inputValue() === '新任務', 'modal-based unplaced task creation should open with the new title ready to edit');
+    await createdTaskTitleInput.fill('臨時拜訪客戶');
+    await createdTaskModal.locator('button[title="關閉"]').click();
+    await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
     const newUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).first();
     await newUnplacedCard.waitFor({ state: 'visible', timeout: 10000 });
     assert(await newUnplacedCard.locator('[data-task-drag-handle="true"]').count() === 0, 'dense task rows should not render a separate drag handle');

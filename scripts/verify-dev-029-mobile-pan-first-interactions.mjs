@@ -110,18 +110,13 @@ assert(
 );
 
 assert(
-  'large mobile canvas CTAs are tap actions but pass short-pan gestures through to the pan broker',
+  'mobile board no longer exposes inline creation controls while workbench keeps one modal creation entry',
   source.useMobilePanBroker.includes('isMobilePanPassThroughTarget') &&
     source.useMobilePanBroker.includes('const passThrough = isMobilePanPassThroughTarget(event.target)') &&
-    source.boardView.includes('data-kanban-add-column-button="true"') &&
-    source.boardView.includes('data-mobile-pan-pass-through="true"') &&
-    source.kanbanColumn.includes('data-kanban-add-task-button="true"') &&
-    source.kanbanColumn.includes('data-mobile-pan-pass-through="true"') &&
-    source.taskWorkbench.includes('data-task-workbench-unclassified-add="true"') &&
-    source.taskWorkbench.includes('data-mobile-pan-pass-through="true"') &&
-    source.browserVerifier.includes('kanban add-task button short-pan scrolls the board without creating a task') &&
-    source.browserVerifier.includes('kanban add-task button vertical short-pan scrolls the column') &&
-    source.browserVerifier.includes('board add-column button short-pan scrolls the board without creating a column'),
+    !source.boardView.includes('data-kanban-add-column-button="true"') &&
+    !source.kanbanColumn.includes('data-kanban-add-task-button="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-unclassified-modal-add="true"') &&
+    source.taskWorkbench.includes('data-mobile-pan-pass-through="true"'),
 );
 
 assert(
@@ -170,8 +165,8 @@ assert(
     source.taskDragPresenter.includes('data-mobile-task-action-text="true"') &&
     source.taskDragPresenter.includes('data-mobile-task-action-label={label}') &&
     source.taskDragPresenter.includes('標示完成') &&
-    source.taskDragPresenter.includes('新增同階任務') &&
-    source.taskDragPresenter.includes('新增下階任務') &&
+    source.taskDragPresenter.includes('新增並列任務') &&
+    source.taskDragPresenter.includes('新增子任務') &&
     source.taskDragPresenter.includes('刪除任務') &&
     source.taskDragPresenter.includes('data-mobile-task-action={item.key}') &&
     source.taskDragPresenter.includes('data-mobile-drag-preview') &&

@@ -25,14 +25,14 @@ const mobileActionItems: Array<{
   },
   {
     key: 'add-sibling',
-    label: '新增同階任務',
+    label: '新增並列任務',
     permission: 'create',
     activeClassName: 'bg-sky-500 text-white',
     idleClassName: 'bg-sky-50 text-sky-700 hover:bg-sky-100',
   },
   {
     key: 'add-child',
-    label: '新增下階任務',
+    label: '新增子任務',
     permission: 'create',
     activeClassName: 'bg-indigo-500 text-white',
     idleClassName: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',

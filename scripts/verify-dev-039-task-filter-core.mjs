@@ -204,9 +204,8 @@ assert(
     !source.app.includes("case 'task_workbench'") &&
     !source.typesIndex.includes("'task_workbench'") &&
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
-    source.mainLayout.includes('openTaskWorkbenchPanel') &&
+    source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
     !source.sidebar.includes('data-sidebar-task-workbench-button="true"') &&
-    !source.sidebar.includes('openTaskWorkbenchPanel') &&
     !source.localTestEnvironment.includes("'task_workbench'"),
 );
 
@@ -245,8 +244,9 @@ assert(
   'Task Workbench restores unplaced task lane outside board filters with legacy inbox migration',
   source.taskWorkbench.includes("from '../store/useQuickCaptureStore'") &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-section="true"') &&
-    source.taskWorkbench.includes('data-task-workbench-unclassified-input="true"') &&
-    source.taskWorkbench.includes('data-task-workbench-unclassified-add="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-unclassified-modal-add="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-unclassified-input="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-unclassified-add="true"') &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-item') &&
     source.taskWorkbench.includes('data-task-workbench-unplaced-lane="true"') &&

@@ -540,8 +540,8 @@ async (page) => {
         buttons.slice(0, 4).map(button => button.innerText.trim().split(/\r?\n/)[0]?.trim())
       ));
       assert(JSON.stringify(firstFourActionLabels) === JSON.stringify([
-        '新增同階任務',
-        '新增下層任務',
+        '新增並列任務',
+        '新增子任務',
         '複製任務',
         '主責／協作',
       ]), 'task context menu must keep assignment as the fourth action', { firstFourActionLabels });

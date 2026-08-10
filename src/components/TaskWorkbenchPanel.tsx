@@ -2,7 +2,6 @@ import React from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
   ChevronLeft,
-  Plus,
   RotateCcw,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -26,6 +25,9 @@ import {
   readTaskWorkbenchPanelPrefs,
   writeTaskWorkbenchFilterPrefs,
   writeTaskWorkbenchPanelPrefs,
+  clampTaskWorkbenchPanelWidth,
+  MAX_TASK_WORKBENCH_WIDTH,
+  MIN_TASK_WORKBENCH_WIDTH,
   type TaskWorkbenchPanelPrefs,
 } from '../features/taskWorkbench/preferences';
 import {
@@ -36,9 +38,16 @@ import {
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
 } from '../features/taskWorkbench/placement';
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
+import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import type { InboxItem, TaskNode } from '../types';
-import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { formatTaskLocation } from '../utils/taskHierarchy';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
+import {
+  hydrateAccountLayoutPreferences,
+  persistAccountLayoutPreferences,
+} from '../services/accountPreferencesService';
+import { usePanelPreview } from './panelPreviewContext';
 import { CLOSE_PANEL_EVENT, OPEN_PANEL_EVENT, TOGGLE_PANEL_EVENT } from './taskWorkbenchPanelCommands';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
 import { isMobileTaskActionMode } from './Wbs/mobileTaskActionContext';
@@ -47,6 +56,13 @@ import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 
 type PanelPrefs = TaskWorkbenchPanelPrefs;
+
+const persistTaskWorkbenchWidth = (width: number, accountId: string | null) => {
+  const clampedWidth = clampTaskWorkbenchPanelWidth(width);
+  const currentPrefs = readTaskWorkbenchPanelPrefs(accountId);
+  writeTaskWorkbenchPanelPrefs({ ...currentPrefs, width: clampedWidth }, accountId);
+  persistAccountLayoutPreferences(accountId, { taskWorkbenchWidth: clampedWidth });
+};
 
 type BoardOption = {
   workspaceId: string;
@@ -105,10 +121,10 @@ const getUnclassifiedItems = (items: InboxItem[]) => items
 
 const WorkbenchUnclassifiedSection: React.FC<{
   tasks: TaskNode[];
+  canCreateTask: boolean;
   canMoveTask: boolean;
-  onAddTask: (title: string) => void;
-}> = ({ tasks, canMoveTask, onAddTask }) => {
-  const [draft, setDraft] = React.useState('');
+  onCreateTask: () => void;
+}> = ({ tasks, canCreateTask, canMoveTask, onCreateTask }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'task-workbench-unplaced-lane',
     disabled: !canMoveTask,
@@ -118,58 +134,39 @@ const WorkbenchUnclassifiedSection: React.FC<{
     },
   });
 
-  const canAdd = draft.trim().length > 0;
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!canAdd) return;
-    onAddTask(draft);
-    setDraft('');
-  };
-
   return (
     <section
       ref={setNodeRef}
-      className={`max-h-[38vh] shrink-0 overflow-y-auto overscroll-contain border-b border-slate-300 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'}`}
+      className={`min-h-0 flex-1 basis-0 flex flex-col overflow-hidden bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
     >
-      <form onSubmit={handleSubmit} className="mb-2 mt-2 flex gap-1.5">
-        <input
-          value={draft}
-          onChange={event => setDraft(event.target.value)}
-          className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20"
-          placeholder="新增任務"
-          data-task-workbench-unclassified-input="true"
-        />
-        <button
-          type="submit"
-          disabled={!canAdd}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          title="新增任務"
-          aria-label="新增任務"
-          data-task-workbench-unclassified-add="true"
-          data-mobile-pan-pass-through="true"
-        >
-          <Plus size={14} />
-        </button>
-      </form>
-
       <div
-        className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-200/95 px-3 py-1.5 backdrop-blur"
+        className="relative z-20 mt-2 mb-px box-border flex h-8 w-[104px] shrink-0 items-center justify-between gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
         data-task-workbench-section-header="unplaced"
       >
-        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-slate-700">
-          <span className="h-3 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" data-task-workbench-header-accent="unplaced" />
+        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-white">
           <span className="min-w-0 truncate">未歸位</span>
         </div>
+        <button
+          type="button"
+          onClick={onCreateTask}
+          disabled={!canCreateTask}
+          className="absolute left-[112px] top-1/2 inline-flex h-8 -translate-y-1/2 items-center whitespace-nowrap rounded-md border border-yellow-400 bg-yellow-300 px-2.5 text-xs font-semibold text-black shadow-sm transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-40"
+          title="新增未歸位任務並開啟任務彈窗"
+          aria-label="新增未歸位任務"
+          data-task-workbench-unclassified-modal-add="true"
+          data-mobile-pan-pass-through="true"
+        >
+          <span>新增任務</span>
+        </button>
         <span className="sr-only" data-task-workbench-unclassified-count="true">
           {tasks.length}
         </span>
       </div>
 
-      <div className="space-y-0.5" data-task-workbench-unclassified-list="true">
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-unclassified-list="true">
         {tasks.map(task => (
           <WorkbenchDragCard
             key={task.id}
@@ -225,8 +222,10 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       ? 'font-medium text-slate-700'
       : 'font-medium text-slate-600';
   const dependencies = useWbsStore(s => s.dependencies);
+  const nodes = useWbsStore(s => s.nodes);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(task.id, dependencies);
+  const taskLocation = isUnplacedLaneRow ? '未歸位' : formatTaskLocation(task, nodes);
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -275,6 +274,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-task-workbench-unplaced-compact-row={unplacedLane ? 'true' : undefined}
       data-task-workbench-hierarchy-row={!unplacedLane ? 'true' : undefined}
       data-task-workbench-hierarchy-depth={unplacedLane ? 0 : depth}
+      data-desktop-task-hover-preview={!isDragging ? 'true' : undefined}
       data-touch-tap-guard="true"
       data-task-id={task.id}
       data-mobile-drop-target={task.id}
@@ -288,10 +288,12 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   }: {
     titleClassName: string;
   }) => (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-3" data-task-workbench-task-content="true">
       <div
         className={titleClassName}
-        title={task.title || '未命名任務'}
+        title={taskLocation}
+        data-task-workbench-task-title="true"
+        data-task-workbench-task-location={taskLocation}
       >
         {task.title || '未命名任務'}
       </div>
@@ -311,23 +313,22 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   if (isUnplacedLaneRow) {
     return renderWorkbenchTaskRow({
       unplacedLane: true,
-      className: `kanban-checklist-item group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-0.5 transition-colors ${
-          isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-slate-50'
+      className: `kanban-checklist-item group flex min-h-[23px] cursor-pointer items-center px-1.5 py-0 transition-colors ${
+          isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white'
         }`,
       children: renderWorkbenchTaskContent({
-        titleClassName: 'task-title-text min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-slate-700',
+        titleClassName: 'min-w-0 flex-1 truncate text-sm leading-5 font-semibold text-slate-800',
       }),
     });
   }
 
   return renderWorkbenchTaskRow({
     unplacedLane: false,
-    className: `group flex min-h-[28px] cursor-pointer items-center rounded-md px-1.5 py-1 transition-colors ${
-        isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white/80'
+    className: `group flex min-h-[23px] cursor-pointer items-center px-1.5 py-0 transition-colors ${
+        isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white'
     }`,
-    style: { paddingLeft: `${0.375 + depth * 0.75}rem` },
     children: renderWorkbenchTaskContent({
-      titleClassName: `min-w-0 flex-1 truncate text-sm leading-6 ${hierarchyTextClass}`,
+      titleClassName: `min-w-0 flex-1 truncate text-sm leading-5 ${hierarchyTextClass}`,
     }),
   });
 };
@@ -497,7 +498,13 @@ const WorkbenchFilterControls: React.FC<{
 
 const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask = false }) => {
   const accountId = useAuthStore(state => state.user?.uid ?? null);
+  const { canCreateTask } = useBoardPermissions();
+  const { previewedPanel } = usePanelPreview();
   const [panelPrefs, setPanelPrefs] = React.useState<PanelPrefs>(() => readTaskWorkbenchPanelPrefs(accountId));
+  const [panelWidth, setPanelWidth] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).width);
+  const [isResizing, setIsResizing] = React.useState(false);
+  const panelWidthRef = React.useRef(panelWidth);
+  const resizeCleanupRef = React.useRef<(() => void) | null>(null);
   const [isNarrowViewport, setIsNarrowViewport] = React.useState(() => (
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
@@ -529,20 +536,35 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   }, [accountId]);
 
   const closePanel = React.useCallback(() => {
-    if (isNarrowViewport) {
-      setMobileOverlayOpen(false);
-      return;
-    }
     patchPanelPrefs({ open: false, filtersOpen: false });
+    if (isNarrowViewport) setMobileOverlayOpen(false);
   }, [isNarrowViewport, patchPanelPrefs]);
 
   React.useEffect(() => {
     const nextPanelPrefs = readTaskWorkbenchPanelPrefs(accountId);
     setPanelPrefs(nextPanelPrefs);
+    panelWidthRef.current = nextPanelPrefs.width;
+    setPanelWidth(nextPanelPrefs.width);
     setMobileOverlayOpen(nextPanelPrefs.open);
     const filterPrefs = readTaskWorkbenchFilterPrefs(accountId);
     setSelectedBoardId(filterPrefs.selectedBoardId);
     setFiltersByBoardId(filterPrefs.filtersByBoardId);
+
+    let cancelled = false;
+    void hydrateAccountLayoutPreferences(accountId).then(preferences => {
+      if (cancelled || typeof preferences.taskWorkbenchWidth !== 'number') return;
+      const hydratedWidth = clampTaskWorkbenchPanelWidth(preferences.taskWorkbenchWidth);
+      const currentPrefs = readTaskWorkbenchPanelPrefs(accountId);
+      const hydratedPrefs = { ...currentPrefs, width: hydratedWidth };
+      panelWidthRef.current = hydratedWidth;
+      setPanelWidth(hydratedWidth);
+      setPanelPrefs(current => ({ ...current, width: hydratedWidth }));
+      writeTaskWorkbenchPanelPrefs(hydratedPrefs, accountId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [accountId]);
 
   React.useEffect(() => {
@@ -557,6 +579,26 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     media.addEventListener?.('change', syncViewport);
     return () => media.removeEventListener?.('change', syncViewport);
   }, []);
+
+  React.useEffect(() => {
+    panelWidthRef.current = panelWidth;
+  }, [panelWidth]);
+
+  React.useEffect(() => {
+    const handleViewportResize = () => {
+      setPanelWidth(previousWidth => {
+        const nextWidth = clampTaskWorkbenchPanelWidth(previousWidth);
+        panelWidthRef.current = nextWidth;
+        persistTaskWorkbenchWidth(nextWidth, accountId);
+        return nextWidth;
+      });
+    };
+
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, [accountId]);
+
+  React.useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   React.useEffect(() => {
     const open = () => {
@@ -574,6 +616,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     const toggle = () => {
       if (isNarrowViewport) {
         setMobileOverlayOpen(current => !current);
+        setPanelPrefs(current => ({ ...current, open: !current.open, filtersOpen: false }));
         return;
       }
 
@@ -775,10 +818,12 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     hydratedTasks.forEach(task => addNode(task));
   }, [addNode, fallbackWorkspaceId, inboxItems, markInboxPromoted]);
 
-  const handleAddUnplacedTask = React.useCallback((title: string) => {
-    if (!fallbackWorkspaceId) return;
-    addNode(createNewUnplacedTaskNode(title, fallbackWorkspaceId, nextUnplacedOrder()));
-  }, [addNode, fallbackWorkspaceId, nextUnplacedOrder]);
+  const handleCreateUnplacedTask = React.useCallback(() => {
+    if (!canCreateTask || !fallbackWorkspaceId) return;
+    const newTask = createNewUnplacedTaskNode('', fallbackWorkspaceId, nextUnplacedOrder());
+    addNode(newTask);
+    prepareNewTaskNaming(newTask.id);
+  }, [addNode, canCreateTask, fallbackWorkspaceId, nextUnplacedOrder]);
 
   const { setNodeRef: setPlacedBoardLaneRef, isOver: isPlacedBoardLaneOver } = useDroppable({
     id: `task-workbench-placed-board-lane-${selectedBoardId || 'none'}`,
@@ -792,7 +837,57 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   });
 
   const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
-  const panelOverlayWidth = isNarrowViewport ? 'min(340px, calc(100vw - 52px))' : '340px';
+  const panelOverlayWidth = isNarrowViewport
+    ? `min(${panelWidth}px, calc(100vw - 52px))`
+    : `${panelWidth}px`;
+
+  const applyPanelWidth = (nextWidth: number, persist = false) => {
+    const clampedWidth = clampTaskWorkbenchPanelWidth(nextWidth);
+    panelWidthRef.current = clampedWidth;
+    setPanelWidth(clampedWidth);
+    if (persist) persistTaskWorkbenchWidth(clampedWidth, accountId);
+  };
+
+  const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCleanupRef.current?.();
+
+    const startX = event.clientX;
+    const startWidth = panelWidthRef.current;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      applyPanelWidth(startWidth + moveEvent.clientX - startX);
+    };
+
+    const cleanup = () => {
+      setIsResizing(false);
+      persistTaskWorkbenchWidth(panelWidthRef.current, accountId);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+      resizeCleanupRef.current = null;
+    };
+
+    resizeCleanupRef.current = cleanup;
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    applyPanelWidth(panelWidth + (event.key === 'ArrowRight' ? 24 : -24), true);
+  };
 
   React.useEffect(() => {
     if (!isExpanded) {
@@ -821,25 +916,45 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
         />
       ) : null}
       <aside
-        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col border-r-2 border-slate-300 bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 ${
+        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 ${isResizing ? 'transition-none' : ''} ${
           isNarrowViewport
             ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_28px_rgba(15,23,42,0.18)]'
             : 'relative z-20 h-full shadow-[4px_0_20px_rgba(15,23,42,0.12)]'
         }`}
-        style={{ width: panelOverlayWidth }}
+       style={{ width: panelOverlayWidth }}
         data-task-workbench-panel="true"
         data-layout-region="task-command-center"
         data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
         data-task-workbench-inline={!isNarrowViewport ? 'true' : undefined}
         data-mobile-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
-        aria-label="全域任務平台"
-      >
+       data-panel-previewed={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
+       aria-label="全域任務平台"
+     >
         <div
-          className="relative border-b border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.08)]"
-          data-task-workbench-filter-control-area="true"
+          role="separator"
+          aria-label="調整全域任務平台寬度"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_TASK_WORKBENCH_WIDTH}
+          aria-valuemax={MAX_TASK_WORKBENCH_WIDTH}
+          aria-valuenow={panelWidth}
+          tabIndex={0}
+          onPointerDown={handleResizeStart}
+          onKeyDown={handleResizeKeyDown}
+          title="拖拉調整全域任務平台寬度；方向鍵也可微調"
+          className="task-workbench-resize-handle absolute right-0 top-0 z-30 h-full w-3 cursor-col-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          data-task-workbench-resize-handle="true"
+        />
+        <div
+          className={previewedPanel === 'task-workbench' ? 'relative flex min-h-0 flex-1 flex-col ring-2 ring-inset ring-primary-400/95' : 'relative flex min-h-0 flex-1 flex-col'}
+          data-panel-preview-subtree={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
         >
+          <div
+            className={previewedPanel === 'task-workbench' ? 'relative border border-primary-500 bg-primary-50/70 px-3 py-2.5 ring-2 ring-inset ring-primary-500' : 'relative border border-slate-300 bg-gradient-to-r from-white via-slate-50 to-slate-100 px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.08)]'}
+            data-task-workbench-filter-control-area="true"
+            data-panel-preview-source={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
+          >
           <div className="flex items-center gap-2">
-            <div className="min-w-0 shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm" data-task-command-center-title="true">
+            <div className="min-w-0 shrink-0 px-1 py-1" data-task-command-center-title="true">
               <div className="whitespace-nowrap text-sm font-black text-slate-700">
                 全域任務平台
               </div>
@@ -899,24 +1014,24 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
         <WorkbenchUnclassifiedSection
           tasks={unplacedTasks}
+          canCreateTask={canCreateTask}
           canMoveTask={canMoveTask}
-          onAddTask={handleAddUnplacedTask}
+          onCreateTask={handleCreateUnplacedTask}
         />
 
         <div
           ref={setPlacedBoardLaneRef}
-          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : 'bg-slate-100'}`}
+          className={`min-h-0 flex-1 basis-0 flex flex-col overflow-hidden bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
           data-task-workbench-placed-board-lane="true"
           data-task-workbench-lane-drop-target="placed-board"
           data-board-id={selectedBoardOption?.boardId || undefined}
           data-workspace-id={selectedBoardOption?.workspaceId || undefined}
         >
           <div
-            className="sticky top-0 z-20 -mx-3 mb-2 flex items-center justify-between gap-2 border-b border-slate-300 bg-slate-200/95 px-3 py-2 backdrop-blur"
+            className="relative z-20 mb-px box-border flex w-[104px] shrink-0 items-center justify-between gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-white"
             data-task-workbench-section-header="all-tasks"
           >
-            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-slate-700">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary shadow-[0_0_0_3px_rgba(99,102,241,0.18)]" aria-hidden="true" data-task-workbench-header-accent="placed" />
+            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-white">
               <span className="min-w-0 truncate">已歸位</span>
             </div>
             <span className="sr-only" data-task-workbench-all-tasks-count="true">
@@ -924,7 +1039,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
             </span>
           </div>
 
-          <div className="space-y-0.5" data-task-workbench-all-tasks-list="true">
+          <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-all-tasks-list="true">
             {sortedPlacedTasks.map(task => (
               <WorkbenchDragCard
                 key={`all-${task.id}`}
@@ -943,6 +1058,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
           </div>
         </div>
 
+        </div>
       </aside>
     </>
   );

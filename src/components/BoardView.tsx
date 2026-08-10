@@ -8,7 +8,7 @@
  * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -24,8 +24,6 @@ import { KanbanColumn } from './Wbs/KanbanColumn';
 import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames } from './ui/compactTokens';
-import type { TaskNode } from '../types';
-import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
@@ -505,25 +503,6 @@ const BoardView = () => {
     };
 
 
-    /** 新增頂層任務 (Level 1 → 新列表) */
-    const handleAddColumn = () => {
-        if (!canCreateTask) return;
-        const newNode: TaskNode = {
-            id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
-            workspaceId: activeWorkspaceId || '',
-            boardId: activeBoardId || '',
-            parentId: null,
-            title: '新任務',
-            status: 'todo',
-            nodeType: 'group',
-            order: rootNodes.length,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-        };
-        addNode(newNode);
-        prepareNewTaskNaming(newNode.id);
-    };
-
     if (!activeBoardId) {
         return (
             <div className="flex-1 flex items-center justify-center text-slate-400">
@@ -644,20 +623,6 @@ const BoardView = () => {
                             ))}
                         </SortableContext>
 
-                        {/* 新增列表按鈕 */}
-                        <div className="flex-shrink-0 w-[260px]">
-                            <button
-                                onClick={handleAddColumn}
-                                disabled={!canCreateTask}
-                                className="w-full rounded-lg py-[8px] flex flex-col items-center justify-center gap-0.5 text-slate-400 font-semibold hover:text-primary hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all group disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
-                                data-mobile-pan-pass-through="true"
-                                data-kanban-add-column-button="true"
-                                data-kanban-add-column-visual="borderless"
-                            >
-                                <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-                                <span>新增任務</span>
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>

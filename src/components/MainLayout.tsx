@@ -30,12 +30,16 @@ import { GlobalContextMenu } from './GlobalContextMenu';
 import { BoardShareDialog } from './BoardMembersPanel';
 import RagSidebar from './Rag/RagSidebar';
 import RecordSidebar from './Records/RecordSidebar';
-import { closeTaskWorkbenchPanel, openTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
+import { closeTaskWorkbenchPanel, toggleTaskWorkbenchPanel } from './taskWorkbenchPanelCommands';
 import { topbarClassNames } from './ui/compactTokens';
 import { ModeSwitcher, type ModeSwitcherOption } from './ui/ModeSwitcher';
 import { StatusFilterBar } from './ui/StatusFilterBar';
 import type { ViewMode } from '../types';
 import { getTopOpenLeftPanel } from '../utils/leftPanelEscapeStack';
+import {
+  PanelPreviewProvider,
+  type PanelPreviewId,
+} from './panelPreviewContext';
 import {
   selectPendingTaskFilterRefreshCount,
   useDeferredTaskFilterRefreshStore,
@@ -75,6 +79,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const boardMemberCount = useMemberStore(state => state.boardMembers.length);
   const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
   const [isSmallViewport, setIsSmallViewport] = React.useState(false);
+  const [previewedPanel, setPreviewedPanel] = React.useState<PanelPreviewId | null>(null);
   const isCoarsePointer = useCoarsePointer();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
@@ -94,7 +99,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isSystemPageView = isSettingsScopeView || currentView === 'records';
   const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
+  const canPreviewPanels = !isMobileBoardOnly;
   const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar']), []);
+
+  const handlePanelPreview = useCallback((panel: PanelPreviewId) => {
+    if (!canPreviewPanels) return;
+    setPreviewedPanel(panel);
+  }, [canPreviewPanels]);
 
   const handleModeChange = (nextView: ViewMode) => {
     if (isMobileBoardOnly && nextView !== 'board') return;
@@ -118,8 +129,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const handleToggleMobileTaskWorkbench = useCallback(() => {
     if (isMobileBoardOnly) setSidebarOpen(false);
     setView(activeWorkspace && activeBoard ? 'board' : 'home');
-    openTaskWorkbenchPanel();
+    toggleTaskWorkbenchPanel();
   }, [activeBoard, activeWorkspace, isMobileBoardOnly, setSidebarOpen, setView]);
+
+  const handleToggleWorkspaceSidebar = useCallback(() => {
+    if (isMobileBoardOnly && !isSidebarOpen) closeTaskWorkbenchPanel();
+    setSidebarOpen(!isSidebarOpen);
+  }, [isMobileBoardOnly, isSidebarOpen, setSidebarOpen]);
 
   const handleStartMeetingRecord = () => {
     if (isMeetingMode) {
@@ -165,6 +181,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     if (!mobileBlockedViews.has(currentView)) return;
     setView('board');
   }, [activeBoard, activeWorkspace, currentView, isMobileBoardOnly, mobileBlockedViews, setView]);
+
+  useEffect(() => {
+    if (canPreviewPanels) return;
+    setPreviewedPanel(null);
+  }, [canPreviewPanels]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -220,7 +241,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, [canRedo, canUndo, isSystemPageView, redo, returnToBoard, setSidebarOpen, undo]);
 
   return (
-    <div className="flex h-screen flex-col bg-slate-100 text-slate-800" data-mobile-density="compact">
+    <PanelPreviewProvider value={{ previewedPanel, setPreviewedPanel }}>
+      <div className="flex h-screen flex-col bg-slate-100 text-slate-800" data-mobile-density="compact">
       <nav
         className="app-main-nav z-40 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-slate-300/80 bg-white/95 px-2 shadow-[0_1px_8px_rgba(15,23,42,0.08)] backdrop-blur sm:px-3"
         data-layout-region="topbar"
@@ -229,8 +251,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <button
             type="button"
-            onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className={cn(topbarClassNames.iconButton, 'mr-1 sm:mr-2')}
+            onClick={handleToggleWorkspaceSidebar}
+            onPointerEnter={() => handlePanelPreview('workspace-sidebar')}
+            onPointerLeave={() => setPreviewedPanel(null)}
+            onFocus={() => handlePanelPreview('workspace-sidebar')}
+            onBlur={() => setPreviewedPanel(null)}
+            className={cn(
+              topbarClassNames.iconButton,
+              'mr-1 sm:mr-2',
+              previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+            )}
             title={isSidebarOpen ? '收合側欄' : '展開側欄'}
             aria-label={isSidebarOpen ? '收合工作區選單' : '展開工作區選單'}
             data-main-sidebar-toggle="true"
@@ -240,9 +270,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <button
             type="button"
             onClick={handleToggleMobileTaskWorkbench}
-            className={cn(topbarClassNames.iconButton, 'text-sky-700 hover:text-sky-700')}
-            title="開啟全域任務平台"
-            aria-label="開啟全域任務平台"
+            onPointerEnter={() => handlePanelPreview('task-workbench')}
+            onPointerLeave={() => setPreviewedPanel(null)}
+            onFocus={() => handlePanelPreview('task-workbench')}
+            onBlur={() => setPreviewedPanel(null)}
+            className={cn(
+              topbarClassNames.iconButton,
+              'text-primary-700 hover:text-primary-700',
+              previewedPanel === 'task-workbench' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
+            )}
+            title="開啟或收合全域任務平台"
+            aria-label="開啟或收合全域任務平台"
             data-mobile-task-workbench-nav-entry="true"
           >
             <ClipboardList size={17} />
@@ -456,8 +494,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <RagSidebar />
       </div>
 
-      <GlobalContextMenu />
-    </div>
+        <GlobalContextMenu />
+      </div>
+    </PanelPreviewProvider>
   );
 };
 

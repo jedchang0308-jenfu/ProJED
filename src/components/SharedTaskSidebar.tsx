@@ -88,7 +88,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                         onAddChild(item);
                     }}
                     className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded text-slate-400 transition-all hover:text-primary z-50"
-                    title="新增下層任務"
+                    title="新增子任務"
                 >
                     <Plus size={12} />
                 </button>
