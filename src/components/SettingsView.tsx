@@ -6,14 +6,16 @@ import {
   Settings,
   ShieldCheck,
   Smartphone,
+  UserRound,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import AccountProfileSettings from './AccountProfileSettings';
 import BackupSettings from './BackupSettings';
 import { BoardMembersPanel } from './BoardMembersPanel';
 import CalendarSubscriptionsView from './CalendarSubscriptionsView';
 import { AppInstallAssistant } from './AppInstallAssistant';
 
-type SettingsSection = 'backup' | 'permissions' | 'calendar' | 'app';
+type SettingsSection = 'profile' | 'backup' | 'permissions' | 'calendar' | 'app';
 
 type SettingsViewProps = {
   initialSection?: SettingsSection;
@@ -24,6 +26,7 @@ const SETTINGS_SECTIONS: Array<{
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }> = [
+  { id: 'profile', label: '個人資料', icon: UserRound },
   { id: 'backup', label: '備份、還原與資料移轉', icon: DatabaseBackup },
   { id: 'permissions', label: '看板權限', icon: ShieldCheck },
   { id: 'calendar', label: '行事曆訂閱', icon: CalendarPlus },
@@ -74,7 +77,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
           </div>
         </header>
 
-        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="設定分類">
+        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="設定分類">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
             const isActive = activeSection === section.id;
@@ -102,6 +105,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
           })}
         </nav>
 
+        {activeSection === 'profile' && <AccountProfileSettings />}
         {activeSection === 'backup' && <BackupSettings />}
         {activeSection === 'permissions' && <PermissionSettings hasActiveBoard={Boolean(activeBoard)} />}
         {activeSection === 'calendar' && (

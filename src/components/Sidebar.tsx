@@ -37,6 +37,7 @@ const isTextInputEvent = (event) => {
 
 const Sidebar = () => {
   const accountId = useAuthStore(state => state.user?.uid ?? null);
+  const currentUser = useAuthStore(state => state.user);
   const { previewedPanel } = usePanelPreview();
   const {
     workspaces,
@@ -591,11 +592,11 @@ const Sidebar = () => {
         <div className="border-t border-slate-200/80 bg-white/80 p-4">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white shadow-sm">
-              {(useAuthStore.getState().user?.displayName || 'U')[0].toUpperCase()}
+              {(currentUser?.displayName || 'U')[0].toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-slate-700">{useAuthStore.getState().user?.displayName || '使用者'}</div>
-              <div className="truncate text-xs text-slate-400">{useAuthStore.getState().user?.email || ''}</div>
+              <div className="truncate text-sm font-semibold text-slate-700">{currentUser?.displayName || '使用者'}</div>
+              <div className="truncate text-xs text-slate-400">{currentUser?.email || ''}</div>
             </div>
             <button
               onClick={() => useAuthStore.getState().signOut()}

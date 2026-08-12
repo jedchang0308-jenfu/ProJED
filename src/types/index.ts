@@ -486,6 +486,7 @@ export interface AuthState {
 export interface AuthActions {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateDisplayName: (displayName: string) => Promise<void>;
 }
 
 export type AuthStore = AuthState & AuthActions;

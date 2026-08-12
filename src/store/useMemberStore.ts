@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createDefaultBoardRolePermissionMatrix, type BoardMember, type BoardRolePermissionMatrix, type CurrentBoardAccess, type WorkspaceMember } from '../types';
+import { createDefaultBoardRolePermissionMatrix, type BoardMember, type BoardRolePermissionMatrix, type CollaborationMemberProfile, type CurrentBoardAccess, type WorkspaceMember } from '../types';
 import { memberService } from '../services/dataBackend';
 import useAuthStore from './useAuthStore';
 
@@ -14,6 +14,7 @@ interface MemberState {
 
 interface MemberActions {
   clearMembers: () => void;
+  updateMemberProfile: (userId: string, profile: Partial<CollaborationMemberProfile>) => void;
   loadMembers: (workspaceId: string | null | undefined, boardId: string | null | undefined) => Promise<void>;
   inviteBoardMember: (workspaceId: string, boardId: string, userId: string, role: BoardMember['role']) => Promise<void>;
   removeBoardMember: (workspaceId: string, boardId: string, userId: string) => Promise<void>;
@@ -37,6 +38,27 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
     currentBoardAccess: null,
     loading: false,
     error: null,
+  }),
+
+  updateMemberProfile: (userId, profile) => set(state => {
+    const mergeProfile = (member: WorkspaceMember | BoardMember) => {
+      if (member.userId !== userId) return member;
+      return {
+        ...member,
+        profile: {
+          id: userId,
+          email: member.profile?.email ?? null,
+          displayName: member.profile?.displayName ?? null,
+          ...member.profile,
+          ...profile,
+        },
+      };
+    };
+
+    return {
+      workspaceMembers: state.workspaceMembers.map(mergeProfile) as WorkspaceMember[],
+      boardMembers: state.boardMembers.map(mergeProfile) as BoardMember[],
+    };
   }),
 
   loadMembers: async (workspaceId, boardId) => {

@@ -2,6 +2,7 @@ import { requireFirebaseAuth, requireFirebaseDb } from './firebase';
 import {
   GoogleAuthProvider,
   getRedirectResult,
+  updateProfile,
   signInWithPopup,
   signInWithRedirect,
   signOut as firebaseSignOut,
@@ -13,6 +14,8 @@ import type { FirestoreUser } from '../types';
 import { isLocalTestBackend, isSupabaseBackend } from './dataBackend';
 import { isSupabaseConfigured, supabase } from './supabase/client';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
+import { emitProfileUpdated } from '../utils/profileEvents';
+import { saveLocalTestProfileOverride } from './localTestProfileService';
 
 type SupabaseUser = NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']>;
 
@@ -65,15 +68,24 @@ const mapSupabaseUser = (user: SupabaseUser): FirestoreUser => ({
 
 const ensureSupabaseProfile = async (user: SupabaseUser): Promise<FirestoreUser> => {
   const mappedUser = mapSupabaseUser(user);
+  const { data: existingProfile, error: profileReadError } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', mappedUser.uid)
+    .maybeSingle();
+
+  if (profileReadError) throw new Error(profileReadError.message);
+
+  const displayName = existingProfile?.display_name ?? mappedUser.displayName;
   const { error } = await supabase
     .from('profiles')
     .upsert({
       id: mappedUser.uid,
       email: mappedUser.email,
-      display_name: mappedUser.displayName,
+      display_name: displayName,
     });
   if (error) throw new Error(error.message);
-  return mappedUser;
+  return { ...mappedUser, displayName };
 };
 
 const requireSupabaseAuth = () => {
@@ -223,6 +235,66 @@ const getLocalTestSession = (): FirestoreUser | null => {
   }
 };
 
+const updateCurrentUserDisplayName = async (displayName: string): Promise<FirestoreUser> => {
+  const normalizedDisplayName = displayName.trim();
+  if (!normalizedDisplayName) throw new Error('顯示名稱不可為空白。');
+
+  if (isLocalTestAuth()) {
+    const currentUser = getLocalTestSession();
+    if (!currentUser) throw new Error('目前沒有登入使用者。');
+
+    const updatedUser = { ...currentUser, displayName: normalizedDisplayName };
+    localStorage.setItem(LOCAL_TEST_SESSION_KEY, JSON.stringify(updatedUser));
+    saveLocalTestProfileOverride(updatedUser.uid, normalizedDisplayName);
+    emitProfileUpdated(updatedUser);
+    return updatedUser;
+  }
+
+  if (isSupabaseBackend) {
+    requireSupabaseAuth();
+
+    const { data, error: userError } = await supabase.auth.getUser();
+    if (userError) throw new Error(userError.message);
+    if (!data.user) throw new Error('目前沒有登入使用者。');
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: data.user.id,
+        email: data.user.email ?? null,
+        display_name: normalizedDisplayName,
+      });
+    if (profileError) throw new Error(profileError.message);
+
+    const updatedUser = {
+      uid: data.user.id,
+      email: data.user.email ?? null,
+      displayName: normalizedDisplayName,
+      createdAt: data.user.created_at ? new Date(data.user.created_at).getTime() : undefined,
+    };
+    emitProfileUpdated(updatedUser);
+    return updatedUser;
+  }
+
+  const firebaseUser = requireFirebaseAuth().currentUser;
+  if (!firebaseUser) throw new Error('目前沒有登入使用者。');
+  await updateProfile(firebaseUser, { displayName: normalizedDisplayName });
+  await setDoc(doc(requireFirebaseDb(), 'users', firebaseUser.uid), {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: normalizedDisplayName,
+  }, { merge: true });
+
+  const updatedUser = {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName,
+    createdAt: undefined,
+  };
+  emitProfileUpdated(updatedUser);
+  return updatedUser;
+};
+
 const signInWithLocalSupabasePassword = async (): Promise<FirestoreUser> => {
   const { email, password } = getSupabaseSeedCredentials();
   if (!email || !password) {
@@ -322,6 +394,8 @@ export const authService = {
 
     await firebaseSignOut(requireFirebaseAuth());
   },
+
+  updateDisplayName: updateCurrentUserDisplayName,
 
   onAuthStateChanged: (callback: (user: FirestoreUser | null) => void) => {
     if (isLocalTestAuth()) {

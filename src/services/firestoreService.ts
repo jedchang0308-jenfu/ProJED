@@ -65,17 +65,21 @@ export const memberService = {
 
     const workspace = { ...(snapshot.data() as Workspace), id: snapshot.id };
     const memberIds = Array.from(new Set([...(workspace.members || []), workspace.ownerId].filter(Boolean) as string[]));
-    return memberIds.map(userId => ({
-      workspaceId: wsId,
-      userId,
-      role: userId === workspace.ownerId ? 'owner' : 'member',
-      status: 'active',
-      profile: {
-        id: userId,
-        email: null,
-        displayName: userId,
-      },
-      createdAt: workspace.createdAt,
+    return Promise.all(memberIds.map(async userId => {
+      const userSnapshot = await getDoc(doc(db, 'users', userId));
+      const userData = userSnapshot.exists() ? userSnapshot.data() as { email?: string | null; displayName?: string | null } : {};
+      return {
+        workspaceId: wsId,
+        userId,
+        role: userId === workspace.ownerId ? 'owner' : 'member',
+        status: 'active' as const,
+        profile: {
+          id: userId,
+          email: userData.email ?? null,
+          displayName: userData.displayName || userData.email || userId,
+        },
+        createdAt: workspace.createdAt,
+      };
     }));
   },
 

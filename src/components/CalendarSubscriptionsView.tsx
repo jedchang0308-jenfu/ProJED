@@ -31,6 +31,7 @@ import type {
   CalendarSubscriptionFilters,
   CalendarSubscriptionScopeType,
 } from '../services/supabase/database.types';
+import { PROFILE_UPDATED_EVENT, type ProfileUpdatedDetail } from '../utils/profileEvents';
 import { toast } from '../store/useToastStore';
 import CalendarSubscriptionBuilderPreview, {
   type CalendarSubscriptionBuilderAssigneeOption,
@@ -276,6 +277,27 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<ProfileUpdatedDetail>).detail;
+      if (!detail?.uid) return;
+      setMembers(currentMembers => currentMembers.map(member => (
+        member.userId === detail.uid
+          ? {
+              ...member,
+              email: detail.email ?? member.email,
+              displayName: detail.displayName ?? member.displayName,
+            }
+          : member
+      )));
+    };
+
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+  }, []);
+
   const boardOptions = useMemo<CalendarBoardOption[]>(() => {
     const map = new Map<string, CalendarBoardOption>();
     const representedStorageIds = new Set<string>();
@@ -337,7 +359,15 @@ const CalendarSubscriptionsView: React.FC = () => {
       current.workspaceIds.add(member.workspaceId);
       const ref = workspaceRefs.find((workspace) => workspace.id === member.workspaceId);
       if (ref?.appWorkspaceId) current.workspaceIds.add(ref.appWorkspaceId);
-      if (!current.member.displayName && member.displayName) current.member = member;
+      if (user?.uid === member.userId) {
+        current.member = {
+          ...current.member,
+          email: user.email ?? current.member.email,
+          displayName: user.displayName ?? current.member.displayName,
+        };
+      } else if (!current.member.displayName && member.displayName) {
+        current.member = member;
+      }
       byUserId.set(member.userId, current);
     });
     if (user && !byUserId.has(user.uid)) {

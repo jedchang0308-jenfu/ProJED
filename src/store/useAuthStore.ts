@@ -25,7 +25,19 @@ const useAuthStore = create<AuthStore>((set) => ({
     } catch (error: any) {
       set({ error: error.message, loading: false });
     }
-  }
+  },
+
+  updateDisplayName: async (displayName) => {
+    try {
+      set({ error: null });
+      const user = await authService.updateDisplayName(displayName);
+      set({ user });
+    } catch (error: any) {
+      const message = error?.message || '顯示名稱儲存失敗。';
+      set({ error: message });
+      throw new Error(message);
+    }
+  },
 }));
 
 // Initialize the global auth state listener once

@@ -17,6 +17,7 @@ import {
   type WorkspaceMember,
 } from '../types';
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
+import { getLocalTestProfileOverride } from './localTestProfileService';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -224,8 +225,11 @@ const defaultBoardMemberRecords: LocalBoardMemberRecord[] = [
   { userId: 'local-test-viewer', role: 'viewer', createdAt: 1704067200000, updatedAt: 1704067200000 },
 ];
 
-const getLocalProfile = (userId: string) =>
-  localTestProfiles[userId as keyof typeof localTestProfiles];
+const getLocalProfile = (userId: string) => {
+  const profile = localTestProfiles[userId as keyof typeof localTestProfiles];
+  const override = getLocalTestProfileOverride(userId);
+  return profile ? { ...profile, ...override } : profile;
+};
 
 const toBoardMember = (workspaceId: string, boardId: string, record: LocalBoardMemberRecord): BoardMember => ({
   workspaceId,
@@ -264,7 +268,7 @@ export const localTestMemberService = {
       userId: 'local-test-user',
       role: 'owner',
       status: 'active',
-      profile: localTestProfiles['local-test-user'],
+      profile: getLocalProfile('local-test-user'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -273,7 +277,7 @@ export const localTestMemberService = {
       userId: 'local-test-pm',
       role: 'project_manager',
       status: 'active',
-      profile: localTestProfiles['local-test-pm'],
+      profile: getLocalProfile('local-test-pm'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -282,7 +286,7 @@ export const localTestMemberService = {
       userId: 'local-test-admin',
       role: 'admin',
       status: 'active',
-      profile: localTestProfiles['local-test-admin'],
+      profile: getLocalProfile('local-test-admin'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -291,7 +295,7 @@ export const localTestMemberService = {
       userId: 'local-test-member',
       role: 'member',
       status: 'active',
-      profile: localTestProfiles['local-test-member'],
+      profile: getLocalProfile('local-test-member'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -300,7 +304,7 @@ export const localTestMemberService = {
       userId: 'local-test-viewer',
       role: 'viewer',
       status: 'active',
-      profile: localTestProfiles['local-test-viewer'],
+      profile: getLocalProfile('local-test-viewer'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -309,7 +313,7 @@ export const localTestMemberService = {
       userId: 'local-test-analyst',
       role: 'member',
       status: 'active',
-      profile: localTestProfiles['local-test-analyst'],
+      profile: getLocalProfile('local-test-analyst'),
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
