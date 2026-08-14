@@ -103,22 +103,34 @@ async (page) => {
     try {
       await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
     } catch (error) {
-      const screenshot = `output/playwright/dev-035-open-app-timeout-${Date.now()}.png`;
-      await page.screenshot({ path: screenshot, fullPage: true });
-      const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
-      const rootHtml = await page.locator('#root').evaluate((node) => node.innerHTML.slice(0, 2000)).catch(() => '');
-      throw new Error(`app nav did not become visible: ${JSON.stringify({
-        url: page.url(),
-        title: await page.title().catch(() => ''),
-        bodyText: bodyText.slice(0, 2000),
-        rootHtml,
-        screenshot,
-        diagnostics: diagnostics.slice(-20),
-      })}`);
+      const localTestLogin = page.getByRole('button', { name: /使用固定測試環境/ }).first();
+      if (await localTestLogin.count() > 0) {
+        await localTestLogin.click();
+        await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+      } else {
+        const screenshot = `output/playwright/dev-035-open-app-timeout-${Date.now()}.png`;
+        await page.screenshot({ path: screenshot, fullPage: true });
+        const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
+        const rootHtml = await page.locator('#root').evaluate((node) => node.innerHTML.slice(0, 2000)).catch(() => '');
+        throw new Error(`app nav did not become visible: ${JSON.stringify({
+          url: page.url(),
+          title: await page.title().catch(() => ''),
+          bodyText: bodyText.slice(0, 2000),
+          rootHtml,
+          screenshot,
+          diagnostics: diagnostics.slice(-20),
+        })}`);
+      }
     }
     if (await page.locator('[data-sidebar-workspace-title="true"]').count() === 0) {
-      await page.getByTitle('展開工作區選單').click();
+      const mainSidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+      if (await mainSidebarToggle.count() > 0) {
+        await mainSidebarToggle.click();
+      } else {
+        await page.getByTitle('展開工作區選單').click();
+      }
     }
+    await page.waitForTimeout(1000);
     await page.locator('[data-sidebar-workspace-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
   };
 

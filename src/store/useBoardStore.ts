@@ -390,7 +390,10 @@ const useBoardStore = create<BoardStore>()(
             const { workspaces } = get();
             const ws = workspaces.find(w => w.id === workspaceId);
             const board = ws?.boards.find(b => b.id === boardId);
-            if (board) {
+            // Optimistic rows use a local-only id until Supabase returns the
+            // canonical project id. Never route the app into a board that the
+            // backend cannot resolve yet, even if the pending row is clicked.
+            if (board && !board.id.startsWith('b_')) {
                 safeSetItem(WS_STORAGE_KEY, workspaceId);
                 safeSetItem(BOARD_STORAGE_KEY, boardId);
                 safeSetItem(VIEW_STORAGE_KEY, 'board');
@@ -487,9 +490,11 @@ const useBoardStore = create<BoardStore>()(
             }
 
             const tempId = 'b_' + Date.now();
-            safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
-            safeSetItem(BOARD_STORAGE_KEY, tempId);
-            safeSetItem(VIEW_STORAGE_KEY, 'board');
+            // Keep the optimistic row visible while the request is pending, but
+            // do not make the temporary id active. Supabase resolves legacy
+            // board ids through `projects`, so loading/synchronising this id
+            // before the create request succeeds produces a blank board and a
+            // noisy "project not found" error.
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== targetWorkspaceId) return ws;
@@ -504,9 +509,6 @@ const useBoardStore = create<BoardStore>()(
                         }]
                     };
                 }),
-                activeWorkspaceId: targetWorkspaceId,
-                activeBoardId: tempId,
-                currentView: 'board',
             }));
             boardService.create(targetWorkspaceId, boardName)
                 .then((createdBoard) => {
@@ -565,24 +567,31 @@ const useBoardStore = create<BoardStore>()(
                         activateCreatedBoard(recreatedBoard);
                     };
 
+                    safeSetItem(WS_STORAGE_KEY, targetWorkspaceId);
+                    safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
+                    safeSetItem(VIEW_STORAGE_KEY, 'board');
                     set((state) => ({
                         workspaces: state.workspaces.map(ws => {
-                    if (ws.id !== targetWorkspaceId) return ws;
-                    return {
-                        ...ws,
-                        boards: ws.boards.map(board =>
-                            board.id === tempId ? { ...createdBoard, title: board.title || createdBoard.title } : board
-                        ),
-                    };
-                }),
-                activeBoardId: state.activeBoardId === tempId ? createdBoard.id : state.activeBoardId,
-                pendingBoardTitleEdit: state.pendingBoardTitleEdit?.boardId === tempId
-                    ? { workspaceId: targetWorkspaceId, boardId: createdBoard.id }
-                    : state.pendingBoardTitleEdit,
-            }));
-                    if (get().activeBoardId === createdBoard.id) {
-                        safeSetItem(BOARD_STORAGE_KEY, createdBoard.id);
-                    }
+                            if (ws.id !== targetWorkspaceId) return ws;
+                            const resolvedBoard = {
+                                ...createdBoard,
+                                title: ws.boards.find(board => board.id === tempId)?.title || createdBoard.title,
+                            };
+                            const hasCreatedBoard = ws.boards.some(board => board.id === createdBoard.id);
+                            return {
+                                ...ws,
+                                boards: hasCreatedBoard
+                                    ? ws.boards.map(board => board.id === createdBoard.id ? resolvedBoard : board)
+                                    : ws.boards.map(board => board.id === tempId ? resolvedBoard : board),
+                            };
+                        }),
+                        activeWorkspaceId: targetWorkspaceId,
+                        activeBoardId: createdBoard.id,
+                        currentView: 'board',
+                        pendingBoardTitleEdit: state.pendingBoardTitleEdit?.boardId === tempId
+                            ? { workspaceId: targetWorkspaceId, boardId: createdBoard.id }
+                            : state.pendingBoardTitleEdit,
+                    }));
                     const command = {
                         label: '新增看板',
                         scope: 'board',
@@ -592,7 +601,25 @@ const useBoardStore = create<BoardStore>()(
                     };
                     useUndoStore.getState().pushUndo(command);
                 })
-                .catch(console.error);
+                .catch((error) => {
+                    console.error('[useBoardStore] Board create failed:', error);
+                    set((state) => {
+                        const isActivePendingBoard = state.activeBoardId === tempId;
+                        const shouldClearPendingTitle = state.pendingBoardTitleEdit?.boardId === tempId;
+                        if (isActivePendingBoard) {
+                            safeSetItem(BOARD_STORAGE_KEY, null);
+                            safeSetItem(VIEW_STORAGE_KEY, 'home');
+                        }
+                        return {
+                            workspaces: state.workspaces.map(ws => ws.id === targetWorkspaceId
+                                ? { ...ws, boards: ws.boards.filter(board => board.id !== tempId) }
+                                : ws),
+                            activeBoardId: isActivePendingBoard ? null : state.activeBoardId,
+                            currentView: isActivePendingBoard ? 'home' : state.currentView,
+                            pendingBoardTitleEdit: shouldClearPendingTitle ? null : state.pendingBoardTitleEdit,
+                        };
+                    });
+                });
             return tempId;
         },
 

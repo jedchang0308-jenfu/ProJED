@@ -6,6 +6,7 @@ import useUndoStore from './useUndoStore';
 import useBoardStore from './useBoardStore';
 import useRecordStore from './useRecordStore';
 import useAuthStore from './useAuthStore';
+import { useMemberStore } from './useMemberStore';
 import { useTagStore } from './useTagStore';
 import {
   isTaskWorkbenchUnplacedTask,
@@ -416,13 +417,26 @@ const buildTaskUpdateActivities = (
     left.length === right.length && left.every((id, index) => id === right[index]);
   const oldPrimaryIds = getTaskAssigneeIds(oldNode);
   const newPrimaryIds = getTaskAssigneeIds(newNode);
+  const getMemberName = (id: string) => {
+    const member = useMemberStore.getState().boardMembers.find(item => item.userId === id);
+    return member?.profile?.displayName || member?.profile?.email || null;
+  };
+  const getTagName = (id: string) => useTagStore.getState().tags.find(tag => tag.id === id)?.name || null;
 
   if (('assigneeIds' in updates || 'assigneeId' in updates) && !sameIds(oldPrimaryIds, newPrimaryIds)) {
     events.push({
       eventType: 'task_assigned',
       payload: {
-        before: { assigneeIds: oldPrimaryIds, assigneeId: oldPrimaryIds[0] ?? null },
-        after: { assigneeIds: newPrimaryIds, assigneeId: newPrimaryIds[0] ?? null },
+        before: {
+          assigneeIds: oldPrimaryIds,
+          assigneeId: oldPrimaryIds[0] ?? null,
+          assigneeNames: oldPrimaryIds.map(getMemberName),
+        },
+        after: {
+          assigneeIds: newPrimaryIds,
+          assigneeId: newPrimaryIds[0] ?? null,
+          assigneeNames: newPrimaryIds.map(getMemberName),
+        },
       },
     });
   }
@@ -433,8 +447,14 @@ const buildTaskUpdateActivities = (
     events.push({
       eventType: 'task_collaborators_changed',
       payload: {
-        before: { collaboratorIds: oldCollaboratorIds },
-        after: { collaboratorIds: newCollaboratorIds },
+        before: {
+          collaboratorIds: oldCollaboratorIds,
+          collaboratorNames: oldCollaboratorIds.map(getMemberName),
+        },
+        after: {
+          collaboratorIds: newCollaboratorIds,
+          collaboratorNames: newCollaboratorIds.map(getMemberName),
+        },
       },
     });
   }
@@ -499,8 +519,14 @@ const buildTaskUpdateActivities = (
     events.push({
       eventType: 'task_tags_changed',
       payload: {
-        before: { tagIds: oldNode.tagIds ?? [] },
-        after: { tagIds: newNode.tagIds ?? [] },
+        before: {
+          tagIds: oldNode.tagIds ?? [],
+          tagNames: (oldNode.tagIds ?? []).map(getTagName),
+        },
+        after: {
+          tagIds: newNode.tagIds ?? [],
+          tagNames: (newNode.tagIds ?? []).map(getTagName),
+        },
       },
     });
   }

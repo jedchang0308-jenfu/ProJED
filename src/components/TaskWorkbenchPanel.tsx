@@ -159,7 +159,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
           data-task-workbench-unclassified-modal-add="true"
           data-mobile-pan-pass-through="true"
         >
-          <span>新增任務</span>
+          <span>+新增任務</span>
         </button>
         <span className="sr-only" data-task-workbench-unclassified-count="true">
           {tasks.length}
@@ -199,6 +199,7 @@ interface WorkbenchTaskRowProps extends WorkbenchDragCardProps {
   setNodeRef?: (element: HTMLElement | null) => void;
   draggableBindings?: Record<string, unknown>;
   gestureHandlers: ReturnType<typeof useTaskGestureSurface>['handlers'];
+  touchGestureEnabled: boolean;
 }
 
 const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
@@ -211,6 +212,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   setNodeRef,
   draggableBindings = {},
   gestureHandlers,
+  touchGestureEnabled,
 }) => {
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
@@ -276,6 +278,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-task-workbench-hierarchy-depth={unplacedLane ? 0 : depth}
       data-desktop-task-hover-preview={!isDragging ? 'true' : undefined}
       data-touch-tap-guard="true"
+      data-task-touch-gesture-surface={touchGestureEnabled ? 'true' : undefined}
       data-task-id={task.id}
       data-mobile-drop-target={task.id}
       data-task-drop-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
@@ -384,6 +387,7 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
       setNodeRef={setNodeRef}
       draggableBindings={canUseDragSurface ? { ...attributes, ...listeners } : {}}
       gestureHandlers={taskGesture.handlers}
+      touchGestureEnabled={taskGesture.touchGestureEnabled}
     />
   );
 };
@@ -410,6 +414,7 @@ const WorkbenchPlacedReadOnlyCard: React.FC<WorkbenchDragCardProps> = ({
       isDragging={false}
       canUseDragSurface={false}
       gestureHandlers={taskGesture.handlers}
+      touchGestureEnabled={taskGesture.touchGestureEnabled}
     />
   );
 };

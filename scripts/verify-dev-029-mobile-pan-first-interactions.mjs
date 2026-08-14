@@ -110,10 +110,12 @@ assert(
 );
 
 assert(
-  'mobile board no longer exposes inline creation controls while workbench keeps one modal creation entry',
+  'the restored board add-list canvas CTA passes short-pan gestures through while removed inline task creation stays absent',
   source.useMobilePanBroker.includes('isMobilePanPassThroughTarget') &&
     source.useMobilePanBroker.includes('const passThrough = isMobilePanPassThroughTarget(event.target)') &&
-    !source.boardView.includes('data-kanban-add-column-button="true"') &&
+    source.boardView.includes('data-kanban-add-column-button="true"') &&
+    source.boardView.includes('data-mobile-pan-pass-through="true"') &&
+    source.boardView.includes('<span>新增列表</span>') &&
     !source.kanbanColumn.includes('data-kanban-add-task-button="true"') &&
     source.taskWorkbench.includes('data-task-workbench-unclassified-modal-add="true"') &&
     source.taskWorkbench.includes('data-mobile-pan-pass-through="true"'),

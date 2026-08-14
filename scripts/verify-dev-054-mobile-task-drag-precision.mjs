@@ -6,6 +6,9 @@ const files = {
   intent: 'src/components/Wbs/taskDrag/taskDropIntent.ts',
   target: 'src/components/Wbs/taskDrag/taskDragTargetAdapter.ts',
   session: 'src/components/Wbs/taskDrag/useTaskDragSession.ts',
+  gesturePolicy: 'src/components/Wbs/taskDrag/taskGesturePolicy.ts',
+  gestureSurface: 'src/components/Wbs/taskDrag/useTaskGestureSurface.ts',
+  dragSensors: 'src/hooks/useDragSensors.ts',
   commit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   presenter: 'src/components/Wbs/taskDrag/TaskDragPresenter.tsx',
   originField: 'src/components/Wbs/taskDrag/TaskOriginTitleField.tsx',
@@ -17,6 +20,7 @@ const files = {
   checklist: 'src/components/Wbs/KanbanChecklist.tsx',
   column: 'src/components/Wbs/KanbanColumn.tsx',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
+  css: 'src/index.css',
   spec: 'ai-doc/specs/SPEC-054-mobile-task-drag-precision.md',
   qa: 'ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md',
   browser: 'scripts/verify-dev-054-mobile-task-drag-precision-browser.pw.js',
@@ -73,6 +77,31 @@ check('target stability tracks lock, pending handover, and freshness', hasAll(so
 check('task drag owns touch movement after long press and pan broker yields', hasAll(source.panBroker, [
   'isTaskDragTouchActive', 'document.body.hasAttribute', 'move:task-drag-owner', 'reset();',
 ]));
+
+check('actual touch owns the dedicated drag session independently of viewport width',
+  source.gestureSurface.includes('if (mobileActionEnabled && sourceKind)')
+  && !source.gestureSurface.includes('if (isMobileTaskActionMode() && mobileActionEnabled && sourceKind)')
+  && !source.session.includes('if (!isMobileTaskActionMode()) return false;')
+  && !source.dragSensors.includes('TouchSensor'));
+
+check('every eligible task long-press surface suppresses native selection and iOS callout from touchstart',
+  hasAll(source.css, [
+    '[data-task-touch-gesture-surface="true"]',
+    '-webkit-touch-callout: none;',
+    '-webkit-user-select: none;',
+    'user-select: none;',
+    ':is(input, textarea, [contenteditable="true"])',
+  ])
+  && hasAll(source.column, ['data-task-touch-gesture-surface=', 'taskGesture.touchGestureEnabled'])
+  && hasAll(source.card, ['data-task-touch-gesture-surface=', 'taskGesture.touchGestureEnabled'])
+  && hasAll(source.checklist, ['data-task-touch-gesture-surface=', 'taskGesture.touchGestureEnabled'])
+  && hasAll(source.workbench, ['data-task-touch-gesture-surface=', 'touchGestureEnabled={taskGesture.touchGestureEnabled}']));
+
+check('Workbench keeps native pan while only eligible unplaced rows receive touch ownership',
+  source.workbench.includes("sourceKind: 'workbench-unplaced-row'")
+  && source.workbench.includes('sourceKind: null')
+  && source.workbench.includes('mobileActionEnabled: false')
+  && !source.css.includes('[data-task-touch-gesture-surface="true"] {\n  touch-action: none;'));
 
 check('release cannot fall back to a stale previous target',
   source.session.includes('withoutTarget(latestObservation)')
@@ -133,6 +162,10 @@ check('browser verifier covers finger-centered hit, single live indicator, pan o
   'origin title field must fit the viewport',
   'mobile action rail must take priority and clear origin feedback while hovered',
   'card and column origin releases must be zero-write no-ops',
+  'every kanban task level owns native selection before long press activates',
+  '500ms and 8px gesture boundaries separate tap pan and drag',
+  'actual touch starts the dedicated drag session above the old 768px width gate',
+  'Workbench unplaced rows suppress selection without disabling native pan and placed rows stay non-draggable',
 ]));
 
 const placedStart = source.workbench.indexOf('const WorkbenchPlacedReadOnlyCard');

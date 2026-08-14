@@ -150,7 +150,11 @@ async (page) => {
       noteCardCount: noteCards.length,
       deleteButtonCount: deleteButtons.length,
       titleValues: titleInputs.map((element) => element.value),
-      contentValues: contentInputs.map((element) => element.value),
+      contentValues: contentInputs.map((element) => (
+        element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+          ? element.value
+          : element.textContent || ''
+      )),
       deleteButtonTitles: deleteButtons.map((element) => element.getAttribute('title')),
       visibleAlerts,
       storedNotes: JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev050-task']?.detailNotes || [],

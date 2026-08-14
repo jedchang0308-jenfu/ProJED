@@ -66,15 +66,24 @@ async (page) => {
     try {
       await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
     } catch (error) {
-      const screenshot = `output/playwright/dev-036-open-app-timeout-${Date.now()}.png`;
-      await page.screenshot({ path: screenshot, fullPage: true });
-      const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
-      throw new Error(`app nav did not become visible: ${JSON.stringify({
-        url: page.url(),
-        bodyText: bodyText.slice(0, 2000),
-        screenshot,
-        diagnostics: diagnostics.slice(-20),
-      })}`);
+      // A fresh Playwright context can race the local-test auth listener before
+      // the seeded session is observed. Use the explicit fixed test login as a
+      // deterministic fallback, then continue with the same seeded dataset.
+      const localTestLogin = page.getByRole('button', { name: /使用固定測試環境/ }).first();
+      if (await localTestLogin.count() > 0) {
+        await localTestLogin.click();
+        await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+      } else {
+        const screenshot = `output/playwright/dev-036-open-app-timeout-${Date.now()}.png`;
+        await page.screenshot({ path: screenshot, fullPage: true });
+        const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
+        throw new Error(`app nav did not become visible: ${JSON.stringify({
+          url: page.url(),
+          bodyText: bodyText.slice(0, 2000),
+          screenshot,
+          diagnostics: diagnostics.slice(-20),
+        })}`);
+      }
     }
     if (await page.locator('[data-sidebar-workspace-title="true"]').count() === 0) {
       const mainSidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
@@ -84,6 +93,9 @@ async (page) => {
         await page.getByTitle('展開工作區選單').click();
       }
     }
+    // Allow the local-test seed and auth store subscription to settle before
+    // opening context menus; this keeps the test deterministic on cold starts.
+    await page.waitForTimeout(1500);
     await page.locator('[data-sidebar-workspace-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
   };
 
@@ -137,6 +149,14 @@ async (page) => {
 
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    if (await page.locator('[data-sidebar-workspace-title="true"]').count() === 0) {
+      const mainSidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+      if (await mainSidebarToggle.count() > 0) {
+        await mainSidebarToggle.click();
+      } else {
+        await page.getByTitle('展開工作區選單').click();
+      }
+    }
     await page.locator('[data-sidebar-workspace-title="true"]', { hasText: '研發部' }).waitFor({ state: 'visible', timeout: 10000 });
     state = await readStorageState();
     assert(state.workspaces.some(workspace => workspace.title === '研發部'), 'created workspace should persist after reload', state);

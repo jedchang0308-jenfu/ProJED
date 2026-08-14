@@ -16,7 +16,7 @@ DEV-036 Phase 1 已通過本機自動化 QC。此次交付完成 Trello-like Wor
 
 | Gate | 結果 | 證據 |
 |---|---|---|
-| DEV-036 static | Pass | `npm.cmd run verify:dev-036-trello-like-workspace-governance`，24/24 |
+| DEV-036 static | Pass | `npm.cmd run verify:dev-036-trello-like-workspace-governance`，27/27 |
 | DEV-036 browser | Pass | `npm.cmd run verify:dev-036-trello-like-workspace-governance-browser` |
 | DEV-035 workspace delete static | Pass | `npm.cmd run verify:dev-035-workspace-delete-persistence-fix`，22/22 |
 | DEV-035 workspace delete browser | Pass | `npm.cmd run verify:dev-035-workspace-delete-browser` |
@@ -43,6 +43,11 @@ DEV-036 Phase 1 已通過本機自動化 QC。此次交付完成 Trello-like Wor
 - 初版 browser verifier 發現 local-test seed 在 reload 後會把 `home + no activeBoard` 狀態帶回基準 board view。
 - 已修正 `seedLocalTestEnvironment`：`home` view 可恢復，且在沒有 active board 時移除 `projed-last-board`，不自動塞回基準 board。
 - 已將此行為加入 DEV-036 static verifier，避免後續回歸。
+
+## 驗證對齊追加（2026-08-12）
+
+- DEV-036 static verifier 已通過 27/27；新增 pending board local id 不得在 backend create 完成前成為 active board 的回歸檢查。
+- 現行 canonical `dev_task` / `documentation_map` 索引與 SPEC / ADR / QA / QC 交叉引用一致。
 
 ## DB / Production 邊界
 

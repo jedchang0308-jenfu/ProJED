@@ -92,6 +92,13 @@ assert(
 );
 
 assert(
+  'pending board ids cannot become active before backend create succeeds',
+  source.boardStore.includes("board && !board.id.startsWith('b_')") &&
+    source.boardStore.includes("safeSetItem(BOARD_STORAGE_KEY, createdBoard.id)") &&
+    !source.boardStore.includes("safeSetItem(BOARD_STORAGE_KEY, tempId)"),
+);
+
+assert(
   'first-run default workspace create is awaited with visible error path',
   source.app.includes("addWorkspace('我的工作區').catch") &&
     source.app.includes("toast.error(error instanceof Error ? error.message : '建立預設工作區失敗，請稍後再試。')"),
@@ -115,8 +122,10 @@ assert(
     source.qa.includes('Workspace 清單不新增任何 local-only 項目') &&
     source.qc.includes('Local Automated QC Passed / DB unchanged') &&
     source.qc.includes('DEV-036 static') &&
-    source.devTask.includes('Phase 1 RD acceptance') &&
-    source.devTask.includes('若 Workspace create 無法做到 backend-success-first') &&
+    source.spec.includes('## RD 驗收標準') &&
+    source.devTask.includes('✓ DEV-036 [交付點] [完成]') &&
+    source.devTask.includes('ADR-036') &&
+    source.devTask.includes('QA/QC-DEV-036') &&
     source.documentationMap.includes('Local Automated QC Passed / DB unchanged'),
 );
 

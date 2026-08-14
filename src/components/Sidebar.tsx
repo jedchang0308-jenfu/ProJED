@@ -211,9 +211,12 @@ const Sidebar = () => {
     if (!pendingBoardTitleEdit) return;
     const workspace = workspaces.find((item) => item.id === pendingBoardTitleEdit.workspaceId);
     const board = workspace?.boards.find((item) => item.id === pendingBoardTitleEdit.boardId);
-    if (workspace && board) {
-      startBoardTitleEdit(workspace, board);
-    }
+    // A newly-created board is represented by a temporary local id until the
+    // backend returns its canonical project id. Do not open the title editor
+    // against that id; the update would race the create request and attempt to
+    // resolve a project that does not exist yet.
+    if (!workspace || !board || board.id.startsWith('b_')) return;
+    startBoardTitleEdit(workspace, board);
     setPendingBoardTitleEdit(null);
   }, [pendingBoardTitleEdit, setPendingBoardTitleEdit, startBoardTitleEdit, workspaces]);
 

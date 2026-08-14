@@ -4,6 +4,8 @@ import { AlertTriangle, BookOpenText, CheckCircle2, ChevronDown, ChevronRight, C
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
+import { useMemberStore } from '../../store/useMemberStore';
+import { useTagStore } from '../../store/useTagStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useMeetingModeExitGuard } from '../../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
@@ -635,6 +637,8 @@ const RecordListItem: React.FC<{ record: KnowledgeRecord; onOpen: () => void }> 
 const RecordSidebar: React.FC = () => {
   const user = useAuthStore(state => state.user);
   const nodes = useWbsStore(state => state.nodes);
+  const boardMembers = useMemberStore(state => state.boardMembers);
+  const tags = useTagStore(state => state.tags);
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
   const guardRecordDraft = useRecordDraftGuard();
   const requestExitMeetingMode = useMeetingModeExitGuard();
@@ -676,6 +680,15 @@ const RecordSidebar: React.FC = () => {
   const archiveRecord = useRecordStore(state => state.archiveRecord);
   const meetingSynthesisTrace = getMeetingSynthesisTrace(draft?.metadata);
   const meetingSynthesisUsedRules = isRuleBasedSynthesisProvider(meetingSynthesisProvider);
+  const activitySummaryResolvers = React.useMemo(() => ({
+    memberNameById: new Map(
+      boardMembers.flatMap(member => {
+        const name = member.profile?.displayName || member.profile?.email;
+        return name ? [[member.userId, name] as const] : [];
+      }),
+    ),
+    tagNameById: new Map(tags.map(tag => [tag.id, tag.name] as const)),
+  }), [boardMembers, tags]);
 
   React.useEffect(() => {
     const handleOpenRecord = (event: Event) => {
@@ -931,6 +944,7 @@ const RecordSidebar: React.FC = () => {
           draft.title || '專案變化紀錄',
           events,
           nodes,
+          activitySummaryResolvers,
         )),
         '整理專案變化逾時，請稍後重試；也可以縮短日期範圍或先手動撰寫紀錄。',
       );
@@ -1443,7 +1457,7 @@ const RecordSidebar: React.FC = () => {
                                 <span className="truncate font-semibold" title={activity.title}>{activity.title}</span>
                                 <span className="shrink-0 text-[10px] text-slate-400">{dayjs(activity.occurredAt).format('HH:mm')}</span>
                               </div>
-                              <div className="truncate text-slate-500" title={activity.summary}>{activity.summary}</div>
+                              <div className="whitespace-normal break-words text-slate-500" title={activity.summary}>{activity.summary}</div>
                             </div>
                           ))
                         ) : (

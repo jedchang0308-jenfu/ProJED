@@ -1,4 +1,5 @@
 import { serializeTaskMention, TASK_MENTION_PATTERN } from './recordContentMentions';
+import { summarizeTaskActivity } from './meetingActivitySummary';
 
 export type MeetingSynthesisTask = {
   id: string;
@@ -209,6 +210,13 @@ const formatActivityNarrative = (activity: MeetingSynthesisActivity) => {
     if (startChanged && !endChanged) return formatSingleDateChange('開始日', before.startDate, after.startDate);
     if (!startChanged && endChanged) return formatSingleDateChange('到期日', before.endDate, after.endDate);
     return `日期由「${formatDateRange(before)}」改為「${formatDateRange(after)}」。`;
+  }
+
+  if (
+    ['task_assigned', 'task_collaborators_changed', 'task_tags_changed'].includes(activity.eventType) &&
+    hasMeaningfulPayloadChange(activity)
+  ) {
+    return summarizeTaskActivity(activity.eventType, activity.payload ?? {});
   }
 
   const fallback = normalizeText(stripTaskMentions(activity.summary));

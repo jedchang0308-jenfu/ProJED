@@ -254,7 +254,7 @@ const runSelfCheck = () => {
       'knowledge_records',
       'record_task_links',
       'data-task-details-modal',
-      '任務知識',
+      '歷史資訊',
     ]),
   );
 
@@ -643,7 +643,7 @@ async (page) => {
     await page.locator('[data-task-id="' + payload.taskA.uiId + '"]').first().click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 15000 });
     const taskDetailsText = await page.locator('[data-task-details-modal="true"]').innerText({ timeout: 15000 });
-    if (!taskDetailsText.includes('任務知識') || !taskDetailsText.includes(payload.uniqueNeedle)) {
+    if (!taskDetailsText.includes('歷史資訊') || !taskDetailsText.includes(payload.uniqueNeedle)) {
       return JSON.stringify({
         ok: false,
         stage: 'task_knowledge_ui_missing',

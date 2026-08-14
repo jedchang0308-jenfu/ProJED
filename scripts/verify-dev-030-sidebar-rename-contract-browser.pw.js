@@ -27,11 +27,27 @@ async (page) => {
       }));
     }, account);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    try {
+      await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    } catch (error) {
+      const localTestLogin = page.getByRole('button', { name: /使用固定測試環境/ }).first();
+      if (await localTestLogin.count() > 0) {
+        await localTestLogin.click();
+        await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+      } else {
+        throw error;
+      }
+    }
 
     if (await page.locator('[data-sidebar-workspace-title="true"]').count() === 0) {
-      await page.getByTitle('展開工作區選單').click();
+      const mainSidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+      if (await mainSidebarToggle.count() > 0) {
+        await mainSidebarToggle.click();
+      } else {
+        await page.getByTitle('展開工作區選單').click();
+      }
     }
+    await page.waitForTimeout(1000);
     await page.locator('[data-sidebar-workspace-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-sidebar-board-title="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
   };

@@ -105,7 +105,7 @@ QC 回報至少包含：
 
 ## 本輪 QC 結果（2026-06-29）
 
-- Pass：`npm.cmd run verify:dev-036-trello-like-workspace-governance`，24/24。
+- Pass：`npm.cmd run verify:dev-036-trello-like-workspace-governance`，27/27。
 - Pass：`npm.cmd run verify:dev-036-trello-like-workspace-governance-browser`。
 - Pass：`npm.cmd run verify:dev-035-workspace-delete-persistence-fix`，22/22。
 - Pass：`npm.cmd run verify:dev-035-workspace-delete-browser`。

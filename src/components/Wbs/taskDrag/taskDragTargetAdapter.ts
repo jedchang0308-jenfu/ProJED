@@ -137,7 +137,8 @@ const buildCandidate = (
   state: TaskDragSessionState,
   point: Point,
 ): TaskTargetCandidate | null => {
-  const nodeId = targetElement.getAttribute('data-task-id');
+  const nodeId = targetElement.getAttribute('data-task-drop-node-id')
+    || targetElement.getAttribute('data-task-id');
   const domSurfaceKind = readSurfaceKind(targetElement);
   if (!nodeId || nodeId === state.nodeId || !domSurfaceKind) return null;
 
@@ -174,7 +175,9 @@ const buildCandidate = (
     rect,
     indicatorRect: {
       left: indicatorLeft,
-      top: dropPosition === 'after' ? rect.bottom : rect.top,
+      top: surfaceKind === 'root-drop'
+        ? rect.top
+        : dropPosition === 'after' ? rect.bottom : rect.top,
       width: Math.max(24, rect.right - indicatorLeft),
     },
   };
@@ -183,7 +186,9 @@ const buildCandidate = (
 const collectDirectCandidates = (point: Point, state: TaskDragSessionState) => {
   const element = document.elementFromPoint(point.x, point.y);
   const targetElement = element instanceof Element
-    ? element.closest('[data-mobile-drop-target][data-task-id]') as HTMLElement | null
+    ? element.closest(
+      '[data-mobile-drop-target][data-task-id], [data-mobile-drop-target][data-task-drop-node-id]',
+    ) as HTMLElement | null
     : null;
   if (!targetElement) return [];
 

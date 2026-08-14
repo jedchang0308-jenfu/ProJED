@@ -131,7 +131,18 @@ async (page) => {
           promotedTaskNodeId: null,
         },
       ]));
-      localStorage.setItem('projed-task-workbench-panel:v1', JSON.stringify({ open: true, filtersOpen: false }));
+      localStorage.setItem(`projed-task-workbench-panel:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        open: true,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+        width: 340,
+        openPreferenceVersion: 1,
+      }));
+      localStorage.setItem(`projed-task-workbench-filters:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        version: 2,
+        selectedBoardId: 'dev039-placement-board-a',
+        filtersByBoardId: {},
+      }));
       localStorage.setItem('projed-local-test.seeded.v1', 'true');
       localStorage.setItem('projed-local-test.seeded.size', '12');
       localStorage.setItem('projed-last-ws', workspace.id);
@@ -277,13 +288,15 @@ async (page) => {
     const unplacedTitleTypography = await readTaskTitleTypography(
       unplacedLane.locator('[data-task-workbench-task-title="true"]').first(),
     );
-    const placedRootTitleTypography = await readTaskTitleTypography(
-      placedLane.locator('[data-task-workbench-hierarchy-row="true"][data-task-workbench-hierarchy-depth="0"] [data-task-workbench-task-title="true"]').first(),
+    const placedTaskTitleTypography = await readTaskTitleTypography(
+      placedLane.locator('[data-task-workbench-placed-task-card="true"] [data-task-workbench-task-title="true"]').first(),
     );
     assert(
-      JSON.stringify(unplacedTitleTypography) === JSON.stringify(placedRootTitleTypography),
-      'unplaced task titles should match placed root-task typography',
-      { unplacedTitleTypography, placedRootTitleTypography },
+      unplacedTitleTypography.fontFamily === placedTaskTitleTypography.fontFamily
+        && unplacedTitleTypography.fontSize === placedTaskTitleTypography.fontSize
+        && unplacedTitleTypography.lineHeight === placedTaskTitleTypography.lineHeight,
+      'unplaced and placed task titles should keep the same typography family and density while hierarchy emphasis may differ',
+      { unplacedTitleTypography, placedTaskTitleTypography },
     );
     assert(await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').count() === 1, 'legacy inbox item should be migrated into one unplaced task card');
     assert(await workbenchPanel.locator('[data-task-workbench-placed-task-card="true"][data-task-id="dev039-placement-card-a"]').count() === 1, 'placed board lane should show existing board task');
@@ -494,6 +507,12 @@ async (page) => {
     step = 'mobile-viewport';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
+    const mobileWorkbenchNavEntry = page.locator('[data-mobile-task-workbench-nav-entry="true"]').first();
+    const mobileWorkbenchPanel = page.locator('[data-task-workbench-panel="true"]').first();
+    if (await mobileWorkbenchPanel.isVisible().catch(() => false)) {
+      await mobileWorkbenchNavEntry.click();
+      await mobileWorkbenchPanel.waitFor({ state: 'hidden', timeout: 10000 });
+    }
     assert(
       await page.locator('[data-task-workbench-panel="collapsed"]').count() === 0,
       'mobile closed task workbench should not render an in-flow collapsed rail',
@@ -551,7 +570,7 @@ async (page) => {
     const mobileClosedOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     assert(!mobileClosedOverflow, 'mobile closed rails should not create document-level horizontal overflow');
 
-    await page.locator('[data-mobile-task-workbench-nav-entry="true"]').click();
+    await mobileWorkbenchNavEntry.click();
     await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-unplaced-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });

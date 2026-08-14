@@ -133,6 +133,7 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
           data-mobile-drop-indicator="true"
           data-mobile-drop-target={state.hoverTargetId || undefined}
           data-mobile-drop-position={state.dropPosition || undefined}
+          data-mobile-drop-surface-kind={state.targetSurfaceKind || undefined}
         >
           <KanbanInsertionMarker compact className="py-0" />
         </div>

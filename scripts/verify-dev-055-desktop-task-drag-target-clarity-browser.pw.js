@@ -346,7 +346,8 @@ async (page) => {
     const targetColumn = columns().nth(1);
     const result = await dragAndCommit({
       source: cardsInColumn(0).nth(0),
-      target: targetColumn.locator('[data-kanban-add-task-button="true"]'),
+      target: targetColumn.locator('[data-task-drop-surface-kind="column-drop"]'),
+      targetRatio: { x: 0.55, y: 0.98 },
       screenshotSuffix: 'B03-column-append',
     });
     assert(result.indicator.surfaceKind === 'column-drop' && result.indicator.position === 'append',
@@ -593,7 +594,8 @@ async (page) => {
     await unplaced.waitFor({ state: 'visible', timeout: 5000 });
     const placed = await dragAndCommit({
       source: unplaced,
-      target: columns().first().locator('[data-kanban-add-task-button="true"]'),
+      target: columns().first().locator('[data-task-drop-surface-kind="column-drop"]'),
+      targetRatio: { x: 0.55, y: 0.98 },
       screenshotSuffix: 'B12-workbench-placement',
     });
     const placedRow = panel.locator(`[data-task-workbench-placed-task-card="true"][data-task-id="${placed.sourceId}"]`).first();

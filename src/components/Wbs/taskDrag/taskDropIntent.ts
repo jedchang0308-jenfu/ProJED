@@ -88,24 +88,26 @@ export const resolveTaskDropIntent = ({
   if (draggedNode.id === targetNode.id) return null;
 
   const sourceIsColumn = source.surfaceKind === 'column-header';
-  const shouldBecomeTask = sourceIsColumn && target.surfaceKind !== 'column-header';
+  const targetIsRoot = target.surfaceKind === 'column-header' || target.surfaceKind === 'root-drop';
+  const shouldBecomeTask = sourceIsColumn && !targetIsRoot;
+  const rootNodeType = sourceIsColumn ? draggedNode.nodeType : 'group';
   let intent: TaskDropIntent | null = null;
 
   if (target.surfaceKind === 'column-header') {
     const reorder = getReorderIntent(draggedNode, targetNode);
-    intent = sourceIsColumn
-      ? {
-          parentId: targetNode.parentId || null,
-          order: reorder.order,
-          nodeType: draggedNode.nodeType,
-          displayPosition: reorder.displayPosition,
-        }
-      : {
-          parentId: targetNode.id,
-          order: getTaskAppendOrder(targetNode.id, draggedNode.id, nodesRecord),
-          nodeType: draggedNode.nodeType,
-          displayPosition: 'append',
-        };
+    intent = {
+      parentId: targetNode.parentId || null,
+      order: reorder.order,
+      nodeType: rootNodeType,
+      displayPosition: reorder.displayPosition,
+    };
+  } else if (target.surfaceKind === 'root-drop') {
+    intent = {
+      parentId: null,
+      order: (targetNode.order ?? 0) + 1,
+      nodeType: rootNodeType,
+      displayPosition: 'append',
+    };
   } else if (target.surfaceKind === 'kanban-card') {
     const reorder = getReorderIntent(draggedNode, targetNode);
     intent = {
@@ -149,6 +151,7 @@ export const desktopTargetTypeToSurfaceKind = (
 ): TaskDropSurfaceKind | null => {
   if (targetType === 'wbs-column') return 'column-header';
   if (targetType === 'wbs-column-drop') return 'column-drop';
+  if (targetType === 'wbs-root-drop') return 'root-drop';
   if (targetType === 'wbs-card') return 'kanban-card';
   if (targetType === 'wbs-checklist') return 'checklist-row';
   if (targetType === 'wbs-card-drop') return 'checklist-drop';

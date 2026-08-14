@@ -109,7 +109,7 @@ async (page) => {
     });
     assert(buttonLayout && buttonLayout.saveRight <= buttonLayout.closeLeft && Math.abs(buttonLayout.saveCenterY - buttonLayout.closeCenterY) <= 1,
       'save button should sit directly beside the close button', buttonLayout || {});
-    const firstNote = modal.locator('[data-task-detail-note-card="true"]').first().locator('textarea');
+    const firstNote = modal.locator('[data-task-detail-note-card="true"]').first().locator('[data-task-detail-note-content-input="true"]');
     const manuallySavedNote = `DEV033 manual save ${Date.now().toString(36)}`;
     await firstNote.fill(manuallySavedNote);
     await saveButton.click();
@@ -130,7 +130,7 @@ async (page) => {
     }, { taskId, closeSavedNote }, { timeout: 10000 });
 
     const reopenedModal = await openTaskDetails(taskId);
-    const reopenedNoteValue = await reopenedModal.locator('[data-task-detail-note-card="true"]').first().locator('textarea').inputValue();
+    const reopenedNoteValue = await reopenedModal.locator('[data-task-detail-note-card="true"]').first().locator('[data-task-detail-note-content-input="true"]').textContent();
     assert(reopenedNoteValue === closeSavedNote, 'close button should preserve the latest pending note', { reopenedNoteValue, closeSavedNote });
   } catch (error) {
     throw new Error(`${step}: ${error.message}`);

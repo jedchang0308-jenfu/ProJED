@@ -85,7 +85,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-700">
           <BookOpenText size={16} className="text-blue-500" />
-          <span>任務知識</span>
+          <span>歷史資訊</span>
         </div>
         <div className="hidden items-center gap-2 md:flex" data-task-record-timeline-actions="true">
           <button
@@ -178,7 +178,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
         })}
         {!hasResults ? (
           <div className="rounded-md border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">
-            {query.trim() ? '沒有符合搜尋的任務知識' : '尚無關聯紀錄'}
+            {query.trim() ? '沒有符合搜尋的歷史資訊' : '尚無關聯紀錄'}
           </div>
         ) : null}
       </div>

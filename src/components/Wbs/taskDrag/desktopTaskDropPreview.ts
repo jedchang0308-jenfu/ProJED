@@ -118,7 +118,7 @@ const getIndicatorRect = ({
 
   if (displayPosition === 'append') {
     const anchorRect = getAppendAnchor(targetElement, targetSurfaceKind).getBoundingClientRect();
-    const top = targetSurfaceKind === 'column-drop'
+    const top = targetSurfaceKind === 'column-drop' || targetSurfaceKind === 'root-drop'
       ? anchorRect.top
       : anchorRect.height > 0
         ? anchorRect.bottom

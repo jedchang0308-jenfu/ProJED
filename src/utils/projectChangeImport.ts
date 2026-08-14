@@ -7,6 +7,7 @@ import {
   type MeetingSynthesisInput,
   type MeetingSynthesisTask,
 } from './meetingRecordSynthesis';
+import { summarizeTaskActivity, type ActivitySummaryResolvers } from './meetingActivitySummary';
 
 export type ProjectChangeScope = 'board' | 'workspace';
 
@@ -21,30 +22,6 @@ export const PROJECT_CHANGE_EVENT_TYPES: ActivityEventType[] = [
   'task_restored',
   'task_tags_changed',
 ];
-
-const statusLabels: Record<string, string> = {
-  todo: '待辦',
-  in_progress: '進行中',
-  completed: '已完成',
-  delayed: '延遲',
-  unsure: '未確認',
-  onhold: '暫停',
-};
-
-const formatStatus = (status: unknown) =>
-  typeof status === 'string' ? statusLabels[status] ?? status : '未設定';
-
-const formatDateRange = (value: unknown) => {
-  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const start = typeof record.startDate === 'string' && record.startDate ? record.startDate : '未設定';
-  const end = typeof record.endDate === 'string' && record.endDate ? record.endDate : '未設定';
-  return `${start} 至 ${end}`;
-};
-
-const getSidePayload = (payload: Record<string, unknown>, side: 'before' | 'after') =>
-  payload[side] && typeof payload[side] === 'object'
-    ? payload[side] as Record<string, unknown>
-    : {};
 
 export const getProjectChangeNodeId = (event: ActivityEvent) => {
   const taskId = event.payload.taskId;
@@ -62,25 +39,10 @@ export const getProjectChangeTitle = (event: ActivityEvent, nodes: Record<string
   return nodeId;
 };
 
-export const summarizeProjectChangeEvent = (event: ActivityEvent) => {
-  const payload = event.payload ?? {};
-  if (event.eventType === 'task_created') return '新增任務。';
-  if (event.eventType === 'task_status_changed') {
-    const before = getSidePayload(payload, 'before');
-    const after = getSidePayload(payload, 'after');
-    return `狀態由「${formatStatus(before.status)}」改為「${formatStatus(after.status)}」。`;
-  }
-  if (event.eventType === 'task_dates_changed') {
-    return `日期由「${formatDateRange(payload.before)}」改為「${formatDateRange(payload.after)}」。`;
-  }
-  if (event.eventType === 'task_assigned') return '負責人已更新。';
-  if (event.eventType === 'task_collaborators_changed') return '協作者已更新。';
-  if (event.eventType === 'task_moved') return '任務位置已調整。';
-  if (event.eventType === 'task_tags_changed') return '標籤已更新。';
-  if (event.eventType === 'task_archived') return '任務已封存。';
-  if (event.eventType === 'task_restored') return '任務已還原。';
-  return '任務已更新。';
-};
+export const summarizeProjectChangeEvent = (
+  event: ActivityEvent,
+  resolvers?: ActivitySummaryResolvers,
+) => summarizeTaskActivity(event.eventType, event.payload ?? {}, resolvers);
 
 const getTaskPath = (
   nodeId: string,
@@ -125,6 +87,7 @@ export const createProjectChangeSynthesisInput = (
   title: string,
   events: ActivityEvent[],
   nodes: Record<string, TaskNode>,
+  resolvers?: ActivitySummaryResolvers,
 ): MeetingSynthesisInput => {
   const activities: MeetingSynthesisActivity[] = filterMeetingSynthesisActivities(
     events.map(event => {
@@ -134,7 +97,7 @@ export const createProjectChangeSynthesisInput = (
         nodeId,
         title: getProjectChangeTitle(event, nodes),
         occurredAt: event.createdAt ?? Date.now(),
-        summary: summarizeProjectChangeEvent(event),
+        summary: summarizeProjectChangeEvent(event, resolvers),
         payload: event.payload,
       };
     }),

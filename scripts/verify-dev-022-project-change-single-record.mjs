@@ -6,6 +6,7 @@ import ts from 'typescript';
 const tempRoot = join(process.cwd(), 'node_modules', '.cache', 'verify-dev-022');
 const sources = [
   'src/utils/recordContentMentions.ts',
+  'src/utils/meetingActivitySummary.ts',
   'src/utils/meetingRecordSynthesis.ts',
   'src/utils/projectChangeImport.ts',
 ];
@@ -15,6 +16,7 @@ rmSync(tempRoot, { recursive: true, force: true });
 const rewriteImports = (outputText) =>
   outputText
     .replaceAll("from './recordContentMentions'", "from './recordContentMentions.js'")
+    .replaceAll("from './meetingActivitySummary'", "from './meetingActivitySummary.js'")
     .replaceAll("from './meetingRecordSynthesis'", "from './meetingRecordSynthesis.js'");
 
 for (const sourcePath of sources) {

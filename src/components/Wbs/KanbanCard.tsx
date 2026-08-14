@@ -294,6 +294,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             data-desktop-task-hover-preview={!isSelectingMode && !isRecordCaptureMode ? 'true' : undefined}
             data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
             data-touch-tap-guard="true"
+            data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
             data-task-card-primary="true"
             data-mobile-task-card-primary="true"
             className={`kanban-task-card-body mobile-pan-item kanban-scroll-touch group min-w-0 px-[9px] py-[6px] transition-[background-color,box-shadow] ${

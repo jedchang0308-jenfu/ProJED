@@ -564,7 +564,10 @@ async (page) => {
       await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 10000 });
       await assertNoHandles(page, 'board should not render visible drag handles');
 
-      await assertSurfaceSamplePoints(page.locator('.kanban-task-card[data-task-id="dev046-card-a"]').first(), 'kanban card');
+      await assertSurfaceSamplePoints(
+        page.locator('.kanban-task-card[data-task-id="dev046-card-a"] > [data-task-surface-source="true"]').first(),
+        'kanban card',
+      );
       await assertSurfaceSamplePoints(page.locator('.kanban-checklist-item[data-task-id="dev046-child-a"]').first(), 'checklist row');
       await assertSurfaceSamplePoints(page.locator('.kanban-checklist-item[data-task-id="dev046-grandchild-a"]').first(), 'deep checklist row');
       await assertSurfaceSamplePoints(page.locator('[data-kanban-column-header="true"][data-task-id="dev046-col-a"]').first(), 'kanban list header');
@@ -575,28 +578,19 @@ async (page) => {
         page.locator('.kanban-checklist-item[data-task-id="dev046-child-a"]').first(),
         { startRatioX: 0.7, endRatioY: 0.2 },
       );
-      await page.waitForFunction(() => {
-        const card = document.querySelector('.kanban-task-card[data-task-id="dev046-card-a"]');
-        const ids = Array.from(card?.querySelectorAll('.kanban-checklist-item[data-task-id]') || [])
-          .map((item) => item.getAttribute('data-task-id'));
-        return ids.indexOf('dev046-child-b') >= 0 && ids.indexOf('dev046-child-b') < ids.indexOf('dev046-child-a');
-      }, null, { timeout: 7000 });
       const checklistAfter = await checklistOrderInCard('dev046-card-a');
+      assert(checklistAfter.indexOf('dev046-child-b') >= 0
+        && checklistAfter.indexOf('dev046-child-b') < checklistAfter.indexOf('dev046-child-a'),
+      'checklist drag should reorder child rows', { checklistAfter });
 
       const cardBefore = await orderInColumn('dev046-col-a');
       await dragBetween(
         page.locator('.kanban-task-card[data-task-id="dev046-card-b"]').first(),
-        page.locator('.kanban-task-card[data-task-id="dev046-card-a"]').first(),
+        page.locator('.kanban-task-card[data-task-id="dev046-card-a"] > [data-task-surface-source="true"]').first(),
         { startRatioX: 0.72, endRatioY: 0.18 },
       );
-      await page.waitForFunction(() => {
-        const header = document.querySelector('[data-kanban-column-header="true"][data-task-id="dev046-col-a"]');
-        const column = header?.closest('[data-kanban-column="true"]');
-        const ids = Array.from(column?.querySelectorAll('.kanban-task-card[data-task-id]') || [])
-          .map((item) => item.getAttribute('data-task-id'));
-        return ids[0] === 'dev046-card-b';
-      }, null, { timeout: 7000 });
       const cardAfter = await orderInColumn('dev046-col-a');
+      assert(cardAfter[0] === 'dev046-card-b', 'card drag should reorder cards in the same column', { cardAfter });
 
       const crossColumnBefore = {
         columnA: await orderInColumn('dev046-col-a'),
@@ -604,18 +598,18 @@ async (page) => {
       };
       await dragBetween(
         page.locator('.kanban-task-card[data-task-id="dev046-card-b"]').first(),
-        page.locator('.kanban-task-card[data-task-id="dev046-card-c"]').first(),
-        { startRatioX: 0.72, endRatioY: 0.25 },
+        page.locator('[data-task-drop-surface-kind="column-drop"][data-task-id="dev046-col-b"]').first(),
+        { startRatioX: 0.72, endRatioX: 0.85, endRatioY: 0.85 },
       );
-      await page.waitForFunction(() => {
-        const header = document.querySelector('[data-kanban-column-header="true"][data-task-id="dev046-col-b"]');
-        const column = header?.closest('[data-kanban-column="true"]');
-        return Boolean(column?.querySelector('.kanban-task-card[data-task-id="dev046-card-b"]'));
-      }, null, { timeout: 7000 });
       const crossColumnAfter = {
         columnA: await orderInColumn('dev046-col-a'),
         columnB: await orderInColumn('dev046-col-b'),
       };
+      const crossColumnDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-25));
+      assert(crossColumnAfter.columnB.includes('dev046-card-b'), 'card drag should move the task across columns', {
+        ...crossColumnAfter,
+        crossColumnDebug,
+      });
 
       const columnBefore = await columnOrder();
       await dragBetween(
@@ -623,11 +617,12 @@ async (page) => {
         page.locator('[data-kanban-column-header="true"][data-task-id="dev046-col-a"]').first(),
         { startRatioX: 0.6, endRatioX: 0.2, endRatioY: 0.35 },
       );
-      await page.waitForFunction(() => {
-        const ids = Array.from(document.querySelectorAll('[data-kanban-column-header="true"][data-task-id]'))
-          .map((item) => item.getAttribute('data-task-id'));
-        return ids[0] === 'dev046-col-b';
-      }, null, { timeout: 7000 });
+      const observedColumnOrder = await columnOrder();
+      const columnDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-20));
+      assert(observedColumnOrder[0] === 'dev046-col-b', 'column drag should reorder the root list', {
+        observedColumnOrder,
+        columnDebug,
+      });
       const columnAfter = await columnOrder();
 
       await page.screenshot({ path: `${screenshotBase}-desktop-board.png`, fullPage: true });

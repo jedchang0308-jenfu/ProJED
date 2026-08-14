@@ -80,6 +80,13 @@ async (page) => {
         filtersOpen: false,
         showContainersInAllTasks: false,
       }));
+      localStorage.setItem(`projed-task-workbench-panel:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        open: false,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+        width: 340,
+        openPreferenceVersion: 1,
+      }));
       localStorage.setItem('projed-last-view', 'board');
     }, { account });
   };
@@ -93,13 +100,12 @@ async (page) => {
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
   };
 
-  const card = () => page.locator('.kanban-task-card[data-touch-tap-guard="true"][data-task-id]').first();
+  const card = () => page.locator('.kanban-task-card[data-task-id] > [data-touch-tap-guard="true"][data-task-surface-source="true"]').first();
   const cardTitle = () => card().locator('.task-title-text').first();
   const childRow = () => page.locator('.kanban-checklist-item[data-touch-tap-guard="true"][data-task-id]').first();
   const columnSurface = () => page.locator('[data-mobile-pan-surface="kanban-column"]').first();
   const boardSurface = () => page.locator('[data-mobile-pan-surface="board"]').first();
   const columnRail = () => page.locator('[data-mobile-pan-rail="kanban-column"]').first();
-  const kanbanAddTaskButton = () => page.locator('[data-kanban-add-task-button="true"][data-mobile-pan-pass-through="true"]').first();
   const boardAddColumnButton = () => page.locator('[data-kanban-add-column-button="true"][data-mobile-pan-pass-through="true"]').first();
   const mobileActionRail = () => page.locator('[data-mobile-task-action-rail="true"]').first();
   const mobileDragPreview = () => page.locator('[data-mobile-drag-preview="true"]').first();
@@ -536,6 +542,7 @@ async (page) => {
     });
 
     await runCase('QA-029-B07', 'L2+ checklist row vertical pan scrolls the column', async () => {
+      await openApp({ width: 390, height: 415 });
       await childRow().waitFor({ state: 'visible', timeout: 5000 });
       await columnSurface().evaluate((element) => { element.scrollTop = 0; });
       const before = await getScrollState(columnSurface());
@@ -548,6 +555,7 @@ async (page) => {
     });
 
     await runCase('QA-029-B08', 'L2+ checklist row horizontal pan scrolls the board', async () => {
+      await openApp();
       await childRow().waitFor({ state: 'visible', timeout: 5000 });
       await boardSurface().evaluate((element) => { element.scrollLeft = 0; });
       const before = await getScrollState(boardSurface());
@@ -564,7 +572,7 @@ async (page) => {
       await boardSurface().evaluate((element) => { element.scrollLeft = 0; });
       const before = await getScrollState(boardSurface());
       assert(before.scrollWidth > before.clientWidth + 20, 'board should be horizontally scrollable for former-handle-zone pan scenario', before);
-      await dispatchTouchGesture(card(), { dx: -120, dy: 0, ratioX: 0.12, ratioY: 0.28 });
+      await dispatchTouchGesture(cardTitle(), { dx: -120, dy: 0, ratioX: 0.55, ratioY: 0.5 });
       const after = await getScrollState(boardSurface());
       const mobilePanDebug = await page.evaluate(() => window.__projedMobilePanDebug || []);
       assert(after.scrollLeft > before.scrollLeft + 4, 'former handle zone short pan should move board scrollLeft on mobile', { before, after, mobilePanDebug });
@@ -582,39 +590,32 @@ async (page) => {
       await assertNoTaskAction('board gap pan');
     });
 
-    await runCase('QA-029-B10', 'kanban add-task button short-pan scrolls the board without creating a task', async () => {
+    await runCase('QA-029-B10', 'removed inline add-task CTA stays absent after L1 add-list replacement', async () => {
       await closeWorkbenchIfOpen();
-      const addButton = kanbanAddTaskButton();
+      const addButton = boardAddColumnButton();
+      await addButton.scrollIntoViewIfNeeded();
       await addButton.waitFor({ state: 'visible', timeout: 5000 });
-      await boardSurface().evaluate((element) => { element.scrollLeft = 0; });
-      const before = await getScrollState(boardSurface());
-      const beforeCount = await page.locator('.kanban-task-card[data-task-id]').count();
-      assert(before.scrollWidth > before.clientWidth + 20, 'board should be horizontally scrollable from add-task button', before);
-      await dispatchTouchGesture(addButton, { dx: -120, dy: 0, compatibilityClick: true, ratioX: 0.5, ratioY: 0.5 });
-      const after = await getScrollState(boardSurface());
-      const afterCount = await page.locator('.kanban-task-card[data-task-id]').count();
-      const mobilePanDebug = await page.evaluate(() => window.__projedMobilePanDebug || []);
-      assert(after.scrollLeft > before.scrollLeft + 4, 'add-task button horizontal short-pan should move board scrollLeft', { before, after, mobilePanDebug });
-      assert(afterCount === beforeCount, 'add-task button short-pan must not create a task', { beforeCount, afterCount });
-      await assertNoTaskAction('add-task button horizontal pan');
-      return { before, after, beforeCount, afterCount, mobilePanDebug: mobilePanDebug.slice(-10) };
+      const removedAddTaskCount = await page.locator('[data-kanban-add-task-button="true"]').count();
+      const passThrough = await addButton.getAttribute('data-mobile-pan-pass-through');
+      assert(removedAddTaskCount === 0 && passThrough === 'true',
+        'board must expose only the replacement add-list CTA with pan pass-through', { removedAddTaskCount, passThrough });
+      return { removedAddTaskCount, passThrough };
     });
 
-    await runCase('QA-029-B11', 'kanban add-task button vertical short-pan scrolls the column', async () => {
-      await closeWorkbenchIfOpen();
-      const addButton = kanbanAddTaskButton();
-      await addButton.scrollIntoViewIfNeeded();
+    await runCase('QA-029-B11', 'column body vertical short-pan scrolls a compact viewport', async () => {
+      await openApp({ width: 390, height: 415 });
+      await columnSurface().evaluate((element) => { element.scrollTop = 0; });
       const before = await getScrollState(columnSurface());
       const beforeCount = await page.locator('.kanban-task-card[data-task-id]').count();
-      assert(before.scrollHeight > before.clientHeight + 20, 'column should be vertically scrollable from add-task button', before);
-      assert(before.scrollTop > 8, 'add-task button should be reachable near the lower column scroll range', before);
-      await dispatchTouchGesture(addButton, { dx: 0, dy: 120, ratioX: 0.5, ratioY: 0.5 });
+      assert(before.scrollHeight > before.clientHeight + 20, 'column should be vertically scrollable in the compact viewport', before);
+      await dispatchTouchGesture(columnSurface(), { dx: 0, dy: -120, ratioX: 0.5, ratioY: 0.75 });
       const after = await getScrollState(columnSurface());
       const afterCount = await page.locator('.kanban-task-card[data-task-id]').count();
       const mobilePanDebug = await page.evaluate(() => window.__projedMobilePanDebug || []);
-      assert(after.scrollTop < before.scrollTop - 4, 'add-task button vertical short-pan should move column scrollTop', { before, after, mobilePanDebug });
-      assert(afterCount === beforeCount, 'add-task button vertical short-pan must not create a task', { beforeCount, afterCount });
-      await assertNoTaskAction('add-task button vertical pan');
+      assert(after.scrollTop > before.scrollTop + 4, 'column body vertical short-pan should move column scrollTop', { before, after, mobilePanDebug });
+      assert(afterCount === beforeCount, 'column body vertical short-pan must not create a task', { beforeCount, afterCount });
+      await assertNoTaskAction('column body vertical pan');
+      await openApp();
       return { before, after, beforeCount, afterCount, mobilePanDebug: mobilePanDebug.slice(-10) };
     });
 
@@ -676,12 +677,12 @@ async (page) => {
 
     await runCase('QA-029-C09', 'card former handle zone long press uses mobile action mode', async () => {
       await card().waitFor({ state: 'visible', timeout: 5000 });
-      const heldTouch = await startHeldTouch(card(), { ratioX: 0.12, ratioY: 0.28 });
+      const heldTouch = await startHeldTouch(cardTitle(), { ratioX: 0.55, ratioY: 0.5 });
       await mobileActionRail().waitFor({ state: 'visible', timeout: 5000 });
       await mobileDragPreview().waitFor({ state: 'visible', timeout: 5000 });
       const handleCount = await page.locator('[data-task-drag-handle="true"]').count();
       assert(handleCount === 0, 'retired drag handle should not exist on mobile card surfaces', { handleCount });
-      const contextMenuState = await assertMobileContextMenuSuppressed('card former handle zone long press', card(), { ratioX: 0.12, ratioY: 0.28 });
+      const contextMenuState = await assertMobileContextMenuSuppressed('card former handle zone long press', cardTitle(), { ratioX: 0.55, ratioY: 0.5 });
       await heldTouch.end();
       return { handleCount, contextMenuState };
     });
@@ -746,7 +747,7 @@ async (page) => {
     });
 
     await runCase('QA-029-C13', 'drag-action near bottom column edge auto-scrolls column', async () => {
-      await closeWorkbenchIfOpen();
+      await openApp({ width: 390, height: 415 });
       await columnSurface().evaluate((element) => { element.scrollTop = 0; });
       const before = await getScrollState(columnSurface());
       assert(before.scrollHeight > before.clientHeight + 20, 'column should be vertically scrollable for drag edge auto-scroll', before);
@@ -776,6 +777,7 @@ async (page) => {
       const after = await getScrollState(columnSurface());
       const mobileActionDebug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
       assert(after.scrollTop > before.scrollTop + 20, 'drag-action bottom edge should auto-scroll column vertically', { before, after, mobileActionDebug });
+      await openApp();
       return { before, after, mobileActionDebug };
     });
 
@@ -798,7 +800,7 @@ async (page) => {
 
     await runCase('QA-029-C06', 'long press drag to another task reorders by task position', async () => {
       await closeWorkbenchIfOpen();
-      const cards = page.locator('.kanban-task-card[data-mobile-drop-target="true"], .kanban-task-card[data-mobile-drop-target][data-task-id]');
+      const cards = page.locator('.kanban-task-card > [data-mobile-drop-target][data-task-id][data-task-surface-source="true"]');
       const count = await cards.count();
       assert(count >= 4, 'scenario needs at least four cards', { count });
       // The first two seeded roots are already overdue. Use future-dated siblings so this
@@ -874,15 +876,20 @@ async (page) => {
       await closeWorkbenchIfOpen();
       const task = card();
       const taskId = await task.getAttribute('data-task-id');
-      const beforeClass = await task.getAttribute('class');
-      const beforeCompleted = String(beforeClass || '').includes('border-l-emerald-400');
+      const beforeStatus = await page.evaluate((id) => {
+        const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+        return nodes[id]?.status || null;
+      }, taskId);
       await dispatchLongPressDragToLocator(task, mobileAction('toggle-complete'), { ratioY: 0.12 });
       await page.waitForTimeout(300);
-      const afterClass = await page.locator(`.kanban-task-card[data-task-id="${taskId}"]`).first().getAttribute('class');
-      const afterCompleted = String(afterClass || '').includes('border-l-emerald-400');
+      const afterStatus = await page.evaluate((id) => {
+        const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+        return nodes[id]?.status || null;
+      }, taskId);
       const mobileActionDebug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
-      assert(beforeCompleted !== afterCompleted, 'complete action should toggle completed border state', { taskId, beforeCompleted, afterCompleted, beforeClass, afterClass, mobileActionDebug });
-      return { taskId, beforeCompleted, afterCompleted };
+      assert(beforeStatus !== afterStatus && afterStatus === 'completed',
+        'complete action should toggle the canonical task status', { taskId, beforeStatus, afterStatus, mobileActionDebug });
+      return { taskId, beforeStatus, afterStatus };
     });
 
     await runCase('QA-029-D01', 'mobile quick tap opens TaskDetailsModal when no pan movement occurs', async () => {
@@ -922,23 +929,25 @@ async (page) => {
       return { title };
     });
 
-    await runCase('QA-029-E04', 'kanban add-task button opens new task details', async () => {
+    await runCase('QA-029-E04', 'board add-column button opens the new L1 task details', async () => {
       await cleanupUi();
       const addTaskInputCount = await page.getByPlaceholder('輸入任務名稱').count();
       assert(addTaskInputCount === 0, 'kanban add-task text input should be removed', { addTaskInputCount });
 
-      const beforeCount = await page.locator('.kanban-task-card[data-task-id]').count();
-      await page.locator('[data-kanban-add-task-button="true"]').first().click({ timeout: 5000 });
+      const addColumnButton = boardAddColumnButton();
+      await addColumnButton.scrollIntoViewIfNeeded();
+      const beforeCount = await page.locator('[data-kanban-column-header="true"][data-task-id]').count();
+      await addColumnButton.click({ timeout: 5000 });
       await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 5000 });
       await page.waitForFunction(() => document.activeElement?.getAttribute('data-task-details-title-input') === 'true', null, { timeout: 5000 });
 
-      const afterCount = await page.locator('.kanban-task-card[data-task-id]').count();
+      const afterCount = await page.locator('[data-kanban-column-header="true"][data-task-id]').count();
       const modalTaskId = await page.locator('[data-task-details-modal="true"]').getAttribute('data-task-id');
       const titleValue = await page.locator('[data-task-details-title-input="true"]').inputValue().catch(() => '');
       const titleFocused = await page.locator('[data-task-details-title-input="true"]').evaluate((element) => document.activeElement === element);
 
-      assert(afterCount >= beforeCount + 1, 'kanban add-task button should create a new task card', { beforeCount, afterCount });
-      assert(Boolean(modalTaskId), 'kanban add-task button should open the new task details modal', { modalTaskId });
+      assert(afterCount >= beforeCount + 1, 'board add-column button should create a new L1 task', { beforeCount, afterCount });
+      assert(Boolean(modalTaskId), 'board add-column button should open the new L1 task details modal', { modalTaskId });
       assert(titleValue.includes('新任務'), 'new task details title should use the default task title', { titleValue });
       assert(titleFocused, 'new task details title input should be focused for naming', { titleFocused });
       return { beforeCount, afterCount, modalTaskId, titleValue, titleFocused };
@@ -984,7 +993,7 @@ async (page) => {
     await runCase('QA-029-F02', 'whole task surfaces use broker-owned touch arbitration without handles', async () => {
       await closeWorkbenchIfOpen();
       const styles = await page.evaluate(() => {
-        const cardElement = document.querySelector('.kanban-task-card[data-touch-tap-guard="true"][data-task-id]');
+        const cardElement = document.querySelector('.kanban-task-card[data-task-id] > [data-touch-tap-guard="true"][data-task-surface-source="true"]');
         const checklistElement = document.querySelector('.kanban-checklist-item[data-touch-tap-guard="true"][data-task-id]');
         return {
           cardTouchAction: cardElement ? getComputedStyle(cardElement).touchAction : null,

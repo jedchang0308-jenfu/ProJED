@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronDown, ChevronUp, Copy, LockKeyhole, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import {
   countActiveTaskFilters,
   matchesTaskFilters,
   normalizeTaskFilters,
-  TASK_STATUS_OPTIONS,
   type TaskFilterState,
 } from '../features/taskFilters';
-import { normalizeManualTaskStatus } from '../utils/taskStatus';
 import {
   cloneCalendarBoardFilterSnapshot,
   createCalendarSafeDefaultTaskFilters,
@@ -86,8 +84,6 @@ const unique = (values: Array<string | undefined>) => Array.from(new Set(values.
 
 const boardAliases = (board: CalendarSubscriptionBuilderBoard) => unique([board.id, board.storageId]);
 const workspaceAliases = (board: CalendarSubscriptionBuilderBoard) => unique([board.workspaceId, board.storageWorkspaceId]);
-const statusLabelByKey = new Map(TASK_STATUS_OPTIONS.map(option => [option.key, option.label]));
-const dateTypeLabel = (dateType: CalendarSubscriptionDateType) => dateType === 'start_date' ? '開始' : '到期';
 const taskDateForType = (node: TaskNode, dateType: CalendarSubscriptionDateType) =>
   dateType === 'start_date' ? node.startDate : node.endDate;
 const formatCalendarDate = (date: string) => {
@@ -122,7 +118,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
   const [copyTargetIds, setCopyTargetIds] = useState<string[]>([]);
   const [previewGroupMode, setPreviewGroupMode] = useState<PreviewGroupMode>('date');
   const [previewExpanded, setPreviewExpanded] = useState(false);
-  const [missingEventsOpen, setMissingEventsOpen] = useState(false);
   const [previewSource, setPreviewSource] = useState<{
     loading: boolean;
     failedBoardIds: string[];
@@ -153,7 +148,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
       setFiltersOpen(false);
       setPreviewGroupMode('date');
       setPreviewExpanded(false);
-      setMissingEventsOpen(false);
     }
   }, [boardKey, boards, currentUserId, initialFilters, resetKey]);
 
@@ -296,8 +290,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
     () => new Set(previewEvents.map(event => event.node.id)).size,
     [previewEvents],
   );
-  const startEventCount = previewEvents.filter(event => event.dateType === 'start_date').length;
-  const dueEventCount = previewEvents.length - startEventCount;
   const orderedPreviewEvents = useMemo(() => [...previewEvents].sort((left, right) => {
     if (previewGroupMode === 'date') {
       const dateCompare = left.date.localeCompare(right.date);
@@ -442,8 +434,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
     setCopyTargetIds([]);
   };
 
-  const includedWorkspaceCount = unique(includedBoards.map(board => board.workspaceId)).length;
-
   return (
     <section
       className="relative mt-3 space-y-3 border-t border-slate-200 pt-3"
@@ -460,9 +450,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
       <div className="flex items-start gap-3">
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900">任務條件與事件預覽</div>
-          <p className="mt-0.5 text-xs leading-5 text-slate-500" data-calendar-subscription-preview-count-label="true">
-            {previewSource.loading ? '正在整理看板與事件' : `已納入 ${includedBoards.length} / ${boards.length} 張看板`}
-          </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center">
           <button
@@ -653,12 +640,8 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
       ) : null}
 
       <div className="overflow-hidden border border-slate-200 bg-white" data-calendar-subscription-live-preview="true">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2.5">
-          <div className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
-            <CalendarDays size={15} className="text-primary" />
-            訂閱事件預覽
-          </div>
-          <div className="ml-auto inline-flex border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="預覽分組方式">
+        <div className="flex justify-end border-b border-slate-200 px-3 py-2.5">
+          <div className="inline-flex border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="預覽分組方式">
             {([
               ['date', '依日期'],
               ['board', '依看板'],
@@ -685,29 +668,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
             <span>外部行事曆會收到</span>
             <span className="text-base font-bold text-slate-900">{previewEvents.length} 個行事曆事件</span>
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-            <span>{includedWorkspaceCount} 個工作區 · {includedBoards.length} 張看板 · {subscribedTaskCount} 項任務</span>
-            <span className="hidden text-slate-300 sm:inline">|</span>
-            <span className="font-semibold text-blue-700">開始 {startEventCount}</span>
-            <span className="font-semibold text-rose-700">到期 {dueEventCount}</span>
-            {missingPreviewEvents.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setMissingEventsOpen(current => !current)}
-                className="inline-flex items-center gap-1 border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-700 hover:border-amber-300"
-                aria-expanded={missingEventsOpen}
-                data-calendar-subscription-missing-events-toggle="true"
-              >
-                未產生 {missingPreviewEvents.length}
-                {missingEventsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex items-start gap-1.5 border-b border-slate-100 px-3 py-2 text-xs leading-5 text-amber-700">
-          <LockKeyhole size={13} className="mt-0.5 shrink-0" />
-          <span>任何持有此連結的人都能讀取下列事件內容；請只輸出必要任務。</span>
         </div>
 
         {previewSource.loading ? (
@@ -737,29 +697,20 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
               <section key={group.key}>
                 <div className="mb-1.5 flex min-w-0 items-center gap-2 border-b border-slate-200 pb-1.5">
                   <div className="min-w-0 flex-1 break-words text-xs font-bold text-slate-600 sm:truncate">{group.label}</div>
-                  <span className="shrink-0 text-[11px] text-slate-400">{group.events.length} 個事件</span>
                 </div>
                 <div className="divide-y divide-slate-100 border border-slate-200">
                   {group.events.map(event => (
                     <div
                       key={`${event.node.id}:${event.dateType}`}
-                      className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 bg-white px-2.5 py-2 text-sm"
+                      className="bg-white px-2.5 py-2 text-sm"
                       data-calendar-subscription-preview-event="true"
                       data-preview-event-task-id={event.node.storageId ?? event.node.id}
                       data-preview-event-board-id={event.board.storageId ?? event.board.id}
                       data-preview-event-date={event.date}
                       data-preview-event-date-type={event.dateType}
                     >
-                      <span className={`mt-0.5 inline-flex h-5 items-center border px-1.5 text-[10px] font-bold ${event.dateType === 'start_date' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-                        {dateTypeLabel(event.dateType)}
-                      </span>
                       <div className="min-w-0">
                         <div className="break-words font-bold leading-5 text-slate-800 sm:truncate">{event.node.title}</div>
-                        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-slate-500">
-                          <span className="min-w-0 break-words sm:truncate">{previewGroupMode === 'date' ? event.board.path : formatCalendarDate(event.date)}</span>
-                          <span className="text-slate-300">·</span>
-                          <span>{statusLabelByKey.get(normalizeManualTaskStatus(event.node.status))}</span>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -781,22 +732,6 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
           </div>
         )}
 
-        {missingEventsOpen && missingPreviewEvents.length > 0 ? (
-          <div className="border-t border-amber-200 bg-amber-50 px-3 py-3" data-calendar-subscription-missing-events="true">
-            <div className="text-xs font-bold text-amber-800">未產生事件</div>
-            <div className="mt-1 text-xs leading-5 text-amber-700">下列任務符合條件，但缺少該看板所選日期，因此不會出現在外部行事曆。</div>
-            <div className="mt-2 divide-y divide-amber-100 border border-amber-200 bg-white">
-              {missingPreviewEvents.slice(0, 20).map(event => (
-                <div key={`${event.node.id}:${event.dateType}`} className="flex min-w-0 items-center gap-2 px-2.5 py-2 text-xs">
-                  <span className="shrink-0 font-bold text-amber-700">缺少{dateTypeLabel(event.dateType)}日</span>
-                  <span className="min-w-0 flex-1 truncate font-semibold text-slate-700">{event.node.title}</span>
-                  <span className="hidden max-w-[45%] truncate text-slate-400 sm:block">{event.board.path}</span>
-                </div>
-              ))}
-            </div>
-            {missingPreviewEvents.length > 20 ? <div className="mt-2 text-xs text-amber-700">另有 {missingPreviewEvents.length - 20} 個未產生事件。</div> : null}
-          </div>
-        ) : null}
       </div>
     </section>
   );

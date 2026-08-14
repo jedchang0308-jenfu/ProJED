@@ -8,7 +8,7 @@
  * - Level 3+ (更深子節點)               → 下層任務 (KanbanChecklist)
  */
 import React, { useState, useMemo, useCallback } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { DndContext, DragOverlay, closestCorners, pointerWithin } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../hooks/useDragSensors';
@@ -22,6 +22,7 @@ import useDialogStore from '../store/useDialogStore';
 import { useTagStore } from '../store/useTagStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
+import { KanbanRootDropZone } from './Wbs/KanbanRootDropZone';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames } from './ui/compactTokens';
 import { projectTaskFilterResults } from '../features/taskFilters';
@@ -29,6 +30,8 @@ import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
 import { TaskOriginTitleField } from './Wbs/taskDrag/TaskOriginTitleField';
 import { commitDesktopTaskDrag } from './Wbs/taskDrag/taskDragCommit';
+import type { TaskNode } from '../types';
+import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import {
     desktopTaskDropPreviewMatches,
     findDesktopTaskDropElement,
@@ -229,7 +232,19 @@ const BoardView = () => {
             }
         }
 
-        if (pointerCollisions.length > 0 && args.pointerCoordinates && typeof document !== 'undefined') {
+        if (activeType === 'wbs-column') {
+            return collisions.filter((collision: any) => (
+                getCollisionContainer(collision)?.data.current?.type === 'wbs-column'
+            ));
+        }
+
+        // Exact task-surface ownership is only for task sources. A list/column
+        // drag must keep dnd-kit's sortable collision path; routing wbs-column
+        // through the task intent resolver makes every header target invalid.
+        if (activeType !== 'wbs-column'
+            && pointerCollisions.length > 0
+            && args.pointerCoordinates
+            && typeof document !== 'undefined') {
             const sourceRect = desktopDragSourceRectRef.current;
             if (sourceRect) {
                 const pointerInsideSource = args.pointerCoordinates.x >= sourceRect.left
@@ -263,8 +278,8 @@ const BoardView = () => {
                     .map((id) => pointerCollisions.find((collision: any) => String(collision.id) === id))
                     .filter(Boolean);
                 const typePreference = activeType === 'wbs-checklist'
-                    ? ['wbs-checklist', 'wbs-checklist-drop', 'wbs-card-drop', 'wbs-card', 'wbs-column-drop', 'wbs-column']
-                    : ['wbs-checklist', 'wbs-checklist-drop', 'wbs-card', 'wbs-card-drop', 'wbs-column-drop', 'wbs-column'];
+                    ? ['wbs-checklist', 'wbs-checklist-drop', 'wbs-card-drop', 'wbs-card', 'wbs-column-drop', 'wbs-column', 'wbs-root-drop']
+                    : ['wbs-checklist', 'wbs-checklist-drop', 'wbs-card', 'wbs-card-drop', 'wbs-column-drop', 'wbs-column', 'wbs-root-drop'];
                 directCollisions.sort((left: any, right: any) => {
                     const leftType = getCollisionContainer(left)?.data.current?.type;
                     const rightType = getCollisionContainer(right)?.data.current?.type;
@@ -361,12 +376,14 @@ const BoardView = () => {
      *
      * 支援場景：
      * 1. wbs-column → wbs-column         : 列表水平排序
-     * 2. wbs-card   → wbs-column (drop)  : 卡片跨列移動
-     * 3. wbs-card   → wbs-card (sortable): 同列排序
-     * 4. wbs-card   → wbs-card-drop      : 卡片降級為目標卡片的子節點 ✨新增
-     * 5. wbs-checklist → wbs-column (drop): 任務升級為列表直接子節點（卡片級別）✨新增
-     * 6. wbs-checklist → wbs-card-drop    : 任務跨卡片移動 ✨新增
-     * 7. wbs-checklist → wbs-checklist    : 同卡片內任務排序 ✨新增
+     * 2. wbs-card/checklist → wbs-column : 任務升級為 L1 列表同階
+     * 3. 任務 → wbs-root-drop            : 任務追加為最後一個 L1 列表
+     * 4. wbs-card   → wbs-column (drop)  : 卡片跨列移動
+     * 5. wbs-card   → wbs-card (sortable): 同列排序
+     * 6. wbs-card   → wbs-card-drop      : 卡片降級為目標卡片的子節點
+     * 7. wbs-checklist → wbs-column (drop): 任務升級為列表直接子節點（卡片級別）
+     * 8. wbs-checklist → wbs-card-drop    : 任務跨卡片移動
+     * 9. wbs-checklist → wbs-checklist    : 同卡片內任務排序
      */
     const handleDragStart = (event: any) => {
         if (!canMoveTask) return;
@@ -477,7 +494,28 @@ const BoardView = () => {
         setActiveDrag(null);
         if (!canMoveTask || !over) return;
 
+        const activeType = active.data.current?.type;
         const targetType = over.data.current?.type;
+        if (activeType === 'wbs-column' && targetType === 'wbs-column') {
+            const sourceId = active.data.current?.nodeId;
+            const targetId = over.data.current?.nodeId;
+            const roots = useWbsStore.getState()
+                .getRootNodesForBoard(activeBoardId || '')
+                .filter(node => !node.isArchived)
+                .sort((left, right) => left.order - right.order);
+            const sourceIndex = roots.findIndex(node => node.id === sourceId);
+            const targetIndex = roots.findIndex(node => node.id === targetId);
+            if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+            const reordered = [...roots];
+            const [moved] = reordered.splice(sourceIndex, 1);
+            reordered.splice(targetIndex, 0, moved);
+            const updatedAt = Date.now();
+            batchUpdateNodes(Object.fromEntries(reordered.map((node, order) => [
+                node.id,
+                { order, updatedAt },
+            ])), { label: '移動列表位置', mergeKey: `move:${sourceId}` });
+            return;
+        }
         const isWorkbenchLane = targetType === 'task-workbench-unplaced-lane'
             || targetType === 'task-workbench-placed-board-lane';
         if (!isWorkbenchLane && !desktopTaskDropPreviewMatches(displayedPreview, currentPreview)) return;
@@ -500,6 +538,31 @@ const BoardView = () => {
                 recalculateAncestorStatus,
             },
         });
+    };
+
+    /** 新增頂層任務（Level 1 → 新列表） */
+    const handleAddColumn = () => {
+        if (!canCreateTask || !activeBoardId) return;
+
+        const nextOrder = useWbsStore.getState()
+            .getRootNodesForBoard(activeBoardId)
+            .filter(node => !node.isArchived)
+            .reduce((maxOrder, node) => Math.max(maxOrder, node.order), -1) + 1;
+        const newNode: TaskNode = {
+            id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
+            workspaceId: activeWorkspaceId || '',
+            boardId: activeBoardId,
+            parentId: null,
+            title: '新任務',
+            status: 'todo',
+            nodeType: 'group',
+            order: nextOrder,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+
+        addNode(newNode);
+        prepareNewTaskNaming(newNode.id);
     };
 
 
@@ -623,6 +686,26 @@ const BoardView = () => {
                             ))}
                         </SortableContext>
 
+                        {/* 新增列表按鈕 */}
+                        <KanbanRootDropZone
+                            boardId={activeBoardId}
+                            anchorNodeId={rootNodes[rootNodes.length - 1]?.id}
+                            canMoveTask={canMoveTask}
+                        >
+                            <button
+                                type="button"
+                                onClick={handleAddColumn}
+                                disabled={!canCreateTask}
+                                title={canCreateTask ? '新增列表' : '目前沒有新增任務權限'}
+                                className="group flex w-full flex-col items-center justify-center gap-0.5 rounded-lg py-[8px] font-semibold text-slate-400 transition-all hover:bg-white/70 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                                data-mobile-pan-pass-through="true"
+                                data-kanban-add-column-button="true"
+                                data-kanban-add-column-visual="borderless"
+                            >
+                                <Plus size={24} className="transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
+                                <span>新增列表</span>
+                            </button>
+                        </KanbanRootDropZone>
                     </div>
                 </div>
             </div>

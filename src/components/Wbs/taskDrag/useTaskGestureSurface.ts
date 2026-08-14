@@ -47,7 +47,10 @@ export const useTaskGestureSurface = ({
 
   const handleLongPress = React.useCallback((event: React.TouchEvent) => {
     if (disabled || isTaskGestureInteractiveTarget(event.target)) return;
-    if (isMobileTaskActionMode() && mobileActionEnabled && sourceKind) {
+    // A real TouchEvent owns the mobile drag-action path regardless of viewport
+    // width. Viewport width is a layout concern and must not turn a tablet or a
+    // landscape phone long press into the desktop context-menu fallback.
+    if (mobileActionEnabled && sourceKind) {
       mobileTaskAction?.begin(task, event, sourceKind);
       return;
     }
@@ -139,6 +142,7 @@ export const useTaskGestureSurface = ({
   return {
     handlers,
     mobileActionMode,
+    touchGestureEnabled: shouldBindLongPress,
     isActive,
     activeSurfaceHeight: isActive ? activeSurfaceHeight : null,
     shouldSuppressTap: touchTapGuard.shouldSuppressTap,

@@ -1,6 +1,6 @@
 # QA-DEV-054：手機任務拖拉定位精準度驗證計畫
 
-狀態：RD Rework 4 Automated + User Revalidation Passed / Full Matrix + Physical iOS/Android Not Executed
+狀態：RD Rework 5 Automated QA Passed / Physical iOS/Android Not Executed
 
 關聯規格：`ai-doc/specs/SPEC-054-mobile-task-drag-precision.md`
 
@@ -17,6 +17,8 @@
 - Mobile action rail 與 task position drop 的互斥提交。
 - 手機頂部欄與一般按鈕在非拖拉狀態必須可用 native touch click 操作。
 - Workbench placed row 不能拖。
+- L1、L2、L3+ 與 Workbench unplaced 長按不得出現文字圈選、選取工具列或 iOS callout。
+- 橫向手機、平板與寬觸控 viewport 的真實 touch 不得退回桌機 context menu；mouse/right-click baseline 不變。
 - Cancel、cleanup、at-most-once、undo grouping 與 viewport safety。
 
 ## 2. 驗證分層
@@ -53,6 +55,9 @@
 | 桌機 baseline 漂移 | resolver extraction 改變既有結果 | 已滿意體驗回歸 | D01-D04 | P0 | extraction 前 characterization |
 | Placed row 恢復可拖 | shared surface 誤掛 | 違反產品決策 | S11、B11、P09 | P0 | no source / no rail gate |
 | Synthetic pass、實機失敗 | 缺手指面積、事件雜訊與遮蔽 | 假性完成 | Physical gate | P0 | iOS / Android 各 50 trials |
+| 長按先出現文字圈選／callout | task surface 在 500ms callback 前沒有 selection/callout 防護 | 無法啟動拖拉或拖拉與系統選取競爭 | R12、P11 | P0 | 所有 eligible surface 從 touchstart 宣告 ownership；interactive text control 例外 |
+| 寬觸控裝置退回桌機流程 | `innerWidth <= 768` 同時被當成 layout 與輸入 gate | 橫向手機／平板長按開完整右鍵選單 | R14、P12 | P0 | actual TouchEvent 決定 dedicated session；mouse baseline 獨立回歸 |
+| Workbench 因防圈選失去捲動 | 共用 selector 誤加 `touch-action: none` | 未歸位清單不能自然上下滑 | R15、P11 | P0 | 只停用 selection/callout，不改 Workbench native pan |
 
 ## 4. 測試資料與環境
 
@@ -68,7 +73,7 @@
 ### 4.2 Viewport / Device
 
 - Desktop browser：`1440x900`、`1024x768`。
-- Mobile browser automation：`320x844`、`337x415`、`390x844`、`430x932`、使用者回報重現尺寸 `636x764`。
+- Mobile / touch browser automation：`320x844`、`337x415`、`390x844`、`430x932`、使用者回報重現尺寸 `636x764`，另加寬觸控 `844x390` 與 `1024x768`。
 - Physical iOS：至少一台 iPhone Safari；記錄 device、iOS、Safari、viewport。
 - Physical Android：至少一台 Android Chrome；記錄 device、Android、Chrome、viewport。
 
@@ -123,7 +128,7 @@ Debug trace 至少記錄：
 
 ### 6.1 Reported Bug Focused Browser Regression
 
-下列 R cases 是 2026-07-17 針對手機頂部欄、action rail 與使用者回報的錯位畫面新增的 targeted automation。R cases 不取代 B01-B12 完整矩陣與 P01-P10 實機 gate。
+下列 R cases 是針對手機頂部欄、action rail、使用者回報的錯位畫面，以及 Rework 5 原生文字圈選問題新增的 targeted automation。R cases 不取代 B01-B12 完整矩陣與 P01-P12 實機 gate。
 
 | ID | Viewport | 實際操作 | 通過標準 |
 |---|---|---|---|
@@ -137,6 +142,10 @@ Debug trace 至少記錄：
 | QA-054-R08 | 320/390/430 | action rail + preview viewport sweep | rail / preview 不水平溢出；drag UI 不造成 viewport overflow |
 | QA-054-R09 | 390x844 | console / network sweep | 無非預期 console error、pageerror、HTTP/network failure |
 | QA-054-R10 | 636x764 | 長按 checklist source 後在同一 source row 內橫移超過 8px 並放手 | invalid innermost source 阻斷 parent card；無 parent indicator；preview 跟手；zero write |
+| QA-054-R12 | 390x844 | 分別長按 L1、L2、L3+ 的可拖 task surface | computed `user-select` / `-webkit-user-select` 為 `none`；selection 為空；只進 mobile rail，不開桌機 menu |
+| QA-054-R13 | 390x844 | 430ms 放手、7px 後跨 500ms、9px 後跨 500ms | 430ms 不啟動；7px 仍啟動；9px 取消，維持 500ms／8px 契約 |
+| QA-054-R14 | 844x390、1024x768 touch | 長按 L2 task | 即使 width > 768 仍進 dedicated mobile session；無文字選取、無桌機 menu |
+| QA-054-R15 | 390x844 Workbench | unplaced／placed row 分別長按並檢查 computed style | unplaced 防選取但 `touch-action != none` 且可進 rail；placed 無 ownership marker、無 rail |
 
 ## 7. Desktop Frozen Baseline Regression
 
@@ -170,6 +179,8 @@ Debug trace 至少記錄：
 | QA-054-P08 | 無效區與 stale release 各 5 次 | 全部 no-op；下一次立即可操作 |
 | QA-054-P09 | Placed row 長按 5 次 + tap 2 次 | 長按不進 drag；tap 開正確 details |
 | QA-054-P10 | Preview / indicator 視覺檢查 | 只有一條 live insertion line；來源原位無假 marker；preview 全程跟手；tall-card indicator 不使用 expanded outer rect；無裁切 / overflow |
+| QA-054-P11 | L1／L2／L3+／Workbench unplaced 各長按 5 次 | 不出現文字反白、selection handles、系統查詢／複製工具列或 iOS callout；Workbench 仍可自然垂直滑動 |
+| QA-054-P12 | 橫向手機／平板寬度 > 768px 各長按 5 次 | 真實 touch 仍進 compact rail／拖曳，不開桌機完整 context menu；同裝置 mouse/right-click（若可用）仍維持桌機語意 |
 
 ## 9. Quantitative Pass / Fail
 
@@ -185,11 +196,11 @@ first_release_correct_rate = correct_first_release / 50
 - Android first-release correct >= 48/50。
 - 每台 no-op <= 2/50；no-op 不得寫入錯誤資料。
 - Wrong target = 0、wrong parent = 0、wrong action = 0、duplicate commit = 0。
-- P06-P10 全數 Pass。
+- P06-P12 全數 Pass。
 - Static、browser、desktop regression、TypeScript、build 與指定回歸全部通過。
 - Visible Error Hard Gate 為 0 finding。
 
-`未通過`：任一 wrong commit、任一裝置低於 96%、placed row 可拖、桌機 baseline 改變、auto-scroll 跳列、target 明顯震盪或 visible error。
+`未通過`：任一 wrong commit、任一裝置低於 96%、任一 task long press 出現原生文字圈選／callout、寬觸控退回桌機 menu、placed row 可拖、桌機 baseline 改變、auto-scroll 跳列、target 明顯震盪或 visible error。
 
 `未充分驗證`：缺 iOS / Android 任一裝置、缺完整 trial sheet、缺錄影／trace、缺前後 parent/order，或只用 synthetic touch / 主觀描述。
 
@@ -261,3 +272,22 @@ npm.cmd run build:test
 - 最終結論：`通過`、`未通過` 或 `未充分驗證`。
 
 DEV-054 只有在 QC 明確記錄兩台實機均通過後，才可在 `dev_task.md` 標記完成。
+
+## 14. RD Rework 5 執行結果（2026-08-14）
+
+Automated QA 判定：`PASS`。整體 DEV 判定：`未充分驗證`（僅因 required physical gate 尚未執行）。
+
+| 驗證層 | 結果 | 主要覆蓋 |
+|---|---|---|
+| DEV-054 static | 44/44 passed | TouchEvent 不受 viewport gate、selection/callout ownership、Workbench native pan、placed no-drag、no TouchSensor |
+| DEV-054 browser | 15/15 passed | native topbar touch、action rail exactly-once、同層／跨層落點、jitter、stale target、invalid zero-write、320/390/430、L1/L2/L3+ 零圈選、430ms/7px/9px、844x390/1024x768 touch、Workbench |
+| Mobile pan regression | DEV-029 static 39/39；browser 41 cases passed | quick tap、horizontal/vertical pan、long press、cancel、edge scroll、CTA、互動控制、無 click-through |
+| Shared drag regressions | DEV-046 static 31/31 + browser passed；DEV-053 static 30/30 + browser 10/10 | 全表面拖拉、click/right-click、invalid no-op、cancel recovery、placed row readonly |
+| Desktop / L1 regressions | DEV-055 static 27/27 + browser 16/16；DEV-067 static 13/13 + browser 8/8 | 桌機 approved overlay、同欄／跨欄／復原、L1 promotion/reorder、錯誤提交為 0 |
+| Workbench regression | DEV-039 static 31/31 + placement-lanes browser passed | scoped v2 prefs、未歸位可拖、已歸位不可拖、mobile overlay、lane filtering |
+| Engineering gates | TypeScript passed；targeted ESLint 0 error；`build:test` passed | 編譯、型別、規範、可建置性 |
+| Runtime sweep | console errors 0；network failures 0；visible errors 0 | DEV-054、DEV-053 與相鄰 rendered suites |
+
+零容忍項目結果：wrong target = 0、wrong parent = 0、duplicate commit = 0、stale indicator commit = 0、native text selection = 0、mobile desktop context-menu fallback = 0、placed-row drag = 0。
+
+尚待使用者可提供的實體裝置環境：iPhone Safari 與 Android Chrome 各依 P01-P12 完成 50-trial matrix、錄影、裝置資訊及 trial sheet。未完成前不可把 DEV-054 標記為完整完成或已可 release。

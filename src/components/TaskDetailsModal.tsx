@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { CheckCircle2, Lock, MessageSquareText, Plus, Save, Send, Trash2, Unlock, X } from 'lucide-react';
+import { BookOpenText, CheckCircle2, Lock, MessageSquareText, Save, Send, Unlock, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -13,6 +13,8 @@ import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { MANUAL_TASK_STATUSES, normalizeManualTaskStatus, TASK_STATUS_LABELS } from '../utils/taskStatus';
 import { buildAncestorPath } from '../utils/taskHierarchy';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
+import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
+import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -39,7 +41,9 @@ const getDefaultModalSize = () => {
   const maxHeight = viewportHeight * 0.9;
 
   return {
-    width: Math.min(Math.max(viewportWidth * 0.64, 1040), maxWidth),
+    // 任務詳情需要同時容納日期、主責／協作與備註編輯；維持大型工作區，
+    // 避免在桌面 viewport 只得到窄欄並產生水平捲軸。
+    width: Math.min(Math.max(viewportWidth * 0.78, 1040), maxWidth),
     height: Math.min(Math.max(viewportHeight * 0.84, 680), maxHeight),
   };
 };
@@ -87,6 +91,7 @@ const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) =>
     note.id === right[index]?.id
     && note.title === right[index]?.title
     && note.content === right[index]?.content
+    && areTaskNoteRichContentsEqual(note.richContent, right[index]?.richContent)
   ))
 );
 
@@ -112,6 +117,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const [titleValue, setTitleValue] = React.useState('');
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
+  const [isTaskKnowledgeOpen, setIsTaskKnowledgeOpen] = React.useState(false);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const skipNextNotesSave = React.useRef(true);
@@ -191,7 +197,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
       if (event.target instanceof Element && event.target.closest('[data-task-details-title-input="true"]')) return;
-      const hasNestedOverlay = Boolean(document.querySelector('[data-tag-picker-panel], .global-dialog-content'));
+      const hasNestedOverlay = Boolean(document.querySelector(
+        '[data-tag-picker-panel], .global-dialog-content, [data-task-note-toolbar-popover="true"]',
+      ));
       if (hasNestedOverlay) return;
       event.preventDefault();
       event.stopPropagation();
@@ -230,6 +238,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     currentNodeStartDate,
     currentNodeTitle,
   ]);
+
+  React.useEffect(() => {
+    setIsTaskKnowledgeOpen(false);
+  }, [currentNodeId]);
 
   React.useEffect(() => {
     if (!node || !canEditTask) return;
@@ -331,6 +343,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       setEndDate(value);
     }
     updateNode(node.id, updates);
+  };
+
+  const handleDateChange = (field: 'startDate' | 'endDate', event: React.ChangeEvent<HTMLInputElement>) => {
+    // Chromium may emit a transient out-of-range value while navigating an
+    // empty native date picker. Let the input constraints reject that value
+    // without treating month navigation as a real date change.
+    if (!event.currentTarget.validity.valid) {
+      event.currentTarget.value = field === 'startDate' ? startDate : endDate;
+      return;
+    }
+    updateDate(field, event.currentTarget.value);
   };
 
   const handleAssignmentChange = (primaryIds: string[], collaboratorIds: string[]) => {
@@ -478,11 +501,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div
-          className="flex items-start gap-3 border-b border-slate-200 px-5 py-4"
+          className="flex items-start gap-2 px-5 py-3"
           data-task-details-header="true"
         >
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-0.5">
               {canEditTask ? (
                 <input
                   ref={titleInputRef}
@@ -496,7 +519,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
                   aria-label="編輯任務名稱"
-                  className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50/80 px-3 text-base font-semibold text-slate-900 outline-none transition hover:border-blue-200 hover:bg-white focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className="h-9 w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-50/80 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   title={node.title}
                 />
               ) : (
@@ -534,7 +557,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
             <button
               type="button"
               onClick={handleSaveDetails}
-              className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-100 ${
+              className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-100 ${
                 saveFeedbackVisible
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                   : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
@@ -550,7 +573,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
           <button
             type="button"
             onClick={handleClose}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
             title="關閉"
             aria-label="關閉任務詳情"
           >
@@ -559,9 +582,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
         </div>
 
         <div className="flex-1 overflow-auto px-4 py-4">
-          <section className="border-b border-slate-100 pb-3" data-task-details-meta-section="true">
+          <section className="pb-2" data-task-details-meta-section="true">
             <div
-              className="grid gap-y-3 lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
+              className="grid gap-y-3 lg:grid-cols-[5.5rem_23.5rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
               data-task-details-meta-grid="true"
             >
               <div
@@ -569,7 +592,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                 data-task-details-mobile-meta="true"
               >
                 <div
-                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
+                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_23.5rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
                   data-task-details-mobile-meta-controls="true"
                 >
               <div
@@ -596,9 +619,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       <input
                         type="date"
                         value={startDate}
-                        onChange={(event) => updateDate('startDate', event.target.value)}
+                        onChange={(event) => handleDateChange('startDate', event)}
+                        max={!node.isDurationLocked ? (endDate || undefined) : undefined}
                         readOnly={!canEditTask || startLocked}
-                        className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 lg:min-w-[7.5rem] ${
+                        className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 lg:w-[8rem] lg:flex-none lg:min-w-0 ${
                           !canEditTask || startLocked
                             ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
                             : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
@@ -635,9 +659,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       <input
                         type="date"
                         value={endDate}
-                        onChange={(event) => updateDate('endDate', event.target.value)}
+                        onChange={(event) => handleDateChange('endDate', event)}
+                        min={startDate || undefined}
                         readOnly={!canEditTask || endLocked || node.isDurationLocked}
-                        className={`h-8 min-w-0 flex-1 rounded-md rounded-r-none border-r-0 px-2 text-sm outline-none transition focus:ring-2 lg:min-w-[7.5rem] ${
+                        className={`h-8 min-w-0 flex-1 rounded-md rounded-r-none border-r-0 px-2 text-sm outline-none transition focus:ring-2 lg:w-[8rem] lg:flex-none lg:min-w-0 ${
                           !canEditTask || endLocked || node.isDurationLocked
                             ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
                             : isDueToday
@@ -686,7 +711,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       placeholder="—"
                       disabled={!canEditTask || !node.isDurationLocked}
                       aria-label="工期天數"
-                      className={`h-full w-16 border-0 bg-transparent px-1.5 text-sm text-center outline-none transition focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
+                      className={`h-full w-12 border-0 bg-transparent px-1.5 text-sm text-center outline-none transition focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
                         !node.isDurationLocked
                           ? 'text-slate-400'
                           : 'text-slate-700'
@@ -803,66 +828,41 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
             </section>
           ) : null}
 
-          <section className="pt-4" data-task-detail-notes-section="true">
-            <div className="grid gap-3" data-task-detail-notes-grid="true">
+          <section className="pt-2" data-task-detail-notes-section="true">
+            <div className="grid gap-2" data-task-detail-notes-grid="true">
               {notes.map((note, noteIndex) => (
-                <div
+                <TaskDetailNoteField
                   key={note.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50/70 p-3"
-                  data-task-detail-note-card="true"
-                >
-                  <div
-                    className="mb-2 flex min-w-0 items-center gap-2"
-                    data-task-detail-note-header="true"
-                  >
-                    <input
-                      type="text"
-                      value={note.title}
-                      onChange={(event) => updateNote(note.id, { title: event.target.value })}
-                      disabled={!canEditTask}
-                      className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-white px-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
-                      placeholder="備註標題"
-                      data-task-detail-note-title-input="true"
-                    />
-                    {noteIndex === 0 ? (
-                      <button
-                        type="button"
-                        onClick={addNote}
-                        disabled={!canEditTask}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-                        title="新增備註欄"
-                        aria-label="新增備註欄"
-                        data-task-detail-note-add="true"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => deleteNote(note.id)}
-                      disabled={!canEditTask}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      title="刪除此備註欄"
-                      aria-label={`刪除備註欄：${note.title || '未命名備註'}`}
-                      data-task-detail-note-delete="true"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <textarea
-                    value={note.content}
-                    onChange={(event) => updateNote(note.id, { content: event.target.value })}
-                    disabled={!canEditTask}
-                    className="min-h-[120px] w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    placeholder="輸入備註內容"
-                    data-task-detail-note-content-input="true"
-                  />
-                </div>
+                  canEdit={canEditTask}
+                  note={note}
+                  noteIndex={noteIndex}
+                  onAdd={addNote}
+                  onDelete={() => deleteNote(note.id)}
+                  onSave={handleSaveDetails}
+                  onUpdate={updates => updateNote(note.id, updates)}
+                />
               ))}
             </div>
           </section>
 
-          <TaskRecordTimeline nodeId={node.id} />
+          <div className="flex justify-end pt-2" data-task-knowledge-trigger="true">
+            <button
+              type="button"
+              onClick={() => setIsTaskKnowledgeOpen((current) => !current)}
+              aria-expanded={isTaskKnowledgeOpen}
+              aria-controls="task-knowledge-panel"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              data-task-knowledge-toggle="true"
+            >
+              <BookOpenText size={14} />
+              <span>{isTaskKnowledgeOpen ? '收合歷史資訊' : '查看歷史資訊'}</span>
+            </button>
+          </div>
+          {isTaskKnowledgeOpen ? (
+            <div id="task-knowledge-panel" data-task-knowledge-panel="true">
+              <TaskRecordTimeline nodeId={node.id} />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

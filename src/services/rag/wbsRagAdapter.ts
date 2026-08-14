@@ -1,6 +1,7 @@
 import type { TaskDetailNote, TaskNode, TaskTag } from '../../types';
 import { chunkText } from './chunking';
 import type { RagChunkDraft, RagCitation, RagDocumentDraft } from './ragContract';
+import { taskNoteToAiMarkdown } from '../../utils/taskNoteRichContent';
 
 export interface WbsRagBuildInput {
   tenantId: string;
@@ -34,9 +35,13 @@ const formatDetailNotes = (detailNotes: TaskDetailNote[] | undefined): string[] 
   (detailNotes ?? [])
     .map(note => {
       const title = note.title.trim();
-      const content = note.content.trim();
+      const content = taskNoteToAiMarkdown(note).trim();
       if (!title && !content) return null;
-      return [`備註：${title || '未命名'}`, content].filter(Boolean).join('\n');
+      return [
+        `## 備註：${title || '未命名'}`,
+        `備註 ID：${note.id}`,
+        content,
+      ].filter(Boolean).join('\n\n');
     })
     .filter((note): note is string => Boolean(note));
 
@@ -48,14 +53,17 @@ const formatTags = (node: TaskNode, tagById: Map<string, TaskTag>): string | nul
 };
 
 const buildNodeContent = (node: TaskNode, tagById: Map<string, TaskTag>): string => {
+  const detailNoteSections = formatDetailNotes(node.detailNotes);
   const parts = [
     `標題：${node.title}`,
     `類型：${node.nodeType ?? 'task'}`,
     `狀態：${node.status}`,
     formatTags(node, tagById),
     formatDateRange(node) ? `排程：${formatDateRange(node)}` : null,
-    node.description?.trim() ? `描述：\n${node.description.trim()}` : null,
-    ...formatDetailNotes(node.detailNotes),
+    detailNoteSections.length === 0 && node.description?.trim()
+      ? `描述：\n${node.description.trim()}`
+      : null,
+    ...detailNoteSections,
   ];
 
   return parts.filter((part): part is string => Boolean(part)).join('\n\n');
@@ -93,6 +101,15 @@ export const buildWbsRagDocuments = ({ tenantId, projectId, nodes, tags = [] }: 
         tagIds: node.tagIds ?? [],
         tags: (node.tagIds ?? []).map(tagId => tagById.get(tagId)?.name).filter(Boolean),
         order: node.order,
+        updatedAt: node.updatedAt,
+        detailNotes: (node.detailNotes ?? [])
+          .filter(note => Boolean(note.title.trim() || taskNoteToAiMarkdown(note).trim()))
+          .map(note => ({
+            taskId: node.id,
+            noteId: note.id,
+            noteTitle: note.title.trim() || '未命名',
+            updatedAt: node.updatedAt,
+          })),
       },
     };
 

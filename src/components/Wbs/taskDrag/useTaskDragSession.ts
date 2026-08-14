@@ -3,7 +3,6 @@ import type { TaskStatus } from '../../../types';
 import { useWbsStore } from '../../../store/useWbsStore';
 import useBoardStore from '../../../store/useBoardStore';
 import type { MobileTaskActionContextValue } from '../mobileTaskActionContext';
-import { isMobileTaskActionMode } from './taskGesturePolicy';
 import { commitTaskDragObservation, type TaskDragCommitDependencies } from './taskDragCommit';
 import { resolveTaskOriginFieldRect } from './desktopTaskDropPreview';
 import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
@@ -194,7 +193,6 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     event: React.TouchEvent,
     sourceKind: TaskDragSourceKind = 'kanban-card',
   ) => {
-    if (!isMobileTaskActionMode()) return false;
     const permissions = dependenciesRef.current;
     if (!permissions.canMoveTask && !permissions.canEditTask && !permissions.canCreateTask && !permissions.canDeleteTask) {
       return false;
@@ -453,7 +451,6 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
 
   React.useEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
-      if (!isMobileTaskActionMode()) return;
       const activeState = stateRef.current;
       if (!activeState) return;
       const target = event.target;

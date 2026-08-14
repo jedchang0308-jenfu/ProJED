@@ -44,7 +44,8 @@ assert(
     source.settingsView.includes("label: '看板權限'") &&
     source.settingsView.includes("label: '行事曆訂閱'") &&
     source.settingsView.includes("label: '快速開啟'") &&
-    source.settingsView.includes('grid grid-cols-2 gap-2 sm:grid-cols-4') &&
+    source.settingsView.includes("label: '個人資料'") &&
+    source.settingsView.includes('grid grid-cols-2 gap-2 sm:grid-cols-5') &&
     source.settingsView.includes('flex min-h-11 min-w-0 items-center gap-2') &&
     !source.settingsView.includes('section.description') &&
     !source.settingsView.includes('建立可供外部行事曆讀取的任務訂閱連結。'),
@@ -110,7 +111,8 @@ assert(
   'DEV-038 governance docs are present',
   source.spec.includes('設定中心作用範圍一致性與高風險防呆') &&
     source.qa.includes('QA-DEV-038') &&
-    source.devTask.includes('DEV-038: 設定中心作用範圍一致性與高風險防呆') &&
+    source.devTask.includes('DEV-038') &&
+    source.devTask.includes('設定中心範圍一致性與防呆') &&
     source.documentationMap.includes('DEV-038: 設定中心作用範圍一致性與高風險防呆'),
 );
 

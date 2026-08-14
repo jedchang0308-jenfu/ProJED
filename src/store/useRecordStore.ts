@@ -21,6 +21,8 @@ import {
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
 import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
 import { useMemberStore } from './useMemberStore';
+import { useTagStore } from './useTagStore';
+import { summarizeTaskActivity } from '../utils/meetingActivitySummary';
 import type {
   KnowledgeRecord,
   KnowledgeRecordInput,
@@ -184,96 +186,21 @@ const syncDraftContentLinks = (draft: RecordDraft, content: string): RecordDraft
   taskLinks: syncTaskLinksFromRecordContent(content, draft.taskLinks, draft.legacyTaskLinkNodeIds ?? []),
 });
 
-const statusLabels: Record<string, string> = {
-  todo: '待辦',
-  in_progress: '進行中',
-  completed: '已完成',
-  delayed: '延遲',
-  unsure: '未確認',
-  onhold: '暫停',
-};
-
-const getPayloadStatus = (payload: Record<string, unknown>, side: 'before' | 'after') => {
-  const sidePayload = payload[side] as Record<string, unknown> | undefined;
-  const status = sidePayload?.status;
-  return typeof status === 'string' ? status : '';
-};
-
-const formatStatus = (status: string) => statusLabels[status] ?? (status || '未設定');
-
-const formatDateRange = (value: Record<string, unknown> | undefined) => {
-  const start = typeof value?.startDate === 'string' && value.startDate ? value.startDate : '未設定';
-  const end = typeof value?.endDate === 'string' && value.endDate ? value.endDate : '未設定';
-  return `${start} 至 ${end}`;
-};
-
-const formatDateChange = (before: Record<string, unknown> | undefined, after: Record<string, unknown> | undefined) => {
-  const beforeStart = typeof before?.startDate === 'string' && before.startDate ? before.startDate : '';
-  const afterStart = typeof after?.startDate === 'string' && after.startDate ? after.startDate : '';
-  const beforeEnd = typeof before?.endDate === 'string' && before.endDate ? before.endDate : '';
-  const afterEnd = typeof after?.endDate === 'string' && after.endDate ? after.endDate : '';
-  const startChanged = beforeStart !== afterStart;
-  const endChanged = beforeEnd !== afterEnd;
-
-  if (!startChanged && !endChanged) return '';
-  if (startChanged && !endChanged) {
-    if (!afterStart) return `開始日已取消（原為「${beforeStart || '未設定'}」）。`;
-    if (!beforeStart) return `開始日設定為「${afterStart}」。`;
-    return `開始日由「${beforeStart}」改為「${afterStart}」。`;
-  }
-  if (!startChanged && endChanged) {
-    if (!afterEnd) return `到期日已取消（原為「${beforeEnd || '未設定'}」）。`;
-    if (!beforeEnd) return `到期日設定為「${afterEnd}」。`;
-    return `到期日由「${beforeEnd}」改為「${afterEnd}」。`;
-  }
-  return `日期由「${formatDateRange(before)}」改為「${formatDateRange(after)}」。`;
-};
-
-const getPayloadAssigneeIds = (payload: Record<string, unknown>, side: 'before' | 'after') => {
-  const sidePayload = payload[side] as Record<string, unknown> | undefined;
-  const assigneeIds = sidePayload?.assigneeIds;
-  if (Array.isArray(assigneeIds)) {
-    return assigneeIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
-  }
-  const assigneeId = sidePayload?.assigneeId;
-  return typeof assigneeId === 'string' && assigneeId ? [assigneeId] : [];
-};
-
-const shortId = (value: string) => value.slice(0, 8);
-
-const formatAssignee = (assigneeId: string | null) => {
-  if (!assigneeId) return '未指派';
-
-  const member = useMemberStore.getState().boardMembers.find(item => item.userId === assigneeId);
-  const label = member?.profile?.displayName || member?.profile?.email;
-  if (label) return label;
-
-  return `已離開成員（${shortId(assigneeId)}）`;
-};
-
-const formatAssignees = (assigneeIds: string[]) =>
-  assigneeIds.length ? assigneeIds.map(id => formatAssignee(id)).join('、') : '未指派';
-
 const summarizeMeetingActivity = (activity: MeetingTaskActivityInput) => {
-  const payload = activity.payload ?? {};
-  if (activity.eventType === 'task_status_changed') {
-    return `狀態由「${formatStatus(getPayloadStatus(payload, 'before'))}」改為「${formatStatus(getPayloadStatus(payload, 'after'))}」。`;
-  }
-  if (activity.eventType === 'task_moved') return '位置已調整。';
-  if (activity.eventType === 'task_dates_changed') {
-    const before = payload.before as Record<string, unknown> | undefined;
-    const after = payload.after as Record<string, unknown> | undefined;
-    return formatDateChange(before, after);
-  }
-  if (activity.eventType === 'task_assigned') {
-    return `主責成員改為「${formatAssignees(getPayloadAssigneeIds(payload, 'after'))}」。`;
-  }
-  if (activity.eventType === 'task_collaborators_changed') return '協作者已更新。';
-  if (activity.eventType === 'task_tags_changed') return '標籤已更新。';
-  if (activity.eventType === 'task_archived') return '任務已封存。';
-  if (activity.eventType === 'task_restored') return '任務已還原。';
-  if (activity.eventType === 'task_created') return `新增任務「${activity.title || activity.nodeId}」。`;
-  return '任務已更新。';
+  const memberNameById = new Map(
+    useMemberStore.getState().boardMembers.flatMap(member => {
+      const name = member.profile?.displayName || member.profile?.email;
+      return name ? [[member.userId, name] as const] : [];
+    }),
+  );
+  const tagNameById = new Map(useTagStore.getState().tags.map(tag => [tag.id, tag.name] as const));
+  const summary = summarizeTaskActivity(activity.eventType, activity.payload ?? {}, {
+    memberNameById,
+    tagNameById,
+  });
+  return activity.eventType === 'task_created'
+    ? `新增任務「${activity.title || activity.nodeId}」。`
+    : summary;
 };
 
 const createMeetingActivity = (activity: MeetingTaskActivityInput): MeetingTaskActivity => {

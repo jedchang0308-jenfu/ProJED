@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../src/components/TaskDetailsModal.tsx', import.meta.url), 'utf8');
+const fieldSource = readFileSync(new URL('../src/components/TaskNotes/TaskDetailNoteField.tsx', import.meta.url), 'utf8');
+const desktopSource = readFileSync(new URL('../src/components/TaskNotes/TaskDetailNoteDesktopEditor.tsx', import.meta.url), 'utf8');
+const noteUiSource = fieldSource + '\n' + desktopSource;
 
 const checks = [
   {
     name: 'TaskDetailsModal imports a delete icon for note removal',
-    pass: source.includes('Trash2') && source.includes("from 'lucide-react'"),
+    pass: noteUiSource.includes('Trash2') && fieldSource.includes("from 'lucide-react'"),
   },
   {
     name: 'TaskDetailsModal defines deleteNote guarded by edit permission and confirmation',
@@ -20,16 +23,16 @@ const checks = [
   },
   {
     name: 'note cards expose stable hooks for delete browser QC',
-    pass: source.includes('data-task-detail-note-card="true"') &&
-      source.includes('data-task-detail-note-delete="true"') &&
-      source.includes('data-task-detail-note-title-input="true"') &&
-      source.includes('data-task-detail-note-content-input="true"'),
+    pass: noteUiSource.includes('data-task-detail-note-card="true"') &&
+      noteUiSource.includes('data-task-detail-note-delete="true"') &&
+      noteUiSource.includes('data-task-detail-note-title-input="true"') &&
+      noteUiSource.includes('data-task-detail-note-content-input="true"'),
   },
   {
     name: 'delete button is disabled when task editing is not allowed',
-    pass: source.includes('disabled={!canEditTask}') &&
-      source.includes('刪除此備註欄') &&
-      source.includes('aria-label={`刪除備註欄：${note.title ||'),
+    pass: noteUiSource.includes('disabled={!canEdit}') &&
+      noteUiSource.includes('刪除此備註欄') &&
+      noteUiSource.includes("aria-label={'刪除備註欄：' +"),
   },
 ];
 

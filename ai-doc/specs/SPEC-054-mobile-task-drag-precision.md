@@ -1,6 +1,6 @@
 # SPEC-054：手機任務拖拉定位精準度優化
 
-狀態：RD Rework 4 Implemented / Automated Browser + User Revalidation Passed / Physical Device Gate Pending
+狀態：RD Rework 5 Implemented / Automated QA-QC Passed / Physical Device Gate Pending
 
 優先級：P1
 
@@ -24,6 +24,8 @@
 - auto-scroll 每幀最多移動 18px，與 checklist 最小列高 18px 相同；手指靜止時，畫面仍可能一幀跨過一列。
 - 手機拖拉 session 的全域 `touchend` 監聽在非拖拉狀態也可能 `preventDefault()`，會抑制瀏覽器產生 native click，導致手機模式頂部欄按鈕不可按。
 - Mobile action rail 視覺上是 button，但缺少直接 tap 的 `onClick` command path；長按放手後進入 action rail 時，使用者第二次點 action 無法形成穩定操作記憶。
+- Rework 5 發現長按計時器成立前沒有宣告 task surface 的手勢所有權；瀏覽器可先啟動原生文字圈選或 iOS callout，500ms 後才呼叫 `preventDefault()` 已來不及阻止。
+- Rework 5 同時發現 mobile drag-action 以 `innerWidth <= 768` 作輸入 gate；橫向手機、平板或寬觸控裝置即使送出真實 `TouchEvent`，仍會退回桌機 context-menu 路徑。
 - DEV-053 browser / QA gate 證明功能、cleanup、viewport 與指定座標流程正確，但沒有量測真實手指下的重複定位成功率。
 - 2026-07-17 使用者以電腦模擬手機重新驗證後判定定位比舊版更差且 indicator 亂跳；此反證推翻先前 targeted browser pass 對「定位品質已改善」的解讀，DEV-054 退回 RD。
 - 2026-07-17 使用者再提供實際畫面，顯示 preview 與 insertion line 分處不同 checklist row，主觀上等同「定位到完全不相干的位置」；幾何盤查確認固定 40px preview clearance 會再疊加半列高度，形成約 50px 的視覺斷裂。
@@ -47,6 +49,8 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 - 手機不再以任務 DOM 上下半區作為隱形 `before / after` 控制。
 - 手機正常觸控 topbar、drawer、workbench 等非拖拉 UI 時，drag session 不得攔截 native click。
 - Mobile action rail 保留既有 action set，但必須同時支援「拖放到 action」與「長按放手進入 armed rail 後點擊 action」兩種一致操作。
+- 真實 `TouchEvent` 是 dedicated drag-action session 的輸入依據，不以 viewport 寬度判斷使用者正在用滑鼠或觸控；桌機 mouse 仍由既有 MouseSensor 處理，不新增 dnd-kit TouchSensor。
+- 所有允許 task long press 的 L1、L2、L3+ 與 Workbench unplaced surface，從 `touchstart` 起必須停用原生文字選取與 iOS touch callout；input、textarea、contenteditable 保留文字選取。
 - 本 DEV 必須完成真實 iOS 與 Android 實機操作驗證；未執行只能判定 `未充分驗證`。
 
 ### 2.2 與 DEV-053 的關係
@@ -77,6 +81,7 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 - 修正手機全域 touch lifecycle 不得壓制一般頂部欄／面板按鈕 native click。
 - 修正 mobile action rail button 的直接 tap command path，並保留 at-most-once terminal guard。
 - 新增 pure/static/browser verifier 與 iOS / Android 真機量化驗證。
+- 補上 native selection/callout、500ms/8px 邊界、寬觸控 viewport、各階層 surface 與 Workbench placed/unplaced 的啟動所有權驗證。
 - 保留 DEV-029 / DEV-039 / DEV-046 / DEV-053 所有仍有效回歸。
 
 ### 4.2 Out of Scope
@@ -220,6 +225,9 @@ interface TaskDragTargetLock {
 
 ### 5.7 Mobile Topbar and Action Rail Touch Contract
 
+- Task long-press surface 必須在 timer 成立前即以 `user-select: none`、`-webkit-user-select: none` 與 `-webkit-touch-callout: none` 阻止瀏覽器原生圈選／callout；不得等到 500ms callback 才補救。
+- 真實 touch 起手可在任何 viewport 寬度進入 dedicated task drag-action session；viewport 寬度只負責 layout，不得作 touch input ownership gate。
+- Workbench unplaced row 套用 selection/callout 防護，但不得全域套用 `touch-action: none`，以免破壞其原生垂直捲動；看板仍由既有 pan broker 仲裁。
 - `touchmove` / `touchend` / pointer cancel 只有在 session phase 為 `dragging` 時可攔截與 `preventDefault()`；`armed` 或無 active drag 時不得壓制一般 UI 的 native click。
 - Long press drag 成立後，task drag 是 touch / pointer move 的唯一 owner；`useMobilePanBroker` 必須立即 reset 並停止寫入 `scrollTop` / `scrollLeft`。Quick tap 與 long press 前的 short pan 維持 DEV-029 pan-first 契約。
 - 手機頂部欄、hamburger、workbench、filter、modal、drawer 與其他非拖拉 button 的 quick tap 必須維持原生點擊語意。
@@ -244,13 +252,15 @@ interface TaskDragTargetLock {
 |---|---|
 | `taskDragTypes.ts` | 新增 descriptor、canonical intent、target lock state |
 | `taskGesturePolicy.ts` | 集中初始 constants；保留 500ms / 8px |
+| `useTaskGestureSurface.ts` | 真實 touch 直接進 dedicated session；輸出共用 long-press surface ownership marker |
 | `taskDragTargetAdapter.ts` | 移除上下半區判定，改輸出 descriptor / canonical intent |
-| `useTaskDragSession.ts` | 套用 stability、release freshness、兩階段 auto-scroll |
+| `useTaskDragSession.ts` | 套用 stability、release freshness、兩階段 auto-scroll；active touch session 的 context menu suppression 不受 viewport gate 影響 |
 | `taskDragCommit.ts` | 桌機／手機共用 resolver；保留最新 store revalidation |
 | `TaskDragPresenter.tsx` | always finger-coupled preview、z-order、viewport / action-rail clamp；不得讀 target geometry 改寫 preview |
 | `BoardView.tsx` | 僅抽取既有 desktop intent adapter；不得改 DndContext UI / collision baseline |
 | `KanbanCard.tsx`、`KanbanChecklist.tsx`、`KanbanColumn.tsx` | 加入明確 target surface kind；card 額外標記 bounded primary geometry |
 | `TaskWorkbenchPanel.tsx` | 加入明確 target kind；不得讓 placed row 變成 source |
+| `src/index.css` | 共用 marker 關閉 task surface 原生 selection/callout；interactive text control 恢復選取，Workbench 不關閉 native pan |
 
 ### 6.3 Data / API / Permission
 
@@ -286,7 +296,7 @@ flowchart LR
 | E Integration hardening | D 後 | release、placed-row、cancel、at-most-once、scripts | DEV-054 + regressions、TS、build 通過 | double-submit、placed source、desktop drift |
 | F QA True Device Gate | E 後 | iOS / Android 各 50 次、錄影、trial sheet、QC | `QA-DEV-054` 全通過 | 缺裝置、wrong commit > 0、成功率不足 |
 
-Current execution boundary：使用者第四次模擬手機／截圖驗證失敗後，Slice C-E 已完成 RD rework 4；R01-R10 automated browser revalidation 與使用者原失敗路徑重驗均已通過。仍需 QA/QC 依本文件與 `QA-DEV-054` 執行完整 matrix 與 iOS / Android 實機 gate。未要求 production release。
+Current execution boundary：Slice C-E 已完成 RD rework 5；長按前原生文字圈選／iOS callout、寬觸控 viewport 誤走桌機路徑與 Workbench pan ownership 均已修正。R01-R15 automated browser、指定相鄰拖拉回歸、TypeScript、ESLint 與 test build 已通過。仍需 QA/QC 依本文件執行 iOS / Android 實機 gate；未要求 production release。
 
 ## 9. Acceptance Criteria
 
@@ -368,7 +378,16 @@ npm.cmd run build:test
 - `npm.cmd exec tsc -- --noEmit`：passed。
 - `npm.cmd run build:test`：passed。
 
-尚未完成：QA-054-B01~B12 全矩陣逐項人工／完整 trace、QA-054-P01~P10 iOS / Android 實機 trial sheet、錄影與正式 QC report。DEV-054 目前結論仍為 `未充分驗證`，不得標記完成。
+### 10.2 RD Rework 5 Automated Evidence - 2026-08-14
+
+- `verify:dev-054-mobile-task-drag-precision`：44/44 passed。
+- `verify:dev-054-mobile-task-drag-precision-browser`：15/15 passed；R12 驗證 L1/L2/L3+ `user-select:none`、零 selection／零 context menu，R13 驗證 500ms／8px 邊界，R14 驗證 844x390 與 1024x768 真實 touch 不受舊寬度 gate 影響，R15 驗證 Workbench 未歸位列保留 native pan、已歸位列仍不可拖。
+- Browser regressions：DEV-029 41 cases、DEV-039 placement lanes、DEV-046 universal surfaces、DEV-053 10/10、DEV-055 16/16、DEV-067 8/8 passed。
+- Static regressions：DEV-029 39/39、DEV-039 31/31、DEV-046 31/31、DEV-053 30/30、DEV-055 27/27、DEV-067 13/13 passed。
+- TypeScript、targeted ESLint（0 error，2 個既有 warning）、`build:test` passed；console／network error sweep 為 0。
+- Authoritative QC evidence：`ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md`。
+
+尚未完成：QA-054-P01~P12 iOS / Android 實機 trial sheet、錄影與裝置資訊。Automated QA-QC 已通過；因 physical gate 仍是本 DEV 完成條件，整體結論維持 `未充分驗證`，不得標記完成。
 
 ## 11. Stop Conditions
 

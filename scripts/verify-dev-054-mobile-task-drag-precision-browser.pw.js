@@ -60,6 +60,13 @@ async (page) => {
         filtersOpen: false,
         showContainersInAllTasks: false,
       }));
+      localStorage.setItem(`projed-task-workbench-panel:v2:account:${encodeURIComponent(account.id)}`, JSON.stringify({
+        open: false,
+        filtersOpen: false,
+        showContainersInAllTasks: false,
+        width: 340,
+        openPreferenceVersion: 1,
+      }));
       localStorage.setItem('projed-last-view', 'board');
     }, { account });
   };
@@ -75,6 +82,11 @@ async (page) => {
     if (await sidebar.isVisible().catch(() => false)) {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(100);
+    }
+    const workbenchPanel = page.locator('[data-task-workbench-panel="true"]').first();
+    if (await workbenchPanel.isVisible().catch(() => false)) {
+      await page.locator('[data-mobile-task-workbench-nav-entry="true"]').first().click();
+      await workbenchPanel.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
     }
   };
 
@@ -488,26 +500,34 @@ async (page) => {
     return { sourceId, firstTargetId, farTargetId, handover, screenshotPath };
   });
 
-  await runCase('QA-054-R07', 'leaving a target for an invalid control produces a zero-write release', async () => {
+  await runCase('QA-054-R07', 'leaving a target for the invalid screen edge produces a zero-write release', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
     const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
-    const invalid = page.locator('[data-kanban-add-task-button="true"]').first();
     const before = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const held = await startHeldTouch(source.locator(':scope > [data-task-surface-source="true"]'));
     const targetPoint = await pointFor(target.locator(':scope > [data-task-surface-source="true"]'));
     await held.moveTo({ x: targetPoint.x, y: targetPoint.y });
     await page.locator('[data-mobile-drop-indicator="true"]').waitFor({ state: 'visible', timeout: 5000 });
-    await held.moveTo(await pointFor(invalid));
+    await held.moveTo({ x: 1, y: 20 });
     await page.waitForTimeout(160);
     await held.end();
     const after = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
+    const beforeNodes = JSON.parse(before || '{}');
+    const afterNodes = JSON.parse(after || '{}');
+    const changedNodes = Array.from(new Set([...Object.keys(beforeNodes), ...Object.keys(afterNodes)]))
+      .filter((nodeId) => JSON.stringify(beforeNodes[nodeId]) !== JSON.stringify(afterNodes[nodeId]))
+      .map((nodeId) => ({ nodeId, before: beforeNodes[nodeId] || null, after: afterNodes[nodeId] || null }));
     const transient = await page.evaluate(() => ({
       rail: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
       preview: document.querySelectorAll('[data-mobile-drag-preview="true"]').length,
       indicator: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
     }));
-    assert(before === after, 'invalid release must not commit the previous target', { beforeLength: before?.length, afterLength: after?.length });
+    assert(before === after, 'invalid release must not commit the previous target', {
+      beforeLength: before?.length,
+      afterLength: after?.length,
+      changedNodes,
+    });
     assert(transient.rail === 0 && transient.preview === 0 && transient.indicator === 0, 'invalid release must clean transient drag UI', transient);
     return { zeroWrite: true, transient };
   });
@@ -759,6 +779,162 @@ async (page) => {
       cardScreenshotPath,
       columnScreenshotPath,
     };
+  });
+
+  await runCase('QA-054-R12', 'every kanban task level owns native selection before long press activates', async () => {
+    await openApp();
+    const surfaces = [
+      { level: 'L1', locator: page.locator('[data-kanban-column-header="true"][data-task-touch-gesture-surface="true"]').first() },
+      { level: 'L2', locator: page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first() },
+      { level: 'L3+', locator: page.locator('.kanban-checklist-item[data-task-touch-gesture-surface="true"]').first() },
+    ];
+    const measurements = [];
+    for (const surface of surfaces) {
+      await surface.locator.scrollIntoViewIfNeeded();
+      const before = await surface.locator.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          marker: element.getAttribute('data-task-touch-gesture-surface'),
+          userSelect: style.userSelect,
+          webkitUserSelect: style.webkitUserSelect,
+          touchAction: style.touchAction,
+        };
+      });
+      assert(before.marker === 'true'
+        && before.userSelect === 'none'
+        && before.webkitUserSelect === 'none',
+      `${surface.level} must suppress native selection from touchstart`, before);
+      const held = await startHeldTouch(surface.locator);
+      const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
+      await rail.waitFor({ state: 'visible', timeout: 5000 });
+      const during = await page.evaluate(() => ({
+        selection: String(window.getSelection() || ''),
+        contextMenuCount: document.querySelectorAll('[data-global-context-menu="true"]').length,
+        railMode: document.querySelector('[data-mobile-task-action-rail="true"]')?.getAttribute('data-mobile-task-action-rail-mode') || null,
+      }));
+      assert(during.selection === '' && during.contextMenuCount === 0 && during.railMode === 'dragging',
+        `${surface.level} long press must enter task drag without selection or desktop menu`, during);
+      await held.end();
+      await page.keyboard.press('Escape');
+      await rail.waitFor({ state: 'detached', timeout: 3000 }).catch(() => undefined);
+      measurements.push({ level: surface.level, before, during });
+    }
+    const screenshotPath = `${screenshotBase}-R12-selection-ownership.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    return { measurements, screenshotPath };
+  });
+
+  await runCase('QA-054-R13', '500ms and 8px gesture boundaries separate tap pan and drag', async () => {
+    const samples = [];
+
+    await openApp();
+    let surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+    let point = await pointFor(surface);
+    let held = await startHeldTouchAtPoint(point, 0);
+    await page.waitForTimeout(430);
+    samples.push({ sample: '430ms', railCount: await page.locator('[data-mobile-task-action-rail="true"]').count() });
+    assert(samples.at(-1).railCount === 0, 'sub-threshold hold must not activate drag', samples.at(-1));
+    await held.end();
+    await page.keyboard.press('Escape');
+
+    await openApp();
+    surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+    point = await pointFor(surface);
+    held = await startHeldTouchAtPoint(point, 0);
+    await page.waitForTimeout(250);
+    await held.moveExact({ x: point.x + 7, y: point.y }, 20);
+    await page.waitForTimeout(310);
+    const sevenPxRail = page.locator('[data-mobile-task-action-rail="true"]').first();
+    await sevenPxRail.waitFor({ state: 'visible', timeout: 3000 });
+    samples.push({ sample: '7px', railCount: await sevenPxRail.count() });
+    await held.end();
+    await page.keyboard.press('Escape');
+
+    await openApp();
+    surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+    point = await pointFor(surface);
+    held = await startHeldTouchAtPoint(point, 0);
+    await page.waitForTimeout(250);
+    await held.moveExact({ x: point.x + 9, y: point.y }, 20);
+    await page.waitForTimeout(350);
+    const ninePxRailCount = await page.locator('[data-mobile-task-action-rail="true"]').count();
+    samples.push({ sample: '9px', railCount: ninePxRailCount });
+    assert(ninePxRailCount === 0, 'movement beyond 8px must cancel long press', samples.at(-1));
+    await held.end();
+    await page.keyboard.press('Escape');
+    return { samples };
+  });
+
+  await runCase('QA-054-R14', 'actual touch starts the dedicated drag session above the old 768px width gate', async () => {
+    const measurements = [];
+    for (const viewport of [{ width: 844, height: 390 }, { width: 1024, height: 768 }]) {
+      await openApp(viewport);
+      const surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
+      const held = await startHeldTouch(surface);
+      const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
+      await rail.waitFor({ state: 'visible', timeout: 5000 });
+      const state = await page.evaluate(() => ({
+        width: window.innerWidth,
+        railMode: document.querySelector('[data-mobile-task-action-rail="true"]')?.getAttribute('data-mobile-task-action-rail-mode') || null,
+        selection: String(window.getSelection() || ''),
+        contextMenuCount: document.querySelectorAll('[data-global-context-menu="true"]').length,
+      }));
+      assert(state.width > 768 && state.railMode === 'dragging' && state.selection === '' && state.contextMenuCount === 0,
+        'wide touch viewport must not fall back to desktop selection or context menu', { viewport, state });
+      await held.end();
+      await page.keyboard.press('Escape');
+      measurements.push({ viewport, state });
+    }
+    return { measurements };
+  });
+
+  await runCase('QA-054-R15', 'Workbench unplaced rows suppress selection without disabling native pan and placed rows stay non-draggable', async () => {
+    await openApp();
+    await nativeTouch(page.locator('[data-mobile-task-workbench-nav-entry="true"]').first());
+    const panel = page.locator('[data-task-workbench-panel="true"]').first();
+    await panel.waitFor({ state: 'visible', timeout: 5000 });
+    await nativeTouch(page.locator('[data-task-workbench-unclassified-modal-add="true"]').first());
+    const taskDetails = page.locator('[data-task-details-modal="true"]').first();
+    await taskDetails.waitFor({ state: 'visible', timeout: 5000 });
+    await page.locator('[data-task-details-modal="true"] [aria-label="關閉任務詳情"]').click();
+    await taskDetails.waitFor({ state: 'detached', timeout: 5000 });
+    const unplaced = page.locator('[data-task-workbench-unplaced-task-card="true"]').first();
+    await unplaced.waitFor({ state: 'visible', timeout: 5000 });
+    const unplacedStyle = await unplaced.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        marker: element.getAttribute('data-task-touch-gesture-surface'),
+        userSelect: style.userSelect,
+        webkitUserSelect: style.webkitUserSelect,
+        touchAction: style.touchAction,
+      };
+    });
+    assert(unplacedStyle.marker === 'true'
+      && unplacedStyle.userSelect === 'none'
+      && unplacedStyle.webkitUserSelect === 'none'
+      && unplacedStyle.touchAction !== 'none',
+    'unplaced row must block selection while preserving Workbench native pan', unplacedStyle);
+    const heldUnplaced = await startHeldTouch(unplaced);
+    const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
+    await rail.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.evaluate(() => String(window.getSelection() || '')) === '', 'Workbench long press must not create native text selection');
+    await heldUnplaced.end();
+    await page.keyboard.press('Escape');
+
+    if (!await panel.isVisible().catch(() => false)) {
+      await nativeTouch(page.locator('[data-mobile-task-workbench-nav-entry="true"]').first());
+      await panel.waitFor({ state: 'visible', timeout: 5000 });
+    }
+    const placed = page.locator('[data-task-workbench-placed-task-card="true"]').first();
+    await placed.waitFor({ state: 'visible', timeout: 5000 });
+    const placedMarker = await placed.getAttribute('data-task-touch-gesture-surface');
+    assert(placedMarker === null, 'placed row must not become a long-press drag source', { placedMarker });
+    const heldPlaced = await startHeldTouch(placed);
+    const placedRailCount = await page.locator('[data-mobile-task-action-rail="true"]').count();
+    assert(placedRailCount === 0, 'placed row long press must not enter action rail', { placedRailCount });
+    await heldPlaced.end();
+    await page.keyboard.press('Escape');
+    return { unplacedStyle, placedMarker, placedRailCount };
   });
 
   const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));

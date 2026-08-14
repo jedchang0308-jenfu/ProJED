@@ -190,7 +190,7 @@ export const getMeetingRecordActionState = ({
         : 'capture';
 
   const statusMessage = isPublished
-    ? '會議紀錄已發布，可在紀錄庫與任務知識查找。'
+    ? '會議紀錄已發布，可在紀錄庫與歷史資訊查找。'
     : saving
       ? '正在儲存會議紀錄。'
       : isSynthesizing

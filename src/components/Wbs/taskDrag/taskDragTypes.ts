@@ -19,6 +19,7 @@ export type TaskDropSurfaceKind =
   | 'kanban-card'
   | 'checklist-row'
   | 'column-drop'
+  | 'root-drop'
   | 'checklist-drop'
   | 'workbench-unplaced-row'
   | 'workbench-placed-lane';

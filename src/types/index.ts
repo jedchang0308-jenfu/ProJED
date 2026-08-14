@@ -1,3 +1,5 @@
+import type { SerializedEditorState } from 'lexical';
+
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
 export type DependencySide = 'start' | 'end';
@@ -420,6 +422,12 @@ export interface TaskDetailNote {
   id: string;
   title: string;
   content: string;
+  richContent?: TaskDetailNoteRichContent;
+}
+
+export interface TaskDetailNoteRichContent {
+  schema: 'task-note.lexical-v1';
+  editorState: SerializedEditorState;
 }
 
 export interface TaskTag {

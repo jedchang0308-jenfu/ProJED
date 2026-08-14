@@ -231,13 +231,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得復活 DEV-052 或 DEV-051 parent-lock baseline；若要改 DB、production 或恢復 placed-row drag 需 Human Re-entry。
   - 證據：`SPEC-053`、`QA-DEV-053`、`QC-DEV-053`；DEV-053 static 30/30、browser 10/10、DEV-029/046/039/028 browser、DEV-044、TypeScript、`build:test` 與 T01-T14 全數通過；不代表真機定位精準度已簽核。
   - 計入交付：是
-- ◇ DEV-054 [交付點] [驗證中] [P1] [RD Rework 4 Browser + User Revalidation Passed / Physical Gate Required] 手機任務拖拉定位精準度優化
-  - 摘要：使用者第四次模擬手機證明 Rework 3 將 preview 停靠 indicator 是錯誤補償，且 checklist source 會在 innermost target 無效後誤命中 expanded parent card。RD rework 4 改為 preview 永遠跟 raw finger、exact innermost target ownership、invalid ancestor blocking、card primary bounded geometry，並移除 nearest-target 磁吸；桌機 dnd-kit UI、topbar、action rail 與 placed-row no-drag 契約維持不變。
+- ! DEV-054 [交付點] [阻塞] [P1] [RD Rework 5 Automated QA-QC Passed / Awaiting Physical Devices] 手機任務拖拉定位精準度優化
+  - 摘要：Rework 5 修正長按計時器成立前瀏覽器已啟動文字圈選／iOS callout，以及真實 TouchEvent 被 `innerWidth <= 768` gate 誤導回桌機路徑的根因；L1、L2、L3+ 與 Workbench 未歸位任務表面現在從 touchstart 宣告 selection ownership，實際 touch 不再依 viewport 寬度分流。Workbench 保留 native pan，已歸位列仍不可拖；桌機 dnd-kit、click/right-click 與 approved overlay 契約維持。
   - 來源 ID：`USER-20260717-mobile-task-drag-precision`
   - 父任務：DEV-053、DEV-029、DEV-046
-  - 下一步：QA/QC 依 `QA-DEV-054` 補齊 B01-B12 正式 trace matrix 與 iOS / Android 各 50 次真機操作；兩台實機 gate 均通過後才可關閉 DEV-054。
-  - 阻塞 / 恢復條件：不得改變桌機 approved baseline、不得恢復 DEV-051/052、不得讓 Workbench placed row 可拖；任一實機缺席或 wrong commit > 0 不得完成。
-  - 證據：四次使用者失敗均保留；R10 修正前以 `636x764` 重現 preview 跳離手指與 parent-card fall-through，修正後 DEV-054 static 34/34、browser R01-R10 與指定回歸通過。使用者已於 2026-07-17 以原路徑確認「成功、效果非常好、跨階層移動非常清楚」。仍缺 physical trial sheet、錄影與 QC report，故目前不得標記完成。
+  - 下一步：Automated QA-QC 已通過，實機驗證工作簿亦已備妥；連接 iPhone Safari 與 Android Chrome 後依工作簿各執行主要 50 次與 P06-P12 補充情境，兩台實機 gate 均通過後才可關閉 DEV-054。
+  - 阻塞 / 恢復條件：2026-08-14 連續三輪完成稽核均未偵測到可操作的 iPhone/iPad/Android 裝置；需提供 iPhone Safari 與 Android Chrome 實機，或回傳填妥且附錄影的驗證工作簿後恢復。不得改變桌機 approved baseline、恢復 DEV-051/052 或讓 Workbench placed row 可拖；任一實機缺席或 wrong commit > 0 不得完成。
+  - 證據：`SPEC-054`、`QA-DEV-054`、`QC-DEV-054`；2026-08-14 DEV-054 static 44/44、browser R01-R15 15/15、DEV-029 browser 41 cases、DEV-039/046 browser、DEV-053 10/10、DEV-055 16/16、DEV-067 8/8、全部指定 static regression、TypeScript、targeted ESLint（0 error）與 `build:test` 通過。R12-R15 直接證明 L1/L2/L3+ 零圈選、500ms/8px 邊界、寬觸控 viewport 與 Workbench pan/no-drag 契約。實機驗證工作簿已完成公式雙向模擬與六分頁 visual QA；本機未偵測到可操作的 iOS/Android 實體裝置，故仍不得標記完整完成。
   - 計入交付：是
 - ✓ DEV-055 [交付點] [完成] [P1] [正式環境已交付 / Level 4 通過] 電腦版任務拖拉落點清晰化與跨階層定位升級
   - 摘要：第一次自動化通過後，使用者 T01-T08 真實桌機操作回報「同一格定位線會飄」與「L3+ 任務被定位線推開」。RD Rework 1 在保留現有桌機 DragOverlay、8px 起手門檻與滑鼠跟手感的前提下，改為 fixed overlay-only indicator、overlay checklist append hit area、card/checklist sortable displacement freeze、同 target rect micro-retain；Workbench placed row 維持不能拖。2026-07-17 使用者重跑 T01-T08 後回報測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做；同日 Firebase Hosting production release 與 Level 4 smoke 通過。
@@ -327,6 +327,181 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得改變 click、right-click、8px threshold、drag commit／undo、cycle guard、手機 long-press、資料或 schema；本輪沒有部署授權。
   - 證據：`SPEC-065`、`QA-DEV-065`；Rework 13 依使用者示意將 L2 source marker 放回卡片 root，整張卡片使用 `primary-500` outer source frame，標題列不另加框，子任務區維持 `primary-400` 完整 group frame；Rework 10 新增 L1 卡片內容區完整 `primary-400` overlay；Rework 9 的雙層範圍語意、Rework 7 native tooltip、Rework 6 text/cursor、Rework 5 框線強度與 L3+ 完整 inset group frame 均保留。DEV-065 static 27/27、browser QA-065-001～013 13/13、DEV-028 45/45、DEV-046 31/31、DEV-055 static 27/27、TypeScript、ESLint、test build 與新截圖通過。
   - 計入交付：是
+- ● DEV-066 [交付點] [已完成] [P1] [QC PASS / 未 Release] 任務備註語意富文字與 AI 可讀內容
+  - 摘要：桌機／筆電讓每個任務備註欄以按需開啟的浮動工具編輯語意格式；手機不載入富文字編輯器，改為格式化唯讀與純文字追加；AI 取得去重且保留結構的安全文字投影。
+  - 來源 ID：`USER-20260812-TASK-NOTE-RICH-TEXT-AI-READABLE`
+  - 父任務：DEV-006、DEV-008、DEV-057
+  - 下一步：功能已完成；若要交付正式環境，另走 release gate。既有 nanoid advisory 與 DEV-047 MOD-047-013 finding 另立維護 DEV，不混入本交付。
+  - 阻塞 / 恢復條件：本輪無交付阻塞；未授權 migration、production 資料操作、部署或 release。
+  - 證據：2026-08-12 `/grilling` 決策 `1A／2A／3A`；`SPEC-066`、`ADR-042`、`QA-DEV-066`、`QC-DEV-066`；targeted lint、TypeScript、test build、RAG smoke、DEV-006／008／033／050 regression 與 1440／1024／390 rendered QC 通過。Rework 1 將 `本文／小標題` 改為完整中文標籤；Rework 2 恢復 B／I／U 與 Aa 刪除線圖示；Rework 3 將工具列移到 header 的 A 左側並改為 toggle-only 常駐。1024 toolbar 無裁切或水平 overflow。
+  - 計入交付：是
+- ● DEV-067 [交付點] [已完成] [P1] [QC PASS / 未 Release] 看板任務拖曳升級為 L1 列表
+  - 摘要：讓 L2／L3+ 任務可拖到列表標頭升級為 L1，並以既有單一定位條顯示插入位置；列表內容區仍維持 L2 drop，尾端新增 L1 append target。
+  - 來源 ID：`USER-20260814-KANBAN-L1-DRAG-PROMOTION`
+  - 父任務：DEV-053、DEV-054、DEV-055、DEV-058
+  - 下一步：功能已完成；若要交付正式環境，另走 release gate。
+  - 阻塞 / 恢復條件：不得恢復 DEV-051／052、不得改 Workbench placed-row no-drag、來源 no-op、單一 marker、raw finger、click/right-click 或 schema；任何 indicator／commit 不一致即停止。
+  - 證據：`SPEC-067`、`QA-DEV-067`、`QC-DEV-067`；DEV-067 static 13/13、browser 8/8、DEV-055 desktop 16/16、DEV-054 mobile 11/11、DEV-053／054／055／058 static regression、TypeScript、targeted ESLint、test build 與 1440／1024／390 rendered QC 通過。
+  - 計入交付：是
+
+## DEV-066：任務備註語意富文字與 AI 可讀內容
+
+- 狀態：Completed / QC PASS / Human Confirmed / 未 Release
+- 節點類型：交付點
+- 父交付點：DEV-006、DEV-008、DEV-057
+- 是否計入產品交付完成：是
+- 原始需求邊界：`USER-20260812-TASK-NOTE-RICH-TEXT-AI-READABLE`
+- 風險等級：Medium（跨桌機／手機 UI、內容相容與 AI indexing）
+
+### 問題與使用者價值
+
+目前任務詳情的備註內容是純文字 `textarea`。使用者需要在桌機以 Gmail／Word／Excel 熟悉的方式表達標題、重點、清單與連結，但格式功能不常用，不應常態占用版位；同一份內容還必須讓 AI 穩定讀取與索引。手機的主要任務是閱讀與快速補記，不應載入或顯示富文字編輯器。
+
+完成後，使用者可以在需要時才叫出格式工具，平時仍保有目前緊湊的備註畫面；桌機格式、手機補記與 AI 讀取走明確的資料方向，不因跨裝置操作而靜默遺失格式或重複餵給 AI。
+
+### Human Decision Brief
+
+- `1A`：手機不提供富文字編輯器。既有內容以安全的格式化唯讀方式呈現，另提供純文字追加欄；追加不得覆寫或降級原有桌機格式。
+- `2A`：桌機第一版只提供語意格式：本文／小標題、粗體、斜體、底線、刪除線、項目清單、編號清單、連結與清除格式。
+- `3A`：每一個備註欄使用相同行為，各自具有按需叫出的格式按鈕與工具，不限定第一個預設備註。
+- 已拒絕：手機完整純文字覆寫、手機完全不可補記、Word-like 字型／字級／顏色／對齊／表格／圖片，以及只讓第一個備註支援格式。
+
+### 主要流程
+
+#### 桌機／筆電
+
+1. 每個備註標題右側顯示低干擾的「文字格式」按鈕，與該備註的新增／刪除動作相鄰但語意分離。
+2. 工具列預設關閉且不占版位；點擊按鈕後顯示在同一 header row、格式按鈕左側，不推擠內容欄或改變 modal 高度。
+3. 工具列開啟後保持顯示；點進內容、持續輸入、點外部或按 `Escape` 均不收起，只有再次按同一個格式按鈕才關閉。
+4. 工具列操作需保留原本文字 selection；儲存、關閉前寫入、undo／redo、中文 IME、複製貼上與多備註行為不得退步。
+
+#### 手機
+
+1. 不顯示格式按鈕，不掛載富文字編輯器或浮動工具列。
+2. 既有備註以安全 renderer 顯示其語意格式，使用者不能在手機直接覆寫格式化本文。
+3. 每個備註提供簡單純文字追加欄；成功追加後成為該備註的新段落，不改寫既有格式節點。
+4. 追加失敗時保留尚未提交的文字並提供可發現的重試方式，不得清空輸入。
+
+### 初步範圍
+
+- 任務詳情中的所有 `TaskDetailNote` 內容欄。
+- 桌機／筆電按需開啟、header-inline 且 toggle-only 關閉的單列語意格式工具列，以及可見 focus／pressed 狀態與 tooltip。
+- 本文／小標題、粗體、斜體、底線、刪除線、項目清單、編號清單、連結、清除格式。
+- Gmail／Word 貼上時只保留允許的語意格式；一般 `Ctrl+C/V`、純文字貼上、中文 IME、undo／redo 與 editor focus 內快捷鍵需一致。
+- 手機格式化唯讀 renderer 與每個備註的純文字追加流程。
+- 舊純文字備註向下相容，以及桌機保存／重開後格式 round-trip。
+- AI indexing 使用由受控內容模型產生的 Markdown 或等效語意文字投影，不把 raw HTML 直接送入 AI。
+- AI 文件需以備註為單位保留 `taskId`、`noteId`、`noteTitle` 與可用的更新資訊，並避免第一個備註由 `description` 與 `detailNotes` 重複索引。
+
+### 初步範圍外
+
+- 手機富文字工具列、手機直接覆寫格式化本文。
+- 字型、任意字級、文字／背景顏色、對齊、表格、圖片、附件、嵌入內容與程式碼區塊。
+- Excel 儲存格轉原生表格；第一版只保證可安全貼成純文字或允許的基本段落。
+- 多人即時協作、留言／修訂模式、版本歷史與 Word 等級版面能力。
+- 修改會議紀錄 `RecordContentEditor` 的既有產品行為；若 RD 後續抽共用 editor core，必須維持 DEV-006 回歸契約。
+- 本 Brief 階段的 schema migration、production 操作、部署與 release artifact。
+
+### 驗收方向
+
+- 桌機每個備註欄都有自己的格式按鈕；工具列關閉時不占垂直版位，開啟後顯示在按鈕左側並持續存在，編輯內容不自動收起，開啟／關閉不造成 modal layout shift、裁切或非預期捲動。
+- 桌機語意格式、連結、清單、selection、中文 IME、貼上、undo／redo、明確儲存與 X 關閉前寫入，在保存並重開後結果一致。
+- 桌機 editor focus 內的 `Ctrl+B/I/U/K/Z/Y` 等熟悉快捷鍵作用於目前備註且不洩漏到外層任務快捷鍵；是否納入 `Ctrl+S` 於 RD Contract 階段依既有儲存契約決定。
+- 1440px 與 1024px viewport 可完整操作 header-inline toolbar；390px mobile 不出現格式按鈕、Lexical contenteditable 或水平 overflow。
+- 手機能閱讀桌機建立的格式化內容並以純文字追加；追加前後原有格式與文字不變，離線／失敗時輸入不遺失。
+- 舊的純文字備註不需人工轉檔即可閱讀、編輯與被 AI 搜尋；任何 lazy upgrade 必須可回復且不得產生空內容。
+- AI 輸入能保留標題、段落、清單、強調、連結與備註 metadata，不包含未清理 HTML／script，且相同第一備註不重複出現在同一份 RAG document。
+- 真實 rendered surface 的 desktop／laptop／mobile QC 必須包含主要互動、可見錯誤掃描、長內容、長連結、空內容、多備註與 readonly／disabled 狀態。
+
+### 限制、風險與待 RD 決定事項
+
+- 現有 `recordLexicalContent` serializer 只保存純文字與 task mention token；不能直接加格式工具後沿用原 serializer，否則格式會在儲存時消失。
+- RD Contract 階段需決定單一 canonical rich state、純文字 fallback、AI 語意投影與 schema/version 邊界；投影是衍生資料，不得形成可各自編輯而漂移的三份正文。
+- 手機追加需有明確的 merge contract，保證只新增段落並處理同時更新；不得以手機純文字覆蓋整份 desktop rich state。
+- Gmail／Word HTML 貼上需 allowlist、URL protocol 檢查與清理；未知 node 或轉換失敗時降級為純文字，不得中斷輸入或保存不安全內容。
+- 既有 `description = 第一個備註` 相容別名與 RAG adapter 同時輸出 description／detailNotes 的重複風險，需在實作契約中指定唯一 AI owner 與 legacy fallback。
+
+### Architecture Memory Capsule
+
+- 延續既有 Lexical 能力與經驗，不在同一產品中引入第二套 editor engine；是否抽成共用 core 於 RD Contract 階段依回歸成本決定。
+- 富文字原稿與 AI 輸入分層：原稿負責無損重開，AI 只讀安全且去重的語意投影；raw HTML 不作 canonical source，也不直接送入 AI。
+- 手機永遠不掛載富文字 editor；若未來要求手機直接修改格式化本文，視為產品方向改變並重新進入 Human Decision／RD Contract。
+
+### RD Implementation Contract
+
+- Canonical：`TaskDetailNote.richContent` 儲存帶 `task-note.lexical-v1` 版本的 Lexical JSON；`content` 為由 canonical state 衍生的純文字相容別名，`description` 繼續只鏡像第一則備註純文字。投影不可反向覆寫 rich state。
+- Legacy：沒有 `richContent` 的舊備註以 `content` 開啟，只在首次實際編輯或手機追加時 lazy upgrade；無 migration，現有 Supabase `detail_notes` JSONB 繼續完整儲存可選欄位。
+- Desktop：只在 `min-width: 768px` 掛載 Lexical；每則備註各有一個格式按鈕與 header-inline toolbar，工具列絕對定位於按鈕左側且不改變 card/modal 幾何。開啟狀態只由該按鈕切換，editor focus、內容輸入、outside click 與 Escape 不關閉。格式限於 2A allowlist，`Ctrl+S` 阻止瀏覽器另存並呼叫任務明確儲存。
+- Mobile：低於 768px 不 render 格式按鈕、LexicalComposer 或 `contenteditable`；安全 renderer 僅處理 allowlist node，追加只在 root 尾端新增純文字 paragraph，失敗前不清空 draft。
+- Clipboard/security：不儲存 raw HTML；未知 node 轉成其文字 children，連結只允許 `http:`、`https:`、`mailto:`、`tel:`，其餘以純文字顯示。
+- AI：`wbsRagAdapter` 由 rich state 生成受控 Markdown 投影並加入 note id/title metadata；有 `detailNotes` 時不再另輸出 `description`，無 detail notes 時才使用 legacy description fallback。
+- Repo impact：`src/types/index.ts`、`src/utils/taskNoteRichContent.ts`、`src/components/TaskNotes/*`、`src/components/TaskDetailsModal.tsx`、`src/services/rag/wbsRagAdapter.ts`、Lexical 直接相依、DEV-066 verifier 與現有備註 browser verifier 相容更新。
+
+### 執行邊界與下一步
+
+- 本輪執行邊界：已授權完成 DEV-066 的 RD、最小 QA 與 targeted QC；不含 migration、production 資料操作、部署與 release。
+- Quality gate：必須通過 TypeScript、targeted static/unit verifier、現有受影響備註回歸，並在 1440／1024／390 viewport 完成真實 rendered QC 與可見錯誤掃描。
+- Stop condition：如需改動 Supabase schema、會議紀錄 editor 行為、手機全文覆寫或格式 allowlist，停止並重回 Human Decision；本輪不自動 release。
+
+### Completion Evidence
+
+- RD：完成版本化 Lexical JSON canonical、desktop on-demand semantic editor、mobile safe renderer＋append-only merge、plain compatibility alias 與 AI safe Markdown projection。
+- QA：targeted contract suite、TypeScript、ESLint、P9 RAG local smoke、test build、DEV-006／008 static 與 DEV-033／050 browser regressions 通過。
+- QC：1440 desktop、1024 laptop、390 mobile 共 13 cases PASS；popover geometry 穩定，手機為 0 editor／0 format toggle／0 contenteditable，append 前段 rich nodes byte-for-byte 不變，console/page error 與 visible alert 皆為 0。
+- Rework 1：將不直覺的 `¶`、`H3`、刪除線等格式 glyph 改為完整中文標籤；targeted lint、TypeScript、static verifier 與 1440／1024／390 browser suite 再驗 PASS，沒有規格契約漂移。
+- Rework 2：依使用者標註恢復粗體／斜體／底線的 B／I／U 圖示，刪除線改用不含 S 的 Aa 加水平線圖示；三種 viewport browser suite 再驗 PASS，沒有規格契約漂移。
+- Rework 3：依使用者圖片將工具列移到 header 的 A 按鈕左側；輸入、outside click 與 Escape 不收起，只有再次點 A 關閉。SPEC／QA 已按明示需求作 `Intentional replacement`，targeted lint、TypeScript、static verifier 與 1440／1024／390 browser suite PASS。
+- 證據文件：SPEC-066、ADR-042、QA-DEV-066、QC-DEV-066；screenshots 位於 output/playwright/dev-066-task-note-*.png。
+- Release：未執行；Supabase schema/migration、production 資料與部署均未變更。
+
+### Spec Governance 結論
+
+- SPEC-006：`Intentional successor`；保留其「DEV-006 不含富文字工具列與 editor JSON」歷史完成邊界，DEV-066 另行承接新能力。
+- SPEC-008／DEV-057：`Compatible extension`；任務知識仍由任務詳情查找，儲存與 X 關閉前寫入不可退步。
+- ADR：建立 `ADR-042`，記憶 canonical Lexical JSON／plain compatibility alias／safe AI projection 的跨模組單向資料契約。
+- Spec／QA 文件：建立 `SPEC-066` 與 `QA-DEV-066`，作為本輪 RD／QA／QC 交接契約。
+- 剩餘產品決策：無。格式 allowlist、desktop/mobile 邊界與每備註一致性已由 `1A／2A／3A` 確認。
+
+## DEV-067：看板任務拖曳升級為 L1 列表
+
+- 狀態：Completed / QC PASS / Local Only / 未 Release
+- 節點類型：交付點
+- 父交付點：DEV-053、DEV-054、DEV-055、DEV-058
+- 是否計入產品交付完成：是
+- 原始需求邊界：`USER-20260814-KANBAN-L1-DRAG-PROMOTION`
+- 風險等級：Medium（核心拖曳 parent/order/nodeType 與跨裝置落點）
+
+### 問題與使用者價值
+
+目前任務只能拖進既有列表成為 L2，無法在看板內直接升成 L1。完成後，使用者拖到列表標頭即可升階並看到與其他階層一致的定位條；拖到列表內容仍表示放進列表，無需新增選單或額外按鈕。
+
+### RD Implementation Contract
+
+- `column-header` 對所有 task source 都代表與 target 同階定位；非 L1 來源升階時轉為 `parentId: null`、`nodeType: group`。
+- 看板尾端新增 `root-drop` append surface，包住既有新增列表 CTA；一般 tap／pan 不變，drag release 不得新增額外列表。
+- 桌機與手機 preview／commit 共用 `resolveTaskDropIntent()`；單一 marker、origin zero-write、cycle guard、stale preview no-op 與 undo 維持。
+- 列表內容 `column-drop` 仍只把來源放成該列表 L2，不得被 root semantics 汙染。
+- 本輪只改本機產品程式、targeted verifier 與必要文件；不含 migration、production、release 或遠端資料。
+
+### QA / QC Gate
+
+- Resolver、desktop L1 header、desktop root append、column body regression、mobile L1 header／root append、invalid/origin no-op、subtree preserve、三 viewport geometry 與 visible-error sweep。
+- 必須通過 DEV-067 targeted static/browser、DEV-054／055 targeted regression、TypeScript、targeted ESLint 與 test build。
+- UI 需有 1440／1024／390 真實 rendered interaction 或等效 DOM／screenshot 證據；未具備時只能判定未充分驗證。
+
+### Spec Governance 結論
+
+- 對 DEV-054／055 舊 `column-header` 非 L1 語意為 `Intentional replacement`；使用者本輪明示需求足以授權。
+- 對 DEV-053／058 其餘 canonical resolver、commit safety 與 marker 基線為 `Compatible exception`／`No conflict`。
+- ADR 不需要：變更局部、可逆、無 schema／外部 API／權限或跨模組治理基準。
+- Authoritative source：`SPEC-067`；QA source：`QA-DEV-067`。
+
+### Completion Evidence
+
+- Targeted resolver／source contract 13/13、DEV-067 browser 8/8、DEV-055 desktop regression 16/16、DEV-054 mobile regression 11/11 PASS。
+- DEV-053／054／055／058 static regression 30/30、37/37、27/27、26/26 PASS。
+- TypeScript、targeted ESLint（0 error；2 個既存 warning）、`build:test` 與 1440x900／1024x768／390x844 rendered QC PASS。
+- QC authoritative evidence：`ai-doc/qc/QC-DEV-067-kanban-l1-drag-promotion.md`；Physical iOS／Android 手感列 supplemental。
 
 
 ## PM Update 歷史歸檔

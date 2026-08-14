@@ -229,6 +229,22 @@
   user-select: none;
 }
 
+/*
+ * Task long-press arbitration starts before the 500ms timer fires. Native text
+ * selection and the iOS callout must therefore be disabled on every eligible
+ * task surface from touchstart, including Workbench rows that keep native pan.
+ */
+[data-task-touch-gesture-surface="true"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+[data-task-touch-gesture-surface="true"] :is(input, textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* 拖動中的視覺效果 */
 .kanban-scroll-touch {
   touch-action: pan-x pan-y;

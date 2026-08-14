@@ -172,6 +172,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-desktop-task-hover-preview={!isColumnPlaceholder && !isSelectingMode ? 'true' : undefined}
         data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
         data-touch-tap-guard="true"
+        data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
         data-kanban-column-header="true"
         data-kanban-header-visual="tonal-borderless"
         className={`group mobile-pan-item flex flex-col gap-1 bg-slate-50 px-[10px] py-[8px] transition-colors hover:bg-white ${

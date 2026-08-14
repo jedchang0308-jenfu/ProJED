@@ -109,8 +109,9 @@ assert(
   source.spec.includes('SPEC-035') &&
     source.qa.includes('QA-DEV-035') &&
     source.qc.includes('QC-DEV-035') &&
-    source.devTask.includes('### DEV-035: 工作區刪除持久化修正') &&
-    source.devTask.includes('QA 驗證計畫') &&
+    source.devTask.includes('✓ DEV-035 [交付點] [完成]') &&
+    source.devTask.includes('SPEC-035') &&
+    source.devTask.includes('QA/QC-DEV-035') &&
     source.documentationMap.includes('SPEC-035-workspace-delete-persistence-fix.md') &&
     source.documentationMap.includes('QA-DEV-035-workspace-delete-persistence-fix.md') &&
     source.documentationMap.includes('QC-DEV-035-workspace-delete-persistence-fix.md'),

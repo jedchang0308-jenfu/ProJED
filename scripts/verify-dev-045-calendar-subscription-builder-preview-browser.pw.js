@@ -70,9 +70,9 @@ async (page) => {
     assert(initialTaskCount > 0 && initialTaskCount <= initialEventCount, 'event projection should expose task-to-event counts', { initialTaskCount, initialEventCount });
     const text = await builder().innerText();
     assert(!text.includes('全域條件') && !text.includes('沿用') && !text.includes('override'), 'legacy inheritance UI must be absent', { text });
-    assert(text.includes('訂閱事件預覽') && text.includes('行事曆事件') && text.includes('任何持有此連結的人都能讀取'), 'event preview summary and link warning should be visible');
+    assert(text.includes('行事曆事件') && !text.includes('訂閱事件預覽') && !text.includes('任何持有此連結的人都能讀取'), 'event preview should keep only the event total');
     const eventSummary = await builder().locator('[data-calendar-subscription-event-summary="true"]').innerText();
-    assert(eventSummary.includes('張看板') && eventSummary.includes('項任務') && eventSummary.includes('開始') && eventSummary.includes('到期'), 'summary should explain scope and event projection', { eventSummary });
+    assert(eventSummary.includes('行事曆事件') && !eventSummary.includes('張看板') && !eventSummary.includes('項任務') && !eventSummary.includes('開始') && !eventSummary.includes('到期'), 'summary should keep only the event total', { eventSummary });
     const previewEvents = builder().locator('[data-calendar-subscription-preview-event="true"]');
     assert(await previewEvents.count() > 0, 'event preview should render event rows');
     const defaultEventTypes = await previewEvents.evaluateAll(events => events.map(event => event.getAttribute('data-preview-event-date-type')));

@@ -1,5 +1,42 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-14（手機長按文字圈選修復）
+
+Spec Impact：對 DEV-054 為 `Compatible hardening`；不改 raw-finger、canonical target、action rail、桌機 approved overlay 或 Workbench placed-row no-drag。可長按任務表面從 touchstart 抑制 native selection/callout，實際 TouchEvent 不再依 viewport 寬度判定輸入模式；Workbench 未歸位列仍保留 native pan。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md` | Rework 5 Implemented / Automated QA-QC Passed / Physical Pending | DEV-054 | 新增原生 selection/callout ownership、width-independent touch session 與 Workbench pan boundary。 |
+| `ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | Automated QA 15/15 + regressions PASS / Physical Pending | DEV-054 | R12-R15 與擴充回歸涵蓋 L1/L2/L3+、gesture threshold、wide touch、Workbench。 |
+| `ai-doc/qc/QC-DEV-054-mobile-task-drag-precision.md` | Automated QA-QC PASS / Overall 未充分驗證 | DEV-054 | 記錄 44/44 static、15/15 browser、完整相鄰回歸、zero-tolerance 與 physical gate 邊界。 |
+| `ai-doc/dev_task.md` | DEV-054 Blocked / Awaiting Physical Devices | DEV-054 | RD 與 automated QA-QC 完成；連續三輪未偵測到實機，iOS/Android 各 50 trials 前不標記 Complete。 |
+
+## Documentation Map Update - 2026-08-14（看板任務拖曳升級為 L1 列表）
+
+Spec Impact：對 DEV-054／055 的舊 `column-header` 非 L1 落點語意為 `Intentional replacement`；對 DEV-053 canonical resolver、DEV-058 單一定位條與來源 no-op 為 `Compatible exception`／`No conflict`。L2／L3+ 拖到列表標頭會升級為 L1，拖到列表內容區仍是 L2；看板尾端另提供 L1 append target。DEV-051／052、Workbench placed row、schema、production 與 release 不在本輪。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-067-kanban-l1-drag-promotion.md` | Implemented / QC PASS | DEV-067 | L1 header、root append、nodeType group、single marker、desktop/mobile canonical resolver 與不可變更邊界。 |
+| `ai-doc/qa/QA-DEV-067-kanban-l1-drag-promotion.md` | Executed / PASS | DEV-067 | Resolver、桌機／手機 L1 promotion、L2 regression、zero-write、subtree、三 viewport 與 visible-error gate 已通過。 |
+| `ai-doc/qc/QC-DEV-067-kanban-l1-drag-promotion.md` | QC PASS / 未 Release | DEV-067 | DEV-067 13/13 static、8/8 browser、DEV-055 16/16、DEV-054 11/11、TypeScript、ESLint、build 與 rendered evidence。 |
+| `ai-doc/dev_task.md` | DEV-067 Completed / QC PASS / 未 Release | DEV-067 | 本機 RD／QA／QC 完成；正式環境須另走 release gate。 |
+
+## Documentation Map Update - 2026-08-12（任務備註語意富文字與 AI 可讀內容）
+
+Spec Impact：`DEV-066` 已完成 RD、QA 與 QC，狀態為 `Completed / QC PASS / 未 Release`。它是 DEV-006 Gmail-like editor 能力在「任務詳情備註」上的 `Intentional successor`，不回寫或重開已完成的 DEV-006。`SPEC-066`、`ADR-042`、`QA-DEV-066` 與 `QC-DEV-066` 已固定並驗證 canonical rich state、plain compatibility alias、desktop on-demand header-inline persistent toolbar、mobile zero-editor＋append-only merge、AI safe projection 與 1440／1024／390 gate；沒有 schema migration、production 資料操作、部署或 release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-066 Completed / QC PASS / 未 Release | DEV-066 | 1A／2A／3A、implementation contract、completion evidence 與 release boundary 已收斂。 |
+| `ai-doc/specs/SPEC-066-task-note-semantic-rich-text.md` | Implemented / verified | DEV-066 | desktop on-demand editor、mobile zero-editor renderer＋append、legacy/schema 與 AI projection 契約均已落實。 |
+| `ai-doc/decisions/ADR-042-task-note-canonical-rich-content.md` | Accepted | DEV-066 | 採版本化 Lexical JSON canonical；plain text、description 與 AI Markdown 皆為單向相容／讀取投影。 |
+| `ai-doc/qa/QA-DEV-066-task-note-semantic-rich-text.md` | Executed / PASS | DEV-066 | QA-066-001～013 已通過 targeted automation 與 1440／1024／390 rendered QC。 |
+| `ai-doc/qc/QC-DEV-066-task-note-semantic-rich-text.md` | PASS | DEV-066 | 收錄 geometry、semantic toolbar、mobile append preservation、AI/RAG、error sweep、screenshots 與既有非阻塞 findings。 |
+| `src/components/TaskDetailsModal.tsx`、`src/components/TaskNotes/*`、`src/types/index.ts` | Implemented / verified | DEV-066 / DEV-057 | desktop Lexical 與 mobile readonly＋append 已完成，既有儲存／X 關閉前寫入回歸通過。 |
+| `src/components/Records/RecordContentEditor.tsx`、`src/utils/recordLexicalContent.ts` | Existing Lexical capability reference / no behavior change | DEV-066 / DEV-006 | 只重用 engine 經驗；不改會議紀錄 editor 或其 serializer。 |
+| `src/services/rag/wbsRagAdapter.ts` | Implemented / verified | DEV-066 / DEV-008 | 由 rich state 產生安全 Markdown 與 note metadata，已驗證 description/detailNotes 去重與 legacy fallback。 |
+
 ## Documentation Map Update - 2026-08-10（未歸位任務帳號同步）
 
 Spec Impact：使用者已授權執行未歸位任務跨裝置一致化。Supabase backend 現改採 `task_workbench_unplaced_items` 以 `owner_id` 隔離，首次載入以 `updatedAt` 合併 legacy localStorage 並在成功後清除 staging；Firebase / local-test 維持本機 fallback。Migration、RLS readback、正式部署與 production smoke 仍是 release gate，尚未宣稱完成。

@@ -10,7 +10,7 @@ const checks = [
       'meetingActivities: MeetingTaskActivity[]',
       'recordMeetingTaskActivity',
       'createMeetingActivity(activity)',
-      'createMeetingSynthesisInput(preservedDraft, meetingActivities, nodes)',
+      'createMeetingSynthesisInput(synthesisSourceDraft, meetingActivities, nodes)',
       'meetingSynthesisStatus',
     ],
     forbiddenSnippets: [

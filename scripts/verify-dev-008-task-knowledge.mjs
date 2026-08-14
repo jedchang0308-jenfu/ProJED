@@ -141,7 +141,7 @@ assert('numbered tree child snippet excludes sibling detail', !numberedChildSnip
 
 const timelineSource = readFileSync('src/components/Records/TaskRecordTimeline.tsx', 'utf8');
 const requiredTimelineSnippets = [
-  '任務知識',
+  '歷史資訊',
   'extractTaskRecordSnippets(record.content, nodeId)',
   '搜尋此任務的會議細節、變更或備註',
   '片段',

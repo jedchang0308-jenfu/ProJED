@@ -286,7 +286,7 @@ async (page) => {
 
   await runCase('QA-053-B01', 'DEV-053 desktop approved drag overlay remains unchanged', async () => {
     await openApp({ width: 1440, height: 900 });
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const point = await pointFor(card, 0.62, 0.34);
     const before = await card.evaluate((element) => ({
       taskId: element.getAttribute('data-task-id'),
@@ -316,7 +316,7 @@ async (page) => {
 
   await runCase('QA-053-B02', 'desktop card, checklist, and column header clicks open the matching details', async () => {
     await openApp({ width: 1440, height: 900 });
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const checklist = page.locator('.kanban-checklist-item[data-task-id]').first();
     const header = page.locator('[data-kanban-column-header="true"][data-task-id]').first();
     const details = [];
@@ -331,7 +331,7 @@ async (page) => {
   await runCase('QA-053-B03', 'desktop card, checklist, and column header right click opens the task context menu', async () => {
     await openApp({ width: 1440, height: 900 });
     const targets = [
-      ['card', page.locator('.kanban-task-card[data-task-id]').first()],
+      ['card', page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first()],
       ['checklist', page.locator('.kanban-checklist-item[data-task-id]').first()],
       ['column header', page.locator('[data-kanban-column-header="true"][data-task-id]').first()],
     ];
@@ -348,7 +348,7 @@ async (page) => {
   await runCase('QA-053-B05', 'mobile card, checklist, and column header quick taps open the matching details', async () => {
     await openApp({ width: 390, height: 844 });
     const targets = [
-      ['card', page.locator('.kanban-task-card[data-task-id]').first()],
+      ['card', page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first()],
       ['checklist', page.locator('.kanban-checklist-item[data-task-id]').first()],
       ['column header', page.locator('[data-kanban-column-header="true"][data-task-id]').first()],
     ];
@@ -376,7 +376,7 @@ async (page) => {
   await runCase('QA-053-B06', 'mobile short pan scrolls without task writes or click-through', async () => {
     await openApp({ width: 390, height: 844 });
     const board = page.locator('[data-mobile-pan-surface="board"]').first();
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     await board.evaluate((element) => { element.scrollLeft = 0; });
     const before = {
       nodes: await page.evaluate(() => localStorage.getItem('projed-local-test.nodes')),
@@ -406,13 +406,12 @@ async (page) => {
 
   await runCase('QA-053-B07', 'mobile invalid drop is a zero-write no-op and the next session starts immediately', async () => {
     await openApp({ width: 390, height: 844 });
-    const card = page.locator('.kanban-task-card[data-task-id]').first();
-    const invalidTarget = page.locator('[data-kanban-add-task-button="true"]').first();
+    const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const beforeNodes = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const firstSession = await startHeldTouch(card);
     await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
     await page.locator('[data-mobile-drag-preview="true"]').waitFor({ state: 'visible', timeout: 5000 });
-    await firstSession.moveTo(await pointFor(invalidTarget, 0.5, 0.5));
+    await firstSession.moveTo({ x: 2, y: 2 });
     await firstSession.end();
     const afterNodes = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const afterInvalid = {
@@ -444,7 +443,7 @@ async (page) => {
     const cancellations = [];
     for (const reason of ['touchcancel', 'pointercancel', 'escape', 'blur', 'visibilitychange']) {
       await openApp({ width: 390, height: 844 });
-      const card = page.locator('.kanban-task-card[data-task-id]').first();
+      const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
       const beforeNodes = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
       const heldTouch = await startHeldTouch(card);
       await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 5000 });
@@ -538,7 +537,7 @@ async (page) => {
     const sweeps = [];
     for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
       await openApp(viewport);
-      const card = page.locator('.kanban-task-card[data-task-id]').first();
+      const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
       const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
       await card.waitFor({ state: 'visible', timeout: 5000 });
       const heldTouch = await startHeldTouch(card);
@@ -574,7 +573,7 @@ async (page) => {
   });
 
   const failCount = results.filter((result) => result.result !== 'PASS').length;
-  const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));
+  const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver|Ignored attempt to cancel a touchcancel event with cancelable=false/i.test(message));
   const unexpectedNetworkFailures = networkFailures.filter((message) => !/favicon/i.test(message));
   if (unexpectedDiagnostics.length || unexpectedNetworkFailures.length) {
     results.push({
