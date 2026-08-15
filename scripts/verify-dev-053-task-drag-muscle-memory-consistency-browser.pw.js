@@ -284,7 +284,7 @@ async (page) => {
   page.setDefaultTimeout(6000);
   page.setDefaultNavigationTimeout(20000);
 
-  await runCase('QA-053-B01', 'DEV-053 desktop approved drag overlay remains unchanged', async () => {
+  await runCase('QA-053-B01', 'desktop drag overlay preserves its appearance while DEV-068 anchors it above-right of the pointer', async () => {
     await openApp({ width: 1440, height: 900 });
     const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const point = await pointFor(card, 0.62, 0.34);
@@ -300,9 +300,16 @@ async (page) => {
     const overlayState = await overlay.evaluate((element) => ({
       className: element.className,
       text: (element.textContent || '').trim(),
-      rect: (() => { const rect = element.getBoundingClientRect(); return { width: rect.width, height: rect.height }; })(),
+      anchor: element.getAttribute('data-task-drag-overlay-anchor'),
+      gap: Number(element.getAttribute('data-task-drag-overlay-pointer-gap') || 0),
+      rect: (() => { const rect = element.getBoundingClientRect(); return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }; })(),
     }));
-    assert(overlayState.className.includes('translate-x-4') && overlayState.className.includes('translate-y-4'), 'desktop overlay offset should match approved baseline', overlayState);
+    const pointer = { x: point.x + 18, y: point.y + 5 };
+    assert(overlayState.anchor === 'pointer-upper-right'
+      && overlayState.gap === 16
+      && overlayState.rect.left >= pointer.x + overlayState.gap - 1
+      && overlayState.rect.bottom <= pointer.y - overlayState.gap + 1,
+    'desktop overlay must use the DEV-068 pointer-upper-right placement amendment', { overlayState, pointer });
     assert(overlayState.className.includes('rounded-lg') && overlayState.className.includes('shadow-lg'), 'desktop overlay visual treatment should match approved baseline', overlayState);
     assert(overlayState.rect.width >= 230 && overlayState.rect.width <= 250, 'desktop card overlay width should stay at the approved 240px baseline', overlayState);
     const screenshotPath = `${screenshotBase}-B01-desktop-approved-overlay.png`;
@@ -311,7 +318,7 @@ async (page) => {
     await page.mouse.up();
     await page.waitForTimeout(180);
     assert(await page.locator('[data-kanban-drag-overlay="true"]').count() === 0, 'desktop overlay should clear after cancel');
-    return { route: page.url(), viewport: { width: 1440, height: 900 }, before, overlayState, screenshotPath };
+    return { route: page.url(), viewport: { width: 1440, height: 900 }, before, pointer, overlayState, screenshotPath };
   });
 
   await runCase('QA-053-B02', 'desktop card, checklist, and column header clicks open the matching details', async () => {
@@ -538,14 +545,17 @@ async (page) => {
     for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
       await openApp(viewport);
       const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
-      const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
+      const target = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"]').nth(1);
       await card.waitFor({ state: 'visible', timeout: 5000 });
       const heldTouch = await startHeldTouch(card);
       const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
       const preview = page.locator('[data-mobile-drag-preview="true"]').first();
       await rail.waitFor({ state: 'visible', timeout: 5000 });
       await preview.waitFor({ state: 'visible', timeout: 5000 });
-      await heldTouch.moveTo(await pointFor(target, 0.5, 0.4));
+      // DEV-068 reserves the task-title center for the deliberate child intent.
+      // Keep this DEV-053 regression on the lower primary-card surface so it
+      // continues to verify the original same-level insertion indicator.
+      await heldTouch.moveTo(await pointFor(target, 0.08, 0.82));
       const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
       await indicator.waitFor({ state: 'visible', timeout: 5000 });
       const railRect = await rail.evaluate((element) => {

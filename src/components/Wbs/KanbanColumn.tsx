@@ -98,9 +98,13 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     },
   });
 
+  // Keep title-center geometry stationary while an L1 source is dragged.
+  // dnd-kit can still resolve and commit horizontal reordering on release, but
+  // sibling transforms must not move a prospective child target during dwell.
+  const freezeDesktopColumnLayout = activeType === 'wbs-column';
   const columnStyle = {
-    transform: CSS.Transform.toString(columnTransform),
-    transition: columnTransition,
+    transform: freezeDesktopColumnLayout ? undefined : CSS.Transform.toString(columnTransform),
+    transition: freezeDesktopColumnLayout ? undefined : columnTransition,
     minHeight: taskGesture.activeSurfaceHeight ?? undefined,
   };
   const isColumnPlaceholder = isColumnDragging || taskGesture.isActive;
@@ -150,6 +154,9 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       style={columnStyle}
       data-kanban-column="true"
       data-desktop-task-hover-scope="true"
+      data-task-child-drop-target="true"
+      data-task-child-drop-level="L1"
+      data-task-id={nodeId}
       data-task-hover-scope-kind="column"
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
@@ -210,8 +217,15 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           <h3
             className="task-title-text relative min-w-0 flex-1 text-sm font-semibold text-slate-800"
             aria-label={node.title || '未命名任務'}
+            data-task-title-slot="true"
+            data-task-id={nodeId}
           >
-            <span className="block truncate">{node.title || '未命名任務'}</span>
+            <span
+              className="inline-block max-w-full truncate align-top"
+              data-task-id={nodeId}
+            >
+              {node.title || '未命名任務'}
+            </span>
           </h3>
           {!isSelectingMode && (
             <TaskDateBadge

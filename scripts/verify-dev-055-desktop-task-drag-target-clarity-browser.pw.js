@@ -219,7 +219,7 @@ async (page) => {
     return { sourceId, point };
   };
 
-  const moveDragTo = async (target, ratio = { x: 0.55, y: 0.5 }) => {
+  const moveDragTo = async (target, ratio = { x: 0.995, y: 0.95 }) => {
     const targetPoint = await pointFor(target, ratio.x, ratio.y);
     await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 12 });
     await page.waitForTimeout(140);
@@ -365,7 +365,7 @@ async (page) => {
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
   });
 
-  await runCase('QA-055-B05', 'checklist cross-parent move is owned by the target card', async () => {
+  await runCase('QA-055-B05', 'checklist non-center cross-parent move keeps canonical same-level card ownership', async () => {
     await openApp();
     const sourceCard = cardsWithChildren().nth(0);
     const targetCard = cardsWithChildren().nth(1);
@@ -374,12 +374,13 @@ async (page) => {
       target: targetCard.locator(':scope > [data-task-surface-source="true"]'),
       screenshotSuffix: 'B05-checklist-cross-parent',
     });
-    assert(result.indicator.surfaceKind === 'checklist-drop' && result.indicator.position === 'append',
-      'checklist over a card primary must append to that card', result.indicator);
+    assert(result.indicator.surfaceKind === 'kanban-card'
+      && ['before', 'after'].includes(result.indicator.position),
+    'non-center checklist-to-card drop must keep same-level card ordering after DEV-068', result.indicator);
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
   });
 
-  await runCase('QA-055-B06', 'card append into an expanded checklist uses the explicit child lane', async () => {
+  await runCase('QA-055-B06', 'retired expanded-checklist child lane cannot silently append a child', async () => {
     await openApp();
     const targetCard = cardsWithChildren().nth(1);
     const result = await dragAndCommit({
@@ -389,8 +390,9 @@ async (page) => {
       targetRatio: { x: 0.005, y: 0.5 },
       screenshotSuffix: 'B06-card-checklist-append',
     });
-    assert(result.indicator.surfaceKind === 'checklist-drop' && result.indicator.position === 'append',
-      'explicit checklist lane must expose append intent', result.indicator);
+    assert(result.indicator.surfaceKind !== 'checklist-drop'
+      && result.indicator.targetNodeId !== result.sourceId,
+    'retired checklist lane must not expose the old invisible child append intent', result.indicator);
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
   });
 
@@ -674,7 +676,7 @@ async (page) => {
     await targetCard.scrollIntoViewIfNeeded();
     const beforeLayout = await readChecklistRowLayout(targetCard);
     const { sourceId } = await beginMouseDrag(source);
-    const targetPoint = await pointFor(targetRows.first(), 0.55, 0.35);
+    const targetPoint = await pointFor(targetRows.first(), 0.92, 0.5);
     const indicatorStates = [];
     await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 12 });
     await page.waitForTimeout(140);

@@ -24,6 +24,10 @@ import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
 import { TaskDateBadge } from './TaskDateBadge';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
+import {
+  TASK_CHILD_DROP_HIGHLIGHT_EVENT,
+  type TaskChildDropSuccessDetail,
+} from './taskDrag/taskChildDropFeedback';
 import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 
 interface KanbanChecklistProps {
@@ -135,6 +139,23 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     minHeight: taskGesture.activeSurfaceHeight ?? undefined,
   };
   const isDragPlaceholder = isDragging || taskGesture.isActive;
+  const [isRecentlyChildDropped, setIsRecentlyChildDropped] = React.useState(false);
+
+  React.useEffect(() => {
+    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleChildDropHighlight = (event: Event) => {
+      const detail = (event as CustomEvent<TaskChildDropSuccessDetail>).detail;
+      if (!detail || detail.sourceNodeId !== childId) return;
+      setIsRecentlyChildDropped(true);
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(() => setIsRecentlyChildDropped(false), 1400);
+    };
+    window.addEventListener(TASK_CHILD_DROP_HIGHLIGHT_EVENT, handleChildDropHighlight);
+    return () => {
+      window.removeEventListener(TASK_CHILD_DROP_HIGHLIGHT_EVENT, handleChildDropHighlight);
+      if (highlightTimer) clearTimeout(highlightTimer);
+    };
+  }, [childId]);
 
   const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode
     ? {}
@@ -149,6 +170,9 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       style={style}
       data-task-surface-scope="true"
       data-desktop-task-hover-scope="true"
+      data-task-child-drop-target="true"
+      data-task-child-drop-level="L3+"
+      data-task-id={child.id}
       data-task-hover-scope-kind="checklist"
       data-task-hover-scope-source-id={child.id}
       data-task-hover-has-descendants={hasGrandchildren ? 'true' : undefined}
@@ -214,6 +238,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
         data-kanban-checklist-row-visual="flat-unlined"
         data-task-hierarchy-level="L3+"
+        data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       >
         {isRecordCaptureMode ? (
           <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
@@ -224,8 +249,12 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         ) : null}
 
         <span
-          className={`task-title-text relative min-w-0 flex-1 pr-2 text-xs font-medium leading-tight transition-colors ${taskStatusTitleClass[status]}`}
+          className={`task-title-text relative min-w-0 flex-1 rounded-sm pr-2 text-xs font-medium leading-tight transition-[color,background-color,box-shadow] ${
+            isRecentlyChildDropped ? 'bg-primary/10 ring-2 ring-primary/40' : ''
+          } ${taskStatusTitleClass[status]}`}
           aria-label={child.title || '未命名任務'}
+          data-task-title-slot="true"
+          data-task-id={childId}
           onClick={(e) => {
             if (isRecordCaptureMode) {
               e.preventDefault();
@@ -234,7 +263,12 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             }
           }}
         >
-          <span className="block truncate">{child.title || '未命名任務'}</span>
+          <span
+            className="inline-block max-w-full truncate align-top"
+            data-task-id={childId}
+          >
+            {child.title || '未命名任務'}
+          </span>
         </span>
 
         {!isDragPlaceholder && showTags && nodeTags.length > 0 ? (

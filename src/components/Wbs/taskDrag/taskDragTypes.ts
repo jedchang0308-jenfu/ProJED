@@ -14,10 +14,12 @@ export type MobileTaskDropPosition = 'before' | 'after';
 export type TaskDragTargetKind = 'task-position' | 'workbench-placed-lane' | 'mobile-action' | 'none';
 export type TaskDragTerminalState = 'committed' | 'cancelled' | 'no-op';
 export type TaskDragPhase = 'dragging' | 'armed';
+export type TaskChildIntentPhase = 'none' | 'candidate' | 'armed';
 export type TaskDropSurfaceKind =
   | 'column-header'
   | 'kanban-card'
   | 'checklist-row'
+  | 'task-title-child'
   | 'column-drop'
   | 'root-drop'
   | 'checklist-drop'
@@ -51,6 +53,14 @@ export interface TaskDragTargetRect {
   height: number;
 }
 
+export interface TaskChildDropPreviewRect {
+  parent: TaskDragTargetRect;
+  safe: TaskDragTargetRect;
+  scope: TaskDragTargetRect | null;
+  subtree: TaskDragTargetRect | null;
+  insertion: TaskDragIndicatorRect;
+}
+
 export interface TaskDragObservation {
   sessionId: string;
   sequence: number;
@@ -69,6 +79,11 @@ export interface TaskDragObservation {
   pendingTargetId: string | null;
   pendingSince: number | null;
   lastStableAt: number | null;
+  childIntentPhase: TaskChildIntentPhase;
+  childTargetId: string | null;
+  childTargetTitle: string | null;
+  childCandidateSince: number | null;
+  childPreviewRect: TaskChildDropPreviewRect | null;
   pointer: { x: number; y: number } | null;
   intentPointer: { x: number; y: number } | null;
   observedAt: number;
@@ -100,6 +115,11 @@ export interface TaskDragSessionState {
   pendingTargetId: string | null;
   pendingSince: number | null;
   lastStableAt: number | null;
+  childIntentPhase: TaskChildIntentPhase;
+  childTargetId: string | null;
+  childTargetTitle: string | null;
+  childCandidateSince: number | null;
+  childPreviewRect: TaskChildDropPreviewRect | null;
   terminal: TaskDragTerminalState | null;
 }
 

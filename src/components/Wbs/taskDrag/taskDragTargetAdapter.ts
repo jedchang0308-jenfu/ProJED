@@ -4,6 +4,11 @@ import {
   taskDragSourceKindToSurfaceKind,
 } from './taskDropIntent';
 import { resolveTaskOriginFieldRect } from './desktopTaskDropPreview';
+import {
+  advanceTaskChildIntent,
+  resolveTaskTitleChildDropTarget,
+  resolveTaskTitleChildDropZone,
+} from './taskChildDropTarget';
 import type {
   MobileTaskAction,
   MobileTaskDropPosition,
@@ -81,6 +86,11 @@ const emptyObservation = (
   pendingTargetId: null,
   pendingSince: null,
   lastStableAt: null,
+  childIntentPhase: 'none',
+  childTargetId: null,
+  childTargetTitle: null,
+  childCandidateSince: null,
+  childPreviewRect: null,
   pointer: rawPoint,
   intentPointer: rawPoint ? getTaskIntentPoint(rawPoint) : null,
   observedAt: Date.now(),
@@ -146,9 +156,7 @@ const buildCandidate = (
   const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
   const targetNode = nodes[nodeId];
   if (!sourceSurfaceKind || !targetNode || targetNode.isArchived) return null;
-  const surfaceKind = sourceSurfaceKind === 'checklist-row' && domSurfaceKind === 'kanban-card'
-    ? 'checklist-drop'
-    : domSurfaceKind;
+  const surfaceKind = domSurfaceKind;
   const intent = resolveTaskDropIntent({
     source: { nodeId: state.nodeId, surfaceKind: sourceSurfaceKind },
     target: { nodeId, surfaceKind },
@@ -311,6 +319,67 @@ export const resolveTaskDragObservation = ({
 
   const intentPoint = getTaskIntentPoint(point);
   if (canMoveTask && state.source.kind !== 'workbench-unplaced-row') {
+    const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
+    const nodesRecord = useWbsStore.getState().nodes;
+    const childZone = resolveTaskTitleChildDropZone({
+      point: intentPoint,
+      inputMode: state.source.inputMode,
+      nodesRecord,
+    });
+    const childTarget = sourceSurfaceKind
+      ? resolveTaskTitleChildDropTarget({
+        point: intentPoint,
+        inputMode: state.source.inputMode,
+        sourceNodeId: state.nodeId,
+        sourceSurfaceKind,
+        nodesRecord,
+      })
+      : null;
+    const childIntent = advanceTaskChildIntent({
+      current: {
+        phase: state.childIntentPhase,
+        targetId: state.childTargetId,
+        candidateSince: state.childCandidateSince,
+      },
+      targetId: childTarget?.targetNodeId || null,
+      now: observation.observedAt,
+    });
+    if (childTarget && childIntent.phase !== 'none') {
+      const armed = childIntent.phase === 'armed';
+      const targetNode = useWbsStore.getState().nodes[childTarget.targetNodeId];
+      const childObservation = {
+        childIntentPhase: childIntent.phase,
+        childTargetId: childTarget.targetNodeId,
+        childTargetTitle: childTarget.targetTitle,
+        childCandidateSince: childIntent.candidateSince,
+        childPreviewRect: childTarget.previewRect,
+      } as const;
+      if (!armed) {
+        const directCandidate = collectDirectCandidates(intentPoint, state)[0] || null;
+        const stabilized = stabilizeCandidate(observation, directCandidate, state, intentPoint);
+        return {
+          ...stabilized,
+          ...childObservation,
+        };
+      }
+      return {
+        ...observation,
+        targetKind: 'task-position',
+        targetNodeId: childTarget.targetNodeId,
+        targetBoardId: targetNode?.boardId || null,
+        targetWorkspaceId: targetNode?.workspaceId || null,
+        targetSurfaceKind: childTarget.targetSurfaceKind,
+        dropPosition: 'after',
+        lockedTargetRect: childTarget.previewRect.safe,
+        lastStableAt: observation.observedAt,
+        ...childObservation,
+      };
+    }
+
+    // A title center owns the gesture even when self/descendant/stale rules
+    // make it invalid. Never reinterpret that same point as row reordering.
+    if (childZone) return observation;
+
     const directCandidate = collectDirectCandidates(intentPoint, state)[0] || null;
     const stabilized = stabilizeCandidate(observation, directCandidate, state, intentPoint);
     if (stabilized.targetKind === 'task-position') return stabilized;
@@ -354,6 +423,11 @@ export const observationToSessionState = (
   pendingTargetId: observation.pendingTargetId,
   pendingSince: observation.pendingSince,
   lastStableAt: observation.lastStableAt,
+  childIntentPhase: observation.childIntentPhase,
+  childTargetId: observation.childTargetId,
+  childTargetTitle: observation.childTargetTitle,
+  childCandidateSince: observation.childCandidateSince,
+  childPreviewRect: observation.childPreviewRect,
 });
 
 const getEdgeScrollDelta = (position: number, min: number, max: number) => {

@@ -4,10 +4,16 @@ import type { MobileTaskAction, TaskDragSessionState } from './taskDragTypes';
 import { MOBILE_PREVIEW_FINGER_CLEARANCE_PX } from './taskDragTargetAdapter';
 import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
 import { TaskOriginTitleField } from './TaskOriginTitleField';
+import { TaskChildDropPreview } from './TaskChildDropPreview';
+import {
+  resolvePointerUpperRightOverlayPosition,
+  TASK_DRAG_OVERLAY_POINTER_GAP_PX,
+} from './taskDragOverlayPosition';
 
 const MOBILE_PREVIEW_HEIGHT_PX = 40;
 const MOBILE_PREVIEW_SAFE_TOP_PX = 48;
 const MOBILE_PREVIEW_SAFE_BOTTOM_PX = 8;
+const MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX = 16;
 
 const mobileActionItems: Array<{
   key: MobileTaskAction;
@@ -65,13 +71,21 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
 
   const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
-  const previewLeft = Math.min(Math.max(state.pointerX, 124), Math.max(124, viewportWidth - 124));
+  const previewWidth = Math.min(240, Math.max(0, viewportWidth - 16));
+  const previewHorizontalPosition = resolvePointerUpperRightOverlayPosition({
+    pointer: { x: state.pointerX, y: state.pointerY },
+    overlay: { width: previewWidth, height: MOBILE_PREVIEW_HEIGHT_PX },
+    viewport: { left: 0, top: 0, width: viewportWidth, height: viewportHeight },
+  });
   const previewMaxTop = Math.max(
     MOBILE_PREVIEW_SAFE_TOP_PX,
     viewportHeight - MOBILE_PREVIEW_HEIGHT_PX - MOBILE_PREVIEW_SAFE_BOTTOM_PX,
   );
+  const previewFingerClearance = state.childIntentPhase === 'none'
+    ? MOBILE_PREVIEW_FINGER_CLEARANCE_PX
+    : MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX;
   const fingerPreviewTop = state.pointerY
-    - MOBILE_PREVIEW_FINGER_CLEARANCE_PX
+    - previewFingerClearance
     - MOBILE_PREVIEW_HEIGHT_PX;
   const previewTop = Math.min(
     previewMaxTop,
@@ -89,19 +103,40 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
     <>
       {state.phase === 'dragging' ? (
         <div
-          className="pointer-events-none fixed z-[80] flex h-10 max-w-[240px] -translate-x-1/2 items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
-          style={{ left: previewLeft, top: previewTop }}
+          className="pointer-events-none fixed z-[80] flex h-10 w-[240px] max-w-[calc(100vw-1rem)] items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
+          style={{ left: previewHorizontalPosition.left, top: previewTop }}
           data-mobile-drag-preview="true"
           data-task-id={state.nodeId}
           data-task-drag-session-id={state.sessionId}
           data-mobile-preview-anchor="finger"
-          data-mobile-preview-finger-clearance={MOBILE_PREVIEW_FINGER_CLEARANCE_PX}
+          data-mobile-preview-placement="upper-right"
+          data-mobile-preview-edge-placement={previewHorizontalPosition.placement}
+          data-mobile-preview-pointer-gap={TASK_DRAG_OVERLAY_POINTER_GAP_PX}
+          data-mobile-preview-finger-clearance={previewFingerClearance}
         >
           <div className="truncate">{state.title || '未命名任務'}</div>
         </div>
       ) : null}
 
-      {state.phase === 'dragging' && state.originFieldRect && sourceSurfaceKind ? (
+      {state.phase === 'dragging'
+      && state.childIntentPhase !== 'none'
+      && state.childTargetId
+      && state.childTargetTitle
+      && state.childPreviewRect ? (
+        <TaskChildDropPreview
+          phase={state.childIntentPhase}
+          sourceTitle={state.title || '未命名任務'}
+          targetNodeId={state.childTargetId}
+          targetTitle={state.childTargetTitle}
+          previewRect={state.childPreviewRect}
+          inputMode="touch"
+        />
+      ) : null}
+
+      {state.phase === 'dragging'
+      && state.childIntentPhase !== 'armed'
+      && state.originFieldRect
+      && sourceSurfaceKind ? (
         <div
           className="pointer-events-none fixed z-[90]"
           style={{
@@ -122,7 +157,9 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
             data-mobile-origin-field="true"
           />
         </div>
-      ) : state.phase === 'dragging' && state.dropIndicatorRect ? (
+      ) : state.phase === 'dragging'
+        && state.childIntentPhase !== 'armed'
+        && state.dropIndicatorRect ? (
         <div
           className="pointer-events-none fixed z-[90] -translate-y-1/2"
           style={{

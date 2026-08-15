@@ -256,3 +256,10 @@ RD 必須停止並回報，不得硬做完：
 - 2026-07-17：RD Rework 1 完成。修正使用者 T01-T08 回報的兩項失敗：同一格定位線漂移、L3+ 任務被定位線推開。實作改為 overlay-only checklist append dropzone、桌機 task drag sortable displacement freeze、fixed overlay indicator rect micro-retain。DEV-055 static 27/27、browser B01-B16 16/16 通過；B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0。DEV-046/053/054 static/browser、TypeScript 與 build 亦通過。
 - 2026-07-17：第一次 Slice A / B 自動化通過（已被後續 T01-T08 Attempt 1 失敗與 RD Rework 1 supersede）：DEV-055 static 25/25、browser 15/15、DEV-046/053/054 指定回歸、TypeScript 與 build 通過。當時 T01-T08 共 38 次使用者真實桌機操作與新版手感主觀確認仍為完成門檻。
 - 2026-07-17：依使用者 `#引導模式` 要求，將 DEV-055 補為 RD Implementation Ready，建立桌機落點清晰化與跨階層定位升級契約。
+
+## 11. DEV-068 使用者明示位置修訂（2026-08-15）
+
+- 使用者已依本文件Stop Condition／Re-entry Trigger明示要求更改來源overlay位置，原因是舊位置遮住新的child target preview。
+- `Intentional replacement`只限來源任務卡的幾何anchor：改為raw pointer右上方16px、右緣左上fallback、8px viewport clamp，並與dnd-kit collision transform解耦。
+- `DragOverlay`視覺內容、`dropAnimation={null}`、8px threshold、single live target、fixed insertion indicator、before／after／append commit equivalence及L3+ no-layout-shift均保留並完成回歸。
+- DEV-068完整藍框在candidate階段與single insertion indicator共存，armed後才清線並接管release；Workbench `source="task-workbench"`不進child intent，保留column append歸位。

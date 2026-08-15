@@ -166,7 +166,8 @@ assert(
     'useTaskDragSession({',
     '<TaskDragPresenter',
     'commitDesktopTaskDrag({',
-    '<DragOverlay dropAnimation={null}>',
+    '<DragOverlay',
+    'dropAnimation={null}',
   ]) &&
     !source.boardView.includes("window.addEventListener('touchmove'") &&
     !source.boardView.includes('resolveTaskDragObservation') &&
@@ -174,10 +175,12 @@ assert(
 );
 
 assert(
-  'approved desktop drag UI baseline remains frozen',
+  'desktop drag UI keeps its approved appearance while DEV-068 owns the pointer-upper-right offset',
   includesAll(source.boardView, [
     'data-kanban-drag-overlay="true"',
-    'pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg',
+    'resolvePointerUpperRightOverlayPosition',
+    'data-task-drag-overlay-anchor="pointer-upper-right"',
+    'pointer-events-none fixed z-[93] flex items-center gap-2 rounded-lg',
     'border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg',
     "activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'",
   ]) &&
@@ -204,7 +207,7 @@ assert(
   source.packageJson.includes('"verify:dev-053-task-drag-muscle-memory-consistency"') &&
     source.packageJson.includes('"verify:dev-053-task-drag-muscle-memory-consistency-browser"') &&
     includesAll(source.browserVerifier, [
-      'DEV-053 desktop approved drag overlay remains unchanged',
+      'desktop drag overlay preserves its appearance while DEV-068 anchors it above-right of the pointer',
       'desktop card, checklist, and column header clicks open the matching details',
       'desktop card, checklist, and column header right click opens the task context menu',
       'mobile card, checklist, and column header quick taps open the matching details',

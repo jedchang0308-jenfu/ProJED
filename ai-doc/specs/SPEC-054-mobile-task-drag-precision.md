@@ -389,6 +389,12 @@ npm.cmd run build:test
 
 尚未完成：QA-054-P01~P12 iOS / Android 實機 trial sheet、錄影與裝置資訊。Automated QA-QC 已通過；因 physical gate 仍是本 DEV 完成條件，整體結論維持 `未充分驗證`，不得標記完成。
 
+### 10.3 DEV-068 Child-intent Preview Exception - 2026-08-15
+
+- 未進入child intent的一般same-level position drag仍維持preview bottom距raw finger `12px +/- 1px`，由R03驗證。
+- 進入DEV-065完整藍框的child candidate／armed狀態，為避免來源卡遮住parent frame與ghost，來源preview改採raw finger右上方16px；右緣時左上fallback，viewport margin 8px。R05／R06已改驗證candidate phase與16px實際量測。
+- 此為`Compatible exception`：target hit-test仍只使用raw finger與innermost surface，來源preview位置不參與target resolver、indicator或commit geometry；action rail優先、pan-first、cancel與physical gate不變。
+
 ## 11. Stop Conditions
 
 - 任何桌機拖拉 UI、overlay、操作路徑或結果偏離 approved baseline。

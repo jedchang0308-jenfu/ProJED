@@ -71,7 +71,8 @@ check('S05', 'origin feedback fills the exact title field blue while normal targ
 check('S06', 'source collision remains blocked and origin release cannot enter commit', hasAll(source.board, [
   "type: 'collision:source-block'",
   'return [];',
-  'if (!canMoveTask || !over) return;',
+  'if (!canMoveTask) return;',
+  'if (!over) return;',
 ]));
 
 check('S07', 'cancel and end clear every origin session reference',
@@ -105,7 +106,9 @@ check('S11', 'mobile origin remains a no-op observation and reuses the same titl
   'originFieldRect: initialOriginFieldRect',
   'originFieldRect: null',
 ]) && hasAll(source.presenter, [
-  'state.originFieldRect && sourceSurfaceKind',
+  'state.childIntentPhase !== \'armed\'',
+  'state.originFieldRect',
+  'sourceSurfaceKind',
   'data-mobile-drop-origin="true"',
   'data-mobile-drop-noop="true"',
   'data-mobile-origin-field="true"',

@@ -166,3 +166,9 @@ DEV-055 完成前必跑：
 - 2026-07-17：完成 Firebase Hosting production deployment 與 Level 4 smoke；authenticated production drag smoke 未由 Codex 自動登入執行，需使用者登入正式站後補人工操作證據。
 - 2026-07-17：使用者 T01-T08 Attempt 1 未通過後完成 RD Rework 1，補 B15 鎖定「同格不飄、L3+ 不被推開」；使用者重跑 T01-T08 回報測試通過，最後完成門檻已通過。
 - 2026-07-17：建立 QA plan，將 DEV-055 的自動化、回歸與真實操作驗證納入完成標準。
+
+## 10. DEV-068 Source Preview Revalidation（2026-08-15）
+
+- 使用者明示來源卡不得遮住child parent frame／ghost，因此舊位置凍結已由DEV-068取代；其餘single live indicator、fixed overlay-only marker、display/commit equivalence與no-layout-shift仍是回歸門檻。
+- 最新DEV-055 static 28/28、browser 16/16 PASS；B01-B06、B15與error sweep確認同階／跨欄／L3+落點未因來源卡獨立定位而回歸。
+- B12另攔下並修正Workbench桌機來源被完整L1 scope誤納child intent；最終未歸位任務可正常column append歸位，placed row仍不可拖。

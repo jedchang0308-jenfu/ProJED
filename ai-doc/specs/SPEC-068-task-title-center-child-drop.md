@@ -1,209 +1,155 @@
-# SPEC-068：任務標題中央停留移入子任務
+# SPEC-068：任務完整預選範圍停留移入子任務
 
-狀態：RD Contract Ready / Human Confirmed / QA Plan Ready / Not Implemented
+狀態：Implemented / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release
+
+日期：2026-08-15
 
 優先級：P1
 
-風險：Medium-to-High（核心拖曳意圖、跨階層 parent/order、桌機／手機手勢與既有同階排序肌肉記憶）
+風險：Medium-to-High（階層 parent/order、桌機與手機手勢、既有同階排序相容性）
 
 父任務：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
 
 來源 ID：`USER-20260815-TASK-TITLE-CENTER-CHILD-DROP`
 
-QA 計畫：`ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md`
+QA：`ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md`
 
-文件成熟度：RD Contract Ready
+QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
-## 1. 問題與目標
+## 1. 最終使用者決策
 
-目前 L2 卡片的「子任務追加區」是拖曳時才啟用的透明命中區；L3+ 任務列又沒有相同的子任務落點。使用者無法從畫面知道某個任務可以接收既有任務成為子任務，也無法在放開前確認最終 parent。
+子任務定位範圍不是標題文字寬度，也不是標題尾端或舊卡片底部透明追加區。L1、L2、L3+ 一律重用 DEV-065 的完整任務滑鼠預選範圍：主任務表面加目前可見的子樹範圍，也就是使用者畫面中的完整藍框。
 
-DEV-068 將「移入特定任務底下」改成跨階層一致的明確意圖：把來源拖到目標任務標題中央，持續停留 1 秒後才鎖定子任務意圖；鎖定時顯示可辨識的子任務預覽，只有放開才提交。桌機與手機使用相同語意，但各自保留既有 mouse threshold、mobile pan-first、long-press 與 action rail。
+本節是 `Intentional replacement`，取代本文件先前的 shrink-wrapped title `SPAN`、title center、44px title halo、標題尾端空白負向等契約。檔名保留 legacy 名稱以維持既有連結，內容以本版為準。
 
-成功不是只有資料能移動，而是使用者在放開前能回答：
+操作結果：
 
-- 目前鎖定的是哪一個父任務。
-- 來源會成為該任務的子任務，而不是同階 before／after。
-- 尚未鎖定、離開目標或取消時不會改寫資料。
+- 來源進入有效目標的完整預選範圍即成為 `child-candidate`。
+- 同一來源、同一目標連續停留滿 1,000ms 才成為 `child-armed`。
+- `child-armed` 顯示父任務框、可見子樹框及「下一子階」插入線；插入線起點依實際階層右移，只有放開才移入。
+- 滑到內層任務時，最深、面積較小的 innermost scope 接管；父框不得搶走子框。
+- 展開鍵、連結、輸入框、文字區域、選單與其他內部控制項不建立 child intent；任務主表面即使為了可及性帶 `role="button"`，仍是有效藍框範圍。
+- 拖曳中的來源任務固定在 pointer／finger 上方，優先右側 16px，空間不足時左側或 viewport clamp，不得遮住 parent frame 或 child insertion marker。
 
-## 2. Human Decision Brief
+## 2. 與既有排序的相容規則
 
-- 子任務目標改為「任務標題中央安全區」，不再依賴 L2 卡片底部的透明追加區。
-- 來源進入中央安全區後必須連續停留 1,000ms 才鎖定；計時從真正進入該目標安全區後開始。
-- 鎖定只建立 preview，不寫資料；使用者放開後才提交。
-- 預覽必須讓使用者看出來源會縮排到目標任務底下，不能只顯示與同階排序相同的一條線。
-- 桌機與手機採同一產品語意；手機仍須先通過既有 long-press drag-action 入口。
-- 本輪要求為所有風險建立「AI 在真實渲染畫面操作」的驗證計畫；不得只用 store mutation、static scan、unit test、lint 或 build 宣稱通過。
+整個藍框同時也是既有 sortable/lane surface，因此採「候選共存、鎖定接管」：
 
-## 3. Spec Impact
-
-- `Intentional replacement`：取代 DEV-055 的 L2 卡片底部透明 `checklist-drop`／append hit area 作為「指定父任務」的主要 child-drop 入口。
-- `Intentional replacement`：局部覆寫 DEV-067「任務本體／column header 皆為同階定位」；只有標題中央安全區完成 1 秒鎖定後改為 child intent，其他區域仍維持 DEV-067 的 L1 reorder／promotion 與 lane semantics。
-- `Compatible exception`：DEV-054 的 raw finger、exact innermost ownership、target stability、release freshness、action rail priority、mobile pan-first 與 cancel cleanup 必須保留，新增的 dwell state 不得建立第二套 mobile commit path。
-- `Compatible exception`：DEV-053 的單一 drag session、at-most-once commit、permission revalidation、cycle guard、undo 與 Workbench placed-row no-drag 必須保留。
-- `Compatible exception`：DEV-058 的 origin/no-op 藍色標題欄位繼續有效；來源原地、child candidate、child armed 與一般 position indicator 同一時間只能顯示一種主要回饋。
-- `Compatible exception`：DEV-065 的 drag 前來源子樹 hover 預覽保持；真正開始拖曳後由 DEV-068 target preview 接管，不得讓 source hover frame 與 child target preview 混淆。
-- 不恢復 DEV-051 的跨父層 750ms parent-lock，也不重新啟動 archived DEV-052。DEV-068 的 1,000ms dwell 只治理「標題中央 child intent」，不鎖整個父層或一般跨欄排序。
-
-ADR 判定：不建立。此變更雖改變主要 UI flow，但仍是看板內局部、可逆、無 schema／API／權限或外部契約的產品互動；替代方案與後果由本 SPEC 保存。
-
-## 4. UX Intent
-
-- 使用者與情境：桌機以滑鼠整理看板階層，或手機以長按拖曳整理 L1／L2／L3+ 任務。
-- 主要任務與成功結果：把既有任務精準放到指定任務底下，放開前能明確預知 parent 與階層。
-- 熟悉 pattern：拖到目標中央並停留表示「進入／收納」，上／下或外圍表示排序。
-- 最可能誤解點：中央 child intent 與既有同階排序、手機 long-press/action rail、來源原地 no-op 使用相似藍色回饋。
-- 安全預設：尚未滿 1 秒、離開中央區、目標無效、權限失效、取消或 stale timer 一律 zero-write。
-- 不能發生：hover/dwell 自動提交、未滿 1 秒變成子任務、舊目標 timer 鎖定新目標、preview 與實際 parent 不一致、同一 release 同時 reorder 與 child commit。
-
-## 5. Interaction State Contract
-
-### 5.1 狀態
-
-| 狀態 | 進入條件 | 可見回饋 | Release 結果 |
+| 階段 | 子任務回饋 | 既有排序回饋 | 放開結果 |
 |---|---|---|---|
-| `dragging` | 桌機超過既有 8px threshold；手機完成既有 long-press drag-action 入口 | 既有 DragOverlay／finger preview | 依一般有效落點提交，無落點則 no-op |
-| `child-candidate` | pointer／raw finger 進入另一個有效任務的標題中央安全區 | 目標標題出現低干擾候選框；不得顯示已鎖定子任務 preview | no-op；不得 reorder、不得成為 child |
-| `child-armed` | 同一 source、同一 target、同一中央安全區連續停留滿 1,000ms | 顯示唯一 child placement preview | 放開後提交 child move 一次 |
-| `cancelled` | 離開中央區、切換 target、Escape、pointer/touch cancel、blur、pagehide、visibility hidden、session timeout | 所有 candidate／armed preview 清除 | zero-write |
-| `committed` | `child-armed` 中放開且 release revalidation 通過 | 新位置短暫高亮；必要時展開目標子任務區 | 寫入一次，可一次 undo |
+| `<1,000ms` candidate | DEV-065 同款藍框；無 child insertion marker | 保留既有 standard insertion marker | 執行當下既有同階／lane／promotion 動作，不得改成 child |
+| `>=1,000ms` armed | parent source frame、subtree frame、下一子階 insertion marker | standard insertion marker 清除 | `parentId = exact target.id`，一次提交 |
+| 離開／切換目標 | 舊 candidate/armed 立即清除並重算 | 依目前落點恢復 | 不得提交 stale child target |
+| 無效 self／descendant／archived／missing target | 不得 armed | 同一危險點不得被重新解讀為繞過 cycle guard 的排序 | zero-write |
 
-### 5.2 計時與切換
+此相容規則保留 DEV-053／054／055／067 的同階排序、L1 promotion、column/root drop 與 action rail 肌肉記憶；只有完成 1 秒鎖定後才由 DEV-068 獨占 release。
 
-- dwell 固定為 1,000ms；必須有 deterministic clock／timer 測試。
-- 桌機 mouse-down 至開始拖曳、手機 touch-down 至 long-press drag-action 的時間不得計入 child dwell。
-- 計時 key 至少包含 `sessionId + sourceNodeId + targetNodeId`；pointer 離開中央區或 target 改變立即取消並歸零。
-- `<1,000ms` 不得進入 `child-armed`；`>=1,000ms` 後應在下一個 render frame 產生 armed preview。
-- armed 後若離開中央區，立即解除 armed；不得保留 grace period 提交舊 child target。
-- auto-scroll、DOM reflow、filter、collapse、permission 或 target snapshot 改變後，release 必須以最新 geometry／store／permission 重新驗證。
+## 3. 命中幾何
 
-### 5.3 標題中央安全區
+### 3.1 L1
 
-- 使用 `.task-title-text` 或等效 canonical title geometry，必須包含標題幾何中心。
-- 安全區不得涵蓋展開按鈕、完成控制、日期、標籤、依賴按鈕、context menu 或其他 interactive controls。
-- Desktop fine pointer 的安全區需可穩定命中，不得退化為單一像素或只依文字實際 glyph 寬度。
-- Mobile coarse pointer 的語意中心相同，但命中區至少 44x44 CSS px；可在不超出 canonical task primary surface 的前提下擴大 invisible hit geometry。
-- 長中文、截斷英文、空白／未命名標題與多層縮排都必須有穩定中心；視覺預覽不得因文字長度改變 parent 語意。
+- 命中 scope：`data-desktop-task-hover-scope="true"` 的完整 column scope。
+- primary frame：column header。
+- subtree frame：column 內目前可見卡片群組。
+- armed 時可額外顯示完整 column 外框，以對齊 DEV-065 的 column 視覺語意。
 
-## 6. Drop Semantics
+### 3.2 L2
 
-### 6.1 所有看板階層
+- 命中 scope：卡片最外層 task scope，包含 primary card 與目前可見 checklist subtree。
+- primary frame：DEV-065 `primary-500` 2px inset source frame。
+- subtree frame：DEV-065 `primary-400` 1px inset group frame。
 
-| 目標 | 中央停留鎖定後結果 | 非中央區既有行為 |
+### 3.3 L3+
+
+- 命中 scope：recursive checklist task scope，包含該列與目前可見 descendants。
+- 指標落在 descendant scope 時，依 DOM depth 優先選最內層；同 depth 才以面積與距離決勝。
+
+### 3.4 控制項排除
+
+- 排除：`button`、`a`、`input`、`textarea`、`select`、非 task-source 的 `[role="button"]`、`[data-task-primary-action="true"]`。
+- 判斷以控制項實際 `getBoundingClientRect()` 為準，避免 fixed drag overlay 蓋住底層控制時 `elementFromPoint()` 誤判。
+- `[data-task-surface-source="true"]` 是完整任務主表面，不因 `role="button"` 被排除。
+
+## 4. 狀態與提交
+
+| 狀態 | 條件 | Store 寫入 |
 |---|---|---|
-| L1 列表標題 | 來源成為該 L1 的直接 L2 child | L1 reorder／promotion 依 DEV-067 |
-| L2 卡片標題 | 來源 append 成為該卡片的直接 L3 child | 同階 card before／after 或 lane move |
-| L3+ 任務標題 | 來源 append 成為該列的直接下一階 child | 同父層 checklist before／after |
+| `dragging` | 桌機超過既有 8px threshold；手機完成 long-press drag-action | 無 |
+| `child-candidate` | 進入有效完整 hover scope，未滿 1,000ms | 無 child write；標準 drop 仍可 release |
+| `child-armed` | exact target 連續滿 1,000ms | 無，僅預覽 |
+| `committed` | armed 畫面已呈現且 release revalidation 通過 | 一次 child move，可 undo/redo |
+| `cancelled` | Escape、pointer/touch cancel、blur、pagehide、visibility hidden、resize/orientation、失效目標 | 無 |
 
-- child commit 固定 `parentId = targetNode.id`，order 為 target canonical active children 末尾。
-- L1／group source 被移入非 root target 時，沿用既有 normalize 規則轉為 `nodeType: task`；其完整非封存子樹隨來源移動。
-- source、target、source descendant、archived/missing target、跨 board 不合法 target、權限不足都不可 armed 或 commit。
-- 一次 child move 只建立一次 batch／undo command；undo／redo 必須完整還原 parent、order、nodeType 與 ancestor rollup。
+- dwell 不含 mouse drag threshold 或 mobile long-press 啟動時間。
+- target 改變、離開所有 task scopes、auto-scroll/reflow 後 target 改變，timer 立即重設。
+- release 必須重讀 permission、source/target existence、archived、board/workspace、cycle、最新 geometry 與 canonical append order。
+- L1/group source 移入非 root target 時正規化為 `nodeType: task`，完整非封存子樹隨來源移動。
+- 成功只建立一次 batch/undo command；不得同一 release 同時執行 standard drop 與 child move。
 
-### 6.2 保留與退役的落點
+## 5. 預覽契約
 
-- `column-drop` 保留作為「把任務放入該列表」的 broad lane target；不依 title dwell，並維持 L2 lane semantics。
-- `root-drop` 保留作為看板尾端 L1 append。
-- L2 卡片底部透明 append overlay 不再作為指定父任務的 child commit 入口，避免同一 parent 有兩套不可辨識命中方式。
-- checklist/card 背景空白不應隱性建立 child intent；指定父任務只能由標題中央 dwell 鎖定。
+- Candidate 與 armed 的 target frame 沿用 DEV-065 視覺語言，不新增另一套顏色：
+  - primary source：`ring-2 ring-inset ring-primary-500 bg-primary-50/60`
+  - visible subtree：`ring-1 ring-inset ring-primary-400`
+- Candidate 可與既有 insertion marker 共存，用來表達「現在放開走原操作，繼續停留可進子階」。
+- Armed 必須清除原 standard insertion marker，改在 exact target 子樹末端顯示唯一 child insertion marker；沿用 `KanbanInsertionMarker` 的圓點＋線條，起點與下一層任務內容對齊，L2／L3／L4+ 必須逐層右移。
+- Armed 不顯示常駐「移入…的子任務」文字框；視覺以框形、圓點、線條與縮排位置表意，輔助科技仍由 `aria-live` 宣告 exact parent，避免只靠顏色。
+- 全部 child preview 為 fixed overlay，不得改 normal-flow geometry、column width、scrollHeight 或 board scrollWidth。
+- 同一時間只允許一個 exact child target；離開後立即清除，不得 stale re-arm。
+- `aria-live` candidate/armed 與成功 announcement 必須能辨識 exact target。
 
-## 7. Preview 與完成回饋
+## 6. Desktop / Mobile
 
-### 7.1 Candidate
+### Desktop
 
-- 進入中央安全區後立即以低干擾 outline／inset frame 表示「此處可停留」，但不得顯示完整 child placement preview。
-- candidate 不得只靠顏色；DOM／accessibility 應提供 child-candidate 語意。
-- 不顯示數字倒數、progress bar、breadcrumb 或常駐教學文字。
+- 保留 click-to-details、right-click、8px threshold、origin field、blank-canvas pan、依賴／紀錄選取抑制。
+- Candidate 前 1 秒保留 dnd-kit standard indicator；armed 後 child preview 接管。
+- pointer source overlay 優先右上 16px，右側不足時左上，8px viewport clamp。
 
-### 7.2 Armed Preview
+### Mobile
 
-- 1 秒到期後，目標任務被明確標示為 parent，來源以縮排一層的 ghost row／card 呈現在目標底下，並有短標籤或圖示表達「子任務」。
-- Preview 必須是 overlay／portal，不得插入 normal flow、推開兄弟任務、改變 column width、scrollHeight 或 board scrollWidth。
-- 畫面同一時間只允許一個主要 target preview；armed child preview、一般 insertion marker、origin field 不得同時存在。
-- 手機 preview 必須避開手指與頂部 action rail，且不超出 viewport。
+- quick tap 開詳情、short pan 捲動畫面、long-press 才開始拖曳。
+- raw finger 決定 exact innermost task scope；不再建立 title-only 44px halo。
+- Candidate 前 1 秒保留原 mobile position target；armed 後才使用 `task-title-child`。
+- action rail 永遠高於 child candidate/armed；進入 rail 立即清 child timer。
+- edge auto-scroll、rotation、resize、background、touchcancel 後不得保留舊 target 或卡住下一次手勢。
 
-### 7.3 Commit 後
+## 7. 退役與保留
 
-- 只有 release revalidation 通過才移動；若 target 在 release 前失效則 no-op 並清除 preview。
-- 目標若收合，成功後自動展開到可看見新 child；新位置以低干擾 highlight/focus 暫時標示，不建立常駐提示卡或逐項 CTA。
-- 可及性必須有一次性的成功 announcement，內容至少可辨識來源與新 parent；畫面不強制顯示 toast。
+- 退役 L2 卡片底部透明 `wbs-checklist-drop` child append 入口。
+- 保留 `column-drop`、`root-drop` 與一般 before/after；candidate 未 armed 時可正常提交。
+- 不恢復 DEV-051 750ms parent-lock 或 DEV-052 架構。
+- 不修改 schema、RLS、API、permission model 或 production data。
 
-## 8. Desktop Contract
+## 8. 驗收
 
-- 保留既有 8px drag threshold、DragOverlay、click-to-details、right-click、blank-canvas pan、dependency／record selection suppression。
-- 未啟動 drag 時，標題中央不攔截 click、double click、context menu 或 hover subtree preview。
-- active drag 中，中央安全區擁有 child candidate/armed 判定；標題非中央區與 task outer surface 繼續提供同階／lane target。
-- Release before 1,000ms in center 必須 no-op，不得退回 ancestor 或同階 target。
-- Escape、blur、pagehide、visibility hidden、pointercancel 與 unmount 清理 timer、preview、target metadata 與 source hidden state。
+- L1/L2/L3+ marker 均掛在 DEV-065 完整 hover scope，而非 title span。
+- hit-scope rect 包住 primary 與可見 subtree；長中文、長英文、未命名、標題尾端空白與主表面其他空白都可候選。
+- exact innermost ownership、控制項排除、999/1000ms、target switch、armed leave、cancel/stale target、cycle、permission、undo/redo 全部通過。
+- Candidate 保留一個 standard indicator、child insertion marker 為 0；armed 時 standard indicator 為 0、child insertion marker 恰為 1。
+- L1→L2、L2→L3、L3+→下一層的 child insertion 起點必須單調右移，且線條落在 exact target 子樹末端，不得顯示在父層或兄弟層起點。
+- DEV-065 的 primary-500／primary-400 樣式與 hover 行為不回歸。
+- 五個 viewport：1440x900、1024x768、390x844、430x932、320x844 無 overflow 或不可讀遮擋。
+- Physical iPhone Safari 與 Android Chrome 仍是完整 mobile sign-off 的必要 gate；synthetic touch 不取代實機。
 
-## 9. Mobile Contract
+## 9. 實作與證據
 
-- quick tap 仍開詳情；short pan 仍捲動畫面；只有既有 long-press drag-action 啟動後才可進入 child candidate。
-- child dwell 從 raw finger 進入 target title center 後開始，不含 long-press 啟動時間。
-- action rail target 優先於 child candidate/armed；拖進 action rail 立即取消 child timer，且每次 release 只能執行 action 或 move 其中一個。
-- Finger occlusion 下 armed preview 顯示於手指上方／安全位置，目標 parent 與 ghost child 仍需可辨識。
-- edge auto-scroll 後必須重新 hit-test；不得以 scroll 前的 timer/target armed。
-- touchcancel、pointercancel、原生 contextmenu 合成事件、app background／rotation 後不得殘留 preview、timer 或下一次手勢卡死。
-
-## 10. Scope
-
-### In Scope
-
-- 看板 L1／L2／L3+ 的 title-center child candidate、1 秒 dwell、armed preview 與 release commit。
-- 桌機 mouse 與手機 long-press touch 的同源語意。
-- 同階排序、L1 promotion、column/root lane、origin no-op、action rail、cycle/permission/undo 回歸。
-- AI 真實瀏覽器操作、timing instrumentation、store read-only snapshots、三以上 viewport 與 visible-error evidence。
-
-### Out of Scope
-
-- WBS 清單、甘特圖、月曆、心智圖的新 child-center drop UI。
-- 新增偏好設定、可調 dwell 秒數、鍵盤拖曳或 desktop modifier key。
-- 修改手機 action rail 的 action set；「新增子任務」仍是建立新任務，不是移動來源。
-- DB schema、migration、RLS、RPC、遠端資料、production deploy 或 release。
-- 恢復 DEV-051 parent-lock、DEV-052 架構或舊卡片底部透明 child commit。
-
-## 11. Current Architecture Impact
-
-預期受影響面：
+主要檔案：
 
 - `src/components/BoardView.tsx`
 - `src/components/Wbs/KanbanColumn.tsx`
 - `src/components/Wbs/KanbanCard.tsx`
 - `src/components/Wbs/KanbanChecklist.tsx`
-- `src/components/Wbs/taskDrag/taskDragTypes.ts`
-- `src/components/Wbs/taskDrag/taskDropIntent.ts`
+- `src/components/Wbs/taskDrag/taskChildDropTarget.ts`
+- `src/components/Wbs/taskDrag/TaskChildDropPreview.tsx`
 - `src/components/Wbs/taskDrag/taskDragTargetAdapter.ts`
 - `src/components/Wbs/taskDrag/useTaskDragSession.ts`
-- `src/components/Wbs/taskDrag/desktopTaskDropPreview.ts`
-- `src/components/Wbs/taskDrag/taskDragCommit.ts`
-- `src/components/Wbs/taskDrag/TaskDragPresenter.tsx`
-- targeted verifier 與 browser true-operation suite
 
-不影響 `TaskNode` schema、Supabase、external API 或權限模型。RD Implementation Ready 階段需把 desktop/mobile dwell state 收斂到單一 normalized child-intent state，禁止各寫一套 timer／commit。
+已執行核心證據：
 
-## 12. Acceptance Criteria
-
-- L1／L2／L3+ title center 都能在連續 1,000ms 後產生唯一 child armed preview，且 release 後 parentId 等於 exact target id。
-- `<1,000ms` center release、進入後離開、快速切換 target、auto-scroll stale target、cancel／blur／hidden 全部 zero-write。
-- Armed preview 明確呈現 parent＋縮排 ghost child＋非純色 child 語意；不得與一般 marker／origin field 同時存在。
-- 非中央區的同階排序、L1 promotion、column body L2 drop、root append 保持可用且不受 dwell timer 延遲。
-- quick tap、short pan、long-press、action rail、right-click、8px threshold、blank pan、interactive controls、Workbench placed row no-drag 不回歸。
-- self／descendant／missing／archived／permission denied／cross-board invalid target 不得 armed 或寫入。
-- 一次 release 最多一筆 batch；source subtree、nodeType normalization、ancestor rollup、undo／redo 一致。
-- 1440x900、1024x768、390x844、430x932 無 layout shift、重疊、裁切、非預期 overflow、preview 遮擋或 runtime-visible error。
-- AI 必須在真實 rendered page 使用實際 mouse／touch event path 操作；直接改 store 只可建立 fixture，不得當作操作證據。
-
-## 13. Stop Conditions
-
-- child preview 與 release 後 parent/order/nodeType 不一致。
-- 未滿 1 秒即 child commit、離開後 stale timer armed、同一 release double commit 或 cycle 成立。
-- 中央 child zone 使非中央同階排序、L1 promotion、mobile pan/action rail 或桌機 click/right-click 回歸。
-- 新舊 child commit hit area 同時有效，造成同一 parent 有兩套不可辨識落點。
-- Preview 插入 normal flow、推動任務、被 action rail／手指遮住、超出 viewport 或只靠顏色表達。
-- 缺少桌機與手機真實 rendered interaction、timing、screenshot／video、before-after snapshot 或 visible-error evidence；此時只能判定 `未充分驗證`。
-- 需要 schema、remote data、production 或恢復 DEV-051／052 才能完成。
-
-## 14. Execution Boundary
-
-本輪只完成 RD Contract 與 QA 計畫，不修改產品程式、不執行 QC、不部署。下一步若使用者要求實作，先補到 RD Implementation Ready，再由 RD 實作並依 `QA-DEV-068` 由 AI 真實操作；正式環境仍須另走 release gate。
-
+- `verify:dev-068-task-title-center-child-drop`：61/61。
+- `verify:dev-068-task-title-center-child-drop-browser`：27/27 rendered mouse/touch；新增 L2／L3／L4+ insertion-start 單調右移 gate。
+- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786808137276-*`。
+- QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop及Workbench來源誤入child intent；均回送 RD 修正後才採信最終結果。
+- Physical iPhone／Android：未執行。
+- 本輪未 push、deploy 或 release。

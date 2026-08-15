@@ -93,7 +93,7 @@ async (page) => {
     return { x: Math.round(box.x + box.width * ratioX), y: Math.round(box.y + box.height * ratioY), box };
   };
 
-  const visiblePointFor = async (locator, ratioY = 0.5) => {
+  const visiblePointFor = async (locator, ratioX = 0.5, ratioY = 0.5) => {
     const box = await locator.boundingBox();
     const viewport = page.viewportSize();
     assert(Boolean(box) && Boolean(viewport), 'mobile target must expose geometry');
@@ -102,7 +102,11 @@ async (page) => {
     const top = Math.max(48, box.y + 4);
     const bottom = Math.min(viewport.height - 8, box.y + box.height - 4);
     assert(right > left && bottom > top, 'mobile target must have a visible hit region', { box, viewport });
-    return { x: Math.round((left + right) / 2), y: Math.round(top + (bottom - top) * ratioY), box };
+    return {
+      x: Math.round(left + (right - left) * ratioX),
+      y: Math.round(top + (bottom - top) * ratioY),
+      box,
+    };
   };
 
   const beginMouseDrag = async (source) => {
@@ -130,12 +134,19 @@ async (page) => {
     }));
   };
 
-  const desktopDrag = async ({ source, target, targetRatio = { x: 0.5, y: 0.5 }, screenshot }) => {
+  const desktopDrag = async ({
+    source,
+    target,
+    targetRatio = { x: 0.5, y: 0.5 },
+    targetSteps = 14,
+    settleMs = 160,
+    screenshot,
+  }) => {
     const before = await readNodes();
     const { sourceId } = await beginMouseDrag(source);
     const targetPoint = await pointFor(target, targetRatio.x, targetRatio.y);
-    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 14 });
-    await page.waitForTimeout(160);
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: targetSteps });
+    await page.waitForTimeout(settleMs);
     const indicator = await readDesktopIndicator();
     const screenshotPath = `${screenshotBase}-${screenshot}.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
@@ -150,7 +161,20 @@ async (page) => {
   const columns = () => page.locator('[data-kanban-column="true"]');
   const cardsInColumn = (index) => columns().nth(index).locator('.kanban-task-card[data-task-id]');
   const columnHeader = (index) => columns().nth(index).locator('[data-kanban-column-header="true"]');
+  const columnTitleSlot = (index) => columnHeader(index).locator('[data-task-title-slot="true"]');
   const rootDrop = () => page.locator('[data-kanban-root-drop-zone="true"]').first();
+
+  const readColumnTitleTailGeometry = async (index, visibleOnly = false) => {
+    const slot = columnTitleSlot(index);
+    const title = slot.locator(':scope > span').first();
+    const slotPoint = visibleOnly
+      ? await visiblePointFor(slot, 0.85, 0.5)
+      : await pointFor(slot, 0.85, 0.5);
+    const titleRect = await title.boundingBox();
+    assert(Boolean(titleRect) && slotPoint.x > titleRect.x + titleRect.width + 8,
+      'L1 promotion probe must be visibly after the rendered title text', { slotPoint, titleRect });
+    return { slotPoint, titleRect };
+  };
 
   const runCase = async (id, scenario, operation) => {
     try {
@@ -168,11 +192,15 @@ async (page) => {
   page.setDefaultTimeout(8000);
   page.setDefaultNavigationTimeout(20000);
 
-  await runCase('QA-067-003', 'desktop L2 card promotes to L1 at a column header', async () => {
+  await runCase('QA-067-003', 'desktop L2 card promotes to L1 from the title-tail area before child dwell arms', async () => {
     await openApp({ width: 1440, height: 900 });
+    const tailGeometry = await readColumnTitleTailGeometry(1);
     const result = await desktopDrag({
       source: cardsInColumn(0).first().locator(':scope > [data-task-surface-source="true"]'),
-      target: columnHeader(1),
+      target: columnTitleSlot(1),
+      targetRatio: { x: 0.85, y: 0.5 },
+      targetSteps: 1,
+      settleMs: 80,
       screenshot: 'desktop-card-to-l1-header',
     });
     const sourceAfter = result.after[result.sourceId];
@@ -180,13 +208,13 @@ async (page) => {
     assert(result.indicator.surfaceKind === 'column-header'
       && result.indicator.position === 'before'
       && result.indicator.markerCount === 1,
-    'column header promotion must use the existing single insertion marker', result.indicator);
+    'column header pre-dwell release must use the existing single insertion marker', result.indicator);
     assert(sourceAfter.parentId === null && sourceAfter.nodeType === 'group' && sourceAfter.order < targetAfter.order,
-      'desktop header release must promote source to L1 before target', { sourceAfter, targetAfter });
-    return result;
+      'desktop header release before child dwell must promote source to L1 before target', { sourceAfter, targetAfter });
+    return { ...result, tailGeometry };
   });
 
-  await runCase('QA-067-002', 'desktop L3 task promotes to L1 without rewriting descendants', async () => {
+  await runCase('QA-067-002', 'desktop L3 task promotes to L1 before child dwell without rewriting descendants', async () => {
     await openApp({ width: 1440, height: 900 });
     const source = page.locator('.kanban-checklist-item[data-task-id]').first();
     const sourceId = await source.getAttribute('data-task-id');
@@ -194,12 +222,20 @@ async (page) => {
     const descendantParents = Object.values(before)
       .filter((node) => node.parentId === sourceId)
       .map((node) => ({ id: node.id, parentId: node.parentId }));
-    const result = await desktopDrag({ source, target: columnHeader(1), screenshot: 'desktop-l3-to-l1-header' });
+    const tailGeometry = await readColumnTitleTailGeometry(1);
+    const result = await desktopDrag({
+      source,
+      target: columnTitleSlot(1),
+      targetRatio: { x: 0.85, y: 0.5 },
+      targetSteps: 1,
+      settleMs: 80,
+      screenshot: 'desktop-l3-to-l1-header',
+    });
     assert(result.after[result.sourceId].parentId === null && result.after[result.sourceId].nodeType === 'group',
-      'L3 source must become an L1 group', result.after[result.sourceId]);
+      'L3 source must become an L1 group before child dwell arms', result.after[result.sourceId]);
     assert(descendantParents.every(({ id, parentId }) => result.after[id]?.parentId === parentId),
       'promotion must preserve descendant ownership', { descendantParents });
-    return { ...result, descendantParents };
+    return { ...result, descendantParents, tailGeometry };
   });
 
   await runCase('QA-067-004', 'desktop board-end root drop appends the promoted L1', async () => {
@@ -222,7 +258,7 @@ async (page) => {
     return result;
   });
 
-  await runCase('QA-067-005', 'desktop column body remains an L2 append target at 1024x768', async () => {
+  await runCase('QA-067-005', 'desktop column body remains an L2 append target before child dwell at 1024x768', async () => {
     await openApp({ width: 1024, height: 768 });
     const targetColumnId = await columns().nth(1).getAttribute('data-task-hover-scope-source-id');
     const result = await desktopDrag({
@@ -232,7 +268,7 @@ async (page) => {
       screenshot: 'desktop-column-body-l2-regression',
     });
     assert(result.indicator.surfaceKind === 'column-drop' && result.indicator.position === 'append',
-      'column body must retain column-drop append semantics', result.indicator);
+      'column body must retain column-drop append semantics before child dwell', result.indicator);
     assert(result.after[result.sourceId].parentId === targetColumnId && result.after[result.sourceId].nodeType === 'task',
       'column body release must keep the task at L2', result.after[result.sourceId]);
     const sweep = await visibleErrorSweep('1024 desktop L1/L2 drag');
@@ -306,12 +342,13 @@ async (page) => {
     }));
   };
 
-  await runCase('QA-067-006', 'mobile long-press card promotes to L1 through its column header', async () => {
+  await runCase('QA-067-006', 'mobile long-press card promotes to L1 from the title-tail area before child dwell', async () => {
     await openApp({ width: 390, height: 844 });
     const source = cardsInColumn(0).first().locator(':scope > [data-task-surface-source="true"]');
     const sourceId = await source.locator('..').getAttribute('data-task-id');
     const sourcePoint = await visiblePointFor(source);
-    const targetPoint = await visiblePointFor(columnHeader(0));
+    const tailGeometry = await readColumnTitleTailGeometry(0, true);
+    const targetPoint = tailGeometry.slotPoint;
     const before = await readNodes();
     const held = await startHeldTouchAtPoint(sourcePoint);
     await held.moveTo(targetPoint);
@@ -322,11 +359,11 @@ async (page) => {
     await held.end();
     const after = await readNodes();
     assert(indicator.surfaceKind === 'column-header' && indicator.position === 'before' && indicator.markerCount === 1,
-      'mobile column header must show the canonical L1 marker', indicator);
+      'mobile column header must show the canonical L1 marker before child dwell', indicator);
     assert(after[sourceId].parentId === null && after[sourceId].nodeType === 'group',
-      'mobile header release must promote the card to L1', { before: before[sourceId], after: after[sourceId] });
+      'mobile header release before child dwell must promote the card to L1', { before: before[sourceId], after: after[sourceId] });
     const sweep = await visibleErrorSweep('390 mobile L1 header drag');
-    return { sourceId, indicator, screenshotPath, sweep };
+    return { sourceId, indicator, screenshotPath, sweep, tailGeometry };
   });
 
   await runCase('QA-067-007', 'mobile board-end surface appends a task as the final L1', async () => {

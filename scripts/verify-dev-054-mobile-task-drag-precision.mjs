@@ -61,10 +61,11 @@ check('explicit target surface kinds exist for card, checklist, and column',
   && source.checklist.includes('data-task-drop-surface-kind="checklist-row"')
   && source.column.includes('data-task-drop-surface-kind="column-header"'));
 
-check('mobile hit testing is exact, innermost-first, and blocks ancestor fall-through',
+check('mobile hit testing is exact, title-child-first, innermost-first, and blocks ancestor fall-through',
   source.target.includes('document.elementFromPoint(point.x, point.y)')
   && source.target.includes('The innermost task surface owns the point')
-  && source.target.includes("sourceSurfaceKind === 'checklist-row' && domSurfaceKind === 'kanban-card'")
+  && source.target.includes('resolveTaskTitleChildDropTarget({')
+  && source.target.indexOf('resolveTaskTitleChildDropTarget({') < source.target.indexOf('collectDirectCandidates(intentPoint, state)')
   && !source.target.includes('findNearestCandidate'));
 
 check('target stability tracks lock, pending handover, and freshness', hasAll(source.types, [
@@ -145,8 +146,8 @@ check('mobile source origin is a shared blue no-op title field outside normal fl
   'text-white',
 ]) && source.originPreview.includes('export const resolveTaskOriginFieldRect'));
 
-check('browser verifier covers finger-centered hit, single live indicator, pan ownership, boundary jitter, and deliberate handover', hasAll(source.browser, [
-  'finger-centered point selects canonical same-parent order',
+check('browser verifier covers non-center raw-finger hit, single live indicator, pan ownership, boundary jitter, and deliberate handover', hasAll(source.browser, [
+  'non-center raw finger point selects canonical same-parent order',
   'adjacent checklist boundary jitter keeps one stable target',
   'mobile checklist drag exposes only the live target indicator',
   'rapid multi-row movement cannot retain a stale indicator or use a tall card outer rect',
@@ -179,8 +180,9 @@ check('workbench placed row remains non-draggable',
   && !placedSource.includes('useDraggable('));
 
 check('desktop approved presenter and collision path remain present', hasAll(source.board, [
-  '<DragOverlay dropAnimation={null}>',
-  'pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg',
+  '<DragOverlay dropAnimation={null}>{null}</DragOverlay>',
+  'resolvePointerUpperRightOverlayPosition',
+  'pointer-events-none fixed z-[93] flex items-center gap-2 rounded-lg',
   'collisionDetection={collisionDetection}',
 ]));
 

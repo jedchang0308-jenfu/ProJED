@@ -86,6 +86,10 @@ export const resolveTaskDropIntent = ({
   const targetNode = nodesRecord[target.nodeId];
   if (!draggedNode || !targetNode || draggedNode.isArchived || targetNode.isArchived) return null;
   if (draggedNode.id === targetNode.id) return null;
+  if (
+    target.surfaceKind === 'task-title-child'
+    && (draggedNode.workspaceId !== targetNode.workspaceId || draggedNode.boardId !== targetNode.boardId)
+  ) return null;
 
   const sourceIsColumn = source.surfaceKind === 'column-header';
   const targetIsRoot = target.surfaceKind === 'column-header' || target.surfaceKind === 'root-drop';
@@ -124,7 +128,11 @@ export const resolveTaskDropIntent = ({
       nodeType: shouldBecomeTask ? 'task' : draggedNode.nodeType,
       displayPosition: reorder.displayPosition,
     };
-  } else if (target.surfaceKind === 'column-drop' || target.surfaceKind === 'checklist-drop') {
+  } else if (
+    target.surfaceKind === 'column-drop'
+    || target.surfaceKind === 'checklist-drop'
+    || target.surfaceKind === 'task-title-child'
+  ) {
     intent = {
       parentId: targetNode.id,
       order: getTaskAppendOrder(targetNode.id, draggedNode.id, nodesRecord),
@@ -156,5 +164,6 @@ export const desktopTargetTypeToSurfaceKind = (
   if (targetType === 'wbs-checklist') return 'checklist-row';
   if (targetType === 'wbs-card-drop') return 'checklist-drop';
   if (targetType === 'wbs-checklist-drop') return 'checklist-drop';
+  if (targetType === 'wbs-task-title-child') return 'task-title-child';
   return null;
 };

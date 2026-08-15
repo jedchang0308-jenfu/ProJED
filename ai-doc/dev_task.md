@@ -343,13 +343,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得恢復 DEV-051／052、不得改 Workbench placed-row no-drag、來源 no-op、單一 marker、raw finger、click/right-click 或 schema；任何 indicator／commit 不一致即停止。
   - 證據：`SPEC-067`、`QA-DEV-067`、`QC-DEV-067`；DEV-067 static 13/13、browser 8/8、DEV-055 desktop 16/16、DEV-054 mobile 11/11、DEV-053／054／055／058 static regression、TypeScript、targeted ESLint、test build 與 1440／1024／390 rendered QC 通過。
   - 計入交付：是
-- ○ DEV-068 [交付點] [待排] [P1] [RD Contract Ready / QA Plan Ready] 任務標題中央停留移入子任務
-  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的明確落點；來源進入目標標題中央後連續停留 1,000ms 才鎖定 child intent，顯示父任務與縮排 ghost preview，放開後才提交。
+- ◐ DEV-068 [交付點] [執行中] [P1] [AI Browser QA-QC PASS / Physical Mobile 未充分驗證 / 未 Release] 任務完整預選範圍停留移入子任務
+  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的完整藍框落點；命中範圍重用 DEV-065 任務 hover scope（主任務＋可見子樹），前 1 秒保留既有同階／lane 操作，連續滿 1,000ms 才由 child intent 接管並在下一子階起點顯示同款插入線，放開後提交 exact parent。
   - 來源 ID：`USER-20260815-TASK-TITLE-CENTER-CHILD-DROP`
   - 父任務：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
-  - 下一步：若要開始實作，先把契約補到 RD Implementation Ready，再由 RD 開發；完成後必須依 `QA-DEV-068` 由 AI 在真實 rendered page 操作桌機與手機流程。
-  - 阻塞 / 恢復條件：本輪只授權規格與 QA 計畫；尚未授權產品碼、QC、部署或 release。缺 iPhone Safari／Android Chrome AI 可控實機時，只能標記 browser gate 通過，不得宣稱完整 mobile sign-off。
-  - 證據：`SPEC-068`、`QA-DEV-068`；FMEA、桌機／手機真實操作案例、1 秒 timing boundary、衝突回歸、資料安全、viewport、可及性與失敗證據規則已定義，尚未執行。
+  - 下一步：接入 AI 可控 iPhone Safari 與 Android Chrome，完成各平台 physical precision gate；兩者通過後才可標完整 mobile sign-off。若要交付正式環境，另走 release gate。
+  - 阻塞 / 恢復條件：本輪不含部署或 release。缺 iPhone Safari／Android Chrome AI 可控實機時，只能標記 browser gate 通過，不得宣稱完整 physical mobile sign-off。
+  - 證據：基線 commit `56baa77`；`QC-DEV-068`；使用者重驗依序修正 title slot、title-only scope、來源卡遮擋、控制項 overlay 命中、candidate 搶走 standard drop、Workbench來源誤入child intent與文字ghost不一致。來源卡為pointer/finger上方fixed overlay；DEV-068 static 61/61、browser 27/27，全部相鄰browser 62/62。68項對照見`QA-DEV-068-coverage-matrix`。未偵測到iPhone／Android實機。
   - 計入交付：是
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
@@ -511,9 +511,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - TypeScript、targeted ESLint（0 error；2 個既存 warning）、`build:test` 與 1440x900／1024x768／390x844 rendered QC PASS。
 - QC authoritative evidence：`ai-doc/qc/QC-DEV-067-kanban-l1-drag-promotion.md`；Physical iOS／Android 手感列 supplemental。
 
-## DEV-068：任務標題中央停留移入子任務
+## DEV-068：任務完整預選範圍停留移入子任務
 
-- 狀態：RD Contract Ready / Human Confirmed / QA Plan Ready / Not Implemented
+- 狀態：Implemented / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release
 - 節點類型：交付點
 - 父交付點：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
 - 是否計入產品交付完成：是
@@ -522,13 +522,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 
 ### 問題與使用者價值
 
-目前只有無子任務 L2 卡片底部存在透明追加 hit area，L3+ 沒有一致入口，使用者也看不出該區域。完成後，拖到任一階層任務標題中央並停留 1 秒，畫面會先明確預覽「來源將成為此任務的子任務」，只有放開才移動；未滿 1 秒、離開或取消一律不寫入。
+舊版只有 L2 卡片底部透明追加區，後續 title-only 方案仍與使用者看見的任務藍框不一致。最終方案把 DEV-065 完整預選範圍（主任務＋可見子樹）當作 child dwell scope；未滿 1 秒放開仍走既有 standard drop，滿 1 秒後才以「下一子階插入線」表達落點並由 child intent 接管。
 
 ### Human Decision / RD Contract
 
-- L1／L2／L3+ 共用 title-center child intent；中央安全區不含完成、展開、日期、標籤、依賴與選單等控制。
-- 真正開始拖曳後才計 child dwell；同一 source、target 與中央區連續 1,000ms 才 armed。未滿 1 秒在中央放開為 no-op，不回退成 reorder。
-- Candidate 立即顯示低干擾提示；armed 後顯示唯一 parent＋縮排 ghost child 預覽。Preview 使用 overlay／portal，不得推動 layout。
+- L1／L2／L3+ 共用 DEV-065 complete-hover-scope child intent；canonical target 是 outer scope，不是 title span。標題尾端與主表面空白都屬於 scope；內層任務以 exact innermost ownership 接管，展開、輸入、連結、選單等內部控制依實際矩形排除。
+- 真正開始拖曳後才計 child dwell；同一 source、target 與完整hover scope連續 1,000ms 才 armed。未滿 1 秒放開依當下 standard drop，不得提交 child。
+- Candidate 顯示完整藍框並保留 standard insertion marker；armed 後顯示唯一 parent＋下一子階 child insertion marker。插入線沿用既有圓點＋線條樣式，起點依 L2／L3／L4+ 逐層右移；Preview 使用 overlay／portal，不得推動 layout。
+- 原始任務卡以raw pointer／finger為anchor固定於右上方16px；靠右時改放左上方並保留8px viewport margin，且不得遮住parent frame或child insertion marker。
 - Release 重新驗證 exact target、geometry、permission、cycle 與 store freshness；通過才寫入一次並提供單次 undo。
 - 桌機保留 8px threshold、click/right-click 與一般排序；手機保留 pan-first、long-press、raw finger 與 action rail priority。
 - DEV-055 的 L2 卡片底部透明 child commit 入口退役；column body L2 drop、root L1 append、非中央同階排序與 L1 promotion 保留。
@@ -545,10 +546,29 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 ### Spec Governance 結論
 
 - DEV-055 底部透明 L2 child append target：`Intentional replacement`。
-- DEV-067 任務標題既有同階定位：`Intentional replacement`，僅限標題中央完成 1 秒 armed；非中央區維持原契約。
+- DEV-067 同階定位：`Compatible extension`；完整藍框在 candidate 前 1 秒仍保留既有 insertion/promotion/lane target，只有 armed 後改由 child intent 獨占 release。
 - DEV-053／054／058／065 的 session safety、mobile input、origin feedback 與 drag 前 subtree hover：`Compatible exception`。
 - ADR 不需要：看板內局部、可逆，無 schema、外部 API、權限模型或跨模組資料架構變更。
-- 本輪只完成 RD Contract 與 QA 計畫，尚未執行產品碼、QC、部署或 release。
+- 本輪已完成產品實作與本機 AI 真實 rendered QA/QC；physical iPhone Safari／Android Chrome 未執行，部署與 release 也未執行。
+
+### Execution Evidence（2026-08-15）
+
+- 開發前基線 commit：`56baa77 docs: define DEV-068 child drop contract`。
+- 使用者重驗修正：最終明示命中區不是 flex slot 或 shrink-wrapped title `SPAN`，而是圖片中 DEV-065 完整藍框；已改為 whole hover scope，並新增 task-source `role="button"` 保留、內部控制排除與 candidate/standard coexist gate。
+- 使用者重驗遮擋修正：來源任務卡原先覆蓋parent frame／當時的child ghost；直接修改dnd-kit modifier的第一輪與仍有1.75px／2px相交的第二輪均判FAIL並留存證據，最終改為與collision解耦的pointer-upper-right fixed overlay。
+- 使用者重驗階層語言修正：可見文字ghost退役，改用現有`KanbanInsertionMarker`；L2／L3／L4+起點相對欄位左側實測19／29／43px。
+- 核心 gate：DEV-068 static 61/61、desktop/mobile browser true operation 27/27；68 個 QA case 均已連回 AI 操作證據。
+- 相鄰回歸：DEV-065 40/40＋13/13、DEV-053 30/30＋10/10、DEV-054 44/44＋15/15、DEV-055 28/28＋16/16、DEV-058 26/26、DEV-067 13/13＋8/8，全部 PASS。
+- 工程 gate：TypeScript PASS；targeted ESLint 0 error／2 個既存 warning；`npm run build` PASS（2000 modules）。
+- Rendered viewports：1440x900、1024x768、390x844、430x932、320x844；console／network／visible-error／overflow sweep PASS。
+- QC authoritative evidence：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`。
+- Remaining gate：本機未偵測到 ADB 或 Windows iPhone／Android portable device；依 QA 契約維持執行中，不標記 Complete 或 release ready。
+
+### RD Readiness Gate
+
+- 共用 `task-title-child` target、complete-hover-scope geometry、candidate/standard coexist、desktop/mobile child-intent state、timer cleanup、release revalidation、single commit與 success feedback 的檔案級契約已寫入 `SPEC-068`。
+- 無 schema／migration／API／remote／權限模型變更；P0/P1 產品決策與工程 readiness 缺口均已清除。
+- 本輪可執行產品程式、targeted verifier與本機 RD→QC；production deploy／release仍需另走 release gate。
 
 
 ## PM Update 歷史歸檔

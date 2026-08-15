@@ -7,7 +7,7 @@
  */
 import React, { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
-import { useDndContext, useDroppable } from '@dnd-kit/core';
+import { useDndContext } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, ChevronRight, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
@@ -25,6 +25,11 @@ import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { TaskDateBadge } from './TaskDateBadge';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
+import {
+  TASK_CHILD_DROP_HIGHLIGHT_EVENT,
+  TASK_CHILD_DROP_SUCCESS_EVENT,
+  type TaskChildDropSuccessDetail,
+} from './taskDrag/taskChildDropFeedback';
 import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 
 interface KanbanCardProps {
@@ -64,9 +69,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
   const setContextMenuState = useBoardStore(s => s.setContextMenuState);
-  const { active, over } = useDndContext();
+  const { active } = useDndContext();
   const activeType = active?.data.current?.type;
-  const activeNodeId = active?.data.current?.nodeId;
   const taskGesture = useTaskGestureSurface({
     task: { id: nodeId, title: node?.title, status: node?.status },
     sourceKind: 'kanban-card',
@@ -136,38 +140,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     setNodeRef(element);
   }, [setNodeRef]);
 
-  // 此卡片同時是放置區：可接收 wbs-checklist 或 wbs-card 的拖入（降級操作）
-  // 使用獨立 id `${nodeId}-card-drop` 區分「被拖動中的卡片」和「作為放置區的卡片」
-  const { setNodeRef: setDropRef } = useDroppable({
-    id: `${nodeId}-card-drop`,
-    disabled: !canMoveTask || activeType === 'wbs-card',
-    data: {
-      type: 'wbs-card-drop',
-      nodeId,
-      columnId,
-    },
-  });
-
-  const { setNodeRef: setChecklistDropRef, isOver: isChecklistDropOver } = useDroppable({
-    id: `${nodeId}-checklist-drop`,
-    disabled: !canMoveTask || hasChildren || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
-    data: {
-      type: 'wbs-checklist-drop',
-      nodeId,
-      columnId,
-    },
-  });
-
-  const { setNodeRef: setChecklistAreaDropRef, isOver: isChecklistAreaDropOver } = useDroppable({
-    id: `${nodeId}-checklist-area-drop`,
-    disabled: !canMoveTask || !hasChildren || activeType === 'wbs-checklist' || !['wbs-column', 'wbs-card'].includes(activeType || '') || activeNodeId === nodeId,
-    data: {
-      type: 'wbs-checklist-drop',
-      nodeId,
-      columnId,
-    },
-  });
-
   const isDragPlaceholder = isDragging || taskGesture.isActive;
   // The source surface starts the gesture, but the sortable placeholder owns
   // the complete source + subtree scope and must retain that full height.
@@ -189,31 +161,32 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
 
   const status = node?.status || 'todo';
   const nodeTags = getNodeTags(node, tags);
-  const canDropIntoChecklist = canMoveTask && ['wbs-column', 'wbs-card'].includes(activeType || '') && activeNodeId !== nodeId;
-  const showChecklistAppendSurface = canDropIntoChecklist && !hasChildren;
-  const showChecklistSurface = hasVisibleChildren || (canDropIntoChecklist && hasChildren);
-  const overData = over?.data.current;
-  const overNodeId = overData?.nodeId;
-  const isOverChecklistDescendant = (() => {
+  const showChecklistSurface = hasVisibleChildren;
+  const [isRecentlyChildDropped, setIsRecentlyChildDropped] = useState(false);
 
-    if (activeType !== 'wbs-checklist' || overData?.type !== 'wbs-checklist' || !overNodeId) {
-      return false;
-    }
-
-    const nodes = previewNodes || useWbsStore.getState().nodes;
-    let current = nodes[overNodeId]?.parentId;
-    const visited = new Set<string>();
-
-    while (current) {
-      if (current === nodeId) return true;
-      if (visited.has(current)) return false;
-      visited.add(current);
-      current = nodes[current]?.parentId || null;
-    }
-
-    return false;
-  })();
-  const isChecklistTargeted = isChecklistAreaDropOver || isChecklistDropOver || isOverChecklistDescendant;
+  React.useEffect(() => {
+    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleChildDropSuccess = (event: Event) => {
+      const detail = (event as CustomEvent<TaskChildDropSuccessDetail>).detail;
+      if (!detail) return;
+      if (detail.targetNodeId === nodeId) setIsChecklistExpanded(true);
+    };
+    const handleChildDropHighlight = (event: Event) => {
+      const detail = (event as CustomEvent<TaskChildDropSuccessDetail>).detail;
+      if (!detail) return;
+      if (detail.sourceNodeId !== nodeId) return;
+      setIsRecentlyChildDropped(true);
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(() => setIsRecentlyChildDropped(false), 1400);
+    };
+    window.addEventListener(TASK_CHILD_DROP_SUCCESS_EVENT, handleChildDropSuccess);
+    window.addEventListener(TASK_CHILD_DROP_HIGHLIGHT_EVENT, handleChildDropHighlight);
+    return () => {
+      window.removeEventListener(TASK_CHILD_DROP_SUCCESS_EVENT, handleChildDropSuccess);
+      window.removeEventListener(TASK_CHILD_DROP_HIGHLIGHT_EVENT, handleChildDropHighlight);
+      if (highlightTimer) clearTimeout(highlightTimer);
+    };
+  }, [nodeId]);
 
   const cardLongPressHandlers = {
     ...taskGesture.handlers,
@@ -246,13 +219,18 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
       data-task-surface-scope="true"
       data-desktop-task-hover-scope="true"
+      data-task-child-drop-target="true"
+      data-task-child-drop-level="L2"
       data-task-hover-scope-kind="card"
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={hasChildren ? 'true' : undefined}
       data-kanban-card-visual="framed-elevated"
       data-task-hierarchy-level="L2"
+      data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       className={`kanban-task-card relative mb-[6px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow ${
         isDragPlaceholder ? 'pointer-events-none !border-transparent bg-transparent shadow-none' : ''
+      } ${
+        isRecentlyChildDropped ? 'ring-2 ring-primary/50 ring-offset-1' : ''
       }`}
     >
       {isDragPlaceholder ? (
@@ -265,7 +243,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       <>
         {/* 來源 surface 與子樹 surface 為 sibling；scope 只負責版面與整棵樹的排序位移。 */}
           <div
-            ref={setDropRef}
             {...dragSurfaceBindings}
             {...cardLongPressHandlers}
             onClick={(e) => {
@@ -287,7 +264,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             data-mobile-drop-target={nodeId}
             data-task-drop-surface-kind="kanban-card"
             data-desktop-drop-surface="true"
-            data-desktop-drop-id={activeType === 'wbs-checklist' ? `${nodeId}-card-drop` : nodeId}
+            data-desktop-drop-id={nodeId}
             data-task-drag-surface="true"
             data-task-drag-surface-kind="kanban-card"
             data-task-surface-source="true"
@@ -352,6 +329,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               <h4
                 className={`task-title-text relative min-w-0 flex-1 pr-2 text-sm font-medium leading-tight transition-colors ${taskStatusTitleClass[status as TaskStatus]}`}
                 aria-label={node.title || '未命名任務'}
+                data-task-title-slot="true"
+                data-task-id={nodeId}
                 onClick={(e) => {
                   if (isRecordCaptureMode) {
                     e.preventDefault();
@@ -360,7 +339,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   }
                 }}
               >
-                <span className="block truncate">{node.title || '未命名任務'}</span>
+                <span
+                  className="inline-block max-w-full truncate align-top"
+                  data-task-id={nodeId}
+                >
+                  {node.title || '未命名任務'}
+                </span>
               </h4>
               {showTags && nodeTags.length > 0 ? (
                 <KanbanTagSticker tags={nodeTags} />
@@ -421,18 +405,10 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
           {showChecklistSurface && (
             <div
               id={checklistRegionId}
-              ref={setChecklistAreaDropRef}
               className={`kanban-checklist-section mx-[9px] mb-[6px] mt-1 rounded-md border-l-2 border-slate-300/80 transition-[background-color,box-shadow] duration-100 ${
-                isChecklistTargeted
-                  ? 'bg-primary/10 ring-1 ring-inset ring-primary/30'
-                  : isChecklistExpanded
-                    ? 'bg-surface-subtask'
-                    : 'bg-transparent'
+                isChecklistExpanded ? 'bg-surface-subtask' : 'bg-transparent'
               }`}
               data-task-id={nodeId}
-              data-task-drop-surface-kind="checklist-drop"
-              data-desktop-drop-surface="true"
-              data-desktop-drop-id={`${nodeId}-checklist-area-drop`}
               data-kanban-checklist-visual="inset-rail"
               data-kanban-card-subtree-scope="true"
               data-task-surface-subtree="true"
@@ -450,20 +426,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               )}
             </div>
           )}
-
-          <div
-            ref={setChecklistDropRef}
-            className={`kanban-card-dropzone absolute inset-x-2 bottom-1 h-7 rounded-md opacity-0 ${
-              showChecklistAppendSurface ? 'z-20' : '-z-10 pointer-events-none'
-            }`}
-            data-task-id={nodeId}
-            data-task-drop-surface-kind="checklist-drop"
-            data-desktop-drop-surface={showChecklistAppendSurface ? 'true' : undefined}
-            data-desktop-drop-id={showChecklistAppendSurface ? `${nodeId}-checklist-drop` : undefined}
-            data-desktop-checklist-append-anchor={showChecklistAppendSurface ? 'true' : undefined}
-            data-desktop-dropzone-layout="overlay"
-            aria-hidden="true"
-          />
       </>
       )}
     </div>

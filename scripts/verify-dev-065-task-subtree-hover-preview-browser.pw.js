@@ -443,20 +443,20 @@ async (page) => {
     await page.waitForTimeout(220);
     const nodesAfterDrag = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     record('QA-065-004',
-      overlayEvidence.count === 3
-        && overlayEvidence.summaryCount === 1
-        && overlayEvidence.text.includes('含 3 個子任務')
-        && dropIndicatorEvidence.target === 'dev065-target-card'
-        && dropIndicatorEvidence.surfaceKind === 'checklist-drop'
-        && dropIndicatorEvidence.position === 'append'
-        && dropIndicatorEvidence.rect.top >= targetSourceEvidence.rect.top
-        && dropIndicatorEvidence.rect.top <= targetSourceEvidence.rect.bottom + 4
-        && dropIndicatorEvidence.rect.left >= targetSourceEvidence.rect.left
-        && dropIndicatorEvidence.rect.right <= targetSourceEvidence.rect.right
-        && dropIndicatorEvidence.rect.width <= targetSourceEvidence.rect.width
-        && dropIndicatorEvidence.rect.width >= 24
-        && nodesBeforeDrag === nodesAfterDrag
-        && await page.locator('[data-kanban-drag-overlay="true"]').count() === 0,
+        overlayEvidence.count === 3
+          && overlayEvidence.summaryCount === 1
+          && overlayEvidence.text.includes('含 3 個子任務')
+          && dropIndicatorEvidence.target === 'dev065-target-card'
+          && dropIndicatorEvidence.surfaceKind === 'kanban-card'
+          && dropIndicatorEvidence.position === 'before'
+          && dropIndicatorEvidence.rect.top <= targetSourceEvidence.rect.top + 4
+          && dropIndicatorEvidence.rect.bottom >= targetSourceEvidence.rect.top - 4
+          && dropIndicatorEvidence.rect.left >= targetSourceEvidence.rect.left
+          && dropIndicatorEvidence.rect.right <= targetSourceEvidence.rect.right
+          && dropIndicatorEvidence.rect.width <= targetSourceEvidence.rect.width
+          && dropIndicatorEvidence.rect.width >= 24
+          && nodesBeforeDrag === nodesAfterDrag
+          && await page.locator('[data-kanban-drag-overlay="true"]').count() === 0,
       { overlayEvidence, dropIndicatorEvidence, targetSourceEvidence });
 
     await parentCard.locator('[data-kanban-checklist-toggle="true"]').click();

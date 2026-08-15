@@ -7,6 +7,7 @@ const files = {
   checklist: 'src/components/Wbs/KanbanChecklist.tsx',
   column: 'src/components/Wbs/KanbanColumn.tsx',
   preview: 'src/components/Wbs/taskDrag/desktopTaskDropPreview.ts',
+  childPreview: 'src/components/Wbs/taskDrag/TaskChildDropPreview.tsx',
   intent: 'src/components/Wbs/taskDrag/taskDropIntent.ts',
   commit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
@@ -72,10 +73,11 @@ check('S06', 'exact innermost ownership blocks invalid ancestor fallback', hasAl
   'return resolved ? [directCollision] : [];',
 ]) && source.preview.includes('if (!resolved) return null;'));
 
-check('S07', 'approved desktop overlay and 8px mouse threshold remain intact', hasAll(source.board, [
-  '<DragOverlay dropAnimation={null}>',
+check('S07', 'approved desktop overlay appearance and 8px threshold remain while DEV-068 owns pointer offset', hasAll(source.board, [
+  '<DragOverlay dropAnimation={null}>{null}</DragOverlay>',
+  'resolvePointerUpperRightOverlayPosition',
   'data-kanban-drag-overlay="true"',
-  'translate-x-4 translate-y-4',
+  'data-task-drag-overlay-anchor="pointer-upper-right"',
 ]) && readFileSync(resolve('src/hooks/useDragSensors.ts'), 'utf8').includes('distance: 8'));
 
 check('S08', 'workbench placed rows remain non-draggable and commit keeps the no-op guard',
@@ -99,11 +101,14 @@ check('S11', 'displayed preview and final commit must match and revalidate lates
   'const state = useWbsStore.getState();',
 ]));
 
-check('S12', 'desktop task drag indicator is overlay-only and does not create a layout marker',
+check('S12', 'desktop task drag indicators are fixed overlays and retired child dropzones cannot create layout markers',
   source.board.includes('className={`pointer-events-none fixed z-[86]')
   && source.board.includes("desktopIndicator.kind === 'origin' ? '' : '-translate-y-1/2'")
-  && source.card.includes('data-desktop-dropzone-layout="overlay"')
-  && source.card.includes("showChecklistAppendSurface ? 'z-20' : '-z-10 pointer-events-none'")
+  && source.board.includes('<TaskChildDropPreview')
+  && source.childPreview.includes('className="pointer-events-none fixed inset-0 z-[94]"')
+  && source.childPreview.includes('data-task-child-drop-preview="true"')
+  && !source.card.includes('data-desktop-dropzone-layout="overlay"')
+  && !source.card.includes('wbs-checklist-drop')
   && !source.card.includes("showChecklistDropZone ? 'h-6 opacity-100'")
   && !source.card.includes('data-kanban-insertion-marker="true"'));
 

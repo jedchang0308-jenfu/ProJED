@@ -6,6 +6,7 @@ import type { MobileTaskActionContextValue } from '../mobileTaskActionContext';
 import { commitTaskDragObservation, type TaskDragCommitDependencies } from './taskDragCommit';
 import { resolveTaskOriginFieldRect } from './desktopTaskDropPreview';
 import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
+import { getTaskChildIntentRemainingMs } from './taskChildDropTarget';
 import {
   autoScrollTaskDragSurfaces,
   getTaskIntentPoint,
@@ -53,6 +54,11 @@ const stateToObservation = (state: TaskDragSessionState): TaskDragObservation =>
   pendingTargetId: state.pendingTargetId,
   pendingSince: state.pendingSince,
   lastStableAt: state.lastStableAt,
+  childIntentPhase: state.childIntentPhase,
+  childTargetId: state.childTargetId,
+  childTargetTitle: state.childTargetTitle,
+  childCandidateSince: state.childCandidateSince,
+  childPreviewRect: state.childPreviewRect,
   pointer: { x: state.pointerX, y: state.pointerY },
   intentPointer: getTaskIntentPoint({ x: state.pointerX, y: state.pointerY }),
   observedAt: Date.now(),
@@ -73,11 +79,17 @@ const withoutTarget = (observation: TaskDragObservation): TaskDragObservation =>
   pendingTargetId: null,
   pendingSince: null,
   lastStableAt: null,
+  childIntentPhase: 'none',
+  childTargetId: null,
+  childTargetTitle: null,
+  childCandidateSince: null,
+  childPreviewRect: null,
 });
 
 interface UseTaskDragSessionOptions extends TaskDragCommitDependencies {
   boardSurfaceRef: React.RefObject<HTMLElement | null>;
   onSessionBegin?: () => void;
+  onCommit?: (result: { status: 'committed' | 'no-op'; reason: string }, observation: TaskDragObservation) => void;
 }
 
 export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
@@ -85,6 +97,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   const stateRef = React.useRef<TaskDragSessionState | null>(null);
   const dependenciesRef = React.useRef<TaskDragCommitDependencies>(options);
   const onSessionBeginRef = React.useRef(options.onSessionBegin);
+  const onCommitRef = React.useRef(options.onCommit);
   const terminalSessionIdsRef = React.useRef<string[]>([]);
   const failsafeRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollFrameRef = React.useRef<number | null>(null);
@@ -95,6 +108,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   React.useLayoutEffect(() => {
     dependenciesRef.current = options;
     onSessionBeginRef.current = options.onSessionBegin;
+    onCommitRef.current = options.onCommit;
   }, [options]);
 
   const stopAutoScroll = React.useCallback(() => {
@@ -254,6 +268,11 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       pendingTargetId: null,
       pendingSince: null,
       lastStableAt: null,
+      childIntentPhase: 'none',
+      childTargetId: null,
+      childTargetTitle: null,
+      childCandidateSince: null,
+      childPreviewRect: null,
       terminal: null,
     };
     recordTaskDragDebug({ type: 'begin', sessionId, nodeId: node.id, sourceKind });
@@ -298,6 +317,54 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     moveAtPoint(point);
   }, [moveAtPoint]);
 
+  React.useEffect(() => {
+    if (
+      state?.phase !== 'dragging'
+      || state.childIntentPhase !== 'candidate'
+      || !state.childTargetId
+    ) {
+      return undefined;
+    }
+    const remaining = getTaskChildIntentRemainingMs({
+      phase: state.childIntentPhase,
+      targetId: state.childTargetId,
+      candidateSince: state.childCandidateSince,
+    });
+    if (remaining === null) return undefined;
+
+    const sessionId = state.sessionId;
+    const targetId = state.childTargetId;
+    const timer = window.setTimeout(() => {
+      const activeState = stateRef.current;
+      if (
+        !activeState
+        || activeState.sessionId !== sessionId
+        || activeState.phase !== 'dragging'
+        || activeState.childTargetId !== targetId
+        || hasTerminated(sessionId)
+      ) {
+        return;
+      }
+      const observation = resolveObservation(activeState, {
+        x: activeState.pointerX,
+        y: activeState.pointerY,
+      });
+      if (observation.childIntentPhase !== 'armed' || observation.childTargetId !== targetId) return;
+      recordTaskDragDebug({ type: 'child-intent:armed', sessionId, targetId });
+      applyState(observationToSessionState(activeState, observation));
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [
+    applyState,
+    hasTerminated,
+    resolveObservation,
+    state?.childCandidateSince,
+    state?.childIntentPhase,
+    state?.childTargetId,
+    state?.phase,
+    state?.sessionId,
+  ]);
+
   const finish = React.useCallback(async (
     activeState: TaskDragSessionState,
     observation: TaskDragObservation,
@@ -314,11 +381,16 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       targetKind: observation.targetKind,
       action: observation.action,
       targetNodeId: observation.targetNodeId,
+      targetSurfaceKind: observation.targetSurfaceKind,
+      dropPosition: observation.dropPosition,
+      childIntentPhase: observation.childIntentPhase,
+      childTargetId: observation.childTargetId,
     });
     const result = await commitTaskDragObservation({
       observation,
       dependencies: dependenciesRef.current,
     });
+    onCommitRef.current?.(result, observation);
     recordTaskDragDebug({
       type: 'terminal:complete',
       sessionId: activeState.sessionId,
@@ -350,6 +422,11 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
         pendingTargetId: null,
         pendingSince: null,
         lastStableAt: null,
+        childIntentPhase: 'none',
+        childTargetId: null,
+        childTargetTitle: null,
+        childCandidateSince: null,
+        childPreviewRect: null,
       };
       recordTaskDragDebug({ type: 'end:armed', sessionId: activeState.sessionId, nodeId: activeState.nodeId });
       applyState(armedState);
@@ -363,17 +440,26 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
 
     const latestObservation = resolveObservation(activeState, point);
     let releaseObservation = latestObservation;
-    if (latestObservation.targetKind === 'task-position') {
+    if (
+      latestObservation.targetSurfaceKind === 'task-title-child'
+      && activeState.childIntentPhase !== 'armed'
+    ) {
+      // A release-time hit test may cross the dwell threshold before React has
+      // rendered the armed preview. Child placement is valid only when the
+      // user has already seen an armed state before lifting their finger.
+      releaseObservation = withoutTarget(latestObservation);
+    }
+    if (releaseObservation.targetKind === 'task-position') {
       const intentPoint = getTaskIntentPoint(point);
-      const rect = latestObservation.lockedTargetRect;
-      const fresh = latestObservation.lastStableAt !== null
-        && Date.now() - latestObservation.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS;
+      const rect = releaseObservation.lockedTargetRect;
+      const fresh = releaseObservation.lastStableAt !== null
+        && Date.now() - releaseObservation.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS;
       const retained = Boolean(rect
         && intentPoint.x >= rect.left - MOBILE_TARGET_RETAIN_PX
         && intentPoint.x <= rect.right + MOBILE_TARGET_RETAIN_PX
         && intentPoint.y >= rect.top - MOBILE_TARGET_RETAIN_PX
         && intentPoint.y <= rect.bottom + MOBILE_TARGET_RETAIN_PX);
-      if (!fresh || !retained) releaseObservation = withoutTarget(latestObservation);
+      if (!fresh || !retained) releaseObservation = withoutTarget(releaseObservation);
     }
     void finish(activeState, releaseObservation);
   }, [applyState, finish, hasTerminated, resolveObservation, stopAutoScroll]);
@@ -515,18 +601,23 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     const handlePointerCancel = () => cancelWithReason('pointercancel');
     const handleBlur = () => cancelWithReason('blur');
     const handlePageHide = () => cancelWithReason('pagehide');
+    const handleViewportChange = () => cancelWithReason('viewport-change');
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('pointercancel', handlePointerCancel, true);
     window.addEventListener('blur', handleBlur);
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('orientationchange', handleViewportChange);
+    window.addEventListener('resize', handleViewportChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('pointercancel', handlePointerCancel, true);
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('orientationchange', handleViewportChange);
+      window.removeEventListener('resize', handleViewportChange);
     };
   }, [cancelWithReason]);
 

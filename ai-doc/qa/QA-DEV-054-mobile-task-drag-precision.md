@@ -273,6 +273,11 @@ npm.cmd run build:test
 
 DEV-054 只有在 QC 明確記錄兩台實機均通過後，才可在 `dev_task.md` 標記完成。
 
+## 13.1 DEV-068 Source Preview Revalidation（2026-08-15）
+
+- 未進入child intent的一般same-level mobile drag繼續驗證12px finger clearance；進入DEV-065完整藍框的child candidate／armed改驗證finger upper-right 16px、8px viewport clamp及parent/ghost零交集。R05／R06實測phase=`candidate`且clearance=16px。
+- 最新DEV-054 browser 15/15 PASS；physical iPhone／Android門檻仍未執行，狀態邊界不變。
+
 ## 14. RD Rework 5 執行結果（2026-08-14）
 
 Automated QA 判定：`PASS`。整體 DEV 判定：`未充分驗證`（僅因 required physical gate 尚未執行）。

@@ -19,6 +19,7 @@ import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useRecordStore from '../store/useRecordStore';
 import useDialogStore from '../store/useDialogStore';
+import { useMemberStore } from '../store/useMemberStore';
 import { useTagStore } from '../store/useTagStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
@@ -29,6 +30,7 @@ import { projectTaskFilterResults } from '../features/taskFilters';
 import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
 import { TaskOriginTitleField } from './Wbs/taskDrag/TaskOriginTitleField';
+import { TaskChildDropPreview } from './Wbs/taskDrag/TaskChildDropPreview';
 import { commitDesktopTaskDrag } from './Wbs/taskDrag/taskDragCommit';
 import type { TaskNode } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
@@ -43,6 +45,22 @@ import {
 } from './Wbs/taskDrag/desktopTaskDropPreview';
 import { useTaskDragSession } from './Wbs/taskDrag/useTaskDragSession';
 import { collectTaskDragDescendantIds } from './Wbs/taskDrag/taskDragScope';
+import {
+    advanceTaskChildIntent,
+    getTaskChildIntentRemainingMs,
+    resolveTaskTitleChildDropTarget,
+    resolveTaskTitleChildDropZone,
+    type TaskChildDropTarget,
+} from './Wbs/taskDrag/taskChildDropTarget';
+import { taskDragSourceKindToSurfaceKind } from './Wbs/taskDrag/taskDropIntent';
+import {
+    emitTaskChildDropSuccess,
+    type TaskChildDropSuccessDetail,
+} from './Wbs/taskDrag/taskChildDropFeedback';
+import {
+    resolvePointerUpperRightOverlayPosition,
+    TASK_DRAG_OVERLAY_POINTER_GAP_PX,
+} from './Wbs/taskDrag/taskDragOverlayPosition';
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -74,6 +92,15 @@ const shouldRetainDesktopIndicatorRect = (
     && Math.abs(current.width - next.width) <= DESKTOP_INDICATOR_RECT_RETAIN_PX
 );
 
+interface DesktopTaskChildDropState {
+    sessionId: number;
+    sourceNodeId: string;
+    sourceTitle: string;
+    phase: 'candidate' | 'armed';
+    candidateSince: number;
+    target: TaskChildDropTarget;
+}
+
 const BoardView = () => {
     const mobilePanSurfaceRef = useMobilePanBroker<HTMLDivElement>();
     const mousePanSurfaceRef = useKanbanMousePan<HTMLDivElement>();
@@ -94,10 +121,18 @@ const BoardView = () => {
     const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
     const [activeDrag, setActiveDrag] = useState<any>(null);
+    const [desktopDragOverlayPointer, setDesktopDragOverlayPointer] = useState<{ x: number; y: number } | null>(null);
     const [desktopDropPreview, setDesktopDropPreview] = useState<DesktopTaskDropPreview | null>(null);
     const [desktopOriginIndicator, setDesktopOriginIndicator] = useState<DesktopTaskOriginIndicator | null>(null);
+    const [desktopChildDrop, setDesktopChildDrop] = useState<DesktopTaskChildDropState | null>(null);
+    const [taskChildDropAnnouncement, setTaskChildDropAnnouncement] = useState('');
     const desktopDropPreviewRef = React.useRef<DesktopTaskDropPreview | null>(null);
     const desktopDragOriginIndicatorRef = React.useRef<DesktopTaskOriginIndicator | null>(null);
+    const desktopChildDropRef = React.useRef<DesktopTaskChildDropState | null>(null);
+    const desktopChildDropSessionRef = React.useRef(0);
+    const desktopActiveDataRef = React.useRef<Record<string, any> | null>(null);
+    const desktopPointerRef = React.useRef<{ x: number; y: number } | null>(null);
+    const desktopRawPointerRef = React.useRef<{ x: number; y: number } | null>(null);
     const desktopDragActivatorPointRef = React.useRef<{ x: number; y: number } | null>(null);
     const desktopDragSourceRectRef = React.useRef<{
         left: number;
@@ -105,12 +140,76 @@ const BoardView = () => {
         top: number;
         bottom: number;
     } | null>(null);
+    const desktopDragCancelledRef = React.useRef(false);
+    const desktopDragOverlayActiveRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (import.meta.env.MODE !== 'test') return undefined;
+        const debugWindow = window as any;
+        debugWindow.__projedTaskDragTestApi = {
+            patchNode: (nodeId: string, patch: Partial<TaskNode>) => {
+                useWbsStore.setState(state => ({
+                    nodes: {
+                        ...state.nodes,
+                        [nodeId]: state.nodes[nodeId] ? { ...state.nodes[nodeId], ...patch } : state.nodes[nodeId],
+                    },
+                }));
+            },
+            removeNodeFromRuntime: (nodeId: string) => {
+                useWbsStore.setState(state => {
+                    const nodes = { ...state.nodes };
+                    delete nodes[nodeId];
+                    return { nodes };
+                });
+            },
+            setMovePermission: (allowed: boolean) => {
+                const access = useMemberStore.getState().currentBoardAccess;
+                if (!access) return;
+                const capabilities = new Set(access.capabilities || []);
+                if (allowed) capabilities.add('move_task');
+                else capabilities.delete('move_task');
+                useMemberStore.setState({
+                    currentBoardAccess: { ...access, capabilities: Array.from(capabilities) },
+                });
+            },
+            snapshotNodes: () => useWbsStore.getState().nodes,
+        };
+        return () => {
+            delete debugWindow.__projedTaskDragTestApi;
+        };
+    }, []);
+    React.useEffect(() => {
+        const captureDesktopPointer = (event: PointerEvent) => {
+            if (event.pointerType === 'touch') return;
+            const point = { x: event.clientX, y: event.clientY };
+            desktopRawPointerRef.current = point;
+            if (desktopDragOverlayActiveRef.current) setDesktopDragOverlayPointer(point);
+        };
+        window.addEventListener('pointermove', captureDesktopPointer, true);
+        return () => window.removeEventListener('pointermove', captureDesktopPointer, true);
+    }, []);
     const activeDragDescendantCount = React.useMemo(() => {
         const sourceNodeId = activeDrag?.node?.id;
         if (!sourceNodeId) return 0;
         const state = useWbsStore.getState();
         return collectTaskDragDescendantIds(sourceNodeId, state.parentNodesIndex, state.nodes).length;
     }, [activeDrag]);
+    const desktopDragOverlayPosition = React.useMemo(() => {
+        if (!activeDrag?.node || !desktopDragOverlayPointer || typeof window === 'undefined') return null;
+        return resolvePointerUpperRightOverlayPosition({
+            pointer: desktopDragOverlayPointer,
+            overlay: {
+                width: activeDrag.type === 'wbs-column' ? 270 : 240,
+                height: 40,
+            },
+            viewport: {
+                left: 0,
+                top: 0,
+                width: window.innerWidth,
+                height: window.innerHeight,
+            },
+        });
+    }, [activeDrag, desktopDragOverlayPointer]);
     const updateDesktopDropPreview = React.useCallback((preview: DesktopTaskDropPreview | null) => {
         const currentPreview = desktopDropPreviewRef.current;
         const nextPreview = currentPreview
@@ -122,6 +221,129 @@ const BoardView = () => {
         desktopDropPreviewRef.current = nextPreview;
         setDesktopDropPreview(nextPreview);
     }, []);
+
+    const applyDesktopChildDrop = React.useCallback((next: DesktopTaskChildDropState | null) => {
+        desktopChildDropRef.current = next;
+        setDesktopChildDrop(next);
+    }, []);
+
+    const clearDesktopChildDrop = React.useCallback(() => {
+        desktopPointerRef.current = null;
+        desktopRawPointerRef.current = null;
+        desktopActiveDataRef.current = null;
+        applyDesktopChildDrop(null);
+    }, [applyDesktopChildDrop]);
+
+    const reportTaskChildDropSuccess = React.useCallback((detail: TaskChildDropSuccessDetail) => {
+        setTaskChildDropAnnouncement('');
+        window.requestAnimationFrame(() => {
+            setTaskChildDropAnnouncement(`${detail.sourceTitle} 已移入 ${detail.targetTitle} 的子任務`);
+        });
+        emitTaskChildDropSuccess(detail);
+    }, []);
+
+    const resolveDesktopChildDropAtPoint = React.useCallback((
+        activeData: Record<string, any>,
+        point: { x: number; y: number },
+    ) => {
+        const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(activeData?.type);
+        if (activeData?.source === 'task-workbench'
+            || !sourceSurfaceKind
+            || sourceSurfaceKind === 'workbench-unplaced-row'
+            || !activeData?.nodeId) return null;
+        return resolveTaskTitleChildDropTarget({
+            point,
+            inputMode: 'mouse',
+            sourceNodeId: activeData.nodeId,
+            sourceSurfaceKind,
+            nodesRecord: useWbsStore.getState().nodes,
+        });
+    }, []);
+
+    const resolveDesktopChildDropZoneAtPoint = React.useCallback((
+        point: { x: number; y: number },
+    ) => resolveTaskTitleChildDropZone({
+        point,
+        inputMode: 'mouse',
+        nodesRecord: useWbsStore.getState().nodes,
+    }), []);
+
+    const updateDesktopChildDropAtPoint = React.useCallback((
+        activeData: Record<string, any>,
+        point: { x: number; y: number },
+    ) => {
+        desktopActiveDataRef.current = activeData;
+        desktopPointerRef.current = point;
+        const target = resolveDesktopChildDropAtPoint(activeData, point);
+        const current = desktopChildDropRef.current;
+        const transition = advanceTaskChildIntent({
+            current: {
+                phase: current?.phase || 'none',
+                targetId: current?.target.targetNodeId || null,
+                candidateSince: current?.candidateSince || null,
+            },
+            targetId: target?.targetNodeId || null,
+            now: Date.now(),
+        });
+        if (!target || transition.phase === 'none' || transition.candidateSince === null) {
+            applyDesktopChildDrop(null);
+            return false;
+        }
+
+        const sourceNode = useWbsStore.getState().nodes[activeData.nodeId];
+        const next: DesktopTaskChildDropState = {
+            sessionId: desktopChildDropSessionRef.current,
+            sourceNodeId: activeData.nodeId,
+            sourceTitle: sourceNode?.title || activeData.title || '未命名任務',
+            phase: transition.phase,
+            candidateSince: transition.candidateSince,
+            target,
+        };
+        applyDesktopChildDrop(next);
+        if (transition.phase === 'armed') {
+            updateDesktopDropPreview(null);
+            setDesktopOriginIndicator(null);
+        }
+        recordDesktopTaskDragDebug({
+            type: transition.phase === 'armed' ? 'child-intent:armed' : 'child-intent:candidate',
+            sourceNodeId: next.sourceNodeId,
+            targetNodeId: target.targetNodeId,
+            candidateSince: transition.candidateSince,
+            point,
+            safeRect: target.previewRect.safe,
+        });
+        return true;
+    }, [applyDesktopChildDrop, resolveDesktopChildDropAtPoint, updateDesktopDropPreview]);
+
+    React.useEffect(() => {
+        const current = desktopChildDrop;
+        if (!current || current.phase !== 'candidate') return undefined;
+        const remaining = getTaskChildIntentRemainingMs({
+            phase: current.phase,
+            targetId: current.target.targetNodeId,
+            candidateSince: current.candidateSince,
+        });
+        if (remaining === null) return undefined;
+        const sessionId = current.sessionId;
+        const targetNodeId = current.target.targetNodeId;
+        const timer = window.setTimeout(() => {
+            const activeData = desktopActiveDataRef.current;
+            const point = desktopPointerRef.current;
+            const latest = desktopChildDropRef.current;
+            if (
+                !activeData
+                || !point
+                || !latest
+                || latest.sessionId !== sessionId
+                || latest.target.targetNodeId !== targetNodeId
+            ) {
+                return;
+            }
+            updateDesktopChildDropAtPoint(activeData, point);
+        }, remaining);
+        return () => window.clearTimeout(timer);
+    }, [desktopChildDrop, updateDesktopChildDropAtPoint]);
+
     const taskDragSession = useTaskDragSession({
         boardSurfaceRef: mobilePanSurfaceRef,
         activeBoardId,
@@ -138,6 +360,23 @@ const BoardView = () => {
         onSessionBegin: () => {
             setActiveDrag(null);
             updateDesktopDropPreview(null);
+            clearDesktopChildDrop();
+        },
+        onCommit: (result, observation) => {
+            if (
+                result.status !== 'committed'
+                || observation.targetSurfaceKind !== 'task-title-child'
+                || !observation.targetNodeId
+            ) {
+                return;
+            }
+            const nodes = useWbsStore.getState().nodes;
+            reportTaskChildDropSuccess({
+                sourceNodeId: observation.source.nodeId,
+                sourceTitle: nodes[observation.source.nodeId]?.title || '未命名任務',
+                targetNodeId: observation.targetNodeId,
+                targetTitle: nodes[observation.targetNodeId]?.title || observation.childTargetTitle || '未命名任務',
+            });
         },
     });
 
@@ -205,9 +444,30 @@ const BoardView = () => {
 
     const collisionDetection = useCallback((args: any) => {
         const pointerCollisions = pointerWithin(args);
-        const collisions = pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
         const activeType = args.active?.data.current?.type;
         const activeSource = args.active?.data.current?.source;
+        if (
+            ['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType)
+            && args.pointerCoordinates
+            && typeof document !== 'undefined'
+        ) {
+            const boardCanvas = document.querySelector<HTMLElement>('[data-layout-region="board-canvas"]');
+            const boardRect = boardCanvas?.getBoundingClientRect();
+            const pointerOutsideBoard = Boolean(boardRect
+                && (args.pointerCoordinates.x < boardRect.left
+                    || args.pointerCoordinates.x > boardRect.right
+                    || args.pointerCoordinates.y < boardRect.top
+                    || args.pointerCoordinates.y > boardRect.bottom));
+            if (pointerOutsideBoard) {
+                recordDesktopTaskDragDebug({
+                    type: 'collision:outside-board',
+                    activeId: String(args.active?.id),
+                    pointer: args.pointerCoordinates,
+                });
+                return [];
+            }
+        }
+        const collisions = pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
         const getCollisionContainer = (collision: any) => (
             typeof args.droppableContainers?.get === 'function'
                 ? args.droppableContainers.get(collision.id)
@@ -387,8 +647,12 @@ const BoardView = () => {
      */
     const handleDragStart = (event: any) => {
         if (!canMoveTask) return;
+        desktopDragCancelledRef.current = false;
         const { active } = event;
         const activeData = active.data.current;
+        desktopChildDropSessionRef.current += 1;
+        applyDesktopChildDrop(null);
+        desktopActiveDataRef.current = activeData;
         const nodeId = activeData?.nodeId;
         const sourceCandidates = Array.from(document.querySelectorAll<HTMLElement>('[data-task-id]'))
             .filter((element) => element.getAttribute('data-task-id') === nodeId);
@@ -396,7 +660,10 @@ const BoardView = () => {
             ? sourceCandidates.find((element) => element.hasAttribute('data-task-workbench-drag-surface'))
             : sourceCandidates.find((element) => element.hasAttribute('data-task-surface-source'))
                 || sourceCandidates.find((element) => element.hasAttribute('data-task-drag-surface'));
-        const sourceRect = sourceElement?.getBoundingClientRect();
+        const sourceScopeElement = sourceElement?.closest<HTMLElement>(
+            '[data-task-surface-scope="true"], [data-desktop-task-hover-scope="true"]',
+        ) || sourceElement;
+        const sourceRect = sourceScopeElement?.getBoundingClientRect();
         desktopDragSourceRectRef.current = sourceRect
             ? { left: sourceRect.left, right: sourceRect.right, top: sourceRect.top, bottom: sourceRect.bottom }
             : null;
@@ -411,6 +678,9 @@ const BoardView = () => {
             && typeof activatorEvent?.clientY === 'number'
             ? { x: activatorEvent.clientX, y: activatorEvent.clientY }
             : null;
+        desktopRawPointerRef.current = desktopDragActivatorPointRef.current;
+        desktopDragOverlayActiveRef.current = true;
+        setDesktopDragOverlayPointer(desktopRawPointerRef.current);
         updateDesktopDropPreview(null);
         setDesktopOriginIndicator(desktopDragActivatorPointRef.current ? originIndicator : null);
         setActiveDrag({
@@ -422,14 +692,41 @@ const BoardView = () => {
         });
     };
 
-    const handleDragCancel = () => {
+    const handleDragCancel = React.useCallback(() => {
+        desktopDragCancelledRef.current = true;
         desktopDragSourceRectRef.current = null;
         desktopDragOriginIndicatorRef.current = null;
         desktopDragActivatorPointRef.current = null;
+        desktopDragOverlayActiveRef.current = false;
+        setDesktopDragOverlayPointer(null);
         updateDesktopDropPreview(null);
         setDesktopOriginIndicator(null);
+        clearDesktopChildDrop();
         setActiveDrag(null);
-    };
+    }, [clearDesktopChildDrop, updateDesktopDropPreview]);
+
+    React.useEffect(() => {
+        if (!activeDrag) return undefined;
+        const cancel = () => handleDragCancel();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'visible') cancel();
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') cancel();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('keydown', handleKeyDown, true);
+        window.addEventListener('pointercancel', cancel, true);
+        window.addEventListener('blur', cancel);
+        window.addEventListener('pagehide', cancel);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('keydown', handleKeyDown, true);
+            window.removeEventListener('pointercancel', cancel, true);
+            window.removeEventListener('blur', cancel);
+            window.removeEventListener('pagehide', cancel);
+        };
+    }, [activeDrag, handleDragCancel]);
 
     const buildDesktopDropPreview = React.useCallback((active: any, over: any) => {
         if (!active?.data.current || !over?.data.current) return null;
@@ -445,6 +742,10 @@ const BoardView = () => {
 
     const handleDragOver = (event: any) => {
         if (!canMoveTask) return;
+        if (desktopChildDropRef.current?.phase === 'armed') {
+            updateDesktopDropPreview(null);
+            return;
+        }
         const { active, over } = event;
         const preview = over ? buildDesktopDropPreview(active, over) : null;
         recordDesktopTaskDragDebug({
@@ -466,33 +767,143 @@ const BoardView = () => {
             return;
         }
 
-        const pointer = {
+        const pointer = desktopRawPointerRef.current || {
             x: activatorPoint.x + event.delta.x,
             y: activatorPoint.y + event.delta.y,
         };
+        desktopPointerRef.current = pointer;
         const pointerInsideSource = pointer.x >= sourceRect.left
             && pointer.x <= sourceRect.right
             && pointer.y >= sourceRect.top
             && pointer.y <= sourceRect.bottom;
         if (pointerInsideSource) {
+            applyDesktopChildDrop(null);
             updateDesktopDropPreview(null);
             setDesktopOriginIndicator(originIndicator);
             return;
         }
+        const hasChildCandidate = updateDesktopChildDropAtPoint(event.active.data.current, pointer);
+        if (hasChildCandidate && desktopChildDropRef.current?.phase === 'armed') return;
+        const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(event.active.data.current?.type);
+        const canUseChildDrop = Boolean(
+            event.active.data.current?.source !== 'task-workbench'
+            && sourceSurfaceKind
+            && sourceSurfaceKind !== 'workbench-unplaced-row'
+        );
+        if (canUseChildDrop && !hasChildCandidate && resolveDesktopChildDropZoneAtPoint(pointer)) {
+            setDesktopOriginIndicator(null);
+            updateDesktopDropPreview(null);
+            return;
+        }
         setDesktopOriginIndicator(null);
+        const preview = event.over ? buildDesktopDropPreview(event.active, event.over) : null;
+        updateDesktopDropPreview(preview);
     };
 
     const handleDragEnd = (event: any) => {
+        const wasCancelled = desktopDragCancelledRef.current;
+        desktopDragCancelledRef.current = false;
         const { active, over } = event;
         const displayedPreview = desktopDropPreviewRef.current;
         const currentPreview = over ? buildDesktopDropPreview(active, over) : null;
+        const displayedChildDrop = desktopChildDropRef.current;
+        const activatorPoint = desktopDragActivatorPointRef.current;
+        const releasePointer = desktopRawPointerRef.current
+            || (activatorPoint && event.delta
+                ? { x: activatorPoint.x + event.delta.x, y: activatorPoint.y + event.delta.y }
+                : desktopPointerRef.current);
+        const releaseChildTarget = releasePointer
+            ? resolveDesktopChildDropAtPoint(active.data.current, releasePointer)
+            : null;
+        const releaseSourceSurfaceKind = taskDragSourceKindToSurfaceKind(active.data.current?.type);
+        const canUseReleaseChildDrop = Boolean(
+            active.data.current?.source !== 'task-workbench'
+            && releaseSourceSurfaceKind
+            && releaseSourceSurfaceKind !== 'workbench-unplaced-row'
+        );
+        const releaseChildZone = releasePointer && canUseReleaseChildDrop
+            ? resolveDesktopChildDropZoneAtPoint(releasePointer)
+            : null;
+        const sourceRect = desktopDragSourceRectRef.current;
+        const releaseInsideSource = Boolean(releasePointer && sourceRect
+            && releasePointer.x >= sourceRect.left
+            && releasePointer.x <= sourceRect.right
+            && releasePointer.y >= sourceRect.top
+            && releasePointer.y <= sourceRect.bottom);
+        const canCommitDisplayedChild = Boolean(
+            displayedChildDrop
+            && displayedChildDrop.phase === 'armed'
+            && displayedChildDrop.sessionId === desktopChildDropSessionRef.current
+            && displayedChildDrop.sourceNodeId === active.data.current?.nodeId
+            && releaseChildTarget
+            && releaseChildTarget.targetNodeId === displayedChildDrop.target.targetNodeId
+        );
         desktopDragSourceRectRef.current = null;
         desktopDragOriginIndicatorRef.current = null;
         desktopDragActivatorPointRef.current = null;
+        desktopRawPointerRef.current = null;
+        desktopDragOverlayActiveRef.current = false;
+        setDesktopDragOverlayPointer(null);
         updateDesktopDropPreview(null);
         setDesktopOriginIndicator(null);
+        clearDesktopChildDrop();
         setActiveDrag(null);
-        if (!canMoveTask || !over) return;
+        if (wasCancelled) return;
+        if (!canMoveTask) return;
+        if (releaseInsideSource) return;
+
+        if (canCommitDisplayedChild && displayedChildDrop && releaseChildTarget) {
+            const childPreview: DesktopTaskDropPreview = {
+                sourceNodeId: displayedChildDrop.sourceNodeId,
+                targetNodeId: releaseChildTarget.targetNodeId,
+                targetDndId: `task-title-child:${releaseChildTarget.targetNodeId}`,
+                targetSurfaceKind: releaseChildTarget.targetSurfaceKind,
+                displayPosition: 'append',
+                intent: releaseChildTarget.intent,
+                indicatorRect: {
+                    left: releaseChildTarget.previewRect.insertion.left,
+                    top: releaseChildTarget.previewRect.insertion.top,
+                    width: releaseChildTarget.previewRect.insertion.width,
+                },
+            };
+            const result = commitDesktopTaskDrag({
+                activeData: active.data.current,
+                overData: {
+                    type: 'wbs-task-title-child',
+                    nodeId: releaseChildTarget.targetNodeId,
+                },
+                desktopPreview: childPreview,
+                dependencies: {
+                    activeBoardId,
+                    activeWorkspaceId,
+                    canMoveTask,
+                    canEditTask,
+                    canCreateTask,
+                    canDeleteTask,
+                    addNode,
+                    updateNode,
+                    batchUpdateNodes,
+                    removeNode,
+                    recalculateAncestorStatus,
+                },
+            });
+            if (result.status === 'committed') {
+                reportTaskChildDropSuccess({
+                    sourceNodeId: displayedChildDrop.sourceNodeId,
+                    sourceTitle: displayedChildDrop.sourceTitle,
+                    targetNodeId: releaseChildTarget.targetNodeId,
+                    targetTitle: releaseChildTarget.targetTitle,
+                });
+            }
+            return;
+        }
+
+        // A valid candidate does not own release until it has visibly armed;
+        // preserve the existing same-level/lane action before the 1s dwell.
+        // Invalid self/descendant/stale child zones remain blocked for safety.
+        if (releaseChildZone && !releaseChildTarget) return;
+
+        if (!over) return;
 
         const activeType = active.data.current?.type;
         const targetType = over.data.current?.type;
@@ -709,7 +1120,17 @@ const BoardView = () => {
                     </div>
                 </div>
             </div>
-            {desktopIndicator ? (
+            {desktopChildDrop ? (
+                <TaskChildDropPreview
+                    phase={desktopChildDrop.phase}
+                    sourceTitle={desktopChildDrop.sourceTitle}
+                    targetNodeId={desktopChildDrop.target.targetNodeId}
+                    targetTitle={desktopChildDrop.target.targetTitle}
+                    previewRect={desktopChildDrop.target.previewRect}
+                    inputMode="mouse"
+                />
+            ) : null}
+            {desktopIndicator && desktopChildDrop?.phase !== 'armed' ? (
                 <div
                     className={`pointer-events-none fixed z-[86] ${
                         desktopIndicator.kind === 'origin' ? '' : '-translate-y-1/2'
@@ -739,30 +1160,36 @@ const BoardView = () => {
                     )}
                 </div>
             ) : null}
-            <DragOverlay dropAnimation={null}>
-                {activeDrag?.node ? (
-                    <div
-                        data-kanban-drag-overlay="true"
-                        data-task-drag-source-id={activeDrag.node.id}
-                        data-task-drag-descendant-count={activeDragDescendantCount}
-                        className={`task-title-text pointer-events-none flex translate-x-4 translate-y-4 items-center gap-2 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg will-change-transform ${
+            <DragOverlay dropAnimation={null}>{null}</DragOverlay>
+            {activeDrag?.node && desktopDragOverlayPosition ? (
+                <div
+                    data-kanban-drag-overlay="true"
+                    data-task-drag-source-id={activeDrag.node.id}
+                    data-task-drag-descendant-count={activeDragDescendantCount}
+                    data-task-drag-overlay-anchor="pointer-upper-right"
+                    data-task-drag-overlay-pointer-gap={TASK_DRAG_OVERLAY_POINTER_GAP_PX}
+                    data-task-drag-overlay-edge-placement={desktopDragOverlayPosition.placement}
+                    className={`task-title-text pointer-events-none fixed z-[93] flex items-center gap-2 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg ${
                         activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
                     }`}
-                    >
-                        <span className="min-w-0 flex-1 truncate">
-                            {activeDrag.title || activeDrag.node.title || '未命名任務'}
+                    style={{
+                        left: desktopDragOverlayPosition.left,
+                        top: desktopDragOverlayPosition.top,
+                    }}
+                >
+                    <span className="min-w-0 flex-1 truncate">
+                        {activeDrag.title || activeDrag.node.title || '未命名任務'}
+                    </span>
+                    {activeDragDescendantCount > 0 ? (
+                        <span
+                            data-task-drag-scope-summary="true"
+                            className="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700"
+                        >
+                            含 {activeDragDescendantCount} 個子任務
                         </span>
-                        {activeDragDescendantCount > 0 ? (
-                            <span
-                                data-task-drag-scope-summary="true"
-                                className="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700"
-                            >
-                                含 {activeDragDescendantCount} 個子任務
-                            </span>
-                        ) : null}
-                    </div>
-                ) : null}
-            </DragOverlay>
+                    ) : null}
+                </div>
+            ) : null}
             <TaskDragPresenter
                 state={taskDragSession.state}
                 canEditTask={canEditTask}
@@ -770,6 +1197,14 @@ const BoardView = () => {
                 canDeleteTask={canDeleteTask}
                 onAction={taskDragSession.activateAction}
             />
+            <div
+                className="sr-only"
+                aria-live="polite"
+                aria-atomic="true"
+                data-task-child-drop-announcement="true"
+            >
+                {taskChildDropAnnouncement}
+            </div>
         </DndContext>
         </MobileTaskActionContext.Provider>
         </KanbanDependencyContext.Provider>

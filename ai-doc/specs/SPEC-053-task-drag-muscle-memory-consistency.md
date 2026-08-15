@@ -402,6 +402,13 @@ npm.cmd run build:test
 - QA 真實操作驗證計畫尚未執行、任一必要案例失敗，或缺少可追溯操作證據卻宣稱完成。
 - DEV-052 archived contract 被作為 executable source of truth。
 
+## 14. DEV-068 使用者明示位置修訂（2026-08-15）
+
+- 使用者重驗確認舊桌機來源卡位置會遮住當時的「移入子任務」parent frame與ghost（DEV-068後續已改為child insertion marker），因此已完成本文件要求的Human Re-entry。
+- `Intentional replacement`只限active drag來源預覽的位置：由舊source-located右下偏移改為raw pointer右上方16px，右緣時左上fallback並以8px clamp。
+- 外觀內容、8px drag threshold、`dropAnimation={null}`、click／right-click、single session、at-most-once commit、cancel cleanup與Workbench placed-row no-drag全部維持；DEV-053回歸改以這些不變項及新位置契約驗證。
+- DEV-068最新完整藍框契約採candidate與standard indicator共存、armed才接管；Workbench來源明確不進child intent，未歸位歸位與placed-row no-drag仍由DEV-053／055回歸保護。
+
 ## 13. Deferred Scope Audit
 
 - Physical iOS Safari / Android Chrome：Supplemental；不阻塞 DEV-053 done，但若未執行，不得宣稱真機手感已簽核。
