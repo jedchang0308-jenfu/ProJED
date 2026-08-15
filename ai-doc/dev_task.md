@@ -343,6 +343,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得恢復 DEV-051／052、不得改 Workbench placed-row no-drag、來源 no-op、單一 marker、raw finger、click/right-click 或 schema；任何 indicator／commit 不一致即停止。
   - 證據：`SPEC-067`、`QA-DEV-067`、`QC-DEV-067`；DEV-067 static 13/13、browser 8/8、DEV-055 desktop 16/16、DEV-054 mobile 11/11、DEV-053／054／055／058 static regression、TypeScript、targeted ESLint、test build 與 1440／1024／390 rendered QC 通過。
   - 計入交付：是
+- ○ DEV-068 [交付點] [待排] [P1] [RD Contract Ready / QA Plan Ready] 任務標題中央停留移入子任務
+  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的明確落點；來源進入目標標題中央後連續停留 1,000ms 才鎖定 child intent，顯示父任務與縮排 ghost preview，放開後才提交。
+  - 來源 ID：`USER-20260815-TASK-TITLE-CENTER-CHILD-DROP`
+  - 父任務：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
+  - 下一步：若要開始實作，先把契約補到 RD Implementation Ready，再由 RD 開發；完成後必須依 `QA-DEV-068` 由 AI 在真實 rendered page 操作桌機與手機流程。
+  - 阻塞 / 恢復條件：本輪只授權規格與 QA 計畫；尚未授權產品碼、QC、部署或 release。缺 iPhone Safari／Android Chrome AI 可控實機時，只能標記 browser gate 通過，不得宣稱完整 mobile sign-off。
+  - 證據：`SPEC-068`、`QA-DEV-068`；FMEA、桌機／手機真實操作案例、1 秒 timing boundary、衝突回歸、資料安全、viewport、可及性與失敗證據規則已定義，尚未執行。
+  - 計入交付：是
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -502,6 +510,45 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - DEV-053／054／055／058 static regression 30/30、37/37、27/27、26/26 PASS。
 - TypeScript、targeted ESLint（0 error；2 個既存 warning）、`build:test` 與 1440x900／1024x768／390x844 rendered QC PASS。
 - QC authoritative evidence：`ai-doc/qc/QC-DEV-067-kanban-l1-drag-promotion.md`；Physical iOS／Android 手感列 supplemental。
+
+## DEV-068：任務標題中央停留移入子任務
+
+- 狀態：RD Contract Ready / Human Confirmed / QA Plan Ready / Not Implemented
+- 節點類型：交付點
+- 父交付點：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
+- 是否計入產品交付完成：是
+- 原始需求邊界：`USER-20260815-TASK-TITLE-CENTER-CHILD-DROP`
+- 風險等級：Medium-to-High（核心拖曳意圖、parent/order、跨階層與桌機／手機手勢衝突）
+
+### 問題與使用者價值
+
+目前只有無子任務 L2 卡片底部存在透明追加 hit area，L3+ 沒有一致入口，使用者也看不出該區域。完成後，拖到任一階層任務標題中央並停留 1 秒，畫面會先明確預覽「來源將成為此任務的子任務」，只有放開才移動；未滿 1 秒、離開或取消一律不寫入。
+
+### Human Decision / RD Contract
+
+- L1／L2／L3+ 共用 title-center child intent；中央安全區不含完成、展開、日期、標籤、依賴與選單等控制。
+- 真正開始拖曳後才計 child dwell；同一 source、target 與中央區連續 1,000ms 才 armed。未滿 1 秒在中央放開為 no-op，不回退成 reorder。
+- Candidate 立即顯示低干擾提示；armed 後顯示唯一 parent＋縮排 ghost child 預覽。Preview 使用 overlay／portal，不得推動 layout。
+- Release 重新驗證 exact target、geometry、permission、cycle 與 store freshness；通過才寫入一次並提供單次 undo。
+- 桌機保留 8px threshold、click/right-click 與一般排序；手機保留 pan-first、long-press、raw finger 與 action rail priority。
+- DEV-055 的 L2 卡片底部透明 child commit 入口退役；column body L2 drop、root L1 append、非中央同階排序與 L1 promotion 保留。
+- Authoritative source：`ai-doc/specs/SPEC-068-task-title-center-child-drop.md`。
+
+### QA / QC Gate
+
+- QA authoritative source：`ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md`。
+- AI 必須在真實 rendered page 使用 mouse down/move/hold/up 與 mobile touch/long-press 路徑；直接改 store 只可建立 fixture，不得代替操作。
+- 必測 1440x900、1024x768、390x844、430x932 與 320x844；需保存 timing、座標、preview、before/after store、screenshot/video、console/network/visible-error evidence。
+- wrong parent、未滿 1 秒提交、stale timer、double commit、cycle、subtree loss、permission bypass 或 visible runtime error 任一發生即不通過。
+- iPhone Safari 與 Android Chrome 實機是完整 mobile sign-off gate；若 AI 無可控實機，結果必須標記 `AI Browser QA/QC Passed / Physical Mobile 未充分驗證`。
+
+### Spec Governance 結論
+
+- DEV-055 底部透明 L2 child append target：`Intentional replacement`。
+- DEV-067 任務標題既有同階定位：`Intentional replacement`，僅限標題中央完成 1 秒 armed；非中央區維持原契約。
+- DEV-053／054／058／065 的 session safety、mobile input、origin feedback 與 drag 前 subtree hover：`Compatible exception`。
+- ADR 不需要：看板內局部、可逆，無 schema、外部 API、權限模型或跨模組資料架構變更。
+- 本輪只完成 RD Contract 與 QA 計畫，尚未執行產品碼、QC、部署或 release。
 
 
 ## PM Update 歷史歸檔
