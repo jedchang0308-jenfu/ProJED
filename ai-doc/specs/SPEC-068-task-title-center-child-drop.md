@@ -2,7 +2,7 @@
 
 狀態：Implemented / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release
 
-日期：2026-08-15
+日期：2026-08-16
 
 優先級：P1
 
@@ -26,7 +26,8 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 - 來源進入有效目標的完整預選範圍即成為 `child-candidate`。
 - 同一來源、同一目標連續停留滿 1,000ms 才成為 `child-armed`。
-- `child-armed` 顯示父任務框、可見子樹框及「下一子階」插入線；插入線起點依實際階層右移，只有放開才移入。
+- `child-candidate` 只保留不可見命中與計時狀態，不顯示子任務藍框；畫面維持既有排序定位條。
+- `child-armed` 才同步顯示父任務框、可見子樹框及「下一子階」插入線；插入線起點依實際階層右移，只有放開才移入。
 - 滑到內層任務時，最深、面積較小的 innermost scope 接管；父框不得搶走子框。
 - 展開鍵、連結、輸入框、文字區域、選單與其他內部控制項不建立 child intent；任務主表面即使為了可及性帶 `role="button"`，仍是有效藍框範圍。
 - 拖曳中的來源任務固定在 pointer／finger 上方，優先右側 16px，空間不足時左側或 viewport clamp，不得遮住 parent frame 或 child insertion marker。
@@ -37,7 +38,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 | 階段 | 子任務回饋 | 既有排序回饋 | 放開結果 |
 |---|---|---|---|
-| `<1,000ms` candidate | DEV-065 同款藍框；無 child insertion marker | 保留既有 standard insertion marker | 執行當下既有同階／lane／promotion 動作，不得改成 child |
+| `<1,000ms` candidate | 不顯示子任務藍框；無 child insertion marker | 保留既有 standard insertion marker | 執行當下既有同階／lane／promotion 動作，不得改成 child |
 | `>=1,000ms` armed | parent source frame、subtree frame、下一子階 insertion marker | standard insertion marker 清除 | `parentId = exact target.id`，一次提交 |
 | 離開／切換目標 | 舊 candidate/armed 立即清除並重算 | 依目前落點恢復 | 不得提交 stale child target |
 | 無效 self／descendant／archived／missing target | 不得 armed | 同一危險點不得被重新解讀為繞過 cycle guard 的排序 | zero-write |
@@ -88,11 +89,11 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 ## 5. 預覽契約
 
-- Candidate 與 armed 的 target frame 沿用 DEV-065 視覺語言，不新增另一套顏色：
+- 只有 Armed 顯示 target frame，並沿用 DEV-065 視覺語言，不新增另一套顏色：
   - primary source：`ring-2 ring-inset ring-primary-500 bg-primary-50/60`
   - visible subtree：`ring-1 ring-inset ring-primary-400`
-- Candidate 可與既有 insertion marker 共存，用來表達「現在放開走原操作，繼續停留可進子階」。
-- Armed 必須清除原 standard insertion marker，改在 exact target 子樹末端顯示唯一 child insertion marker；沿用 `KanbanInsertionMarker` 的圓點＋線條，起點與下一層任務內容對齊，L2／L3／L4+ 必須逐層右移。
+- Candidate 不顯示任何子任務 frame，只保留既有 insertion marker；避免使用者在 1 秒命中前誤以為放開會移入子階。
+- Armed 必須在同一狀態切換中同步顯示 target frame、清除原 standard insertion marker，並在 exact target 子樹末端顯示唯一 child insertion marker；沿用 `KanbanInsertionMarker` 的圓點＋線條，起點與下一層任務內容對齊，L2／L3／L4+ 必須逐層右移。
 - Armed 不顯示常駐「移入…的子任務」文字框；視覺以框形、圓點、線條與縮排位置表意，輔助科技仍由 `aria-live` 宣告 exact parent，避免只靠顏色。
 - 全部 child preview 為 fixed overlay，不得改 normal-flow geometry、column width、scrollHeight 或 board scrollWidth。
 - 同一時間只允許一個 exact child target；離開後立即清除，不得 stale re-arm。
@@ -126,7 +127,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - L1/L2/L3+ marker 均掛在 DEV-065 完整 hover scope，而非 title span。
 - hit-scope rect 包住 primary 與可見 subtree；長中文、長英文、未命名、標題尾端空白與主表面其他空白都可候選。
 - exact innermost ownership、控制項排除、999/1000ms、target switch、armed leave、cancel/stale target、cycle、permission、undo/redo 全部通過。
-- Candidate 保留一個 standard indicator、child insertion marker 為 0；armed 時 standard indicator 為 0、child insertion marker 恰為 1。
+- Candidate 保留一個 standard indicator，primary/subtree/scope 子任務藍框與 child insertion marker 均為 0；armed 時 target frame 與 child insertion marker 同步出現，standard indicator 為 0、child insertion marker 恰為 1。
 - L1→L2、L2→L3、L3+→下一層的 child insertion 起點必須單調右移，且線條落在 exact target 子樹末端，不得顯示在父層或兄弟層起點。
 - DEV-065 的 primary-500／primary-400 樣式與 hover 行為不回歸。
 - 五個 viewport：1440x900、1024x768、390x844、430x932、320x844 無 overflow 或不可讀遮擋。
@@ -147,9 +148,9 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 已執行核心證據：
 
-- `verify:dev-068-task-title-center-child-drop`：61/61。
-- `verify:dev-068-task-title-center-child-drop-browser`：27/27 rendered mouse/touch；新增 L2／L3／L4+ insertion-start 單調右移 gate。
-- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786808137276-*`。
-- QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop及Workbench來源誤入child intent；均回送 RD 修正後才採信最終結果。
+- `verify:dev-068-task-title-center-child-drop`：64/64。
+- `verify:dev-068-task-title-center-child-drop-browser`：27/27 rendered mouse/touch；包含 candidate 零藍框、armed 藍框與插入線同步、L2／L3／L4+ insertion-start 單調右移 gate。
+- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786811035576-*`。
+- QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop、Workbench來源誤入child intent、desktop viewport-change未取消，以及 candidate 過早顯示子任務藍框；均回送 RD 修正後才採信最終結果。
 - Physical iPhone／Android：未執行。
 - 本輪未 push、deploy 或 release。

@@ -259,6 +259,8 @@ assert.match(source.board, /resolveDesktopChildDropAtPoint/);
 assert.match(source.board, /desktopDragCancelledRef/);
 assert.match(source.board, /buildDesktopDropPreview\(event\.active, event\.over\)/);
 assert.match(source.board, /window\.addEventListener\('pagehide', cancel\)/);
+assert.match(source.board, /window\.addEventListener\('orientationchange', cancel\)/);
+assert.match(source.board, /window\.addEventListener\('resize', cancel\)/);
 assert.match(source.board, /__projedTaskDragTestApi/);
 assert.match(source.board, /resolvePointerUpperRightOverlayPosition/);
 assert.match(source.board, /task-title-text pointer-events-none fixed z-\[93\]/);
@@ -276,6 +278,10 @@ assert.match(source.childPreview, /data-task-child-drop-source-frame="true"/);
 assert.match(source.childPreview, /data-task-child-drop-subtree-frame="true"/);
 assert.match(source.childPreview, /data-task-child-drop-insertion-preview="true"/);
 assert.match(source.childPreview, /<KanbanInsertionMarker compact className="py-0"/);
+assert.match(
+  source.childPreview,
+  /\{armed \? \(\s*<>[\s\S]*data-task-child-drop-scope-frame="true"[\s\S]*data-task-child-drop-parent-frame="true"[\s\S]*data-task-child-drop-subtree-frame="true"[\s\S]*data-task-child-drop-insertion-preview="true"[\s\S]*<\/>\s*\) : null\}/,
+);
 assert.doesNotMatch(source.childPreview, /data-task-child-drop-ghost="true"/);
 assert.doesNotMatch(source.childPreview, /CornerDownRight/);
 assert.match(source.childPreview, /ring-primary-500/);
@@ -303,7 +309,7 @@ assert.match(source.packageJson, /verify:dev-068-task-title-center-child-drop/);
 
 console.log(JSON.stringify({
   ok: true,
-  cases: 61,
+  cases: 64,
   timing: { start, at999, at1000, switched },
   insertionGeometry: { l1ChildInsertion, l2ChildInsertion, l3ChildInsertion, viewportClampedInsertion },
   intents: {

@@ -2,18 +2,18 @@
 
 狀態：68/68 AI automated coverage PASS / Physical iPhone Safari 與 Android Chrome Pending
 
-日期：2026-08-15
+日期：2026-08-16
 
-本表把 `QA-DEV-068-task-title-center-child-drop.md` 的 68 個風險案例逐項連到 rendered mouse/touch 或 deterministic evidence。2026-08-15 最新使用者決策已把 title-only target 改為 DEV-065 完整 hover scope，並採 candidate 共存 standard drop、armed 才接管；`PASS` 只代表本機 AI 可執行範圍，browser synthetic touch 不取代實機 gate。
+本表把 `QA-DEV-068-task-title-center-child-drop.md` 的 68 個風險案例逐項連到 rendered mouse/touch 或 deterministic evidence。2026-08-16 最新使用者決策要求 candidate 不顯示子任務藍框，armed 才讓藍框與下一子階插入線同步出現；`PASS` 只代表本機 AI 可執行範圍，browser synthetic touch 不取代實機 gate。
 
 ## 執行證據總覽
 
-- DEV-068 deterministic：61/61 PASS（完整 hover scope、primary/subtree frame、控制項幾何排除、task-source 保留、candidate standard coexist、child insertion geometry、source overlay edge contract、Workbench來源邊界）。
+- DEV-068 deterministic：64/64 PASS（完整 hover scope、armed-only primary/subtree frame、控制項幾何排除、task-source 保留、candidate standard coexist、child insertion geometry、source overlay edge contract、Workbench來源邊界、desktop viewport-change cleanup）。
 - DEV-068 rendered mouse/touch：27/27 PASS。
-- 相鄰 rendered regression：DEV-065 13/13、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共62/62 PASS。
-- Browser true-operation 合計：89/89 PASS。
-- Static／deterministic 合計：DEV-065 40、DEV-053 30、DEV-054 44、DEV-055 28、DEV-058 26、DEV-067 13、DEV-068 61，共242/242 PASS。
-- 完整 scope 核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786808137276-*`。
+- 相鄰 rendered regression：DEV-065 15/15、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共64/64 PASS。
+- Browser true-operation 合計：91/91 PASS。
+- Static／deterministic 合計：DEV-065 40、DEV-053 30、DEV-054 44、DEV-055 28、DEV-058 26、DEV-067 13、DEV-068 64，共245/245 PASS。
+- 完整 scope 核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786811035576-*`。
 
 ## 68 項案例對照
 
@@ -25,7 +25,7 @@
 | GEO-004 | PASS | `DEV068-DESK-L1`、`DESK-DEEP`、`MOB-L1-SCOPE`、`MOB-DEEP`：L1/L2/L3+ exact innermost target id。 |
 | GEO-005 | PASS | `DEV068-MOB-ARMED`＋`DEV068-VIEWPORTS`：390/430/320 hit-scope 與 desktop complete scope 同源，無 title-only 44px halo。 |
 | GEO-006 | PASS | `QA-054-R03`＋`DEV068-MOB-MOTION-SCROLL`：candidate 前保留原 standard target；離開 scope、scroll/re-enter 後不吸回舊 target。 |
-| UX-001 | PASS | `DEV068-DESK-LIFECYCLE-A11Y`：未滿1秒有candidate frame與原standard insertion marker，child insertion count=0。 |
+| UX-001 | PASS | `DEV068-DESK-900`＋`DEV068-MOB-900`：未滿1秒 primary/subtree/scope frame=0、child insertion=0，僅保留原standard insertion marker。 |
 | UX-002 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`＋`DEV068-DESK-DEPTH-LINE`：parent frame與唯一child insertion marker；L2/L3/L4+起點相對欄位左側為19/29/43px。 |
 | UX-003 | PASS | `DEV068-DESK-ARMED-LEAVE`、`MOB-ACTION`、`QA-055-B07`：origin/general/candidate/armed 互斥且清理。 |
 | TIM-001 | PASS | `DEV068-DESK-900`＋`DEV068-MOB-900`：門檻前 release，parent/order/type zero-write。 |
@@ -43,7 +43,7 @@
 | DESK-005 | PASS | `DEV068-DESK-L1-SOURCE`：L1 group→L2 child 正規化為 task，保留 27 個 descendants。 |
 | DESK-006 | PASS | `DEV068-DESK-DEEP`：exact L3+ direct child。 |
 | DESK-007 | PASS | `DEV068-DESK-SUBTREE-UNDO`：收合 target 的完整 children canonical append、成功展開與 highlight。 |
-| DESK-008 | PASS | `DEV068-DESK-CANCEL-MATRIX`：Escape/pointercancel/blur/pagehide/visibility，zero-write 且 retry PASS。 |
+| DESK-008 | PASS | `DEV068-DESK-CANCEL-MATRIX`：Escape/pointercancel/blur/pagehide/visibility/orientationchange/resize，zero-write、feedback 全清且 retry PASS。 |
 | DESK-009 | PASS | `QA-055-B09/B10/B11`＋`QA-053-B02/B03`：threshold、click、right-click、blank pan 不誤啟動。 |
 | DESK-010 | PASS | `DEV068-DESK-SUBTREE-UNDO`：一次 Undo/Redo 完整還原／重現 parent/order/type。 |
 | MOB-001 | PASS | `QA-053-B05`：L1/L2/L3+ quick tap 開啟 exact details。 |

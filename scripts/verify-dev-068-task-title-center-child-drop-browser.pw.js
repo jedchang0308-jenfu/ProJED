@@ -388,8 +388,10 @@ async (page) => {
     await page.waitForTimeout(420);
     const candidate = await readChildPreview();
     assert(candidate.phase === 'candidate' && candidate.target === targetId && candidate.childInsertionCount === 0
+      && candidate.sourceFrameCount === 0 && candidate.subtreeFrameCount === 0 && candidate.scopeFrameCount === 0
+      && candidate.parentRect === null && candidate.subtreeRect === null
       && candidate.standardInsertionIndicatorCount === 1,
-      'sub-threshold desktop hold must keep the child candidate and standard insertion intent visible', candidate);
+      'sub-threshold desktop hold must keep only the standard insertion intent visible without child frames', candidate);
     await page.mouse.up();
     await page.waitForTimeout(260);
     const after = await readNode(sourceId);
@@ -414,6 +416,7 @@ async (page) => {
     const sourceOverlay = await readSourceOverlayGeometry(targetPoint);
     const targetSurfaceArmed = await surfaceFor(targetId).boundingBox();
     assert(armed.count === 1 && armed.childInsertionCount === 1 && armed.target === targetId
+      && armed.sourceFrameCount === 1 && armed.scopeFrameCount <= 1
       && armed.standardInsertionIndicatorCount === 0
       && armed.childInsertionRect && armed.parentRect
       && armed.childInsertionRect.left >= armed.parentRect.left + 8
@@ -786,9 +789,9 @@ async (page) => {
     return { attempts, duplicatePreview };
   });
 
-  await runCase('DEV068-DESK-CANCEL-MATRIX', 'desktop Escape, pointercancel, blur, pagehide and visibility hidden are terminal zero-write cancellations', async () => {
+  await runCase('DEV068-DESK-CANCEL-MATRIX', 'desktop pointer, lifecycle and viewport changes are terminal zero-write cancellations', async () => {
     const cancellations = [];
-    for (const reason of ['escape', 'pointercancel', 'blur', 'pagehide', 'visibilitychange']) {
+    for (const reason of ['escape', 'pointercancel', 'blur', 'pagehide', 'visibilitychange', 'orientationchange', 'resize']) {
       await openApp({ width: 1440, height: 900 });
       const [sourceId, targetId] = (await fixtureIds()).l2Pair;
       const before = await readNode(sourceId);
@@ -799,7 +802,7 @@ async (page) => {
       else if (reason === 'pointercancel') await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true })));
       else if (reason === 'blur') await page.evaluate(() => window.dispatchEvent(new Event('blur')));
       else if (reason === 'pagehide') await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
-      else {
+      else if (reason === 'visibilitychange') {
         await page.evaluate(() => {
           const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState');
           Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -807,7 +810,8 @@ async (page) => {
           if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor);
           else delete document.visibilityState;
         });
-      }
+      } else if (reason === 'orientationchange') await page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+      else await page.evaluate(() => window.dispatchEvent(new Event('resize')));
       await page.waitForTimeout(120);
       await page.mouse.up().catch(() => undefined);
       await page.waitForTimeout(220);
@@ -982,11 +986,14 @@ async (page) => {
     await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
     await page.waitForTimeout(720);
     const candidate = await readChildPreview();
-    assert(candidate.input === 'touch' && candidate.childInsertionCount === 0 && candidate.standardInsertionIndicatorCount === 1
+    assert(candidate.input === 'touch' && candidate.childInsertionCount === 0
+      && candidate.sourceFrameCount === 0 && candidate.subtreeFrameCount === 0 && candidate.scopeFrameCount === 0
+      && candidate.parentRect === null && candidate.subtreeRect === null
+      && candidate.standardInsertionIndicatorCount === 1
       && candidate.hitScopeRect && targetScopeBefore
       && Math.abs(candidate.safeWidth - targetScopeBefore.width) <= 2
       && Math.abs(candidate.safeHeight - targetScopeBefore.height) <= 2,
-      'mobile candidate must expose the same complete task hover scope used on desktop', { candidate, targetScopeBefore });
+      'mobile candidate must keep the complete hit scope without rendering child frames before arming', { candidate, targetScopeBefore });
     await held.end();
     const after = await readNode(sourceId);
     assert(after.parentId === targetBefore.parentId && after.parentId !== targetId,
@@ -1005,7 +1012,8 @@ async (page) => {
     await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
     const armed = await readChildPreview();
     const sourceOverlay = await readSourceOverlayGeometry(targetPoint);
-    assert(armed.count === 1 && armed.childInsertionCount === 1 && armed.standardInsertionIndicatorCount === 0
+    assert(armed.count === 1 && armed.childInsertionCount === 1 && armed.sourceFrameCount === 1
+      && armed.scopeFrameCount <= 1 && armed.standardInsertionIndicatorCount === 0
       && armed.childInsertionRect.left >= 0 && armed.childInsertionRect.right <= armed.viewport.width
       && armed.childInsertionRect.top >= 48 && armed.childInsertionRect.bottom <= armed.viewport.height,
     'mobile armed child insertion marker must be unique and stay inside the viewport/action-rail safe area', armed);

@@ -719,12 +719,16 @@ const BoardView = () => {
         window.addEventListener('pointercancel', cancel, true);
         window.addEventListener('blur', cancel);
         window.addEventListener('pagehide', cancel);
+        window.addEventListener('orientationchange', cancel);
+        window.addEventListener('resize', cancel);
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('keydown', handleKeyDown, true);
             window.removeEventListener('pointercancel', cancel, true);
             window.removeEventListener('blur', cancel);
             window.removeEventListener('pagehide', cancel);
+            window.removeEventListener('orientationchange', cancel);
+            window.removeEventListener('resize', cancel);
         };
     }, [activeDrag, handleDragCancel]);
 

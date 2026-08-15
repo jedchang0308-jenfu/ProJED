@@ -2,13 +2,13 @@
 
 狀態：Executed / AI Browser QA-QC Passed / Physical Mobile 未充分驗證
 
-日期：2026-08-15
+日期：2026-08-16
 
 對應規格：`ai-doc/specs/SPEC-068-task-title-center-child-drop.md`
 
 ## 1. 驗證目標
 
-用 AI 在真實渲染頁面操作滑鼠與 synthetic touch，證明 L1/L2/L3+ 的子任務命中區等於 DEV-065 完整藍框，而非標題文字；前 1 秒保留原排序／lane/promotion，滿 1 秒後才由 child intent 接管，放開只提交一次到 exact target。
+用 AI 在真實渲染頁面操作滑鼠與 synthetic touch，證明 L1/L2/L3+ 的子任務命中區等於 DEV-065 完整預選範圍，而非標題文字；前 1 秒不顯示子任務藍框並保留原排序／lane/promotion，滿 1 秒後藍框與下一子階插入線才同步出現並由 child intent 接管，放開只提交一次到 exact target。
 
 驗證採 Failure-first → RD → QA → QC：先保留失敗證據，再修產品，不以放寬斷言掩蓋真缺陷。
 
@@ -21,6 +21,7 @@
 | 展開鍵／輸入控制誤命中 | 在控制項中心停留 >1 秒，preview count 必須為 0 |
 | 任務主表面 `role="button"` 被當控制項排除 | 主表面中心、底部空白、title tail 均須 candidate/armed |
 | Candidate 搶走既有排序 | `<1s` 同時有 child candidate 與 standard indicator；release 不得成為 child |
+| Candidate 藍框讓人誤判已命中子任務 | `<1s` primary/subtree/scope frame 全為 0；`armed` 才與 child insertion marker 同時出現 |
 | Armed 同時做兩種動作 | armed 時 standard indicator=0；release 一次 child commit |
 | stale timer／快速切 target | A→B→A、leave/re-enter、auto-scroll 全部重算 dwell |
 | source preview 遮住 parent／child insertion marker | desktop/mobile rect intersection=0；viewport clamp |
@@ -34,7 +35,7 @@
 
 `verify:dev-068-task-title-center-child-drop-browser` 共 27 案：
 
-- Desktop：pre-dwell standard release、armed exact child、L1、L3+、L2／L3／L4+ insertion-start depth matrix、target switch、主表面空白、lifecycle/a11y、armed leave、subtree/Undo、L1 source normalization、invalids、cancel matrix、stale target、scope/title variants/control exclusion。
+- Desktop：pre-dwell standard release、armed exact child、L1、L3+、L2／L3／L4+ insertion-start depth matrix、target switch、主表面空白、lifecycle/a11y、armed leave、subtree/Undo、L1 source normalization、invalids、包含 orientationchange／resize 的 cancel matrix、stale target、scope/title variants/control exclusion。
 - Mobile：pre-dwell standard release、armed exact child、L1、touchcancel、cancel matrix、L3+、leave/re-enter/edge scroll、action rail matrix、10 次 commit＋10 次 cancel。
 - Viewports/error：1440x900、1024x768、390x844、430x932、320x844、console/network/visible error sweep。
 
@@ -42,14 +43,14 @@
 
 1. `data-task-child-drop-target="true"` 與 `data-desktop-task-hover-scope="true"` 在同一 L1/L2/L3+ scope。
 2. title `SPAN` 不再持有 exclusive child-target marker。
-3. hit-scope rect 包住 primary source 與 visible subtree；candidate/armed 使用 DEV-065 primary-500/primary-400。
-4. Candidate：child insertion marker=0，standard insertion indicator=1；release 後 `parentId !== child target id`。
-5. Armed：child insertion marker=1，standard insertion indicator=0；marker 起點依下一階層縮排，release 後 `parentId === exact target id`。
+3. hit-scope rect 包住 primary source 與 visible subtree；candidate 的 primary/subtree/scope frame 全為 0。
+4. Candidate：child frame=0、child insertion marker=0、standard insertion indicator=1；release 後 `parentId !== child target id`。
+5. Armed：DEV-065 primary-500/primary-400 frame 與 child insertion marker 同步出現，standard insertion indicator=0；marker 起點依下一階層縮排，release 後 `parentId === exact target id`。
 6. 控制項的實際矩形排除；task-source 主表面即使 `role="button"` 仍可命中。
 
 ## 4. Deterministic / Static Gate
 
-`verify:dev-068-task-title-center-child-drop`：61/61，覆蓋：
+`verify:dev-068-task-title-center-child-drop`：64/64，覆蓋：
 
 - 999ms candidate / 1000ms armed。
 - target switch/reset。
@@ -60,6 +61,8 @@
 - Desktop/mobile candidate 保留 direct/standard target，armed 才接管。
 - Workbench來源明確排除child intent，保留未歸位任務原歸位流程。
 - L1／L2／L3+ child insertion marker deterministic geometry、48px 最小寬度與 viewport clamp。
+- Desktop 與 mobile 均註冊 orientationchange／resize 終止清理，viewport geometry 改變後不得沿用 armed target。
+- `TaskChildDropPreview` 把 primary/subtree/scope frame 與 child insertion marker 放在同一 armed-only render gate。
 
 ## 5. 相鄰回歸
 
@@ -85,13 +88,15 @@
 | 7 | 完整L1 scope誤攔Workbench未歸位任務 | 依`source="task-workbench"`排除child intent，恢復column append歸位 |
 | 8 | L1慢速14段移入在高負載下已超過1秒 | pre-dwell案例改為單步進入立即release；armed案例獨立驗證滿1秒 |
 | 9 | 使用者指出「移入子任務」文字 ghost 與其他階層拖曳語言不一致 | 退役可見文字 ghost；armed 改用既有圓點＋插入線，並以起點縮排表示下一階層 |
+| 10 | commit 後 RD 稽核新增 desktop viewport-change 案，真實操作發現 orientationchange 後仍提交 child | Desktop drag lifecycle 補 orientationchange／resize cancel 與 listener cleanup；同案改驗 7 種終止來源並回歸通過 |
+| 11 | 使用者指出 candidate 藍框過早讓人誤以為已定位到子任務 | 先新增桌機／手機 frame count=0 failure gate；再把全部子任務藍框移入 armed-only render，與 child insertion marker 同步出現 |
 
 ## 7. 已執行結果
 
-- DEV-068 static/deterministic：61/61 PASS。
-- DEV-068 rendered mouse/touch：27/27 PASS；candidate coexist、完整scope、Workbench與child insertion depth修正後由最終QC重跑確認。
-- 核心最新 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786808137276-*`。
-- 相鄰browser：DEV-065 13/13、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共62/62 PASS。
+- DEV-068 static/deterministic：64/64 PASS。
+- DEV-068 rendered mouse/touch：27/27 PASS；candidate frame=0、armed frame/child insertion 同步、完整scope、Workbench與child insertion depth均由真實操作確認。
+- 核心最新 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786811035576-*`。
+- 相鄰browser：DEV-065 15/15、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共64/64 PASS。
 - Browser console error：0；network error：0；visible HTTP/UI error：0。
 - 相鄰回歸與工程 gate 的最終數字以 `QC-DEV-068` 為準。
 
