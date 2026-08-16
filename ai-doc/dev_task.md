@@ -344,12 +344,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-067`、`QA-DEV-067`、`QC-DEV-067`；DEV-067 static 13/13、browser 8/8、DEV-055 desktop 16/16、DEV-054 mobile 11/11、DEV-053／054／055／058 static regression、TypeScript、targeted ESLint、test build 與 1440／1024／390 rendered QC 通過。
   - 計入交付：是
 - ◐ DEV-068 [交付點] [執行中] [P1] [AI Browser QA-QC PASS / Physical Mobile 未充分驗證 / 未 Release] 任務完整預選範圍停留移入子任務
-  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的完整 hover-scope 落點；前 1 秒不顯示子任務藍框並保留既有同階／lane 操作，連續滿 1,000ms 才讓 DEV-065 同款藍框與下一子階插入線同步出現，由 child intent 接管，放開後提交 exact parent。
+  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的完整 hover-scope 落點；前 1 秒不顯示子任務藍框並保留既有同階／lane 操作，連續滿 1,000ms 才讓 DEV-065 同款藍框與下一子階定位同步出現；若結果回到原位則顯示原任務名稱並 zero-write，否則放開後提交 exact parent。
   - 來源 ID：`USER-20260815-TASK-TITLE-CENTER-CHILD-DROP`
   - 父任務：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
   - 下一步：接入 AI 可控 iPhone Safari 與 Android Chrome，完成各平台 physical precision gate；兩者通過後才可標完整 mobile sign-off。若要交付正式環境，另走 release gate。
   - 阻塞 / 恢復條件：本輪不含部署或 release。缺 iPhone Safari／Android Chrome AI 可控實機時，只能標記 browser gate 通過，不得宣稱完整 physical mobile sign-off。
-  - 證據：基線 commit `56baa77`、RD 續作前 checkpoint commit `ca41403`；`QC-DEV-068`；使用者重驗依序修正 title slot、title-only scope、來源卡遮擋、控制項 overlay 命中、candidate 搶走 standard drop、Workbench來源誤入child intent、文字ghost不一致、desktop viewport-change cleanup與candidate藍框過早出現。來源卡為pointer/finger上方fixed overlay；DEV-068 static 64/64、browser 27/27，全部相鄰browser 64/64。68項對照見`QA-DEV-068-coverage-matrix`。未偵測到iPhone／Android實機。
+  - 證據：基線 commit `56baa77`、RD 續作前 checkpoint commit `ca41403`；`QC-DEV-068`；使用者重驗依序修正 title slot、title-only scope、來源卡遮擋、控制項 overlay 命中、candidate 搶走 standard drop、Workbench來源誤入child intent、文字ghost不一致、desktop viewport-change cleanup、candidate藍框過早出現與child-origin名稱預覽。來源卡為pointer/finger上方fixed overlay；DEV-068 static 66/66、browser 29/29，全部相鄰browser 64/64。68項對照見`QA-DEV-068-coverage-matrix`。未偵測到iPhone／Android實機。
   - 計入交付：是
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
@@ -559,8 +559,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - 使用者重驗遮擋修正：來源任務卡原先覆蓋parent frame／當時的child ghost；直接修改dnd-kit modifier的第一輪與仍有1.75px／2px相交的第二輪均判FAIL並留存證據，最終改為與collision解耦的pointer-upper-right fixed overlay。
 - 使用者重驗階層語言修正：可見文字ghost退役，改用現有`KanbanInsertionMarker`；L2／L3／L4+起點相對欄位左側實測19／29／43px。
 - 使用者重驗顯示時序修正：candidate 的子任務 primary/subtree/scope frame 全為0；armed 才與下一子階 insertion marker 同步顯示。
+- 使用者重驗原位修正：child append 若父層／型態／兄弟順序均不變，armed 改顯示既有藍底白字來源名稱欄位；一般 marker=0，release 完整 node snapshot 不變且無成功播報。同父層但實際換序仍維持一般 marker 與 commit。
 - Commit 後 RD 稽核：failure-first 抓到 desktop orientationchange 後仍可提交，補 orientationchange／resize cancel 後 7 種終止來源回歸通過。
-- 核心 gate：DEV-068 static 64/64、desktop/mobile browser true operation 27/27；68 個 QA case 均已連回 AI 操作證據。
+- 核心 gate：DEV-068 static 66/66、desktop/mobile browser true operation 29/29；68 個 QA case 均已連回 AI 操作證據。
 - 相鄰回歸：DEV-065 40/40＋15/15、DEV-053 30/30＋10/10、DEV-054 44/44＋15/15、DEV-055 28/28＋16/16、DEV-058 26/26、DEV-067 13/13＋8/8，全部 PASS。
 - 工程 gate：TypeScript PASS；targeted ESLint 0 error／2 個既存 warning；`npm run build:test` PASS（2000 modules）。
 - Rendered viewports：1440x900、1024x768、390x844、430x932、320x844；console／network／visible-error／overflow sweep PASS。

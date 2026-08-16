@@ -165,7 +165,16 @@ async (page) => {
       }
       return [];
     };
-    return { l1, l2, l3, l2Pair: pair(l2), l3Pair: pair(l3) };
+    const visibleIds = Array.from(new Set([...l1, ...l2, ...l3]));
+    const originPair = visibleIds.map((sourceId) => {
+      const parentId = nodes[sourceId]?.parentId;
+      if (!parentId || !visibleIds.includes(parentId)) return null;
+      const siblings = Object.values(nodes)
+        .filter((node) => node && !node.isArchived && node.parentId === parentId)
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+      return siblings.at(-1)?.id === sourceId ? [sourceId, parentId] : null;
+    }).find(Boolean) || [];
+    return { l1, l2, l3, l2Pair: pair(l2), l3Pair: pair(l3), originPair };
   });
 
   const descendantIds = (nodes, rootId) => {
@@ -231,12 +240,14 @@ async (page) => {
     const subtreeFrame = document.querySelector('[data-task-child-drop-subtree-frame="true"]');
     const scopeFrame = document.querySelector('[data-task-child-drop-scope-frame="true"]');
     const childInsertion = document.querySelector('[data-task-child-drop-insertion-preview="true"]');
+    const childOriginField = document.querySelector('[data-task-child-drop-origin-field="true"]');
     const hitScopeRect = hitScope?.getBoundingClientRect();
     const parentRect = parent?.getBoundingClientRect();
     const subtreeRect = subtreeFrame?.getBoundingClientRect();
     const childInsertionRect = childInsertion?.getBoundingClientRect();
     const sourceStyle = sourceFrame ? getComputedStyle(sourceFrame) : null;
     const subtreeStyle = subtreeFrame ? getComputedStyle(subtreeFrame) : null;
+    const childOriginStyle = childOriginField ? getComputedStyle(childOriginField) : null;
     return {
       count: document.querySelectorAll('[data-task-child-drop-preview="true"]').length,
       phase: preview?.getAttribute('data-task-child-drop-phase') || null,
@@ -248,6 +259,10 @@ async (page) => {
       subtreeFrameCount: document.querySelectorAll('[data-task-child-drop-subtree-frame="true"]').length,
       scopeFrameCount: document.querySelectorAll('[data-task-child-drop-scope-frame="true"]').length,
       childInsertionCount: document.querySelectorAll('[data-task-child-drop-insertion-preview="true"]').length,
+      childGenericMarkerCount: childInsertion?.querySelectorAll('[data-kanban-insertion-marker="true"]').length || 0,
+      childOriginFieldCount: document.querySelectorAll('[data-task-child-drop-origin-field="true"]').length,
+      childOriginTitle: childOriginField?.textContent?.trim() || null,
+      childOriginNoop: childInsertion?.getAttribute('data-task-child-drop-noop') || null,
       standardInsertionIndicatorCount: document.querySelectorAll('[data-desktop-drop-indicator="true"],[data-mobile-drop-indicator="true"]').length,
       hitScopeRect: hitScopeRect ? { left: hitScopeRect.left, top: hitScopeRect.top, right: hitScopeRect.right, bottom: hitScopeRect.bottom } : null,
       parentRect: parentRect ? { left: parentRect.left, top: parentRect.top, right: parentRect.right, bottom: parentRect.bottom } : null,
@@ -255,6 +270,10 @@ async (page) => {
       childInsertionRect: childInsertionRect ? { left: childInsertionRect.left, top: childInsertionRect.top, right: childInsertionRect.right, bottom: childInsertionRect.bottom, width: childInsertionRect.width, height: childInsertionRect.height } : null,
       sourceFrameStyle: sourceStyle ? { boxShadow: sourceStyle.boxShadow, backgroundColor: sourceStyle.backgroundColor } : null,
       subtreeFrameStyle: subtreeStyle ? { boxShadow: subtreeStyle.boxShadow } : null,
+      childOriginStyle: childOriginStyle ? {
+        backgroundColor: childOriginStyle.backgroundColor,
+        color: childOriginStyle.color,
+      } : null,
       viewport: { width: innerWidth, height: innerHeight },
       childInsertionLeft: Number(childInsertion?.getAttribute('data-task-child-drop-insertion-left') || 0),
     };
@@ -464,6 +483,38 @@ async (page) => {
     const announcement = await page.locator('[data-task-child-drop-announcement="true"]').textContent();
     assert((announcement || '').includes(targetBefore.title), 'successful child move must announce target parent', { announcement });
     return { sourceId, targetId, armed, sourceOverlay, sourceBefore, sourceAfter, screenshotPath, announcement };
+  });
+
+  await runCase('DEV068-DESK-ORIGIN-CHILD', 'desktop child append at the original position shows the source title and is zero-write', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.originPair;
+    assert(sourceId && targetId, 'fixture must expose a visible last child and its current parent', fixture);
+    const before = await readNode(sourceId);
+    await beginMouseDrag(sourceId);
+    await moveMouseToTargetPrimary(targetId);
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const armed = await readChildPreview();
+    assert(armed.childInsertionCount === 1
+      && armed.childOriginFieldCount === 1
+      && armed.childGenericMarkerCount === 0
+      && armed.childOriginTitle === before.title
+      && armed.childOriginNoop === 'true'
+      && armed.childOriginStyle?.backgroundColor === 'rgb(99, 102, 241)'
+      && armed.childOriginStyle?.color === 'rgb(255, 255, 255)',
+    'desktop origin child preview must reuse the blue source-title field instead of a generic insertion line', { before, armed });
+    const screenshotPath = `${screenshotBase}-desktop-origin-child.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const after = await readNode(sourceId);
+    const announcement = await page.locator('[data-task-child-drop-announcement="true"]').textContent();
+    assert(JSON.stringify(after) === JSON.stringify(before),
+      'desktop origin child release must preserve the complete source node snapshot', { before, after });
+    assert(!(announcement || '').trim(), 'desktop origin child release must not announce a successful move', { announcement });
+    assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
+      'desktop origin child preview must clear after release');
+    return { sourceId, targetId, before, armed, after, screenshotPath, announcement };
   });
 
   await runCase('DEV068-DESK-L1', 'desktop L2 to L1 hover scope becomes direct L2 child', async () => {
@@ -1038,6 +1089,36 @@ async (page) => {
     const completions = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
     assert(completions.length === 1, 'mobile child drop must terminate exactly once', { completions });
     return { sourceId, targetId, targetTitle: targetBefore.title, armed, sourceOverlay, after, completions: completions.length, screenshotPath };
+  });
+
+  await runCase('DEV068-MOB-ORIGIN-CHILD', 'mobile child append at the original position shows the source title and is zero-write', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, targetId] = fixture.originPair;
+    assert(sourceId && targetId, 'fixture must expose a visible mobile last child and its current parent', fixture);
+    const before = await readNode(sourceId);
+    const held = await startHeldTouch(sourceId);
+    await held.moveTo(await pointFor(surfaceFor(targetId)));
+    await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
+    const armed = await readChildPreview();
+    assert(armed.childInsertionCount === 1
+      && armed.childOriginFieldCount === 1
+      && armed.childGenericMarkerCount === 0
+      && armed.childOriginTitle === before.title
+      && armed.childOriginNoop === 'true'
+      && armed.childOriginStyle?.backgroundColor === 'rgb(99, 102, 241)'
+      && armed.childOriginStyle?.color === 'rgb(255, 255, 255)',
+    'mobile origin child preview must reuse the blue source-title field instead of a generic insertion line', { before, armed });
+    const screenshotPath = `${screenshotBase}-mobile-origin-child.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await held.end();
+    const after = await readNode(sourceId);
+    const transient = await readTransientState();
+    assert(JSON.stringify(after) === JSON.stringify(before),
+      'mobile origin child release must preserve the complete source node snapshot', { before, after });
+    assert(Object.values(transient).every((value) => value === 0 || value === false),
+      'mobile origin child release must clear every transient surface', transient);
+    return { sourceId, targetId, before, armed, after, transient, screenshotPath };
   });
 
   await runCase('DEV068-MOB-L1-SCOPE', 'mobile L2 source becomes a direct L2 child when the L1 hover scope visibly arms', async () => {

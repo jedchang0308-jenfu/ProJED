@@ -28,6 +28,32 @@ export const buildTaskParentIndex = (nodesRecord: Record<string, TaskNode>) => {
   return parentIndex;
 };
 
+export const isTaskDropIntentOrigin = (
+  draggedNodeId: string,
+  intent: TaskDropIntent | null,
+  nodesRecord: Record<string, TaskNode>,
+) => {
+  const draggedNode = nodesRecord[draggedNodeId];
+  if (!draggedNode || !intent) return false;
+  if ((draggedNode.parentId || null) !== intent.parentId) return false;
+  if ((intent.nodeType ?? draggedNode.nodeType) !== draggedNode.nodeType) return false;
+
+  const parentKey = intent.parentId || 'root';
+  const originalOrder = buildTaskParentIndex(nodesRecord)[parentKey] || [];
+  const movedOrder = buildTaskParentIndex({
+    ...nodesRecord,
+    [draggedNodeId]: {
+      ...draggedNode,
+      parentId: intent.parentId,
+      nodeType: intent.nodeType ?? draggedNode.nodeType,
+      order: intent.order,
+    },
+  })[parentKey] || [];
+
+  return originalOrder.length === movedOrder.length
+    && originalOrder.every((nodeId, index) => nodeId === movedOrder[index]);
+};
+
 export const getTaskAppendOrder = (
   parentId: string,
   excludeId: string | undefined,

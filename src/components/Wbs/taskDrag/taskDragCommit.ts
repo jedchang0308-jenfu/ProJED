@@ -15,6 +15,7 @@ import {
   desktopTargetTypeToSurfaceKind,
   getTaskAppendOrder,
   isValidTaskDropIntent,
+  isTaskDropIntentOrigin,
   resolveTaskDropIntent,
   taskDragSourceKindToSurfaceKind,
   type TaskDropIntent,
@@ -178,6 +179,12 @@ export const commitDesktopTaskDrag = ({
   }
   if (!isValidTaskDropIntent(draggedNode.id, intent, state.nodes) || !intent) {
     return noOp('invalid-drop-intent');
+  }
+  if (
+    desktopPreview?.targetSurfaceKind === 'task-title-child'
+    && isTaskDropIntentOrigin(draggedNode.id, intent, state.nodes)
+  ) {
+    return noOp('task-position-origin');
   }
 
   const updates = normalizeTaskMoveUpdates(draggedNode.id, intent, state.nodes);
@@ -350,6 +357,12 @@ export const commitTaskDragObservation = async ({
   });
   if (!isValidTaskDropIntent(draggedNode.id, intent, state.nodes)) return noOp('invalid-drop-intent');
   if (!intent) return noOp('invalid-drop-intent');
+  if (
+    observation.targetSurfaceKind === 'task-title-child'
+    && isTaskDropIntentOrigin(draggedNode.id, intent, state.nodes)
+  ) {
+    return noOp('task-position-origin');
+  }
 
   const updates = normalizeTaskMoveUpdates(draggedNode.id, intent, state.nodes);
   updates[draggedNode.id] = {

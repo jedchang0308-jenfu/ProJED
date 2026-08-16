@@ -14,6 +14,7 @@
 - 進入完整命中範圍未滿 1 秒：不顯示任何子任務 primary／subtree／scope 藍框，只保留原本 standard insertion marker；此時放開仍執行同階排序、lane 或 L1 promotion，不會移成 child。
 - 同一 exact target 連續滿 1,000ms：子任務藍框與下一子階唯一 child insertion marker 同步出現，原 standard insertion marker 同步清除；放開後只提交一次，`parentId = exact target.id`。
 - child insertion marker 沿用既有圓點＋插入線語言；L2、L3、L4+ 起點相對欄位左側實測為 19px、29px、43px，逐層右移。
+- 若 child append 的 canonical 結果等於原位置，定位預覽改沿用其他階層的藍底白字來源名稱欄位，不顯示一般圓點插入線；桌機／手機放開後完整 node snapshot 不變，也不播報「已移入」。同父層但確實移到尾端的情況仍是一般插入線與真實 reorder。
 - 來源任務固定於滑鼠／手指上方、優先右側 16px，右側不足時左上或 viewport clamp；不遮住 parent frame 或 child insertion marker。
 - 展開鍵、連結、輸入框、選單等內部控制排除；主任務表面即使帶 `role="button"` 仍屬完整命中範圍。
 - Workbench 未歸位來源不進 child intent；原本歸位欄位的 append 流程已回歸通過。
@@ -22,8 +23,8 @@
 
 | Gate | 結果 | 覆蓋 |
 |---|---:|---|
-| DEV-068 static／deterministic | PASS 64/64 | 999/1000ms、armed-only frame、完整 scope marker、child insertion geometry、innermost、controls、cycle、candidate coexist、overlay、Workbench boundary、desktop viewport cleanup |
-| DEV-068 browser | PASS 27/27 | desktop/synthetic touch、L1/L2/L3+、depth-line matrix、pre-dwell/armed、subtree/Undo、cancel/stale/action、五 viewport、error sweep |
+| DEV-068 static／deterministic | PASS 66/66 | 999/1000ms、armed-only frame、完整 scope marker、child insertion geometry、origin/no-op 順序判定、innermost、controls、cycle、candidate coexist、overlay、Workbench boundary、desktop viewport cleanup |
+| DEV-068 browser | PASS 29/29 | desktop/synthetic touch、L1/L2/L3+、depth-line matrix、桌機／手機 child-origin 名稱預覽與 zero-write、pre-dwell/armed、subtree/Undo、cancel/stale/action、五 viewport、error sweep |
 | DEV-065 static／browser | PASS 40/40、15/15 | 原滑鼠預選 primary/subtree 樣式、handoff、零位移、一般 before 插入；現行 verifier 共有 15 個 record gates |
 | DEV-053 static／browser | PASS 30/30、10/10 | click/right-click、pan、cancel、Workbench、320/390/430 |
 | DEV-054 static／browser | PASS 44/44、15/15 | raw finger、12px normal／16px child candidate、jitter、action rail、origin、touch ownership |
@@ -34,7 +35,7 @@
 | Targeted ESLint | PASS | 0 error；`BoardView.tsx` 保留 2 個既有 warning |
 | Test build | PASS | `npm run build:test`；Vite 轉換 2000 modules |
 
-Browser 真實渲染操作合計 91/91 PASS（核心 27＋相鄰 64）。Static／deterministic 合計 245/245 PASS（核心 64＋相鄰 181）。wrong parent、early child commit、stale child target、double commit、cycle、subtree loss、來源遮擋、action＋move double terminal與 runtime-visible error 均為 0。
+Browser 真實渲染操作合計 93/93 PASS（核心 29＋相鄰 64）。Static／deterministic 合計 247/247 PASS（核心 66＋相鄰 181）。wrong parent、early child commit、stale child target、double commit、cycle、subtree loss、來源遮擋、origin 誤寫入、action＋move double terminal與 runtime-visible error 均為 0。
 
 ## 3. Failure-first 與 RD 修正事實
 
@@ -49,12 +50,13 @@ Browser 真實渲染操作合計 91/91 PASS（核心 27＋相鄰 64）。Static�
 9. QC 接手時既有測試分頁曾顯示舊 HMR module export error；保留為恢復紀錄，同一分頁 hard reload 後恢復，最終版本再執行 visible-error sweep。
 10. Commit 後 RD 稽核新增 desktop viewport-change 案，真實操作先抓到 orientationchange 後仍可能提交 child；補上 orientationchange／resize cancel 與 listener cleanup 後，7 種桌機終止來源全數通過。
 11. 使用者指出 candidate 藍框會讓人誤以為已命中子任務；先加入桌機／手機 candidate frame count=0 的失敗 gate，再把全部藍框與 child insertion marker 收進同一 armed-only render gate。
+12. 使用者要求 child insertion 回到原位時顯示來源名稱；先以缺少 origin resolver 的 deterministic failure 建立 gate，再加入 canonical 順序比較、共用 `TaskOriginTitleField` 與 commit zero-write guard。第一輪 browser 僅因測試誤用 Tailwind 預設藍色碼失敗，畫面實際已是既有品牌藍；校正測試基準後產品未改色，完整矩陣通過。
 
 以上缺陷均先保留失敗畫面或 assertion，再回送 RD；最終結果不是以放寬產品錯誤斷言取得。
 
 ## 4. Rendered Evidence
 
-核心證據 prefix：`output/playwright/dev-068-title-child-drop-1786811035576-*`
+核心證據 prefix：`output/playwright/dev-068-title-child-drop-1786845256349-*`
 
 - Desktop candidate：`desktop-candidate.png`，子任務 primary/subtree/scope 藍框與 child insertion marker 均為 0，只顯示既有 standard insertion marker。
 - Desktop armed：`desktop-armed.png`，parent/subtree 藍框與下一子階 child insertion marker 同步可見，standard marker 清除，來源卡位於 pointer 右上且無交集。
@@ -62,6 +64,8 @@ Browser 真實渲染操作合計 91/91 PASS（核心 27＋相鄰 64）。Static�
 - Desktop deep armed：`desktop-deep-armed.png`。
 - Desktop subtree committed：`desktop-subtree-committed.png`。
 - Mobile armed：`mobile-armed.png`，來源卡與 child feedback 均在 viewport／action rail 安全區。
+- Desktop child origin：`desktop-origin-child.png`，原任務名稱取代一般插入線；放開 zero-write、announcement 為空。
+- Mobile child origin：`mobile-origin-child.png`，同款品牌藍來源名稱欄位；一般 marker=0，放開後 transient UI 全清。
 - 五 viewport：`viewport-1440x900.png`、`viewport-1024x768.png`、`viewport-390x844.png`、`viewport-430x932.png`、`viewport-320x844.png`。
 - 交付頁終檢：目前 App 瀏覽器可用區 `518x698` 的窄版測試頁已 hard reload、收合 Workbench 並標記 deliverable；64 個 child-drop targets 可見，console error、visible alert、HTTP error 與 horizontal overflow 均為 0。自動化另完整覆蓋 `390x844`、`430x932` 與 `320x844`。
 

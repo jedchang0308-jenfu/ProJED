@@ -130,6 +130,9 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
           targetTitle={state.childTargetTitle}
           previewRect={state.childPreviewRect}
           inputMode="touch"
+          isOrigin={state.childDropIsOrigin}
+          originFieldRect={state.sourceOriginFieldRect}
+          sourceSurfaceKind={sourceSurfaceKind || 'checklist-row'}
         />
       ) : null}
 

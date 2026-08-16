@@ -89,6 +89,7 @@ const emptyObservation = (
   childIntentPhase: 'none',
   childTargetId: null,
   childTargetTitle: null,
+  childDropIsOrigin: false,
   childCandidateSince: null,
   childPreviewRect: null,
   pointer: rawPoint,
@@ -351,6 +352,7 @@ export const resolveTaskDragObservation = ({
         childIntentPhase: childIntent.phase,
         childTargetId: childTarget.targetNodeId,
         childTargetTitle: childTarget.targetTitle,
+        childDropIsOrigin: childTarget.isOrigin,
         childCandidateSince: childIntent.candidateSince,
         childPreviewRect: childTarget.previewRect,
       } as const;
@@ -426,6 +428,7 @@ export const observationToSessionState = (
   childIntentPhase: observation.childIntentPhase,
   childTargetId: observation.childTargetId,
   childTargetTitle: observation.childTargetTitle,
+  childDropIsOrigin: observation.childDropIsOrigin,
   childCandidateSince: observation.childCandidateSince,
   childPreviewRect: observation.childPreviewRect,
 });

@@ -82,6 +82,7 @@ export interface TaskDragObservation {
   childIntentPhase: TaskChildIntentPhase;
   childTargetId: string | null;
   childTargetTitle: string | null;
+  childDropIsOrigin: boolean;
   childCandidateSince: number | null;
   childPreviewRect: TaskChildDropPreviewRect | null;
   pointer: { x: number; y: number } | null;
@@ -111,6 +112,7 @@ export interface TaskDragSessionState {
   dropPosition: MobileTaskDropPosition | null;
   dropIndicatorRect: TaskDragIndicatorRect | null;
   originFieldRect: TaskDragOriginFieldRect | null;
+  sourceOriginFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;
   pendingTargetId: string | null;
   pendingSince: number | null;
@@ -118,6 +120,7 @@ export interface TaskDragSessionState {
   childIntentPhase: TaskChildIntentPhase;
   childTargetId: string | null;
   childTargetTitle: string | null;
+  childDropIsOrigin: boolean;
   childCandidateSince: number | null;
   childPreviewRect: TaskChildDropPreviewRect | null;
   terminal: TaskDragTerminalState | null;

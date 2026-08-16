@@ -1132,6 +1132,9 @@ const BoardView = () => {
                     targetTitle={desktopChildDrop.target.targetTitle}
                     previewRect={desktopChildDrop.target.previewRect}
                     inputMode="mouse"
+                    isOrigin={desktopChildDrop.target.isOrigin}
+                    originFieldRect={desktopDragOriginIndicatorRef.current?.fieldRect || null}
+                    sourceSurfaceKind={desktopDragOriginIndicatorRef.current?.sourceSurfaceKind || 'checklist-row'}
                 />
             ) : null}
             {desktopIndicator && desktopChildDrop?.phase !== 'armed' ? (

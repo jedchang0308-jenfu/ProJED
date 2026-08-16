@@ -6,7 +6,11 @@ import type {
   TaskDragTargetRect,
   TaskDropSurfaceKind,
 } from './taskDragTypes';
-import { resolveTaskDropIntent, type TaskDropIntent } from './taskDropIntent';
+import {
+  isTaskDropIntentOrigin,
+  resolveTaskDropIntent,
+  type TaskDropIntent,
+} from './taskDropIntent';
 
 export const TASK_CHILD_DROP_DWELL_MS = 1000;
 export const TASK_CHILD_DROP_SURFACE_KIND = 'task-title-child' as const;
@@ -24,6 +28,7 @@ export interface TaskChildDropTarget {
   targetTitle: string;
   targetSurfaceKind: typeof TASK_CHILD_DROP_SURFACE_KIND;
   intent: TaskDropIntent;
+  isOrigin: boolean;
   previewRect: TaskChildDropPreviewRect;
 }
 
@@ -327,5 +332,6 @@ export const resolveTaskTitleChildDropTarget = ({
     ...zone,
     targetSurfaceKind: TASK_CHILD_DROP_SURFACE_KIND,
     intent,
+    isOrigin: isTaskDropIntentOrigin(sourceNodeId, intent, nodesRecord),
   };
 };

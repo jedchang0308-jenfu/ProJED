@@ -12,7 +12,10 @@ import {
   TASK_DRAG_OVERLAY_POINTER_GAP_PX,
   TASK_DRAG_OVERLAY_VIEWPORT_MARGIN_PX,
 } from '../src/components/Wbs/taskDrag/taskDragOverlayPosition';
-import { resolveTaskDropIntent } from '../src/components/Wbs/taskDrag/taskDropIntent';
+import {
+  isTaskDropIntentOrigin,
+  resolveTaskDropIntent,
+} from '../src/components/Wbs/taskDrag/taskDropIntent';
 
 const now = 1_723_600_000_000;
 const node = (value: Partial<TaskNode> & Pick<TaskNode, 'id' | 'parentId' | 'order' | 'nodeType'>): TaskNode => ({
@@ -83,6 +86,28 @@ assert.deepEqual(cardToCardChild, {
   nodeType: 'task',
   displayPosition: 'append',
 });
+
+const childReturningToOriginalAppend = resolveTaskDropIntent({
+  source: { nodeId: 'cardBChildB', surfaceKind: 'checklist-row' },
+  target: { nodeId: 'cardB', surfaceKind: 'task-title-child' },
+  nodesRecord: nodes,
+});
+assert.equal(
+  isTaskDropIntentOrigin('cardBChildB', childReturningToOriginalAppend, nodes),
+  true,
+  'the last child appended back to its current parent must be recognized as origin/no-op',
+);
+
+const childMovingToAppend = resolveTaskDropIntent({
+  source: { nodeId: 'cardBChildA', surfaceKind: 'checklist-row' },
+  target: { nodeId: 'cardB', surfaceKind: 'task-title-child' },
+  nodesRecord: nodes,
+});
+assert.equal(
+  isTaskDropIntentOrigin('cardBChildA', childMovingToAppend, nodes),
+  false,
+  'a non-last child appended within the same parent is a real reorder, not origin/no-op',
+);
 
 const rootToDeepChild = resolveTaskDropIntent({
   source: { nodeId: 'rootB', surfaceKind: 'column-header' },
@@ -309,11 +334,13 @@ assert.match(source.packageJson, /verify:dev-068-task-title-center-child-drop/);
 
 console.log(JSON.stringify({
   ok: true,
-  cases: 64,
+  cases: 66,
   timing: { start, at999, at1000, switched },
   insertionGeometry: { l1ChildInsertion, l2ChildInsertion, l3ChildInsertion, viewportClampedInsertion },
   intents: {
     cardToCardChild,
+    childReturningToOriginalAppend,
+    childMovingToAppend,
     rootToDeepChild,
     invalidCycle,
     invalidSelf,
