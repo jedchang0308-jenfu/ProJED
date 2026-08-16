@@ -97,6 +97,17 @@ const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) =>
   ))
 );
 
+const PINCH_CLOSE_MIN_DISTANCE_DELTA = 36;
+const PINCH_CLOSE_MAX_DISTANCE_RATIO = 0.78;
+
+const getTouchDistance = (touches: React.TouchList) => {
+  const first = touches[0];
+  const second = touches[1];
+  if (!first || !second) return null;
+
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+};
+
 export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const nodes = useWbsStore((state) => state.nodes);
@@ -126,6 +137,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const skipNextTitleBlurSave = React.useRef(false);
   const [saveFeedbackVisible, setSaveFeedbackVisible] = React.useState(false);
   const saveFeedbackTimerRef = React.useRef<number | null>(null);
+  const pinchCloseRef = React.useRef<{
+    initialDistance: number;
+    triggered: boolean;
+  } | null>(null);
   const assigneeOptions = React.useMemo(
     () => boardMembers.map(member => ({
       id: member.userId,
@@ -227,6 +242,40 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     if (saveFeedbackTimerRef.current !== null) {
       window.clearTimeout(saveFeedbackTimerRef.current);
     }
+  }, []);
+
+  const handlePinchTouchStart = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 2) {
+      pinchCloseRef.current = null;
+      return;
+    }
+
+    const initialDistance = getTouchDistance(event.touches);
+    pinchCloseRef.current = initialDistance === null
+      ? null
+      : { initialDistance, triggered: false };
+  }, []);
+
+  const handlePinchTouchMove = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const gesture = pinchCloseRef.current;
+    if (!gesture || gesture.triggered || event.touches.length !== 2) return;
+
+    const currentDistance = getTouchDistance(event.touches);
+    if (currentDistance === null) return;
+
+    const distanceDelta = gesture.initialDistance - currentDistance;
+    const distanceRatio = currentDistance / gesture.initialDistance;
+    if (
+      distanceDelta < PINCH_CLOSE_MIN_DISTANCE_DELTA
+      || distanceRatio > PINCH_CLOSE_MAX_DISTANCE_RATIO
+    ) return;
+
+    gesture.triggered = true;
+    handleClose();
+  }, [handleClose]);
+
+  const handlePinchTouchEnd = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length < 2) pinchCloseRef.current = null;
   }, []);
 
   React.useEffect(() => {
@@ -495,6 +544,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       data-task-details-modal="true"
       data-task-id={node.id}
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
+      data-task-details-pinch-close="true"
+      onTouchStart={handlePinchTouchStart}
+      onTouchMove={handlePinchTouchMove}
+      onTouchEnd={handlePinchTouchEnd}
+      onTouchCancel={() => { pinchCloseRef.current = null; }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) handleClose();
       }}

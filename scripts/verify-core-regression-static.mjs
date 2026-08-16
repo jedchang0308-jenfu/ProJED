@@ -64,6 +64,13 @@ const checks = [
       includes('src/components/ui/ToastContainer.tsx', 'pointer-events-auto'),
   },
   {
+    name: 'task details supports deliberate two-finger pinch-in close without changing single-finger scroll behavior',
+    ok: includes('src/components/TaskDetailsModal.tsx', 'data-task-details-pinch-close="true"') &&
+      includes('src/components/TaskDetailsModal.tsx', 'event.touches.length !== 2') &&
+      includes('src/components/TaskDetailsModal.tsx', 'PINCH_CLOSE_MIN_DISTANCE_DELTA') &&
+      includes('src/components/TaskDetailsModal.tsx', 'handleClose();'),
+  },
+  {
     name: 'task model keeps parent/order/kanban stage mutations auditable',
     ok: includes('src/store/useWbsStore.ts', "'parentId' in updates || 'order' in updates || 'kanbanStageId' in updates") &&
       includes('src/store/useWbsStore.ts', 'parentId: newNode.parentId') &&
