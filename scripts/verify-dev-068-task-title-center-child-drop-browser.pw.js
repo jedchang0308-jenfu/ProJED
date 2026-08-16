@@ -129,6 +129,27 @@ async (page) => {
   const targetScopeFor = (nodeId) => page.locator(`[data-task-child-drop-target="true"][data-task-id="${nodeId}"]`).first();
   const titleSlotFor = (nodeId) => page.locator(`[data-task-title-slot="true"][data-task-id="${nodeId}"]`).first();
   const surfaceFor = (nodeId) => page.locator(`[data-task-surface-source="true"][data-task-id="${nodeId}"]`).first();
+  const readSourceOriginPlaceholder = async (nodeId) => page.evaluate((id) => {
+    const matches = Array.from(document.querySelectorAll(
+      `[data-kanban-drag-source-placeholder="true"][data-task-id="${id}"]`,
+    )).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    });
+    const element = matches[0];
+    const rect = element?.getBoundingClientRect();
+    const style = element ? getComputedStyle(element) : null;
+    return {
+      count: matches.length,
+      rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
+      outlineStyle: style?.outlineStyle || null,
+      outlineWidth: style?.outlineWidth || null,
+      outlineColor: style?.outlineColor || null,
+      outlineOffset: style?.outlineOffset || null,
+      backgroundColor: style?.backgroundColor || null,
+    };
+  }, nodeId);
 
   const pointFor = async (locator, ratioX = 0.5, ratioY = 0.5) => {
     await locator.scrollIntoViewIfNeeded();
@@ -393,6 +414,75 @@ async (page) => {
 
   page.setDefaultTimeout(8000);
   page.setDefaultNavigationTimeout(20000);
+
+  await runCase('DEV068-SOURCE-ORIGIN-PLACEHOLDER', 'desktop L1/L2/L3+ and mobile keep a dashed frame at the source position while dragging', async () => {
+    const evidence = [];
+    for (const sample of [
+      { level: 'L1', viewport: { width: 1440, height: 900 }, fixtureKey: 'l1' },
+      { level: 'L2', viewport: { width: 1440, height: 900 }, fixtureKey: 'l2' },
+      { level: 'L3+', viewport: { width: 1024, height: 768 }, fixtureKey: 'l3' },
+    ]) {
+      await openApp(sample.viewport);
+      const fixture = await fixtureIds();
+      const sourceId = fixture[sample.fixtureKey][0];
+      assert(sourceId, `${sample.level} fixture must expose a draggable task`, fixture);
+      const beforeRect = await (sample.level === 'L2' ? targetScopeFor(sourceId) : surfaceFor(sourceId)).boundingBox();
+      await beginMouseDrag(sourceId);
+      await page.waitForTimeout(180);
+      const placeholder = await readSourceOriginPlaceholder(sourceId);
+      assert(placeholder.count === 1
+        && placeholder.outlineStyle === 'dashed'
+        && placeholder.outlineWidth === '2px'
+        && placeholder.outlineColor === 'rgb(129, 140, 248)'
+        && placeholder.rect && beforeRect
+        && Math.abs(placeholder.rect.left - beforeRect.x) <= 1
+        && Math.abs(placeholder.rect.top - beforeRect.y) <= 1
+        && Math.abs(placeholder.rect.width - beforeRect.width) <= 1
+        && Math.abs(placeholder.rect.height - beforeRect.height) <= 1,
+      `${sample.level} must show one geometry-stable dashed frame at the original task position`, { beforeRect, placeholder });
+      if (sample.level === 'L2') {
+        const screenshotPath = `${screenshotBase}-desktop-source-origin-placeholder.png`;
+        await page.screenshot({ path: screenshotPath, fullPage: false });
+        placeholder.screenshotPath = screenshotPath;
+      }
+      evidence.push({ level: sample.level, sourceId, beforeRect, placeholder });
+      await page.keyboard.press('Escape');
+      await page.mouse.up().catch(() => undefined);
+    }
+
+    for (const sample of [
+      { level: 'mobile-L1', fixtureKey: 'l1' },
+      { level: 'mobile-L2', fixtureKey: 'l2' },
+      { level: 'mobile-L3+', fixtureKey: 'l3' },
+    ]) {
+      await openApp({ width: 390, height: 844 });
+      const fixture = await fixtureIds();
+      const sourceId = fixture[sample.fixtureKey][0];
+      assert(sourceId, `${sample.level} fixture must expose a draggable task`, fixture);
+      const beforeRect = await (sample.level === 'mobile-L2' ? targetScopeFor(sourceId) : surfaceFor(sourceId)).boundingBox();
+      const held = await startHeldTouch(sourceId);
+      await page.waitForTimeout(180);
+      const placeholder = await readSourceOriginPlaceholder(sourceId);
+      assert(placeholder.count === 1
+        && placeholder.outlineStyle === 'dashed'
+        && placeholder.outlineWidth === '2px'
+        && placeholder.outlineColor === 'rgb(129, 140, 248)'
+        && placeholder.rect && beforeRect
+        && Math.abs(placeholder.rect.left - beforeRect.x) <= 1
+        && Math.abs(placeholder.rect.top - beforeRect.y) <= 1
+        && Math.abs(placeholder.rect.width - beforeRect.width) <= 1
+        && Math.abs(placeholder.rect.height - beforeRect.height) <= 1,
+      `${sample.level} long-press drag must show one geometry-stable dashed frame at the original task position`, { beforeRect, placeholder });
+      let screenshotPath = null;
+      if (sample.level === 'mobile-L2') {
+        screenshotPath = `${screenshotBase}-mobile-source-origin-placeholder.png`;
+        await page.screenshot({ path: screenshotPath, fullPage: false });
+      }
+      await held.cancel();
+      evidence.push({ level: sample.level, sourceId, beforeRect, placeholder: { ...placeholder, screenshotPath } });
+    }
+    return { evidence };
+  });
 
   await runCase('DEV068-DESK-900', 'desktop task hover scope preserves the standard drop before one second', async () => {
     await openApp({ width: 1440, height: 900 });

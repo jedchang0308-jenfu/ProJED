@@ -32,6 +32,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - 滑到內層任務時，最深、面積較小的 innermost scope 接管；父框不得搶走子框。
 - 展開鍵、連結、輸入框、文字區域、選單與其他內部控制項不建立 child intent；任務主表面即使為了可及性帶 `role="button"`，仍是有效藍框範圍。
 - 拖曳中的來源任務固定在 pointer／finger 上方，優先右側 16px，空間不足時左側或 viewport clamp，不得遮住 parent frame 或 child insertion marker。
+- 任務離開來源位置後，原位置保留 `primary-400` 的 2px 內縮虛線框；L1 對應原標題列、L2 對應完整來源卡與可見子樹 scope、L3+ 對應原任務列。虛線框不顯示任務文字、不充當插入線，且結束或取消拖曳後立即清除。
 
 ## 2. 與既有排序的相容規則
 
@@ -99,6 +100,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - Armed 若為原位 no-op，唯一 child insertion preview 改為既有 `TaskOriginTitleField`：位置沿用來源原始 title field rect、文字等於來源任務名稱、品牌藍底白字，`data-task-child-drop-origin/noop="true"`；一般 `KanbanInsertionMarker` 數量必須為 0。
 - Armed 不顯示常駐「移入…的子任務」文字框；視覺以框形、圓點、線條與縮排位置表意，輔助科技仍由 `aria-live` 宣告 exact parent，避免只靠顏色。
 - 全部 child preview 為 fixed overlay，不得改 normal-flow geometry、column width、scrollHeight 或 board scrollWidth。
+- 來源虛線框使用不影響盒模型的 inset outline，左、上、寬、高須與拖曳前來源佔位一致；L1 來源不得再縮放、旋轉或以固定高度撐大原位置。
 - 同一時間只允許一個 exact child target；離開後立即清除，不得 stale re-arm。
 - `aria-live` candidate/armed 與成功 announcement 必須能辨識 exact target。
 
@@ -132,6 +134,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - exact innermost ownership、控制項排除、999/1000ms、target switch、armed leave、cancel/stale target、cycle、permission、undo/redo 全部通過。
 - Candidate 保留一個 standard indicator，primary/subtree/scope 子任務藍框與 child insertion marker 均為 0；armed 時 target frame 與 child insertion marker 同步出現，standard indicator 為 0、child insertion marker 恰為 1。
 - 子任務 append 回到原始位置時，armed 仍同步顯示 target frame，但定位預覽必須顯示原任務名稱而非一般插入線；桌機與手機 release 的完整 node snapshot 必須相同，成功 announcement 為空。
+- 桌機 L1／L2／L3+ 與手機 long-press 拖曳期間，來源原位置各顯示唯一 2px 虛線框；量測位置與尺寸差異均不得超過 1px，取消後框數為 0。
 - L1→L2、L2→L3、L3+→下一層的 child insertion 起點必須單調右移，且線條落在 exact target 子樹末端，不得顯示在父層或兄弟層起點。
 - DEV-065 的 primary-500／primary-400 樣式與 hover 行為不回歸。
 - 五個 viewport：1440x900、1024x768、390x844、430x932、320x844 無 overflow 或不可讀遮擋。
@@ -152,9 +155,9 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 已執行核心證據：
 
-- `verify:dev-068-task-title-center-child-drop`：66/66。
-- `verify:dev-068-task-title-center-child-drop-browser`：29/29 rendered mouse/touch；包含 candidate 零藍框、armed 藍框與插入線同步、L2／L3／L4+ insertion-start 單調右移，以及桌機／手機 child-origin 名稱預覽與 zero-write gate。
-- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786845256349-*`。
+- `verify:dev-068-task-title-center-child-drop`：73/73。
+- `verify:dev-068-task-title-center-child-drop-browser`：30/30 rendered mouse/touch；包含 candidate 零藍框、armed 藍框與插入線同步、L2／L3／L4+ insertion-start 單調右移、桌機／手機 child-origin 名稱預覽與 zero-write，以及 desktop／mobile L1／L2／L3+ 來源虛線框原位 geometry gate。
+- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786849936366-*`。
 - QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop、Workbench來源誤入child intent、desktop viewport-change未取消，以及 candidate 過早顯示子任務藍框；均回送 RD 修正後才採信最終結果。
 - Physical iPhone／Android：未執行。
 - 本輪未 push、deploy 或 release。

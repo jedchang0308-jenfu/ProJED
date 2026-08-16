@@ -143,6 +143,12 @@
   .kanban-drag-source-placeholder > :not([data-kanban-insertion-marker]) {
     visibility: hidden;
   }
+
+  .kanban-drag-origin-placeholder {
+    outline: 2px dashed var(--color-primary-400);
+    outline-offset: -2px;
+    background-color: rgb(238 242 255 / 45%);
+  }
 }
 
 [data-task-surface-source="true"][data-task-selected="true"] {

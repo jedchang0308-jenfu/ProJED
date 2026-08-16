@@ -184,7 +184,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         {...taskGesture.handlers}
         className={`kanban-checklist-item relative kanban-scroll-touch flex min-h-[20px] items-center gap-1 py-0.5 group transition-colors ${
           isDragPlaceholder
-            ? 'kanban-drag-source-placeholder pointer-events-none bg-transparent shadow-none ring-0'
+            ? 'kanban-drag-source-placeholder kanban-drag-origin-placeholder pointer-events-none bg-transparent shadow-none ring-0'
             : isRecordCaptureMode
               ? isRecordSelected
                 ? 'cursor-pointer bg-primary-light ring-1 ring-inset ring-primary/50'

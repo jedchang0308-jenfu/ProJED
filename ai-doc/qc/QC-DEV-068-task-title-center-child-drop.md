@@ -16,6 +16,7 @@
 - child insertion marker 沿用既有圓點＋插入線語言；L2、L3、L4+ 起點相對欄位左側實測為 19px、29px、43px，逐層右移。
 - 若 child append 的 canonical 結果等於原位置，定位預覽改沿用其他階層的藍底白字來源名稱欄位，不顯示一般圓點插入線；桌機／手機放開後完整 node snapshot 不變，也不播報「已移入」。同父層但確實移到尾端的情況仍是一般插入線與真實 reorder。
 - 來源任務固定於滑鼠／手指上方、優先右側 16px，右側不足時左上或 viewport clamp；不遮住 parent frame 或 child insertion marker。
+- 任務離開後，來源原位置顯示唯一 2px `primary-400` 虛線框：desktop 與 mobile 的 L1 標題列、L2 完整來源 scope、L3+ 任務列，其 left/top/width/height 均與拖曳前量測相同（差≤1px）；框不顯示文字、不改變版面，取消後清除。
 - 展開鍵、連結、輸入框、選單等內部控制排除；主任務表面即使帶 `role="button"` 仍屬完整命中範圍。
 - Workbench 未歸位來源不進 child intent；原本歸位欄位的 append 流程已回歸通過。
 
@@ -23,8 +24,8 @@
 
 | Gate | 結果 | 覆蓋 |
 |---|---:|---|
-| DEV-068 static／deterministic | PASS 66/66 | 999/1000ms、armed-only frame、完整 scope marker、child insertion geometry、origin/no-op 順序判定、innermost、controls、cycle、candidate coexist、overlay、Workbench boundary、desktop viewport cleanup |
-| DEV-068 browser | PASS 29/29 | desktop/synthetic touch、L1/L2/L3+、depth-line matrix、桌機／手機 child-origin 名稱預覽與 zero-write、pre-dwell/armed、subtree/Undo、cancel/stale/action、五 viewport、error sweep |
+| DEV-068 static／deterministic | PASS 73/73 | 999/1000ms、armed-only frame、完整 scope marker、child insertion geometry、origin/no-op 順序判定、來源虛線框、不可取消 touchcancel guard、innermost、controls、cycle、candidate coexist、overlay、Workbench boundary、desktop viewport cleanup |
+| DEV-068 browser | PASS 30/30 | desktop/synthetic touch、L1/L2/L3+來源原位虛線框與geometry、depth-line matrix、桌機／手機 child-origin 名稱預覽與 zero-write、pre-dwell/armed、subtree/Undo、cancel/stale/action、五 viewport、error sweep |
 | DEV-065 static／browser | PASS 40/40、15/15 | 原滑鼠預選 primary/subtree 樣式、handoff、零位移、一般 before 插入；現行 verifier 共有 15 個 record gates |
 | DEV-053 static／browser | PASS 30/30、10/10 | click/right-click、pan、cancel、Workbench、320/390/430 |
 | DEV-054 static／browser | PASS 44/44、15/15 | raw finger、12px normal／16px child candidate、jitter、action rail、origin、touch ownership |
@@ -32,10 +33,10 @@
 | DEV-058 static | PASS 26/26 | origin field、candidate 前 indicator、armed 互斥 |
 | DEV-067 static／browser | PASS 13/13、8/8 | L1 promotion、column/root drop；快速 release 與一秒 dwell 分流 |
 | TypeScript | PASS | `npx tsc --noEmit` |
-| Targeted ESLint | PASS | 0 error；`BoardView.tsx` 保留 2 個既有 warning |
-| Test build | PASS | `npm run build:test`；Vite 轉換 2000 modules |
+| Targeted ESLint | PASS | 0 error；CSS 不在 ESLint 設定範圍，樣式由 rendered computed-style gate 驗證 |
+| Test build | PASS | `output/build-dev068-source-origin-final-20260816`；Vite 轉換 2000 modules |
 
-Browser 真實渲染操作合計 93/93 PASS（核心 29＋相鄰 64）。Static／deterministic 合計 247/247 PASS（核心 66＋相鄰 181）。wrong parent、early child commit、stale child target、double commit、cycle、subtree loss、來源遮擋、origin 誤寫入、action＋move double terminal與 runtime-visible error 均為 0。
+Browser 真實渲染操作合計 94/94 PASS（核心 30＋相鄰 64）。Static／deterministic 合計 254/254 PASS（核心 73＋相鄰 181）。wrong parent、early child commit、stale child target、double commit、cycle、subtree loss、來源遮擋、來源虛線框位移、origin 誤寫入、action＋move double terminal與 runtime-visible error 均為 0。
 
 ## 3. Failure-first 與 RD 修正事實
 
@@ -51,12 +52,14 @@ Browser 真實渲染操作合計 93/93 PASS（核心 29＋相鄰 64）。Static�
 10. Commit 後 RD 稽核新增 desktop viewport-change 案，真實操作先抓到 orientationchange 後仍可能提交 child；補上 orientationchange／resize cancel 與 listener cleanup 後，7 種桌機終止來源全數通過。
 11. 使用者指出 candidate 藍框會讓人誤以為已命中子任務；先加入桌機／手機 candidate frame count=0 的失敗 gate，再把全部藍框與 child insertion marker 收進同一 armed-only render gate。
 12. 使用者要求 child insertion 回到原位時顯示來源名稱；先以缺少 origin resolver 的 deterministic failure 建立 gate，再加入 canonical 順序比較、共用 `TaskOriginTitleField` 與 commit zero-write guard。第一輪 browser 僅因測試誤用 Tailwind 預設藍色碼失敗，畫面實際已是既有品牌藍；校正測試基準後產品未改色，完整矩陣通過。
+13. 使用者要求拖離後保留來源虛線框；static failure-first 先證明 L1/L2/L3+ 均缺樣式。首輪 browser 再抓到 L1 source 的 scale/rotate/opacity 與固定 38px child 使原 36px 位置變成約 61px；RD 移除 transform 並恢復單列原高。後續校正 transition 完成後取樣及 L2 完整 scope 基準，最終 desktop／mobile 各三階來源 geometry 全通過。
+14. 擴充 mobile L1/L2/L3+ 後，全部功能斷言先通過，但 error sweep 抓到不可取消的 `touchcancel` 仍呼叫 `preventDefault()`；RD 加入 `event.cancelable` guard，保留 session cleanup，再由 static 與完整 browser error sweep 重驗。
 
 以上缺陷均先保留失敗畫面或 assertion，再回送 RD；最終結果不是以放寬產品錯誤斷言取得。
 
 ## 4. Rendered Evidence
 
-核心證據 prefix：`output/playwright/dev-068-title-child-drop-1786845256349-*`
+核心證據 prefix：`output/playwright/dev-068-title-child-drop-1786849936366-*`
 
 - Desktop candidate：`desktop-candidate.png`，子任務 primary/subtree/scope 藍框與 child insertion marker 均為 0，只顯示既有 standard insertion marker。
 - Desktop armed：`desktop-armed.png`，parent/subtree 藍框與下一子階 child insertion marker 同步可見，standard marker 清除，來源卡位於 pointer 右上且無交集。
@@ -66,10 +69,12 @@ Browser 真實渲染操作合計 93/93 PASS（核心 29＋相鄰 64）。Static�
 - Mobile armed：`mobile-armed.png`，來源卡與 child feedback 均在 viewport／action rail 安全區。
 - Desktop child origin：`desktop-origin-child.png`，原任務名稱取代一般插入線；放開 zero-write、announcement 為空。
 - Mobile child origin：`mobile-origin-child.png`，同款品牌藍來源名稱欄位；一般 marker=0，放開後 transient UI 全清。
+- Desktop source origin placeholder：`desktop-source-origin-placeholder.png`，L2 完整來源 scope 保留虛線框，pointer-upper-right 任務預覽不遮擋。
+- Mobile source origin placeholder：`mobile-source-origin-placeholder.png`，long-press 後原位置虛線框與 finger-upper-right 任務預覽並存，action rail 可讀。
 - 五 viewport：`viewport-1440x900.png`、`viewport-1024x768.png`、`viewport-390x844.png`、`viewport-430x932.png`、`viewport-320x844.png`。
 - 交付頁終檢：目前 App 瀏覽器可用區 `518x698` 的窄版測試頁已 hard reload、收合 Workbench 並標記 deliverable；64 個 child-drop targets 可見，console error、visible alert、HTTP error 與 horizontal overflow 均為 0。自動化另完整覆蓋 `390x844`、`430x932` 與 `320x844`。
 
-視覺複查確認 primary frame 為 `primary-500 / 2px inset`，可見子樹為 `primary-400 / 1px inset`；命中框涵蓋整張卡片與可見後代，而非只框文字。preview 為 fixed overlay，未推動任務、改變欄寬或造成水平 overflow。
+視覺複查確認 primary frame 為 `primary-500 / 2px inset`，可見子樹為 `primary-400 / 1px inset`；命中框涵蓋整張卡片與可見後代，而非只框文字。來源原位框為 `primary-400 / 2px dashed / -2px inset`，不改盒模型；preview 為 fixed overlay，未推動任務、改變欄寬或造成水平 overflow。
 
 ## 5. 未充分驗證與 Release Boundary
 

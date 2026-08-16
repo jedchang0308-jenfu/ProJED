@@ -480,7 +480,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   const cancelWithReason = React.useCallback((reason: string, event?: React.TouchEvent) => {
     const activeState = stateRef.current;
     if (event) {
-      event.preventDefault();
+      if (event.cancelable) event.preventDefault();
       event.stopPropagation();
     }
     if (!activeState) return;

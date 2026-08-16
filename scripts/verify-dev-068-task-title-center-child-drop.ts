@@ -249,6 +249,7 @@ const source = {
   targetAdapter: readFileSync('src/components/Wbs/taskDrag/taskDragTargetAdapter.ts', 'utf8'),
   presenter: readFileSync('src/components/Wbs/taskDrag/TaskDragPresenter.tsx', 'utf8'),
   childPreview: readFileSync('src/components/Wbs/taskDrag/TaskChildDropPreview.tsx', 'utf8'),
+  styles: readFileSync('src/index.css', 'utf8'),
   overlayPosition: readFileSync('src/components/Wbs/taskDrag/taskDragOverlayPosition.ts', 'utf8'),
   session: readFileSync('src/components/Wbs/taskDrag/useTaskDragSession.ts', 'utf8'),
   commit: readFileSync('src/components/Wbs/taskDrag/taskDragCommit.ts', 'utf8'),
@@ -270,6 +271,23 @@ for (const [level, component] of [
 assert.doesNotMatch(source.card, /kanban-card-dropzone/);
 assert.doesNotMatch(source.card, /data-desktop-checklist-append-anchor/);
 assert.doesNotMatch(source.card, /type: 'wbs-checklist-drop'/);
+for (const [level, component] of [
+  ['L1', source.column],
+  ['L2', source.card],
+  ['L3+', source.checklist],
+] as const) {
+  assert.match(component, /kanban-drag-origin-placeholder/,
+    `${level} source must render the shared dashed origin placeholder while dragging`);
+}
+assert.match(
+  source.styles,
+  /\.kanban-drag-origin-placeholder\s*\{[\s\S]*outline:\s*2px dashed var\(--color-primary-400\)/,
+  'the source origin placeholder must use a geometry-stable dashed brand outline',
+);
+assert.doesNotMatch(source.column, /isColumnDragging \? '[^']*(?:scale-|rotate-|opacity-)/,
+  'the L1 source origin must remain at its exact untransformed position');
+assert.match(source.column, /className="h-\[20px\] w-full"/,
+  'the L1 neutral placeholder must preserve the normal single-row header height');
 assert.match(source.target, /TASK_CHILD_DROP_DWELL_MS = 1000/);
 assert.match(source.target, /resolveTaskTitleChildDropTarget/);
 assert.match(source.target, /resolveTaskTitleChildDropZone/);
@@ -320,6 +338,8 @@ assert.match(source.session, /activeState\.childIntentPhase !== 'armed'/);
 assert.match(source.session, /user has already seen an armed state/);
 assert.match(source.session, /addEventListener\('orientationchange', handleViewportChange\)/);
 assert.match(source.session, /addEventListener\('resize', handleViewportChange\)/);
+assert.match(source.session, /if \(event\.cancelable\) event\.preventDefault\(\);/,
+  'touchcancel cleanup must not attempt to cancel a non-cancelable browser event');
 assert.match(source.targetAdapter, /if \(!armed\)[\s\S]*collectDirectCandidates/);
 assert.match(source.commit, /normalizeTaskMoveUpdates/);
 assert.match(
@@ -334,7 +354,7 @@ assert.match(source.packageJson, /verify:dev-068-task-title-center-child-drop/);
 
 console.log(JSON.stringify({
   ok: true,
-  cases: 66,
+  cases: 73,
   timing: { start, at999, at1000, switched },
   insertionGeometry: { l1ChildInsertion, l2ChildInsertion, l3ChildInsertion, viewportClampedInsertion },
   intents: {

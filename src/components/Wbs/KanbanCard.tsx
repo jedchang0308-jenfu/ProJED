@@ -228,7 +228,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-task-hierarchy-level="L2"
       data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       className={`kanban-task-card relative mb-[6px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow ${
-        isDragPlaceholder ? 'pointer-events-none !border-transparent bg-transparent shadow-none' : ''
+        isDragPlaceholder ? 'kanban-drag-origin-placeholder pointer-events-none !border-transparent bg-transparent shadow-none' : ''
       } ${
         isRecentlyChildDropped ? 'ring-2 ring-primary/50 ring-offset-1' : ''
       }`}

@@ -161,7 +161,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
       className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all ${
-        isColumnDragging ? 'pointer-events-none scale-105 rotate-1 opacity-50 shadow-2xl' : ''
+        isColumnDragging ? 'pointer-events-none' : ''
       }`}
     >
       <div
@@ -183,6 +183,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-kanban-column-header="true"
         data-kanban-header-visual="tonal-borderless"
         className={`group mobile-pan-item flex flex-col gap-1 bg-slate-50 px-[10px] py-[8px] transition-colors hover:bg-white ${
+            isColumnPlaceholder ? 'kanban-drag-origin-placeholder pointer-events-none' : ''
+        } ${
             isSelectingMode
                 ? isSelfNode
                     ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
@@ -207,7 +209,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       >
         {isColumnPlaceholder ? (
           <div
-            className="h-[38px] w-full"
+            className="h-[20px] w-full"
             data-kanban-drag-source-placeholder-neutral="true"
             aria-hidden="true"
           />

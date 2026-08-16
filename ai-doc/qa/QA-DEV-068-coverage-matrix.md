@@ -1,21 +1,21 @@
 # QA-DEV-068 風險與真實操作證據對照表
 
-狀態：68/68 AI automated coverage PASS / Physical iPhone Safari 與 Android Chrome Pending
+狀態：70/70 AI automated coverage PASS / Physical iPhone Safari 與 Android Chrome Pending
 
 日期：2026-08-16
 
-本表把 `QA-DEV-068-task-title-center-child-drop.md` 的 68 個風險案例逐項連到 rendered mouse/touch 或 deterministic evidence。2026-08-16 最新使用者決策另要求 child append 回到原位時以既有藍底白字欄位顯示來源名稱，不顯示一般插入線且 release zero-write；`PASS` 只代表本機 AI 可執行範圍，browser synthetic touch 不取代實機 gate。
+本表把 `QA-DEV-068-task-title-center-child-drop.md` 的 70 個風險案例逐項連到 rendered mouse/touch 或 deterministic evidence。2026-08-16 最新使用者決策另要求 child append 回到原位時以既有藍底白字欄位顯示來源名稱，不顯示一般插入線且 release zero-write；拖離來源後原位置須保留虛線框。`PASS` 只代表本機 AI 可執行範圍，browser synthetic touch 不取代實機 gate。
 
 ## 執行證據總覽
 
-- DEV-068 deterministic：66/66 PASS（完整 hover scope、armed-only primary/subtree frame、控制項幾何排除、task-source 保留、candidate standard coexist、child insertion geometry、origin/no-op 順序判定、source overlay edge contract、Workbench來源邊界、desktop viewport-change cleanup）。
-- DEV-068 rendered mouse/touch：29/29 PASS。
+- DEV-068 deterministic：73/73 PASS（完整 hover scope、armed-only primary/subtree frame、控制項幾何排除、task-source 保留、candidate standard coexist、child insertion geometry、origin/no-op 順序判定、source overlay edge contract、來源原位虛線框、不可取消 touchcancel guard、Workbench來源邊界、desktop viewport-change cleanup）。
+- DEV-068 rendered mouse/touch：30/30 PASS。
 - 相鄰 rendered regression：DEV-065 15/15、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共64/64 PASS。
-- Browser true-operation 合計：93/93 PASS。
-- Static／deterministic 合計：DEV-065 40、DEV-053 30、DEV-054 44、DEV-055 28、DEV-058 26、DEV-067 13、DEV-068 66，共247/247 PASS。
-- 完整 scope 核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786845256349-*`。
+- Browser true-operation 合計：94/94 PASS。
+- Static／deterministic 合計：DEV-065 40、DEV-053 30、DEV-054 44、DEV-055 28、DEV-058 26、DEV-067 13、DEV-068 73，共254/254 PASS。
+- 完整 scope 核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786849936366-*`。
 
-## 68 項案例對照
+## 70 項案例對照
 
 | QA ID | 結果 | AI 操作／證據 |
 |---|---|---|
@@ -28,6 +28,7 @@
 | UX-001 | PASS | `DEV068-DESK-900`＋`DEV068-MOB-900`：未滿1秒 primary/subtree/scope frame=0、child insertion=0，僅保留原standard insertion marker。 |
 | UX-002 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`＋`DEV068-DESK-DEPTH-LINE`：新位置顯示唯一child insertion marker，L2/L3/L4+起點為19/29/43px；`DESK/MOB-ORIGIN-CHILD`：原位改顯示來源名稱、一般marker=0。 |
 | UX-003 | PASS | `DEV068-DESK-ARMED-LEAVE`、`MOB-ACTION`、`QA-055-B07`：origin/general/candidate/armed 互斥且清理。 |
+| UX-004 | PASS | `DEV068-SOURCE-ORIGIN-PLACEHOLDER`：desktop 與 mobile 的 L1/L2/L3+ 皆顯示唯一 2px dashed origin frame；left/top/width/height 與拖曳前來源佔位差≤1px，取消後清除。 |
 | TIM-001 | PASS | `DEV068-DESK-900`＋`DEV068-MOB-900`：門檻前 release，parent/order/type zero-write。 |
 | TIM-002 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`：滿門檻先顯示 armed，release 前 store 不變。 |
 | TIM-003 | PASS | `DEV068-DESK-LIFECYCLE-A11Y`：armed 後延長 hold，不自動 commit、不累積 preview/timer。 |
@@ -87,6 +88,7 @@
 | A11Y-002 | PASS | 最新 desktop/mobile/320 截圖人工複查：框形、圓點、線條與逐層縮排，不只靠顏色；exact parent 另由 live status 宣告。 |
 | A11Y-003 | PASS | `DEV068-DESK-ARMED`＋lifecycle/cancel cases：成功 announce 一次；`DESK/MOB-ORIGIN-CHILD`與cancel/no-op無成功誤報，完整node snapshot不變。 |
 | ERR-001 | PASS | `DEV068-ERROR-SWEEP`＋所有相鄰 suite error sweep：console 0 error、無非預期 network/visible error。 |
+| ERR-002 | PASS | mobile L1/L2/L3+ cancel matrix＋static guard：不可取消的 `touchcancel` 不呼叫 `preventDefault()`，session 仍完整清理；最終 console error sweep 為 0。 |
 
 ## 尚未完成的實機門檻
 
