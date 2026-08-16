@@ -60,7 +60,7 @@ const checks = [
   {
     name: 'toast is non-blocking above dialogs/menus',
     ok: includes('src/components/ui/ToastContainer.tsx', 'pointer-events-none') &&
-      includes('src/components/ui/ToastContainer.tsx', 'z-[9999]') &&
+      includes('src/components/ui/ToastContainer.tsx', 'z-[10001]') &&
       includes('src/components/ui/ToastContainer.tsx', 'pointer-events-auto'),
   },
   {

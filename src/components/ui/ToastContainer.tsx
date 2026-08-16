@@ -8,7 +8,13 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+    <div
+      className="pointer-events-none fixed inset-x-4 top-4 z-[10001] flex flex-col items-stretch gap-2 sm:left-auto sm:right-4 sm:items-end"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      data-toast-container="true"
+    >
       {toasts.map((toast) => {
         let Icon = Info;
         let bgColor = 'bg-blue-50 dark:bg-blue-900/30';
@@ -39,8 +45,9 @@ export const ToastContainer: React.FC = () => {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 min-w-[280px] max-w-sm rounded-lg border shadow-lg transition-all animate-in slide-in-from-right-8 fade-in ${bgColor} ${borderColor}`}
+            className={`pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-lg border px-4 py-3 shadow-lg transition-all animate-in slide-in-from-right-8 fade-in sm:min-w-[280px] ${bgColor} ${borderColor}`}
             style={{ animationDuration: '0.3s' }}
+            data-toast-message={toast.message}
           >
             <Icon size={18} className={`flex-shrink-0 ${iconColor}`} />
             <p className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">

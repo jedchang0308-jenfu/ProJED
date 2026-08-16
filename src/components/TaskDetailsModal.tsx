@@ -15,6 +15,8 @@ import { buildAncestorPath } from '../utils/taskHierarchy';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
+import { toast } from '../store/useToastStore';
+import type { UpdateNodeOptions } from '../store/useWbsStore';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -158,8 +160,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     }, 1600);
   }, []);
 
-  const savePendingTaskDetails = React.useCallback(() => {
-    if (!node || !canEditTask) return;
+  const savePendingTaskDetails = React.useCallback((options?: UpdateNodeOptions) => {
+    if (!node || !canEditTask) return false;
 
     const updates: Partial<TaskNode> = {};
     const trimmedTitle = titleValue.trim();
@@ -179,19 +181,29 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
     if (Object.keys(updates).length > 0) {
       updates.updatedAt = Date.now();
-      updateNode(node.id, updates);
+      updateNode(node.id, updates, options);
+      return true;
     }
+    options?.onPersistSuccess?.();
+    return false;
   }, [canEditTask, node, notes, titleValue, updateNode]);
 
   const handleSaveDetails = React.useCallback(() => {
-    savePendingTaskDetails();
-    showSaveFeedback();
+    savePendingTaskDetails({
+      onPersistSuccess: showSaveFeedback,
+      onPersistError: () => toast.error('儲存失敗', { duration: 1000 }),
+    });
   }, [savePendingTaskDetails, showSaveFeedback]);
 
   const handleClose = React.useCallback(() => {
-    savePendingTaskDetails();
+    if (canEditTask) {
+      savePendingTaskDetails({
+        onPersistSuccess: () => toast.success('已儲存', { duration: 1000 }),
+        onPersistError: () => toast.error('儲存失敗', { duration: 1000 }),
+      });
+    }
     onClose();
-  }, [onClose, savePendingTaskDetails]);
+  }, [canEditTask, onClose, savePendingTaskDetails]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

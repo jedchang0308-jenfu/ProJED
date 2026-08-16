@@ -56,6 +56,11 @@ export type SetNodesOptions = {
 
 export type BatchNodeUpdates = Record<string, Partial<TaskNode>>;
 
+export type UpdateNodeOptions = {
+  onPersistSuccess?: () => void;
+  onPersistError?: (error: unknown) => void;
+};
+
 export type BatchUpdateNodesOptions = {
   label?: string;
   mergeKey?: string;
@@ -81,7 +86,7 @@ export interface WbsBoardActions {
   /**
    * 更新任務節點 (部分欄位)
    */
-  updateNode: (id: string, updates: Partial<TaskNode>) => void;
+  updateNode: (id: string, updates: Partial<TaskNode>, options?: UpdateNodeOptions) => void;
 
   /**
    * 以單一 undo command 套用多筆任務更新，用於拖曳、重排與跨視圖歸位。
@@ -859,7 +864,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     };
   },
 
-  updateNode: (id, updates) => {
+  updateNode: (id, updates, options) => {
     const state = get();
     if (!state.nodes[id]) return;
 
@@ -938,29 +943,47 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
     const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
+    const persistencePromises: Promise<unknown>[] = [];
+    const trackPersistence = (promise: Promise<unknown>) => {
+      persistencePromises.push(promise);
+      if (!options?.onPersistSuccess && !options?.onPersistError) {
+        void promise.catch(console.error);
+      }
+    };
 
     // 非同步寫入資料來源；跨看板/未歸位移動使用 create/delete，避免只 update 新路徑造成舊路徑殘留。
     if (newIsUnplaced) {
         if (newNode.isArchived) {
-            void persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid);
+            trackPersistence(persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid));
         } else {
-            void persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid);
+            trackPersistence(persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid));
         }
         if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
-            nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
+            trackPersistence(nodeService.delete(oldNode.workspaceId, oldNode.boardId, id));
         }
     } else if (newNode.workspaceId && newNode.boardId) {
         if (oldWasUnplaced) {
-            void persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid);
-            nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
+            trackPersistence(persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid));
+            trackPersistence(nodeService.create(newNode.workspaceId, newNode.boardId, newNode));
         } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
-            nodeService.create(newNode.workspaceId, newNode.boardId, newNode).catch(console.error);
+            trackPersistence(nodeService.create(newNode.workspaceId, newNode.boardId, newNode));
             if (oldNode.workspaceId && oldNode.boardId) {
-                nodeService.delete(oldNode.workspaceId, oldNode.boardId, id).catch(console.error);
+                trackPersistence(nodeService.delete(oldNode.workspaceId, oldNode.boardId, id));
             }
         } else {
-            nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates).catch(console.error);
+            trackPersistence(nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates));
         }
+    }
+
+    if (options && persistencePromises.length > 0) {
+      void Promise.all(persistencePromises)
+        .then(() => options.onPersistSuccess?.())
+        .catch((error) => {
+          console.error('[WbsStore] Failed to persist task update:', error);
+          options.onPersistError?.(error);
+        });
+    } else if (options?.onPersistSuccess) {
+      queueMicrotask(options.onPersistSuccess);
     }
 
     if (!newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
