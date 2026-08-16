@@ -317,18 +317,19 @@ assert.match(source.overlayPosition, /placement: 'upper-right' \| 'upper-left'/)
 assert.match(source.presenter, /<TaskChildDropPreview/);
 assert.match(source.presenter, /MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX = 16/);
 assert.match(source.childPreview, /data-task-child-drop-live-status="true"/);
-assert.match(source.childPreview, /data-task-child-drop-source-frame="true"/);
-assert.match(source.childPreview, /data-task-child-drop-subtree-frame="true"/);
 assert.match(source.childPreview, /data-task-child-drop-insertion-preview="true"/);
 assert.match(source.childPreview, /<KanbanInsertionMarker compact className="py-0"/);
 assert.match(
   source.childPreview,
-  /\{armed \? \(\s*<>[\s\S]*data-task-child-drop-scope-frame="true"[\s\S]*data-task-child-drop-parent-frame="true"[\s\S]*data-task-child-drop-subtree-frame="true"[\s\S]*data-task-child-drop-insertion-preview="true"[\s\S]*<\/>\s*\) : null\}/,
+  /\{armed \? \(\s*<>[\s\S]*data-task-child-drop-insertion-preview="true"[\s\S]*<\/>\s*\) : null\}/,
+);
+assert.doesNotMatch(
+  source.childPreview,
+  /data-task-child-drop-(?:scope|parent|source|subtree)-frame="true"|ring-(?:1|2) ring-inset ring-primary-(?:400|500)|bg-primary-50/,
+  'child intent must not render any target blue frame or blue background',
 );
 assert.doesNotMatch(source.childPreview, /data-task-child-drop-ghost="true"/);
 assert.doesNotMatch(source.childPreview, /CornerDownRight/);
-assert.match(source.childPreview, /ring-primary-500/);
-assert.match(source.childPreview, /ring-primary-400/);
 assert.match(source.childPreview, /role="status"/);
 assert.match(source.childPreview, /持續停留一秒即可鎖定/);
 assert.match(source.childPreview, /放開後/);

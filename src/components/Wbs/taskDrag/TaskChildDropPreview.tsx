@@ -66,44 +66,6 @@ export const TaskChildDropPreview: React.FC<TaskChildDropPreviewProps> = ({
 
         {armed ? (
           <>
-            {previewRect.scope ? (
-              <div
-                className="fixed rounded-lg ring-1 ring-inset ring-primary-400"
-                style={{
-                  left: previewRect.scope.left,
-                  top: previewRect.scope.top,
-                  width: previewRect.scope.width,
-                  height: previewRect.scope.height,
-                }}
-                data-task-child-drop-scope-frame="true"
-              />
-            ) : null}
-
-            <div
-              className="fixed rounded-md bg-primary-50/60 ring-2 ring-inset ring-primary-500"
-              style={{
-                left: previewRect.parent.left,
-                top: previewRect.parent.top,
-                width: previewRect.parent.width,
-                height: previewRect.parent.height,
-              }}
-              data-task-child-drop-parent-frame="true"
-              data-task-child-drop-source-frame="true"
-            />
-
-            {previewRect.subtree ? (
-              <div
-                className="fixed rounded-md ring-1 ring-inset ring-primary-400"
-                style={{
-                  left: previewRect.subtree.left,
-                  top: previewRect.subtree.top,
-                  width: previewRect.subtree.width,
-                  height: previewRect.subtree.height,
-                }}
-                data-task-child-drop-subtree-frame="true"
-              />
-            ) : null}
-
             <div
               className={`fixed ${resolvedOriginRect ? '' : '-translate-y-1/2'}`}
               style={{

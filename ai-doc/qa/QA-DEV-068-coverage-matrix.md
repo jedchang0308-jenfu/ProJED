@@ -8,12 +8,12 @@
 
 ## 執行證據總覽
 
-- DEV-068 deterministic：73/73 PASS（完整 hover scope、armed-only primary/subtree frame、控制項幾何排除、task-source 保留、candidate standard coexist、child insertion geometry、origin/no-op 順序判定、source overlay edge contract、來源原位虛線框、不可取消 touchcancel guard、Workbench來源邊界、desktop viewport-change cleanup）。
+- DEV-068 deterministic：73/73 PASS（完整 hover scope、candidate／armed target frame=0、控制項幾何排除、task-source 保留、candidate standard coexist、child insertion geometry、origin/no-op 順序判定、source overlay edge contract、來源原位虛線框、不可取消 touchcancel guard、Workbench來源邊界、desktop viewport-change cleanup）。
 - DEV-068 rendered mouse/touch：30/30 PASS。
 - 相鄰 rendered regression：DEV-065 15/15、DEV-053 10/10、DEV-054 15/15、DEV-055 16/16、DEV-067 8/8，共64/64 PASS。
 - Browser true-operation 合計：94/94 PASS。
 - Static／deterministic 合計：DEV-065 40、DEV-053 30、DEV-054 44、DEV-055 28、DEV-058 26、DEV-067 13、DEV-068 73，共254/254 PASS。
-- 完整 scope 核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786849936366-*`。
+- 完整 scope 核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786851252620-*`。
 
 ## 70 項案例對照
 
@@ -26,7 +26,7 @@
 | GEO-005 | PASS | `DEV068-MOB-ARMED`＋`DEV068-VIEWPORTS`：390/430/320 hit-scope 與 desktop complete scope 同源，無 title-only 44px halo。 |
 | GEO-006 | PASS | `QA-054-R03`＋`DEV068-MOB-MOTION-SCROLL`：candidate 前保留原 standard target；離開 scope、scroll/re-enter 後不吸回舊 target。 |
 | UX-001 | PASS | `DEV068-DESK-900`＋`DEV068-MOB-900`：未滿1秒 primary/subtree/scope frame=0、child insertion=0，僅保留原standard insertion marker。 |
-| UX-002 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`＋`DEV068-DESK-DEPTH-LINE`：新位置顯示唯一child insertion marker，L2/L3/L4+起點為19/29/43px；`DESK/MOB-ORIGIN-CHILD`：原位改顯示來源名稱、一般marker=0。 |
+| UX-002 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`＋`DEV068-DESK-DEPTH-LINE`：target 藍框全為0，只顯示唯一child insertion marker，L2/L3/L4+起點為19/29/43px；`DESK/MOB-ORIGIN-CHILD`：原位改顯示來源名稱、一般marker=0。 |
 | UX-003 | PASS | `DEV068-DESK-ARMED-LEAVE`、`MOB-ACTION`、`QA-055-B07`：origin/general/candidate/armed 互斥且清理。 |
 | UX-004 | PASS | `DEV068-SOURCE-ORIGIN-PLACEHOLDER`：desktop 與 mobile 的 L1/L2/L3+ 皆顯示唯一 2px dashed origin frame；left/top/width/height 與拖曳前來源佔位差≤1px，取消後清除。 |
 | TIM-001 | PASS | `DEV068-DESK-900`＋`DEV068-MOB-900`：門檻前 release，parent/order/type zero-write。 |
@@ -82,7 +82,7 @@
 | VIS-001 | PASS | `DEV068-VIEWPORTS`：1440/1024/390/430/320 candidate/armed screenshots。 |
 | VIS-002 | PASS | `DEV068-DESK-ARMED`＋`QA-055-B15`：drag 前後 rect delta≤1px，fixed overlay 不推動 sibling。 |
 | VIS-003 | PASS | `DEV068-DESK-SCOPE-CONTROLS`＋`DEV068-VIEWPORTS`：source overlay預設pointer upper-right、右緣upper-left fallback；完整 scope、深縮排、viewport edge 無 overflow/crop。 |
-| VIS-004 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`＋`DEV068-VIEWPORTS`＋`QA-054-R08/R11`：source rect與parent frame／child insertion marker交集皆為0，rail/finger/child preview z-order 可讀。 |
+| VIS-004 | PASS | `DEV068-DESK-ARMED`＋`DEV068-MOB-ARMED`＋`DEV068-VIEWPORTS`＋`QA-054-R08/R11`：source rect與child insertion marker交集為0，rail/finger/child preview z-order 可讀，target 藍框不存在。 |
 | VIS-005 | PASS | `DEV068-DESK-SUBTREE-UNDO`：commit 後展開與短暫 committed highlight，清理後無常駐 badge。 |
 | A11Y-001 | PASS | `DEV068-DESK-LIFECYCLE-A11Y`：candidate/armed live status 包含 exact target 與 child 語意。 |
 | A11Y-002 | PASS | 最新 desktop/mobile/320 截圖人工複查：框形、圓點、線條與逐層縮排，不只靠顏色；exact parent 另由 live status 宣告。 |

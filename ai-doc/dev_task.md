@@ -344,12 +344,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-067`、`QA-DEV-067`、`QC-DEV-067`；DEV-067 static 13/13、browser 8/8、DEV-055 desktop 16/16、DEV-054 mobile 11/11、DEV-053／054／055／058 static regression、TypeScript、targeted ESLint、test build 與 1440／1024／390 rendered QC 通過。
   - 計入交付：是
 - ◐ DEV-068 [交付點] [執行中] [P1] [AI Browser QA-QC PASS / Physical Mobile 未充分驗證 / 未 Release] 任務完整預選範圍停留移入子任務
-  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的完整 hover-scope 落點；拖離來源後原位置保留尺寸穩定的虛線框；前 1 秒不顯示子任務藍框並保留既有同階／lane 操作，連續滿 1,000ms 才讓 DEV-065 同款藍框與下一子階定位同步出現；若結果回到原位則顯示原任務名稱並 zero-write，否則放開後提交 exact parent。
+  - 摘要：把「移到指定任務底下」改成跨 L1／L2／L3+ 一致的完整 hover-scope 落點；拖離來源後原位置保留尺寸穩定的虛線框；前 1 秒不顯示子任務藍框並保留既有同階／lane 操作，連續滿 1,000ms 只顯示下一子階插入線；若結果回到原位則顯示原任務名稱並 zero-write，否則放開後提交 exact parent。
   - 來源 ID：`USER-20260815-TASK-TITLE-CENTER-CHILD-DROP`
   - 父任務：DEV-053、DEV-054、DEV-055、DEV-058、DEV-065、DEV-067
   - 下一步：接入 AI 可控 iPhone Safari 與 Android Chrome，完成各平台 physical precision gate；兩者通過後才可標完整 mobile sign-off。若要交付正式環境，另走 release gate。
   - 阻塞 / 恢復條件：本輪不含部署或 release。缺 iPhone Safari／Android Chrome AI 可控實機時，只能標記 browser gate 通過，不得宣稱完整 physical mobile sign-off。
-  - 證據：基線 commit `56baa77`、RD 續作前 checkpoint commit `ca41403`；`QC-DEV-068`；使用者重驗依序修正 title slot、title-only scope、來源卡遮擋、控制項 overlay 命中、candidate 搶走 standard drop、Workbench來源誤入child intent、文字ghost不一致、desktop viewport-change cleanup、candidate藍框過早出現、child-origin名稱預覽、來源原位虛線框與不可取消 touchcancel。來源卡為pointer/finger上方fixed overlay；DEV-068 static 73/73、browser 30/30，全部相鄰browser 64/64。70項對照見`QA-DEV-068-coverage-matrix`。未偵測到iPhone／Android實機。
+  - 證據：基線 commit `56baa77`、RD 續作前 checkpoint commit `ca41403`；`QC-DEV-068`；使用者重驗依序修正 title slot、title-only scope、來源卡遮擋、控制項 overlay 命中、candidate 搶走 standard drop、Workbench來源誤入child intent、文字ghost不一致、desktop viewport-change cleanup、candidate藍框過早出現、child-origin名稱預覽、來源原位虛線框、子任務定位藍框完全取消與不可取消 touchcancel。來源卡為pointer/finger上方fixed overlay；DEV-068 static 73/73、browser 30/30，全部相鄰browser 64/64。70項對照見`QA-DEV-068-coverage-matrix`。未偵測到iPhone／Android實機。
   - 計入交付：是
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
@@ -522,14 +522,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 
 ### 問題與使用者價值
 
-舊版只有 L2 卡片底部透明追加區，後續 title-only 方案仍與使用者看見的任務範圍不一致。最終方案把 DEV-065 完整預選範圍（主任務＋可見子樹）當作 child dwell scope；未滿 1 秒不顯示子任務藍框、放開仍走既有 standard drop，滿 1 秒後藍框與「下一子階插入線」才同步出現並由 child intent 接管。
+舊版只有 L2 卡片底部透明追加區，後續 title-only 方案仍與使用者看見的任務範圍不一致。最終方案把 DEV-065 完整預選範圍（主任務＋可見子樹）當作 child dwell scope；未滿 1 秒不顯示子任務藍框、放開仍走既有 standard drop，滿 1 秒後只顯示「下一子階插入線」並由 child intent 接管。
 
 ### Human Decision / RD Contract
 
 - L1／L2／L3+ 共用 DEV-065 complete-hover-scope child intent；canonical target 是 outer scope，不是 title span。標題尾端與主表面空白都屬於 scope；內層任務以 exact innermost ownership 接管，展開、輸入、連結、選單等內部控制依實際矩形排除。
 - 真正開始拖曳後才計 child dwell；同一 source、target 與完整hover scope連續 1,000ms 才 armed。未滿 1 秒放開依當下 standard drop，不得提交 child。
-- Candidate 不顯示子任務藍框，只保留 standard insertion marker；armed 後 parent/subtree frame 與下一子階唯一 child insertion marker 同步出現。插入線沿用既有圓點＋線條樣式，起點依 L2／L3／L4+ 逐層右移；Preview 使用 overlay／portal，不得推動 layout。
-- 原始任務卡以raw pointer／finger為anchor固定於右上方16px；靠右時改放左上方並保留8px viewport margin，且不得遮住parent frame或child insertion marker。
+- Candidate 與 armed 都不顯示子任務 target 藍框；candidate 保留 standard insertion marker，armed 清除後只顯示下一子階唯一 child insertion marker。插入線沿用既有圓點＋線條樣式，起點依 L2／L3／L4+ 逐層右移；Preview 使用 overlay／portal，不得推動 layout。
+- 原始任務卡以raw pointer／finger為anchor固定於右上方16px；靠右時改放左上方並保留8px viewport margin，且不得遮住child insertion marker。
 - 任務拖離後，原位置保留唯一 `primary-400` 2px 內縮虛線框；L1/L2/L3+ 與手機共用視覺語言，框的 left/top/width/height 與原佔位差≤1px，結束或取消後清除。
 - Release 重新驗證 exact target、geometry、permission、cycle 與 store freshness；通過才寫入一次並提供單次 undo。
 - 桌機保留 8px threshold、click/right-click 與一般排序；手機保留 pan-first、long-press、raw finger 與 action rail priority。
@@ -559,13 +559,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - 使用者重驗修正：最終明示命中區不是 flex slot 或 shrink-wrapped title `SPAN`，而是圖片中 DEV-065 完整藍框；已改為 whole hover scope，並新增 task-source `role="button"` 保留、內部控制排除與 candidate/standard coexist gate。
 - 使用者重驗遮擋修正：來源任務卡原先覆蓋parent frame／當時的child ghost；直接修改dnd-kit modifier的第一輪與仍有1.75px／2px相交的第二輪均判FAIL並留存證據，最終改為與collision解耦的pointer-upper-right fixed overlay。
 - 使用者重驗階層語言修正：可見文字ghost退役，改用現有`KanbanInsertionMarker`；L2／L3／L4+起點相對欄位左側實測19／29／43px。
-- 使用者重驗顯示時序修正：candidate 的子任務 primary/subtree/scope frame 全為0；armed 才與下一子階 insertion marker 同步顯示。
+- 使用者重驗顯示修正：candidate 與 armed 的子任務 primary/subtree/scope frame 全為0；armed 只顯示下一子階 insertion marker。
 - 使用者重驗原位修正：child append 若父層／型態／兄弟順序均不變，armed 改顯示既有藍底白字來源名稱欄位；一般 marker=0，release 完整 node snapshot 不變且無成功播報。同父層但實際換序仍維持一般 marker 與 commit。
 - 使用者重驗來源位置修正：三階來源離開後共用2px虛線框；failure-first rendered gate抓到L1舊有scale/rotate與固定高度使原位偏移，移除transform並恢復36px原高後，desktop與mobile的L1/L2/L3+座標／尺寸全數差≤1px。
 - Commit 後 RD 稽核：failure-first 抓到 desktop orientationchange 後仍可提交，補 orientationchange／resize cancel 後 7 種終止來源回歸通過。
 - 核心 gate：DEV-068 static 73/73、desktop/mobile browser true operation 30/30；70 個 QA case 均已連回 AI 操作證據。
 - 相鄰回歸：DEV-065 40/40＋15/15、DEV-053 30/30＋10/10、DEV-054 44/44＋15/15、DEV-055 28/28＋16/16、DEV-058 26/26、DEV-067 13/13＋8/8，全部 PASS。
-- 工程 gate：TypeScript PASS；targeted ESLint 0 error；test build `output/build-dev068-source-origin-final-20260816` PASS（2000 modules）。
+- 工程 gate：TypeScript PASS；targeted ESLint 0 error；test build `output/build-dev068-no-child-blue-20260816` PASS（2000 modules）。
 - Rendered viewports：1440x900、1024x768、390x844、430x932、320x844；console／network／visible-error／overflow sweep PASS。
 - QC authoritative evidence：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`。
 - Remaining gate：本機未偵測到 ADB 或 Windows iPhone／Android portable device；依 QA 契約維持執行中，不標記 Complete 或 release ready。

@@ -18,7 +18,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 ## 1. 最終使用者決策
 
-子任務定位範圍不是標題文字寬度，也不是標題尾端或舊卡片底部透明追加區。L1、L2、L3+ 一律重用 DEV-065 的完整任務滑鼠預選範圍：主任務表面加目前可見的子樹範圍，也就是使用者畫面中的完整藍框。
+子任務定位範圍不是標題文字寬度，也不是標題尾端或舊卡片底部透明追加區。L1、L2、L3+ 一律重用 DEV-065 的完整任務滑鼠預選範圍：主任務表面加目前可見的子樹範圍；這是命中範圍，不代表 child preview 要渲染藍框。
 
 本節是 `Intentional replacement`，取代本文件先前的 shrink-wrapped title `SPAN`、title center、44px title halo、標題尾端空白負向等契約。檔名保留 legacy 名稱以維持既有連結，內容以本版為準。
 
@@ -27,21 +27,21 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - 來源進入有效目標的完整預選範圍即成為 `child-candidate`。
 - 同一來源、同一目標連續停留滿 1,000ms 才成為 `child-armed`。
 - `child-candidate` 只保留不可見命中與計時狀態，不顯示子任務藍框；畫面維持既有排序定位條。
-- `child-armed` 才同步顯示父任務框、可見子樹框及「下一子階」插入線；插入線起點依實際階層右移，只有放開才移入。
+- `child-armed` 不顯示任何子任務 target 藍框或藍底，只顯示「下一子階」插入線；插入線起點依實際階層右移，只有放開才移入。
 - 若 armed 的 canonical append 結果與來源原本的父層、型態及兄弟排序完全相同，該位置是 `origin/no-op`：以其他階層既有的藍底白字 `TaskOriginTitleField` 顯示來源任務名稱，不顯示一般圓點插入線；放開不得寫入或播報移入成功。
 - 滑到內層任務時，最深、面積較小的 innermost scope 接管；父框不得搶走子框。
-- 展開鍵、連結、輸入框、文字區域、選單與其他內部控制項不建立 child intent；任務主表面即使為了可及性帶 `role="button"`，仍是有效藍框範圍。
-- 拖曳中的來源任務固定在 pointer／finger 上方，優先右側 16px，空間不足時左側或 viewport clamp，不得遮住 parent frame 或 child insertion marker。
+- 展開鍵、連結、輸入框、文字區域、選單與其他內部控制項不建立 child intent；任務主表面即使為了可及性帶 `role="button"`，仍是有效命中範圍。
+- 拖曳中的來源任務固定在 pointer／finger 上方，優先右側 16px，空間不足時左側或 viewport clamp，不得遮住 child insertion marker。
 - 任務離開來源位置後，原位置保留 `primary-400` 的 2px 內縮虛線框；L1 對應原標題列、L2 對應完整來源卡與可見子樹 scope、L3+ 對應原任務列。虛線框不顯示任務文字、不充當插入線，且結束或取消拖曳後立即清除。
 
 ## 2. 與既有排序的相容規則
 
-整個藍框同時也是既有 sortable/lane surface，因此採「候選共存、鎖定接管」：
+整個預選範圍同時也是既有 sortable/lane surface，因此採「候選共存、鎖定接管」：
 
 | 階段 | 子任務回饋 | 既有排序回饋 | 放開結果 |
 |---|---|---|---|
 | `<1,000ms` candidate | 不顯示子任務藍框；無 child insertion marker | 保留既有 standard insertion marker | 執行當下既有同階／lane／promotion 動作，不得改成 child |
-| `>=1,000ms` armed | parent source frame、subtree frame、下一子階 insertion marker；若結果為原位則改顯示來源名稱 | standard insertion marker 清除 | 新位置：`parentId = exact target.id`，一次提交；原位：zero-write no-op |
+| `>=1,000ms` armed | 不顯示 target 藍框，只顯示下一子階 insertion marker；若結果為原位則改顯示來源名稱 | standard insertion marker 清除 | 新位置：`parentId = exact target.id`，一次提交；原位：zero-write no-op |
 | 離開／切換目標 | 舊 candidate/armed 立即清除並重算 | 依目前落點恢復 | 不得提交 stale child target |
 | 無效 self／descendant／archived／missing target | 不得 armed | 同一危險點不得被重新解讀為繞過 cycle guard 的排序 | zero-write |
 
@@ -52,15 +52,12 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 ### 3.1 L1
 
 - 命中 scope：`data-desktop-task-hover-scope="true"` 的完整 column scope。
-- primary frame：column header。
-- subtree frame：column 內目前可見卡片群組。
-- armed 時可額外顯示完整 column 外框，以對齊 DEV-065 的 column 視覺語意。
+- child preview 不渲染 column／primary／subtree target frame；L1 的 column scope 僅作為命中與插入線幾何來源。
 
 ### 3.2 L2
 
 - 命中 scope：卡片最外層 task scope，包含 primary card 與目前可見 checklist subtree。
-- primary frame：DEV-065 `primary-500` 2px inset source frame。
-- subtree frame：DEV-065 `primary-400` 1px inset group frame。
+- child preview 不渲染 DEV-065 的 `primary-500`／`primary-400` target frame；L2 的卡片與可見 checklist subtree 僅作為命中與插入線幾何來源。
 
 ### 3.3 L3+
 
@@ -92,13 +89,9 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 ## 5. 預覽契約
 
-- 只有 Armed 顯示 target frame，並沿用 DEV-065 視覺語言，不新增另一套顏色：
-  - primary source：`ring-2 ring-inset ring-primary-500 bg-primary-50/60`
-  - visible subtree：`ring-1 ring-inset ring-primary-400`
-- Candidate 不顯示任何子任務 frame，只保留既有 insertion marker；避免使用者在 1 秒命中前誤以為放開會移入子階。
-- Armed 必須在同一狀態切換中同步顯示 target frame、清除原 standard insertion marker，並在 exact target 子樹末端顯示唯一 child insertion marker；沿用 `KanbanInsertionMarker` 的圓點＋線條，起點與下一層任務內容對齊，L2／L3／L4+ 必須逐層右移。
+- Candidate 與 Armed 都不顯示任何子任務 target frame 或藍底；candidate 保留既有 standard insertion marker，armed 清除它並在 exact target 子樹末端顯示唯一 child insertion marker。沿用 `KanbanInsertionMarker` 的圓點＋線條，起點與下一層任務內容對齊，L2／L3／L4+ 必須逐層右移。
 - Armed 若為原位 no-op，唯一 child insertion preview 改為既有 `TaskOriginTitleField`：位置沿用來源原始 title field rect、文字等於來源任務名稱、品牌藍底白字，`data-task-child-drop-origin/noop="true"`；一般 `KanbanInsertionMarker` 數量必須為 0。
-- Armed 不顯示常駐「移入…的子任務」文字框；視覺以框形、圓點、線條與縮排位置表意，輔助科技仍由 `aria-live` 宣告 exact parent，避免只靠顏色。
+- Armed 不顯示常駐「移入…的子任務」文字框；視覺以圓點、線條與縮排位置表意，原位 no-op 才使用既有藍底白字來源名稱欄位，輔助科技仍由 `aria-live` 宣告 exact parent。
 - 全部 child preview 為 fixed overlay，不得改 normal-flow geometry、column width、scrollHeight 或 board scrollWidth。
 - 來源虛線框使用不影響盒模型的 inset outline，左、上、寬、高須與拖曳前來源佔位一致；L1 來源不得再縮放、旋轉或以固定高度撐大原位置。
 - 同一時間只允許一個 exact child target；離開後立即清除，不得 stale re-arm。
@@ -132,8 +125,8 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - L1/L2/L3+ marker 均掛在 DEV-065 完整 hover scope，而非 title span。
 - hit-scope rect 包住 primary 與可見 subtree；長中文、長英文、未命名、標題尾端空白與主表面其他空白都可候選。
 - exact innermost ownership、控制項排除、999/1000ms、target switch、armed leave、cancel/stale target、cycle、permission、undo/redo 全部通過。
-- Candidate 保留一個 standard indicator，primary/subtree/scope 子任務藍框與 child insertion marker 均為 0；armed 時 target frame 與 child insertion marker 同步出現，standard indicator 為 0、child insertion marker 恰為 1。
-- 子任務 append 回到原始位置時，armed 仍同步顯示 target frame，但定位預覽必須顯示原任務名稱而非一般插入線；桌機與手機 release 的完整 node snapshot 必須相同，成功 announcement 為空。
+- Candidate 保留一個 standard indicator，所有子任務 target 藍框與 child insertion marker 均為 0；armed 時所有 target 藍框仍為 0，standard indicator 為 0、child insertion marker 恰為 1。
+- 子任務 append 回到原始位置時，armed 不顯示 target 藍框，但定位預覽必須顯示原任務名稱而非一般插入線；桌機與手機 release 的完整 node snapshot 必須相同，成功 announcement 為空。
 - 桌機 L1／L2／L3+ 與手機 long-press 拖曳期間，來源原位置各顯示唯一 2px 虛線框；量測位置與尺寸差異均不得超過 1px，取消後框數為 0。
 - L1→L2、L2→L3、L3+→下一層的 child insertion 起點必須單調右移，且線條落在 exact target 子樹末端，不得顯示在父層或兄弟層起點。
 - DEV-065 的 primary-500／primary-400 樣式與 hover 行為不回歸。
@@ -156,8 +149,8 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 已執行核心證據：
 
 - `verify:dev-068-task-title-center-child-drop`：73/73。
-- `verify:dev-068-task-title-center-child-drop-browser`：30/30 rendered mouse/touch；包含 candidate 零藍框、armed 藍框與插入線同步、L2／L3／L4+ insertion-start 單調右移、桌機／手機 child-origin 名稱預覽與 zero-write，以及 desktop／mobile L1／L2／L3+ 來源虛線框原位 geometry gate。
-- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786849936366-*`。
+- `verify:dev-068-task-title-center-child-drop-browser`：30/30 rendered mouse/touch；包含 candidate／armed 均零 target 藍框、armed 插入線、L2／L3／L4+ insertion-start 單調右移、桌機／手機 child-origin 名稱預覽與 zero-write，以及 desktop／mobile L1／L2／L3+ 來源虛線框原位 geometry gate。
+- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786851252620-*`。
 - QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop、Workbench來源誤入child intent、desktop viewport-change未取消，以及 candidate 過早顯示子任務藍框；均回送 RD 修正後才採信最終結果。
 - Physical iPhone／Android：未執行。
 - 本輪未 push、deploy 或 release。

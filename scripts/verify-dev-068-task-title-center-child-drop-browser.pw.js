@@ -511,7 +511,7 @@ async (page) => {
     return { sourceId, targetId, candidate, before, targetBefore, after };
   });
 
-  await runCase('DEV068-DESK-ARMED', 'desktop armed preview reuses the DEV-065 source and subtree frames and commits once', async () => {
+  await runCase('DEV068-DESK-ARMED', 'desktop armed preview shows only the child insertion marker and commits once', async () => {
     await openApp({ width: 1440, height: 900 });
     const fixture = await fixtureIds();
     const [sourceId, targetId] = fixture.l2Pair;
@@ -525,38 +525,18 @@ async (page) => {
     const sourceOverlay = await readSourceOverlayGeometry(targetPoint);
     const targetSurfaceArmed = await surfaceFor(targetId).boundingBox();
     assert(armed.count === 1 && armed.childInsertionCount === 1 && armed.target === targetId
-      && armed.sourceFrameCount === 1 && armed.scopeFrameCount <= 1
+      && armed.sourceFrameCount === 0 && armed.subtreeFrameCount === 0 && armed.scopeFrameCount === 0
       && armed.standardInsertionIndicatorCount === 0
-      && armed.childInsertionRect && armed.parentRect
-      && armed.childInsertionRect.left >= armed.parentRect.left + 8
+      && armed.childInsertionRect && armed.parentRect === null && armed.subtreeRect === null
       && armed.childInsertionRect.width >= 48,
-    'armed desktop preview must replace the text ghost with one child-level insertion marker', armed);
-    assert(armed.sourceFrameCount === 1
-      && armed.sourceFrameStyle?.boxShadow.includes('99, 102, 241')
-      && armed.sourceFrameStyle?.boxShadow.includes('inset')
-      && armed.hitScopeRect && armed.parentRect
-      && armed.hitScopeRect.left <= armed.parentRect.left + 1
-      && armed.hitScopeRect.top <= armed.parentRect.top + 1
-      && armed.hitScopeRect.right >= armed.parentRect.right - 1
-      && armed.hitScopeRect.bottom >= armed.parentRect.bottom - 1,
-    'child preview must reuse the DEV-065 primary source frame inside the complete hover scope', armed);
-    if (armed.subtreeRect) {
-      assert(armed.subtreeFrameCount === 1
-        && /(?:129|130|131), (?:140|141|142), 248/.test(armed.subtreeFrameStyle?.boxShadow || '')
-        && armed.hitScopeRect.left <= armed.subtreeRect.left + 1
-        && armed.hitScopeRect.top <= armed.subtreeRect.top + 1
-        && armed.hitScopeRect.right >= armed.subtreeRect.right - 1
-        && armed.hitScopeRect.bottom >= armed.subtreeRect.bottom - 1,
-      'child preview must reuse the DEV-065 descendant frame inside the same complete hover scope', armed);
-    }
+    'armed desktop preview must render only one child-level insertion marker and no blue target frames', armed);
     assert(sourceOverlay.kind === 'desktop'
       && sourceOverlay.anchor === 'pointer-upper-right'
       && sourceOverlay.gap === 16
       && sourceOverlay.sourceRect.left >= targetPoint.x + sourceOverlay.gap - 1
       && sourceOverlay.sourceRect.bottom <= targetPoint.y - sourceOverlay.gap + 1
-      && !sourceOverlay.overlapsParent
       && !sourceOverlay.overlapsChildInsertion,
-    'desktop source overlay must stay at pointer upper-right without covering the parent frame or child insertion marker', sourceOverlay);
+    'desktop source overlay must stay at pointer upper-right without covering the child insertion marker', sourceOverlay);
     assert(targetSurfaceBefore && targetSurfaceArmed
       && Math.abs(targetSurfaceBefore.x - targetSurfaceArmed.x) <= 1
       && Math.abs(targetSurfaceBefore.y - targetSurfaceArmed.y) <= 1
@@ -1153,11 +1133,13 @@ async (page) => {
     await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
     const armed = await readChildPreview();
     const sourceOverlay = await readSourceOverlayGeometry(targetPoint);
-    assert(armed.count === 1 && armed.childInsertionCount === 1 && armed.sourceFrameCount === 1
-      && armed.scopeFrameCount <= 1 && armed.standardInsertionIndicatorCount === 0
+    assert(armed.count === 1 && armed.childInsertionCount === 1
+      && armed.sourceFrameCount === 0 && armed.subtreeFrameCount === 0 && armed.scopeFrameCount === 0
+      && armed.parentRect === null && armed.subtreeRect === null
+      && armed.standardInsertionIndicatorCount === 0
       && armed.childInsertionRect.left >= 0 && armed.childInsertionRect.right <= armed.viewport.width
       && armed.childInsertionRect.top >= 48 && armed.childInsertionRect.bottom <= armed.viewport.height,
-    'mobile armed child insertion marker must be unique and stay inside the viewport/action-rail safe area', armed);
+    'mobile armed preview must render only one child insertion marker and stay inside the viewport/action-rail safe area', armed);
     assert(sourceOverlay.kind === 'mobile'
       && sourceOverlay.anchor === 'finger'
       && sourceOverlay.placement === 'upper-right'
@@ -1166,7 +1148,6 @@ async (page) => {
       && sourceOverlay.sourceRect.left >= 8 - 1
       && sourceOverlay.sourceRect.right <= sourceOverlay.viewport.width - 8 + 1
       && sourceOverlay.sourceRect.bottom <= targetPoint.y - sourceOverlay.gap + 1
-      && !sourceOverlay.overlapsParent
       && !sourceOverlay.overlapsChildInsertion,
     'mobile source preview must prefer upper-right, clamp safely at narrow edges, and stay above the finger without covering child feedback', sourceOverlay);
     const screenshotPath = `${screenshotBase}-mobile-armed.png`;
