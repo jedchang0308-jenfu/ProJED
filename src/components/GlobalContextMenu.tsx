@@ -20,6 +20,8 @@ import {
   selectAndOpenTaskDetails,
 } from '../utils/taskInteractions';
 import { getTaskAssigneeIds } from '../utils/taskAssignments';
+import { resolveTaskMenu } from '../interactions/task/resolveTaskInteraction';
+import type { InteractionContext } from '../interactions/task/types';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -62,9 +64,25 @@ export const GlobalContextMenu: React.FC = () => {
   const IGNORE_OPENING_TOUCH_MS = 750;
   const MENU_WIDTH = 220;
   const VIEWPORT_PADDING = 12;
-  const isDependencySupportedView = currentView === 'board' || currentView === 'list';
   const menuKind = contextMenuState?.kind || 'task';
   const isTaskMenu = menuKind === 'task';
+  const taskMenuHostMode = contextMenuState?.kind === 'task'
+    ? contextMenuState.interactionLocation?.hostMode
+    : currentView;
+  const taskMenuInteractionContext: InteractionContext | null = isTaskMenu && contextMenuState?.kind === 'task'
+    ? {
+      interactionId: contextMenuState.interactionId || 'legacy-context-menu',
+      location: contextMenuState.interactionLocation || { hostMode: currentView === 'mindmap' || currentView === 'board' || currentView === 'gantt' || currentView === 'calendar' ? currentView : 'list', origin: 'mode-primary' },
+      surfaceId: contextMenuState.surfaceId || 'list.row',
+      taskId: contextMenuState.nodeId,
+      modality: 'fine-pointer',
+      transientOwners: [],
+      blockers: [],
+    }
+    : null;
+  const resolvedTaskMenuActionIds = taskMenuInteractionContext ? resolveTaskMenu(taskMenuInteractionContext) : [];
+  const isDependencySupportedView = resolvedTaskMenuActionIds.includes('task.dependency-start')
+    && resolvedTaskMenuActionIds.includes('task.dependency-end');
   const currentNode = isTaskMenu && contextMenuState ? useWbsStore.getState().nodes[contextMenuState.nodeId] : null;
   const getWorkspace = (workspaceId: string) => workspaces.find(workspace => workspace.id === workspaceId);
   const getWorkspaceRole = (workspaceId: string) => {

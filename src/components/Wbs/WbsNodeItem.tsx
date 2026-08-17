@@ -15,7 +15,8 @@ import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
 import { matchesTaskFilters } from '../../features/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
-import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { isMobileTaskActionMode } from './mobileTaskActionContext';
 import TaskAssignmentPicker from '../TaskAssignmentPicker';
@@ -44,6 +45,12 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
   const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: nodeId,
+    title: node?.title,
+    surfaceId: 'list.row',
+    nodeRole: node?.nodeType || 'task',
+  });
   const touchTapGuard = useTouchTapGuard();
   const mobileActionMode = isMobileTaskActionMode();
 
@@ -88,8 +95,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const showStartDate = useBoardStore(s => s.showStartDate);
   const showTags = useBoardStore(s => s.showTags);
   
-  const setContextMenuState = useBoardStore(s => s.setContextMenuState);
-
   const updateNode = useWbsStore(s => s.updateNode);
   const statusFilters = useBoardStore(s => s.statusFilters);
   const dueWithinDays = useBoardStore(s => s.dueWithinDays);
@@ -298,18 +303,12 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         {...touchTapGuard.handlers}
         onContextMenu={(e) => {
             e.preventDefault();
-            setContextMenuState({
-                kind: 'task',
-                isOpen: true,
-                x: e.clientX,
-                y: e.clientY,
-                nodeId: node.id,
-                title: node.title
-            });
+            void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
         }}
         onClick={(event) => {
             if (isDragging || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
-            selectAndOpenTaskDetails(node.id);
+            // Compatibility contract: selectAndOpenTaskDetails(node.id) is dispatched by the interaction kernel.
+            void interactionBinding.dispatch('pointer.primary');
         }}
         data-task-id={node.id}
         data-mobile-drop-target={node.id}

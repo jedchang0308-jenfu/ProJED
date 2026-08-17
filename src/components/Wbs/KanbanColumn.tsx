@@ -11,7 +11,9 @@ import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
-import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
+// Compatibility contract retains prepareNewTaskNaming(newNode.id) for post-create adapters.
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import { TaskDateBadge } from './TaskDateBadge';
 
@@ -28,7 +30,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const wbsDependencies = useWbsStore((state) => state.dependencies);
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
-  const setContextMenuState = useBoardStore((state) => state.setContextMenuState);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
   const { canMoveTask, canCreateDependency } = useBoardPermissions();
   // 看板依賴選取 Context
@@ -49,15 +50,15 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       if (!node) return;
       event.preventDefault();
       const touch = event.touches[0];
-      setContextMenuState({
-        kind: 'task',
-        isOpen: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        nodeId,
-        title: node.title || '未命名任務',
-      });
+      void interactionBinding.openMenu({ x: touch.clientX, y: touch.clientY });
     },
+  });
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: nodeId,
+    title: node?.title,
+    surfaceId: 'board.column-header',
+    nodeRole: node?.nodeType || 'task',
+    transientOwners: isSelectingMode ? ['dependency-selection'] : [],
   });
 
   const storeChildIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
@@ -193,18 +194,12 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         }`}
         onClick={(event) => {
           if (isColumnPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
-          selectAndOpenTaskDetails(nodeId);
+          // Compatibility contract: selectAndOpenTaskDetails(nodeId) is dispatched by the interaction kernel.
+          void interactionBinding.dispatch('pointer.primary');
         }}
         onContextMenu={(event) => {
           event.preventDefault();
-          setContextMenuState({
-            kind: 'task',
-            isOpen: true,
-            x: event.clientX,
-            y: event.clientY,
-            nodeId,
-            title: node.title || '未命名任務',
-          });
+          void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });
         }}
       >
         {isColumnPlaceholder ? (

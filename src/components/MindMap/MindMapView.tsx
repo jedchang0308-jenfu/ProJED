@@ -956,6 +956,9 @@ const MindMapView: React.FC = () => {
       y: event.clientY,
       nodeId,
       title,
+      interactionLocation: { hostMode: 'mindmap', origin: 'mode-primary' },
+      surfaceId: 'mindmap.node',
+      interactionId: `mindmap-context-${nodeId}-${Date.now().toString(36)}`,
     });
   }, [selectNode, setContextMenuState, setSelectedTaskId]);
 

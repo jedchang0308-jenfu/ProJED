@@ -21,7 +21,8 @@ import { getNodeTags } from '../../utils/tags';
 import { KanbanTagSticker } from '../Tags/KanbanTagSticker';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
-import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 import { TaskDateBadge } from './TaskDateBadge';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import {
@@ -101,15 +102,18 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       event.preventDefault();
       event.stopPropagation();
       const touch = event.touches[0];
-      useBoardStore.getState().setContextMenuState({
-        kind: 'task',
-        isOpen: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        nodeId: child.id,
-        title: child.title || '未命名任務',
-      });
+      void interactionBinding.openMenu({ x: touch.clientX, y: touch.clientY });
     },
+  });
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: childId,
+    title: child?.title,
+    surfaceId: 'board.checklist-row',
+    nodeRole: child?.nodeType || 'task',
+    transientOwners: [
+      ...(isSelectingMode ? ['dependency-selection' as const] : []),
+      ...(isRecordCaptureMode ? ['record-capture' as const] : []),
+    ],
   });
 
   // 每個任務都是可拖曳元素
@@ -200,14 +204,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
           e.preventDefault();
           e.stopPropagation();
           if (isRecordCaptureMode) return;
-          useBoardStore.getState().setContextMenuState({
-            kind: 'task',
-            isOpen: true,
-            x: e.clientX,
-            y: e.clientY,
-            nodeId: child.id,
-            title: child.title || '未命名任務',
-          });
+          void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
         }}
         onClick={(e) => {
           if (isRecordCaptureMode) {
@@ -221,7 +218,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             return;
           }
           e.stopPropagation();
-          selectAndOpenTaskDetails(child.id);
+          // Compatibility contract: selectAndOpenTaskDetails(child.id) is dispatched by the interaction kernel.
+          void interactionBinding.dispatch('pointer.primary');
         }}
         data-task-id={child.id}
         data-mobile-drop-target={child.id}

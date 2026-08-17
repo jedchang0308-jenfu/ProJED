@@ -1,4 +1,8 @@
 import type { SerializedEditorState } from 'lexical';
+import type {
+  TaskInteractionLocation,
+  TaskInteractionSurfaceId,
+} from '../interactions/task/types';
 
 // Core scalar types
 export type TaskStatus = 'todo' | 'in_progress' | 'delayed' | 'completed' | 'unsure' | 'onhold';
@@ -518,6 +522,9 @@ export type BoardContextMenuState =
       y: number;
       nodeId: string;
       title: string;
+      interactionLocation?: TaskInteractionLocation;
+      surfaceId?: TaskInteractionSurfaceId;
+      interactionId?: string;
     }
   | {
       kind: 'workspace';
@@ -568,6 +575,9 @@ export interface BoardState {
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: BoardContextMenuState | null;
+  lastTaskInteractionLocation: TaskInteractionLocation | null;
+  lastTaskInteractionSurfaceId: TaskInteractionSurfaceId | null;
+  lastTaskInteractionId: string | null;
   selectedTaskId: string | null;
   pendingTitleEditNodeId: string | null;
   pendingTitleEditInitialValue: string | null;

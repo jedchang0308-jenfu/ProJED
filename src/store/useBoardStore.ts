@@ -4,6 +4,8 @@ import useAuthStore from './useAuthStore';
 import useUndoStore from './useUndoStore';
 import { workspaceService, boardService } from '../services/dataBackend';
 import type { BoardStore, ViewMode } from '../types';
+import type { BoardContextMenuState } from '../types';
+import type { TaskHostMode, TaskInteractionLocation, TaskInteractionSurfaceId } from '../interactions/task/types';
 import {
     createDefaultTaskDisplaySettings,
     createDefaultTaskFilters,
@@ -85,6 +87,40 @@ const getStoredView = () => {
     return 'home' as ViewMode;
 };
 
+const viewToTaskHostMode = (view: ViewMode): TaskHostMode => {
+    if (view === 'mindmap' || view === 'board' || view === 'gantt' || view === 'calendar') return view;
+    return 'list';
+};
+
+const viewToTaskSurfaceId = (view: ViewMode): TaskInteractionSurfaceId => {
+    switch (view) {
+        case 'mindmap': return 'mindmap.node';
+        case 'board': return 'board.card';
+        case 'gantt': return 'gantt.task-bar';
+        case 'calendar': return 'calendar.segment';
+        default: return 'list.row';
+    }
+};
+
+const createTaskInteractionId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    return `task-interaction-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const normalizeTaskContextMenuState = (state: BoardContextMenuState, currentView: ViewMode): BoardContextMenuState => {
+    if (state.kind !== 'task') return state;
+    const interactionLocation: TaskInteractionLocation = state.interactionLocation || {
+        hostMode: viewToTaskHostMode(currentView),
+        origin: 'mode-primary',
+    };
+    return {
+        ...state,
+        interactionLocation,
+        surfaceId: state.surfaceId || viewToTaskSurfaceId(currentView),
+        interactionId: state.interactionId || createTaskInteractionId(),
+    };
+};
+
 const getStoredId = (key: string) => {
     try { return localStorage.getItem(key) || null; } catch { return null; }
 };
@@ -163,6 +199,9 @@ const useBoardStore = create<BoardStore>()(
         ...getStoredFilters(),
         dependencySelection: null,
         contextMenuState: null,
+        lastTaskInteractionLocation: null,
+        lastTaskInteractionSurfaceId: null,
+        lastTaskInteractionId: null,
         selectedTaskId: null,
         pendingTitleEditNodeId: null,
         pendingTitleEditInitialValue: null,
@@ -190,9 +229,16 @@ const useBoardStore = create<BoardStore>()(
         // layer, so the task's hover preview would otherwise disappear immediately.
         // Keep the menu target selected while the menu is open; closeContextMenu
         // remains responsible for clearing it when the menu is dismissed.
-        setContextMenuState: (state) => set({
-            contextMenuState: state,
-            selectedTaskId: state?.kind === 'task' ? state.nodeId : get().selectedTaskId,
+        setContextMenuState: (state) => set((currentState) => {
+            const normalizedState = state ? normalizeTaskContextMenuState(state, currentState.currentView) : null;
+            const taskState = normalizedState?.kind === 'task' ? normalizedState : null;
+            return {
+                contextMenuState: normalizedState,
+                selectedTaskId: taskState ? taskState.nodeId : currentState.selectedTaskId,
+                lastTaskInteractionLocation: taskState?.interactionLocation || currentState.lastTaskInteractionLocation,
+                lastTaskInteractionSurfaceId: taskState?.surfaceId || currentState.lastTaskInteractionSurfaceId,
+                lastTaskInteractionId: taskState?.interactionId || currentState.lastTaskInteractionId,
+            };
         }),
         setSelectedTaskId: (nodeId) => set({ selectedTaskId: nodeId }),
         setPendingTitleEditNodeId: (nodeId, initialValue = null) => set({

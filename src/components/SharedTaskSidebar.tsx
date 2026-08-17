@@ -10,6 +10,7 @@ import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { COMPACT_DIMENSIONS } from './ui/compactTokens';
 import type { TaskNode } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
+import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 
 interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
 const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
@@ -36,9 +37,13 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     const isTask = item.nodeType === 'task';
     const childIds = useWbsStore(s => s.parentNodesIndex[item.id]);
     const hasChildren = childIds && childIds.length > 0;
-
-    // 全域 Context Menu
-    const setContextMenuState = useBoardStore(s => s.setContextMenuState);
+    const interactionBinding = useTaskInteractionBinding({
+        taskId: item.id,
+        title: item.title,
+        surfaceId: 'shared-task-sidebar.row',
+        origin: 'shared-task-sidebar',
+        nodeRole: item.nodeType || 'task',
+    });
 
     return (
         <div
@@ -47,7 +52,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
             {...dragSurfaceBindings}
             onContextMenu={(e) => {
                 e.preventDefault();
-                setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
+                void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
             }}
             data-task-id={item.id}
             data-task-drag-surface="true"
@@ -59,7 +64,8 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
             onClick={() => {
                 if (isDragging) return;
-                onClick(item);
+                if (isTask) void interactionBinding.dispatch('pointer.primary');
+                else onClick(item);
             }}
         >
             {hasChildren && onToggleCollapse ? (

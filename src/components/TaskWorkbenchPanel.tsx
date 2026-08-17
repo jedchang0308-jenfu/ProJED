@@ -40,7 +40,8 @@ import {
 import { isTaskWorkbenchSortableTask, listWorkbenchTasks } from '../features/taskWorkbench/source';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import type { InboxItem, TaskNode } from '../types';
-import { isTaskPrimaryActionTarget, prepareNewTaskNaming, selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { isTaskPrimaryActionTarget, prepareNewTaskNaming } from '../utils/taskInteractions';
+import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 import { formatTaskLocation } from '../utils/taskHierarchy';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
 import {
@@ -217,7 +218,13 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
   const depth = Math.max(0, Math.min(hierarchyDepth, 6));
-  const setContextMenuState = useBoardStore(state => state.setContextMenuState);
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: task.id,
+    title: task.title,
+    surfaceId: placement === 'unplaced' ? 'task-workbench.unplaced-row' : 'task-workbench.placed-row',
+    origin: 'task-workbench',
+    nodeRole: placement === 'unplaced' ? 'unplaced' : (task.nodeType || 'task'),
+  });
   const hierarchyTextClass = depth === 0
     ? 'font-semibold text-slate-800'
     : depth === 1
@@ -232,14 +239,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
     event.preventDefault();
     event.stopPropagation();
     if (isMobileTaskActionMode()) return;
-    setContextMenuState({
-      kind: 'task',
-      isOpen: true,
-      x: event.clientX,
-      y: event.clientY,
-      nodeId: task.id,
-      title: task.title || '未命名任務',
-    });
+    void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });
   };
   const renderWorkbenchTaskRow = ({
     className,
@@ -258,7 +258,8 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       {...gestureHandlers}
       onClick={(event) => {
         if (isDragging || isTaskPrimaryActionTarget(event.target)) return;
-        selectAndOpenTaskDetails(task.id);
+        // Compatibility contract: selectAndOpenTaskDetails(task.id) is dispatched by the interaction kernel.
+        void interactionBinding.dispatch('pointer.primary');
       }}
       onContextMenu={handleContextMenu}
       className={className}
@@ -342,7 +343,6 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
   surface = 'unplaced-lane',
   hierarchyDepth = 0,
 }) => {
-  const setContextMenuState = useBoardStore(state => state.setContextMenuState);
   const taskGesture = useTaskGestureSurface({
     task,
     sourceKind: 'workbench-unplaced-row',
@@ -350,15 +350,15 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
     onNonMobileLongPress: (event) => {
       event.preventDefault();
       const touch = event.touches[0];
-      setContextMenuState({
-        kind: 'task',
-        isOpen: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        nodeId: task.id,
-        title: task.title || '未命名任務',
-      });
+      void interactionBinding.openMenu({ x: touch.clientX, y: touch.clientY });
     },
+  });
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: task.id,
+    title: task.title,
+    surfaceId: 'task-workbench.unplaced-row',
+    origin: 'task-workbench',
+    nodeRole: 'unplaced',
   });
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `task-workbench-${surface}-${task.id}`,

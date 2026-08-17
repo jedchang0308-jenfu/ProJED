@@ -21,7 +21,8 @@ import { KanbanTagSticker } from '../Tags/KanbanTagSticker';
 import dayjs from 'dayjs';
 import type { TaskStatus } from '../../types';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
-import { isTaskPrimaryActionTarget, selectAndOpenTaskDetails } from '../../utils/taskInteractions';
+import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { TaskDateBadge } from './TaskDateBadge';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
@@ -68,7 +69,6 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const isSelfStart = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === nodeId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
-  const setContextMenuState = useBoardStore(s => s.setContextMenuState);
   const { active } = useDndContext();
   const activeType = active?.data.current?.type;
   const taskGesture = useTaskGestureSurface({
@@ -79,14 +79,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       if (!node) return;
       event.preventDefault();
       const touch = event.touches[0];
-      setContextMenuState({
-        kind: 'task',
-        isOpen: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        nodeId,
-        title: node.title,
-      });
+      void interactionBinding.openMenu({ x: touch.clientX, y: touch.clientY });
     },
   });
 
@@ -134,6 +127,17 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       nodeId,
       columnId,  // 讓 DragEnd 知道此卡片來自哪一列
     }
+  });
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: nodeId,
+    title: node?.title,
+    surfaceId: 'board.card',
+    nodeRole: node?.nodeType || 'task',
+    transientOwners: [
+      ...(isSelectingMode ? ['dependency-selection' as const] : []),
+      ...(isRecordCaptureMode ? ['record-capture' as const] : []),
+      ...(taskGesture.mobileActionMode ? ['mobile-action-mode' as const] : []),
+    ],
   });
   const setCardScopeRef = React.useCallback((element: HTMLDivElement | null) => {
     cardScopeRef.current = element;
@@ -253,12 +257,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                 return;
               }
               if (isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
-              selectAndOpenTaskDetails(nodeId);
+              // Compatibility contract: selectAndOpenTaskDetails(nodeId) is dispatched by the interaction kernel.
+              void interactionBinding.dispatch('pointer.primary');
             }}
             onContextMenu={(e) => {
               e.preventDefault();
               if (isRecordCaptureMode) return;
-              setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId, title: node.title });
+              void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
             }}
             data-task-id={nodeId}
             data-mobile-drop-target={nodeId}

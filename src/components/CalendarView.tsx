@@ -460,7 +460,17 @@ const CalendarView = () => {
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
-                                                        useBoardStore.getState().setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: seg.item.id, title: seg.item.title });
+                                                        useBoardStore.getState().setContextMenuState({
+                                                            kind: 'task',
+                                                            isOpen: true,
+                                                            x: e.clientX,
+                                                            y: e.clientY,
+                                                            nodeId: seg.item.id,
+                                                            title: seg.item.title,
+                                                            interactionLocation: { hostMode: 'calendar', origin: 'calendar-segment' },
+                                                            surfaceId: 'calendar.segment',
+                                                            interactionId: `calendar-segment-${seg.item.id}-${Date.now().toString(36)}`,
+                                                        });
                                                     }}
                                                     style={{
                                                         position: 'absolute',

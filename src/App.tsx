@@ -35,6 +35,7 @@ import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
 import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
+import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
 
 const BoardView = lazy(() => import('./components/BoardView'));
 const GanttView = lazy(() => import('./components/GanttView'));
@@ -247,11 +248,11 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'home':        return <HomeView />;
-      case 'list':        return <WbsListView boardId={activeBoardId || ''} />; // 攔截原本的 ListView
-      case 'mindmap':     return <MindMapView />;
-      case 'board':       return <BoardView />;
-      case 'gantt':       return <GanttView />;
-      case 'calendar':    return <CalendarView />;
+      case 'list':        return <TaskInteractionScope hostMode="list"><WbsListView boardId={activeBoardId || ''} /></TaskInteractionScope>; // 攔截原本的 ListView
+      case 'mindmap':     return <TaskInteractionScope hostMode="mindmap"><MindMapView /></TaskInteractionScope>;
+      case 'board':       return <TaskInteractionScope hostMode="board"><BoardView /></TaskInteractionScope>;
+      case 'gantt':       return <TaskInteractionScope hostMode="gantt"><GanttView /></TaskInteractionScope>;
+      case 'calendar':    return <TaskInteractionScope hostMode="calendar"><CalendarView /></TaskInteractionScope>;
       case 'records':     return <RecordsView />;
       case 'calendar_subscriptions': return <SettingsView initialSection="calendar" />;
       case 'settings':    return <SettingsView />;

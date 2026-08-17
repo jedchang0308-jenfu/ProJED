@@ -9,6 +9,7 @@ import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 
 interface TaskItem {
     id: string;
@@ -45,12 +46,18 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 }) => {
     const updateNode = useWbsStore(s => s.updateNode);
     const wbsDependencies = useWbsStore(s => s.dependencies);
-    const setContextMenuState = useBoardStore(s => s.setContextMenuState);
     const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const { canEditTask, canMoveTask } = useBoardPermissions();
     const isCoarsePointer = useCoarsePointer();
     const touchTapGuard = useTouchTapGuard();
     const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer;
+    const interactionBinding = useTaskInteractionBinding({
+        taskId: item.id,
+        title: item.title,
+        surfaceId: 'gantt.task-bar',
+        nodeRole: item.nodeType === 'group' || item.nodeType === 'milestone' ? item.nodeType : 'task',
+        blockers: dragStateRef.current?.hasDragged ? ['drag-established'] : [],
+    });
 
     // Hover state
     const [isHovered, setIsHovered] = useState(false);
@@ -416,7 +423,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             onMouseLeave={() => setIsHovered(false)}
             onContextMenu={(e) => {
                 e.preventDefault();
-                setContextMenuState({ kind: 'task', isOpen: true, x: e.clientX, y: e.clientY, nodeId: item.id, title: item.title });
+                void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
             }}
             onMouseUp={(e) => {
                 // 只允許左鍵觸發點擊（防止右鍵觸發 setView）
@@ -424,7 +431,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 if (touchTapGuard.shouldSuppressTap()) return;
                 const latestDragState = dragStateRef.current;
                 if (!latestDragState || !latestDragState.hasDragged) {
-                    onItemClick(item);
+                    void interactionBinding.dispatch('pointer.primary');
                 }
             }}
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
