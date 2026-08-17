@@ -73,9 +73,9 @@ async (page) => {
 
   const openApp = async (viewport = { width: 390, height: 844 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
@@ -848,9 +848,12 @@ async (page) => {
     surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
     point = await pointFor(surface);
     held = await startHeldTouchAtPoint(point, 0);
-    await page.waitForTimeout(250);
+    // Send the boundary move well before the 500ms timer. CDP touch dispatch
+    // has variable round-trip latency under the full regression suite; keeping
+    // the move early tests the product threshold rather than the harness race.
+    await page.waitForTimeout(120);
     await held.moveExact({ x: point.x + 7, y: point.y }, 20);
-    await page.waitForTimeout(310);
+    await page.waitForTimeout(420);
     const sevenPxRail = page.locator('[data-mobile-task-action-rail="true"]').first();
     await sevenPxRail.waitFor({ state: 'visible', timeout: 3000 });
     samples.push({ sample: '7px', railCount: await sevenPxRail.count() });
@@ -861,9 +864,9 @@ async (page) => {
     surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
     point = await pointFor(surface);
     held = await startHeldTouchAtPoint(point, 0);
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(120);
     await held.moveExact({ x: point.x + 9, y: point.y }, 20);
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(420);
     const ninePxRailCount = await page.locator('[data-mobile-task-action-rail="true"]').count();
     samples.push({ sample: '9px', railCount: ninePxRailCount });
     assert(ninePxRailCount === 0, 'movement beyond 8px must cancel long press', samples.at(-1));

@@ -3,6 +3,7 @@ import type {
   TaskInteractionLocation,
   TaskInteractionProfile,
   TaskInteractionProfileLayer,
+  TaskNodeRole,
   TaskHostMode,
 } from './types';
 
@@ -69,10 +70,30 @@ const ORIGIN_PROFILES: Readonly<Record<TaskInteractionLocation['origin'], TaskIn
   }),
 });
 
-export const getInteractionProfileLayers = (location: TaskInteractionLocation): readonly TaskInteractionProfileLayer[] => [
+// Node role is an explicit cascade layer even when Phase 1 has no role-specific
+// override. Keeping the empty profiles here makes the precedence observable and
+// gives later L1/L2/L3+ changes a narrow, sparse extension point without copying
+// host-mode handlers.
+const EMPTY_NODE_ROLE_PROFILE: TaskInteractionProfile = Object.freeze({});
+const NODE_ROLE_PROFILES: Readonly<Record<TaskNodeRole, TaskInteractionProfile>> = Object.freeze({
+  group: EMPTY_NODE_ROLE_PROFILE,
+  milestone: EMPTY_NODE_ROLE_PROFILE,
+  task: EMPTY_NODE_ROLE_PROFILE,
+  unplaced: EMPTY_NODE_ROLE_PROFILE,
+});
+
+export const getNodeRoleProfile = (nodeRole: TaskNodeRole = 'task'): TaskInteractionProfile => (
+  NODE_ROLE_PROFILES[nodeRole] || EMPTY_NODE_ROLE_PROFILE
+);
+
+export const getInteractionProfileLayers = (
+  location: TaskInteractionLocation,
+  nodeRole: TaskNodeRole = 'task',
+): readonly TaskInteractionProfileLayer[] => [
   { layer: 'task-default', profile: TASK_DEFAULT_PROFILE },
   { layer: 'host-mode', profile: HOST_MODE_PROFILES[location.hostMode] },
   { layer: 'origin', profile: ORIGIN_PROFILES[location.origin] },
+  { layer: 'node-role', profile: getNodeRoleProfile(nodeRole) },
 ];
 
 export const getTaskInteractionLocation = (context: Pick<InteractionContext, 'location'>): TaskInteractionLocation => ({

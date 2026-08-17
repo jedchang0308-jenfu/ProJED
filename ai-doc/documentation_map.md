@@ -1,15 +1,15 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-08-17（跨模式互動策略核心 RD Implementation Ready）
+## Documentation Map Update - 2026-08-17（跨模式互動策略核心 QC Functional PASS）
 
-Spec Impact：`DEV-070` 已升級為 `RD Implementation Ready / 尚未開始`，維持 `No contract drift / behavior-preserving architecture refactor`。`SPEC-070` 已固定 App-level scope、pure/effect module boundary、public API、逐檔 patch intent、S0～S11 binding manifest、`dev-070-v1` fixture、artifact path、single-executor、owner 與 rollback；`ADR-043` 同步鎖定長期決策。`QA-DEV-070` 為 `Plan Ready / Supports RD Implementation Ready / 未執行`，保留 57 項 cases 與 16 項 AC traceability。Phase 1 只建立架構，所有 task surface 的可觀察行為維持重構前 runtime；Calendar 現行點擊切到 List 亦被明確納入相容 seed。本輪只修改文件，不改產品／測試程式、不執行 QA/QC、deploy 或 release。
+Spec Impact：`DEV-070` 的產品契約維持 `No contract drift / behavior-preserving architecture refactor`。`SPEC-070` 固定 App-level scope、pure/effect module boundary、public API、逐檔 patch intent、S0～S11 binding manifest、`dev-070-v1` fixture、artifact path、single-executor、owner 與 rollback；`ADR-043` 鎖定長期決策。`QA-DEV-070` 已完成 post-implementation FMEA 修訂，57 項功能 cases／16 項 AC traceability、required regression 與 baseline/after/diff 均已由 QC local PASS；F-01～F-04 的 release overlay 仍維持 `Release Gate Blocked`。Phase 1 只建立架構，所有 task surface 的可觀察行為維持重構前 runtime；Calendar 現行點擊切到 List 亦納入相容 seed。本輪未執行 deploy、push 或 release。
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/dev_task.md` | DEV-070 RD Implementation Ready / Human Confirmed / 尚未開始 | DEV-070 | 記錄 frozen scope、S0～S11 handoff、compatibility baseline、repo／data／permission 邊界、必要證據、stop conditions 與 execution boundary。 |
-| `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md` | RD Implementation Ready / 尚未開始實作 | DEV-070 | 固定 location／surface、typed API、pure/effect modules、逐檔 patch、binding manifest、fixture、Action／Guard／Command、16 項 AC 與 failure recovery。 |
+| `ai-doc/dev_task.md` | RD Implemented / QC Functional PASS / Release Gate Blocked | DEV-070 | 記錄 frozen scope、S0～S11 handoff、compatibility baseline、repo／data／permission 邊界、實作證據、stop conditions 與 release overlay。 |
+| `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md` | Implemented / Compatibility Verified / Release Gate Blocked | DEV-070 | 固定 location／surface、typed API、pure/effect modules、逐檔 patch、binding manifest、fixture、Action／Guard／Command、16 項 AC 與 failure recovery。 |
 | `ai-doc/decisions/ADR-043-cross-mode-interaction-policy-kernel.md` | Accepted / Implementation Contract Locked | DEV-070 | 採 App scope、Host／Origin 稀疏繼承、契約專屬 merge、deny-wins、open-time snapshot、single executor 與逐 binding migration。 |
-| `ai-doc/qa/QA-DEV-070-cross-mode-interaction-policy-kernel.md` | Plan Ready / Supports RD Implementation Ready / 未執行 | DEV-070 | FMEA、frozen fixture、artifact contract、57 項 cases、16 項 AC traceability、runtime lifecycle、evidence owner、viewport 與 regression contract。 |
+| `ai-doc/qa/QA-DEV-070-cross-mode-interaction-policy-kernel.md` | Execution Complete / Functional PASS / Release Gate Blocked | DEV-070 | 量化 FMEA、frozen fixture、artifact contract、57 項功能 cases、16 項 AC traceability、12 項 release overlay、runtime lifecycle、evidence owner、viewport、regression、Firebase preview／production provenance 與 rollback gate。 |
 | `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Active Behavior Baseline / Unchanged | DEV-028 / DEV-070 | 現行 click-to-details、統一 task menu 與 detail-only title edit 契約；DEV-070 Phase 1 必須以 compatibility profile 完整保留。 |
 | `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md` | Partial Compatibility Baseline / Pre-existing Post-create Drift Logged | DEV-027B / DEV-070 | 保留心智圖 `Enter`／`Tab`、方向鍵與 selection-first keyboard flow；其舊「新增後只選取」文字與目前 `prepareNewTaskNaming()` runtime 不一致，DEV-070 只維持重構前 runtime，不藉重構修訂行為。 |
 | `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Active Mobile Gesture Authority | DEV-029 / DEV-070 | 保留手機短滑 pan-first、無位移 tap、長按 compact action rail 與危險操作確認；不得由 desktop profile 覆蓋。 |

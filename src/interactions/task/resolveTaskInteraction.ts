@@ -68,7 +68,7 @@ export const resolveTaskInteraction = (
 
   const layers: readonly TaskInteractionProfileLayer[] = [
     { layer: 'base', profile: SYSTEM_BASE_PROFILE },
-    ...getInteractionProfileLayers(context.location),
+    ...getInteractionProfileLayers(context.location, context.nodeRole),
   ];
   const binding = resolveBinding(layers, trigger);
   if (binding === null) {
@@ -91,6 +91,6 @@ export const resolveTaskMenu = (context: InteractionContext): readonly TaskActio
   if (!KNOWN_HOST_MODES.has(context.location.hostMode) || !KNOWN_ORIGINS.has(context.location.origin)) return [];
   if (context.transientOwners.length > 0 || context.blockers.length > 0) return [];
   if (hasExclusiveTransientConflict(context.transientOwners)) return [];
-  const layers = getInteractionProfileLayers(context.location);
+  const layers = getInteractionProfileLayers(context.location, context.nodeRole);
   return getTaskMenuActionIds(layers.map(layer => layer.profile));
 };

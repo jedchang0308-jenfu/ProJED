@@ -1,6 +1,6 @@
 # SPEC-070：跨模式互動策略核心與相容性遷移契約
 
-- 狀態：RD Implementation Ready / Human Confirmed / 尚未開始實作
+- 狀態：Implemented / QC Functional PASS / Release Gate Blocked
 - 日期：2026-08-17
 - 關聯：DEV-070、DEV-027B、DEV-028、DEV-029、ADR-043、QA-DEV-070
 - 節點類型：開發點（不計入產品交付完成）
@@ -612,7 +612,7 @@ output/playwright/dev-070/diff/visible-error-sweep.json
 - RD 開工前記錄 `git rev-parse HEAD`、`git status --short` 與本節所有受影響檔案的 owner；目前 worktree 已有其他功能變更，RD 必須只 patch DEV-070 片段，不覆寫 `src/types/index.ts`、`package.json` 等既有未提交內容。
 - RD 負責 S0～S11 實作與自測；QA review S0 fixture／matrix／expected 並維護本計畫；QC 在 RD 完成後獨立執行 rendered／true-operation gate。QA 不可因 RD 自測全綠直接標 PASS，QC 不修改產品碼。
 - Readiness gate：產品決策、型別、檔名、patch intent、binding manifest、fixture、命令、rollback、QA traceability、owner、runtime boundary 的 P0／P1 缺口均為 0。RD 可直接從 S0 開始；S0 是第一個可執行 work package，不是待補規格。
-- 本狀態只代表 `RD Implementation Ready`；尚未 Implemented、QA/QC PASS、Merge Ready、Release Ready，亦未授權 deploy／release。
+- 本狀態代表 local implementation 與 functional QC 已通過；尚未 Merge Ready／Release Ready，亦未授權 deploy／release。F-01～F-04 的 release overlay 仍須依 `QA-DEV-070` Gate A～C 完成。
 
 ## 9. 驗收標準
 
@@ -665,8 +665,8 @@ DEV-070 verifier 必須至少輸出：
 - RD Contract 所需的人類產品決策缺口：0；Phase 1 的產品語意已固定為重構前 runtime 零差異。
 - P0／P1 architecture contract 缺口：0；location model、precedence、single executor、migration gate 與 failure recovery 已固定。
 - RD Implementation Ready 缺口：0。8.4～8.9 已固定 public API、相容 seed、逐檔 patch、binding manifest、`dev-070-v1` fixture、artifact 路徑、single-executor、rollback、owner 與 runtime boundary。
-- WP0 baseline 尚未執行，但已成為可直接派工的 S0；S0 完成前不得修改產品 wiring。這是 implementation gate，不是待補產品決策或規格缺口。
-- QA／QC 執行缺口：尚未執行 57 項 required cases、rendered evidence 與 regression，因此不得標 Implemented／PASS／Merge Ready／Release Ready。
+- WP0 baseline 已於 `output/playwright/dev-070/baseline` 重建，after／diff 亦已保存；baseline 與 after 使用同一 `dev-070-v1` fixture，3 viewport diff 全部相等。
+- QA／QC 執行結果：57/57 functional cases、rendered evidence、required regression、TypeScript 與 `build:test` 通過；僅可標 local Functional PASS，不可推定 Merge／Release Ready。
 
 ## 11. Stop Conditions 與失敗恢復
 

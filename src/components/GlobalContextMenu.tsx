@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, Copy, Plus, Trash2, GitBranch, CornerLeftUp, CornerRightDown, ChevronRight, UserRound, Pencil, LayoutDashboard, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Plus, Trash2, Pencil, LayoutDashboard, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -21,6 +21,8 @@ import {
 } from '../utils/taskInteractions';
 import { getTaskAssigneeIds } from '../utils/taskAssignments';
 import { resolveTaskMenu } from '../interactions/task/resolveTaskInteraction';
+import { getTaskActionEnabledMap, guardTaskAction } from '../interactions/task/taskActionGuards';
+import { TaskActionMenu } from '../interactions/task/TaskActionMenu';
 import type { InteractionContext } from '../interactions/task/types';
 
 export const GlobalContextMenu: React.FC = () => {
@@ -84,6 +86,20 @@ export const GlobalContextMenu: React.FC = () => {
   const isDependencySupportedView = resolvedTaskMenuActionIds.includes('task.dependency-start')
     && resolvedTaskMenuActionIds.includes('task.dependency-end');
   const currentNode = isTaskMenu && contextMenuState ? useWbsStore.getState().nodes[contextMenuState.nodeId] : null;
+  const taskActionEnabled = {
+    ...getTaskActionEnabledMap(resolvedTaskMenuActionIds, {
+      nodeExists: Boolean(currentNode),
+      canCreateTask,
+      canEditTask,
+      canMoveTask,
+      canDeleteTask,
+      canAssignTask,
+      canCreateDependency,
+    }),
+    // Delete opens a confirmation first; the destructive guard is evaluated
+    // again by handleDelete after the user confirms.
+    'task.delete-request': canDeleteTask,
+  };
   const getWorkspace = (workspaceId: string) => workspaces.find(workspace => workspace.id === workspaceId);
   const getWorkspaceRole = (workspaceId: string) => {
     if (currentBoardAccess?.workspaceId === workspaceId) return currentBoardAccess.workspaceRole;
@@ -426,10 +442,25 @@ export const GlobalContextMenu: React.FC = () => {
     if (!canDeleteTask) return;
     if (!contextMenuState) return;
 
-    if (window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`)) {
+    const dangerousActionConfirmed = window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`);
+    if (guardTaskAction('task.delete-request', { canDeleteTask, dangerousActionConfirmed }).allowed) {
       removeNode(contextMenuState.nodeId);
     }
     closeContextMenu();
+  };
+
+  const handleTaskAction = (actionId) => {
+    switch (actionId) {
+      case 'task.create-sibling': return handleAddSibling();
+      case 'task.create-child': return handleAddChild();
+      case 'task.duplicate': return handleDuplicate();
+      case 'task.dependency-start': return enterDependencyMode('start');
+      case 'task.dependency-end': return enterDependencyMode('end');
+      case 'task.promote': return handleMoveUp();
+      case 'task.demote': return handleMoveDown();
+      case 'task.delete-request': return handleDelete();
+      default: return undefined;
+    }
   };
 
   const handleRenameWorkspace = () => {
@@ -638,124 +669,28 @@ export const GlobalContextMenu: React.FC = () => {
                 </button>
               </>
             ) : (
-              <>
-            <button
-              onClick={handleAddSibling}
-              disabled={!canCreateTask}
-              title="與目前任務同層新增"
-              data-context-menu-add-sibling="true"
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Plus size={14} className="flex-shrink-0 text-sky-500" />
-              <span>新增並列任務</span>
-            </button>
-
-            <button
-              onClick={handleAddChild}
-              disabled={!canCreateTask}
-              title="放在目前任務底下新增"
-              data-context-menu-add-child="true"
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />
-              <span>新增子任務</span>
-            </button>
-
-            <button
-              onClick={() => void handleDuplicate()}
-              disabled={!canCreateTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <Copy size={14} className="flex-shrink-0 text-slate-500" />
-              <span>複製任務</span>
-            </button>
-
-            <div>
-              <button
-                type="button"
-                onClick={() => setIsAssigneeMenuOpen(current => !current)}
-                disabled={!canAssignTask}
-                className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
-              >
-                <UserRound size={14} className="flex-shrink-0 text-blue-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block">主責／協作</span>
-                  <span className="block truncate text-[11px] text-gray-400">{currentAssigneeLabel}</span>
-                </span>
-                <ChevronRight size={14} className={`flex-shrink-0 text-gray-400 transition-transform ${isAssigneeMenuOpen ? 'rotate-90' : ''}`} />
-              </button>
-
-              {isAssigneeMenuOpen && (
-                <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
-                  {currentNode ? (
-                    <TaskAssignmentPicker
-                      node={currentNode}
-                      options={assigneeOptions}
-                      membersLoading={membersLoading}
-                      disabled={!canAssignTask}
-                      inline
-                      onChange={(primaryIds, collaboratorIds) => updateNode(currentNode.id, {
-                        assigneeIds: primaryIds,
-                        collaboratorIds,
-                        updatedAt: Date.now(),
-                      })}
-                    />
-                  ) : null}
-                </div>
-              )}
-            </div>
-
-            {isDependencySupportedView && (
-              <>
-                <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-                <button
-                  onClick={() => enterDependencyMode('start')}
-                  disabled={!canCreateDependency}
-                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-amber-50 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  <GitBranch size={14} className="flex-shrink-0 text-amber-500" />
-                  <span>設定依賴關係（開始日）</span>
-                </button>
-                <button
-                  onClick={() => enterDependencyMode('end')}
-                  disabled={!canCreateDependency}
-                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-purple-50 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  <GitBranch size={14} className="flex-shrink-0 text-purple-500" />
-                  <span>設定依賴關係（結束日）</span>
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={handleMoveUp}
-              disabled={!canMoveTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />
-              <span>往上一階</span>
-            </button>
-
-            <button
-              onClick={handleMoveDown}
-              disabled={!canMoveTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />
-              <span>往下一階</span>
-            </button>
-
-            <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-
-            <button
-              onClick={handleDelete}
-              disabled={!canDeleteTask}
-              className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              <Trash2 size={14} className="flex-shrink-0 text-red-500" />
-              <span>刪除任務</span>
-            </button>
-              </>
+              <TaskActionMenu
+                actionIds={resolvedTaskMenuActionIds}
+                enabled={taskActionEnabled}
+                onAction={handleTaskAction}
+                assignmentOpen={isAssigneeMenuOpen}
+                assignmentSummary={currentAssigneeLabel}
+                onToggleAssignment={() => setIsAssigneeMenuOpen(current => !current)}
+                assignmentContent={currentNode ? (
+                  <TaskAssignmentPicker
+                    node={currentNode}
+                    options={assigneeOptions}
+                    membersLoading={membersLoading}
+                    disabled={!canAssignTask}
+                    inline
+                    onChange={(primaryIds, collaboratorIds) => updateNode(currentNode.id, {
+                      assigneeIds: primaryIds,
+                      collaboratorIds,
+                      updatedAt: Date.now(),
+                    })}
+                  />
+                ) : null}
+              />
             )}
           </div>
         </>

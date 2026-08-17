@@ -51,6 +51,13 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const isCoarsePointer = useCoarsePointer();
     const touchTapGuard = useTouchTapGuard();
     const canEditSchedule = canEditTask && canMoveTask && !isCoarsePointer;
+
+    // Refs are created before any hook reads them. Gantt bars are mounted on
+    // mode entry, so reading this ref from the interaction binding before its
+    // declaration throws a TDZ ReferenceError and tears down the whole view.
+    const dragStateRef = useRef<any>(null);
+    const rafIdRef = useRef<number | null>(null);
+
     const interactionBinding = useTaskInteractionBinding({
         taskId: item.id,
         title: item.title,
@@ -66,9 +73,6 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const [dragState, setDragState] = useState<any>(null);
     const [dragDates, setDragDates] = useState<{ start: string; end: string } | null>(null);
     const [dragDeltaX, setDragDeltaX] = useState(0);
-
-    const dragStateRef = useRef<any>(null);
-    const rafIdRef = useRef<number | null>(null);
 
     const isMilestone = false;
     let start = item.startDate;
@@ -412,6 +416,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     return (
         <div
             data-task-id={item.id}
+            data-gantt-task-bar="true"
             {...touchTapGuard.handlers}
             onMouseDown={(e) => {
                 // 只允許左鍵觸發拖曳（防止右鍵誤觸跳轉）

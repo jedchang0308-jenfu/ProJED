@@ -359,7 +359,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得以每次按鍵呼叫完整 `saveDraft()`；若需要 migration、server 全域硬限流、多端 merge 或開放手機功能，停止並 Human Re-entry。
   - 證據：`SPEC-069`、`QA-DEV-069`、`QC-DEV-069`、DEV-069 static/browser verifier、DEV-007/008/009/010/020 regression、TypeScript、build、1440/1024/390 screenshots。
   - 計入交付：是
-- ☐ DEV-070 [開發點] [可執行] [P1] [RD Implementation Ready / 尚未開始] 跨模式互動策略核心與差異治理
+- ✓ DEV-070 [開發點] [完成] [P1] [RD Implemented / QC Functional PASS / Release Gate Blocked] 跨模式互動策略核心與差異治理
   - 摘要：建立行為相容的 Interaction Kernel，以 Base／Host Mode／Origin／Transient sparse override 治理；Phase 1 零行為變更。
   - 來源 ID：`USER-20260817-CROSS-MODE-INTERACTION-POLICY-KERNEL`
   - 父任務：DEV-027B、DEV-028、DEV-029
@@ -690,7 +690,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 
 ## DEV-070：跨模式互動策略核心與差異治理
 
-- 狀態：RD Implementation Ready / Human Confirmed / 尚未開始實作
+- 狀態：RD Implemented / QC Functional PASS / Release Gate Blocked
 - 節點類型：開發點
 - 父交付點：DEV-027B、DEV-028、DEV-029
 - 是否計入產品交付完成：否
@@ -760,7 +760,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 | Surface | 主要操作必須維持 | 模式差異必須維持 |
 |---|---|---|
 | List | 單擊選取＋開詳情；post-create 依目前入口進詳情命名 | `Enter` 開詳情；task menu 有目前依賴項目 |
-| Mindmap | 單擊選取＋開詳情；無外層 rename | `Enter` 同階、`Tab` 子階、方向鍵導航；relationship／drag 優先；menu 無目前未支援的依賴項目 |
+| Mindmap | 單擊選取＋開詳情；無外層 rename | `Enter` 同階、`Tab` 子階、方向鍵導航；selection-first insert；relationship／drag 優先；menu 無目前未支援的依賴項目 |
 | Board | L1／L2／L3+ 單擊選取＋開詳情 | `Enter` 開詳情；dependency／record capture／drag 優先；mobile 依 `SPEC-029` |
 | Gantt | 任務條與 Shared Sidebar 單擊選取＋開詳情 | `Enter` 開詳情；move／resize 後 suppress click-through |
 | Calendar／Workbench | Calendar segment／其 Shared Sidebar 維持切到 List；Workbench 維持開詳情 | 只補來源 context，不新增快捷鍵或 menu 項目 |
@@ -779,7 +779,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - 新增檔名、單一責任與禁止依賴已固定於 `SPEC-070` 7.1：pure types／profiles／resolver／catalog／guard 與 effect scope／binding／menu／command 分層，另含 manifest、static verifier、browser verifier 與 artifact runner。
 - 逐檔 patch intent 已固定於 `SPEC-070` 7.2，涵蓋 App scope、ephemeral state、Global task menu、List／Mindmap／Board／Gantt／Calendar／Workbench／Shared Sidebar、mobile command bridge 與既有 source verifier。
 - 可派工順序固定為 S0～S11；binding IDs、owner、完成定義與 rollback point見 `SPEC-070` 8.6，不得一次全面替換。
-- 測試 fixture 固定為 `dev-070-v1`，artifact 路徑與 temporary runtime boundary 見 `SPEC-070` 8.7 及 `QA-DEV-070` 3.4。本輪只完成文件，不修改產品／測試程式。
+- 測試 fixture 固定為 `dev-070-v1`，artifact 路徑與 temporary runtime boundary 見 `SPEC-070` 8.7 及 `QA-DEV-070` 3.4。本輪已完成產品／驗證實作與 local QC；不執行 deploy、push 或 release。
 
 ### Out of Scope
 
@@ -831,11 +831,12 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 
 ### 文件成熟度與下一步
 
-- 目前成熟度：`RD Implementation Ready`；產品決策、public API、檔案邊界、相容 seed、逐檔 patch、S0～S11 manifest、fixture、evidence、owner、failure recovery 與 rollback 的 P0／P1 規格缺口為 0。
+- 目前成熟度：`Implemented / QC Functional PASS`；產品決策、public API、檔案邊界、相容 seed、逐檔 patch、S0～S11 manifest、fixture、evidence、owner、failure recovery 與 rollback 的 P0／P1 規格缺口為 0；release overlay 仍 blocked。
 - `ADR-043` 已鎖定 App-level scope、稀疏繼承 Profile、pure/effect 邊界、Semantic Action／Command、open-time location snapshot、single executor 與 source/test-only migration。
-- `QA-DEV-070` 為 `Plan Ready / Supports RD Implementation Ready / 未執行`，含 57 項 QA cases、16 項 AC traceability、frozen fixture、artifact path、逐 WP exit gate、runtime lifecycle 與 evidence owner；目前不得標 PASS。
-- 下一步：RD 從 S0 建立當下 HEAD／dirty boundary 的 baseline。S0 未通過前不可改 wiring；其後每片依 manifest promotion 與 negative diff gate 前進。
-- Execution Boundary：本輪只完善開發文件；未執行產品／測試程式、QA/QC、merge、deploy 或 release。`RD Implementation Ready` 不等於 Implemented／PASS／Release Ready。
+- `QA-DEV-070` 為 `Execution Complete / Functional PASS / Release Gate Blocked`，含 57 項 QA cases、16 項 AC traceability、frozen fixture、artifact path、逐 WP exit gate、runtime lifecycle、regression 與 evidence owner；F-01～F-04 仍由 release overlay 管理。
+- QC 證據：DEV-070 57/57、baseline/after/diff 三 viewport、DEV-027B/028/029/053/054/055/067/068 required regression、TypeScript 與 `build:test` 均通過；詳見 `QA-DEV-070` 13.1。
+- 下一步：若要進入 release，先完成 Gate A～C 的 clean worktree、exact artifact、upstream/provenance、preview hash 與 rollback evidence；未完成前不得部署。
+- Execution Boundary：本輪完成 RD 修復與 local QA/QC；未執行 merge、deploy 或 release。`Functional PASS` 不等於 `Release Ready`。
 
 
 ## PM Update 歷史歸檔

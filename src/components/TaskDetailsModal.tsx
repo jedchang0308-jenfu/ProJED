@@ -746,7 +746,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   </label>
                   </div>
                   <span
-                    className={`col-start-4 -ml-2 inline-flex h-8 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
+                    className={`col-start-4 ml-0 inline-flex h-8 shrink-0 items-center overflow-hidden rounded-l-none rounded-r-md border ${
                       node.isDurationLocked
                         ? 'border-amber-200 bg-amber-50/70'
                         : 'border-slate-200 bg-slate-50'
@@ -777,7 +777,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       placeholder="—"
                       disabled={!canEditTask || !node.isDurationLocked}
                       aria-label="工期天數"
-                      className={`h-full w-12 border-0 bg-transparent px-1.5 text-sm text-center outline-none transition focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
+                      className={`h-full w-16 border-0 bg-transparent px-1.5 text-sm text-center outline-none transition focus:ring-2 focus:ring-inset focus:ring-blue-100 ${
                         !node.isDurationLocked
                           ? 'text-slate-400'
                           : 'text-slate-700'

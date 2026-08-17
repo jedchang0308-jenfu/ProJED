@@ -5,7 +5,7 @@ async (page) => {
   const networkFailures = [];
   const screenshotBase = `output/playwright/dev-055-desktop-drag-${Date.now()}`;
   const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
-  const appBaseUrl = currentPageOrigin || 'http://127.0.0.1:4173';
+  const appBaseUrl = currentPageOrigin || 'http://127.0.0.1:4000';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
@@ -221,7 +221,10 @@ async (page) => {
 
   const moveDragTo = async (target, ratio = { x: 0.995, y: 0.95 }) => {
     const targetPoint = await pointFor(target, ratio.x, ratio.y);
-    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 12 });
+    // Keep the standard-drop regression below DEV-068's 1s child-intent dwell.
+    // A long multi-step synthetic path can spend >1s in React rendering and
+    // legitimately arm the child target before the intended standard release.
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
     await page.waitForTimeout(140);
     return { targetPoint, indicator: await readIndicator() };
   };

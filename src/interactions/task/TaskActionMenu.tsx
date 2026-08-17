@@ -1,44 +1,129 @@
-import type { CSSProperties, MouseEventHandler } from 'react';
-import { getTaskActionDefinition } from './taskActionCatalog';
+import React from 'react';
+import {
+  Copy,
+  CornerLeftUp,
+  CornerRightDown,
+  GitBranch,
+  Plus,
+  Trash2,
+  UserRound,
+} from 'lucide-react';
+import { getTaskActionCatalog, getTaskActionDefinition } from './taskActionCatalog';
 import type { TaskActionId } from './types';
 
-export type TaskActionMenuProps = {
+type TaskActionMenuProps = {
   actionIds: readonly TaskActionId[];
-  enabled?: Readonly<Record<string, boolean>>;
-  onAction: (actionId: TaskActionId) => void;
-  style?: CSSProperties;
-  className?: string;
+  enabled: Readonly<Partial<Record<TaskActionId, boolean>>>;
+  onAction: (actionId: TaskActionId) => void | Promise<void>;
+  assignmentOpen?: boolean;
+  assignmentSummary?: React.ReactNode;
+  assignmentContent?: React.ReactNode;
+  onToggleAssignment?: () => void;
 };
 
-export const TaskActionMenu = ({ actionIds, enabled = {}, onAction, style, className = '' }: TaskActionMenuProps) => {
-  const handleClick = (actionId: TaskActionId): MouseEventHandler<HTMLButtonElement> => (event) => {
-    event.stopPropagation();
-    if (enabled[actionId] === false) return;
-    onAction(actionId);
-  };
+const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
+  'task.create-sibling': <Plus size={14} className="flex-shrink-0 text-sky-500" />,
+  'task.create-child': <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />,
+  'task.duplicate': <Copy size={14} className="flex-shrink-0 text-slate-500" />,
+  'task.assign': <UserRound size={14} className="flex-shrink-0 text-blue-500" />,
+  'task.dependency-start': <GitBranch size={14} className="flex-shrink-0 text-amber-500" />,
+  'task.dependency-end': <GitBranch size={14} className="flex-shrink-0 text-purple-500" />,
+  'task.promote': <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />,
+  'task.demote': <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />,
+  'task.delete-request': <Trash2 size={14} className="flex-shrink-0 text-red-500" />,
+};
+
+const LABELS: Partial<Record<TaskActionId, string>> = {
+  'task.create-sibling': '新增並列任務',
+  'task.create-child': '新增子任務',
+  'task.duplicate': '複製任務',
+  'task.assign': '主責／協作',
+  'task.dependency-start': '設定依賴關係（開始日）',
+  'task.dependency-end': '設定依賴關係（結束日）',
+  'task.promote': '往上一階',
+  'task.demote': '往下一階',
+  'task.delete-request': '刪除任務',
+};
+
+const TITLES: Partial<Record<TaskActionId, string>> = {
+  'task.create-sibling': '與目前任務同層新增',
+  'task.create-child': '放在目前任務底下新增',
+};
+
+const SECTION_ORDER = ['create', 'assignment', 'dependency', 'hierarchy', 'danger'] as const;
+
+const actionLabel = (actionId: TaskActionId) => (
+  LABELS[actionId] || getTaskActionDefinition(actionId)?.label || actionId
+);
+
+export const TaskActionMenu = ({
+  actionIds,
+  enabled,
+  onAction,
+  assignmentOpen = false,
+  assignmentSummary,
+  assignmentContent,
+  onToggleAssignment,
+}: TaskActionMenuProps) => {
+  const actionsBySection = new Map<string, TaskActionId[]>();
+  for (const section of SECTION_ORDER) actionsBySection.set(section, []);
+  for (const action of getTaskActionCatalog()) {
+    if (!action.section || !actionIds.includes(action.id)) continue;
+    actionsBySection.get(action.section)?.push(action.id);
+  }
 
   return (
-    <div className={`flex min-w-52 flex-col rounded-lg border border-slate-200 bg-white p-1 shadow-xl ${className}`} style={style} role="menu">
-      {actionIds.map(actionId => {
-        const action = getTaskActionDefinition(actionId);
-        if (!action) return null;
-        const isEnabled = enabled[actionId] !== false;
-        return (
-          <button
-            key={action.id}
-            type="button"
-            role="menuitem"
-            disabled={!isEnabled}
-            aria-label={action.label}
-            data-task-action-id={action.id}
-            className="flex items-center rounded px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
-            onClick={handleClick(action.id)}
-          >
-            <span className="mr-2 w-4 text-center text-xs text-slate-500" aria-hidden="true">{action.icon.slice(0, 1).toUpperCase()}</span>
-            {action.label}
-          </button>
-        );
+    <>
+      {SECTION_ORDER.flatMap((section, sectionIndex) => {
+        const actions = actionsBySection.get(section) || [];
+        if (actions.length === 0) return [];
+        const content = actions.map(actionId => {
+          const actionEnabled = enabled[actionId] !== false;
+          if (actionId === 'task.assign') {
+            return (
+              <React.Fragment key={actionId}>
+                <button
+                  type="button"
+                  onClick={onToggleAssignment}
+                  disabled={!actionEnabled}
+                  data-task-action-id={actionId}
+                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  {ICONS[actionId]}
+                  <span className="min-w-0 flex-1">
+                    <span className="block">{actionLabel(actionId)}</span>
+                    {assignmentSummary ? <span className="block truncate text-[11px] text-gray-400">{assignmentSummary}</span> : null}
+                  </span>
+                  <span aria-hidden="true" className={`text-gray-400 transition-transform ${assignmentOpen ? 'rotate-90' : ''}`}>›</span>
+                </button>
+                {assignmentOpen ? (
+                  <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
+                    {assignmentContent}
+                  </div>
+                ) : null}
+              </React.Fragment>
+            );
+          }
+          return (
+            <button
+              key={actionId}
+              type="button"
+              onClick={() => void onAction(actionId)}
+              disabled={!actionEnabled}
+              title={TITLES[actionId]}
+              data-task-action-id={actionId}
+              className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.delete-request' ? 'text-red-600 hover:bg-red-50 dark:text-red-400' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              {ICONS[actionId]}
+              <span>{actionLabel(actionId)}</span>
+            </button>
+          );
+        });
+        return [
+          sectionIndex > 0 ? <div key={`${section}-divider`} className="my-1 border-t border-gray-100 dark:border-gray-700" /> : null,
+          ...content,
+        ];
       })}
-    </div>
+    </>
   );
 };

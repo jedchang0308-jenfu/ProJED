@@ -136,7 +136,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     transientOwners: [
       ...(isSelectingMode ? ['dependency-selection' as const] : []),
       ...(isRecordCaptureMode ? ['record-capture' as const] : []),
-      ...(taskGesture.mobileActionMode ? ['mobile-action-mode' as const] : []),
+      ...(taskGesture.isActive ? ['mobile-action-mode' as const] : []),
     ],
   });
   const setCardScopeRef = React.useCallback((element: HTMLDivElement | null) => {

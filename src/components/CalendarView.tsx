@@ -456,6 +456,8 @@ const CalendarView = () => {
                                             return (
                                                 <div
                                                     key={`seg-${seg.item.id}-${wIdx}-${sIdx}`}
+                                                    data-calendar-task-segment="true"
+                                                    data-task-id={seg.item.id}
                                                     onClick={() => handleItemClick(seg.item)}
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();

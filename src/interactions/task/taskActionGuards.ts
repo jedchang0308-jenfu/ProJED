@@ -21,7 +21,10 @@ export const guardTaskAction = (actionId: TaskActionId, input: TaskActionGuardIn
   if (input.nodeExists === false) return { allowed: false, reason: 'task-not-found' };
   const action = getTaskActionDefinition(actionId);
   if (!action) return { allowed: false, reason: 'unknown-action' };
-  if (actionId === 'task.delete-request' && input.dangerousActionConfirmed) {
+  if (actionId === 'task.delete-request') {
+    if (!input.dangerousActionConfirmed) {
+      return { allowed: false, reason: 'dangerous-action-confirmation-required' };
+    }
     return { allowed: Boolean(input.canDeleteTask), reason: input.canDeleteTask ? undefined : 'permission-delete' };
   }
   switch (action.capability) {

@@ -3,10 +3,10 @@
 - 關聯 DEV：DEV-070
 - 規格：SPEC-070、SPEC-027B、SPEC-028、SPEC-029
 - 架構決策：ADR-043
-- QA 狀態：Plan Ready / Supports RD Implementation Ready / 未執行
-- QC 狀態：Not Started
-- 風險：Medium（跨模式 interaction routing、context menu、快捷鍵、transient mode 與 drag/mobile 邊界）
-- Execution Boundary：本文件已可直接交 RD；本輪仍只完善文件，尚未修改／執行產品或測試程式
+- QA 狀態：Execution Complete / FMEA Reassessed / QC Evidence Recorded
+- QC 狀態：Functional PASS（57/57；required regression 全綠）；Release Overlay Blocked
+- 風險：High / Release Gate Blocked（跨模式 interaction routing、驗證逃逸、dirty release boundary、artifact provenance、context menu、快捷鍵、transient mode、drag/mobile 與 Firebase cache）
+- Execution Boundary：本輪由 RD 修復 runtime／verifier 阻塞後，QC 以 local fixture 重跑 57-case functional gate、rendered matrix、baseline/after/diff 與受影響 regression；不執行 deploy／release。另有 12 項 release overlay gate 維持獨立判定。
 
 ## 1. 驗證目標
 
@@ -20,22 +20,30 @@
 
 ## 2. FMEA 風險優先順序
 
-| 失效模式 | 使用者影響 | 風險 | 必要控制／證據 |
-|---|---|---:|---|
-| Base 變更誤套所有模式 | 多個模式同時退步 | 高 | affected-location diff、other-mode negative snapshot |
-| 只記 origin、遺失 host mode | Workbench／Sidebar menu 能力錯誤 | 高 | `hostMode + origin` snapshot 與 nested-origin cases |
-| menu render 時重新讀 `currentView` | 開啟後切 view 造成項目／command 漂移 | 高 | event-time location freeze case |
-| legacy 與 kernel 雙重執行 | 重複建立、移動、刪除或 toast | 高 | executor count=1、mutation count=1 |
-| unknown location fallback 到 board/list | 出現不該有的 action | 高 | fail-closed case、diagnostic |
-| Profile 直接 mutation／繞過 Guard | 權限、安全、確認失效 | 高 | architecture static check＋direct command denial |
-| 心智圖 Enter／Tab 被全域 Enter 覆蓋 | 結構編輯失效 | 高 | keyboard mode matrix |
-| relationship／dependency／record mode 被一般 click 攔截 | 暫時操作失效或誤開詳情 | 高 | transient precedence browser cases |
-| drag mouseup click-through | 移動後誤開詳情 | 高 | move／resize／no-move pair cases |
-| mobile short pan／long press 漂移 | 誤開詳情、不能捲動或刪除誤觸 | 高 | DEV-029 full targeted regression |
-| task menu item/order/enabled 漂移 | 功能消失、權限誤判 | 高 | stable action ID snapshot＋role matrix |
-| post-create 漂移 | 命名入口或 selection 改變 | 高 | before/after state＋modal identity |
-| selection／modal lifecycle 漂移 | 殘留選取框或錯 task detail | 中 | selected ID／modal ID／close/ESC cases |
-| UI 加入 debug／migration 資訊 | 介面雜訊與工程資訊外洩 | 中 | information-noise sweep |
+評分尺度：Severity／Occurrence／Detection（S/O/D）各 1～10，Detection 越高代表越難在正式環境前發現，`RPN = S × O × D`。`RPN ≥ 250` 為 Critical、150～249 為 High、80～149 為 Medium、低於 80 為 Low。權限／危險操作繞過、重複 mutation、dirty／unknown artifact 或 production provenance mismatch 不論 RPN 均為 P0 hard gate。
+
+| ID | 失效模式 | 可能原因 | 使用者影響 | S | O | D | RPN | 優先級 | 偵測方式／對策／建議測試 |
+|---|---|---|---|---:|---:|---:|---:|---|---|
+| F-01 | 未提交或未知變更被包入正式產物 | 直接從 dirty worktree build；DEV-069、service、Auth、Record 或 Edge Function 變更未分類 | 部署未核准功能、資料流程或遠端契約 | 10 | 8 | 7 | 560 | Critical / P0 | REL-070-001～003；clean release worktree、included/excluded manifest、artifact source SHA |
+| F-02 | 發布 commit 不可由遠端重建 | HEAD 領先 upstream、未 push、branch／main release path 不明 | 無法追溯、重建、協作或可靠 rollback | 9 | 7 | 8 | 504 | Critical / P0 | upstream reachability、remote SHA、release path declaration、rollback reference |
+| F-03 | `dist` 不是目標 commit 的 exact artifact | stale `dist`、從 dirty source build、build 後 source 又變更 | 驗證與實際部署不是同一份程式 | 9 | 7 | 8 | 504 | Critical / P0 | clean build、source SHA、asset manifest／SHA-256、build-after diff=0 |
+| F-04 | 正式站資產無法對應 release evidence | production bundle 名稱／hash 與最近文件、cache 或 candidate 不一致 | 問題發生時無法定位版本或確定回滾點 | 9 | 5 | 8 | 360 | Critical / P0 | REL-070-004、009～012；pre/post deploy hash chain 與 provider release ID |
+| F-05 | QA harness 低估覆蓋並產生假通過 | 目前 static 只覆蓋 14 assertions，browser 只做三 viewport smoke；未輸出完整 matrix／diff | mode、menu、permission、command 或 transient 缺陷逃逸到正式站 | 9 | 9 | 8 | 648 | Critical / P0 | 57 項功能案例逐項 evidence；baseline/after/diff artifact contract；缺一不得進 QC |
+| F-06 | Base／Host／Origin sparse precedence 錯誤 | merge operator 或 location registry 漏項 | 單一變更污染其他模式／子表面 | 8 | 4 | 6 | 192 | High / P0 | QA-070-001～010、016～018；affected-location＋negative diff |
+| F-07 | menu 使用 render-time `currentView` 或錯 target | 沒保存 open-time host/origin/task snapshot | 切模式或 selection 後執行錯任務、錯 menu | 8 | 5 | 6 | 240 | High / P0 | QA-070-020～029；開 menu 後切 view／task 的 target identity test |
+| F-08 | legacy 與 kernel 雙重執行或 dedupe 失效 | migration state/wiring 不完整、同一事件多路 dispatch | 任務重複新增、刪除、移動或重複 toast | 10 | 4 | 7 | 280 | Critical / P0 | QA-070-014、019、040、057；executor=1、mutation=1、duplicate=noop |
+| F-09 | Guard／permission／danger confirmation 被繞過 | Profile 直接 enabled/mutation、direct command 未二次拒絕 | 未授權修改或無確認刪除 | 10 | 3 | 8 | 240 | Critical / P0 | QA-070-011～013、017、028、056；owner/viewer role matrix、cancel/confirm pair |
+| F-10 | transient owner 或 drag/resize click-through | owner 仲裁錯、mouseup compatibility click 未 suppress | 建依賴、拖曳或紀錄擷取時誤開詳情／誤動作 | 8 | 5 | 5 | 200 | High / P0 | QA-070-018、050～053、059；move/no-move、owner conflict、command=0 |
+| F-11 | mobile tap／pan／long-press state 漂移 | desktop profile 蓋過 mobile broker、門檻或 cancel lifecycle 改變 | 不能捲動、誤開詳情、危險操作誤觸 | 8 | 6 | 5 | 240 | High / P0 | QA-070-054～059、062；390x844 quick tap／short pan／long press／cancel |
+| F-12 | 心智圖鍵盤語意被共用快捷鍵覆蓋 | Global Enter/Tab handler 未檢查 mode/focus/IME | 無法建立同階／子階或錯開詳情 | 7 | 5 | 4 | 140 | Medium / P0 | QA-070-035～038；Mindmap Enter/Tab/arrow 與 input/modal/IME negative cases |
+| F-13 | Calendar／Workbench／Shared Sidebar 繼承錯 host 能力 | 只記 origin 或 fallback 到 list/board | 點擊、右鍵或依賴項目與所在模式不符 | 7 | 5 | 6 | 210 | High / P0 | QA-070-023～026、034、039；每一 host×origin pair true operation |
+| F-14 | 既有跨模式階層視覺回歸 | Kernel wiring 或相鄰 UI 變更使 L2／L3+ hierarchy contract 漂移 | 使用者難以辨識階層、誤判任務層級 | 6 | 6 | 3 | 108 | Medium / P1 | DEV-028 static/browser 必須全綠；目前 44/45，未關閉前不放行 |
+| F-15 | viewport、focus、menu/modal 浮層不可操作 | responsive、scroll owner、focus lifecycle 未覆蓋 | 手機／低高度畫面裁切、遮擋或鍵盤不可用 | 6 | 5 | 4 | 120 | Medium / P1 | QA-070-029、060～066；1440x900、1024x768、390x844 screenshot＋DOM |
+| F-16 | production env/auth/config 錯誤 | build env 缺 key、test auth 洩入 production、target 錯誤 | blank app、登入失敗或連到錯 backend | 9 | 3 | 3 | 81 | Medium / P0 | REL-070-005～007；env probe、production-auth 5/5、preview authenticated read-only smoke |
+| F-17 | Service Worker／cache 提供舊 HTML 或失效 chunk | cache 切換、index/chunk hash 或 normal reload 未驗證 | 更新後白畫面、ChunkLoadError、版本混用 | 9 | 5 | 7 | 315 | Critical / P0 | REL-070-008～012；hard reload＋normal navigation＋SW／asset 200＋hash match |
+| F-18 | 可見錯誤或內部診斷外洩 | runtime exception、failed request、diagnostic 被渲染 | 使用者看到錯誤、工程資訊或無法完成工作 | 9 | 4 | 3 | 108 | Medium / P0 | QA-070-063、065 與所有 release smoke 的 visible-error／noise sweep |
+
+目前已成立且尚未關閉的 blocker：F-01、F-02、F-03、F-04。F-05 已由 57-case verifier、完整 interaction artifact 與 baseline/after/diff 關閉；F-14 已由 DEV-028 45/45 targeted regression 關閉。F-16 的 production auth 靜態檢查雖已通過，但只能作為先前 QA evidence，必須在 exact release artifact 上重驗。
 
 ## 3. Test Harness 與 Golden Master 契約
 
@@ -286,3 +294,135 @@ RD 自測結果只可標 `RD Self-Test`; QA 在證據完整前維持 `未執行�
 - `SPEC-070`、`ADR-043`、DEV-070、QA evidence 與實際實作一致，Spec Drift 判定為 `In sync / No contract drift`。
 - QC 報告需記錄 route、viewport、fixture、操作、visible-error sweep、screenshots／trace、命令與殘餘限制；未執行前不得標 PASS。
 - 不包含 deploy／release；local QA/QC PASS 也不等於 Release Ready。
+
+## 13. Post-implementation QA Reassessment
+
+本節是實作後 QA 重新評估，不變更 SPEC-070 的 Phase 1 產品契約，也不把 release 納入 DEV-070 功能完成率。2026-08-17 本輪 RD→QC 已修復 Gantt mode entry 的 `dragStateRef` TDZ runtime error、手機長按狀態誤綁定與相鄰版面回歸，並完成 local functional gate；release overlay 仍獨立阻擋。
+
+### 13.1 本輪 QC 結果
+
+| 證據層 | 實際結果 | QC 判定 |
+|---|---|---|
+| DEV-070 pure／source gate | QA-070-001～066 共 57/57 PASS；`commandCount=1` | PASS |
+| rendered interaction matrix | `dev-070-v1`；1440x900、1024x768、390x844；desktop 5 modes、mobile board-only；menu／details／selection close evidence；各 viewport errors=0 | PASS |
+| golden master | baseline／after 均重建；`fixtureMatch=true`、3 viewport `equal=true`、`ok=true` | PASS |
+| required regression | DEV-027B browser PASS；DEV-028 45/45；DEV-029 39/39；DEV-053 30/30 + browser PASS；DEV-054 44/44 + browser 15/15；DEV-055 28/28 + browser 16/16；DEV-067 13/13 + browser 8/8；DEV-068 73/73 + browser 30/30 | PASS |
+| implementation health | `npm.cmd exec tsc -- --noEmit` PASS；`npm.cmd run build:test` PASS | PASS |
+
+### 13.2 修復與證據邊界
+
+- RD root cause：`src/components/Gantt/GanttTaskBar.tsx` 在 `useTaskInteractionBinding` 參數中先讀取尚未宣告的 `dragStateRef`，切入甘特圖即觸發 `ReferenceError: Cannot access 'dragStateRef' before initialization`；已將 ref 移到 hook 之前，未改變使用者互動契約。
+- 相鄰回歸修復：`TaskDetailsModal` 的日期／工期欄位恢復既有 1024px 幾何；`KanbanCard` 僅在真實 long-press session active 時掛 transient owner，保留手機 quick tap 開詳情；DEV-055 verifier 的標準 drop 只用單步移動，避免測試本身跨過 DEV-068 的 1 秒 child dwell。
+- SPEC-028 相容性：DEV-027B 關係線 verifier 改為遵循「關閉詳情即清除 selection」後重新進入 relationship mode 並顯式選 source；不是讓產品保留已清除的 selection。
+- Browser：`npm.cmd run verify:dev-070-interaction-kernel-browser`（after）通過三 viewport，包含 visible-error sweep、task data sanity、desktop list/mindmap/board/gantt/calendar、Gantt shared sidebar、mobile board-only、task details／Escape lifecycle。
+- Golden diff：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-dev-070-interaction-kernel-browser.ps1 -Phase diff -BaseUrl http://127.0.0.1:4000/ -OutputDirectory output/playwright/dev-070` 通過，diff artifact 為 `output/playwright/dev-070/diff/interaction-diff.json`。
+- Runtime boundary：本輪只使用 task-owned Playwright；受保護 4173 與既有 4000 均未停止、重啟或清除。未執行 deploy、push 或 production mutation。
+
+本節 Functional PASS 只代表 local fixture、rendered matrix 與 required regression 已通過；F-01～F-04 仍須依 Gate A／B／C 分流，不得以 local QC PASS 宣告 Release Ready。
+
+## 14. FMEA-to-Test Traceability
+
+| FMEA | 必要功能／回歸 evidence | 必要 release overlay evidence |
+|---|---|---|
+| F-01～F-04 | 不適用於 local function parity | REL-070-001～006、009～012 |
+| F-05 | QA-070-001～066 全矩陣；artifact contract | REL-070-007～008 |
+| F-06 | QA-070-001～010、016～018 | REL-070-007 |
+| F-07 | QA-070-020～029 | REL-070-007、012 |
+| F-08～F-09 | QA-070-011～019、028、040、056～057 | REL-070-007；production 僅做 read-only negative assertion |
+| F-10～F-13 | QA-070-023～026、030～040、050～059 | REL-070-007、009、012 |
+| F-14 | DEV-028 static＋browser | REL-070-008 |
+| F-15 | QA-070-029、060～066 | REL-070-006、009、012 |
+| F-16 | production auth／env static checks | REL-070-005～006、009、011～012 |
+| F-17 | PWA/cache targeted regression | REL-070-006、009～012 |
+| F-18 | QA-070-063、065 | REL-070-006、009、011～012 |
+
+## 15. Risk-based Verification Plan
+
+### Gate A：Release Boundary Readiness
+
+目的：先證明「要驗證的是哪一份程式」。Gate A 未通過不得 build candidate artifact。
+
+| Case | Priority | 前置／步驟 | Expected／Evidence |
+|---|---:|---|---|
+| REL-070-001 | P0 | 宣告 source branch、target SHA、base／rollback SHA、release path；列出所有 included DEV／commit | scope 無 unknown；若只發 DEV-070，candidate 固定為 clean `288d2ce` 或後續核准修正版 |
+| REL-070-002 | P0 | 在 release worktree 執行 `git status --short --branch`、`git diff --name-only`、`git ls-files --others --exclude-standard` | release worktree clean；任何 dirty／untracked 均已分類且 excluded，不得從 canonical dirty worktree build |
+| REL-070-003 | P0 | 檢查 upstream、remote reachability 與 target SHA | target commit 已 push、可由遠端 clone／fetch 重建；branch intent 明確 |
+| REL-070-004 | P0 | 記錄部署前 production URL、index ETag、JS/CSS/SW asset names／SHA-256、provider release ID、已知 rollback reference | 現行 production provenance 可稽核；找不到 commit mapping 時先建立可操作 rollback point |
+
+### Gate B：Exact Artifact 與 Level 0／2
+
+目的：從 Gate A 的 exact commit 建立唯一 artifact，並證明 artifact 能啟動。build 後 source、lockfile、env contract 或 config 任一改變，Gate B 全部失效重跑。
+
+| Case | Priority | 前置／步驟 | Expected／Evidence |
+|---|---:|---|---|
+| REL-070-005 | P0 | 在 clean worktree 執行 production env probe、`npm.cmd run verify:production-auth-mode`，檢查 test auto-login／test credential 不進 production | production auth 5/5；required env 無 blocking missing；輸出不含 secret value |
+| REL-070-006 | P0 | 執行 `npm.cmd run verify:source` 或等效完整 source gate；從空 `dist` 產生 artifact，記錄 index／JS／CSS／SW manifest 與 SHA-256 | lint 無 error、tsc/build/static gates PASS；artifact 與 target SHA 一對一；warning 逐項分類 |
+| REL-070-007 | P0 | 對 exact source/artifact 執行本文件 57 項功能案例與 section 10 regression commands | P0/P1 fail=0；完整 matrix、baseline/after/diff、三 viewport evidence 存在 |
+| REL-070-008 | P0 | 啟動 exact production artifact 的 local preview；hard reload＋normal navigation，檢查 shell、assets、SW、console/pageerror/network | Level 2 PASS；HTTP 200、non-empty app shell、critical error=0、asset hash 等於 manifest |
+
+### Gate C：Firebase Preview／Production-like
+
+目的：驗證 Firebase Hosting rewrite、cache、production env、登入與 production-class backend 差異。即使 DEV-070 單獨可視為 Lane 1，因目前存在 provenance/cache 歷史缺口，本次仍要求 Level 3 preview；若 release scope 包含 service、Auth、remote query、Edge Function 或 DEV-069，則為 Lane 2 mandatory。
+
+| Case | Priority | 前置／步驟 | Expected／Evidence |
+|---|---:|---|---|
+| REL-070-009 | P0 | 將 Gate B exact artifact 部署至唯一 Firebase preview channel；記錄 project、channel、URL、release ID | preview JS/CSS/SW 名稱與 SHA-256 逐檔等於 Gate B；target 明確為 `projed-cc78d` |
+| REL-070-010 | P0 | Preview 以未登入與既有安全測試帳號分別 hard reload、normal reload；檢查 auth、資料 sanity、SW/cache/chunk | app shell／登入／讀取正常；無 missing env、ChunkLoadError、4xx/5xx、all-zero unexpected counters |
+| REL-070-011 | P0 | Preview 於 1440x900、1024x768、390x844 執行受影響模式 read-only smoke；mutation、drag commit、delete 只在 local fixture 驗證 | List／Mindmap／Board／Gantt／Calendar／Workbench／Sidebar 可切換；visible error=0；viewport-safe |
+
+### Gate D：Production Level 4
+
+目的：只在 Gate A～C 全綠、rollback ready 後執行；Deploy success 不等於 Release PASS。
+
+| Case | Priority | 前置／步驟 | Expected／Evidence |
+|---|---:|---|---|
+| REL-070-012 | P0 | 部署 Gate B 的同一 artifact；立即比對 production URL、index ETag、release ID、JS/CSS/SW hashes，執行 app-shell＋authenticated read-only feature smoke | production artifact 與 Gate B/C 完全一致；HTTP/assets 200、critical error=0、模式入口與 task read-only interaction正常；若 hash／版本不符立即 rollback |
+
+## 16. Test Data／Viewport／Evidence Contract
+
+### 16.1 測試資料
+
+- Local mutation／permission／drag 使用 `dev-070-v1`：owner＋viewer、L1～L4、completed parent、milestone、dependency、placed／unplaced、cross-board task。
+- Preview／production 使用既有安全登入帳號，只做 read-only smoke；不得建立、移動、完成、刪除正式 task，除非另有 disposable fixture 與明確 mutation authorization。
+- menu permission matrix 必須至少有 owner／viewer；不得以 owner-only pass 推定 deny-wins。
+- artifact、console、trace、screenshot 不得包含 email、真實 task title、member name、access token 或完整 API payload。
+
+### 16.2 必測 viewport／操作面
+
+| Viewport | 必測 surface／互動 |
+|---|---|
+| 1440x900 | List、Mindmap、Board、Gantt、Calendar、Workbench、Shared Sidebar；primary、secondary、keyboard、menu、modal、selection |
+| 1024x768 | menu edge positioning、modal、Workbench、Gantt sidebar、scroll owner、長 title |
+| 390x844 | Board／Workbench quick tap、short pan、long press、compact rail、cancel、confirm dialog viewport；非開放模式不得意外出現 |
+
+### 16.3 Evidence 最小集合
+
+- Git：branch、target SHA、upstream、clean status、included/excluded manifest、rollback SHA。
+- Functional：fixture hash、57-case result、interaction matrix、menu/permission/command counters、baseline/after/diff。
+- UI：每 viewport 的 route、timestamp、操作、screenshot、DOM state、visible-error／information-noise sweep。
+- Runtime：console/pageerror、failed network、HTTP status、auth/data sanity。
+- Artifact：build command、index ETag、JS/CSS/SW names＋SHA-256、Firebase preview／production release ID。
+- Release：preview／production hash equality、authenticated read-only smoke、rollback readiness/result。
+
+## 17. QC Execution Order／Stop Rules
+
+QC 必須依 `Gate A → B → 57-case functional gate → Gate C → Gate D` 順序執行。第一個 P0 failure 即停止，不繼續用後段成功掩蓋前段失敗。
+
+硬性 stop conditions：
+
+1. target SHA、release path、included/excluded scope 或 rollback reference 任一不明。
+2. release worktree dirty，或 build 後 source／lockfile／env contract 改變。
+3. browser verifier 未產生完整 matrix／diff，或 baseline/after 被覆寫。
+4. DEV-028、DEV-029、drag/mobile targeted regression 任一必要案例失敗。
+5. permission bypass、double mutation、wrong task target、danger confirmation bypass、unknown fallback。
+6. 任一 in-scope viewport 出現 visible error、critical console/pageerror、failed chunk、重疊／裁切／不可操作。
+7. Preview／production asset hash 不等於 Gate B artifact，或 production artifact 無 provider release mapping。
+8. 正式站需要寫資料才能證明功能；改回 local/disposable fixture，不在 production 冒險補證據。
+
+## 18. QA Release Decision Rule
+
+- `QA Functional PASS`：57 項功能案例、16 項 AC、required regressions、rendered evidence 全綠；只代表 DEV-070 local behavior-preserving contract 通過。
+- `Release Candidate Ready`：另需 REL-070-001～011 全綠、exact artifact 與 rollback ready。
+- `Production Release PASS`：只有 REL-070-012 的 Level 4 production smoke 與 artifact provenance 通過後才成立。
+- `Blocked`：目前狀態。F-01～F-04 尚未關閉；本輪 local functional evidence 不得取代 Gate A provenance、exact artifact、preview 或 Release Ready 判定。
+- Residual-risk gate：控制措施執行後不得保留 Critical／High residual risk；Medium residual risk 必須有可重現 evidence、owner、rollback／recovery，並由 release owner 明確接受。

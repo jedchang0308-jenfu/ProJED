@@ -93,9 +93,9 @@ async (page) => {
 
   const openApp = async (viewport = { width: 390, height: 844 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedAuxiliaryState();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -335,7 +335,7 @@ async (page) => {
       if (compatibilityClick) {
         await page.waitForTimeout(80);
         const nativeTouchOpenedDetails = !dx && !dy
-          && await page.locator('[data-task-details-modal="true"]').count() > 0;
+          && await page.locator('[data-task-details-modal="true"]').isVisible().catch(() => false);
         if (!nativeTouchOpenedDetails) {
           await locator.click({ position: { x: point.localX, y: point.localY }, timeout: 3000 });
         }
@@ -895,6 +895,16 @@ async (page) => {
     await runCase('QA-029-D01', 'mobile quick tap opens TaskDetailsModal when no pan movement occurs', async () => {
       const taskId = await card().getAttribute('data-task-id');
       await dispatchTouchGesture(cardTitle(), { compatibilityClick: true });
+      const tapState = await page.evaluate(() => {
+        const modal = document.querySelector('[data-task-details-modal="true"]');
+        const rect = modal?.getBoundingClientRect();
+        return {
+          modalVisible: Boolean(rect && rect.width > 0 && rect.height > 0),
+          modalCount: document.querySelectorAll('[data-task-details-modal="true"]').length,
+          selectedTask: document.querySelector('[data-task-selected="true"]')?.getAttribute('data-task-id') || '',
+        };
+      });
+      assert(tapState.modalVisible, 'mobile quick tap should expose a visible details modal after compatibility click', tapState);
       await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 5000 });
       const modalTaskId = await page.locator('[data-task-details-modal="true"]').getAttribute('data-task-id');
       assert(modalTaskId === taskId, 'mobile quick tap should open TaskDetailsModal for tapped card', { taskId, modalTaskId });
@@ -969,6 +979,16 @@ async (page) => {
         state,
       );
       await dispatchTouchGesture(cardTitle(), { compatibilityClick: true });
+      const tapState = await page.evaluate(() => {
+        const modal = document.querySelector('[data-task-details-modal="true"]');
+        const rect = modal?.getBoundingClientRect();
+        return {
+          modalVisible: Boolean(rect && rect.width > 0 && rect.height > 0),
+          modalCount: document.querySelectorAll('[data-task-details-modal="true"]').length,
+          selectedTask: document.querySelector('[data-task-selected="true"]')?.getAttribute('data-task-id') || '',
+        };
+      });
+      assert(tapState.modalVisible, 'mobile card tap should expose a visible details modal after outer rename removal', tapState);
       await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 5000 });
       const modalTaskId = await page.locator('[data-task-details-modal="true"]').getAttribute('data-task-id');
       assert(modalTaskId === taskId, 'mobile card tap should still open details after outer rename removal', { taskId, modalTaskId, state });

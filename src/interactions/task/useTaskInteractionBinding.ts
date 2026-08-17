@@ -21,6 +21,7 @@ import type {
 } from './types';
 
 let interactionSequence = 0;
+const EMPTY_COMMAND_DEPENDENCIES: TaskCommandDependencies = Object.freeze({});
 
 const nextInteractionId = () => {
   interactionSequence += 1;
@@ -53,7 +54,7 @@ export const useTaskInteractionBinding = ({
   modality,
   transientOwners = [],
   blockers = [],
-  commandDependencies = {},
+  commandDependencies = EMPTY_COMMAND_DEPENDENCIES,
 }: UseTaskInteractionBindingOptions): TaskInteractionBinding => {
   const scope = useTaskInteractionScope();
   const setContextMenuState = useBoardStore(state => state.setContextMenuState);

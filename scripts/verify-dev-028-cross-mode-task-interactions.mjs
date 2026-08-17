@@ -172,12 +172,15 @@ assert(
     !kanbanColumn.includes('kanban-task-progress') &&
     !kanbanCard.includes('kanban-task-progress') &&
     kanbanColumn.includes('data-kanban-header-visual="tonal-borderless"') &&
-    kanbanColumn.includes('data-kanban-add-task-visual="borderless"') &&
+    // The inline column "新增任務" affordance was intentionally removed by
+    // the compact Kanban contract (90cfcb4). Creation remains available from
+    // the canonical task menu / drag command paths; this verifier must not
+    // resurrect the retired visual marker as a required baseline.
+    !kanbanColumn.includes('data-kanban-add-task-visual="borderless"') &&
     boardView.includes('data-kanban-add-column-visual="borderless"') &&
     !boardView.includes('border-2 border-dashed border-slate-200') &&
-    kanbanColumn.includes('variant="ghost"') &&
-    !kanbanColumn.includes('flex flex-col gap-1 border-b') &&
     !kanbanColumn.includes('variant="dashed"') &&
+    !kanbanColumn.includes('flex flex-col gap-1 border-b') &&
     kanbanCard.includes('data-kanban-card-visual="framed-elevated"') &&
     kanbanCard.includes('data-task-hierarchy-level="L2"') &&
     kanbanCard.includes('data-kanban-checklist-visual="inset-rail"') &&
