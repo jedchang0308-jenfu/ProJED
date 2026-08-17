@@ -351,6 +351,22 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：本輪不含部署或 release。缺 iPhone Safari／Android Chrome AI 可控實機時，只能標記 browser gate 通過，不得宣稱完整 physical mobile sign-off。
   - 證據：基線 commit `56baa77`、RD 續作前 checkpoint commit `ca41403`；`QC-DEV-068`；使用者重驗依序修正 title slot、title-only scope、來源卡遮擋、控制項 overlay 命中、candidate 搶走 standard drop、Workbench來源誤入child intent、文字ghost不一致、desktop viewport-change cleanup、candidate藍框過早出現、child-origin名稱預覽、來源原位虛線框、子任務定位藍框完全取消與不可取消 touchcancel。來源卡為pointer/finger上方fixed overlay；DEV-068 static 73/73、browser 30/30，全部相鄰browser 64/64。70項對照見`QA-DEV-068-coverage-matrix`。未偵測到iPhone／Android實機。
   - 計入交付：是
+- ◐ DEV-069 [交付點] [RD Implemented / Local QA-QC PASS / Provider Smoke Pending / 未 Release] [P1] 會議草稿 F5 復原與低成本雲端備份
+  - 摘要：桌機／筆電會議紀錄採本機即時復原與低頻雲端 checkpoint，避免 F5 丟失並限制寫入、重試與 RAG 成本；手機版不開放會議紀錄功能。
+  - 來源 ID：`USER-20260817-MEETING-DRAFT-RECOVERY-COST-CONTROL`
+  - 父任務：DEV-002、DEV-005、DEV-010、DEV-020
+  - 下一步：補 Supabase／Firestore 真實 provider smoke 與 QA-069-014～020、QA-069-023；本輪不含 deploy／release。
+  - 阻塞 / 恢復條件：不得以每次按鍵呼叫完整 `saveDraft()`；若需要 migration、server 全域硬限流、多端 merge 或開放手機功能，停止並 Human Re-entry。
+  - 證據：`SPEC-069`、`QA-DEV-069`、`QC-DEV-069`、DEV-069 static/browser verifier、DEV-007/008/009/010/020 regression、TypeScript、build、1440/1024/390 screenshots。
+  - 計入交付：是
+- ☐ DEV-070 [開發點] [可執行] [P1] [RD Implementation Ready / 尚未開始] 跨模式互動策略核心與差異治理
+  - 摘要：建立行為相容的 Interaction Kernel，以 Base／Host Mode／Origin／Transient sparse override 治理；Phase 1 零行為變更。
+  - 來源 ID：`USER-20260817-CROSS-MODE-INTERACTION-POLICY-KERNEL`
+  - 父任務：DEV-027B、DEV-028、DEV-029
+  - 下一步：RD 依 `SPEC-070` S0 先建立 `dev-070-v1` golden master；S0 通過後才依 S1→S11 逐 binding shadow／authoritative 遷移。
+  - 阻塞 / 恢復條件：Phase 1 任何 click、右鍵、快捷鍵、詳情、mobile gesture 或拖曳行為差異都必須停止；產品行為變更需另行 re-entry。
+  - 證據：本檔 DEV-070、`SPEC-070`、`ADR-043`、`QA-DEV-070`、`SPEC-027B`、`SPEC-028`、`SPEC-029`。
+  - 計入交付：否
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -575,6 +591,251 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - 共用 `task-title-child` target、complete-hover-scope geometry、candidate/standard coexist、desktop/mobile child-intent state、timer cleanup、release revalidation、single commit與 success feedback 的檔案級契約已寫入 `SPEC-068`。
 - 無 schema／migration／API／remote／權限模型變更；P0/P1 產品決策與工程 readiness 缺口均已清除。
 - 本輪可執行產品程式、targeted verifier與本機 RD→QC；production deploy／release仍需另走 release gate。
+
+
+## DEV-069：會議草稿 F5 復原與低成本雲端備份
+
+- 狀態：RD Implemented / Local QA-QC PASS / Provider Smoke Pending / 未 Release
+- 節點類型：交付點
+- 父交付點：DEV-002、DEV-005、DEV-010、DEV-020
+- 是否計入產品交付完成：是
+- 原始需求邊界：`USER-20260817-MEETING-DRAFT-RECOVERY-COST-CONTROL`
+- 風險等級：Medium（跨瀏覽器生命週期、本機持久化、多 backend adapter 與伺服器成本邊界）
+
+### 問題與使用者價值
+
+會議紀錄的核心任務是不中斷捕捉討論、決議與追蹤事項。現況草稿主要留在前端記憶體，應用程式內的 dirty guard 無法覆蓋 F5，造成已輸入內容永久遺失。反之，若每次輸入都呼叫現有完整儲存路徑，會放大資料庫寫入、task link 重建、重試與後續 RAG 誤觸發風險。
+
+交付後，桌機／筆電使用者誤按 F5 可恢復最新未完成草稿，並能區分「已保存在此裝置」與「已備份至雲端」；伺服器使用量由明確上限控制，不隨按鍵數量線性成長。
+
+### Human Decision Brief
+
+- 2026-08-17 使用者確認：必須解決 F5 造成的會議草稿遺失，且必須控制伺服器成本。
+- 2026-08-17 使用者確認：手機版不開放會議紀錄功能；不建立手機會議編輯、復原或保存狀態 UI。
+- 保留現有「存草稿」與「發布」語意；自動復原不得自動發布。
+- `SPEC-010` 的桌機／筆電限定為目前手機邊界依據；`SPEC-005` 早期 Mobile 右側欄設想視為歷史方向，不是 DEV-069 現行契約。
+
+### 主要流程
+
+1. 使用者在桌機／筆電會議紀錄編輯器輸入內容。
+2. 系統先寫入本機可復原快照，不發送伺服器請求。
+3. 符合內容已變更、最小間隔與最大過期條件後，只將最新草稿送往輕量雲端 checkpoint。
+4. 誤按 F5 後，系統在相同帳號、workspace 與 board 下恢復較新的本機草稿，並顯示復原結果。
+5. 手動「存草稿」會立即完成雲端儲存；「發布」才進入正式紀錄與 RAG lifecycle。
+
+### Current Scope
+
+- 桌機／筆電會議紀錄的標題、內容、與會者、task links、會議活動 buffer 與必要草稿識別資訊。
+- 本機即時快照、F5 復原、過期清理、登出清理與 terminal action 清理；meeting mode 持續期間即使雲端已確認仍保留最新本機快照。
+- 輕量雲端 checkpoint，只儲存最新草稿，不建立每次輸入版本歷史。
+- 保存狀態的桌機 UI：「已保存在此裝置」、「已備份至雲端 HH:mm」、「雲端備份失敗，本機內容仍安全」。
+- 離線期間合併成單一最新快照，重新連線時最多補送一份。
+- 維持 draft 不產生 RAG document version、chunk、sync job 或 embedding；發布時才依 content hash 進入現有 RAG 流程。
+
+### Out of Scope
+
+- 手機版會議紀錄入口、編輯器、本機復原、雲端備份狀態與會議流程驗收。
+- 多人即時共編、跨裝置文字合併、每次輸入版本歷史或完整事件溯源。
+- 每次按鍵即呼叫雲端儲存，或用現有完整 `saveDraft()` 作為高頻自動儲存。
+- draft 期間觸發 AI 整理、RAG、embedding 或重建所有 task links。
+- 不含 schema／migration、production 操作、部署或 release。
+
+### Frozen Implementation Contract
+
+- 本機層：500ms debounce 同步產生 sessionStorage emergency copy 與 IndexedDB v1 durable snapshot；TTL 7 天，以 user/workspace/board/draft 分區。latest IndexedDB 成功才顯示「已保存在此裝置」；只有 sessionStorage 成功顯示 degraded；兩者失敗才顯示高風險警告。
+- F5 restore：auth 與 scope ready、record load settle 後取兩種媒介較新有效值；離線仍恢復。remote published 或 remote newer+different 時不得覆寫，提供「本機另存新草稿／使用雲端／稍後決定」，不做 merge。
+- 雲端層：首個 checkpoint 需 idle 20 秒；持續輸入最晚 5 分鐘；任兩次 attempt 至少 180 秒；rolling 60 分鐘最多 20 attempts；單次 payload <=512KiB；single-flight、latest-only、3m/5m/15m/30m backoff。
+- 同瀏覽器多 tab 以 Web Locks、localStorage lease/ledger 協調；跨裝置全域 20/h 硬限流不在本版承諾範圍，若需要則 re-entry server quota 設計。
+- provider-neutral `recordService.checkpointDraft()`：Supabase 每次最多 1 次 `knowledge_records` mutation、0 task-link mutation、0 full reload、0 RAG；Firestore 最多 1 transaction read + 1 write；local-test 0 server request。
+- Supabase recovery payload 使用既有 `metadata.projedDraftRecovery`，沿用現有 RLS/grants，不新增 migration、RPC、Edge Function 或 service-role。
+- checkpoint 不更新 `draftBaselineSignature`、不寫 undo、不讓 UI 誤判已手動存草稿或已發布；手動存草稿／發布仍走完整既有路徑。
+- 手機 authoritative boundary：`coarse pointer || viewport <=640px` 時不 render meeting 入口、list row、editor、restore/conflict/save status，也不執行 snapshot/checkpoint；非 meeting work log 不受影響，390x844 僅負向回歸。
+
+### Repo / Module Impact
+
+- 新增：`meetingDraftRecoveryService.ts`、`recordDraftCheckpointPolicy.ts`、`useMeetingDraftRecovery.ts`、`useMeetingRecordAvailability.ts`、DEV-069 static/browser verifier。
+- 修改：`types/index.ts`、`App.tsx`、record/auth stores、dataBackend、Supabase/Firestore/local-test record adapters、MainLayout、Sidebar、RecordsView、RecordSidebar、TaskRecordTimeline、record guards、meeting workflow、package scripts。
+- 不新增 runtime dependency；使用 browser native IndexedDB、sessionStorage、Web Locks / localStorage lease。
+
+### RD Work Packages
+
+1. WP1：型別、signature、validator、IndexedDB/sessionStorage 與純 checkpoint policy。
+2. WP2：store subscription、page lifecycle、restore/conflict、terminal cleanup。
+3. WP3：local-test、Supabase、Firestore adapter 與可稽核 request/RAG cost seam。
+4. WP4：桌機單一狀態位置、產品化錯誤、共用手機 availability hard guard。
+5. WP5：targeted verifier、既有 meeting regression、1440/1024 rendered QC、390 negative QC。
+
+### 驗收方向
+
+- 桌機 1440x900 與筆電 1024x768：輸入後立即 F5，標題、內容、任務關聯與必要會議 buffer 完整恢復，不得自動發布。
+- 本機快照完成前不得誤顯示「已保存在此裝置」；雲端確認前不得誤顯示「已備份至雲端」。
+- 模擬一小時持續輸入，自動 checkpoint 不超過 20 次；每次按鍵不產生伺服器請求。
+- 模擬離線十分鐘後 F5 仍可復原；重新連線後僅補送最新快照一次，不重播中間版本。
+- draft 內容變更期間，RAG job、document version、chunk 與 embedding 增量均為 0；發布後才依有效 content hash 進入現有同步流程。
+- 手機 390x844 只做負向回歸：不出現會議紀錄入口、編輯器或保存狀態；不執行手機會議紀錄功能驗收。
+- 雲端儲存失敗時，桌機 UI 必須說明「本機內容仍安全」與可恢復路徑，不得顯示 raw HTTP 或 API 錯誤。
+
+### 限制與 Re-entry Trigger
+
+- 7 天本機保留、3 分鐘最小 attempt 間隔、5 分鐘持續輸入上限、20 attempts/hour/browser-account 與 512KiB payload 已固化為本版工程決策；更短跨裝置 RPO 或全域硬 quota 必須連同成本模型重新決策。
+- 不做即時共編或跨裝置 merge；若未來開放同一草稿多端同時編輯，另立 conflict/version contract。
+- 若公司安全政策禁止 IndexedDB/sessionStorage 保存會議內容，停止 WP1 並 Human Re-entry；不得暗中退化為高頻 server write。
+
+### 文件成熟度與下一步
+
+- `SPEC-069` 已固化資料封包、狀態機、restore/conflict、provider adapter、成本計數、失敗恢復、手機排除、repo impact 與 RD work packages。
+- `QA-DEV-069` 已定義 25 項 required cases、provider request/RAG cost evidence 與 rendered QC；P0/P1 readiness gap 為 0，可直接派 RD。
+- 下一步：RD 依 WP1→WP5 實作並交 QA/QC；未通過 QC 前不得標 Implemented / PASS，未走 release gate 前不得部署。
+
+
+## DEV-070：跨模式互動策略核心與差異治理
+
+- 狀態：RD Implementation Ready / Human Confirmed / 尚未開始實作
+- 節點類型：開發點
+- 父交付點：DEV-027B、DEV-028、DEV-029
+- 是否計入產品交付完成：否
+- 原始需求邊界：`USER-20260817-CROSS-MODE-INTERACTION-POLICY-KERNEL`
+- 風險等級：Medium（跨心智圖、看板與共用任務表面的主要互動契約；不涉及資料模型或後端）
+- 關聯規格：`SPEC-070-cross-mode-interaction-policy-kernel.md`
+- 架構決策：`ADR-043-cross-mode-interaction-policy-kernel.md`
+- 驗證計畫：`QA-DEV-070-cross-mode-interaction-policy-kernel.md`
+
+### 問題與使用者價值
+
+現況將「選取任務、開啟詳情、建立任務後命名、右鍵選單」等行為直接綁在各 Surface 元件與共用 `GlobalContextMenu`。當心智圖需要結構編輯語法、看板需要執行管理語法時，若持續在元件內加入 `currentView` 判斷，會造成每種模式重複設定、權限與選單行為漂移，且修改共用 helper 時容易無意改動其他模式。
+
+完成後，產品先維持所有既有點擊、快捷鍵、右鍵與暫時操作語意，但底層不再複製任務 CRUD、權限、Undo 與安全規則；後續行為需求可明確判定為「全域預設」或「模式差異」，並可列出實際受影響模式。
+
+### Human Decision Brief
+
+- 2026-08-17 使用者確認：心智圖、看板與未來其他模式必須能擁有不同互動模式，不能再假設所有任務 Surface 都共用相同操作語法。
+- 2026-08-17 使用者確認：不希望每個模組重新設定完整互動邏輯；模式應只宣告與預設不同的差異。
+- 2026-08-17 使用者確認：後續變更需可判斷為 Base 預設、Surface 差異、Transient Override 或 Guard／Command 規則；未明示全域時採最小影響原則。
+- 2026-08-17 使用者確認：Phase 1 只建立架構，不改心智圖、看板、清單、甘特或手機現有行為；既有 resolved interaction matrix 是零差異基線。
+- 未來要變更心智圖或看板單擊、右鍵或快捷鍵時，再以獨立 Host Mode／Origin Profile 差異進入產品決策與驗收，不回溯擴張 Phase 1。
+
+### 主要流程
+
+1. 任務元件只回報標準化 Trigger、Surface、Entity 與必要互動上下文，不直接決定資料或 UI 結果。
+2. Interaction Resolver 依 Base、Host Mode、Origin、節點角色與 Transient Mode 的優先序解析 Semantic Action。
+3. Action Catalog 提供一致的名稱、圖示、可用條件與執行入口；右鍵選單、快捷鍵與工具列共用同一份 Action 定義。
+4. Guard 執行權限、輸入焦點、拖曳、危險操作與狀態限制；Command 負責共用資料異動、Undo、確認與結果。
+5. QA 以解析後互動矩陣比較變更前後結果；Base 變更必須揭露所有受影響 Surface，Surface 變更不得讓其他模式 snapshot 漂移。
+
+### Architecture Memory Capsule
+
+- 核心資料流：`Raw Trigger → Normalizer → Policy Resolver → Semantic Action → Guard → Command`。
+- 設定優先序：`System Base → Task Default → Host Mode → Origin → Node Role → Transient Override → Runtime Guard`。
+- View root 只設定一次 `InteractionScope`；任務卡、節點與列透過共用 hook 取得 bindings，不逐層傳遞完整 profile。
+- Base 只放跨模式不變量，例如 secondary pointer trigger、`Escape` 關閉暫時 UI、輸入元件不攔截模式快捷鍵；`Shift+F10` 若 WP0 證明目前未綁定，Phase 1 必須維持 disabled。
+- Host Mode Profile 放主要模式差異；Origin Profile 放 Workbench／Shared Sidebar 等巢狀表面差異。未宣告項目逐層繼承，只有特定組合不同時才用 composite override。
+- Transient Override 放關聯建立、拖曳、紀錄擷取、行動版 long-press action mode 等有生命週期的暫時語意。
+- Guard／Command 放權限、安全、資料一致性、確認與 Undo，不因 Surface 複製實作。
+
+### Frozen Scope
+
+- 建立 typed `TaskActionId`、標準化 Trigger、Interaction Context 與可解析的 Profile 契約。
+- 建立 Base、Host Mode、Origin、Node Role、Transient Override 與 deterministic resolver。
+- 建立共用 Task Action Catalog／Command facade，使右鍵、快捷鍵與工具列共用 capability、permission 與執行入口。
+- Task context target 必須快照事件當下的 `hostMode + origin`；選單 render／execute 不再讀全域 `currentView` 推測語境。
+- 建立 resolved interaction matrix 與 affected-location diff，作為 Base／差異變更的驗證證據。
+- 以 `SPEC-028` 現行四模式操作契約建立心智圖、看板、清單與甘特 Compatibility Profile；Profile 的解析結果必須與重構前一致。
+- 手機 Board interaction 透過 `SPEC-029` 相容 adapter／Transient Override 接入，不重開手機非 Board 模式，也不改 pan-first、無位移 tap 或 long-press lifecycle。
+- Calendar、Task Workbench 與 Shared Task Sidebar 雖非四個主要模式，但會開啟共用 task context menu 或詳情；Phase 1 必須補 explicit source Surface 並納入零差異盤點，不能因 `GlobalContextMenu` 遷移而被動改變。
+
+### RD Handoff Contract
+
+- `SPEC-070` 是 Phase 1 的 authoritative architecture／verification contract；產品行為 authority 仍為目前 runtime、既有 DEV-027B／028／029 verifier、較新的 `SPEC-028` 與 mobile authority `SPEC-029`。
+- typed pipeline 固定為 `Trigger → Profile Resolver → Semantic Action → Runtime Guard → Command`；Resolver 必須 pure、deterministic、可輸出 source layer 與 affected-location diff。
+- merge precedence 固定為 `System Base → Task Default → Host Mode → Origin → Node Role → Transient Override → Runtime Guard`；Mode／Origin 只能宣告 sparse override。
+- task context state 必須快照 `interactionLocation = { hostMode, origin }`；此欄位只屬前端 ephemeral context，不持久化。
+- Action Catalog 集中 stable ID、label／icon、permission、danger level 與 Command；menu／shortcut／toolbar／mobile rail 可有不同呈現集合，但不得分叉 mutation。
+- merge operator 依契約固定：trigger replace、menu stable-ID patch、metadata catalog-only、permission deny-wins、Command non-mergeable；Profile 不使用任意 deep merge。
+- exclusive transient owner 超過一個時 fail closed；同一 `interactionId` 的 mutation 最多執行一次，Command outcome 必須區分 executed／noop／denied／cancelled／failed。
+- 逐片遷移固定為 WP0 golden master → WP1 pure kernel → WP2 catalog／context origin → WP3 List／Mindmap／Board／Gantt adapter → WP4 auxiliary／transient adapter → WP5 legacy cleanup。
+- 每個 location 依 `legacy-only → shadow-resolve → kernel-authoritative → legacy-removed` 遷移；shadow 只比較不執行，任何時點只有一個 Command executor。
+
+### Compatibility Baseline 摘要
+
+| Surface | 主要操作必須維持 | 模式差異必須維持 |
+|---|---|---|
+| List | 單擊選取＋開詳情；post-create 依目前入口進詳情命名 | `Enter` 開詳情；task menu 有目前依賴項目 |
+| Mindmap | 單擊選取＋開詳情；無外層 rename | `Enter` 同階、`Tab` 子階、方向鍵導航；relationship／drag 優先；menu 無目前未支援的依賴項目 |
+| Board | L1／L2／L3+ 單擊選取＋開詳情 | `Enter` 開詳情；dependency／record capture／drag 優先；mobile 依 `SPEC-029` |
+| Gantt | 任務條與 Shared Sidebar 單擊選取＋開詳情 | `Enter` 開詳情；move／resize 後 suppress click-through |
+| Calendar／Workbench | Calendar segment／其 Shared Sidebar 維持切到 List；Workbench 維持開詳情 | 只補來源 context，不新增快捷鍵或 menu 項目 |
+
+已知 pre-existing spec drift：`SPEC-027B` 舊文字的「心智圖新增後只選取」與目前 `MindMapView.createTask() → prepareNewTaskNaming()` 會開詳情的 runtime 不一致。Phase 1 以重構前 runtime＋browser evidence 作 golden master；不得在架構重構中順便更改產品行為。後續若要選擇其中一種語意，另立 Human Re-entry。
+
+### Data／API／Permission Impact
+
+- Data／schema／migration／provider API／RLS：無。
+- Permission source：沿用 `useBoardPermissions` 或等效 facade；Profile 不得自創角色或規避 Command 二次檢查。
+- State：只擴充前端 task interaction context／menu origin；不寫入 backend、URL 或 localStorage。
+- Release：本 DEV 不含 production、deploy 或 release。
+
+### Repo Impact
+
+- 新增檔名、單一責任與禁止依賴已固定於 `SPEC-070` 7.1：pure types／profiles／resolver／catalog／guard 與 effect scope／binding／menu／command 分層，另含 manifest、static verifier、browser verifier 與 artifact runner。
+- 逐檔 patch intent 已固定於 `SPEC-070` 7.2，涵蓋 App scope、ephemeral state、Global task menu、List／Mindmap／Board／Gantt／Calendar／Workbench／Shared Sidebar、mobile command bridge 與既有 source verifier。
+- 可派工順序固定為 S0～S11；binding IDs、owner、完成定義與 rollback point見 `SPEC-070` 8.6，不得一次全面替換。
+- 測試 fixture 固定為 `dev-070-v1`，artifact 路徑與 temporary runtime boundary 見 `SPEC-070` 8.7 及 `QA-DEV-070` 3.4。本輪只完成文件，不修改產品／測試程式。
+
+### Out of Scope
+
+- 不修改 TaskNode、workspace、board、dependency、assignment 等資料模型、後端 API、schema、migration 或權限來源。
+- 不重寫 DEV-053～DEV-068 已驗證的拖曳、落點、hover scope、mobile raw-finger 或 commit／undo 子系統。
+- 不在本 Brief 改變任務名稱編輯入口；`SPEC-027B` 與 `SPEC-028` 的 detail-only title edit 仍有效。
+- 不重新開放手機 list／mindmap／gantt／calendar；`SPEC-029` 的 pan-first、無位移 tap、長按 compact action rail 與刪除確認仍有效。
+- 不重做 `TaskDetailsModal`、任務資料內容、視覺設計系統、部署或 release。
+- 不在 Phase 1 導入任何新的 click、double-click、keyboard、context-menu、toolbar、long-press 或 post-create 行為。
+
+### Base／差異變更治理
+
+| 需求性質 | 修改層級 | 判定規則 |
+|---|---|---|
+| 所有模式必須一致的不變量 | Base Profile | 使用者明示「所有模式／全域」，或屬輸入安全、關閉暫時 UI 等跨 Surface 不變量 |
+| 特定模式工作方式 | Host Mode Profile | 需求明示心智圖、看板、清單或甘特；未明示全域時採最小影響原則 |
+| 巢狀表面工作方式 | Origin／Composite Profile | 只影響 Task Workbench、Shared Sidebar 或特定 mode＋origin 組合 |
+| 暫時操作狀態 | Transient Override | 關聯模式、拖曳、紀錄擷取、mobile action mode 等進入／退出明確的 session |
+| 權限、安全與資料規則 | Guard／Command | 相同 Action 在任何 Surface 都必須遵守，禁止以 Profile 規避 |
+| 純視覺差異 | Component／Design Token | 不改 Semantic Action、資料結果或安全契約 |
+
+### 驗收方向
+
+- 新 Surface 若沒有特殊需求，可只引用 Base Profile；不得複製整份 click、context menu、shortcut handler。
+- Phase 1 的心智圖、看板、清單、甘特及手機 Board resolved interaction matrix 必須與重構前逐項相同，包括 primary action、task menu、快捷鍵與 post-create 行為。
+- 不同 Surface 可擁有獨立 Compatibility Profile，但相同 Action 只存在一份 permission、guard 與 command 實作。
+- 任一 Base Profile 變更都能輸出所有受影響 Surface；未預期 Surface 的 resolved matrix 改變即判定失敗。
+- 任一 Host Mode／Origin Profile 變更都不改其他 location 的解析 snapshot、資料結果、權限與 Undo 行為。
+- Context menu、快捷鍵與工具列對同一 Action 的 enabled／disabled、permission 與執行結果一致。
+- focus 位於 input／textarea／select／contenteditable／modal 時不得攔截 Surface 快捷鍵；危險操作不得因快捷鍵或 Profile 繞過確認。
+- 既有 `SPEC-027B` 心智圖鍵盤新增與方向選取、`SPEC-029` mobile pan-first，以及 DEV-053～DEV-068 drag regression 必須在各自受影響邊界維持通過。
+
+### Spec Impact 與限制
+
+- Phase 1 分類：`No contract drift / behavior-preserving architecture refactor`。`SPEC-028` 的四模式單擊、詳情與 task menu 現行契約仍是驗收基線，不在本階段改寫。
+- Future Phase Capsule：架構通過零差異 gate 後，若使用者要求心智圖或看板採不同互動，才以 Host Mode／Origin override 建立產品行為變更；屆時再判定 `Compatible exception` 或 `Intentional replacement` 並同步 authoritative spec。
+- `SPEC-027B` 的 `Enter` 新增同階、`Tab` 新增子階、方向鍵選取與 detail-only title edit 是既有相容基線；若未來要改外層 rename，需另行明確決策。
+- `SPEC-029` 繼續治理 coarse pointer／mobile 手勢仲裁；Interaction Kernel 不得把 desktop profile 直接套用到 mobile gesture lifecycle。
+- 若 resolver 需要重寫 drag sensor、mobile broker、資料 store 或既有權限模型，視為 scope 擴張，停止並以 Human Re-entry 修訂 RD Contract；不得直接實作。
+
+### 必要證據與 Stop Conditions
+
+- WP0 必須依 `QA-DEV-070` 保存每個 host mode／origin／role／trigger 的 resolved action、selection、modal、post-create、menu 與 transient result；沒有 baseline evidence 不得開始 wiring。
+- 新 resolver 需有 Base affected-location diff、Mode／Origin negative diff、unknown location fail-closed、shadow command=0 與 authoritative executor=1 證據。
+- `SPEC-070` 的 AC-070-001～016 必須逐項連到 `QA-DEV-070` 的直接證據；不得以相鄰案例或 RD 自述推定覆蓋。
+- 完成後至少重跑 DEV-070、DEV-027B、DEV-028、DEV-029 static/browser、受影響 drag regression、TypeScript 與 `build:test`；rendered gate 為 1440x900、1024x768、390x844。
+- 任一 click、keyboard、menu、post-create、selection、modal、gesture、drag、permission、confirmation 或 Undo 漂移即停止；不得以修改產品行為讓測試通過。
+- 發生雙重 dispatch、重複建立、錯誤 task、unknown location／非法 merge／transient conflict 誤 fallback、silent failure、資料層／部署需求時，停止並回到最近通過 parity 的 slice。
+
+### 文件成熟度與下一步
+
+- 目前成熟度：`RD Implementation Ready`；產品決策、public API、檔案邊界、相容 seed、逐檔 patch、S0～S11 manifest、fixture、evidence、owner、failure recovery 與 rollback 的 P0／P1 規格缺口為 0。
+- `ADR-043` 已鎖定 App-level scope、稀疏繼承 Profile、pure/effect 邊界、Semantic Action／Command、open-time location snapshot、single executor 與 source/test-only migration。
+- `QA-DEV-070` 為 `Plan Ready / Supports RD Implementation Ready / 未執行`，含 57 項 QA cases、16 項 AC traceability、frozen fixture、artifact path、逐 WP exit gate、runtime lifecycle 與 evidence owner；目前不得標 PASS。
+- 下一步：RD 從 S0 建立當下 HEAD／dirty boundary 的 baseline。S0 未通過前不可改 wiring；其後每片依 manifest promotion 與 negative diff gate 前進。
+- Execution Boundary：本輪只完善開發文件；未執行產品／測試程式、QA/QC、merge、deploy 或 release。`RD Implementation Ready` 不等於 Implemented／PASS／Release Ready。
 
 
 ## PM Update 歷史歸檔

@@ -1,5 +1,33 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-17（跨模式互動策略核心 RD Implementation Ready）
+
+Spec Impact：`DEV-070` 已升級為 `RD Implementation Ready / 尚未開始`，維持 `No contract drift / behavior-preserving architecture refactor`。`SPEC-070` 已固定 App-level scope、pure/effect module boundary、public API、逐檔 patch intent、S0～S11 binding manifest、`dev-070-v1` fixture、artifact path、single-executor、owner 與 rollback；`ADR-043` 同步鎖定長期決策。`QA-DEV-070` 為 `Plan Ready / Supports RD Implementation Ready / 未執行`，保留 57 項 cases 與 16 項 AC traceability。Phase 1 只建立架構，所有 task surface 的可觀察行為維持重構前 runtime；Calendar 現行點擊切到 List 亦被明確納入相容 seed。本輪只修改文件，不改產品／測試程式、不執行 QA/QC、deploy 或 release。
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-070 RD Implementation Ready / Human Confirmed / 尚未開始 | DEV-070 | 記錄 frozen scope、S0～S11 handoff、compatibility baseline、repo／data／permission 邊界、必要證據、stop conditions 與 execution boundary。 |
+| `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md` | RD Implementation Ready / 尚未開始實作 | DEV-070 | 固定 location／surface、typed API、pure/effect modules、逐檔 patch、binding manifest、fixture、Action／Guard／Command、16 項 AC 與 failure recovery。 |
+| `ai-doc/decisions/ADR-043-cross-mode-interaction-policy-kernel.md` | Accepted / Implementation Contract Locked | DEV-070 | 採 App scope、Host／Origin 稀疏繼承、契約專屬 merge、deny-wins、open-time snapshot、single executor 與逐 binding migration。 |
+| `ai-doc/qa/QA-DEV-070-cross-mode-interaction-policy-kernel.md` | Plan Ready / Supports RD Implementation Ready / 未執行 | DEV-070 | FMEA、frozen fixture、artifact contract、57 項 cases、16 項 AC traceability、runtime lifecycle、evidence owner、viewport 與 regression contract。 |
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Active Behavior Baseline / Unchanged | DEV-028 / DEV-070 | 現行 click-to-details、統一 task menu 與 detail-only title edit 契約；DEV-070 Phase 1 必須以 compatibility profile 完整保留。 |
+| `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md` | Partial Compatibility Baseline / Pre-existing Post-create Drift Logged | DEV-027B / DEV-070 | 保留心智圖 `Enter`／`Tab`、方向鍵與 selection-first keyboard flow；其舊「新增後只選取」文字與目前 `prepareNewTaskNaming()` runtime 不一致，DEV-070 只維持重構前 runtime，不藉重構修訂行為。 |
+| `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Active Mobile Gesture Authority | DEV-029 / DEV-070 | 保留手機短滑 pan-first、無位移 tap、長按 compact action rail 與危險操作確認；不得由 desktop profile 覆蓋。 |
+
+## Documentation Map Update - 2026-08-17（會議草稿 F5 復原與低成本雲端備份）
+
+Spec Impact：`DEV-069` 已完成 RD 實作與 local-test／browser QA-QC，狀態為 Provider Smoke Pending / 未 Release。承接 `SPEC-003` 「輸入時自動儲存 draft」的未完成契約，並以 sessionStorage + IndexedDB 本機復原、低頻 provider-neutral checkpoint 與發布時 RAG 分層控制伺服器成本。`SPEC-069` 已固化 20s idle、180s 最小 attempt 間隔、20 attempts/hour/browser-account、512KiB payload、single-flight、provider request 上限、restore/conflict 與失敗降級。手機版不開放會議紀錄，390x844 只做功能不存在的負向驗證；`SPEC-005` 早期 Mobile 右側欄設想不得作為 DEV-069 驗收依據。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / Local QA-QC PASS / Provider Smoke Pending / 未 Release | DEV-069 | Human Decision、frozen contract、repo impact、WP1～WP5、實作證據與 re-entry gate 已固定。 |
+| `ai-doc/specs/SPEC-069-meeting-draft-recovery-cost-control.md` | Implemented / Local QA-QC PASS / Provider Smoke Pending | DEV-069 | 本機 snapshot、restore/conflict、狀態機、checkpoint policy、Supabase/Firestore/local-test adapter、成本與手機 hard guard 的 authoritative contract。 |
+| `ai-doc/qa/QA-DEV-069-meeting-draft-recovery-cost-control.md` | Executed local/browser PASS / Provider Smoke Pending | DEV-069 | 25 項 required cases 的執行邊界已記錄，涵蓋 F5、storage failure、timing/budget、provider request count、RAG=0、桌機 rendered UI 與 390 negative boundary。 |
+| `ai-doc/qc/QC-DEV-069-meeting-draft-recovery-cost-control.md` | Local Browser QC PASS / Provider Smoke Pending / 未 Release | DEV-069 | 實測 F5、1440/1024/390、visible-error、既有 regression、TypeScript/build；不冒充 Supabase／Firestore 真實 provider sign-off。 |
+| `ai-doc/specs/SPEC-003-meeting-work-records-workflow.md` | Historical source / Compatible completion | DEV-002 / DEV-069 | 原始契約已要求輸入時自動儲存 draft；DEV-069 負責補齊 F5 復原與成本邊界。 |
+| `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Current mobile boundary reference | DEV-010 / DEV-069 | 維持手機版不開放會議紀錄，驗收以桌機 1440x900 與筆電 1024x768 為主；390x844 只驗證功能仍不可用。 |
+| `src/store/useRecordStore.ts`、`src/services/dataBackend.ts`、三 provider record adapter | Implemented / Local QA-QC PASS | DEV-069 | 已新增獨立 `checkpointDraft()`、本機 recovery hook/service、成本 policy、desktop status 與 mobile hard guard；正式 provider smoke 仍待補。 |
+
 ## Documentation Map Update - 2026-08-16（任務完整預選範圍停留移入子任務）
 
 Spec Impact：DEV-068 最終依使用者畫面重驗，把 child dwell target 從 title slot／shrink-wrapped title `SPAN` 改為 DEV-065 完整 hover scope（主任務＋可見子樹）。Candidate 與 armed 都不顯示子任務 target 藍框；candidate 保留 standard insertion/lane/promotion，armed 只顯示下一子階插入線並由 child intent 接管。來源卡使用與collision解耦的pointer／finger上方fixed overlay（16px gap、8px clamp、edge fallback）；拖離後原位置保留不改變geometry的2px虛線框。Physical iPhone／Android未偵測，故不標完整mobile sign-off、release ready或已部署。
