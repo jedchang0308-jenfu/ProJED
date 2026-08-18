@@ -34,6 +34,10 @@ const createNote = (index: number): TaskDetailNote => ({
   content: '',
 });
 
+const formatTaskDateForMobile = (value: string) => (
+  value && dayjs(value).isValid() ? dayjs(value).format('YYYY/MM/DD') : ''
+);
+
 const SIZE_STORAGE_KEY = 'projed.taskDetailsModal.size.v4';
 
 const getDefaultModalSize = () => {
@@ -682,18 +686,27 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     >
                     <span className="hidden" data-task-details-meta-label-text="true">開始日期</span>
                     <div className="mt-1 flex items-center gap-2 lg:mt-0" data-task-details-meta-control-row="true">
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(event) => handleDateChange('startDate', event)}
-                        max={!node.isDurationLocked ? (endDate || undefined) : undefined}
-                        readOnly={!canEditTask || startLocked}
-                        className={`h-8 min-w-0 flex-1 rounded-md px-2 text-sm outline-none transition focus:ring-2 lg:w-[8rem] lg:flex-none lg:min-w-0 ${
-                          !canEditTask || startLocked
-                            ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
-                            : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
-                        }`}
-                      />
+                      <div className="relative min-w-0 flex-1 lg:w-[8rem] lg:flex-none">
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(event) => handleDateChange('startDate', event)}
+                          max={!node.isDurationLocked ? (endDate || undefined) : undefined}
+                          readOnly={!canEditTask || startLocked}
+                          className={`h-8 w-full min-w-0 rounded-md px-2 text-sm text-transparent outline-none transition focus:ring-2 sm:text-slate-700 lg:w-[8rem] lg:flex-none ${
+                            !canEditTask || startLocked
+                              ? 'border border-dashed border-slate-300 bg-slate-50 sm:text-slate-500 pointer-events-none'
+                              : 'border border-slate-200 focus:border-blue-400 focus:ring-blue-100'
+                          }`}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 left-2 right-5 flex items-center whitespace-nowrap text-[11px] font-normal text-slate-700 sm:hidden"
+                          data-task-details-mobile-date-value="true"
+                        >
+                          {formatTaskDateForMobile(startDate)}
+                        </span>
+                      </div>
                       <span
                         className={`${startLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border ${
                           startLocked
@@ -722,20 +735,29 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     >
                     <span className="hidden" data-task-details-meta-label-text="true">結束日期</span>
                     <div className="mt-1 flex items-center gap-2 lg:mt-0" data-task-details-meta-control-row="true">
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(event) => handleDateChange('endDate', event)}
-                        min={startDate || undefined}
-                        readOnly={!canEditTask || endLocked || node.isDurationLocked}
-                        className={`h-8 min-w-0 flex-1 rounded-md rounded-r-none border-r-0 px-2 text-sm outline-none transition focus:ring-2 lg:w-[8rem] lg:flex-none lg:min-w-0 ${
-                          !canEditTask || endLocked || node.isDurationLocked
-                            ? 'border border-dashed border-slate-300 bg-slate-50 text-slate-500 pointer-events-none'
-                            : isDueToday
-                            ? 'border border-orange-300 bg-orange-50 text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
-                            : 'border border-slate-200 text-slate-700 focus:border-blue-400 focus:ring-blue-100'
-                        }`}
-                      />
+                      <div className="relative min-w-0 flex-1 lg:w-[8rem] lg:flex-none">
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(event) => handleDateChange('endDate', event)}
+                          min={startDate || undefined}
+                          readOnly={!canEditTask || endLocked || node.isDurationLocked}
+                          className={`h-8 w-full min-w-0 rounded-md rounded-r-none border-r-0 px-2 text-sm text-transparent outline-none transition focus:ring-2 sm:text-slate-700 lg:w-[8rem] lg:flex-none ${
+                            !canEditTask || endLocked || node.isDurationLocked
+                              ? 'border border-dashed border-slate-300 bg-slate-50 sm:text-slate-500 pointer-events-none'
+                              : isDueToday
+                              ? 'border border-orange-300 bg-orange-50 sm:text-orange-700 shadow-[0_0_0_1px_rgba(251,146,60,0.25)] focus:border-orange-400 focus:ring-orange-100'
+                              : 'border border-slate-200 focus:border-blue-400 focus:ring-blue-100'
+                          }`}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 left-2 right-5 flex items-center whitespace-nowrap text-[11px] font-normal text-slate-700 sm:hidden"
+                          data-task-details-mobile-date-value="true"
+                        >
+                          {formatTaskDateForMobile(endDate)}
+                        </span>
+                      </div>
                       <span
                         className={`${endLocked ? 'inline-flex' : 'hidden'} h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-600`}
                         title="結束日期已有依賴關係鎖定"

@@ -2,9 +2,11 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
+  'http://127.0.0.1:4000',
   'http://127.0.0.1:4173',
   'http://127.0.0.1:4174',
   'http://localhost:4173',
+  'http://localhost:4000',
   'http://localhost:4174',
   'http://127.0.0.1:5173',
   'https://projed-test.web.app',

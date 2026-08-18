@@ -36,11 +36,11 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }, reset = true) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
     const url = reset
-      ? 'http://127.0.0.1:4173/?qcReset=1&qcSize=18'
-      : 'http://127.0.0.1:4173/';
+      ? 'http://127.0.0.1:4000/?qcReset=1&qcSize=18'
+      : 'http://127.0.0.1:4000/';
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
@@ -178,7 +178,7 @@ async (page) => {
       localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
       localStorage.setItem('projed-last-view', 'recycle_bin');
     }, { target });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-recycle-bin-view="current-board"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.getByText('清空回收桶', { exact: true }).click();
@@ -194,7 +194,7 @@ async (page) => {
     step = 'mobile viewport settings scope';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => localStorage.setItem('projed-last-view', 'settings'));
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await assertNoHorizontalOverflow('DEV-038 mobile backup');

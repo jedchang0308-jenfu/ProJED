@@ -10,7 +10,7 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'networkidle' });
     if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {
       await page.locator('button', { hasText: '使用固定測試環境' }).click();
       await page.locator('button', { hasText: /新增會議記錄|紀錄庫/ }).first().waitFor({ state: 'visible', timeout: 10000 });

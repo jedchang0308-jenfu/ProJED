@@ -376,6 +376,66 @@ export interface KnowledgeRecordInput {
   taskLinks: Array<Pick<RecordTaskLink, 'nodeId' | 'role'>>;
 }
 
+export type MeetingTaskActivityInput = {
+  eventType: string;
+  nodeId: string;
+  title: string;
+  occurredAt?: number;
+  payload?: Record<string, unknown>;
+};
+
+export type MeetingTaskActivity = Required<Omit<MeetingTaskActivityInput, 'payload'>> & {
+  payload: Record<string, unknown>;
+  summary: string;
+};
+
+export interface MeetingDraftRecoverySnapshot {
+  schemaVersion: 1;
+  scopeKey: string;
+  ownerUserId: string;
+  workspaceId: string;
+  boardId: string;
+  draftId: string;
+  savedAt: number;
+  localSignature: string;
+  remoteSignature: string | null;
+  baselineSignature: string | null;
+  contentCursorOffset: number | null;
+  draft: KnowledgeRecordInput;
+  meetingActivities: MeetingTaskActivity[];
+  appendedMeetingActivityIds: string[];
+}
+
+export type MeetingDraftRecoveryLocalStatus = 'idle' | 'saving' | 'saved' | 'degraded' | 'error';
+export type MeetingDraftRecoveryCloudStatus = 'idle' | 'scheduled' | 'saving' | 'saved' | 'paused' | 'conflict' | 'error';
+
+export interface MeetingDraftRecoveryState {
+  localStatus: MeetingDraftRecoveryLocalStatus;
+  cloudStatus: MeetingDraftRecoveryCloudStatus;
+  localSavedAt: number | null;
+  cloudSavedAt: number | null;
+  message: string | null;
+  restoredAt: number | null;
+  conflictSnapshot: MeetingDraftRecoverySnapshot | null;
+}
+
+export interface MeetingDraftCheckpointInput {
+  ownerUserId: string;
+  workspaceId: string;
+  boardId: string;
+  record: KnowledgeRecordInput;
+  meetingActivities: MeetingTaskActivity[];
+  appendedMeetingActivityIds: string[];
+  localSignature: string;
+  remoteSignature: string | null;
+}
+
+export interface MeetingDraftCheckpointResult {
+  recordId: string;
+  confirmedAt: number;
+  remoteSignature: string;
+}
+
 export interface AuditLogEntry {
   id?: string;
   workspaceId: string;

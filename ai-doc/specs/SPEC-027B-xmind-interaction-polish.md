@@ -76,3 +76,11 @@ DEV-027B 補強 ProJED 心智圖模式，使 WBS 任務操作更接近 Xmind。�
 - `ArrowUp` / `ArrowDown` / `ArrowLeft` / `ArrowRight` 可移動選取。
 - 直接打字、`F2` 或雙擊不得進入節點外層 rename；命名 / 改名需走任務詳情 title input。
 - Zoom、tidy connector、drag insertion preview 的 DEV-027B 既有 gates 必須維持通過。
+
+## 最新 UX 增補：關係線上的展開／收合控制（2026-08-18）
+
+- 具子任務的節點，展開／收合控制不得佔用任務節點欄位內的水平空間；控制項必須放在父節點與子節點群組之間的關係線交會位置。
+- 控制項採 XMind 式小型圓形按鈕：展開狀態顯示減號、收合狀態顯示加號；保留 `aria-expanded`、可見 focus ring、tooltip 與鍵盤啟動。
+- 控制項平時不得常駐顯示；滑鼠進入父子關係線的感應區時才顯示，滑鼠離開後淡出。鍵盤 Tab 聚焦、`focus-within` 或程式化 focus 時，即使沒有滑鼠 hover 仍必須保持可見。
+- 點擊控制項只切換該節點的子樹顯示，不得觸發節點選取、雙擊明細、拖曳或快速命名；關係線 trunk 的幾何中心與控制項中心需對齊。
+- 收合、展開、zoom、scroll 與 drag 後，控制項與 connector 必須重新對齊；沒有子任務的節點不得顯示控制項。

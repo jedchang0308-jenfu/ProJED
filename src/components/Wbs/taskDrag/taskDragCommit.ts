@@ -3,7 +3,7 @@ import type { BatchNodeUpdates, WbsBoardActions } from '../../../store/useWbsSto
 import { useWbsStore } from '../../../store/useWbsStore';
 import useDialogStore from '../../../store/useDialogStore';
 import { toast } from '../../../store/useToastStore';
-import { selectAndOpenTaskDetails } from '../../../utils/taskInteractions';
+import { prepareNewTaskNaming } from '../../../utils/taskInteractions';
 import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../../../features/taskWorkbench/placement';
 import type {
   MobileTaskAction,
@@ -267,7 +267,7 @@ export const commitTaskDragAction = async ({
       updatedAt: Date.now(),
     };
     dependencies.addNode(newNode);
-    selectAndOpenTaskDetails(newNode.id);
+    prepareNewTaskNaming(newNode.id);
     return committed('sibling-created');
   }
 
@@ -287,7 +287,7 @@ export const commitTaskDragAction = async ({
       updatedAt: Date.now(),
     };
     dependencies.addNode(newNode);
-    selectAndOpenTaskDetails(newNode.id);
+    prepareNewTaskNaming(newNode.id);
     return committed('child-created');
   }
 

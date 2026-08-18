@@ -60,6 +60,9 @@ export const useTaskInteractionBinding = ({
   const setContextMenuState = useBoardStore(state => state.setContextMenuState);
   const setView = useBoardStore(state => state.setView);
   const executor = useMemo(() => createTaskCommandExecutor({
+    'task.select': ({ taskId: targetTaskId }) => {
+      useBoardStore.getState().setSelectedTaskId(targetTaskId);
+    },
     'task.open-details': ({ taskId: targetTaskId }) => selectAndOpenTaskDetails(targetTaskId),
     'task.open-details-for-naming': ({ taskId: targetTaskId }) => prepareNewTaskNaming(targetTaskId),
     'task.switch-to-list': () => setView('list'),

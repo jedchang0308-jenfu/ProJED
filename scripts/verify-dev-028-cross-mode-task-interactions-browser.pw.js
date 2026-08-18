@@ -18,7 +18,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -315,7 +315,7 @@ async (page) => {
     assert(renameInputs === 0, `${mode} title click should not enter rename input`, { renameInputs });
   };
 
-  const assertMindMapClickOpensDetails = async () => {
+  const assertMindMapSelectionDetailsContract = async () => {
     await switchMode('mindmap');
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     const node = page.locator('[data-mindmap-node]').first();
@@ -323,9 +323,14 @@ async (page) => {
     const taskId = await node.getAttribute('data-mindmap-node');
     await node.click();
     const modal = page.locator('[data-task-details-modal="true"]');
+    await page.waitForTimeout(250);
+    assert(await modal.count() === 0, 'mindmap single click should select without opening TaskDetailsModal', { taskId });
+    const singleClickSelected = await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count();
+    assert(singleClickSelected === 1, 'mindmap single click should select the node', { taskId, singleClickSelected });
+    await node.dblclick();
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     const modalTaskId = await modal.getAttribute('data-task-id');
-    assert(modalTaskId === taskId, 'mindmap single click should open TaskDetailsModal', { taskId, modalTaskId });
+    assert(modalTaskId === taskId, 'mindmap double click should open TaskDetailsModal', { taskId, modalTaskId });
     const detailTitleInput = modal.locator('[data-task-details-title-input="true"]');
     await detailTitleInput.waitFor({ state: 'visible', timeout: 10000 });
     assert(await detailTitleInput.count() === 1, 'mindmap details title input should be the editable title locus');
@@ -354,6 +359,12 @@ async (page) => {
     });
     const renameMenuCount = await page.getByText('重新命名任務', { exact: true }).count();
     assert(renameMenuCount === 0, 'mindmap context menu should not expose task rename', { renameMenuCount });
+    const openDetailsMenuCount = await page.locator('[data-task-action-id="task.open-details"]').count();
+    assert(openDetailsMenuCount === 1, 'mindmap context menu should expose 開啟明細', { openDetailsMenuCount });
+    await page.locator('[data-task-action-id="task.open-details"]').click();
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await modal.getAttribute('data-task-id') === taskId, 'mindmap context menu 開啟明細 should open the target task', { taskId });
+    await closeDetails();
     await page.keyboard.press('Escape');
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'hidden', timeout: 10000 });
 
@@ -383,8 +394,8 @@ async (page) => {
       clickPosition: { x: 90, y: 12 },
     });
 
-    step = 'mindmap-click-details';
-    await assertMindMapClickOpensDetails();
+    step = 'mindmap-selection-details-contract';
+    await assertMindMapSelectionDetailsContract();
 
     step = 'board-click-details';
     await assertClickOpensDetails({

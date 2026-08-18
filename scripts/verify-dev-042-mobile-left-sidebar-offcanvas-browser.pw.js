@@ -43,9 +43,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedAuxiliaryState();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=36', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=36', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedAuxiliaryState();
     await page.reload({ waitUntil: 'domcontentloaded' });

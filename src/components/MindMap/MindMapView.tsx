@@ -11,7 +11,12 @@ import MindMapConnectorOverlay from './MindMapConnectorOverlay';
 import MindMapDragPreviewBadge from './MindMapDragPreviewBadge';
 import MindMapDragPreviewLayer, { type MindMapDragPreviewModel } from './MindMapDragPreviewLayer';
 import MindMapEmptyState from './MindMapEmptyState';
-import MindMapNode, { type MindMapDirection, type MindMapDropMode, type MindMapDropTarget } from './MindMapNode';
+import MindMapNode, {
+  type MindMapDirection,
+  type MindMapDropMode,
+  type MindMapDropTarget,
+  type MindMapQuickCreateIntent,
+} from './MindMapNode';
 import MindMapRelationshipInteractionLayer from './MindMapRelationshipInteractionLayer';
 import MindMapRelationshipOverlay from './MindMapRelationshipOverlay';
 import MindMapRootLayout from './MindMapRootLayout';
@@ -98,6 +103,7 @@ import {
   createMindMapTaskNode,
   getMindMapArchiveTaskPlan,
   getMindMapChildTaskCreatePlan,
+  getCommittedMindMapTitle,
   getMindMapSiblingTaskCreatePlan,
   getNextMindMapRootOrder,
 } from './mindMapTaskCommands';
@@ -146,7 +152,6 @@ import {
   clearTaskSelection,
   CLEAR_TASK_SELECTION_EVENT,
   openTaskDetails,
-  prepareNewTaskNaming,
 } from '../../utils/taskInteractions';
 
 type RootSideDropTarget = MindMapDirection | null;
@@ -165,6 +170,8 @@ interface DragPreviewState extends MindMapDragPreviewModel {
   y: number;
   title: string;
 }
+
+const MINDMAP_POINTER_QUICK_TITLE_DELAY_MS = 240;
 
 const MindMapView: React.FC = () => {
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
@@ -186,6 +193,7 @@ const MindMapView: React.FC = () => {
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, isReadOnly } = useBoardPermissions();
 
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
+  const [inlineTitleEditNodeId, setInlineTitleEditNodeId] = React.useState<string | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = React.useState<Set<string>>(() => new Set());
   const [draggedNodeId, setDraggedNodeId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<MindMapDropTarget | null>(null);
@@ -217,6 +225,7 @@ const MindMapView: React.FC = () => {
   const zoomPreviewFrameRef = React.useRef<number | null>(null);
   const zoomPreviewCommitTimerRef = React.useRef<number | null>(null);
   const zoomSuppressReleaseTimerRef = React.useRef<number | null>(null);
+  const pointerQuickTitleTimerRef = React.useRef<number | null>(null);
   const zoomSuppressTokenRef = React.useRef(0);
   const autoCenteredBoardRef = React.useRef<string | null>(null);
   const selectionBoardRef = React.useRef<string | null>(null);
@@ -280,13 +289,35 @@ const MindMapView: React.FC = () => {
   }, [clearRelationshipHover, clearRelationshipPointerDrag, clearSelectedRelationship, finishRelationshipDraftMode]);
 
   const selectRelationship = React.useCallback((relationshipId: string) => {
+    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
+    setInlineTitleEditNodeId(null);
     setSelectedRelationshipId(relationshipId);
     setSelectedNodeId(null);
   }, []);
 
+  const cancelPointerQuickTitleRequest = React.useCallback(() => {
+    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
+  }, []);
+
   const selectNode = React.useCallback((nodeId: string | null) => {
+    // Keep the inline editor alive when the newly-created node receives focus
+    // and re-dispatches selection. Selecting a different node still exits edit
+    // mode so the editor never remains attached to a stale task.
+    cancelPointerQuickTitleRequest();
+    setInlineTitleEditNodeId(editingNodeId => editingNodeId && editingNodeId !== nodeId ? null : editingNodeId);
     setSelectedNodeId(nodeId);
     setSelectedRelationshipId(null);
+  }, [cancelPointerQuickTitleRequest]);
+
+  const commitInlineTitleEdit = React.useCallback((nodeId: string, title: string) => {
+    if (canEditTask) {
+      updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
+    }
+    setInlineTitleEditNodeId(null);
+  }, [canEditTask, updateNode]);
+
+  const cancelInlineTitleEdit = React.useCallback(() => {
+    setInlineTitleEditNodeId(null);
   }, []);
 
   const clearSelection = React.useCallback(() => {
@@ -339,6 +370,7 @@ const MindMapView: React.FC = () => {
   React.useEffect(() => () => {
     clearPendingTimeoutRef(zoomPreviewCommitTimerRef);
     clearPendingTimeoutRef(zoomSuppressReleaseTimerRef);
+    clearPendingTimeoutRef(pointerQuickTitleTimerRef);
     cancelPendingAnimationFrameRef(zoomPreviewFrameRef);
     cancelPendingAnimationFrameRef(connectorRecomputeFrameRef);
   }, []);
@@ -386,6 +418,7 @@ const MindMapView: React.FC = () => {
   React.useEffect(() => {
     if (selectionBoardRef.current === boardId) return;
     selectionBoardRef.current = boardId;
+    setInlineTitleEditNodeId(null);
     setSelectedNodeId(null);
     clearSelectedRelationship();
     clearRelationshipDraft();
@@ -435,12 +468,13 @@ const MindMapView: React.FC = () => {
 
   React.useEffect(() => {
     if (!selectedNodeId) return;
+    if (inlineTitleEditNodeId === selectedNodeId) return;
     const frame = window.requestAnimationFrame(() => {
       const selected = getMindMapNodeElement(mapContentRef.current, selectedNodeId);
       selected?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedNodeId]);
+  }, [inlineTitleEditNodeId, selectedNodeId]);
 
   React.useEffect(() => {
     if (!editingRelationshipId) return;
@@ -632,7 +666,11 @@ const MindMapView: React.FC = () => {
     return () => window.removeEventListener('dragover', handleWindowDragOver);
   }, [draggedNodeId]);
 
-  const createTask = React.useCallback((parentId: string | null, order: number, title = DEFAULT_MINDMAP_TASK_TITLE) => {
+  const createTask = React.useCallback((
+    parentId: string | null,
+    order: number,
+    title = DEFAULT_MINDMAP_TASK_TITLE,
+  ) => {
     if (!canCreateTask || !activeWorkspaceId || !boardId) {
       toast.warning(MINDMAP_MESSAGES.noCreateTaskPermission);
       return null;
@@ -648,9 +686,9 @@ const MindMapView: React.FC = () => {
     addNode(node);
     selectNode(node.id);
     expandNodes([parentId, node.id]);
-    prepareNewTaskNaming(node.id);
+    if (canEditTask) setInlineTitleEditNodeId(node.id);
     return node;
-  }, [activeWorkspaceId, addNode, boardId, canCreateTask, expandNodes, selectNode]);
+  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, expandNodes, selectNode]);
 
   const handleCreateRoot = React.useCallback(() => {
     createTask(null, getNextMindMapRootOrder(rootNodes));
@@ -825,7 +863,7 @@ const MindMapView: React.FC = () => {
     if (!nodeId) return handleCreateRoot();
     const plan = getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId });
     if (!plan) return null;
-    const created = createTask(plan.parentId, plan.order);
+    const created = createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE);
     if (created && plan.inheritRootSideFromId) {
       updateRootSide(created.id, getNodeSide(plan.inheritRootSideFromId));
     }
@@ -835,8 +873,26 @@ const MindMapView: React.FC = () => {
   const createChildForNode = React.useCallback((nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
     const plan = getMindMapChildTaskCreatePlan({ nodeId, nodes, getChildren });
-    return plan ? createTask(plan.parentId, plan.order) : null;
+    return plan
+      ? createTask(plan.parentId, plan.order, DEFAULT_MINDMAP_TASK_TITLE)
+      : null;
   }, [createTask, getChildren, handleCreateRoot, nodes]);
+
+  const continueInlineTitleEdit = React.useCallback((
+    nodeId: string,
+    title: string,
+    intent: MindMapQuickCreateIntent,
+  ) => {
+    if (!canEditTask) {
+      setInlineTitleEditNodeId(null);
+      return;
+    }
+    updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
+    const created = intent === 'child'
+      ? createChildForNode(nodeId)
+      : createSiblingForNode(nodeId);
+    if (!created) setInlineTitleEditNodeId(null);
+  }, [canEditTask, createChildForNode, createSiblingForNode, updateNode]);
 
   const archiveNode = React.useCallback(async () => {
     if (!selectedNodeId) return;
@@ -936,6 +992,15 @@ const MindMapView: React.FC = () => {
     createNoteRelationshipInline(relationshipDraft.fromId, nodeId);
     finishRelationshipDraftMode();
   }, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode]);
+
+  const handleNodePointerPrimary = React.useCallback((nodeId: string) => {
+    handleNodeSelect(nodeId);
+    if (!canEditTask || relationshipToolActive || draggedNodeId) return;
+    pointerQuickTitleTimerRef.current = window.setTimeout(() => {
+      pointerQuickTitleTimerRef.current = null;
+      setInlineTitleEditNodeId(nodeId);
+    }, MINDMAP_POINTER_QUICK_TITLE_DELAY_MS);
+  }, [canEditTask, draggedNodeId, handleNodeSelect, relationshipToolActive]);
 
   const handleNodeOpenDetails = React.useCallback((nodeId: string) => {
     if (relationshipToolActive || draggedNodeId) return;
@@ -1379,7 +1444,12 @@ const MindMapView: React.FC = () => {
       isRelationshipModeActive={relationshipToolActive}
       showStartDate={showStartDate}
       canMoveTask={canMoveTask}
+      isTitleEditing={inlineTitleEditNodeId === node.id}
+      onTitleEditCommit={commitInlineTitleEdit}
+      onTitleEditContinue={continueInlineTitleEdit}
+      onTitleEditCancel={cancelInlineTitleEdit}
       onSelect={handleNodeSelect}
+      onPointerPrimary={handleNodePointerPrimary}
       onOpenDetails={handleNodeOpenDetails}
       onOpenContextMenu={handleNodeContextMenu}
       onToggleExpanded={toggleNodeExpansion}

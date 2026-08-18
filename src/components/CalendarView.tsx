@@ -27,7 +27,6 @@ import { useTagStore } from '../store/useTagStore';
 import dayjs from 'dayjs';
 import {
     ChevronLeft, ChevronRight, ChevronDown, Calendar,
-    PanelLeftClose, PanelLeftOpen, LayoutList
 } from 'lucide-react';
 
 // ── 常數 ─────────────────────────────────────────────────
@@ -168,8 +167,6 @@ const CalendarView = () => {
         dueWithinDays,
         overdueOnly,
         selectedAssigneeIds,
-        isSidebarOpen,
-        setSidebarOpen,
         toggleStatusFilter,
         setView,
     } = useBoardStore();
@@ -302,39 +299,21 @@ const CalendarView = () => {
             <ViewToolbar
                 rightControls={(
                     <>
-                    <div className="flex items-center gap-[8px]">
-                        <button onClick={goToPrevMonth} className={compactIconButtonClass()} title="上個月">
-                            <ChevronLeft size={16} />
-                        </button>
-                        <span className="text-sm font-bold text-slate-700 min-w-[100px] text-center">
-                            {currentMonth.format('YYYY 年 M 月')}
-                        </span>
-                        <button onClick={goToNextMonth} className={compactIconButtonClass()} title="下個月">
-                            <ChevronRight size={16} />
-                        </button>
-                        <button onClick={goToToday} className={`${compactClassNames.textButtonBase} group`} title="回到今天">
-                            <Calendar size={14} className="group-hover:scale-110 transition-transform" />
-                            <span>今天</span>
-                        </button>
-                    </div>
-                    <div className="flex items-center gap-[8px] border-l border-slate-200 pl-[8px]">
-                        <div className={compactClassNames.segmented}>
-                            <button
-                                onClick={() => setSidebarOpen(!isSidebarOpen)}
-                                className={compactIconButtonClass(!isSidebarOpen)}
-                                title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}
-                            >
-                                {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                        <div className="flex items-center gap-[8px]">
+                            <button onClick={goToPrevMonth} className={compactIconButtonClass()} title="上個月">
+                                <ChevronLeft size={16} />
                             </button>
-                            <button
-                                onClick={() => setIsTaskListOpen(!isTaskListOpen)}
-                                className={compactIconButtonClass(!isTaskListOpen)}
-                                title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}
-                            >
-                                <LayoutList size={16} />
+                            <span className="text-sm font-bold text-slate-700 min-w-[100px] text-center">
+                                {currentMonth.format('YYYY 年 M 月')}
+                            </span>
+                            <button onClick={goToNextMonth} className={compactIconButtonClass()} title="下個月">
+                                <ChevronRight size={16} />
+                            </button>
+                            <button onClick={goToToday} className={`${compactClassNames.textButtonBase} group`} title="回到今天">
+                                <Calendar size={14} className="group-hover:scale-110 transition-transform" />
+                                <span>今天</span>
                             </button>
                         </div>
-                    </div>
                     </>
                 )}
             />

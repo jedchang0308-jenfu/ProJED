@@ -191,10 +191,9 @@ export const makeConnectorPath = (
   const fromY = fromRect.top + fromRect.height / 2;
   const toY = toRect.top + toRect.height / 2;
   if (variant === 'bracket') {
-    const gap = Math.max(Math.min(Math.abs(toX - fromX) * 0.42, 72), 34);
-    const trunkX = direction === 'right'
-      ? Math.min(fromX + gap, toX - 18)
-      : Math.max(fromX - gap, toX + 18);
+    // Keep the branch junction centered in the parent/child gap so the
+    // XMind-style collapse control can sit directly on the relationship line.
+    const trunkX = (fromX + toX) / 2;
     return {
       d: `M ${fromX.toFixed(2)} ${fromY.toFixed(2)} H ${trunkX.toFixed(2)} V ${toY.toFixed(2)} H ${toX.toFixed(2)}`,
       fromX,

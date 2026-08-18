@@ -18,6 +18,7 @@ export const useMeetingModeExitGuard = () => {
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const saveDraft = useRecordStore(state => state.saveDraft);
   const closePanel = useRecordStore(state => state.closePanel);
+  const requestMeetingDraftRecoveryClear = useRecordStore(state => state.requestMeetingDraftRecoveryClear);
   const showActionDialog = useDialogStore(state => state.showActionDialog);
 
   const actionState = getMeetingRecordActionState({
@@ -36,6 +37,7 @@ export const useMeetingModeExitGuard = () => {
     if (!isMeetingMode) return;
 
     if (!actionState.isDirty) {
+      requestMeetingDraftRecoveryClear();
       closePanel();
       return;
     }
@@ -66,12 +68,16 @@ export const useMeetingModeExitGuard = () => {
 
     if (choice === 'save_and_exit') {
       const saved = await saveDraft({ nodes });
-      if (saved) closePanel();
+      if (saved) {
+        requestMeetingDraftRecoveryClear();
+        closePanel();
+      }
       return;
     }
 
     if (choice === 'exit_without_saving') {
+      requestMeetingDraftRecoveryClear();
       closePanel();
     }
-  }, [actionState.exitWarning, actionState.isDirty, closePanel, isMeetingMode, nodes, saveDraft, showActionDialog]);
+  }, [actionState.exitWarning, actionState.isDirty, closePanel, isMeetingMode, nodes, requestMeetingDraftRecoveryClear, saveDraft, showActionDialog]);
 };

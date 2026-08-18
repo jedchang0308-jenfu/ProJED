@@ -23,9 +23,13 @@ const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>>
     triggers: Object.freeze({ 'keyboard.enter': 'task.open-details' }),
   }),
   mindmap: Object.freeze({
-    menu: Object.freeze({ exclude: ['task.dependency-start', 'task.dependency-end'] as const }),
+    menu: Object.freeze({
+      include: ['task.open-details'] as const,
+      exclude: ['task.dependency-start', 'task.dependency-end'] as const,
+    }),
     triggers: Object.freeze({
-      'pointer.primary': 'task.open-details',
+      'pointer.primary': 'task.select',
+      'pointer.double': 'task.open-details',
       'keyboard.enter': 'task.create-sibling',
       'keyboard.tab': 'task.create-child',
       'keyboard.arrow-up': 'mindmap.select-parent',

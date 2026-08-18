@@ -195,7 +195,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'networkidle' });
     try {
       await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 15000 });

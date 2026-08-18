@@ -3,13 +3,13 @@ param(
   [ValidateSet("start", "watch", "stop", "restart", "status", "install", "uninstall")]
   [string]$Action = "start",
   [string]$HostName = "127.0.0.1",
-  [int]$Port = 4173
+  [int]$Port = 4000
 )
 
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$StateRoot = Join-Path $env:LOCALAPPDATA "ProJED\local-test-server"
+$StateRoot = Join-Path $env:LOCALAPPDATA "ProJED\local-test-server-$Port"
 $PidPath = Join-Path $StateRoot "dev-test-server.pid"
 $WatchPidPath = Join-Path $StateRoot "dev-test-server-watch.pid"
 $LogPath = Join-Path $StateRoot "dev-test-server.log"

@@ -4,12 +4,12 @@ import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useTagStore } from '../store/useTagStore';
 import dayjs from 'dayjs';
-import { Calendar, PanelLeftClose, PanelLeftOpen, LayoutList, GitBranch } from 'lucide-react';
+import { Calendar, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
 import { matchesTaskFilters } from '../features/taskFilters';
-import { compactClassNames, compactIconButtonClass, compactSegmentedButtonClass } from './ui/compactTokens';
+import { compactClassNames, compactSegmentedButtonClass } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
 
@@ -23,8 +23,6 @@ const GanttView = () => {
         dueWithinDays,
         overdueOnly,
         selectedAssigneeIds,
-        isSidebarOpen,
-        setSidebarOpen,
         showDependencies,
     } = useBoardStore();
     const selectedTagIds = useTagStore(state => state.selectedTagIds);
@@ -244,16 +242,6 @@ const GanttView = () => {
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-[8px] border-l border-slate-200 pl-[8px]">
-                        <div className={compactClassNames.segmented}>
-                            <button onClick={() => setSidebarOpen(!isSidebarOpen)} className={compactIconButtonClass(!isSidebarOpen)} title={isSidebarOpen ? "收疊工作區選單" : "展開工作區選單"}>
-                                {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-                            </button>
-                            <button onClick={() => setIsTaskListOpen(!isTaskListOpen)} className={compactIconButtonClass(!isTaskListOpen)} title={isTaskListOpen ? "收疊任務清單" : "展開任務清單"}>
-                                <LayoutList size={16} />
-                            </button>
-                        </div>
-                    </div>
                     </>
                 )}
             />

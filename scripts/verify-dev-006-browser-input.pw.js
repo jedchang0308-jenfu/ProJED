@@ -69,16 +69,16 @@ async (page) => {
     }, { account });
   };
 
-  await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
   await page.setViewportSize({ width: 1440, height: 950 });
   await seedSession();
-  await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
   await seedSession();
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
-    origin: 'http://127.0.0.1:4173',
+    origin: 'http://127.0.0.1:4000',
   });
 
   if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {

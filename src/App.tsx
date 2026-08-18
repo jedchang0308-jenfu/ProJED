@@ -11,7 +11,7 @@
  * - 遷移完成後，由 onSnapshot 自動更新畫面，無須手動 reload
  * - 若無舊版資料，跳過遷移
  */
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
@@ -35,6 +35,7 @@ import { ToastContainer } from './components/ui/ToastContainer';
 import { toast } from './store/useToastStore';
 import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
 import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
+import { useMeetingDraftRecovery } from './hooks/useMeetingDraftRecovery';
 import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
 
 const BoardView = lazy(() => import('./components/BoardView'));
@@ -77,12 +78,22 @@ function AppContent() {
   const userEmail = user?.email ?? null;
   const userDisplayName = user?.displayName ?? null;
   const loadRecords = useRecordStore(s => s.loadRecords);
+  const recordsLoading = useRecordStore(s => s.loading);
+  const recordsScopeKey = activeWorkspaceId && activeBoardId ? `${activeWorkspaceId}:${activeBoardId}` : null;
+  const [recordsLoadedScope, setRecordsLoadedScope] = useState<string | null>(null);
   // 確保遷移只執行一次，不因 re-render 重複觸發
   const migrationDone = useRef(false);
   const processedInviteToken = useRef<string | null>(null);
 
   // 啟動目前資料後端的同步監聽
   useDataSync();
+
+  useMeetingDraftRecovery({
+    userId,
+    workspaceId: activeWorkspaceId,
+    boardId: activeBoardId,
+    recordsLoaded: Boolean(recordsScopeKey && !recordsLoading && recordsLoadedScope === recordsScopeKey),
+  });
 
   // Zustand store 會在模組載入時先建立；登入帳號確定後重新載入帳號範圍的篩選，避免沿用前一個帳號的記憶。
   useLayoutEffect(() => {
@@ -92,9 +103,15 @@ function AppContent() {
   }, [userId]);
 
   useEffect(() => {
-    if (!userId || !activeWorkspaceId || !activeBoardId) return;
-    loadRecords(activeWorkspaceId, activeBoardId).catch(console.error);
-  }, [activeBoardId, activeWorkspaceId, loadRecords, userId]);
+    if (!userId || !activeWorkspaceId || !activeBoardId || !recordsScopeKey) {
+      setRecordsLoadedScope(null);
+      return;
+    }
+    setRecordsLoadedScope(null);
+    void loadRecords(activeWorkspaceId, activeBoardId)
+      .catch(console.error)
+      .finally(() => setRecordsLoadedScope(recordsScopeKey));
+  }, [activeBoardId, activeWorkspaceId, loadRecords, recordsScopeKey, userId]);
 
   useEffect(() => {
     if (!userId || dataBackend !== 'local-test') return;

@@ -19,6 +19,7 @@ import {
   type MeetingSynthesisResponse,
 } from '../utils/meetingRecordSynthesis';
 import { getRecordDraftSignature } from '../utils/meetingRecordWorkflow';
+import { isMeetingRecordUnavailable } from '../utils/meetingRecordAvailability';
 import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerge';
 import { useMemberStore } from './useMemberStore';
 import { useTagStore } from './useTagStore';
@@ -29,6 +30,10 @@ import type {
   KnowledgeRecordStatus,
   KnowledgeRecordType,
   KnowledgeRecordVisibility,
+  MeetingDraftRecoverySnapshot,
+  MeetingDraftRecoveryState,
+  MeetingTaskActivity,
+  MeetingTaskActivityInput,
   RecordTaskLinkRole,
   TaskNode,
   ViewMode,
@@ -57,19 +62,6 @@ type RecordSaveFeedback = {
   savedAt: number;
 } | null;
 
-export type MeetingTaskActivityInput = {
-  eventType: string;
-  nodeId: string;
-  title: string;
-  occurredAt?: number;
-  payload?: Record<string, unknown>;
-};
-
-export type MeetingTaskActivity = Required<Omit<MeetingTaskActivityInput, 'payload'>> & {
-  payload: Record<string, unknown>;
-  summary: string;
-};
-
 interface RecordStoreState {
   records: KnowledgeRecord[];
   loading: boolean;
@@ -92,6 +84,8 @@ interface RecordStoreState {
   meetingSynthesisWarnings: string[];
   meetingSynthesisProvider: string | null;
   lastSaveFeedback: RecordSaveFeedback;
+  meetingDraftRecovery: MeetingDraftRecoveryState;
+  meetingDraftRecoveryClearToken: number;
 }
 
 interface RecordStoreActions {
@@ -117,6 +111,9 @@ interface RecordStoreActions {
   saveDraft: (options?: SaveDraftOptions) => Promise<KnowledgeRecord | null>;
   archiveRecord: (recordId: string) => Promise<void>;
   clearSaveFeedback: () => void;
+  setMeetingDraftRecovery: (updates: Partial<MeetingDraftRecoveryState>) => void;
+  restoreMeetingDraftSnapshot: (snapshot: MeetingDraftRecoverySnapshot) => void;
+  requestMeetingDraftRecoveryClear: () => void;
 }
 
 const createId = () =>
@@ -220,6 +217,16 @@ const resetMeetingSynthesisState = {
   meetingSynthesisError: null,
   meetingSynthesisWarnings: [],
   meetingSynthesisProvider: null,
+};
+
+const initialMeetingDraftRecoveryState: MeetingDraftRecoveryState = {
+  localStatus: 'idle',
+  cloudStatus: 'idle',
+  localSavedAt: null,
+  cloudSavedAt: null,
+  message: null,
+  restoredAt: null,
+  conflictSnapshot: null,
 };
 
 type MeetingSynthesisTraceMetadata = ReturnType<typeof createMeetingSynthesisTraceMetadata>;
@@ -392,6 +399,8 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   meetingSynthesisWarnings: [],
   meetingSynthesisProvider: null,
   lastSaveFeedback: null,
+  meetingDraftRecovery: initialMeetingDraftRecoveryState,
+  meetingDraftRecoveryClearToken: 0,
 
   loadRecords: async (workspaceId, boardId) => {
     set({ loading: true, error: null });
@@ -408,7 +417,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
   openPanel: () => set({ isPanelOpen: true, isPanelCollapsed: false }),
 
-  closePanel: () => set({
+  closePanel: () => set(state => ({
     isPanelOpen: false,
     isPanelCollapsed: false,
     isTaskSelectionMode: false,
@@ -422,11 +431,16 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     appendedMeetingActivityIds: [],
     ...resetMeetingSynthesisState,
     lastSaveFeedback: null,
-  }),
+    meetingDraftRecoveryClearToken: state.draft?.type === 'meeting'
+      ? state.meetingDraftRecoveryClearToken + 1
+      : state.meetingDraftRecoveryClearToken,
+  })),
 
   togglePanelCollapsed: () => set(state => ({ isPanelCollapsed: !state.isPanelCollapsed })),
 
   openNewRecord: (type, initialNodeId) => {
+    if (type === 'meeting' && isMeetingRecordUnavailable()) return;
+    if (get().draft?.type === 'meeting') get().requestMeetingDraftRecoveryClear();
     const userId = useAuthStore.getState().user?.uid ?? null;
     const draft = createDefaultDraft(type, userId, initialNodeId);
     set({
@@ -443,10 +457,13 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       ...resetMeetingSynthesisState,
       lastSaveFeedback: null,
       error: null,
+      meetingDraftRecovery: initialMeetingDraftRecoveryState,
     });
   },
 
   openExistingRecord: (record) => {
+    if (record.type === 'meeting' && isMeetingRecordUnavailable()) return;
+    if (get().draft?.type === 'meeting' && get().draft?.id !== record.id) get().requestMeetingDraftRecoveryClear();
     const mentionedNodeIds = extractTaskMentionIds(record.content);
     const draft = {
       id: record.id,
@@ -480,10 +497,12 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       ...resetMeetingSynthesisState,
       lastSaveFeedback: null,
       error: null,
+      meetingDraftRecovery: initialMeetingDraftRecoveryState,
     });
   },
 
   startMeetingRecord: () => {
+    if (isMeetingRecordUnavailable()) return;
     const { activeBoardId, currentView, setView } = useBoardStore.getState();
     if (!activeBoardId) {
       set({
@@ -520,6 +539,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         ...(isExistingMeetingDraft ? {} : resetMeetingSynthesisState),
         lastSaveFeedback: null,
         error: null,
+        meetingDraftRecovery: isExistingMeetingDraft ? state.meetingDraftRecovery : initialMeetingDraftRecoveryState,
       };
     });
   },
@@ -847,6 +867,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         undo: () => previousInput ? applyRecordInput(previousInput) : archiveSavedRecord(),
         redo: () => applyRecordInput(savedInput),
       });
+      if (wantsPublish && draft.type === 'meeting') get().requestMeetingDraftRecoveryClear();
       return saved;
     } catch (error) {
       set({
@@ -872,6 +893,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         draftBaselineSignature: state.draft?.id === recordId ? null : state.draftBaselineSignature,
         lastSaveFeedback: state.lastSaveFeedback?.recordId === recordId ? null : state.lastSaveFeedback,
       }));
+      if (archivedRecord?.type === 'meeting') get().requestMeetingDraftRecoveryClear();
       if (archivedRecord) {
         const restoreInput = toRecordInput(archivedRecord);
         useUndoStore.getState().pushUndo({
@@ -916,6 +938,43 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       });
     }
   },
+
+  setMeetingDraftRecovery: (updates) => set(state => ({
+    meetingDraftRecovery: { ...state.meetingDraftRecovery, ...updates },
+  })),
+
+  restoreMeetingDraftSnapshot: (snapshot) => set({
+    isPanelOpen: true,
+    isPanelCollapsed: false,
+    isTaskSelectionMode: false,
+    isMeetingMode: true,
+    meetingTaskCaptureEnabled: false,
+    returnViewAfterSelection: null,
+    contentCursorOffset: snapshot.contentCursorOffset,
+    draft: {
+      ...snapshot.draft,
+      taskLinks: snapshot.draft.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+    },
+    draftBaselineSignature: snapshot.baselineSignature ?? getRecordDraftSignature(snapshot.draft),
+    meetingActivities: snapshot.meetingActivities,
+    appendedMeetingActivityIds: snapshot.appendedMeetingActivityIds,
+    ...resetMeetingSynthesisState,
+    lastSaveFeedback: null,
+    error: null,
+    meetingDraftRecovery: {
+      ...initialMeetingDraftRecoveryState,
+      localStatus: 'saved',
+      cloudStatus: snapshot.remoteSignature === snapshot.localSignature ? 'saved' : 'scheduled',
+      localSavedAt: snapshot.savedAt,
+      cloudSavedAt: snapshot.remoteSignature === snapshot.localSignature ? snapshot.savedAt : null,
+      restoredAt: Date.now(),
+    },
+  }),
+
+  requestMeetingDraftRecoveryClear: () => set(state => ({
+    meetingDraftRecoveryClearToken: state.meetingDraftRecoveryClearToken + 1,
+    meetingDraftRecovery: initialMeetingDraftRecoveryState,
+  })),
 
   clearSaveFeedback: () => set({ lastSaveFeedback: null }),
 }));

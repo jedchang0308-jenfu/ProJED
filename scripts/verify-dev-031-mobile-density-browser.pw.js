@@ -105,7 +105,7 @@ async (page) => {
   const openApp = async () => {
     await setCoarsePointer();
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes }) => {
       localStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);

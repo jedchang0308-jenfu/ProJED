@@ -21,9 +21,9 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
   await seedSession();
-  await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=12', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=12', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
   await seedSession();
   await page.reload({ waitUntil: 'domcontentloaded' });

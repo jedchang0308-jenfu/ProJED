@@ -367,6 +367,30 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：Phase 1 任何 click、右鍵、快捷鍵、詳情、mobile gesture 或拖曳行為差異都必須停止；產品行為變更需另行 re-entry。
   - 證據：本檔 DEV-070、`SPEC-070`、`ADR-043`、`QA-DEV-070`、`SPEC-027B`、`SPEC-028`、`SPEC-029`。
   - 計入交付：否
+- ✓ DEV-071 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / 未 Release] 心智圖選取與明細入口差異
+  - 摘要：心智圖單擊任務只選取；雙擊或右鍵選單「開啟明細」才開啟任務明細；Enter／Tab 可建立任務但不自動開啟明細；其他模式維持既有單擊開明細。
+  - 來源 ID：`USER-20260818-MINDMAP-SELECTION-DETAILS`
+  - 父任務：DEV-070、DEV-027B、DEV-028
+  - 下一步：完成文件同步與 commit；不含 deploy／release。
+  - 阻塞 / 恢復條件：心智圖單擊誤開明細、雙擊／右鍵開錯任務、其他模式 menu 或單擊漂移時，回 RD 修 Host Mode Profile／surface adapter。
+  - 證據：`SPEC-070` DEV-071 addendum、`SPEC-028` DEV-071 addendum、`QA-DEV-071`、DEV-071 static/browser verifier、DEV-028 static/browser regression、TypeScript。
+  - 計入交付：否
+- ✓ DEV-072 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / 未 Release] 共用彈窗按鈕鍵盤導航
+  - 摘要：所有模式共用 `GlobalDialog` 的預設鍵盤互動；confirm／prompt 預設確認、action 預設第一個 action；左右鍵循環選擇，Enter 執行，prompt 輸入框保留原生游標左右鍵。
+  - 來源 ID：`USER-20260818-GLOBAL-DIALOG-KEYBOARD-NAVIGATION`
+  - 父任務：DEV-010、DEV-028、DEV-070
+  - 下一步：完成正式 release gate 前的整合驗證；本輪不含 deploy／release。
+  - 阻塞 / 恢復條件：若任一模式出現不同預設、Enter 執行錯誤按鈕、prompt 游標被攔截或按鍵穿透底層模式，回 RD 修正 `GlobalDialog` 共用契約，不在模式元件增加分支。
+  - 證據：`SPEC-072`、`QA-DEV-072`、DEV-072 static/browser verifier、DEV-028 regression、TypeScript、`build:test`。
+  - 計入交付：否
+- ✓ DEV-073 [開發點] [完成] [P1] [RD Implemented / Local QA-QC PASS / 未 Release] 心智圖 XMind 式快速命名
+  - 摘要：只有心智圖新增任務後或細滑鼠單擊既有任務會進入節點快速命名；可直接打字，按一次 Enter 只保存並離開、不新增任務，按一次 Tab 即保存並新增子任務。其他模式維持原本進入任務明細 title edit；心智圖雙擊與右鍵仍開任務明細。
+  - 來源 ID：`USER-20260818-TASK-TITLE-EDIT-DEFAULTS`
+  - 父任務：DEV-028、DEV-071、DEV-070
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 deploy／release。
+  - 阻塞 / 恢復條件：若新增／單擊入口未 focus title、Enter 誤新增任務、Tab 建立層級錯誤、IME 組字誤新增、單擊開 modal、雙擊被 quick-title 攔截、右鍵入口錯誤或權限／relationship／觸控邊界漂移，回 RD 修正 MindMap host adapter。
+  - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`。
+  - 計入交付：否
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -837,6 +861,109 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - QC 證據：DEV-070 57/57、baseline/after/diff 三 viewport、DEV-027B/028/029/053/054/055/067/068 required regression、TypeScript 與 `build:test` 均通過；詳見 `QA-DEV-070` 13.1。
 - 下一步：若要進入 release，先完成 Gate A～C 的 clean worktree、exact artifact、upstream/provenance、preview hash 與 rollback evidence；未完成前不得部署。
 - Execution Boundary：本輪完成 RD 修復與 local QA/QC；未執行 merge、deploy 或 release。`Functional PASS` 不等於 `Release Ready`。
+
+## DEV-071：心智圖選取與明細入口差異
+
+- 狀態：RD Implemented / Local QA-QC PASS / 未 Release
+- 節點類型：開發點
+- 父任務：DEV-070、DEV-027B、DEV-028
+- 是否計入產品交付完成：否
+- 原始需求邊界：`USER-20260818-MINDMAP-SELECTION-DETAILS`
+- 風險等級：Medium（心智圖主要互動入口與共用 task menu；不涉及資料模型、API、權限或後端）
+- 關聯規格：`SPEC-070` DEV-071 addendum、`SPEC-028` DEV-071 addendum
+- 驗證計畫：`QA-DEV-071-mindmap-selection-details.md`
+
+### 行為契約
+
+- 心智圖 `mindmap.node` 單擊：只選取節點，不開啟 `TaskDetailsModal`。
+- 心智圖 `mindmap.node` 雙擊：開啟同一節點的 `TaskDetailsModal`。
+- 心智圖右鍵：維持 task context menu，新增「開啟明細」；點擊後開啟右鍵事件快照所指向的任務。
+- 清單、看板、甘特、Workbench、Shared Sidebar 與 Calendar 不因本 DEV 改變既有單擊／選單行為。
+- 心智圖 Enter／Tab 仍建立同階／子任務並選取新任務，但不得自動開啟 `TaskDetailsModal`；方向鍵、relationship、drag、mobile pan-first 與 title edit 邊界不變。
+
+### 實作邊界
+
+- 只在 `mindmap` Host Mode Profile 宣告 `pointer.primary → task.select`、`pointer.double → task.open-details` 與 menu include `task.open-details`。
+- `task.select`、`task.open-details` 仍由共用 Action／Command facade 執行；不在 MindMapNode 複製明細或權限邏輯。
+- TaskActionMenu 支援 profile 明確 include 的 navigation action；預設模式不顯示「開啟明細」。
+- 不改 TaskNode、workspace、board、dependency、assignment、schema、migration、provider API 或 persisted interaction state。
+
+### 實際驗證結果
+
+- DEV-071 static verifier：PASS；mindmap primary=`task.select`、double=`task.open-details`、menu include=`task.open-details`；board primary/menu 維持原契約。
+- DEV-071 browser verifier：PASS；1440x900，心智圖單擊選取-only、Enter／Tab 新增後 modal 維持關閉、雙擊開明細、右鍵「開啟明細」開正確任務、看板單擊仍開明細；console error=0。
+- DEV-028 static regression：45/45 PASS。
+- TypeScript：`npm.cmd exec tsc -- --noEmit` PASS。
+- Test build：`npm.cmd run build:test` PASS；Vite 2012 modules，PWA service worker generated。
+- Execution Boundary：本輪未執行 merge、deploy 或 release；commit 需保留 DEV-069 與其他未分類 dirty changes 在提交範圍外。
+
+> 契約更新註記：DEV-073 曾暫時取消心智圖單擊 inline title edit；使用者本輪再次明確要求「僅心智圖」滑鼠單擊進入與新增後相同的 XMind 式 quick-title。現行 fine-pointer 單擊為選取 + quick-title；Enter 只保存並離開、不建立新任務，Tab 保存並建立子任務；雙擊／右鍵仍開明細，非心智圖仍維持詳情 title edit default。
+
+## DEV-072：共用彈窗按鈕鍵盤導航
+
+- 狀態：RD Implemented / Local QA-QC PASS / 未 Release
+- 節點類型：開發點
+- 父任務：DEV-010、DEV-028、DEV-070
+- 是否計入產品交付完成：否
+- 原始需求邊界：`USER-20260818-GLOBAL-DIALOG-KEYBOARD-NAVIGATION`
+- 風險等級：Medium（共用阻塞式 UI 與鍵盤焦點；不涉及資料模型、API、權限或各模式 task profile）
+- 關聯規格：`SPEC-072-global-dialog-keyboard-navigation.md`
+- 驗證計畫：`QA-DEV-072-global-dialog-keyboard-navigation.md`
+
+### 行為契約
+
+- 所有模式共用同一個 `GlobalDialog`，不在看板、清單、甘特、心智圖等模式重複設定。
+- `confirm` 開啟時預設聚焦「確認」；`action` 開啟時預設聚焦第一個 action；`prompt` 保持輸入框 focus 並選取既有文字。
+- `ArrowLeft`／`ArrowRight` 在決策按鈕間循環；`Enter` 執行目前聚焦按鈕；`Escape`／X 維持既有關閉回傳。
+- prompt 輸入框的左右鍵仍由原生文字編輯器處理，避免將游標移動誤判為按鈕導航。
+
+### 實作邊界
+
+- 變更集中於 `src/components/GlobalDialog.tsx`：focus group refs、初始焦點、capture keydown、循環索引、focus-visible ring 與穩定 DOM markers。
+- `useDialogStore` 的 `showConfirm`／`showPrompt`／`showActionDialog` 公開 API 與 result 型別不變。
+- 不改 `Interaction Kernel`、Host Mode Profile、任務點擊／右鍵／Enter／Tab 行為，不新增各模式 override。
+
+### 實際驗證結果
+
+- DEV-072 static verifier：PASS；共用 dialog marker、ARIA、confirm/action 預設索引、左右鍵、Enter、prompt caret guard 與 preventDefault 均存在。
+- DEV-072 browser verifier：PASS；1440x900 confirm dialog 預設聚焦「確認」，ArrowLeft + Enter 取消且不刪除，ArrowLeft／Right 可循環回到「確認」；console error=0。
+- DEV-028 static regression：PASS；TypeScript：PASS；`build:test`：PASS。
+- Execution Boundary：本輪未執行 merge、deploy 或 release；維持既有 dirty worktree，不將不相關變更納入本開發點。
+
+## DEV-073：心智圖 XMind 式快速命名（新增與滑鼠單擊）
+
+- 狀態：RD Implemented / Local QA-QC PASS / 未 Release
+- 節點類型：開發點
+- 父任務：DEV-028、DEV-071、DEV-070
+- 是否計入產品交付完成：否
+- 原始需求邊界：`USER-20260818-TASK-TITLE-EDIT-DEFAULTS`
+- 風險等級：Medium（心智圖新增／細滑鼠單擊 focus、雙擊仲裁、quick-title lifecycle、Enter／Tab 層級與非心智圖負向邊界；不涉及資料模型、API 或 provider）
+- 關聯規格：`SPEC-073-task-title-edit-defaults.md`；修訂 `SPEC-028`／`SPEC-070` 的 DEV-071 addendum 邊界
+- 驗證計畫：`QA-DEV-073-task-title-edit-defaults.md`
+
+### 行為契約
+
+- 心智圖 toolbar、Enter、Tab 新增任務後，使用 mindmap-local post-create adapter 掛載視覺低干擾的 quick-title input，自動 focus；使用者可直接打字且不開啟 `TaskDetailsModal`。
+- 清單、看板、甘特、Workbench、Shared Sidebar 等非心智圖模式維持 `TASK_DEFAULT_PROFILE['task.post-create'] → task.open-details-for-naming` 與既有 `prepareNewTaskNaming()`。
+- 心智圖 fine-pointer 單擊立即選取節點，經可取消的 240ms 雙擊判定窗後進入與 post-create 相同的 quick-title；自動 focus／全選既有名稱且不開 `TaskDetailsModal`。
+- quick-title 只貼合節點文字，不顯示右圖的滿版輸入框或藍色反白；輸入層不攔截指標事件，節點外層保持 draggable，兼具快速拖曳與快速命名。
+- 心智圖雙擊開啟同一任務明細；右鍵「開啟明細」維持既有入口。
+- quick-title 中按一次 Enter：提交目前名稱並離開 quick-title，不建立新任務；按一次 Tab：提交目前名稱、建立子任務、選取子任務並延續 quick-title focus，不需要先離開編輯模式。
+- blur 保存目前名稱並退出；Escape 取消目前 draft 且不新增；IME composition 期間 Enter 不觸發新增。key action 與 blur 必須具一次性 guard，避免重複提交或重複建立。
+
+### 實作邊界
+
+- 非心智圖共用 post-create 行為留在 interaction default profile 與既有 `prepareNewTaskNaming`；各模式不複製命名 command。
+- 心智圖差異集中於 `MindMapView` post-create／pointer-primary／continuation adapter 與 `MindMapNode` 可控 quick-title editor；共用 title commit／permission／data command，不把差異擴散到其他模式。
+- pointer-primary quick-title timer 在 selection、雙擊、右鍵、畫布點擊、relationship selection 與 unmount 時取消；coarse pointer、唯讀、relationship mode 與 drag 不進入 quick-title。
+- 不改 schema、API、權限模型、relationship／drag／direction keyboard、context menu snapshot 或雙擊 details command。
+
+### 實際驗證結果
+
+- DEV-073 static verifier：PASS；非心智圖 shared details naming、心智圖 quick-title continuation、IME guard、fine/coarse pointer split、click arbitration、double-click／menu wiring 均符合契約。
+- DEV-073 browser verifier：PASS；1440x900、0 console error；toolbar 建立後可直接輸入，Enter 一次保存並離開且不建立新任務，Tab 一次保存並建立子任務；細滑鼠單擊進入 quick-title、Escape 取消草稿，快速雙擊仍開正確明細，快速切換節點只由最新 selection 進入命名；quick-title 不滿版、反白透明、輸入層不攔 pointer 且節點仍 draggable。
+- DEV-028 static regression：45/45 PASS；TypeScript：PASS；`build:test`：PASS。
+- Execution Boundary：本輪未執行 merge、deploy 或 release；保留既有 dirty worktree。
 
 
 ## PM Update 歷史歸檔

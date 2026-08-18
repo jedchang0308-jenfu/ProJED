@@ -11,6 +11,8 @@ import {
   type ActivityEvent,
   type KnowledgeRecord,
   type KnowledgeRecordInput,
+  type MeetingDraftCheckpointInput,
+  type MeetingDraftCheckpointResult,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -18,6 +20,7 @@ import {
 } from '../types';
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
 import { getLocalTestProfileOverride } from './localTestProfileService';
+import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -841,6 +844,58 @@ export const localTestRecordService = {
       ...records.filter(item => item.id !== record.id),
     ]);
     return record;
+  },
+
+  checkpointDraft: async (workspaceId: string, boardId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    if (!input.record.id) throw new MeetingDraftCheckpointError('transient', '會議草稿缺少固定識別碼。');
+    const now = Date.now();
+    const records = readKnowledgeRecords();
+    const existing = records.find(record => record.id === input.record.id);
+    const existingRecovery = existing?.metadata?.projedDraftRecovery;
+    const existingSignature = existingRecovery && typeof existingRecovery === 'object' && !Array.isArray(existingRecovery)
+      ? (existingRecovery as { localSignature?: unknown }).localSignature
+      : undefined;
+    if (existing && existing.status !== 'draft') {
+      throw new MeetingDraftCheckpointError('conflict', '雲端紀錄已不是草稿，請選擇保留本機內容或使用雲端版本。');
+    }
+    if (existingSignature && input.remoteSignature && existingSignature !== input.remoteSignature) {
+      throw new MeetingDraftCheckpointError('conflict', '雲端紀錄已有其他版本，請選擇保留本機內容或使用雲端版本。');
+    }
+    const actorId = input.record.recordedBy ?? readCurrentLocalUserId();
+    const recordId = input.record.id;
+    const record: KnowledgeRecord = {
+      ...(existing || {}),
+      id: recordId,
+      workspaceId,
+      boardId,
+      type: 'meeting',
+      title: input.record.title,
+      content: input.record.content,
+      status: 'draft',
+      visibility: input.record.visibility,
+      participantsText: input.record.participantsText,
+      occurredAt: input.record.occurredAt,
+      startedAt: input.record.startedAt,
+      endedAt: input.record.endedAt,
+      recordedBy: input.record.recordedBy ?? actorId,
+      metadata: input.record.metadata,
+      createdBy: existing?.createdBy ?? actorId,
+      updatedBy: actorId,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      ragEnabled: false,
+      taskLinks: input.record.taskLinks.map((link, index) => ({
+        id: `${recordId}_link_${link.nodeId}_${link.role}_${index}`,
+        recordId,
+        workspaceId,
+        boardId,
+        nodeId: link.nodeId,
+        role: link.role,
+        createdAt: now,
+      })),
+    };
+    writeKnowledgeRecords([record, ...records.filter(item => item.id !== record.id)]);
+    return { recordId, confirmedAt: now, remoteSignature: input.localSignature };
   },
 
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {

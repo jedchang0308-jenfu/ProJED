@@ -1,20 +1,18 @@
 import React, { useCallback, useEffect } from 'react';
 import {
   BookOpenText,
-  BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
   ClipboardList,
   Columns,
   LineChart,
   ListChecks,
+  LockKeyhole,
   Menu,
   Network,
   Redo2,
-  SquarePen,
   Sparkles,
   Undo2,
-  UserPlus,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useUndoStore from '../store/useUndoStore';
@@ -23,7 +21,7 @@ import useRecordStore from '../store/useRecordStore';
 import { useMemberStore } from '../store/useMemberStore';
 import { useMeetingModeExitGuard } from '../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
-import { useCoarsePointer } from '../hooks/useCoarsePointer';
+import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
 import { cn } from '../utils/cn';
 import Sidebar from './Sidebar';
 import { GlobalContextMenu } from './GlobalContextMenu';
@@ -71,16 +69,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     isPanelCollapsed: isRecordPanelCollapsed,
     isMeetingMode,
     startMeetingRecord,
-    openNewRecord,
     isTaskSelectionMode,
   } = useRecordStore();
   const requestExitMeetingMode = useMeetingModeExitGuard();
   const guardRecordDraft = useRecordDraftGuard();
   const boardMemberCount = useMemberStore(state => state.boardMembers.length);
   const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
-  const [isSmallViewport, setIsSmallViewport] = React.useState(false);
   const [previewedPanel, setPreviewedPanel] = React.useState<PanelPreviewId | null>(null);
-  const isCoarsePointer = useCoarsePointer();
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
   const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
@@ -98,7 +94,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const isTaskFilterView = ['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView);
   const isSettingsScopeView = currentView === 'settings' || currentView === 'calendar_subscriptions';
   const isSystemPageView = isSettingsScopeView || currentView === 'records';
-  const isMobileBoardOnly = isCoarsePointer || isSmallViewport;
+  const isMobileBoardOnly = isMeetingRecordUnavailable;
   const canPreviewPanels = !isMobileBoardOnly;
   const mobileBlockedViews = React.useMemo(() => new Set<ViewMode>(['list', 'mindmap', 'gantt', 'calendar']), []);
 
@@ -138,6 +134,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, [isMobileBoardOnly, isSidebarOpen, setSidebarOpen]);
 
   const handleStartMeetingRecord = () => {
+    if (isMeetingRecordUnavailable) return;
     if (isMeetingMode) {
       void requestExitMeetingMode();
       return;
@@ -148,34 +145,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     });
   };
 
-  const handleStartWorkLog = () => {
-    void guardRecordDraft(() => openNewRecord('work_log'), {
-      title: '新增個人紀錄？',
-      message: '新增個人紀錄會開啟新的紀錄草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
-    });
-  };
-
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
-    { value: 'list', label: '清單', icon: <ListChecks size={13} /> },
-    { value: 'mindmap', label: '心智圖', icon: <Network size={13} /> },
-    { value: 'board', label: '看板', icon: <Columns size={13} /> },
-    { value: 'gantt', label: '甘特', icon: <LineChart size={13} /> },
+    { value: 'list', label: '清單模式', icon: <ListChecks size={13} /> },
+    { value: 'mindmap', label: '心智圖模式', icon: <Network size={13} /> },
+    { value: 'board', label: '看板模式', icon: <Columns size={13} /> },
+    { value: 'gantt', label: '甘特圖模式', icon: <LineChart size={13} /> },
     {
       value: 'calendar',
-      label: '日曆(開發中)',
+      label: '日曆模式',
       icon: <CalendarDays size={13} />,
       title: '日曆功能開發中，內容可能尚未穩定',
     },
   ];
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const query = window.matchMedia('(max-width: 640px)');
-    const updateSmallViewport = () => setIsSmallViewport(query.matches);
-    updateSmallViewport();
-    query.addEventListener?.('change', updateSmallViewport);
-    return () => query.removeEventListener?.('change', updateSmallViewport);
-  }, []);
-
   useEffect(() => {
     if (!isMobileBoardOnly || !activeWorkspace || !activeBoard) return;
     if (!mobileBlockedViews.has(currentView)) return;
@@ -380,31 +361,32 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
 
         <div
-          className="relative z-20 hidden shrink-0 items-center gap-1 rounded-lg sm:flex"
+          className="relative z-20 flex shrink-0 items-center gap-1 rounded-lg sm:gap-2"
           data-topbar-action-group="true"
         >
           {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
-            <button
-              type="button"
-              onClick={() => setShareDialogOpen(true)}
-              className={cn(
-                'btn-outline hidden h-7 shrink-0 px-2 text-xs sm:flex sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'hover:border-blue-400 hover:text-blue-600',
-              )}
-              title="分享看板"
-              data-board-share-open
-            >
-              <UserPlus size={14} className="text-slate-400" />
-              <span>分享</span>
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
-                {boardMemberCount}
-              </span>
-            </button>
+            <div className="hidden shrink-0 items-center sm:flex">
+              <button
+                type="button"
+                onClick={() => setShareDialogOpen(true)}
+                className={cn(
+                  'btn-outline h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+                  topbarClassNames.textButton,
+                  'hover:border-blue-400 hover:text-blue-600',
+                )}
+                title="分享看板"
+                data-board-share-open
+              >
+                <span>分享</span>
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
+                  {boardMemberCount}
+                </span>
+              </button>
+            </div>
           ) : null}
 
           <div className="hidden items-center gap-1 sm:flex sm:gap-2">
-          {isMeetingMode ? (
+          {!isMeetingRecordUnavailable && (isMeetingMode ? (
             <div
               role="status"
               data-active-record-kind="meeting"
@@ -443,26 +425,38 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               )}
               title="新增會議記錄，切到看板並開啟右側紀錄欄"
             >
-              <SquarePen size={14} className="text-slate-400" />
               <span className="hidden lg:inline">新增會議記錄</span>
             </button>
-          )}
+          ))}
 
           {!isMeetingMode && !isRecordOpen ? (
-            <button
-              type="button"
-              onClick={handleStartWorkLog}
-              className={cn(
-                'btn-outline flex h-7 shrink-0 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
-                topbarClassNames.textButton,
-                'hover:border-slate-400 hover:text-slate-700',
-              )}
-              title="新增個人紀錄開發中，內容可能尚未穩定"
-            >
-              <BriefcaseBusiness size={14} className="text-slate-400" />
-              <span className="hidden xl:inline">新增個人紀錄(開發中)</span>
-            </button>
+            <div className="group relative shrink-0">
+              <button
+                type="button"
+                aria-disabled="true"
+                aria-describedby="work-log-unavailable-tooltip"
+                data-work-log-unavailable="true"
+                onClick={(event) => event.preventDefault()}
+                className={cn(
+                  'btn-outline flex h-7 shrink-0 cursor-not-allowed px-2 text-xs sm:h-8 sm:px-3 sm:text-sm',
+                  topbarClassNames.textButton,
+                  'border-slate-200 bg-slate-50 text-slate-400',
+                )}
+              >
+                <LockKeyhole size={14} aria-hidden="true" />
+                <span className="hidden xl:inline">新增個人紀錄</span>
+              </button>
+              <div
+                id="work-log-unavailable-tooltip"
+                role="tooltip"
+                className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-max max-w-[220px] rounded-md border border-slate-200 bg-slate-800 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              >
+                個人紀錄功能目前尚未開放，敬請期待。
+              </div>
+            </div>
           ) : null}
+
+          </div>
 
           <button
             type="button"
@@ -472,12 +466,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               topbarClassNames.textButton,
               isRagOpen ? 'border-blue-400 bg-blue-50 text-blue-600' : 'hover:border-blue-400 hover:text-blue-600',
             )}
-            title="開啟 AI 全域分析"
+            title="問AI"
+            aria-label="問AI"
+            data-ai-analysis-open="true"
           >
             <Sparkles size={14} className={isRagOpen ? 'text-blue-500' : 'text-slate-400'} />
-            <span className="hidden lg:inline">AI 分析</span>
+            <span>問AI</span>
           </button>
-          </div>
         </div>
       </nav>
 

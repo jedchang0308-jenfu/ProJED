@@ -242,17 +242,20 @@ assert(
 );
 
 assert(
-  'mind map click opens details, supports explicit clear selection, and no longer exposes node-title rename gestures',
+  'mind map keeps shared select/double-details actions while DEV-073 host owns the quick-title exception',
   mindMapView.includes('openTaskDetails(nodeId)') &&
     mindMapView.includes('CLEAR_TASK_SELECTION_EVENT') &&
     mindMapView.includes('clearTaskSelection();') &&
     mindMapView.includes('initialSelectionBoardRef') &&
     mindMapView.includes('clearSelection();') &&
     mindMapView.includes('setContextMenuState({') &&
-    mindMapNode.includes('onOpenDetails(node.id)') &&
+    mindMapNode.includes("interactionBinding.dispatch('pointer.primary')") &&
+    mindMapNode.includes("interactionBinding.dispatch('pointer.double')") &&
+    mindMapNode.includes('data-mindmap-quick-title-input="true"') &&
+    mindMapView.includes('handleNodePointerPrimary') &&
     mindMapNode.includes('onOpenContextMenu(node.id') &&
     !mindMapNode.includes('data-mindmap-title-input') &&
-    !mindMapNode.includes('onDoubleClick') &&
+    mindMapNode.includes('onDoubleClick') &&
     !mindMapKeyboard.includes("type: 'rename-selected'") &&
     !mindMapKeyboard.includes("event.key === 'F2' && state.hasSelectedNode") &&
     !mindMapNode.includes('onRelationshipStart') &&
@@ -309,7 +312,9 @@ assert(
     browserVerifier.includes('selectedCount === 0') &&
     browserVerifier.includes('mindmap should clear selected node after closing details') &&
     browserVerifier.includes('blank click should clear mindmap selection') &&
-    browserVerifier.includes('single click should open TaskDetailsModal') &&
+    browserVerifier.includes('mindmap single click should select') &&
+    browserVerifier.includes('mindmap double click should open TaskDetailsModal') &&
+    browserVerifier.includes('data-task-action-id="task.open-details"') &&
     browserVerifier.includes('context menu should not expose task rename') &&
     browserVerifier.includes('data-task-details-title-input="true"'),
 );

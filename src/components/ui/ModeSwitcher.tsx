@@ -31,6 +31,7 @@ export function ModeSwitcher<T extends string>({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const activeOption = options.find(option => option.value === value) || options[0];
+  const activeModeLabel = activeOption?.label ?? '模式';
 
   const updateMenuPosition = React.useCallback(() => {
     const trigger = triggerRef.current;
@@ -100,8 +101,8 @@ export function ModeSwitcher<T extends string>({
         type="button"
         disabled={disabled}
         onClick={toggleMenu}
-        title={disabled ? disabledTitle : '檢視畫面'}
-        aria-label="檢視畫面"
+        title={disabled ? disabledTitle : activeModeLabel}
+        aria-label={activeModeLabel}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         data-mode-switcher-trigger="true"
@@ -112,7 +113,7 @@ export function ModeSwitcher<T extends string>({
         )}
       >
         {activeOption?.icon}
-        <span className="hidden lg:inline">檢視畫面</span>
+        <span className="hidden lg:inline">{activeModeLabel}</span>
         <ChevronDown size={12} className={cn('transition-transform duration-150', isOpen && 'rotate-180')} />
       </button>
 
@@ -126,7 +127,7 @@ export function ModeSwitcher<T extends string>({
         >
           <div className="grid h-9 grid-cols-[2rem_1fr_2rem] items-center border-b border-slate-100 px-2">
             <span aria-hidden="true" />
-            <div className="text-center text-xs font-bold text-slate-500">檢視畫面</div>
+            <div className="text-center text-xs font-bold text-slate-500">切換模式</div>
             <button
               type="button"
               onClick={() => {
@@ -134,7 +135,7 @@ export function ModeSwitcher<T extends string>({
                 triggerRef.current?.focus();
               }}
               className="inline-flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="關閉檢視畫面選單"
+              aria-label="關閉模式選單"
               data-mode-switcher-close="true"
             >
               <X size={15} />

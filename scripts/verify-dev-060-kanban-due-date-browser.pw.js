@@ -141,7 +141,7 @@ async (page) => {
 
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((fixedAccount) => {
       localStorage.setItem('projed-local-test.selected-account', fixedAccount.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({

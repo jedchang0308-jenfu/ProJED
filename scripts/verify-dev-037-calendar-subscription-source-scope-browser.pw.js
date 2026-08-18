@@ -36,9 +36,9 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -101,7 +101,7 @@ async (page) => {
     step = 'mobile viewport calendar settings';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => localStorage.setItem('projed-last-view', 'settings'));
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-settings-section-tab="calendar"]').click();

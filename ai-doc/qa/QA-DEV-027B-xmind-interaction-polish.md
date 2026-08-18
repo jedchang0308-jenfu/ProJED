@@ -25,6 +25,7 @@
 | ZT-027B-010 | 拖曳時沒有 insertion placeholder / intended connector / ghost node | drag hover screenshot + DOM metadata |
 | ZT-027B-011 | preview 顯示位置與 mouseup 後實際 parent/order/side 不一致 | pre-drop metadata + post-drop metadata |
 | ZT-027B-012 | 任一 viewport 顯示 runtime error、線條殘破、文字重疊、控制項裁切 | screenshot + visible error sweep |
+| ZT-027B-013 | 展開／收合控制仍位於任務欄內、未落在關係線交會點、平時常駐顯示，或誤觸發選取／拖曳 | DOM containment + default opacity + relationship-line hover + connector midpoint geometry + browser click trace |
 
 ## Manual UI Matrix
 
@@ -42,6 +43,8 @@
 | UI-027B-010 | 1440x900 | parent + 5 children | 線條為整齊 trunk / bracket，沒有孤立短線 |
 | UI-027B-011 | 1440x900 | 拖曳 child 到另一 root hover 300ms | insertion placeholder、connector preview、ghost node 明確顯示 |
 | UI-027B-012 | 390x844 | mobile viewport zoom out | toolbar 可用，無水平錯亂、無 visible error |
+| UI-027B-013 | 1440x900 / 1024x768 | 先觀察有子任務節點，再將滑鼠移入父子關係線感應區並點擊圓形 `+/-` 控制；另以 Tab 聚焦 | 控制項預設隱藏，hover 關係線後顯示；focus 時即使未 hover 仍可見；控制項位於父子關係線中點、節點欄位不含控制項、子群組可逆切換且無誤選取 |
+| UI-027B-014 | 390x844 | 進入心智圖的 mobile scope boundary | 依現行 mobile board-only 邊界不渲染心智圖；不得出現 visible runtime error，桌機契約不被誤套用 |
 
 ## Automated Verification Requirement
 
@@ -61,6 +64,7 @@ npm.cmd run verify:dev-027b-xmind-interaction-polish-browser
 - zoom connector endpoint alignment。
 - tidy connector trunk。
 - drag insertion preview fidelity。
+- 關係線上的 `+/-` 展開／收合控制預設隱藏、hover 顯示、focus 保持可見、位置、aria state、可逆切換與 viewport 對齊。
 
 ## QC Handoff Gate
 

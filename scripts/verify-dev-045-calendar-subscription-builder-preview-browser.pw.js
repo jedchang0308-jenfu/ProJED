@@ -20,15 +20,15 @@ async (page) => {
 
   const openPage = async (viewport, reset = false) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
     if (reset) {
-      await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=18&qcCalendarBoards=2', { waitUntil: 'domcontentloaded' });
+      await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=18&qcCalendarBoards=2', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
       await seedSession();
     }
     await page.evaluate(() => localStorage.setItem('projed-last-view', 'calendar_subscriptions'));
-    await page.goto('http://127.0.0.1:4173/?qcCalendarBoards=2', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/?qcCalendarBoards=2', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-calendar-subscription-local-preview="true"]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-calendar-subscription-preview-source-state="ready"]').waitFor({ state: 'visible', timeout: 15000 });

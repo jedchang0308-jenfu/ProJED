@@ -1,12 +1,14 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, Minus, Plus } from 'lucide-react';
 import type { TaskNode } from '../../types';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
+import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 
 export type MindMapDirection = 'left' | 'right';
 export type MindMapDropMode = 'before' | 'after' | 'child';
+export type MindMapQuickCreateIntent = 'sibling' | 'child';
 
 export interface MindMapDropTarget {
   nodeId: string;
@@ -24,7 +26,12 @@ interface MindMapNodeProps {
   isRelationshipModeActive?: boolean;
   showStartDate: boolean;
   canMoveTask: boolean;
+  isTitleEditing?: boolean;
+  onTitleEditCommit?: (nodeId: string, title: string) => void;
+  onTitleEditContinue?: (nodeId: string, title: string, intent: MindMapQuickCreateIntent) => void;
+  onTitleEditCancel?: (nodeId: string) => void;
   onSelect: (nodeId: string) => void;
+  onPointerPrimary: (nodeId: string) => void;
   onOpenDetails: (nodeId: string) => void;
   onOpenContextMenu: (nodeId: string, title: string, event: React.MouseEvent) => void;
   onToggleExpanded: (nodeId: string) => void;
@@ -54,7 +61,12 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   isRelationshipModeActive = false,
   showStartDate,
   canMoveTask,
+  isTitleEditing = false,
+  onTitleEditCommit,
+  onTitleEditContinue,
+  onTitleEditCancel,
   onSelect,
+  onPointerPrimary,
   onOpenDetails,
   onOpenContextMenu,
   onToggleExpanded,
@@ -72,6 +84,53 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   const hasChildren = childrenNodes.length > 0;
   const isLeft = direction === 'left';
   const hasVisibleDates = (showStartDate && node.startDate) || node.endDate;
+  const [titleDraft, setTitleDraft] = React.useState(node.title || '');
+  const titleInputRef = React.useRef<HTMLInputElement | null>(null);
+  const nodeTitleRef = React.useRef(node.title || '');
+  const titleEditActionHandledRef = React.useRef(false);
+  React.useEffect(() => {
+    nodeTitleRef.current = node.title || '';
+  }, [node.title]);
+  const interactionCommandDependencies = React.useMemo(() => ({
+    'task.select': () => isCoarsePointer ? onSelect(node.id) : onPointerPrimary(node.id),
+    'task.open-details': () => onOpenDetails(node.id),
+  }), [isCoarsePointer, node.id, onOpenDetails, onPointerPrimary, onSelect]);
+  const interactionBinding = useTaskInteractionBinding({
+    taskId: node.id,
+    title: node.title || '未命名任務',
+    surfaceId: 'mindmap.node',
+    origin: 'mode-primary',
+    commandDependencies: interactionCommandDependencies,
+  });
+  const commitTitleEdit = React.useCallback(() => {
+    if (titleEditActionHandledRef.current) return;
+    titleEditActionHandledRef.current = true;
+    onTitleEditCommit?.(node.id, titleDraft);
+  }, [node.id, onTitleEditCommit, titleDraft]);
+  const continueTitleEdit = React.useCallback((intent: MindMapQuickCreateIntent) => {
+    if (titleEditActionHandledRef.current) return;
+    titleEditActionHandledRef.current = true;
+    if (onTitleEditContinue) {
+      onTitleEditContinue(node.id, titleDraft, intent);
+      return;
+    }
+    onTitleEditCommit?.(node.id, titleDraft);
+  }, [node.id, onTitleEditCommit, onTitleEditContinue, titleDraft]);
+  const cancelTitleEdit = React.useCallback(() => {
+    if (titleEditActionHandledRef.current) return;
+    titleEditActionHandledRef.current = true;
+    onTitleEditCancel?.(node.id);
+  }, [node.id, onTitleEditCancel]);
+
+  React.useEffect(() => {
+    if (!isTitleEditing) return;
+    titleEditActionHandledRef.current = false;
+    setTitleDraft(nodeTitleRef.current);
+    window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  }, [isTitleEditing, node.id]);
   const formatDate = (value?: string) => {
     if (!value) return '';
     const date = dayjs(value);
@@ -97,15 +156,17 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           data-mindmap-node-direction={direction}
           data-mindmap-parent-id={node.parentId || ''}
           data-mindmap-node-order={node.order}
+          data-mindmap-inline-title-editing={isTitleEditing ? 'true' : 'false'}
           draggable={canMoveTask && !isCoarsePointer}
           {...touchTapGuard.handlers}
           onClick={(event) => {
             event.stopPropagation();
-            if (isRelationshipModeActive) {
-              onSelect(node.id);
-              return;
-            }
-            onOpenDetails(node.id);
+            void interactionBinding.dispatch('pointer.primary');
+          }}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+            if (isTitleEditing) commitTitleEdit();
+            void interactionBinding.dispatch('pointer.double');
           }}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -131,28 +192,56 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           data-touch-tap-guard="true"
           className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-primary-500 ring-2 ring-primary-100' : 'border-slate-200 hover:border-primary-300 hover:bg-primary-50/30'} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
         >
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleExpanded(node.id);
-              }}
-              className="flex h-[var(--mindmap-toggle-size)] w-[var(--mindmap-toggle-size)] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              title={isExpanded ? '收合分支' : '展開分支'}
-              data-mindmap-toggle
-            >
-              {isExpanded ? <ChevronDown size="var(--mindmap-toggle-icon-size)" /> : <ChevronRight size="var(--mindmap-toggle-icon-size)" className={isLeft ? 'rotate-180' : ''} />}
-            </button>
-          ) : (
-            <span className="h-[var(--mindmap-toggle-size)] w-[var(--mindmap-toggle-size)] shrink-0" aria-hidden="true" />
-          )}
-
           <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
             <span className="relative inline-block max-w-full">
-              <span className="block truncate" title={node.title || '未命名任務'}>
-                {node.title || '未命名任務'}
-              </span>
+              {isTitleEditing ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="invisible block max-w-full truncate whitespace-nowrap"
+                    data-mindmap-quick-title-layout-anchor="true"
+                  >
+                    {node.title || '未命名任務'}
+                  </span>
+                  <input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                      commitTitleEdit();
+                      onOpenDetails(node.id);
+                    }}
+                    onBlur={commitTitleEdit}
+                    onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing) return;
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        commitTitleEdit();
+                      } else if (event.key === 'Tab') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        continueTitleEdit('child');
+                      } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        cancelTitleEdit();
+                      }
+                    }}
+                    aria-label="快速命名任務"
+                    data-mindmap-inline-title-input="true"
+                    data-mindmap-quick-title-input="true"
+                    className="pointer-events-none absolute inset-0 block h-full w-full min-w-0 border-0 bg-transparent p-0 text-center text-inherit outline-none selection:bg-transparent selection:text-inherit"
+                  />
+                </>
+              ) : (
+                <span className="block truncate" title={node.title || '未命名任務'}>
+                  {node.title || '未命名任務'}
+                </span>
+              )}
             </span>
             {hasVisibleDates ? (
               <span
@@ -176,6 +265,38 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             ) : null}
           </span>
         </div>
+        {hasChildren ? (
+          <div
+            className="group absolute top-1/2 z-20 flex h-8 w-[var(--mindmap-node-gap)] -translate-y-1/2 items-center justify-center"
+            style={isLeft
+              ? { left: 'calc(0px - var(--mindmap-node-gap))' }
+              : { left: '100%' }}
+            data-mindmap-toggle-hover-target={node.id}
+          >
+            <span
+              aria-hidden="true"
+              className="absolute inset-0"
+              data-mindmap-toggle-hover-hitbox
+            />
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleExpanded(node.id);
+              }}
+              className="pointer-events-none relative flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 bg-white text-slate-500 opacity-0 shadow-sm transition-[opacity,color,border-color,background-color] duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:border-slate-600 hover:bg-slate-50 hover:text-slate-700 focus:pointer-events-auto focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-200"
+              title={isExpanded ? '收合分支' : '展開分支'}
+              aria-label={isExpanded ? '收合分支' : '展開分支'}
+              aria-expanded={isExpanded}
+              data-mindmap-toggle
+              data-mindmap-toggle-parent-id={node.id}
+            >
+              {isExpanded ? <Minus size="10" strokeWidth={2.5} /> : <Plus size="10" strokeWidth={2.5} />}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {hasChildren && isExpanded && (

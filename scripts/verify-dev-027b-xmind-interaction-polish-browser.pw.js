@@ -91,7 +91,20 @@ async (page) => {
   };
 
   const renameSelectedInTaskDetails = async (title, label) => {
-    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const modal = page.locator('[data-task-details-modal="true"]');
+    if ((await modal.count()) === 0) {
+      assert(
+        await selectedNode().count() === 1,
+        `${label} should keep the newly created node selected without opening task details`,
+      );
+      await page.waitForTimeout(120);
+      assert(
+        await modal.count() === 0,
+        `${label} should not open task details after keyboard insertion`,
+      );
+      await selectedNode().dblclick();
+    }
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
     await detailTitleInput().waitFor({ state: 'visible', timeout: 10000 });
     await page.waitForFunction(() => document.activeElement?.matches('[data-task-details-title-input="true"]'), null, { timeout: 3000 });
     const focused = await detailTitleInput().evaluate(element => document.activeElement === element);

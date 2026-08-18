@@ -11,8 +11,55 @@ Spec Impact：`DEV-070` 的產品契約維持 `No contract drift / behavior-pres
 | `ai-doc/decisions/ADR-043-cross-mode-interaction-policy-kernel.md` | Accepted / Implementation Contract Locked | DEV-070 | 採 App scope、Host／Origin 稀疏繼承、契約專屬 merge、deny-wins、open-time snapshot、single executor 與逐 binding migration。 |
 | `ai-doc/qa/QA-DEV-070-cross-mode-interaction-policy-kernel.md` | Execution Complete / Functional PASS / Release Gate Blocked | DEV-070 | 量化 FMEA、frozen fixture、artifact contract、57 項功能 cases、16 項 AC traceability、12 項 release overlay、runtime lifecycle、evidence owner、viewport、regression、Firebase preview／production provenance 與 rollback gate。 |
 | `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | Active Behavior Baseline / Unchanged | DEV-028 / DEV-070 | 現行 click-to-details、統一 task menu 與 detail-only title edit 契約；DEV-070 Phase 1 必須以 compatibility profile 完整保留。 |
-| `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md` | Partial Compatibility Baseline / Pre-existing Post-create Drift Logged | DEV-027B / DEV-070 | 保留心智圖 `Enter`／`Tab`、方向鍵與 selection-first keyboard flow；其舊「新增後只選取」文字與目前 `prepareNewTaskNaming()` runtime 不一致，DEV-070 只維持重構前 runtime，不藉重構修訂行為。 |
+| `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md` | Selection-first Keyboard Baseline / DEV-071 Runtime Alignment | DEV-027B / DEV-071 | 心智圖 `Enter`／`Tab` 建立後只選取新任務、不自動開啟明細；命名改由任務詳情 title edit 入口處理。 |
 | `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Active Mobile Gesture Authority | DEV-029 / DEV-070 | 保留手機短滑 pan-first、無位移 tap、長按 compact action rail 與危險操作確認；不得由 desktop profile 覆蓋。 |
+
+## Documentation Map Update - 2026-08-18（DEV-071 心智圖選取與明細入口差異）
+
+Spec Impact：`Intentional replacement`。本節記錄 DEV-071 當時將心智圖 `mindmap.node` 單擊改為 selection-only，並新增雙擊、右鍵「開啟明細」與鍵盤新增不開明細的歷史基線；看板、清單、甘特與其他 task origin 不變。現行單擊 side effect 已由下方 DEV-073 再次覆寫為 selection + quick-title，resolver 的 `task.select` 與明細入口仍沿用 DEV-071。
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / Local QA-QC PASS / 未 Release | DEV-071 | 記錄心智圖單擊 selection-only、雙擊／右鍵開明細、Enter／Tab 新增不開明細、Host Profile 邊界、證據與未 release 狀態。 |
+| `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md` | DEV-071 Product Re-entry Implemented / Local QA-QC PASS / 未 Release | DEV-070 / DEV-071 | 記錄 Intentional replacement、mindmap Host Mode Profile override、Action／Command 共用與非受影響模式 negative boundary。 |
+| `ai-doc/specs/SPEC-028-cross-mode-trello-like-task-interactions.md` | DEV-071 Addendum Implemented / Local QA-QC PASS | DEV-028 / DEV-071 | 修訂心智圖 node click／double-click／context menu／keyboard insertion 入口；清單、看板、甘特既有契約維持。 |
+| `ai-doc/qa/QA-DEV-071-mindmap-selection-details.md` | Execution Complete / Functional PASS / 未 Release | DEV-071 | FMEA、acceptance、static/browser evidence 與 regression boundary。 |
+| `scripts/verify-dev-071-mindmap-selection-details.ts`、`scripts/verify-dev-071-mindmap-selection-details-browser.pw.js` | Executed / PASS | DEV-071 | 驗證 resolver、menu、心智圖單擊／Enter／Tab／雙擊／右鍵明細與看板單擊不回歸。 |
+
+## Documentation Map Update - 2026-08-18（DEV-072 共用彈窗按鈕鍵盤導航）
+
+Spec Impact：`No conflict / shared default enhancement`。需求只增加共用 `GlobalDialog` 的鍵盤焦點與按鈕選擇預設，不改各模式的 task interaction profile；附圖視為 confirm dialog 的情境參考，不新增外部文件指令。Confirm／prompt／action 以同一個 component contract 提供初始焦點、左右鍵循環與 Enter 執行，避免每個模式重複設定。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / Local QA-QC PASS / 未 Release | DEV-072 | 記錄 shared default、focus／keyboard contract、實作邊界、FMEA 證據與 release boundary。 |
+| `ai-doc/specs/SPEC-072-global-dialog-keyboard-navigation.md` | Implemented / Local QA-QC PASS / 未 Release | DEV-072 | 固定 confirm／prompt／action 的預設焦點、左右鍵循環、Enter、Escape／X、prompt caret 與 non-goals。 |
+| `ai-doc/qa/QA-DEV-072-global-dialog-keyboard-navigation.md` | Execution Complete / Functional PASS / 未 Release | DEV-072 | FMEA、AC traceability、confirm browser smoke、prompt/action follow-up boundary 與 runtime lifecycle。 |
+| `src/components/GlobalDialog.tsx` | Implemented / Shared default | DEV-072 | 集中處理決策按鈕 focus group、左右鍵、Enter、focus-visible 與穩定 DOM marker；不新增 mode-specific 分支。 |
+| `scripts/verify-dev-072-global-dialog-keyboard-navigation.mjs`、`scripts/verify-dev-072-global-dialog-keyboard-navigation-browser.pw.js` | Executed / PASS | DEV-072 | 驗證 shared dialog static contract、confirm default focus、左右鍵循環與取消不執行 destructive action。 |
+
+## Documentation Map Update - 2026-08-18（DEV-073 心智圖 XMind 式快速命名）
+
+Spec Impact：`Intentional replacement / mindmap-only exception`。使用者將 XMind 式快速命名限定為心智圖，且明確把 fine-pointer 單擊既有任務納入相同狀態；清單、看板、甘特與其他模式維持既有詳情 title edit。心智圖雙擊／右鍵明細入口維持；toolbar／Enter／Tab 新增或 fine-pointer 單擊皆可直接打字，按一次 Enter 保存並離開且不新增，按一次 Tab 保存並建立子任務。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / Local QA-QC PASS / 未 Release | DEV-073 | 記錄 mindmap-only post-create／pointer quick-title、Enter 提交不新增、Tab 子任務延續、非心智圖 details naming、證據與 release boundary。 |
+| `ai-doc/specs/SPEC-073-task-title-edit-defaults.md` | Implemented / Local QA-QC PASS / 未 Release | DEV-073 | 固定只有心智圖新增與 fine-pointer 單擊進入 XMind 式快速命名；輸入覆蓋原標題槽，節點選取不放大／縮小且不裁切中文／全形字，保留拖曳，Enter 保存離開、Tab 建子任務，其他模式維持詳情 title edit。 |
+| `ai-doc/qa/QA-DEV-073-task-title-edit-defaults.md` | Execution Complete / Functional PASS / 未 Release | DEV-073 | FMEA、quick-title continuation／層級／IME／click-double-click 仲裁、視覺貼合／拖曳並存驗收、非心智圖負向邊界與 regression evidence。 |
+| `src/components/MindMap/MindMapNode.tsx`、`src/components/MindMap/MindMapView.tsx` | Implemented / Local QA-QC PASS | DEV-073 | 心智圖 fine-pointer 單擊 quick-title、雙擊 details、右鍵明細與新增後 continuation；其他模式未改。 |
+| `scripts/verify-dev-073-task-title-edit-defaults.mjs`、`scripts/verify-dev-073-task-title-edit-defaults-browser.pw.js` | Executed / PASS | DEV-073 | 驗證非心智圖 shared details naming、mindmap fine/coarse pointer boundary、雙擊仲裁、Enter 提交不新增、Tab 子任務延續、中文標題寬度與選取前後節點尺寸穩定及 focus。 |
+
+## Documentation Map Update - 2026-08-18（心智圖關係線展開／收合控制）
+
+Spec Impact：`Intentional replacement / mindmap connector control placement`。依使用者 XMind 參考圖，具子任務節點的展開／收合控制由任務欄移至父子關係線交會點；平時隱藏，滑鼠進入關係線感應區才顯示，鍵盤 focus 仍保持可見；資料、權限、拖曳與其他模式互動不變。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md` | UX Addendum / Local Implemented | DEV-027B | 定義圓形 `+/-` 控制、關係線中點對齊、預設隱藏／關係線 hover 顯示、aria/focus、可逆展開／收合與誤觸邊界。 |
+| `ai-doc/qa/QA-DEV-027B-xmind-interaction-polish.md` | Verification Addendum | DEV-027B | 新增關係線控制位置、containment、viewport 與可逆切換驗收。 |
+| `src/components/MindMap/MindMapNode.tsx`、`src/components/MindMap/mindMapGeometry.ts` | Implemented / Local Browser PASS | DEV-027B | 將 toggle 移出任務欄，讓 bracket trunk 以父子水平間距中點對齊控制項，並以關係線感應區控制預設隱藏／hover 顯示。 |
+| `scripts/verify-dev-073-task-title-edit-defaults.mjs`、`scripts/verify-dev-073-task-title-edit-defaults-browser.pw.js` | Executed / PASS | DEV-027B / DEV-073 | 驗證 toggle 不在 node bar 內、預設 opacity 隱藏、關係線 hover 顯示、關係線中點幾何、收合／展開可逆、既有 quick-title 與明細入口不回歸。 |
 
 ## Documentation Map Update - 2026-08-17（會議草稿 F5 復原與低成本雲端備份）
 

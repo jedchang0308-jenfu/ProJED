@@ -10,6 +10,7 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.promote', label: '提升階層', icon: 'corner-left-up', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.demote', label: '降為子任務', icon: 'corner-right-down', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.delete-request', label: '刪除任務', icon: 'trash-2', section: 'danger', kind: 'danger', capability: 'delete' },
+  { id: 'task.select', label: '選取任務', icon: 'mouse-pointer-2', section: null, kind: 'selection' },
   { id: 'task.open-details', label: '開啟詳情', icon: 'panel-right', section: null, kind: 'navigation' },
   { id: 'task.open-details-for-naming', label: '開啟詳情並命名', icon: 'panel-right', section: null, kind: 'navigation' },
   { id: 'task.switch-to-list', label: '切換至清單', icon: 'list-checks', section: null, kind: 'navigation' },
@@ -34,13 +35,17 @@ const menuActionIds = ACTION_CATALOG
 
 export const getTaskMenuActionIds = (profiles: readonly TaskInteractionProfile[] = []): readonly TaskActionId[] => {
   const included = new Set<TaskActionId>(menuActionIds);
+  const explicitlyIncluded = new Set<TaskActionId>();
   const excluded = new Set<TaskActionId>();
   for (const profile of profiles) {
-    for (const actionId of profile.menu?.include || []) included.add(actionId);
+    for (const actionId of profile.menu?.include || []) {
+      included.add(actionId);
+      explicitlyIncluded.add(actionId);
+    }
     for (const actionId of profile.menu?.exclude || []) excluded.add(actionId);
   }
   return ACTION_CATALOG
-    .filter(action => action.section !== null && included.has(action.id) && !excluded.has(action.id))
+    .filter(action => (action.section !== null || explicitlyIncluded.has(action.id)) && included.has(action.id) && !excluded.has(action.id))
     .map(action => action.id);
 };
 

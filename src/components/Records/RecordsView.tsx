@@ -5,6 +5,7 @@ import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { renderRecordContentAsPlainText } from '../../utils/recordContentMentions';
+import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
 
 const formatRecordType = (type: string) => (type === 'meeting' ? '會議紀錄' : '個人工作紀錄');
 
@@ -19,6 +20,11 @@ const RecordsView: React.FC = () => {
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const setView = useBoardStore(state => state.setView);
   const guardRecordDraft = useRecordDraftGuard();
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
+  const visibleRecords = React.useMemo(
+    () => isMeetingRecordUnavailable ? records.filter(record => record.type !== 'meeting') : records,
+    [isMeetingRecordUnavailable, records],
+  );
   const returnToBoard = () => setView(activeWorkspaceId && activeBoardId ? 'board' : 'home');
 
   const handleNewMeetingRecord = () => {
@@ -54,11 +60,11 @@ const RecordsView: React.FC = () => {
           <BookOpenText size={18} className="text-blue-500" />
           <div>
             <h1 className="text-sm font-semibold text-slate-900">紀錄庫</h1>
-            <p className="text-xs text-slate-500">會後查閱與整理會議紀錄/個人工作紀錄；開會主畫面請使用看板上的新增會議記錄入口。</p>
+            <p className="text-xs text-slate-500">{isMeetingRecordUnavailable ? '查閱與整理個人工作紀錄。' : '會後查閱與整理會議紀錄/個人工作紀錄；開會主畫面請使用看板上的新增會議記錄入口。'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          {!isMeetingRecordUnavailable ? <button
             type="button"
             onClick={handleNewMeetingRecord}
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -66,14 +72,14 @@ const RecordsView: React.FC = () => {
           >
             <Plus size={14} />
             補一筆會後紀錄
-          </button>
+          </button> : null}
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-5">
         {loading ? (
           <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">載入紀錄中...</div>
-        ) : records.length === 0 ? (
+        ) : visibleRecords.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center">
             <FileText size={24} className="mx-auto mb-2 text-slate-300" />
             <div className="text-sm font-semibold text-slate-700">尚無紀錄</div>
@@ -88,7 +94,7 @@ const RecordsView: React.FC = () => {
               <span className="text-right">任務</span>
             </div>
             <div className="divide-y divide-slate-100">
-              {records.map(record => {
+              {visibleRecords.map(record => {
                 const time = record.type === 'meeting'
                   ? record.occurredAt
                   : record.endedAt || record.startedAt;

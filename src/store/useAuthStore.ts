@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authService } from '../services/authService';
+import { clearMeetingDraftRecoveryForUser } from '../services/meetingDraftRecoveryService';
 import type { AuthStore } from '../types';
 
 const useAuthStore = create<AuthStore>((set) => ({
@@ -19,7 +20,9 @@ const useAuthStore = create<AuthStore>((set) => ({
   
   signOut: async () => {
     try {
+      const currentUserId = useAuthStore.getState().user?.uid;
       set({ loading: true, error: null });
+      if (currentUserId) await clearMeetingDraftRecoveryForUser(currentUserId);
       await authService.signOut();
       set({ user: null, loading: false });
     } catch (error: any) {

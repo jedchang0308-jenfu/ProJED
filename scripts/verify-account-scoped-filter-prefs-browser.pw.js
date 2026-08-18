@@ -143,7 +143,7 @@ async (page) => {
 
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     const fixedLogin = page.getByRole('button', { name: /使用固定測試環境/ });
     if (await fixedLogin.count()) {
       await fixedLogin.click();

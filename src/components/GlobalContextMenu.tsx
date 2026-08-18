@@ -451,6 +451,10 @@ export const GlobalContextMenu: React.FC = () => {
 
   const handleTaskAction = (actionId) => {
     switch (actionId) {
+      case 'task.open-details':
+        if (contextMenuState?.kind !== 'task') return;
+        selectAndOpenTaskDetails(contextMenuState.nodeId);
+        return closeContextMenu({ preserveTaskSelection: true });
       case 'task.create-sibling': return handleAddSibling();
       case 'task.create-child': return handleAddChild();
       case 'task.duplicate': return handleDuplicate();

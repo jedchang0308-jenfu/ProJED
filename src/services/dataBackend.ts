@@ -15,6 +15,8 @@ import {
   type Dependency,
   type KnowledgeRecord,
   type KnowledgeRecordInput,
+  type MeetingDraftCheckpointInput,
+  type MeetingDraftCheckpointResult,
   type TaskNode,
   type TaskTag,
   type Workspace,
@@ -526,6 +528,13 @@ export const recordService = {
       : isSupabaseBackend
       ? supabaseRecordService.upsert(workspaceId, boardId, input)
       : firestoreRecordService.upsert(workspaceId, boardId, input),
+
+  checkpointDraft: (workspaceId: string, boardId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> =>
+    isLocalTestBackend
+      ? localTestRecordService.checkpointDraft(workspaceId, boardId, input)
+      : isSupabaseBackend
+      ? supabaseRecordService.checkpointDraft(workspaceId, boardId, input)
+      : firestoreRecordService.checkpointDraft(workspaceId, boardId, input),
 
   delete: (workspaceId: string, boardId: string, recordId: string): Promise<void> =>
     isLocalTestBackend

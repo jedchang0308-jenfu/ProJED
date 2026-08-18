@@ -16,7 +16,7 @@ async (page) => {
     return page.locator('aside', { hasText: '會議速記' }).last();
   };
 
-  await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'networkidle' });
   await page.setViewportSize({ width: 1365, height: 768 });
 
   if (await page.locator('button', { hasText: '使用固定測試環境' }).count()) {

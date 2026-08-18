@@ -101,7 +101,7 @@ async (page) => {
 
   const openAppWithDenseMobileFixture = async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -179,7 +179,7 @@ async (page) => {
       }));
     });
 
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'networkidle' });
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
   };
 

@@ -255,7 +255,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }, lastView = 'board') => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seed(lastView);
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });

@@ -1,8 +1,9 @@
 import { requireFirebaseDb } from './firebase';
-import { 
-  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs
+import {
+  collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs, runTransaction
 } from 'firebase/firestore';
-import type { Workspace, Board, BoardMember, Dependency, KnowledgeRecord, KnowledgeRecordInput, TaskNode, TaskTag, WorkspaceMember } from '../types';
+import type { Workspace, Board, BoardMember, Dependency, KnowledgeRecord, KnowledgeRecordInput, MeetingDraftCheckpointInput, MeetingDraftCheckpointResult, TaskNode, TaskTag, WorkspaceMember } from '../types';
+import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 
 // ==========================
 // Helper: 處理 undefined 轉 deleteField()
@@ -308,6 +309,59 @@ export const recordService = {
     };
     await setDoc(recordRef, record);
     return record;
+  },
+
+  checkpointDraft: async (wsId: string, bId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    const db = requireFirebaseDb();
+    if (!input.record.id) throw new MeetingDraftCheckpointError('transient', '會議草稿缺少固定識別碼。');
+    const recordRef = doc(db, 'workspaces', wsId, 'boards', bId, 'records', input.record.id);
+    const now = Date.now();
+    await runTransaction(db, async transaction => {
+      const previous = await transaction.get(recordRef);
+      const existing = previous.exists() ? previous.data() as KnowledgeRecord : undefined;
+      const existingRecovery = existing?.metadata?.projedDraftRecovery;
+      const existingSignature = existingRecovery && typeof existingRecovery === 'object' && !Array.isArray(existingRecovery)
+        ? (existingRecovery as { localSignature?: unknown }).localSignature
+        : undefined;
+      if (existing && existing.status !== 'draft') {
+        throw new MeetingDraftCheckpointError('conflict', '雲端紀錄已不是草稿，請選擇保留本機內容或使用雲端版本。');
+      }
+      if (existingSignature && input.remoteSignature && existingSignature !== input.remoteSignature) {
+        throw new MeetingDraftCheckpointError('conflict', '雲端紀錄已有其他版本，請選擇保留本機內容或使用雲端版本。');
+      }
+      const recordId = recordRef.id;
+      const record: KnowledgeRecord = {
+        ...(existing || {}),
+        id: recordId,
+        workspaceId: wsId,
+        boardId: bId,
+        type: 'meeting',
+        title: input.record.title,
+        content: input.record.content,
+        status: 'draft',
+        visibility: input.record.visibility,
+        participantsText: input.record.participantsText,
+        occurredAt: input.record.occurredAt,
+        startedAt: input.record.startedAt,
+        endedAt: input.record.endedAt,
+        recordedBy: input.record.recordedBy,
+        metadata: input.record.metadata,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        ragEnabled: false,
+        taskLinks: input.record.taskLinks.map((link, index) => ({
+          id: `${recordId}_link_${link.nodeId}_${link.role}_${index}`,
+          recordId,
+          workspaceId: wsId,
+          boardId: bId,
+          nodeId: link.nodeId,
+          role: link.role,
+          createdAt: now,
+        })),
+      };
+      transaction.set(recordRef, record);
+    });
+    return { recordId: input.record.id, confirmedAt: now, remoteSignature: input.localSignature };
   },
 
   delete: async (wsId: string, bId: string, recordId: string): Promise<void> => {

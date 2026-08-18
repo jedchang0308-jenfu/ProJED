@@ -20,6 +20,8 @@ import type {
   Dependency,
   KnowledgeRecord,
   KnowledgeRecordInput,
+  MeetingDraftCheckpointInput,
+  MeetingDraftCheckpointResult,
   PermissionCapability,
   RecordTaskLink,
   TagColor,
@@ -32,6 +34,7 @@ import { isSupabaseConfigured, supabase } from './client';
 import type { ActivityEventRow, BoardInviteRow, BoardRolePermissionRow, DocumentRow, Json, KnowledgeRecordRow, ProjectMemberRow, ProjectRow, RecordTaskLinkRow, TaskTagRow, TenantMemberRow, TenantRow, WbsDependencyRow, WbsItemRow } from './database.types';
 import { hashBoardInviteToken } from '../../utils/boardInviteToken';
 import { RAG_EMBEDDING_PROVIDER } from '../rag/ragContract';
+import { MeetingDraftCheckpointError } from '../meetingDraftRecoveryService';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentSelection,
@@ -384,8 +387,18 @@ const mapKnowledgeRecord = (
   };
 };
 
+const workspaceResolutionCache = new Map<string, string>();
+const projectResolutionCache = new Map<string, string>();
+
+export const clearSupabaseResolutionCaches = () => {
+  workspaceResolutionCache.clear();
+  projectResolutionCache.clear();
+};
+
 export const resolveWorkspaceId = async (workspaceId: string): Promise<string> => {
   if (isUuid(workspaceId)) return workspaceId;
+  const cached = workspaceResolutionCache.get(workspaceId);
+  if (cached) return cached;
   const { data, error } = await supabase
     .from('tenants')
     .select('id')
@@ -393,11 +406,15 @@ export const resolveWorkspaceId = async (workspaceId: string): Promise<string> =
     .maybeSingle();
   assertNoError(error);
   if (!data?.id) throw new Error(`Supabase tenant not found for legacy workspace id: ${workspaceId}`);
+  workspaceResolutionCache.set(workspaceId, data.id);
   return data.id;
 };
 
 export const resolveProjectId = async (tenantId: string, projectId: string): Promise<string> => {
   if (isUuid(projectId)) return projectId;
+  const cacheKey = `${tenantId}:${projectId}`;
+  const cached = projectResolutionCache.get(cacheKey);
+  if (cached) return cached;
   const { data, error } = await supabase
     .from('projects')
     .select('id')
@@ -406,6 +423,7 @@ export const resolveProjectId = async (tenantId: string, projectId: string): Pro
     .maybeSingle();
   assertNoError(error);
   if (!data?.id) throw new Error(`Supabase project not found for legacy board id: ${projectId}`);
+  projectResolutionCache.set(cacheKey, data.id);
   return data.id;
 };
 
@@ -1706,6 +1724,58 @@ const knowledgeRecordToInsert = async (
   };
 };
 
+const checkpointRecordToInsert = (
+  tenantId: string,
+  projectId: string,
+  input: MeetingDraftCheckpointInput,
+): KnowledgeRecordInsert => {
+  const userId = isUuid(input.ownerUserId) ? input.ownerUserId : null;
+  return stripUndefinedForJson({
+    id: input.record.id,
+    tenant_id: tenantId,
+    project_id: projectId,
+    record_type: 'meeting',
+    title: input.record.title,
+    content: input.record.content,
+    participants_text: input.record.participantsText ?? null,
+    occurred_at: toIso(input.record.occurredAt),
+    started_at: toIso(input.record.startedAt),
+    ended_at: toIso(input.record.endedAt),
+    recorded_by: isUuid(input.record.recordedBy) ? input.record.recordedBy : userId,
+    status: 'draft',
+    visibility: input.record.visibility,
+    rag_enabled: false,
+    metadata: {
+      ...(input.record.metadata ?? {}),
+      projedDraftRecovery: {
+        schemaVersion: 1,
+        ownerUserId: input.ownerUserId,
+        workspaceId: input.workspaceId,
+        boardId: input.boardId,
+        localSignature: input.localSignature,
+        remoteSignature: input.remoteSignature,
+        meetingActivities: input.meetingActivities,
+        appendedMeetingActivityIds: input.appendedMeetingActivityIds,
+        checkpointedAt: Date.now(),
+      },
+    },
+    updated_by: userId,
+    created_by: userId,
+  }) as KnowledgeRecordInsert;
+};
+
+const toCheckpointError = (error: unknown): MeetingDraftCheckpointError => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
+  if (code === '23505' || /duplicate|unique/i.test(message)) {
+    return new MeetingDraftCheckpointError('conflict', '雲端已有同一筆草稿，請稍候重新載入後再試。');
+  }
+  if (/JWT|auth|permission|row-level security|not authenticated/i.test(message)) {
+    return new MeetingDraftCheckpointError('unauthorized', '登入狀態已失效，草稿仍保留在本機。');
+  }
+  return new MeetingDraftCheckpointError('transient', '雲端暫時無法保存，草稿仍保留在本機。');
+};
+
 export const supabaseRecordService = {
   listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> => {
     requireSupabase();
@@ -1843,6 +1913,47 @@ export const supabaseRecordService = {
     assertNoError(reloadError);
     if (!reloaded) throw new Error('Supabase did not return the saved knowledge record.');
     return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId);
+  },
+
+  checkpointDraft: async (workspaceId: string, boardId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    requireSupabase();
+    if (!input.record.id || !isUuid(input.record.id)) {
+      throw new MeetingDraftCheckpointError('transient', '會議草稿缺少可同步的固定識別碼。');
+    }
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const payload = checkpointRecordToInsert(tenantId, projectId, input);
+    try {
+      if (input.remoteSignature) {
+        const { data, error } = await supabase
+          .from('knowledge_records')
+          .update(payload)
+          .eq('tenant_id', tenantId)
+          .eq('project_id', projectId)
+          .eq('id', input.record.id)
+          .eq('status', 'draft')
+          .select('id')
+          .maybeSingle();
+        if (error) throw error;
+        if (!data?.id) throw new MeetingDraftCheckpointError('conflict', '雲端紀錄已變更，請選擇保留本機內容或使用雲端版本。');
+      } else {
+        const { data, error } = await supabase
+          .from('knowledge_records')
+          .insert(payload)
+          .select('id')
+          .single();
+        if (error) throw error;
+        if (!data?.id) throw new MeetingDraftCheckpointError('transient', '雲端沒有回傳草稿識別碼。');
+      }
+    } catch (error) {
+      if (error instanceof MeetingDraftCheckpointError) throw error;
+      throw toCheckpointError(error);
+    }
+    return {
+      recordId: input.record.id,
+      confirmedAt: Date.now(),
+      remoteSignature: input.localSignature,
+    };
   },
 
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {

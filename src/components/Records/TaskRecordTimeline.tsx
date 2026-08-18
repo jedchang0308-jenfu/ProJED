@@ -4,6 +4,7 @@ import { BookOpenText, CalendarClock, FileText, Plus, Search } from 'lucide-reac
 import useRecordStore from '../../store/useRecordStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
+import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
 import {
   extractTaskRecordSnippets,
   taskKnowledgeMatchesQuery,
@@ -33,13 +34,15 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
   const openExistingRecord = useRecordStore(state => state.openExistingRecord);
   const openNewRecord = useRecordStore(state => state.openNewRecord);
   const guardRecordDraft = useRecordDraftGuard();
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const [query, setQuery] = React.useState('');
   const detailNotes = node?.detailNotes ?? [];
   const relatedRecords = React.useMemo(
     () => records
+      .filter(record => !isMeetingRecordUnavailable || record.type !== 'meeting')
       .filter(record => record.taskLinks.some(link => link.nodeId === nodeId))
       .sort((a, b) => (getRecordTime(b) || b.updatedAt || 0) - (getRecordTime(a) || a.updatedAt || 0)),
-    [nodeId, records]
+    [isMeetingRecordUnavailable, nodeId, records]
   );
   const knowledgeRecords = React.useMemo(
     () => relatedRecords
@@ -88,7 +91,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
           <span>歷史資訊</span>
         </div>
         <div className="hidden items-center gap-2 md:flex" data-task-record-timeline-actions="true">
-          <button
+          {!isMeetingRecordUnavailable ? <button
             type="button"
             onClick={() => handleNewRecord('meeting')}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -96,7 +99,7 @@ const TaskRecordTimeline: React.FC<TaskRecordTimelineProps> = ({ nodeId }) => {
           >
             <Plus size={13} />
             補會後紀錄
-          </button>
+          </button> : null}
           <button
             type="button"
             onClick={() => handleNewRecord('work_log')}

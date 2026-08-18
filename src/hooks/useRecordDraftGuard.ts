@@ -22,6 +22,7 @@ export const useRecordDraftGuard = () => {
   const draftBaselineSignature = useRecordStore(state => state.draftBaselineSignature);
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const saveDraft = useRecordStore(state => state.saveDraft);
+  const requestMeetingDraftRecoveryClear = useRecordStore(state => state.requestMeetingDraftRecoveryClear);
   const showActionDialog = useDialogStore(state => state.showActionDialog);
 
   const isDirty = React.useMemo(() => {
@@ -86,15 +87,17 @@ export const useRecordDraftGuard = () => {
     if (choice === 'save_and_continue') {
       const saved = await saveDraft({ nodes });
       if (!saved) return false;
+      if (draft.type === 'meeting') requestMeetingDraftRecoveryClear();
       await action();
       return true;
     }
 
     if (choice === 'continue_without_saving') {
+      if (draft.type === 'meeting') requestMeetingDraftRecoveryClear();
       await action();
       return true;
     }
 
     return false;
-  }, [draft, isDirty, nodes, saveDraft, showActionDialog]);
+  }, [draft, isDirty, nodes, requestMeetingDraftRecoveryClear, saveDraft, showActionDialog]);
 };

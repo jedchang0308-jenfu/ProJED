@@ -56,9 +56,10 @@ const backlog = read(files.backlog);
 const documentationMap = read(files.documentationMap);
 
 assert(
-  'New task insertion selects and routes naming through task details',
+  'New task insertion selects and routes naming through the current host adapter',
   mindMapView.includes('selectNode(node.id)') &&
-    mindMapView.includes('prepareNewTaskNaming(node.id)') &&
+    mindMapView.includes('setInlineTitleEditNodeId(node.id)') &&
+    !mindMapView.includes('prepareNewTaskNaming(node.id)') &&
     !mindMapView.includes('setEditingNodeId(node.id)') &&
     !mindMapView.includes('setEditingTitle(node.title)') &&
     !mindMapView.includes('continuousInsertNodeIds') &&

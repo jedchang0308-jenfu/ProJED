@@ -25,6 +25,7 @@ export type TaskInteractionSurfaceId =
 
 export type InteractionTrigger =
   | 'pointer.primary'
+  | 'pointer.double'
   | 'pointer.secondary'
   | 'keyboard.enter'
   | 'keyboard.tab'
@@ -44,6 +45,7 @@ export type TaskTransientOwner = 'relationship' | 'dependency-selection' | 'reco
 export type TaskInteractionBlocker = 'drag-established' | 'resize-established';
 
 export type TaskActionId =
+  | 'task.select'
   | 'task.open-details'
   | 'task.open-details-for-naming'
   | 'task.switch-to-list'

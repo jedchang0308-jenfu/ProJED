@@ -34,9 +34,9 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1280, height: 820 });
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4173/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=18', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
     await page.reload({ waitUntil: 'domcontentloaded' });

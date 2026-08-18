@@ -4,6 +4,7 @@ import {
   CornerLeftUp,
   CornerRightDown,
   GitBranch,
+  PanelRight,
   Plus,
   Trash2,
   UserRound,
@@ -22,6 +23,7 @@ type TaskActionMenuProps = {
 };
 
 const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
+  'task.open-details': <PanelRight size={14} className="flex-shrink-0 text-indigo-500" />,
   'task.create-sibling': <Plus size={14} className="flex-shrink-0 text-sky-500" />,
   'task.create-child': <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />,
   'task.duplicate': <Copy size={14} className="flex-shrink-0 text-slate-500" />,
@@ -34,6 +36,7 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
 };
 
 const LABELS: Partial<Record<TaskActionId, string>> = {
+  'task.open-details': '開啟明細',
   'task.create-sibling': '新增並列任務',
   'task.create-child': '新增子任務',
   'task.duplicate': '複製任務',
@@ -67,58 +70,69 @@ export const TaskActionMenu = ({
 }: TaskActionMenuProps) => {
   const actionsBySection = new Map<string, TaskActionId[]>();
   for (const section of SECTION_ORDER) actionsBySection.set(section, []);
+  const navigationActions: TaskActionId[] = [];
   for (const action of getTaskActionCatalog()) {
-    if (!action.section || !actionIds.includes(action.id)) continue;
+    if (!actionIds.includes(action.id)) continue;
+    if (!action.section) {
+      navigationActions.push(action.id);
+      continue;
+    }
     actionsBySection.get(action.section)?.push(action.id);
   }
 
+  const renderAction = (actionId: TaskActionId) => {
+    const actionEnabled = enabled[actionId] !== false;
+    if (actionId === 'task.assign') {
+      return (
+        <React.Fragment key={actionId}>
+          <button
+            type="button"
+            onClick={onToggleAssignment}
+            disabled={!actionEnabled}
+            data-task-action-id={actionId}
+            className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            {ICONS[actionId]}
+            <span className="min-w-0 flex-1">
+              <span className="block">{actionLabel(actionId)}</span>
+              {assignmentSummary ? <span className="block truncate text-[11px] text-gray-400">{assignmentSummary}</span> : null}
+            </span>
+            <span aria-hidden="true" className={`text-gray-400 transition-transform ${assignmentOpen ? 'rotate-90' : ''}`}>›</span>
+          </button>
+          {assignmentOpen ? (
+            <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
+              {assignmentContent}
+            </div>
+          ) : null}
+        </React.Fragment>
+      );
+    }
+    return (
+      <button
+        key={actionId}
+        type="button"
+        onClick={() => void onAction(actionId)}
+        disabled={!actionEnabled}
+        title={TITLES[actionId]}
+        data-task-action-id={actionId}
+        className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.delete-request' ? 'text-red-600 hover:bg-red-50 dark:text-red-400' : 'text-gray-700 hover:bg-gray-100'}`}
+      >
+        {ICONS[actionId]}
+        <span>{actionLabel(actionId)}</span>
+      </button>
+    );
+  };
+
   return (
     <>
+      {navigationActions.map(renderAction)}
+      {navigationActions.length > 0 && SECTION_ORDER.some(section => (actionsBySection.get(section) || []).length > 0) ? (
+        <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+      ) : null}
       {SECTION_ORDER.flatMap((section, sectionIndex) => {
         const actions = actionsBySection.get(section) || [];
         if (actions.length === 0) return [];
-        const content = actions.map(actionId => {
-          const actionEnabled = enabled[actionId] !== false;
-          if (actionId === 'task.assign') {
-            return (
-              <React.Fragment key={actionId}>
-                <button
-                  type="button"
-                  onClick={onToggleAssignment}
-                  disabled={!actionEnabled}
-                  data-task-action-id={actionId}
-                  className="flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left text-gray-700 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  {ICONS[actionId]}
-                  <span className="min-w-0 flex-1">
-                    <span className="block">{actionLabel(actionId)}</span>
-                    {assignmentSummary ? <span className="block truncate text-[11px] text-gray-400">{assignmentSummary}</span> : null}
-                  </span>
-                  <span aria-hidden="true" className={`text-gray-400 transition-transform ${assignmentOpen ? 'rotate-90' : ''}`}>›</span>
-                </button>
-                {assignmentOpen ? (
-                  <div className="border-y border-gray-100 bg-gray-50/80 py-1 dark:border-gray-700 dark:bg-gray-900/30">
-                    {assignmentContent}
-                  </div>
-                ) : null}
-              </React.Fragment>
-            );
-          }
-          return (
-            <button
-              key={actionId}
-              type="button"
-              onClick={() => void onAction(actionId)}
-              disabled={!actionEnabled}
-              title={TITLES[actionId]}
-              data-task-action-id={actionId}
-              className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.delete-request' ? 'text-red-600 hover:bg-red-50 dark:text-red-400' : 'text-gray-700 hover:bg-gray-100'}`}
-            >
-              {ICONS[actionId]}
-              <span>{actionLabel(actionId)}</span>
-            </button>
-          );
-        });
+        const content = actions.map(renderAction);
         return [
           sectionIndex > 0 ? <div key={`${section}-divider`} className="my-1 border-t border-gray-100 dark:border-gray-700" /> : null,
           ...content,

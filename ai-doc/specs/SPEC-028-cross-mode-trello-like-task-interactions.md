@@ -272,6 +272,30 @@ ADR 判定:
 - 心智圖鍵盤/拖曳基線: `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md`
 - 心智圖關聯線基線: `ai-doc/specs/SPEC-027E-xmind-note-relationship-line-ux-parity.md`
 
+## DEV-071 心智圖選取與明細入口差異增補（2026-08-18）
+
+本增補由使用者明確要求，屬 `Intentional replacement`；只修訂心智圖節點的主要 pointer interaction，不改清單、看板、甘特、Workbench、Shared Sidebar 或 Calendar 的既有單擊契約。
+
+- 心智圖節點單擊改為「只選取」，不開啟任務明細。
+- 心智圖節點雙擊開啟該節點任務明細。
+- 心智圖右鍵任務選單新增「開啟明細」，點擊後開啟右鍵事件快照所指向的任務。
+- 心智圖 `Enter`／`Tab` 仍建立同階／子任務並選取新任務，但不得自動開啟 `TaskDetailsModal`；方向鍵、relationship／drag、mobile pan-first 與 detail-only title edit 不變。
+- 原本文內「心智圖單擊 = 選取 + 開詳情」只在本增補指定的 `mindmap.node` 例外下失效；其他模式仍依原契約驗收。
+- 驗證證據：`QA-DEV-071-mindmap-selection-details.md`、`scripts/verify-dev-071-mindmap-selection-details.ts`、`scripts/verify-dev-071-mindmap-selection-details-browser.pw.js`。
+
+## DEV-073 心智圖 XMind 式快速命名差異增補（2026-08-18）
+
+本增補記錄最新使用者決策：只有心智圖新增後與 fine-pointer 單擊既有任務會進入 XMind 式快速命名；清單、看板、甘特與其他模式維持既有 `TaskDetailsModal` title edit。DEV-071 的 `task.select` resolver 與雙擊／右鍵明細入口仍保留，但 selection-only side effect 已由本節覆寫；現行驗收以本節與 `SPEC-073` 為準。
+
+- 心智圖 toolbar、`Enter` 同階新增、`Tab` 子任務新增後，選取新節點並 focus 視覺低干擾的 quick-title input，可直接打字且不開啟 `TaskDetailsModal`。
+- quick-title 必須貼合節點文字、不滿版、不顯示藍色反白；輸入層不攔截 pointer，節點仍可拖曳。
+- quick-title 中按一次 `Enter` 會提交目前名稱並離開 quick-title，不建立新任務；按一次 `Tab` 會提交目前名稱並建立／選取子任務，延續 quick-title focus，不需要先退出編輯模式。
+- blur 保存並退出、`Escape` 取消且不新增；IME composition Enter 不建立任務，key action 與 blur 不得重複執行。空值 fallback 與權限沿用既有 command。
+- 非心智圖新增後仍使用 `task.open-details-for-naming` 與 `prepareNewTaskNaming()`，不得出現 mindmap quick-title editor。
+- 心智圖 fine-pointer 單擊立即選取並在可取消的雙擊判定窗後進入 quick-title；coarse pointer、唯讀、relationship 與 drag 維持 selection／專用行為，不進入 quick-title。
+- 雙擊與右鍵「開啟明細」維持既有明細入口；pending click request 不得攔截雙擊或指向 stale node。
+- 驗證證據：`QA-DEV-073-task-title-edit-defaults.md`、`scripts/verify-dev-073-task-title-edit-defaults.mjs`、`scripts/verify-dev-073-task-title-edit-defaults-browser.pw.js`。
+
 ## DEV-060 看板僅顯示到期日替代增補（2026-08-04）
 
 ### Spec Impact

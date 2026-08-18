@@ -9,10 +9,12 @@ import { useTagStore } from '../../store/useTagStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useMeetingModeExitGuard } from '../../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
+import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
 import { eventLogService } from '../../services/dataBackend';
 import { synthesizeMeetingRecord } from '../../services/meetingSynthesisService';
 import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDraftSignature, type MeetingWorkflowStepAction } from '../../utils/meetingRecordWorkflow';
 import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
+import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
 import type { KnowledgeRecord, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
 
@@ -642,6 +644,7 @@ const RecordSidebar: React.FC = () => {
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
   const guardRecordDraft = useRecordDraftGuard();
   const requestExitMeetingMode = useMeetingModeExitGuard();
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const [sidebarWidth, setSidebarWidth] = React.useState(readRecordSidebarWidth);
   const [isResizing, setIsResizing] = React.useState(false);
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
@@ -672,6 +675,7 @@ const RecordSidebar: React.FC = () => {
   const meetingSynthesisWarnings = useRecordStore(state => state.meetingSynthesisWarnings);
   const meetingSynthesisProvider = useRecordStore(state => state.meetingSynthesisProvider);
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
+  const meetingDraftRecovery = useRecordStore(state => state.meetingDraftRecovery);
   const draftBaselineSignature = useRecordStore(state => state.draftBaselineSignature);
   const setDraftTaskRole = useRecordStore(state => state.setDraftTaskRole);
   const enterTaskSelectionMode = useRecordStore(state => state.enterTaskSelectionMode);
@@ -694,6 +698,7 @@ const RecordSidebar: React.FC = () => {
     const handleOpenRecord = (event: Event) => {
       const detail = (event as CustomEvent<{ recordId?: string }>).detail;
       const record = records.find(item => item.id === detail?.recordId);
+      if (record?.type === 'meeting' && isMeetingRecordUnavailable) return;
       if (record) {
         void guardRecordDraft(() => openExistingRecord(record), {
           title: '開啟另一筆紀錄？',
@@ -703,7 +708,7 @@ const RecordSidebar: React.FC = () => {
     };
     document.addEventListener('open-knowledge-record', handleOpenRecord);
     return () => document.removeEventListener('open-knowledge-record', handleOpenRecord);
-  }, [guardRecordDraft, openExistingRecord, records]);
+  }, [guardRecordDraft, isMeetingRecordUnavailable, openExistingRecord, records]);
 
   React.useEffect(() => {
     sidebarWidthRef.current = sidebarWidth;
@@ -732,7 +737,7 @@ const RecordSidebar: React.FC = () => {
     setIsLinkedTasksOpen(false);
   }, [draft?.id]);
 
-  if (!isPanelOpen) return null;
+  if (!isPanelOpen || (isMeetingMode && isMeetingRecordUnavailable)) return null;
 
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
@@ -750,11 +755,32 @@ const RecordSidebar: React.FC = () => {
     lastSaveFeedback,
   });
   const meetingWorkflowSteps = getMeetingWorkflowStepActions(meetingActionState);
-  const compactMeetingRisk = meetingActivities.length > 0 && !meetingActionState.hasAiDraft && !meetingActionState.isPublished
-    ? `任務變更 ${meetingActivities.length} 筆需整理`
-    : meetingActionState.isDirty && !meetingActionState.isPublished
-      ? '未儲存'
-      : '已同步';
+  const meetingRecoveryStatus = meetingDraftRecovery.cloudStatus === 'conflict'
+    ? '雲端版本有衝突，請選擇保留本機或使用雲端'
+    : meetingDraftRecovery.cloudStatus === 'error'
+      ? String(meetingDraftRecovery.localStatus) === 'saved' || String(meetingDraftRecovery.localStatus) === 'degraded'
+        ? '本機已保存，雲端稍後重試'
+        : '本機保存狀態待確認'
+      : meetingDraftRecovery.cloudStatus === 'paused'
+        ? '本機已保存，雲端暫停 checkpoint'
+        : meetingDraftRecovery.cloudStatus === 'saving'
+          ? '本機已保存，雲端保存中…'
+          : meetingDraftRecovery.cloudStatus === 'saved'
+            ? '本機已保存，雲端已完成 checkpoint'
+            : String(meetingDraftRecovery.localStatus) === 'saving'
+              ? '本機保存中…'
+              : String(meetingDraftRecovery.localStatus) === 'degraded'
+                ? '本機部分保存，請保留此分頁'
+                : String(meetingDraftRecovery.localStatus) === 'error'
+                  ? '本機保存失敗，請勿關閉此分頁'
+                  : String(meetingDraftRecovery.localStatus) === 'saved'
+                    ? '本機已保存，等待雲端 checkpoint'
+                    : meetingActionState.isDirty
+                      ? '本機保存排程中…'
+                      : '等待輸入，尚未保存';
+  const visibleRecords = isMeetingRecordUnavailable
+    ? records.filter(record => record.type !== 'meeting')
+    : records;
   const isPublished = isMeetingDraft
     ? meetingActionState.isPublished
     : Boolean(
@@ -1191,15 +1217,23 @@ const RecordSidebar: React.FC = () => {
                     </div>
                   ) : null}
 
-                  {(meetingActionState.riskMessage || meetingActionState.isDirty) ? (
-                    <div
-                      className="mt-1.5 flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] leading-4 text-amber-800"
-                      title={meetingActionState.riskMessage ?? meetingActionState.exitWarning ?? ''}
-                    >
-                      <AlertTriangle size={11} className="shrink-0" />
-                      <span className="truncate">{compactMeetingRisk}</span>
-                    </div>
-                  ) : null}
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    data-meeting-draft-recovery-status
+                    className={cn(
+                      'mt-1.5 flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] leading-4',
+                      meetingDraftRecovery.cloudStatus === 'conflict' || meetingDraftRecovery.cloudStatus === 'error' || meetingDraftRecovery.localStatus === 'error'
+                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                        : 'border-slate-200 bg-slate-50 text-slate-600',
+                    )}
+                    title={meetingDraftRecovery.message ?? meetingActionState.riskMessage ?? meetingActionState.exitWarning ?? ''}
+                  >
+                    {meetingDraftRecovery.cloudStatus === 'conflict' || meetingDraftRecovery.cloudStatus === 'error' || meetingDraftRecovery.localStatus === 'error'
+                      ? <AlertTriangle size={11} className="shrink-0" />
+                      : null}
+                    <span className="truncate">{meetingRecoveryStatus}</span>
+                  </div>
                 </div>
               ) : (
                 <WorkLogWorkflowCard
@@ -1515,14 +1549,14 @@ const RecordSidebar: React.FC = () => {
               <div className="text-sm font-semibold text-slate-700">先選擇紀錄類型</div>
               <div className="mt-1 text-xs text-slate-500">這裡用來補一筆會後紀錄；個人工作紀錄請用上方全域入口建立。</div>
               <div className="mt-3">
-                <button
+                {!isMeetingRecordUnavailable ? <button
                   type="button"
                   onClick={handleGuardedNewMeetingRecord}
                   className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   <Plus size={13} />
                   補一筆會後紀錄
-                </button>
+                </button> : null}
               </div>
             </div>
           )}
@@ -1535,14 +1569,14 @@ const RecordSidebar: React.FC = () => {
               {loading ? <span className="text-[11px] text-slate-400">載入中</span> : null}
             </div>
             <div className="space-y-2">
-              {records.map(record => (
+              {visibleRecords.map(record => (
                 <RecordListItem
                   key={record.id}
                   record={record}
                   onOpen={() => handleGuardedOpenExistingRecord(record)}
                 />
               ))}
-              {!loading && records.length === 0 ? (
+              {!loading && visibleRecords.length === 0 ? (
                 <div className="rounded-md border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">
                   尚無紀錄
                 </div>

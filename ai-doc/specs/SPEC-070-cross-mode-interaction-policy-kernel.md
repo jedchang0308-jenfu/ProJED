@@ -704,3 +704,62 @@ DEV-070 verifier 必須至少輸出：
 ## 13. ADR Decision
 
 需要 ADR。Interaction Kernel、sparse cascading profiles、Semantic Action／Command 邊界與 interaction location 是長期跨模組架構決策，存在 scattered handlers、giant view switch、event bus／plugin engine 等有意義替代方案；採用理由與後果記錄於 `ADR-043`。
+
+## 14. DEV-071 Product Re-entry：心智圖選取與明細入口差異（2026-08-18）
+
+本節是使用者明確提出的產品行為 re-entry，分類為 `Intentional replacement`，不回溯改寫 DEV-070 Phase 1 的歷史零差異結果。受影響範圍只限 `hostMode=mindmap`、`origin=mode-primary`、`surfaceId=mindmap.node`；其他模式沿用原有 Compatibility Profile。
+
+### 14.1 行為契約
+
+| Trigger／入口 | 心智圖預期結果 | 其他模式預期結果 |
+|---|---|---|
+| `pointer.primary`（單擊） | `task.select`；節點保持 selected，不開 `TaskDetailsModal` | 維持既有預設，例如看板／清單／甘特開明細 |
+| `pointer.double`（雙擊） | `task.open-details`；開啟雙擊節點的 `TaskDetailsModal` | 不新增或改寫其他模式雙擊契約 |
+| `pointer.secondary`（右鍵） | task menu 額外包含 `task.open-details`，顯示「開啟明細」 | 既有 task menu action set 維持不變 |
+| `keyboard.enter`（選取節點後） | 建立同階任務、選取新任務，不自動開啟 `TaskDetailsModal` | 維持各模式既有快捷鍵契約 |
+| `keyboard.tab`（選取節點後） | 建立子任務、選取新任務，不自動開啟 `TaskDetailsModal` | 維持各模式既有快捷鍵契約 |
+
+### 14.2 架構與安全邊界
+
+- 差異只宣告在 `HOST_MODE_PROFILES.mindmap` 與心智圖鍵盤新增的 post-create effect boundary：`pointer.primary`、`pointer.double`、menu include，以及 Enter／Tab 建立後不開明細；不修改 Task Default 或 Base Profile。
+- `task.select`、`task.open-details` 共用既有 Action／Guard／Command facade；TaskActionMenu 只支援 profile 明確 include 的 navigation action，不複製 mutation／permission 邏輯。
+- 心智圖 relationship、drag、方向鍵、mobile pan-first、title edit 與 context target snapshot 不因本增補改變；Enter／Tab 只保留建立與選取，不再將新任務導向明細。
+- 不改 TaskNode、workspace、board、dependency、assignment、schema、migration、provider API、URL 或 persisted interaction state。
+
+### 14.3 Acceptance 與證據
+
+- `pointer.primary` resolver source layer 為 `host-mode` 且 action=`task.select`；`pointer.double` action=`task.open-details`。
+- Mindmap menu 包含 `task.open-details`，清單／看板預設 menu 不因本變更出現該項目。
+- 1440x900 rendered browser evidence：心智圖單擊選取-only、Enter／Tab 新增後 modal 維持關閉、雙擊開明細、右鍵「開啟明細」開正確任務；看板單擊仍開明細；console/page error=0。
+- Required regression：DEV-028 static 45/45、TypeScript；DEV-071 static/browser verifier 均 PASS。
+- 不含 deploy、merge、release；release overlay 仍依 DEV-070 Gate A～D 獨立判定。
+
+## 15. DEV-073 Product Re-entry：心智圖 XMind 式快速命名（2026-08-18）
+
+本節記錄最新使用者決策：只有心智圖 post-create 與 fine-pointer primary 進入 XMind 式 quick-title；其他模式維持原本的詳情 title edit。DEV-071 的 `pointer.primary → task.select` resolver 保留，但 selection-only side effect 被本節的 mindmap host adapter 有意覆寫；不回溯改寫 DEV-070 Phase 1 的歷史零差異結果。
+
+### 15.1 行為契約
+
+| Trigger／入口 | 非心智圖預期 | 心智圖額外差異 |
+|---|---|---|
+| `task.post-create` | 建立後執行 `task.open-details-for-naming`，focus `TaskDetailsModal` 任務名稱欄位 | toolbar／Enter／Tab 建立後掛載 quick-title input，focus 新節點且不開 `TaskDetailsModal`；直接輸入後 Enter 提交並離開、不新增，Tab 建子任務並延續 quick-title |
+| `pointer.primary`（滑鼠單擊） | 維持各 host profile 原有行為 | fine pointer：`task.select` 後以可取消的雙擊判定 timer 進入 quick-title，不開 `TaskDetailsModal`；coarse pointer／唯讀／relationship／drag 不進入 quick-title |
+| `pointer.double`（雙擊） | 不新增其他模式行為 | `task.open-details`，開啟同一節點 `TaskDetailsModal` |
+| `pointer.secondary`（右鍵） | 維持各模式 menu | 「開啟明細」維持既有 action snapshot |
+
+### 15.2 架構與安全邊界
+
+- 非心智圖 shared post-create default 留在 `TASK_DEFAULT_PROFILE` 與既有 `prepareNewTaskNaming`；不得在每個模式新增命名 command。
+- 心智圖差異集中於 `MindMapView` post-create／pointer-primary／continuation adapter 與 `MindMapNode` quick-title editor；共用 title commit／permission／data command，不把 quick-title 擴散到其他模式。
+- quick-title 的 rendered surface 必須貼合節點文字、不滿版、不顯示反白，且輸入層不攔截 pointer，保留節點 draggable 能力。
+- selected-node focus effect 在 quick-title 時不得再次 focus 外層節點，避免 blur 立即提交新任務預設名稱；Enter 提交並離開、Tab 建立子任務，兩者與 blur 都需有一次性 action guard，IME composition 期間不得建立任務。
+- pointer-primary quick-title request 使用單一可取消 timer（目前 240ms）保留雙擊 target；selection、雙擊、右鍵、畫布點擊、relationship selection 與 unmount 取消舊 request，避免 stale node 編輯。
+- relationship mode、coarse pointer、唯讀與 drag 邊界沿用 DEV-071／DEV-029，不得誤進 quick-title 或誤開明細。
+- 不改 TaskNode、workspace、board、dependency、assignment、schema、migration、provider API、URL 或 persisted interaction state。
+
+### 15.3 Acceptance 與證據
+
+- `TASK_DEFAULT_PROFILE['task.post-create']` 對非心智圖仍為 `task.open-details-for-naming`；非心智圖新增入口保留 shared naming adapter。
+- 1440x900 browser evidence：心智圖 fine-pointer 單擊選取並進入 quick-title、Escape 取消草稿且 modal=0；toolbar 新增可直接輸入，Enter 一次保存並離開且不建任務、Tab 一次保存並建子任務；快速雙擊／右鍵開正確明細；console error=0。
+- Required regression：DEV-028 static 45/45、TypeScript、`build:test` 與 DEV-073 static/browser verifier 均 PASS。
+- 不含 deploy、merge、release；正式交付仍依 release overlay 獨立判定。
