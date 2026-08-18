@@ -12,9 +12,6 @@ const GlobalDialog = () => {
     const actionsRef = useRef(actions);
     const [focusedDecisionIndex, setFocusedDecisionIndex] = useState(-1);
 
-    inputValueRef.current = inputValue;
-    actionsRef.current = actions;
-
     const decisionButtonCount = type === 'action' ? actions.length : 2;
     const defaultDecisionIndex = type === 'action' ? 0 : 1;
 
@@ -23,6 +20,16 @@ const GlobalDialog = () => {
         if (type === 'action') return actionsRef.current[index]?.id ?? null;
         return index === 1;
     };
+
+    // Keep mutable keyboard-result snapshots outside render so the global listener
+    // always reads the latest prompt text/action list without triggering ref lint errors.
+    useEffect(() => {
+        inputValueRef.current = inputValue;
+    }, [inputValue]);
+
+    useEffect(() => {
+        actionsRef.current = actions;
+    }, [actions]);
 
     // Focus the primary/default control on open. Prompt inputs keep their native text editing focus.
     useEffect(() => {
