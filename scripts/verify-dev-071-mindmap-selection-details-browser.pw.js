@@ -13,7 +13,7 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
   await page.evaluate((session) => {
     localStorage.setItem('projed-local-test.selected-account', session.id);
     localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -71,7 +71,7 @@ async (page) => {
   await node.dblclick();
   await modal.waitFor({ state: 'visible', timeout: 10000 });
   assert(await modal.getAttribute('data-task-id') === taskId, 'mindmap double click must open the selected task details', { taskId });
-  await modal.locator('button[title="關閉"]').click();
+  await modal.locator('button[aria-label="關閉任務詳情"]').click();
   await modal.waitFor({ state: 'hidden', timeout: 10000 });
 
   await node.click({ button: 'right' });
@@ -83,7 +83,7 @@ async (page) => {
   await openDetailsAction.click();
   await modal.waitFor({ state: 'visible', timeout: 10000 });
   assert(await modal.getAttribute('data-task-id') === taskId, 'context menu 開啟明細 must open the right task', { taskId });
-  await modal.locator('button[title="關閉"]').click();
+  await modal.locator('button[aria-label="關閉任務詳情"]').click();
   await modal.waitFor({ state: 'hidden', timeout: 10000 });
 
   await switchMode('board');

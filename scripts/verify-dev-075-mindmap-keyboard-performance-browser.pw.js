@@ -106,7 +106,7 @@ async (page) => {
   const openFixture = async (visibleNodeCount, viewport = { width: 1440, height: 900 }, routePhase = phase) => {
     await page.setViewportSize(viewport);
     const query = routePhase ? `?dev075Phase=${routePhase}` : '';
-    await page.goto(`http://127.0.0.1:4000/${query}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:4000/${query}`, { waitUntil: 'domcontentloaded' });
     await writeFixture(visibleNodeCount);
     await page.reload({ waitUntil: 'networkidle' });
     if (await page.locator('nav').count() === 0) {
@@ -411,7 +411,14 @@ async (page) => {
       'horizontal arrows must cross the board title in both directions without selecting the center',
       centerBridge,
     );
-    await page.locator('[data-mindmap-create-root]').click();
+    const createRootButton = page.locator('[data-mindmap-create-root]');
+    if (await createRootButton.count()) {
+      await createRootButton.click();
+    } else {
+      await page.locator('[data-mindmap-view]').focus();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Enter');
+    }
     const createdInteractionNode = page.locator('[data-mindmap-node][aria-selected="true"]').first();
     const interactionNodeId = await createdInteractionNode.getAttribute('data-mindmap-node');
     assert(Boolean(interactionNodeId), 'interaction fixture node must expose an ID');
@@ -442,7 +449,7 @@ async (page) => {
     await detailsTitleInput.press('ArrowDown');
     const selectedDuringModal = await page.locator('[data-mindmap-node][aria-selected="true"]').getAttribute('data-mindmap-node');
     const modalFocusRetained = await detailsTitleInput.evaluate(element => document.activeElement === element);
-    await detailsModal.locator('button[title="關閉"]').click();
+    await detailsModal.locator('button[aria-label="關閉任務詳情"]').click();
     await detailsModal.waitFor({ state: 'hidden', timeout: 10000 });
 
     const relationshipTarget = page.locator('[data-mindmap-note-relationship-click-target]').first();

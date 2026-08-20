@@ -5,7 +5,7 @@ async (page) => {
   const networkFailures = [];
   const screenshotBase = `output/playwright/dev-067-kanban-l1-drag-${Date.now()}`;
   const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
-  const appBaseUrl = currentPageOrigin || 'http://127.0.0.1:4000';
+  const appBaseUrl = currentPageOrigin || 'http://localhost:4000';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };

@@ -153,7 +153,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'networkidle' });
     try {
       await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 15000 });
@@ -383,7 +383,7 @@ async (page) => {
     step = 'unplaced-card-opens-details';
     await seededUnplacedCard.click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-task-details-modal="true"] button[title="關閉"]').click();
+    await page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'detached', timeout: 10000 });
 
     step = 'modal-create-entry';
@@ -393,7 +393,7 @@ async (page) => {
     const createdTaskTitleInput = createdTaskModal.locator('[data-task-details-title-input="true"]');
     assert(await createdTaskTitleInput.inputValue() === '新任務', 'modal-based unplaced task creation should open with the new title ready to edit');
     await createdTaskTitleInput.fill('臨時拜訪客戶');
-    await createdTaskModal.locator('button[title="關閉"]').click();
+    await createdTaskModal.locator('button[aria-label="關閉任務詳情"]').click();
     await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
     const newUnplacedCard = workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').filter({ hasText: '臨時拜訪客戶' }).first();
     await newUnplacedCard.waitFor({ state: 'visible', timeout: 10000 });

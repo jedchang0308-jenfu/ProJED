@@ -127,7 +127,7 @@ async (page) => {
   );
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
   await page.evaluate(({ account, workspace, nodes }) => {
     localStorage.clear();
     localStorage.setItem('projed-local-test.selected-account', account.id);
@@ -227,7 +227,7 @@ async (page) => {
     return task?.detailNotes?.[1]?.richContent?.editorState?.root?.children?.[0]?.children?.[0]?.format === 1;
   }, null, { timeout: 10000 });
   await secondEditor.press('Control+s');
-  await modal.locator('[data-task-details-save="true"]').getByText('已儲存', { exact: true }).waitFor({ state: 'visible', timeout: 5000 });
+  await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).waitFor({ state: 'visible', timeout: 5000 });
   await page.screenshot({ path: 'output/playwright/dev-066-task-note-desktop-1440.png', fullPage: true });
 
   if (await secondToolbar.count()) {

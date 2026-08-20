@@ -14,7 +14,6 @@ interface MindMapRelationshipInteractionLayerProps {
   editingRelationshipLabel: string;
   relationshipToolActive: boolean;
   relationshipLabelInputRef: React.RefObject<HTMLInputElement | null>;
-  getLocalLineSegmentStyle: (fromX: number, fromY: number, toX: number, toY: number) => React.CSSProperties;
   startRelationshipLabelEdit: (relationshipId: string) => void;
   startRelationshipPointerDrag: (
     event: React.PointerEvent<Element>,
@@ -39,7 +38,6 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
   editingRelationshipLabel,
   relationshipToolActive,
   relationshipLabelInputRef,
-  getLocalLineSegmentStyle,
   startRelationshipLabelEdit,
   startRelationshipPointerDrag,
   handleRelationshipHotkey,
@@ -184,22 +182,6 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
       {relationshipPaths.map(path => (
         selectedRelationshipId === path.id ? (
           <React.Fragment key={`relationship-html-handles-${path.id}`}>
-            <div
-              className="pointer-events-none absolute z-[41] h-0.5 origin-left rounded-full bg-sky-300"
-              style={{ ...getLocalLineSegmentStyle(path.fromX, path.fromY, path.c1X, path.c1Y), height: hitHeight(2) }}
-              data-mindmap-note-relationship-control-arm-overlay={path.id}
-              data-mindmap-note-relationship-screen-control-arm="from"
-              data-mindmap-note-relationship-coordinate-space="map-local"
-              data-relationship-id={path.id}
-            />
-            <div
-              className="pointer-events-none absolute z-[41] h-0.5 origin-left rounded-full bg-sky-300"
-              style={{ ...getLocalLineSegmentStyle(path.toX, path.toY, path.c2X, path.c2Y), height: hitHeight(2) }}
-              data-mindmap-note-relationship-control-arm-overlay={path.id}
-              data-mindmap-note-relationship-screen-control-arm="to"
-              data-mindmap-note-relationship-coordinate-space="map-local"
-              data-relationship-id={path.id}
-            />
             <button
               type="button"
               className="absolute z-[62] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
@@ -217,26 +199,6 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'to')}
               data-mindmap-note-relationship-endpoint="to"
               data-mindmap-note-relationship-screen-endpoint="to"
-              data-mindmap-note-relationship-coordinate-space="map-local"
-              data-relationship-id={path.id}
-            />
-            <button
-              type="button"
-              className="absolute z-[63] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
-              style={{ left: `${path.c1X}px`, top: `${path.c1Y}px`, width: hitHeight(24), height: hitHeight(24) }}
-              onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-1')}
-              data-mindmap-note-relationship-control-point="1"
-              data-mindmap-note-relationship-screen-control-point="1"
-              data-mindmap-note-relationship-coordinate-space="map-local"
-              data-relationship-id={path.id}
-            />
-            <button
-              type="button"
-              className="absolute z-[63] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
-              style={{ left: `${path.c2X}px`, top: `${path.c2Y}px`, width: hitHeight(24), height: hitHeight(24) }}
-              onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-2')}
-              data-mindmap-note-relationship-control-point="2"
-              data-mindmap-note-relationship-screen-control-point="2"
               data-mindmap-note-relationship-coordinate-space="map-local"
               data-relationship-id={path.id}
             />

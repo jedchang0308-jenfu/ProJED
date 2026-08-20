@@ -1,13 +1,13 @@
 param(
   [ValidateSet('baseline', 'after', 'diff')]
   [string]$Phase = 'after',
-  [string]$BaseUrl = 'http://127.0.0.1:4000/',
+  [string]$BaseUrl = 'http://localhost:4000/',
   [string]$OutputDirectory = 'output/playwright/dev-070'
 )
 
 $ErrorActionPreference = 'Stop'
-if ($BaseUrl -notmatch '^https?://127\.0\.0\.1:\d+/') {
-  throw 'DEV-070 browser verifier only accepts a loopback base URL.'
+if ($BaseUrl -notmatch '^https?://localhost:\d+/') {
+  throw 'DEV-070 browser verifier only accepts the canonical localhost base URL.'
 }
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 if ($Phase -eq 'baseline') {

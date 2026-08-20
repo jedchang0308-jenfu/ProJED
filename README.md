@@ -15,10 +15,16 @@ Start with:
 ```bash
 npm install
 npm run dev
+npm run dev:local
 npm run build
 npm run preview
 npm run lint
 ```
+
+The fixed local browser test environment is available at `http://localhost:4000/`.
+Use `npm run dev:local` to start or reuse the managed Vite test server. The server
+binds to loopback for local-only access; `localhost:4000` is the canonical URL for
+browser tests, auth callbacks, and local QA evidence.
 
 ## Supabase Migration
 

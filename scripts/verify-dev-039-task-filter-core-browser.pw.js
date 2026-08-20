@@ -126,7 +126,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'networkidle' });
     try {
       await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
@@ -341,8 +341,7 @@ async (page) => {
     await createdTaskModal.waitFor({ state: 'visible', timeout: 10000 });
     const createdTaskTitleInput = createdTaskModal.locator('[data-task-details-title-input="true"]');
     await createdTaskTitleInput.fill('臨時拜訪客戶');
-    await createdTaskModal.locator('[data-task-details-save="true"]').click();
-    await createdTaskModal.locator('button[title="關閉"]').click();
+    await createdTaskModal.locator('button[aria-label="關閉任務詳情"]').click();
     await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
     assert(
       await unclassifiedSection.locator('[data-task-workbench-unclassified-item="true"]').count() === 2,

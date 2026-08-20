@@ -7,6 +7,7 @@ import { supabaseTagService } from '../services/supabase/projedService';
 import useBoardStore from '../store/useBoardStore';
 import { useTagStore } from '../store/useTagStore';
 import type { TaskTag } from '../types';
+import { createCoalescedAsyncRefresh } from '../utils/coalescedAsyncRefresh';
 
 export function useTagSync() {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
@@ -51,23 +52,37 @@ export function useTagSync() {
 
       let cancelled = false;
       const loadSupabaseTags = async () => {
-        try {
-          const tags = await supabaseTagService.listByWorkspace(activeWorkspaceId);
-          if (!cancelled) setTags(tags);
-        } catch (error) {
-          console.error('[useTagSync] Supabase tag load error:', error);
-        }
+        const tags = await supabaseTagService.listByWorkspace(activeWorkspaceId);
+        if (!cancelled) setTags(tags);
       };
 
-      void loadSupabaseTags();
+      const tagRefresh = createCoalescedAsyncRefresh(loadSupabaseTags, {
+        onError: error => console.error('[useTagSync] Supabase tag load error:', error),
+      });
+      tagRefresh.request({ immediate: true });
+
       const channel = supabase
         .channel(`projed-tags-${activeWorkspaceId}-${activeBoardId || 'workspace'}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'task_tags' }, () => void loadSupabaseTags())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'wbs_item_tags' }, () => void loadSupabaseTags())
-        .subscribe();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'task_tags' }, () => tagRefresh.request())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'wbs_item_tags' }, () => tagRefresh.request())
+        .subscribe((status, error) => {
+          if (status === 'SUBSCRIBED') tagRefresh.request({ immediate: true });
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[useTagSync] Supabase realtime channel error:', error ?? status);
+          }
+        });
+
+      const refreshVisibleTags = () => {
+        if (document.visibilityState === 'visible') tagRefresh.request({ immediate: true });
+      };
+      window.addEventListener('online', refreshVisibleTags);
+      document.addEventListener('visibilitychange', refreshVisibleTags);
 
       return () => {
         cancelled = true;
+        tagRefresh.cancel();
+        window.removeEventListener('online', refreshVisibleTags);
+        document.removeEventListener('visibilitychange', refreshVisibleTags);
         void supabase.removeChannel(channel);
       };
     }

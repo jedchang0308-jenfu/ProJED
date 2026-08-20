@@ -18,7 +18,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -60,7 +60,14 @@ async (page) => {
   };
 
   const createRoot = async (title) => {
-    await page.locator('[data-mindmap-create-root]').click();
+    const createRootButton = page.locator('[data-mindmap-create-root]');
+    if (await createRootButton.count()) {
+      await createRootButton.click();
+    } else {
+      await page.locator('[data-mindmap-view]').focus();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Enter');
+    }
     await selectedNode().waitFor({ state: 'visible', timeout: 10000 });
     assert((await page.locator('[data-mindmap-title-input]').count()) === 0, 'new root should be selected without opening rename input');
     await renameSelectedByTyping(title);

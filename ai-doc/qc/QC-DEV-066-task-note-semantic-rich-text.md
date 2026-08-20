@@ -2,8 +2,15 @@
 
 - 關聯：DEV-066、SPEC-066、ADR-042、QA-DEV-066
 - 執行日期：2026-08-12
-- 結論：PASS
+- 結論：Historical PASS（Rework 1～3）；Rework 4 尚未執行，非目前 release acceptance
 - Release：未執行；本輪沒有部署授權
+
+## Evidence Validity Notice（2026-08-20）
+
+- 使用者已明確以 Rework 4 取代舊手機 zero-editor／append-only 契約：手機與電腦應共用同一個既有 Lexical 任務備註 editor，不新增手機專用模組，並完全移除「追加文字」區塊。
+- 本報告中的 390px `0 editor／0 format toggle／append preservation` 是 2026-08-12 舊契約的真實歷史證據，保留不可改寫，但不再能證明目前 SPEC-066／QA-DEV-066 的 Rework 4 acceptance。
+- desktop toolbar、canonical rich state、plain compatibility alias、AI safe projection、legacy compatibility 與既有 regression 結果可作為 Rework 4 baseline；手機直接編輯、touch selection、soft keyboard、responsive toolbar 與 append UI absence 必須在 RD 完成後另行驗證。
+- Rework 4 尚未實作或 QC；在新增實測結果前，本文件不得被引用為 DEV-066 目前版本 `QC PASS` 或 release-ready 證據。
 
 ## 交付結果
 

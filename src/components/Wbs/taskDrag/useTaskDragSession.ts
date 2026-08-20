@@ -494,6 +494,10 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     cancelWithReason('manual', event);
   }, [cancelWithReason]);
 
+  const cancelForGestureConflict = React.useCallback(() => {
+    cancelWithReason('multitouch');
+  }, [cancelWithReason]);
+
   const activateAction = React.useCallback<MobileTaskActionContextValue['activateAction']>((action) => {
     const activeState = stateRef.current;
     if (!activeState || hasTerminated(activeState.sessionId)) return;
@@ -651,6 +655,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     state,
     contextValue,
     cancel,
+    cancelForGestureConflict,
     activateAction,
   };
 };

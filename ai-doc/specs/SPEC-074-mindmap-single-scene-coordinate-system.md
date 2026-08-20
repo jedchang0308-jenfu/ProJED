@@ -34,7 +34,7 @@
 - `Ctrl`／`Meta` + wheel：保留指標位置作為縮放錨點。
 - 工具列 `+`／`-`／`100%`：維持現行 behavior-compatible 基線，提交後置中可見內容。
 - 「符合內容」：依可見 world bounds 計算倍率並置中；保留現行 0.86 安全係數與 25%～400% 範圍。
-- 中鍵 pan、一般 scroll、選取、relationship mode、drag、quick-title、鍵盤與 context menu 語意不變。
+- 中鍵 velocity pan 保留；DEV-076 另在 fine-pointer 空白畫布新增左鍵 direct pan。兩者都只修改唯一 viewport scroll；一般 scroll、選取、relationship mode、drag、quick-title、鍵盤與 context menu 其餘語意不變。
 
 使用思考習慣：#設計思考、#可驗證性
 
@@ -249,7 +249,7 @@ worldY = (clientY - viewportRect.top  + viewport.scrollTop  - translateY) / scal
 
 不得標記 geometry dirty 的事件：
 
-- 純 zoom、scroll、middle-mouse pan、pointer anchored preview 或 toolbar zoom commit。
+- 純 zoom、scroll、middle-mouse pan、DEV-076 left-mouse canvas pan、pointer anchored preview 或 toolbar zoom commit。
 - 只改 hover、focus、selected ring、線條顏色或不影響 bounds 的狀態。
 
 Scheduler 契約：
@@ -312,7 +312,7 @@ export type MindMapGeometryDirtyReason =
 
 - 建立 viewport／stageSizer／scene 與單一 coordinate mapper contract。
 - 將 hierarchy connector、note relationship、label、handles、hit targets、inline editor、drag connector 與 insertion preview 收斂到 scene world coordinates。
-- 將 zoom／fit／center／pan 改為 matrix + stage bounds，移除 content CSS `zoom`。
+- 將 zoom／fit／center／pan 改為 matrix + stage bounds，移除 content CSS `zoom`；DEV-076 左鍵 pan 仍由 viewport scroll 表達。
 - 將 geometry lifecycle 改為 dirty-latch + coalesced frame，純 zoom／pan 不重算 path。
 - 保留現有 toolbar、wheel、middle pan、interaction、permission 與資料行為。
 - 建立 unit、static 與 rendered browser geometry evidence。
@@ -470,7 +470,7 @@ npm.cmd run build:test
 
 - `+／-／100%` 記錄目前可見 content bounds center 為 world anchor，使用 viewport center 作 client anchor，再走同一 zoom intent。
 - fit 直接以未縮放 world bounds 計算 `clamp(min(viewportWidth/bounds.width, viewportHeight/bounds.height) * 0.86)`，再以 bounds center 置中。
-- middle pan 與 scroll 只改 viewport scroll；不改 scene transform state，不 dirty geometry。
+- middle pan、DEV-076 left pan 與 scroll 只改 viewport scroll；不改 scene transform state，不 dirty geometry。
 
 ### 18.3 Layout mutation
 

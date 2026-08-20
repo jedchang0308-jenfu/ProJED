@@ -102,23 +102,18 @@ assert(
 );
 
 assert(
-  'Selected relationships expose Xmind-like endpoint and Bezier control handles',
+  'Selected relationships keep endpoints while omitting redlined Bezier control visuals',
     mindMapView.includes('startRelationshipPointerDrag') &&
     mindMapView.includes("handle: RelationshipPointerDragState['handle']") &&
     mindMapView.includes('const handle = relationshipPointerDrag.handle;') &&
-    mindMapView.includes("handle === 'control-1' || handle === 'control-2'") &&
     relationshipInteraction.includes('data-mindmap-note-relationship-endpoint="from"') &&
     relationshipInteraction.includes('data-mindmap-note-relationship-endpoint="to"') &&
-    relationshipOverlay.includes('data-mindmap-note-relationship-control-arm="from"') &&
-    relationshipOverlay.includes('data-mindmap-note-relationship-control-arm="to"') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-control-arm-overlay') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-arm="from"') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-arm="to"') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-point="1"') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-point="2"') &&
     relationshipInteraction.includes('rounded-full border-2 border-sky-500') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-control-point="1"') &&
-    relationshipInteraction.includes('data-mindmap-note-relationship-control-point="2"'),
+    !relationshipOverlay.includes('data-mindmap-note-relationship-control-arm=') &&
+    !relationshipOverlay.includes('data-mindmap-note-relationship-svg-control-point=') &&
+    !relationshipInteraction.includes('data-mindmap-note-relationship-control-point=') &&
+    !relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-arm=') &&
+    !relationshipInteraction.includes('data-mindmap-note-relationship-screen-control-point='),
 );
 
 assert(
@@ -174,7 +169,7 @@ assert(
 );
 
 assert(
-  'Browser verifier covers inline edit, selection, style, handles, reconnect, shortcut, right-click, and zoom',
+  'Browser verifier covers inline edit, selection, style, endpoint, redline cleanup, reconnect, shortcut, right-click, and zoom',
   browserVerifier.includes('inline relationship editor should open without a prompt') &&
     browserVerifier.includes('draft relationship preview should follow the cursor in the map-local zoom layer before selecting endpoint') &&
     browserVerifier.includes('data-mindmap-note-relationship-draft-coordinate-space') &&
@@ -182,8 +177,8 @@ assert(
     browserVerifier.includes('clicking the line body should select the relationship') &&
     browserVerifier.includes('relationship style panel should be visible') &&
     browserVerifier.includes('relationship style controls should render as a right drawer instead of a floating popover') &&
-    browserVerifier.includes('selected relationship adjustment control points should be visibly sized on screen') &&
-    browserVerifier.includes('dragging a control point should update Bezier geometry') &&
+    browserVerifier.includes('selected relationship should omit redlined control arms, guides, and square points') &&
+    browserVerifier.includes('editing a relationship label should not restore redlined control elements') &&
     browserVerifier.includes('dragging endpoint to another task should reconnect the note relationship') &&
     browserVerifier.includes('Ctrl+Shift+R should start note relationship mode') &&
     browserVerifier.includes('right-clicking a task should open the task menu and should not start note relationship mode') &&

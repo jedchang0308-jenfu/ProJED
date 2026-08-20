@@ -2,7 +2,7 @@
 async (page) => {
   const diagnostics = [];
   const httpFailures = [];
-  const appBaseUrl = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://127.0.0.1:4000';
+  const appBaseUrl = page.url().match(/^https?:\/\/[^/]+/)?.[0] || 'http://localhost:4000';
   const screenshotBase = 'output/playwright/dev-069';
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);

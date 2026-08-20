@@ -73,9 +73,9 @@ async (page) => {
 
   const openApp = async (viewport = { width: 390, height: 844 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();

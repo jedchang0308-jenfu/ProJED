@@ -50,7 +50,7 @@ async (page) => {
 
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(account => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -120,7 +120,7 @@ async (page) => {
     const details = page.locator('[data-task-details-modal="true"]');
     await details.waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: screenshots.details, fullPage: false });
-    await details.locator('button[title="關閉"]').click();
+    await details.locator('button[aria-label="關閉任務詳情"]').click();
     await details.waitFor({ state: 'detached', timeout: 10000 });
 
     await switchMode('mindmap');

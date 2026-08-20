@@ -76,7 +76,7 @@ async (page) => {
   };
 
   const seed = async ({ activityEvents = [] } = {}) => {
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ account, workspace, nodes, activityEvents }) => {
       localStorage.clear();
       localStorage.setItem('projed-local-test.selected-account', account.id);
@@ -94,7 +94,7 @@ async (page) => {
       localStorage.setItem('projed-last-view', 'board');
     }, { account, workspace, nodes, activityEvents });
 
-    await page.goto('http://127.0.0.1:4000/?dev024=1', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?dev024=1', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('nav button', { hasText: '新增會議記錄' }).waitFor({ state: 'visible', timeout: 10000 });

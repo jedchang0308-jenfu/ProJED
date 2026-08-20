@@ -5,7 +5,7 @@
  * restricted to fixture bootstrap and read-only measurement.
  */
 async (page) => {
-  const BASE_URL = 'http://127.0.0.1:4000/?dev074Phase=after';
+  const BASE_URL = 'http://localhost:4000/?dev074Phase=after';
   const OUTPUT = 'output/playwright/dev-074-ai-real-operation';
   const viewportDesktop = { width: 1440, height: 900, label: 'desktop' };
   const viewportCompact = { width: 1024, height: 768, label: 'compact' };
@@ -235,7 +235,7 @@ async (page) => {
     const target = node('dev074-ai-root-a'); await target.dblclick();
     const details = page.locator('[data-task-details-modal="true"]'); await details.waitFor({ state: 'visible', timeout: 10000 });
     assert(await details.getAttribute('data-task-id') === 'dev074-ai-root-a', 'double click should open matching details');
-    await details.locator('button[title="關閉"]').click(); await details.waitFor({ state: 'hidden', timeout: 10000 });
+    await details.locator('button[aria-label="關閉任務詳情"]').click(); await details.waitFor({ state: 'hidden', timeout: 10000 });
     await target.click({ button: 'right' }); const menu = page.locator('[data-global-context-menu="true"]'); await menu.waitFor({ state: 'visible', timeout: 10000 });
     assert(await menu.getAttribute('data-global-context-menu-kind') === 'task', 'right click should open task context menu'); await page.keyboard.press('Escape');
     result.actions.push('double-click details → close → right-click task menu → Escape');

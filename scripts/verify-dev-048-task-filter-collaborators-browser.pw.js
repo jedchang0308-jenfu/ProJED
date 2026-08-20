@@ -154,7 +154,7 @@ async (page) => {
   const workbenchSelector = '[data-task-workbench-all-task-card="true"][data-task-id]';
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /使用固定測試環境/ }).click();
   await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
   await seed();

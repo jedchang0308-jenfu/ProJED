@@ -17,6 +17,7 @@ import {
   OPEN_TASK_DETAILS_EVENT,
   isTextInputTarget,
   prepareNewTaskNaming,
+  requestMindMapRelationshipStart,
   selectAndOpenTaskDetails,
 } from '../utils/taskInteractions';
 import { getTaskAssigneeIds } from '../utils/taskAssignments';
@@ -457,6 +458,11 @@ export const GlobalContextMenu: React.FC = () => {
         return closeContextMenu({ preserveTaskSelection: true });
       case 'task.create-sibling': return handleAddSibling();
       case 'task.create-child': return handleAddChild();
+      case 'task.create-relationship': {
+        if (contextMenuState?.kind !== 'task' || !canEditTask) return;
+        requestMindMapRelationshipStart(contextMenuState.nodeId);
+        return closeContextMenu({ preserveTaskSelection: true });
+      }
       case 'task.duplicate': return handleDuplicate();
       case 'task.dependency-start': return enterDependencyMode('start');
       case 'task.dependency-end': return enterDependencyMode('end');

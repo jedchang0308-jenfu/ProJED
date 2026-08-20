@@ -66,3 +66,9 @@
 - filter / collapse 誤刪仍存在的關聯線。
 - 拖曳 endpoint 改連接對象後資料 fromId/toId 未更新。
 - 任一 browser screenshot 出現 visible runtime error、重疊、overflow 或不可讀文字。
+
+## DEV-077 視覺清理增補（2026-08-20）
+
+- 選取關係線時，control arms、control guide、SVG square control points 與 HTML square control-point hit target 必須為 0。
+- 兩端 endpoint、path、label、style drawer、inline edit、Delete／Escape 與 endpoint reconnect 必須維持可用。
+- `QA-027E-010` control point drag 不再是現行 UI acceptance；由 `QA-DEV-077` 的 selected-state redline cleanup case 取代。

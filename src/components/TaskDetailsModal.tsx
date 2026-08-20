@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { BookOpenText, CheckCircle2, Lock, MessageSquareText, Save, Send, Unlock, X } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, Send, Unlock, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -16,7 +16,6 @@ import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
-import type { UpdateNodeOptions } from '../store/useWbsStore';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -103,6 +102,9 @@ const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) =>
 
 const PINCH_CLOSE_MIN_DISTANCE_DELTA = 36;
 const PINCH_CLOSE_MAX_DISTANCE_RATIO = 0.78;
+const TASK_DETAILS_AUTOSAVE_DELAY_MS = 900;
+
+type TaskDetailsSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const getTouchDistance = (touches: React.TouchList) => {
   const first = touches[0];
@@ -123,11 +125,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const modalRef = React.useRef<HTMLDivElement | null>(null);
   const titleInputRef = React.useRef<HTMLInputElement | null>(null);
   const { canEditTask, canAssignTask } = useBoardPermissions();
+  const canPersistTask = canEditTask || canAssignTask;
   const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
   const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const [size, setSize] = React.useState(readSavedSize);
-  const minimumModalSize = React.useMemo(() => getDefaultModalSize(), []);
+  const [minimumModalSize, setMinimumModalSize] = React.useState(getDefaultModalSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [durationDraft, setDurationDraft] = React.useState<string | null>(null);
@@ -139,8 +142,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const skipNextNotesSave = React.useRef(true);
   const skipNextTitleBlurSave = React.useRef(false);
-  const [saveFeedbackVisible, setSaveFeedbackVisible] = React.useState(false);
+  const [saveState, setSaveState] = React.useState<TaskDetailsSaveState>('idle');
+  const [isClosePending, setIsClosePending] = React.useState(false);
   const saveFeedbackTimerRef = React.useRef<number | null>(null);
+  const titleAutosaveTimerRef = React.useRef<number | null>(null);
+  const pendingPersistCountRef = React.useRef(0);
+  const persistVersionRef = React.useRef(0);
+  const latestPersistVersionByKeyRef = React.useRef<Record<string, number>>({});
+  const failedUpdatesRef = React.useRef<Partial<TaskNode>>({});
+  const failedUpdateVersionsRef = React.useRef<Record<string, number>>({});
+  const closeRequestedRef = React.useRef(false);
+  const previousNodeIdRef = React.useRef<string | undefined>(undefined);
   const pinchCloseRef = React.useRef<{
     initialDistance: number;
     triggered: boolean;
@@ -160,26 +172,105 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const currentNodeDetailNotes = node?.detailNotes;
   const currentNodeDescription = node?.description || '';
 
-  const clearSaveFeedback = React.useCallback(() => {
+  const clearSaveFeedbackTimer = React.useCallback(() => {
     if (saveFeedbackTimerRef.current !== null) {
       window.clearTimeout(saveFeedbackTimerRef.current);
       saveFeedbackTimerRef.current = null;
     }
-    setSaveFeedbackVisible(false);
   }, []);
 
   const showSaveFeedback = React.useCallback(() => {
-    if (saveFeedbackTimerRef.current !== null) {
-      window.clearTimeout(saveFeedbackTimerRef.current);
-    }
-    setSaveFeedbackVisible(true);
-    saveFeedbackTimerRef.current = window.setTimeout(() => {
-      setSaveFeedbackVisible(false);
-      saveFeedbackTimerRef.current = null;
-    }, 1600);
-  }, []);
+    clearSaveFeedbackTimer();
+    setSaveState('saved');
+  }, [clearSaveFeedbackTimer]);
 
-  const savePendingTaskDetails = React.useCallback((options?: UpdateNodeOptions) => {
+  const markDraftDirty = React.useCallback(() => {
+    clearSaveFeedbackTimer();
+    if (pendingPersistCountRef.current === 0) setSaveState('idle');
+  }, [clearSaveFeedbackTimer]);
+
+  const settlePersistence = React.useCallback((
+    succeeded: boolean,
+    requestUpdates: Partial<TaskNode>,
+    requestVersion: number,
+    persistedKeys: string[],
+  ) => {
+    pendingPersistCountRef.current = Math.max(0, pendingPersistCountRef.current - 1);
+
+    if (succeeded) {
+      persistedKeys.forEach((key) => {
+        const failedVersion = failedUpdateVersionsRef.current[key];
+        if (failedVersion !== undefined && failedVersion <= requestVersion) {
+          delete failedUpdateVersionsRef.current[key];
+          delete (failedUpdatesRef.current as Record<string, unknown>)[key];
+        }
+      });
+    } else {
+      persistedKeys.forEach((key) => {
+        if (latestPersistVersionByKeyRef.current[key] !== requestVersion) return;
+        (failedUpdatesRef.current as Record<string, unknown>)[key] = (
+          requestUpdates as Record<string, unknown>
+        )[key];
+        failedUpdateVersionsRef.current[key] = requestVersion;
+      });
+    }
+
+    if (pendingPersistCountRef.current > 0) return;
+
+    const hasFailedUpdates = Object.keys(failedUpdatesRef.current).length > 0;
+    if (hasFailedUpdates) {
+      clearSaveFeedbackTimer();
+      setSaveState('error');
+      if (closeRequestedRef.current) {
+        closeRequestedRef.current = false;
+        setIsClosePending(false);
+        toast.error('儲存失敗，請重試', { duration: 1800 });
+      }
+      return;
+    }
+
+    if (closeRequestedRef.current) {
+      closeRequestedRef.current = false;
+      setIsClosePending(false);
+      onClose();
+      return;
+    }
+
+    showSaveFeedback();
+  }, [clearSaveFeedbackTimer, onClose, showSaveFeedback]);
+
+  const persistTaskUpdates = React.useCallback((updates: Partial<TaskNode>) => {
+    if (!currentNodeId || !canPersistTask || Object.keys(updates).length === 0) return false;
+
+    const requestUpdates: Partial<TaskNode> = {
+      ...updates,
+      updatedAt: updates.updatedAt ?? Date.now(),
+    };
+    const persistedKeys = Object.keys(requestUpdates).filter((key) => key !== 'updatedAt');
+    if (persistedKeys.length === 0) return false;
+
+    const requestVersion = persistVersionRef.current + 1;
+    persistVersionRef.current = requestVersion;
+    persistedKeys.forEach((key) => {
+      latestPersistVersionByKeyRef.current[key] = requestVersion;
+    });
+
+    clearSaveFeedbackTimer();
+    setSaveState('saving');
+    pendingPersistCountRef.current += 1;
+
+    try {
+      updateNode(currentNodeId, requestUpdates, {
+        onPersistSuccess: () => settlePersistence(true, requestUpdates, requestVersion, persistedKeys),
+        onPersistError: () => settlePersistence(false, requestUpdates, requestVersion, persistedKeys),
+      });
+    } catch {
+      settlePersistence(false, requestUpdates, requestVersion, persistedKeys);
+    }
+    return true;
+  }, [canPersistTask, clearSaveFeedbackTimer, currentNodeId, settlePersistence, updateNode]);
+
+  const savePendingTaskDetails = React.useCallback(() => {
     if (!node || !canEditTask) return false;
 
     const updates: Partial<TaskNode> = {};
@@ -199,30 +290,57 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     }
 
     if (Object.keys(updates).length > 0) {
-      updates.updatedAt = Date.now();
-      updateNode(node.id, updates, options);
-      return true;
+      return persistTaskUpdates(updates);
     }
-    options?.onPersistSuccess?.();
     return false;
-  }, [canEditTask, node, notes, titleValue, updateNode]);
+  }, [canEditTask, node, notes, persistTaskUpdates, titleValue]);
+
+  const retryFailedSave = React.useCallback(() => {
+    if (pendingPersistCountRef.current > 0) return false;
+    const failedUpdates = { ...failedUpdatesRef.current };
+    if (Object.keys(failedUpdates).length === 0) return false;
+
+    failedUpdatesRef.current = {};
+    failedUpdateVersionsRef.current = {};
+    return persistTaskUpdates(failedUpdates);
+  }, [persistTaskUpdates]);
 
   const handleSaveDetails = React.useCallback(() => {
-    savePendingTaskDetails({
-      onPersistSuccess: showSaveFeedback,
-      onPersistError: () => toast.error('儲存失敗', { duration: 1000 }),
-    });
-  }, [savePendingTaskDetails, showSaveFeedback]);
+    const didQueueDraft = savePendingTaskDetails();
+    if (didQueueDraft || pendingPersistCountRef.current > 0) return;
+    if (retryFailedSave()) return;
+    showSaveFeedback();
+  }, [retryFailedSave, savePendingTaskDetails, showSaveFeedback]);
 
   const handleClose = React.useCallback(() => {
-    if (canEditTask) {
-      savePendingTaskDetails({
-        onPersistSuccess: () => toast.success('已儲存', { duration: 1000 }),
-        onPersistError: () => toast.error('儲存失敗', { duration: 1000 }),
-      });
+    if (!canPersistTask) {
+      onClose();
+      return;
     }
-    onClose();
-  }, [canEditTask, onClose, savePendingTaskDetails]);
+    if (closeRequestedRef.current) return;
+
+    if (titleAutosaveTimerRef.current !== null) {
+      window.clearTimeout(titleAutosaveTimerRef.current);
+      titleAutosaveTimerRef.current = null;
+    }
+
+    closeRequestedRef.current = true;
+    setIsClosePending(true);
+
+    const failedUpdates = { ...failedUpdatesRef.current };
+    failedUpdatesRef.current = {};
+    failedUpdateVersionsRef.current = {};
+    const didQueueRetry = Object.keys(failedUpdates).length > 0
+      ? persistTaskUpdates(failedUpdates)
+      : false;
+    const didQueueDraft = savePendingTaskDetails();
+
+    if (!didQueueRetry && !didQueueDraft && pendingPersistCountRef.current === 0) {
+      closeRequestedRef.current = false;
+      setIsClosePending(false);
+      onClose();
+    }
+  }, [canPersistTask, onClose, persistTaskUpdates, savePendingTaskDetails]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -243,10 +361,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, [handleClose]);
 
   React.useEffect(() => () => {
-    if (saveFeedbackTimerRef.current !== null) {
-      window.clearTimeout(saveFeedbackTimerRef.current);
-    }
-  }, []);
+    clearSaveFeedbackTimer();
+    if (titleAutosaveTimerRef.current !== null) window.clearTimeout(titleAutosaveTimerRef.current);
+  }, [clearSaveFeedbackTimer]);
 
   const handlePinchTouchStart = React.useCallback((event: React.TouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 2) {
@@ -283,26 +400,40 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, []);
 
   React.useEffect(() => {
-    if (!currentNodeId) return;
+    if (previousNodeIdRef.current === currentNodeId) return;
+    previousNodeIdRef.current = currentNodeId;
+    setSaveState('idle');
+    if (titleAutosaveTimerRef.current !== null) {
+      window.clearTimeout(titleAutosaveTimerRef.current);
+      titleAutosaveTimerRef.current = null;
+    }
+  }, [currentNodeId]);
 
-    setTitleValue(currentNodeTitle);
+  React.useEffect(() => {
+    if (!currentNodeId) return;
+    setTitleValue((current) => {
+      const isEditingTitle = document.activeElement === titleInputRef.current;
+      const hasLocalDraft = isEditingTitle && current.trim() !== currentNodeTitle;
+      return hasLocalDraft ? current : currentNodeTitle;
+    });
+  }, [currentNodeId, currentNodeTitle]);
+
+  React.useEffect(() => {
+    if (!currentNodeId) return;
     setStartDate(currentNodeStartDate);
     setEndDate(currentNodeEndDate);
     setDurationDraft(null);
+  }, [currentNodeEndDate, currentNodeId, currentNodeStartDate]);
+
+  React.useEffect(() => {
+    if (!currentNodeId) return;
     setNotes(
       currentNodeDetailNotes?.length
         ? currentNodeDetailNotes
         : [{ id: 'note_default', title: '備註', content: currentNodeDescription }]
     );
     skipNextNotesSave.current = true;
-  }, [
-    currentNodeDescription,
-    currentNodeDetailNotes,
-    currentNodeEndDate,
-    currentNodeId,
-    currentNodeStartDate,
-    currentNodeTitle,
-  ]);
+  }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
 
   React.useEffect(() => {
     setIsTaskKnowledgeOpen(false);
@@ -354,6 +485,20 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, []);
 
   React.useEffect(() => {
+    const handleViewportResize = () => {
+      const nextMinimum = getDefaultModalSize();
+      setMinimumModalSize(nextMinimum);
+      setSize((current) => ({
+        width: Math.min(Math.max(current.width, nextMinimum.width), window.innerWidth * 0.94),
+        height: Math.min(Math.max(current.height, nextMinimum.height), window.innerHeight * 0.9),
+      }));
+    };
+
+    window.addEventListener('resize', handleViewportResize);
+    return () => window.removeEventListener('resize', handleViewportResize);
+  }, []);
+
+  React.useEffect(() => {
     if (!node) return;
 
     if (skipNextNotesSave.current) {
@@ -361,16 +506,20 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       return;
     }
 
+    const displayedNotes = getDisplayedDetailNotes(node);
+    const nextDescription = notes[0]?.content || '';
+    if (areDetailNotesEqual(notes, displayedNotes) && nextDescription === (node.description || '')) return;
+
     const timer = window.setTimeout(() => {
       if (!canEditTask) return;
-      updateNode(node.id, {
+      persistTaskUpdates({
         detailNotes: notes,
-        description: notes[0]?.content || '',
+        description: nextDescription,
       });
-    }, 450);
+    }, TASK_DETAILS_AUTOSAVE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [canEditTask, notes, node, updateNode]);
+  }, [canEditTask, notes, node, persistTaskUpdates]);
 
   const ancestorPath = buildAncestorPath(node, nodes);
 
@@ -407,7 +556,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     if (field === 'endDate') {
       setEndDate(value);
     }
-    updateNode(node.id, updates);
+    persistTaskUpdates(updates);
   };
 
   const handleDateChange = (field: 'startDate' | 'endDate', event: React.ChangeEvent<HTMLInputElement>) => {
@@ -423,14 +572,36 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const handleAssignmentChange = (primaryIds: string[], collaboratorIds: string[]) => {
     if (!canAssignTask) return;
-    updateNode(node.id, {
+    persistTaskUpdates({
       assigneeIds: primaryIds,
       collaboratorIds,
-      updatedAt: Date.now(),
     });
   };
 
+  const handleTitleChange = (value: string) => {
+    if (!canEditTask) return;
+    markDraftDirty();
+    setTitleValue(value);
+    if (titleAutosaveTimerRef.current !== null) window.clearTimeout(titleAutosaveTimerRef.current);
+
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === node.title) {
+      titleAutosaveTimerRef.current = null;
+      return;
+    }
+
+    titleAutosaveTimerRef.current = window.setTimeout(() => {
+      titleAutosaveTimerRef.current = null;
+      persistTaskUpdates({ title: trimmed });
+      setTitleValue(trimmed);
+    }, TASK_DETAILS_AUTOSAVE_DELAY_MS);
+  };
+
   const saveTitle = () => {
+    if (titleAutosaveTimerRef.current !== null) {
+      window.clearTimeout(titleAutosaveTimerRef.current);
+      titleAutosaveTimerRef.current = null;
+    }
     if (skipNextTitleBlurSave.current) {
       skipNextTitleBlurSave.current = false;
       setTitleValue(node.title || '');
@@ -447,7 +618,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       return;
     }
     if (trimmed !== node.title) {
-      updateNode(node.id, { title: trimmed, updatedAt: Date.now() });
+      persistTaskUpdates({ title: trimmed });
     }
     setTitleValue(trimmed);
   };
@@ -461,6 +632,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       event.currentTarget.blur();
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      if (titleAutosaveTimerRef.current !== null) {
+        window.clearTimeout(titleAutosaveTimerRef.current);
+        titleAutosaveTimerRef.current = null;
+      }
       skipNextTitleBlurSave.current = true;
       setTitleValue(node.title || '');
       event.currentTarget.blur();
@@ -497,12 +672,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const handleToggleDurationLock = () => {
     if (!canEditTask) return;
-    updateNode(node.id, { isDurationLocked: !node.isDurationLocked });
+    persistTaskUpdates({ isDurationLocked: !node.isDurationLocked });
   };
 
   const updateNote = (noteId: string, updates: Partial<TaskDetailNote>) => {
     if (!canEditTask) return;
-    clearSaveFeedback();
+    markDraftDirty();
     setNotes((current) =>
       current.map((note) => (note.id === noteId ? { ...note, ...updates } : note))
     );
@@ -510,7 +685,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   const addNote = () => {
     if (!canEditTask) return;
-    clearSaveFeedback();
+    markDraftDirty();
     setNotes((current) => [...current, createNote(current.length + 1)]);
   };
 
@@ -526,7 +701,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     );
     if (!confirmed) return;
 
-    clearSaveFeedback();
+    markDraftDirty();
     setNotes((current) => {
       const nextNotes = current.filter((item) => item.id !== noteId);
       return nextNotes.length > 0 ? nextNotes : [createNote(1)];
@@ -542,6 +717,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
   const currentStatus = normalizeManualTaskStatus(node.status);
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
+  const closeButtonTitle = saveState === 'error'
+    ? '重試儲存成功後關閉'
+    : saveState === 'saving' || isClosePending
+      ? '儲存完成後關閉'
+      : canPersistTask
+        ? '關閉（變更會自動儲存）'
+        : '關閉';
 
   return (
     <div
@@ -581,10 +763,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   ref={titleInputRef}
                   type="text"
                   value={titleValue}
-                  onChange={(event) => {
-                    clearSaveFeedback();
-                    setTitleValue(event.target.value);
-                  }}
+                  onChange={(event) => handleTitleChange(event.target.value)}
                   onBlur={saveTitle}
                   onKeyDown={handleTitleKeyDown}
                   data-task-details-title-input="true"
@@ -623,32 +802,61 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
               )}
             </div>
           </div>
-          {canEditTask ? (
+          {canPersistTask ? (
+            <div
+              className="flex h-9 min-w-[7.5rem] shrink-0 items-center justify-end text-xs font-medium"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              data-task-details-save-status={saveState}
+            >
+              {saveState === 'saving' ? (
+                <span className="inline-flex items-center gap-1.5 text-slate-500">
+                  <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                  儲存中…
+                </span>
+              ) : saveState === 'saved' ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 size={14} aria-hidden="true" />
+                  已儲存
+                </span>
+              ) : saveState === 'error' ? (
+                <button
+                  type="button"
+                  onClick={retryFailedSave}
+                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-100"
+                  title="重新儲存未同步的變更"
+                  data-task-details-save-retry="true"
+                >
+                  <AlertCircle size={14} aria-hidden="true" />
+                  儲存失敗，請重試
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="group relative shrink-0">
             <button
               type="button"
-              onClick={handleSaveDetails}
-              className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-100 ${
-                saveFeedbackVisible
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                  : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
-              }`}
-              title="儲存目前任務內容"
-              aria-label="儲存目前任務內容"
-              data-task-details-save="true"
+              onClick={handleClose}
+              disabled={isClosePending}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
+              aria-label="關閉任務詳情"
+              aria-describedby="task-details-close-description"
             >
-              {saveFeedbackVisible ? <CheckCircle2 size={16} /> : <Save size={16} />}
-              <span>{saveFeedbackVisible ? '已儲存' : '儲存'}</span>
+              <X size={20} />
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={handleClose}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            title="關閉"
-            aria-label="關閉任務詳情"
-          >
-            <X size={20} />
-          </button>
+            <span
+              id="task-details-close-tooltip"
+              role="tooltip"
+              className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-max max-w-[min(18rem,calc(100vw-2rem))] rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              data-task-details-close-tooltip="true"
+            >
+              {closeButtonTitle}
+            </span>
+            <span id="task-details-close-description" className="sr-only">
+              {closeButtonTitle}
+            </span>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto px-4 py-4">
@@ -820,7 +1028,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                     <div className="mt-1 flex items-center gap-2" data-task-details-meta-control-row="true">
                       <select
                         value={currentStatus}
-                        onChange={(event) => { if (canEditTask) updateNode(node.id, { status: event.target.value as TaskStatus }); }}
+                        onChange={(event) => {
+                          if (canEditTask) persistTaskUpdates({ status: event.target.value as TaskStatus });
+                        }}
                         disabled={!canEditTask}
                         className={getTaskStatusFieldClass(currentStatus)}
                       >
@@ -868,7 +1078,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                       <TagPicker
                         workspaceId={node.workspaceId}
                         selectedTagIds={node.tagIds || []}
-                        onChange={(tagIds) => updateNode(node.id, { tagIds, updatedAt: Date.now() })}
+                        onChange={(tagIds) => persistTaskUpdates({ tagIds })}
                         disabled={!canEditTask}
                         compact
                       />

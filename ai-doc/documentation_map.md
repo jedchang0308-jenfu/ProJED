@@ -1,5 +1,84 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-20（DEV-082 看板多人即時同步 Local QA-QC PASS / Remote Gate Pending）
+
+Spec Impact：`Intentional extension`。沿用既有 Supabase Postgres Changes、RLS 與 optimistic write，補齊 publication、初始讀取／訂閱 race closure、single-flight + trailing refresh、tag assignment／hard DELETE coverage，以及 online／visibility recovery；不新增 UI、presence、CRDT、欄位鎖或正式環境操作。本地契約與 rendered app 通過，remote migration／two-user smoke 尚未執行。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | Local Implemented / QA-QC PASS / Remote Gate Pending | DEV-082 / DEV-026 / DEV-036 | 記錄效用決策、範圍、實作、證據、runtime 與 non-release boundary。 |
+| `ai-doc/specs/SPEC-082-board-realtime-collaboration.md` | Implemented / Local QA-QC PASS / Authoritative | DEV-082 | 固定 publication、race closure、single-flight、DELETE／tag、failure recovery、conflict 與 release 契約。 |
+| `supabase/migrations/20260820080310_board_realtime_collaboration.sql` | Local Migration Ready / Remote Not Applied | DEV-082 | 可重複將現行 realtime channel tables 加入 `supabase_realtime`；RLS 不變。 |
+| `src/utils/coalescedAsyncRefresh.ts` | Implemented / Pure Verifier PASS | DEV-082 | 40ms burst 合併、single in-flight、one trailing read、cleanup cancellation。 |
+| `src/hooks/useSupabaseSync.ts`、`useTagSync.ts`、`useMemberSync.ts` | Implemented / Typecheck + Lint + Build PASS | DEV-082 | active board／tag／member channel race closure、錯誤診斷、online／visibility recovery 與 bounded reload。 |
+| `scripts/verify-dev-082-board-realtime-sync.ts` | Executed / PASS | DEV-082 | 驗證 scheduler concurrency、cleanup、subscription／DELETE／tag 與 publication contract。 |
+| `output/playwright/dev-081-mobile-kanban-dual-scale-pinch/result.json` | Rendered Regression 9/9 PASS | DEV-081 / DEV-082 | 390×844、844×390、1024×768；console／page／network errors=0。 |
+
+## Documentation Map Update - 2026-08-20（DEV-081 手機看板 A／B 2～3 倍閱讀尺寸 Implemented / Automated UI PASS）
+
+Spec Impact：`Compatible extension`。保留 mobile Pan-First 與 task drag authority，新增看板局部 A=`1.0`／B=`2.0～3.0`（預設 `2.5`）顯示模式、單一 pinch 仲裁器、可見 fallback toggle 與 account/device-scoped UI preference；不改 domain data、schema、API、permission 或 release。S0～S4 已實作，9-case browser smoke PASS；完整 QA matrix 與 physical gate 尚未完成。
+
+| 文件 / 權威 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | Implemented / Automated UI PASS（9 cases）/ Physical Pending | DEV-081 / DEV-001 / DEV-029 | 記錄2～3倍Human Decision、S0～S4實作、QA evidence、停止條件與non-release boundary。 |
+| `ai-doc/specs/SPEC-081-mobile-kanban-dual-scale-pinch.md` | Implemented / Automated UI PASS / Authoritative | DEV-081 | 固定repo/file owner、typed contract、local preference、CSS tokens、pinch／anchor／drag cancel演算法、逐檔patch、slice、recovery、commands與evidence。 |
+| `ai-doc/qa/QA-DEV-081-mobile-kanban-dual-scale-pinch.md` | Executed smoke / 9-case PASS / Full matrix + Physical Pending | DEV-081 | 21項FMEA、S0～S4 gate、20項planned browser cases、9-case artifact、acceptance traceability、physical gate與UI-only boundary。 |
+| `src/features/kanbanViewSize/*`、`src/App.tsx`、`src/components/MainLayout.tsx`、`src/components/BoardView.tsx` | Implemented / Typecheck + Browser PASS | DEV-081 | 本機帳號偏好／provider、可見toggle、board root、pinch request與anchor adapter。 |
+| `src/hooks/useMobilePanBroker.ts`、`useLongPress.ts`、`useTouchTapGuard.ts`、`src/components/Wbs/taskDrag/useTaskDragSession.ts`、`src/index.css` | Implemented / Browser PASS | DEV-081 / DEV-029 / DEV-054 | 單一multi-touch仲裁、defense-in-depth、零提交drag cancel與board-scoped 2.5倍layout tokens。 |
+| `scripts/verify-dev-081-mobile-kanban-dual-scale-pinch.ts`、`...-browser.pw.js` | Implemented / PASS | DEV-081 | pure/static contract與AI UI-only rendered verifier；primary artifact固定`output/playwright/dev-081-mobile-kanban-dual-scale-pinch/result.json`。 |
+| `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md`、`ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md` | Existing behavior authority / unchanged | DEV-029 / DEV-081 | 單指 pan／tap／long-press 仍是基準；第二指只透過集中仲裁器提升 owner。 |
+| `ai-doc/specs/SPEC-054-mobile-task-drag-precision.md`、`ai-doc/qa/QA-DEV-054-mobile-task-drag-precision.md` | Existing drag regression authority / unchanged | DEV-054 / DEV-081 | active drag＋第二指必須零提交取消；browser PASS 不取代 iOS／Android physical evidence。 |
+
+## Documentation Map Update - 2026-08-20（DEV-079 心智圖右鍵選單建立關聯線 Implemented / QA-QC PASS）
+
+Spec Impact：`Intentional extension / mindmap-only context-menu action`。心智圖 task 右鍵選單新增「建立關聯線」，以右鍵節點作為 source，沿用既有 relationship draft／target／inline label／Escape 流程；非心智圖 menu 排除，不涉及 schema、storage、API、permission model 或 release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-079 Implemented / QA-QC PASS / 未 Release | DEV-079 / DEV-027 | 記錄 context-menu action scope、event routing、既有 relationship flow reuse 與 local-only release boundary。 |
+| `ai-doc/specs/SPEC-079-mindmap-context-menu-create-relationship.md` | Implemented / QA-QC PASS | DEV-079 | 固定 mindmap-only action、source／target／label／Escape、permission guard 與 responsive acceptance。 |
+| `ai-doc/qa/QA-DEV-079-mindmap-context-menu-create-relationship.md` | Executed / QA PASS / QC PASS / 未 Release | DEV-079 | static 6/6、browser interaction／390 boundary、engineering gates 與 error sweep。 |
+| `src/interactions/task/types.ts`、`taskActionCatalog.ts`、`profiles.ts`、`TaskActionMenu.tsx` | Implemented / QA-QC PASS | DEV-079 | 新增 action contract、catalog label／icon、mindmap-only profile 與 menu rendering。 |
+| `src/components/GlobalContextMenu.tsx`、`src/components/MindMap/MindMapView.tsx`、`src/utils/taskInteractions.ts` | Implemented / QA-QC PASS | DEV-079 | 右鍵 action 透過 DOM event 啟動既有 relationship draft selection，並保留 task selection。 |
+| `scripts/verify-dev-079-mindmap-context-menu-create-relationship.mjs`、`...-browser.pw.js` | Executed / PASS | DEV-079 | static 6/6；artifact 證明 source／target／label／Escape／board exclusion、390 overflow=0 與無錯誤。 |
+
+## Documentation Map Update - 2026-08-20（DEV-078 心智圖工具列新增入口與快捷提示清理 Implemented / QA-QC PASS）
+
+Spec Impact：`Intentional replacement / mindmap-only visual cleanup`。依 Browser Comment 1、Comment 2 移除心智圖工具列「新增任務」與快捷鍵提示；保留空畫布首個任務 fallback、Enter／Tab／Delete、關聯線與縮放控制，不涉及 schema、API、permission 或 release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-078 Implemented / QA-QC PASS / 未 Release | DEV-078 / DEV-027 | 記錄 toolbar cleanup scope、keyboard／empty-state compatibility、artifact 與 local-only release boundary。 |
+| `ai-doc/specs/SPEC-078-mindmap-toolbar-cleanup.md` | Implemented / QA-QC PASS | DEV-078 | 固定 toolbar 元素移除與保留 controls、keyboard、empty-state、responsive acceptance。 |
+| `ai-doc/qa/QA-DEV-078-mindmap-toolbar-cleanup.md` | Executed / QA PASS / QC PASS / 未 Release | DEV-078 | static 5/5、1440／1024／390 browser matrix、Enter browser + Tab／Delete source regression 與 visible-error gate。 |
+| `src/components/MindMap/MindMapToolbar.tsx`、`MindMapView.tsx` | Implemented / QA-QC PASS | DEV-078 | 移除 toolbar create-task button／hint 與不再使用的 props；保留 relationship／zoom owner。 |
+| `scripts/verify-dev-078-mindmap-toolbar-cleanup.mjs`、`...-browser.pw.js` | Executed / PASS | DEV-078 | static 5/5；artifact 證明三 viewport 的 DOM absence、keyboard regression、無錯誤與無 overflow。 |
+
+## Documentation Map Update - 2026-08-20（DEV-077 心智圖關係線紅線標記元素清理 Implemented / QA-QC PASS）
+
+Spec Impact：`Intentional replacement / mindmap-only visual cleanup`。依使用者附圖移除 selected relationship 的控制臂、導引線與方形控制點；保留端點圓形、關係線本體、label、style drawer、inline edit、Delete 與 endpoint drag/reconnect。既有 `geometry.controlPoints` storage shape 與 path builder 相容性維持，不修改附圖本身，不涉及 schema、API、permission 或 release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-077 Implemented / QA-QC PASS / 未 Release | DEV-077 / DEV-027 | 記錄 visual cleanup scope、保留／移除元素、資料相容性、artifact 與 local-only release boundary。 |
+| `ai-doc/specs/SPEC-077-mindmap-relationship-redline-cleanup.md` | Implemented / QA-QC PASS | DEV-077 | 固定紅線標記的 control arms、guide、square points 移除，以及 endpoint/path/label 保留契約。 |
+| `ai-doc/qa/QA-DEV-077-mindmap-relationship-redline-cleanup.md` | Executed / QA PASS / QC PASS / 未 Release | DEV-077 | static 6/6、1440／zoom／1024／390 browser evidence、error sweep 與 relationship regression 均通過。 |
+| `src/components/MindMap/MindMapRelationshipOverlay.tsx`、`MindMapRelationshipInteractionLayer.tsx`、`MindMapView.tsx` | Implemented / QA-QC PASS | DEV-077 | 已移除紅線指向的輔助控制視覺與未使用 adapter，保留端點與關係線操作。 |
+| `scripts/verify-dev-077-mindmap-relationship-redline-cleanup.mjs`、`...-browser.pw.js` | Executed / PASS | DEV-077 | static 6/6；artifact 證明 selected／zoomed／1024 laptop／mobile boundary 的 redline selectors 為 0，endpoint/path/label owner 保留。 |
+
+## Documentation Map Update - 2026-08-20（DEV-076 心智圖左鍵抓取畫布平移 Implemented / QA-QC PASS）
+
+Spec Impact：`Intentional replacement / mindmap-only extension`。使用者明確新增 desktop fine-pointer 空白畫布左鍵 direct pan；既有中鍵 velocity pan、DEV-074 單一 viewport／Scene、DEV-073 quick-title、task／relationship interaction owner 與 SPEC-029 mobile boundary維持。pure/static、1440／1024 rendered mouse trace、390 boundary、geometry/data、visible-error、middle-pan／drag／zoom regression與工程 gates均通過。ADR不需要；本輪未release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-076 Implemented / QA-QC PASS / 未 Release | DEV-076 / DEV-027 | 記錄 authority、實作、evidence、Spec Drift、runtime與 local-only release boundary。 |
+| `ai-doc/specs/SPEC-076-mindmap-left-mouse-canvas-pan.md` | Implemented / QA-QC PASS / 未 Release | DEV-076 | 固定並驗證 6px threshold、direct pan 公式、blocked target、active-only click suppression、geometry/data/mobile boundary與 recovery。 |
+| `ai-doc/qa/QA-DEV-076-mindmap-left-mouse-canvas-pan.md` | Executed / QA PASS / QC PASS / 未 Release | DEV-076 | FMEA、pure/static、1440／1024 rendered mouse trace、selection／geometry／cursor lifecycle、390 boundary與 visible-error gate均通過。 |
+| `ai-doc/specs/SPEC-074-mindmap-single-scene-coordinate-system.md` | Existing architecture authority / DEV-076 Amended | DEV-074 / DEV-076 | left pan 與既有 middle pan 都只修改唯一 viewport scroll，不 dirty world geometry。 |
+| `src/components/MindMap/mindMapPan.ts`、`MindMapView.tsx`、`MindMapCanvasShell.tsx`、`src/index.css` | Implemented / QA-QC PASS | DEV-076 | pure gesture kernel、fine-pointer owner、lifecycle／click suppression、telemetry與grab/grabbing回饋已落地。 |
+| `scripts/verify-dev-076-mindmap-left-mouse-pan.ts`、`verify-dev-076-mindmap-left-mouse-pan-browser.pw.js` | Executed / PASS | DEV-076 | static 12/12；artifact與screenshots證明兩軸direct pan、owner、selection、geometry/data、cancel、viewport與錯誤陣列均通過。 |
+
 ## Documentation Map Update - 2026-08-20（Active Board Topbar 改名入口移除）
 
 使用者明確要求降低誤觸寫入 Board metadata 的風險。`MainLayout` Active Board topbar 名稱已改為 display-only；Sidebar 受控 `F2`／右鍵改名與 owner/admin 權限邊界保留。DEV-030 static 11/11、browser PASS；本輪未涉及資料模型、API、權限或 release。
@@ -141,20 +220,20 @@ Spec Impact：對 DEV-054／055 的舊 `column-header` 非 L1 落點語意為 `I
 | `ai-doc/qc/QC-DEV-067-kanban-l1-drag-promotion.md` | QC PASS / 未 Release | DEV-067 | DEV-067 13/13 static、8/8 browser、DEV-055 16/16、DEV-054 11/11、TypeScript、ESLint、build 與 rendered evidence。 |
 | `ai-doc/dev_task.md` | DEV-067 Completed / QC PASS / 未 Release | DEV-067 | 本機 RD／QA／QC 完成；正式環境須另走 release gate。 |
 
-## Documentation Map Update - 2026-08-12（任務備註語意富文字與 AI 可讀內容）
+## Documentation Map Update - 2026-08-20（DEV-066 Rework 4：手機／電腦共用任務備註 editor）
 
-Spec Impact：`DEV-066` 已完成 RD、QA 與 QC，狀態為 `Completed / QC PASS / 未 Release`。它是 DEV-006 Gmail-like editor 能力在「任務詳情備註」上的 `Intentional successor`，不回寫或重開已完成的 DEV-006。`SPEC-066`、`ADR-042`、`QA-DEV-066` 與 `QC-DEV-066` 已固定並驗證 canonical rich state、plain compatibility alias、desktop on-demand header-inline persistent toolbar、mobile zero-editor＋append-only merge、AI safe projection 與 1440／1024／390 gate；沒有 schema migration、production 資料操作、部署或 release。
+Spec Impact：`Intentional replacement`。使用者 2026-08-20 明確取代 DEV-066 舊 `1A` mobile zero-editor＋append-only 契約：手機與電腦共用同一個既有 Lexical 任務備註 editor、格式 allowlist、canonical write path 與儲存流程，只保留 responsive layout／touch／soft-keyboard 差異；完全刪除手機「追加文字」UI，不新增手機 editor 模組。`2A／3A`、版本化 rich state、plain compatibility alias、AI safe projection、legacy/schema 與權限邊界不變。Rework 4 目前為 `Brief Ready / Human Confirmed / 尚未實作`，沒有 production、migration、部署或 release 授權。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/dev_task.md` | DEV-066 Completed / QC PASS / 未 Release | DEV-066 | 1A／2A／3A、implementation contract、completion evidence 與 release boundary 已收斂。 |
-| `ai-doc/specs/SPEC-066-task-note-semantic-rich-text.md` | Implemented / verified | DEV-066 | desktop on-demand editor、mobile zero-editor renderer＋append、legacy/schema 與 AI projection 契約均已落實。 |
-| `ai-doc/decisions/ADR-042-task-note-canonical-rich-content.md` | Accepted | DEV-066 | 採版本化 Lexical JSON canonical；plain text、description 與 AI Markdown 皆為單向相容／讀取投影。 |
-| `ai-doc/qa/QA-DEV-066-task-note-semantic-rich-text.md` | Executed / PASS | DEV-066 | QA-066-001～013 已通過 targeted automation 與 1440／1024／390 rendered QC。 |
-| `ai-doc/qc/QC-DEV-066-task-note-semantic-rich-text.md` | PASS | DEV-066 | 收錄 geometry、semantic toolbar、mobile append preservation、AI/RAG、error sweep、screenshots 與既有非阻塞 findings。 |
-| `src/components/TaskDetailsModal.tsx`、`src/components/TaskNotes/*`、`src/types/index.ts` | Implemented / verified | DEV-066 / DEV-057 | desktop Lexical 與 mobile readonly＋append 已完成，既有儲存／X 關閉前寫入回歸通過。 |
+| `ai-doc/dev_task.md` | DEV-066 Rework 4 Brief Ready / 待排 | DEV-066 | 記錄 `4A`、單一 editor module boundary、移除手機分流、目前文件-only execution boundary 與 RD re-entry。 |
+| `ai-doc/specs/SPEC-066-task-note-semantic-rich-text.md` | Rework 4 Brief Ready / Human Confirmed | DEV-066 | 所有 viewport 共用 editor；手機 append UI 為 0，responsive／touch／keyboard 為唯一裝置差異。 |
+| `ai-doc/decisions/ADR-042-task-note-canonical-rich-content.md` | Accepted / 2026-08-20 Amended | DEV-066 | canonical／projection 架構不變；mobile append write path 改為同一 Lexical canonical write path，不另建 editor。 |
+| `ai-doc/qa/QA-DEV-066-task-note-semantic-rich-text.md` | Rework 4 Pre-implementation Plan | DEV-066 | 新 gate 覆蓋單一元件、append absence、touch selection、soft keyboard、320／390／landscape 與 iOS／Android 實機。 |
+| `ai-doc/qc/QC-DEV-066-task-note-semantic-rich-text.md` | Historical PASS / Rework 4 未驗證 | DEV-066 | 保留 Rework 1～3 歷史事實；舊 mobile zero-editor／append evidence 明確不再作為目前 acceptance。 |
+| `src/components/TaskDetailsModal.tsx`、`src/components/TaskNotes/*`、`src/utils/taskNoteRichContent.ts` | Prior implementation / Rework 4 pending | DEV-066 / DEV-057 | 目前仍是 desktop Lexical＋mobile readonly/append；待 RD 泛化既有 editor、移除 breakpoint／append branch，不新增手機模組。 |
 | `src/components/Records/RecordContentEditor.tsx`、`src/utils/recordLexicalContent.ts` | Existing Lexical capability reference / no behavior change | DEV-066 / DEV-006 | 只重用 engine 經驗；不改會議紀錄 editor 或其 serializer。 |
-| `src/services/rag/wbsRagAdapter.ts` | Implemented / verified | DEV-066 / DEV-008 | 由 rich state 產生安全 Markdown 與 note metadata，已驗證 description/detailNotes 去重與 legacy fallback。 |
+| `src/services/rag/wbsRagAdapter.ts` | Existing verified baseline / no Rework 4 change | DEV-066 / DEV-008 | 由 rich state 產生安全 Markdown 與 note metadata；description/detailNotes 去重與 legacy fallback 契約維持。 |
 
 ## Documentation Map Update - 2026-08-10（未歸位任務帳號同步）
 
@@ -527,6 +606,8 @@ PM 治理註記：本次不新增重複 DEV，而是 intentional replacement。H
 | `ai-doc/release/LEVEL3-firebase-preview-supabase-test-runbook.md` | Active Fixed Runbook | Release governance / Level 3 smoke | 定義固定低成本路徑：staging build 指向 `ProJED-TEST`、部署到 Firebase preview channel `level3-smoke --expires 1d`、執行 HTTPS browser smoke、手動 auth/read-write/reload/cleanup smoke，並記錄證據。 |
 | `scripts/verify-level3-firebase-preview.ps1` | Active Helper | Release governance / Level 3 smoke | 對 Firebase preview URL 執行 Playwright browser smoke；僅驗證 preview URL，不替代手動登入與 `ProJED-TEST` read/write cleanup smoke。 |
 | `ai-doc/dev_task.md` | Release Gate Rule Updated | Release governance | Release Gate 指令已補固定規則：正式部署前預設需要 Level 3；`ProJED-TEST` 是固定測試環境與受控試爆場；Supabase Branch 預設不用，只保留明確授權例外。 |
+| `ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md` | Accepted / Local browser origin addendum | Local test runtime | 固定測試瀏覽器入口為 `http://localhost:4000/`；`127.0.0.1` 僅作 loopback bind、相容性 CORS 或歷史證據，並由 `npm run verify:local-origin` 防回歸。 |
+| `ai-doc/dev_task.md` | DEV-080 完成／Local QA-QC PASS／未 Release | Local test runtime | 統一 launcher、Auth redirect、active browser verifier 與新 QA/QC 證據的 canonical origin；不改 production、DB loopback、P9／preview 或歷史 evidence。 |
 
 PM 治理註記：本決策採 HCS 引導模式 `1B/2B/3B`。後續 AI 可自動判斷 Level 3 是否 required / not required / blocked；若判定 skip，必須記錄理由。此規則不授權自動 production deploy、不授權自動接受 Supabase Branch 成本、不授權在未備份下執行破壞性 `ProJED-TEST` 測試。
 

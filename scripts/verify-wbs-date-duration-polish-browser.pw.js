@@ -5,7 +5,7 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:4000/', { waitUntil: 'networkidle' });
   const fixedTestButton = page.locator('button', { hasText: '使用固定測試環境' }).first();
   if (await fixedTestButton.count()) {
     await fixedTestButton.click();

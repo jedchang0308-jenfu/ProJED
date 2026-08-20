@@ -73,9 +73,9 @@ async (page) => {
   let step = 'open local test app';
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=18&qcCalendarBoards=2', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1&qcSize=18&qcCalendarBoards=2', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => undefined);
     await seedSession();
     await page.reload({ waitUntil: 'domcontentloaded' });

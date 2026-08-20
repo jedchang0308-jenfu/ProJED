@@ -96,6 +96,18 @@ Supabase Branch 是例外路徑，不是預設 staging。
 - 不採用「把 `ProJED-TEST` 當 production 備份或正式資料副本」。
 - 不採用「AI 在沒有授權時自行 production deploy 或自行承擔雲端成本」。
 
+## Local browser canonical origin
+
+為降低測試證據、Auth callback、Cookie／storage origin 與 browser verifier 的分歧，固定測試環境的瀏覽器入口採用：
+
+- Canonical browser origin：`http://localhost:4000/`。
+- Vite server 仍可綁定 loopback `127.0.0.1`，但啟動器、測試腳本、Auth redirect、QA/QC 新證據與使用者文件一律使用 canonical origin。
+- `127.0.0.1:4000` 僅保留於 bind 設定、相容性 CORS allowlist 或歷史證據；不得作為新的瀏覽器開啟位置。
+- `localhost:4000` 與 `127.0.0.1:4000` 視為不同 browser origin。切換後既有 localStorage、Cookie、IndexedDB 與 Service Worker 不視為自動共用；需要時先重建或匯出 local-test fixture。
+- 固定入口驗證由 `npm run verify:local-origin` 守門；port 被其他程序占用時，啟動器必須先辨識程序歸屬，不得自動終止未驗證程序。
+
+此段是既有固定測試環境決策的相容性補充，不改 production domain、Supabase API loopback、P9／preview port 或正式部署 gate。
+
 ## HCS 思考習慣
 
 - `#批判`：避免把 Branch 當成看似專業但對新手更高風險的預設。

@@ -199,7 +199,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
                 : 'hover:bg-amber-50/60 cursor-crosshair'
               : 'cursor-pointer hover:bg-white'
         }`}
-        style={{ paddingLeft: `${depth * 14 + 4}px` }}
+        style={{ '--kanban-checklist-depth': depth } as React.CSSProperties}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();

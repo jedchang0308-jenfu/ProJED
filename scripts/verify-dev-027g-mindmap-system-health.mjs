@@ -909,7 +909,6 @@ check(
       'data-mindmap-zoom-reset',
       'data-mindmap-zoom-fit',
       'data-mindmap-note-relationship-tool',
-      'data-mindmap-create-root',
     ].every(token => !view.includes(token)) &&
     !/data-mindmap-zoom-in(\s|>)/.test(view) &&
     [
@@ -923,7 +922,6 @@ check(
       'data-mindmap-note-relationship-tool',
       'data-active={relationshipToolActive ?',
       'data-source-node-id={relationshipDraftFromId}',
-      'data-mindmap-create-root',
       'zoomLabelRef',
       'Math.round(zoomLevel * 100)',
     ].every(token => toolbar.includes(token)),

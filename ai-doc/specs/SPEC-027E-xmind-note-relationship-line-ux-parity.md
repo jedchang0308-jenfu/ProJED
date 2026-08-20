@@ -152,3 +152,12 @@ interface MindMapNoteRelationship {
 - `npm.cmd exec tsc -- --noEmit`
 - `npm.cmd run lint -- --quiet`
 - `npm.cmd run build:test`
+
+## DEV-077 視覺清理增補（2026-08-20）
+
+使用者後續以紅線標註選取關係線畫面中不需要的控制臂、導引線與方形控制點。DEV-077 對本 SPEC 的 selected-state 視覺契約做 intentional replacement：
+
+- 保留兩端 circular endpoints、endpoint anchor／reconnect、path、label、style、inline edit 與 Delete。
+- 移除 control arms、control guide 與 square control point 的 SVG decoration 與 HTML hit target。
+- 既有 `geometry.controlPoints` storage shape 與 path builder 相容性維持；不重設、不刪除已保存曲線資料。
+- QA-DEV-027E 的 control-point drag cases 由 QA-DEV-077 的「redlined controls absent」與 endpoint/path/label regression 取代；其他 relationship、zoom、style、keyboard 與資料清理案例維持。

@@ -327,14 +327,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得改變 click、right-click、8px threshold、drag commit／undo、cycle guard、手機 long-press、資料或 schema；本輪沒有部署授權。
   - 證據：`SPEC-065`、`QA-DEV-065`；Rework 14 為 DEV-068 補 outer scope／primary source 責任分離與 selected/focus-visible gate；Rework 13 依使用者示意將 L2 source marker 放回卡片 root，整張卡片使用 `primary-500` outer source frame，標題列不另加框，子任務區維持 `primary-400` 完整 group frame；既有雙層範圍、native tooltip、text/cursor與L3+完整框均保留。DEV-065 static 40/40、browser QA-065-001～015 15/15、TypeScript、ESLint、test build 與新截圖通過。
   - 計入交付：是
-- ● DEV-066 [交付點] [已完成] [P1] [QC PASS / 未 Release] 任務備註語意富文字與 AI 可讀內容
-  - 摘要：桌機／筆電讓每個任務備註欄以按需開啟的浮動工具編輯語意格式；手機不載入富文字編輯器，改為格式化唯讀與純文字追加；AI 取得去重且保留結構的安全文字投影。
-  - 來源 ID：`USER-20260812-TASK-NOTE-RICH-TEXT-AI-READABLE`
+- ○ DEV-066 [交付點] [待排] [P1] [Rework 4 Brief Ready / Human Confirmed / 未實作] 任務備註語意富文字與 AI 可讀內容
+  - 摘要：移除手機唯讀＋純文字追加分流，所有 viewport 統一使用既有 Lexical 任務備註編輯器；只保留 RWD 差異，canonical rich state、plain compatibility alias 與 AI 安全投影不變。
+  - 來源 ID：`USER-20260812-TASK-NOTE-RICH-TEXT-AI-READABLE`、`USER-20260820-DEV066-UNIFIED-MOBILE-TASK-NOTE-EDITOR`
   - 父任務：DEV-006、DEV-008、DEV-057
-  - 下一步：功能已完成；若要交付正式環境，另走 release gate。既有 nanoid advisory 與 DEV-047 MOD-047-013 finding 另立維護 DEV，不混入本交付。
-  - 阻塞 / 恢復條件：本輪無交付阻塞；未授權 migration、production 資料操作、部署或 release。
-  - 證據：2026-08-12 `/grilling` 決策 `1A／2A／3A`；`SPEC-066`、`ADR-042`、`QA-DEV-066`、`QC-DEV-066`；targeted lint、TypeScript、test build、RAG smoke、DEV-006／008／033／050 regression 與 1440／1024／390 rendered QC 通過。Rework 1 將 `本文／小標題` 改為完整中文標籤；Rework 2 恢復 B／I／U 與 Aa 刪除線圖示；Rework 3 將工具列移到 header 的 A 左側並改為 toggle-only 常駐。1024 toolbar 無裁切或水平 overflow。
-  - 計入交付：是
+  - 下一步：使用者要求實作時，先把 Rework 4 補至 `RD Implementation Ready`，再由 RD 移除手機分流／追加流程、共用既有 editor 並執行更新後的 QA/QC。
+  - 阻塞 / 恢復條件：不得新增第二套手機 editor、改變資料／API／權限／格式 allowlist／會議紀錄 editor，或以手機純文字全文覆寫 canonical rich state；命中任一項即停止並回 PM。
+  - 證據：`SPEC-066` Rework 4 Brief、`ADR-042` 2026-08-20 amendment、`QA-DEV-066` pre-implementation plan；`QC-DEV-066` 僅保留 Rework 1～3 歷史證據，舊 mobile zero-editor／append PASS 不再作為目前 release acceptance。
+  - 計入交付：是（Rework 4 尚未實作）
 - ● DEV-067 [交付點] [已完成] [P1] [QC PASS / 未 Release] 看板任務拖曳升級為 L1 列表
   - 摘要：讓 L2／L3+ 任務可拖到列表標頭升級為 L1，並以既有單一定位條顯示插入位置；列表內容區仍維持 L2 drop，尾端新增 L1 append target。
   - 來源 ID：`USER-20260814-KANBAN-L1-DRAG-PROMOTION`
@@ -408,59 +408,122 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得改變 DEV-027B／070／071／073 的鍵盤、選取、快速命名與 interaction owner，或 DEV-074 的單一 Scene／geometry dirty 契約；任一行為差異、selection 雙 owner、geometry recompute、效能 gate 失敗或需改資料／權限時立即停止。
   - 證據：`SPEC-075`、`QA-DEV-075`（Executed / QA PASS / QC PASS）、`output/playwright/dev-075-mindmap-keyboard-performance/result.json`、immutable baseline、center bridge rendered evidence、50／200／500節點真實鍵盤效能、互動／幾何／viewport evidence與targeted regressions。
   - 計入交付：是（未 Release）
+- ✓ DEV-076 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖左鍵抓取畫布平移
+  - 摘要：讓桌機使用者可在心智圖空白畫布按住滑鼠左鍵直接平移，同時保護節點拖曳、關係線、快速命名、空白點擊與單一 Scene 幾何契約。
+  - 來源 ID：`USER-20260820-MINDMAP-LEFT-MOUSE-CANVAS-PAN`
+  - 父任務：DEV-027
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 commit、push、deploy 或 release。
+  - 阻塞 / 恢復條件：若節點／control 起手也會 pan、拖曳後誤清 selection、純 pan dirty world geometry、touch／中鍵回歸或需要改資料／權限，立即停止並回 RD／PM。
+  - 證據：`SPEC-076`、`QA-DEV-076`（Executed / QA PASS / QC PASS）、`output/playwright/dev-076-mindmap-left-mouse-pan/result.json`、DEV-076 static 12/12、1440／1024 rendered mouse trace、390 boundary、DEV-027B browser、DEV-074／075／073／027B static、TypeScript、lint 與 `build:test`。
+  - 計入交付：是（未 Release）
+- ✓ DEV-077 [開發點] [完成] [P2] [RD Implemented / QA-QC PASS / 未 Release] 心智圖關係線紅線標記元素清理
+  - 摘要：依使用者附圖移除選取關係線的控制臂、導引線與方形控制點；保留端點圓形、關係線本體、標籤、樣式與既有端點操作。
+  - 來源 ID：使用者附圖與「紅線的元素刪除」；附圖紅筆僅作視覺標註，不是產品內容。
+  - 父任務：DEV-027
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 commit、push、deploy 或 release。
+  - Spec Impact：`Intentional replacement / mindmap-only visual cleanup`；不清除已保存的 relationship geometry，不改資料／API／權限。
+  - 證據：`SPEC-077`、`QA-DEV-077`（Executed / QA PASS / QC PASS）、`output/playwright/dev-077-mindmap-relationship-redline-cleanup/result.json`、DEV-077 static 6/6、DEV-027E static 24/24 + browser、DEV-027B browser、TypeScript、targeted ESLint、`build:test`。
+  - 計入交付：是（未 Release）
+- ✓ DEV-078 [開發點] [完成] [P2] [RD Implemented / QA-QC PASS / 未 Release] 心智圖工具列新增入口與快捷提示清理
+  - 摘要：移除心智圖工具列「新增任務」與快捷鍵提示，保留空畫布首個任務 fallback 及 Enter／Tab／Delete 鍵盤契約。
+  - 來源 ID：使用者 Browser Comment 1、Comment 2；刪除標註的兩個心智圖工具列元素。
+  - 父任務：DEV-027
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 commit、push、deploy 或 release。
+  - Spec Impact：`Intentional replacement / mindmap-only visual cleanup`；不改資料／API／權限。
+  - 證據：`SPEC-078`、`QA-DEV-078`（Executed / QA PASS / QC PASS）、`output/playwright/dev-078-mindmap-toolbar-cleanup/result.json`、DEV-078 static 5/5、1440／1024／390 browser matrix、Enter browser + Tab／Delete source／既有 keyboard regression、TypeScript、targeted ESLint、`build:test`。
+  - 計入交付：是（未 Release）
+- ✓ DEV-079 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖右鍵選單建立關聯線
+  - 摘要：在心智圖任務右鍵選單加入「建立關聯線」，以目前節點為起點沿用既有 endpoint selection 與 inline label 流程。
+  - 來源 ID：`USER-20260820-MINDMAP-CONTEXT-MENU-CREATE-RELATIONSHIP`
+  - 父任務：DEV-027
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 commit、push、deploy 或 release。
+  - Spec Impact：`Intentional extension / mindmap-only context-menu action`；不改 schema、storage、API 或 permission model。
+  - 證據：`SPEC-079`、`QA-DEV-079`（Executed / QA PASS / QC PASS）、`output/playwright/dev-079-mindmap-context-menu-create-relationship/result.json`、DEV-079 static 6/6、browser source／target／label／Escape／board exclusion、TypeScript、targeted ESLint、`build:test`、`git diff --check`。
+  - 計入交付：是（未 Release）
+- ✓ DEV-080 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 固定地端測試入口改用 localhost:4000
+  - 摘要：將固定測試環境的瀏覽器入口、Auth redirect、啟動器與 active browser verifier 統一為 `http://localhost:4000/`，保留 loopback bind 與歷史證據相容性。
+  - 來源 ID：`USER-20260820-CANONICAL-LOCALHOST-4000`
+  - 父任務：無（ADR-037 治理來源）
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本 DEV 不含 commit、push、deploy 或 release。
+  - 阻塞 / 恢復條件：若 `localhost:4000` 無法連線、Auth redirect／browser origin 不一致或 port owner 無法安全辨識，停止並回報，不改用另一個 canonical URL。
+  - 證據：`npm run verify:local-origin`（455 active files、無 stale reference）、`npm run verify:test-env`、`npm run dev:local`／`http://localhost:4000/` HTTP 200、DEV-079 browser smoke（canonical BaseUrl、console/page/network errors=0）、PowerShell parse、TypeScript、`build:test`、lint（0 errors／55 existing warnings）、`git diff --check`。
+  - 計入交付：否
+- ◐ DEV-081 [交付點] [進行中] [P1] [Implemented / Automated UI PASS（9 cases）/ Physical Mobile Pending / 未 Release] 手機看板 A／B 2～3 倍閱讀尺寸與雙指切換
+  - 摘要：保留手機看板現行 A 緊湊模式，新增 B 放大閱讀模式；B 的主要文字與幾何相對 A 必須為 2.0～3.0 倍（預設 2.5 倍），以看板內 pinch-out／pinch-in 或可見控制切換。
+  - 來源 ID：`USER-20260820-MOBILE-KANBAN-DUAL-SCALE-PINCH`
+  - 父任務：DEV-001、DEV-029；DEV-054 為 mobile drag regression authority。
+  - 下一步：QA／QC 依 `QA-DEV-081` 補完 20-case matrix、DEV-029／054 regression 與 iPhone Safari／Android Chrome physical gate；本輪不宣告 release。
+  - 阻塞 / 恢復條件：若 B 低於 2 倍、pinch 與 pan／tap／long-press／drag 雙 owner、需禁用全頁原生 zoom、需改資料／API／權限，或只能靠直接 store／API mutation 通過，停止並回 PM／RD。
+  - 證據：`SPEC-081`（Implemented / Automated UI PASS）、`QA-DEV-081`（21 項 FMEA；9-case browser smoke PASS；完整 matrix／實機 Not Run）、`output/playwright/dev-081-mobile-kanban-dual-scale-pinch/result.json`。
+  - 計入交付：是（RD implemented；完整 mobile QA 尚未完成）
+- ◇ DEV-082 [交付點] [驗證中] [P1] [Remote Gate Pending] 看板多人即時同步
+  - 摘要：補齊 Supabase Realtime publication、訂閱競態關閉、事件合併與標籤／成員同步，讓同一看板的其他已授權使用者自動收到更新。
+  - 來源 ID：`USER-20260820-BOARD-REALTIME-COLLABORATION`
+  - 父任務：DEV-026、DEV-036
+  - 下一步：release lane 先在 ProJED-TEST 套用 migration 並以兩個授權帳號完成新增／改名／拖曳／封存／標籤／依賴的雙瀏覽器 smoke；通過後才可套用 production migration 與部署。
+  - 阻塞 / 恢復條件：本輪未授權遠端 migration 或 deploy；沒有 authenticated two-user fixture，不宣稱正式環境即時同步已啟用。
+  - 證據：`SPEC-082`、`scripts/verify-dev-082-board-realtime-sync.ts` PASS、TypeScript、targeted ESLint、`build:test`、DEV-081 rendered browser 9/9 PASS（console／page／network errors=0）、`git diff --check`。
+  - 計入交付：是（本地實作完成；Remote Gate Pending）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
-- 狀態：Completed / QC PASS / Human Confirmed / 未 Release
+- 文件成熟度：Rework 4 `Brief Ready / Human Confirmed`；Rework 1～3 為歷史 `Implemented / QC PASS`
+- 狀態：待排 / Rework 4 尚未實作 / 未 Release
 - 節點類型：交付點
 - 父交付點：DEV-006、DEV-008、DEV-057
-- 是否計入產品交付完成：是
-- 原始需求邊界：`USER-20260812-TASK-NOTE-RICH-TEXT-AI-READABLE`
+- 是否計入產品交付完成：是（Rework 4 完成前不得視為目前契約已交付）
+- 原始需求邊界：`USER-20260812-TASK-NOTE-RICH-TEXT-AI-READABLE`；2026-08-20 `USER-20260820-DEV066-UNIFIED-MOBILE-TASK-NOTE-EDITOR`
 - 風險等級：Medium（跨桌機／手機 UI、內容相容與 AI indexing）
+- Spec Impact：`Intentional replacement`；只取代舊 `1A` 手機 zero-editor／append-only 契約，`2A／3A`、canonical rich state 與 AI 投影維持。
 
 ### 問題與使用者價值
 
-目前任務詳情的備註內容是純文字 `textarea`。使用者需要在桌機以 Gmail／Word／Excel 熟悉的方式表達標題、重點、清單與連結，但格式功能不常用，不應常態占用版位；同一份內容還必須讓 AI 穩定讀取與索引。手機的主要任務是閱讀與快速補記，不應載入或顯示富文字編輯器。
+既有 DEV-066 已在桌機提供 Lexical 語意富文字編輯器，但低於 768px 時切換成格式化唯讀內容與常駐純文字追加欄。這個手機專用分流占用狹窄 viewport、阻止使用者直接修改原備註，也讓同一個工作物件存在兩套操作心智模型。
 
-完成後，使用者可以在需要時才叫出格式工具，平時仍保有目前緊湊的備註畫面；桌機格式、手機補記與 AI 讀取走明確的資料方向，不因跨裝置操作而靜默遺失格式或重複餵給 AI。
+Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝置分流：手機與電腦共用同一個任務備註 editor、同一格式 allowlist、同一資料與儲存方向，只以 responsive layout 適應 viewport。完成後手機不再出現「追加文字」區塊，可直接編輯原備註且不降級桌機格式。
 
 ### Human Decision Brief
 
-- `1A`：手機不提供富文字編輯器。既有內容以安全的格式化唯讀方式呈現，另提供純文字追加欄；追加不得覆寫或降級原有桌機格式。
+- `1A`（2026-08-20 superseded）：手機不提供富文字編輯器，改用格式化唯讀與純文字追加。
 - `2A`：桌機第一版只提供語意格式：本文／小標題、粗體、斜體、底線、刪除線、項目清單、編號清單、連結與清除格式。
 - `3A`：每一個備註欄使用相同行為，各自具有按需叫出的格式按鈕與工具，不限定第一個預設備註。
-- 已拒絕：手機完整純文字覆寫、手機完全不可補記、Word-like 字型／字級／顏色／對齊／表格／圖片，以及只讓第一個備註支援格式。
+- `4A`（Human Confirmed）：手機與電腦使用同一個既有 Lexical 任務備註 editor；完全刪除手機追加欄與 append-only 操作，不另寫手機 editor 模組。
+- 保留：`2A／3A`、既有格式 allowlist、每則備註獨立 editor、canonical rich state、plain compatibility alias、AI 安全投影與權限行為。
+- 已拒絕：手機專用第二套 editor、手機純文字全文覆寫、維持 append-only 分流，以及擴張字型／任意字級／顏色／對齊／表格／圖片。
 
 ### 主要流程
 
-#### 桌機／筆電
+#### 所有 viewport
 
 1. 每個備註標題右側顯示低干擾的「文字格式」按鈕，與該備註的新增／刪除動作相鄰但語意分離。
-2. 工具列預設關閉且不占版位；點擊按鈕後顯示在同一 header row、格式按鈕左側，不推擠內容欄或改變 modal 高度。
-3. 工具列開啟後保持顯示；點進內容、持續輸入、點外部或按 `Escape` 均不收起，只有再次按同一個格式按鈕才關閉。
-4. 工具列操作需保留原本文字 selection；儲存、關閉前寫入、undo／redo、中文 IME、複製貼上與多備註行為不得退步。
+2. 每個可編輯備註直接掛載同一個 Lexical editor；不得依 `768px` breakpoint 切換成另一個內容編輯流程。
+3. 工具列預設關閉且不占版位；點擊按鈕後顯示同一組格式功能。桌機維持 header-inline placement，手機只做必要 responsive placement／overflow，不建立另一套 toolbar 行為。
+4. 工具列開啟後保持顯示；點進內容、持續輸入、點外部或按 `Escape` 均不收起，只有再次按同一個格式按鈕才關閉。
+5. 工具列操作需保留原本文字 selection；儲存、關閉前寫入、undo／redo、中文 IME、複製貼上與多備註行為不得退步。
+6. 沒有編輯權限時，同一 editor 以 readonly／disabled 狀態安全呈現，且不顯示可提交或格式控制。
 
-#### 手機
+#### 手機 responsive 邊界
 
-1. 不顯示格式按鈕，不掛載富文字編輯器或浮動工具列。
-2. 既有備註以安全 renderer 顯示其語意格式，使用者不能在手機直接覆寫格式化本文。
-3. 每個備註提供簡單純文字追加欄；成功追加後成為該備註的新段落，不改寫既有格式節點。
-4. 追加失敗時保留尚未提交的文字並提供可發現的重試方式，不得清空輸入。
+1. 不顯示舊「追加文字」label、textarea、追加按鈕或 append-only error surface。
+2. 手機可直接修改既有格式化本文，使用與桌機相同的本文／小標題／強調／清單／連結／清除格式及 undo／redo 能力。
+3. 軟鍵盤、觸控選字與格式按鈕不得造成 selection 遺失、modal 雙捲動、內容遮蔽、水平 overflow 或儲存失敗。
+4. 手機與桌機功能契約相同；允許的差異僅限工具列排列、可見寬度、觸控尺寸與 viewport/safe-area 適配。
 
 ### 初步範圍
 
 - 任務詳情中的所有 `TaskDetailNote` 內容欄。
-- 桌機／筆電按需開啟、header-inline 且 toggle-only 關閉的單列語意格式工具列，以及可見 focus／pressed 狀態與 tooltip。
+- 所有 viewport 共用既有 Lexical 任務備註 editor、按需開啟且 toggle-only 關閉的語意格式工具，以及可見 focus／pressed 狀態與 accessible name。
 - 本文／小標題、粗體、斜體、底線、刪除線、項目清單、編號清單、連結、清除格式。
 - Gmail／Word 貼上時只保留允許的語意格式；一般 `Ctrl+C/V`、純文字貼上、中文 IME、undo／redo 與 editor focus 內快捷鍵需一致。
-- 手機格式化唯讀 renderer 與每個備註的純文字追加流程。
-- 舊純文字備註向下相容，以及桌機保存／重開後格式 round-trip。
+- 移除 `useDesktopNoteEditor`、`TaskDetailNoteMobile` 與手機 append-only UI；現有 editor 元件改成不含裝置語意的共用元件，可重新命名但不得另建手機 editor。
+- `appendPlainTextToTaskNote` 僅在確認無其他 consumer 後移除；不得影響 safe renderer／projection 中仍被其他路徑使用的 utility。
+- 舊純文字備註向下相容，以及所有 viewport 保存／重開後格式 round-trip。
 - AI indexing 使用由受控內容模型產生的 Markdown 或等效語意文字投影，不把 raw HTML 直接送入 AI。
 - AI 文件需以備註為單位保留 `taskId`、`noteId`、`noteTitle` 與可用的更新資訊，並避免第一個備註由 `description` 與 `detailNotes` 重複索引。
 
 ### 初步範圍外
 
-- 手機富文字工具列、手機直接覆寫格式化本文。
+- 新增手機專用 editor engine、第二套儲存流程或不同格式 allowlist。
 - 字型、任意字級、文字／背景顏色、對齊、表格、圖片、附件、嵌入內容與程式碼區塊。
 - Excel 儲存格轉原生表格；第一版只保證可安全貼成純文字或允許的基本段落。
 - 多人即時協作、留言／修訂模式、版本歷史與 Word 等級版面能力。
@@ -469,11 +532,10 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 
 ### 驗收方向
 
-- 桌機每個備註欄都有自己的格式按鈕；工具列關閉時不占垂直版位，開啟後顯示在按鈕左側並持續存在，編輯內容不自動收起，開啟／關閉不造成 modal layout shift、裁切或非預期捲動。
-- 桌機語意格式、連結、清單、selection、中文 IME、貼上、undo／redo、明確儲存與 X 關閉前寫入，在保存並重開後結果一致。
-- 桌機 editor focus 內的 `Ctrl+B/I/U/K/Z/Y` 等熟悉快捷鍵作用於目前備註且不洩漏到外層任務快捷鍵；是否納入 `Ctrl+S` 於 RD Contract 階段依既有儲存契約決定。
-- 1440px 與 1024px viewport 可完整操作 header-inline toolbar；390px mobile 不出現格式按鈕、Lexical contenteditable 或水平 overflow。
-- 手機能閱讀桌機建立的格式化內容並以純文字追加；追加前後原有格式與文字不變，離線／失敗時輸入不遺失。
+- 1440／1024／390 viewport 的每個可編輯備註都由同一 Lexical editor 模組擁有，具有相同格式功能；手機 DOM 不存在 append-only UI。
+- 語意格式、連結、清單、selection、中文 IME、貼上、undo／redo、明確儲存與 X 關閉前寫入，在跨裝置保存並重開後結果一致。
+- 桌機既有 header-inline toolbar 幾何不得退步；手機格式工具完整可達、沒有 viewport 裁切或非預期水平 overflow。
+- 手機實際觸控選字後可套用格式且 selection 不遺失；軟鍵盤開啟時目前備註、工具列與儲存／關閉路徑仍可操作。
 - 舊的純文字備註不需人工轉檔即可閱讀、編輯與被 AI 搜尋；任何 lazy upgrade 必須可回復且不得產生空內容。
 - AI 輸入能保留標題、段落、清單、強調、連結與備註 metadata，不包含未清理 HTML／script，且相同第一備註不重複出現在同一份 RAG document。
 - 真實 rendered surface 的 desktop／laptop／mobile QC 必須包含主要互動、可見錯誤掃描、長內容、長連結、空內容、多備註與 readonly／disabled 狀態。
@@ -481,34 +543,35 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 ### 限制、風險與待 RD 決定事項
 
 - 現有 `recordLexicalContent` serializer 只保存純文字與 task mention token；不能直接加格式工具後沿用原 serializer，否則格式會在儲存時消失。
-- RD Contract 階段需決定單一 canonical rich state、純文字 fallback、AI 語意投影與 schema/version 邊界；投影是衍生資料，不得形成可各自編輯而漂移的三份正文。
-- 手機追加需有明確的 merge contract，保證只新增段落並處理同時更新；不得以手機純文字覆蓋整份 desktop rich state。
+- `ADR-042` 已固定單一 canonical rich state、純文字 fallback、AI 語意投影與 schema/version 邊界；Rework 4 不重新決策或修改這些契約。
+- 移除手機 append merge 路徑後，所有裝置都只能由 Lexical editor state 更新 canonical rich state，再單向產生 plain compatibility alias；不得引入裝置別寫入來源。
 - Gmail／Word HTML 貼上需 allowlist、URL protocol 檢查與清理；未知 node 或轉換失敗時降級為純文字，不得中斷輸入或保存不安全內容。
 - 既有 `description = 第一個備註` 相容別名與 RAG adapter 同時輸出 description／detailNotes 的重複風險，需在實作契約中指定唯一 AI owner 與 legacy fallback。
 
 ### Architecture Memory Capsule
 
-- 延續既有 Lexical 能力與經驗，不在同一產品中引入第二套 editor engine；是否抽成共用 core 於 RD Contract 階段依回歸成本決定。
+- 直接泛化既有任務備註 Lexical editor，不抽出新手機 core、不引入第二套 editor engine，也不修改會議紀錄 editor。
 - 富文字原稿與 AI 輸入分層：原稿負責無損重開，AI 只讀安全且去重的語意投影；raw HTML 不作 canonical source，也不直接送入 AI。
-- 手機永遠不掛載富文字 editor；若未來要求手機直接修改格式化本文，視為產品方向改變並重新進入 Human Decision／RD Contract。
+- 任務備註只有一個 editor responsibility boundary；desktop/mobile 是同一元件的 responsive 呈現，不是兩個產品模式或兩套寫入來源。
 
-### RD Implementation Contract
+### 既有 Architecture Contract 與 Rework 4 Direction（非 Implementation Ready）
 
 - Canonical：`TaskDetailNote.richContent` 儲存帶 `task-note.lexical-v1` 版本的 Lexical JSON；`content` 為由 canonical state 衍生的純文字相容別名，`description` 繼續只鏡像第一則備註純文字。投影不可反向覆寫 rich state。
-- Legacy：沒有 `richContent` 的舊備註以 `content` 開啟，只在首次實際編輯或手機追加時 lazy upgrade；無 migration，現有 Supabase `detail_notes` JSONB 繼續完整儲存可選欄位。
-- Desktop：只在 `min-width: 768px` 掛載 Lexical；每則備註各有一個格式按鈕與 header-inline toolbar，工具列絕對定位於按鈕左側且不改變 card/modal 幾何。開啟狀態只由該按鈕切換，editor focus、內容輸入、outside click 與 Escape 不關閉。格式限於 2A allowlist，`Ctrl+S` 阻止瀏覽器另存並呼叫任務明確儲存。
-- Mobile：低於 768px 不 render 格式按鈕、LexicalComposer 或 `contenteditable`；安全 renderer 僅處理 allowlist node，追加只在 root 尾端新增純文字 paragraph，失敗前不清空 draft。
+- Legacy：沒有 `richContent` 的舊備註以 `content` 開啟，只在任一 viewport 首次實際編輯時 lazy upgrade；無 migration，現有 Supabase `detail_notes` JSONB 繼續完整儲存可選欄位。
+- Unified Editor：移除 `min-width: 768px` editor gate；每則可編輯備註在所有 viewport 掛載同一 Lexical editor、同一格式 toggle／commands／save flow。桌機維持既有 header-inline 幾何，手機只新增同元件內的 responsive style 與必要 touch selection protection。
+- Module Boundary：不得新增 mobile editor module；現有 `TaskDetailNoteDesktopEditor` 應泛化／重新命名為裝置中立元件。原 mobile readonly renderer 可僅在載入 fallback 或共用 readonly 需求確實需要時保留，不得再作為手機專用寫入分支。
 - Clipboard/security：不儲存 raw HTML；未知 node 轉成其文字 children，連結只允許 `http:`、`https:`、`mailto:`、`tel:`，其餘以純文字顯示。
 - AI：`wbsRagAdapter` 由 rich state 生成受控 Markdown 投影並加入 note id/title metadata；有 `detailNotes` 時不再另輸出 `description`，無 detail notes 時才使用 legacy description fallback。
-- Repo impact：`src/types/index.ts`、`src/utils/taskNoteRichContent.ts`、`src/components/TaskNotes/*`、`src/components/TaskDetailsModal.tsx`、`src/services/rag/wbsRagAdapter.ts`、Lexical 直接相依、DEV-066 verifier 與現有備註 browser verifier 相容更新。
+- Rework 4 repo impact：`src/components/TaskNotes/TaskDetailNoteField.tsx`、現有 `TaskDetailNoteDesktopEditor.tsx` 的泛化／重新命名、`src/utils/taskNoteRichContent.ts` 未使用 append helper 清理、DEV-066 verifier 與受影響 browser verifier。`src/types/index.ts`、`TaskDetailsModal` save contract、`wbsRagAdapter`、Lexical dependency 與 schema 預期不需產品行為變更，只做 regression gate。
 
 ### 執行邊界與下一步
 
-- 本輪執行邊界：已授權完成 DEV-066 的 RD、最小 QA 與 targeted QC；不含 migration、production 資料操作、部署與 release。
-- Quality gate：必須通過 TypeScript、targeted static/unit verifier、現有受影響備註回歸，並在 1440／1024／390 viewport 完成真實 rendered QC 與可見錯誤掃描。
-- Stop condition：如需改動 Supabase schema、會議紀錄 editor 行為、手機全文覆寫或格式 allowlist，停止並重回 Human Decision；本輪不自動 release。
+- 本輪執行邊界：只同步 Rework 4 的 Human Decision 與 Brief；未授權產品程式、測試、migration、production 資料操作、部署或 release。
+- 下一步：使用者要求實作或完成 dev_task 時，補齊逐檔 patch intent、touch／keyboard failure recovery 與 executable evidence commands，將 Rework 4 升級為 `RD Implementation Ready` 後再交 RD。
+- Quality gate 方向：TypeScript、targeted verifier、DEV-033／050 與既有資料／AI regression；1440／1024／390 rendered QC，加上 iOS Safari／Android Chrome 實機觸控選字與軟鍵盤證據。
+- Stop condition：若必須新增第二套 editor、改 schema／API／權限／格式 allowlist／會議紀錄 editor，或只能以 plain text 覆寫 canonical rich state，停止並回到 PM／Human Decision；本輪不自動 release。
 
-### Completion Evidence
+### 歷史 Completion Evidence（Rework 1～3）
 
 - RD：完成版本化 Lexical JSON canonical、desktop on-demand semantic editor、mobile safe renderer＋append-only merge、plain compatibility alias 與 AI safe Markdown projection。
 - QA：targeted contract suite、TypeScript、ESLint、P9 RAG local smoke、test build、DEV-006／008 static 與 DEV-033／050 browser regressions 通過。
@@ -517,15 +580,17 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - Rework 2：依使用者標註恢復粗體／斜體／底線的 B／I／U 圖示，刪除線改用不含 S 的 Aa 加水平線圖示；三種 viewport browser suite 再驗 PASS，沒有規格契約漂移。
 - Rework 3：依使用者圖片將工具列移到 header 的 A 按鈕左側；輸入、outside click 與 Escape 不收起，只有再次點 A 關閉。SPEC／QA 已按明示需求作 `Intentional replacement`，targeted lint、TypeScript、static verifier 與 1440／1024／390 browser suite PASS。
 - 證據文件：SPEC-066、ADR-042、QA-DEV-066、QC-DEV-066；screenshots 位於 output/playwright/dev-066-task-note-*.png。
-- Release：未執行；Supabase schema/migration、production 資料與部署均未變更。
+- Rework 4 證據邊界：上述 mobile zero-editor／append PASS 是舊契約的歷史事實，不得作為新統一 editor 契約的通過證據；Rework 4 尚未實作或驗證。
+- Release：未執行；Rework 4 完成並重跑新 QA/QC 前不得進入 DEV-066 release gate。
 
 ### Spec Governance 結論
 
 - SPEC-006：`Intentional successor`；保留其「DEV-006 不含富文字工具列與 editor JSON」歷史完成邊界，DEV-066 另行承接新能力。
 - SPEC-008／DEV-057：`Compatible extension`；任務知識仍由任務詳情查找，儲存與 X 關閉前寫入不可退步。
 - ADR：建立 `ADR-042`，記憶 canonical Lexical JSON／plain compatibility alias／safe AI projection 的跨模組單向資料契約。
-- Spec／QA 文件：建立 `SPEC-066` 與 `QA-DEV-066`，作為本輪 RD／QA／QC 交接契約。
-- 剩餘產品決策：無。格式 allowlist、desktop/mobile 邊界與每備註一致性已由 `1A／2A／3A` 確認。
+- Rework 4：使用者 2026-08-20 明確取代舊 `1A`，分類為 `Intentional replacement`；`2A／3A` 與資料／AI architecture 相容保留，不新增 DEV 或 ADR。
+- Spec／ADR／QA／QC／documentation map：已同步新的 authoritative direction；QC 僅保留歷史 evidence validity notice。
+- 剩餘產品決策：無。下一個 re-entry 是使用者要求實作時補至 `RD Implementation Ready`，不是再詢問是否需要手機專用模組。
 
 ## DEV-067：看板任務拖曳升級為 L1 列表
 
@@ -1102,6 +1167,281 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - 若 500+ 可見節點在 selection isolation 後仍無法達成 gate，再評估 subtree virtualization 或 renderer 分層；re-entry 前必須先確認可見順序、focus accessibility、connector anchor 與搜尋／跳轉行為不被破壞。
 - 若使用者希望方向鍵依畫面幾何選最近節點，而不是現行可見 DOM 順序，另立產品行為契約，不與 DEV-075 效能修正合併。
 
+
+## DEV-076：心智圖左鍵抓取畫布平移
+
+- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
+- 狀態：完成 / Implemented / QA PASS / QC PASS / 未 Release
+- 節點類型：開發點
+- 父交付點：DEV-027
+- 是否計入產品交付完成：是（未 Release）
+- 原始需求邊界：`USER-20260820-MINDMAP-LEFT-MOUSE-CANVAS-PAN`
+- 風險等級：Medium（心智圖主要 pointer owner、selection lifecycle 與 world geometry regression；不涉及資料模型或後端）
+- Spec Impact：`Intentional replacement / mindmap-only extension`
+
+### Authoritative Package
+
+- 實作契約：`ai-doc/specs/SPEC-076-mindmap-left-mouse-canvas-pan.md`
+- 驗證計畫：`ai-doc/qa/QA-DEV-076-mindmap-left-mouse-canvas-pan.md`
+- 座標與 viewport authority：SPEC-074；task interaction／quick-title authority：SPEC-070／071／073；mobile boundary：SPEC-029。
+- ADR：不新增。這是 mindmap-only、可逆且由既有 viewport scroll authority 承接的手勢擴充。
+
+### Current Execution Contract
+
+- **目的**：空白畫布左鍵拖曳超過 6px 後以 direct pan 公式更新 viewport 兩軸 scroll，呈現 grab／grabbing 回饋。
+- **Interaction Owner**：task node、center、toggle、relationship controls、semantic controls、native scrollbar、relationship/tool drag 狀態不得被 canvas pan 接管。
+- **Selection**：有效 pan 吞掉後續 click並保留選取；門檻內普通 blank click 仍清除選取。
+- **Architecture**：left pan 與既有 middle velocity pan 使用獨立 ephemeral refs；不以 React state 驅動 pointermove，不修改 scene matrix、world path、geometry dirty、資料或 undo。
+- **Acceptance**：SPEC-076 AC-001～007、QA-DEV-076 case 001～010、1440／1024 rendered evidence、390 mobile negative boundary與 visible-error hard gate。
+- **Stop Conditions**：第一個 owner、selection、geometry、data、touch/middle、cursor cleanup 或 visible error drift 即停止並回 RD。
+- **Release Boundary**：本輪只含 local code、test、evidence 與必要文件；不含 commit、push、PR、merge、deploy、production data 或 release。
+
+### Execution Result
+
+- Spec Impact Preflight：使用者本輪指令明確擴充 SPEC-074 的既有 middle-pan baseline，分類為 `Intentional replacement / mindmap-only extension`；SPEC-074 已加入 DEV-076 left-pan 相容增補。
+- RD 已在 `mindMapPan.ts` 建立 6px pure threshold／direct scroll／blocked-target／scrollbar guard，在 `MindMapView` 以 refs + window lifecycle 接管 active-only pan／click suppression，CanvasShell／CSS 提供 telemetry 與 grab/grabbing；未改 scene matrix、資料或 permission。
+- QA/QC：DEV-076 static 12/12；1440x900 與 1024x768 的 `-120/-80` pointer 均精確得到 `+120/+80` scroll，selection／paths／recompute／task與relationship storage 不變，node／center／toggle／relationship-tool owner、2px blank click 與 cancel cleanup通過。
+- Rendered evidence：`output/playwright/dev-076-mindmap-left-mouse-pan/result.json`；desktop/laptop active/final與390 boundary screenshots已目視，scroll owner=1、document overflow=0，console/page/network/visible errors=0。
+- Regression／工程 gate：DEV-027B browser（含middle pan、relationship、node drag、zoom）PASS；DEV-074／075／073／027B static、TypeScript、targeted ESLint、`build:test` PASS。
+- Spec Drift：`In sync`。SPEC-076、SPEC-074增補、QA、runtime與evidence一致；ADR不需要，沒有高影響 deferred scope或 blocker。
+- Runtime boundary：重用同專案既有 primary port 4000（listener PID 42856），本輪未啟動或停止 server，沒有新增 cleanup obligation。
+- 本地實作未執行commit、push、PR、merge、deploy、production data或release；若要release，需由使用者另行提出並進既有release gate。
+
+## DEV-077：心智圖關係線紅線標記元素清理
+
+- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
+- 狀態：完成／Implemented／QA PASS／QC PASS／未 Release
+- 節點類型：開發點
+- 父交付點：DEV-027
+- 是否計入產品交付完成：是（未 Release）
+- 原始需求邊界：使用者附圖與「紅線的元素刪除」；附圖紅筆僅作視覺標註，不是產品內容。
+- 風險等級：Low–Medium（selected relationship visual owner 與 endpoint 操作；不涉及資料模型或後端）
+- Spec Impact：`Intentional replacement / mindmap-only visual cleanup`
+
+### Authoritative Package
+
+- 實作契約：`ai-doc/specs/SPEC-077-mindmap-relationship-redline-cleanup.md`
+- 驗證計畫：`ai-doc/qa/QA-DEV-077-mindmap-relationship-redline-cleanup.md`
+- 產品與座標 authority：SPEC-027E、SPEC-074、SPEC-076；本 DEV 只覆寫 selected relationship 的輔助視覺元素。
+- ADR：不新增；不改 schema、storage shape、permission 或後端。
+
+### Current Execution Contract
+
+- **移除**：兩側 control arms、control guide 與 square control points（SVG decoration 與 HTML drag hit target）。
+- **保留**：relationship path／arrow／style／label、hover／selection／inline edit／Delete、兩端 circular endpoint 與 endpoint anchor／reconnect。
+- **資料相容**：既有 `geometry.controlPoints` 仍可被 path builder 讀取，不因視覺清理被重設或刪除。
+- **驗收**：SPEC-077 AC-001～005、QA-DEV-077、1440／1024／390 viewport visible-error sweep 與 relationship／pan regression；DEV-077 static 6/6、DEV-027E static 24/24 + browser、DEV-027B browser 均通過。
+- **停止條件**：endpoint、path、label、style drawer、Delete／Escape 或 viewport 出現行為差異；或需要資料／權限／後端變更時停止並回 PM。
+
+### Execution Result
+
+- RD 已移除關係線 selected state 的 control arms、control guide 與方形控制點，並移除不再使用的 map-local control-arm visual adapter；endpoint 與既有 relationship owner 保留。
+- QA/QC：DEV-077 static 6/6；1440x900 selected／zoomed、1024x768 laptop 與 390 mobile boundary browser artifact 的 redline selector 全為 0，endpoint=2、path=1、label=1，console/page/network errors=0；DEV-027E static 24/24 + browser、DEV-027B browser、TypeScript、targeted ESLint、`build:test` 通過。
+- Spec Drift：`In sync`。SPEC-077、QA、runtime、artifact 與 DEV-027E addendum 一致；不新增 ADR，無 blocker。
+- 本輪未執行 commit、push、PR、merge、deploy、production data 或 release；若要 release，需由使用者另行提出並進 release gate。
+
+## DEV-078：心智圖工具列新增入口與快捷提示清理
+
+- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
+- 狀態：完成／Implemented／QA PASS／QC PASS／未 Release
+- 節點類型：開發點
+- 父交付點：DEV-027
+- 是否計入產品交付完成：是（未 Release）
+- 原始需求邊界：Browser Comment 1、Comment 2；只刪除標註的「新增任務」按鈕與快捷鍵提示，不把圖片上的文字視為額外指令。
+- 風險等級：Low（toolbar DOM cleanup；keyboard／empty-state fallback regression）
+- Spec Impact：`Intentional replacement / mindmap-only visual cleanup`
+
+### Authoritative Package
+
+- 實作契約：`ai-doc/specs/SPEC-078-mindmap-toolbar-cleanup.md`
+- 驗證計畫：`ai-doc/qa/QA-DEV-078-mindmap-toolbar-cleanup.md`
+- 產品 authority：SPEC-027、SPEC-027B、SPEC-073；本 DEV 僅清理 toolbar visual affordance，不改 keyboard／quick-title／資料契約。
+- ADR：不新增；不改 schema、storage shape、permission 或後端。
+
+### Current Execution Contract
+
+- **移除**：toolbar `data-mindmap-create-root` button 與快捷鍵提示文字。
+- **保留**：關聯線、zoom、唯讀 badge、empty-state 首個任務 fallback、Enter／Tab／Delete commands。
+- **資料相容**：`handleCreateRoot`、`createTask` 與既有 permission guard 保留。
+- **驗收**：SPEC-078 AC-001～005、QA-DEV-078、1440／1024／390 viewport visible-error sweep 與 keyboard regression；DEV-078 static 5/5 + browser pass。
+- **停止條件**：新增／刪除／關聯線／zoom 行為差異、empty-state 失去建立入口、手機 boundary overflow 或需資料／權限／後端變更時停止並回 PM。
+
+### Execution Result
+
+- RD 已移除 toolbar「新增任務」與快捷鍵提示，並移除 toolbar 不再需要的 props／icon；empty-state fallback 與 keyboard command 維持。
+- QA/QC：DEV-078 static 5/5；1440x900、1024x768、390x844 browser artifact 的 create button／hint 均為 0，zoom／relationship 保留，Enter root browser 與 Tab／Delete source contract 通過，console/page/network errors=0。
+- Spec Drift：`In sync`。SPEC-078、QA、runtime、artifact 與 Browser Comments scope 一致；不新增 ADR，無 blocker。
+- 本輪未執行 commit、push、PR、merge、deploy、production data 或 release；若要 release，需由使用者另行提出並進 release gate。
+
+## DEV-079：心智圖右鍵選單建立關聯線
+
+- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
+- 狀態：完成／Implemented／QA PASS／QC PASS／未 Release
+- 節點類型：開發點
+- 父交付點：DEV-027
+- 原始需求邊界：使用者要求「心智圖模式下, 右鍵清單新增建立關聯線」；只處理心智圖 task context menu，不把附圖或瀏覽器 ambient text 視為額外需求。
+- 風險等級：Medium（context-menu action routing、transient relationship mode、permission／mode exclusion）
+- Spec Impact：`Intentional extension / mindmap-only context-menu action`
+
+### Authoritative Package
+
+- 實作契約：`ai-doc/specs/SPEC-079-mindmap-context-menu-create-relationship.md`
+- 驗證計畫：`ai-doc/qa/QA-DEV-079-mindmap-context-menu-create-relationship.md`
+- 關聯線互動 authority：SPEC-027C、SPEC-027E；task menu／interaction authority：既有 task action catalog、profiles、GlobalContextMenu。
+- ADR：不新增；不改 schema、storage shape、API 或 permission model。
+
+### Current Execution Contract
+
+- **新增**：心智圖 task menu action `task.create-relationship`，顯示「建立關聯線」與起點提示。
+- **路由**：右鍵 action dispatch `start-mindmap-relationship`，由 `MindMapView` 進入既有 relationship draft selection，使用右鍵節點作為 source。
+- **完成**：點擊 target 後沿用 inline label editor、關係線 persistence、既有 self-link guard；Escape 取消 transient mode。
+- **邊界**：list／board／gantt／calendar menu 排除 action；`edit` capability disabled guard 保留。
+- **驗收**：SPEC-079 AC-001～006、QA-DEV-079 browser source／target／label／Escape／non-mindmap exclusion 與 responsive visible-error gate。
+- **停止條件**：右鍵 menu label／visibility、source selection、target editor、Escape、permission disabled、既有 Delete／開啟明細或 mobile boundary 出現差異時停止並回 PM。
+- **Release Boundary**：本 DEV 只含 local code、test、evidence 與必要文件；不含 commit、push、PR、merge、deploy、production data 或 release。
+
+### Execution Result
+
+- RD 已完成 action type／catalog／profile／menu rendering、GlobalContextMenu event routing 與 MindMapView relationship draft activation；沿用既有 endpoint／label／cancel owner，未新增第二套關聯線資料流程。
+- QA/QC：DEV-079 static 6/6；browser 右鍵 action、source／target、inline label、Escape、board exclusion、1440／1024／390 viewport 通過，artifact 的 console/page/request errors=0、overflow=0；DEV-027E relationship UX parity browser regression 亦通過；TypeScript、targeted ESLint、`build:test`、`git diff --check` 通過（targeted ESLint 僅既有 GlobalContextMenu 2 warnings）。
+- Spec Drift：`In sync`。SPEC-079、QA、runtime 與 artifact 一致；不新增 ADR，無 blocker。
+- Runtime boundary：重用同專案既有 primary port 4000；本 DEV 不啟動第二個 server，完成後不停止使用者既有 primary runtime。
+- 本地實作未執行 commit、push、PR、merge、deploy、production data 或 release；若要 release，需由使用者另行提出並進既有 release gate。
+
+## DEV-080：固定地端測試入口改用 localhost:4000
+
+- 文件成熟度：`RD Implementation Ready`
+- 狀態：完成／Implemented／QA PASS／QC PASS／未 Release
+- 節點類型：開發點
+- 父交付點：無（ADR-037 治理來源）
+- 原始需求邊界：使用者選定 `http://localhost:4000/` 作為長期固定地端測試入口；只處理 local-test browser origin，不把 production、P9／preview port 或資料庫 loopback 位址一併改寫。
+- 風險等級：Medium（跨 launcher、Auth redirect、browser verifier、測試證據與 origin-scoped browser state）
+- Spec Impact：`Compatible exception / local browser origin canonicalization`；不改 schema、storage shape、API contract、permission model 或 production domain。
+
+### Authoritative Package
+
+- 決策 authority：`ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md`
+- 防回歸 verifier：`scripts/verify-local-origin.mjs`／`npm run verify:local-origin`
+- 直接受影響：`package.json`、`.env.test.example`、`.env.test.local`、`scripts/local-test-server.ps1`、active browser verifier 與 `README.md`。
+- 歷史 QA/QC、archive、Supabase DB loopback、P9／preview URL 不在本 DEV 修改範圍。
+
+### Current Execution Contract
+
+- **Canonical**：所有 local-test browser opening、Auth redirect、新 QA/QC 證據與文件使用 `http://localhost:4000/`。
+- **Bind**：Vite 維持 loopback-only bind；`127.0.0.1` 可作 server bind，不作 user-facing URL。
+- **Safety**：固定 port 被占用時先辨識 owner；未驗證 owner 不可 stop／restart。
+- **State**：`localhost` 與 `127.0.0.1` 是不同 browser origin，既有 local state 不自動搬移。
+- **Release boundary**：本 DEV 只含 local code、test、evidence 與必要文件；不含 commit、push、PR、merge、deploy、production data 或 release。
+
+### 驗收標準
+
+- `npm run dev:local` 啟動或重用固定伺服器後，輸出並開啟 `http://localhost:4000/`。
+- active `package.json`／launcher／browser verifier／test env 不再產生 `http://127.0.0.1:4000`。
+- `npm run verify:local-origin`、`npm run verify:test-env`、TypeScript、targeted lint／build 通過。
+- 既有 `127.0.0.1` bind、資料庫/API loopback、P9／preview 與歷史 evidence 未被誤改。
+
+### Execution Result
+
+- RD：已完成 canonical origin、launcher URL、active browser verifier、test redirect 與 README 收斂；新增未驗證 port owner 保護與 local-origin verifier。
+- QA/QC：`verify:local-origin` 通過（455 active files、staleReferences=0）；`verify:test-env` 通過且 redirect=`http://localhost:4000/`；`npm run dev:local` 重用既有 primary runtime（PID 42856）並輸出 canonical URL；HTTP smoke 200；PowerShell syntax、TypeScript、`build:test`、`git diff --check` 通過；lint 0 errors／55 warnings；DEV-079 browser smoke 以 canonical BaseUrl 通過，console/page/network errors=0、390px overflow=0。
+- Spec Drift：`In sync`。ADR-037、DEV-080、launcher、active verifier、test env、README 與 runtime evidence 一致；不改 production、DB loopback、P9／preview 或歷史 evidence，無 blocker。
+- 本地實作未執行 commit、push、PR、merge、deploy、production data 或 release；若要 release，需由使用者另行提出並進既有 release gate。
+
+## DEV-081：手機看板 A／B 2～3 倍閱讀尺寸與雙指切換
+
+- 文件成熟度：`Implemented / Automated UI PASS`
+- 狀態：完成 RD 本地實作／9-case browser smoke PASS／完整 QA 與實機待補／未 Release
+- 節點類型：交付點
+- 父交付點：DEV-001、DEV-029；DEV-054 為 task drag regression authority
+- 原始需求邊界：使用者要求保留手機看板現況 A，新增明顯較大的 B，於看板工作區以雙指放大切 B、雙指縮小切 A；後續明確更正放大幅度至少 2～3 倍。
+- 風險等級：Medium（手機核心 UI、多指手勢仲裁、捲動／拖曳幾何與可存取性）
+- Spec Impact：`Compatible extension`；不取代 `SPEC-029` Pan-First、`SPEC-054` drag owner，不改 schema、API、permission 或 domain data。
+
+### 問題與產品決策
+
+現行緊湊看板適合總覽，但部分文字與操作面過小。B 不採 12～16px 的微調方案，而是把欄頭、L2／L3+ 標題、日期／標籤、欄寬、卡片內距及主要點擊目標協調放大；六組代表性線性尺寸的 `B/A` 都必須在 `2.0～3.0`，RD 預設基準為 `2.5`。
+
+2.5 倍線性放大約需 6.25 倍面積，因此 B 只顯示局部內容是預期行為。產品以看板內平移、pinch 中點錨定與唯一 scroll owner 維持方向感；不得用縮小幅度換取假總覽，也不得把 App shell 一起放大。
+
+### Authoritative Package
+
+- 產品／RD 契約：`ai-doc/specs/SPEC-081-mobile-kanban-dual-scale-pinch.md`
+- QA FMEA／AI UI-only 驗證：`ai-doc/qa/QA-DEV-081-mobile-kanban-dual-scale-pinch.md`
+- 既有互動 authority：`SPEC-029`／`QA-DEV-029`、`SPEC-054`／`QA-DEV-054`
+- 不新增 ADR；若未來要全 App 連續縮放、browser viewport zoom 或跨模式縮放引擎，再另立決策。
+
+### Implemented Package / QA Evidence
+
+- 新增 `kanbanViewSize.ts`、`KanbanViewSizeProvider.tsx`、`kanbanViewSizeAnchor.ts`，分別擁有純契約／本機帳號偏好、React state與anchor adapter、board scroll capture／restore。
+- `App.tsx`負責authenticated provider；`MainLayout.tsx`負責mobile board可見toggle；`BoardView.tsx`以單一canvas ref接合provider、pan broker、drag cancel與root selectors。
+- `useMobilePanBroker.ts`是唯一multi-touch owner；`useLongPress.ts`、`useTouchTapGuard.ts`只做defense in depth；`useTaskDragSession.ts`固定暴露reason=`multitouch`的零提交cancel。
+- preference key固定`projed-kanban-view-size:v1:account:<encoded-account-id>`，只存本機`compact|large`；不修改`accountPreferencesService`、profiles、schema、API或permission。
+- CSS以board-root tokens將A現況與B=2.5倍離散重排；L3 indent改用CSS depth variable。禁止CSS `zoom`、`transform: scale`、全頁touch-action或viewport禁縮。
+- 逐檔patch manifest、typed contract、threshold、anchor演算法、failure recovery、S0～S4 slice、commands、artifact與本機feature recovery已寫入`SPEC-081`；P0／P1 readiness gap=`0`。
+
+### 核心契約
+
+- A=`compact/1.0`；B=`large/2.0～3.0`，預設 `2.5`。看板 root 暴露穩定 mode state，工具列提供可見且可存取的 A／B toggle，pinch 不得是唯一入口。
+- 手勢狀態機為 `IDLE → PINCH_CANDIDATE → COMMITTED → WAIT_ALL_RELEASE → IDLE`；第二指先取消尚未提交的 tap／pan／long-press，單次 gesture 最多切換一次。
+- A→B 需同時達 `d/d0 >= 1.15` 與距離增加至少 24px；B→A 需 `d/d0 <= 0.87` 與距離減少至少 24px。兩指等距平移、門檻內抖動、第三指或 cancel 不得誤切。
+- active task drag 後加入第二指時，只能零提交取消 drag，不得 drop 或切模式；modal／input／popover／action rail 等受保護 owner 內手勢不得穿透看板。
+- 切換採 layout reflow 與 canonical geometry；不用 CSS `zoom`，不得以視覺 transform 建立第二套 hit-test／drag／overlay 座標。
+- 顯示模式僅為同帳號同裝置 preference，不 dirty board／task，不寫 activity log，不新增 schema／API／permission。
+
+### QA 交付與驗收
+
+- QA 已完成 21 項 pre-implementation FMEA，風險包含倍率不足、long-press／drag 雙 owner、pinch release 誤點、browser 原生 zoom 衝突、active drag 誤 drop、stuck state、scroll owner、anchor drift、transform 座標錯位、偏好污染、desktop 外溢與 emulator／真機落差。
+- AI 計畫包含 20 項 browser UI-only cases；只允許真實 locator／keyboard／pointer 與 CDP multi-touch 操作，加上唯讀 DOM／geometry／error 收證。禁止直接 store、API、storage、DOM mutation 或 `dispatchEvent` 製造通過狀態。
+- Automated browser matrix：320x844、390x844、430x932、844x390、touch 1024x768；desktop 1024x768／1440x900 為 negative boundary。
+- iPhone Safari 與 Android Chrome 各需 physical supplemental gate。只有 automated evidence 時，結論最多為 `Automated UI PASS / Physical device pending / 未充分驗證`。
+- 本輪 evidence：`npm run verify:dev-081-mobile-kanban-dual-scale-pinch` PASS；browser `QA-081-R01～R09` 全 PASS，artifact=`output/playwright/dev-081-mobile-kanban-dual-scale-pinch/result.json`，console／page／request errors=0；320／430／touch-1024、DEV-029／054 regression 與實機尚未執行。
+
+### 下一步、停止條件與 release boundary
+
+- 下一步：QA／QC 補完 20-case matrix、DEV-029／054 regression 與 iPhone Safari／Android Chrome physical gate；第一個 slice failure 或 scope 升級即停止。
+- 任一倍率低於 2.0／高於 3.0、pinch 造成資料異動或誤觸、body overflow、控制項不可用、stuck owner、需停用全頁 browser zoom、需改 schema／API／permission，立即停止。
+- 本輪已完成 S0～S4 產品與 verifier 實作，啟動並清理本地 test runtime，執行 pure verifier、typecheck、test build 與 9-case browser smoke；未執行完整 20-case QA、實機、commit、push、PR、merge、deploy、production data 或 release。
+
+
+## DEV-082：看板多人即時同步
+
+- 文件成熟度：`Implemented / Local QA-QC PASS`
+- 狀態：本地實作完成／remote migration 與 authenticated two-user smoke 待 release gate／未 Release
+- 節點類型：交付點
+- 父交付點：DEV-026、DEV-036
+- 是否計入產品交付完成：是（Remote Gate Pending）
+- 原始需求邊界：不同已授權使用者同時開啟同一看板時，任務與其可見協作資料需自動同步，不要求重新整理。
+- 風險等級：Medium（共享資料即時訂閱、publication、跨使用者一致性；正式 migration 屬 High gate）
+- Spec Impact：`Intentional extension`；沿用 Supabase、現行 RLS、partial update 與 optimistic UI，不改 role capability 或資料欄位。
+
+### 效用決策與範圍
+
+現有產品已使用 Supabase Postgres Changes client channel，但 migration history 沒有 publication contract，且 callback 對每個事件平行整板重讀。相較另建 Broadcast trigger／private topic／Realtime Authorization，補強既有 Postgres Changes 的導入成本與回歸風險較低，能最快取得目前團隊規模所需的同步效用；未來若 event volume、授權檢查成本或延遲超過 gate，再以 Broadcast 作 re-entry。
+
+ADR not needed：本輪不更換 provider 或既有 realtime 架構，只把現行 Postgres Changes 補到可運作且可驗證；Broadcast 是規模門檻觸發後的 future re-entry，不是本輪互斥架構決策。
+
+本 DEV 包含 task、dependency、tag assignment、workspace／board metadata、member／role／profile 的現行 channel tables；不包含 presence、逐字共編、CRDT／OT、離線 merge、欄位鎖或版本歷史。同一欄位同時寫入仍由資料庫最後提交者生效。
+
+### Authoritative Package / Implemented Package
+
+- `ai-doc/specs/SPEC-082-board-realtime-collaboration.md`：資料流、race closure、single-flight、failure recovery、migration、驗收與 release boundary。
+- `supabase/migrations/20260820080310_board_realtime_collaboration.sql`：以 `pg_publication`／`pg_publication_tables` 可重複檢查後，把現行 subscription tables 加入 `supabase_realtime`；不改 RLS。
+- `src/utils/coalescedAsyncRefresh.ts`：40ms burst coalescing、single in-flight、one trailing read 與 cleanup cancellation。
+- `useSupabaseSync.ts`：active board subscription、`SUBSCRIBED` 後一致性讀取、tag assignment、unfiltered hard DELETE 補抓、online／visibility recovery。
+- `useTagSync.ts`／`useMemberSync.ts`：同一 scheduler 與 subscription race closure，避免 task 已更新但標籤或成員顯示停留舊狀態。
+
+### QA／QC Evidence
+
+- `npx tsx scripts/verify-dev-082-board-realtime-sync.ts`：burst coalescing、single-flight + trailing read、cleanup、subscription race、DELETE／tag coverage、publication contract PASS。
+- `npx tsc --noEmit`、targeted ESLint、`npm run build:test`、`git diff --check` PASS。
+- Rendered QC：重用 `http://localhost:4000/` primary runtime，DEV-081 browser 390x844、844x390、1024x768 共 9/9 PASS；console errors=0、page errors=0、HTTP 4xx/5xx=0，最新 screenshot=`output/playwright/dev-081-mobile-kanban-dual-scale-pinch-1787213265640-final.png`。
+- QC 結論：本地程式與 rendered app `PASS`；因 local-test backend 不會啟用 Supabase hook，且本輪沒有兩個 authenticated Supabase 測試帳號，遠端 two-user 行為為 `未充分驗證`，不得等同 production ready。
+
+### Spec Drift／Runtime／Release Boundary
+
+- Spec Drift：`In sync`。SPEC-082、migration、三個 sync hooks、scheduler 與 verifier 一致；既有 App／BoardView 工作中變更未被覆蓋。
+- Runtime：只重用既有 primary `localhost:4000`（listener PID 18288）；Playwright session 已由 runner 關閉，沒有新增 cleanup obligation；primary runtime 維持運作。
+- 未執行 commit、push、PR、merge、Supabase remote migration、deploy、production data 或 release。下一步必須進 deployment/release gate，先 test project 再 production。
 
 ## PM Update 歷史歸檔
 

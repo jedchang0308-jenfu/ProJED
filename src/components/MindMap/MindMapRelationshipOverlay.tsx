@@ -95,41 +95,6 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
             />
             {selected ? (
               <>
-                <line
-                  x1={path.c1X}
-                  y1={path.c1Y}
-                  x2={path.c2X}
-                  y2={path.c2Y}
-                  stroke={BRAND_BLUE[200]}
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  style={{ pointerEvents: 'none' }}
-                  data-mindmap-note-relationship-control-guide={path.id}
-                />
-                <line
-                  x1={path.fromX}
-                  y1={path.fromY}
-                  x2={path.c1X}
-                  y2={path.c1Y}
-                  stroke={BRAND_BLUE[400]}
-                  strokeWidth={1.75}
-                  strokeLinecap="round"
-                  style={{ pointerEvents: 'none' }}
-                  data-mindmap-note-relationship-control-arm="from"
-                  data-relationship-id={path.id}
-                />
-                <line
-                  x1={path.toX}
-                  y1={path.toY}
-                  x2={path.c2X}
-                  y2={path.c2Y}
-                  stroke={BRAND_BLUE[400]}
-                  strokeWidth={1.75}
-                  strokeLinecap="round"
-                  style={{ pointerEvents: 'none' }}
-                  data-mindmap-note-relationship-control-arm="to"
-                  data-relationship-id={path.id}
-                />
                 <circle
                   cx={path.fromX}
                   cy={path.fromY}
@@ -152,34 +117,6 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   className="cursor-grab active:cursor-grabbing"
                   style={{ pointerEvents: 'none' }}
                   data-mindmap-note-relationship-svg-endpoint="to"
-                  data-relationship-id={path.id}
-                />
-                <rect
-                  x={path.c1X - 6}
-                  y={path.c1Y - 6}
-                  width={12}
-                  height={12}
-                  rx={2}
-                  fill="#ffffff"
-                  stroke={BRAND_BLUE[500]}
-                  strokeWidth={2.5}
-                  className="cursor-grab active:cursor-grabbing"
-                  style={{ pointerEvents: 'none' }}
-                  data-mindmap-note-relationship-svg-control-point="1"
-                  data-relationship-id={path.id}
-                />
-                <rect
-                  x={path.c2X - 6}
-                  y={path.c2Y - 6}
-                  width={12}
-                  height={12}
-                  rx={2}
-                  fill="#ffffff"
-                  stroke={BRAND_BLUE[500]}
-                  strokeWidth={2.5}
-                  className="cursor-grab active:cursor-grabbing"
-                  style={{ pointerEvents: 'none' }}
-                  data-mindmap-note-relationship-svg-control-point="2"
                   data-relationship-id={path.id}
                 />
               </>

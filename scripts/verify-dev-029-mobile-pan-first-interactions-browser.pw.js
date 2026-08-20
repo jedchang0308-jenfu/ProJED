@@ -93,9 +93,9 @@ async (page) => {
 
   const openApp = async (viewport = { width: 390, height: 844 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedAuxiliaryState();
-    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -240,7 +240,7 @@ async (page) => {
       await page.keyboard.press('Escape').catch(() => undefined);
       await page.waitForTimeout(80);
     }
-    const closeButton = page.locator('[data-task-details-modal="true"] button[title="關閉"]').first();
+    const closeButton = page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').first();
     if (await closeButton.count()) {
       await closeButton.click({ timeout: 1000 }).catch(() => undefined);
       await page.waitForTimeout(80);
@@ -933,7 +933,7 @@ async (page) => {
       const modal = page.locator('[data-task-details-modal="true"]');
       await modal.waitFor({ state: 'visible', timeout: 5000 });
       const title = await modal.locator('[data-task-details-title-input="true"]').inputValue();
-      await modal.locator('button[title="關閉"]').click();
+      await modal.locator('button[aria-label="關閉任務詳情"]').click();
       await modal.waitFor({ state: 'detached', timeout: 5000 });
       assert(title === '新任務', 'workbench modal creation should use the default new-task title', { title });
       return { title };

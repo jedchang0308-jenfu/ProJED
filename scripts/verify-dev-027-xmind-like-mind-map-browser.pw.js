@@ -44,7 +44,7 @@ async (page) => {
 
   const openApp = async (account, viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await setAccount(account);
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
@@ -96,7 +96,7 @@ async (page) => {
   const closeTaskDetailsIfOpen = async () => {
     const modal = page.locator('[data-task-details-modal="true"]');
     if ((await modal.count()) === 0) return;
-    await modal.locator('button[title="關閉"]').click();
+    await modal.locator('button[aria-label="關閉任務詳情"]').click();
     await modal.waitFor({ state: 'hidden', timeout: 10000 });
   };
 
@@ -115,7 +115,14 @@ async (page) => {
   };
 
   const createRoot = async (title) => {
-    await page.locator('[data-mindmap-create-root]').click();
+    const createRootButton = page.locator('[data-mindmap-create-root]');
+    if (await createRootButton.count()) {
+      await createRootButton.click();
+    } else {
+      await page.locator('[data-mindmap-view]').focus();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Enter');
+    }
     await selectedNode().waitFor({ state: 'visible', timeout: 10000 });
     await renameSelectedInTaskDetails(title, 'newly created branch');
     await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
@@ -236,8 +243,7 @@ async (page) => {
   await openMindMap();
   await assertNoVisibleErrors('DEV-027 viewer mind map');
   const viewerCountBefore = await nodeCount();
-  const createButton = page.locator('[data-mindmap-create-root]').first();
-  assert(await createButton.isDisabled(), 'viewer create-root button should be disabled');
+  assert(await page.locator('[data-mindmap-create-root]').count() === 0, 'viewer should not render the removed mind map toolbar create-root button');
   assert((await page.locator('[data-mindmap-view]', { hasText: '唯讀' }).count()) === 1, 'viewer should see read-only badge');
 
   const firstViewerNode = page.locator('[data-mindmap-node]').first();

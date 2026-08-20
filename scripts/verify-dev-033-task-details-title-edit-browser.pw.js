@@ -16,7 +16,7 @@ async (page) => {
 
   const openApp = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
       localStorage.setItem('projed-local-test.selected-account', account.id);
       localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -69,6 +69,9 @@ async (page) => {
     const modal = await openTaskDetails(taskId);
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await modal.getByText('已儲存', { exact: true }).count() === 0, 'saved status should be hidden before any edit');
+    await page.waitForTimeout(1200);
+    assert(await modal.getByText('已儲存', { exact: true }).count() === 0, 'opening task details should not autosave initial notes');
     assert(await modal.getByText('更多詳情選項', { exact: true }).count() === 0, 'removed task details subtitle should not be visible');
     assert(await modal.getByText('時間設定', { exact: true }).count() === 0, 'removed schedule section heading should not be visible');
     assert(await modal.getByText('備註欄', { exact: true }).count() === 0, 'removed notes section heading should not be visible');
@@ -84,40 +87,44 @@ async (page) => {
     const inputValueAfterSave = await titleInput.inputValue();
     assert(inputValueAfterSave === savedTitle, 'modal title input should show trimmed saved title', { inputValueAfterSave, savedTitle });
 
+    step = 'title autosaves after the debounce interval';
+    const autoSavedTitle = `DEV033 title autosave ${Date.now().toString(36)}`;
+    await titleInput.fill(autoSavedTitle);
+    await page.waitForFunction(({ taskId, autoSavedTitle }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return nodes[taskId]?.title === autoSavedTitle;
+    }, { taskId, autoSavedTitle }, { timeout: 10000 });
+    await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForTimeout(2000);
+    assert(await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).isVisible(), 'saved status should remain visible after autosave completes');
+
     step = 'escape reverts title without closing modal';
     await titleInput.fill('should not save');
     await titleInput.press('Escape');
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     const valueAfterEscape = await titleInput.inputValue();
     const storedTitleAfterEscape = await readStoredTitle(taskId);
-    assert(valueAfterEscape === savedTitle, 'Escape in title input should revert to current task title', { valueAfterEscape, savedTitle });
-    assert(storedTitleAfterEscape === savedTitle, 'Escape in title input should not persist draft title', { storedTitleAfterEscape, savedTitle });
+    assert(valueAfterEscape === autoSavedTitle, 'Escape in title input should revert to current task title', { valueAfterEscape, autoSavedTitle });
+    assert(storedTitleAfterEscape === autoSavedTitle, 'Escape in title input should not persist draft title', { storedTitleAfterEscape, autoSavedTitle });
 
-    step = 'save button sits beside close and confirms save';
-    const saveButton = modal.locator('[data-task-details-save="true"]');
+    step = 'autosave status replaces the redundant save button';
     const closeButton = modal.locator('button[aria-label="關閉任務詳情"]');
-    await saveButton.waitFor({ state: 'visible', timeout: 10000 });
-    const buttonLayout = await page.evaluate(() => {
-      const save = document.querySelector('[data-task-details-save="true"]')?.getBoundingClientRect();
-      const close = document.querySelector('button[aria-label="關閉任務詳情"]')?.getBoundingClientRect();
-      return save && close ? {
-        saveRight: save.right,
-        closeLeft: close.left,
-        saveCenterY: save.top + save.height / 2,
-        closeCenterY: close.top + close.height / 2,
-      } : null;
-    });
-    assert(buttonLayout && buttonLayout.saveRight <= buttonLayout.closeLeft && Math.abs(buttonLayout.saveCenterY - buttonLayout.closeCenterY) <= 1,
-      'save button should sit directly beside the close button', buttonLayout || {});
+    assert(await modal.locator('[data-task-details-save="true"]').count() === 0, 'redundant save button should be removed');
+    const closeTooltip = modal.locator('[data-task-details-close-tooltip="true"]');
+    assert((await closeTooltip.textContent())?.includes('自動儲存'), 'close tooltip should explain automatic saving');
+    await closeButton.hover();
+    await closeTooltip.waitFor({ state: 'visible', timeout: 5000 });
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: 'output/playwright/dev-033-task-details-autosave-tooltip-1440x900.png', fullPage: true });
     const firstNote = modal.locator('[data-task-detail-note-card="true"]').first().locator('[data-task-detail-note-content-input="true"]');
-    const manuallySavedNote = `DEV033 manual save ${Date.now().toString(36)}`;
-    await firstNote.fill(manuallySavedNote);
-    await saveButton.click();
-    await saveButton.getByText('已儲存', { exact: true }).waitFor({ state: 'visible', timeout: 5000 });
-    await page.waitForFunction(({ taskId, manuallySavedNote }) => {
+    const autoSavedNote = `DEV033 autosave ${Date.now().toString(36)}`;
+    await firstNote.fill(autoSavedNote);
+    await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(({ taskId, autoSavedNote }) => {
       const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-      return nodes[taskId]?.detailNotes?.[0]?.content === manuallySavedNote;
-    }, { taskId, manuallySavedNote }, { timeout: 10000 });
+      return nodes[taskId]?.detailNotes?.[0]?.content === autoSavedNote;
+    }, { taskId, autoSavedNote }, { timeout: 10000 });
+    await page.screenshot({ path: 'output/playwright/dev-033-task-details-autosave-saved-1440x900.png', fullPage: true });
 
     step = 'close flushes pending note immediately';
     const closeSavedNote = `DEV033 close save ${Date.now().toString(36)}`;
@@ -130,8 +137,43 @@ async (page) => {
     }, { taskId, closeSavedNote }, { timeout: 10000 });
 
     const reopenedModal = await openTaskDetails(taskId);
+    assert(await reopenedModal.getByText('已儲存', { exact: true }).count() === 0, 'saved status should reset when task details reopen');
+    await page.waitForTimeout(1200);
+    assert(await reopenedModal.getByText('已儲存', { exact: true }).count() === 0, 'reopening task details should not autosave initial notes');
     const reopenedNoteValue = await reopenedModal.locator('[data-task-detail-note-card="true"]').first().locator('[data-task-detail-note-content-input="true"]').textContent();
     assert(reopenedNoteValue === closeSavedNote, 'close button should preserve the latest pending note', { reopenedNoteValue, closeSavedNote });
+
+    const verifyResponsiveTooltip = async (viewport, artifactName) => {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(250);
+      const responsiveClose = reopenedModal.locator('button[aria-label="關閉任務詳情"]');
+      const responsiveTooltip = reopenedModal.locator('[data-task-details-close-tooltip="true"]');
+      await responsiveClose.focus();
+      await responsiveTooltip.waitFor({ state: 'visible', timeout: 5000 });
+      await page.waitForTimeout(200);
+      const geometry = await responsiveTooltip.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          documentWidth: document.documentElement.scrollWidth,
+        };
+      });
+      assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth, 'close tooltip should stay inside the viewport', geometry);
+      assert(geometry.top >= 0 && geometry.bottom <= geometry.viewportHeight, 'close tooltip should stay vertically visible', geometry);
+      assert(geometry.documentWidth <= geometry.viewportWidth, 'task details should not introduce horizontal page overflow', geometry);
+      await page.screenshot({ path: `output/playwright/${artifactName}.png`, fullPage: true });
+    };
+
+    step = 'responsive tooltip and visible error sweep';
+    await verifyResponsiveTooltip({ width: 1024, height: 768 }, 'dev-033-task-details-autosave-tooltip-1024x768');
+    await verifyResponsiveTooltip({ width: 390, height: 844 }, 'dev-033-task-details-autosave-tooltip-390x844');
+    const visibleErrors = await page.locator('.inline-error:visible, [role="alert"]:visible').allTextContents();
+    assert(visibleErrors.length === 0, 'task details should not show visible errors in the successful autosave flow', { visibleErrors });
   } catch (error) {
     throw new Error(`${step}: ${error.message}`);
   }

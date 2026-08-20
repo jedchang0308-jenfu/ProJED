@@ -17,9 +17,10 @@ $ControlLogPath = Join-Path $StateRoot "dev-test-server-control.log"
 $WatchLogPath = Join-Path $StateRoot "dev-test-server-watch.log"
 $WatchProcessLogPath = Join-Path $StateRoot "dev-test-server-watch-process.log"
 $TaskName = "ProJED Local Test Server"
+$CanonicalHostName = "localhost"
 $StartupCommandPath = Join-Path ([Environment]::GetFolderPath("Startup")) "ProJED Local Test Server.cmd"
 $StartupScriptPath = Join-Path $StateRoot "start-local-test-server.ps1"
-$Url = "http://${HostName}:${Port}/"
+$Url = "http://${CanonicalHostName}:${Port}/"
 
 function Ensure-StateRoot {
   New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
@@ -41,6 +42,51 @@ function Get-CommandLine {
     (Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId").CommandLine
   } catch {
     ""
+  }
+}
+
+function Test-ProcessOwned {
+  param([int]$ProcessId)
+
+  $knownPids = @()
+  $wrapperPid = Get-WrapperPid
+  $watcherPid = Get-WatcherPid
+  if ($wrapperPid) { $knownPids += $wrapperPid }
+  if ($watcherPid) { $knownPids += $watcherPid }
+
+  $currentPid = $ProcessId
+  $projectMarker = $ProjectRoot.ToLowerInvariant()
+  for ($depth = 0; $depth -lt 12 -and $currentPid -gt 0; $depth++) {
+    if ($knownPids -contains $currentPid) {
+      return $true
+    }
+
+    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $currentPid" -ErrorAction SilentlyContinue
+    if (-not $processInfo) {
+      break
+    }
+
+    $commandLine = ([string]$processInfo.CommandLine).ToLowerInvariant()
+    if ($commandLine.Contains($projectMarker)) {
+      return $true
+    }
+
+    $parentPid = [int]$processInfo.ParentProcessId
+    if ($parentPid -eq $currentPid) {
+      break
+    }
+    $currentPid = $parentPid
+  }
+
+  return $false
+}
+
+function Test-AppReachable {
+  try {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 3
+    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500
+  } catch {
+    return $false
   }
 }
 
@@ -134,6 +180,19 @@ function Start-Server {
 
   $listener = Get-Listener
   if ($listener) {
+    if (-not (Test-ProcessOwned -ProcessId ([int]$listener.OwningProcess))) {
+      Write-Host "PORT_OCCUPIED_UNOWNED $Url"
+      Write-Host "listener_pid=$($listener.OwningProcess)"
+      Write-Host "listener_command=$(Get-CommandLine -ProcessId ([int]$listener.OwningProcess))"
+      exit 2
+    }
+
+    if (-not (Test-AppReachable)) {
+      Write-Host "LISTENER_PRESENT_HTTP_UNREACHABLE $Url"
+      Write-Host "listener_pid=$($listener.OwningProcess)"
+      exit 1
+    }
+
     Write-Host "RUNNING $Url"
     Write-Host "listener_pid=$($listener.OwningProcess)"
     return
@@ -155,7 +214,7 @@ function Start-Server {
   for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 500
     $listener = Get-Listener
-    if ($listener) {
+    if ($listener -and (Test-AppReachable)) {
       Write-Host "STARTED $Url"
       Write-Host "listener_pid=$($listener.OwningProcess)"
       Write-Host "wrapper_pid=$($process.Id)"
@@ -172,8 +231,16 @@ function Start-Server {
 }
 
 function Stop-Server {
+  $listener = Get-Listener
+  if ($listener -and -not (Test-ProcessOwned -ProcessId ([int]$listener.OwningProcess))) {
+    Write-Host "PORT_OCCUPIED_UNOWNED $Url"
+    Write-Host "listener_pid=$($listener.OwningProcess)"
+    Write-Host "listener_command=$(Get-CommandLine -ProcessId ([int]$listener.OwningProcess))"
+    exit 2
+  }
+
   Get-CimInstance Win32_Process |
-    Where-Object { $_.CommandLine -like "*local-test-server.ps1* watch*" } |
+    Where-Object { $_.CommandLine -like "*local-test-server.ps1* watch*" -and $_.CommandLine -like "*$ProjectRoot*" } |
     ForEach-Object {
       Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }

@@ -4,6 +4,7 @@ import {
   CornerLeftUp,
   CornerRightDown,
   GitBranch,
+  Link2,
   PanelRight,
   Plus,
   Trash2,
@@ -26,6 +27,7 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
   'task.open-details': <PanelRight size={14} className="flex-shrink-0 text-indigo-500" />,
   'task.create-sibling': <Plus size={14} className="flex-shrink-0 text-sky-500" />,
   'task.create-child': <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />,
+  'task.create-relationship': <Link2 size={14} className="flex-shrink-0 text-indigo-500" />,
   'task.duplicate': <Copy size={14} className="flex-shrink-0 text-slate-500" />,
   'task.assign': <UserRound size={14} className="flex-shrink-0 text-blue-500" />,
   'task.dependency-start': <GitBranch size={14} className="flex-shrink-0 text-amber-500" />,
@@ -39,6 +41,7 @@ const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.open-details': '開啟明細',
   'task.create-sibling': '新增並列任務',
   'task.create-child': '新增子任務',
+  'task.create-relationship': '建立關聯線',
   'task.duplicate': '複製任務',
   'task.assign': '主責／協作',
   'task.dependency-start': '設定依賴關係（開始日）',
@@ -51,6 +54,7 @@ const LABELS: Partial<Record<TaskActionId, string>> = {
 const TITLES: Partial<Record<TaskActionId, string>> = {
   'task.create-sibling': '與目前任務同層新增',
   'task.create-child': '放在目前任務底下新增',
+  'task.create-relationship': '以目前任務為起點選擇目標',
 };
 
 const SECTION_ORDER = ['create', 'assignment', 'dependency', 'hierarchy', 'danger'] as const;

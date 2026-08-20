@@ -68,10 +68,18 @@ export function useLongPress(
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       triggeredRef.current = false;
+      if (e.touches.length !== 1 || document.body.hasAttribute('data-kanban-pinch-active')) {
+        cancel();
+        return;
+      }
       const touch = e.touches[0];
       startPositionRef.current = { x: touch.clientX, y: touch.clientY };
 
       timerRef.current = setTimeout(() => {
+        if (document.body.hasAttribute('data-kanban-pinch-active')) {
+          cancel();
+          return;
+        }
         triggeredRef.current = true;
         suppressNextClickRef.current = true;
         if (suppressClickTimerRef.current) {
@@ -90,6 +98,10 @@ export function useLongPress(
   const onTouchMove = useCallback(
     (e: React.TouchEvent) => {
       if (!startPositionRef.current) return;
+      if (e.touches.length !== 1 || document.body.hasAttribute('data-kanban-pinch-active')) {
+        cancel();
+        return;
+      }
 
       const touch = e.touches[0];
       const deltaX = Math.abs(touch.clientX - startPositionRef.current.x);

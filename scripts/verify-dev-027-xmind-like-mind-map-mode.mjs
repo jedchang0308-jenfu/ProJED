@@ -105,7 +105,8 @@ assert(
     mindMapView.includes('boardTitle={activeBoard.title}') &&
     mindMapRootLayout.includes('data-mindmap-center') &&
     mindMapRootLayout.includes("boardTitle || '\\u672a\\u547d\\u540d\\u770b\\u677f'") &&
-    mindMapToolbar.includes('data-mindmap-create-root'),
+    !mindMapToolbar.includes('data-mindmap-create-root') &&
+    !mindMapToolbar.includes('Enter 新增同階，Tab 新增子任務，Delete 刪除'),
 );
 
 assert(

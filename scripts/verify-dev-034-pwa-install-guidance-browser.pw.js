@@ -28,9 +28,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4000/?qcReset=1', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -80,7 +80,7 @@ async (page) => {
 
   const assertRetiredQuickCaptureShellAbsent = async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://127.0.0.1:4000/?qcReset=1', { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:4000/?qcReset=1', { waitUntil: 'networkidle' });
     assert(await page.locator('[data-quick-capture-shell]').count() === 0, 'retired quick capture floating shell should not render before login');
     assert(await page.locator('[data-quick-capture-toggle]').count() === 0, 'retired quick capture toggle should not render before login');
     await assertNoHorizontalOverflow('mobile without retired quick capture shell');

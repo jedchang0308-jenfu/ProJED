@@ -275,6 +275,44 @@
   user-select: none;
 }
 
+@media (pointer: fine) {
+  [data-mindmap-left-pan="true"] {
+    cursor: grab;
+  }
+
+  [data-mindmap-left-pan="true"] :is(
+    [data-mindmap-center],
+    input,
+    textarea,
+    select
+  ) {
+    cursor: default;
+  }
+
+  [data-mindmap-left-pan="true"] :is(
+    [data-mindmap-note-relationship-click-target],
+    [data-mindmap-note-relationship-line-click-target],
+    [data-mindmap-note-relationship-curve-click-target],
+    button,
+    a
+  ) {
+    cursor: pointer;
+  }
+
+  [data-mindmap-left-pan="true"] :is(
+    [data-mindmap-note-relationship-endpoint],
+    [data-mindmap-note-relationship-control-point]
+  ) {
+    cursor: grab;
+  }
+}
+
+body[data-mindmap-left-pan-active="true"],
+body[data-mindmap-left-pan-active="true"] * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
 body[data-kanban-mouse-pan-active="true"],
 body[data-kanban-mouse-pan-active="true"] * {
   cursor: grabbing !important;
@@ -530,15 +568,65 @@ body[data-kanban-mouse-pan-active="true"] * {
     gap: 8px !important;
   }
 
+  /* DEV-081：看板工作面專用雙尺寸 token。B 是線性 2.5 倍重排，不使用 zoom/transform，
+     因此滾動、命中測試與拖曳 overlay 仍沿用實際 DOM 幾何。 */
+  [data-mobile-pan-surface="board"][data-kanban-view-size="compact"] {
+    --kanban-column-width: 252px;
+    --kanban-board-gap: 8px;
+    --kanban-header-pad-y: 6px;
+    --kanban-header-pad-x: 7px;
+    --kanban-column-body-pad: 5px;
+    --kanban-card-pad-y: 2px;
+    --kanban-card-pad-x: 5px;
+    --kanban-l1-l2-title-size: 14px;
+    --kanban-l3-title-size: 12px;
+    --kanban-meta-size: 9px;
+    --kanban-tag-height: 13px;
+    --kanban-tag-font-size: 9px;
+    --kanban-checklist-indent: 14px;
+    --kanban-checklist-base: 4px;
+    --kanban-l3-min-height: 20px;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] {
+    --kanban-column-width: 630px;
+    --kanban-board-gap: 20px;
+    --kanban-header-pad-y: 15px;
+    --kanban-header-pad-x: 17.5px;
+    --kanban-column-body-pad: 12.5px;
+    --kanban-card-pad-y: 5px;
+    --kanban-card-pad-x: 12.5px;
+    --kanban-l1-l2-title-size: 35px;
+    --kanban-l3-title-size: 30px;
+    --kanban-meta-size: 22.5px;
+    --kanban-tag-height: 32.5px;
+    --kanban-tag-font-size: 22.5px;
+    --kanban-checklist-indent: 35px;
+    --kanban-checklist-base: 10px;
+    --kanban-l3-min-height: 50px;
+    gap: var(--kanban-board-gap) !important;
+  }
+
   [data-kanban-column],
   [data-mobile-pan-surface="board"] > .flex-shrink-0 {
     width: 252px !important;
     border-radius: 6px !important;
   }
 
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column],
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] > .flex-shrink-0 {
+    width: var(--kanban-column-width) !important;
+    border-radius: 15px !important;
+  }
+
   [data-kanban-column-header] {
     gap: 3px !important;
     padding: 6px 7px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column-header] {
+    gap: 7.5px !important;
+    padding: var(--kanban-header-pad-y) var(--kanban-header-pad-x) !important;
   }
 
   [data-kanban-column-header] > div,
@@ -549,6 +637,59 @@ body[data-kanban-mouse-pan-active="true"] * {
   [data-mobile-pan-surface="kanban-column"] {
     padding: 5px !important;
     border-radius: 5px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-mobile-pan-surface="kanban-column"] {
+    padding: var(--kanban-column-body-pad) !important;
+    border-radius: 12.5px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column-header] [data-task-title-slot],
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-task-hierarchy-level="L2"] [data-task-title-slot] {
+    font-size: var(--kanban-l1-l2-title-size) !important;
+    line-height: 1.15 !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-task-hierarchy-level="L3+"] [data-task-title-slot] {
+    font-size: var(--kanban-l3-title-size) !important;
+    line-height: 1.15 !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-task-date-badge="true"] {
+    font-size: var(--kanban-meta-size) !important;
+    line-height: 1.15 !important;
+    min-height: 32.5px !important;
+    padding: 0 10px !important;
+    gap: 1.25px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-tag-front="true"] {
+    height: var(--kanban-tag-height) !important;
+    font-size: var(--kanban-tag-font-size) !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-tag-sticker="true"] {
+    height: 37.5px !important;
+    max-width: 180px !important;
+    min-width: 44px !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] .kanban-task-card-body {
+    padding: var(--kanban-card-pad-y) var(--kanban-card-pad-x) !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] .kanban-checklist-item {
+    min-height: var(--kanban-l3-min-height) !important;
+    gap: 10px !important;
+    padding-left: calc((var(--kanban-checklist-depth, 0) * var(--kanban-checklist-indent)) + var(--kanban-checklist-base)) !important;
+  }
+
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column] .task-drag-hitbox,
+  [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column] [data-kanban-task-checkbox="true"] {
+    min-width: 44px !important;
+    min-height: 44px !important;
   }
 
   [data-kanban-column] form {
@@ -1122,4 +1263,98 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 .slide-in-from-top-1 {
   animation: slideIn 0.2s ease-out;
+}
+
+/* DEV-081 mobile board contract also covers touch landscape viewports whose CSS
+   media query is not emulated by a desktop browser harness. The JS-owned marker
+   is restricted to the board work surface, so desktop effective size remains A. */
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] {
+  --kanban-column-width: 252px;
+  --kanban-board-gap: 8px;
+  --kanban-header-pad-y: 6px;
+  --kanban-header-pad-x: 7px;
+  --kanban-column-body-pad: 5px;
+  --kanban-card-pad-y: 2px;
+  --kanban-card-pad-x: 5px;
+  --kanban-l1-l2-title-size: 14px;
+  --kanban-l3-title-size: 12px;
+  --kanban-meta-size: 9px;
+  --kanban-tag-height: 13px;
+  --kanban-tag-font-size: 9px;
+  --kanban-checklist-indent: 14px;
+  --kanban-checklist-base: 4px;
+  --kanban-l3-min-height: 20px;
+  gap: var(--kanban-board-gap) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] {
+  --kanban-column-width: 630px;
+  --kanban-board-gap: 20px;
+  --kanban-header-pad-y: 15px;
+  --kanban-header-pad-x: 17.5px;
+  --kanban-column-body-pad: 12.5px;
+  --kanban-card-pad-y: 5px;
+  --kanban-card-pad-x: 12.5px;
+  --kanban-l1-l2-title-size: 35px;
+  --kanban-l3-title-size: 30px;
+  --kanban-meta-size: 22.5px;
+  --kanban-tag-height: 32.5px;
+  --kanban-tag-font-size: 22.5px;
+  --kanban-checklist-indent: 35px;
+  --kanban-checklist-base: 10px;
+  --kanban-l3-min-height: 50px;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column],
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] > .flex-shrink-0 {
+  width: var(--kanban-column-width) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column-header] {
+  padding: var(--kanban-header-pad-y) var(--kanban-header-pad-x) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-mobile-pan-surface="kanban-column"] {
+  padding: var(--kanban-column-body-pad) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-column-header] [data-task-title-slot],
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-hierarchy-level="L2"] [data-task-title-slot] {
+  font-size: var(--kanban-l1-l2-title-size) !important;
+  line-height: 1.15 !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-hierarchy-level="L3+"] [data-task-title-slot] {
+  font-size: var(--kanban-l3-title-size) !important;
+  line-height: 1.15 !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-task-date-badge="true"] {
+  font-size: var(--kanban-meta-size) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-meta-chip="true"] {
+  font-size: var(--kanban-meta-size) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] [data-task-date-badge="true"] {
+  min-height: 32.5px !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"][data-kanban-view-size="large"] [data-kanban-meta-chip="true"] {
+  min-height: 32.5px !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] [data-kanban-tag-front="true"] {
+  height: var(--kanban-tag-height) !important;
+  font-size: var(--kanban-tag-font-size) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-task-card-body {
+  padding: var(--kanban-card-pad-y) var(--kanban-card-pad-x) !important;
+}
+
+[data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-checklist-item {
+  min-height: var(--kanban-l3-min-height) !important;
+  padding-left: calc((var(--kanban-checklist-depth, 0) * var(--kanban-checklist-indent)) + var(--kanban-checklist-base)) !important;
 }

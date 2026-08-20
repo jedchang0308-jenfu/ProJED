@@ -53,6 +53,7 @@ export type TaskActionId =
   | 'task.clear-selection'
   | 'task.create-sibling'
   | 'task.create-child'
+  | 'task.create-relationship'
   | 'task.duplicate'
   | 'task.assign'
   | 'task.dependency-start'

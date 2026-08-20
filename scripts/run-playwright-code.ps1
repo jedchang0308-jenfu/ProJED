@@ -22,7 +22,7 @@ $exitCode = 1
 $hasRunCodeError = $true
 
 try {
-  $baseUrl = if ($BaseUrl) { $BaseUrl } elseif ($env:PLAYWRIGHT_BASE_URL) { $env:PLAYWRIGHT_BASE_URL } else { "http://127.0.0.1:4000/" }
+  $baseUrl = if ($BaseUrl) { $BaseUrl } elseif ($env:PLAYWRIGHT_BASE_URL) { $env:PLAYWRIGHT_BASE_URL } else { "http://localhost:4000/" }
   npx.cmd --yes --package @playwright/cli playwright-cli -s $session open $baseUrl
   if ($LASTEXITCODE -ne 0) {
     $exitCode = $LASTEXITCODE

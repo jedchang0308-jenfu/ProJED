@@ -44,6 +44,9 @@ import {
     type DesktopTaskDropPreview,
 } from './Wbs/taskDrag/desktopTaskDropPreview';
 import { useTaskDragSession } from './Wbs/taskDrag/useTaskDragSession';
+import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
+import { useKanbanViewSize } from '../features/kanbanViewSize/KanbanViewSizeProvider';
+import { createKanbanViewportAdapter } from '../features/kanbanViewSize/kanbanViewSizeAnchor';
 import { collectTaskDragDescendantIds } from './Wbs/taskDrag/taskDragScope';
 import {
     advanceTaskChildIntent,
@@ -102,7 +105,7 @@ interface DesktopTaskChildDropState {
 }
 
 const BoardView = () => {
-    const mobilePanSurfaceRef = useMobilePanBroker<HTMLDivElement>();
+    const boardSurfaceRef = React.useRef<HTMLDivElement | null>(null);
     const mousePanSurfaceRef = useKanbanMousePan<HTMLDivElement>();
     const { activeBoardId, activeWorkspaceId } = useBoardStore();
     const dependencySelection = useBoardStore(s => s.dependencySelection);
@@ -111,6 +114,9 @@ const BoardView = () => {
     const showStartDate = useBoardStore(s => s.showStartDate);
     const { addDependency, dependencies } = useWbsStore();
     const isRecordTaskSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
+    const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
+    const { viewSize, requestViewSize, registerViewportAdapter } = useKanbanViewSize();
+    const effectiveViewSize = isMeetingRecordUnavailable ? viewSize : 'compact';
     const recordDraft = useRecordStore(s => s.draft);
     const exitRecordTaskSelectionMode = useRecordStore(s => s.exitTaskSelectionMode);
     const addNode = useWbsStore(s => s.addNode);
@@ -345,7 +351,7 @@ const BoardView = () => {
     }, [desktopChildDrop, updateDesktopChildDropAtPoint]);
 
     const taskDragSession = useTaskDragSession({
-        boardSurfaceRef: mobilePanSurfaceRef,
+        boardSurfaceRef,
         activeBoardId,
         activeWorkspaceId,
         canMoveTask,
@@ -380,10 +386,28 @@ const BoardView = () => {
         },
     });
 
+    useMobilePanBroker({
+        surfaceRef: boardSurfaceRef,
+        enabled: isMeetingRecordUnavailable && !dependencySelection && !isRecordTaskSelectionMode,
+        viewSize: effectiveViewSize,
+        requestViewSize,
+        cancelActiveTaskDrag: taskDragSession.cancelForGestureConflict,
+    });
+
+    const viewportAdapter = React.useMemo(
+        () => createKanbanViewportAdapter(() => boardSurfaceRef.current, () => activeBoardId),
+        [activeBoardId],
+    );
+
+    React.useLayoutEffect(() => {
+        registerViewportAdapter(viewportAdapter);
+        return () => registerViewportAdapter(null);
+    }, [registerViewportAdapter, viewportAdapter]);
+
     const setBoardCanvasRef = React.useCallback((element: HTMLDivElement | null) => {
-        mobilePanSurfaceRef.current = element;
+        boardSurfaceRef.current = element;
         mousePanSurfaceRef.current = element;
-    }, [mobilePanSurfaceRef, mousePanSurfaceRef]);
+    }, [mousePanSurfaceRef]);
 
     // ===== 依賴關係選取邏輯 =====
     const handleKanbanDependencySelect = React.useCallback(async (targetId: string, targetSide: 'start' | 'end', targetTitle: string) => {
@@ -1088,6 +1112,9 @@ const BoardView = () => {
                         ref={setBoardCanvasRef}
                         className={`scroll-container mobile-pan-surface flex-1 overflow-x-auto overflow-y-hidden bg-slate-100/90 ${compactClassNames.canvas} flex gap-[12px] items-start scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent`}
                         data-mobile-pan-surface="board"
+                        data-kanban-mobile-surface={isMeetingRecordUnavailable ? 'true' : undefined}
+                        data-kanban-view-size={effectiveViewSize}
+                        data-kanban-pinch-state="idle"
                         data-kanban-mouse-pan-surface="true"
                         data-layout-region="board-canvas"
                     >

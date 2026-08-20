@@ -8,7 +8,7 @@ async (page) => {
     if (!condition) throw new Error(`${message}: ${JSON.stringify(details)}`);
   };
 
-  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__projedPwaUpdateTest), null, { timeout: 15000 });
 
   const runMobileMatrix = async () => {

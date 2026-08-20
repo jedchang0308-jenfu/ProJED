@@ -35,7 +35,6 @@ import {
   getMindMapCoordinateMapper,
   getMindMapSceneSize,
   getMindMapViewportSnapshot,
-  getLocalLineSegmentStyle,
   getNodeElementAtPoint as getNodeElementAtPointInSurface,
   getWorldPointFromClient,
 } from './mindMapDomGeometry';
@@ -132,10 +131,17 @@ import {
 } from './mindMapSelectionStore';
 import {
   applyMiddleMousePanFrame,
+  clearLeftMousePanTelemetry,
   clearMiddleMousePanTelemetry,
+  createLeftMousePanState,
   createMiddleMousePanState,
+  getLeftMousePanUpdate,
+  isLeftMousePanBlockedTarget,
+  isMindMapNativeScrollbarPointer,
   markMiddleMousePanActive,
+  setLeftMousePanTelemetry,
   updateMiddleMousePanPointer,
+  type LeftMousePanState,
   type MiddleMousePanState,
 } from './mindMapPan';
 import {
@@ -165,6 +171,7 @@ import {
   clearTaskSelection,
   CLEAR_TASK_SELECTION_EVENT,
   openTaskDetails,
+  START_MINDMAP_RELATIONSHIP_EVENT,
 } from '../../utils/taskInteractions';
 
 type RootSideDropTarget = MindMapDirection | null;
@@ -268,6 +275,7 @@ const MindMapView: React.FC = () => {
   const viewRenderCountRef = React.useRef(0);
   const navigationIndexBuildCountRef = React.useRef(0);
   const relationshipLabelInputRef = React.useRef<HTMLInputElement>(null);
+  const leftMousePanRef = React.useRef<LeftMousePanState | null>(null);
   const middleMousePanRef = React.useRef<MiddleMousePanState | null>(null);
   const middleMousePanFrameRef = React.useRef<number | null>(null);
   const zoomLabelRef = React.useRef<HTMLSpanElement>(null);
@@ -500,6 +508,84 @@ const MindMapView: React.FC = () => {
     cancelPendingAnimationFrameRef(zoomIntentFrameRef);
     cancelPendingAnimationFrameRef(connectorRecomputeFrameRef);
   }, []);
+
+  React.useEffect(() => {
+    const surface = mapSurfaceRef.current;
+    if (!surface) return undefined;
+    let suppressNextClick = false;
+    let suppressTimer: number | null = null;
+
+    const clearSuppressTimer = () => {
+      if (suppressTimer === null) return;
+      window.clearTimeout(suppressTimer);
+      suppressTimer = null;
+    };
+
+    const scheduleSuppressReset = () => {
+      clearSuppressTimer();
+      suppressTimer = window.setTimeout(() => {
+        suppressNextClick = false;
+        suppressTimer = null;
+      }, 0);
+    };
+
+    const resetLeftPan = () => {
+      const wasActive = Boolean(leftMousePanRef.current?.active);
+      if (wasActive) {
+        suppressNextClick = true;
+        scheduleSuppressReset();
+      }
+      leftMousePanRef.current = null;
+      clearLeftMousePanTelemetry(surface);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const pan = leftMousePanRef.current;
+      if (!pan || pan.pointerId !== event.pointerId) return;
+      const update = getLeftMousePanUpdate(pan, event.clientX, event.clientY);
+      if (!update.active) return;
+      if (!pan.active) {
+        pan.active = true;
+        setLeftMousePanTelemetry(surface, 'active');
+      }
+      if (event.cancelable) event.preventDefault();
+      event.stopPropagation();
+      surface.scrollLeft = update.scrollLeft;
+      surface.scrollTop = update.scrollTop;
+      surface.setAttribute('data-mindmap-left-pan-delta-x', (event.clientX - pan.startX).toFixed(2));
+      surface.setAttribute('data-mindmap-left-pan-delta-y', (event.clientY - pan.startY).toFixed(2));
+    };
+
+    const handlePointerEnd = (event: PointerEvent) => {
+      const pan = leftMousePanRef.current;
+      if (!pan || pan.pointerId !== event.pointerId) return;
+      resetLeftPan();
+    };
+
+    const handleClickCapture = (event: MouseEvent) => {
+      if (!suppressNextClick) return;
+      event.preventDefault();
+      event.stopPropagation();
+      suppressNextClick = false;
+      clearSuppressTimer();
+    };
+
+    setLeftMousePanTelemetry(surface, 'idle');
+    window.addEventListener('pointermove', handlePointerMove, true);
+    window.addEventListener('pointerup', handlePointerEnd, true);
+    window.addEventListener('pointercancel', handlePointerEnd, true);
+    window.addEventListener('blur', resetLeftPan);
+    surface.addEventListener('click', handleClickCapture, true);
+    return () => {
+      clearSuppressTimer();
+      window.removeEventListener('pointermove', handlePointerMove, true);
+      window.removeEventListener('pointerup', handlePointerEnd, true);
+      window.removeEventListener('pointercancel', handlePointerEnd, true);
+      window.removeEventListener('blur', resetLeftPan);
+      surface.removeEventListener('click', handleClickCapture, true);
+      resetLeftPan();
+    };
+  }, [activeBoardId]);
 
   const mindMapFilters = React.useMemo(() => ({
     statusFilters,
@@ -1004,6 +1090,34 @@ const MindMapView: React.FC = () => {
     surface.focus({ preventScroll: true });
   }, []);
 
+  const startLeftMousePan = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const surface = mapSurfaceRef.current;
+    const blocked = (
+      !surface ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.pointerType !== 'mouse' ||
+      Boolean(draggedNodeId) ||
+      relationshipToolActive ||
+      Boolean(relationshipPointerDrag) ||
+      isLeftMousePanBlockedTarget(event.target) ||
+      (surface ? isMindMapNativeScrollbarPointer(surface, event.clientX, event.clientY) : true)
+    );
+    if (blocked || !surface) {
+      leftMousePanRef.current = null;
+      clearLeftMousePanTelemetry(surface);
+      return;
+    }
+    leftMousePanRef.current = createLeftMousePanState(
+      event.pointerId,
+      event.clientX,
+      event.clientY,
+      surface.scrollLeft,
+      surface.scrollTop,
+    );
+    setLeftMousePanTelemetry(surface, 'armed');
+  }, [draggedNodeId, relationshipPointerDrag, relationshipToolActive]);
+
   const fitToContent = React.useCallback(() => {
     const surface = mapSurfaceRef.current;
     const bounds = getMindMapContentBounds();
@@ -1223,6 +1337,21 @@ const MindMapView: React.FC = () => {
       interactionId: `mindmap-context-${nodeId}-${Date.now().toString(36)}`,
     });
   }, [selectNode, setContextMenuState, setSelectedTaskId]);
+
+  React.useEffect(() => {
+    const handleStartRelationship = (event: Event) => {
+      const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
+      if (!canEditTask || !taskId || !nodes[taskId]) return;
+      setInlineTitleEditNodeId(null);
+      setInlineTitleEditFocusNodeId(null);
+      clearSelectedRelationship();
+      beginRelationshipDraftSelectionWithCleanup(taskId);
+      setRelationshipToolActive(true);
+    };
+
+    document.addEventListener(START_MINDMAP_RELATIONSHIP_EVENT, handleStartRelationship);
+    return () => document.removeEventListener(START_MINDMAP_RELATIONSHIP_EVENT, handleStartRelationship);
+  }, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearSelectedRelationship, nodes]);
 
   const handleSurfaceClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (isMindMapRelationshipInteractionElement(event.target)) {
@@ -1694,7 +1823,6 @@ const MindMapView: React.FC = () => {
       <MindMapToolbar
         isReadOnly={isReadOnly}
         canEditTask={canEditTask}
-        canCreateTask={canCreateTask}
         relationshipToolActive={relationshipToolActive}
         relationshipDraftFromId={relationshipDraft?.fromId || ''}
         zoomLevel={zoomLevel}
@@ -1704,7 +1832,6 @@ const MindMapView: React.FC = () => {
         onZoomIn={zoomIn}
         onZoomReset={resetZoom}
         onZoomFit={fitToContent}
-        onCreateRoot={handleCreateRoot}
       />
 
 
@@ -1721,6 +1848,7 @@ const MindMapView: React.FC = () => {
         hasContent={rootNodes.length > 0}
         emptyState={<MindMapEmptyState canCreateTask={canCreateTask} onCreateRoot={handleCreateRoot} />}
         onMouseDown={startMiddleMousePan}
+        onPointerDown={startLeftMousePan}
         onContentClick={handleSurfaceClick}
       >
             <MindMapConnectorOverlay connectorPaths={connectorPaths} />
@@ -1744,7 +1872,6 @@ const MindMapView: React.FC = () => {
               editingRelationshipLabel={editingRelationshipLabel}
               relationshipToolActive={relationshipToolActive}
               relationshipLabelInputRef={relationshipLabelInputRef}
-              getLocalLineSegmentStyle={getLocalLineSegmentStyle}
               startRelationshipLabelEdit={startRelationshipLabelEdit}
               startRelationshipPointerDrag={startRelationshipPointerDrag}
               handleRelationshipHotkey={handleRelationshipHotkey}

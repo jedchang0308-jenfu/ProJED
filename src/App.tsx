@@ -37,6 +37,7 @@ import { BOARD_INVITE_TOKEN_PARAM } from './utils/boardInviteToken';
 import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
 import { useMeetingDraftRecovery } from './hooks/useMeetingDraftRecovery';
 import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
+import { KanbanViewSizeProvider } from './features/kanbanViewSize/KanbanViewSizeProvider';
 
 const BoardView = lazy(() => import('./components/BoardView'));
 const GanttView = lazy(() => import('./components/GanttView'));
@@ -279,12 +280,14 @@ function AppContent() {
   };
 
   return (
-    <MainLayout>
-      <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
-        {renderContent()}
-      </Suspense>
-      <GlobalDialog />
-    </MainLayout>
+    <KanbanViewSizeProvider accountId={userId}>
+      <MainLayout>
+        <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">載入中...</div>}>
+          {renderContent()}
+        </Suspense>
+        <GlobalDialog />
+      </MainLayout>
+    </KanbanViewSizeProvider>
   );
 }
 

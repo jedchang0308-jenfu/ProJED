@@ -2,6 +2,7 @@ import useBoardStore from '../store/useBoardStore';
 
 export const OPEN_TASK_DETAILS_EVENT = 'open-task-details';
 export const CLEAR_TASK_SELECTION_EVENT = 'clear-task-selection';
+export const START_MINDMAP_RELATIONSHIP_EVENT = 'start-mindmap-relationship';
 
 export const isCoarsePointer = () => (
   typeof window !== 'undefined' &&
@@ -33,6 +34,10 @@ export const isTaskPrimaryActionTarget = (target: EventTarget | null) => (
 
 export const openTaskDetails = (taskId: string) => {
   document.dispatchEvent(new CustomEvent(OPEN_TASK_DETAILS_EVENT, { detail: { taskId } }));
+};
+
+export const requestMindMapRelationshipStart = (taskId: string) => {
+  document.dispatchEvent(new CustomEvent(START_MINDMAP_RELATIONSHIP_EVENT, { detail: { taskId } }));
 };
 
 export const selectTask = (taskId: string | null) => {

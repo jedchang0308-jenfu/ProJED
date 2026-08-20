@@ -3,6 +3,7 @@ import type { TaskActionDefinition, TaskActionId, TaskInteractionProfile } from 
 const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.create-sibling', label: '新增同階任務', icon: 'plus', section: 'create', kind: 'mutation', capability: 'create' },
   { id: 'task.create-child', label: '新增子任務', icon: 'git-branch', section: 'create', kind: 'mutation', capability: 'create' },
+  { id: 'task.create-relationship', label: '建立關聯線', icon: 'link-2', section: 'create', kind: 'transient', capability: 'edit' },
   { id: 'task.duplicate', label: '複製任務', icon: 'copy', section: 'create', kind: 'mutation', capability: 'create' },
   { id: 'task.assign', label: '指派成員', icon: 'user-round', section: 'assignment', kind: 'mutation', capability: 'assign' },
   { id: 'task.dependency-start', label: '建立開始依賴', icon: 'arrow-right-left', section: 'dependency', kind: 'transient', capability: 'dependency' },

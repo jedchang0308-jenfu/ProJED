@@ -240,7 +240,7 @@ async (page) => {
     'modal-based task creation should place the new task in the unplaced lane',
     { createdTaskId, createdTaskPlacement },
   );
-  await createdTaskModal.locator('button[title="關閉"]').click();
+  await createdTaskModal.locator('button[aria-label="關閉任務詳情"]').click();
   await createdTaskModal.waitFor({ state: 'detached', timeout: 10000 });
  await page.screenshot({ path: 'output/playwright/resizable-navigation-panels-task-workbench-preview.png', fullPage: true });
 

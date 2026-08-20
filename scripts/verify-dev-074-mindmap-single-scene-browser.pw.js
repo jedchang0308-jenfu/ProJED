@@ -110,7 +110,7 @@ async (page) => {
       await waitForMindMap();
       return;
     }
-    await page.goto('http://127.0.0.1:4000/?dev074Phase=after', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?dev074Phase=after', { waitUntil: 'domcontentloaded' });
     await writeFixture();
     await page.reload({ waitUntil: 'networkidle' });
     if (await page.locator('nav').count() === 0) {

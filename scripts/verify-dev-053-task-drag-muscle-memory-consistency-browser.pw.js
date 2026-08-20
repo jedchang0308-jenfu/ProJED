@@ -98,9 +98,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://127.0.0.1:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     await closeSidebarIfOpen();
@@ -607,7 +607,7 @@ async (page) => {
   const summary = {
     ok: finalFailCount === 0,
     summary: { pass: results.length - finalFailCount, fail: finalFailCount },
-    route: 'http://127.0.0.1:4000/?qcReset=1&qcSize=72',
+    route: 'http://localhost:4000/?qcReset=1&qcSize=72',
     results,
     diagnostics: diagnostics.slice(-30),
     networkFailures: networkFailures.slice(-30),

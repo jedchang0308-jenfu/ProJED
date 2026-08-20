@@ -13,7 +13,7 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
   await page.evaluate((session) => {
     localStorage.setItem('projed-local-test.selected-account', session.id);
     localStorage.setItem('projed-local-test.session', JSON.stringify({
@@ -92,7 +92,14 @@ async (page) => {
   assert(await collapseToggle.getAttribute('aria-expanded') === 'true', 'collapse toggle must support keyboard activation');
 
   const details = page.locator('[data-task-details-modal="true"]');
-  await page.locator('[data-mindmap-create-root]').click();
+  const createRootButton = page.locator('[data-mindmap-create-root]');
+  if (await createRootButton.count()) {
+    await createRootButton.click();
+  } else {
+    await page.locator('[data-mindmap-view]').focus();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Enter');
+  }
   const quickTitleInput = page.locator('[data-mindmap-quick-title-input="true"]');
   const quickTitleNode = page.locator('[data-mindmap-inline-title-editing="true"]');
   await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
@@ -189,7 +196,13 @@ async (page) => {
   assert(await page.evaluate((nodeId) => document.activeElement?.getAttribute('data-mindmap-node') === nodeId, continuedChildId), 'child quick naming must retain node focus after delayed click');
 
   // Delete is a task command even while the XMind-like quick naming input has focus.
-  await page.locator('[data-mindmap-create-root]').click();
+  if (await createRootButton.count()) {
+    await createRootButton.click();
+  } else {
+    await page.locator('[data-mindmap-view]').focus();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Enter');
+  }
   await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
   const deleteWhileQuickNamingId = await quickTitleNode.getAttribute('data-mindmap-node');
   const nodeCountBeforeQuickDelete = await page.locator('[data-mindmap-node]').count();
@@ -203,7 +216,7 @@ async (page) => {
   await node.dblclick();
   await details.waitFor({ state: 'visible', timeout: 10000 });
   assert(await details.getAttribute('data-task-id') === taskId, 'mindmap double click must open the same task details');
-  await details.locator('button[title="關閉"]').click();
+  await details.locator('button[aria-label="關閉任務詳情"]').click();
   await details.waitFor({ state: 'hidden', timeout: 10000 });
 
   // Once quick naming is active, double click on the node still reaches details.
@@ -212,7 +225,7 @@ async (page) => {
   await node.dblclick();
   await details.waitFor({ state: 'visible', timeout: 10000 });
   assert(await details.getAttribute('data-task-id') === taskId, 'double click from active quick naming must open the same task details');
-  await details.locator('button[title="關閉"]').click();
+  await details.locator('button[aria-label="關閉任務詳情"]').click();
   await details.waitFor({ state: 'hidden', timeout: 10000 });
 
   // A newer selection cancels the older click timer, so no stale node starts editing.

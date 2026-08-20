@@ -84,6 +84,7 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
         icon={<Calendar size={10} />}
         className={className}
         data-task-date-badge="true"
+        data-kanban-meta-chip="true"
         data-task-due-date={endDate || ''}
         data-task-overdue={isOverdue ? 'true' : 'false'}
         aria-label={accessibilityLabel}
@@ -109,6 +110,7 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
         )}
         title={lockTitle}
         data-task-date-badge="true"
+        data-kanban-meta-chip="true"
         data-task-due-date={endDate || ''}
         data-task-overdue={isOverdue ? 'true' : 'false'}
         data-task-date-visual="borderless"
@@ -132,6 +134,7 @@ export const TaskDateBadge: React.FC<TaskDateBadgeProps> = ({
       )}
       title={lockTitle}
       data-task-date-badge="true"
+      data-kanban-meta-chip="true"
       data-task-due-date={endDate || ''}
       data-task-date-surface="workbench"
       data-task-overdue={isOverdue ? 'true' : 'false'}

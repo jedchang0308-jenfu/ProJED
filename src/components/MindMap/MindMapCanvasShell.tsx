@@ -15,6 +15,7 @@ interface MindMapCanvasShellProps {
   emptyState: React.ReactNode;
   children: React.ReactNode;
   onMouseDown: React.MouseEventHandler<HTMLDivElement>;
+  onPointerDown: React.PointerEventHandler<HTMLDivElement>;
   onContentClick: React.MouseEventHandler<HTMLDivElement>;
 }
 
@@ -32,18 +33,22 @@ const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
   emptyState,
   children,
   onMouseDown,
+  onPointerDown,
   onContentClick,
 }) => (
   <div
     ref={surfaceRef}
     className={`mobile-pan-surface min-h-0 flex-1 overflow-auto ${compactClassNames.canvas}`}
     onMouseDown={onMouseDown}
+    onPointerDown={onPointerDown}
     data-mobile-pan-surface="mindmap"
     data-mindmap-viewport="true"
     data-mindmap-scroll-owner="true"
     data-mindmap-zoom-level={zoomLevelText}
     data-mindmap-zoom-interaction="single-scene-rAF"
     data-mindmap-middle-pan="true"
+    data-mindmap-left-pan="true"
+    data-mindmap-left-pan-state="idle"
   >
     {hasContent ? (
       <div
