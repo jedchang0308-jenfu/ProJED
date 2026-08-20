@@ -54,7 +54,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     currentView,
     getActiveBoard,
     getActiveWorkspace,
-    updateBoardTitle,
     setView,
     isSidebarOpen,
     setSidebarOpen,
@@ -146,9 +145,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   };
 
   const modeSwitcherOptions: ModeSwitcherOption<ViewMode>[] = [
+    { value: 'board', label: '看板模式', icon: <Columns size={13} /> },
     { value: 'list', label: '清單模式', icon: <ListChecks size={13} /> },
     { value: 'mindmap', label: '心智圖模式', icon: <Network size={13} /> },
-    { value: 'board', label: '看板模式', icon: <Columns size={13} /> },
     { value: 'gantt', label: '甘特圖模式', icon: <LineChart size={13} /> },
     {
       value: 'calendar',
@@ -294,11 +293,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
               <>
                 <h1
-                  contentEditable
-                  suppressContentEditableWarning
                   title={`目前位置：${activeWorkspace.title} / ${activeBoard.title}`}
-                  onBlur={(event) => updateBoardTitle(activeWorkspace.id, activeBoard.id, event.currentTarget.innerText)}
-                  className="app-board-title min-w-[1.5rem] shrink-0 cursor-text whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-slate-100 focus:bg-white focus:outline-primary sm:px-2 sm:text-sm"
+                  data-topbar-board-title="true"
+                  className="app-board-title min-w-[1.5rem] shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 sm:px-2 sm:text-sm"
                 >
                   {activeBoard.title}
                 </h1>

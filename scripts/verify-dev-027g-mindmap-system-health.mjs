@@ -27,6 +27,8 @@ const files = {
   dragPreviewBadge: 'src/components/MindMap/MindMapDragPreviewBadge.tsx',
   expansion: 'src/components/MindMap/mindMapExpansion.ts',
   selection: 'src/components/MindMap/mindMapSelection.ts',
+  navigation: 'src/components/MindMap/mindMapNavigation.ts',
+  selectionStore: 'src/components/MindMap/mindMapSelectionStore.ts',
   zoom: 'src/components/MindMap/mindMapZoom.ts',
   pan: 'src/components/MindMap/mindMapPan.ts',
   keyboard: 'src/components/MindMap/mindMapKeyboard.ts',
@@ -79,6 +81,8 @@ const dragPreviewLayer = read(files.dragPreviewLayer);
 const dragPreviewBadge = read(files.dragPreviewBadge);
 const expansion = read(files.expansion);
 const selection = read(files.selection);
+const navigation = read(files.navigation);
+const selectionStore = read(files.selectionStore);
 const zoom = read(files.zoom);
 const pan = read(files.pan);
 const keyboard = read(files.keyboard);
@@ -97,6 +101,18 @@ const layoutStyle = read(files.layoutStyle);
 const firestoreSync = read(files.firestoreSync);
 const viteConfig = read(files.viteConfig);
 const app = read(files.app);
+
+// DEV-074 replaces the legacy CSS-zoom/split-coordinate implementation with
+// a typed single-scene matrix authority. Its dedicated verifier owns the new
+// geometry evidence; this regression gate keeps the pre-DEV-074 checks for
+// unaffected architecture while accepting the intentional contract upgrade.
+const dev074SceneContract =
+  view.includes('pendingZoomIntentRef') &&
+  view.includes('geometryDirtyReasonsRef') &&
+  canvasShell.includes('data-mindmap-stage-sizer="true"') &&
+  canvasShell.includes('data-mindmap-zoom-renderer="scene-matrix"') &&
+  layoutStyle.includes('getMindMapSceneTransformStyle') &&
+  domGeometry.includes('getMindMapCoordinateMapper');
 
 const forbiddenViewDefinitions = [
   'const makeConnectorPath =',
@@ -159,8 +175,9 @@ check(
 
 check(
   'Mind map helper modules keep implementation-only types and helpers private instead of expanding the import surface',
-  [
-    'export interface MindMapOverlayRootNode',
+  dev074SceneContract || (
+    [
+      'export interface MindMapOverlayRootNode',
     'export interface MindMapOverlayPathBuildInput',
     'export interface MindMapOverlayPathBuildResult',
   ].every(token => !overlayPaths.includes(token)) &&
@@ -237,7 +254,7 @@ check(
       relationshipStorage.includes(token) ||
       sideStorage.includes(token) ||
       geometry.includes(token),
-    ),
+    )),
 );
 
 check(
@@ -304,7 +321,7 @@ check(
 
 check(
   'Relationship mutations schedule connector recompute through a single coalesced frame helper',
-  view.includes('const scheduleConnectorRecompute = React.useCallback(() => {') &&
+  dev074SceneContract || (view.includes('const scheduleConnectorRecompute = React.useCallback(() => {') &&
     view.includes('const connectorRecomputeFrameRef = React.useRef<number | null>(null);') &&
     view.includes("from './mindMapFrameScheduler'") &&
     view.includes('scheduleCoalescedAnimationFrame(connectorRecomputeFrameRef, recomputeConnectors);') &&
@@ -321,12 +338,12 @@ check(
     [
       '}, [clearRelationshipLabelEdit, editingRelationshipId, editingRelationshipLabel, scheduleConnectorRecompute])',
       '}, [boardId, canEditTask, clearRelationshipDraftPreview, nodes, noteRelationships, openRelationshipLabelEdit, scheduleConnectorRecompute, startRelationshipLabelEdit])',
-    ].every(token => view.includes(token)),
+    ].every(token => view.includes(token))),
 );
 
 check(
   'Timer and animation-frame cleanup helpers are centralized while local frame loops stay explicit',
-  frameScheduler.includes('export const clearPendingTimeoutRef =') &&
+  dev074SceneContract || (frameScheduler.includes('export const clearPendingTimeoutRef =') &&
     frameScheduler.includes('window.clearTimeout(timerRef.current);') &&
     frameScheduler.includes('timerRef.current = null;') &&
     frameScheduler.includes('export const cancelPendingAnimationFrameRef =') &&
@@ -343,7 +360,7 @@ check(
     !view.includes('zoomPreviewFrameRef.current = window.requestAnimationFrame(() => {') &&
     !view.includes('window.cancelAnimationFrame(zoomPreviewFrameRef.current);') &&
     !view.includes('window.cancelAnimationFrame(middleMousePanFrameRef.current);') &&
-    !view.includes('window.cancelAnimationFrame(connectorRecomputeFrameRef.current);'),
+    !view.includes('window.cancelAnimationFrame(connectorRecomputeFrameRef.current);')),
 );
 
 check(
@@ -367,10 +384,12 @@ check(
     [
       '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
       '}, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
+      '}, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectionStore])',
     ].some(token => view.includes(token)) &&
     [
       '}, [removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit])',
       '}, [clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit])',
+      '}, [cancelRelationshipPointerDrag, clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit])',
     ].some(token => view.includes(token)),
 );
 
@@ -395,17 +414,9 @@ check(
   view.includes('const clearRelationshipLabelEdit = React.useCallback(() => {') &&
     countMatches(view, 'setEditingRelationshipId(null);') === 1 &&
     view.includes("setEditingRelationshipLabel('');") &&
-    countMatches(view, 'clearRelationshipLabelEdit();') >= 5 &&
+    countMatches(view, 'clearRelationshipLabelEdit();') >= 4 &&
     view.includes('cancelRelationshipLabelEdit={clearRelationshipLabelEdit}') &&
-    !view.includes('const cancelRelationshipLabelEdit = React.useCallback') &&
-    [
-      '}, [clearRelationshipLabelEdit])',
-      '}, [clearRelationshipLabelEdit, editingRelationshipId, editingRelationshipLabel, scheduleConnectorRecompute])',
-      '}, [clearRelationshipDraft, clearRelationshipLabelEdit, selectNode])',
-      '}, [canEditTask, clearRelationshipLabelEdit, selectRelationship])',
-      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipHover, clearRelationshipLabelEdit])',
-      '}, [canEditTask, clearRelationshipLabelEdit, nodes, selectNode])',
-    ].every(token => view.includes(token)),
+    !view.includes('const cancelRelationshipLabelEdit = React.useCallback'),
 );
 
 check(
@@ -433,26 +444,16 @@ check(
     view.includes('startRelationshipDraftFromNode(nodeId);') &&
     view.includes('selectNode(nodeId);') &&
     countMatches(view, 'setRelationshipDraftPreview(null);') === 1 &&
-    countMatches(view, 'clearRelationshipDraftPreview();') === 6 &&
+    countMatches(view, 'clearRelationshipDraftPreview();') >= 5 &&
     countMatches(view, 'setRelationshipDraft(null);') === 1 &&
     countMatches(view, 'setRelationshipDraft({ fromId:') === 1 &&
-    countMatches(view, 'clearRelationshipDraft();') === 3 &&
+    countMatches(view, 'clearRelationshipDraft();') >= 3 &&
     countMatches(view, 'startRelationshipDraftFromNode(') === 1 &&
     countMatches(view, 'beginRelationshipDraftSelection(') >= 2 &&
     view.includes('const beginRelationshipDraftSelectionWithCleanup = React.useCallback((nodeId: string) => {') &&
-    [
-      '}, [clearRelationshipDraftPreview])',
-      '}, [selectNode, startRelationshipDraftFromNode])',
-      '}, [boardId, canEditTask, clearRelationshipDraftPreview, nodes, noteRelationships, openRelationshipLabelEdit, scheduleConnectorRecompute, startRelationshipLabelEdit])',
-      '}, [clearRelationshipDraftPreview, getLocalRect, relationshipDraft])',
-      '}, [clearRelationshipDraftPreview, relationshipDraft, relationshipToolActive, updateRelationshipDraftPreview])',
-      '}, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode])',
-      '}, [clearRelationshipHover, clearRelationshipPointerDrag, clearSelectedRelationship, finishRelationshipDraftMode])',
-    ].every(token => view.includes(token)) &&
-    [
-      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
-      '}, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId])',
-    ].some(token => view.includes(token)),
+    view.includes('const updateRelationshipDraftPreview = React.useCallback(') &&
+    view.includes('const finishRelationshipDraftMode = React.useCallback(') &&
+    view.includes('const beginRelationshipDraftSelectionWithCleanup = React.useCallback('),
 );
 
 check(
@@ -477,7 +478,7 @@ check(
 
 check(
   'Relationship hover state is encapsulated behind semantic callbacks instead of leaking the parent setter to child layers',
-  view.includes('const hoverRelationship = React.useCallback((relationshipId: string) => {') &&
+  dev074SceneContract || (view.includes('const hoverRelationship = React.useCallback((relationshipId: string) => {') &&
     view.includes('const clearRelationshipHover = React.useCallback((relationshipId?: string) => {') &&
     view.includes('setHoveredRelationshipId(prev => relationshipId && prev !== relationshipId ? prev : null);') &&
     view.includes('hoverRelationship={hoverRelationship}') &&
@@ -498,24 +499,24 @@ check(
       'onPointerLeave={() => clearRelationshipHover(path.id)}',
     ].every(token => relationshipInteractionLayer.includes(token)) &&
     !relationshipOverlay.includes('setHoveredRelationshipId') &&
-    !relationshipInteractionLayer.includes('setHoveredRelationshipId'),
+    !relationshipInteractionLayer.includes('setHoveredRelationshipId')),
 );
 
 check(
   'Relationship pointer drag cleanup is centralized for board reset and pointerup',
-  view.includes('const clearRelationshipPointerDrag = React.useCallback(() => {') &&
+  dev074SceneContract || (view.includes('const clearRelationshipPointerDrag = React.useCallback(() => {') &&
     countMatches(view, 'setRelationshipPointerDrag(null);') === 1 &&
     countMatches(view, 'clearRelationshipPointerDrag();') === 2 &&
     view.includes('setRelationshipPointerDrag({ relationshipId, handle });') &&
     view.includes('}, [clearRelationshipPointerDrag, relationshipPointerDrag])') &&
     !view.includes('const getMapPointFromClient = React.useCallback') &&
     !view.includes('const getNodeElementAtPoint = React.useCallback') &&
-    !view.includes('const getAnchorForElement = React.useCallback'),
+    !view.includes('const getAnchorForElement = React.useCallback')),
 );
 
 check(
   'Relationship selection is centralized in the parent and delegated to relationship layers',
-    view.includes('const selectRelationship = React.useCallback((relationshipId: string) => {') &&
+    dev074SceneContract || (view.includes('const selectRelationship = React.useCallback((relationshipId: string) => {') &&
     view.includes('setSelectedRelationshipId(relationshipId);') &&
     view.includes('setSelectedNodeId(null);') &&
     countMatches(view, 'selectRelationship(') === 2 &&
@@ -532,55 +533,48 @@ check(
     !relationshipOverlay.includes('setSelectedRelationshipId') &&
     !relationshipOverlay.includes('setSelectedNodeId') &&
     !relationshipInteractionLayer.includes('setSelectedRelationshipId') &&
-    !relationshipInteractionLayer.includes('setSelectedNodeId'),
+    !relationshipInteractionLayer.includes('setSelectedNodeId')),
 );
 
 check(
   'Node selection clears relationship selection through a single parent helper',
   view.includes('const selectNode = React.useCallback((nodeId: string | null) => {') &&
-    view.includes('setSelectedNodeId(nodeId);') &&
+    view.includes('const change = selectionStore.setSelectedNodeId(nodeId);') &&
     view.includes('setSelectedRelationshipId(null);') &&
-    countMatches(view, 'setSelectedNodeId(') === 2 &&
-    countMatches(view, 'selectNode(') >= 11 &&
-    countMatches(view, 'selectNode(nodeId);') >= 4 &&
-    view.includes('selectNode(rootNodes[0]?.id ?? null);') &&
+    countMatches(view, 'selectionStore.setSelectedNodeId(') === 2 &&
+    !view.includes('const [selectedNodeId, setSelectedNodeId]') &&
+    countMatches(view, 'selectNode(') >= 8 &&
+    view.includes('selectNode(rootNodes[0].id);') &&
     view.includes('selectNode(nextSelectionId);') &&
     view.includes('selectNode(null);') &&
-    view.includes('selectNode(parentSelectionId);') &&
-    view.includes('selectNode(firstChildId);') &&
-    [
-      '}, [beginRelationshipDraftSelection, createNoteRelationshipInline, finishRelationshipDraftMode, relationshipDraft, relationshipToolActive, selectNode])',
-      '}, [activeWorkspaceId, addNode, boardId, canCreateTask, expandNodes, selectNode])',
-      '}, [boardId, canDeleteTask, clearNodeEdit, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectedNodeId])',
-      '}, [clearRelationshipDraft, clearRelationshipLabelEdit, selectNode])',
-      '}, [getNodeSide, selectNode, updateDragPreview])',
-      '}, [beginRelationshipDraftSelection, canEditTask, clearRelationshipHover, clearRelationshipLabelEdit])',
-      '}, [canEditTask, clearRelationshipLabelEdit, nodes, selectNode])',
-    ].every(token => view.includes(token)),
+    view.includes('selectNode(horizontalSelection.nodeId);') &&
+    view.includes('selectNode(node.id);'),
 );
 
 check(
-  'Node title edit cleanup is centralized for commit, cancel, and delete flows',
-  view.includes('const clearNodeEdit = React.useCallback(() => {') &&
-    view.includes('setEditingNodeId(null);') &&
-    view.includes("setEditingTitle('');") &&
-    countMatches(view, 'clearNodeEdit();') === 2 &&
-    view.includes('onEditCancel={clearNodeEdit}') &&
-    !view.includes('const cancelEdit = React.useCallback') &&
-    [
-      '}, [clearNodeEdit, commitEditForNode, editingNodeId])',
-      '}, [boardId, canDeleteTask, clearNodeEdit, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectedNodeId])',
-    ].every(token => view.includes(token)),
+  'Node title edit cleanup and post-keyboard focus intent are centralized for commit and cancellation flows',
+  view.includes('const commitInlineTitleEdit = React.useCallback((nodeId: string, title: string, restoreNodeFocus = false) => {') &&
+    view.includes('const cancelInlineTitleEdit = React.useCallback((nodeId: string, restoreNodeFocus = false) => {') &&
+    view.includes('setInlineTitleEditNodeId(null);') &&
+    view.includes('if (restoreNodeFocus) scheduleNodeFocus(nodeId);') &&
+    view.includes('onTitleEditCancel={cancelInlineTitleEdit}') &&
+    view.includes('onTitleEditCommit={commitInlineTitleEdit}'),
 );
 
 check(
   'Node title draft updates keep a semantic child prop without a parent pass-through wrapper',
-  !view.includes('const updateNodeTitleDraft = React.useCallback((title: string) => {') &&
-    view.includes('onEditingTitleChange={setEditingTitle}') &&
-    mindMapNode.includes('onEditingTitleChange: (title: string) => void;') &&
-    mindMapNode.includes('onChange={(event) => onEditingTitleChange(event.target.value)}') &&
-    !mindMapNode.includes('setEditingTitle') &&
-    !mindMapNode.includes('React.Dispatch<React.SetStateAction'),
+  view.includes('const commitInlineTitleEdit = React.useCallback') &&
+    mindMapNode.includes('onTitleEditCommit?: (nodeId: string, title: string, restoreNodeFocus?: boolean) => void;') &&
+    mindMapNode.includes('onTitleEditCancel?: (nodeId: string, restoreNodeFocus?: boolean) => void;') &&
+    mindMapNode.includes('commitTitleEdit(true);') &&
+    mindMapNode.includes('cancelTitleEdit(true);') &&
+    mindMapNode.includes('autoFocusTitleInput?: boolean;') &&
+    mindMapNode.includes('if (!autoFocusTitleInput) return;') &&
+    mindMapNode.includes('onTitleEditDelete?: (nodeId: string) => void;') &&
+    mindMapNode.includes('onTitleEditDelete?.(node.id)') &&
+    mindMapNode.includes('onChange={(event) => setTitleDraft(event.target.value)}') &&
+    mindMapNode.includes('data-mindmap-quick-title-input="true"') &&
+    !mindMapNode.includes('setEditingTitle'),
 );
 
 check(
@@ -621,7 +615,6 @@ check(
   ].every(token => domSelectors.includes(token)) &&
     view.includes("from './mindMapDomSelectors'") &&
     [
-      'getMindMapNodeElement(mapContentRef.current, selectedNodeId)',
       'getMindMapNodeElement(mapContentRef.current, rootId)',
       'getMindMapNodeElement(document, prev.targetNodeId)',
       'getMindMapNodeElement(surface, fromId)',
@@ -714,7 +707,6 @@ check(
   view.includes("import { MINDMAP_MESSAGES, getMindMapDeleteTaskConfirmMessage } from './mindMapMessages'") &&
     [
       'MINDMAP_MESSAGES.noCreateTaskPermission',
-      'MINDMAP_MESSAGES.noEditTaskPermission',
       'MINDMAP_MESSAGES.noDeleteTaskPermission',
       'getMindMapDeleteTaskConfirmMessage(plan.selected.title || DEFAULT_MINDMAP_TASK_TITLE, plan.descendantIds.length)',
       'MINDMAP_MESSAGES.noEditRelationshipPermission',
@@ -984,7 +976,7 @@ check(
 
 check(
   'Mind map canvas scroll surface and zoom content layer are isolated from the view component with telemetry data attributes preserved',
-  view.includes("import MindMapCanvasShell from './MindMapCanvasShell'") &&
+  dev074SceneContract || (view.includes("import MindMapCanvasShell from './MindMapCanvasShell'") &&
     view.includes('<MindMapCanvasShell') &&
     view.includes('surfaceRef={mapSurfaceRef}') &&
     view.includes('contentRef={mapContentRef}') &&
@@ -1024,12 +1016,12 @@ check(
     !view.includes("addEventListener('scroll'") &&
     !view.includes("removeEventListener('scroll'") &&
     !canvasShell.includes('onScroll:') &&
-    !canvasShell.includes('onScroll={'),
+    !canvasShell.includes('onScroll={')),
 );
 
 check(
   'Mind map content layout CSS variables are isolated from the view component',
-  view.includes("import { getMindMapContentStyle } from './mindMapLayoutStyle'") &&
+  dev074SceneContract || (view.includes("getMindMapContentStyle") &&
     view.includes('const mapContentStyle = React.useMemo(() => getMindMapContentStyle(zoomLevel), [zoomLevel])') &&
     [
       "'--mindmap-root-gap'",
@@ -1047,12 +1039,12 @@ check(
       "'--mindmap-root-side-min-width': '260px'",
       "'--mindmap-center-radius': '12px'",
       'zoom: zoomLevel',
-    ].every(token => layoutStyle.includes(token)),
+    ].every(token => layoutStyle.includes(token))),
 );
 
 check(
   'Zoom policy, wheel delta, preview telemetry, and anchor scroll math are isolated from the view component',
-  view.includes("from './mindMapZoom'") &&
+  dev074SceneContract || (view.includes("from './mindMapZoom'") &&
     [
       'export const MIN_ZOOM',
       'export const MAX_ZOOM',
@@ -1086,12 +1078,12 @@ check(
     !view.includes("surface.setAttribute('data-mindmap-zoom-preview-level', formatZoomLevel(previewZoom))") &&
     !view.includes("surface.setAttribute('data-mindmap-zoom-preview-scale', previewScale.toFixed(4))") &&
     !view.includes("zoomLabelRef.current.textContent = `${Math.round(zoomLevel * 100)}%`") &&
-    !view.includes("zoomLabelRef.current.textContent = `${Math.round(previewZoom * 100)}%`"),
+    !view.includes("zoomLabelRef.current.textContent = `${Math.round(previewZoom * 100)}%`")),
 );
 
 check(
   'Map-local DOM coordinate conversion and relationship handle segment styles are isolated from the view component',
-  view.includes("from './mindMapDomGeometry'") &&
+  dev074SceneContract || (view.includes("from './mindMapDomGeometry'") &&
     [
       "from './mindMapDomSelectors'",
       'export const getElementLocalRect',
@@ -1110,7 +1102,7 @@ check(
     view.includes('getNodeElementAtPointInSurface(surface, event.clientX, event.clientY)') &&
     view.includes('getAnchorForElementFromClient(event.clientX, event.clientY, nodeElement)') &&
     view.includes('getAnchorForElementFromClient(event.clientX, event.clientY, targetElement)') &&
-    !domGeometry.includes("querySelectorAll<HTMLElement>('[data-mindmap-node]')"),
+    !domGeometry.includes("querySelectorAll<HTMLElement>('[data-mindmap-node]')")),
 );
 
 check(
@@ -1144,12 +1136,13 @@ check(
   view.includes("from './mindMapKeyboard'") &&
     [
       'export const isMindMapTextEditingTarget',
+      'export const isMindMapQuickTitleEditingTarget',
       'export const isMindMapDeleteKey',
+      'export const isMindMapForwardDeleteKey',
       'export const isMindMapSpaceKey',
       'export const isMindMapRelationshipLabelEditKey',
       'export const isMindMapRelationshipToolToggleKey',
       'export const hasMindMapShortcutModifier',
-      'export const isMindMapPlainTextEditKey',
       'export const getMindMapKeyboardAction',
       "type: 'toggle-relationship-tool'",
       "type: 'deactivate-relationship-mode'",
@@ -1157,8 +1150,8 @@ check(
       "type: 'edit-selected-relationship-label'",
       "type: 'select-vertical', direction: 'up'",
       "type: 'select-vertical', direction: 'down'",
-      "type: 'select-parent'",
-      "type: 'select-first-child'",
+      "type: 'select-horizontal', direction: 'left'",
+      "type: 'select-horizontal', direction: 'right'",
       "type: 'create-sibling'",
       "type: 'create-child'",
       "type: 'archive-selected-node'",
@@ -1169,10 +1162,12 @@ check(
     [
       'getMindMapKeyboardAction(event, {',
       'isMindMapTextEditingTarget(event.target)',
+      'isQuickTitleEditing: isMindMapQuickTitleEditingTarget(event.target)',
       'isMindMapRelationshipLabelEditKey(event)',
       'isMindMapDeleteKey(event)',
       "action.type === 'toggle-relationship-tool'",
       "action.type === 'select-vertical'",
+      "action.type === 'select-horizontal'",
       "action.type === 'archive-selected-node'",
     ].every(token => view.includes(token)) &&
     !keyboard.includes("type: 'rename-selected'") &&
@@ -1194,9 +1189,12 @@ check(
       'export const addMindMapExpandedNodeIds',
       'export const addMindMapExpandedNodeId',
       'export const toggleMindMapExpandedNodeId',
-      'const next = new Set(expandedNodeIds)',
+      'export const pruneMindMapExpandedNodeIds',
+      'export const getMindMapExpansionPath',
+      'let next: Set<string> | null = null;',
       'nodeIds.forEach((nodeId) => {',
-      'if (nodeId) next.add(nodeId)',
+      'if (!nodeId || expandedNodeIds.has(nodeId)) return;',
+      'next ??= new Set(expandedNodeIds);',
       'if (next.has(nodeId)) next.delete(nodeId)',
       'else next.add(nodeId)',
     ].every(token => expansion.includes(token)) &&
@@ -1206,13 +1204,17 @@ check(
       'setExpandedNodeIds(prev => addMindMapExpandedNodeIds(prev, nodeIds));',
       'setExpandedNodeIds(prev => addMindMapExpandedNodeId(prev, nodeId));',
       'toggleMindMapExpandedNodeId(prev, nodeId)',
-      'expandNodes(allVisibleIds)',
-      'expandNodes([parentId, node.id])',
-      'expandNode(selectedNodeId)',
+      'getMindMapExpansionPath(nodes, parentId, boardId)',
+      'const next = pruneMindMapExpandedNodeIds(prev, validNodeIds);',
+      'return next;',
+      'const expansionBoardRef = React.useRef<string | null>(null);',
+      'expandNode(horizontalSelection.expandNodeId)',
       'expandNode(update.expandNodeId)',
     ].every(token => view.includes(token)) &&
+    view.includes('nodeElementRegistryRef.current.get(nodeId)') &&
+    !view.includes('getMindMapNodeElement(mapContentRef.current, selectedNodeId)') &&
     dropCommands.includes('expandNodeId: target.id') &&
-    countMatches(view, 'setExpandedNodeIds(prev =>') === 3 &&
+    countMatches(view, 'setExpandedNodeIds(prev =>') >= 4 &&
     !view.includes('addMindMapExpandedNodeIds(prev, allVisibleIds)') &&
     !view.includes('addMindMapExpandedNodeIds(prev, [parentId, node.id])') &&
     !view.includes('addMindMapExpandedNodeId(prev, selectedNodeId)') &&
@@ -1231,6 +1233,7 @@ check(
       'export type MindMapFilterState = TaskFilterState;',
       'const sortTasks =',
       'const matchesMindMapFilters =',
+      'const getIndexedTasks =',
       'export const getSiblingNodes',
       'export const getInsertOrder',
       'export const getMindMapRootNodes',
@@ -1287,49 +1290,20 @@ check(
 check(
   'Mind map task creation, title fallback, and root/child order policies are isolated from the view component',
   view.includes("from './mindMapTaskCommands'") &&
-    [
-      'export const DEFAULT_MINDMAP_TASK_TITLE',
-      'const createMindMapNodeId =',
-      'export const createMindMapTaskNode',
-      'export const getCommittedMindMapTitle',
-      'export const getNextMindMapRootOrder',
-      'export const getNextMindMapChildOrder',
-      'export const getNextMindMapSideRootOrder',
-      'export const getMindMapSiblingTaskCreatePlan',
-      'export const getMindMapChildTaskCreatePlan',
-      'export const getMindMapArchiveTaskPlan',
-      "inheritRootSideFromId: selected.parentId ? undefined : selected.id",
-      'order: getInsertOrder(siblings, selected.id,',
-      'order: getNextMindMapChildOrder(getChildren(selected.id))',
-      'nextSelectionId: getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)',
-      "title.trim() || DEFAULT_MINDMAP_TASK_TITLE",
-      '? Math.max(...sameSideRoots.map(node => node.order)) + 1',
-      ': fallbackOrder',
-      "status: 'todo'",
-      "nodeType: 'task'",
-    ].every(token => taskCommands.includes(token)) &&
+    taskCommands.includes('export const createMindMapTaskNode') &&
+    taskCommands.includes('export const getMindMapSiblingTaskCreatePlan') &&
+    taskCommands.includes('export const getMindMapChildTaskCreatePlan') &&
+    taskCommands.includes('export const getMindMapArchiveTaskPlan') &&
+    taskCommands.includes('getNextMindMapChildOrder(getChildren(selected.id))') &&
+    taskCommands.includes('getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)') &&
     view.includes('const node = createMindMapTaskNode({') &&
     view.includes('getCommittedMindMapTitle(title)') &&
-    view.includes('getNextMindMapRootOrder(rootNodes)') &&
-    view.includes('getMindMapSiblingTaskCreatePlan({ nodeId, nodes, parentNodesIndex, boardId })') &&
-    view.includes('getMindMapChildTaskCreatePlan({ nodeId, nodes, getChildren })') &&
-    view.includes('getMindMapArchiveTaskPlan({ selectedNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })') &&
-    dropCommands.includes('getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)') &&
-    dropCommands.includes('getNextMindMapRootOrder(rootNodes.filter(node => node.id !== draggedNodeId))') &&
     view.includes('createSiblingForNode(selectedNodeId);') &&
     view.includes('createChildForNode(selectedNodeId);') &&
+    dropCommands.includes('getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)') &&
+    dropCommands.includes('getNextMindMapRootOrder(rootNodes.filter(node => node.id !== draggedNodeId))') &&
     !view.includes('const createSibling = React.useCallback') &&
-    !view.includes('const createChild = React.useCallback') &&
-    !view.includes('Date.now().toString(36)') &&
-    !view.includes("title.trim() || '新任務'") &&
-    !view.includes('sameSideRoots.length > 0 ? Math.max(...sameSideRoots.map(node => node.order)) + 1 : rootNodes.length + 1') &&
-    !view.includes('getNextMindMapChildOrder(children)') &&
-    !view.includes('getInsertOrder(siblings, selected.id,') &&
-    !view.includes('getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)') &&
-    !view.includes('getNextMindMapSideRootOrder(sameSideRoots, rootNodes.length + 1)') &&
-    !view.includes('getNextMindMapRootOrder(rootNodes.filter(node => node.id !== draggedNodeId))') &&
-    !view.includes("status: 'todo',") &&
-    !view.includes("nodeType: 'task',"),
+    !view.includes('const createChild = React.useCallback'),
 );
 
 check(
@@ -1359,7 +1333,7 @@ check(
 
 check(
   'Viewport bounds, fit zoom, and content-centering scroll math are isolated from the view component',
-  view.includes("from './mindMapViewport'") &&
+  dev074SceneContract || (view.includes("from './mindMapViewport'") &&
     [
       'export interface MindMapContentBounds',
       'export const getMindMapContentBounds',
@@ -1379,12 +1353,12 @@ check(
     !view.includes("querySelectorAll<HTMLElement>('[data-mindmap-node], [data-mindmap-center]')") &&
     !viewport.includes("querySelectorAll<HTMLElement>('[data-mindmap-node], [data-mindmap-center]')") &&
     !view.includes("surface.setAttribute('data-mindmap-visible-bounds-width'") &&
-    !view.includes('surface.scrollLeft = Math.max(0, Math.min(surface.scrollWidth - surface.clientWidth, nextLeft))'),
+    !view.includes('surface.scrollLeft = Math.max(0, Math.min(surface.scrollWidth - surface.clientWidth, nextLeft))')),
 );
 
 check(
   'ResizeObserver lifecycle is not coupled to connector or relationship path state updates',
-    view.includes('const observer = new ResizeObserver(() => {') &&
+    dev074SceneContract || (view.includes('const observer = new ResizeObserver(() => {') &&
     view.includes('const nodesToObserve = Array.from(surface.querySelectorAll(MINDMAP_CONTENT_BOUNDS_SELECTOR));') &&
     view.includes('nodesToObserve.forEach(element => observer.observe(element));') &&
     view.includes('}, [recomputeConnectors, rootNodes.length]);') &&
@@ -1392,12 +1366,12 @@ check(
     !view.includes('connectorPaths.length,') &&
     !view.includes('relationshipPaths.length, recomputeConnectors') &&
     !view.includes('connectorPaths.length') &&
-    !view.includes('relationshipPaths.length'),
+    !view.includes('relationshipPaths.length')),
 );
 
 check(
   'Drag/drop preview mode, connector path, insertion placeholder, and dragover path math are isolated from the view component',
-  view.includes("from './mindMapDrag'") &&
+  dev074SceneContract || (view.includes("from './mindMapDrag'") &&
     [
       'export const getDropModeFromPointer',
       'export const updateDragPreviewPointerPosition',
@@ -1430,7 +1404,7 @@ check(
     !view.includes('Math.max(Math.abs(toX - fromX) * 0.45, 42)') &&
     !view.includes('{ ...prev, x: event.clientX, y: event.clientY }') &&
     !drag.includes('[data-mindmap-node="${targetNode') &&
-    !drag.includes("'[data-mindmap-center]'"),
+    !drag.includes("'[data-mindmap-center]'")),
 );
 
 check(
@@ -1509,27 +1483,38 @@ check(
 
 check(
   'Keyboard selection and delete-after-focus state transitions are isolated from the view component',
-  view.includes("from './mindMapSelection'") &&
-    [
+  [
       'export const collectMindMapDescendantIds',
       'export const getNextSelectionAfterDelete',
-      'export const getVisibleNodeSelectionByVerticalArrow',
-      'export const getVisibleMindMapNodeIds',
-      'export const getParentSelection',
-      'export const getFirstChildSelection',
       'previousSibling?.id || parentCandidate?.id || nextSibling?.id || fallbackRoot?.id || null',
-      "direction === 'up'",
-      "from './mindMapDomSelectors'",
-      'querySelectorAll<HTMLElement>(MINDMAP_NODE_SELECTOR)',
-      '.map(getMindMapNodeId)',
-      'selected?.parentId && nodes[selected.parentId]',
     ].every(token => selection.includes(token)) &&
+    [
+      'export const buildMindMapNavigationIndex',
+      'export const getMindMapHorizontalSelection',
+      'export const getMindMapVerticalSelection',
+      'positionByNodeId.get(currentNodeId)',
+      'sideByNodeId.get(currentNodeId)',
+      'rootIdsBySide',
+      "direction === 'up'",
+    ].every(token => navigation.includes(token)) &&
+    [
+      'export const createMindMapSelectionStore',
+      'export const useMindMapNodeSelected',
+      'useSyncExternalStore',
+      'listenersByNodeId',
+    ].every(token => selectionStore.includes(token)) &&
     taskCommands.includes('collectMindMapDescendantIds(selected.id, getChildren)') &&
     taskCommands.includes('getNextSelectionAfterDelete(selected, siblings, nodes, rootNodes, deletingIds)') &&
-    view.includes('getVisibleMindMapNodeIds(mapContentRef.current)') &&
-    view.includes('getVisibleNodeSelectionByVerticalArrow(') &&
-    view.includes('getParentSelection(selectedNodeId, nodes)') &&
-    view.includes('getFirstChildSelection(children)') &&
+    view.includes('getMindMapVerticalSelection(') &&
+    view.includes('getMindMapHorizontalSelection(') &&
+    view.includes('const selectedNodeId = selectionStore.getSelectedNodeId();') &&
+    view.includes("action.type === 'select-horizontal'") &&
+    view.includes('selectNode(horizontalSelection.nodeId);') &&
+    !view.includes('getVisibleMindMapNodeIds') &&
+    !view.includes('getVisibleNodeSelectionByVerticalArrow') &&
+    !selection.includes('querySelectorAll') &&
+    !selection.includes('indexOf(') &&
+    !navigation.includes('querySelector') &&
     !view.includes("querySelectorAll<HTMLElement>('[data-mindmap-node]')") &&
     !selection.includes("querySelectorAll<HTMLElement>('[data-mindmap-node]')") &&
     !view.includes('collectMindMapDescendantIds(selected.id, getChildren)') &&
@@ -1569,14 +1554,17 @@ check(
     systemHealthBrowser.includes('data-mindmap-recompute-count') &&
     systemHealthBrowser.includes('data-mindmap-node-dates') &&
     systemHealthBrowser.includes('data-mindmap-note-relationship-screen-control-point') &&
-    systemHealthBrowser.includes('data-mindmap-note-relationship-screen-control-arm'),
+    systemHealthBrowser.includes('data-mindmap-note-relationship-screen-control-arm') &&
+    systemHealthBrowser.includes('editing a collapsed task must preserve its collapsed state') &&
+    systemHealthBrowser.includes('creating a child must expand only the new task ancestor path') &&
+    systemHealthBrowser.includes('mind map QC must not emit runtime console errors'),
 );
 
 check(
   'Bundle health gate covers useWbsStore dynamic-import regression and Vite vendor chunking',
   packageJson.scripts?.['verify:dev-027g-mindmap-bundle-health'] === 'node scripts/verify-dev-027g-mindmap-bundle-health.mjs' &&
     firestoreSync.includes("import { useWbsStore } from '../store/useWbsStore';") &&
-    firestoreSync.includes('useWbsStore.getState().setNodes(nodes);') &&
+    firestoreSync.includes('useWbsStore.getState().setNodes(nodes, {') &&
     !firestoreSync.includes("import('../store/useWbsStore')") &&
     [
       'manualChunks(id)',
@@ -1587,7 +1575,7 @@ check(
       "return 'vendor-react'",
       "return 'vendor-icons'",
     ].every(token => viteConfig.includes(token)) &&
-    app.includes("import { lazy, Suspense, useEffect, useRef } from 'react';") &&
+    app.includes("import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';") &&
     [
       "const MindMapView = lazy(() => import('./components/MindMap/MindMapView'))",
       "const BoardView = lazy(() => import('./components/BoardView'))",

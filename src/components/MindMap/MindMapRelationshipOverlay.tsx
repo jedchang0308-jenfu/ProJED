@@ -3,7 +3,6 @@ import {
   type MindMapRelationshipDraftPreview,
   type MindMapRelationshipPath,
 } from './mindMapGeometry';
-import type { MindMapRelationshipPointerHandle } from './mindMapRelationshipCommands';
 import { BRAND_BLUE } from '../ui/brandColors';
 
 interface MindMapRelationshipOverlayProps {
@@ -12,15 +11,6 @@ interface MindMapRelationshipOverlayProps {
   selectedRelationshipId: string | null;
   hoveredRelationshipId: string | null;
   editingRelationshipId: string | null;
-  selectRelationship: (relationshipId: string) => void;
-  hoverRelationship: (relationshipId: string) => void;
-  clearRelationshipHover: (relationshipId?: string) => void;
-  startRelationshipLabelEdit: (relationshipId: string) => void;
-  startRelationshipPointerDrag: (
-    event: React.PointerEvent<Element>,
-    relationshipId: string,
-    handle: MindMapRelationshipPointerHandle,
-  ) => void;
 }
 
 const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
@@ -29,11 +19,6 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
   selectedRelationshipId,
   hoveredRelationshipId,
   editingRelationshipId,
-  selectRelationship,
-  hoverRelationship,
-  clearRelationshipHover,
-  startRelationshipLabelEdit,
-  startRelationshipPointerDrag,
 }) => (
   <>
     <svg
@@ -74,16 +59,6 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
               stroke="transparent"
               strokeWidth={18}
               style={{ pointerEvents: 'none' }}
-              onClick={(event) => {
-                event.stopPropagation();
-                selectRelationship(path.id);
-              }}
-              onDoubleClick={(event) => {
-                event.stopPropagation();
-                startRelationshipLabelEdit(path.id);
-              }}
-              onPointerEnter={() => hoverRelationship(path.id)}
-              onPointerLeave={() => clearRelationshipHover(path.id)}
               data-mindmap-note-relationship-hitbox={path.id}
               data-label={path.label}
               data-from-node-id={path.fromNodeId}
@@ -163,8 +138,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
-                  style={{ pointerEvents: 'all' }}
-                  onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'from')}
+                  style={{ pointerEvents: 'none' }}
                   data-mindmap-note-relationship-svg-endpoint="from"
                   data-relationship-id={path.id}
                 />
@@ -176,8 +150,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
-                  style={{ pointerEvents: 'all' }}
-                  onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'to')}
+                  style={{ pointerEvents: 'none' }}
                   data-mindmap-note-relationship-svg-endpoint="to"
                   data-relationship-id={path.id}
                 />
@@ -191,8 +164,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
-                  style={{ pointerEvents: 'all' }}
-                  onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-1')}
+                  style={{ pointerEvents: 'none' }}
                   data-mindmap-note-relationship-svg-control-point="1"
                   data-relationship-id={path.id}
                 />
@@ -206,8 +178,7 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
                   stroke={BRAND_BLUE[500]}
                   strokeWidth={2.5}
                   className="cursor-grab active:cursor-grabbing"
-                  style={{ pointerEvents: 'all' }}
-                  onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-2')}
+                  style={{ pointerEvents: 'none' }}
                   data-mindmap-note-relationship-svg-control-point="2"
                   data-relationship-id={path.id}
                 />

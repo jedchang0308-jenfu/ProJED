@@ -73,8 +73,8 @@ async (page) => {
         },
       };
       localStorage.setItem('projed-filters', JSON.stringify(legacyFilters));
-      localStorage.setItem('projed-task-filters:v1', JSON.stringify({
-        version: 1,
+      const prefs = {
+        version: 3,
         filters: {
           statusFilters: legacyFilters.statusFilters,
           dueWithinDays: legacyFilters.dueWithinDays,
@@ -88,7 +88,9 @@ async (page) => {
           showTags: legacyFilters.showTags,
         },
         updatedAt: Date.now(),
-      }));
+      };
+      localStorage.setItem('projed-task-filters:v1', JSON.stringify(prefs));
+      localStorage.setItem('projed-task-filters:v2:account:local-test-user', JSON.stringify(prefs));
     }, { defaultFilters, overrides });
     await page.reload({ waitUntil: 'networkidle' });
     await enterMindMap();
@@ -115,8 +117,8 @@ async (page) => {
   await page.evaluate((defaultFilters) => {
     window.__PROJED_QC__?.reset(18);
     localStorage.setItem('projed-filters', JSON.stringify(defaultFilters));
-    localStorage.setItem('projed-task-filters:v1', JSON.stringify({
-      version: 1,
+    const prefs = {
+      version: 3,
       filters: {
         statusFilters: defaultFilters.statusFilters,
         dueWithinDays: defaultFilters.dueWithinDays,
@@ -130,7 +132,9 @@ async (page) => {
         showTags: defaultFilters.showTags,
       },
       updatedAt: Date.now(),
-    }));
+    };
+    localStorage.setItem('projed-task-filters:v1', JSON.stringify(prefs));
+    localStorage.setItem('projed-task-filters:v2:account:local-test-user', JSON.stringify(prefs));
   }, defaultFilters);
 
   const titles = await page.evaluate(() => {
@@ -143,12 +147,19 @@ async (page) => {
     const nearTitle = `DEV027D near ${stamp}`;
     const futureTitle = `DEV027D future ${stamp}`;
     const completedTitle = `DEV027D completed ${stamp}`;
+    const dateAtOffset = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const nearStart = dateAtOffset(1);
+    const nearEnd = dateAtOffset(3);
+    const futureStart = dateAtOffset(30);
+    const futureEnd = dateAtOffset(32);
+    const completedStart = dateAtOffset(-4);
+    const completedEnd = dateAtOffset(-2);
 
     Object.assign(roots[0], {
       title: nearTitle,
       status: 'todo',
-      startDate: '2026-06-20',
-      endDate: '2026-06-22',
+      startDate: nearStart,
+      endDate: nearEnd,
       assigneeId: 'local-test-user',
       tagIds: [],
       updatedAt: Date.now(),
@@ -156,8 +167,8 @@ async (page) => {
     Object.assign(roots[1], {
       title: futureTitle,
       status: 'todo',
-      startDate: '2026-08-01',
-      endDate: '2026-08-10',
+      startDate: futureStart,
+      endDate: futureEnd,
       assigneeId: 'local-test-user',
       tagIds: [],
       updatedAt: Date.now(),
@@ -165,14 +176,14 @@ async (page) => {
     Object.assign(roots[2], {
       title: completedTitle,
       status: 'completed',
-      startDate: '2026-06-19',
-      endDate: '2026-06-21',
+      startDate: completedStart,
+      endDate: completedEnd,
       assigneeId: 'local-test-pm',
       tagIds: [],
       updatedAt: Date.now(),
     });
     localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
-    return { nearTitle, futureTitle, completedTitle };
+    return { nearTitle, futureTitle, completedTitle, nearStart, nearEnd };
   });
 
   await page.reload({ waitUntil: 'networkidle' });
@@ -186,8 +197,9 @@ async (page) => {
     start: element.getAttribute('data-start-date'),
     end: element.getAttribute('data-end-date'),
   }));
-  assert(nearBadge.start === '2026-06-20' && nearBadge.end === '2026-06-22', 'date badge should expose start and end date metadata', { nearBadge });
-  assert(nearBadge.text.includes('06/20') && nearBadge.text.includes('06/22'), 'date badge should render compact current-year dates', { nearBadge });
+  const compactDate = value => value.slice(5).replace('-', '/');
+  assert(nearBadge.start === titles.nearStart && nearBadge.end === titles.nearEnd, 'date badge should expose start and end date metadata', { nearBadge, expected: titles });
+  assert(nearBadge.text.includes(compactDate(titles.nearStart)) && nearBadge.text.includes(compactDate(titles.nearEnd)), 'date badge should render compact current-year dates', { nearBadge, expected: titles });
 
   const containment = await nodeByTitle(titles.nearTitle).evaluate((node) => {
     const badge = node.querySelector('[data-mindmap-node-dates]');
@@ -212,8 +224,8 @@ async (page) => {
     start: element.getAttribute('data-start-date'),
     end: element.getAttribute('data-end-date'),
   }));
-  assert(endOnlyBadge.start === '' && endOnlyBadge.end === '2026-06-22', 'showStartDate=false should hide the start date', { endOnlyBadge });
-  assert(!endOnlyBadge.text.includes('06/20') && endOnlyBadge.text.includes('06/22'), 'showStartDate=false should render only end date text', { endOnlyBadge });
+  assert(endOnlyBadge.start === '' && endOnlyBadge.end === titles.nearEnd, 'showStartDate=false should hide the start date', { endOnlyBadge, expected: titles });
+  assert(!endOnlyBadge.text.includes(compactDate(titles.nearStart)) && endOnlyBadge.text.includes(compactDate(titles.nearEnd)), 'showStartDate=false should render only end date text', { endOnlyBadge, expected: titles });
 
   await setFilters({ showStartDate: true, dueWithinDays: 7 });
   await nodeByTitle(titles.nearTitle).waitFor({ state: 'visible', timeout: 15000 });

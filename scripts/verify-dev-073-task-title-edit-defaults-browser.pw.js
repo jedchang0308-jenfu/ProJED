@@ -149,19 +149,55 @@ async (page) => {
   const nodeBeforeQuickTitleBox = await node.boundingBox();
   await node.click();
   await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(350);
   const nodeAfterQuickTitleBox = await node.boundingBox();
   assert(nodeBeforeQuickTitleBox && nodeAfterQuickTitleBox && nodeAfterQuickTitleBox.width >= nodeBeforeQuickTitleBox.width - 1, 'selecting a mindmap task must not shrink its node box', { nodeBeforeQuickTitleBox, nodeAfterQuickTitleBox });
   assert(await page.locator('[data-task-details-modal="true"]').count() === 0, 'mindmap single click must not open task details');
   assert(await page.locator('[data-mindmap-quick-title-input="true"]').count() === 1, 'mindmap single click must enter quick naming');
-  assert(await page.evaluate(() => document.activeElement?.getAttribute('data-mindmap-quick-title-input')) === 'true', 'mindmap single click must focus quick naming');
+  assert(await page.evaluate((nodeId) => document.activeElement?.getAttribute('data-mindmap-node') === nodeId, taskId), 'mindmap single click must retain node focus in XMind quick naming state');
   assert(await quickTitleInput.evaluate((element) => getComputedStyle(element).pointerEvents === 'none'), 'quick naming input must not block node dragging');
   assert(await node.getAttribute('draggable') === 'true', 'selected mindmap node must remain draggable while quick naming');
+  assert(await page.evaluate(() => document.activeElement?.getAttribute('data-mindmap-quick-title-input')) !== 'true', 'mindmap single click must not enter native text-input focus');
   await page.screenshot({ path: 'output/playwright/dev-073-task-title-edit-quick-node.png' });
   assert(await page.locator(`[data-mindmap-node="${taskId}"][aria-selected="true"]`).count() === 1, 'mindmap single click must select the node');
   const originalNodeTitle = await node.getAttribute('data-mindmap-node-title');
   await quickTitleInput.fill('DEV-073 點擊快速命名草稿');
   await quickTitleInput.press('Escape');
   assert(await node.getAttribute('data-mindmap-node-title') === originalNodeTitle, 'Escape must cancel the click-started title draft');
+
+  // Typing from the focused node enters the editor only after the first character,
+  // preserving the XMind armed state for navigation and deletion.
+  await node.click();
+  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(350);
+  await node.press('x');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('data-mindmap-quick-title-input') === 'true');
+  assert(await quickTitleInput.inputValue() === 'x', 'first typed character must replace the title from the armed node state');
+  await quickTitleInput.press('Escape');
+
+  // The delayed XMind quick-title state must keep arrow keys as selection commands.
+  const parentWithChild = page.locator(`[data-mindmap-node="${toolbarTaskId}"]`);
+  await parentWithChild.click();
+  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(350);
+  assert(await page.evaluate((nodeId) => document.activeElement?.getAttribute('data-mindmap-node') === nodeId, toolbarTaskId), 'delayed quick naming must keep the task node focused');
+  await page.keyboard.press('ArrowRight');
+  await page.locator(`[data-mindmap-node="${continuedChildId}"][aria-selected="true"]`).waitFor({ state: 'visible', timeout: 10000 });
+  assert(await page.evaluate(() => document.activeElement?.getAttribute('data-mindmap-quick-title-input')) !== 'true', 'arrow navigation must not move the caret inside quick naming text');
+  await page.locator(`[data-mindmap-node="${continuedChildId}"]`).click();
+  await page.waitForTimeout(350);
+  assert(await page.evaluate((nodeId) => document.activeElement?.getAttribute('data-mindmap-node') === nodeId, continuedChildId), 'child quick naming must retain node focus after delayed click');
+
+  // Delete is a task command even while the XMind-like quick naming input has focus.
+  await page.locator('[data-mindmap-create-root]').click();
+  await quickTitleInput.waitFor({ state: 'visible', timeout: 10000 });
+  const deleteWhileQuickNamingId = await quickTitleNode.getAttribute('data-mindmap-node');
+  const nodeCountBeforeQuickDelete = await page.locator('[data-mindmap-node]').count();
+  assert(Boolean(deleteWhileQuickNamingId), 'quick naming delete fixture must expose a task id');
+  await quickTitleInput.press('Delete');
+  await page.locator(`[data-mindmap-node="${deleteWhileQuickNamingId}"]`).waitFor({ state: 'hidden', timeout: 10000 });
+  await page.waitForFunction(expected => document.querySelectorAll('[data-mindmap-node]').length === expected, nodeCountBeforeQuickDelete - 1);
+  assert(await details.count() === 0, 'quick naming Delete must not open task details');
 
   // The short single-click delay preserves double click as the explicit full-details entry.
   await node.dblclick();

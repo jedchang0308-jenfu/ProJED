@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
+import type { MindMapSceneLayout } from './mindMapCoordinateSystem';
 
-export const getMindMapContentStyle = (zoomLevel: number): CSSProperties => ({
-  '--mindmap-zoom': zoomLevel,
+export const getMindMapContentStyle = (): CSSProperties => ({
   '--mindmap-root-gap': '48px',
   '--mindmap-node-gap': '20px',
   '--mindmap-children-gap': '12px',
@@ -27,5 +27,20 @@ export const getMindMapContentStyle = (zoomLevel: number): CSSProperties => ({
   '--mindmap-center-pad-y': '16px',
   '--mindmap-center-font-size': '16px',
   '--mindmap-center-radius': '12px',
-  zoom: zoomLevel,
 } as CSSProperties);
+
+export const getMindMapStageStyle = (layout: MindMapSceneLayout): CSSProperties => ({
+  position: 'relative',
+  width: `${layout.stageWidth}px`,
+  height: `${layout.stageHeight}px`,
+  overflow: 'visible',
+});
+
+export const getMindMapSceneTransformStyle = (layout: MindMapSceneLayout): CSSProperties => ({
+  width: `${layout.sceneWidth}px`,
+  height: `${layout.sceneHeight}px`,
+  minWidth: 0,
+  minHeight: 0,
+  transformOrigin: '0 0',
+  transform: `matrix(${layout.scale}, 0, 0, ${layout.scale}, ${layout.translateX}, ${layout.translateY})`,
+});

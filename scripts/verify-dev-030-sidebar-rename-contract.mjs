@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   sidebar: 'src/components/Sidebar.tsx',
   globalContextMenu: 'src/components/GlobalContextMenu.tsx',
+  mainLayout: 'src/components/MainLayout.tsx',
   browserVerifier: 'scripts/verify-dev-030-sidebar-rename-contract-browser.pw.js',
   packageJson: 'package.json',
 };
@@ -48,6 +49,13 @@ assert(
     globalContextMenu.includes('handleRenameBoard') &&
     globalContextMenu.includes('setPendingBoardTitleEdit({') &&
     globalContextMenu.includes('重新命名看板'),
+);
+
+assert(
+  'active board topbar title is display-only and cannot open direct rename',
+  !read(files.mainLayout).includes('contentEditable') &&
+    !read(files.mainLayout).includes('updateBoardTitle') &&
+    read(files.mainLayout).includes('className="app-board-title'),
 );
 
 assert(

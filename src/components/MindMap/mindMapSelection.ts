@@ -1,5 +1,4 @@
 import type { TaskNode } from '../../types';
-import { MINDMAP_NODE_SELECTOR, getMindMapNodeId } from './mindMapDomSelectors';
 
 export const collectMindMapDescendantIds = (
   nodeId: string,
@@ -30,24 +29,6 @@ export const getNextSelectionAfterDelete = (
   const fallbackRoot = rootNodes.find(node => !deletingIds.has(node.id));
   return previousSibling?.id || parentCandidate?.id || nextSibling?.id || fallbackRoot?.id || null;
 };
-
-export const getVisibleNodeSelectionByVerticalArrow = (
-  selectedNodeId: string,
-  visibleNodeIds: string[],
-  direction: 'up' | 'down',
-) => {
-  const currentIndex = visibleNodeIds.indexOf(selectedNodeId);
-  if (currentIndex < 0) return null;
-  const nextIndex = direction === 'up'
-    ? Math.max(0, currentIndex - 1)
-    : Math.min(visibleNodeIds.length - 1, currentIndex + 1);
-  return visibleNodeIds[nextIndex] || null;
-};
-
-export const getVisibleMindMapNodeIds = (surface: HTMLElement | null) =>
-  Array.from(surface?.querySelectorAll<HTMLElement>(MINDMAP_NODE_SELECTOR) || [])
-    .map(getMindMapNodeId)
-    .filter((id): id is string => Boolean(id));
 
 export const getParentSelection = (
   selectedNodeId: string,

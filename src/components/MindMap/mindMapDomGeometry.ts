@@ -4,54 +4,59 @@ import type {
   MindMapRelationshipAnchor,
   MindMapRelationshipPoint,
 } from './mindMapGeometry';
+import {
+  createMindMapCoordinateMapper,
+  type MindMapCoordinateMapper,
+  type MindMapSceneLayout,
+  type MindMapSceneSize,
+  type MindMapViewportSnapshot,
+  type MindMapViewportSize,
+} from './mindMapCoordinateSystem';
 import { clampRatio } from './mindMapGeometry';
 import { MINDMAP_NODE_SELECTOR } from './mindMapDomSelectors';
 
-export const getElementLocalRect = (
-  element: HTMLElement,
-  surface: HTMLElement,
-  zoom: number,
-): MindMapLayoutRect => {
-  let left = 0;
-  let top = 0;
-  let current: HTMLElement | null = element;
-  while (current && current !== surface) {
-    left += current.offsetLeft;
-    top += current.offsetTop;
-    current = current.offsetParent as HTMLElement | null;
-  }
-  if (current !== surface) {
-    const surfaceRect = surface.getBoundingClientRect();
-    const rect = element.getBoundingClientRect();
-    const safeZoom = Math.max(zoom, 0.01);
-    left = (rect.left - surfaceRect.left) / safeZoom;
-    top = (rect.top - surfaceRect.top) / safeZoom;
-  }
-  const width = element.offsetWidth;
-  const height = element.offsetHeight;
+export const getMindMapViewportSize = (surface: HTMLElement): MindMapViewportSize => ({
+  width: surface.clientWidth,
+  height: surface.clientHeight,
+});
+
+export const getMindMapViewportSnapshot = (surface: HTMLElement): MindMapViewportSnapshot => {
+  const rect = surface.getBoundingClientRect();
   return {
-    left,
-    top,
-    right: left + width,
-    bottom: top + height,
-    width,
-    height,
+    left: rect.left,
+    top: rect.top,
+    scrollLeft: surface.scrollLeft,
+    scrollTop: surface.scrollTop,
+    clientWidth: surface.clientWidth,
+    clientHeight: surface.clientHeight,
   };
 };
 
-export const getMapPointFromClient = (
+export const getMindMapSceneSize = (scene: HTMLElement): MindMapSceneSize => ({
+  // `scrollWidth/scrollHeight` include transformed descendants in Chromium;
+  // reading them after a zoom would feed the scaled scene back into the
+  // layout, growing the stage on every zoom frame. The world scene is sized
+  // by its untransformed border box, while the viewport owns scrolling.
+  width: Math.max(1, scene.offsetWidth),
+  height: Math.max(1, scene.offsetHeight),
+});
+
+export const getMindMapCoordinateMapper = (
+  scene: HTMLElement,
+  layout: MindMapSceneLayout,
+  viewport: MindMapViewportSnapshot,
+): MindMapCoordinateMapper => createMindMapCoordinateMapper(scene, layout, viewport);
+
+export const getElementWorldRect = (
+  element: HTMLElement,
+  mapper: MindMapCoordinateMapper,
+): MindMapLayoutRect => mapper.elementToWorldRect(element);
+
+export const getWorldPointFromClient = (
   clientX: number,
   clientY: number,
-  surface: HTMLElement,
-  zoom: number,
-): MindMapRelationshipPoint => {
-  const rect = surface.getBoundingClientRect();
-  const safeZoom = Math.max(zoom, 0.01);
-  return {
-    x: (clientX - rect.left) / safeZoom,
-    y: (clientY - rect.top) / safeZoom,
-  };
-};
+  mapper: MindMapCoordinateMapper,
+): MindMapRelationshipPoint => mapper.clientToWorld({ x: clientX, y: clientY });
 
 export const getNodeElementAtPoint = (
   surface: HTMLElement,

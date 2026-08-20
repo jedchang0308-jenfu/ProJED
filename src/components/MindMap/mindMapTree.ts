@@ -14,6 +14,19 @@ const sortTasks = (tasks: TaskNode[]) => [...tasks].sort((a, b) => a.order - b.o
 const matchesMindMapFilters = (node: TaskNode, filters: MindMapFilterState) =>
   matchesTaskFilters(node, filters);
 
+const getIndexedTasks = (
+  nodes: Record<string, TaskNode>,
+  indexedIds: string[],
+  boardId: string,
+) => {
+  const deduped = new Map<string, TaskNode>();
+  indexedIds.forEach((id) => {
+    const node = nodes[id];
+    if (node && node.boardId === boardId && !node.isArchived) deduped.set(node.id, node);
+  });
+  return Array.from(deduped.values());
+};
+
 export const getSiblingNodes = (
   nodes: Record<string, TaskNode>,
   parentNodesIndex: Record<string, string[]>,
@@ -21,9 +34,7 @@ export const getSiblingNodes = (
   boardId: string,
 ) =>
   sortTasks(
-    (parentNodesIndex[getParentKey(parentId)] || [])
-      .map(id => nodes[id])
-      .filter((node): node is TaskNode => Boolean(node) && node.boardId === boardId && !node.isArchived),
+    getIndexedTasks(nodes, parentNodesIndex[getParentKey(parentId)] || [], boardId),
   );
 
 export const getInsertOrder = (
@@ -71,14 +82,8 @@ export const getMindMapChildren = (
   nodeId: string,
 ) =>
   sortTasks(
-    (parentNodesIndex[nodeId] || [])
-      .map(id => nodes[id])
-      .filter((node): node is TaskNode =>
-        Boolean(node) &&
-        !node.isArchived &&
-        node.boardId === boardId &&
-        matchesMindMapFilters(node, filters),
-      ),
+    getIndexedTasks(nodes, parentNodesIndex[nodeId] || [], boardId)
+      .filter(node => matchesMindMapFilters(node, filters)),
   );
 
 export const getMindMapRootAncestorId = (

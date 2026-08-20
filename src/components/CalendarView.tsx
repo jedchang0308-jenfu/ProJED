@@ -19,18 +19,16 @@
  *   - 以 left = col/7 * 100%、width = span/7 * 100% 精準定位
  *   - 同一天可能有多條任務，用 `lane` (行道) 做垂直堆疊
  */
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import useDialogStore from '../store/useDialogStore';
 import { useTagStore } from '../store/useTagStore';
 import dayjs from 'dayjs';
 import {
-    ChevronLeft, ChevronRight, ChevronDown, Calendar,
+    ChevronLeft, ChevronRight, Calendar,
 } from 'lucide-react';
 
 // ── 常數 ─────────────────────────────────────────────────
-const SIDEBAR_ROW_HEIGHT = COMPACT_DIMENSIONS.taskRowHeight;
 // 每週最低高度（日期數字 + 任務條堆疊空間）
 const WEEK_DATE_HEADER_H = COMPACT_DIMENSIONS.calendarHeaderHeight; // px，日期數字列的高度
 const TASK_LANE_H = COMPACT_DIMENSIONS.calendarLaneHeight;        // px，每條任務條的高度（含間距）
@@ -55,9 +53,12 @@ const STATUS_STYLES = {
 
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
-import { matchesTaskFilters } from '../features/taskFilters';
 import { COMPACT_DIMENSIONS, compactClassNames, compactIconButtonClass } from './ui/compactTokens';
+import { BAR_HEIGHT } from './Gantt/utils';
+import { useCoarsePointer } from '../hooks/useCoarsePointer';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
+import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -162,13 +163,10 @@ function buildWeekSegments(flattenedItems, weeks) {
 const CalendarView = () => {
     const {
         activeBoardId,
-        activeWorkspaceId,
         statusFilters,
         dueWithinDays,
         overdueOnly,
         selectedAssigneeIds,
-        toggleStatusFilter,
-        setView,
     } = useBoardStore();
     const selectedTagIds = useTagStore(state => state.selectedTagIds);
     const taskFilters = useMemo(() => ({
@@ -184,6 +182,9 @@ const CalendarView = () => {
     const [collapsedIds, setCollapsedIds] = useState(new Set());
     const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
     const nodes = useWbsStore(s => s.nodes);
+    const parentNodesIndex = useWbsStore(s => s.parentNodesIndex);
+    const isCoarsePointer = useCoarsePointer();
+    const ganttRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
 
     const toggleCollapse = (id) => {
         setCollapsedIds(prev => {
@@ -196,42 +197,16 @@ const CalendarView = () => {
     // (workspaces 已不再需要)
     // (activeBoard 已不再需要)
 
-    // ── 資料扁平化（與 GanttView 一致）──────────────────
+    // ── 資料扁平化（與 GanttView 共用階層排序與收疊邏輯）────────
     const flattenedItems = useMemo(() => {
-        if (!activeBoardId) return [];
-        const items: any[] = [];
-        
-        Object.values(nodes).forEach((node: any) => {
-            if (!node || node.isArchived || node.boardId !== activeBoardId) return;
-            if (!matchesTaskFilters(node, taskFilters)) return;
-            
-            // Map nodeType to pseudoType for filters
-            let pseudoType = 'checklist';
-            if (node.nodeType === 'group') pseudoType = 'list';
-            else pseudoType = 'card';
-            
-            // Check visibility based on collapsible (parents must not be collapsed)
-            let isVisible = true;
-            let currentId = node.parentId;
-            while(currentId) {
-                if (collapsedIds.has(currentId)) {
-                    isVisible = false;
-                    break;
-                }
-                currentId = nodes[currentId]?.parentId;
-            }
-            if (!isVisible) return;
-            
-            items.push({
-                ...node,
-                type: pseudoType,
-                startDate: node.startDate,
-                endDate: node.endDate
-            });
-        });
-        
-        return items;
-    }, [activeBoardId, nodes, taskFilters, collapsedIds]);
+        return buildHierarchicalTaskItems({
+            nodes,
+            parentNodesIndex,
+            activeBoardId,
+            taskFilters,
+            collapsedIds,
+        }).items;
+    }, [activeBoardId, nodes, parentNodesIndex, taskFilters, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -283,8 +258,7 @@ const CalendarView = () => {
 
     // ── 事件處理 ──────────────────────────────────────────
     const handleItemClick = (item) => {
-        // 切換到清單視圖，讓使用者在行內編輯此節點
-        setView('list');
+        selectAndOpenTaskDetails(item.id);
     };
 
     const goToPrevMonth = () => setCurrentMonth(prev => prev.subtract(1, 'month'));
@@ -329,7 +303,7 @@ const CalendarView = () => {
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
-                    rowHeight={SIDEBAR_ROW_HEIGHT}
+                    rowHeight={ganttRowHeight}
                 />
 
                 {/* 右側月曆主體 */}

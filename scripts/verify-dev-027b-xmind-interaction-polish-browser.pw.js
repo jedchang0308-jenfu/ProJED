@@ -92,6 +92,17 @@ async (page) => {
 
   const renameSelectedInTaskDetails = async (title, label) => {
     const modal = page.locator('[data-task-details-modal="true"]');
+    const quickTitle = page.locator('[data-mindmap-quick-title-input="true"]');
+    const commitQuickTitleIfVisible = async () => {
+      if ((await quickTitle.count()) === 0 || !(await quickTitle.isVisible().catch(() => false))) return false;
+      await quickTitle.fill(title);
+      await quickTitle.press('Enter');
+      await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
+      return true;
+    };
+    if (await commitQuickTitleIfVisible()) return;
+    await page.waitForTimeout(220);
+    if (await commitQuickTitleIfVisible()) return;
     if ((await modal.count()) === 0) {
       assert(
         await selectedNode().count() === 1,
@@ -104,6 +115,8 @@ async (page) => {
       );
       await selectedNode().dblclick();
     }
+    await page.waitForTimeout(220);
+    if (await commitQuickTitleIfVisible()) return;
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     await detailTitleInput().waitFor({ state: 'visible', timeout: 10000 });
     await page.waitForFunction(() => document.activeElement?.matches('[data-task-details-title-input="true"]'), null, { timeout: 3000 });
@@ -343,11 +356,9 @@ async (page) => {
     await closeTaskDetailsIfOpen();
     const fromId = await nodeByTitle(fromTitle).getAttribute('data-mindmap-node');
     // SPEC-028 intentionally clears selection when details close. Re-enter
-    // relationship mode first, then explicitly choose the source node so this
-    // verifier follows the production selection lifecycle instead of relying
-    // on a stale selection surviving the modal close.
+    // relationship mode after re-selecting the source so the toolbar owns the
+    // draft source and the next node click is reserved for the target.
     await page.locator('[data-mindmap-note-relationship-tool]').click();
-    await nodeByTitle(fromTitle).click();
     await page.locator(`[data-mindmap-note-relationship-tool][data-active="true"][data-source-node-id="${fromId}"]`).waitFor({ state: 'visible', timeout: 10000 });
     const sourceBox = await nodeByTitle(fromTitle).boundingBox();
     assert(Boolean(sourceBox), 'relationship source should have a bounding box before draft preview');
@@ -464,10 +475,13 @@ async (page) => {
   await expectSelected(children[1], 'ArrowUp should move selection to the previous visible sibling');
   await page.keyboard.press('ArrowDown');
   await expectSelected(children[2], 'ArrowDown should move selection to the next visible sibling');
-  await page.keyboard.press('ArrowLeft');
-  await expectSelected(parent, 'ArrowLeft should move selection to the parent branch');
-  await page.keyboard.press('ArrowRight');
-  await expectSelected(children[0], 'ArrowRight should move selection to the first child branch');
+  const selectedBranchDirection = (await collectNodeMeta([children[2]]))[0].direction;
+  const towardCenterKey = selectedBranchDirection === 'left' ? 'ArrowRight' : 'ArrowLeft';
+  const awayFromCenterKey = selectedBranchDirection === 'left' ? 'ArrowLeft' : 'ArrowRight';
+  await page.keyboard.press(towardCenterKey);
+  await expectSelected(parent, `${towardCenterKey} should move the ${selectedBranchDirection} branch selection toward its parent`);
+  await page.keyboard.press(awayFromCenterKey);
+  await expectSelected(children[0], `${awayFromCenterKey} should move the ${selectedBranchDirection} branch selection to its first child`);
 
   await createRoot(tabParent);
   await selectNode(tabParent);
@@ -520,13 +534,13 @@ async (page) => {
   assert(Number(zoomAfterIn) > 1, 'zoom level should change after zoom-in', { zoomAfterIn });
   const zoomRenderer = await collectZoomRenderer();
   assert(
-    zoomRenderer.renderer === 'css-zoom-layer' &&
-      zoomRenderer.quality === 'zoom-only-no-path-recompute' &&
-      Number(zoomRenderer.vectorZoom) > 1 &&
-      Number(zoomRenderer.cssZoom) > 1 &&
+    zoomRenderer.renderer === 'scene-matrix' &&
+      zoomRenderer.quality === 'world-path-no-recompute' &&
+      Number(zoomRenderer.cssZoom || '1') === 1 &&
+      /^matrix\(/.test(zoomRenderer.transform || '') &&
       parseFloat(zoomRenderer.nodeFontSize) <= 14.5 &&
-      (zoomRenderer.transform === 'none' || zoomRenderer.transform === ''),
-    'zoom-in should use one CSS zoom layer instead of recomputing mind map layout or paths',
+      Number(zoomRenderer.transform.match(/^matrix\(([-\d.]+)/)?.[1] || '0') > 1,
+    'zoom-in should use the single scene transform without recomputing mind map layout or paths',
     { zoomRenderer },
   );
   const zoomDistances = await collectEndpointDistances();
@@ -567,37 +581,25 @@ async (page) => {
   await wheelZoomAtSurface(-180);
   await page.waitForTimeout(60);
   const wheelZoomPreview = await collectZoomPreviewState();
-  assert(
-    wheelZoomPreview.interaction === 'preview-then-vector-commit' &&
-      wheelZoomPreview.active === 'true' &&
-      wheelZoomPreview.previewLevel > wheelZoomBefore.committedLevel &&
-      wheelZoomPreview.previewScale > 1 &&
-      wheelZoomPreview.contentPreviewTransform === 'scale' &&
-      wheelZoomPreview.transform !== 'none' &&
-      wheelZoomPreview.label !== '100%',
-    'wheel zoom should use transient preview transform during continuous zoom',
-    { wheelZoomBefore, wheelZoomPreview },
-  );
-  await page.waitForFunction(() => !document.querySelector('[data-mindmap-middle-pan="true"]')?.hasAttribute('data-mindmap-zoom-preview-active'), null, { timeout: 5000 });
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(180);
   const wheelZoomCommitted = await collectZoomPreviewState();
   assert(
     wheelZoomCommitted.committedLevel > wheelZoomBefore.committedLevel &&
-      wheelZoomCommitted.committedDataLevel === wheelZoomCommitted.committedLevel &&
+      wheelZoomCommitted.interaction === 'single-scene-rAF' &&
       wheelZoomCommitted.active === '' &&
       wheelZoomCommitted.contentPreviewTransform === '' &&
-      (wheelZoomCommitted.transform === 'none' || wheelZoomCommitted.transform === ''),
-    'wheel zoom should commit back to zoom layer after idle',
+      /^matrix\(/.test(wheelZoomCommitted.transform || ''),
+    'wheel zoom should commit through the single scene transform without a transient preview layer',
     { wheelZoomBefore, wheelZoomPreview, wheelZoomCommitted },
   );
   const wheelZoomRenderer = await collectZoomRenderer();
   assert(
-    wheelZoomRenderer.renderer === 'css-zoom-layer' &&
-      wheelZoomRenderer.quality === 'zoom-only-no-path-recompute' &&
-      Number(wheelZoomRenderer.vectorZoom) === wheelZoomCommitted.committedLevel &&
-      Number(wheelZoomRenderer.cssZoom) === wheelZoomCommitted.committedLevel &&
+    wheelZoomRenderer.renderer === 'scene-matrix' &&
+      wheelZoomRenderer.quality === 'world-path-no-recompute' &&
+      Number(wheelZoomRenderer.cssZoom || '1') === 1 &&
+      /^matrix\(/.test(wheelZoomRenderer.transform || '') &&
       parseFloat(wheelZoomRenderer.nodeFontSize) <= 14.5,
-    'wheel zoom committed state should remain one zoom layer without path recompute',
+    'wheel zoom committed state should remain the single scene transform without path recompute',
     { wheelZoomRenderer, wheelZoomCommitted },
   );
   await relationshipTargetByLabel(zoomPanRelationship).click({ force: true });

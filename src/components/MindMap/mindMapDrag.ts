@@ -1,6 +1,6 @@
 import type { TaskNode } from '../../types';
 import type { MindMapDirection, MindMapDropMode } from './MindMapNode';
-import { getElementLocalRect, getMapPointFromClient } from './mindMapDomGeometry';
+import type { MindMapCoordinateMapper } from './mindMapCoordinateSystem';
 import { MINDMAP_CENTER_SELECTOR, getMindMapNodeSelector } from './mindMapDomSelectors';
 import { createLocalConnectorPath } from './mindMapGeometry';
 
@@ -47,12 +47,11 @@ export const getDropModeFromPointer = (
 export const createPreviewConnectorPath = (
   pointer: MindMapDragPointer,
   targetElement: HTMLElement,
-  surface: HTMLElement,
-  zoomLevel: number,
+  mapper: MindMapCoordinateMapper,
   direction: MindMapDirection,
 ) => {
-  const targetRect = getElementLocalRect(targetElement, surface, zoomLevel);
-  const pointerPoint = getMapPointFromClient(pointer.clientX, pointer.clientY, surface, zoomLevel);
+  const targetRect = mapper.elementToWorldRect(targetElement);
+  const pointerPoint = mapper.clientToWorld({ x: pointer.clientX, y: pointer.clientY });
   const fromX = direction === 'right' ? targetRect.right : targetRect.left;
   const fromY = targetRect.top + targetRect.height / 2;
   return createLocalConnectorPath(fromX, fromY, pointerPoint.x, pointerPoint.y, direction);
@@ -63,18 +62,18 @@ export const createInsertionPreview = (
   targetNode: TaskNode | undefined,
   mode: MindMapDropMode,
   direction: MindMapDirection,
-  surface: HTMLElement,
-  zoomLevel: number,
+  scene: HTMLElement,
+  mapper: MindMapCoordinateMapper,
 ): MindMapDragPreviewGeometry => {
-  const targetRect = getElementLocalRect(targetElement, surface, zoomLevel);
+  const targetRect = mapper.elementToWorldRect(targetElement);
   const isLeft = direction === 'left';
   const parentSelector = mode === 'child'
     ? getMindMapNodeSelector(targetNode?.id || '')
     : targetNode?.parentId
       ? getMindMapNodeSelector(targetNode.parentId)
       : MINDMAP_CENTER_SELECTOR;
-  const parentElement = surface.querySelector(parentSelector) as HTMLElement | null;
-  const parentRect = parentElement ? getElementLocalRect(parentElement, surface, zoomLevel) : targetRect;
+  const parentElement = scene.querySelector(parentSelector) as HTMLElement | null;
+  const parentRect = parentElement ? mapper.elementToWorldRect(parentElement) : targetRect;
   const insertionPreview = mode === 'child'
     ? {
         left: isLeft ? targetRect.left - 126 : targetRect.right + 24,
@@ -96,20 +95,4 @@ export const createInsertionPreview = (
     insertionPreview,
     connectorPath: createLocalConnectorPath(fromX, fromY, toX, toY, direction),
   };
-};
-
-export const createScreenDragConnectorPath = (
-  pointer: MindMapDragPointer,
-  targetElement: HTMLElement,
-  direction: MindMapDirection,
-) => {
-  const rect = targetElement.getBoundingClientRect();
-  const fromX = direction === 'right' ? rect.right : rect.left;
-  const fromY = rect.top + rect.height / 2;
-  const toX = pointer.clientX;
-  const toY = pointer.clientY;
-  const delta = Math.max(Math.abs(toX - fromX) * 0.45, 42);
-  const c1X = direction === 'right' ? fromX + delta : fromX - delta;
-  const c2X = direction === 'right' ? toX - delta : toX + delta;
-  return `M ${fromX.toFixed(2)} ${fromY.toFixed(2)} C ${c1X.toFixed(2)} ${fromY.toFixed(2)} ${c2X.toFixed(2)} ${toY.toFixed(2)} ${toX.toFixed(2)} ${toY.toFixed(2)}`;
 };

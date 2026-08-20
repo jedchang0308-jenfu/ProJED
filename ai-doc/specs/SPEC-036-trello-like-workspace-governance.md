@@ -57,6 +57,7 @@
   - 分享 Board
   - Rename Board
   - Move to Workspace
+- Active Board topbar 只顯示目前 Board 名稱，不提供 `contentEditable` 或直接失焦寫回；改名維持由 Sidebar 的受控 `F2`／右鍵入口依權限執行。
 - Home / Workspace overview 顯示多個 Workspace 與其 Boards，而不是把全部 Board 攤平成單一「我的工作區」頁。
 
 ### 權限模型
@@ -73,6 +74,7 @@
 - 不把 Workspace delete 做成無提示高風險操作；沿用 DEV-035 後端成功後才 UI 成功。
 - 不讓非管理者任意移動 Board 到其他 Workspace。
 - 不讓 Board 移動造成 project_id 變更、RAG 權限外洩或 audit 斷鏈。
+- 不在高頻使用的 Active Board topbar 暴露直接改名入口，避免誤觸造成 Board metadata 寫入。
 
 ## Phase Roadmap
 

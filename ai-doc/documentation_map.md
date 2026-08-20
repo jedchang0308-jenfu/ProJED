@@ -1,5 +1,37 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-20（Active Board Topbar 改名入口移除）
+
+使用者明確要求降低誤觸寫入 Board metadata 的風險。`MainLayout` Active Board topbar 名稱已改為 display-only；Sidebar 受控 `F2`／右鍵改名與 owner/admin 權限邊界保留。DEV-030 static 11/11、browser PASS；本輪未涉及資料模型、API、權限或 release。
+
+## Documentation Map Update - 2026-08-20（DEV-075 心智圖方向鍵快速巡覽效能 Implemented / QA-QC PASS）
+
+Spec Impact：`Intentional replacement / horizontal navigation is side-aware and bridges the center`。DEV-075已落地model-derived O(1) navigation index、node-keyed private selection store、node ref registry、latest-only focus rAF與test-only telemetry；2026-08-20依使用者明確要求補上左右root雙向穿越中央看板名稱，中心維持非TaskNode、非selection owner。上下順序、interaction owner、quick-title與DEV-074 scene／geometry authority不變；真實鍵盤、效能、geometry、viewport與targeted regression均通過。ADR不需要；本輪未release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-075 Implemented / QA-QC PASS / 未 Release | DEV-075 / DEV-027 | 記錄authoritative package、S0～S4完成狀態、repo/dirty boundary、量化驗收、失敗修復、evidence與非release execution boundary。 |
+| `ai-doc/specs/SPEC-075-mindmap-keyboard-navigation-performance.md` | Implemented / Contract Verified / Center Bridge Addendum | DEV-075 | 固定並驗證selection/navigation end-state、side-aware水平導航、中央橋接、typed API、telemetry、fixture、failure recovery與done gate。 |
+| `ai-doc/qa/QA-DEV-075-mindmap-keyboard-navigation-performance.md` | Executed / QA PASS / QC PASS / 未 Release | DEV-075 | 已執行FMEA、50／200／500 fixture、真實鍵盤與burst、左右root雙向center bridge、latency／render／geometry、interaction owner、viewport與visible-error gate。 |
+| `src/components/MindMap/MindMapView.tsx`、`MindMapNode.tsx`、`mindMapKeyboard.ts`、`mindMapNavigation.ts`、`mindMapSelectionStore.ts` | Implemented / QA-QC PASS | DEV-075 | 已移除方向鍵hot path的DOM掃描與View selection state，改由含side／root metadata的model index、keyed store、node registry及latest-only focus處理；中央標題不加入selection model。 |
+| `scripts/verify-dev-075-mindmap-keyboard-performance.ts`、`verify-dev-075-mindmap-keyboard-performance-browser.pw.js` | Executed / PASS | DEV-075 | immutable baseline、pure/static contract、13個browser cases、14項regression command results、screenshots、interaction evidence與error arrays皆已收斂。 |
+| `ai-doc/specs/SPEC-027B-xmind-interaction-polish.md` | Behavior authority / Center Bridge Amended | DEV-027B / DEV-075 | 上下維持可見順序；水平鍵改依左右分支解析向內parent／向外first child，root向內可跳過中央標題選取對側root。 |
+| `ai-doc/specs/SPEC-074-mindmap-single-scene-coordinate-system.md` | Existing architecture authority / unchanged | DEV-074 / DEV-075 | 純 selection 不應 dirty connector／relationship world geometry；方向鍵巡覽的 recompute delta 必須為 0。 |
+
+## Documentation Map Update - 2026-08-19（DEV-074 心智圖單一 Scene 座標系重構 Implemented / QA-QC PASS）
+
+Spec Impact：`Intentional replacement / No product contract drift`。使用者已指定「單一 Scene transform」為長期架構，並要求補到 RD 可直接實作。SPEC-074／ADR-044 只取代 SPEC-027B「zoom 後重算 connector」的技術策略；既有心智圖產品行為、資料／API／權限與其他模式 authority 不變。逐檔 patch、typed coordinate API、S0～S5 owner、dirty worktree 保護、fixture、commands、artifact schema、FMEA 與 failure recovery 已固定；本輪已完成實作與 QA/QC rendered evidence，未執行部署或 release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | DEV-074 Implemented / QA-QC PASS / 未 Release | DEV-074 | 記錄 S0～S5 handoff、repo/dirty boundary、owner、stop conditions、evidence 與非 release execution boundary。 |
+| `ai-doc/specs/SPEC-074-mindmap-single-scene-coordinate-system.md` | Authoritative RD Implementation Contract / New | DEV-074 | 固定 DOM、stage 公式、typed API、dirty lifecycle、逐檔 patch intent、zoom時序、fixture/artifact/commands、recovery 與 done gate。 |
+| `ai-doc/decisions/ADR-044-mindmap-single-scene-coordinate-system.md` | Accepted / Implemented / QA Evidence Ready | DEV-074 | 選定 StageSizer + 單一 Scene matrix，並鎖定 kernel、rAF zoom、single interaction owner 與 revisit conditions。 |
+| `ai-doc/qa/QA-DEV-074-mindmap-single-scene-coordinate-system.md` | Executed / QA PASS / QC PASS | DEV-074 | 定義並執行量化 FMEA、fixture、25%～400% screen geometry、artifact、slice、regression、rendered QC 與 runtime cleanup gate。 |
+| `ai-doc/qa/QA-DEV-074-ai-real-operation-verification.md` | Executed / AI Real-Operation PASS / QC PASS | DEV-074 | AI 已以真實滑鼠、鍵盤、滾輪、拖曳、mobile boundary 與極限／對抗操作完成 25/25；必跑 21/21、console/page errors 0；artifact=`output/playwright/dev-074-ai-real-operation/result.json`，RO-12 另由 DEV-027D browser evidence 支持。 |
+| `src/components/MindMap/MindMapView.tsx`、`MindMapCanvasShell.tsx`、`mindMapLayoutStyle.ts` | Implemented / scene-matrix runtime | DEV-027 / DEV-074 | 已建立 scene、接管 zoom/dirty lifecycle；CSS zoom 已移除，world paths 純投影。 |
+| `mindMapCoordinateSystem.ts`、`mindMapDomGeometry.ts`、`mindMapOverlayPaths.ts`、relationship／drag overlays | Implemented / QA-QC PASS | DEV-027B / DEV-027E / DEV-027G / DEV-074 | 已收斂 typed world mapper、single snapshot 與 exclusive interaction owner；artifact 與回歸證據已產出。 |
+
 ## Documentation Map Update - 2026-08-17（跨模式互動策略核心 QC Functional PASS）
 
 Spec Impact：`DEV-070` 的產品契約維持 `No contract drift / behavior-preserving architecture refactor`。`SPEC-070` 固定 App-level scope、pure/effect module boundary、public API、逐檔 patch intent、S0～S11 binding manifest、`dev-070-v1` fixture、artifact path、single-executor、owner 與 rollback；`ADR-043` 鎖定長期決策。`QA-DEV-070` 已完成 post-implementation FMEA 修訂，57 項功能 cases／16 項 AC traceability、required regression 與 baseline/after/diff 均已由 QC local PASS；F-01～F-04 的 release overlay 仍維持 `Release Gate Blocked`。Phase 1 只建立架構，所有 task surface 的可觀察行為維持重構前 runtime；Calendar 現行點擊切到 List 亦納入相容 seed。本輪未執行 deploy、push 或 release。

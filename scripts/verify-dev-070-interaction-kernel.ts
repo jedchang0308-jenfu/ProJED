@@ -94,6 +94,15 @@ runCase('QA-070-005', () => {
   assert.equal(resolveTaskInteraction({ ...baseContext, location: { hostMode: 'calendar', origin: 'calendar-segment' }, surfaceId: 'calendar.segment' }, 'pointer.primary').sourceLayer, 'origin');
   return { sourceLayer: 'origin' };
 });
+runCase('QA-070-005A', () => {
+  const calendarSegment = { ...baseContext, location: { hostMode: 'calendar', origin: 'calendar-segment' }, surfaceId: 'calendar.segment' };
+  const calendarSidebar = { ...baseContext, location: { hostMode: 'calendar', origin: 'shared-task-sidebar' }, surfaceId: 'shared-task-sidebar.row' };
+  assert.equal(resolveTaskInteraction(calendarSegment, 'pointer.primary').actionId, 'task.open-details');
+  assert.equal(resolveTaskInteraction(calendarSegment, 'gesture.tap').actionId, 'task.open-details');
+  assert.equal(resolveTaskInteraction(calendarSidebar, 'pointer.primary').actionId, 'task.open-details');
+  assert.equal(resolveTaskInteraction(calendarSidebar, 'gesture.tap').actionId, 'task.open-details');
+  return { calendarSegment: 'task.open-details', calendarSidebar: 'task.open-details' };
+});
 runCase('QA-070-006', () => {
   const hosts = ['list', 'mindmap', 'board', 'gantt', 'calendar'] as const;
   hosts.forEach(host => assert.ok(menuFor(host).length > 0));
@@ -264,11 +273,11 @@ runCase('QA-070-065', () => { assertArtifact(); [...artifactViewports.values()].
 runCase('QA-070-066', () => { assertArtifact(); [...desktopModes.values()].forEach((item: any) => assert.equal(item.menu.menuClosed, true)); assert.ok(source.browser.includes("page.keyboard.press('Escape')")); return { menuFocusClose: true }; });
 
 const settle = async () => {
-  while (results.length < 57) await new Promise(resolvePromise => setTimeout(resolvePromise, 0));
+  while (results.length < 58) await new Promise(resolvePromise => setTimeout(resolvePromise, 0));
 };
 await settle();
 const failed = results.filter(result => result.status === 'FAIL');
-assert.equal(results.length, 57, `expected 57 functional cases, got ${results.length}`);
+assert.equal(results.length, 58, `expected 58 functional cases, got ${results.length}`);
 if (failed.length > 0) {
   console.error(JSON.stringify({ verifier: 'dev-070-interaction-kernel', status: 'FAIL', cases: results.length, failed }, null, 2));
   process.exit(1);

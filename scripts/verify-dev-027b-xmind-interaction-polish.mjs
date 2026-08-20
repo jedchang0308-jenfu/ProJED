@@ -74,7 +74,9 @@ assert(
     mindMapKeyboard.includes("event.key === 'ArrowDown'") &&
     mindMapKeyboard.includes("event.key === 'ArrowLeft'") &&
     mindMapKeyboard.includes("event.key === 'ArrowRight'") &&
-    mindMapView.includes('selected?.focus({ preventScroll: true })') &&
+    mindMapView.includes('const element = nodeElementRegistryRef.current.get(nodeId);') &&
+    mindMapView.includes('element.focus({ preventScroll: true });') &&
+    mindMapView.includes('if (selectionStore.getSelectedNodeId() !== nodeId) return;') &&
     mindMapView.includes('getMindMapKeyboardAction(event, {') &&
     !mindMapKeyboard.includes("type: 'rename-selected'") &&
     !mindMapKeyboard.includes('isMindMapPlainTextEditKey') &&
@@ -84,10 +86,10 @@ assert(
 
 assert(
   'Deleting a branch preserves Xmind-style nearest-task focus',
-  mindMapView.includes("from './mindMapSelection'") &&
-    mindMapSelection.includes('export const getNextSelectionAfterDelete') &&
+  mindMapSelection.includes('export const getNextSelectionAfterDelete') &&
     mindMapSelection.includes('previousSibling?.id || parentCandidate?.id || nextSibling?.id || fallbackRoot?.id || null') &&
-    mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })') &&
+    (mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })') ||
+      mindMapView.includes('getMindMapArchiveTaskPlan({ selectedNodeId: targetNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren })')) &&
     mindMapView.includes('selectNode(plan.nextSelectionId)') &&
     !mindMapView.includes('setSelectedNodeId(null);\n    setEditingNodeId(null);'),
 );
@@ -104,8 +106,8 @@ assert(
   'Zoom controls and zoom state are exposed',
   mindMapToolbar.includes('data-mindmap-zoom-controls') &&
     mindMapCanvasShell.includes('data-mindmap-zoom-level') &&
-    mindMapCanvasShell.includes('data-mindmap-zoom-renderer="css-zoom-layer"') &&
-    mindMapCanvasShell.includes('data-mindmap-zoom-quality="zoom-only-no-path-recompute"') &&
+    mindMapCanvasShell.includes('data-mindmap-zoom-renderer="scene-matrix"') &&
+    mindMapCanvasShell.includes('data-mindmap-zoom-quality="world-path-no-recompute"') &&
     mindMapToolbar.includes('data-mindmap-zoom-in') &&
     mindMapToolbar.includes('data-mindmap-zoom-out') &&
     mindMapToolbar.includes('data-mindmap-zoom-reset') &&
@@ -118,11 +120,9 @@ assert(
     mindMapZoom.includes('export const ZOOM_BUTTON_STEP = 0.05') &&
     mindMapZoom.includes('export const ZOOM_WHEEL_STEP = 0.03') &&
     mindMapView.includes('formatZoomLevel') &&
-    mindMapView.includes('suppressZoomScrollRecomputeRef') &&
     mindMapView.includes('connectorRecomputeCountRef') &&
     mindMapView.includes('data-mindmap-recompute-count') &&
     mindMapView.includes('getLocalRect') &&
-    mindMapView.includes('ZOOM_PREVIEW_COMMIT_DELAY_MS') &&
     mindMapView.includes('getWheelZoomDelta') &&
     mindMapView.includes('handleWheelZoom') &&
     mindMapView.includes("from './mindMapViewport'") &&
@@ -131,14 +131,13 @@ assert(
     mindMapViewport.includes("surface.setAttribute('data-mindmap-content-centered', reason)") &&
     mindMapViewport.includes("surface.setAttribute('data-mindmap-visible-bounds-width', bounds.width.toFixed(2))") &&
     mindMapViewport.includes('export const getFitZoomForBounds') &&
-    mindMapView.includes('zoomPreviewLevelRef') &&
-    mindMapCanvasShell.includes('data-mindmap-zoom-interaction="preview-then-vector-commit"') &&
-    mindMapZoom.includes('data-mindmap-zoom-preview-active') &&
-    mindMapZoom.includes('data-mindmap-zoom-preview-transform') &&
+    mindMapView.includes('pendingZoomIntentRef') &&
+    mindMapView.includes('flushPendingZoomIntent') &&
+    mindMapCanvasShell.includes('data-mindmap-zoom-interaction="single-scene-rAF"') &&
+    mindMapZoom.includes('createMindMapZoomIntent') &&
     mindMapView.includes('zoomLevelText={formatZoomLevel(zoomLevel)}') &&
-    mindMapZoom.includes("setAttribute('data-mindmap-zoom-preview-level', formatZoomLevel(previewZoom))") &&
-    mindMapLayoutStyle.includes("'--mindmap-zoom': zoomLevel") &&
-    mindMapLayoutStyle.includes('zoom: zoomLevel') &&
+    mindMapLayoutStyle.includes('getMindMapSceneTransformStyle') &&
+    mindMapLayoutStyle.includes('transform: `matrix(') &&
     mindMapLayoutStyle.includes("'--mindmap-node-font-size'") &&
     mindMapCanvasShell.includes('gap-[var(--mindmap-root-gap)]') &&
     mindMapNode.includes('text-[length:var(--mindmap-node-font-size)]') &&
@@ -186,7 +185,7 @@ assert(
     mindMapDrag.includes('export const createInsertionPreview') &&
     mindMapDrag.includes('export const getDropModeFromPointer') &&
     mindMapDrag.includes('export const createPreviewConnectorPath') &&
-    mindMapDrag.includes('export const createScreenDragConnectorPath') &&
+    !mindMapDrag.includes('export const createScreenDragConnectorPath') &&
     mindMapView.includes('insertionPreview') &&
     mindMapDragPreviewLayer.includes('data-sibling-before-id') &&
     mindMapDragPreviewLayer.includes('data-sibling-after-id') &&
@@ -216,9 +215,12 @@ assert(
     browserVerifier.includes('button zoom evidence should still include date badges plus relationship path, label, and hitboxes') &&
     browserVerifier.includes('zoom button changes should keep the mind map visible instead of jumping to blank space') &&
     browserVerifier.includes('fit-to-content should zoom and scroll to visible mind map content, not a blank padded canvas') &&
-    browserVerifier.includes('wheel zoom should use transient preview transform during continuous zoom') &&
-    browserVerifier.includes('wheel zoom should commit back to zoom layer after idle') &&
-    browserVerifier.includes('wheel zoom committed state should remain one zoom layer without path recompute') &&
+    (browserVerifier.includes('wheel zoom should use transient preview transform during continuous zoom') ||
+      browserVerifier.includes('wheel zoom should commit through the single scene transform without a transient preview layer')) &&
+    (browserVerifier.includes('wheel zoom should commit back to zoom layer after idle') ||
+      browserVerifier.includes('wheel zoom should commit through the single scene transform without a transient preview layer')) &&
+    (browserVerifier.includes('wheel zoom committed state should remain one zoom layer without path recompute') ||
+      browserVerifier.includes('wheel zoom committed state should remain the single scene transform without path recompute')) &&
     browserVerifier.includes('wheel zoom evidence should still include date badges plus relationship path, label, and hitboxes') &&
     browserVerifier.includes('middle-mouse pan evidence should still include date badges plus relationship path, label, and hitboxes') &&
     browserVerifier.includes('middle-mouse pan should only scroll the viewport and must not rewrite or recompute the relationship path') &&

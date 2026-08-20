@@ -5,6 +5,10 @@ import type { TaskNode } from '../../types';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
+import {
+  useMindMapNodeSelected,
+  type MindMapSelectionStore,
+} from './mindMapSelectionStore';
 
 export type MindMapDirection = 'left' | 'right';
 export type MindMapDropMode = 'before' | 'after' | 'child';
@@ -20,16 +24,19 @@ interface MindMapNodeProps {
   childrenNodes: TaskNode[];
   direction: MindMapDirection;
   level: number;
-  selectedNodeId: string | null;
+  selectionStore: MindMapSelectionStore;
+  dev075ProbeEnabled?: boolean;
   expandedNodeIds: Set<string>;
   dropTarget: MindMapDropTarget | null;
   isRelationshipModeActive?: boolean;
   showStartDate: boolean;
   canMoveTask: boolean;
   isTitleEditing?: boolean;
-  onTitleEditCommit?: (nodeId: string, title: string) => void;
+  autoFocusTitleInput?: boolean;
+  onTitleEditCommit?: (nodeId: string, title: string, restoreNodeFocus?: boolean) => void;
   onTitleEditContinue?: (nodeId: string, title: string, intent: MindMapQuickCreateIntent) => void;
-  onTitleEditCancel?: (nodeId: string) => void;
+  onTitleEditCancel?: (nodeId: string, restoreNodeFocus?: boolean) => void;
+  onTitleEditDelete?: (nodeId: string) => void;
   onSelect: (nodeId: string) => void;
   onPointerPrimary: (nodeId: string) => void;
   onOpenDetails: (nodeId: string) => void;
@@ -40,6 +47,7 @@ interface MindMapNodeProps {
   onDragEnd: () => void;
   onDragOverNode: (event: React.DragEvent<HTMLDivElement>, nodeId: string) => void;
   onDropOnNode: (event: React.DragEvent<HTMLDivElement>, nodeId: string) => void;
+  onNodeElementChange: (nodeId: string, element: HTMLElement | null) => void;
   renderChild: (node: TaskNode, direction: MindMapDirection, level: number) => React.ReactNode;
 }
 
@@ -50,21 +58,75 @@ const getDropClasses = (target: MindMapDropTarget | null, nodeId: string) => {
   return 'after:absolute after:bottom-[-10px] after:left-1 after:right-1 after:h-1 after:rounded-full after:bg-blue-500 after:shadow-[0_0_0_3px_rgba(99,102,241,0.14)]';
 };
 
+interface MindMapNodeSelectionSurfaceProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'aria-selected'> {
+  nodeId: string;
+  selectionStore: MindMapSelectionStore;
+  dev075ProbeEnabled: boolean;
+  selectedClassName: string;
+  unselectedClassName: string;
+  onNodeElementChange: (nodeId: string, element: HTMLElement | null) => void;
+}
+
+const MindMapNodeSelectionSurface: React.FC<MindMapNodeSelectionSurfaceProps> = ({
+  nodeId,
+  selectionStore,
+  dev075ProbeEnabled,
+  selectedClassName,
+  unselectedClassName,
+  onNodeElementChange,
+  className = '',
+  children,
+  ...elementProps
+}) => {
+  const isSelected = useMindMapNodeSelected(selectionStore, nodeId);
+  const elementRef = React.useRef<HTMLDivElement | null>(null);
+  const renderCountRef = React.useRef(0);
+  const handleElementRef = React.useCallback((element: HTMLDivElement | null) => {
+    elementRef.current = element;
+    onNodeElementChange(nodeId, element);
+  }, [nodeId, onNodeElementChange]);
+
+  React.useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    renderCountRef.current += 1;
+    if (dev075ProbeEnabled) {
+      element.setAttribute('data-mindmap-node-render-count', String(renderCountRef.current));
+    } else {
+      element.removeAttribute('data-mindmap-node-render-count');
+    }
+  });
+
+  return (
+    <div
+      {...elementProps}
+      ref={handleElementRef}
+      aria-selected={isSelected}
+      className={`${className} ${isSelected ? selectedClassName : unselectedClassName}`}
+    >
+      {children}
+    </div>
+  );
+};
+
 export const MindMapNode: React.FC<MindMapNodeProps> = ({
   node,
   childrenNodes,
   direction,
   level,
-  selectedNodeId,
+  selectionStore,
+  dev075ProbeEnabled = false,
   expandedNodeIds,
   dropTarget,
   isRelationshipModeActive = false,
   showStartDate,
   canMoveTask,
   isTitleEditing = false,
+  autoFocusTitleInput = true,
   onTitleEditCommit,
   onTitleEditContinue,
   onTitleEditCancel,
+  onTitleEditDelete,
   onSelect,
   onPointerPrimary,
   onOpenDetails,
@@ -75,11 +137,11 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   onDragEnd,
   onDragOverNode,
   onDropOnNode,
+  onNodeElementChange,
   renderChild,
 }) => {
   const isCoarsePointer = useCoarsePointer();
   const touchTapGuard = useTouchTapGuard();
-  const isSelected = selectedNodeId === node.id;
   const isExpanded = expandedNodeIds.has(node.id);
   const hasChildren = childrenNodes.length > 0;
   const isLeft = direction === 'left';
@@ -102,10 +164,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
     origin: 'mode-primary',
     commandDependencies: interactionCommandDependencies,
   });
-  const commitTitleEdit = React.useCallback(() => {
+  const commitTitleEdit = React.useCallback((restoreNodeFocus = false) => {
     if (titleEditActionHandledRef.current) return;
     titleEditActionHandledRef.current = true;
-    onTitleEditCommit?.(node.id, titleDraft);
+    onTitleEditCommit?.(node.id, titleDraft, restoreNodeFocus);
   }, [node.id, onTitleEditCommit, titleDraft]);
   const continueTitleEdit = React.useCallback((intent: MindMapQuickCreateIntent) => {
     if (titleEditActionHandledRef.current) return;
@@ -116,21 +178,22 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
     }
     onTitleEditCommit?.(node.id, titleDraft);
   }, [node.id, onTitleEditCommit, onTitleEditContinue, titleDraft]);
-  const cancelTitleEdit = React.useCallback(() => {
+  const cancelTitleEdit = React.useCallback((restoreNodeFocus = false) => {
     if (titleEditActionHandledRef.current) return;
     titleEditActionHandledRef.current = true;
-    onTitleEditCancel?.(node.id);
+    onTitleEditCancel?.(node.id, restoreNodeFocus);
   }, [node.id, onTitleEditCancel]);
 
   React.useEffect(() => {
     if (!isTitleEditing) return;
     titleEditActionHandledRef.current = false;
     setTitleDraft(nodeTitleRef.current);
+    if (!autoFocusTitleInput) return;
     window.requestAnimationFrame(() => {
       titleInputRef.current?.focus();
       titleInputRef.current?.select();
     });
-  }, [isTitleEditing, node.id]);
+  }, [autoFocusTitleInput, isTitleEditing, node.id]);
   const formatDate = (value?: string) => {
     if (!value) return '';
     const date = dayjs(value);
@@ -145,10 +208,15 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
       data-mindmap-branch-direction={direction}
     >
       <div className={`relative flex items-center ${isLeft ? 'flex-row-reverse' : ''}`}>
-        <div
+        <MindMapNodeSelectionSurface
+          nodeId={node.id}
+          selectionStore={selectionStore}
+          dev075ProbeEnabled={dev075ProbeEnabled}
+          selectedClassName="border-primary-500 ring-2 ring-primary-100"
+          unselectedClassName="border-slate-200 hover:border-primary-300 hover:bg-primary-50/30"
+          onNodeElementChange={onNodeElementChange}
           role="treeitem"
           tabIndex={0}
-          aria-selected={isSelected}
           aria-expanded={hasChildren ? isExpanded : undefined}
           data-mindmap-node={node.id}
           data-mindmap-node-title={node.title || '未命名任務'}
@@ -162,6 +230,23 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onClick={(event) => {
             event.stopPropagation();
             void interactionBinding.dispatch('pointer.primary');
+          }}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || !isTitleEditing || autoFocusTitleInput) return;
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+              event.preventDefault();
+              event.stopPropagation();
+              onTitleEditDelete?.(node.id);
+              return;
+            }
+            if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setTitleDraft(event.key);
+            window.requestAnimationFrame(() => {
+              titleInputRef.current?.focus();
+              titleInputRef.current?.setSelectionRange(1, 1);
+            });
           }}
           onDoubleClick={(event) => {
             event.stopPropagation();
@@ -190,7 +275,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
           data-touch-tap-guard="true"
-          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-all ${isLeft ? 'flex-row-reverse' : ''} ${isSelected ? 'border-primary-500 ring-2 ring-primary-100' : 'border-slate-200 hover:border-primary-300 hover:bg-primary-50/30'} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
+          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isLeft ? 'flex-row-reverse' : ''} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
         >
           <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
             <span className="relative inline-block max-w-full">
@@ -214,13 +299,13 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                       commitTitleEdit();
                       onOpenDetails(node.id);
                     }}
-                    onBlur={commitTitleEdit}
+                    onBlur={() => commitTitleEdit()}
                     onKeyDown={(event) => {
                       if (event.nativeEvent.isComposing) return;
                       if (event.key === 'Enter') {
                         event.preventDefault();
                         event.stopPropagation();
-                        commitTitleEdit();
+                        commitTitleEdit(true);
                       } else if (event.key === 'Tab') {
                         event.preventDefault();
                         event.stopPropagation();
@@ -228,7 +313,15 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                       } else if (event.key === 'Escape') {
                         event.preventDefault();
                         event.stopPropagation();
-                        cancelTitleEdit();
+                        cancelTitleEdit(true);
+                      } else if (event.key === 'Delete') {
+                        // The quick naming input is intentionally focused for
+                        // XMind-style typing, but Delete is a task command,
+                        // not text editing. Handle it at the input boundary so
+                        // native text deletion and bubbling races cannot win.
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onTitleEditDelete?.(node.id);
                       }
                     }}
                     aria-label="快速命名任務"
@@ -264,7 +357,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
               </span>
             ) : null}
           </span>
-        </div>
+        </MindMapNodeSelectionSurface>
         {hasChildren ? (
           <div
             className="group absolute top-1/2 z-20 flex h-8 w-[var(--mindmap-node-gap)] -translate-y-1/2 items-center justify-center"

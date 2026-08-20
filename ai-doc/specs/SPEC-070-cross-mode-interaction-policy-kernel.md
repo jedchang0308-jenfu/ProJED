@@ -203,7 +203,7 @@ type TaskCommandOutcome = {
 |---|---|---|
 | `task.open-details` | navigation | 選取指定 task 並開同一個 `TaskDetailsModal` |
 | `task.open-details-for-naming` | navigation | 選取、設定 pending title edit、開詳情；禁止外層 rename |
-| `task.switch-to-list` | navigation | Calendar segment／Calendar 內 Shared Sidebar 維持目前切換到 List 的行為，不順便開詳情 |
+| `task.switch-to-list` | navigation | 明確要求時將目前 task flow 切換到 List；不作為 Calendar 任務點擊的預設行為 |
 | `task.open-menu` | presentation | 以 location snapshot 解析 menu，不直接 mutation |
 | `task.clear-selection` | selection | 清除共用 task selection；各模式私有 selection 由 adapter 同步清理 |
 | `task.create-sibling` | mutation | 共用 create permission、parent/order 與 post-create command |
@@ -260,7 +260,7 @@ Command outcome 必須能區分：成功寫入 `executed`、合法無變更 `noo
 | Mindmap | 節點選取＋開詳情 | `Enter` 新增同階、`Tab` 新增子階、方向鍵導航 | 共用 task menu；目前不顯示依賴開始／結束項目；無 rename | relationship draft／line edit、drag 優先，不誤開詳情 |
 | Board | L1／L2／L3+ 任務選取＋開詳情 | `Enter` 對已選任務開詳情 | 共用 task menu；保留目前依賴開始／結束項目 | dependency selection、record capture、desktop drag、mobile gesture broker 優先 |
 | Gantt | 任務條／Shared Sidebar 任務選取＋開詳情 | `Enter` 對已選任務開詳情 | 共用 task menu；目前不顯示依賴開始／結束項目 | move／resize 有實際位移時 suppress click-through |
-| Calendar | task segment／Shared Sidebar click 維持切換到 List，不開詳情 | 不新增快捷鍵 | 維持目前 task menu 集合 | 不因四主模式遷移而改 Calendar 行為 |
+| Calendar | task segment／Shared Sidebar click 選取任務＋開詳情 | 不新增快捷鍵 | 維持目前 task menu 集合 | 不切換到 List；與其他 task surface 共用 details lifecycle |
 | Task Workbench | 任務列選取＋開詳情 | 不新增快捷鍵 | 維持目前 desktop menu；mobile 依 compact rail | placed／unplaced drag 與 mobile action mode 優先 |
 
 矩陣描述的是重構前應被錄製與搬移的結果。若錄製 evidence 發現與表格不一致，先停止該 Surface 遷移並更新 baseline drift 記錄，不得直接修改產品行為使其符合文件。
@@ -341,8 +341,8 @@ Profile 不得持有可變 business state；permission 來源仍為 `useBoardPer
 | `src/components/Wbs/KanbanChecklist.tsx` | `board.checklist-row` primary／secondary adapter；保留 nested propagation 與 gesture broker |
 | `src/components/GanttView.tsx` | `gantt.task-bar` click adapter；不再直接呼叫 `selectAndOpenTaskDetails` |
 | `src/components/Gantt/GanttTaskBar.tsx` | menu binding 與 no-drag mouseup handoff；resize／move established 仍 suppress click |
-| `src/components/SharedTaskSidebar.tsx` | `shared-task-sidebar.row` 自行解析 Gantt=open details、Calendar=switch list；parent 不再複製 click policy；保留 create／drag |
-| `src/components/CalendarView.tsx` | `calendar.segment` primary 維持 switch list，secondary 快照 calendar origin；移除以 callback 間接猜 mode |
+| `src/components/SharedTaskSidebar.tsx` | `shared-task-sidebar.row` 使用共用 task binding，Gantt／Calendar／List 的 task primary 都開 details；parent 不再複製 click policy；保留 create／drag |
+| `src/components/CalendarView.tsx` | `calendar.segment` primary 開共用 `TaskDetailsModal`，secondary 快照 calendar origin；移除以 callback 間接猜 mode |
 | `src/components/TaskWorkbenchPanel.tsx` | placed／unplaced surface binding；保留 cross-board source、record／drag／mobile owner |
 | `src/components/BoardView.tsx` | Board post-create 交給 binding；`TaskDragPresenter` 依既有 mobile session 接 command executor，不改 drag state machine |
 | `src/components/Wbs/WbsListView.tsx` | List post-create 改走 `task.post-create` binding |
@@ -545,7 +545,7 @@ type TaskInteractionBinding = {
 | Mindmap | `keyboard.enter`／`keyboard.tab`／方向鍵 | create sibling／create child／四個 mindmap selection action；menu 排除 dependency |
 | Board | `keyboard.enter` | `task.open-details`；menu 含 dependency section |
 | Gantt | `keyboard.enter` | `task.open-details`；menu 排除 dependency |
-| Calendar＋其 Shared Sidebar | `pointer.primary` | `task.switch-to-list`；不開 details；menu 排除 dependency |
+| Calendar＋其 Shared Sidebar | `pointer.primary`／`gesture.tap` | `task.open-details`；維持 Calendar host mode；menu 排除 dependency |
 | Board Task Workbench | primary／secondary | 繼承 `task.open-details`／`task.open-menu` |
 | `mobile-action-mode` | `task.post-create` | `task.open-details`，不設定 pending title edit；rail action 對應既有四個 Action ID |
 | relationship／dependency-selection／record-capture | 一般 primary | Resolver 回 `actionId:null`＋owner diagnostic，由既有 owner adapter 處理；不 fallback |
@@ -567,7 +567,7 @@ type TaskInteractionBinding = {
 | S5 / WP3B | RD | `MindMapView.tsx` | `mindmap.node.primary/menu/keyboard/post-create/clear` authoritative；relationship／drag owner PASS | Mindmap bindings 回 legacy；不改 keyboard expected |
 | S6 / WP3C | RD | `KanbanColumn.tsx`、`KanbanCard.tsx`、`KanbanChecklist.tsx`、`BoardView.tsx` | Board L1/L2/L3+ primary/menu/post-create authoritative；dependency／record／drag untouched | Board bindings回 legacy；保留既有 gesture/drag files |
 | S7 / WP3D | RD | `GanttView.tsx`、`GanttTaskBar.tsx` | task bar primary/menu、Enter authoritative；move／resize suppression PASS | Gantt task-bar bindings回 legacy |
-| S8 / WP4A | RD | `SharedTaskSidebar.tsx`、`CalendarView.tsx` | Gantt sidebar=open details；Calendar sidebar／segment=switch list；各 menu location 正確 | auxiliary bindings回 legacy callback／handler |
+| S8 / WP4A | RD | `SharedTaskSidebar.tsx`、`CalendarView.tsx` | Gantt／Calendar sidebar／segment 都 open details；各 menu location 正確 | auxiliary bindings回 legacy callback／handler |
 | S9 / WP4B | RD | `TaskWorkbenchPanel.tsx` | placed／unplaced primary/menu/post-create parity；cross-board source 不漂移 | Workbench bindings回 legacy helper |
 | S10 / WP4C | RD | `taskDragCommit.ts`、`TaskDragPresenter.tsx` | rail 四 action 共用 catalog／command；DEV-029／054／067／068 targeted PASS | mobile mapping回原 `commitTaskDragAction` branch |
 | S11 / WP5 | RD | `taskInteractions.ts`、既有 source verifiers、dead-path cleanup；刪除 `migrationManifest.ts` | 所有 binding=`legacy-removed` 後才清理；全 regression、tsc、build、rendered QC readiness 完整 | 回到 S10 tag/commit；不得在 cleanup 修產品行為 |

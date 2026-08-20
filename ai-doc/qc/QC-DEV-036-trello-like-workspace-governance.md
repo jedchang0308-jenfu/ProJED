@@ -55,6 +55,13 @@ DEV-036 Phase 1 已通過本機自動化 QC。此次交付完成 Trello-like Wor
 - 不需要 billing QC：本輪明確不新增 Workspace billing、seat、quota 或付費邏輯。
 - 未部署 production；若要部署，需另走 `deployment-release-gate`。
 
+## 2026-08-20 直接改名風險修訂 QC
+
+- Topbar active Board title 已由 `contentEditable` 改為純顯示；點擊、雙擊與 `F2` 不會開啟改名 input。
+- Sidebar Board 的受控 `F2`／右鍵改名仍可用，未繞過既有權限檢查。
+- Static：`npm.cmd run verify:dev-030-sidebar-rename-contract`，11/11 PASS。
+- Browser：`npm.cmd run verify:dev-030-sidebar-rename-contract-browser`，PASS；Chromium 1440x900，console errors=0。
+
 ## 殘餘風險
 
 - 遠端 Supabase 的 `create_tenant_with_owner` 實際 create 權限仍應在部署前 smoke test，但本輪未改其 RPC / RLS。

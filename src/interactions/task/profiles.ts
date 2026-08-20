@@ -49,8 +49,8 @@ const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>>
   calendar: Object.freeze({
     menu: Object.freeze({ exclude: ['task.dependency-start', 'task.dependency-end'] as const }),
     triggers: Object.freeze({
-      'pointer.primary': 'task.switch-to-list',
-      'gesture.tap': 'task.switch-to-list',
+      'pointer.primary': 'task.open-details',
+      'gesture.tap': 'task.open-details',
     }),
   }),
 });
@@ -64,12 +64,12 @@ const ORIGIN_PROFILES: Readonly<Record<TaskInteractionLocation['origin'], TaskIn
     }),
   }),
   'shared-task-sidebar': Object.freeze({
-    // Host mode remains authoritative: Gantt opens details, Calendar switches to List.
+    // Calendar and Gantt use the shared sidebar's primary task action: open details.
   }),
   'calendar-segment': Object.freeze({
     triggers: Object.freeze({
-      'pointer.primary': 'task.switch-to-list',
-      'gesture.tap': 'task.switch-to-list',
+      'pointer.primary': 'task.open-details',
+      'gesture.tap': 'task.open-details',
     }),
   }),
 });

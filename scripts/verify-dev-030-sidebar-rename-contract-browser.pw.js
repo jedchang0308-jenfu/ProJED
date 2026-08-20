@@ -77,6 +77,18 @@ async (page) => {
   try {
     await openApp();
 
+    step = 'topbar-board-title-no-rename';
+    const topbarBoardTitle = page.locator('h1.app-board-title').first();
+    await topbarBoardTitle.waitFor({ state: 'visible', timeout: 10000 });
+    await assert(topbarBoardTitle.getAttribute('contenteditable') !== 'true', `${step} should render a display-only title`);
+    await topbarBoardTitle.click();
+    await topbarBoardTitle.dblclick();
+    await topbarBoardTitle.focus();
+    await page.keyboard.press('F2');
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'output/playwright/dev030-sidebar-rename-topbar-display-only.png' });
+    await assertNoRenameInputs(step);
+
     step = 'workspace-click-no-rename';
     const workspaceTitle = page.locator('[data-sidebar-workspace-title="true"]').first();
     await workspaceTitle.click();

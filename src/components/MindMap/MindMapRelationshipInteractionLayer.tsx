@@ -10,6 +10,7 @@ interface MindMapRelationshipInteractionLayerProps {
   selectedRelationshipId: string | null;
   hoveredRelationshipId: string | null;
   editingRelationshipId: string | null;
+  zoomLevel: number;
   editingRelationshipLabel: string;
   relationshipToolActive: boolean;
   relationshipLabelInputRef: React.RefObject<HTMLInputElement | null>;
@@ -34,6 +35,7 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
   selectedRelationshipId,
   hoveredRelationshipId,
   editingRelationshipId,
+  zoomLevel,
   editingRelationshipLabel,
   relationshipToolActive,
   relationshipLabelInputRef,
@@ -48,6 +50,9 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
   commitRelationshipLabelEdit,
   cancelRelationshipLabelEdit,
 }) => {
+  const inverseScale = 1 / Math.max(zoomLevel, 0.01);
+  const hitHeight = (screenPixels: number) => `${screenPixels * inverseScale}px`;
+
   const selectRelationshipFromEvent = (event: React.SyntheticEvent, path: MindMapRelationshipPath) => {
     event.preventDefault();
     event.stopPropagation();
@@ -71,11 +76,12 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             key={`curve-hitbox-${path.id}-${segment.index}`}
             type="button"
             aria-label={`選取關聯線 ${path.label}`}
-            className={`absolute z-[44] h-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
+            className={`absolute z-[44] -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
             style={{
               left: `${segment.x}px`,
               top: `${segment.y}px`,
               width: `${segment.length}px`,
+              height: hitHeight(28),
               transform: `translate(-50%, -50%) rotate(${segment.angle}rad)`,
             }}
             onClick={(event) => selectOrEditRelationship(event, path)}
@@ -111,11 +117,12 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             key={`line-hitbox-${path.id}`}
             type="button"
             aria-label={`選取關聯線 ${path.label}`}
-            className={`absolute z-[42] h-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
+            className={`absolute z-[42] -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
             style={{
               left: `${(path.fromX + path.toX) / 2}px`,
               top: `${(path.fromY + path.toY) / 2}px`,
               width: `${length}px`,
+              height: hitHeight(24),
               transform: `translate(-50%, -50%) rotate(${angle}rad)`,
             }}
             onClick={(event) => selectOrEditRelationship(event, path)}
@@ -145,8 +152,14 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
           key={`relationship-label-target-${path.id}`}
           type="button"
           aria-label={`選取關聯線 ${path.label}`}
-          className={`absolute z-[43] h-8 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
-          style={{ left: `${path.labelX}px`, top: `${path.labelY}px` }}
+          className={`absolute z-[43] -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
+          style={{
+            left: `${path.labelX}px`,
+            top: `${path.labelY}px`,
+            width: '96px',
+            height: '32px',
+            transform: `translate(-50%, -50%) scale(${inverseScale})`,
+          }}
           onClick={(event) => selectOrEditRelationship(event, path)}
           onDoubleClick={(event) => {
             event.stopPropagation();
@@ -173,7 +186,7 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
           <React.Fragment key={`relationship-html-handles-${path.id}`}>
             <div
               className="pointer-events-none absolute z-[41] h-0.5 origin-left rounded-full bg-sky-300"
-              style={getLocalLineSegmentStyle(path.fromX, path.fromY, path.c1X, path.c1Y)}
+              style={{ ...getLocalLineSegmentStyle(path.fromX, path.fromY, path.c1X, path.c1Y), height: hitHeight(2) }}
               data-mindmap-note-relationship-control-arm-overlay={path.id}
               data-mindmap-note-relationship-screen-control-arm="from"
               data-mindmap-note-relationship-coordinate-space="map-local"
@@ -181,7 +194,7 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             />
             <div
               className="pointer-events-none absolute z-[41] h-0.5 origin-left rounded-full bg-sky-300"
-              style={getLocalLineSegmentStyle(path.toX, path.toY, path.c2X, path.c2Y)}
+              style={{ ...getLocalLineSegmentStyle(path.toX, path.toY, path.c2X, path.c2Y), height: hitHeight(2) }}
               data-mindmap-note-relationship-control-arm-overlay={path.id}
               data-mindmap-note-relationship-screen-control-arm="to"
               data-mindmap-note-relationship-coordinate-space="map-local"
@@ -189,8 +202,8 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             />
             <button
               type="button"
-              className="absolute z-[62] h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
-              style={{ left: `${path.fromX}px`, top: `${path.fromY}px` }}
+              className="absolute z-[62] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
+              style={{ left: `${path.fromX}px`, top: `${path.fromY}px`, width: hitHeight(24), height: hitHeight(24) }}
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'from')}
               data-mindmap-note-relationship-endpoint="from"
               data-mindmap-note-relationship-screen-endpoint="from"
@@ -199,8 +212,8 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             />
             <button
               type="button"
-              className="absolute z-[62] h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
-              style={{ left: `${path.toX}px`, top: `${path.toY}px` }}
+              className="absolute z-[62] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
+              style={{ left: `${path.toX}px`, top: `${path.toY}px`, width: hitHeight(24), height: hitHeight(24) }}
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'to')}
               data-mindmap-note-relationship-endpoint="to"
               data-mindmap-note-relationship-screen-endpoint="to"
@@ -209,8 +222,8 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             />
             <button
               type="button"
-              className="absolute z-[63] h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
-              style={{ left: `${path.c1X}px`, top: `${path.c1Y}px` }}
+              className="absolute z-[63] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
+              style={{ left: `${path.c1X}px`, top: `${path.c1Y}px`, width: hitHeight(24), height: hitHeight(24) }}
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-1')}
               data-mindmap-note-relationship-control-point="1"
               data-mindmap-note-relationship-screen-control-point="1"
@@ -219,8 +232,8 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             />
             <button
               type="button"
-              className="absolute z-[63] h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
-              style={{ left: `${path.c2X}px`, top: `${path.c2Y}px` }}
+              className="absolute z-[63] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-sm border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
+              style={{ left: `${path.c2X}px`, top: `${path.c2Y}px`, width: hitHeight(24), height: hitHeight(24) }}
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-2')}
               data-mindmap-note-relationship-control-point="2"
               data-mindmap-note-relationship-screen-control-point="2"
@@ -244,8 +257,13 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
               if (event.key === 'Escape') cancelRelationshipLabelEdit();
             }}
             onClick={(event) => event.stopPropagation()}
-            className="absolute z-[80] w-28 -translate-x-1/2 -translate-y-1/2 rounded border border-sky-300 bg-white px-2 py-1 text-center text-xs font-semibold text-slate-700 shadow-lg outline-none ring-4 ring-sky-100"
-            style={{ left: `${path.labelX}px`, top: `${path.labelY}px` }}
+            className="absolute z-[80] -translate-x-1/2 -translate-y-1/2 rounded border border-sky-300 bg-white px-2 py-1 text-center text-xs font-semibold text-slate-700 shadow-lg outline-none ring-4 ring-sky-100"
+            style={{
+              left: `${path.labelX}px`,
+              top: `${path.labelY}px`,
+              width: `${112 * inverseScale}px`,
+              transform: `translate(-50%, -50%) scale(${inverseScale})`,
+            }}
             data-mindmap-note-relationship-label-input={path.id}
             data-mindmap-note-relationship-coordinate-space="map-local"
             data-from-node-id={path.fromNodeId}

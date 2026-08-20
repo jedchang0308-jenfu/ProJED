@@ -25,18 +25,25 @@ import MindMapToolbar from './MindMapToolbar';
 import {
   createInsertionPreview as createDragInsertionPreview,
   createPreviewConnectorPath as createDragPreviewConnectorPath,
-  createScreenDragConnectorPath,
   getDropModeFromPointer,
   setTransparentDragImage,
   updateDragPreviewPointerPosition,
 } from './mindMapDrag';
 import {
   getAnchorForElement as getAnchorForElementFromClient,
-  getElementLocalRect,
+  getElementWorldRect,
+  getMindMapCoordinateMapper,
+  getMindMapSceneSize,
+  getMindMapViewportSnapshot,
   getLocalLineSegmentStyle,
-  getMapPointFromClient as getMapPointFromClientInSurface,
   getNodeElementAtPoint as getNodeElementAtPointInSurface,
+  getWorldPointFromClient,
 } from './mindMapDomGeometry';
+import {
+  clampMindMapScroll,
+  deriveMindMapSceneLayout,
+  getAnchoredMindMapScroll,
+} from './mindMapCoordinateSystem';
 import {
   getMindMapCenterDropUpdate,
   getMindMapNodeDropResult,
@@ -68,16 +75,23 @@ import {
 import {
   addMindMapExpandedNodeId,
   addMindMapExpandedNodeIds,
+  getMindMapExpansionPath,
+  pruneMindMapExpandedNodeIds,
   toggleMindMapExpandedNodeId,
 } from './mindMapExpansion';
 import { buildMindMapOverlayPaths } from './mindMapOverlayPaths';
 import {
   getMindMapKeyboardAction,
   isMindMapDeleteKey,
+  isMindMapQuickTitleEditingTarget,
   isMindMapRelationshipLabelEditKey,
   isMindMapTextEditingTarget,
 } from './mindMapKeyboard';
-import { getMindMapContentStyle } from './mindMapLayoutStyle';
+import {
+  getMindMapContentStyle,
+  getMindMapSceneTransformStyle,
+  getMindMapStageStyle,
+} from './mindMapLayoutStyle';
 import {
   DEFAULT_MINDMAP_RELATIONSHIP_LABEL,
   appendMindMapNoteRelationship,
@@ -108,11 +122,14 @@ import {
   getNextMindMapRootOrder,
 } from './mindMapTaskCommands';
 import {
-  getFirstChildSelection,
-  getParentSelection,
-  getVisibleMindMapNodeIds,
-  getVisibleNodeSelectionByVerticalArrow,
-} from './mindMapSelection';
+  buildMindMapNavigationIndex,
+  getMindMapHorizontalSelection,
+  getMindMapVerticalSelection,
+} from './mindMapNavigation';
+import {
+  createMindMapSelectionStore,
+  type MindMapSelectionStore,
+} from './mindMapSelectionStore';
 import {
   applyMiddleMousePanFrame,
   clearMiddleMousePanTelemetry,
@@ -136,15 +153,11 @@ import {
   type MindMapContentCenterReason,
 } from './mindMapViewport';
 import {
+  createMindMapZoomIntent,
   ZOOM_BUTTON_STEP,
-  ZOOM_PREVIEW_COMMIT_DELAY_MS,
-  applyZoomPreviewTelemetry,
   clampZoom,
-  clearZoomPreviewTelemetry,
   formatZoomLevel,
-  getAnchoredZoomScrollDelta,
   getWheelZoomDelta,
-  getZoomAnchorFromClient,
   syncCommittedZoomTelemetry,
   type MindMapZoomAnchor,
 } from './mindMapZoom';
@@ -163,7 +176,19 @@ interface MindMapRelationshipDraft {
 interface RelationshipPointerDragState {
   relationshipId: string;
   handle: MindMapRelationshipPointerHandle;
+  initialRelationship: MindMapNoteRelationship;
 }
+
+const cloneMindMapRelationship = (relationship: MindMapNoteRelationship): MindMapNoteRelationship => ({
+  ...relationship,
+  style: relationship.style ? { ...relationship.style } : undefined,
+  geometry: relationship.geometry ? {
+    ...relationship.geometry,
+    fromAnchor: relationship.geometry.fromAnchor ? { ...relationship.geometry.fromAnchor } : undefined,
+    toAnchor: relationship.geometry.toAnchor ? { ...relationship.geometry.toAnchor } : undefined,
+    controlPoints: relationship.geometry.controlPoints?.map(point => ({ ...point })),
+  } : undefined,
+});
 
 interface DragPreviewState extends MindMapDragPreviewModel {
   x: number;
@@ -171,7 +196,25 @@ interface DragPreviewState extends MindMapDragPreviewModel {
   title: string;
 }
 
+type MindMapGeometryDirtyReason =
+  | 'initial'
+  | 'node-set'
+  | 'node-resize'
+  | 'font-load'
+  | 'expansion'
+  | 'filter'
+  | 'date-visibility'
+  | 'root-side'
+  | 'drop-commit'
+  | 'relationship-edit'
+  | 'viewport-layout';
+
 const MINDMAP_POINTER_QUICK_TITLE_DELAY_MS = 240;
+const isDev075ProbeEnabled = () => {
+  if (typeof window === 'undefined') return false;
+  const phase = new URLSearchParams(window.location.search).get('dev075Phase');
+  return phase === 'baseline' || phase === 'after';
+};
 
 const MindMapView: React.FC = () => {
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
@@ -192,8 +235,10 @@ const MindMapView: React.FC = () => {
   const selectedTagIds = useTagStore(state => state.selectedTagIds);
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, isReadOnly } = useBoardPermissions();
 
-  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
+  const [selectionStore] = React.useState<MindMapSelectionStore>(() => createMindMapSelectionStore());
+  const dev075ProbeEnabled = React.useMemo(() => isDev075ProbeEnabled(), []);
   const [inlineTitleEditNodeId, setInlineTitleEditNodeId] = React.useState<string | null>(null);
+  const [inlineTitleEditFocusNodeId, setInlineTitleEditFocusNodeId] = React.useState<string | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = React.useState<Set<string>>(() => new Set());
   const [draggedNodeId, setDraggedNodeId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<MindMapDropTarget | null>(null);
@@ -214,29 +259,96 @@ const MindMapView: React.FC = () => {
   const [relationshipPointerDrag, setRelationshipPointerDrag] = React.useState<RelationshipPointerDragState | null>(null);
   const [dragPreview, setDragPreview] = React.useState<DragPreviewState | null>(null);
   const [zoomLevel, setZoomLevel] = React.useState(1);
+  const mindMapViewRef = React.useRef<HTMLDivElement>(null);
   const mapSurfaceRef = React.useRef<HTMLDivElement>(null);
+  const mapStageRef = React.useRef<HTMLDivElement>(null);
   const mapContentRef = React.useRef<HTMLDivElement>(null);
+  const nodeElementRegistryRef = React.useRef(new Map<string, HTMLElement>());
+  const pendingNodeFocusFrameRef = React.useRef<number | null>(null);
+  const viewRenderCountRef = React.useRef(0);
+  const navigationIndexBuildCountRef = React.useRef(0);
   const relationshipLabelInputRef = React.useRef<HTMLInputElement>(null);
   const middleMousePanRef = React.useRef<MiddleMousePanState | null>(null);
   const middleMousePanFrameRef = React.useRef<number | null>(null);
   const zoomLabelRef = React.useRef<HTMLSpanElement>(null);
   const zoomLevelRef = React.useRef(zoomLevel);
-  const zoomPreviewLevelRef = React.useRef(zoomLevel);
-  const zoomPreviewFrameRef = React.useRef<number | null>(null);
-  const zoomPreviewCommitTimerRef = React.useRef<number | null>(null);
-  const zoomSuppressReleaseTimerRef = React.useRef<number | null>(null);
   const pointerQuickTitleTimerRef = React.useRef<number | null>(null);
-  const zoomSuppressTokenRef = React.useRef(0);
   const autoCenteredBoardRef = React.useRef<string | null>(null);
   const selectionBoardRef = React.useRef<string | null>(null);
   const initialSelectionBoardRef = React.useRef<string | null>(null);
-  const suppressZoomScrollRecomputeRef = React.useRef(false);
+  const expansionBoardRef = React.useRef<string | null>(null);
   const connectorRecomputeCountRef = React.useRef(0);
   const connectorRecomputeFrameRef = React.useRef<number | null>(null);
-  const zoomPreviewAnchorRef = React.useRef<MindMapZoomAnchor | null>(null);
-  const mapContentStyle = React.useMemo(() => getMindMapContentStyle(zoomLevel), [zoomLevel]);
+  const geometryDirtyReasonsRef = React.useRef<Set<MindMapGeometryDirtyReason>>(new Set());
+  const pendingZoomIntentRef = React.useRef<ReturnType<typeof createMindMapZoomIntent> | null>(null);
+  const zoomIntentFrameRef = React.useRef<number | null>(null);
+  const sceneLayoutRef = React.useRef(deriveMindMapSceneLayout({ width: 1, height: 1 }, { width: 1, height: 1 }, zoomLevel));
+  const [sceneSize, setSceneSize] = React.useState({ width: 1, height: 1 });
+  const [viewportSize, setViewportSize] = React.useState({ width: 1, height: 1 });
+  const sceneLayout = React.useMemo(
+    () => deriveMindMapSceneLayout(sceneSize, viewportSize, zoomLevel),
+    [sceneSize, viewportSize, zoomLevel],
+  );
+  React.useLayoutEffect(() => {
+    sceneLayoutRef.current = sceneLayout;
+  }, [sceneLayout]);
+  const mapContentStyle = React.useMemo(() => getMindMapContentStyle(), []);
+  const stageStyle = React.useMemo(() => getMindMapStageStyle(sceneLayout), [sceneLayout]);
+  const sceneStyle = React.useMemo(() => getMindMapSceneTransformStyle(sceneLayout), [sceneLayout]);
+
+  const getCurrentCoordinateMapper = React.useCallback(() => {
+    const surface = mapSurfaceRef.current;
+    const scene = mapContentRef.current;
+    if (!surface || !scene) return null;
+    return getMindMapCoordinateMapper(scene, sceneLayoutRef.current, getMindMapViewportSnapshot(surface));
+  }, []);
 
   const boardId = activeBoardId || '';
+
+  const syncDev075ProbeAttributes = React.useCallback(() => {
+    const element = mindMapViewRef.current;
+    if (!element || !dev075ProbeEnabled) return;
+    const diagnostics = selectionStore.getDiagnostics();
+    element.setAttribute('data-mindmap-view-render-count', String(viewRenderCountRef.current));
+    element.setAttribute('data-mindmap-selection-commit-count', String(diagnostics.commitCount));
+    element.setAttribute('data-mindmap-selection-notification-count', String(diagnostics.notifiedNodeCount));
+    element.setAttribute('data-mindmap-navigation-index-build-count', String(navigationIndexBuildCountRef.current));
+  }, [dev075ProbeEnabled, selectionStore]);
+
+  React.useLayoutEffect(() => {
+    viewRenderCountRef.current += 1;
+    syncDev075ProbeAttributes();
+  });
+
+  const cancelPendingNodeFocus = React.useCallback(() => {
+    cancelPendingAnimationFrameRef(pendingNodeFocusFrameRef);
+  }, []);
+
+  const scheduleNodeFocus = React.useCallback((nodeId: string) => {
+    cancelPendingNodeFocus();
+    pendingNodeFocusFrameRef.current = window.requestAnimationFrame(() => {
+      pendingNodeFocusFrameRef.current = null;
+      if (selectionStore.getSelectedNodeId() !== nodeId) return;
+      const element = nodeElementRegistryRef.current.get(nodeId);
+      if (!element || document.activeElement === element) return;
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (activeElement && (
+        isMindMapTextEditingTarget(activeElement) ||
+        activeElement.closest('[role="dialog"], [data-task-details-modal="true"]')
+      )) return;
+      if (element.getAttribute('data-mindmap-inline-title-editing') === 'true' &&
+          element.querySelector('[data-mindmap-quick-title-input="true"]')) return;
+      element.focus({ preventScroll: true });
+    });
+  }, [cancelPendingNodeFocus, selectionStore]);
+
+  const handleNodeElementChange = React.useCallback((nodeId: string, element: HTMLElement | null) => {
+    if (element) {
+      nodeElementRegistryRef.current.set(nodeId, element);
+      return;
+    }
+    nodeElementRegistryRef.current.delete(nodeId);
+  }, []);
 
   const clearRelationshipLabelEdit = React.useCallback(() => {
     setEditingRelationshipId(null);
@@ -266,6 +378,13 @@ const MindMapView: React.FC = () => {
     setRelationshipPointerDrag(null);
   }, []);
 
+  const cancelRelationshipPointerDrag = React.useCallback(() => {
+    if (!relationshipPointerDrag) return;
+    const initialRelationship = relationshipPointerDrag.initialRelationship;
+    setNoteRelationships(prev => prev.map(item => item.id === initialRelationship.id ? initialRelationship : item));
+    setRelationshipPointerDrag(null);
+  }, [relationshipPointerDrag]);
+
   const finishRelationshipDraftMode = React.useCallback(() => {
     setRelationshipToolActive(false);
     clearRelationshipDraft();
@@ -290,10 +409,13 @@ const MindMapView: React.FC = () => {
 
   const selectRelationship = React.useCallback((relationshipId: string) => {
     clearPendingTimeoutRef(pointerQuickTitleTimerRef);
+    cancelPendingNodeFocus();
     setInlineTitleEditNodeId(null);
+    setInlineTitleEditFocusNodeId(null);
     setSelectedRelationshipId(relationshipId);
-    setSelectedNodeId(null);
-  }, []);
+    selectionStore.setSelectedNodeId(null);
+    syncDev075ProbeAttributes();
+  }, [cancelPendingNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
   const cancelPointerQuickTitleRequest = React.useCallback(() => {
     clearPendingTimeoutRef(pointerQuickTitleTimerRef);
@@ -305,20 +427,27 @@ const MindMapView: React.FC = () => {
     // mode so the editor never remains attached to a stale task.
     cancelPointerQuickTitleRequest();
     setInlineTitleEditNodeId(editingNodeId => editingNodeId && editingNodeId !== nodeId ? null : editingNodeId);
-    setSelectedNodeId(nodeId);
+    const change = selectionStore.setSelectedNodeId(nodeId);
+    syncDev075ProbeAttributes();
+    if (change.changed && nodeId) scheduleNodeFocus(nodeId);
+    if (change.changed && !nodeId) cancelPendingNodeFocus();
     setSelectedRelationshipId(null);
-  }, [cancelPointerQuickTitleRequest]);
+  }, [cancelPendingNodeFocus, cancelPointerQuickTitleRequest, scheduleNodeFocus, selectionStore, syncDev075ProbeAttributes]);
 
-  const commitInlineTitleEdit = React.useCallback((nodeId: string, title: string) => {
+  const commitInlineTitleEdit = React.useCallback((nodeId: string, title: string, restoreNodeFocus = false) => {
     if (canEditTask) {
       updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
     }
     setInlineTitleEditNodeId(null);
-  }, [canEditTask, updateNode]);
+    setInlineTitleEditFocusNodeId(null);
+    if (restoreNodeFocus) scheduleNodeFocus(nodeId);
+  }, [canEditTask, scheduleNodeFocus, updateNode]);
 
-  const cancelInlineTitleEdit = React.useCallback(() => {
+  const cancelInlineTitleEdit = React.useCallback((nodeId: string, restoreNodeFocus = false) => {
     setInlineTitleEditNodeId(null);
-  }, []);
+    setInlineTitleEditFocusNodeId(null);
+    if (restoreNodeFocus) scheduleNodeFocus(nodeId);
+  }, [scheduleNodeFocus]);
 
   const clearSelection = React.useCallback(() => {
     selectNode(null);
@@ -363,15 +492,12 @@ const MindMapView: React.FC = () => {
 
   React.useEffect(() => {
     zoomLevelRef.current = zoomLevel;
-    zoomPreviewLevelRef.current = zoomLevel;
     syncCommittedZoomTelemetry(mapSurfaceRef.current, zoomLabelRef.current, zoomLevel);
   }, [zoomLevel]);
 
   React.useEffect(() => () => {
-    clearPendingTimeoutRef(zoomPreviewCommitTimerRef);
-    clearPendingTimeoutRef(zoomSuppressReleaseTimerRef);
     clearPendingTimeoutRef(pointerQuickTitleTimerRef);
-    cancelPendingAnimationFrameRef(zoomPreviewFrameRef);
+    cancelPendingAnimationFrameRef(zoomIntentFrameRef);
     cancelPendingAnimationFrameRef(connectorRecomputeFrameRef);
   }, []);
 
@@ -387,6 +513,25 @@ const MindMapView: React.FC = () => {
   const rootNodes = React.useMemo(() => {
     return getMindMapRootNodes(nodes, parentNodesIndex, boardId, mindMapFilters);
   }, [boardId, mindMapFilters, nodes, parentNodesIndex]);
+
+  React.useLayoutEffect(() => {
+    const surface = mapSurfaceRef.current;
+    const scene = mapContentRef.current;
+    if (!surface || !scene) return undefined;
+    const measure = () => {
+      setViewportSize({ width: surface.clientWidth, height: surface.clientHeight });
+      setSceneSize(getMindMapSceneSize(scene));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(surface);
+    observer.observe(scene);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [boardId, rootNodes.length]);
 
   const rootsBySide = React.useMemo(() => splitRootNodes(rootNodes, sideOverrides), [rootNodes, sideOverrides]);
 
@@ -415,14 +560,20 @@ const MindMapView: React.FC = () => {
     return () => document.removeEventListener(CLEAR_TASK_SELECTION_EVENT, handleClearTaskSelection);
   }, [clearSelection]);
 
+  React.useEffect(() => () => {
+    cancelPendingNodeFocus();
+    selectionStore.dispose();
+  }, [cancelPendingNodeFocus, selectionStore]);
+
   React.useEffect(() => {
     if (selectionBoardRef.current === boardId) return;
     selectionBoardRef.current = boardId;
     setInlineTitleEditNodeId(null);
-    setSelectedNodeId(null);
+    setInlineTitleEditFocusNodeId(null);
+    selectNode(null);
     clearSelectedRelationship();
     clearRelationshipDraft();
-  }, [boardId, clearRelationshipDraft, clearSelectedRelationship]);
+  }, [boardId, clearRelationshipDraft, clearSelectedRelationship, selectNode]);
 
   React.useEffect(() => {
     if (!boardId || rootNodes.length === 0 || initialSelectionBoardRef.current === boardId) return;
@@ -453,28 +604,38 @@ const MindMapView: React.FC = () => {
   }, [clearSelectedRelationship, noteRelationships, selectedRelationshipId]);
 
   React.useEffect(() => {
-    const allVisibleIds = Object.values(nodes)
-      .filter(node => !node.isArchived)
-      .map(node => node.id);
-    expandNodes(allVisibleIds);
-  }, [expandNodes, nodes]);
+    const boardNodes = boardId
+      ? Object.values(nodes).filter(node => node.boardId === boardId && !node.isArchived)
+      : [];
+    const validNodeIds = new Set(boardNodes.map(node => node.id));
+    const boardChanged = expansionBoardRef.current !== boardId;
+
+    if (boardChanged) {
+      // Initialize a newly-entered board once, then keep user collapse choices
+      // stable while remote/local node updates arrive for that same board.
+      if (boardId && boardNodes.length === 0) return;
+      expansionBoardRef.current = boardId;
+      setExpandedNodeIds(prev => {
+        const next = new Set(validNodeIds);
+        if (next.size === prev.size && [...next].every(nodeId => prev.has(nodeId))) return prev;
+        return next;
+      });
+      return;
+    }
+
+    setExpandedNodeIds(prev => {
+      const next = pruneMindMapExpandedNodeIds(prev, validNodeIds);
+      return next;
+    });
+  }, [boardId, nodes]);
 
   React.useEffect(() => {
+    const selectedNodeId = selectionStore.getSelectedNodeId();
     if (!selectedNodeId) return;
     const selectedNode = nodes[selectedNodeId];
     if (selectedNode && selectedNode.boardId === boardId && !selectedNode.isArchived) return;
     selectNode(null);
-  }, [boardId, nodes, selectNode, selectedNodeId]);
-
-  React.useEffect(() => {
-    if (!selectedNodeId) return;
-    if (inlineTitleEditNodeId === selectedNodeId) return;
-    const frame = window.requestAnimationFrame(() => {
-      const selected = getMindMapNodeElement(mapContentRef.current, selectedNodeId);
-      selected?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [inlineTitleEditNodeId, selectedNodeId]);
+  }, [boardId, nodes, selectNode, selectionStore]);
 
   React.useEffect(() => {
     if (!editingRelationshipId) return;
@@ -489,6 +650,16 @@ const MindMapView: React.FC = () => {
     getMindMapChildren(nodes, parentNodesIndex, boardId, mindMapFilters, nodeId),
   [boardId, mindMapFilters, nodes, parentNodesIndex]);
 
+  const navigationIndex = React.useMemo(() => {
+    return buildMindMapNavigationIndex(rootsBySide, expandedNodeIds, getChildren);
+  }, [expandedNodeIds, getChildren, rootsBySide]);
+
+  React.useLayoutEffect(() => {
+    if (!dev075ProbeEnabled) return;
+    navigationIndexBuildCountRef.current += 1;
+    syncDev075ProbeAttributes();
+  }, [dev075ProbeEnabled, navigationIndex, syncDev075ProbeAttributes]);
+
   const getNodeSide = React.useCallback((nodeId: string): MindMapDirection => {
     const rootId = getMindMapRootAncestorId(nodes, nodeId);
     const branch = getMindMapNodeElement(mapContentRef.current, rootId);
@@ -497,9 +668,18 @@ const MindMapView: React.FC = () => {
     return sideOverrides[rootId] || 'right';
   }, [nodes, sideOverrides]);
 
-  const getLocalRect = React.useCallback((element: HTMLElement, surface: HTMLElement): MindMapLayoutRect => {
-    return getElementLocalRect(element, surface, zoomLevelRef.current);
-  }, []);
+  const getLocalRect = React.useCallback((element: HTMLElement): MindMapLayoutRect => {
+    const mapper = getCurrentCoordinateMapper();
+    if (mapper) return getElementWorldRect(element, mapper);
+    return {
+      left: 0,
+      top: 0,
+      right: element.offsetWidth,
+      bottom: element.offsetHeight,
+      width: element.offsetWidth,
+      height: element.offsetHeight,
+    };
+  }, [getCurrentCoordinateMapper]);
 
   const updateRootSide = React.useCallback((nodeId: string, direction: MindMapDirection) => {
     setSideOverrides(prev => {
@@ -528,11 +708,14 @@ const MindMapView: React.FC = () => {
   }, []);
 
   const recomputeConnectors = React.useCallback(() => {
-    if (suppressZoomScrollRecomputeRef.current) return;
     const surface = mapContentRef.current;
     if (!surface) return;
+    const reasons = Array.from(geometryDirtyReasonsRef.current).sort();
+    geometryDirtyReasonsRef.current.clear();
+    if (reasons.length === 0) return;
     connectorRecomputeCountRef.current += 1;
     mapSurfaceRef.current?.setAttribute('data-mindmap-recompute-count', String(connectorRecomputeCountRef.current));
+    mapSurfaceRef.current?.setAttribute('data-mindmap-last-geometry-reasons', reasons.join(','));
     const overlayPaths = buildMindMapOverlayPaths({
       surface,
       rootNodes,
@@ -544,31 +727,33 @@ const MindMapView: React.FC = () => {
     setRelationshipPaths(overlayPaths.relationshipPaths);
   }, [getLocalRect, getNodeSide, noteRelationships, rootNodes]);
 
-  const scheduleConnectorRecompute = React.useCallback(() => {
+  const markGeometryDirty = React.useCallback((reason: MindMapGeometryDirtyReason) => {
+    geometryDirtyReasonsRef.current.add(reason);
     scheduleCoalescedAnimationFrame(connectorRecomputeFrameRef, recomputeConnectors);
   }, [recomputeConnectors]);
 
+  const scheduleConnectorRecompute = React.useCallback(() => {
+    markGeometryDirty('relationship-edit');
+  }, [markGeometryDirty]);
+
   React.useLayoutEffect(() => {
-    const frame = window.requestAnimationFrame(recomputeConnectors);
-    return () => window.cancelAnimationFrame(frame);
-  }, [recomputeConnectors, rootsBySide, expandedNodeIds, dropTarget, rootSideDropTarget, relationshipToolActive, relationshipDraft]);
+    markGeometryDirty('node-set');
+  }, [markGeometryDirty, rootsBySide, expandedNodeIds, dropTarget, rootSideDropTarget, relationshipToolActive, relationshipDraft]);
 
   React.useEffect(() => {
     const surface = mapContentRef.current;
     if (!surface) return undefined;
-    const observer = new ResizeObserver(() => {
-      if (suppressZoomScrollRecomputeRef.current) return;
-      recomputeConnectors();
-    });
+    const observer = new ResizeObserver(() => markGeometryDirty('node-resize'));
+    const handleResize = () => markGeometryDirty('viewport-layout');
     observer.observe(surface);
     const nodesToObserve = Array.from(surface.querySelectorAll(MINDMAP_CONTENT_BOUNDS_SELECTOR));
     nodesToObserve.forEach(element => observer.observe(element));
-    window.addEventListener('resize', recomputeConnectors);
+    window.addEventListener('resize', handleResize);
     return () => {
       observer.disconnect();
-      window.removeEventListener('resize', recomputeConnectors);
+      window.removeEventListener('resize', handleResize);
     };
-  }, [recomputeConnectors, rootNodes.length]);
+  }, [markGeometryDirty, rootNodes.length]);
 
   React.useEffect(() => {
     const stopPan = () => {
@@ -613,9 +798,10 @@ const MindMapView: React.FC = () => {
     direction: MindMapDirection,
   ) => {
     const surface = mapContentRef.current;
-    if (!surface) return '';
-    return createDragPreviewConnectorPath(event, targetElement, surface, zoomLevelRef.current, direction);
-  }, []);
+    const mapper = getCurrentCoordinateMapper();
+    if (!surface || !mapper) return '';
+    return createDragPreviewConnectorPath(event, targetElement, mapper, direction);
+  }, [getCurrentCoordinateMapper]);
 
   const getDragInsertionPreview = React.useCallback((
     targetElement: HTMLElement,
@@ -624,9 +810,10 @@ const MindMapView: React.FC = () => {
     direction: MindMapDirection,
   ): Pick<DragPreviewState, 'connectorPath' | 'insertionPreview'> => {
     const surface = mapContentRef.current;
-    if (!surface) return {};
-    return createDragInsertionPreview(targetElement, targetNode, mode, direction, surface, zoomLevelRef.current);
-  }, []);
+    const mapper = getCurrentCoordinateMapper();
+    if (!surface || !mapper) return {};
+    return createDragInsertionPreview(targetElement, targetNode, mode, direction, surface, mapper);
+  }, [getCurrentCoordinateMapper]);
 
   const updateDragPreview = React.useCallback((
     event: React.DragEvent<HTMLElement>,
@@ -656,15 +843,16 @@ const MindMapView: React.FC = () => {
         const targetElement = prev.targetNodeId
           ? getMindMapNodeElement(document, prev.targetNodeId)
           : getMindMapCenterElement(document);
-        if (targetElement) {
-          connectorPath = createScreenDragConnectorPath(event, targetElement, direction);
+        const mapper = getCurrentCoordinateMapper();
+        if (targetElement && mapper) {
+          connectorPath = createDragPreviewConnectorPath(event, targetElement, mapper, direction);
         }
         return updateDragPreviewPointerPosition({ ...prev, connectorPath }, event);
       });
     };
     window.addEventListener('dragover', handleWindowDragOver);
     return () => window.removeEventListener('dragover', handleWindowDragOver);
-  }, [draggedNodeId]);
+  }, [draggedNodeId, getCurrentCoordinateMapper]);
 
   const createTask = React.useCallback((
     parentId: string | null,
@@ -685,35 +873,60 @@ const MindMapView: React.FC = () => {
     });
     addNode(node);
     selectNode(node.id);
-    expandNodes([parentId, node.id]);
-    if (canEditTask) setInlineTitleEditNodeId(node.id);
+    const expansionPath = getMindMapExpansionPath(nodes, parentId, boardId);
+    expandNodes([...expansionPath, node.id]);
+    if (canEditTask) {
+      setInlineTitleEditNodeId(node.id);
+      setInlineTitleEditFocusNodeId(node.id);
+    }
     return node;
-  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, expandNodes, selectNode]);
+  }, [activeWorkspaceId, addNode, boardId, canCreateTask, canEditTask, expandNodes, nodes, selectNode]);
 
   const handleCreateRoot = React.useCallback(() => {
     createTask(null, getNextMindMapRootOrder(rootNodes));
   }, [createTask, rootNodes]);
 
-  const clearZoomPreview = React.useCallback(() => {
-    const surface = mapSurfaceRef.current;
-    const content = mapContentRef.current;
-    cancelPendingAnimationFrameRef(zoomPreviewFrameRef);
-    clearZoomPreviewTelemetry(surface, content);
-    zoomPreviewAnchorRef.current = null;
-  }, []);
-
   const getMindMapContentBounds = React.useCallback(() => {
     const content = mapContentRef.current;
-    if (!content) return null;
-    return getMindMapViewportContentBounds(content, zoomLevelRef.current);
-  }, []);
+    const mapper = getCurrentCoordinateMapper();
+    if (!content || !mapper) return null;
+    return getMindMapViewportContentBounds(content, mapper);
+  }, [getCurrentCoordinateMapper]);
 
   const centerMindMapContent = React.useCallback((reason: MindMapContentCenterReason = 'repair') => {
     const surface = mapSurfaceRef.current;
-    const content = mapContentRef.current;
-    if (!surface || !content) return false;
-    return centerMindMapViewportContent(surface, content, zoomLevelRef.current, reason);
-  }, []);
+    const bounds = getMindMapContentBounds();
+    if (!surface || !bounds) return false;
+    return centerMindMapViewportContent(surface, bounds, sceneLayoutRef.current, reason);
+  }, [getMindMapContentBounds]);
+
+  const flushPendingZoomIntent = React.useCallback(() => {
+    const intent = pendingZoomIntentRef.current;
+    const surface = mapSurfaceRef.current;
+    if (!intent || !surface) return;
+    const viewport = getMindMapViewportSnapshot(surface);
+    if (intent.anchor) {
+      const rawScroll = getAnchoredMindMapScroll(
+        intent.anchor.world,
+        { x: intent.anchor.clientX, y: intent.anchor.clientY },
+        sceneLayoutRef.current,
+        viewport,
+      );
+      const clamped = clampMindMapScroll(rawScroll, sceneLayoutRef.current, {
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      });
+      surface.scrollLeft = clamped.left;
+      surface.scrollTop = clamped.top;
+    } else if (intent.centerContent) {
+      centerMindMapContent('fit');
+    }
+    pendingZoomIntentRef.current = null;
+  }, [centerMindMapContent]);
+
+  React.useLayoutEffect(() => {
+    flushPendingZoomIntent();
+  }, [flushPendingZoomIntent, sceneLayout, zoomLevel]);
 
   const commitZoom = React.useCallback((
     nextZoom: number,
@@ -721,56 +934,18 @@ const MindMapView: React.FC = () => {
     afterCommit: 'preserve-anchor' | 'center-content' = 'preserve-anchor',
   ) => {
     const targetZoom = clampZoom(nextZoom);
-    const previousZoom = zoomLevelRef.current || zoomLevel;
+    const previousZoom = zoomLevelRef.current;
+    pendingZoomIntentRef.current = createMindMapZoomIntent(
+      targetZoom,
+      anchor ?? null,
+      afterCommit === 'center-content',
+    );
     zoomLevelRef.current = targetZoom;
-    zoomPreviewLevelRef.current = targetZoom;
-    clearPendingTimeoutRef(zoomPreviewCommitTimerRef);
-    clearPendingTimeoutRef(zoomSuppressReleaseTimerRef);
-    const suppressToken = zoomSuppressTokenRef.current + 1;
-    zoomSuppressTokenRef.current = suppressToken;
-    suppressZoomScrollRecomputeRef.current = true;
     setZoomLevel(targetZoom);
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const surface = mapSurfaceRef.current;
-        if (surface && anchor && previousZoom !== targetZoom) {
-          const scrollDelta = getAnchoredZoomScrollDelta(anchor, previousZoom, targetZoom);
-          surface.scrollLeft += scrollDelta.left;
-          surface.scrollTop += scrollDelta.top;
-        }
-        clearZoomPreview();
-        if (afterCommit === 'center-content') {
-          centerMindMapContent('fit');
-        }
-        zoomSuppressReleaseTimerRef.current = window.setTimeout(() => {
-          if (zoomSuppressTokenRef.current === suppressToken) {
-            suppressZoomScrollRecomputeRef.current = false;
-            zoomSuppressReleaseTimerRef.current = null;
-          }
-        }, 260);
-      });
-    });
-  }, [centerMindMapContent, clearZoomPreview, zoomLevel]);
-
-  const applyZoomPreview = React.useCallback(() => {
-    scheduleCoalescedAnimationFrame(zoomPreviewFrameRef, () => {
-      const surface = mapSurfaceRef.current;
-      const content = mapContentRef.current;
-      const anchor = zoomPreviewAnchorRef.current;
-      if (!surface || !content || !anchor) return;
-      const previewZoom = zoomPreviewLevelRef.current;
-      applyZoomPreviewTelemetry(surface, content, zoomLabelRef.current, anchor, previewZoom);
-    });
-  }, []);
-
-  const scheduleZoomPreviewCommit = React.useCallback(() => {
-    clearPendingTimeoutRef(zoomPreviewCommitTimerRef);
-    zoomPreviewCommitTimerRef.current = window.setTimeout(() => {
-      zoomPreviewCommitTimerRef.current = null;
-      commitZoom(zoomPreviewLevelRef.current, zoomPreviewAnchorRef.current);
-    }, ZOOM_PREVIEW_COMMIT_DELAY_MS);
-  }, [commitZoom]);
+    if (previousZoom === targetZoom) {
+      scheduleCoalescedAnimationFrame(zoomIntentFrameRef, flushPendingZoomIntent);
+    }
+  }, [flushPendingZoomIntent]);
 
   const setZoom = React.useCallback((nextZoom: number) => {
     commitZoom(nextZoom, null, 'center-content');
@@ -788,22 +963,35 @@ const MindMapView: React.FC = () => {
     setZoom(1);
   }, [setZoom]);
 
-  const handleWheelZoom = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+  const handleWheelZoom = React.useCallback((event: WheelEvent) => {
     if (!event.ctrlKey && !event.metaKey) return;
     const surface = mapSurfaceRef.current;
-    const content = mapContentRef.current;
-    if (!surface || !content) return;
+    const mapper = getCurrentCoordinateMapper();
+    if (!surface || !mapper) return;
     event.preventDefault();
+    const currentIntent = pendingZoomIntentRef.current;
+    const anchor = currentIntent?.anchor || {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      world: mapper.clientToWorld({ x: event.clientX, y: event.clientY }),
+    };
+    const targetZoom = clampZoom((currentIntent?.targetZoom || zoomLevelRef.current) + getWheelZoomDelta(event.deltaY));
+    pendingZoomIntentRef.current = createMindMapZoomIntent(targetZoom, anchor, false);
+    scheduleCoalescedAnimationFrame(zoomIntentFrameRef, () => {
+      const intent = pendingZoomIntentRef.current;
+      if (!intent) return;
+      zoomLevelRef.current = intent.targetZoom;
+      setZoomLevel(intent.targetZoom);
+    });
+  }, [getCurrentCoordinateMapper]);
 
-    if (!zoomPreviewAnchorRef.current) {
-      const rect = content.getBoundingClientRect();
-      zoomPreviewAnchorRef.current = getZoomAnchorFromClient(event.clientX, event.clientY, rect, zoomLevelRef.current);
-    }
-
-    zoomPreviewLevelRef.current = clampZoom(zoomPreviewLevelRef.current + getWheelZoomDelta(event.deltaY));
-    applyZoomPreview();
-    scheduleZoomPreviewCommit();
-  }, [applyZoomPreview, scheduleZoomPreviewCommit]);
+  React.useEffect(() => {
+    const surface = mapSurfaceRef.current;
+    if (!surface) return undefined;
+    const options = { passive: false } as AddEventListenerOptions;
+    surface.addEventListener('wheel', handleWheelZoom, options);
+    return () => surface.removeEventListener('wheel', handleWheelZoom, options);
+  }, [handleWheelZoom]);
 
   const startMiddleMousePan = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 1) return;
@@ -820,7 +1008,7 @@ const MindMapView: React.FC = () => {
     const surface = mapSurfaceRef.current;
     const bounds = getMindMapContentBounds();
     if (!surface || !bounds) return;
-    const targetZoom = getFitZoomForBounds(surface, bounds, zoomLevelRef.current);
+    const targetZoom = getFitZoomForBounds(surface, bounds);
     commitZoom(targetZoom, null, 'center-content');
   }, [commitZoom, getMindMapContentBounds]);
 
@@ -837,7 +1025,7 @@ const MindMapView: React.FC = () => {
       attempts += 1;
       if (centerMindMapContent('initial')) {
         autoCenteredBoardRef.current = centerKey;
-        window.requestAnimationFrame(recomputeConnectors);
+        markGeometryDirty('initial');
         return;
       }
       if (attempts < 8) {
@@ -848,7 +1036,7 @@ const MindMapView: React.FC = () => {
       frames.push(window.requestAnimationFrame(() => {
         if (centerMindMapContent('initial')) {
           autoCenteredBoardRef.current = centerKey;
-          recomputeConnectors();
+          markGeometryDirty('initial');
         } else {
           frames.push(window.requestAnimationFrame(tryCenter));
         }
@@ -857,7 +1045,7 @@ const MindMapView: React.FC = () => {
     return () => {
       frames.forEach(frame => window.cancelAnimationFrame(frame));
     };
-  }, [boardId, centerMindMapContent, recomputeConnectors, rootNodes]);
+  }, [boardId, centerMindMapContent, markGeometryDirty, rootNodes]);
 
   const createSiblingForNode = React.useCallback((nodeId: string | null) => {
     if (!nodeId) return handleCreateRoot();
@@ -885,22 +1073,27 @@ const MindMapView: React.FC = () => {
   ) => {
     if (!canEditTask) {
       setInlineTitleEditNodeId(null);
+      setInlineTitleEditFocusNodeId(null);
       return;
     }
     updateNode(nodeId, { title: getCommittedMindMapTitle(title) });
     const created = intent === 'child'
       ? createChildForNode(nodeId)
       : createSiblingForNode(nodeId);
-    if (!created) setInlineTitleEditNodeId(null);
+    if (!created) {
+      setInlineTitleEditNodeId(null);
+      setInlineTitleEditFocusNodeId(null);
+    }
   }, [canEditTask, createChildForNode, createSiblingForNode, updateNode]);
 
-  const archiveNode = React.useCallback(async () => {
-    if (!selectedNodeId) return;
+  const archiveNode = React.useCallback(async (nodeId?: string) => {
+    const targetNodeId = nodeId || selectionStore.getSelectedNodeId();
+    if (!targetNodeId) return;
     if (!canDeleteTask) {
       toast.warning(MINDMAP_MESSAGES.noDeleteTaskPermission);
       return;
     }
-    const plan = getMindMapArchiveTaskPlan({ selectedNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren });
+    const plan = getMindMapArchiveTaskPlan({ selectedNodeId: targetNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren });
     if (!plan) return;
     const confirmed = plan.descendantIds.length === 0
       ? true
@@ -908,9 +1101,11 @@ const MindMapView: React.FC = () => {
 
     if (!confirmed) return;
 
+    setInlineTitleEditNodeId(null);
+    setInlineTitleEditFocusNodeId(null);
     [plan.selected.id, ...plan.descendantIds].forEach(id => removeNode(id));
     selectNode(plan.nextSelectionId);
-  }, [boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectedNodeId]);
+  }, [boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectionStore]);
 
   const startRelationshipLabelEdit = React.useCallback((relationshipId: string) => {
     const relationship = noteRelationships.find(item => item.id === relationshipId);
@@ -941,6 +1136,7 @@ const MindMapView: React.FC = () => {
       toast.warning(MINDMAP_MESSAGES.noEditRelationshipPermission);
       return;
     }
+    const selectedNodeId = selectionStore.getSelectedNodeId();
     setRelationshipToolActive(active => {
       const nextActive = !active;
       if (nextActive && selectedNodeId) {
@@ -951,7 +1147,7 @@ const MindMapView: React.FC = () => {
       return nextActive;
     });
     clearSelectedRelationship();
-  }, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectedNodeId]);
+  }, [beginRelationshipDraftSelectionWithCleanup, canEditTask, clearRelationshipDraft, clearSelectedRelationship, selectionStore]);
 
   const createNoteRelationshipInline = React.useCallback((fromId: string, toId: string) => {
     if (!canEditTask || !boardId) return;
@@ -999,6 +1195,7 @@ const MindMapView: React.FC = () => {
     pointerQuickTitleTimerRef.current = window.setTimeout(() => {
       pointerQuickTitleTimerRef.current = null;
       setInlineTitleEditNodeId(nodeId);
+      setInlineTitleEditFocusNodeId(null);
     }, MINDMAP_POINTER_QUICK_TITLE_DELAY_MS);
   }, [canEditTask, draggedNodeId, handleNodeSelect, relationshipToolActive]);
 
@@ -1043,18 +1240,23 @@ const MindMapView: React.FC = () => {
       clearRelationshipDraftPreview();
       return;
     }
+    const mapper = getCurrentCoordinateMapper();
+    if (!mapper) {
+      clearRelationshipDraftPreview();
+      return;
+    }
     const source = getMindMapNodeElement(surface, fromId);
     if (!source) {
       clearRelationshipDraftPreview();
       return;
     }
-    const rect = getLocalRect(source, surface);
+    const rect = getLocalRect(source);
     setRelationshipDraftPreview(makeRelationshipDraftPreview(
       fromId,
       rect,
-      getMapPointFromClientInSurface(clientX, clientY, surface, zoomLevelRef.current),
+      getWorldPointFromClient(clientX, clientY, mapper),
     ));
-  }, [clearRelationshipDraftPreview, getLocalRect, relationshipDraft]);
+  }, [clearRelationshipDraftPreview, getCurrentCoordinateMapper, getLocalRect, relationshipDraft]);
 
   React.useEffect(() => {
     if (!relationshipToolActive || !relationshipDraft) {
@@ -1082,13 +1284,15 @@ const MindMapView: React.FC = () => {
     handle: RelationshipPointerDragState['handle'],
   ) => {
     if (!canEditTask) return;
+    const initialRelationship = noteRelationships.find(item => item.id === relationshipId);
+    if (!initialRelationship) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     selectRelationship(relationshipId);
     clearRelationshipLabelEdit();
-    setRelationshipPointerDrag({ relationshipId, handle });
-  }, [canEditTask, clearRelationshipLabelEdit, selectRelationship]);
+    setRelationshipPointerDrag({ relationshipId, handle, initialRelationship: cloneMindMapRelationship(initialRelationship) });
+  }, [canEditTask, clearRelationshipLabelEdit, noteRelationships, selectRelationship]);
 
   React.useEffect(() => {
     if (!relationshipPointerDrag) return undefined;
@@ -1096,8 +1300,9 @@ const MindMapView: React.FC = () => {
     const handleMove = (event: PointerEvent) => {
       const surface = mapContentRef.current;
       if (!surface) return;
-      const point = getMapPointFromClientInSurface(event.clientX, event.clientY, surface, zoomLevelRef.current);
-      if (!point) return;
+      const mapper = getCurrentCoordinateMapper();
+      if (!mapper) return;
+      const point = getWorldPointFromClient(event.clientX, event.clientY, mapper);
       const handle = relationshipPointerDrag.handle;
       if (handle === 'control-1' || handle === 'control-2') {
         setNoteRelationships(prev => updateRelationshipControlPointById(
@@ -1146,11 +1351,15 @@ const MindMapView: React.FC = () => {
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp, { once: true });
+    window.addEventListener('pointercancel', cancelRelationshipPointerDrag);
+    window.addEventListener('blur', cancelRelationshipPointerDrag);
     return () => {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', cancelRelationshipPointerDrag);
+      window.removeEventListener('blur', cancelRelationshipPointerDrag);
     };
-  }, [clearRelationshipPointerDrag, relationshipPointerDrag]);
+  }, [cancelRelationshipPointerDrag, clearRelationshipPointerDrag, getCurrentCoordinateMapper, relationshipPointerDrag]);
 
   React.useEffect(() => {
     if (!selectedRelationshipId) return undefined;
@@ -1160,6 +1369,7 @@ const MindMapView: React.FC = () => {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        cancelRelationshipPointerDrag();
         clearSelectedRelationship();
         return;
       }
@@ -1175,7 +1385,7 @@ const MindMapView: React.FC = () => {
     };
     window.addEventListener('keydown', handleRelationshipWindowKeyDown);
     return () => window.removeEventListener('keydown', handleRelationshipWindowKeyDown);
-  }, [clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit]);
+  }, [cancelRelationshipPointerDrag, clearSelectedRelationship, removeRelationshipAndClearSelection, selectedRelationshipId, startRelationshipLabelEdit]);
 
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && document.querySelector('[data-global-context-menu="true"]')) {
@@ -1186,8 +1396,10 @@ const MindMapView: React.FC = () => {
       event.stopPropagation();
       event.nativeEvent.stopImmediatePropagation?.();
     };
+    const selectedNodeId = selectionStore.getSelectedNodeId();
     const action = getMindMapKeyboardAction(event, {
       isEditingText: isMindMapTextEditingTarget(event.target),
+      isQuickTitleEditing: isMindMapQuickTitleEditingTarget(event.target),
       hasSelectedNode: Boolean(selectedNodeId),
       hasSelectedRelationship: Boolean(selectedRelationshipId),
       hasRelationshipMode: Boolean(relationshipToolActive || relationshipDraft || selectedRelationshipId),
@@ -1202,6 +1414,7 @@ const MindMapView: React.FC = () => {
 
     if (action.type === 'deactivate-relationship-mode') {
       consumeMindMapKeyboardEvent();
+      if (relationshipPointerDrag) cancelRelationshipPointerDrag();
       deactivateRelationshipMode();
       return;
     }
@@ -1226,10 +1439,9 @@ const MindMapView: React.FC = () => {
     }
 
     if (action.type === 'select-vertical' && selectedNodeId) {
-      const ids = getVisibleMindMapNodeIds(mapContentRef.current);
-      const nextSelectionId = getVisibleNodeSelectionByVerticalArrow(
+      const nextSelectionId = getMindMapVerticalSelection(
         selectedNodeId,
-        ids,
+        navigationIndex,
         action.direction,
       );
       if (nextSelectionId) {
@@ -1239,20 +1451,20 @@ const MindMapView: React.FC = () => {
       return;
     }
 
-    if (action.type === 'select-parent' && selectedNodeId) {
+    if (action.type === 'select-horizontal' && selectedNodeId) {
       consumeMindMapKeyboardEvent();
-      const parentSelectionId = getParentSelection(selectedNodeId, nodes);
-      if (parentSelectionId) selectNode(parentSelectionId);
-      return;
-    }
-
-    if (action.type === 'select-first-child' && selectedNodeId) {
-      consumeMindMapKeyboardEvent();
-      const children = getChildren(selectedNodeId);
-      const firstChildId = getFirstChildSelection(children);
-      if (firstChildId) {
-        expandNode(selectedNodeId);
-        selectNode(firstChildId);
+      const horizontalSelection = getMindMapHorizontalSelection(
+        selectedNodeId,
+        navigationIndex,
+        action.direction,
+        nodeId => nodes[nodeId]?.parentId || null,
+        getChildren,
+      );
+      if (horizontalSelection?.expandNodeId) {
+        expandNode(horizontalSelection.expandNodeId);
+      }
+      if (horizontalSelection && horizontalSelection.nodeId !== selectedNodeId) {
+        selectNode(horizontalSelection.nodeId);
       }
       return;
     }
@@ -1279,14 +1491,17 @@ const MindMapView: React.FC = () => {
     createChildForNode,
     createSiblingForNode,
     clearSelection,
+    cancelRelationshipPointerDrag,
     expandNode,
     getChildren,
+    navigationIndex,
     nodes,
     relationshipDraft,
+    relationshipPointerDrag,
     relationshipToolActive,
     removeSelectedRelationship,
     selectNode,
-    selectedNodeId,
+    selectionStore,
     selectedRelationshipId,
     startRelationshipLabelEdit,
     toggleRelationshipTool,
@@ -1438,16 +1653,19 @@ const MindMapView: React.FC = () => {
       childrenNodes={getChildren(node.id)}
       direction={direction}
       level={level}
-      selectedNodeId={selectedNodeId}
+      selectionStore={selectionStore}
+      dev075ProbeEnabled={dev075ProbeEnabled}
       expandedNodeIds={expandedNodeIds}
       dropTarget={dropTarget}
       isRelationshipModeActive={relationshipToolActive}
       showStartDate={showStartDate}
       canMoveTask={canMoveTask}
       isTitleEditing={inlineTitleEditNodeId === node.id}
+      autoFocusTitleInput={inlineTitleEditFocusNodeId === node.id}
       onTitleEditCommit={commitInlineTitleEdit}
       onTitleEditContinue={continueInlineTitleEdit}
       onTitleEditCancel={cancelInlineTitleEdit}
+      onTitleEditDelete={archiveNode}
       onSelect={handleNodeSelect}
       onPointerPrimary={handleNodePointerPrimary}
       onOpenDetails={handleNodeOpenDetails}
@@ -1458,6 +1676,7 @@ const MindMapView: React.FC = () => {
       onDragEnd={clearDragState}
       onDragOverNode={handleDragOverNode}
       onDropOnNode={handleDropOnNode}
+      onNodeElementChange={handleNodeElementChange}
       renderChild={renderNode}
     />
   );
@@ -1471,7 +1690,7 @@ const MindMapView: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white" data-mindmap-view onKeyDown={handleKeyDown} tabIndex={-1}>
+    <div ref={mindMapViewRef} className="flex h-full flex-col overflow-hidden bg-white" data-mindmap-view onKeyDown={handleKeyDown} tabIndex={-1}>
       <MindMapToolbar
         isReadOnly={isReadOnly}
         canEditTask={canEditTask}
@@ -1491,14 +1710,16 @@ const MindMapView: React.FC = () => {
 
       <MindMapCanvasShell
         surfaceRef={mapSurfaceRef}
+        stageRef={mapStageRef}
         contentRef={mapContentRef}
         zoomLevelText={formatZoomLevel(zoomLevel)}
         mapContentStyle={mapContentStyle}
+        stageStyle={stageStyle}
+        sceneStyle={sceneStyle}
         relationshipToolActive={relationshipToolActive}
         relationshipDraftFromId={relationshipDraft?.fromId || ''}
         hasContent={rootNodes.length > 0}
         emptyState={<MindMapEmptyState canCreateTask={canCreateTask} onCreateRoot={handleCreateRoot} />}
-        onWheel={handleWheelZoom}
         onMouseDown={startMiddleMousePan}
         onContentClick={handleSurfaceClick}
       >
@@ -1510,11 +1731,6 @@ const MindMapView: React.FC = () => {
               selectedRelationshipId={selectedRelationshipId}
               hoveredRelationshipId={hoveredRelationshipId}
               editingRelationshipId={editingRelationshipId}
-              selectRelationship={selectRelationship}
-              hoverRelationship={hoverRelationship}
-              clearRelationshipHover={clearRelationshipHover}
-              startRelationshipLabelEdit={startRelationshipLabelEdit}
-              startRelationshipPointerDrag={startRelationshipPointerDrag}
             />
 
             <MindMapDragPreviewLayer dragPreview={dragPreview} />
@@ -1524,6 +1740,7 @@ const MindMapView: React.FC = () => {
               selectedRelationshipId={selectedRelationshipId}
               hoveredRelationshipId={hoveredRelationshipId}
               editingRelationshipId={editingRelationshipId}
+              zoomLevel={zoomLevel}
               editingRelationshipLabel={editingRelationshipLabel}
               relationshipToolActive={relationshipToolActive}
               relationshipLabelInputRef={relationshipLabelInputRef}

@@ -8,9 +8,9 @@ import { Calendar, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
-import { matchesTaskFilters } from '../features/taskFilters';
 import { compactClassNames, compactSegmentedButtonClass } from './ui/compactTokens';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
+import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
@@ -62,15 +62,11 @@ const GanttView = () => {
 
     // Subscribe to nodes so GanttView re-renders when task dates or orders change
     const nodes = useWbsStore(s => s.nodes);
+    const parentNodesIndex = useWbsStore(s => s.parentNodesIndex);
 
 
     const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
         if (!activeBoardId) return { flattenedItems: [], groups: [], gridStart: DEFAULT_GRID_START, gridEnd: dayjs(DEFAULT_GRID_START).add(60, 'day'), totalUnits: 60 };
-        
-        const state = useWbsStore.getState();
-        const items: any[] = [];
-        const allGroups: any[] = [];
-        let currentRow = 0;
 
         let minDate: dayjs.Dayjs | null = null;
         let maxDate: dayjs.Dayjs | null = null;
@@ -86,61 +82,14 @@ const GanttView = () => {
             }
         };
 
-        const traverse = (nodeId: string, level: number) => {
-            const node = state.nodes[nodeId];
-            if (!node || node.isArchived) return -1;
-            if (!matchesTaskFilters(node, taskFilters)) return -1;
-
-            // Map level to legacy types for gantt filters temporarily
-            let pseudoType = 'checklist';
-            if (level === 0) pseudoType = 'list';
-            else if (level === 1) pseudoType = 'card';
-
-            const startRow = currentRow;
-            updateBounds(node.startDate || null, node.endDate || null);
-
-            items.push({ 
-                ...node, 
-                type: pseudoType, 
-                row: currentRow++, 
-                level,
-                startDate: node.startDate, 
-                endDate: node.endDate 
-            });
-
-            const isCollapsed = collapsedIds.has(nodeId);
-            const childIds = state.parentNodesIndex[nodeId] || [];
-            
-            if (!isCollapsed && childIds.length > 0) {
-                 const children = childIds.map(id => state.nodes[id]).filter(Boolean).sort((a,b) => a.order - b.order);
-                 children.forEach(child => traverse(child.id, level + 1));
-            }
-
-            const endRow = currentRow - 1;
-            if (endRow > startRow && (!isCollapsed || childIds.length > 0)) {
-                 allGroups.push({
-                     start: startRow,
-                     end: endRow,
-                     id: node.id,
-                     level: level,
-                     startDate: node.startDate,
-                     endDate: node.endDate
-                 });
-            }
-            
-            return startRow;
-        };
-
-        // start from root nodes
-        const rootIds = state.parentNodesIndex[activeBoardId] || [];
-        const orphanRootIds = state.parentNodesIndex['root'] || [];
-        
-        const allRootIds = Array.from(new Set([...rootIds, ...orphanRootIds]));
-        const rootNodes = allRootIds.map(id => state.nodes[id])
-            .filter(n => n && n.boardId === activeBoardId && !n.isArchived)
-            .sort((a,b) => a.order - b.order);
-        
-        rootNodes.forEach(rn => traverse(rn.id, 0));
+        const { items, groups } = buildHierarchicalTaskItems({
+            nodes,
+            parentNodesIndex,
+            activeBoardId,
+            taskFilters,
+            collapsedIds,
+        });
+        items.forEach(item => updateBounds(item.startDate || null, item.endDate || null));
 
         const today = dayjs();
         const start = (minDate && minDate.isBefore(today)) ? minDate : today;
@@ -171,12 +120,12 @@ const GanttView = () => {
 
         return {
             flattenedItems: items,
-            groups: allGroups,
+            groups,
             gridStart: calculatedGridStart,
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, taskFilters, mode, collapsedIds, nodes]);
+    }, [activeBoardId, taskFilters, mode, collapsedIds, nodes, parentNodesIndex]);
 
     const colWidth = getColWidth(mode);
 

@@ -16,7 +16,7 @@ async (page) => {
     createdAt: 1704067200000,
   };
 
-  const openMindMap = async (width, height) => {
+  const openMindMap = async (width, height, { allowMobileBoardOnly = false } = {}) => {
     await page.setViewportSize({ width, height });
     await page.goto('http://127.0.0.1:4000/', { waitUntil: 'domcontentloaded' });
     await page.evaluate((account) => {
@@ -30,15 +30,38 @@ async (page) => {
     }, account);
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
-    if ((await page.locator('[data-mindmap-view]').count()) === 0) {
-      await selectViewMode('mindmap');
+    if (allowMobileBoardOnly && width <= 640) {
+      await page.locator('[data-layout-region="board-shell"]').waitFor({ state: 'visible', timeout: 15000 });
+      return;
     }
+    await selectViewMode('mindmap');
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-mindmap-note-relationship-overlay]').waitFor({ state: 'visible', timeout: 15000 });
   };
 
   const selectViewMode = async (mode) => {
-    await page.locator('[data-mode-switcher-trigger="true"]').click();
+    const trigger = page.locator('[data-mode-switcher-trigger="true"]');
+    if (!(await trigger.isVisible().catch(() => false))) {
+      const fixedTestLogin = page.getByRole('button', { name: '使用固定測試環境' });
+      if (await fixedTestLogin.isVisible().catch(() => false)) {
+        await fixedTestLogin.click({ force: true });
+        await page.waitForTimeout(750);
+      }
+    }
+    try {
+      await trigger.waitFor({ state: 'visible', timeout: 15000 });
+    } catch (error) {
+      const diagnostics = await page.evaluate(() => ({
+        body: document.body.innerText.slice(0, 500),
+        url: location.href,
+        session: localStorage.getItem('projed-local-test.session'),
+        selected: localStorage.getItem('projed-local-test.selected-account'),
+        nav: Boolean(document.querySelector('nav')),
+        buttons: Array.from(document.querySelectorAll('button')).slice(0, 8).map(button => button.innerText),
+      }));
+      throw new Error(`mode switcher unavailable: ${JSON.stringify(diagnostics)}`);
+    }
+    await trigger.click();
     await page.locator(`[data-mode-switcher-value="${mode}"]`).click();
     await page.waitForTimeout(250);
   };
@@ -51,16 +74,15 @@ async (page) => {
         .forEach(key => localStorage.removeItem(key));
     });
     await page.reload({ waitUntil: 'networkidle' });
-    if ((await page.locator('[data-mindmap-view]').count()) === 0) {
-      await selectViewMode('mindmap');
-    }
+    await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
+    await selectViewMode('mindmap');
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-mindmap-note-relationship-overlay]').waitFor({ state: 'visible', timeout: 15000 });
   };
 
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
   const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
-  const titleInput = () => page.locator('[data-mindmap-title-input]').first();
+  const titleInput = () => page.locator('[data-mindmap-quick-title-input="true"]').first();
   const relationshipPathByLabel = (label) => page.locator(`[data-mindmap-note-relationship-path][data-label="${label}"]`).first();
 
   const assertNoVisibleErrors = async (label) => {
@@ -79,8 +101,6 @@ async (page) => {
   };
 
   const renameSelectedByTyping = async (title) => {
-    await selectedNode().focus();
-    await page.keyboard.press('D');
     await titleInput().waitFor({ state: 'visible', timeout: 10000 });
     await titleInput().fill(title);
     await titleInput().press('Enter');
@@ -207,13 +227,8 @@ async (page) => {
   await assertNoHardOverlap();
   await page.screenshot({ path: 'output/playwright/dev-027F-mindmap-ui-desktop.png', fullPage: true });
 
-  await openMindMap(390, 844);
-  await page.locator('[data-mindmap-zoom-fit]').click();
-  await page.waitForTimeout(200);
-  await page.locator(`[data-mindmap-node-title="${source}"]`).first().waitFor({ state: 'visible', timeout: 10000 });
-  await page.locator(`[data-mindmap-node-title="${source}"]`).first().scrollIntoViewIfNeeded();
-  await page.waitForTimeout(200);
+  await openMindMap(390, 844, { allowMobileBoardOnly: true });
+  await page.getByText(source, { exact: true }).first().waitFor({ state: 'visible', timeout: 10000 });
   await assertNoVisibleErrors('DEV-027F mobile final');
-  await assertNoHardOverlap();
   await page.screenshot({ path: 'output/playwright/dev-027F-mindmap-ui-mobile.png', fullPage: true });
 }

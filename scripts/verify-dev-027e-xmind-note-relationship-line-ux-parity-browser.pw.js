@@ -51,7 +51,7 @@ async (page) => {
 
   const nodeByTitle = (title) => page.locator(`[data-mindmap-node-title="${title}"]`).first();
   const selectedNode = () => page.locator('[data-mindmap-node][aria-selected="true"]').first();
-  const detailTitleInput = () => page.locator('[data-task-details-title-input="true"]').first();
+  const quickTitleInput = () => page.locator('[data-mindmap-quick-title-input="true"]').first();
   const relationshipGroupByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"]`).first();
   const selectedRelationshipGroupByLabel = (label) => page.locator(`[data-mindmap-note-relationship][data-label="${label}"][data-selected="true"]`).first();
   const relationshipPathByLabel = (label) => page.locator(`[data-mindmap-note-relationship-path][data-label="${label}"]`).first();
@@ -80,19 +80,19 @@ async (page) => {
   };
 
   const renameSelectedByTyping = async (title) => {
-    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await detailTitleInput().waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForFunction(() => document.activeElement?.matches('[data-task-details-title-input="true"]'), null, { timeout: 3000 });
-    const focused = await detailTitleInput().evaluate(element => document.activeElement === element);
-    assert(focused, 'new mind map task should focus the task details title input', { title });
+    await quickTitleInput().waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(() => document.activeElement?.matches('[data-mindmap-quick-title-input="true"]'), null, { timeout: 3000 });
+    const focused = await quickTitleInput().evaluate(element => document.activeElement === element);
+    assert(focused, 'new mind map task should focus quick naming input', { title });
     assert(
-      await page.locator('[data-mindmap-title-input]').count() === 0,
-      'new mind map task should not open an outer title input',
+      await page.locator('[data-task-details-modal="true"]').count() === 0,
+      'new mind map task should not open task details',
     );
-    await detailTitleInput().fill(title);
-    await detailTitleInput().press('Enter');
+    await quickTitleInput().fill(title);
+    await quickTitleInput().press('Enter');
     await nodeByTitle(title).waitFor({ state: 'visible', timeout: 10000 });
     await closeTaskDetailsIfOpen();
+    assert(await page.locator('[data-task-details-modal="true"]').count() === 0, 'quick naming Enter must not open task details');
   };
 
   const createRoot = async (title) => {
@@ -175,12 +175,14 @@ async (page) => {
     await page.locator('[data-mindmap-note-relationship-draft-preview]').waitFor({ state: 'visible', timeout: 10000 });
     const previewMeta = await page.locator('[data-mindmap-note-relationship-draft-preview]').first().evaluate((element, previewPoint) => {
       const surface = document.querySelector('[data-mindmap-surface]');
-      const surfaceRect = surface?.getBoundingClientRect();
-      const zoom = Number(document.querySelector('[data-mindmap-view] [data-mindmap-zoom-level]')?.getAttribute('data-mindmap-zoom-level') || '1');
-      const expectedLocal = surfaceRect
+      const viewport = document.querySelector('[data-mindmap-viewport="true"]');
+      const viewportRect = viewport?.getBoundingClientRect();
+      const transform = surface ? new DOMMatrix(getComputedStyle(surface).transform) : null;
+      const scale = transform?.a || 1;
+      const expectedLocal = viewportRect
         ? {
-            x: (previewPoint.x - surfaceRect.left) / Math.max(zoom, 0.01),
-            y: (previewPoint.y - surfaceRect.top) / Math.max(zoom, 0.01),
+            x: (previewPoint.x - viewportRect.left + (viewport?.scrollLeft || 0) - (transform?.e || 0)) / Math.max(scale, 0.01),
+            y: (previewPoint.y - viewportRect.top + (viewport?.scrollTop || 0) - (transform?.f || 0)) / Math.max(scale, 0.01),
           }
         : { x: Number.NaN, y: Number.NaN };
       return {
@@ -483,14 +485,20 @@ async (page) => {
   const zoomedMeta = await finitePathMeta(editedLabel);
   assertFiniteGeometry(zoomedMeta, 'relationship geometry should remain finite after zoom');
   const zoomInvariantAfter = await relationshipZoomInvariantMeta(editedRelationshipId, editedLabel);
+  const placementEqual = (before, after) =>
+    before.length === after.length && before.every((item, index) =>
+      item.coordinateSpace === after[index].coordinateSpace &&
+      item.left === after[index].left &&
+      item.top === after[index].top,
+    );
   assert(
     JSON.stringify(zoomInvariantAfter.path) === JSON.stringify(zoomInvariantBefore.path) &&
-      JSON.stringify(zoomInvariantAfter.curveHitboxStyles) === JSON.stringify(zoomInvariantBefore.curveHitboxStyles) &&
-      JSON.stringify(zoomInvariantAfter.lineHitboxStyles) === JSON.stringify(zoomInvariantBefore.lineHitboxStyles) &&
-      JSON.stringify(zoomInvariantAfter.labelHitboxStyles) === JSON.stringify(zoomInvariantBefore.labelHitboxStyles) &&
-      JSON.stringify(zoomInvariantAfter.endpointStyles) === JSON.stringify(zoomInvariantBefore.endpointStyles) &&
-      JSON.stringify(zoomInvariantAfter.controlPointStyles) === JSON.stringify(zoomInvariantBefore.controlPointStyles) &&
-      JSON.stringify(zoomInvariantAfter.controlArmStyles) === JSON.stringify(zoomInvariantBefore.controlArmStyles),
+      placementEqual(zoomInvariantBefore.curveHitboxStyles, zoomInvariantAfter.curveHitboxStyles) &&
+      placementEqual(zoomInvariantBefore.lineHitboxStyles, zoomInvariantAfter.lineHitboxStyles) &&
+      placementEqual(zoomInvariantBefore.labelHitboxStyles, zoomInvariantAfter.labelHitboxStyles) &&
+      placementEqual(zoomInvariantBefore.endpointStyles, zoomInvariantAfter.endpointStyles) &&
+      placementEqual(zoomInvariantBefore.controlPointStyles, zoomInvariantAfter.controlPointStyles) &&
+      placementEqual(zoomInvariantBefore.controlArmStyles, zoomInvariantAfter.controlArmStyles),
     'zooming should not recompute or rewrite relationship path geometry or local interaction coordinates',
     { zoomInvariantBefore, zoomInvariantAfter },
   );

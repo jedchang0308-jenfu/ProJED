@@ -391,6 +391,23 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：若新增／單擊入口未 focus title、Enter 誤新增任務、Tab 建立層級錯誤、IME 組字誤新增、單擊開 modal、雙擊被 quick-title 攔截、右鍵入口錯誤或權限／relationship／觸控邊界漂移，回 RD 修正 MindMap host adapter。
   - 證據：`SPEC-073`、`QA-DEV-073`、DEV-073 static/browser verifier、DEV-028 static regression、TypeScript、`build:test`。
   - 計入交付：否
+- ✓ DEV-074 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖單一 Scene 座標系重構
+  - 摘要：將心智圖節點、階層連線、關係線與互動 overlay 收斂到同一 world coordinate scene，
+    讓 zoom／pan 只改變視埠 transform，不再以 CSS `zoom` 引發重排與座標漂移。
+  - 來源 ID：`USER-20260819-MINDMAP-SINGLE-SCENE-TRANSFORM`
+  - 父任務：DEV-027
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 deploy／release。
+  - 阻塞 / 恢復條件：沒有 P0/P1 產品或架構決策缺口；若必須改 schema、world origin、persisted control points、permission 或 quick-title／expansion expected，停止並回 PM／ADR。不得與 immediate dirty-latch 止血混為同一交付。
+  - 證據：`SPEC-074`、`ADR-044`、`QA-DEV-074`（S0～S5 Executed / QA PASS / QC PASS）、`QA-DEV-074-ai-real-operation-verification`（AI real-operation 25/25、必跑 21/21、QC PASS）、`output/playwright/dev-074-single-scene/geometry-evidence.json`、`output/playwright/dev-074-ai-real-operation/result.json`、DEV-027B/D/E/G、028/070/071/073 regression、TypeScript、targeted lint、bundle health、`build:test`。
+  - 計入交付：是（未 Release）
+- ✓ DEV-075 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖方向鍵快速巡覽效能
+  - 摘要：消除方向鍵快速移動延遲，並讓左右分支root可跳過中央看板名稱雙向穿越；中心維持非任務、非selection owner。
+  - 來源 ID：`USER-20260820-MINDMAP-KEYBOARD-NAV-LAG`、`USER-20260820-MINDMAP-CENTER-BRIDGE`
+  - 父任務：DEV-027
+  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 commit、push、deploy 或 release。
+  - 阻塞 / 恢復條件：不得改變 DEV-027B／070／071／073 的鍵盤、選取、快速命名與 interaction owner，或 DEV-074 的單一 Scene／geometry dirty 契約；任一行為差異、selection 雙 owner、geometry recompute、效能 gate 失敗或需改資料／權限時立即停止。
+  - 證據：`SPEC-075`、`QA-DEV-075`（Executed / QA PASS / QC PASS）、`output/playwright/dev-075-mindmap-keyboard-performance/result.json`、immutable baseline、center bridge rendered evidence、50／200／500節點真實鍵盤效能、互動／幾何／viewport evidence與targeted regressions。
+  - 計入交付：是（未 Release）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -964,6 +981,126 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - DEV-073 browser verifier：PASS；1440x900、0 console error；toolbar 建立後可直接輸入，Enter 一次保存並離開且不建立新任務，Tab 一次保存並建立子任務；細滑鼠單擊進入 quick-title、Escape 取消草稿，快速雙擊仍開正確明細，快速切換節點只由最新 selection 進入命名；quick-title 不滿版、反白透明、輸入層不攔 pointer 且節點仍 draggable。
 - DEV-028 static regression：45/45 PASS；TypeScript：PASS；`build:test`：PASS。
 - Execution Boundary：本輪未執行 merge、deploy 或 release；保留既有 dirty worktree。
+
+## DEV-074：心智圖單一 Scene 座標系重構
+
+- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
+- 狀態：完成 / Implemented / QA PASS / QC PASS / 未 Release
+- 節點類型：開發點
+- 父交付點：DEV-027
+- 是否計入產品交付完成：是（未 Release）
+- 原始需求邊界：`USER-20260819-MINDMAP-SINGLE-SCENE-TRANSFORM`
+- 風險等級：Medium（viewport、HTML／SVG、relationship、drag 與 hit testing 的跨模組前端架構重構；不涉及資料模型或後端）
+- Spec Impact：`Intentional replacement / No product contract drift`
+
+### Authoritative Package
+
+- 架構與行為契約：`ai-doc/specs/SPEC-074-mindmap-single-scene-coordinate-system.md`
+- 長期決策：`ai-doc/decisions/ADR-044-mindmap-single-scene-coordinate-system.md`
+- 驗證計畫：`ai-doc/qa/QA-DEV-074-mindmap-single-scene-coordinate-system.md`
+- 既有產品行為 authority：SPEC-027／027B／027E／070／073；SPEC-074 只取代「zoom 後重算 connector」的技術策略。
+
+### Human Decision Brief
+
+- 使用者已指定採用「單一 Scene transform」作為長期架構，並要求補齊到 RD 可直接實作。
+- 縮放產品手感採行為相容：wheel 維持 pointer anchor；工具列 `+`／`-`／`100%` 與 fit 維持提交後置中內容。
+- immediate dirty-latch hotfix 與單一 Scene 重構是不同交付，不得以止血修正宣稱 DEV-074 完成。
+- 沒有待人類確認的資料、隱私、外部成本、權限或不可逆決策。
+
+### Current Phase RD Handoff Contract
+
+- **目的**：讓 zoom／pan 成為純 world-to-viewport 投影，消除節點與 overlay 因 layout reflow／geometry snapshot 不同步而漂移。
+- **主要輸出**：viewport／stageSizer／scene、單一 typed coordinate mapper、world geometry dirty lifecycle、可回復 S0～S5 migration 與 screen-space evidence。
+- **Scope**：hierarchy connector、note relationship、label、handles、hit target、inline editor、drag connector／insertion preview、zoom／fit／center／pan。
+- **Out of Scope**：TaskNode／relationship schema、API、permission、後端、其他模式產品行為、mobile mindmap、全新 renderer、部署與 release。
+- **Behavior Contract**：25%～400% 縮放範圍與既有入口不變；純 zoom／pan 不重算 world paths；layout mutation 才 coalesced recompute。
+- **Data／API／Permission Impact**：無變更；既有 relationship anchors／control points 保持 world units 與 storage shape，不做 migration。
+- **Dependencies**：DEV-027B／027E／027G geometry baseline、DEV-070 interaction ownership、DEV-073 quick-title baseline、DOMMatrix／ResizeObserver。
+- **Acceptance Boundary**：端點距離 `<= 3px`、wheel anchor drift `<= 2px`、world/client round-trip `<= 0.01 world px`，並通過 1440x900、1024x768 rendered gate 與 390x844 mobile boundary。
+- **QA／QC Gate**：QA-DEV-074 的 S0～S5 slice gate、screen geometry、scroll reachability、visible-error sweep 與既有受影響 regression。
+- **Stop Conditions**：第一個 geometry drift、path 被純 zoom 改寫、scroll extent 失效、persisted geometry 改變、雙重 interaction owner 或主要 regression 差異即停止並回復上一 slice。
+- **Evidence Required**：pure transform tests、static authority verifier、browser `getScreenCTM()`／DOMRect evidence、viewport screenshots、regression、TypeScript、targeted lint 與 build:test。
+
+### RD Implementation Manifest
+
+- **Repo baseline**：active repo `C:\VIBE CODING\ProJED\ProJED`；盤點時 branch `持續優化3`、HEAD `df27be9`；working tree 有使用者既存 MindMap／verifier／package 修改，RD 只能增量編輯，不得從 HEAD 重建或整檔覆寫。
+- **S1 kernel**：新增 `mindMapCoordinateSystem.ts`，固定 scene layout、world/client inverse、anchor scroll、clamp pure API；`mindMapDomGeometry.ts` 只做 DOM adapter。
+- **S2 shell**：`MindMapCanvasShell.tsx` 固定為唯一 scroll viewport → stageSizer → 單一 matrix scene；100% 先相容。
+- **S3 authority**：`MindMapView.tsx`、`mindMapZoom.ts`、`mindMapViewport.ts`、`mindMapLayoutStyle.ts`、`mindMapOverlayPaths.ts` 移除 CSS zoom、150ms preview/suppress 與 zoom recompute，改 rAF zoom intent + dirty latch。
+- **S4 overlays**：relationship SVG visual-only、HTML interaction layer single owner且 screen hit target 保持尺寸；drag badge screen-space，connector/insertion scene world-space。
+- **S5 evidence**：新增兩個 DEV-074 verifier/package scripts，更新既有 verifier 只能替換舊 architecture markers，不得放寬行為 expected；完整倍率 artifact 與 regression 已完成。
+- **Artifact**：fixture `dev-074-v1`；`output/playwright/dev-074-single-scene/geometry-evidence.json` + desktop/laptop 全倍率 screenshots + mobile boundary。
+- **Owner**：RD 執行 S0～S5/self-check；QA 執行計畫與 regressions；QC 獨立核對 rendered surface；PM 只處理 stop/scope/release re-entry。
+
+### Execution Boundary / Next Condition
+
+- 本輪已完成 S0～S5 實作與驗證：single-scene matrix、world/client mapper、dirty latch、relationship single owner、drag preview world-space、完整倍率 artifact 與回歸 gate 均落地。
+- QA/QC 證據已寫入 `output/playwright/dev-074-single-scene/geometry-evidence.json`；RD／QA／QC 已完成本輪交付判定，不需再次做 planning/contract upgrade。
+- 本地實作授權不包含 commit、push、PR、merge、deploy、production data 或 release；完成 RD/QA/QC 後仍需使用者另行要求 release。
+
+### Deferred Scope Audit
+
+- immediate dirty-latch hotfix：獨立開發點或相容修正；若另行要求，需保留與 DEV-074 的雙軌邊界。
+- minimap、動畫、自由畫布、Canvas／WebGL 與 mobile mindmap：一般 future scope，不影響目前 contract，不建立新 DEV。
+- release：只保留 re-entry condition；待 RD／QA／QC 完成且使用者提出 release 再進入 release gate。
+
+## DEV-075：心智圖方向鍵快速巡覽效能
+
+- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
+- 狀態：完成 / Implemented / QA PASS / QC PASS / 未 Release
+- 節點類型：開發點
+- 父交付點：DEV-027
+- 是否計入產品交付完成：是（未 Release）
+- 原始需求邊界：`USER-20260820-MINDMAP-KEYBOARD-NAV-LAG`；行為修訂：`USER-20260820-MINDMAP-CENTER-BRIDGE`
+- 風險等級：Medium（高頻互動、React render boundary、focus lifecycle 與既有心智圖鍵盤／幾何回歸；不涉及資料模型或後端）
+- Spec Impact：`Intentional replacement / horizontal navigation is side-aware and bridges the center`
+
+### Authoritative Package
+
+- 實作契約：`ai-doc/specs/SPEC-075-mindmap-keyboard-navigation-performance.md`
+- 驗證計畫：`ai-doc/qa/QA-DEV-075-mindmap-keyboard-navigation-performance.md`
+- 產品行為 authority：SPEC-027B／070／071／073；座標與 geometry authority：SPEC-074。
+- ADR：不新增。selection store 與 navigation index 是心智圖內部、可分片回復的效能 authority，未改跨模式或外部契約；替代方案與禁止事項已由 SPEC-075 固定。
+
+### Implemented Architecture Impact
+
+- S0 baseline確認舊版垂直方向鍵每次掃描完整 DOM並線性搜尋；`selectedNodeId`位於`MindMapView`，使selection更新重新執行遞迴tree render，focus effect再查一次DOM。
+- 現已落地模型衍生且不受selection invalidated的navigation index、按node ID精準通知的心智圖私有selection store、節點ref registry與last-focus-wins rAF；index另含side／root bridge metadata，水平鍵不查DOM即可穿越中心。純selection不re-render `MindMapView`，也不dirty world geometry。
+- TaskNode、board store、interaction profile、資料／API／permission／migration 與 DEV-074 scene matrix 均不變。
+
+### Implemented Contract
+
+- **目的**：讓方向鍵巡覽成本不隨可見節點數線性增加，且一次 selection commit 只影響前後兩個節點。
+- **Scope**：navigation order/index、mindmap private selection owner、node keyed subscription、focus registry、selection transition、test-only performance probe、static/browser verifier 與必要 regression marker 更新。
+- **Behavior**：上下維持DOM可見順序；水平鍵依左右分支決定向內parent／向外first child，root向內時跳過中央標題橋接到對側root。中央標題不取得selection或focus；initial、clear、relationship、delete-next、quick-title、Enter／Tab與focus `preventScroll`語意維持。
+- **Data／API／Permission**：無變更、無 migration、無持久化；同 ID selection 必須 idempotent。
+- **Acceptance**：50／200 節點 p95 `<= 32ms`、500 節點 p95 `<= 50ms`；Long Task `>50ms` 為 0；單步 View render delta=0、受影響 node IDs `<=2`、navigation index build delta=0、geometry recompute delta=0，且最終 selection 無漏步。
+- **QA／QC**：執行 QA-DEV-075 performance／lifecycle／viewport／visible-error matrix，以及 DEV-027B／027G／070／071／073／074 受影響 regression；build／lint 不得取代 rendered evidence。
+- **Stop Conditions**：任一語意漂移、雙 selection owner、stale focus、quick-title focus 被搶、全樹 render、geometry recompute、可見錯誤、效能未達 gate或需要資料／權限變更即停止。
+- **Evidence**：`dev-075-v1` baseline、unit/static summary、browser JSON、screenshots、console/page/visible errors、render／notification／index／geometry telemetry 與 regression command results。
+
+### RD Implementation Manifest（S0～S4 Completed）
+
+- **S0 Baseline**：已在產品改動前保存HEAD/status/touched diff、50／200／500 fixture的before latency與行為順序；baseline artifact維持不可覆寫。
+- **S1 Pure kernels**：已新增`mindMapNavigation.ts`、`mindMapSelectionStore.ts`，完成order/index、O(1) vertical／horizontal lookup、side／root bridge、keyed old/new notifications與same-ID idempotence unit gate。
+- **S2 Selection authority**：`MindMapView`已由store取代React `selectedNodeId` state；`MindMapNode`以`useSyncExternalStore` keyed subscription取得`isSelected`；runtime無legacy/store雙owner。
+- **S3 Navigation／focus／paint**：已接入memoized model index、移除keydown DOM query、建立node ref registry與latest-only focus rAF、移除舊focus effect、把`transition-all`限縮為colors，並加入test-only probe telemetry。
+- **S4 QA／QC**：已更新既有source-marker verifier但未放寬產品expected；QA-DEV-075、受影響regression、TypeScript、lint與build均通過。
+- **Repo boundary**：active repo `C:\VIBE CODING\ProJED\ProJED`，branch `持續優化3`，盤點 HEAD `df27be99711fe44462c96174c0e495d44d6a7209`；工作樹已有 DEV-074 與其他使用者修改，RD 只能增量 patch，不得從 HEAD 重建、整檔覆寫、reset 或 checkout 使用者檔案。
+
+### Execution Boundary / Next Condition
+
+- S0～S4已完成；50／200／500節點100% zoom的baseline median p95分別為25.9／59.4／123.4ms，after為1.2／0.7／0.7ms，改善約95.4%／98.8%／99.4%，Long Task、漏步、View render與geometry recompute皆為0。
+- 真實鍵盤／interaction owner／quick-title／IME／modal／relationship／focus／50%～200% zoom／1440x900、1024x768與390x844 boundary皆通過；console、page、network與visible error皆為0。
+- 首次DEV-027B browser regression發現quick-title以Enter結束後未回復node focus；RD改為「僅鍵盤Enter／Escape帶明確focus restore intent」，同時保護blur／modal focus，重跑後DEV-027B與全矩陣皆通過。
+- 2026-08-20中心橋接修訂：右root按Left可選左root，再按Right回原root；左分支向外鍵選child、向內鍵選parent，中心`centerSelected=false`且focus跟隨最終task selection。
+- 證據：`output/playwright/dev-075-mindmap-keyboard-performance/result.json`、`baseline/keyboard-before.json`、`center-bridge-left-selected.png`與同目錄screenshots；artifact含13個DEV-075 cases及targeted regression command results。
+- 本地實作未執行commit、push、PR、merge、deploy、production data或release；若要release，需由使用者另行提出並進既有release gate。
+
+### Future Phase Capsule
+
+- 若 500+ 可見節點在 selection isolation 後仍無法達成 gate，再評估 subtree virtualization 或 renderer 分層；re-entry 前必須先確認可見順序、focus accessibility、connector anchor 與搜尋／跳轉行為不被破壞。
+- 若使用者希望方向鍵依畫面幾何選最近節點，而不是現行可見 DOM 順序，另立產品行為契約，不與 DEV-075 效能修正合併。
 
 
 ## PM Update 歷史歸檔

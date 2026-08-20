@@ -1,5 +1,8 @@
 import type { MindMapDirection } from './MindMapNode';
 import { BRAND_BLUE, normalizeLegacyBrandBlue } from '../ui/brandColors';
+import type { MindMapWorldPoint, MindMapWorldRect } from './mindMapCoordinateSystem';
+
+export type { MindMapWorldPoint, MindMapWorldRect } from './mindMapCoordinateSystem';
 
 export interface MindMapConnectorPath {
   id: string;
@@ -47,19 +50,8 @@ export interface MindMapRelationshipAnchor {
   yRatio: number;
 }
 
-export interface MindMapRelationshipPoint {
-  x: number;
-  y: number;
-}
-
-export interface MindMapLayoutRect {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-}
+export type MindMapRelationshipPoint = MindMapWorldPoint;
+export type MindMapLayoutRect = MindMapWorldRect;
 
 export interface MindMapRelationshipPath {
   id: string;

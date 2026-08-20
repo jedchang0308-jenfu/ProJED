@@ -117,3 +117,10 @@ QC 回報至少包含：
 - Pass：`$env:NODE_OPTIONS='--max-old-space-size=4096'; npm.cmd run build`。
 
 Supabase DB QC：本 Phase 未新增 migration，也未修改 Workspace membership / guest-like access / RLS，因此不執行遠端 DB role QC。若 Phase 2 觸及 Workspace members 或 Board guest-like access，需另開 DB QC。
+
+## 2026-08-20 直接改名風險修訂
+
+- Active Board topbar 名稱改為 display-only；點擊、雙擊、`F2` 均不得建立改名 input 或寫回 Board title。
+- Sidebar 的受控 Board `F2`／右鍵改名入口與權限邊界保留。
+- `npm.cmd run verify:dev-030-sidebar-rename-contract`：11/11 PASS。
+- `npm.cmd run verify:dev-030-sidebar-rename-contract-browser`：PASS；Chromium 1440x900，console errors=0。
