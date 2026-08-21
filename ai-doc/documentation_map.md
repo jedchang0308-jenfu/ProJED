@@ -1,5 +1,23 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-21（DEV-083 P0＋P1 Implemented／Local QA PASS／P2不採用）
+
+Spec Impact：`Compatible extension`。保留 ADR-037 的 ProJED production、ProJED-TEST staging／test
+與 Firebase `level3-smoke` 分工；P0固定production public/server env隔離、sealed artifact與OAuth callback
+fail-closed，P1固定單一`release:production`的prepare／candidate／activate phase。P2 CI/IAM防繞過由使用者
+明確不採用。P0＋P1 code、sealed artifact與local QA gate已完成；QA-083-01／02的live-channel snapshot修正已通過local fixture；candidate／production activation仍須release型指令與人類go/no-go。
+
+| 文件／權威 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | Implemented / Local QA-QC PASS / Release Gate Pending | DEV-083 / Release Governance | 記錄決策、實作、證據、Current phase、acceptance、stop/release boundary與下一步。 |
+| `ai-doc/specs/SPEC-083-production-release-environment-integrity.md` | Implemented / Local QA-QC PASS / Authoritative | DEV-083 | 固定P0＋P1 target/env/loader/manifest/OAuth/phase/逐檔/failure-recovery契約；P2明確排除。 |
+| `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md` | Local QA Subset Executed / PASS / Candidate＋Activation Pending | DEV-083 | FMEA、20項local cases、Layer 2/3/4、activation/canonical smoke與已執行證據邊界。 |
+| `ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md` | Existing Authority / Compatible Extension | DEV-083 / Release Governance | TEST／Level 3決策維持；DEV-083不更換provider、Level 3 authority或activation ownership，ADR不需修改。 |
+| `scripts/release/*`、`scripts/load-server-verification-env.mjs`、`scripts/p7-release-gate.mjs`、`scripts/p8-*.mjs`、`scripts/verify-dev-083-layer2.mjs` | Implemented / Local Gate PASS | DEV-083 | production contract、isolated envDir、sanitized preview/browser child、sealed artifact、full-manifest remote hash、credential evidence mode、OAuth safe-cancel、Layer2 browser provenance、live-channel-only snapshot與三 phase release orchestration。 |
+| `scripts/load-local-env.mjs`、`vite.config.js`、`package.json`、`.env.production`、`.env.test.example` | Implemented / Boundary PASS | DEV-083 | local/test loader拒絕production profile；Vite sealed envDir；build與release命令已收斂到DEV-083入口。 |
+| `scripts/migrate-test-env-profile.mjs` | Fail-closed / Human choice pending | DEV-083 | 只搬移release-controlled test keys；偵測 `.env.local`／`.env.test.local` conflict 時不覆寫、不輸出值；目前 `VITE_DATA_BACKEND` conflict 已被阻擋。 |
+| Firebase Hosting `1a798e`／`assets/index-DcU8rMpv.js` | Rollback Restored / Canonical Smoke Passed | DEV-083 incident CA | 2026-08-21 09:09 rollback 後正式 bundle 只含 `knodlkxqpcqyrtgwpdst`，OAuth callback 回正式站；不等於 PA 已實作。 |
+
 ## Documentation Map Update - 2026-08-20（DEV-082 看板多人即時同步 Local QA-QC PASS / Remote Gate Pending）
 
 Spec Impact：`Intentional extension`。沿用既有 Supabase Postgres Changes、RLS 與 optimistic write，補齊 publication、初始讀取／訂閱 race closure、single-flight + trailing refresh、tag assignment／hard DELETE coverage，以及 online／visibility recovery；不新增 UI、presence、CRDT、欄位鎖或正式環境操作。本地契約與 rendered app 通過，remote migration／two-user smoke 尚未執行。

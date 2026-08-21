@@ -464,6 +464,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：本輪未授權遠端 migration 或 deploy；沒有 authenticated two-user fixture，不宣稱正式環境即時同步已啟用。
   - 證據：`SPEC-082`、`scripts/verify-dev-082-board-realtime-sync.ts` PASS、TypeScript、targeted ESLint、`build:test`、DEV-081 rendered browser 9/9 PASS（console／page／network errors=0）、`git diff --check`。
   - 計入交付：是（本地實作完成；Remote Gate Pending）
+- ◇ DEV-083 [交付點] [驗證中] [P0] [P0＋P1 local PASS／Release Gate Pending] 正式發版環境隔離與 artifact 完整性閘門
+  - 摘要：以 production env隔離、sealed artifact與單一正式發版入口，阻止測試Supabase／localhost設定再次進入production。
+  - 來源 ID：`USER-20260821-PRODUCTION-OAUTH-LOCALHOST-INCIDENT`
+  - 下一步：具備同commit Level 3 evidence後，進入 `release:production -- --phase prepare`；candidate／activation仍須獨立 release go/no-go；P2不執行。
+  - 阻塞 / 恢復條件：candidate／production activation需另進release gate；Firebase re-auth／2FA才需人類操作。
+  - 證據：`SPEC-083`、`QA-DEV-083`、local gate／sealed manifest PASS、2026-08-21 Firebase Hosting rollback與canonical incident smoke。
+  - 計入交付：是（完成 release gate 實作與 QC 前不得計為已交付）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -1442,6 +1449,123 @@ ADR not needed：本輪不更換 provider 或既有 realtime 架構，只把現�
 - Spec Drift：`In sync`。SPEC-082、migration、三個 sync hooks、scheduler 與 verifier 一致；既有 App／BoardView 工作中變更未被覆蓋。
 - Runtime：只重用既有 primary `localhost:4000`（listener PID 18288）；Playwright session 已由 runner 關閉，沒有新增 cleanup obligation；primary runtime 維持運作。
 - 未執行 commit、push、PR、merge、Supabase remote migration、deploy、production data 或 release。下一步必須進 deployment/release gate，先 test project 再 production。
+
+## DEV-083：正式發版環境隔離與 artifact 完整性閘門
+
+- 文件成熟度：`Implemented / Local QA-QC PASS / Release Gate Pending`
+- 狀態：P0＋P1已實作／本地驗證通過／未執行candidate或production activation／production由rollback暫時恢復
+- 節點類型：交付點
+- 父交付點：無（Release Governance；相容延伸 ADR-037）
+- 是否計入產品交付完成：是（實作與 QC 通過前不得計為已交付）
+- 原始需求邊界：使用者確認執行P0＋P1並不做P2；P0＋P1程式與開發文件已完成，P2不納入。
+- 風險等級：Medium implementation／Lane 2 release（變更build env、artifact、Auth smoke與production release gate）
+- Spec Impact：`Compatible extension`；保留 ADR-037 的 ProJED／ProJED-TEST／Level 3 分工，新增正式 artifact 的獨立環境與證據邊界。
+- 規格／驗證權威：`ai-doc/specs/SPEC-083-production-release-environment-integrity.md`、
+  `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md`
+
+### Human Confirmed Execution Boundary
+
+- Current phase：P0環境／artifact fail-closed與P1單一`release:production`入口已由RD依S0～S5實作；candidate／activation仍受release gate約束。
+- P2：使用者明確不採用；不建立CI workflow、protected environment、IAM或direct-deploy技術封鎖。
+- 必要人類決策：只有實際production activation go/no-go；re-auth／2FA出現時才需人類操作。
+- 本機一次性 env profile migration 已提供 `npm run migrate:test-env-profile`；目前 dry-run 因 `.env.local` 與 `.env.test.local` 的 `VITE_DATA_BACKEND` 值不同而 fail-closed，未自動覆寫，需人類先決定保留哪個 test profile。
+- 成本：P0＋P1沿用既有 Firebase Hosting／Supabase／Playwright，不新增固定月費；candidate／activation仍可能消耗既有 Hosting preview quota與網路流量。
+- 本輪已完成local RD與QA/QC自動驗證；不等於candidate或production release完成。
+
+### 問題、影響與使用者價值
+
+2026-08-20 18:05 的 Firebase Hosting 版本 `d8b523` 將測試 Supabase project
+`fhisnnufoeulxqrchldf` 寫入 production bundle `assets/index-DG4UDv9H.js`；Google OAuth
+因而使用測試專案的 callback 設定，登入後導向 `localhost:3000`。2026-08-21 09:09 已將
+Hosting rollback 至 2026-08-20 12:10 的 `1a798e`，正式站改載
+`assets/index-DcU8rMpv.js`、只包含 production project
+`knodlkxqpcqyrtgwpdst`，OAuth callback 與登入後資料載入 smoke 通過。
+
+Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 的使用者價值是：任何正式發布在
+啟用流量前，系統都能客觀證明 build 使用正確 production 環境、部署的是同一份已驗證 artifact，
+且 OAuth 最終回到正式網域；錯誤環境應自動阻擋，而不是依賴發布者人工注意。
+
+使用思考習慣：#多層次分析、#效用理論、#可驗證性
+
+### 已確認根因與控制失效
+
+| 層次 | 已確認事實 | 控制失效 |
+|---|---|---|
+| 症狀 | Google 登入後跳到 `localhost:3000` | 正式站使用了錯誤 Auth 專案 |
+| 直接原因 | production JS 內嵌 ProJED-TEST Supabase ref | build artifact 沒有環境身分檢查 |
+| 作用機制 | `p7-release-gate.mjs` import `load-local-env.mjs`，再把污染後的 `process.env` 傳給包含 `verify:source`／Vite build 的所有 child process | 測試驗證與 production build 共用同一個可變 process environment |
+| 貢獻因素 | 通用 loader 依序讀取 `.env.p8.local`、`.env.local`、development／production local 與 `.env`，並把 `VITE_SUPABASE_*` alias 成 `SUPABASE_*` | 沒有 profile allowlist、環境一致性 invariant 或 cross-profile rejection |
+| 漏檢原因 | 現有 production auth verifier 檢查 auth mode／test credentials 清除，browser smoke 檢查 app shell／asset／console，但未驗證 bundle 中實際 Supabase ref、redirect 與 callback 最終 Location | gate 證明「build 可運作」，沒有證明「build 屬於 production」 |
+| 系統性根因 | staging、production build、remote readiness 與人工確認未綁定同一 artifact identity | release gate 不是 fail-closed、artifact-centric contract |
+
+反事實檢查：若 production build 使用獨立且拒絕污染的環境、artifact 必須通過預期 project／redirect
+掃描、OAuth callback 必須回正式網域，則相同的測試 ref 即使存在於本機，也無法進入可部署 artifact；
+同類事故會在啟用前被阻擋。
+
+### CAPA／PA 追溯
+
+| 根因 | 立即矯正 CA | 永久預防 PA | 效用判斷 | 驗證證據 | 建議流向 |
+|---|---|---|---|---|---|
+| 錯誤 artifact 已上線 | Hosting rollback `d8b523` → `1a798e` | 不以 rollback 取代 release gate 修正 | 已恢復服務，但不降低下一次污染機率 | 正式 bundle、Supabase ref、OAuth callback 與登入後 app smoke | QC incident evidence |
+| process env 污染 production build | 無追加 production 變更 | 測試 `VITE_*` 移出通用 `.env.local`；release 使用明確 production profile 與 allowlist | 高效益、低 runtime 風險 | 污染注入 negative test、缺 env fail-closed | dev_task／release gate |
+| build 與 remote verifier 共用 env | 無 | P7／P8 不得用通用 loader 建 production artifact；build env 與 server-only verification env 分離 | 同時降低錯環境與管理金鑰傳入 Vite 風險 | child env contract、secret boundary test | dev_task／project SOP |
+| artifact 身分未驗證 | 無 | build 後掃描 project ref／redirect／forbidden origin，記錄 entry bundle 與 SHA-256 | 可直接攔截本事故 | artifact manifest、forbidden-value verifier | release gate |
+| OAuth 只驗證起始 URL或人工旗標 | 安全 cancel callback 已手動驗證 | 自動模擬 OAuth cancel callback，最終 Location 必須為正式網域；evidence 綁定 artifact hash | 不需真實登入或寫資料即可驗證核心風險 | authorize/callback 302 chain | QA plan／release gate |
+| staging 證據被誤當 production artifact 證據 | 無 | Level 3 繼續驗證 ProJED-TEST 整合；production artifact 另做 env／artifact／production-bound read-only gate | 保留既有測試效益並消除證據越界 | 各層 artifact identity 與 evidence boundary | ADR-037 addendum／release gate |
+
+### Current Phase Scope（P0＋P1）
+
+- P0：`.env.production`成為production public-env唯一authority；test/local與`.env.p8.local` server env分流。
+- P0：Vite使用task-owned isolated envDir與sanitized child env；P7／P8改為per-step server-key allowlist。
+- P0：build once後建立release-meta、deterministic manifest/tree hash、project-ref／secret／tamper verifier。
+- P0：OAuth manual boolean gate改為不登入、不寫資料的safe cancel callback 302-chain verifier。
+- P1：唯一正式入口`release:production`分成prepare、candidate、activate三phase；candidate不可自動activation。
+- P1：inactive Firebase candidate與live production都需remote entry hash、release-meta與OAuth provenance。
+- 完整loader、public/server keys、manifest schema、逐檔impact、failure recovery與phase contract見`SPEC-083`。
+
+### Out of Scope
+
+- 不建立CI workflow、protected production environment、Firebase credential owner或IAM/direct-deploy限制（P2）。
+- 不修改DB schema、RLS、migration、正式資料、Supabase Auth dashboard、Google OAuth scope或登入UI。
+- 不把ProJED-TEST的localhost redirect視為錯誤；錯誤是production artifact指向test project。
+- 不以硬編碼URL、擴大redirect allowlist、教育訓練或人工checklist作為唯一PA。
+- 不自動rollback；post-deploy失敗由release gate保留previous version並回到go/no-go決策。
+
+### Final Acceptance Summary
+
+- Conflicting parent env、缺production key、錯Supabase ref／redirect／Firebase target都在build或deploy前失敗。
+- `.env.local`不得影響sealed build；`.env.p8.local`的service role／DB password／PAT不得進入Vite或artifact。
+- production artifact只允許`knodlkxqpcqyrtgwpdst`與`https://projed-cc78d.web.app/`的resolved identity；
+  app-owned local origin、test ref或test credential literal命中即失敗，vendor generic localhost不得假陽性。
+- manifest tree hash可重算，任一byte改變即使candidate／activate失效；不得自動修manifest或rebuild接續證據。
+- OAuth authorize→safe cancel callback最終Location回正式origin，不需真實登入或資料寫入。
+- prepare沒有remote side effect、candidate不啟用live、activate缺獨立approval release ID必須失敗。
+- canonical smoke驗證HTTP／asset、app shell、errors、remote hashes、release-meta、Supabase ref與OAuth callback。
+- P2不得出現在code/config；manual direct deploy仍可繞過P1，列為使用者已接受殘留風險。
+
+### RD Slices、QA/QC 與 Evidence
+
+- S0：先建立process-env、local-env、secret、tamper、OAuth與phase negative fixtures。
+- S1：production contract、local/server loader與sanitized child env。
+- S2：sealed build、release-meta、manifest與artifact verifier。
+- S3：OAuth safe cancel self-check與production-bound adapter。
+- S4：`release:production` prepare／candidate／activate orchestration與browser provenance。
+- S5：依`QA-DEV-083`完成local mandatory matrix、Spec Drift與QC handoff；第一個失敗即停止。
+- Evidence root：`output/release/dev-083/<release-id>/`；generated artifact/evidence不加入Git，secret不落盤。
+
+### 文件、執行與 Release Boundary
+
+- RD Readiness：`PASS`。P0＋P1已具repo/file impact、env/manifest/phase contract、failure recovery、
+  QA FMEA、QC cases、stop conditions與evidence path；S0～S5 local implementation已完成，release gate仍待執行。
+- ADR：不新增。DEV-083保持ADR-037 compatible extension，Level 3 authority、provider與activation ownership未改。
+- Release Feasibility：現有Firebase Hosting/Supabase能力足夠，不需新固定月費；實際release屬Lane 2，
+  仍需Layer 1-2、targeted Level 3、inactive production candidate、獨立activation decision與canonical smoke。
+- 實作與證據：`npm run verify:source` PASS（lint 0 errors／tsc／sealed build／既有 Supabase static、migration alias、calendar、core regression、P9 gate）；
+  `npm run verify:dev-083-production-release-gate` PASS（19項 local fixture／negative／sanitized runtime child／credential evidence mode／full-manifest remote hash／supported command contract／live-channel snapshot與phase safety；QA-083-01～05 local PASS）；
+  `npm run verify:production-artifact` PASS（最新 manifest tree／contract／ref／secret／tamper scan）；
+  `npm run verify:dev-083-oauth-cancel` PASS（valid／invalid synthetic 302 chain）；`npm run verify:dev-083-layer2` PASS（exact artifact browser／provenance／cleanup）；`node scripts/p8-preflight.mjs --strict` PASS、`npm run verify:production-bound-readiness` PASS。`node scripts/p8-credential-rotation-check.mjs --strict`目前因三組old credential只有`human-attested`而如預期BLOCK；candidate前需客觀inactive probe或明確release exception。
+- 本輪已修改 P0/P1 code、package scripts、`.env.production`固定旗標與`.env.test.example`；未執行 `release:production -- --phase candidate|activate`、Firebase deploy、production activation、Supabase schema／Auth config變更、commit/push/PR/merge。
+- Evidence：`output/release/dev-083/20260821072307-a077b5/manifest.json`＋`layer2-evidence.json`（generated、gitignored）；Layer 3同commit evidence、candidate URL與canonical production smoke仍待release型指令。
 
 ## PM Update 歷史歸檔
 

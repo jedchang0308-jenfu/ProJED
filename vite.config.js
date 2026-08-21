@@ -5,6 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  // DEV-083 P0: sealed production builds point Vite at an isolated env directory,
+  // preventing root .env.local auto-loading and parent-process collisions.
+  envDir: process.env.PROJED_RELEASE_ENV_DIR || process.cwd(),
   define: mode === 'production'
     ? {
         'import.meta.env.VITE_SUPABASE_AUTH_MODE': JSON.stringify('oauth-google'),

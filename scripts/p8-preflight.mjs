@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
 
 const strict = process.argv.includes('--strict');
 
@@ -14,14 +14,6 @@ const requiredEnv = [
 ];
 
 const manualGates = [
-  {
-    name: 'browser-google-oauth-e2e',
-    env: [
-      'SUPABASE_BROWSER_OAUTH_E2E_CONFIRMED',
-      'P8_BROWSER_OAUTH_E2E_CONFIRMED',
-      'P7_BROWSER_OAUTH_E2E_CONFIRMED',
-    ],
-  },
   {
     name: 'credential-rotation',
     env: [

@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+if (process.env.PROJED_RELEASE_PROFILE === 'production') {
+  throw new Error('DEV-083 P0: load-local-env.mjs is forbidden for production release builds; use .env.production isolation.');
+}
+
 const requestedEnv =
   process.env.PROJED_ENV ||
   process.env.APP_ENV ||

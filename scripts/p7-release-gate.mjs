@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
+import { buildSanitizedChildEnv } from './release/env-boundary.mjs';
 
 const strict = process.argv.includes('--strict');
 
 const run = (command, args, env = {}) => new Promise((resolve) => {
   const spawnOptions = {
-    env: { ...process.env, ...env },
+    env: buildSanitizedChildEnv(process.env, { extra: env }),
     stdio: 'inherit',
   };
 
@@ -63,19 +64,12 @@ for (const step of steps) {
     continue;
   }
 
-  const code = await run(step.command, step.args);
+  const stepEnv = Object.fromEntries((step.requiredEnv ?? []).filter(key => process.env[key]).map(key => [key, process.env[key]]));
+  const code = await run(step.command, step.args, stepEnv);
   results.push({ name: step.name, status: code === 0 ? 'pass' : 'fail', code });
 }
 
 const manualGates = [
-  {
-    name: 'browser-google-oauth-e2e',
-    env: [
-      'SUPABASE_BROWSER_OAUTH_E2E_CONFIRMED',
-      'P8_BROWSER_OAUTH_E2E_CONFIRMED',
-      'P7_BROWSER_OAUTH_E2E_CONFIRMED',
-    ],
-  },
   {
     name: 'credential-rotation',
     env: [

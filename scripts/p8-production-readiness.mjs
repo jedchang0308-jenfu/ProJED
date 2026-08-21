@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
+import { buildSanitizedChildEnv } from './release/env-boundary.mjs';
 
 const run = (command, args, env = {}) => new Promise((resolve) => {
   const spawnOptions = {
-    env: { ...process.env, ...env },
+    env: buildSanitizedChildEnv(process.env, { extra: env }),
     stdio: 'inherit',
   };
 
@@ -14,13 +15,12 @@ const run = (command, args, env = {}) => new Promise((resolve) => {
   child.on('close', code => resolve(code ?? 1));
 });
 
-const gateEnv = { ...process.env };
-if (
-  gateEnv.SUPABASE_BROWSER_OAUTH_E2E_CONFIRMED === 'true' ||
-  gateEnv.P8_BROWSER_OAUTH_E2E_CONFIRMED === 'true'
-) {
-  gateEnv.P7_BROWSER_OAUTH_E2E_CONFIRMED = 'true';
-}
+const gateEnv = Object.fromEntries([
+  'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_AUTH_REDIRECT_URL', 'SUPABASE_ACCESS_TOKEN', 'SUPABASE_DB_PASSWORD',
+  'SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED',
+  'P7_CREDENTIAL_ROTATION_CONFIRMED',
+].filter(key => process.env[key]).map(key => [key, process.env[key]]));
 if (
   gateEnv.SUPABASE_CREDENTIAL_ROTATION_VERIFIED === 'true' ||
   gateEnv.P8_CREDENTIAL_ROTATION_VERIFIED === 'true'

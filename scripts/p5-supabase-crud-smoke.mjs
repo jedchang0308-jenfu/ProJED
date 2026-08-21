@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
 
 const requiredEnv = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
 const missing = requiredEnv.filter(key => !process.env[key]);

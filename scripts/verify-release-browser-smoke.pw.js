@@ -22,6 +22,14 @@ async (page) => {
     const scripts = Array.from(document.querySelectorAll('script[src]')).map((script) => script.getAttribute('src'));
     const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map((link) => link.getAttribute('href'));
     const bodyText = document.body.innerText.slice(0, 1200);
+    const expectedReleaseId = new URL(window.location.href).searchParams.get('dev083ReleaseId');
+    let releaseMeta = null;
+    try {
+      const response = await fetch('/release-meta.json', { cache: 'no-store' });
+      if (response.ok) releaseMeta = await response.json();
+    } catch {
+      // Existing non-DEV-083 browser smoke targets may not expose release metadata.
+    }
     const serviceWorker = {
       supported: 'serviceWorker' in navigator,
       ready: false,
@@ -55,6 +63,9 @@ async (page) => {
       title: document.title,
       rootNonEmpty: Boolean(root && root.innerHTML.trim().length > 0),
       bodyText,
+      expectedReleaseId,
+      releaseMeta,
+      releaseIdentityMatch: !expectedReleaseId || Boolean(releaseMeta && releaseMeta.releaseId === expectedReleaseId),
       scripts,
       styles,
       serviceWorker,
@@ -76,7 +87,8 @@ async (page) => {
     hasMainStyle &&
     criticalMessages.length === 0 &&
     pageErrors.length === 0 &&
-    criticalFailed.length === 0;
+    criticalFailed.length === 0 &&
+    result.releaseIdentityMatch;
 
   if (!ok) {
     throw new Error(JSON.stringify({ result, criticalMessages, pageErrors, criticalFailed }, null, 2));

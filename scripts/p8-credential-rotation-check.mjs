@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
+import { classifyOldCredentialEvidence } from './release/credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
 
@@ -10,8 +11,8 @@ const envFirst = (...keys) => {
   return undefined;
 };
 
-const supabaseUrl = envFirst('SUPABASE_URL', 'VITE_SUPABASE_URL');
-const currentAnonKey = envFirst('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
+const supabaseUrl = envFirst('SUPABASE_URL');
+const currentAnonKey = envFirst('SUPABASE_ANON_KEY');
 const currentServiceRoleKey = envFirst('SUPABASE_SERVICE_ROLE_KEY');
 const currentAccessToken = envFirst('SUPABASE_ACCESS_TOKEN');
 
@@ -171,54 +172,66 @@ const checkCurrentAccessToken = async (name, token) => {
 
 const checkOldRestKeyInactive = async (name, key, envName) => {
   if (!key) {
-    addResult(name, manualRotationConfirmed ? 'pass' : 'pending', {
-      reason: manualRotationConfirmed ? 'manual rotation confirmation supplied' : `${envName} not provided`,
-    });
+    const evidence = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed, envName });
+    addResult(name, evidence.status, evidence);
     return;
   }
 
   try {
     const result = await restKeyIsActive(key);
-    addResult(name, result.active ? 'fail' : 'pass', { http_status: result.status });
+    const evidence = classifyOldCredentialEvidence({ credentialProvided: true, active: result.active });
+    addResult(name, evidence.status, { ...evidence, http_status: result.status });
   } catch (error) {
-    addResult(name, 'pass', { reason: error instanceof Error ? error.message : String(error) });
+    const evidence = classifyOldCredentialEvidence({
+      credentialProvided: true,
+      probeError: error instanceof Error ? error.message : String(error),
+    });
+    addResult(name, evidence.status, evidence);
   }
 };
 
 const checkOldServiceRoleInactive = async (name, key, envName) => {
   if (!key) {
-    addResult(name, manualRotationConfirmed ? 'pass' : 'pending', {
-      reason: manualRotationConfirmed ? 'manual rotation confirmation supplied' : `${envName} not provided`,
-    });
+    const evidence = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed, envName });
+    addResult(name, evidence.status, evidence);
     return;
   }
 
   try {
     const result = await serviceRoleIsActive(key);
-    addResult(name, result.active ? 'fail' : 'pass', result.reason ? { reason: result.reason } : {});
+    const evidence = classifyOldCredentialEvidence({ credentialProvided: true, active: result.active });
+    addResult(name, evidence.status, { ...evidence, ...(result.reason ? { reason: result.reason } : {}) });
   } catch (error) {
-    addResult(name, 'pass', { reason: error instanceof Error ? error.message : String(error) });
+    const evidence = classifyOldCredentialEvidence({
+      credentialProvided: true,
+      probeError: error instanceof Error ? error.message : String(error),
+    });
+    addResult(name, evidence.status, evidence);
   }
 };
 
 const checkOldAccessTokenInactive = async (name, token, envName) => {
   if (!token) {
-    addResult(name, manualRotationConfirmed ? 'pass' : 'pending', {
-      reason: manualRotationConfirmed ? 'manual rotation confirmation supplied' : `${envName} not provided`,
-    });
+    const evidence = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed, envName });
+    addResult(name, evidence.status, evidence);
     return;
   }
 
   try {
     const result = await accessTokenIsActive(token);
-    addResult(name, result.active ? 'fail' : 'pass', { http_status: result.status });
+    const evidence = classifyOldCredentialEvidence({ credentialProvided: true, active: result.active });
+    addResult(name, evidence.status, { ...evidence, http_status: result.status });
   } catch (error) {
-    addResult(name, 'pass', { reason: error instanceof Error ? error.message : String(error) });
+    const evidence = classifyOldCredentialEvidence({
+      credentialProvided: true,
+      probeError: error instanceof Error ? error.message : String(error),
+    });
+    addResult(name, evidence.status, evidence);
   }
 };
 
 if (!supabaseUrl) {
-  failCurrentMissing('current-supabase-url', ['SUPABASE_URL', 'VITE_SUPABASE_URL']);
+  failCurrentMissing('current-supabase-url', ['SUPABASE_URL']);
 }
 
 if (!projectRef) {
@@ -228,7 +241,7 @@ if (!projectRef) {
 }
 
 if (!currentAnonKey) {
-  failCurrentMissing('current-public-key-shape', ['SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY']);
+  failCurrentMissing('current-public-key-shape', ['SUPABASE_ANON_KEY']);
 } else {
   checkKeyShape('current-public-key-shape', currentAnonKey, 'public');
 }

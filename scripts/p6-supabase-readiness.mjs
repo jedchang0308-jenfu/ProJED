@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import './load-local-env.mjs';
+import './load-server-verification-env.mjs';
 
 const requiredEnv = [
   'SUPABASE_URL',
