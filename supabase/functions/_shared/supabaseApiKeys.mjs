@@ -13,7 +13,7 @@ const present = (value) => typeof value === "string" && value.trim().length > 0;
 
 export const resolveSupabaseFunctionKey = (
   kind,
-  readEnv = (name) => Deno.env.get(name),
+  readEnv = (name) => globalThis.Deno?.env?.get(name),
   keyName = "default",
 ) => {
   const source = KEY_SOURCES[kind];
