@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -456,8 +457,8 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabasePublishableKey = resolveSupabaseFunctionKey('publishable');
+    const supabase = createClient(supabaseUrl, supabasePublishableKey, {
       global: { headers: { Authorization: authHeader } },
     });
 

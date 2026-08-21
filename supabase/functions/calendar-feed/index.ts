@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { FEED_TASK_LIMIT, buildCalendarFeedIcs } from "./ics.mjs";
+import { resolveSupabaseFunctionKey } from "../_shared/supabaseApiKeys.mjs";
 
 const renderCalendarFeedIcs = buildCalendarFeedIcs as unknown as (input: Record<string, unknown>) => string;
 
@@ -111,7 +112,8 @@ const DEFAULT_STATUS_FILTERS: Record<string, boolean> = {
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+  resolveSupabaseFunctionKey("secret"),
+  { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
 const hashString = async (message: string) => {

@@ -1,10 +1,10 @@
 # SPEC-083：正式發版環境隔離與 artifact 完整性閘門
 
-- 文件狀態：`Implemented / Local QA-QC PASS / Release Gate Pending`
+- 文件狀態：`Implemented / Credential Rotation Authorized / Remote Execution In Progress`
 - 關聯 DEV：DEV-083
 - 權威邊界：本文件是 DEV-083 P0＋P1 的工程契約；ADR-037 仍是 ProJED／ProJED-TEST／Level 3 分工權威
-- Spec Impact：`Compatible extension`；不更換 provider、不改資料或登入產品語意
-- 決策來源：使用者於 2026-08-21 指示「先執行 DEV-083 P0＋P1，不做 P2」
+- Spec Impact：原 P0＋P1 為 `Compatible extension`；2026-08-21 production credential rotation 為使用者明確授權的 `Intentional replacement`，不更換 provider、不改資料或登入產品語意
+- 決策來源：使用者於 2026-08-21 指示「先執行 DEV-083 P0＋P1，不做 P2」，並於 strict probe 證明 legacy keys 仍有效後，另行授權遷移與部署兩個 Edge Functions、停用 legacy keys、輪替 Management PAT
 - 實作證據：sealed artifact、artifact verifier、OAuth self-check與DEV-083 local gate已通過；candidate／production activation未執行。
 
 ## 1. 目標與成功狀態
@@ -28,6 +28,7 @@
 - P2 不建立 future implementation capsule；只有使用者日後明確改變決策時才重新登錄。
 - 人類保留的必要決策只有 production activation go/no-go；遇到 Firebase／Google／Supabase re-auth 或 2FA 時，
   人類需完成身分驗證，但不需手動編輯 env、artifact 或部署指令。
+- production credential rotation 已取得獨立明確授權；依「新 key runtime smoke → legacy disable → readback → PAT rotation → strict gate」順序執行，任一步失敗即停止。
 - 一次性 `.env.local` → `.env.test.local` migration 由 `npm run migrate:test-env-profile` 執行；遇到不同值即停止且不覆寫，保留人類決策權。
 
 ## 3. Scope
@@ -52,6 +53,10 @@
   不得啟用 live traffic。
 - `activate` 必須重新驗證 manifest、candidate evidence、target、credential-rotation gate 與獨立 go/no-go token，才可部署 live。
 - activation 後執行 canonical smoke；失敗即非零退出、保留前一版 reference，且不得宣稱 release complete。
+- credential remediation 先讓 `calendar-feed` 改讀 `SUPABASE_SECRET_KEYS.default`、`match_project_knowledge` 改讀
+  `SUPABASE_PUBLISHABLE_KEYS.default`，並保留 Supabase CLI 的 singular-key local fallback；production code 不再讀 legacy env。
+- 只有兩個 production Edge Functions 部署後 smoke 通過，才可停用 legacy API keys；停用後需重新驗證新 publishable／secret keys、兩個 Functions與 legacy inactive probe。
+- Management PAT 必須先建立並驗證新 token、更新 gitignored `.env.p8.local`，才可撤銷舊 token；新 token 無法驗證時不得撤銷舊 token。
 
 ## 4. Out of Scope
 
@@ -238,7 +243,11 @@ Supabase 官方契約依據：`redirectTo` 必須符合專案 allowlist，produc
 | `scripts/release/production-release.mjs` | 新增 | prepare/candidate/activate唯一 orchestration入口；live channel-only snapshot，candidate delta不污染live invariant |
 | `scripts/verify-release-browser-smoke.pw.js` | 修改 | 接受expected release identity並輸出可保存 evidence；既有 Level 3用法相容 |
 | `scripts/verify-dev-083-production-release-gate.mjs` | 新增 | pure/fixture regression與phase safety verifier |
-| `src/**`、`supabase/**`、`firebase.json` | 不修改 | 產品、DB與canonical Hosting contract維持 |
+| `supabase/functions/_shared/supabaseApiKeys.mjs` | 新增 | fail-closed 解析 hosted JSON key maps與 CLI singular-key fallback；不得讀 legacy env |
+| `supabase/functions/calendar-feed/index.ts` | 修改 | admin client改用新 secret key map；保留既有 public token feed與資料行為 |
+| `supabase/functions/match_project_knowledge/index.ts` | 修改 | user-scoped client改用新 publishable key map並維持 caller JWT／RLS |
+| `scripts/verify-dev-083-edge-key-rotation.mjs` | 新增 | key-map precedence／failure mode、source legacy-read absence與 function config verifier |
+| `src/**`、DB schema／migration、`firebase.json` | 不修改 | 產品 UI、資料、RLS與canonical Hosting contract維持 |
 
 Local-only data migration：RD實作時將 `.env.local` 的 release-controlled test keys移至 `.env.test.local`；
 不得在 diff、console或 evidence顯示值。若目的檔存在不同值，停止並保留兩檔原狀，由使用者決定來源。
@@ -253,6 +262,7 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 | S3 | OAuth safe cancel callback self-check與remote adapter | S2 | mock valid/invalid chain PASS；不輸出state或key |
 | S4 | `release:production`三 phase與browser provenance | S1-S3 | prepare不得remote、candidate不得activate、activate缺approval必敗 |
 | S5 | QA/QC local gate與Spec Drift | S0-S4 | QA-DEV-083 local必測項PASS；`In sync`；仍未release |
+| S6 | Production credential rotation | S5＋使用者明確授權 | rollback snapshot、兩個 Function deploy/smoke、legacy disable/readback、PAT rotate與 strict gate客觀PASS |
 
 第一個 failing slice、secret exposure、artifact identity mismatch、scope drift或需改 Supabase/Auth remote config時立即停止。
 
@@ -266,6 +276,10 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 - Activation後canonical smoke失敗：保留previous live version與failed release ID，回送release gate決定rollback；
   不自動修改production或隱藏失敗。
 - Auth/2FA過期：停止於credential boundary，等待人類完成re-auth後從失敗phase重跑，不重建artifact。
+- Function migration/deploy smoke失敗：legacy keys保持啟用；必要時以已下載的 production source snapshot重新部署前一版。
+- Legacy disable後 Function smoke失敗：立即重新啟用 legacy keys並重跑同一 smoke；未恢復前不得繼續 PAT rotation或candidate。
+- 新 Management PAT無法建立或驗證：保留現行 PAT，不執行撤銷；不得以人工聲明冒充 old PAT inactive evidence。
+- 舊 PAT撤銷後仍 active：停止並保存 read-only probe evidence，不進 candidate。
 
 ## 14. Acceptance Criteria
 
@@ -280,6 +294,8 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 - [ ] candidate與production遠端manifest全部entries、release-meta與manifest一致。
 - [ ] canonical post-deploy必要項任一失敗時release狀態不是complete。
 - [ ] P2未新增，且文件清楚揭露manual direct deploy仍可繞過P1的殘留風險。
+- [ ] production Edge Functions不再讀 legacy key env；停用前後 smoke與 legacy disabled readback均通過。
+- [ ] 新 Management PAT通過 projects probe後才取代本機 authority，舊 PAT撤銷後由 strict gate客觀回報 inactive。
 
 ## 15. QA/QC、Stop Conditions 與 Evidence
 

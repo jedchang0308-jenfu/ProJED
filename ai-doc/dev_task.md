@@ -464,11 +464,11 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：本輪未授權遠端 migration 或 deploy；沒有 authenticated two-user fixture，不宣稱正式環境即時同步已啟用。
   - 證據：`SPEC-082`、`scripts/verify-dev-082-board-realtime-sync.ts` PASS、TypeScript、targeted ESLint、`build:test`、DEV-081 rendered browser 9/9 PASS（console／page／network errors=0）、`git diff --check`。
   - 計入交付：是（本地實作完成；Remote Gate Pending）
-- ◇ DEV-083 [交付點] [驗證中] [P0] [P0＋P1 local PASS／Release Gate Pending] 正式發版環境隔離與 artifact 完整性閘門
+- ◐ DEV-083 [交付點] [執行中] [P0] [Production Credential Rotation Authorized] 正式發版環境隔離與 artifact 完整性閘門
   - 摘要：以 production env隔離、sealed artifact與單一正式發版入口，阻止測試Supabase／localhost設定再次進入production。
   - 來源 ID：`USER-20260821-PRODUCTION-OAUTH-LOCALHOST-INCIDENT`
-  - 下一步：具備同commit Level 3 evidence後，進入 `release:production -- --phase prepare`；candidate／activation仍須獨立 release go/no-go；P2不執行。
-  - 阻塞 / 恢復條件：candidate／production activation需另進release gate；Firebase re-auth／2FA才需人類操作。
+  - 下一步：依已授權順序完成兩個 Edge Functions新key遷移／部署、legacy停用、Management PAT輪替與 strict gate；之後由新commit重建artifact，candidate／activation仍須獨立 go/no-go。
+  - 阻塞 / 恢復條件：任何新key或Function smoke失敗立即保持或恢復legacy；新PAT未驗證不得撤銷舊PAT；Firebase production activation仍未授權。
   - 證據：`SPEC-083`、`QA-DEV-083`、local gate／sealed manifest PASS、2026-08-21 Firebase Hosting rollback與canonical incident smoke。
   - 計入交付：是（完成 release gate 實作與 QC 前不得計為已交付）
 
@@ -1452,20 +1452,21 @@ ADR not needed：本輪不更換 provider 或既有 realtime 架構，只把現�
 
 ## DEV-083：正式發版環境隔離與 artifact 完整性閘門
 
-- 文件成熟度：`Implemented / Local QA-QC PASS / Release Gate Pending`
-- 狀態：P0＋P1已實作／本地驗證通過／未執行candidate或production activation／production由rollback暫時恢復
+- 文件成熟度：`Implemented / Credential Rotation Authorized / Remote Execution In Progress`
+- 狀態：P0＋P1已實作；production credential rotation正在執行；Firebase candidate／activation尚未執行
 - 節點類型：交付點
 - 父交付點：無（Release Governance；相容延伸 ADR-037）
 - 是否計入產品交付完成：是（實作與 QC 通過前不得計為已交付）
 - 原始需求邊界：使用者確認執行P0＋P1並不做P2；P0＋P1程式與開發文件已完成，P2不納入。
-- 風險等級：Medium implementation／Lane 2 release（變更build env、artifact、Auth smoke與production release gate）
-- Spec Impact：`Compatible extension`；保留 ADR-037 的 ProJED／ProJED-TEST／Level 3 分工，新增正式 artifact 的獨立環境與證據邊界。
+- 風險等級：Medium implementation／Lane 2 release；本次正式 Edge Function部署與憑證停用／撤銷為 Lane 3 High
+- Spec Impact：P0＋P1為 `Compatible extension`；本次 credential rotation 是使用者明確授權的 `Intentional replacement`，保留 ADR-037分工與產品資料／登入語意。
 - 規格／驗證權威：`ai-doc/specs/SPEC-083-production-release-environment-integrity.md`、
   `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md`
 
 ### Human Confirmed Execution Boundary
 
 - Current phase：P0環境／artifact fail-closed與P1單一`release:production`入口已由RD依S0～S5實作；candidate／activation仍受release gate約束。
+- Credential phase：使用者已授權遷移並部署 `calendar-feed`／`match_project_knowledge`、停用 production legacy keys、建立新 Management PAT並撤銷舊 PAT；Firebase Hosting activation不在此授權內。
 - P2：使用者明確不採用；不建立CI workflow、protected environment、IAM或direct-deploy技術封鎖。
 - 必要人類決策：只有實際production activation go/no-go；re-auth／2FA出現時才需人類操作。
 - 本機一次性 env profile migration 已提供 `npm run migrate:test-env-profile`；目前 dry-run 因 `.env.local` 與 `.env.test.local` 的 `VITE_DATA_BACKEND` 值不同而 fail-closed，未自動覆寫，需人類先決定保留哪個 test profile。
@@ -1521,6 +1522,7 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - P0：OAuth manual boolean gate改為不登入、不寫資料的safe cancel callback 302-chain verifier。
 - P1：唯一正式入口`release:production`分成prepare、candidate、activate三phase；candidate不可自動activation。
 - P1：inactive Firebase candidate與live production都需remote entry hash、release-meta與OAuth provenance。
+- P1 remediation：Edge Functions改讀新 publishable／secret JSON key maps；完成production smoke後停用legacy，輪替PAT並重跑strict gate。
 - 完整loader、public/server keys、manifest schema、逐檔impact、failure recovery與phase contract見`SPEC-083`。
 
 ### Out of Scope
@@ -1551,6 +1553,7 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - S3：OAuth safe cancel self-check與production-bound adapter。
 - S4：`release:production` prepare／candidate／activate orchestration與browser provenance。
 - S5：依`QA-DEV-083`完成local mandatory matrix、Spec Drift與QC handoff；第一個失敗即停止。
+- S6：下載production Function rollback snapshot，部署新key版本；smoke通過後停用legacy並readback；新PAT先驗證再撤銷舊PAT，最後 strict gate需全部`probed-inactive`。
 - Evidence root：`output/release/dev-083/<release-id>/`；generated artifact/evidence不加入Git，secret不落盤。
 
 ### 文件、執行與 Release Boundary

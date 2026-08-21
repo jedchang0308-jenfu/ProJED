@@ -236,3 +236,15 @@ output/release/dev-083/<release-id>/
 - P1 release orchestration：QA-083-01～05 **local QA PASS**；`npm run verify:dev-083-production-release-gate`共19項PASS。完整release仍待Firebase re-auth、old credential客觀inactive probe、同commit Level 3、candidate與activation。
 - 正式站目前 UI 可用，但 rollback 版本的 live smoke 不可替代同一 immutable artifact 的 provenance evidence。
 - 本 addendum 不執行 Firebase deploy、production activation、資料寫入或 P2；修正後需由乾淨commit重建新release ID，舊evidence不得沿用。
+
+### 13.5 Production Credential Rotation QA（使用者已授權）
+
+| ID | Gate | 通過標準 | 失敗處置 |
+|---|---|---|---|
+| QA-083-06 | New-key source boundary | `calendar-feed`只讀 secret key map、`match_project_knowledge`只讀 publishable key map；legacy env read為0 | 不部署 |
+| QA-083-07 | Function rollback readiness | 保存目前production function版本／hash與下載source snapshot | 不部署 |
+| QA-083-08 | Pre-disable production smoke | 新版本 Functions已部署；calendar invalid-token走到DB並回404、knowledge走到RPC auth boundary | legacy保持啟用 |
+| QA-083-09 | Legacy disable/readback | Management API回報disabled；legacy anon/service-role均客觀`probed-inactive` | 立即重新啟用legacy並重跑smoke |
+| QA-083-10 | New-key post-disable smoke | 現行publishable／secret key仍active；兩個Functions與production app必要read-only smoke通過 | 恢復legacy |
+| QA-083-11 | Management PAT rotation | 新PAT先通過projects probe並寫入gitignored authority；舊PAT撤銷後回401/403 | 新PAT未驗證時不得撤銷舊PAT |
+| QA-083-12 | Strict gate | current三組PASS；old anon／service／PAT三組皆`probed-inactive`；exit 0 | 不進candidate |
