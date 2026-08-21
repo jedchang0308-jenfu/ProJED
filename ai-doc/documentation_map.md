@@ -1,22 +1,22 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-08-21（DEV-083 P0＋P1 Implemented／Local QA PASS／P2不採用）
+## Documentation Map Update - 2026-08-22（DEV-083 Released／FMEA Credential Exception Accepted／P2不採用）
 
 Spec Impact：`Compatible extension`。保留 ADR-037 的 ProJED production、ProJED-TEST staging／test
 與 Firebase `level3-smoke` 分工；P0固定production public/server env隔離、sealed artifact與OAuth callback
 fail-closed，P1固定單一`release:production`的prepare／candidate／activate phase。P2 CI/IAM防繞過由使用者
-明確不採用。P0＋P1 code、sealed artifact與local QA gate已完成；QA-083-01／02的live-channel snapshot修正已通過local fixture；candidate／production activation仍須release型指令與人類go/no-go。
+明確不採用。2026-08-22使用者接受FMEA並核准一次性例外：只跳過Management PAT輪替與strict credential gate；exact sealed artifact、candidate、remote provenance、activation與canonical smoke均保留並已PASS。
 
 | 文件／權威 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/dev_task.md` | Implemented / Local QA-QC PASS / Release Gate Pending | DEV-083 / Release Governance | 記錄決策、實作、證據、Current phase、acceptance、stop/release boundary與下一步。 |
-| `ai-doc/specs/SPEC-083-production-release-environment-integrity.md` | Implemented / Local QA-QC PASS / Authoritative | DEV-083 | 固定P0＋P1 target/env/loader/manifest/OAuth/phase/逐檔/failure-recovery契約；P2明確排除。 |
-| `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md` | Local QA Subset Executed / PASS / Candidate＋Activation Pending | DEV-083 | FMEA、20項local cases、Layer 2/3/4、activation/canonical smoke與已執行證據邊界。 |
+| `ai-doc/dev_task.md` | Released / FMEA Credential Exception Accepted | DEV-083 / Release Governance | 記錄release identity、candidate/live evidence、回滾點、accepted residual risk與下一步。 |
+| `ai-doc/specs/SPEC-083-production-release-environment-integrity.md` | Implemented / Released / Authoritative Exception Recorded | DEV-083 | 固定P0＋P1契約；本次僅PAT／strict gate由FMEA例外取代，P2仍排除。 |
+| `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md` | Candidate＋Activation＋Canonical PASS / Credential Exception | DEV-083 | 保留FMEA、QA-083-06～12實際結果、candidate／activation／authenticated smoke與證據邊界。 |
 | `ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md` | Existing Authority / Compatible Extension | DEV-083 / Release Governance | TEST／Level 3決策維持；DEV-083不更換provider、Level 3 authority或activation ownership，ADR不需修改。 |
 | `scripts/release/*`、`scripts/load-server-verification-env.mjs`、`scripts/p7-release-gate.mjs`、`scripts/p8-*.mjs`、`scripts/verify-dev-083-layer2.mjs` | Implemented / Local Gate PASS | DEV-083 | production contract、isolated envDir、sanitized preview/browser child、sealed artifact、full-manifest remote hash、credential evidence mode、OAuth safe-cancel、Layer2 browser provenance、live-channel-only snapshot與三 phase release orchestration。 |
 | `scripts/load-local-env.mjs`、`vite.config.js`、`package.json`、`.env.production`、`.env.test.example` | Implemented / Boundary PASS | DEV-083 | local/test loader拒絕production profile；Vite sealed envDir；build與release命令已收斂到DEV-083入口。 |
 | `scripts/migrate-test-env-profile.mjs` | Fail-closed / Human choice pending | DEV-083 | 只搬移release-controlled test keys；偵測 `.env.local`／`.env.test.local` conflict 時不覆寫、不輸出值；目前 `VITE_DATA_BACKEND` conflict 已被阻擋。 |
-| Firebase Hosting `1a798e`／`assets/index-DcU8rMpv.js` | Rollback Restored / Canonical Smoke Passed | DEV-083 incident CA | 2026-08-21 09:09 rollback 後正式 bundle 只含 `knodlkxqpcqyrtgwpdst`，OAuth callback 回正式站；不等於 PA 已實作。 |
+| Firebase live version `ca48cc7d514432d8`／release `20260821144058-509110` | Released / Canonical Smoke PASS | DEV-083 | commit `4ee8bf8`、39/39 remote hashes、release-meta、OAuth與authenticated smoke PASS；previous version `93c2a80ddc1a798e`保留為rollback reference。 |
 
 ## Documentation Map Update - 2026-08-20（DEV-082 看板多人即時同步 Local QA-QC PASS / Remote Gate Pending）
 

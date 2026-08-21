@@ -1,11 +1,11 @@
 # SPEC-083：正式發版環境隔離與 artifact 完整性閘門
 
-- 文件狀態：`Implemented / Credential Rotation Authorized / Remote Execution In Progress`
+- 文件狀態：`Implemented / Released / FMEA Credential Exception Accepted`
 - 關聯 DEV：DEV-083
 - 權威邊界：本文件是 DEV-083 P0＋P1 的工程契約；ADR-037 仍是 ProJED／ProJED-TEST／Level 3 分工權威
-- Spec Impact：原 P0＋P1 為 `Compatible extension`；2026-08-21 production credential rotation 為使用者明確授權的 `Intentional replacement`，不更換 provider、不改資料或登入產品語意
-- 決策來源：使用者於 2026-08-21 指示「先執行 DEV-083 P0＋P1，不做 P2」，並於 strict probe 證明 legacy keys 仍有效後，另行授權遷移與部署兩個 Edge Functions、停用 legacy keys、輪替 Management PAT
-- 實作證據：sealed artifact、artifact verifier、OAuth self-check與DEV-083 local gate已通過；candidate／production activation未執行。
+- Spec Impact：P0＋P1為`Compatible extension`；2026-08-22使用者接受FMEA後，以一次性`Intentional replacement`跳過Management PAT輪替／strict credential gate，不更換provider、不改資料或登入產品語意
+- 決策來源：使用者先核准P0＋P1、不做P2及Edge Functions／legacy remediation；2026-08-22再明確核准「跳過PAT輪替與strict credential gate，其餘candidate、activation與正式站smoke保留」
+- 實作證據：release `20260821144058-509110`／commit `4ee8bf8`已通過sealed artifact、candidate、39/39 remote hash、OAuth、activation與canonical authenticated smoke；PAT strict gate未執行且不宣稱PASS。
 
 ## 1. 目標與成功狀態
 
@@ -28,7 +28,7 @@
 - P2 不建立 future implementation capsule；只有使用者日後明確改變決策時才重新登錄。
 - 人類保留的必要決策只有 production activation go/no-go；遇到 Firebase／Google／Supabase re-auth 或 2FA 時，
   人類需完成身分驗證，但不需手動編輯 env、artifact 或部署指令。
-- production credential rotation 已取得獨立明確授權；依「新 key runtime smoke → legacy disable → readback → PAT rotation → strict gate」順序執行，任一步失敗即停止。
+- Edge Functions新key runtime smoke、legacy disable與readback已完成；Management PAT輪替／strict gate由2026-08-22 FMEA一次性例外取代，舊PAT保持active並列為High residual risk。
 - 一次性 `.env.local` → `.env.test.local` migration 由 `npm run migrate:test-env-profile` 執行；遇到不同值即停止且不覆寫，保留人類決策權。
 
 ## 3. Scope
@@ -283,19 +283,19 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 
 ## 14. Acceptance Criteria
 
-- [ ] `.env.local`與parent test env無法改變sealed production artifact；衝突的parent release key會在build前失敗。
-- [ ] production builder不讀`.env.p8.local`，server secrets sentinel不出現在child env、artifact、manifest或log。
-- [ ] 缺少production required key、錯Supabase ref、錯redirect、錯Firebase target均非零退出。
-- [ ] artifact只解析到production Supabase ref；test ref與test credential literal命中時失敗。
-- [ ] dependency vendor中的generic localhost literal不造成假陽性，但resolved/app-owned local origin會失敗。
-- [ ] manifest tree hash可重算；artifact任一byte tamper後candidate/activate拒絕。
-- [ ] OAuth valid cancel chain回正式origin；localhost/test/missing-state/redirect-loop fixtures全部失敗。
-- [ ] `prepare`無遠端副作用，`candidate`不啟用live，`activate`缺獨立approval必敗。
-- [ ] candidate與production遠端manifest全部entries、release-meta與manifest一致。
-- [ ] canonical post-deploy必要項任一失敗時release狀態不是complete。
-- [ ] P2未新增，且文件清楚揭露manual direct deploy仍可繞過P1的殘留風險。
-- [ ] production Edge Functions不再讀 legacy key env；停用前後 smoke與 legacy disabled readback均通過。
-- [ ] 新 Management PAT通過 projects probe後才取代本機 authority，舊 PAT撤銷後由 strict gate客觀回報 inactive。
+- [x] `.env.local`與parent test env無法改變sealed production artifact；衝突的parent release key會在build前失敗。
+- [x] production builder不讀`.env.p8.local`，server secrets sentinel不出現在child env、artifact、manifest或log。
+- [x] 缺少production required key、錯Supabase ref、錯redirect、錯Firebase target均非零退出。
+- [x] artifact只解析到production Supabase ref；test ref與test credential literal命中時失敗。
+- [x] dependency vendor中的generic localhost literal不造成假陽性，但resolved/app-owned local origin會失敗。
+- [x] manifest tree hash可重算；artifact任一byte tamper後candidate/activate拒絕。
+- [x] OAuth valid cancel chain回正式origin；localhost/test/missing-state/redirect-loop fixtures全部失敗。
+- [x] `prepare`無遠端副作用，`candidate`不啟用live，`activate`缺獨立approval必敗。
+- [x] candidate與production遠端manifest全部entries、release-meta與manifest一致。
+- [x] canonical post-deploy必要項任一失敗時release狀態不是complete。
+- [x] P2未新增，且文件清楚揭露manual direct deploy仍可繞過P1的殘留風險。
+- [x] production Edge Functions不再讀legacy key env；停用前後smoke與legacy disabled readback均通過。
+- [ ] Management PAT輪替／strict inactive probe未執行；2026-08-22由使用者FMEA例外明確取代本次acceptance，不得標示PASS。
 
 ## 15. QA/QC、Stop Conditions 與 Evidence
 
@@ -306,6 +306,7 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
   missing production-bound candidate、candidate auto-activation、wrong target、hash mismatch、OAuth final target mismatch、
   expired auth、canonical smoke fail。
 - QC只執行驗證與蒐證，不修改產品或release scripts；失敗回送RD。
+- 本次release exception僅適用release `20260821144058-509110`；除PAT／strict gate外，其餘stop conditions均未豁免。
 
 ## 16. Release Feasibility Note
 
@@ -313,7 +314,7 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 - 本變更屬release Lane 2：auth/env/config/artifact；實際發布需Layer 1-2、targeted Level 3、
   production-bound inactive candidate、獨立activation decision與canonical smoke。
 - P2不做，因此P1是project convention與官方入口，不是IAM強制；manual direct deploy bypass列為已接受殘留風險。
-- 實際production activate仍須使用者另行下達release/go-no-go，或在當次release workflow提供等效明確決策。
+- 2026-08-22 production activation已依使用者明確go/no-go完成；live version `ca48cc7d514432d8`，previous rollback version `93c2a80ddc1a798e`。
 
 ## 17. 官方契約參考
 

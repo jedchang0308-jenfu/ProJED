@@ -233,9 +233,9 @@ output/release/dev-083/<release-id>/
 ### 13.4 QA 結論
 
 - P0 env／artifact 本地控制：`PASS`。
-- P1 release orchestration：QA-083-01～05 **local QA PASS**；`npm run verify:dev-083-production-release-gate`共19項PASS。完整release仍待Firebase re-auth、old credential客觀inactive probe、同commit Level 3、candidate與activation。
-- 正式站目前 UI 可用，但 rollback 版本的 live smoke 不可替代同一 immutable artifact 的 provenance evidence。
-- 本 addendum 不執行 Firebase deploy、production activation、資料寫入或 P2；修正後需由乾淨commit重建新release ID，舊evidence不得沿用。
+- P1 release orchestration：QA-083-01～05 **local QA PASS**；release `20260821144058-509110`的candidate、activation與canonical smoke已PASS。
+- 本次同一immutable artifact已取得candidate與live 39/39 remote hash、release-meta、OAuth callback及authenticated session evidence；rollback版本不再被用來替代新artifact證據。
+- P2未執行；Management PAT輪替與strict credential gate由2026-08-22使用者FMEA例外跳過，QA不得將例外記成PASS。
 
 ### 13.5 Production Credential Rotation QA（使用者已授權）
 
@@ -248,3 +248,22 @@ output/release/dev-083/<release-id>/
 | QA-083-10 | New-key post-disable smoke | 現行publishable／secret key仍active；兩個Functions與production app必要read-only smoke通過 | 恢復legacy |
 | QA-083-11 | Management PAT rotation | 新PAT先通過projects probe並寫入gitignored authority；舊PAT撤銷後回401/403 | 新PAT未驗證時不得撤銷舊PAT |
 | QA-083-12 | Strict gate | current三組PASS；old anon／service／PAT三組皆`probed-inactive`；exit 0 | 不進candidate |
+
+### 13.6 Controlled Rapid Release Exception 與 QC 結果（2026-08-22）
+
+- Human decision：使用者明確接受FMEA，僅跳過Management PAT輪替與strict credential gate；保留exact artifact、inactive candidate、activation與canonical smoke。
+- QA-083-06～10：`PASS`。兩個Functions新key版本已部署，legacy API keys disabled/readback與停用後smoke通過。
+- QA-083-11～12：`WAIVED / NOT PASS`。新PAT未建立、舊PAT未撤銷、strict gate未執行；既有PAT保持active。
+- Candidate：`https://projed-cc78d--production-candidate-k86qbpc8.web.app`，Firebase version `880dfc3bbbc5d8b3`；39/39 entries、tree hash、release-meta、browser、OAuth 302 PASS，live snapshot未改變。
+- Activation：canonical live version `ca48cc7d514432d8`；39/39 entries、release-meta、browser root、console/page/network與OAuth PASS。
+- Authenticated smoke：既有正式Chrome session重載後仍在`https://projed-cc78d.web.app/`，工作區與真實資料可見，無visible alert／inline error／localhost；乾淨browser critical errors為0。
+- Rollback：previous live version `93c2a80ddc1a798e`。canonical gate未失敗，未執行rollback。
+
+| 殘留失效模式 | S/O/D | RPN | Release判定 |
+|---|---:|---:|---|
+| P2未實作且manual direct deploy仍可繞過P1 | 5/3/5 | 75 | 使用者接受；保留為治理債，不屬本次一次性credential例外 |
+| DEV-082 production migration／完整two-user remote gate pending | 4/4/3 | 48 | 不宣稱DEV-082正式交付 |
+| 舊Management PAT保持active | 5/2/4 | 40 | 使用者接受；後續仍建議輪替 |
+| DEV-081 iPhone／Android physical gate pending | 3/3/4 | 36 | 不宣稱實機QA完成 |
+
+- Generated evidence：`output/release/dev-083/20260821144058-509110/{risk-acceptance,candidate-evidence,activation-evidence}.json`；gitignored且不含secret。
