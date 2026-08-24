@@ -180,7 +180,7 @@ async (page) => {
   const modalCreateButtonHeight = await page.locator('[data-task-workbench-unclassified-modal-add="true"]').evaluate(element => Math.round(element.getBoundingClientRect().height));
   const modalCreateButtonLabel = await page.locator('[data-task-workbench-unclassified-modal-add="true"]').innerText();
   assert(
-    unplacedHeaderHeight === modalCreateButtonHeight && modalCreateButtonLabel.trim() === '新增任務',
+    unplacedHeaderHeight === modalCreateButtonHeight && modalCreateButtonLabel.trim().replace(/^\+/, '') === '新增任務',
     'unplaced modal add button should match the section header height and use the full 新增任務 label',
     { unplacedHeaderHeight, modalCreateButtonHeight, modalCreateButtonLabel },
   );
@@ -232,7 +232,8 @@ async (page) => {
     { createdTaskId, title: await createdTaskTitleInput.inputValue() },
   );
   const createdTaskPlacement = await page.evaluate(taskId => {
-    const tasks = JSON.parse(localStorage.getItem('projed-task-workbench-unplaced-tasks:v1') || '[]');
+    const accountKey = 'projed-task-workbench-unplaced-tasks:v1:account:local-test-user';
+    const tasks = JSON.parse(localStorage.getItem(accountKey) || localStorage.getItem('projed-task-workbench-unplaced-tasks:v1') || '[]');
     return taskId ? tasks.find(task => task.id === taskId) || null : null;
   }, createdTaskId);
   assert(

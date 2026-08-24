@@ -43,6 +43,7 @@ import type { InboxItem, TaskNode } from '../types';
 import { isTaskPrimaryActionTarget, prepareNewTaskNaming } from '../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 import { formatTaskLocation } from '../utils/taskHierarchy';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
 import {
   hydrateAccountLayoutPreferences,
@@ -861,6 +862,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   };
 
   const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPrimaryPointerActivation(event)) return;
     event.preventDefault();
     event.stopPropagation();
     resizeCleanupRef.current?.();

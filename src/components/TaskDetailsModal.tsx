@@ -16,6 +16,7 @@ import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -736,7 +737,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       onTouchEnd={handlePinchTouchEnd}
       onTouchCancel={() => { pinchCloseRef.current = null; }}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) handleClose();
+        if (event.target === event.currentTarget && isPrimaryPointerActivation(event)) handleClose();
       }}
     >
       <div

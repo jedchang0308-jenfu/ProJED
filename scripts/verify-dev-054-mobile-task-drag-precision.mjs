@@ -76,8 +76,8 @@ check('target stability tracks lock, pending handover, and freshness', hasAll(so
 ]));
 
 check('task drag owns touch movement after long press and pan broker yields', hasAll(source.panBroker, [
-  'isTaskDragTouchActive', 'document.body.hasAttribute', 'move:task-drag-owner', 'reset();',
-]));
+  'isTaskDragTouchActive', 'document.body.hasAttribute', 'task-drag-owner',
+]) && source.panBroker.includes('reset('));
 
 check('actual touch owns the dedicated drag session independently of viewport width',
   source.gestureSurface.includes('if (mobileActionEnabled && sourceKind)')

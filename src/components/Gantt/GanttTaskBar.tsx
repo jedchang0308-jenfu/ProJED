@@ -10,6 +10,7 @@ import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
+import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 
 interface TaskItem {
     id: string;
@@ -125,6 +126,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     const isMoveLocked = lockStatus.moveLocked;
 
     const handleDragStart = (e: React.MouseEvent, type: string) => {
+        if (!isPrimaryPointerActivation(e)) return;
         e.stopPropagation();
         if (!canEditSchedule) return;
 
@@ -420,7 +422,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             {...touchTapGuard.handlers}
             onMouseDown={(e) => {
                 // 只允許左鍵觸發拖曳（防止右鍵誤觸跳轉）
-                if (e.button !== 0) return;
+                if (!isPrimaryPointerActivation(e)) return;
                 if (!canEditSchedule || isMoveLocked) return;
                 handleDragStart(e, 'move');
             }}
@@ -432,7 +434,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             }}
             onMouseUp={(e) => {
                 // 只允許左鍵觸發點擊（防止右鍵觸發 setView）
-                if (e.button !== 0) return;
+                if (!isPrimaryPointerActivation(e)) return;
                 if (touchTapGuard.shouldSuppressTap()) return;
                 const latestDragState = dragStateRef.current;
                 if (!latestDragState || !latestDragState.hasDragged) {
@@ -465,7 +467,9 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                 <>
                     <div
                         className={`absolute left-0 top-0 bottom-0 w-2.5 ${isLeftLocked || !canEditSchedule ? 'cursor-not-allowed bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-l-[6px]`}
+                        data-gantt-task-resize-handle="start"
                         onMouseDown={(e) => {
+                            if (!isPrimaryPointerActivation(e)) return;
                             e.stopPropagation();
                             if (!canEditSchedule || isLeftLocked) return;
                             handleDragStart(e, 'left');
@@ -474,7 +478,9 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     />
                     <div
                         className={`absolute right-0 top-0 bottom-0 w-2.5 ${isRightLocked || !canEditSchedule ? 'cursor-not-allowed bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(0,0,0,0.1)_2px,rgba(0,0,0,0.1)_4px)]' : 'cursor-ew-resize hover:bg-white/30'} rounded-r-[6px]`}
+                        data-gantt-task-resize-handle="end"
                         onMouseDown={(e) => {
+                            if (!isPrimaryPointerActivation(e)) return;
                             e.stopPropagation();
                             if (!canEditSchedule || isRightLocked) return;
                             handleDragStart(e, 'right');

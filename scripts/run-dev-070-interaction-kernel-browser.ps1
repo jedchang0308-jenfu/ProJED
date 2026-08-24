@@ -23,7 +23,10 @@ New-Item -ItemType Directory -Force (Join-Path $phaseDirectory 'screenshots') | 
 $env:DEV070_BASE_URL = $BaseUrl
 $env:DEV070_PHASE = $Phase
 $env:DEV070_OUTPUT_DIRECTORY = (Resolve-Path $OutputDirectory).Path
-$env:PLAYWRIGHT_CAPTURE_ARTIFACT = '1'
+# The verifier writes its artifact into the page and prints a compact fallback
+# index through the wrapper. Avoid the optional post-run eval round-trip here:
+# long DEV-070 runs can close the Playwright transport before that second query.
+$env:PLAYWRIGHT_CAPTURE_ARTIFACT = '0'
 $separator = if ($BaseUrl.Contains('?')) { '&' } else { '?' }
 # Keep the URL argument ampersand-free: npx.cmd is a Windows cmd shim and an
 # unescaped '&' is interpreted as a second shell command before Playwright sees

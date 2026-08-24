@@ -23,6 +23,7 @@ import {
   type WorkspaceMember,
   normalizeBoardRolePermissionMatrix,
 } from '../types';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 import {
   buildBoardInviteUrl,
   generateBoardInviteToken,
@@ -293,8 +294,9 @@ export const BoardShareDialog: React.FC<BoardShareDialogProps> = ({ open, onOpen
     <div
       className="fixed inset-0 z-[10040] flex items-start justify-center bg-slate-950/45 px-3 py-8 sm:items-center sm:py-4"
       role="presentation"
+      data-board-share-backdrop="true"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onOpenChange(false);
+        if (event.target === event.currentTarget && isPrimaryPointerActivation(event)) onOpenChange(false);
       }}
     >
       <section

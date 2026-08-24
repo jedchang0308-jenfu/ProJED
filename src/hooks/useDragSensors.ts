@@ -14,6 +14,7 @@
  */
 import { useSensor, useSensors, MouseSensor, KeyboardSensor } from '@dnd-kit/core';
 import type { SensorDescriptor, SensorOptions } from '@dnd-kit/core';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 
 /**
  * Smart*Sensor — 集中式互動控制保護
@@ -46,6 +47,10 @@ class SmartMouseSensor extends MouseSensor {
         ...activator,
         handler: (...args: Parameters<typeof activator.handler>) => {
             const [event] = args;
+            const nativeEvent = (event as React.MouseEvent).nativeEvent;
+            if (!isPrimaryPointerActivation(nativeEvent)) {
+                return false;
+            }
             const target = (event as React.SyntheticEvent).target;
             if (isInteractiveEditingTarget(target)) {
                 return false;

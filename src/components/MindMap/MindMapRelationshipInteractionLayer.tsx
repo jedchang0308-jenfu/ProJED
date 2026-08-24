@@ -4,6 +4,7 @@ import {
   type MindMapRelationshipPath,
 } from './mindMapGeometry';
 import type { MindMapRelationshipPointerHandle } from './mindMapRelationshipCommands';
+import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 
 interface MindMapRelationshipInteractionLayerProps {
   relationshipPaths: MindMapRelationshipPath[];
@@ -51,7 +52,11 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
   const inverseScale = 1 / Math.max(zoomLevel, 0.01);
   const hitHeight = (screenPixels: number) => `${screenPixels * inverseScale}px`;
 
-  const selectRelationshipFromEvent = (event: React.SyntheticEvent, path: MindMapRelationshipPath) => {
+  const selectRelationshipFromEvent = (
+    event: React.MouseEvent<Element> | React.PointerEvent<Element>,
+    path: MindMapRelationshipPath,
+  ) => {
+    if (!isPrimaryPointerActivation(event)) return;
     event.preventDefault();
     event.stopPropagation();
     selectRelationship(path.id);

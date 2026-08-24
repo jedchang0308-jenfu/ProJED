@@ -17,6 +17,7 @@ import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProj
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
 import type { KnowledgeRecord, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
+import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 
 type ProjectChangeImportStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 type ProjectChangeImportStepState = 'pending' | 'skipped' | 'inserted';
@@ -1050,6 +1051,7 @@ const RecordSidebar: React.FC = () => {
   };
 
   const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPrimaryPointerActivation(event)) return;
     event.preventDefault();
     event.stopPropagation();
     resizeCleanupRef.current?.();
@@ -1133,6 +1135,7 @@ const RecordSidebar: React.FC = () => {
         aria-valuenow={sidebarWidth}
         tabIndex={0}
         onPointerDown={handleResizeStart}
+        data-record-sidebar-resize-handle="true"
         onKeyDown={handleResizeKeyDown}
         title="拖拉調整紀錄欄寬度；方向鍵也可微調"
         className={`record-sidebar-resize-handle absolute left-0 top-0 z-20 hidden h-full w-3 -translate-x-1/2 cursor-col-resize items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:flex ${

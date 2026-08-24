@@ -18,6 +18,7 @@ import {
   persistAccountLayoutPreferences,
 } from '../services/accountPreferencesService';
 import { usePanelPreview } from './panelPreviewContext';
+import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 
 const BOARD_WORKSPACE_VIEWS = ['list', 'mindmap', 'board', 'gantt', 'calendar'];
 const SETTINGS_SCOPE_VIEWS = ['settings', 'calendar_subscriptions'];
@@ -324,6 +325,7 @@ const Sidebar = () => {
   };
 
   const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPrimaryPointerActivation(event)) return;
     event.preventDefault();
     event.stopPropagation();
     resizeCleanupRef.current?.();

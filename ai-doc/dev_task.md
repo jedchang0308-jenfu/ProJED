@@ -471,6 +471,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：若 canonical smoke、artifact identity或OAuth回歸失敗，回滾至Firebase version `93c2a80ddc1a798e`；DEV-081實機與DEV-082 production remote gate仍由各自DEV管理。
   - 證據：release `20260821144058-509110`、commit `4ee8bf8`、candidate version `880dfc3bbbc5d8b3`、live version `ca48cc7d514432d8`、39/39 remote hash、OAuth與authenticated smoke PASS。
   - 計入交付：是（P0＋P1已發布；PAT strict gate依使用者FMEA例外不宣稱PASS）
+- ✓ DEV-084 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 非主按鍵不得觸發主按鍵互動
+  - 摘要：以共用 raw-input guard 修正中鍵／右鍵誤啟動 task drag、Gantt／panel resize、mindmap relationship primary action與 modal backdrop close，同時保留左鍵、鍵盤、觸控、右鍵 menu及心智圖中鍵 pan。
+  - 來源 ID：`USER-20260822-NON-PRIMARY-POINTER-ISOLATION`
+  - 父任務：DEV-070；相容權威 DEV-028、DEV-053、DEV-076、DEV-077
+  - 下一步：保留 local-only evidence；若要進正式環境，另走 deployment/release gate；本輪不 release。
+  - 阻塞 / 恢復條件：若 DEV-084 required static/rendered gate、non-primary isolation、合法 middle-pan/right-menu/left/keyboard 或 automated mobile boundary 回歸，回 RD 修正；physical iPhone Safari／Android Chrome 為 supplemental Not Run，不得冒稱真機通過。
+  - 證據：`SPEC-084`（Implemented / QA-QC PASS）、`QA-DEV-084`（static 7/7、rendered 13/13、Calendar local fixture）、`output/playwright/dev-084-primary-pointer-isolation/result.json`、required DEV-028／029／046／053／054／070／076／077／DEV-017／resizable-navigation regressions、TypeScript／targeted ESLint／build:test／git diff --check。
+  - 計入交付：是（local implementation + complete required QA/QC；未 Release）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -1570,6 +1578,74 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - Release evidence：commit `4ee8bf8024daf3c7a92a208c733404d7cc63058a`、release `20260821144058-509110`、tree `c8abe0ce...b113c54`；candidate `https://projed-cc78d--production-candidate-k86qbpc8.web.app`／version `880dfc3bbbc5d8b3`，live version `ca48cc7d514432d8`。
 - Candidate與canonical均39/39 entries hash、release-meta、browser root、console/page/network、OAuth callback PASS；既有authenticated Chrome session重載後留在canonical URL、工作區與真實資料可見、無visible alert／inline error／localhost。回滾reference為version `93c2a80ddc1a798e`。
 - Generated evidence：`output/release/dev-083/20260821144058-509110/{risk-acceptance,candidate-evidence,activation-evidence}.json`（gitignored、無secret）。
+
+## DEV-084：非主按鍵不得觸發主按鍵互動
+
+- 文件成熟度：`RD Implemented / QA-QC PASS`
+- 狀態：已實作／QA PASS／QC PASS／未 Release
+- 節點類型：開發點
+- 父任務：DEV-070；相容權威 DEV-028、DEV-053、DEV-076、DEV-077
+- 是否計入產品交付完成：是（local required gates；未 Release）
+- 原始需求邊界：`USER-20260822-NON-PRIMARY-POINTER-ISOLATION`；使用者回報看板中鍵誤啟動左鍵功能，並要求以多層次分析盤點全系統同型問題後寫到 RD 可實作。
+- 風險等級：Medium；P0 defect path 可改動 task order／parent、Gantt date 或 relationship，P1 path 可持久化 panel width或中斷 dialog flow。
+- Spec Impact：`Compatible correction / raw-input isolation`；修正實作漂移，不取代既有 primary／secondary／middle-pan／keyboard／mobile產品契約。
+
+### 問題、根因與價值
+
+系統已在 `DEV-070 / ADR-043` 定義 `Raw Input → Trigger Normalizer → Profile Resolver → Semantic Action → Guard → Command`，但 raw button eligibility 沒有共用實作。`useTaskInteractionBinding` 接收的是已具語意的 trigger，sensor、resize handle、relationship layer 與 backdrop各自決定是否把 DOM event當成 primary；部分入口只排除右鍵，部分完全未檢查 button。
+
+盤點與真實瀏覽器已確認五類缺口：共用 `SmartMouseSensor` 讓中鍵跨過8px門檻後進入 task drag；Gantt左右日期 handle接受中鍵；Workspace／Task Workbench／Record三個 resizer接受任意 pointer button；Mindmap relationship path／label／endpoint會以中鍵選取或拖曳並搶走既有 middle pan；Task Details／Board Share／Calendar delete backdrop以任意mousedown關閉。
+
+反事實檢查：若每一個 raw primary owner在第一個 side effect前都套用同一個 `button===0 && isPrimary!==false` guard，則相同中鍵事件不會建立 drag／resize／selection／dismiss state；同時因事件沒有被 prevent／stop，Mindmap canvas仍可取得有意的 middle-pan owner。這是本 DEV 的最小充分修正。
+
+使用思考習慣：#多層次分析、#風險導向、#可驗證性、#反事實檢查
+
+### Authoritative package
+
+- 產品／RD contract：`ai-doc/specs/SPEC-084-primary-pointer-button-isolation.md`
+- QA FMEA／QC matrix：`ai-doc/qa/QA-DEV-084-primary-pointer-button-isolation.md`
+- 架構 authority：`SPEC-070`、`ADR-043`；本 DEV補齊既有 Trigger Normalizer前置不變量，不改 semantic dispatch API。
+- 行為 regression authority：`SPEC-028`（跨模式 primary／secondary）、`SPEC-053`（task drag）、`SPEC-076`（left/middle canvas pan）、`SPEC-077`（relationship endpoint）。
+- ADR：不新增；未更換 Interaction Kernel、profile、provider、資料模型或長期架構。
+
+### Current phase contract
+
+新增 pure `src/interactions/pointerActivation.ts`，輸出 `isPrimaryPointerActivation({button,isPrimary?})`。Mouse `button=0`與 Pointer `button=0,isPrimary!==false`可進 primary；middle/right、non-primary touch／pen與非0 barrel button fail closed。Helper只判 eligibility，不做 permission、mode、action或data決策。
+
+所有 rejected event必須在 `preventDefault()`、`stopPropagation()`、pointer capture、state、listener、cursor、preference或domain mutation前return。修正範圍固定為：
+
+| Owner | RD contract | 保留契約 |
+|---|---|---|
+| `useDragSensors.ts` | SmartMouseSensor在原activator前拒絕非primary | 8px、KeyboardSensor、interactive target、mobile long-press不變 |
+| `GanttTaskBar.tsx` | shared starter與兩個resize handle defense-in-depth guard | locked handle不得冒泡成bar move；日期算法不變 |
+| Sidebar／Workbench／Record resizer | 三個pointerdown在side effect前共用guard | clamp、方向鍵、preference key不變 |
+| Mindmap relationship layer／View | path、label、endpoint拒絕非primary且不吞事件 | relationship左鍵／鍵盤、middle pan、single Scene不變 |
+| 三個 modal backdrop | 只有primary且exact backdrop target才close | content、X、Escape、confirm、自動儲存不變 |
+
+通用 non-mutating popover／picker outside-dismiss、原生 button click與合法 context-menu不在本輪改寫。這個排除是為避免把「終止 transient layer」誤當成domain primary action而造成過度修正。
+
+### RD slices 與完成定義
+
+- S0：新增 DEV-084 pure/static與browser failure-first cases，保存五類修正前 fail摘要與可重置 fixture。
+- S1：完成 pure normalizer與共用 task drag sensor；Board／List／Workbench／Shared Sidebar的middle/right矩陣通過。
+- S2：完成 Gantt與三 resizer；non-primary不得改日期、geometry、width、preference或cursor lifecycle。
+- S3：完成 Mindmap relationship owner仲裁；relationship target起手的middle pan可用且relationship零寫入。
+- S4：完成三 modal backdrop；middle/right保持開啟，left／X／Escape／confirm不回歸。
+- S5：執行 `SPEC-084` required commands、`QA-DEV-084` B01～B19、Spec Drift與QC handoff；Calendar 使用 query-gated local fixture，artifact固定 `output/playwright/dev-084-primary-pointer-isolation/result.json`。
+
+Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08、DEV-084 browser B01～B03／B06～B10／B12（Task Details／Board Share／Calendar）／B13，並以 DEV-028／029／046／053／054／070／076／077、DEV-017、resizable-navigation regression 覆蓋 B04／B05／B11／B14～B19；non-primary domain/preference commit=0；console/page/visible/request error=0；runtime與 browser session cleanup 完成。Physical mobile supplemental gate仍明確標示 Not Run；Static、TypeScript或build仍不能取代 rendered UI evidence。
+
+### Failure recovery、停止條件與 execution boundary
+
+- Slice第一個有效失敗即停止，記錄button、target、viewport、座標、before/during/after、資料污染與screenshot，回RD修正後重跑直接受影響slice及regression。
+- 正向控制若改 local fixture／preference，必須以相同 UI在 `finally`回到起始值；不得直接呼叫store、API、DOM mutation或production資料製造通過。
+- 若本任務啟動port 4000 runtime，需記錄owner process tree並在結束時只停止該tree；重用matching primary runtime時不得停止。
+- 非primary仍可寫task/date/relationship/preference、right menu／middle pan／left／keyboard／touch回歸、stuck cursor/overlay、visible error或需改schema／permission／backend，立即停止。
+- 本輪已完成產品程式實作與 local QA/QC evidence；仍未授權 commit、push、PR、merge、deploy、production data、production smoke 或 release。Physical mobile supplemental gate若要執行，另由具設備能力的 QA 流程補驗，不回寫為本地 desktop completion 的阻塞。
+
+### Readiness conclusion
+
+`RD Implemented = PASS；QA-QC PASS`。Repo/file owner、pure API、button matrix、逐檔 patch、S0～S5、QA FMEA、rendered evidence、artifact、failure recovery、角色分工與 non-release boundary 均已固定；Calendar rendered local fixture 已通過，physical mobile 僅維持 supplemental Not Run，不延伸為真機完整通過。
 
 ## PM Update 歷史歸檔
 

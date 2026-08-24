@@ -9,11 +9,12 @@ async (page) => {
   };
 
   const openMeetingSidebar = async () => {
-    if ((await page.locator('aside', { hasText: '會議速記' }).count()) === 0) {
+    const sidebar = page.locator('[data-record-composer-shell="true"], [data-record-composer-shell]').last();
+    if ((await sidebar.count()) === 0) {
       await page.locator('nav button', { hasText: /新增會議記錄|會議紀錄/ }).first().click();
     }
-    await page.locator('aside', { hasText: '會議速記' }).last().waitFor({ state: 'visible', timeout: 10000 });
-    return page.locator('aside', { hasText: '會議速記' }).last();
+    await page.locator('[data-record-composer-shell]').last().waitFor({ state: 'visible', timeout: 10000 });
+    return page.locator('[data-record-composer-shell]').last();
   };
 
   await page.goto('http://localhost:4000/', { waitUntil: 'networkidle' });

@@ -22,6 +22,7 @@ import MindMapRelationshipOverlay from './MindMapRelationshipOverlay';
 import MindMapRootLayout from './MindMapRootLayout';
 import MindMapRelationshipStyleLayer from './MindMapRelationshipStyleLayer';
 import MindMapToolbar from './MindMapToolbar';
+import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 import {
   createInsertionPreview as createDragInsertionPreview,
   createPreviewConnectorPath as createDragPreviewConnectorPath,
@@ -1412,6 +1413,7 @@ const MindMapView: React.FC = () => {
     relationshipId: string,
     handle: RelationshipPointerDragState['handle'],
   ) => {
+    if (!isPrimaryPointerActivation(event)) return;
     if (!canEditTask) return;
     const initialRelationship = noteRelationships.find(item => item.id === relationshipId);
     if (!initialRelationship) return;

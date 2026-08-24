@@ -1,5 +1,18 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-24（DEV-084 Implemented／QA-QC PASS／非主按鍵隔離）
+
+Spec Impact：`Compatible correction / raw-input isolation`。新增單一 pure primary-pointer eligibility guard，修正中鍵／右鍵被 sensor或 scattered handler誤解為左鍵語意的實作漂移；不改 Interaction Kernel profile、task／relationship資料、schema、API、permission、mobile gesture或release。心智圖中鍵 pan、右鍵 menu、左鍵、鍵盤與 primary touch／pen均為必守 regression boundary。ADR不新增；DEV-084直接落實ADR-043既有 `Raw Input → Trigger Normalizer`。
+
+| 文件／權威 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / QA-QC PASS / 未 Release | DEV-084 / DEV-070 | 記錄五類缺口已修正、pure helper、逐檔 owner、S0～S5、rendered evidence、Calendar local fixture、required regression與local-only execution boundary。 |
+| `ai-doc/specs/SPEC-084-primary-pointer-button-isolation.md` | Authoritative RD Contract / Implemented / QA-QC PASS | DEV-084 | 固定button／pointer矩陣、root cause、safe/excluded入口、typed API、逐檔patch、12項AC、artifact與完整 verification evidence；physical mobile supplemental boundary 明確標示。 |
+| `ai-doc/qa/QA-DEV-084-primary-pointer-button-isolation.md` | Executed / QA PASS / QC PASS | DEV-084 | 14項FMEA、8項static／pure、DEV-084 rendered 13/13、required DEV-028／029／046／053／054／070／076／077／DEV-017／resizable regression、1440／1024／390 boundary、data-sanity、visible-error與cleanup evidence。 |
+| `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md`、`ai-doc/decisions/ADR-043-cross-mode-interaction-policy-kernel.md` | Existing architecture authority / Compatible | DEV-070 / DEV-084 | semantic dispatch API不變；raw button eligibility在進入 `pointer.primary`前fail closed，補齊既有Normalizer前置不變量。 |
+| `ai-doc/specs/SPEC-053-task-drag-muscle-memory-consistency.md`、`SPEC-076-mindmap-left-mouse-canvas-pan.md`、`SPEC-077-mindmap-relationship-redline-cleanup.md` | Existing behavior authority / Regression required | DEV-053 / DEV-076 / DEV-077 / DEV-084 | 保留8px mouse drag、keyboard/mobile owner、left/middle canvas pan與relationship左鍵endpoint行為。 |
+| `src/interactions/pointerActivation.ts`、`src/hooks/useDragSensors.ts`、Gantt／三個panel resizer、Mindmap relationship layer、三個modal backdrop | Implemented / Static + rendered evidence PASS | DEV-084 | 共用 primary guard 已在第一個 side effect 前接入五類 owner；artifact `output/playwright/dev-084-primary-pointer-isolation/result.json`，Calendar local fixture rendered PASS；physical mobile維持 supplemental Not Run。 |
+
 ## Documentation Map Update - 2026-08-22（DEV-083 Released／FMEA Credential Exception Accepted／P2不採用）
 
 Spec Impact：`Compatible extension`。保留 ADR-037 的 ProJED production、ProJED-TEST staging／test

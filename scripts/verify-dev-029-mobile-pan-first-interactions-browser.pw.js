@@ -240,6 +240,11 @@ async (page) => {
       await page.keyboard.press('Escape').catch(() => undefined);
       await page.waitForTimeout(80);
     }
+    const globalDialog = page.locator('[data-global-dialog="true"]').first();
+    if (await globalDialog.count() && await globalDialog.isVisible().catch(() => false)) {
+      await globalDialog.locator('[data-global-dialog-close="true"], [data-global-dialog-decision-index="0"]').first().click({ force: true, timeout: 1000 }).catch(() => undefined);
+      await globalDialog.waitFor({ state: 'detached', timeout: 1500 }).catch(() => undefined);
+    }
     const closeButton = page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').first();
     if (await closeButton.count()) {
       await closeButton.click({ timeout: 1000 }).catch(() => undefined);
@@ -1091,7 +1096,9 @@ async (page) => {
       await closeMobileSidebarIfOpen();
       await card().waitFor({ state: 'visible', timeout: 10000 });
       const taskId = await card().getAttribute('data-task-id');
-      await card().click({ position: { x: 84, y: 28 }, timeout: 5000 });
+      const cardBox = await card().boundingBox();
+      assert(Boolean(cardBox), 'desktop card surface should have a rendered box');
+      await card().click({ position: { x: Math.max(4, Math.min(cardBox.width - 4, cardBox.width / 2)), y: Math.max(4, Math.min(cardBox.height - 4, cardBox.height / 2)) }, timeout: 5000 });
       await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 5000 });
       const modalTaskId = await page.locator('[data-task-details-modal="true"]').getAttribute('data-task-id');
       assert(modalTaskId === taskId, 'desktop click should open details for clicked card', { taskId, modalTaskId });
