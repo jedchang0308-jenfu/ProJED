@@ -83,9 +83,11 @@ const checks = [
       includes('src/components/Wbs/WbsNodeItem.tsx', '下層任務的日期不得超出上層任務的範圍'),
   },
   {
-    name: 'shared task sidebar guards missing node level before style calculations',
+    name: 'shared task sidebar guards node level and consumes the shared hierarchy token',
     ok: includes('src/components/SharedTaskSidebar.tsx', 'Number.isFinite(item.level) ? item.level : 0') &&
-      includes('src/components/SharedTaskSidebar.tsx', 'paddingLeft: Math.max(10, 10 + (level * 14))'),
+      includes('src/components/SharedTaskSidebar.tsx', "'--task-hierarchy-depth': level") &&
+      includes('src/components/SharedTaskSidebar.tsx', "'--task-hierarchy-base': '10px'") &&
+      includes('src/components/SharedTaskSidebar.tsx', 'task-hierarchy-indented-row'),
   },
 ];
 
