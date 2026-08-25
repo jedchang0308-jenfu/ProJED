@@ -1,7 +1,7 @@
 # QA-DEV-089 全域工作台權威任務搬移交易
 
 日期：2026-08-25  
-狀態：Executed／Local QA PASS／Remote DB + Level 3 Pending／未 Release  
+狀態：Executed／Local QA PASS／TEST DB01-DB02 PASS／Level 3 Pending／未 Release  
 規格：SPEC-089  
 CAPA：CAPA-20260825-01
 
@@ -31,9 +31,9 @@ CAPA：CAPA-20260825-01
 | S01 | store persistence await 發生在 local update 前 | PASS；DEV-089 static |
 | S02 | pending source refresh、整棵 disabled、共用 spinner | PASS；DEV-089 static/browser |
 | S03 | operation begin `ignoreDuplicates`，RPC immutable payload | PASS；DEV-089 static |
-| S04 | migration exact subtree、row locks、delete count、RLS/search_path/revoke | PASS；DEV-089 static；實際 DB apply 待 TEST |
-| S05 | server `move_task` 判定與 client configurable role matrix 一致，來源／目的皆檢查 | PASS；DEV-089 static；角色資料實測待 TEST |
-| S06 | 第二次 transport ambiguity 以同 operation ledger readback 判定；client 不可偽造 committed | PASS；DEV-089 static；網路 fault DB 實測待 TEST |
+| S04 | migration exact subtree、row locks、delete count、RLS/search_path/revoke | PASS；DEV-089 static；TEST migration/RLS readback PASS |
+| S05 | server `move_task` 判定與 client configurable role matrix 一致，來源／目的皆檢查 | PASS；DEV-089 static；TEST owner round-trip PASS |
+| S06 | 第二次 transport ambiguity 以同 operation ledger readback 判定；client 不可偽造 committed | PASS；DEV-089 static；TEST idempotent replay PASS |
 | F01 | 390×844 touch board→unplaced，注入 700ms delay＋failure | PASS；fault injection |
 | F02 | pending 時原 board root 可見且 subtree spinner=3 | PASS；rendered DOM |
 | F03 | failure 後 local/runtime 三節點仍在 source board，parents=`column/root/child` | PASS |
@@ -42,10 +42,11 @@ CAPA：CAPA-20260825-01
 | R01 | DEV-086 subtree success source contract | PASS |
 | R02 | DEV-039 workbench placement/cross-device static | PASS |
 | R03 | TypeScript、build:test、targeted lint、diff check | PASS |
-| R04 | linked migration history、schema error lint、security advisor 唯讀 preflight | PASS WITH BASELINE WARN；`20260825093621` 僅 local、remote 空白；remote schema `No schema errors found`；advisor 為既有 `touch_updated_at` search-path、既有 callable DEFINER functions、leaked-password protection 告警，新 migration 尚未 apply、故不代表 DEV-089 advisor PASS |
-| DB01 | Supabase local／TEST migration parse + db lint | PENDING；本機 Docker daemon 未運行；本機 PostgreSQL 18 雖 listening，但受密碼保護且本輪未提供受控測試憑證，未碰既有 DB |
-| DB02 | TEST to_unplaced/to_board success、rollback、idempotent replay | PENDING release gate |
-| DB03 | TEST outsider/RLS、partial subtree、linked/dependency reject | PENDING release gate |
+| R04 | linked migration history、schema error lint、security advisor 唯讀 preflight | PASS WITH BASELINE WARN；production 未變更；TEST advisors 僅既有 baseline WARN |
+| TEST backup | custom-format logical dump + `pg_restore --list` | PASS；712,269 bytes；SHA-256 `df4bf7008fdf46f2a36bf781fbb3592efa196398eb6369292f730386c1639b19` |
+| DB01 | Supabase TEST migration apply + schema/RLS/grant readback | PASS；Management API migration version `20260825125421`；table/RPC/RLS/3 policies；`PUBLIC/anon` ACL 已撤銷；匿名 REST 401 |
+| DB02 | TEST to_unplaced/to_board success、exact subtree、activity、idempotent replay、fixture cleanup | PASS；3 層 parent chain；board=3／unplaced=0；兩方向 committed；activity=6；replay 不新增 mutation；fixture counts=0 |
+| DB03 | TEST outsider/RLS、partial subtree、linked/dependency reject | PARTIAL；匿名 Data API denied 已通過；authenticated outsider、partial subtree、linked/dependency reject 尚待 Level 3 fixture |
 | L3 | 同 commit Firebase preview + Supabase TEST authenticated smoke | PENDING release gate |
 
 ## Browser evidence
@@ -58,4 +59,4 @@ CAPA：CAPA-20260825-01
 
 ## QA 結論
 
-Local RD/QA acceptance 通過；CAPA 的程式矯正、手機 failure-first 證據與防再發 static gate 已完成。由於 migration 尚未套用任何遠端環境，DB01～DB03、Level 3、production Level 4 與 effectiveness check 仍是 stop-ship gate，不得把本報告解讀為 production 已修復。
+Local RD/QA acceptance、TEST DB01／DB02 與 CAPA 的程式矯正、手機 failure-first 證據、防再發 static gate 已完成。DB03 authenticated matrix、Level 3、production Level 4 與 effectiveness check 仍是 stop-ship gate，不得把本報告解讀為 production 已修復。

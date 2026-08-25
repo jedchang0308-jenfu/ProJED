@@ -108,6 +108,7 @@ add('migration creates an owner-scoped operation ledger with RLS and explicit gr
     'create table if not exists public.task_workbench_placement_operations',
     'root_task_id text not null',
     'enable row level security',
+    'revoke all on public.task_workbench_placement_operations from public, anon',
     '(select auth.uid()) = owner_id',
     "and status = 'pending'",
     "and status = 'failed'",

@@ -516,9 +516,9 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：修正手機／桌機跨 ownership 搬移的 optimistic 假成功；看板 WBS 與帳號級未歸位之間改為 await 單一 idempotent transaction，成功才收斂本機，失敗保留完整來源子樹。
   - 來源 ID：`USER-20260825-TASK-PLACEMENT-MOBILE-DIVERGENCE`、`USER-20260825-CAPA-COMPLETE`。
   - 父任務：DEV-086、DEV-039；CAPA：`CAPA-20260825-01`。
-  - 下一步：先取得 Supabase TEST 可復原 backup／restore evidence（目前唯讀 preflight：`ACTIVE_HEALTHY`、`pitr_enabled=false`、`backups=[]`），再執行 migration／RPC／RLS／rollback matrix 與 Level 3；production migration/deploy 與 Level 4 不在本輪授權。
+  - 下一步：TEST backup、migration、RLS/grant、兩方向 transaction、exact subtree、activity 與 replay 已通過；接續完成 authenticated outsider／partial subtree／linked-dependency DB03 與 Level 3，production migration/deploy 與 Level 4 仍須獨立 activation decision。
   - Spec Impact：`Intentional replacement`；以 SPEC-089 取代 SPEC-086 的 optimistic failure recovery，不改雙向拖曳、完整子樹、已歸位唯讀或手機範圍。
-  - 證據：`SPEC-089`、`QA-DEV-089`、`QC-DEV-089`、DEV-089 static、390×844 mobile fault injection、DEV-086／039 regression、TypeScript、build:test、source gate、targeted lint 與 diff check PASS；TEST project／backup／schema 唯讀 preflight PASS／STOP，新 migration remote 空白，mutating remote DB evidence pending。
+  - 證據：`SPEC-089`、`QA-DEV-089`、`QC-DEV-089`、DEV-089 static、390×844 mobile fault injection、DEV-086／039 regression、TypeScript、build:test、source gate、targeted lint 與 diff check PASS；TEST dump／migration version `20260825125421`／RLS-ACL／兩方向 round-trip／replay PASS；DB03 authenticated matrix 與 Level 3 pending。
   - 計入交付：否（production effectiveness 尚未驗證）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容

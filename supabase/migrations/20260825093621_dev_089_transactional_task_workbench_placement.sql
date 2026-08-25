@@ -39,6 +39,10 @@ create index if not exists task_workbench_placement_operations_owner_created_idx
 
 alter table public.task_workbench_placement_operations enable row level security;
 
+-- Do not inherit a project-level default privilege for PUBLIC/anon. The
+-- operation ledger is an authenticated, owner-scoped implementation detail.
+revoke all on public.task_workbench_placement_operations from public, anon;
+
 drop policy if exists "owners read task placement operations"
   on public.task_workbench_placement_operations;
 create policy "owners read task placement operations"

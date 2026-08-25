@@ -2,7 +2,7 @@
 
 日期：2026-08-25  
 關聯：DEV-089、DEV-086、DEV-039  
-狀態：Correction + Corrective Action + Preventive Action 已完成本地實作與 QC／TEST Read-only Preflight PASS／Remote Effectiveness Pending
+狀態：Correction + Corrective Action + Preventive Action 已完成本地實作與 QC／TEST DB01-DB02 PASS／Level 3 Remote Effectiveness Pending
 
 ## 不符合與影響
 
@@ -56,8 +56,10 @@
 |---|---|---|
 | Local | fault injection 1 次、完整三層 subtree | PASS：來源 3／目的 0、parent chain preserved、page error 0 |
 | Linked remote preflight | migration history、schema lint、security advisor（唯讀） | PASS WITH BASELINE WARN：新 migration remote 空白、production 未變更；既有 remote schema 無 error，既有 advisor warnings 留列，不得視為新 object 已通過 |
-| Supabase TEST read-only preflight | project health、backup capability、canonical schema readback | PASS／STOP：TEST `ACTIVE_HEALTHY`；`pitr_enabled=false`、`backups=[]`；新 operation table／RPC 尚不存在，未執行 mutation |
-| Supabase TEST | 兩方向各 success、transaction fault、replay、partial subtree、outsider、linked/dependency | Pending；需先取得可復原 backup／restore evidence，全部 exactly-one-source 才可 release |
+| Supabase TEST backup | custom-format dump + restore listing | PASS：712,269 bytes；`pg_restore --list` exit 0；SHA-256 `df4bf7008fdf46f2a36bf781fbb3592efa196398eb6369292f730386c1639b19` |
+| Supabase TEST migration／RLS | migration、operation ledger、RPC、ACL、anonymous REST | PASS：migration version `20260825125421`；RLS/3 policies；`PUBLIC/anon` ACL revoked；anonymous REST 401；advisor 僅既有 baseline WARN |
+| Supabase TEST transaction | 兩方向 success、exact subtree、activity、idempotent replay、cleanup | PASS：三層 parent chain；兩 operation committed；activity=6；replay 不新增 mutation；fixture 清理後 source/destination/ledger/activity counts=0 |
+| Supabase TEST DB03 | authenticated outsider、partial subtree、linked/dependency | Pending；匿名 REST denied 已通過，完整 authenticated matrix 尚待 Level 3 fixture |
 | Level 3 | Firebase preview + TEST，同帳號桌機／手機 round trip＋reload | Pending |
 | Production T+0 | Level 4 authenticated smoke，readback operation/result/source/target | Pending |
 | Production T+7／T+30 | 查 operation ledger；抽查 committed 與 failed | Pending；任何兩邊皆有／皆無／partial subtree=CAPA ineffective，立即 reopen |
@@ -66,4 +68,4 @@
 
 ## 結論與未完成邊界
 
-本 CAPA 的本地 Correction、Corrective Action、Preventive Action 與 failure-first QC 已完成。TEST 唯讀 preflight 已執行，但因 `pitr_enabled=false`、無可用 backup 且沒有受控 TEST DB restore 證據，release gate 未允許 migration。Effectiveness Check 仍需要 migration 與同 commit frontend 進入 Supabase TEST／Level 3，之後才可 production release；本輪未執行 remote migration、commit、push、deploy 或 production data mutation。
+本 CAPA 的本地 Correction、Corrective Action、Preventive Action、TEST backup 與 DB01／DB02 已完成。DB03 的完整權限／fail-safe matrix、Level 3、production migration/deploy 與 Level 4 仍未完成；本輪未執行 production migration、production deploy 或 production data mutation。
