@@ -1,5 +1,53 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-25（DEV-087 跨模式任務階層縮排一致化）
+
+Spec Impact：`Intentional replacement / cross-view consolidation`。依使用者明確指示，以 `SPEC-001` 的共用 spacing contract 統一看板 L3+、清單、甘特與日曆左側清單的每層增量：desktop `6px`、≤767px `5px`。各模式保留原本 base inset、字級、列高、卡片內距與操作面；DEV-081 的 mobile large `35px` indent 舊例外被此決策取代，A/B 仍保留其餘 2.5x 閱讀與操作幾何。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md`、`SPEC-001`、`SPEC-081`、`SPEC-086` | In sync / QA-QC PASS / 未 Release | DEV-087／DEV-001／DEV-081／DEV-086 | 固定單一 `--task-hierarchy-indent`、6px／5px breakpoint、各 surface base inset 與 DEV-081 明確例外。 |
+| `src/index.css`、`KanbanChecklist.tsx`、`WbsNodeItem.tsx`、`SharedTaskSidebar.tsx`、`GanttView.tsx`、`CalendarView.tsx` | Implemented / Rendered PASS | DEV-087 | 四模式共用 depth increment；甘特／日曆展開鍵與 leaf placeholder 同為 18px，避免最後一層額外漂移 2px。 |
+| `scripts/verify-dev-087-*`、`output/playwright/dev-087/result.json` | Static 9/9 + Browser 8/8 PASS | DEV-087 | 1440×900／760×900 逐層量測 computed padding 與 title X：全數 6px／5px；body overflow=0、console/page error=0，八張截圖已人工目視。 |
+| `scripts/verify-dev-081-*`、`scripts/verify-dev-086-*` | Regression PASS | DEV-081／DEV-086／DEV-087 | DEV-081 static 32/32、browser 10/10（compact/large=5px、desktop=6px）；DEV-086 static／browser PASS，工作台 6px／5px 與跨看板流程維持。 |
+
+## Documentation Map Update - 2026-08-25（DEV-086 全域工作台子樹暫存／跨看板搬移）
+
+Spec Impact：`Intentional replacement`。全域工作台未歸位區升級為帳號級跨工作區 staging surface：桌機 pointer 與手機長按 touch 都可把看板完整子樹放入未歸位，切換目的看板後再整棵歸位；parent links、task ID 與單一 batch／undo 邊界保留。兩端拖曳 presenter 直接使用看板既有 `KanbanInsertionMarker` 顯示 append 落點，零高度 overlay 不推動清單。已歸位列仍唯讀不可拖；手機不新增 subtree hover，也不開放清單／甘特／日曆模式。不改 schema、API、permission 或 release。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / QA-QC PASS / 未 Release | DEV-086／DEV-039／DEV-053／DEV-065 | 記錄全域 staging、根因、子樹不變量、UI 決策、證據、runtime 與 non-release boundary。 |
+| `ai-doc/specs/SPEC-086-task-workbench-subtree-staging.md` | Authoritative / Implemented / QA-QC PASS | DEV-086 | 固定來源／目的矩陣、跨工作區範圍、parent links、批次與 persistence order、placed no-drag、共用 append 定位線、mobile inclusion／exclusion 與 15 項 AC。 |
+| `ai-doc/qa/QA-DEV-086-task-workbench-subtree-staging.md`、`ai-doc/qc/QC-DEV-086-task-workbench-subtree-staging.md` | Executed / QA PASS / QC PASS | DEV-086 | FMEA、static、desktop pointer、390px／320px 原生 touch、geometry、storage、負向邊界與 runtime evidence。 |
+| `taskSubtreePlacement.ts`、`taskDragCommit.ts`、`placementModel.ts`、`taskWorkbenchUnplacedService.ts`、`useWbsStore.ts` | Implemented / Static + browser PASS | DEV-086 | pure subtree updates、parentId round-trip、單一 batch／undo、leaves-first／root-first 與目的先存來源後刪。 |
+| `BoardView.tsx`、`TaskWorkbenchPanel.tsx`、`taskDragTargetAdapter.ts`、`taskDragCommit.ts`、`TaskDragPresenter.tsx`、`KanbanInsertionMarker.tsx`、`index.css` | Implemented / Rendered PASS | DEV-086 | desktop／mobile 共用 staging target、subtree commit 與零高度 marker；desktop 保留 subtree hover，mobile 明確不導入；placed rows 仍無 drag surface。 |
+| `scripts/verify-dev-086-*`、`output/playwright/dev-086/*.png` | Static + Browser PASS | DEV-086 | desktop pointer＋390px／320px touch 完成 board→unplaced；390px 再完成 workspace A／board A→workspace B／board B；三節點、parent links、marker lifecycle、cleanup 與 RWD 通過。 |
+
+## Documentation Map Update - 2026-08-25（DEV-085 關聯線方向搖桿／DEV-077 意圖更正）
+
+Spec Impact：`Compatible correction / restore original relationship control intent`。使用者澄清 DEV-077 原意只刪除控制 UI 多畫的一條中央線，不是移除控制臂與方形控制點；DEV-085 恢復兩條端點控制臂與兩個可獨立拖曳的方形方向搖桿，同時維持中央 guide=0、舊重複 controls=0。2026-08-25 follow-up 再固定兩端各自貼齊所屬分支外側框線，舊 anchor `xRatio` 不得把端點拉回內側。未改 schema、API、permission、relationship identity 或 release。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / QA-QC PASS / 未 Release | DEV-085 / DEV-077 / DEV-027 | 記錄使用者澄清、歷史誤讀不計交付、現行契約、rendered evidence、runtime 與 non-release boundary。 |
+| `ai-doc/specs/SPEC-085-mindmap-relationship-direction-joysticks.md` | Authoritative / Implemented / QA-QC PASS | DEV-085 | 固定 selected-only controls、兩端 arms／joysticks、中央 guide 排除、首拖 fallback、persistence、zoom、input isolation、端點外側框線與 12 項 AC。 |
+| `ai-doc/qa/QA-DEV-085-mindmap-relationship-direction-joysticks.md`、`ai-doc/qc/QC-DEV-085-mindmap-relationship-direction-joysticks.md` | Executed / QA PASS / QC PASS | DEV-085 | failure-first、static、browser、FMEA、人工截圖、visible-error、responsive 與 runtime ownership 證據。 |
+| `ai-doc/specs/SPEC-077-mindmap-relationship-redline-cleanup.md`、`ai-doc/qa/QA-DEV-077-mindmap-relationship-redline-cleanup.md` | Corrected / historical misread superseded | DEV-077 / DEV-085 | 現行意圖只刪除 `control-1 → control-2` 中央導引線；舊「所有 controls=0」artifact 僅保留稽核用途。 |
+| `mindMapGeometry.ts`、`mindMapOverlayPaths.ts`、`MindMapRelationshipOverlay.tsx`、`MindMapRelationshipInteractionLayer.tsx`、`MindMapView.tsx`、`mindMapRelationshipCommands.ts` | Implemented / Static + rendered PASS | DEV-085 | 兩端依各自 branch direction 貼齊外側框線並保留 anchor Y；兩條 control arms、兩個 28px accessible joystick hit targets、72px 預設 control offset 上限、44px transparent hit window、Bezier 中點／切線置中、完整 click 選取、fallback pair、snapshot rollback 與持久化。 |
+| `scripts/verify-dev-085-*.{mjs,js}`、`output/playwright/dev-085-mindmap-relationship-direction-joysticks/result.json` | Static 9/9 + Browser PASS | DEV-085 | selected counts=`2/2/2/0/0`；右→左 fixture 即使保存反向 xRatio，兩端外框誤差皆 `0.0044px`；曲線後 window centerline 距 path `0.24px`、中心與 18px edge-tolerance true click、拖曳／重載／非主按鍵／Escape／zoom／1024／390 與 error sweep通過。 |
+
+## Documentation Map Update - 2026-08-24（DEV-081 `4a947ef` Regression CAPA；縮排數值已由 DEV-087 取代）
+
+Spec Impact：`Compatible correction`。恢復共用 `KanbanChecklist` 的全 viewport 階層縮排，手機只覆寫倍率 token；補齊 desktop hierarchy geometry gate，未新增分支元件、資料變更或 release 行為。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/index.css`、`src/components/Wbs/KanbanChecklist.tsx` | Historical correction / consumer retained / values superseded by DEV-087 | DEV-081 / DEV-063 / DEV-087 | 當時恢復全域 depth consumer；`14px／35px` 歷史數值已被現行 desktop 6px／narrow 5px 共用增量取代。 |
+| `scripts/verify-dev-081-mobile-kanban-dual-scale-pinch.ts` | Static 32/32 PASS | DEV-081 | 防止 depth consumer 再次只存在 mobile media 內。 |
+| `scripts/verify-dev-081-mobile-kanban-dual-scale-pinch-browser.pw.js` | Updated / 10/10 PASS | DEV-081 / DEV-087 | 同一卡片量測 depth 0／1 computed padding 與 title X delta；現行 compact／large=5px、desktop=6px。 |
+| `ai-doc/dev_task.md`、`SPEC-081`、`QA-DEV-081` | CAPA / audit recorded | DEV-081 | 記錄 `4a947ef` 146-file 盤點、唯一確認產品回歸、QA coverage defect、change-isolation risk 與真實畫面 3-mode evidence。 |
+
 ## Documentation Map Update - 2026-08-24（DEV-084 Implemented／QA-QC PASS／非主按鍵隔離）
 
 Spec Impact：`Compatible correction / raw-input isolation`。新增單一 pure primary-pointer eligibility guard，修正中鍵／右鍵被 sensor或 scattered handler誤解為左鍵語意的實作漂移；不改 Interaction Kernel profile、task／relationship資料、schema、API、permission、mobile gesture或release。心智圖中鍵 pan、右鍵 menu、左鍵、鍵盤與 primary touch／pen均為必守 regression boundary。ADR不新增；DEV-084直接落實ADR-043既有 `Raw Input → Trigger Normalizer`。
@@ -85,17 +133,17 @@ Spec Impact：`Intentional replacement / mindmap-only visual cleanup`。依 Brow
 | `src/components/MindMap/MindMapToolbar.tsx`、`MindMapView.tsx` | Implemented / QA-QC PASS | DEV-078 | 移除 toolbar create-task button／hint 與不再使用的 props；保留 relationship／zoom owner。 |
 | `scripts/verify-dev-078-mindmap-toolbar-cleanup.mjs`、`...-browser.pw.js` | Executed / PASS | DEV-078 | static 5/5；artifact 證明三 viewport 的 DOM absence、keyboard regression、無錯誤與無 overflow。 |
 
-## Documentation Map Update - 2026-08-20（DEV-077 心智圖關係線紅線標記元素清理 Implemented / QA-QC PASS）
+## Documentation Map Update - 2026-08-20（DEV-077 歷史紀錄；2026-08-25 由 DEV-085 更正）
 
-Spec Impact：`Intentional replacement / mindmap-only visual cleanup`。依使用者附圖移除 selected relationship 的控制臂、導引線與方形控制點；保留端點圓形、關係線本體、label、style drawer、inline edit、Delete 與 endpoint drag/reconnect。既有 `geometry.controlPoints` storage shape 與 path builder 相容性維持，不修改附圖本身，不涉及 schema、API、permission 或 release。
+Spec Impact：`Corrected by DEV-085`。原段落把「刪除多畫的一條線」誤讀成移除全部控制臂與方形控制點；使用者已澄清現行意圖只移除 `control-1 → control-2` 中央導引線，兩側 `endpoint → control point` arms 與 square direction joysticks 必須保留。既有 `geometry.controlPoints` storage shape 與 path builder 相容性維持，不涉及 schema、API、permission 或 release。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/dev_task.md` | DEV-077 Implemented / QA-QC PASS / 未 Release | DEV-077 / DEV-027 | 記錄 visual cleanup scope、保留／移除元素、資料相容性、artifact 與 local-only release boundary。 |
-| `ai-doc/specs/SPEC-077-mindmap-relationship-redline-cleanup.md` | Implemented / QA-QC PASS | DEV-077 | 固定紅線標記的 control arms、guide、square points 移除，以及 endpoint/path/label 保留契約。 |
-| `ai-doc/qa/QA-DEV-077-mindmap-relationship-redline-cleanup.md` | Executed / QA PASS / QC PASS / 未 Release | DEV-077 | static 6/6、1440／zoom／1024／390 browser evidence、error sweep 與 relationship regression 均通過。 |
-| `src/components/MindMap/MindMapRelationshipOverlay.tsx`、`MindMapRelationshipInteractionLayer.tsx`、`MindMapView.tsx` | Implemented / QA-QC PASS | DEV-077 | 已移除紅線指向的輔助控制視覺與未使用 adapter，保留端點與關係線操作。 |
-| `scripts/verify-dev-077-mindmap-relationship-redline-cleanup.mjs`、`...-browser.pw.js` | Executed / PASS | DEV-077 | static 6/6；artifact 證明 selected／zoomed／1024 laptop／mobile boundary 的 redline selectors 為 0，endpoint/path/label owner 保留。 |
+| `ai-doc/dev_task.md` | Historical misread / superseded by DEV-085 | DEV-077 / DEV-085 / DEV-027 | 舊實作不計入現行交付；更正後 scope、證據與完成狀態見 DEV-085。 |
+| `ai-doc/specs/SPEC-077-mindmap-relationship-redline-cleanup.md` | Corrected | DEV-077 / DEV-085 | 只移除中央 control guide；保留 endpoint、arms、square joysticks、path 與 label。 |
+| `ai-doc/qa/QA-DEV-077-mindmap-relationship-redline-cleanup.md` | Corrected / old artifact historical only | DEV-077 / DEV-085 | 舊「controls 全 0」只證明誤讀契約，不作現行 acceptance；現行 browser evidence 見 QA/QC-DEV-085。 |
+| `src/components/MindMap/MindMapRelationshipOverlay.tsx`、`MindMapRelationshipInteractionLayer.tsx`、`MindMapView.tsx` | Restored / QA-QC PASS under DEV-085 | DEV-077 / DEV-085 | 中央 guide 仍移除；兩條 control arms 與兩個 direction joysticks 已恢復。 |
+| `scripts/verify-dev-077-mindmap-relationship-redline-cleanup.mjs`、`...-browser.pw.js` | Corrected / PASS | DEV-077 / DEV-085 | 更正後 static 6/6 驗證 endpoint=2、arm=2、joystick=2、center guide=0、legacy duplicate=0。 |
 
 ## Documentation Map Update - 2026-08-20（DEV-076 心智圖左鍵抓取畫布平移 Implemented / QA-QC PASS）
 
@@ -217,14 +265,25 @@ Spec Impact：`DEV-069` 已完成 RD 實作與 local-test／browser QA-QC，狀�
 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Current mobile boundary reference | DEV-010 / DEV-069 | 維持手機版不開放會議紀錄，驗收以桌機 1440x900 與筆電 1024x768 為主；390x844 只驗證功能仍不可用。 |
 | `src/store/useRecordStore.ts`、`src/services/dataBackend.ts`、三 provider record adapter | Implemented / Local QA-QC PASS | DEV-069 | 已新增獨立 `checkpointDraft()`、本機 recovery hook/service、成本 policy、desktop status 與 mobile hard guard；正式 provider smoke 仍待補。 |
 
+## Documentation Map Update - 2026-08-25（展開 L2 standard marker 完整子樹邊界）
+
+Spec Impact：對 DEV-055 primary collision geometry 為 `No conflict`，對舊 before／after primary bottom 顯示規則為 `Intentional replacement`。展開 L2／L3+ 的 standard `after` marker 改用完整 task scope bottom；primary geometry、innermost ownership、commit parent/order 與 child dwell 均不變。本輪未部署、未 release。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/components/Wbs/taskDrag/taskOrderingGeometry.ts` | Added / Local Verified | DEV-055 / DEV-068 | 桌機與手機共用完整 task scope 的 reorder marker 顯示邊界。 |
+| `src/components/Wbs/taskDrag/desktopTaskDropPreview.ts`、`taskDragTargetAdapter.ts` | Rework 16 / Local Browser PASS | DEV-055 / DEV-068 | 命中保留 primary rect；standard before／after marker 改用完整 scope top／bottom。 |
+| `ai-doc/specs/SPEC-055-desktop-task-drag-target-clarity.md`、`SPEC-068-task-title-center-child-drop.md` | Intentional Replacement Recorded | DEV-055 / DEV-068 | 明定 marker 不得出現在 L2 標題與可見子樹之間。 |
+| `ai-doc/qa/QA-DEV-055-desktop-task-drag-target-clarity.md`、`QA-DEV-068-task-title-center-child-drop.md` | DEV-055 Browser 16/16 + Targeted Desktop/Mobile PASS | DEV-055 / DEV-068 | failure-first、桌機／手機幾何、DEV-055 完整 browser、static、TypeScript、build 與 screenshot 證據已記錄。 |
+
 ## Documentation Map Update - 2026-08-16（任務完整預選範圍停留移入子任務）
 
 Spec Impact：DEV-068 最終依使用者畫面重驗，把 child dwell target 從 title slot／shrink-wrapped title `SPAN` 改為 DEV-065 完整 hover scope（主任務＋可見子樹）。Candidate 與 armed 都不顯示子任務 target 藍框；candidate 保留 standard insertion/lane/promotion，armed 只顯示下一子階插入線並由 child intent 接管。來源卡使用與collision解耦的pointer／finger上方fixed overlay（16px gap、8px clamp、edge fallback）；拖離後原位置保留不改變geometry的2px虛線框。Physical iPhone／Android未偵測，故不標完整mobile sign-off、release ready或已部署。
 
 | 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-068-task-title-center-child-drop.md` | Implemented / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release | DEV-068 | L1／L2／L3+ 完整 DEV-065 hover scope、來源原位虛線框、1,000ms dwell、innermost ownership、control exclusion、candidate/standard coexist、armed preview與single child commit。 |
-| `ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md` | Executed / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 | DEV-068 | 73/73 DEV-068 static、30/30 rendered mouse/touch、來源原位虛線框、candidate／armed零 target 藍框、armed插入線、完整scope geometry、控制項矩形、同階相容、Workbench邊界、五 viewport、截圖與實機缺口。 |
+| `ai-doc/specs/SPEC-068-task-title-center-child-drop.md` | Implemented / Targeted Title-Anchor + Reorder Boundary Browser Passed / Adjacent L1 Placeholder Regression Open / Physical Mobile 未充分驗證 / 未 Release | DEV-068 | L1／L2／L3+ 完整 DEV-065 hover scope、1,000ms dwell、最終同層標題起點，以及展開任務 standard marker 的完整 scope 邊界契約。 |
+| `ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md` | Executed / Targeted Title-Anchor + Reorder Boundary Browser Passed / Adjacent L1 Placeholder Regression Open / Physical Mobile 未充分驗證 | DEV-068 | 76/76 static、TypeScript、build、L2／L3／L4+ title-anchor 與 desktop/mobile 完整 scope boundary rendered gate PASS；既有 L1 placeholder 相鄰失敗仍保留。 |
 | `ai-doc/qa/QA-DEV-068-coverage-matrix.md` | 70/70 AI Coverage PASS / Physical Mobile Pending | DEV-068 | 將70個風險案例逐項連到94項browser與254項static/deterministic evidence。 |
 | `ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md` | AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release | DEV-068 | QC 事實報告、操作矩陣、畫面證據、錯誤 sweep 與剩餘 physical gate。 |
 | `ai-doc/dev_task.md` | DEV-068 Implemented / Browser PASS / Physical Pending | DEV-068 | 基線 commit `56baa77` 與續作前 checkpoint `ca41403` 後完成 whole-hover-scope revalidation、RD 與獨立 QC；未授權 release。 |
@@ -698,16 +757,16 @@ PM 治理註記：DEV-044 不是建立遠端歷史紀錄系統，而是先把既
 
 ## Documentation Map Update - 2026-07-05
 
-### DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas
+### DEV-042: 手機與桌機共用左側 Inline 面板排列
 
 | 文件 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | DEV-042 / DEV-039 / DEV-001 | 定義並記錄手機版 collapsed Sidebar / TaskWorkbench 不保留 in-flow rail；手機展開採 overlay / drawer，不推擠主內容；桌機保留受控 compact rail；已發布 production 且使用者回報真機通過。 |
-| `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | DEV-042 | 記錄 DEV-042 static/browser viewport gate、overlay open/close、DEV-029 pan-first、DEV-039 workbench regression gate、production release evidence 與使用者回報真機通過。 |
-| `ai-doc/qc/QC-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Production Release Deployed / Local + Production + User-Reported Physical Phone QC Passed | DEV-042 | 記錄 RD 修正、static/browser screenshots、DEV-029/DEV-039 regression、TypeScript、production build、artifact/browser/auth smoke 與使用者回報 physical-phone supplemental passed evidence。 |
-| `ai-doc/dev_task.md` | DEV-042 Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed | DEV-042 | 記錄授權邊界：產品程式碼、verifier、本機 automated QA/QC、production release 與使用者回報真機通過已完成；DB/RLS/migration 與正式資料修復不屬於本 DEV。 |
+| `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md` | Shared Inline Width Alignment Local Verification Passed / Production Not Deployed | DEV-042 / DEV-039 / DEV-054 | 目前權威契約為手機與桌機共用同一 `Sidebar`／`TaskWorkbenchPanel`，且手機兩面板 computed width 必須一致；舊 Off-Canvas／234px／default-open 只保留歷史。 |
+| `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Shared Inline Width Alignment Local QA Passed / Production Not Deployed | DEV-042 / DEV-054 | 390／320 mobile 兩面板同寬、1440 desktop、單／雙面板、無 overlay/backdrop、Escape、visible error 與未歸位任務回歸均已驗證。 |
+| `ai-doc/qc/QC-DEV-042-mobile-left-sidebar-offcanvas-collapse.md` | Shared Inline Width Alignment Local QC Passed / Production Not Deployed / Physical Supplemental Pending | DEV-042 / DEV-054 | static 22/22 + browser 8/8，390px=340px、320px=272px，且兩面板共用同一 width helper 與 viewport clamp；未部署 production。 |
+| `ai-doc/dev_task.md` | DEV-042 Shared Inline Width Alignment Local Verification Passed / Production Not Deployed | DEV-042 | 共用元件、inline reflow 與手機工作區清單／全域工作台同寬契約均已本機驗證；production deploy 仍需另行 release gate。 |
 
-PM 治理註記：DEV-042 修正的是「手機 collapsed state 不應被桌機 compact rail 語意綁住」。本輪已同時處理主工作區側欄與全域任務平台：mobile closed 不再渲染 in-flow rail，open state 以 overlay 顯示；desktop compact rail 保留。2026-07-06 已發布 Firebase Hosting production，且使用者回報真機驗證通過。DB schema、migration、RLS/RPC、完整 Sidebar IA redesign 不在本輪完成範圍。
+PM 治理註記：2026-08-24 使用者明確要求手機面板不得覆蓋看板且不得另寫元件，因此 Shared Inline 契約是對 Off-Canvas、default-open、234px 與 128px gutter 的 `Intentional replacement`。本輪再依使用者指令補上手機 Sidebar 與 TaskWorkbench computed width 必須一致，兩者共用同一 width helper 與 viewport clamp；實際內容與狀態來源仍和桌機共用。未歸位任務可由 Workbench 跨 inline 邊界拖入看板，placed row 不可拖。本輪 width alignment 已完成本機驗證，未部署；2026-07-06 production／真機證據只代表舊 Off-Canvas 版本。DB schema、migration、RLS/RPC、完整 Sidebar IA redesign 不在本輪範圍。
 
 ### DEV-028 Addendum: 任務名稱僅限詳情頁編輯
 
@@ -1049,7 +1108,7 @@ DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延�
 | `ai-doc/specs/SPEC-029-mobile-pan-first-touch-interactions.md` | Phase 1 + Phase 1B Implemented / Local Automated QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed / Canvas CTA Pass-Through Covered | DEV-029 | 定義手機 BoardView / Kanban / TaskWorkbench pan-first 觸控仲裁，手機 task surface、拖曳把手與大型新增 CTA 短滑不誤開詳情且可 pan，無位移 tap 仍開詳情或執行新增；Phase 1B compact action rail、長按拖放、edge auto-scroll 與 cancel/blur/Escape/timeout 防卡死已完成本機 QA，production 與真機 supplemental 未執行。 |
 | `ai-doc/specs/SPEC-051-kanban-cross-parent-drag-lock.md` | Implemented / Local Automated QA + Browser UI QC Passed / Production Not Deployed | DEV-051 / DEV-046 / DEV-029 | 定義並落地同父層即時排序、跨父層 750ms lock、empty/collapsed child lane、locked before/after/append、filter canonical order、桌機/手機共用 resolver、commit/undo 與取消安全。 |
 | `ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md` | Archived / Historical / Do Not Execute | DEV-052 / DEV-051 / DEV-046 / DEV-029 | 歷史 targeted drag subsystem refactor 提案；依賴已撤回的 DEV-051 baseline，不得直接實作。 |
-| `ai-doc/specs/SPEC-068-task-title-center-child-drop.md` | Implemented / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release | DEV-068 | 定義並落地 L1／L2／L3+ complete-hover-scope geometry、來源原位虛線框、1秒child-intent、candidate／armed零 target 藍框、armed插入線；child append 回原位時顯示來源名稱並zero-write，其餘沿用desktop/mobile共用提交契約。 |
+| `ai-doc/specs/SPEC-068-task-title-center-child-drop.md` | Implemented / AI Browser QA-QC Passed / Reorder Boundary Targeted PASS / Physical Mobile 未充分驗證 / 未 Release | DEV-068 | 定義並落地 L1／L2／L3+ complete-hover-scope geometry、來源原位虛線框、1秒child-intent、candidate／armed零 target 藍框、armed插入線，以及展開任務 standard marker 的完整 scope 邊界；child append 回原位時顯示來源名稱並zero-write。 |
 | `ai-doc/specs/SPEC-034-fast-start-pwa-install-guidance.md` | Done / Browser QC Passed / Local-first scope / QuickCaptureShell Retired | DEV-034 | 定義 App 快速啟動、PWA 自動更新、加入主畫面平台分流指引與本機 pending InboxItem queue；QuickCaptureShell 已退役並由 DEV-039 全域任務平台 `未歸位` lane 取代；正式雲端 Inbox、跨裝置同步與轉正式任務接 SPEC-002 後續。 |
 
 ## 目前交付邊界
@@ -1071,7 +1130,7 @@ DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延�
 - DEV-026：Trello-like 看板分享體驗。
 - DEV-027：Xmind-like 心智圖模式。
 - DEV-028：四模式一致的 Trello-like 任務操作契約。
-- DEV-068：拖離任務後原位置保留尺寸穩定的虛線框；進入任務完整命中範圍後，前1秒不顯示子任務藍框並保留原standard drop，滿1秒只顯示下一子階插入線；若回到原位則顯示來源名稱並zero-write，否則放開才移入exact parent。標題尾端與主任務空白都在scope內，內部控制項排除。目前AI Browser QA/QC已通過，Physical Mobile未充分驗證，未Release。
+- DEV-068：拖離任務後原位置保留尺寸穩定的虛線框；進入任務完整命中範圍後，前1秒不顯示子任務藍框並保留原standard drop，但展開任務的 `after` 線必須在完整子樹之後，不能出現在 L2 標題正下方；滿1秒只顯示下一子階插入線。若回到原位則顯示來源名稱並zero-write，否則放開才移入exact parent。目前AI Browser QA/QC與本輪 boundary targeted gate已通過，Physical Mobile未充分驗證，未Release。
 - DEV-029：手機 Pan-First 觸控手勢仲裁與 compact action rail。
 - DEV-034：App 快速啟動與加入主畫面 UX。
 - DEV-035：工作區刪除持久化修正。
@@ -1292,7 +1351,7 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/qa/QA-DEV-029-mobile-pan-first-touch-interactions.md` | Local Automated Browser QA Passed / Physical Phone Supplemental Not Executed / Phase 1B Hotfix Covered / B10-B12 Added | DEV-029 | 驗證手機 pan-first：任務卡、L2+ 子任務、欄位、工作台 row、手機拖曳把手與大型新增 CTA 短滑不誤開詳情且可 pan，L2+ pan 可推動 `scrollTop` / `scrollLeft`，無位移 tap 可開詳情或執行新增；Phase 1B 覆蓋 compact action rail、長按浮起、拖曳把手長按、touchcancel 退出不卡死、drop target、刪除確認與桌機右鍵不變驗證。 |
 | `ai-doc/qa/QA-DEV-051-kanban-cross-parent-drag-lock.md` | QA Plan Updated / Local Automated QA + Browser UI QC Passed / Manual Real Operation Not Executed / Physical Phone Supplemental Not Executed | DEV-051 | 驗證 750ms/200ms/20px 邊界、1A/2A/3A、desktop/mobile、filter、cycle、雙 ancestor rollup、undo、stable selectors 與 DEV-029/039/044/046/048 回歸；新增 R01～R14 人工操作腳本。 |
 | `ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md` | Archived / Historical / Not Executed | DEV-052 | 歷史驗證設計；因 DEV-052 已封存，不得作為目前 QA ready 或實作 gate。 |
-| `ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md` | Executed / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 | DEV-068 | 已驗證來源原位虛線框、complete-hover-scope geometry、1秒timing、candidate／armed零 target 藍框、armed插入線、child-origin名稱預覽／zero-write、mouse/touch、preview/commit一致、衝突回歸、資料安全與五種viewport；iOS/Android實機待補。 |
+| `ai-doc/qa/QA-DEV-068-task-title-center-child-drop.md` | Executed / Targeted Title-Anchor + Reorder Boundary Browser Passed / Adjacent L1 Placeholder Regression Open / Physical Mobile 未充分驗證 | DEV-068 | 2026-08-25 已驗證最終同層 title anchor 與展開 L2 standard marker 的完整 scope bottom；desktop/mobile targeted 各 2/2，既有 L1 placeholder 相鄰回歸與 iOS/Android 實機待補。 |
 | `ai-doc/qa/QA-DEV-040-production-environment-risk-validation.md` | QA Plan Complete / Local + P0 Addendum QC Executed / P0 Remote Read-only Preflight + Remote Readiness Static Gate Passed / Production Smoke Executed for Original BUG Flows / Extended Matrix Partially Covered | DEV-040 | 驗證正式環境同型 BUG 風險：dependencies 匯入、RAG timeout、看板 temp id、member/tag stale response、Google Calendar timeout、MindMap local-only 語意與 production smoke evidence；已完成原始 2 BUG production authenticated UI smoke、2026-07-06 P0 local addendum QC、2026-07-07 read-only preflight 與 remote-readiness static gate，延伸矩陣剩餘項需另行驗證。 |
 
 ### QC Fact Reports

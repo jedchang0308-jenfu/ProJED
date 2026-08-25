@@ -126,10 +126,20 @@ async (page) => {
       target: element.getAttribute('data-desktop-drop-target'),
       position: element.getAttribute('data-desktop-drop-position'),
       surfaceKind: element.getAttribute('data-desktop-drop-surface-kind'),
+      axis: element.getAttribute('data-desktop-drop-axis'),
       markerCount: element.querySelectorAll('[data-kanban-insertion-marker="true"]').length,
+      dotCount: element.querySelectorAll('[data-kanban-insertion-dot="true"]').length,
+      barCount: element.querySelectorAll('[data-kanban-insertion-bar="true"]').length,
       rect: (() => {
         const rect = element.getBoundingClientRect();
-        return { left: rect.left, right: rect.right, top: rect.top, width: rect.width };
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
       })(),
     }));
   };
@@ -163,6 +173,22 @@ async (page) => {
   const columnHeader = (index) => columns().nth(index).locator('[data-kanban-column-header="true"]');
   const columnTitleSlot = (index) => columnHeader(index).locator('[data-task-title-slot="true"]');
   const rootDrop = () => page.locator('[data-kanban-root-drop-zone="true"]').first();
+
+  const readColumnGeometry = async () => ({
+    scrollWidth: await page.locator('[data-layout-region="board-canvas"]').evaluate((element) => element.scrollWidth),
+    columns: await columns().evaluateAll((items) => items.map((item) => {
+      const rect = item.getBoundingClientRect();
+      return {
+        id: item.getAttribute('data-task-id'),
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      };
+    })),
+  });
 
   const readColumnTitleTailGeometry = async (index, visibleOnly = false) => {
     const slot = columnTitleSlot(index);
@@ -206,11 +232,24 @@ async (page) => {
     const sourceAfter = result.after[result.sourceId];
     const targetAfter = result.after[result.indicator.target];
     assert(result.indicator.surfaceKind === 'column-header'
-      && result.indicator.position === 'before'
+      && result.indicator.position === 'after'
+      && result.indicator.axis === 'vertical'
       && result.indicator.markerCount === 1,
-    'column header pre-dwell release must use the existing single insertion marker', result.indicator);
-    assert(sourceAfter.parentId === null && sourceAfter.nodeType === 'group' && sourceAfter.order < targetAfter.order,
-      'desktop header release before child dwell must promote source to L1 before target', { sourceAfter, targetAfter });
+    'column header pre-dwell release must use one vertical L1 insertion rail', result.indicator);
+    const promotionCommitted = sourceAfter.parentId === null
+      && sourceAfter.nodeType === 'group'
+      && sourceAfter.order > targetAfter.order;
+    const dragDiagnostics = promotionCommitted ? null : await page.evaluate(() => ({
+      debug: window.__projedDesktopTaskDragDebug || [],
+      commitSpy: window.__projedTaskDragTestApi?.snapshotDesktopCommitSpy?.() || null,
+    }));
+    assert(promotionCommitted,
+      'desktop header right-half release must promote source to L1 after target', {
+        sourceAfter,
+        targetAfter,
+        indicator: result.indicator,
+        dragDiagnostics,
+      });
     return { ...result, tailGeometry };
   });
 
@@ -233,6 +272,8 @@ async (page) => {
     });
     assert(result.after[result.sourceId].parentId === null && result.after[result.sourceId].nodeType === 'group',
       'L3 source must become an L1 group before child dwell arms', result.after[result.sourceId]);
+    assert(result.indicator.axis === 'vertical' && result.indicator.rect.height > result.indicator.rect.width * 10,
+      'L3 promotion to L1 must use the vertical root-level rail', result.indicator);
     assert(descendantParents.every(({ id, parentId }) => result.after[id]?.parentId === parentId),
       'promotion must preserve descendant ownership', { descendantParents });
     return { ...result, descendantParents, tailGeometry };
@@ -249,6 +290,7 @@ async (page) => {
     const boardId = sourceAfter.boardId;
     const roots = Object.values(result.after).filter((node) => !node.isArchived && node.boardId === boardId && node.parentId === null);
     assert(result.indicator.surfaceKind === 'root-drop' && result.indicator.position === 'append'
+      && result.indicator.axis === 'vertical'
       && result.indicator.markerCount === 1,
     'board-end drop must expose one root append marker', result.indicator);
     assert(sourceAfter.nodeType === 'group' && sourceAfter.order === Math.max(...roots.map((node) => node.order)),
@@ -269,10 +311,98 @@ async (page) => {
     });
     assert(result.indicator.surfaceKind === 'column-drop' && result.indicator.position === 'append',
       'column body must retain column-drop append semantics before child dwell', result.indicator);
+    assert(result.indicator.axis === 'horizontal' && result.indicator.rect.width > result.indicator.rect.height * 10,
+      'L2 column body append must retain the horizontal insertion line', result.indicator);
     assert(result.after[result.sourceId].parentId === targetColumnId && result.after[result.sourceId].nodeType === 'task',
       'column body release must keep the task at L2', result.after[result.sourceId]);
     const sweep = await visibleErrorSweep('1024 desktop L1/L2 drag');
     return { ...result, sweep };
+  });
+
+  await runCase('QA-067-010', 'desktop L1 reorder uses one stable vertical rail controlled only by pointer X', async () => {
+    await openApp({ width: 1440, height: 900 });
+    assert(await columns().count() >= 2, 'L1 axis verification requires at least two columns');
+    const beforeGeometry = await readColumnGeometry();
+    const beforeNodes = await readNodes();
+    const source = columnHeader(0);
+    const sourceId = await source.getAttribute('data-task-id');
+    const target = columnHeader(1);
+    const targetId = await target.getAttribute('data-task-id');
+    const targetPoint = await pointFor(target, 0.82, 0.5);
+    const targetColumnBox = await columns().nth(1).boundingBox();
+    const adjacentBox = await columns().count() > 2
+      ? await columns().nth(2).boundingBox()
+      : await rootDrop().boundingBox();
+    assert(Boolean(targetColumnBox) && Boolean(adjacentBox), 'L1 boundary neighbors must expose geometry');
+    const expectedBoundaryCenter = (targetColumnBox.x + targetColumnBox.width + adjacentBox.x) / 2;
+
+    await beginMouseDrag(source);
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 12 });
+    await page.waitForTimeout(100);
+    const firstIndicator = await readDesktopIndicator();
+    assert(firstIndicator.surfaceKind === 'column-header'
+      && firstIndicator.position === 'after'
+      && firstIndicator.axis === 'vertical'
+      && firstIndicator.markerCount === 1
+      && firstIndicator.dotCount === 0
+      && firstIndicator.barCount === 1,
+    'L1 reorder must expose one quiet vertical rail without a second dot signal', firstIndicator);
+    assert(Math.abs((firstIndicator.rect.left + firstIndicator.rect.width / 2) - expectedBoundaryCenter) <= 1,
+      'vertical rail must be centered in the canonical inter-column boundary', {
+        firstIndicator,
+        expectedBoundaryCenter,
+      });
+    assert(firstIndicator.rect.width === 6 && firstIndicator.rect.height > 100,
+      'vertical rail must use the 6px axis-aware geometry', firstIndicator);
+
+    const boardBox = await page.locator('[data-layout-region="board-canvas"]').boundingBox();
+    assert(Boolean(boardBox), 'board canvas must expose geometry during L1 drag');
+    await page.mouse.move(targetPoint.x, Math.round(boardBox.y + boardBox.height - 24), { steps: 8 });
+    await page.waitForTimeout(100);
+    const lowerIndicator = await readDesktopIndicator();
+    assert(lowerIndicator.target === firstIndicator.target
+      && lowerIndicator.position === firstIndicator.position
+      && Math.abs(lowerIndicator.rect.left - firstIndicator.rect.left) <= 1
+      && Math.abs(lowerIndicator.rect.top - firstIndicator.rect.top) <= 1
+      && Math.abs(lowerIndicator.rect.height - firstIndicator.rect.height) <= 1,
+    'moving only on Y must not change the L1 target or rail geometry', { firstIndicator, lowerIndicator });
+
+    const duringGeometry = await readColumnGeometry();
+    assert(duringGeometry.scrollWidth === beforeGeometry.scrollWidth,
+      'fixed L1 rail must not change board scroll width', { beforeGeometry, duringGeometry });
+    assert(duringGeometry.columns.every((column, index) => {
+      const before = beforeGeometry.columns[index];
+      return before
+        && Math.abs(column.left - before.left) <= 1
+        && Math.abs(column.top - before.top) <= 1
+        && Math.abs(column.width - before.width) <= 1
+        && Math.abs(column.height - before.height) <= 1;
+    }), 'fixed L1 rail must not shift sibling column geometry', { beforeGeometry, duringGeometry });
+
+    const screenshotPath = `${screenshotBase}-desktop-l1-vertical-axis.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(280);
+    const afterNodes = await readNodes();
+    const roots = Object.values(afterNodes)
+      .filter((node) => !node.isArchived && node.parentId === null && node.boardId === afterNodes[sourceId].boardId)
+      .sort((left, right) => left.order - right.order);
+    assert(roots.findIndex((node) => node.id === sourceId) > roots.findIndex((node) => node.id === targetId),
+      'release order must match the vertical rail shown after the target column', {
+        sourceId,
+        targetId,
+        beforeSource: beforeNodes[sourceId],
+        roots,
+      });
+    return {
+      sourceId,
+      targetId,
+      firstIndicator,
+      lowerIndicator,
+      beforeGeometry,
+      duringGeometry,
+      screenshotPath,
+    };
   });
 
   await page.addInitScript(() => {
@@ -333,12 +463,38 @@ async (page) => {
 
   const readMobileIndicator = async () => {
     const indicators = page.locator('[data-mobile-drop-indicator="true"]');
-    assert(await indicators.count() === 1, 'mobile must show exactly one live indicator');
+    const indicatorCount = await indicators.count();
+    const diagnostics = indicatorCount === 1 ? null : await page.evaluate(() => ({
+      actionRailCount: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      activePlaceholders: Array.from(document.querySelectorAll('[data-kanban-drag-source-placeholder="true"]'))
+        .map((element) => element.getAttribute('data-task-id')),
+      mobileIndicators: Array.from(document.querySelectorAll('[data-mobile-drop-indicator="true"]'))
+        .map((element) => ({
+          target: element.getAttribute('data-mobile-drop-target'),
+          surfaceKind: element.getAttribute('data-mobile-drop-surface-kind'),
+        })),
+    }));
+    assert(indicatorCount === 1, 'mobile must show exactly one live indicator', diagnostics || {});
     return indicators.first().evaluate((element) => ({
       target: element.getAttribute('data-mobile-drop-target'),
       position: element.getAttribute('data-mobile-drop-position'),
       surfaceKind: element.getAttribute('data-mobile-drop-surface-kind'),
+      axis: element.getAttribute('data-mobile-drop-axis'),
       markerCount: element.querySelectorAll('[data-kanban-insertion-marker="true"]').length,
+      dotCount: element.querySelectorAll('[data-kanban-insertion-dot="true"]').length,
+      barCount: element.querySelectorAll('[data-kanban-insertion-bar="true"]').length,
+      rect: (() => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+      })(),
     }));
   };
 
@@ -358,10 +514,28 @@ async (page) => {
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await held.end();
     const after = await readNodes();
-    assert(indicator.surfaceKind === 'column-header' && indicator.position === 'before' && indicator.markerCount === 1,
-      'mobile column header must show the canonical L1 marker before child dwell', indicator);
+    const roots = Object.values(after)
+      .filter((node) => !node.isArchived && node.parentId === null && node.boardId === after[sourceId].boardId)
+      .sort((left, right) => left.order - right.order);
+    const sourceIndex = roots.findIndex((node) => node.id === sourceId);
+    const targetIndex = roots.findIndex((node) => node.id === indicator.target);
+    assert(indicator.surfaceKind === 'column-header'
+      && ['before', 'after'].includes(indicator.position)
+      && indicator.axis === 'vertical'
+      && indicator.markerCount === 1
+      && indicator.dotCount === 0
+      && indicator.barCount === 1
+      && indicator.rect.width === 6
+      && indicator.rect.height > 100,
+    'mobile column header must show one quiet vertical L1 rail before child dwell', indicator);
     assert(after[sourceId].parentId === null && after[sourceId].nodeType === 'group',
       'mobile header release before child dwell must promote the card to L1', { before: before[sourceId], after: after[sourceId] });
+    assert(indicator.position === 'before' ? sourceIndex < targetIndex : sourceIndex > targetIndex,
+      'mobile release order must match the exact before/after descriptor shown by the rail', {
+        sourceId,
+        roots,
+        indicator,
+      });
     const sweep = await visibleErrorSweep('390 mobile L1 header drag');
     return { sourceId, indicator, screenshotPath, sweep, tailGeometry };
   });
@@ -374,10 +548,22 @@ async (page) => {
     const lastColumn = columns().last();
     const source = lastColumn.locator('.kanban-task-card[data-task-id]').first();
     const sourceId = await source.getAttribute('data-task-id');
-    const sourcePoint = await visiblePointFor(source.locator(':scope > [data-task-surface-source="true"]'));
+    const sourcePoint = await visiblePointFor(
+      source.locator(':scope > [data-task-surface-source="true"]'),
+      0.15,
+      0.5,
+    );
     const targetPoint = await visiblePointFor(rootDrop());
     const before = await readNodes();
     const held = await startHeldTouchAtPoint(sourcePoint);
+    const heldState = await page.evaluate(({ sourcePoint, targetPoint }) => ({
+      sourcePoint,
+      targetPoint,
+      sourceAtPoint: document.elementFromPoint(sourcePoint.x, sourcePoint.y)?.closest('[data-task-id]')?.getAttribute('data-task-id'),
+      actionRailCount: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
+      placeholderCount: document.querySelectorAll('[data-kanban-drag-source-placeholder="true"]').length,
+    }), { sourcePoint, targetPoint });
+    assert(heldState.actionRailCount === 1, 'mobile root-append source must arm before moving', heldState);
     await held.moveTo(targetPoint);
     await page.waitForTimeout(140);
     const indicator = await readMobileIndicator();
@@ -387,14 +573,77 @@ async (page) => {
     const after = await readNodes();
     const sourceAfter = after[sourceId];
     const roots = Object.values(after).filter((node) => !node.isArchived && node.boardId === sourceAfter.boardId && node.parentId === null);
-    assert(indicator.surfaceKind === 'root-drop' && indicator.position === 'after' && indicator.markerCount === 1,
-      'mobile board-end surface must expose one root-drop marker', indicator);
+    assert(indicator.surfaceKind === 'root-drop'
+      && indicator.position === 'after'
+      && indicator.axis === 'vertical'
+      && indicator.markerCount === 1
+      && indicator.dotCount === 0
+      && indicator.barCount === 1
+      && indicator.rect.width === 6
+      && indicator.rect.height > 100,
+    'mobile board-end surface must expose one vertical root-drop rail', indicator);
     assert(sourceAfter.nodeType === 'group' && sourceAfter.order === Math.max(...roots.map((node) => node.order)),
       'mobile root-drop release must append the source as the final L1', { sourceAfter, roots });
     assert(Object.keys(before).length === Object.keys(after).length,
       'mobile root-drop release must not trigger the add-list button');
     const sweep = await visibleErrorSweep('390 mobile root append drag');
     return { sourceId, indicator, screenshotPath, sweep };
+  });
+
+  await runCase('QA-067-008', 'touch L1 reorder keeps one X-axis target while the finger moves vertically', async () => {
+    await openApp({ width: 1024, height: 768 });
+    assert(await columns().count() >= 2, 'touch L1 axis verification requires at least two columns');
+    const before = await readNodes();
+    const sourceId = await columnHeader(0).getAttribute('data-task-id');
+    const targetId = await columnHeader(1).getAttribute('data-task-id');
+    const sourcePoint = await visiblePointFor(columnHeader(0), 0.2, 0.5);
+    const targetPoint = await visiblePointFor(columnHeader(1), 0.82, 0.5);
+    const targetColumnBox = await columns().nth(1).boundingBox();
+    assert(sourceId && targetId && targetColumnBox, 'touch L1 sample must expose source/target geometry');
+
+    const held = await startHeldTouchAtPoint(sourcePoint);
+    await held.moveTo(targetPoint);
+    await page.waitForTimeout(100);
+    const firstIndicator = await readMobileIndicator();
+    const lowerPoint = {
+      x: targetPoint.x,
+      y: Math.round(Math.min(740, targetColumnBox.y + targetColumnBox.height - 24)),
+    };
+    await held.moveTo(lowerPoint);
+    await page.waitForTimeout(100);
+    const lowerIndicator = await readMobileIndicator();
+    assert(firstIndicator.axis === 'vertical'
+      && firstIndicator.surfaceKind === 'column-header'
+      && firstIndicator.target === targetId
+      && firstIndicator.position === 'after'
+      && firstIndicator.dotCount === 0
+      && firstIndicator.barCount === 1,
+    'touch L1 reorder must resolve by horizontal column midpoint and use a vertical rail', firstIndicator);
+    assert(lowerIndicator.target === firstIndicator.target
+      && lowerIndicator.position === firstIndicator.position
+      && lowerIndicator.axis === firstIndicator.axis
+      && Math.abs(lowerIndicator.rect.left - firstIndicator.rect.left) <= 1
+      && Math.abs(lowerIndicator.rect.top - firstIndicator.rect.top) <= 1
+      && Math.abs(lowerIndicator.rect.height - firstIndicator.rect.height) <= 1,
+    'moving only on Y must not change the touch L1 boundary or rail geometry', {
+      firstIndicator,
+      lowerIndicator,
+      targetPoint,
+      lowerPoint,
+    });
+    const screenshotPath = `${screenshotBase}-mobile-l1-x-axis-vertical-rail.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await held.end();
+    const after = await readNodes();
+    const roots = Object.values(after)
+      .filter((node) => !node.isArchived && node.parentId === null && node.boardId === after[sourceId].boardId)
+      .sort((left, right) => left.order - right.order);
+    assert(roots.findIndex((node) => node.id === sourceId) > roots.findIndex((node) => node.id === targetId),
+      'touch L1 release must commit the same after-target descriptor shown by the rail', {
+        beforeSource: before[sourceId],
+        roots,
+      });
+    return { sourceId, targetId, firstIndicator, lowerIndicator, screenshotPath };
   });
 
   await runCase('QA-067-009', '1440/1024/390 rendered surfaces remain stable and error-free', async () => {

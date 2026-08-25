@@ -68,12 +68,12 @@ check('all panel resizers guard before pointer side effects', () => {
   }
 });
 
-check('Mindmap relationship selection and endpoint drag reject non-primary events', () => {
-  assert.match(relationshipLayer, /React\.MouseEvent<Element> \| React\.PointerEvent<Element>/);
-  assert.match(relationshipLayer, /if \(!isPrimaryPointerActivation\(event\)\) return;/);
+check('Mindmap relationship selection commits on click while endpoint drag rejects non-primary events', () => {
+  assert.match(relationshipLayer, /const selectOrEditRelationship = \(event: React\.MouseEvent/);
+  assert.match(relationshipLayer, /onClick=\{\(event\) => selectOrEditRelationship\(event, path\)\}/);
+  assert.doesNotMatch(relationshipLayer, /selectRelationshipFromEvent/);
+  assert.doesNotMatch(relationshipLayer, /onAuxClick=/);
   assert.match(mindMapView, /if \(!isPrimaryPointerActivation\(event\)\) return;/);
-  const layerGuard = relationshipLayer.indexOf('if (!isPrimaryPointerActivation(event)) return;');
-  assert.ok(layerGuard < relationshipLayer.indexOf('event.preventDefault()', layerGuard));
   const viewGuard = mindMapView.indexOf('if (!isPrimaryPointerActivation(event)) return;');
   assert.ok(viewGuard < mindMapView.indexOf('event.preventDefault()', viewGuard));
 });

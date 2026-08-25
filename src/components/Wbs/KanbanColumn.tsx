@@ -161,10 +161,18 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       data-task-hover-scope-kind="column"
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
-      className={`flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all ${
+      className={`relative flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all ${
         isColumnDragging ? 'pointer-events-none' : ''
       }`}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 h-px w-px opacity-0"
+        data-task-direct-child-title-anchor="true"
+        style={{
+          left: 'calc(var(--kanban-column-body-pad, 8px) + 1px + var(--kanban-card-pad-x, 9px))',
+        }}
+      />
       <div
         {...columnHeaderDragBindings}
         {...taskGesture.handlers}
@@ -204,10 +212,30 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       >
         {isColumnPlaceholder ? (
           <div
-            className="h-[20px] w-full"
+            className="invisible flex min-w-0 items-center gap-1.5"
             data-kanban-drag-source-placeholder-neutral="true"
             aria-hidden="true"
-          />
+          >
+            <h3
+              className="task-title-text relative min-w-0 flex-1 text-sm font-semibold text-slate-800"
+              data-task-title-slot="true"
+            >
+              <span className="inline-block max-w-full truncate align-top">
+                {node.title || '未命名任務'}
+              </span>
+            </h3>
+            <TaskDateBadge
+              startDate={node.startDate}
+              endDate={node.endDate}
+              status={status}
+              showStartDate={false}
+              startLocked={lockStatus.startLocked}
+              endLocked={lockStatus.endLocked}
+              durationLocked={Boolean(node.isDurationLocked)}
+              surface="checklist"
+              className="ml-0.5"
+            />
+          </div>
         ) : (
         <>
         <div className="flex min-w-0 items-center gap-1.5">
@@ -283,6 +311,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         }`}
         data-mobile-pan-surface="kanban-column"
         data-task-id={nodeId}
+        data-mobile-drop-target={nodeId}
         data-task-drop-surface-kind="column-drop"
         data-desktop-drop-surface="true"
         data-desktop-drop-id={`${nodeId}-drop`}
@@ -303,6 +332,11 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               />
             ))}
           </SortableContext>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none block h-0 w-full"
+            data-kanban-column-append-anchor="true"
+          />
         </div>
 
         <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />

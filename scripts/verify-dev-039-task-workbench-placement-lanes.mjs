@@ -129,12 +129,10 @@ assert(
 
 assert(
   'Task Workbench task rows open the shared GlobalContextMenu on right click',
-  source.taskWorkbench.includes('const setContextMenuState = useBoardStore(state => state.setContextMenuState)') &&
+  source.taskWorkbench.includes("import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding'") &&
+    source.taskWorkbench.includes('const interactionBinding = useTaskInteractionBinding({') &&
     source.taskWorkbench.includes('const handleContextMenu = (event: React.MouseEvent) => {') &&
-    source.taskWorkbench.includes('setContextMenuState({') &&
-    source.taskWorkbench.includes("kind: 'task'") &&
-    source.taskWorkbench.includes('nodeId: task.id') &&
-    source.taskWorkbench.includes("title: task.title || '未命名任務'") &&
+    source.taskWorkbench.includes('void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });') &&
     source.taskWorkbench.includes('onContextMenu={handleContextMenu}') &&
     source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
     !source.taskWorkbench.includes('TaskWorkbenchContextMenu') &&
@@ -168,6 +166,10 @@ assert(
     source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
     source.taskWorkbench.includes('rounded-md border border-slate-600 bg-slate-700') &&
     source.taskWorkbench.includes('w-[104px]') &&
+    source.taskWorkbench.includes('w-full min-w-0 shrink-0 items-center gap-2') &&
+    source.taskWorkbench.includes('min-w-0 w-[104px] shrink') &&
+    source.taskWorkbench.includes('min-w-[80px] shrink-0') &&
+    !source.taskWorkbench.includes('absolute left-[112px]') &&
     source.taskWorkbench.includes('text-white') &&
     !source.taskWorkbench.includes('border-b border-slate-300') &&
     !source.taskWorkbench.includes('bg-slate-200/95') &&
@@ -195,8 +197,9 @@ assert(
     !source.taskWorkbench.includes('NotebookText') &&
     source.taskWorkbench.includes('data-task-workbench-collapse-toggle="true"') &&
     source.taskWorkbench.includes('<ChevronLeft size={16} />') &&
-    source.taskWorkbench.includes("data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}") &&
-    source.taskWorkbench.includes('data-task-workbench-backdrop="true"') &&
+    source.taskWorkbench.includes('data-task-workbench-inline="true"') &&
+    !source.taskWorkbench.includes('data-task-workbench-overlay=') &&
+    !source.taskWorkbench.includes('data-task-workbench-backdrop=') &&
     source.taskWorkbench.includes('if (!isExpanded) {') &&
     source.taskWorkbench.includes('return null;') &&
     !source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
@@ -216,13 +219,14 @@ assert(
 );
 
 assert(
-  'Task drag committer handles placement while rejecting placed workbench sources',
+  'Task drag committer handles subtree placement while rejecting placed workbench sources',
   source.boardView.includes('commitDesktopTaskDrag') &&
     source.taskDragCommit.includes("activeData?.source === 'task-workbench' && activeData?.placement !== 'unplaced'") &&
     source.taskDragCommit.includes("overData?.type === 'task-workbench-unplaced-lane'") &&
     source.taskDragCommit.includes("overData?.type === 'task-workbench-placed-board-lane'") &&
-    source.taskDragCommit.includes('boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
-    source.taskDragCommit.includes('boardId: overData.boardId'),
+    source.taskDragCommit.includes('buildTaskSubtreePlacementUpdates') &&
+    source.taskDragCommit.includes('targetBoardId: TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
+    source.taskDragCommit.includes('targetBoardId: overData.boardId'),
 );
 
 assert(

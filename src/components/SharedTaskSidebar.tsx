@@ -12,8 +12,10 @@ import type { TaskNode } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 
-interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
-const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
+type SharedTaskSidebarSurface = 'gantt' | 'calendar';
+
+interface SortableSidebarRowProps { item: any; onClick: (item: any) => void; rowHeight: number; surface: SharedTaskSidebarSurface; onAddChild?: (item: any) => void; onToggleCollapse?: (id: string) => void; isCollapsed?: boolean; }
+const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onToggleCollapse, isCollapsed }: SortableSidebarRowProps) => {
     const { canCreateTask, canMoveTask } = useBoardPermissions();
     const selectedTaskId = useBoardStore(s => s.selectedTaskId);
     const level = Number.isFinite(item.level) ? item.level : 0;
@@ -27,7 +29,8 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
         transform: CSS.Transform.toString(transform),
         transition,
         height: rowHeight,
-        paddingLeft: Math.max(10, 10 + (level * 14)),
+        '--task-hierarchy-depth': level,
+        '--task-hierarchy-base': '10px',
         position: 'relative' as any,
         zIndex: isDragging ? 50 : 1,
     };
@@ -58,7 +61,11 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
             data-task-drag-surface="true"
             data-task-drag-surface-kind="shared-sidebar-row"
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
+            data-task-hierarchy-row="true"
+            data-task-hierarchy-surface={surface}
+            data-task-hierarchy-depth={level}
             className={`flex items-center px-[10px] border-b border-slate-100 hover:bg-primary/5 transition-colors gap-1 cursor-pointer group
+                task-hierarchy-indented-row
                 task-title-text ${isGroup ? 'font-medium text-slate-700' : isTask && level === 1 ? 'font-medium text-slate-600' : 'font-medium text-slate-500'}
                 ${selectedTaskId === item.id ? 'bg-primary/[0.05] ring-2 ring-inset ring-primary/30' : ''}
                 ${isDragging ? 'opacity-50 bg-slate-100' : ''}`}
@@ -74,7 +81,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
                         e.stopPropagation();
                         onToggleCollapse(item.id);
                     }}
-                    className="flex-shrink-0 p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-all"
+                    className="inline-flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded p-0 text-slate-400 transition-all hover:bg-slate-200 hover:text-slate-600"
                     title={isCollapsed ? '展開' : '收疊'}
                 >
                     {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -103,7 +110,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, onAddChild, onToggleColl
     );
 };
 
-interface SharedTaskSidebarProps { flattenedItems: any[]; collapsedIds: any; toggleCollapse: (id: string) => void; onItemClick: (item: any) => void; isTaskListOpen: boolean; setIsTaskListOpen: (isOpen: boolean) => void; rowHeight?: number; }
+interface SharedTaskSidebarProps { flattenedItems: any[]; collapsedIds: any; toggleCollapse: (id: string) => void; onItemClick: (item: any) => void; isTaskListOpen: boolean; setIsTaskListOpen: (isOpen: boolean) => void; surface: SharedTaskSidebarSurface; rowHeight?: number; }
 const SharedTaskSidebar = ({
     flattenedItems,
     collapsedIds,
@@ -111,6 +118,7 @@ const SharedTaskSidebar = ({
     onItemClick,
     isTaskListOpen,
     setIsTaskListOpen,
+    surface,
     rowHeight = COMPACT_DIMENSIONS.taskRowHeight
 }: SharedTaskSidebarProps) => {
     const { activeWorkspaceId, activeBoardId } = useBoardStore();
@@ -208,7 +216,7 @@ const SharedTaskSidebar = ({
     };
 
     return (
-        <div className={`flex-shrink-0 flex flex-col border-r border-slate-200 bg-white/95 z-20 transition-all duration-300 ease-in-out relative ${isTaskListOpen ? 'w-64' : 'w-10'}`}>
+        <div data-task-hierarchy-surface={surface} className={`flex-shrink-0 flex flex-col border-r border-slate-200 bg-white/95 z-20 transition-all duration-300 ease-in-out relative ${isTaskListOpen ? 'w-64' : 'w-10'}`}>
             {!isTaskListOpen ? (
                 <div className="flex-1 flex flex-col items-center pt-[6px] gap-[8px] overflow-hidden">
                     <button
@@ -249,6 +257,7 @@ const SharedTaskSidebar = ({
                                         <SortableSidebarRow
                                             key={`${item.nodeType}-${item.id}`}
                                             item={item}
+                                            surface={surface}
                                             onClick={onItemClick}
                                             onToggleCollapse={toggleCollapse}
                                             isCollapsed={collapsedIds.has(item.id)}

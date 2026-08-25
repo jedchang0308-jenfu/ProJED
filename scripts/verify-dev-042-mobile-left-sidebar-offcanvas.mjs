@@ -5,6 +5,7 @@ const files = {
   sidebar: 'src/components/Sidebar.tsx',
   taskWorkbench: 'src/components/TaskWorkbenchPanel.tsx',
   mainLayout: 'src/components/MainLayout.tsx',
+  layoutPreferences: 'src/features/layout/preferences.ts',
   browserVerifier: 'scripts/verify-dev-042-mobile-left-sidebar-offcanvas-browser.pw.js',
   packageJson: 'package.json',
   spec: 'ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md',
@@ -22,10 +23,10 @@ for (const [label, file] of Object.entries(files)) {
 const source = Object.fromEntries(Object.entries(files).map(([label, file]) => [label, read(file)]));
 
 assert(
-  'Sidebar has a mobile/narrow viewport branch',
+  'Sidebar keeps one responsive component for mobile-only close behavior',
   source.sidebar.includes("(max-width: 767px), (hover: none) and (pointer: coarse)") &&
     source.sidebar.includes('isNarrowViewport') &&
-    source.sidebar.includes('data-mobile-sidebar-overlay={isNarrowViewport ?'),
+    source.sidebar.includes('if (isNarrowViewport) setSidebarOpen(false);'),
 );
 
 assert(
@@ -37,15 +38,14 @@ assert(
 );
 
 assert(
-  'Sidebar opens as mobile overlay and desktop inline panel',
-  source.sidebar.includes("data-sidebar-overlay={isNarrowViewport ? 'true' : undefined}") &&
-    source.sidebar.includes("data-sidebar-inline={!isNarrowViewport ? 'true' : undefined}") &&
-    source.sidebar.includes('{isNarrowViewport ? (') &&
-    source.sidebar.includes('data-sidebar-backdrop="true"') &&
-    source.sidebar.includes('data-mobile-sidebar-overlay') &&
-    source.sidebar.includes('data-mobile-sidebar-backdrop') &&
-    source.sidebar.includes("setSidebarOpen(false)") &&
-    source.sidebar.includes("event.key !== 'Escape'"),
+  'Sidebar is inline on every viewport and never renders an overlay or backdrop',
+  source.sidebar.includes('data-sidebar-inline="true"') &&
+    source.sidebar.includes('relative z-10 h-full flex-shrink-0') &&
+    !source.sidebar.includes('data-sidebar-overlay') &&
+    !source.sidebar.includes('data-mobile-sidebar-overlay') &&
+    !source.sidebar.includes('data-sidebar-backdrop') &&
+    !source.sidebar.includes('data-mobile-sidebar-backdrop') &&
+    !source.sidebar.includes('fixed bottom-0 left-0 top-10'),
 );
 
 assert(
@@ -58,18 +58,45 @@ assert(
 );
 
 assert(
-  'TaskWorkbenchPanel closed state returns no in-flow rail on mobile and desktop',
-    source.taskWorkbench.includes('const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;') &&
+  'TaskWorkbenchPanel uses the same inline panel state on mobile and desktop',
+    source.taskWorkbench.includes('const isExpanded = panelPrefs.open;') &&
     source.taskWorkbench.includes('if (!isExpanded)') &&
     source.taskWorkbench.includes('return null;') &&
-    source.taskWorkbench.includes("data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}") &&
-    source.taskWorkbench.includes("data-task-workbench-inline={!isNarrowViewport ? 'true' : undefined}") &&
-    source.taskWorkbench.includes('{isNarrowViewport ? (') &&
-    source.taskWorkbench.includes('data-task-workbench-backdrop="true"') &&
-    source.taskWorkbench.includes('data-mobile-task-workbench-overlay') &&
+    source.taskWorkbench.includes('data-task-workbench-inline="true"') &&
+    source.taskWorkbench.includes('relative z-20 flex h-full') &&
+    !source.taskWorkbench.includes('mobileOverlayOpen') &&
+    !source.taskWorkbench.includes('data-task-workbench-overlay') &&
+    !source.taskWorkbench.includes('data-mobile-task-workbench-overlay') &&
+    !source.taskWorkbench.includes('data-task-workbench-backdrop') &&
+    !source.taskWorkbench.includes('data-mobile-task-workbench-backdrop') &&
     !source.taskWorkbench.includes('data-task-workbench-panel="collapsed"') &&
     !source.taskWorkbench.includes('data-task-workbench-collapsed-toggle') &&
     !source.taskWorkbench.includes('data-task-workbench-collapsed-count'),
+);
+
+assert(
+  'TaskWorkbench shares the persisted open and width preferences across viewports',
+  source.taskWorkbench.includes('const [panelPrefs, setPanelPrefs]') &&
+    source.taskWorkbench.includes('readTaskWorkbenchPanelPrefs(accountId)') &&
+    source.taskWorkbench.includes('const panelWidthStyle = getSharedInlinePanelWidthStyle(panelWidth);') &&
+    !source.taskWorkbench.includes('MOBILE_TASK_WORKBENCH_WIDTH') &&
+    !source.taskWorkbench.includes('MOBILE_TASK_WORKBENCH_VIEWPORT_GUTTER'),
+);
+
+assert(
+  'mobile Sidebar and TaskWorkbench share the same inline width helper',
+  source.layoutPreferences.includes('SHARED_INLINE_PANEL_VIEWPORT_GUTTER = 48;') &&
+    source.layoutPreferences.includes('getSharedInlinePanelWidthStyle') &&
+    source.sidebar.includes('readTaskWorkbenchPanelPrefs(accountId)') &&
+    source.sidebar.includes('getSharedInlinePanelWidthStyle(mobileSharedPanelWidth)') &&
+    source.taskWorkbench.includes('getSharedInlinePanelWidthStyle(panelWidth)'),
+);
+
+assert(
+  'mobile and desktop reuse the same Sidebar and TaskWorkbench component instances',
+  (source.mainLayout.match(/<Sidebar\s*\/>/g) || []).length === 1 &&
+    !source.mainLayout.includes('MobileSidebar') &&
+    !source.taskWorkbench.includes('MobileTaskWorkbench'),
 );
 
 assert(
@@ -82,10 +109,10 @@ assert(
 );
 
 assert(
-  'desktop Sidebar and TaskWorkbench can stay open side by side',
-  source.sidebar.includes("'relative z-10 h-full shadow-none'") &&
-    source.taskWorkbench.includes("'relative z-10 h-full shadow-none'") &&
-    source.taskWorkbench.includes('style={{ width: panelOverlayWidth }}') &&
+  'Sidebar and TaskWorkbench use inline flex positioning',
+  source.sidebar.includes('relative z-10 h-full flex-shrink-0') &&
+    source.taskWorkbench.includes('relative z-20 flex h-full') &&
+    source.taskWorkbench.includes('style={{ width: panelWidthStyle }}') &&
     !source.taskWorkbench.includes('const panelBackdropLeft = shouldOffsetForDesktopSidebar') &&
     !source.taskWorkbench.includes('panelOverlayLeft') &&
     source.sidebar.includes('if (isNarrowViewport) setSidebarOpen(false);'),
@@ -113,6 +140,14 @@ assert(
     source.spec.includes('All-Phase Coverage Matrix') &&
     source.qa.includes('Zero-Tolerance Failures') &&
     source.qa.includes('All-Phase QA Coverage Matrix'),
+);
+
+assert(
+  'DEV-042 docs capture the shared inline layout replacement',
+  source.spec.includes('手機與桌機共用 Inline 元件增補') &&
+    source.spec.includes('Intentional replacement') &&
+    source.qa.includes('手機與桌機共用 inline 元件') &&
+    source.qa.includes('不得存在 overlay 或 backdrop'),
 );
 
 const failed = results.filter(result => !result.ok);

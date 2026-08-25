@@ -204,6 +204,7 @@ const GanttView = () => {
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
+                    surface="gantt"
                     rowHeight={ganttRowHeight}
                 />
 

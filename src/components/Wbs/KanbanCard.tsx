@@ -237,6 +237,14 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
         isRecentlyChildDropped ? 'ring-2 ring-primary/50 ring-offset-1' : ''
       }`}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 h-px w-px opacity-0"
+        data-task-direct-child-title-anchor="true"
+        style={{
+          left: 'calc(9px + 2px + var(--kanban-checklist-body-pad-x, 4px) + var(--kanban-checklist-base, 4px))',
+        }}
+      />
       {isDragPlaceholder ? (
         <div
           className="w-full"
@@ -298,39 +306,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             className="kanban-task-title-row flex items-start justify-between gap-1"
           >
             <div className="kanban-task-title-content flex items-center gap-1 flex-1 min-w-0">
-              {hasVisibleChildren ? (
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsChecklistExpanded(current => !current);
-                  }}
-                  className="kanban-checklist-toggle relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors after:absolute after:-inset-1 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-expanded={isChecklistExpanded}
-                  aria-controls={checklistRegionId}
-                  aria-label={checklistToggleLabel}
-                  title={checklistToggleLabel}
-                  data-kanban-checklist-toggle="true"
-                  data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
-                >
-                  <ChevronRight
-                    size={16}
-                    aria-hidden="true"
-                    className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
-                  />
-                </button>
-              ) : null}
-
               {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
-              {isRecordCaptureMode ? (
-                <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                  isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
-                }`}>
-                  {isRecordSelected ? <Check size={11} /> : null}
-                </span>
-              ) : null}
-
               <h4
                 className={`task-title-text relative min-w-0 flex-1 pr-2 text-sm font-medium leading-tight transition-colors ${taskStatusTitleClass[status as TaskStatus]}`}
                 aria-label={node.title || '未命名任務'}
@@ -353,6 +329,39 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
               </h4>
               {showTags && nodeTags.length > 0 ? (
                 <KanbanTagSticker tags={nodeTags} />
+              ) : null}
+              {isRecordCaptureMode ? (
+                <span
+                  className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                    isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
+                  }`}
+                  data-task-record-capture-checkbox="true"
+                >
+                  {isRecordSelected ? <Check size={11} /> : null}
+                </span>
+              ) : null}
+              {hasVisibleChildren ? (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsChecklistExpanded(current => !current);
+                  }}
+                  className="kanban-checklist-toggle relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors after:absolute after:-inset-1 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-expanded={isChecklistExpanded}
+                  aria-controls={checklistRegionId}
+                  aria-label={checklistToggleLabel}
+                  title={checklistToggleLabel}
+                  data-kanban-checklist-toggle="true"
+                  data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
+                >
+                  <ChevronRight
+                    size={16}
+                    aria-hidden="true"
+                    className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
+                  />
+                </button>
               ) : null}
             </div>
             {!isSelectingMode && (

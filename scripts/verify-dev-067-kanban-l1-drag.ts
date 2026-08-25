@@ -5,6 +5,16 @@ import {
   resolveTaskDropIntent,
   type TaskDropDescriptor,
 } from '../src/components/Wbs/taskDrag/taskDropIntent';
+import {
+  DESKTOP_L1_MIDPOINT_HYSTERESIS_PX,
+  resolveDesktopL1IndicatorRect,
+  resolveDesktopL1OrderingTarget,
+} from '../src/components/Wbs/taskDrag/desktopL1DropPolicy';
+import {
+  MOBILE_L1_MIDPOINT_HYSTERESIS_PX,
+  resolveMobileL1IndicatorRect,
+  resolveMobileL1OrderingTarget,
+} from '../src/components/Wbs/taskDrag/mobileL1DropPolicy';
 
 const now = 1_723_600_000_000;
 const node = (value: Partial<TaskNode> & Pick<TaskNode, 'id' | 'parentId' | 'order' | 'nodeType'>): TaskNode => ({
@@ -82,6 +92,75 @@ assert.equal(rootReorder?.parentId, null);
 assert.equal(rootReorder?.nodeType, 'group');
 assert.equal(rootReorder?.displayPosition, 'after');
 
+const explicitRootBefore = resolve(
+  { nodeId: 'rootA', surfaceKind: 'column-header' },
+  { nodeId: 'rootB', surfaceKind: 'column-header', orderingPosition: 'before' },
+);
+assert.equal(explicitRootBefore?.displayPosition, 'before');
+
+const l1Columns = [
+  { id: 'rootA', left: 0, right: 270, top: 20, bottom: 420 },
+  { id: 'rootB', left: 282, right: 552, top: 20, bottom: 620 },
+];
+const rootBBefore = resolveDesktopL1OrderingTarget({
+  pointerX: 350,
+  columns: l1Columns,
+});
+assert.deepEqual(rootBBefore, {
+  targetId: 'rootB',
+  orderingPosition: 'before',
+  boundaryIndex: 1,
+});
+assert.equal(resolveDesktopL1OrderingTarget({
+  pointerX: 417 + DESKTOP_L1_MIDPOINT_HYSTERESIS_PX - 1,
+  columns: l1Columns,
+  previousTarget: rootBBefore,
+})?.orderingPosition, 'before');
+assert.equal(resolveDesktopL1OrderingTarget({
+  pointerX: 417 + DESKTOP_L1_MIDPOINT_HYSTERESIS_PX + 1,
+  columns: l1Columns,
+  previousTarget: rootBBefore,
+})?.orderingPosition, 'after');
+
+const afterRootA = resolveDesktopL1IndicatorRect({
+  targetId: 'rootA',
+  orderingPosition: 'after',
+  columns: l1Columns,
+});
+const beforeRootB = resolveDesktopL1IndicatorRect({
+  targetId: 'rootB',
+  orderingPosition: 'before',
+  columns: l1Columns,
+});
+assert.deepEqual(afterRootA, beforeRootB);
+assert.deepEqual(afterRootA, {
+  left: 273,
+  top: 20,
+  width: 6,
+  height: 600,
+});
+
+const mobileRootBBefore = resolveMobileL1OrderingTarget({
+  pointerX: 350,
+  columns: l1Columns,
+});
+assert.deepEqual(mobileRootBBefore, rootBBefore);
+assert.equal(resolveMobileL1OrderingTarget({
+  pointerX: 417 + MOBILE_L1_MIDPOINT_HYSTERESIS_PX - 1,
+  columns: l1Columns,
+  previousTarget: mobileRootBBefore,
+})?.orderingPosition, 'before');
+assert.equal(resolveMobileL1OrderingTarget({
+  pointerX: 417 + MOBILE_L1_MIDPOINT_HYSTERESIS_PX + 1,
+  columns: l1Columns,
+  previousTarget: mobileRootBBefore,
+})?.orderingPosition, 'after');
+assert.deepEqual(resolveMobileL1IndicatorRect({
+  targetId: 'rootB',
+  orderingPosition: 'before',
+  columns: l1Columns,
+}), beforeRootB);
+
 const invalidCycle = resolve(
   { nodeId: 'rootA', surfaceKind: 'column-header' },
   { nodeId: 'cardA', surfaceKind: 'checklist-drop' },
@@ -95,6 +174,10 @@ const source = {
   commit: readFileSync('src/components/Wbs/taskDrag/taskDragCommit.ts', 'utf8'),
   mobile: readFileSync('src/components/Wbs/taskDrag/taskDragTargetAdapter.ts', 'utf8'),
   presenter: readFileSync('src/components/Wbs/taskDrag/TaskDragPresenter.tsx', 'utf8'),
+  desktopPreview: readFileSync('src/components/Wbs/taskDrag/desktopTaskDropPreview.ts', 'utf8'),
+  l1Policy: readFileSync('src/components/Wbs/taskDrag/desktopL1DropPolicy.ts', 'utf8'),
+  mobileL1Policy: readFileSync('src/components/Wbs/taskDrag/mobileL1DropPolicy.ts', 'utf8'),
+  insertionMarker: readFileSync('src/components/Wbs/KanbanInsertionMarker.tsx', 'utf8'),
   spec: readFileSync('ai-doc/specs/SPEC-067-kanban-l1-drag-promotion.md', 'utf8'),
   qa: readFileSync('ai-doc/qa/QA-DEV-067-kanban-l1-drag-promotion.md', 'utf8'),
 };
@@ -106,11 +189,22 @@ assert.match(source.intent, /if \(targetType === 'wbs-root-drop'\) return 'root-
 assert.match(source.commit, /normalizeTaskMoveUpdates\(draggedNode\.id, intent, state\.nodes\)/);
 assert.match(source.mobile, /data-task-drop-node-id/);
 assert.match(source.presenter, /data-mobile-drop-surface-kind=\{state\.targetSurfaceKind/);
+assert.match(source.presenter, /data-mobile-drop-axis=\{state\.dropIndicatorAxis/);
+assert.match(source.board, /resolveDesktopL1OrderingTarget/);
+assert.match(source.board, /data-desktop-drop-axis=\{desktopIndicator\.axis\}/);
+assert.match(source.desktopPreview, /indicatorAxis: resolved\.targetSurfaceKind === 'column-header'/);
+assert.match(source.l1Policy, /DESKTOP_L1_MIDPOINT_HYSTERESIS_PX = 14/);
+assert.match(source.mobileL1Policy, /MOBILE_L1_MIDPOINT_HYSTERESIS_PX = 24/);
+assert.match(source.mobile, /resolveMobileL1OrderingTarget/);
+assert.match(source.mobile, /resolveMobileL1IndicatorRect/);
+assert.match(source.commit, /orderingPosition: observation\.dropPosition/);
+assert.match(source.insertionMarker, /data-kanban-insertion-axis="vertical"/);
 assert.match(source.spec, /Intentional replacement/);
 assert.match(source.qa, /QA-067-011/);
 
 console.log(JSON.stringify({
   ok: true,
-  cases: 13,
-  intents: { cardToHeader, childToHeader, cardToRootEnd, cardToColumnBody, rootReorder },
+  cases: 31,
+  intents: { cardToHeader, childToHeader, cardToRootEnd, cardToColumnBody, rootReorder, explicitRootBefore },
+  l1Geometry: { rootBBefore, afterRootA, beforeRootB, mobileRootBBefore },
 }, null, 2));

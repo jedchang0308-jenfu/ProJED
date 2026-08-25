@@ -293,9 +293,10 @@ async (page) => {
     );
     assert(
       unplacedTitleTypography.fontFamily === placedTaskTitleTypography.fontFamily
-        && unplacedTitleTypography.fontSize === placedTaskTitleTypography.fontSize
-        && unplacedTitleTypography.lineHeight === placedTaskTitleTypography.lineHeight,
-      'unplaced and placed task titles should keep the same typography family and density while hierarchy emphasis may differ',
+        && unplacedTitleTypography.fontSize === '12px'
+        && Number.parseFloat(unplacedTitleTypography.lineHeight) <= 16
+        && Number.parseFloat(placedTaskTitleTypography.fontSize) > Number.parseFloat(unplacedTitleTypography.fontSize),
+      'unplaced titles should use compact L3+ typography while placed read-only rows keep their browsing scale',
       { unplacedTitleTypography, placedTaskTitleTypography },
     );
     assert(await workbenchPanel.locator('[data-task-workbench-unplaced-task-card="true"]').count() === 1, 'legacy inbox item should be migrated into one unplaced task card');
@@ -571,8 +572,12 @@ async (page) => {
     assert(!mobileClosedOverflow, 'mobile closed rails should not create document-level horizontal overflow');
 
     await mobileWorkbenchNavEntry.click();
-    await page.locator('[data-mobile-task-workbench-overlay="true"]').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-task-workbench-panel="true"]').waitFor({ state: 'visible', timeout: 10000 });
+    const reopenedMobileWorkbench = page.locator('[data-task-workbench-panel="true"][data-task-workbench-inline="true"]');
+    await reopenedMobileWorkbench.waitFor({ state: 'visible', timeout: 10000 });
+    assert(
+      await page.locator('[data-mobile-task-workbench-overlay="true"], [data-task-workbench-backdrop="true"]').count() === 0,
+      'narrow workbench should keep the shared inline panel contract without a second overlay implementation',
+    );
     await page.locator('[data-task-workbench-unplaced-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-task-workbench-placed-board-lane="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-039-task-workbench-placement-lanes-mobile.png', fullPage: true });

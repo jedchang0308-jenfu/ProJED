@@ -4,6 +4,7 @@ async (page) => {
   const diagnostics = [];
   const networkFailures = [];
   const screenshotBase = `output/playwright/dev-068-title-child-drop-${Date.now()}`;
+  const requestedCaseId = page.url().match(/[?&]dev068Case=([^&]+)/)?.[1] || null;
   const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
   const appBaseUrl = currentPageOrigin || 'http://localhost:4000';
   const assert = (condition, message, details = {}) => {
@@ -102,6 +103,18 @@ async (page) => {
   const setMovePermission = async (allowed) => page.evaluate((next) =>
     window.__projedTaskDragTestApi.setMovePermission(next), allowed);
 
+  const resetDesktopCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.resetDesktopCommitSpy());
+
+  const readDesktopCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.snapshotDesktopCommitSpy());
+
+  const resetMobileCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.resetMobileCommitSpy());
+
+  const readMobileCommitSpy = async () => page.evaluate(() =>
+    window.__projedTaskDragTestApi.snapshotMobileCommitSpy());
+
   const visibleErrorSweep = async (label) => {
     const state = await page.evaluate(() => {
       const visible = (element) => {
@@ -148,6 +161,7 @@ async (page) => {
       outlineColor: style?.outlineColor || null,
       outlineOffset: style?.outlineOffset || null,
       backgroundColor: style?.backgroundColor || null,
+      boxShadow: style?.boxShadow || null,
     };
   }, nodeId);
 
@@ -195,7 +209,15 @@ async (page) => {
         .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
       return siblings.at(-1)?.id === sourceId ? [sourceId, parentId] : null;
     }).find(Boolean) || [];
-    return { l1, l2, l3, l2Pair: pair(l2), l3Pair: pair(l3), originPair };
+    const columnOriginPair = l2.map((sourceId) => {
+      const parentId = nodes[sourceId]?.parentId;
+      if (!parentId || !l1.includes(parentId)) return null;
+      const siblings = Object.values(nodes)
+        .filter((node) => node && !node.isArchived && node.parentId === parentId)
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+      return siblings.at(-1)?.id === sourceId ? [sourceId, parentId] : null;
+    }).find(Boolean) || [];
+    return { l1, l2, l3, l2Pair: pair(l2), l3Pair: pair(l3), originPair, columnOriginPair };
   });
 
   const descendantIds = (nodes, rootId) => {
@@ -262,10 +284,12 @@ async (page) => {
     const scopeFrame = document.querySelector('[data-task-child-drop-scope-frame="true"]');
     const childInsertion = document.querySelector('[data-task-child-drop-insertion-preview="true"]');
     const childOriginField = document.querySelector('[data-task-child-drop-origin-field="true"]');
+    const standardInsertion = document.querySelector('[data-desktop-drop-indicator="true"],[data-mobile-drop-indicator="true"]');
     const hitScopeRect = hitScope?.getBoundingClientRect();
     const parentRect = parent?.getBoundingClientRect();
     const subtreeRect = subtreeFrame?.getBoundingClientRect();
     const childInsertionRect = childInsertion?.getBoundingClientRect();
+    const standardInsertionRect = standardInsertion?.getBoundingClientRect();
     const sourceStyle = sourceFrame ? getComputedStyle(sourceFrame) : null;
     const subtreeStyle = subtreeFrame ? getComputedStyle(subtreeFrame) : null;
     const childOriginStyle = childOriginField ? getComputedStyle(childOriginField) : null;
@@ -285,6 +309,18 @@ async (page) => {
       childOriginTitle: childOriginField?.textContent?.trim() || null,
       childOriginNoop: childInsertion?.getAttribute('data-task-child-drop-noop') || null,
       standardInsertionIndicatorCount: document.querySelectorAll('[data-desktop-drop-indicator="true"],[data-mobile-drop-indicator="true"]').length,
+      standardInsertionPosition: standardInsertion?.getAttribute('data-desktop-drop-position')
+        || standardInsertion?.getAttribute('data-mobile-drop-position')
+        || null,
+      standardInsertionRect: standardInsertionRect ? {
+        left: standardInsertionRect.left,
+        top: standardInsertionRect.top,
+        right: standardInsertionRect.right,
+        bottom: standardInsertionRect.bottom,
+        width: standardInsertionRect.width,
+        height: standardInsertionRect.height,
+        centerY: standardInsertionRect.top + standardInsertionRect.height / 2,
+      } : null,
       hitScopeRect: hitScopeRect ? { left: hitScopeRect.left, top: hitScopeRect.top, right: hitScopeRect.right, bottom: hitScopeRect.bottom } : null,
       parentRect: parentRect ? { left: parentRect.left, top: parentRect.top, right: parentRect.right, bottom: parentRect.bottom } : null,
       subtreeRect: subtreeRect ? { left: subtreeRect.left, top: subtreeRect.top, right: subtreeRect.right, bottom: subtreeRect.bottom } : null,
@@ -330,6 +366,7 @@ async (page) => {
       pointerGap: Number(source?.getAttribute('data-task-drag-overlay-pointer-gap')
         || source?.getAttribute('data-mobile-preview-pointer-gap')
         || 0),
+      scale: Number(source?.getAttribute('data-task-drag-overlay-scale') || 1),
       gap: Number(source?.getAttribute('data-task-drag-overlay-pointer-gap')
         || source?.getAttribute('data-mobile-preview-finger-clearance')
         || 0),
@@ -399,7 +436,27 @@ async (page) => {
     return held;
   };
 
+  const readTaskScopeGeometry = async (nodeId) => page.evaluate((id) => {
+    const scope = Array.from(document.querySelectorAll('[data-task-surface-scope="true"][data-task-id]'))
+      .find((candidate) => candidate.getAttribute('data-task-id') === id);
+    const primary = scope?.querySelector(':scope > [data-task-surface-source="true"]');
+    const subtree = scope?.querySelector(':scope > [data-task-surface-subtree="true"]');
+    const toRect = (element) => {
+      const rect = element?.getBoundingClientRect();
+      return rect ? {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      } : null;
+    };
+    return { scope: toRect(scope), primary: toRect(primary), subtree: toRect(subtree) };
+  }, nodeId);
+
   const runCase = async (id, scenario, operation) => {
+    if (requestedCaseId && requestedCaseId !== id) return;
     try {
       const details = await operation();
       results.push({ id, scenario, result: 'PASS', details: details || {} });
@@ -432,8 +489,9 @@ async (page) => {
       const placeholder = await readSourceOriginPlaceholder(sourceId);
       assert(placeholder.count === 1
         && placeholder.outlineStyle === 'dashed'
-        && placeholder.outlineWidth === '2px'
-        && placeholder.outlineColor === 'rgb(129, 140, 248)'
+        && placeholder.outlineWidth === '1px'
+        && placeholder.outlineColor === 'rgb(148, 163, 184)'
+        && placeholder.boxShadow === 'none'
         && placeholder.rect && beforeRect
         && Math.abs(placeholder.rect.left - beforeRect.x) <= 1
         && Math.abs(placeholder.rect.top - beforeRect.y) <= 1
@@ -465,8 +523,9 @@ async (page) => {
       const placeholder = await readSourceOriginPlaceholder(sourceId);
       assert(placeholder.count === 1
         && placeholder.outlineStyle === 'dashed'
-        && placeholder.outlineWidth === '2px'
-        && placeholder.outlineColor === 'rgb(129, 140, 248)'
+        && placeholder.outlineWidth === '1px'
+        && placeholder.outlineColor === 'rgb(148, 163, 184)'
+        && placeholder.boxShadow === 'none'
         && placeholder.rect && beforeRect
         && Math.abs(placeholder.rect.left - beforeRect.x) <= 1
         && Math.abs(placeholder.rect.top - beforeRect.y) <= 1
@@ -494,13 +553,23 @@ async (page) => {
     await beginMouseDrag(sourceId);
     await moveMouseToTargetPrimary(targetId);
     await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
-    await page.waitForTimeout(420);
+    await page.waitForTimeout(80);
     const candidate = await readChildPreview();
+    const targetGeometry = await readTaskScopeGeometry(targetId);
     assert(candidate.phase === 'candidate' && candidate.target === targetId && candidate.childInsertionCount === 0
       && candidate.sourceFrameCount === 0 && candidate.subtreeFrameCount === 0 && candidate.scopeFrameCount === 0
       && candidate.parentRect === null && candidate.subtreeRect === null
       && candidate.standardInsertionIndicatorCount === 1,
       'sub-threshold desktop hold must keep only the standard insertion intent visible without child frames', candidate);
+    assert(candidate.standardInsertionPosition === 'after'
+      && candidate.standardInsertionRect && targetGeometry.scope && targetGeometry.primary && targetGeometry.subtree
+      && targetGeometry.subtree.height > 0
+      && Math.abs(candidate.standardInsertionRect.centerY - targetGeometry.scope.bottom) <= 1
+      && candidate.standardInsertionRect.centerY > targetGeometry.primary.bottom + 1,
+    'expanded L2 standard after marker must render after the complete task subtree, never directly below the L2 title',
+    { candidate, targetGeometry });
+    const screenshotPath = `${screenshotBase}-desktop-candidate-expanded-l2-boundary.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.mouse.up();
     await page.waitForTimeout(260);
     const after = await readNode(sourceId);
@@ -508,7 +577,7 @@ async (page) => {
       'desktop release before dwell may use the standard target but must not commit child placement', { before, targetBefore, after });
     assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
       'candidate preview must clear after release');
-    return { sourceId, targetId, candidate, before, targetBefore, after };
+    return { sourceId, targetId, candidate, targetGeometry, before, targetBefore, after, screenshotPath };
   });
 
   await runCase('DEV068-DESK-ARMED', 'desktop armed preview shows only the child insertion marker and commits once', async () => {
@@ -518,6 +587,8 @@ async (page) => {
     const sourceBefore = await readNode(sourceId);
     const targetBefore = await readNode(targetId);
     const targetSurfaceBefore = await surfaceFor(targetId).boundingBox();
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
     await beginMouseDrag(sourceId);
     const targetPoint = await moveMouseToTargetPrimary(targetId);
     await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
@@ -532,11 +603,16 @@ async (page) => {
     'armed desktop preview must render only one child-level insertion marker and no blue target frames', armed);
     assert(sourceOverlay.kind === 'desktop'
       && sourceOverlay.anchor === 'pointer-upper-right'
-      && sourceOverlay.gap === 16
-      && sourceOverlay.sourceRect.left >= targetPoint.x + sourceOverlay.gap - 1
-      && sourceOverlay.sourceRect.bottom <= targetPoint.y - sourceOverlay.gap + 1
+      && sourceOverlay.gap === 0
+      && sourceOverlay.scale === 0.5
+      && Math.abs(sourceOverlay.sourceRect.left - targetPoint.x) <= 1
+      && Math.abs(sourceOverlay.sourceRect.bottom - targetPoint.y) <= 1
+      && sourceOverlay.sourceRect.width >= 119
+      && sourceOverlay.sourceRect.width <= 121
+      && sourceOverlay.sourceRect.height >= 19
+      && sourceOverlay.sourceRect.height <= 21
       && !sourceOverlay.overlapsChildInsertion,
-    'desktop source overlay must stay at pointer upper-right without covering the child insertion marker', sourceOverlay);
+    'desktop source overlay must stay at 50 percent and attach precisely to the pointer upper-right without covering the child insertion marker', sourceOverlay);
     assert(targetSurfaceBefore && targetSurfaceArmed
       && Math.abs(targetSurfaceBefore.x - targetSurfaceArmed.x) <= 1
       && Math.abs(targetSurfaceBefore.y - targetSurfaceArmed.y) <= 1
@@ -548,11 +624,18 @@ async (page) => {
     await page.mouse.up();
     await page.waitForTimeout(320);
     const sourceAfter = await readNode(sourceId);
+    const spyAfter = await readDesktopCommitSpy();
     assert(sourceAfter.parentId === targetId && sourceAfter.nodeType === 'task',
       'desktop armed release must make source the exact target child', { sourceBefore, sourceAfter, targetId });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'a real desktop child move must still produce exactly one batch, ancestor recalculation and Undo command', {
+      spyBefore, spyAfter,
+    });
     const announcement = await page.locator('[data-task-child-drop-announcement="true"]').textContent();
     assert((announcement || '').includes(targetBefore.title), 'successful child move must announce target parent', { announcement });
-    return { sourceId, targetId, armed, sourceOverlay, sourceBefore, sourceAfter, screenshotPath, announcement };
+    return { sourceId, targetId, armed, sourceOverlay, sourceBefore, sourceAfter, spyBefore, spyAfter, screenshotPath, announcement };
   });
 
   await runCase('DEV068-DESK-ORIGIN-CHILD', 'desktop child append at the original position shows the source title and is zero-write', async () => {
@@ -585,6 +668,649 @@ async (page) => {
     assert(await page.locator('[data-task-child-drop-preview="true"]').count() === 0,
       'desktop origin child preview must clear after release');
     return { sourceId, targetId, before, armed, after, screenshotPath, announcement };
+  });
+
+  await runCase('DEV068-DESK-ORIGIN-COLUMN-DROP', 'desktop column append at the original position uses the source title field and performs no commit', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const [sourceId, columnId] = fixture.columnOriginPair;
+    assert(sourceId && columnId, 'fixture must expose a visible last L2 task and its current L1 column', fixture);
+    const beforeNodes = await readRuntimeNodes();
+    const sourceBefore = beforeNodes[sourceId];
+    const sourceTitleBefore = await surfaceFor(sourceId).locator('[data-task-title-slot="true"]').first().boundingBox();
+    assert(Boolean(sourceTitleBefore), 'source must expose a stable title anchor before drag', { sourceId });
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+
+    await beginMouseDrag(sourceId);
+    const columnDrop = page.locator(`[data-task-drop-surface-kind="column-drop"][data-task-id="${columnId}"]`).first();
+    const dropBox = await columnDrop.boundingBox();
+    const appendAnchorBox = await columnDrop.locator('[data-kanban-column-append-anchor="true"]').boundingBox();
+    assert(Boolean(dropBox), 'column-drop surface must expose desktop geometry', { columnId });
+    assert(Boolean(appendAnchorBox), 'column-drop surface must expose an explicit tail append anchor', { columnId });
+    const dropPoint = {
+      x: Math.round(dropBox.x + 3),
+      y: Math.round(Math.min(dropBox.y + dropBox.height - 2, appendAnchorBox.y + 2)),
+    };
+    await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 8 });
+    const originIndicator = page.locator('[data-desktop-drop-origin="true"][data-desktop-drop-position="origin"]').first();
+    await originIndicator.waitFor({ state: 'visible', timeout: 3000 });
+    const originField = originIndicator.locator('[data-desktop-origin-field="true"]').first();
+    const originFieldRect = await originField.boundingBox();
+    const originTextRect = await originField.locator('span').first().boundingBox();
+    const markerCount = await originIndicator.locator('[data-kanban-insertion-marker="true"]').count();
+    const originTitle = (await originField.textContent() || '').trim();
+    assert(originFieldRect && originTextRect
+      && originTitle === sourceBefore.title
+      && markerCount === 0
+      && Math.abs(originTextRect.x - sourceTitleBefore.x) <= 1,
+    'canonical column-drop origin must show only the source title field aligned to the original title text', {
+      sourceTitleBefore, originFieldRect, originTextRect, originTitle, markerCount,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-origin-column-drop.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const spyAfter = await readDesktopCommitSpy();
+    assert(JSON.stringify(afterNodes) === JSON.stringify(beforeNodes),
+      'column-drop origin release must preserve the complete node record including updatedAt', {
+        sourceBefore, sourceAfter: afterNodes[sourceId],
+      });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'column-drop origin release must produce zero batch, ancestor and Undo changes', { spyBefore, spyAfter });
+    assert(await page.locator('[data-desktop-drop-indicator="true"]').count() === 0,
+      'column-drop origin preview must clear after release');
+    return {
+      sourceId,
+      columnId,
+      dropPoint,
+      sourceTitleBefore,
+      originFieldRect,
+      originTextRect,
+      markerCount,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-COLUMN-GAP-PROXIMITY', 'desktop space between L2 cards resolves to the nearest task line instead of a distant column append', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const columnFixtures = await page.evaluate(() => Array.from(document.querySelectorAll(
+      '[data-task-drop-surface-kind="column-drop"][data-task-id]',
+    )).map((column) => {
+      const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+      const cardIds = Array.from(subtree?.children || [])
+        .filter((element) => element.matches?.('[data-task-surface-scope="true"][data-task-id]'))
+        .map((element) => element.getAttribute('data-task-id'))
+        .filter(Boolean);
+      return { columnId: column.getAttribute('data-task-id'), cardIds };
+    }));
+    const targetFixture = columnFixtures.find(({ columnId, cardIds }) => (
+      cardIds.length >= 2
+      && fixture.l2.some(sourceId => beforeNodes[sourceId]?.parentId !== columnId)
+    ));
+    assert(Boolean(targetFixture), 'fixture must expose a target column with two cards and a source in another column', {
+      fixture, columnFixtures,
+    });
+    const sourceId = fixture.l2.find(id => beforeNodes[id]?.parentId !== targetFixture.columnId);
+    assert(Boolean(sourceId), 'gap test must use a cross-column L2 source', { targetFixture, fixture });
+    const sourceBefore = beforeNodes[sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+
+    const columnDrop = page.locator(
+      `[data-task-drop-surface-kind="column-drop"][data-task-id="${targetFixture.columnId}"]`,
+    ).first();
+    const gapPoint = await columnDrop.evaluate((column) => {
+      const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+      const cards = Array.from(subtree?.children || [])
+        .filter((element) => element.matches?.('[data-task-surface-scope="true"][data-task-id]'));
+      const pairs = cards.slice(0, -1).map((current, index) => {
+        const currentRect = current.getBoundingClientRect();
+        const nextRect = cards[index + 1].getBoundingClientRect();
+        return {
+          previousId: current.getAttribute('data-task-id'),
+          nextId: cards[index + 1].getAttribute('data-task-id'),
+          top: currentRect.bottom,
+          bottom: nextRect.top,
+        };
+      });
+      const gap = pairs.find(candidate => candidate.bottom - candidate.top >= 2);
+      const rect = column.getBoundingClientRect();
+      return gap ? {
+        ...gap,
+        x: Math.round(rect.left + rect.width * 0.55),
+        y: Math.round((gap.top + gap.bottom) / 2),
+      } : null;
+    });
+    assert(Boolean(gapPoint), 'target column must expose a measurable visual gap between adjacent cards', {
+      targetFixture,
+    });
+    await page.mouse.move(gapPoint.x, gapPoint.y, { steps: 1 });
+    await page.waitForTimeout(180);
+    const indicator = await page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        lineY: Number.parseFloat(element?.style.top || ''),
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      };
+    });
+    const placeholder = await readSourceOriginPlaceholder(sourceId);
+    const gapDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-30));
+    assert(indicator.count === 1
+      && indicator.surfaceKind === 'kanban-card'
+      && ['before', 'after'].includes(indicator.position)
+      && Number.isFinite(indicator.lineY)
+      && Math.abs(indicator.lineY - gapPoint.y) <= Math.max(6, (gapPoint.bottom - gapPoint.top) / 2 + 2),
+    'a card gap must show one same-level task indicator next to the pointer', { gapPoint, indicator, gapDebug });
+    assert(placeholder.outlineColor === 'rgb(148, 163, 184)'
+      && placeholder.outlineWidth === '1px'
+      && placeholder.boxShadow === 'none',
+    'the source placeholder must remain a neutral secondary signal', placeholder);
+    const screenshotPath = `${screenshotBase}-desktop-column-gap-proximity.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+
+    const targetBefore = beforeNodes[indicator.targetNodeId];
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const targetAfter = afterNodes[indicator.targetNodeId];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetFixture.columnId
+      && sourceAfter.nodeType === sourceBefore.nodeType
+      && targetBefore?.parentId === targetFixture.columnId
+      && ((indicator.position === 'before' && sourceAfter.order < targetAfter.order)
+        || (indicator.position === 'after' && sourceAfter.order > targetAfter.order)),
+    'gap release must commit exactly where the nearby indicator was displayed', {
+      sourceBefore, sourceAfter, targetBefore, targetAfter, indicator,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'gap release must retain the normal one-batch move contract', { spyBefore, spyAfter });
+    return {
+      sourceId,
+      targetColumnId: targetFixture.columnId,
+      gapPoint,
+      indicator,
+      gapDebug,
+      placeholder,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-EXPANDED-L2-EDGE-PROXIMITY', 'desktop pointer near the bottom of an expanded L2 card resolves to that nearby lower edge', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const expandedTargets = await page.evaluate(() => Array.from(document.querySelectorAll(
+      '[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+    )).map((scope) => {
+      const primary = scope.querySelector(':scope > [data-task-surface-source="true"]');
+      const scopeRect = scope.getBoundingClientRect();
+      const primaryRect = primary?.getBoundingClientRect();
+      return {
+        id: scope.getAttribute('data-task-id'),
+        scopeHeight: scopeRect.height,
+        primaryHeight: primaryRect?.height || 0,
+        subtreeHeight: Math.max(0, scopeRect.height - (primaryRect?.height || 0)),
+      };
+    }).filter(candidate => candidate.id && candidate.subtreeHeight >= 32)
+      .sort((left, right) => right.scopeHeight - left.scopeHeight));
+    const target = expandedTargets.find(candidate => fixture.l2.some(sourceId => (
+      beforeNodes[sourceId]?.parentId !== beforeNodes[candidate.id]?.parentId
+    )));
+    assert(Boolean(target), 'fixture must expose an expanded L2 target and a cross-column L2 source', {
+      fixture, expandedTargets,
+    });
+    const targetColumnId = beforeNodes[target.id]?.parentId;
+    const sourceId = fixture.l2.find(id => beforeNodes[id]?.parentId !== targetColumnId);
+    assert(Boolean(sourceId), 'expanded L2 proximity case must use a source from another column', {
+      target, targetColumnId,
+    });
+    const sourceBefore = beforeNodes[sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+    const targetPoint = await page.locator(
+      `[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id="${target.id}"]`,
+    ).first().evaluate((scope) => {
+      const rect = scope.getBoundingClientRect();
+      const x = Math.round(rect.right - 12);
+      const y = Math.round(rect.bottom - 10);
+      const hit = document.elementFromPoint(x, y);
+      return {
+        x,
+        y,
+        scopeRect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        hitTaskId: hit?.closest('[data-task-id]')?.getAttribute('data-task-id') || null,
+        hitSurfaceKind: hit?.closest('[data-task-drop-surface-kind]')?.getAttribute('data-task-drop-surface-kind') || null,
+      };
+    });
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(180);
+    const indicator = await page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        lineY: Number.parseFloat(element?.style.top || ''),
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      };
+    });
+    const dragDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-40));
+    assert(indicator.count === 1
+      && Number.isFinite(indicator.lineY)
+      && Math.abs(indicator.lineY - targetPoint.y) <= 16,
+    'an expanded L2 lower-edge hover must keep the same-level insertion line beside the pointer', {
+      target, targetPoint, indicator, dragDebug,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-expanded-l2-edge-proximity.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const targetAfter = afterNodes[target.id];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetColumnId
+      && sourceAfter.nodeType === sourceBefore.nodeType
+      && indicator.position === 'after'
+      && sourceAfter.order > targetAfter.order,
+    'expanded L2 lower-edge release must commit after the displayed L2 target', {
+      sourceBefore, sourceAfter, targetAfter, targetPoint, indicator,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'expanded L2 lower-edge release must keep the one-batch move contract', { spyBefore, spyAfter });
+    return {
+      sourceId,
+      targetId: target.id,
+      targetColumnId,
+      targetPoint,
+      indicator,
+      dragDebug,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-EXPANDED-L2-ORIGIN-EDGE', 'desktop lower-edge hover beside the source original slot stays nearby and performs no write', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const beforeNodes = await readRuntimeNodes();
+    const fixture = await page.evaluate(() => {
+      const columns = Array.from(document.querySelectorAll(
+        '[data-task-drop-surface-kind="column-drop"][data-task-id]',
+      ));
+      for (const column of columns) {
+        const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+        const cards = Array.from(subtree?.children || [])
+          .filter(element => element.matches?.(
+            '[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+          ));
+        for (let index = 0; index < cards.length - 1; index += 1) {
+          const target = cards[index];
+          const primary = target.querySelector(':scope > [data-task-surface-source="true"]');
+          const targetRect = target.getBoundingClientRect();
+          const primaryRect = primary?.getBoundingClientRect();
+          if (targetRect.height - (primaryRect?.height || 0) < 32) continue;
+          return {
+            columnId: column.getAttribute('data-task-id'),
+            targetId: target.getAttribute('data-task-id'),
+            sourceId: cards[index + 1].getAttribute('data-task-id'),
+            targetHeight: targetRect.height,
+          };
+        }
+      }
+      return null;
+    });
+    assert(fixture?.targetId && fixture?.sourceId,
+      'fixture must expose an expanded L2 card followed by a same-column source', fixture);
+    const sourceBefore = beforeNodes[fixture.sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(fixture.sourceId);
+    const targetPoint = await page.locator(
+      `[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id="${fixture.targetId}"]`,
+    ).first().evaluate((scope) => {
+      const rect = scope.getBoundingClientRect();
+      return {
+        x: Math.round(rect.right - 12),
+        y: Math.round(rect.bottom - 10),
+        targetBottom: rect.bottom,
+      };
+    });
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(180);
+    const indicator = await page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        feedbackKind: element?.getAttribute('data-desktop-drop-feedback-kind') || null,
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+      };
+    });
+    const dragDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-30));
+    assert(indicator.count === 1
+      && indicator.targetNodeId === fixture.sourceId
+      && indicator.position === 'origin'
+      && indicator.surfaceKind === 'kanban-card'
+      && indicator.rect
+      && Math.abs(indicator.rect.top - targetPoint.y) <= 32,
+    'the original slot immediately after an expanded L2 card must show its no-op field beside the pointer', {
+      fixture, targetPoint, indicator, dragDebug,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-expanded-l2-origin-edge.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const sourceAfter = (await readRuntimeNodes())[fixture.sourceId];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === sourceBefore.parentId
+      && sourceAfter.order === sourceBefore.order
+      && sourceAfter.nodeType === sourceBefore.nodeType,
+    'releasing at the source original slot must remain a data no-op', {
+      sourceBefore, sourceAfter, fixture, indicator,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'the original expanded L2 slot must not create a write or undo entry', { spyBefore, spyAfter });
+    return {
+      fixture,
+      targetPoint,
+      indicator,
+      dragDebug,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-EXPANDED-L2-ORIGIN-GAP-STABILITY', 'desktop pointer jitter in the narrow gap after an expanded L2 card stays at the adjacent original slot', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const beforeNodes = await readRuntimeNodes();
+    const fixture = await page.evaluate(() => {
+      const columns = Array.from(document.querySelectorAll(
+        '[data-task-drop-surface-kind="column-drop"][data-task-id]',
+      ));
+      for (const column of columns) {
+        const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+        const cards = Array.from(subtree?.children || [])
+          .filter(element => element.matches?.(
+            '[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id]',
+          ));
+        for (let index = 0; index < cards.length - 1; index += 1) {
+          const target = cards[index];
+          const primary = target.querySelector(':scope > [data-task-surface-source="true"]');
+          const targetRect = target.getBoundingClientRect();
+          const primaryRect = primary?.getBoundingClientRect();
+          if (targetRect.height - (primaryRect?.height || 0) < 32) continue;
+          return {
+            columnId: column.getAttribute('data-task-id'),
+            targetId: target.getAttribute('data-task-id'),
+            sourceId: cards[index + 1].getAttribute('data-task-id'),
+          };
+        }
+      }
+      return null;
+    });
+    assert(fixture?.targetId && fixture?.sourceId,
+      'fixture must expose an expanded L2 card followed by its same-column source', fixture);
+    const sourceBefore = beforeNodes[fixture.sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(fixture.sourceId);
+    const gapGeometry = await page.evaluate(({ targetId, sourceId }) => {
+      const target = document.querySelector(
+        `[data-task-surface-scope="true"][data-task-hierarchy-level="L2"][data-task-id="${targetId}"]`,
+      );
+      const placeholder = document.querySelector(
+        `[data-kanban-drag-source-placeholder="true"][data-task-id="${sourceId}"]`,
+      );
+      const targetRect = target?.getBoundingClientRect();
+      const placeholderRect = placeholder?.getBoundingClientRect();
+      if (!targetRect || !placeholderRect) return null;
+      const gapTop = targetRect.bottom;
+      const gapBottom = placeholderRect.top;
+      return {
+        x: Math.round(targetRect.left + targetRect.width * 0.72),
+        gapTop,
+        gapBottom,
+        targetRect: {
+          left: targetRect.left,
+          top: targetRect.top,
+          right: targetRect.right,
+          bottom: targetRect.bottom,
+        },
+        placeholderRect: {
+          left: placeholderRect.left,
+          top: placeholderRect.top,
+          right: placeholderRect.right,
+          bottom: placeholderRect.bottom,
+        },
+      };
+    }, fixture);
+    assert(gapGeometry && gapGeometry.gapBottom >= gapGeometry.gapTop,
+      'dragging must expose the narrow visual gap before the source placeholder', { fixture, gapGeometry });
+    const gapHeight = Math.max(1, gapGeometry.gapBottom - gapGeometry.gapTop);
+    const jitterPoints = [
+      Math.round(gapGeometry.gapTop + Math.min(1, gapHeight / 2)),
+      Math.round(gapGeometry.gapTop + gapHeight / 2),
+      Math.round(gapGeometry.gapBottom - Math.min(1, gapHeight / 2)),
+      Math.round(gapGeometry.gapTop + gapHeight / 2),
+    ].map(y => ({ x: gapGeometry.x, y }));
+    const samples = [];
+    for (const point of jitterPoints) {
+      await page.mouse.move(point.x, point.y, { steps: 1 });
+      await page.waitForTimeout(60);
+      samples.push(await page.evaluate((pointer) => {
+        const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+        const element = matches[0];
+        const rect = element?.getBoundingClientRect();
+        const overlay = document.querySelector('[data-desktop-drag-overlay="true"]');
+        const overlayRect = overlay?.getBoundingClientRect();
+        return {
+          pointer,
+          count: matches.length,
+          targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+          position: element?.getAttribute('data-desktop-drop-position') || null,
+          surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+          rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+          overlayRect: overlayRect
+            ? { left: overlayRect.left, top: overlayRect.top, right: overlayRect.right, bottom: overlayRect.bottom }
+            : null,
+        };
+      }, point));
+    }
+    const dragDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-80));
+    assert(samples.every(sample => sample.count === 1
+      && sample.targetNodeId === fixture.sourceId
+      && sample.position === 'origin'
+      && sample.surfaceKind === 'kanban-card'
+      && sample.rect
+      && Math.abs(sample.rect.top - sample.pointer.y) <= 32),
+    'every pointer sample in the narrow gap must keep the no-op original field adjacent to the pointer', {
+      fixture, gapGeometry, samples, dragDebug,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-expanded-l2-origin-gap-stability.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const sourceAfter = (await readRuntimeNodes())[fixture.sourceId];
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === sourceBefore.parentId
+      && sourceAfter.order === sourceBefore.order
+      && sourceAfter.nodeType === sourceBefore.nodeType,
+    'releasing in the original narrow gap must remain a data no-op', {
+      sourceBefore, sourceAfter, fixture, samples,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'the original narrow gap must not create a write or undo entry', { spyBefore, spyAfter });
+    return {
+      fixture,
+      gapGeometry,
+      samples,
+      dragDebug,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-DESK-COLUMN-TAIL-APPEND', 'desktop column append remains available only beside the explicit tail anchor', async () => {
+    await openApp({ width: 1440, height: 900 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const targetColumnId = fixture.l1.find(columnId => (
+      fixture.l2.some(taskId => beforeNodes[taskId]?.parentId === columnId)
+      && fixture.l2.some(taskId => beforeNodes[taskId]?.parentId !== columnId)
+    ));
+    const sourceId = fixture.l2.find(taskId => beforeNodes[taskId]?.parentId !== targetColumnId);
+    assert(sourceId && targetColumnId, 'tail test must expose a cross-column source and non-empty target column', {
+      fixture,
+    });
+    const sourceBefore = beforeNodes[sourceId];
+    await resetDesktopCommitSpy();
+    const spyBefore = await readDesktopCommitSpy();
+    await beginMouseDrag(sourceId);
+    const columnDrop = page.locator(
+      `[data-task-drop-surface-kind="column-drop"][data-task-id="${targetColumnId}"]`,
+    ).first();
+    const tailPoint = await columnDrop.evaluate((column) => {
+      const columnRect = column.getBoundingClientRect();
+      const anchor = column.querySelector('[data-kanban-column-append-anchor="true"]');
+      const anchorRect = anchor?.getBoundingClientRect();
+      const subtree = column.querySelector(':scope > [data-kanban-column-subtree-scope]');
+      const cards = Array.from(subtree?.children || [])
+        .filter((element) => element.matches?.('[data-task-surface-scope="true"][data-task-id]'));
+      const lastRect = cards.at(-1)?.getBoundingClientRect();
+      return anchorRect && lastRect ? {
+        x: Math.round(columnRect.left + columnRect.width * 0.55),
+        y: Math.round(Math.min(columnRect.bottom - 2, anchorRect.top + 2)),
+        anchorY: anchorRect.top,
+        lastBottom: lastRect.bottom,
+        lastId: cards.at(-1)?.getAttribute('data-task-id') || null,
+        columnBottom: columnRect.bottom,
+      } : null;
+    });
+    assert(tailPoint
+      && tailPoint.y >= tailPoint.lastBottom
+      && tailPoint.y <= tailPoint.lastBottom + 32,
+    'tail append point must be inside the explicit 32px zone after the last card', tailPoint);
+    const readTailIndicator = () => page.evaluate(() => {
+      const matches = Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]'));
+      const element = matches[0];
+      return {
+        count: matches.length,
+        targetNodeId: element?.getAttribute('data-desktop-drop-target') || null,
+        position: element?.getAttribute('data-desktop-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-desktop-drop-surface-kind') || null,
+        lineY: Number.parseFloat(element?.style.top || ''),
+      };
+    });
+    const lowerEdgePoint = { x: tailPoint.x, y: Math.round(tailPoint.lastBottom - 1) };
+    const outsidePoint = { x: tailPoint.x, y: Math.round(tailPoint.columnBottom + 2) };
+    await page.mouse.move(lowerEdgePoint.x, lowerEdgePoint.y, { steps: 1 });
+    await page.waitForTimeout(40);
+    const lowerEdgeIndicator = await readTailIndicator();
+    await page.mouse.move(tailPoint.x, tailPoint.y, { steps: 1 });
+    await page.waitForTimeout(40);
+    const tailIndicator = await readTailIndicator();
+    await page.mouse.move(outsidePoint.x, outsidePoint.y, { steps: 1 });
+    await page.waitForTimeout(40);
+    const outsideIndicator = await readTailIndicator();
+    await page.mouse.move(tailPoint.x, tailPoint.y, { steps: 1 });
+    await page.waitForTimeout(80);
+    const indicator = await readTailIndicator();
+    const transitionIndicators = [lowerEdgeIndicator, tailIndicator, outsideIndicator, indicator];
+    assert(transitionIndicators.every(sample => sample.count === 1
+      && Number.isFinite(sample.lineY)
+      && Math.abs(sample.lineY - tailPoint.lastBottom) <= 1),
+    'the last-card lower edge, column tail and near-column exterior must share one stable insertion-line Y', {
+      tailPoint, lowerEdgePoint, outsidePoint, transitionIndicators,
+    });
+    assert(indicator.count === 1
+      && indicator.targetNodeId === targetColumnId
+      && indicator.surfaceKind === 'column-drop'
+      && indicator.position === 'append'
+      && Math.abs(indicator.lineY - tailPoint.lastBottom) <= 1,
+    'column append must reuse the final same-level card boundary instead of its 6px margin offset', {
+      tailPoint, indicator, transitionIndicators,
+    });
+    const screenshotPath = `${screenshotBase}-desktop-column-tail-append.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+
+    await page.mouse.up();
+    await page.waitForTimeout(320);
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const siblingOrders = Object.values(afterNodes)
+      .filter(node => node && !node.isArchived && node.parentId === targetColumnId)
+      .map(node => node.order);
+    const spyAfter = await readDesktopCommitSpy();
+    assert(sourceAfter.parentId === targetColumnId
+      && sourceAfter.nodeType === sourceBefore.nodeType
+      && sourceAfter.order === Math.max(...siblingOrders),
+    'tail release must preserve canonical column append semantics', {
+      sourceBefore, sourceAfter, siblingOrders,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'tail append must retain the normal one-batch move contract', { spyBefore, spyAfter });
+    return {
+      sourceId,
+      targetColumnId,
+      tailPoint,
+      lowerEdgePoint,
+      outsidePoint,
+      transitionIndicators,
+      indicator,
+      sourceBefore,
+      sourceAfter,
+      spyBefore,
+      spyAfter,
+      screenshotPath,
+    };
   });
 
   await runCase('DEV068-DESK-L1', 'desktop L2 to L1 hover scope becomes direct L2 child', async () => {
@@ -623,7 +1349,7 @@ async (page) => {
     return { sourceId, targetId, after, screenshotPath };
   });
 
-  await runCase('DEV068-DESK-DEPTH-LINE', 'child insertion marker start position communicates L2, L3 and L4+ depth', async () => {
+  await runCase('DEV068-DESK-DEPTH-LINE', 'child insertion marker aligns with the final same-level title at L2, L3 and L4+', async () => {
     const sampleDepth = async (level) => {
       await openApp({ width: 1440, height: 900 });
       const fixture = await fixtureIds();
@@ -644,16 +1370,55 @@ async (page) => {
       await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
       const preview = await readChildPreview();
       const targetGeometry = await page.evaluate((id) => {
-        const target = document.querySelector(`[data-task-child-drop-target="true"][data-task-id="${id}"]`);
+        const target = Array.from(document.querySelectorAll('[data-task-child-drop-target="true"][data-task-id]'))
+          .find((candidate) => candidate.getAttribute('data-task-id') === id);
         const column = target?.closest('[data-kanban-column="true"]');
         const columnRect = column?.getBoundingClientRect();
+        const directChild = target
+          ? Array.from(target.querySelectorAll('[data-task-child-drop-target="true"]'))
+            .find((candidate) => (
+              candidate.parentElement?.closest('[data-task-child-drop-target="true"]') === target
+            ))
+          : null;
+        const directChildPrimary = directChild?.querySelector(':scope > [data-task-surface-source="true"]');
+        const directChildTitle = directChildPrimary?.querySelector('[data-task-title-slot="true"]');
+        const emptyLevelTitleAnchor = target?.querySelector(
+          ':scope > [data-task-direct-child-title-anchor="true"]',
+        );
+        const directChildTitleLeft = directChildTitle?.getBoundingClientRect().left ?? null;
+        const emptyLevelTitleLeft = emptyLevelTitleAnchor?.getBoundingClientRect().left ?? null;
+        const l2Layouts = Array.from(document.querySelectorAll('[data-task-hierarchy-level="L2"]'))
+          .map((scope) => {
+            const primary = scope.querySelector(':scope > [data-task-surface-source="true"]');
+            const title = primary?.querySelector('[data-task-title-slot="true"]');
+            const titleContent = title?.closest('.kanban-task-title-content');
+            if (!primary || !title) return null;
+            return {
+              offset: title.getBoundingClientRect().left - primary.getBoundingClientRect().left,
+              titleIsFirst: titleContent?.firstElementChild === title,
+              hasToggle: Boolean(titleContent?.querySelector('[data-kanban-checklist-toggle="true"]')),
+            };
+          })
+          .filter(Boolean);
         return {
           targetLevel: target?.getAttribute('data-task-child-drop-level') || null,
           columnLeft: columnRect?.left ?? null,
+          directChildTitleLeft,
+          emptyLevelTitleLeft,
+          expectedTitleLeft: directChildTitleLeft ?? emptyLevelTitleLeft,
+          l2Layouts,
         };
       }, targetId);
-      assert(preview.childInsertionRect && targetGeometry.columnLeft !== null,
-        `${level} depth sample must expose one insertion marker and its column`, { preview, targetGeometry });
+      assert(preview.childInsertionRect
+        && targetGeometry.columnLeft !== null
+        && targetGeometry.expectedTitleLeft !== null,
+      `${level} depth sample must expose one insertion marker and its final-level title anchor`, { preview, targetGeometry });
+      assert(Math.abs(preview.childInsertionRect.left - targetGeometry.expectedTitleLeft) <= 1,
+        `${level} insertion marker must align with its final same-level title start`, { preview, targetGeometry });
+      if (targetGeometry.directChildTitleLeft !== null && targetGeometry.emptyLevelTitleLeft !== null) {
+        assert(Math.abs(targetGeometry.directChildTitleLeft - targetGeometry.emptyLevelTitleLeft) <= 1,
+          `${level} real and empty-level title anchors must share the same geometry`, targetGeometry);
+      }
       const result = {
         level,
         sourceId,
@@ -674,9 +1439,14 @@ async (page) => {
     const l2 = await sampleDepth('L2');
     const l3 = await sampleDepth('L3');
     const l4 = await sampleDepth('L4+');
+    const l2Offsets = l2.targetGeometry.l2Layouts.map((layout) => layout.offset);
+    assert(l2Offsets.length >= 2
+      && l2.targetGeometry.l2Layouts.every((layout) => layout.titleIsFirst)
+      && Math.max(...l2Offsets) - Math.min(...l2Offsets) <= 1,
+    'L2 titles must keep one fixed start whether or not a row has a checklist toggle', l2.targetGeometry.l2Layouts);
     assert(l2.offsetFromColumn + 6 <= l3.offsetFromColumn
-      && l3.offsetFromColumn + 8 <= l4.offsetFromColumn,
-    'each deeper child insertion marker must visibly start farther right', { l2, l3, l4 });
+      && l3.offsetFromColumn + 6 <= l4.offsetFromColumn,
+    'each deeper child insertion marker must advance by at least the shared 6px hierarchy token', { l2, l3, l4 });
     return { l2, l3, l4 };
   });
 
@@ -1097,16 +1867,30 @@ async (page) => {
   await runCase('DEV068-MOB-900', 'mobile complete hover-scope hold below one second preserves the standard drop', async () => {
     await openApp({ width: 390, height: 844 });
     const fixture = await fixtureIds();
-    const [sourceId, targetId] = fixture.l2Pair;
+    const runtimeBefore = await readRuntimeNodes();
+    const targetId = fixture.l2Pair[1];
+    const targetNode = runtimeBefore[targetId];
+    const orderedSiblings = Object.values(runtimeBefore)
+      .filter(node => node && !node.isArchived && node.parentId === targetNode?.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const targetSiblingIndex = orderedSiblings.findIndex(node => node.id === targetId);
+    const sourceId = orderedSiblings[targetSiblingIndex + 1]?.id
+      || orderedSiblings[targetSiblingIndex - 2]?.id;
+    assert(sourceId && targetId && sourceId !== targetId,
+      'mobile nearest-boundary fixture must expose a non-origin same-level move', {
+        fixture,
+        orderedSiblings: orderedSiblings.map(node => node.id),
+      });
     const before = await readNode(sourceId);
     const targetBefore = await readNode(targetId);
-    const targetPoint = await pointFor(surfaceFor(targetId));
     const targetScopeBefore = await targetScopeFor(targetId).boundingBox();
     const held = await startHeldTouch(sourceId);
+    const targetPoint = await pointFor(surfaceFor(targetId));
     await held.moveTo(targetPoint);
     await page.locator('[data-task-child-drop-phase="candidate"]').waitFor({ state: 'visible' });
     await page.waitForTimeout(720);
     const candidate = await readChildPreview();
+    const targetGeometry = await readTaskScopeGeometry(targetId);
     assert(candidate.input === 'touch' && candidate.childInsertionCount === 0
       && candidate.sourceFrameCount === 0 && candidate.subtreeFrameCount === 0 && candidate.scopeFrameCount === 0
       && candidate.parentRect === null && candidate.subtreeRect === null
@@ -1115,11 +1899,171 @@ async (page) => {
       && Math.abs(candidate.safeWidth - targetScopeBefore.width) <= 2
       && Math.abs(candidate.safeHeight - targetScopeBefore.height) <= 2,
       'mobile candidate must keep the complete hit scope without rendering child frames before arming', { candidate, targetScopeBefore });
+    assert(candidate.standardInsertionPosition === 'before'
+      && candidate.standardInsertionRect && targetGeometry.scope && targetGeometry.primary && targetGeometry.subtree
+      && targetGeometry.subtree.height > 0
+      && Math.abs(candidate.standardInsertionRect.centerY - targetGeometry.scope.top) <= 1
+      && candidate.standardInsertionRect.centerY <= targetGeometry.primary.top + 1
+      && Math.abs(candidate.standardInsertionRect.centerY - targetPoint.y) <= 24,
+    'expanded mobile L2 must choose the nearest leading same-level boundary and keep it close to the finger',
+    { candidate, targetGeometry, targetPoint });
     await held.end();
     const after = await readNode(sourceId);
+    const runtimeAfter = await readRuntimeNodes();
+    const siblingsAfter = Object.values(runtimeAfter)
+      .filter(node => node && !node.isArchived && node.parentId === targetBefore.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const sourceAfterIndex = siblingsAfter.findIndex(node => node.id === sourceId);
+    const targetAfterIndex = siblingsAfter.findIndex(node => node.id === targetId);
     assert(after.parentId === targetBefore.parentId && after.parentId !== targetId,
       'mobile sub-threshold release may use the standard target but must not commit child placement', { before, targetBefore, after });
-    return { sourceId, targetId, candidate, before, targetBefore, after };
+    assert(sourceAfterIndex === targetAfterIndex - 1,
+      'mobile release must commit the exact before-target descriptor shown in preview', {
+        sourceAfterIndex,
+        targetAfterIndex,
+        siblingsAfter: siblingsAfter.map(node => node.id),
+      });
+    return { sourceId, targetId, targetPoint, candidate, targetGeometry, before, targetBefore, after, siblingsAfter };
+  });
+
+  await runCase('DEV068-MOB-STANDARD-SWITCH', 'mobile standard insertion switches to the current nearby boundary without retaining a stale line', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const nodes = await readRuntimeNodes();
+    const sameParent = fixture.l2
+      .map(id => nodes[id])
+      .filter(node => node && node.parentId === nodes[fixture.l2[0]]?.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const targetA = sameParent[0]?.id;
+    const targetB = sameParent[1]?.id;
+    const sourceId = sameParent.at(-1)?.id;
+    assert(sourceId && targetA && targetB && ![targetA, targetB].includes(sourceId),
+      'stale-switch fixture must expose three same-level mobile tasks', {
+        sameParent: sameParent.map(node => node.id),
+      });
+
+    const readStandardIndicator = async (fingerPoint) => page.evaluate(({ fingerPoint }) => {
+      const indicator = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const rect = indicator?.getBoundingClientRect();
+      return {
+        count: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+        target: indicator?.getAttribute('data-mobile-drop-target') || null,
+        position: indicator?.getAttribute('data-mobile-drop-position') || null,
+        axis: indicator?.getAttribute('data-mobile-drop-axis') || null,
+        distance: rect ? Math.abs((rect.top + rect.height / 2) - fingerPoint.y) : null,
+      };
+    }, { fingerPoint });
+
+    const held = await startHeldTouch(sourceId);
+    const pointA = await pointFor(surfaceFor(targetA));
+    await held.moveExact(pointA);
+    await page.waitForTimeout(100);
+    const indicatorA = await readStandardIndicator(pointA);
+    const pointB = await pointFor(surfaceFor(targetB));
+    await held.moveExact(pointB);
+    await page.waitForTimeout(100);
+    const indicatorB = await readStandardIndicator(pointB);
+    assert(indicatorA.count === 1
+      && indicatorA.target === targetA
+      && indicatorA.axis === 'horizontal'
+      && indicatorA.distance <= 24,
+    'first mobile ordering target must expose one nearby horizontal boundary', {
+      pointA,
+      indicatorA,
+    });
+    assert(indicatorB.count === 1
+      && indicatorB.target === targetB
+      && indicatorB.target !== indicatorA.target
+      && indicatorB.axis === 'horizontal'
+      && indicatorB.distance <= 24,
+    'crossing into another task must replace the old descriptor and keep the line near the finger', {
+      pointB,
+      indicatorA,
+      indicatorB,
+    });
+
+    const actionPoint = await pointFor(page.locator('[data-mobile-task-action="toggle-complete"]').first());
+    await held.moveExact(actionPoint);
+    await page.waitForTimeout(100);
+    const cleared = await page.evaluate(() => ({
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      actionActive: document.querySelector('[data-mobile-task-action="toggle-complete"]')
+        ?.getAttribute('class')?.includes('bg-emerald-500') || false,
+    }));
+    assert(cleared.indicatorCount === 0 && cleared.originCount === 0 && cleared.actionActive,
+      'leaving ordering targets must clear the last line before another target owns the gesture', cleared);
+    await held.cancel();
+    return { sourceId, targetA, targetB, pointA, pointB, indicatorA, indicatorB, cleared };
+  });
+
+  await runCase('DEV068-MOB-COLUMN-GAP-NEAREST', 'mobile L2 gap resolves to its nearest same-level boundary instead of a distant column append', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const sameParent = fixture.l2
+      .map(id => beforeNodes[id])
+      .filter(node => node && node.parentId === beforeNodes[fixture.l2[0]]?.parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const upperId = sameParent[0]?.id;
+    const lowerId = sameParent[1]?.id;
+    const sourceId = sameParent.at(-1)?.id;
+    assert(sourceId && upperId && lowerId && ![upperId, lowerId].includes(sourceId),
+      'mobile gap fixture must expose two adjacent targets and a separate source', {
+        sameParent: sameParent.map(node => node.id),
+      });
+
+    const held = await startHeldTouch(sourceId);
+    await targetScopeFor(upperId).scrollIntoViewIfNeeded();
+    const upperRect = await targetScopeFor(upperId).boundingBox();
+    const lowerRect = await targetScopeFor(lowerId).boundingBox();
+    assert(upperRect && lowerRect && lowerRect.y > upperRect.y + upperRect.height,
+      'adjacent mobile L2 scopes must expose a visual gap', { upperRect, lowerRect });
+    const gapPoint = {
+      x: Math.round(Math.max(8, Math.min(382, upperRect.x + upperRect.width / 2))),
+      y: Math.round((upperRect.y + upperRect.height + lowerRect.y) / 2),
+    };
+    await held.moveExact(gapPoint);
+    await page.waitForTimeout(100);
+    const indicator = await page.evaluate(({ gapPoint }) => {
+      const element = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const rect = element?.getBoundingClientRect();
+      return {
+        count: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+        target: element?.getAttribute('data-mobile-drop-target') || null,
+        position: element?.getAttribute('data-mobile-drop-position') || null,
+        surfaceKind: element?.getAttribute('data-mobile-drop-surface-kind') || null,
+        axis: element?.getAttribute('data-mobile-drop-axis') || null,
+        centerY: rect ? rect.top + rect.height / 2 : null,
+        distance: rect ? Math.abs((rect.top + rect.height / 2) - gapPoint.y) : null,
+      };
+    }, { gapPoint });
+    assert(indicator.count === 1
+      && indicator.surfaceKind === 'kanban-card'
+      && indicator.axis === 'horizontal'
+      && ((indicator.target === upperId && indicator.position === 'after')
+        || (indicator.target === lowerId && indicator.position === 'before'))
+      && indicator.distance <= Math.max(4, (lowerRect.y - (upperRect.y + upperRect.height)) / 2 + 1),
+    'the L2 gap must own one canonical nearby card boundary, never column-drop append', {
+      gapPoint,
+      upperRect,
+      lowerRect,
+      indicator,
+    });
+    await held.end();
+    const afterNodes = await readRuntimeNodes();
+    const siblingsAfter = Object.values(afterNodes)
+      .filter(node => node && !node.isArchived && node.parentId === beforeNodes[upperId].parentId)
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const sourceIndex = siblingsAfter.findIndex(node => node.id === sourceId);
+    const upperIndex = siblingsAfter.findIndex(node => node.id === upperId);
+    const lowerIndex = siblingsAfter.findIndex(node => node.id === lowerId);
+    assert(sourceIndex === upperIndex + 1 && sourceIndex === lowerIndex - 1,
+      'gap release must commit the same between-siblings descriptor shown in preview', {
+        indicator,
+        siblingsAfter: siblingsAfter.map(node => node.id),
+      });
+    return { sourceId, upperId, lowerId, gapPoint, upperRect, lowerRect, indicator, siblingsAfter };
   });
 
   await runCase('DEV068-MOB-ARMED', 'mobile armed hover-scope preview commits exact child once', async () => {
@@ -1128,6 +2072,8 @@ async (page) => {
     const [sourceId, targetId] = fixture.l2Pair;
     const targetBefore = await readNode(targetId);
     const targetPoint = await pointFor(surfaceFor(targetId));
+    await resetMobileCommitSpy();
+    const spyBefore = await readMobileCommitSpy();
     const held = await startHeldTouch(sourceId);
     await held.moveTo(targetPoint);
     await page.locator('[data-task-child-drop-phase="armed"]').waitFor({ state: 'visible', timeout: 1800 });
@@ -1154,12 +2100,19 @@ async (page) => {
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await held.end();
     const after = await readNode(sourceId);
+    const spyAfter = await readMobileCommitSpy();
     assert(after.parentId === targetId && after.nodeType === 'task',
       'mobile armed release must commit exact parent', { sourceId, targetId, after });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'a real mobile child move must still produce exactly one batch, ancestor recalculation and Undo command', {
+      spyBefore, spyAfter,
+    });
     const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
     const completions = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
     assert(completions.length === 1, 'mobile child drop must terminate exactly once', { completions });
-    return { sourceId, targetId, targetTitle: targetBefore.title, armed, sourceOverlay, after, completions: completions.length, screenshotPath };
+    return { sourceId, targetId, targetTitle: targetBefore.title, armed, sourceOverlay, after, spyBefore, spyAfter, completions: completions.length, screenshotPath };
   });
 
   await runCase('DEV068-MOB-ORIGIN-CHILD', 'mobile child append at the original position shows the source title and is zero-write', async () => {
@@ -1190,6 +2143,199 @@ async (page) => {
     assert(Object.values(transient).every((value) => value === 0 || value === false),
       'mobile origin child release must clear every transient surface', transient);
     return { sourceId, targetId, before, armed, after, transient, screenshotPath };
+  });
+
+  await runCase('DEV068-MOB-ORIGIN-COLUMN-DROP', 'mobile column append at the original position uses the source title field and performs no commit', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const [sourceId, columnId] = fixture.columnOriginPair;
+    assert(sourceId && columnId, 'fixture must expose a visible mobile last L2 task and its current L1 column', fixture);
+    const sourcePoint = await pointFor(surfaceFor(sourceId), 0.48, 0.45);
+    const sourceTitleBefore = await titleSlotFor(sourceId).boundingBox();
+    assert(Boolean(sourceTitleBefore), 'mobile source must expose a stable title anchor before drag', { sourceId });
+    const beforeNodes = await readRuntimeNodes();
+    const sourceBefore = beforeNodes[sourceId];
+    await resetMobileCommitSpy();
+    const spyBefore = await readMobileCommitSpy();
+
+    const held = await startHeldTouchAtPoint(sourcePoint);
+    await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 3000 });
+    const columnDrop = page.locator(`[data-task-drop-surface-kind="column-drop"][data-task-id="${columnId}"]`).first();
+    const dropBox = await columnDrop.boundingBox();
+    const appendAnchorBox = await columnDrop.locator('[data-kanban-column-append-anchor="true"]').boundingBox();
+    assert(Boolean(dropBox), 'mobile column-drop surface must expose geometry', { columnId });
+    const dropPoint = {
+      x: Math.round(dropBox.x + 3),
+      y: Math.round(Math.min(dropBox.y + dropBox.height - 4, (appendAnchorBox?.y ?? dropBox.y) + 12)),
+    };
+    await held.moveExact(dropPoint);
+    const origin = page.locator('[data-mobile-drop-origin="true"][data-mobile-drop-noop="true"]').first();
+    await origin.waitFor({ state: 'visible', timeout: 3000 });
+    const originField = origin.locator('[data-mobile-origin-field="true"]').first();
+    const originFieldRect = await originField.boundingBox();
+    const originTextRect = await originField.locator('span').first().boundingBox();
+    const markerCount = await origin.locator('[data-kanban-insertion-marker="true"]').count();
+    const indicatorCount = await page.locator('[data-mobile-drop-indicator="true"]').count();
+    const originTitle = (await originField.textContent() || '').trim();
+    assert(originFieldRect && originTextRect
+      && originTitle === sourceBefore.title
+      && markerCount === 0
+      && indicatorCount === 0
+      && Math.abs(originTextRect.x - sourceTitleBefore.x) <= 1,
+    'canonical mobile column-drop origin must show only the source title field aligned to the original title text', {
+      sourceTitleBefore, originFieldRect, originTextRect, originTitle, markerCount, indicatorCount,
+    });
+
+    const actionPoint = await pointFor(page.locator('[data-mobile-task-action="toggle-complete"]').first());
+    await held.moveExact(actionPoint);
+    await page.waitForTimeout(80);
+    const actionPriority = await page.evaluate(() => ({
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      activeClass: document.querySelector('[data-mobile-task-action="toggle-complete"]')?.getAttribute('class') || '',
+    }));
+    assert(actionPriority.originCount === 0
+      && actionPriority.indicatorCount === 0
+      && actionPriority.activeClass.includes('bg-emerald-500'),
+    'mobile action rail must retain priority over a canonical origin outcome', actionPriority);
+
+    await held.moveExact(dropPoint);
+    await origin.waitFor({ state: 'visible', timeout: 3000 });
+    const screenshotPath = `${screenshotBase}-mobile-origin-column-drop.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await held.end();
+    const afterNodes = await readRuntimeNodes();
+    const spyAfter = await readMobileCommitSpy();
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const terminal = [...debug].reverse().find(entry => entry.type === 'terminal:complete' && entry.nodeId === sourceId) || null;
+    assert(JSON.stringify(afterNodes) === JSON.stringify(beforeNodes),
+      'mobile column-drop origin release must preserve the complete node record including updatedAt', {
+        sourceBefore, sourceAfter: afterNodes[sourceId],
+      });
+    assert(spyAfter.batchUpdateNodesCalls === 0
+      && spyAfter.ancestorRecalculationCalls === 0
+      && spyAfter.undoDepth === spyBefore.undoDepth,
+    'mobile column-drop origin release must produce zero batch, ancestor and Undo changes', { spyBefore, spyAfter });
+    assert(terminal?.status === 'no-op' && terminal?.reason === 'task-position-origin',
+      'mobile release commit must classify the same target as canonical origin', { terminal });
+    assert(Object.values(await readTransientState()).every(value => value === 0 || value === false),
+      'mobile canonical origin release must clear every transient drag surface');
+    return {
+      sourceId,
+      columnId,
+      dropPoint,
+      sourceTitleBefore,
+      originFieldRect,
+      originTextRect,
+      markerCount,
+      indicatorCount,
+      actionPriority,
+      spyBefore,
+      spyAfter,
+      terminal,
+      screenshotPath,
+    };
+  });
+
+  await runCase('DEV068-MOB-MOVE-COLUMN-DROP', 'mobile direct column append preserves the canonical move result before child dwell arms', async () => {
+    await openApp({ width: 390, height: 844 });
+    const fixture = await fixtureIds();
+    const beforeNodes = await readRuntimeNodes();
+    const sourceId = fixture.l2.find(id => beforeNodes[id]?.parentId === fixture.l1[0]);
+    const sourceBefore = beforeNodes[sourceId];
+    const columnId = fixture.l1.find(id => id !== sourceBefore?.parentId);
+    assert(sourceId && sourceBefore && columnId,
+      'fixture must expose an L2 source and another visible L1 column', fixture);
+    const expectedOrder = Object.values(beforeNodes)
+      .filter(node => node && !node.isArchived && node.parentId === columnId && node.id !== sourceId)
+      .length;
+    const sourcePoint = await pointFor(surfaceFor(sourceId), 0.48, 0.45);
+    await resetMobileCommitSpy();
+    const spyBefore = await readMobileCommitSpy();
+
+    const held = await startHeldTouchAtPoint(sourcePoint);
+    await page.locator('[data-mobile-task-action-rail="true"]').waitFor({ state: 'visible', timeout: 3000 });
+    const columnDrop = page.locator(`[data-task-drop-surface-kind="column-drop"][data-task-id="${columnId}"]`).first();
+    const dropBox = await columnDrop.boundingBox();
+    const appendAnchorBox = await columnDrop.locator('[data-kanban-column-append-anchor="true"]').boundingBox();
+    assert(dropBox && dropBox.x < 390 && dropBox.x + dropBox.width > 0,
+      'another column-drop surface must remain at least partially visible', { columnId, dropBox });
+    const dropPoint = {
+      x: Math.round(Math.max(2, Math.min(388, dropBox.x + 3))),
+      y: Math.round(Math.min(dropBox.y + dropBox.height - 4, (appendAnchorBox?.y ?? dropBox.y) + 12)),
+    };
+    const farPoint = appendAnchorBox && appendAnchorBox.y + 64 < dropBox.y + dropBox.height - 4
+      ? { x: dropPoint.x, y: Math.round(appendAnchorBox.y + 64) }
+      : null;
+    if (farPoint) {
+      await held.moveExact(farPoint);
+      await page.waitForTimeout(80);
+      const farPreviewCount = await page.locator('[data-mobile-drop-indicator="true"], [data-mobile-drop-origin="true"]').count();
+      assert(farPreviewCount === 0,
+        'column whitespace beyond the explicit 32px tail must not imply a distant append target', {
+          farPoint,
+          dropBox,
+          appendAnchorBox,
+          farPreviewCount,
+        });
+    }
+    await held.moveExact(dropPoint);
+    const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
+    await indicator.waitFor({ state: 'visible', timeout: 800 });
+    const preview = await page.evaluate(({ dropPoint }) => {
+      const indicator = document.querySelector('[data-mobile-drop-indicator="true"]');
+      const rect = indicator?.getBoundingClientRect();
+      return {
+      indicatorCount: document.querySelectorAll('[data-mobile-drop-indicator="true"]').length,
+      originCount: document.querySelectorAll('[data-mobile-drop-origin="true"]').length,
+      markerCount: document.querySelectorAll('[data-mobile-drop-indicator="true"] [data-kanban-insertion-marker="true"]').length,
+      childPhase: document.querySelector('[data-task-child-drop-preview="true"]')?.getAttribute('data-task-child-drop-phase') || null,
+      surfaceKind: indicator?.getAttribute('data-mobile-drop-surface-kind') || null,
+      axis: indicator?.getAttribute('data-mobile-drop-axis') || null,
+      distanceFromFinger: rect ? Math.abs((rect.top + rect.height / 2) - dropPoint.y) : null,
+    };
+    }, { dropPoint });
+    assert(preview.indicatorCount === 1
+      && preview.originCount === 0
+      && preview.markerCount === 1
+      && preview.childPhase === 'candidate'
+      && preview.surfaceKind === 'column-drop'
+      && preview.axis === 'horizontal'
+      && preview.distanceFromFinger <= 16,
+    'only the explicit column tail may append, and its marker must stay close to the finger', preview);
+    await held.end();
+    const afterNodes = await readRuntimeNodes();
+    const sourceAfter = afterNodes[sourceId];
+    const spyAfter = await readMobileCommitSpy();
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const terminal = [...debug].reverse().find(entry => entry.type === 'terminal:complete' && entry.nodeId === sourceId) || null;
+    assert(sourceAfter.parentId === columnId
+      && sourceAfter.order === expectedOrder
+      && sourceAfter.nodeType === sourceBefore.nodeType,
+    'mobile column-drop move must preserve canonical parent/order/nodeType semantics', {
+      sourceBefore, sourceAfter, columnId, expectedOrder,
+    });
+    assert(spyAfter.batchUpdateNodesCalls === 1
+      && spyAfter.ancestorRecalculationCalls === 1
+      && spyAfter.undoDepth === spyBefore.undoDepth + 1,
+    'mobile column-drop move must produce one batch, ancestor recalculation and Undo command', {
+      spyBefore, spyAfter,
+    });
+    assert(terminal?.status === 'committed' && terminal?.reason === 'task-position-updated',
+      'mobile column-drop move must terminate exactly once as committed', { terminal });
+    return {
+      sourceId,
+      columnId,
+      dropPoint,
+      farPoint,
+      preview,
+      sourceBefore,
+      sourceAfter,
+      expectedOrder,
+      spyBefore,
+      spyAfter,
+      terminal,
+    };
   });
 
   await runCase('DEV068-MOB-L1-SCOPE', 'mobile L2 source becomes a direct L2 child when the L1 hover scope visibly arms', async () => {

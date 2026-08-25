@@ -17,10 +17,12 @@ const results = [
   },
   {
     id: 'REL-077-002',
-    label: 'relationship overlay removes the redlined control arms and guide',
+    label: 'relationship overlay removes only the extra center guide and restores the two direction arms',
     ok: !overlay.includes('data-mindmap-note-relationship-control-guide') &&
       !overlay.includes('data-mindmap-note-relationship-control-arm=') &&
-      !overlay.includes('data-mindmap-note-relationship-svg-control-point='),
+      !overlay.includes('data-mindmap-note-relationship-svg-control-point=') &&
+      overlay.includes('data-mindmap-note-relationship-direction-arm="from"') &&
+      overlay.includes('data-mindmap-note-relationship-direction-arm="to"'),
   },
   {
     id: 'REL-077-003',
@@ -30,11 +32,13 @@ const results = [
   },
   {
     id: 'REL-077-004',
-    label: 'relationship interaction layer removes visible control-point and arm elements',
+    label: 'relationship interaction layer restores two direction joysticks without legacy duplicate controls',
     ok: !interaction.includes('data-mindmap-note-relationship-control-point') &&
       !interaction.includes('data-mindmap-note-relationship-screen-control-point') &&
       !interaction.includes('data-mindmap-note-relationship-screen-control-arm') &&
-      !interaction.includes('data-mindmap-note-relationship-control-arm-overlay'),
+      !interaction.includes('data-mindmap-note-relationship-control-arm-overlay') &&
+      interaction.includes('data-mindmap-note-relationship-direction-joystick="from"') &&
+      interaction.includes('data-mindmap-note-relationship-direction-joystick="to"'),
   },
   {
     id: 'REL-077-005',

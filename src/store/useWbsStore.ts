@@ -59,11 +59,13 @@ export type BatchNodeUpdates = Record<string, Partial<TaskNode>>;
 export type UpdateNodeOptions = {
   onPersistSuccess?: () => void;
   onPersistError?: (error: unknown) => void;
+  skipPersistence?: boolean;
 };
 
 export type BatchUpdateNodesOptions = {
   label?: string;
   mergeKey?: string;
+  persistenceOrder?: 'parallel' | 'root-first' | 'leaves-first';
 };
 
 export interface WbsBoardActions {
@@ -260,6 +262,54 @@ const buildChangedNodePatch = (
   }
 
   return Object.keys(after).length > 0 ? { before, after } : null;
+};
+
+const persistNodeTransition = async (
+  id: string,
+  oldNode: TaskNode,
+  newNode: TaskNode,
+  updates: Partial<TaskNode>,
+) => {
+  const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
+  const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
+
+  if (newIsUnplaced) {
+    await (newNode.isArchived
+      ? persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid)
+      : persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid));
+    if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
+      await nodeService.delete(oldNode.workspaceId, oldNode.boardId, id);
+    }
+    return;
+  }
+
+  if (newNode.workspaceId && newNode.boardId) {
+    if (oldWasUnplaced) {
+      await nodeService.create(newNode.workspaceId, newNode.boardId, newNode);
+      await persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid);
+    } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
+      await nodeService.create(newNode.workspaceId, newNode.boardId, newNode);
+      if (oldNode.workspaceId && oldNode.boardId) {
+        await nodeService.delete(oldNode.workspaceId, oldNode.boardId, id);
+      }
+    } else {
+      await nodeService.update(newNode.workspaceId, newNode.boardId, id, updates);
+    }
+  }
+};
+
+const getNodeHierarchyDepth = (nodeId: string, nodes: Record<string, TaskNode>) => {
+  let depth = 0;
+  let parentId = nodes[nodeId]?.parentId || null;
+  const visited = new Set<string>([nodeId]);
+
+  while (parentId && nodes[parentId] && !visited.has(parentId)) {
+    visited.add(parentId);
+    depth += 1;
+    parentId = nodes[parentId].parentId || null;
+  }
+
+  return depth;
 };
 
 const createDependencyId = () =>
@@ -941,47 +991,19 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         );
     }
 
-    const oldWasUnplaced = isTaskWorkbenchUnplacedTask(oldNode);
     const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
-    const persistencePromises: Promise<unknown>[] = [];
-    const trackPersistence = (promise: Promise<unknown>) => {
-      persistencePromises.push(promise);
-      if (!options?.onPersistSuccess && !options?.onPersistError) {
-        void promise.catch(console.error);
+    if (!options?.skipPersistence) {
+      const persistence = persistNodeTransition(id, oldNode, newNode, normalizedUpdates);
+      if (options?.onPersistSuccess || options?.onPersistError) {
+        void persistence
+          .then(() => options.onPersistSuccess?.())
+          .catch((error) => {
+            console.error('[WbsStore] Failed to persist task update:', error);
+            options.onPersistError?.(error);
+          });
+      } else {
+        void persistence.catch(console.error);
       }
-    };
-
-    // 非同步寫入資料來源；跨看板/未歸位移動使用 create/delete，避免只 update 新路徑造成舊路徑殘留。
-    if (newIsUnplaced) {
-        if (newNode.isArchived) {
-            trackPersistence(persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid));
-        } else {
-            trackPersistence(persistTaskWorkbenchUnplacedTask(newNode, useAuthStore.getState().user?.uid));
-        }
-        if (!oldWasUnplaced && oldNode.workspaceId && oldNode.boardId) {
-            trackPersistence(nodeService.delete(oldNode.workspaceId, oldNode.boardId, id));
-        }
-    } else if (newNode.workspaceId && newNode.boardId) {
-        if (oldWasUnplaced) {
-            trackPersistence(persistRemoveTaskWorkbenchUnplacedTask(id, useAuthStore.getState().user?.uid));
-            trackPersistence(nodeService.create(newNode.workspaceId, newNode.boardId, newNode));
-        } else if (oldNode.workspaceId !== newNode.workspaceId || oldNode.boardId !== newNode.boardId) {
-            trackPersistence(nodeService.create(newNode.workspaceId, newNode.boardId, newNode));
-            if (oldNode.workspaceId && oldNode.boardId) {
-                trackPersistence(nodeService.delete(oldNode.workspaceId, oldNode.boardId, id));
-            }
-        } else {
-            trackPersistence(nodeService.update(newNode.workspaceId, newNode.boardId, id, normalizedUpdates));
-        }
-    }
-
-    if (options && persistencePromises.length > 0) {
-      void Promise.all(persistencePromises)
-        .then(() => options.onPersistSuccess?.())
-        .catch((error) => {
-          console.error('[WbsStore] Failed to persist task update:', error);
-          options.onPersistError?.(error);
-        });
     } else if (options?.onPersistSuccess) {
       queueMicrotask(options.onPersistSuccess);
     }
@@ -1019,6 +1041,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const state = get();
     const beforePatches: BatchNodeUpdates = {};
     const afterPatches: BatchNodeUpdates = {};
+    const beforeNodes: Record<string, TaskNode> = {};
 
     for (const [id, updates] of entries) {
       const oldNode = state.nodes[id];
@@ -1029,6 +1052,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
       beforePatches[id] = patch.before;
       afterPatches[id] = patch.after;
+      beforeNodes[id] = oldNode;
     }
 
     const changedEntries = Object.entries(afterPatches);
@@ -1040,10 +1064,33 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (!wasApplying) useUndoStore.setState({ isApplying: true });
     try {
       changedEntries.forEach(([id, updates]) => {
-        get().updateNode(id, updates);
+        get().updateNode(id, updates, {
+          skipPersistence: options.persistenceOrder !== undefined && options.persistenceOrder !== 'parallel',
+        });
       });
     } finally {
       if (!wasApplying) useUndoStore.setState({ isApplying: false });
+    }
+
+    if (options.persistenceOrder && options.persistenceOrder !== 'parallel') {
+      const updatedNodes = get().nodes;
+      const afterNodes = Object.fromEntries(
+        changedEntries.flatMap(([id]) => updatedNodes[id] ? [[id, updatedNodes[id]]] : []),
+      ) as Record<string, TaskNode>;
+      const persistenceEntries = [...changedEntries].sort(([leftId], [rightId]) => {
+        const depthDifference = getNodeHierarchyDepth(leftId, updatedNodes) - getNodeHierarchyDepth(rightId, updatedNodes);
+        return options.persistenceOrder === 'leaves-first' ? -depthDifference : depthDifference;
+      });
+      void (async () => {
+        for (const [id, updates] of persistenceEntries) {
+          const oldNode = beforeNodes[id];
+          const newNode = afterNodes[id];
+          if (!oldNode || !newNode) continue;
+          await persistNodeTransition(id, oldNode, newNode, updates);
+        }
+      })().catch(error => {
+        console.error('[WbsStore] Failed to persist ordered task batch:', error);
+      });
     }
 
     if (wasApplying) return;
@@ -1056,8 +1103,20 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       scope: 'batch',
       entityIds,
       mergeKey: options.mergeKey,
-      undo: () => get().batchUpdateNodes(beforePatches, { label, mergeKey: options.mergeKey }),
-      redo: () => get().batchUpdateNodes(afterPatches, { label, mergeKey: options.mergeKey }),
+      undo: () => get().batchUpdateNodes(beforePatches, {
+        label,
+        mergeKey: options.mergeKey,
+        persistenceOrder: options.persistenceOrder === 'root-first'
+          ? 'leaves-first'
+          : options.persistenceOrder === 'leaves-first'
+            ? 'root-first'
+            : options.persistenceOrder,
+      }),
+      redo: () => get().batchUpdateNodes(afterPatches, {
+        label,
+        mergeKey: options.mergeKey,
+        persistenceOrder: options.persistenceOrder,
+      }),
     });
   },
 

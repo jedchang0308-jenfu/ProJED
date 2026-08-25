@@ -164,18 +164,29 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
         && state.childIntentPhase !== 'armed'
         && state.dropIndicatorRect ? (
         <div
-          className="pointer-events-none fixed z-[90] -translate-y-1/2"
+          className={`pointer-events-none fixed z-[90] ${
+            state.dropIndicatorAxis === 'vertical' ? '' : '-translate-y-1/2'
+          }`}
           style={{
             left: state.dropIndicatorRect.left,
             top: state.dropIndicatorRect.top,
             width: state.dropIndicatorRect.width,
+            height: state.dropIndicatorAxis === 'vertical'
+              ? state.dropIndicatorRect.height
+              : undefined,
           }}
           data-mobile-drop-indicator="true"
+          data-mobile-drop-axis={state.dropIndicatorAxis || 'horizontal'}
           data-mobile-drop-target={state.hoverTargetId || undefined}
+          data-mobile-drop-target-kind={state.targetKind}
           data-mobile-drop-position={state.dropPosition || undefined}
           data-mobile-drop-surface-kind={state.targetSurfaceKind || undefined}
         >
-          <KanbanInsertionMarker compact className="py-0" />
+          <KanbanInsertionMarker
+            axis={state.dropIndicatorAxis || 'horizontal'}
+            compact
+            className="py-0"
+          />
         </div>
       ) : null}
 

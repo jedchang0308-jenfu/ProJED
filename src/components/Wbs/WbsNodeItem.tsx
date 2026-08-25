@@ -142,9 +142,6 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const isStartDateReadOnly = !canEditTask || lockStatus.startLocked;
   const isEndDateReadOnly = !canEditTask || isEndDateEffectivelyLocked;
 
-  // 緊湊的縮排 (使用 1.25rem 取代原本的 1.5rem 以節省空間)
-  const indentPadding = level * 1.25;
-
   const handleToggle = () => setIsExpanded(!isExpanded);
 
   // ----- 日期防呆機制 (Date Boundary Protection) -----
@@ -322,8 +319,15 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         
         {/* Col 1: 任務名稱與階層結構 */}
         <div
-          className="relative flex items-center gap-1 overflow-hidden pr-[10px]"
-          style={{ paddingLeft: `${indentPadding}rem` }}
+          className="task-hierarchy-indented-row relative flex items-center gap-1 overflow-hidden pr-[10px]"
+          style={{
+            '--task-hierarchy-depth': level,
+            '--task-hierarchy-base': '0px',
+          } as React.CSSProperties}
+          data-task-hierarchy-row="true"
+          data-task-hierarchy-surface="list"
+          data-task-hierarchy-depth={level}
+          data-task-id={node.id}
         >
           <button 
             onClick={handleToggle}

@@ -42,7 +42,11 @@ assert(
     "'column-header'",
     "'wbs-list-row'",
     "'workbench-unplaced-row'",
-    "export type TaskDragTargetKind = 'task-position' | 'workbench-placed-lane' | 'mobile-action' | 'none';",
+    'export type TaskDragTargetKind =',
+    "'workbench-unplaced-lane'",
+    "'workbench-placed-lane'",
+    "'mobile-action'",
+    "'none'",
     'export interface TaskDragObservation',
     'export interface TaskDragSessionState',
   ]) && !source.types.includes("'workbench-placed-row'"),
@@ -102,11 +106,12 @@ assert(
 );
 
 assert(
-  'target priority is centralized and ordered action, task, placed lane, none',
+  'target priority is centralized and includes action, task, unplaced lane, placed lane, none',
   includesAll(source.target, [
     'export const TASK_DRAG_TARGET_PRIORITY = [',
     "'mobile-action'",
     "'task-position'",
+    "'workbench-unplaced-lane'",
     "'workbench-placed-lane'",
     "'none'",
     'resolveTaskDragObservation',
@@ -153,8 +158,8 @@ assert(
     'const state = useWbsStore.getState();',
     'const latestNode = useWbsStore.getState().nodes[nodeId];',
     "noOp('workbench-placed-row-is-not-a-source')",
-    "dependencies.batchUpdateNodes(updates, { label: '移動任務位置'",
-    "dependencies.batchUpdateNodes({",
+    'dependencies.batchUpdateNodes(updates, {',
+    "label: '移動任務位置'",
     "mergeKey: `placement:${draggedNode.id}`",
     'isValidTaskDropIntent',
   ]),
@@ -175,14 +180,17 @@ assert(
 );
 
 assert(
-  'desktop drag UI keeps its approved appearance while DEV-068 owns the pointer-upper-right offset',
+  'desktop drag UI keeps its approved styling while the latest user decision owns half-scale pointer attachment',
   includesAll(source.boardView, [
     'data-kanban-drag-overlay="true"',
     'resolvePointerUpperRightOverlayPosition',
     'data-task-drag-overlay-anchor="pointer-upper-right"',
-    'pointer-events-none fixed z-[93] flex items-center gap-2 rounded-lg',
+    'data-task-drag-overlay-pointer-gap={DESKTOP_TASK_DRAG_OVERLAY_POINTER_GAP_PX}',
+    'data-task-drag-overlay-scale={DESKTOP_TASK_DRAG_OVERLAY_SCALE}',
+    'pointer-events-none fixed z-[93] flex h-10 origin-top-left items-center gap-2 rounded-lg',
     'border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg',
     "activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'",
+    'transform: `scale(${DESKTOP_TASK_DRAG_OVERLAY_SCALE})`',
   ]) &&
     source.dragSensors.includes('SmartMouseSensor extends MouseSensor') &&
     source.dragSensors.includes('SmartKeyboardSensor extends KeyboardSensor') &&
@@ -207,7 +215,7 @@ assert(
   source.packageJson.includes('"verify:dev-053-task-drag-muscle-memory-consistency"') &&
     source.packageJson.includes('"verify:dev-053-task-drag-muscle-memory-consistency-browser"') &&
     includesAll(source.browserVerifier, [
-      'desktop drag overlay preserves its appearance while DEV-068 anchors it above-right of the pointer',
+      'desktop drag overlay scales to 50 percent and attaches to the pointer upper-right',
       'desktop card, checklist, and column header clicks open the matching details',
       'desktop card, checklist, and column header right click opens the task context menu',
       'mobile card, checklist, and column header quick taps open the matching details',

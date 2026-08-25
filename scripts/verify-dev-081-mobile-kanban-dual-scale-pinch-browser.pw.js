@@ -61,6 +61,23 @@ async (page) => {
     const tag = board?.querySelector('[data-kanban-tag-front="true"]');
     const rect = (item) => item ? item.getBoundingClientRect().toJSON() : null;
     const style = (item) => item ? getComputedStyle(item) : null;
+    const checklistRows = Array.from(board?.querySelectorAll('.kanban-checklist-item') || []);
+    const checklistDepth = (item) => style(item)?.getPropertyValue('--kanban-checklist-depth').trim();
+    const depth1Row = checklistRows.find((item) => checklistDepth(item) === '1');
+    const hierarchyCard = depth1Row?.closest('.kanban-task-card');
+    const sameCardRows = Array.from(hierarchyCard?.querySelectorAll('.kanban-checklist-item') || []);
+    const checklistRowAtDepth = (depth) => sameCardRows.find((item) => checklistDepth(item) === String(depth));
+    const checklistGeometry = (depth) => {
+      const row = checklistRowAtDepth(depth);
+      const title = row?.querySelector('[data-task-title-slot="true"]');
+      return {
+        found: Boolean(row && title),
+        paddingLeft: Number.parseFloat(style(row)?.paddingLeft || '0'),
+        titleLeft: rect(title)?.left || 0,
+      };
+    };
+    const depth0 = checklistGeometry(0);
+    const depth1 = checklistGeometry(1);
     return {
       viewSize: board?.getAttribute('data-kanban-view-size') || null,
       pinchState: board?.getAttribute('data-kanban-pinch-state') || null,
@@ -77,9 +94,24 @@ async (page) => {
       bodyPinch: document.body.hasAttribute('data-kanban-pinch-active'),
       modalCount: document.querySelectorAll('[data-task-details-modal="true"]').length,
       actionRailCount: document.querySelectorAll('[data-mobile-task-action-rail="true"]').length,
+      hierarchy: {
+        depth0,
+        depth1,
+        paddingDelta: depth1.paddingLeft - depth0.paddingLeft,
+        titleLeftDelta: depth1.titleLeft - depth0.titleLeft,
+      },
       pinchDebug: (window.__projedMobilePanDebug || []).slice(-12),
     };
   });
+
+  const assertHierarchy = (geometry, expectedBase, expectedIndent) => {
+    const hierarchy = geometry.hierarchy;
+    const tolerance = 0.6;
+    assert(hierarchy.depth0.found && hierarchy.depth1.found, 'fixture must expose two checklist depths', hierarchy);
+    assert(Math.abs(hierarchy.depth0.paddingLeft - expectedBase) <= tolerance, 'depth 0 base inset should match the active scale', { hierarchy, expectedBase });
+    assert(Math.abs(hierarchy.paddingDelta - expectedIndent) <= tolerance, 'each child depth should add the active hierarchy indent', { hierarchy, expectedIndent });
+    assert(Math.abs(hierarchy.titleLeftDelta - expectedIndent) <= tolerance, 'child title should be visibly offset from its parent', { hierarchy, expectedIndent });
+  };
 
   const firstBoardPoint = async (ratioX = 0.5, ratioY = 0.25) => {
     const box = await page.locator('[data-mobile-pan-surface="board"]').boundingBox();
@@ -147,6 +179,7 @@ async (page) => {
     const geometry = await readGeometry();
     assert(geometry.viewSize === 'compact', 'default view should be compact', geometry);
     assert(geometry.toggleCount === 1, 'mobile board should expose exactly one size toggle', geometry);
+    assertHierarchy(geometry, 4, 5);
     return geometry;
   });
 
@@ -158,6 +191,7 @@ async (page) => {
     assert(geometry.viewSize === 'large', 'toolbar should switch to large', geometry);
     assert(geometry.columnWidth >= 620, 'large column width should be approximately 630px', geometry);
     assert(geometry.l1Font >= 34 && geometry.l2Font >= 34 && geometry.l3Font >= 29 && geometry.dateFont >= 20, 'large text/meta should be 2–3x compact', geometry);
+    assertHierarchy(geometry, 10, 5);
     return geometry;
   });
 
@@ -230,6 +264,12 @@ async (page) => {
     const geometry = await readGeometry();
     assert(geometry.toggleCount === 0, 'desktop should not expose mobile size toggle', geometry);
     assert(geometry.viewSize === 'compact', 'desktop effective board size must remain compact', geometry);
+    return geometry;
+  });
+
+  await runCase('QA-081-R10', 'desktop keeps the shared parent-child hierarchy indentation', async () => {
+    const geometry = await readGeometry();
+    assertHierarchy(geometry, 4, 6);
     return geometry;
   });
 

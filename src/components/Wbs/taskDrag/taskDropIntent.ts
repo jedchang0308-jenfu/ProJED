@@ -4,6 +4,7 @@ import type { TaskDropSurfaceKind } from './taskDragTypes';
 export interface TaskDropDescriptor {
   nodeId: string;
   surfaceKind: TaskDropSurfaceKind;
+  orderingPosition?: 'before' | 'after';
 }
 
 export interface TaskDropIntent {
@@ -12,6 +13,11 @@ export interface TaskDropIntent {
   nodeType?: TaskNode['nodeType'];
   displayPosition: 'before' | 'after' | 'append';
 }
+
+export type TaskDropOutcome =
+  | { kind: 'move'; intent: TaskDropIntent }
+  | { kind: 'origin'; intent: TaskDropIntent }
+  | { kind: 'invalid'; intent: null };
 
 export const buildTaskParentIndex = (nodesRecord: Record<string, TaskNode>) => {
   const parentIndex: Record<string, string[]> = {};
@@ -90,7 +96,34 @@ export const isValidTaskDropIntent = (
   return !intent.parentId || !isDescendantOf(intent.parentId, draggedNodeId, nodesRecord);
 };
 
-const getReorderIntent = (draggedNode: TaskNode, targetNode: TaskNode) => {
+export const classifyTaskDropOutcome = ({
+  draggedNodeId,
+  intent,
+  nodesRecord,
+}: {
+  draggedNodeId: string;
+  intent: TaskDropIntent | null;
+  nodesRecord: Record<string, TaskNode>;
+}): TaskDropOutcome => {
+  if (!isValidTaskDropIntent(draggedNodeId, intent, nodesRecord) || !intent) {
+    return { kind: 'invalid', intent: null };
+  }
+  return isTaskDropIntentOrigin(draggedNodeId, intent, nodesRecord)
+    ? { kind: 'origin', intent }
+    : { kind: 'move', intent };
+};
+
+const getReorderIntent = (
+  draggedNode: TaskNode,
+  targetNode: TaskNode,
+  orderingPosition?: 'before' | 'after',
+) => {
+  if (orderingPosition) {
+    return {
+      order: (targetNode.order ?? 0) + (orderingPosition === 'after' ? 0.5 : -0.5),
+      displayPosition: orderingPosition,
+    };
+  }
   const sameParent = (draggedNode.parentId || null) === (targetNode.parentId || null);
   const movingDown = sameParent && (draggedNode.order ?? 0) < (targetNode.order ?? 0);
   return {
@@ -124,7 +157,7 @@ export const resolveTaskDropIntent = ({
   let intent: TaskDropIntent | null = null;
 
   if (target.surfaceKind === 'column-header') {
-    const reorder = getReorderIntent(draggedNode, targetNode);
+    const reorder = getReorderIntent(draggedNode, targetNode, target.orderingPosition);
     intent = {
       parentId: targetNode.parentId || null,
       order: reorder.order,
@@ -139,7 +172,7 @@ export const resolveTaskDropIntent = ({
       displayPosition: 'append',
     };
   } else if (target.surfaceKind === 'kanban-card') {
-    const reorder = getReorderIntent(draggedNode, targetNode);
+    const reorder = getReorderIntent(draggedNode, targetNode, target.orderingPosition);
     intent = {
       parentId: targetNode.parentId || null,
       order: reorder.order,
@@ -147,7 +180,7 @@ export const resolveTaskDropIntent = ({
       displayPosition: reorder.displayPosition,
     };
   } else if (target.surfaceKind === 'checklist-row' && targetNode.parentId) {
-    const reorder = getReorderIntent(draggedNode, targetNode);
+    const reorder = getReorderIntent(draggedNode, targetNode, target.orderingPosition);
     intent = {
       parentId: targetNode.parentId,
       order: reorder.order,
@@ -169,6 +202,20 @@ export const resolveTaskDropIntent = ({
 
   return isValidTaskDropIntent(draggedNode.id, intent, nodesRecord) ? intent : null;
 };
+
+export const resolveTaskDropOutcome = ({
+  source,
+  target,
+  nodesRecord,
+}: {
+  source: TaskDropDescriptor;
+  target: TaskDropDescriptor;
+  nodesRecord: Record<string, TaskNode>;
+}): TaskDropOutcome => classifyTaskDropOutcome({
+  draggedNodeId: source.nodeId,
+  intent: resolveTaskDropIntent({ source, target, nodesRecord }),
+  nodesRecord,
+});
 
 export const taskDragSourceKindToSurfaceKind = (
   sourceKind: string,

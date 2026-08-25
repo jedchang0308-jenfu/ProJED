@@ -4,7 +4,6 @@ import {
   type MindMapRelationshipPath,
 } from './mindMapGeometry';
 import type { MindMapRelationshipPointerHandle } from './mindMapRelationshipCommands';
-import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 
 interface MindMapRelationshipInteractionLayerProps {
   relationshipPaths: MindMapRelationshipPath[];
@@ -30,6 +29,8 @@ interface MindMapRelationshipInteractionLayerProps {
   cancelRelationshipLabelEdit: () => void;
 }
 
+const RELATIONSHIP_LINE_HIT_WINDOW_PX = 44;
+
 const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteractionLayerProps> = ({
   relationshipPaths,
   selectedRelationshipId,
@@ -52,16 +53,6 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
   const inverseScale = 1 / Math.max(zoomLevel, 0.01);
   const hitHeight = (screenPixels: number) => `${screenPixels * inverseScale}px`;
 
-  const selectRelationshipFromEvent = (
-    event: React.MouseEvent<Element> | React.PointerEvent<Element>,
-    path: MindMapRelationshipPath,
-  ) => {
-    if (!isPrimaryPointerActivation(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    selectRelationship(path.id);
-  };
-
   const selectOrEditRelationship = (event: React.MouseEvent, path: MindMapRelationshipPath) => {
     event.stopPropagation();
     if (selectedRelationshipId === path.id && event.detail === 0) {
@@ -79,12 +70,12 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             key={`curve-hitbox-${path.id}-${segment.index}`}
             type="button"
             aria-label={`選取關聯線 ${path.label}`}
-            className={`absolute z-[44] -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
+            className={`absolute z-[44] rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
             style={{
               left: `${segment.x}px`,
               top: `${segment.y}px`,
               width: `${segment.length}px`,
-              height: hitHeight(28),
+              height: hitHeight(RELATIONSHIP_LINE_HIT_WINDOW_PX),
               transform: `translate(-50%, -50%) rotate(${segment.angle}rad)`,
             }}
             onClick={(event) => selectOrEditRelationship(event, path)}
@@ -92,14 +83,12 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
               event.stopPropagation();
               startRelationshipLabelEdit(path.id);
             }}
-            onPointerDown={(event) => selectRelationshipFromEvent(event, path)}
-            onPointerUp={(event) => selectRelationshipFromEvent(event, path)}
-            onMouseDown={(event) => selectRelationshipFromEvent(event, path)}
-            onMouseUp={(event) => selectRelationshipFromEvent(event, path)}
             onKeyDown={(event) => handleRelationshipHotkey(event, path.id)}
             onPointerEnter={() => hoverRelationship(path.id)}
             onPointerLeave={() => clearRelationshipHover(path.id)}
             data-mindmap-note-relationship-curve-click-target={path.id}
+            data-mindmap-note-relationship-hit-window-screen-px={RELATIONSHIP_LINE_HIT_WINDOW_PX}
+            data-mindmap-note-relationship-hit-window-alignment="centerline"
             data-mindmap-note-relationship-coordinate-space="map-local"
             data-segment-index={segment.index}
             data-label={path.label}
@@ -111,36 +100,33 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
       ))}
 
       {relationshipPaths.map(path => {
-        const dx = path.toX - path.fromX;
-        const dy = path.toY - path.fromY;
-        const length = Math.max(80, Math.hypot(dx, dy) - 64);
-        const angle = Math.atan2(dy, dx);
+        const curveSegments = getRelationshipCurveHitSegments(path);
+        const centerSegment = curveSegments[Math.floor(curveSegments.length / 2)];
+        if (!centerSegment) return null;
         return (
           <button
             key={`line-hitbox-${path.id}`}
             type="button"
             aria-label={`選取關聯線 ${path.label}`}
-            className={`absolute z-[42] -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
+            className={`absolute z-[42] rounded-full bg-transparent outline-none focus:ring-2 focus:ring-sky-300 ${relationshipToolActive ? 'pointer-events-none' : ''}`}
             style={{
-              left: `${(path.fromX + path.toX) / 2}px`,
-              top: `${(path.fromY + path.toY) / 2}px`,
-              width: `${length}px`,
-              height: hitHeight(24),
-              transform: `translate(-50%, -50%) rotate(${angle}rad)`,
+              left: `${centerSegment.x}px`,
+              top: `${centerSegment.y}px`,
+              width: `${centerSegment.length}px`,
+              height: hitHeight(RELATIONSHIP_LINE_HIT_WINDOW_PX),
+              transform: `translate(-50%, -50%) rotate(${centerSegment.angle}rad)`,
             }}
             onClick={(event) => selectOrEditRelationship(event, path)}
             onDoubleClick={(event) => {
               event.stopPropagation();
               startRelationshipLabelEdit(path.id);
             }}
-            onPointerDown={(event) => selectRelationshipFromEvent(event, path)}
-            onPointerUp={(event) => selectRelationshipFromEvent(event, path)}
-            onMouseDown={(event) => selectRelationshipFromEvent(event, path)}
-            onMouseUp={(event) => selectRelationshipFromEvent(event, path)}
             onKeyDown={(event) => handleRelationshipHotkey(event, path.id)}
             onPointerEnter={() => hoverRelationship(path.id)}
             onPointerLeave={() => clearRelationshipHover(path.id)}
             data-mindmap-note-relationship-line-click-target={path.id}
+            data-mindmap-note-relationship-hit-window-screen-px={RELATIONSHIP_LINE_HIT_WINDOW_PX}
+            data-mindmap-note-relationship-hit-window-alignment="centerline"
             data-mindmap-note-relationship-coordinate-space="map-local"
             data-label={path.label}
             data-from-node-id={path.fromNodeId}
@@ -168,10 +154,6 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             event.stopPropagation();
             startRelationshipLabelEdit(path.id);
           }}
-          onPointerDown={(event) => selectRelationshipFromEvent(event, path)}
-          onPointerUp={(event) => selectRelationshipFromEvent(event, path)}
-          onMouseDown={(event) => selectRelationshipFromEvent(event, path)}
-          onMouseUp={(event) => selectRelationshipFromEvent(event, path)}
           onKeyDown={(event) => handleRelationshipHotkey(event, path.id)}
           onPointerEnter={() => hoverRelationship(path.id)}
           onPointerLeave={() => clearRelationshipHover(path.id)}
@@ -189,6 +171,7 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
           <React.Fragment key={`relationship-html-handles-${path.id}`}>
             <button
               type="button"
+              aria-label="調整關聯線起點位置"
               className="absolute z-[62] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
               style={{ left: `${path.fromX}px`, top: `${path.fromY}px`, width: hitHeight(24), height: hitHeight(24) }}
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'from')}
@@ -199,6 +182,7 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
             />
             <button
               type="button"
+              aria-label="調整關聯線終點位置"
               className="absolute z-[62] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full border-2 border-sky-500 bg-white shadow-sm active:cursor-grabbing"
               style={{ left: `${path.toX}px`, top: `${path.toY}px`, width: hitHeight(24), height: hitHeight(24) }}
               onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'to')}
@@ -207,6 +191,48 @@ const MindMapRelationshipInteractionLayer: React.FC<MindMapRelationshipInteracti
               data-mindmap-note-relationship-coordinate-space="map-local"
               data-relationship-id={path.id}
             />
+            <button
+              type="button"
+              aria-label="調整關聯線起點方向"
+              className="absolute z-[63] flex -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center rounded-md bg-transparent outline-none cursor-grab focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 active:cursor-grabbing"
+              style={{ left: `${path.c1X}px`, top: `${path.c1Y}px`, width: hitHeight(28), height: hitHeight(28) }}
+              onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-1')}
+              data-mindmap-note-relationship-direction-joystick="from"
+              data-mindmap-note-relationship-coordinate-space="map-local"
+              data-relationship-id={path.id}
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none rotate-45 bg-white shadow-sm"
+                style={{
+                  width: hitHeight(10),
+                  height: hitHeight(10),
+                  border: `${2 * inverseScale}px solid #0ea5e9`,
+                  borderRadius: `${2 * inverseScale}px`,
+                }}
+              />
+            </button>
+            <button
+              type="button"
+              aria-label="調整關聯線終點方向"
+              className="absolute z-[63] flex -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center rounded-md bg-transparent outline-none cursor-grab focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 active:cursor-grabbing"
+              style={{ left: `${path.c2X}px`, top: `${path.c2Y}px`, width: hitHeight(28), height: hitHeight(28) }}
+              onPointerDown={(event) => startRelationshipPointerDrag(event, path.id, 'control-2')}
+              data-mindmap-note-relationship-direction-joystick="to"
+              data-mindmap-note-relationship-coordinate-space="map-local"
+              data-relationship-id={path.id}
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none rotate-45 bg-white shadow-sm"
+                style={{
+                  width: hitHeight(10),
+                  height: hitHeight(10),
+                  border: `${2 * inverseScale}px solid #0ea5e9`,
+                  borderRadius: `${2 * inverseScale}px`,
+                }}
+              />
+            </button>
           </React.Fragment>
         ) : null
       ))}

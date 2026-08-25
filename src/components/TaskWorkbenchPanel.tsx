@@ -52,10 +52,12 @@ import {
 import { usePanelPreview } from './panelPreviewContext';
 import { CLOSE_PANEL_EVENT, OPEN_PANEL_EVENT, TOGGLE_PANEL_EVENT } from './taskWorkbenchPanelCommands';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
+import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
 import { isMobileTaskActionMode } from './Wbs/mobileTaskActionContext';
 import { useTaskGestureSurface } from './Wbs/taskDrag/useTaskGestureSurface';
 import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
+import { getSharedInlinePanelWidthStyle } from '../features/layout/preferences';
 
 type PanelPrefs = TaskWorkbenchPanelPrefs;
 
@@ -144,18 +146,18 @@ const WorkbenchUnclassifiedSection: React.FC<{
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
     >
-      <div
-        className="relative z-20 mt-2 mb-px box-border flex h-8 w-[104px] shrink-0 items-center justify-between gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
-        data-task-workbench-section-header="unplaced"
-      >
-        <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-white">
-          <span className="min-w-0 truncate">未歸位</span>
+      <div className="relative z-20 mt-2 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2">
+        <div
+          className="box-border mb-px flex h-8 min-w-0 w-[104px] shrink items-center gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
+          data-task-workbench-section-header="unplaced"
+        >
+          <span className="min-w-0 truncate text-[13px] font-black leading-5 text-white">未歸位</span>
         </div>
         <button
           type="button"
           onClick={onCreateTask}
           disabled={!canCreateTask}
-          className="absolute left-[112px] top-1/2 inline-flex h-8 -translate-y-1/2 items-center whitespace-nowrap rounded-md border border-yellow-400 bg-yellow-300 px-2.5 text-xs font-semibold text-black shadow-sm transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-8 min-w-[80px] shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-yellow-400 bg-yellow-300 px-2.5 text-xs font-semibold text-black shadow-sm transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-40"
           title="新增未歸位任務並開啟任務彈窗"
           aria-label="新增未歸位任務"
           data-task-workbench-unclassified-modal-add="true"
@@ -169,16 +171,23 @@ const WorkbenchUnclassifiedSection: React.FC<{
       </div>
 
       <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-unclassified-list="true">
-        {tasks.map(task => (
-          <WorkbenchDragCard
-            key={task.id}
-            task={task}
-            canMoveTask={canMoveTask}
-            placement="unplaced"
-          />
-        ))}
+        <WorkbenchUnplacedHierarchy tasks={tasks} canMoveTask={canMoveTask} />
+        {isOver ? (
+          <div
+            className="pointer-events-none relative z-30 h-0"
+            data-task-workbench-unplaced-insertion-preview="true"
+            data-task-workbench-insertion-preview-layer="overlay"
+          >
+            <div className={`absolute inset-x-0 top-0 ${tasks.length > 0 ? '-translate-y-1/2' : ''}`}>
+              <KanbanInsertionMarker compact className="py-0" />
+            </div>
+          </div>
+        ) : null}
         {tasks.length === 0 ? (
-          <div className="px-1 py-1 text-sm font-semibold text-slate-500">
+          <div
+            className={`px-1 py-1 text-sm font-semibold text-slate-500 ${isOver ? 'invisible' : ''}`}
+            data-task-workbench-unplaced-empty-state="true"
+          >
             目前沒有未歸位任務。
           </div>
         ) : null}
@@ -276,8 +285,9 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-task-workbench-unclassified-item={unplacedLane ? 'true' : undefined}
       data-task-workbench-task-placement={placement}
       data-task-workbench-unplaced-compact-row={unplacedLane ? 'true' : undefined}
-      data-task-workbench-hierarchy-row={!unplacedLane ? 'true' : undefined}
-      data-task-workbench-hierarchy-depth={unplacedLane ? 0 : depth}
+      data-task-workbench-hierarchy-row="true"
+      data-task-workbench-hierarchy-depth={depth}
+      data-task-surface-source={unplacedLane ? 'true' : undefined}
       data-desktop-task-hover-preview={!isDragging ? 'true' : undefined}
       data-touch-tap-guard="true"
       data-task-touch-gesture-surface={touchGestureEnabled ? 'true' : undefined}
@@ -293,7 +303,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   }: {
     titleClassName: string;
   }) => (
-    <div className="flex min-w-0 flex-1 items-center gap-3" data-task-workbench-task-content="true">
+    <div className={`flex min-w-0 flex-1 items-center ${isUnplacedLaneRow ? 'gap-1' : 'gap-3'}`} data-task-workbench-task-content="true">
       <div
         className={titleClassName}
         title={taskLocation}
@@ -318,11 +328,12 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   if (isUnplacedLaneRow) {
     return renderWorkbenchTaskRow({
       unplacedLane: true,
-      className: `kanban-checklist-item group flex min-h-[23px] cursor-pointer items-center px-1.5 py-0 transition-colors ${
+      className: `kanban-checklist-item task-workbench-unplaced-hierarchy-row group flex min-h-5 cursor-pointer items-center pr-1 py-0 transition-colors ${
           isDragging ? 'bg-primary/5 opacity-40' : 'hover:bg-white'
         }`,
+      style: { '--kanban-checklist-depth': depth } as React.CSSProperties,
       children: renderWorkbenchTaskContent({
-        titleClassName: 'min-w-0 flex-1 truncate text-sm leading-5 font-semibold text-slate-800',
+        titleClassName: `min-w-0 flex-1 truncate text-xs leading-tight ${hierarchyTextClass}`,
       }),
     });
   }
@@ -426,6 +437,120 @@ const WorkbenchDragCard: React.FC<WorkbenchDragCardProps> = (props) => (
     : <WorkbenchUnplacedDragCard {...props} />
 );
 
+type WorkbenchUnplacedHierarchyProps = {
+  tasks: TaskNode[];
+  canMoveTask: boolean;
+};
+
+type WorkbenchUnplacedHierarchyProjection = {
+  roots: TaskNode[];
+  childrenByParentId: Map<string, TaskNode[]>;
+};
+
+const projectWorkbenchUnplacedHierarchy = (tasks: TaskNode[]): WorkbenchUnplacedHierarchyProjection => {
+  const orderedTasks = sortTasks(tasks);
+  const taskById = new Map(orderedTasks.map(task => [task.id, task]));
+  const childrenByParentId = new Map<string, TaskNode[]>();
+  const roots: TaskNode[] = [];
+
+  orderedTasks.forEach((task) => {
+    const parentId = task.parentId || null;
+    if (!parentId || parentId === task.id || !taskById.has(parentId)) {
+      roots.push(task);
+      return;
+    }
+    childrenByParentId.set(parentId, [
+      ...(childrenByParentId.get(parentId) || []),
+      task,
+    ]);
+  });
+
+  const reached = new Set<string>();
+  const markReached = (taskId: string, path: Set<string>) => {
+    if (path.has(taskId)) return;
+    reached.add(taskId);
+    const nextPath = new Set(path).add(taskId);
+    (childrenByParentId.get(taskId) || []).forEach(child => markReached(child.id, nextPath));
+  };
+  roots.forEach(root => markReached(root.id, new Set()));
+  orderedTasks.forEach((task) => {
+    if (reached.has(task.id)) return;
+    roots.push(task);
+    markReached(task.id, new Set());
+  });
+
+  return { roots, childrenByParentId };
+};
+
+const WorkbenchUnplacedHierarchyBranch: React.FC<{
+  task: TaskNode;
+  canMoveTask: boolean;
+  childrenByParentId: Map<string, TaskNode[]>;
+  depth: number;
+  ancestorIds: Set<string>;
+}> = ({ task, canMoveTask, childrenByParentId, depth, ancestorIds }) => {
+  if (ancestorIds.has(task.id)) return null;
+  const children = childrenByParentId.get(task.id) || [];
+  const hasDescendants = children.length > 0;
+  const nextAncestorIds = new Set(ancestorIds).add(task.id);
+
+  return (
+    <div
+      className="relative"
+      data-task-surface-scope="true"
+      data-desktop-task-hover-scope="true"
+      data-task-hover-scope-kind="workbench-unplaced"
+      data-task-hover-scope-source-id={task.id}
+      data-task-hover-has-descendants={hasDescendants ? 'true' : undefined}
+      data-task-workbench-unplaced-hierarchy-branch="true"
+    >
+      <WorkbenchDragCard
+        task={task}
+        canMoveTask={canMoveTask}
+        placement="unplaced"
+        hierarchyDepth={depth}
+      />
+      {hasDescendants ? (
+        <div
+          className={depth === 0 ? 'task-workbench-unplaced-subtree-rail' : undefined}
+          data-task-surface-subtree="true"
+          data-task-workbench-unplaced-subtree="true"
+        >
+          {children.map(child => (
+            <WorkbenchUnplacedHierarchyBranch
+              key={child.id}
+              task={child}
+              canMoveTask={canMoveTask}
+              childrenByParentId={childrenByParentId}
+              depth={Math.min(depth + 1, 6)}
+              ancestorIds={nextAncestorIds}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const WorkbenchUnplacedHierarchy: React.FC<WorkbenchUnplacedHierarchyProps> = ({ tasks, canMoveTask }) => {
+  const projection = React.useMemo(() => projectWorkbenchUnplacedHierarchy(tasks), [tasks]);
+
+  return (
+    <div data-task-workbench-unplaced-hierarchy="true">
+      {projection.roots.map(root => (
+        <WorkbenchUnplacedHierarchyBranch
+          key={root.id}
+          task={root}
+          canMoveTask={canMoveTask}
+          childrenByParentId={projection.childrenByParentId}
+          depth={0}
+          ancestorIds={new Set()}
+        />
+      ))}
+    </div>
+  );
+};
+
 const WorkbenchFilterControls: React.FC<{
   assigneeOptions: Array<{ id: string; label: string }>;
   boardOptions: BoardOption[];
@@ -511,12 +636,6 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const [isResizing, setIsResizing] = React.useState(false);
   const panelWidthRef = React.useRef(panelWidth);
   const resizeCleanupRef = React.useRef<(() => void) | null>(null);
-  const [isNarrowViewport, setIsNarrowViewport] = React.useState(() => (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(max-width: 767px)').matches
-  ));
-  const [mobileOverlayOpen, setMobileOverlayOpen] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).open);
   const [selectedBoardId, setSelectedBoardId] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).selectedBoardId);
   const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterState>>(() => readTaskWorkbenchFilterPrefs(accountId).filtersByBoardId);
   const filterToggleRef = React.useRef<HTMLButtonElement>(null);
@@ -544,15 +663,13 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
   const closePanel = React.useCallback(() => {
     patchPanelPrefs({ open: false, filtersOpen: false });
-    if (isNarrowViewport) setMobileOverlayOpen(false);
-  }, [isNarrowViewport, patchPanelPrefs]);
+  }, [patchPanelPrefs]);
 
   React.useEffect(() => {
     const nextPanelPrefs = readTaskWorkbenchPanelPrefs(accountId);
     setPanelPrefs(nextPanelPrefs);
     panelWidthRef.current = nextPanelPrefs.width;
     setPanelWidth(nextPanelPrefs.width);
-    setMobileOverlayOpen(nextPanelPrefs.open);
     const filterPrefs = readTaskWorkbenchFilterPrefs(accountId);
     setSelectedBoardId(filterPrefs.selectedBoardId);
     setFiltersByBoardId(filterPrefs.filtersByBoardId);
@@ -573,19 +690,6 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
       cancelled = true;
     };
   }, [accountId]);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const media = window.matchMedia('(max-width: 767px)');
-    const syncViewport = () => {
-      const isNarrow = media.matches;
-      setIsNarrowViewport(isNarrow);
-      if (!isNarrow) setMobileOverlayOpen(false);
-    };
-    syncViewport();
-    media.addEventListener?.('change', syncViewport);
-    return () => media.removeEventListener?.('change', syncViewport);
-  }, []);
 
   React.useEffect(() => {
     panelWidthRef.current = panelWidth;
@@ -609,24 +713,14 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
   React.useEffect(() => {
     const open = () => {
-      if (isNarrowViewport) {
-        setMobileOverlayOpen(true);
-        return;
-      }
       patchPanelPrefs({ open: true });
     };
     window.addEventListener(OPEN_PANEL_EVENT, open);
     return () => window.removeEventListener(OPEN_PANEL_EVENT, open);
-  }, [isNarrowViewport, patchPanelPrefs]);
+  }, [patchPanelPrefs]);
 
   React.useEffect(() => {
     const toggle = () => {
-      if (isNarrowViewport) {
-        setMobileOverlayOpen(current => !current);
-        setPanelPrefs(current => ({ ...current, open: !current.open, filtersOpen: false }));
-        return;
-      }
-
       setPanelPrefs(current => {
         const next = { ...current, open: !current.open, filtersOpen: false };
         writeTaskWorkbenchPanelPrefs(next, accountId);
@@ -636,7 +730,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
     window.addEventListener(TOGGLE_PANEL_EVENT, toggle);
     return () => window.removeEventListener(TOGGLE_PANEL_EVENT, toggle);
-  }, [accountId, isNarrowViewport]);
+  }, [accountId]);
 
   React.useEffect(() => {
     window.addEventListener(CLOSE_PANEL_EVENT, closePanel);
@@ -781,9 +875,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     .filter((task): task is TaskNode => (
       Boolean(task) &&
       !task.isArchived &&
-      isTaskWorkbenchUnplacedTask(task) &&
-      (panelPrefs.showContainersInAllTasks || isTaskWorkbenchSortableTask(task))
-    ))), [nodes, panelPrefs.showContainersInAllTasks]);
+      isTaskWorkbenchUnplacedTask(task)
+    ))), [nodes]);
 
   const sortedPlacedTasks = React.useMemo(
     () => sortTasksByDueDate(visiblePlacedTasks),
@@ -849,10 +942,8 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     },
   });
 
-  const isExpanded = isNarrowViewport ? mobileOverlayOpen : panelPrefs.open;
-  const panelOverlayWidth = isNarrowViewport
-    ? `min(${panelWidth}px, calc(100vw - 52px))`
-    : `${panelWidth}px`;
+  const isExpanded = panelPrefs.open;
+  const panelWidthStyle = getSharedInlinePanelWidthStyle(panelWidth);
 
   const applyPanelWidth = (nextWidth: number, persist = false) => {
     const clampedWidth = clampTaskWorkbenchPanelWidth(nextWidth);
@@ -917,30 +1008,12 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   }
 
   return (
-    <>
-      {isNarrowViewport ? (
-        <button
-          type="button"
-          className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
-          style={{ left: panelOverlayWidth }}
-          onClick={closePanel}
-          aria-label="關閉全域任務平台遮罩"
-          data-task-workbench-backdrop="true"
-          data-mobile-task-workbench-backdrop="true"
-        />
-      ) : null}
       <aside
-        className={`flex max-w-[calc(100vw-48px)] shrink-0 flex-col bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 ${isResizing ? 'transition-none' : ''} ${
-          isNarrowViewport
-            ? 'fixed bottom-0 left-0 top-10 z-50 shadow-[8px_0_28px_rgba(15,23,42,0.18)]'
-            : 'relative z-20 h-full shadow-[4px_0_20px_rgba(15,23,42,0.12)]'
-        }`}
-       style={{ width: panelOverlayWidth }}
+        className={`relative z-20 flex h-full shrink-0 flex-col bg-gradient-to-b from-slate-50 via-slate-100 to-slate-200 shadow-[4px_0_20px_rgba(15,23,42,0.12)] ${isResizing ? 'transition-none' : ''}`}
+       style={{ width: panelWidthStyle }}
         data-task-workbench-panel="true"
         data-layout-region="task-command-center"
-        data-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
-        data-task-workbench-inline={!isNarrowViewport ? 'true' : undefined}
-        data-mobile-task-workbench-overlay={isNarrowViewport ? 'true' : undefined}
+        data-task-workbench-inline="true"
        data-panel-previewed={previewedPanel === 'task-workbench' ? 'task-workbench' : undefined}
        aria-label="全域任務平台"
      >
@@ -1041,12 +1114,12 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
           data-board-id={selectedBoardOption?.boardId || undefined}
           data-workspace-id={selectedBoardOption?.workspaceId || undefined}
         >
-          <div
-            className="relative z-20 mb-px box-border flex w-[104px] shrink-0 items-center justify-between gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-white"
-            data-task-workbench-section-header="all-tasks"
-          >
-            <div className="flex min-w-0 items-center gap-2 truncate text-[13px] font-black leading-5 text-white">
-              <span className="min-w-0 truncate">已歸位</span>
+          <div className="relative z-20 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2">
+            <div
+              className="box-border mb-px flex h-8 min-w-0 w-[104px] shrink items-center gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
+              data-task-workbench-section-header="all-tasks"
+            >
+              <span className="min-w-0 truncate text-[13px] font-black leading-5 text-white">已歸位</span>
             </div>
             <span className="sr-only" data-task-workbench-all-tasks-count="true">
               {sortedPlacedTasks.length}
@@ -1074,7 +1147,6 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
         </div>
       </aside>
-    </>
   );
 };
 

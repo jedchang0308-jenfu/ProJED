@@ -295,8 +295,8 @@ async (page) => {
       lineHitboxStyles: readStyle(`[data-mindmap-note-relationship-line-click-target][data-label="${label}"]`),
       labelHitboxStyles: readStyle(`[data-mindmap-note-relationship-click-target][data-label="${label}"]`),
       endpointStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-endpoint]`),
-      controlPointStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-control-point]`),
-      controlArmStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-screen-control-arm]`),
+      controlPointStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-direction-joystick]`),
+      controlArmStyles: readStyle(`[data-relationship-id="${relationshipId}"][data-mindmap-note-relationship-direction-arm]`),
     };
   }, { relationshipId, label });
 
@@ -389,7 +389,12 @@ async (page) => {
   const redlinedControlCounts = await page.evaluate((selectors) => Object.fromEntries(
     selectors.map(selector => [selector, document.querySelectorAll(selector).length]),
   ), redlinedControlSelectors);
-  assert(Object.values(redlinedControlCounts).every(count => count === 0), 'selected relationship should omit redlined control arms, guides, and square points', { redlinedControlCounts });
+  const directionControlCounts = await page.evaluate(() => ({
+    arms: document.querySelectorAll('[data-mindmap-note-relationship-direction-arm]').length,
+    joysticks: document.querySelectorAll('[data-mindmap-note-relationship-direction-joystick]').length,
+  }));
+  assert(Object.values(redlinedControlCounts).every(count => count === 0), 'selected relationship should omit the extra center guide and legacy duplicate controls', { redlinedControlCounts });
+  assert(directionControlCounts.arms === 2 && directionControlCounts.joysticks === 2, 'selected relationship should restore two XMind-like direction controls', { directionControlCounts });
   await page.screenshot({ path: 'output/playwright/dev-027E-relationship-selected-handles.png', fullPage: true });
 
   await relationshipCurveHitboxByLabel(label).dblclick({ force: true });
@@ -415,7 +420,8 @@ async (page) => {
   const redlinedAfterEditCounts = await page.evaluate((selectors) => Object.fromEntries(
     selectors.map(selector => [selector, document.querySelectorAll(selector).length]),
   ), redlinedControlSelectors);
-  assert(Object.values(redlinedAfterEditCounts).every(count => count === 0), 'editing a relationship label should not restore redlined control elements', { redlinedAfterEditCounts });
+  assert(Object.values(redlinedAfterEditCounts).every(count => count === 0), 'editing a relationship label should not restore the extra center guide or legacy controls', { redlinedAfterEditCounts });
+  assert(await page.locator('[data-mindmap-note-relationship-direction-joystick]').count() === 2, 'editing a relationship label should retain the two direction joysticks');
 
   const reconnectNodeId = await nodeByTitle(reconnectTarget).getAttribute('data-mindmap-node');
   await page.locator(`[data-mindmap-note-relationship-click-target][data-label="${editedLabel}"]`).click({ force: true });

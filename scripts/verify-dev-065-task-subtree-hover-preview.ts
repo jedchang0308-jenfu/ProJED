@@ -38,7 +38,7 @@ const css = read('src/index.css');
 
 assert.match(boardView, /collectTaskDragDescendantIds/);
 assert.match(boardView, /data-task-drag-descendant-count/);
-assert.match(boardView, /含 \{activeDragDescendantCount\} 個子任務/);
+assert.doesNotMatch(boardView, /含 \{activeDragDescendantCount\} 個子任務/);
 assert.match(column, /data-task-hover-scope-kind="column"/);
 assert.match(column, /data-kanban-column-subtree-scope/);
 assert.doesNotMatch(column, /className="task-title-text[^"]*hover:text-primary/);

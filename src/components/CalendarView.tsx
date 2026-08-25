@@ -303,6 +303,7 @@ const CalendarView = () => {
                     onItemClick={handleItemClick}
                     isTaskListOpen={isTaskListOpen}
                     setIsTaskListOpen={setIsTaskListOpen}
+                    surface="calendar"
                     rowHeight={ganttRowHeight}
                 />
 

@@ -95,6 +95,32 @@ const MindMapRelationshipOverlay: React.FC<MindMapRelationshipOverlayProps> = ({
             />
             {selected ? (
               <>
+                <line
+                  x1={path.fromX}
+                  y1={path.fromY}
+                  x2={path.c1X}
+                  y2={path.c1Y}
+                  stroke="#94a3b8"
+                  strokeWidth={1.25}
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                  data-mindmap-note-relationship-direction-arm="from"
+                  data-mindmap-note-relationship-coordinate-space="map-local"
+                  data-relationship-id={path.id}
+                />
+                <line
+                  x1={path.toX}
+                  y1={path.toY}
+                  x2={path.c2X}
+                  y2={path.c2Y}
+                  stroke="#94a3b8"
+                  strokeWidth={1.25}
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                  data-mindmap-note-relationship-direction-arm="to"
+                  data-mindmap-note-relationship-coordinate-space="map-local"
+                  data-relationship-id={path.id}
+                />
                 <circle
                   cx={path.fromX}
                   cy={path.fromY}

@@ -250,7 +250,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       )}
 
       {/* 清單容器 */}
-      <div className="scroll-container mobile-pan-surface flex-1 overflow-auto w-full pb-[10px] pr-0 custom-scrollbar" data-mobile-pan-surface="wbs-list">
+      <div className="scroll-container mobile-pan-surface flex-1 overflow-auto w-full pb-[10px] pr-0 custom-scrollbar" data-mobile-pan-surface="wbs-list" data-task-hierarchy-surface="list">
         {rootNodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
             <p className="mb-4">此專案目前沒有任何任務</p>

@@ -80,8 +80,8 @@ assert(
     'commitDesktopTaskDrag({',
   ]) &&
     includesAll(source.taskDragCommit, [
-    "batchUpdateNodes(updates, { label: '移動任務位置'",
-    'dependencies.batchUpdateNodes({',
+    'dependencies.batchUpdateNodes(updates, {',
+    "label: '移動任務位置'",
     "label: '移到未歸位'",
     "label: '歸位任務'",
   ]) &&

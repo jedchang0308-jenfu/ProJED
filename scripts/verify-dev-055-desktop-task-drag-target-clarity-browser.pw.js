@@ -4,6 +4,7 @@ async (page) => {
   const diagnostics = [];
   const networkFailures = [];
   const screenshotBase = `output/playwright/dev-055-desktop-drag-${Date.now()}`;
+  const requestedCaseId = page.url().match(/[?&]dev055Case=([^&]+)/)?.[1] || null;
   const currentPageOrigin = page.url().match(/^https?:\/\/[^/]+/)?.[0];
   const appBaseUrl = currentPageOrigin || 'http://localhost:4000';
   const assert = (condition, message, details = {}) => {
@@ -138,6 +139,11 @@ async (page) => {
         noop: element.getAttribute('data-desktop-drop-noop') === 'true',
         feedbackKind: originField ? 'origin-field' : marker ? 'insertion-marker' : null,
         barHeight: barRect?.height || 0,
+        barRect: barRect ? {
+          top: barRect.top,
+          bottom: barRect.bottom,
+          centerY: barRect.top + barRect.height / 2,
+        } : null,
         barColor: bar ? getComputedStyle(bar).backgroundColor : null,
         fieldBackground: originField ? getComputedStyle(originField).backgroundColor : null,
         fieldColor: originField ? getComputedStyle(originField).color : null,
@@ -229,6 +235,22 @@ async (page) => {
     return { targetPoint, indicator: await readIndicator() };
   };
 
+  const moveDragToPoint = async (targetPoint) => {
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(140);
+    return { targetPoint, indicator: await readIndicator() };
+  };
+
+  const pointForCardBoundaryGap = async (card, position) => {
+    await card.scrollIntoViewIfNeeded();
+    const box = await card.boundingBox();
+    assert(Boolean(box), 'same-level card boundary must have a visible bounding box');
+    return {
+      x: Math.round(box.x + box.width * 0.55),
+      y: Math.round(position === 'after' ? box.y + box.height + 3 : box.y - 3),
+    };
+  };
+
   const expectedParentForIndicator = (indicator, targetNode) => {
     if (indicator.surfaceKind === 'kanban-card' || indicator.surfaceKind === 'checklist-row') {
       return targetNode.parentId || null;
@@ -266,10 +288,13 @@ async (page) => {
     }
   };
 
-  const dragAndCommit = async ({ source, target, targetRatio, screenshotSuffix }) => {
+  const dragAndCommit = async ({ source, target, targetRatio, resolveTargetPoint, screenshotSuffix }) => {
     const beforeNodes = await readNodes();
     const { sourceId } = await beginMouseDrag(source);
-    const { indicator } = await moveDragTo(target, targetRatio);
+    const movement = resolveTargetPoint
+      ? await moveDragToPoint(await resolveTargetPoint())
+      : await moveDragTo(target, targetRatio);
+    const { indicator } = movement;
     const screenshotPath = screenshotSuffix ? `${screenshotBase}-${screenshotSuffix}.png` : null;
     if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.mouse.up();
@@ -298,6 +323,7 @@ async (page) => {
     }));
 
   const runCase = async (id, scenario, operation) => {
+    if (requestedCaseId && requestedCaseId !== id) return;
     const startedAt = new Date().toISOString();
     try {
       const details = await operation();
@@ -322,11 +348,16 @@ async (page) => {
     const moveAfter = await dragAndCommit({
       source: first,
       target: second.locator(':scope > [data-task-surface-source="true"]'),
+      resolveTargetPoint: () => pointForCardBoundaryGap(second, 'after'),
       screenshotSuffix: 'B01-card-after',
     });
+    const moveBeforeTarget = page.locator(
+      `.kanban-task-card[data-task-id="${moveAfter.indicator.targetNodeId}"]`,
+    ).first();
     const moveBefore = await dragAndCommit({
       source: taskById(moveAfter.sourceId),
-      target: page.locator(`.kanban-task-card[data-task-id="${moveAfter.indicator.targetNodeId}"] > [data-task-surface-source="true"]`).first(),
+      target: moveBeforeTarget.locator(':scope > [data-task-surface-source="true"]'),
+      resolveTargetPoint: () => pointForCardBoundaryGap(moveBeforeTarget, 'before'),
       screenshotSuffix: 'B01-card-before',
     });
     assert(moveAfter.indicator.position === 'after' && moveBefore.indicator.position === 'before',
@@ -495,6 +526,7 @@ async (page) => {
     const same = await dragAndCommit({
       source: cardsInColumn(0).nth(0),
       target: cardsInColumn(0).nth(1).locator(':scope > [data-task-surface-source="true"]'),
+      resolveTargetPoint: () => pointForCardBoundaryGap(cardsInColumn(0).nth(1), 'after'),
       screenshotSuffix: 'B08-1024-same-column',
     });
     const cross = await dragAndCommit({
@@ -681,14 +713,14 @@ async (page) => {
     const { sourceId } = await beginMouseDrag(source);
     const targetPoint = await pointFor(targetRows.first(), 0.92, 0.5);
     const indicatorStates = [];
-    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 12 });
-    await page.waitForTimeout(140);
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(20);
     indicatorStates.push(await readIndicator());
-    await page.mouse.move(targetPoint.x + 2, targetPoint.y + 1, { steps: 2 });
-    await page.waitForTimeout(80);
+    await page.mouse.move(targetPoint.x + 2, targetPoint.y + 1, { steps: 1 });
+    await page.waitForTimeout(20);
     indicatorStates.push(await readIndicator());
-    await page.mouse.move(targetPoint.x - 2, targetPoint.y + 1, { steps: 2 });
-    await page.waitForTimeout(80);
+    await page.mouse.move(targetPoint.x - 2, targetPoint.y + 1, { steps: 1 });
+    await page.waitForTimeout(20);
     indicatorStates.push(await readIndicator());
     const afterLayout = await readChecklistRowLayout(targetCard);
     const afterById = Object.fromEntries(afterLayout.map((row) => [row.id, row]));
@@ -735,6 +767,114 @@ async (page) => {
       rowDeltas,
       screenshotPath,
     };
+  });
+
+  await runCase('QA-055-B15A', 'same-column gap immediately replaces a distant cached tail indicator', async () => {
+    await openApp({ width: 1024, height: 768 });
+    const column = columns().first();
+    const source = column.locator('.kanban-task-card[data-task-id]:has(.kanban-checklist-item[data-task-id])').first();
+    assert(await source.count() === 1, 'fixture must expose one expanded source card');
+    const { sourceId } = await beginMouseDrag(
+      source,
+      { x: 0.55, y: 0.18 },
+      source.locator(':scope > [data-task-surface-source="true"]'),
+    );
+    const cards = column.locator(
+      '[data-task-drop-surface-kind="column-drop"] > [data-kanban-column-subtree-scope] > .kanban-task-card[data-task-id]',
+    );
+    const layout = await cards.evaluateAll((elements) => elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        id: element.getAttribute('data-task-id'),
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+      };
+    }));
+    const pairs = layout.slice(0, -1).map((upper, index) => ({ upper, lower: layout[index + 1] }))
+      .filter(({ upper, lower }) => upper.id !== sourceId && lower.id !== sourceId);
+    assert(pairs.length > 0, 'fixture must expose a non-source same-level card gap', { sourceId, layout });
+    const pair = pairs.sort((left, right) => right.upper.height - left.upper.height)[0];
+    const last = layout[layout.length - 1];
+    const x = Math.round((pair.upper.left + pair.upper.right) / 2);
+    const staleSeedPoint = {
+      x: Math.round((last.left + last.right) / 2),
+      y: Math.round(last.bottom - 2),
+    };
+    const gapPoint = {
+      x,
+      y: Math.round((pair.upper.bottom + pair.lower.top) / 2),
+    };
+    await page.mouse.move(staleSeedPoint.x, staleSeedPoint.y, { steps: 1 });
+    await page.waitForTimeout(20);
+    const staleIndicator = await readIndicator();
+    await page.mouse.move(gapPoint.x, gapPoint.y, { steps: 1 });
+    await page.waitForTimeout(140);
+    const gapIndicator = await readIndicator();
+    const distance = Math.abs((gapIndicator.barRect?.centerY ?? gapIndicator.rect.top) - gapPoint.y);
+    const screenshotPath = `${screenshotBase}-B15A-near-pointer-gap.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(220);
+    assert(gapIndicator.feedbackKind === 'insertion-marker' && gapIndicator.surfaceKind === 'kanban-card',
+      'same-level card gap must expose one canonical card insertion marker', { gapIndicator, pair, gapPoint });
+    assert(distance <= 8,
+      'same-level gap indicator must stay at the pointer-adjacent boundary instead of retaining a distant tail target', {
+        sourceId,
+        staleSeedPoint,
+        staleIndicator,
+        gapPoint,
+        gapIndicator,
+        distance,
+        pair,
+      });
+    return { sourceId, staleSeedPoint, staleIndicator, gapPoint, gapIndicator, distance, pair, screenshotPath };
+  });
+
+  await runCase('QA-055-B15B', 'expanded-card title resolves to the pointer-nearest outer boundary', async () => {
+    await openApp({ width: 1024, height: 768 });
+    const expandedCards = columns().first().locator(
+      '.kanban-task-card[data-task-id]:has(.kanban-checklist-item[data-task-id])',
+    );
+    assert(await expandedCards.count() >= 3, 'fixture must expose three expanded cards in one column');
+    const source = expandedCards.nth(0);
+    const target = expandedCards.nth(2);
+    const sourceId = await source.getAttribute('data-task-id');
+    const targetId = await target.getAttribute('data-task-id');
+    const beforeNodes = await readNodes();
+    const { sourceId: startedSourceId } = await beginMouseDrag(
+      source,
+      { x: 0.55, y: 0.5 },
+      source.locator(':scope > [data-task-surface-source="true"]'),
+    );
+    const targetSurface = page.locator(
+      `.kanban-task-card[data-task-id="${targetId}"] > [data-task-surface-source="true"]`,
+    ).first();
+    const targetPoint = await pointFor(targetSurface, 0.55, 0.5);
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });
+    await page.waitForTimeout(140);
+    const indicator = await readIndicator();
+    const barCenterY = indicator.barRect?.centerY ?? indicator.rect.top;
+    const distance = Math.abs(barCenterY - targetPoint.y);
+    const screenshotPath = `${screenshotBase}-B15B-expanded-title-nearest-boundary.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: false });
+    await page.mouse.up();
+    await page.waitForTimeout(220);
+    const afterNodes = await readNodes();
+    assert(startedSourceId === sourceId && indicator.targetNodeId === targetId,
+      'expanded-card title must keep exact target ownership', { sourceId, startedSourceId, targetId, indicator });
+    assert(indicator.position === 'before' && distance <= 24,
+      'expanded-card title must use its nearby leading boundary instead of a distant subtree tail', {
+        sourceId,
+        targetId,
+        targetPoint,
+        indicator,
+        distance,
+      });
+    assertCommittedAsDisplayed({ sourceId, beforeNodes, afterNodes, indicator });
+    return { sourceId, targetId, targetPoint, indicator, distance, screenshotPath };
   });
 
   const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));

@@ -63,6 +63,10 @@ async (page) => {
   const readRedlineCounts = () => page.evaluate((selectors) => Object.fromEntries(
     selectors.map(selector => [selector, document.querySelectorAll(selector).length]),
   ), redlinedSelectors);
+  const readDirectionControlCounts = () => page.evaluate(() => ({
+    arms: document.querySelectorAll('[data-mindmap-note-relationship-direction-arm]').length,
+    joysticks: document.querySelectorAll('[data-mindmap-note-relationship-direction-joystick]').length,
+  }));
   const assertNoVisibleErrors = async (label) => {
     const bodyText = await page.locator('body').innerText();
     const visibleError = ['Internal Server Error', 'HTTP 4', 'HTTP 5', 'Not Found', 'Unhandled Runtime Error']
@@ -116,7 +120,9 @@ async (page) => {
   await relationshipHitbox(label).click({ force: true });
   await page.locator(`[data-mindmap-note-relationship][data-label="${label}"][data-selected="true"]`).waitFor({ state: 'visible', timeout: 10000 });
   const countsDesktop = await readRedlineCounts();
-  assert(Object.values(countsDesktop).every(count => count === 0), 'redlined relationship control elements should be absent after selection', { countsDesktop });
+  const directionControlsDesktop = await readDirectionControlCounts();
+  assert(Object.values(countsDesktop).every(count => count === 0), 'the extra center guide and legacy duplicate controls should be absent after selection', { countsDesktop });
+  assert(directionControlsDesktop.arms === 2 && directionControlsDesktop.joysticks === 2, 'the corrected relationship intent should keep two direction arms and joysticks', { directionControlsDesktop });
   assert(await page.locator('[data-mindmap-note-relationship-endpoint]').count() === 2, 'selected relationship should keep two draggable endpoints');
   assert(await relationshipPath(label).count() === 1, 'relationship path should remain rendered');
   assert(await page.locator('[data-mindmap-note-relationship-label]').count() === 1, 'relationship label should remain rendered');
@@ -126,13 +132,17 @@ async (page) => {
   await page.locator('[data-mindmap-zoom-in]').click();
   await page.waitForTimeout(200);
   const countsZoomed = await readRedlineCounts();
-  assert(Object.values(countsZoomed).every(count => count === 0), 'redlined elements should stay absent after zoom', { countsZoomed });
+  const directionControlsZoomed = await readDirectionControlCounts();
+  assert(Object.values(countsZoomed).every(count => count === 0), 'the extra center guide and legacy duplicate controls should stay absent after zoom', { countsZoomed });
+  assert(directionControlsZoomed.arms === 2 && directionControlsZoomed.joysticks === 2, 'direction controls should remain after zoom', { directionControlsZoomed });
   await page.screenshot({ path: 'output/playwright/dev-077-mindmap-relationship-redline-cleanup/desktop-zoomed.png', fullPage: true });
 
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.waitForTimeout(300);
   const countsLaptop = await readRedlineCounts();
-  assert(Object.values(countsLaptop).every(count => count === 0), 'redlined elements should stay absent on laptop viewport', { countsLaptop });
+  const directionControlsLaptop = await readDirectionControlCounts();
+  assert(Object.values(countsLaptop).every(count => count === 0), 'the extra center guide and legacy duplicate controls should stay absent on laptop viewport', { countsLaptop });
+  assert(directionControlsLaptop.arms === 2 && directionControlsLaptop.joysticks === 2, 'direction controls should remain on laptop viewport', { directionControlsLaptop });
   await assertNoVisibleErrors('DEV-077 laptop');
   await page.screenshot({ path: 'output/playwright/dev-077-mindmap-relationship-redline-cleanup/laptop-selected.png', fullPage: true });
 
@@ -159,11 +169,12 @@ async (page) => {
     ok: true,
     viewportEvidence: {
       desktop: { width: 1440, height: 900, redlined: countsDesktop },
-      zoomed: { redlined: countsZoomed },
-      laptop: { width: 1024, height: 768, redlined: countsLaptop },
+      zoomed: { redlined: countsZoomed, directionControls: directionControlsZoomed },
+      laptop: { width: 1024, height: 768, redlined: countsLaptop, directionControls: directionControlsLaptop },
       mobile: { width: 390, height: 844, boundary: mobileBoundary, redlined: countsMobile },
     },
     endpointCount: 2,
+    directionControls: directionControlsDesktop,
     pathCount: 1,
     labelCount: 1,
     errors,

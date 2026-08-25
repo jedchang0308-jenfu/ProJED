@@ -17,6 +17,7 @@ import { useMobilePanBroker } from '../hooks/useMobilePanBroker';
 import { useKanbanMousePan } from '../hooks/useKanbanMousePan';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
+import useUndoStore from '../store/useUndoStore';
 import useRecordStore from '../store/useRecordStore';
 import useDialogStore from '../store/useDialogStore';
 import { useMemberStore } from '../store/useMemberStore';
@@ -43,6 +44,19 @@ import {
     type DesktopTaskOriginIndicator,
     type DesktopTaskDropPreview,
 } from './Wbs/taskDrag/desktopTaskDropPreview';
+import {
+    DESKTOP_COLUMN_TAIL_EXTERIOR_SLOP_PX,
+    isDesktopPointerInColumnTailExterior,
+    resolveDesktopColumnDropPointerRegion,
+    resolveDesktopColumnTaskCacheYRange,
+    resolveDesktopTaskEdgePosition,
+    selectNearestDesktopTaskGapCandidate,
+} from './Wbs/taskDrag/desktopColumnDropPolicy';
+import {
+    resolveDesktopL1OrderingTarget,
+    type DesktopL1ColumnGeometry,
+    type DesktopL1OrderingTarget,
+} from './Wbs/taskDrag/desktopL1DropPolicy';
 import { useTaskDragSession } from './Wbs/taskDrag/useTaskDragSession';
 import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
 import { useKanbanViewSize } from '../features/kanbanViewSize/KanbanViewSizeProvider';
@@ -61,9 +75,14 @@ import {
     type TaskChildDropSuccessDetail,
 } from './Wbs/taskDrag/taskChildDropFeedback';
 import {
+    DESKTOP_TASK_DRAG_OVERLAY_POINTER_GAP_PX,
+    DESKTOP_TASK_DRAG_OVERLAY_SCALE,
     resolvePointerUpperRightOverlayPosition,
-    TASK_DRAG_OVERLAY_POINTER_GAP_PX,
 } from './Wbs/taskDrag/taskDragOverlayPosition';
+
+const DESKTOP_TASK_DRAG_OVERLAY_CARD_WIDTH_PX = 240;
+const DESKTOP_TASK_DRAG_OVERLAY_COLUMN_WIDTH_PX = 270;
+const DESKTOP_TASK_DRAG_OVERLAY_HEIGHT_PX = 40;
 
 /**
  * 依賴關係選取 Context—讓 KanbanCard 能存取当前選取狀態與處理函式
@@ -93,6 +112,7 @@ const shouldRetainDesktopIndicatorRect = (
     Math.abs(current.left - next.left) <= DESKTOP_INDICATOR_RECT_RETAIN_PX
     && Math.abs(current.top - next.top) <= DESKTOP_INDICATOR_RECT_RETAIN_PX
     && Math.abs(current.width - next.width) <= DESKTOP_INDICATOR_RECT_RETAIN_PX
+    && Math.abs((current.height ?? 0) - (next.height ?? 0)) <= DESKTOP_INDICATOR_RECT_RETAIN_PX
 );
 
 interface DesktopTaskChildDropState {
@@ -103,6 +123,41 @@ interface DesktopTaskChildDropState {
     candidateSince: number;
     target: TaskChildDropTarget;
 }
+
+interface DesktopColumnGapTarget {
+    ownership: 'ordering-gap' | 'direct-ordering';
+    validRect: { left: number; right: number; top: number; bottom: number };
+    preview: DesktopTaskDropPreview;
+    over: { id: string; data: { current: Record<string, any> } };
+}
+
+interface DesktopL1DropTarget {
+    validRect: { left: number; right: number; top: number; bottom: number };
+    preview: DesktopTaskDropPreview;
+    over: { id: string; data: { current: Record<string, any> } };
+}
+
+const desktopColumnGapTargetAtPointer = (
+    target: DesktopColumnGapTarget | null,
+    pointer: { x: number; y: number } | null,
+) => pointer && target
+    && pointer.x >= target.validRect.left
+    && pointer.x <= target.validRect.right
+    && pointer.y >= target.validRect.top
+    && pointer.y <= target.validRect.bottom
+    ? target
+    : null;
+
+const desktopL1DropTargetAtPointer = (
+    target: DesktopL1DropTarget | null,
+    pointer: { x: number; y: number } | null,
+) => pointer && target
+    && pointer.x >= target.validRect.left
+    && pointer.x <= target.validRect.right
+    && pointer.y >= target.validRect.top
+    && pointer.y <= target.validRect.bottom
+    ? target
+    : null;
 
 const BoardView = () => {
     const boardSurfaceRef = React.useRef<HTMLDivElement | null>(null);
@@ -133,6 +188,9 @@ const BoardView = () => {
     const [desktopChildDrop, setDesktopChildDrop] = useState<DesktopTaskChildDropState | null>(null);
     const [taskChildDropAnnouncement, setTaskChildDropAnnouncement] = useState('');
     const desktopDropPreviewRef = React.useRef<DesktopTaskDropPreview | null>(null);
+    const desktopColumnGapTargetRef = React.useRef<DesktopColumnGapTarget | null>(null);
+    const desktopL1DropTargetRef = React.useRef<DesktopL1DropTarget | null>(null);
+    const desktopL1OrderingTargetRef = React.useRef<DesktopL1OrderingTarget | null>(null);
     const desktopDragOriginIndicatorRef = React.useRef<DesktopTaskOriginIndicator | null>(null);
     const desktopChildDropRef = React.useRef<DesktopTaskChildDropState | null>(null);
     const desktopChildDropSessionRef = React.useRef(0);
@@ -148,6 +206,30 @@ const BoardView = () => {
     } | null>(null);
     const desktopDragCancelledRef = React.useRef(false);
     const desktopDragOverlayActiveRef = React.useRef(false);
+    const desktopTaskDragCommitSpyRef = React.useRef({
+        batchUpdateNodesCalls: 0,
+        ancestorRecalculationCalls: 0,
+    });
+    const batchUpdateNodesForDesktopTaskDrag: typeof batchUpdateNodes = React.useCallback((updates, options) => {
+        if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
+        batchUpdateNodes(updates, options);
+    }, [batchUpdateNodes]);
+    const recalculateAncestorStatusForDesktopTaskDrag: typeof recalculateAncestorStatus = React.useCallback((nodeId) => {
+        if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.ancestorRecalculationCalls += 1;
+        recalculateAncestorStatus(nodeId);
+    }, [recalculateAncestorStatus]);
+    const mobileTaskDragCommitSpyRef = React.useRef({
+        batchUpdateNodesCalls: 0,
+        ancestorRecalculationCalls: 0,
+    });
+    const batchUpdateNodesForMobileTaskDrag: typeof batchUpdateNodes = React.useCallback((updates, options) => {
+        if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
+        batchUpdateNodes(updates, options);
+    }, [batchUpdateNodes]);
+    const recalculateAncestorStatusForMobileTaskDrag: typeof recalculateAncestorStatus = React.useCallback((nodeId) => {
+        if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.ancestorRecalculationCalls += 1;
+        recalculateAncestorStatus(nodeId);
+    }, [recalculateAncestorStatus]);
 
     React.useEffect(() => {
         if (import.meta.env.MODE !== 'test') return undefined;
@@ -179,6 +261,26 @@ const BoardView = () => {
                 });
             },
             snapshotNodes: () => useWbsStore.getState().nodes,
+            resetDesktopCommitSpy: () => {
+                desktopTaskDragCommitSpyRef.current = {
+                    batchUpdateNodesCalls: 0,
+                    ancestorRecalculationCalls: 0,
+                };
+            },
+            snapshotDesktopCommitSpy: () => ({
+                ...desktopTaskDragCommitSpyRef.current,
+                undoDepth: useUndoStore.getState().undoStack.length,
+            }),
+            resetMobileCommitSpy: () => {
+                mobileTaskDragCommitSpyRef.current = {
+                    batchUpdateNodesCalls: 0,
+                    ancestorRecalculationCalls: 0,
+                };
+            },
+            snapshotMobileCommitSpy: () => ({
+                ...mobileTaskDragCommitSpyRef.current,
+                undoDepth: useUndoStore.getState().undoStack.length,
+            }),
         };
         return () => {
             delete debugWindow.__projedTaskDragTestApi;
@@ -202,11 +304,14 @@ const BoardView = () => {
     }, [activeDrag]);
     const desktopDragOverlayPosition = React.useMemo(() => {
         if (!activeDrag?.node || !desktopDragOverlayPointer || typeof window === 'undefined') return null;
+        const overlayWidth = activeDrag.type === 'wbs-column'
+            ? DESKTOP_TASK_DRAG_OVERLAY_COLUMN_WIDTH_PX
+            : DESKTOP_TASK_DRAG_OVERLAY_CARD_WIDTH_PX;
         return resolvePointerUpperRightOverlayPosition({
             pointer: desktopDragOverlayPointer,
             overlay: {
-                width: activeDrag.type === 'wbs-column' ? 270 : 240,
-                height: 40,
+                width: overlayWidth * DESKTOP_TASK_DRAG_OVERLAY_SCALE,
+                height: DESKTOP_TASK_DRAG_OVERLAY_HEIGHT_PX * DESKTOP_TASK_DRAG_OVERLAY_SCALE,
             },
             viewport: {
                 left: 0,
@@ -214,6 +319,7 @@ const BoardView = () => {
                 width: window.innerWidth,
                 height: window.innerHeight,
             },
+            pointerGap: DESKTOP_TASK_DRAG_OVERLAY_POINTER_GAP_PX,
         });
     }, [activeDrag, desktopDragOverlayPointer]);
     const updateDesktopDropPreview = React.useCallback((preview: DesktopTaskDropPreview | null) => {
@@ -280,6 +386,28 @@ const BoardView = () => {
     ) => {
         desktopActiveDataRef.current = activeData;
         desktopPointerRef.current = point;
+        const columnBodyAtPoint = typeof document !== 'undefined'
+            ? Array.from(document.querySelectorAll<HTMLElement>(
+                '[data-task-drop-surface-kind="column-drop"]',
+            )).find((column) => {
+                const rect = column.getBoundingClientRect();
+                return point.x >= rect.left && point.x <= rect.right
+                    && point.y >= rect.top && point.y <= rect.bottom;
+            })
+            : null;
+        const directCardAtPoint = columnBodyAtPoint
+            ? Array.from(columnBodyAtPoint.querySelectorAll<HTMLElement>(
+                ':scope > [data-kanban-column-subtree-scope] > [data-task-surface-scope="true"]',
+            )).some((scope) => {
+                const rect = scope.getBoundingClientRect();
+                return point.x >= rect.left && point.x <= rect.right
+                    && point.y >= rect.top && point.y <= rect.bottom;
+            })
+            : false;
+        if (columnBodyAtPoint && !directCardAtPoint) {
+            applyDesktopChildDrop(null);
+            return false;
+        }
         const target = resolveDesktopChildDropAtPoint(activeData, point);
         const current = desktopChildDropRef.current;
         const transition = advanceTaskChildIntent({
@@ -360,9 +488,9 @@ const BoardView = () => {
         canDeleteTask,
         addNode,
         updateNode,
-        batchUpdateNodes,
+        batchUpdateNodes: batchUpdateNodesForMobileTaskDrag,
         removeNode,
-        recalculateAncestorStatus,
+        recalculateAncestorStatus: recalculateAncestorStatusForMobileTaskDrag,
         onSessionBegin: () => {
             setActiveDrag(null);
             updateDesktopDropPreview(null);
@@ -470,23 +598,32 @@ const BoardView = () => {
         const pointerCollisions = pointerWithin(args);
         const activeType = args.active?.data.current?.type;
         const activeSource = args.active?.data.current?.source;
+        const exactPointer = desktopRawPointerRef.current || args.pointerCoordinates;
         if (
             ['wbs-column', 'wbs-card', 'wbs-checklist'].includes(activeType)
-            && args.pointerCoordinates
+            && exactPointer
             && typeof document !== 'undefined'
         ) {
             const boardCanvas = document.querySelector<HTMLElement>('[data-layout-region="board-canvas"]');
             const boardRect = boardCanvas?.getBoundingClientRect();
             const pointerOutsideBoard = Boolean(boardRect
-                && (args.pointerCoordinates.x < boardRect.left
-                    || args.pointerCoordinates.x > boardRect.right
-                    || args.pointerCoordinates.y < boardRect.top
-                    || args.pointerCoordinates.y > boardRect.bottom));
-            if (pointerOutsideBoard) {
+                && (exactPointer.x < boardRect.left
+                    || exactPointer.x > boardRect.right
+                    || exactPointer.y < boardRect.top
+                    || exactPointer.y > boardRect.bottom));
+            const isOverUnplacedLane = pointerCollisions.some((collision: any) => (
+                String(collision.id) === 'task-workbench-unplaced-lane'
+            ));
+            const isOverPlacedLane = pointerCollisions.some((collision: any) => (
+                String(collision.id).startsWith('task-workbench-placed-board-lane-')
+            ));
+            const isAllowedWorkbenchLane = isOverUnplacedLane
+                || (activeSource === 'task-workbench' && isOverPlacedLane);
+            if (pointerOutsideBoard && !isAllowedWorkbenchLane) {
                 recordDesktopTaskDragDebug({
                     type: 'collision:outside-board',
                     activeId: String(args.active?.id),
-                    pointer: args.pointerCoordinates,
+                    pointer: exactPointer,
                 });
                 return [];
             }
@@ -497,6 +634,45 @@ const BoardView = () => {
                 ? args.droppableContainers.get(collision.id)
                 : args.droppableContainers?.find((item: any) => item.id === collision.id)
         );
+        const buildDesktopL1Target = ({
+            targetDndId,
+            targetElement,
+            targetData,
+            validRect,
+        }: {
+            targetDndId: string;
+            targetElement: HTMLElement;
+            targetData: Record<string, any>;
+            validRect: DesktopL1DropTarget['validRect'];
+        }) => {
+            const droppableContainer = getCollisionContainer({ id: targetDndId });
+            if (!droppableContainer) return null;
+            const preview = resolveDesktopTaskDropPreview({
+                activeData: args.active?.data.current,
+                targetData,
+                targetDndId,
+                targetElement,
+                nodesRecord: useWbsStore.getState().nodes,
+            });
+            if (!preview) return null;
+            const existingCollision = collisions.find(
+                (collision: any) => String(collision.id) === targetDndId,
+            );
+            return {
+                target: {
+                    validRect,
+                    preview,
+                    over: {
+                        id: targetDndId,
+                        data: { current: targetData },
+                    },
+                } satisfies DesktopL1DropTarget,
+                collision: existingCollision || {
+                    id: targetDndId,
+                    data: { droppableContainer, value: 0 },
+                },
+            };
+        };
 
         if (activeSource === 'task-workbench') {
             const taskWorkbenchCollision = collisions.find((collision: any) => {
@@ -517,49 +693,397 @@ const BoardView = () => {
         }
 
         if (activeType === 'wbs-column') {
+            const unplacedLaneCollision = collisions.find((collision: any) => (
+                getCollisionContainer(collision)?.data.current?.type === 'task-workbench-unplaced-lane'
+            ));
+            if (unplacedLaneCollision) return [unplacedLaneCollision];
+
+            if (exactPointer && typeof document !== 'undefined') {
+                const boardCanvas = document.querySelector<HTMLElement>('[data-layout-region="board-canvas"]');
+                const boardRect = boardCanvas?.getBoundingClientRect();
+                const columnElements = Array.from(
+                    boardCanvas?.querySelectorAll<HTMLElement>('[data-kanban-column="true"][data-task-id]') || [],
+                );
+                const columns: DesktopL1ColumnGeometry[] = columnElements.map((column) => {
+                    const rect = column.getBoundingClientRect();
+                    return {
+                        id: column.getAttribute('data-task-id') || '',
+                        left: rect.left,
+                        right: rect.right,
+                        top: rect.top,
+                        bottom: rect.bottom,
+                    };
+                }).filter(column => Boolean(column.id));
+                const orderingTarget = resolveDesktopL1OrderingTarget({
+                    pointerX: exactPointer.x,
+                    columns,
+                    previousTarget: desktopL1OrderingTargetRef.current,
+                });
+                const targetElement = orderingTarget
+                    ? columnElements.find(column => column.getAttribute('data-task-id') === orderingTarget.targetId)
+                        ?.querySelector<HTMLElement>('[data-kanban-column-header="true"]')
+                    : null;
+                const droppableContainer = orderingTarget
+                    ? getCollisionContainer({ id: orderingTarget.targetId })
+                    : null;
+                const targetData = droppableContainer?.data.current && orderingTarget
+                    ? {
+                        ...droppableContainer.data.current,
+                        orderingPosition: orderingTarget.orderingPosition,
+                    }
+                    : null;
+                const resolvedTarget = orderingTarget && targetElement && targetData && boardRect
+                    ? buildDesktopL1Target({
+                        targetDndId: orderingTarget.targetId,
+                        targetElement,
+                        targetData,
+                        validRect: {
+                            left: boardRect.left,
+                            right: boardRect.right,
+                            top: boardRect.top,
+                            bottom: boardRect.bottom,
+                        },
+                    })
+                    : null;
+                desktopL1OrderingTargetRef.current = orderingTarget;
+                desktopL1DropTargetRef.current = resolvedTarget?.target || null;
+                recordDesktopTaskDragDebug({
+                    type: resolvedTarget ? 'collision:l1-horizontal-target' : 'collision:l1-horizontal-noop',
+                    pointer: exactPointer,
+                    targetNodeId: orderingTarget?.targetId || null,
+                    targetPosition: orderingTarget?.orderingPosition || null,
+                    boundaryIndex: orderingTarget?.boundaryIndex ?? null,
+                    indicatorLeft: resolvedTarget?.target.preview.indicatorRect.left ?? null,
+                });
+                if (resolvedTarget) return [resolvedTarget.collision];
+            }
+
+            desktopL1DropTargetRef.current = null;
             return collisions.filter((collision: any) => (
                 getCollisionContainer(collision)?.data.current?.type === 'wbs-column'
             ));
+        }
+
+        if (exactPointer && typeof document !== 'undefined') {
+            const pointerElement = document.elementFromPoint(exactPointer.x, exactPointer.y);
+            const directL1Surface = pointerElement instanceof Element
+                ? pointerElement.closest<HTMLElement>(
+                    '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="column-header"], '
+                    + '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="root-drop"]',
+                )
+                : null;
+            if (directL1Surface) {
+                const targetSurfaceKind = directL1Surface.getAttribute('data-task-drop-surface-kind');
+                const targetDndId = (directL1Surface.getAttribute('data-desktop-drop-id') || '')
+                    .split(/\s+/)
+                    .find(Boolean);
+                const droppableContainer = targetDndId
+                    ? getCollisionContainer({ id: targetDndId })
+                    : null;
+                let orderingTarget: DesktopL1OrderingTarget | null = null;
+                if (targetSurfaceKind === 'column-header') {
+                    const boardCanvas = directL1Surface.closest<HTMLElement>('[data-layout-region="board-canvas"]');
+                    const columnElements = Array.from(
+                        boardCanvas?.querySelectorAll<HTMLElement>('[data-kanban-column="true"][data-task-id]') || [],
+                    );
+                    const columns: DesktopL1ColumnGeometry[] = columnElements.map((column) => {
+                        const rect = column.getBoundingClientRect();
+                        return {
+                            id: column.getAttribute('data-task-id') || '',
+                            left: rect.left,
+                            right: rect.right,
+                            top: rect.top,
+                            bottom: rect.bottom,
+                        };
+                    }).filter(column => Boolean(column.id));
+                    orderingTarget = resolveDesktopL1OrderingTarget({
+                        pointerX: exactPointer.x,
+                        columns,
+                        previousTarget: desktopL1OrderingTargetRef.current,
+                    });
+                }
+                const targetData = droppableContainer?.data.current
+                    ? {
+                        ...droppableContainer.data.current,
+                        ...(orderingTarget ? { orderingPosition: orderingTarget.orderingPosition } : {}),
+                    }
+                    : null;
+                const surfaceRect = directL1Surface.getBoundingClientRect();
+                const resolvedTarget = targetDndId && targetData
+                    ? buildDesktopL1Target({
+                        targetDndId,
+                        targetElement: directL1Surface,
+                        targetData,
+                        validRect: {
+                            left: surfaceRect.left,
+                            right: surfaceRect.right,
+                            top: surfaceRect.top,
+                            bottom: surfaceRect.bottom,
+                        },
+                    })
+                    : null;
+                desktopL1OrderingTargetRef.current = orderingTarget;
+                desktopL1DropTargetRef.current = resolvedTarget?.target || null;
+                if (resolvedTarget) {
+                    recordDesktopTaskDragDebug({
+                        type: 'collision:l1-axis-target',
+                        pointer: exactPointer,
+                        targetNodeId: resolvedTarget.target.preview.targetNodeId,
+                        targetPosition: resolvedTarget.target.preview.displayPosition,
+                        targetSurfaceKind,
+                        indicatorLeft: resolvedTarget.target.preview.indicatorRect.left,
+                    });
+                    return [resolvedTarget.collision];
+                }
+            }
         }
 
         // Exact task-surface ownership is only for task sources. A list/column
         // drag must keep dnd-kit's sortable collision path; routing wbs-column
         // through the task intent resolver makes every header target invalid.
         if (activeType !== 'wbs-column'
-            && pointerCollisions.length > 0
-            && args.pointerCoordinates
+            && exactPointer
             && typeof document !== 'undefined') {
             const sourceRect = desktopDragSourceRectRef.current;
             if (sourceRect) {
-                const pointerInsideSource = args.pointerCoordinates.x >= sourceRect.left
-                    && args.pointerCoordinates.x <= sourceRect.right
-                    && args.pointerCoordinates.y >= sourceRect.top
-                    && args.pointerCoordinates.y <= sourceRect.bottom;
+                const pointerInsideSource = exactPointer.x >= sourceRect.left
+                    && exactPointer.x <= sourceRect.right
+                    && exactPointer.y >= sourceRect.top
+                    && exactPointer.y <= sourceRect.bottom;
                 if (pointerInsideSource) {
                     recordDesktopTaskDragDebug({
                         type: 'collision:source-block',
                         activeId: String(args.active?.id),
                         sourceRect,
-                        pointer: args.pointerCoordinates,
+                        pointer: exactPointer,
                     });
                     return [];
                 }
             }
 
             const rawElement = document.elementFromPoint(
-                args.pointerCoordinates.x,
-                args.pointerCoordinates.y,
+                exactPointer.x,
+                exactPointer.y,
             );
-            const directSurface = rawElement instanceof Element
+            const rawDirectSurface = rawElement instanceof Element
                 ? rawElement.closest<HTMLElement>('[data-desktop-drop-surface="true"]')
                 : null;
+            const exteriorColumnSurface = rawDirectSurface ? null : Array.from(
+                document.querySelectorAll<HTMLElement>(
+                    '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="column-drop"]',
+                ),
+            ).find((column) => {
+                const rect = column.getBoundingClientRect();
+                return isDesktopPointerInColumnTailExterior({
+                    pointerX: exactPointer.x,
+                    pointerY: exactPointer.y,
+                    columnLeft: rect.left,
+                    columnRight: rect.right,
+                    columnBottom: rect.bottom,
+                });
+            }) || null;
+            const directSurface = rawDirectSurface || exteriorColumnSurface;
 
             if (directSurface) {
+                if (directSurface.getAttribute('data-task-drop-surface-kind') === 'column-drop') {
+                    const columnRect = directSurface.getBoundingClientRect();
+                    const subtree = directSurface.querySelector<HTMLElement>(
+                        ':scope > [data-kanban-column-subtree-scope]',
+                    );
+                    const cardScopes = Array.from(subtree?.children || [])
+                        .filter((element): element is HTMLElement => (
+                            element instanceof HTMLElement
+                            && element.matches('[data-task-surface-scope="true"][data-task-id]')
+                        ));
+                    const taskRects = cardScopes.map((scope) => {
+                        const rect = scope.getBoundingClientRect();
+                        return {
+                            id: scope.getAttribute('data-task-id') || '',
+                            top: rect.top,
+                            bottom: rect.bottom,
+                        };
+                    }).filter(rect => Boolean(rect.id));
+                    const region = exteriorColumnSurface === directSurface
+                        ? { kind: 'column-append' as const }
+                        : resolveDesktopColumnDropPointerRegion({
+                            pointerY: exactPointer.y,
+                            columnTop: columnRect.top,
+                            columnBottom: columnRect.bottom,
+                            taskRects,
+                        });
+
+                    if (exteriorColumnSurface === directSurface) {
+                        recordDesktopTaskDragDebug({
+                            type: 'collision:column-tail-exterior',
+                            pointer: exactPointer,
+                            columnId: directSurface.getAttribute('data-task-id'),
+                            columnBottom: columnRect.bottom,
+                        });
+                    }
+
+                    if (region.kind === 'none') {
+                        desktopColumnGapTargetRef.current = null;
+                        recordDesktopTaskDragDebug({
+                            type: 'collision:column-append-outside-tail',
+                            pointer: exactPointer,
+                            columnRect: {
+                                top: columnRect.top,
+                                bottom: columnRect.bottom,
+                            },
+                        });
+                        return [];
+                    }
+
+                    if (region.kind === 'task-nearest') {
+                        const scopesById = new Map(cardScopes.map(scope => [
+                            scope.getAttribute('data-task-id') || '',
+                            scope,
+                        ]));
+                        const gapCandidates = region.candidateIds.flatMap((candidateId) => {
+                            const scope = scopesById.get(candidateId);
+                            const targetElement = scope?.querySelector<HTMLElement>(
+                                ':scope > [data-task-surface-source="true"][data-desktop-drop-id]',
+                            );
+                            const targetDndId = targetElement
+                                ?.getAttribute('data-desktop-drop-id')
+                                ?.split(/\s+/)
+                                .find(Boolean);
+                            if (!scope || !targetElement || !targetDndId) return [];
+                            const droppableContainer = getCollisionContainer({ id: targetDndId });
+                            const scopeRect = scope.getBoundingClientRect();
+                            const targetData = {
+                                ...droppableContainer?.data.current,
+                                orderingPosition: resolveDesktopTaskEdgePosition({
+                                    pointerY: exactPointer.y,
+                                    taskTop: scopeRect.top,
+                                    taskBottom: scopeRect.bottom,
+                                }),
+                            };
+                            const preview = resolveDesktopTaskDropPreview({
+                                activeData: args.active?.data.current,
+                                targetData,
+                                targetDndId,
+                                targetElement,
+                                nodesRecord: useWbsStore.getState().nodes,
+                            });
+                            if (!droppableContainer || !preview) return [];
+                            const existingCollision = collisions.find(
+                                (collision: any) => String(collision.id) === targetDndId,
+                            );
+                            return [{
+                                id: candidateId,
+                                indicatorTop: preview.indicatorRect.top,
+                                collision: existingCollision || {
+                                    id: targetDndId,
+                                    data: { droppableContainer, value: 0 },
+                                },
+                                preview,
+                                targetData,
+                                targetDndId,
+                            }];
+                        });
+                        const nearest = selectNearestDesktopTaskGapCandidate({
+                            pointerY: exactPointer.y,
+                            candidates: gapCandidates,
+                        });
+                        const cacheYRange = resolveDesktopColumnTaskCacheYRange({
+                            pointerY: exactPointer.y,
+                            columnTop: columnRect.top,
+                            taskRects,
+                            candidateIds: region.candidateIds,
+                        });
+                        recordDesktopTaskDragDebug({
+                            type: nearest ? 'collision:column-gap-nearest' : 'collision:column-gap-blocked',
+                            pointer: exactPointer,
+                            dndPointer: args.pointerCoordinates,
+                            candidateIds: region.candidateIds,
+                            targetNodeId: nearest?.preview.targetNodeId || null,
+                            targetPosition: nearest?.preview.displayPosition || null,
+                            indicatorTop: nearest?.indicatorTop || null,
+                            cacheYRange,
+                        });
+                        desktopColumnGapTargetRef.current = nearest && cacheYRange ? {
+                            ownership: 'ordering-gap',
+                            validRect: {
+                                left: columnRect.left,
+                                right: columnRect.right,
+                                top: cacheYRange.top,
+                                bottom: cacheYRange.bottom,
+                            },
+                            preview: nearest.preview,
+                            over: {
+                                id: nearest.targetDndId,
+                                data: { current: nearest.targetData },
+                            },
+                        } : null;
+                        return nearest ? [nearest.collision] : [];
+                    }
+                    const targetDndId = (directSurface.getAttribute('data-desktop-drop-id') || '')
+                        .split(/\s+/)
+                        .find(Boolean);
+                    const droppableContainer = targetDndId
+                        ? getCollisionContainer({ id: targetDndId })
+                        : null;
+                    const targetData = droppableContainer?.data.current;
+                    const preview = targetDndId ? resolveDesktopTaskDropPreview({
+                        activeData: args.active?.data.current,
+                        targetData,
+                        targetDndId,
+                        targetElement: directSurface,
+                        nodesRecord: useWbsStore.getState().nodes,
+                    }) : null;
+                    if (!targetDndId || !droppableContainer || !preview) {
+                        desktopColumnGapTargetRef.current = null;
+                        return [];
+                    }
+                    const existingCollision = collisions.find(
+                        (collision: any) => String(collision.id) === targetDndId,
+                    );
+                    const collision = existingCollision || {
+                        id: targetDndId,
+                        data: { droppableContainer, value: 0 },
+                    };
+                    const lastTaskBottom = taskRects[taskRects.length - 1]?.bottom ?? columnRect.top;
+                    desktopColumnGapTargetRef.current = {
+                        ownership: 'ordering-gap',
+                        validRect: {
+                            left: columnRect.left,
+                            right: columnRect.right,
+                            top: lastTaskBottom,
+                            bottom: columnRect.bottom + DESKTOP_COLUMN_TAIL_EXTERIOR_SLOP_PX,
+                        },
+                        preview,
+                        over: {
+                            id: targetDndId,
+                            data: { current: targetData },
+                        },
+                    };
+                    recordDesktopTaskDragDebug({
+                        type: 'collision:column-tail-canonical',
+                        pointer: exactPointer,
+                        targetNodeId: preview.targetNodeId,
+                        indicatorTop: preview.indicatorRect.top,
+                        validRect: desktopColumnGapTargetRef.current.validRect,
+                    });
+                    return [collision];
+                } else {
+                    desktopColumnGapTargetRef.current = null;
+                }
+
                 const directIds = (directSurface.getAttribute('data-desktop-drop-id') || '')
                     .split(/\s+/)
                     .filter(Boolean);
                 const directCollisions = directIds
-                    .map((id) => pointerCollisions.find((collision: any) => String(collision.id) === id))
+                    .map((id) => {
+                        const existingCollision = pointerCollisions.find(
+                            (collision: any) => String(collision.id) === id,
+                        ) || collisions.find((collision: any) => String(collision.id) === id);
+                        if (existingCollision) return existingCollision;
+                        const droppableContainer = getCollisionContainer({ id });
+                        return droppableContainer
+                            ? { id, data: { droppableContainer, value: 0 } }
+                            : null;
+                    })
                     .filter(Boolean);
                 const typePreference = activeType === 'wbs-checklist'
                     ? ['wbs-checklist', 'wbs-checklist-drop', 'wbs-card-drop', 'wbs-card', 'wbs-column-drop', 'wbs-column', 'wbs-root-drop']
@@ -581,11 +1105,55 @@ const BoardView = () => {
                     return [];
                 }
                 const targetData = getCollisionContainer(directCollision)?.data.current;
+                const orderingScope = directSurface.closest<HTMLElement>('[data-task-surface-scope="true"]');
+                const orderingRect = orderingScope?.getBoundingClientRect();
+                const directRect = directSurface.getBoundingClientRect();
+                // A collapsed card/row already has an edge close to the pointer.
+                // Only an expanded L2 title can otherwise inherit source-order
+                // direction and send its marker to a distant subtree tail.
+                const isDirectOrderingSurface = Boolean(
+                    orderingRect
+                    && targetData?.type === 'wbs-card'
+                    && orderingRect.height > directRect.height + 8
+                );
+                const pointerTargetData = targetData && isDirectOrderingSurface && orderingRect
+                    ? {
+                        ...targetData,
+                        orderingPosition: resolveDesktopTaskEdgePosition({
+                            pointerY: exactPointer.y,
+                            taskTop: orderingRect.top,
+                            taskBottom: orderingRect.bottom,
+                        }),
+                    }
+                    : targetData;
                 const resolved = resolveDesktopTaskDropIntent({
                     activeData: args.active?.data.current,
-                    targetData,
+                    targetData: pointerTargetData,
                     nodesRecord: useWbsStore.getState().nodes,
                 });
+                const directPreview = resolved && pointerTargetData
+                    ? resolveDesktopTaskDropPreview({
+                        activeData: args.active?.data.current,
+                        targetData: pointerTargetData,
+                        targetDndId: String(directCollision.id),
+                        targetElement: directSurface,
+                        nodesRecord: useWbsStore.getState().nodes,
+                    })
+                    : null;
+                desktopColumnGapTargetRef.current = directPreview && isDirectOrderingSurface ? {
+                    ownership: 'direct-ordering',
+                    validRect: {
+                        left: directRect.left,
+                        right: directRect.right,
+                        top: directRect.top,
+                        bottom: directRect.bottom,
+                    },
+                    preview: directPreview,
+                    over: {
+                        id: String(directCollision.id),
+                        data: { current: pointerTargetData },
+                    },
+                } : null;
 
                 // Exact innermost ownership: an invalid child/source surface blocks
                 // its ancestors instead of silently redirecting the task elsewhere.
@@ -594,6 +1162,10 @@ const BoardView = () => {
                     directId: String(directCollision.id),
                     targetType: targetData?.type,
                     targetNodeId: targetData?.nodeId,
+                    targetPosition: directPreview?.displayPosition || null,
+                    pointerDistanceToIndicator: directPreview
+                        ? Math.abs(directPreview.indicatorRect.top - exactPointer.y)
+                        : null,
                     activeType,
                 });
                 return resolved ? [directCollision] : [];
@@ -674,6 +1246,9 @@ const BoardView = () => {
         desktopDragCancelledRef.current = false;
         const { active } = event;
         const activeData = active.data.current;
+        desktopColumnGapTargetRef.current = null;
+        desktopL1DropTargetRef.current = null;
+        desktopL1OrderingTargetRef.current = null;
         desktopChildDropSessionRef.current += 1;
         applyDesktopChildDrop(null);
         desktopActiveDataRef.current = activeData;
@@ -722,6 +1297,9 @@ const BoardView = () => {
         desktopDragOriginIndicatorRef.current = null;
         desktopDragActivatorPointRef.current = null;
         desktopDragOverlayActiveRef.current = false;
+        desktopColumnGapTargetRef.current = null;
+        desktopL1DropTargetRef.current = null;
+        desktopL1OrderingTargetRef.current = null;
         setDesktopDragOverlayPointer(null);
         updateDesktopDropPreview(null);
         setDesktopOriginIndicator(null);
@@ -775,9 +1353,22 @@ const BoardView = () => {
             return;
         }
         const { active, over } = event;
-        const preview = over ? buildDesktopDropPreview(active, over) : null;
+        const pointer = desktopRawPointerRef.current;
+        const forcedL1Target = desktopL1DropTargetAtPointer(
+            desktopL1DropTargetRef.current,
+            pointer,
+        );
+        const forcedGapTarget = desktopColumnGapTargetAtPointer(
+            desktopColumnGapTargetRef.current,
+            pointer,
+        );
+        const preview = forcedL1Target?.preview
+            || forcedGapTarget?.preview
+            || (over ? buildDesktopDropPreview(active, over) : null);
         recordDesktopTaskDragDebug({
-            type: 'drag-over',
+            type: forcedL1Target
+                ? 'drag-over:l1-axis-forced'
+                : forcedGapTarget ? 'drag-over:column-gap-forced' : 'drag-over',
             overId: over ? String(over.id) : null,
             overType: over?.data.current?.type || null,
             previewTargetId: preview?.targetNodeId || null,
@@ -810,6 +1401,30 @@ const BoardView = () => {
             setDesktopOriginIndicator(originIndicator);
             return;
         }
+        const forcedL1Target = desktopL1DropTargetAtPointer(
+            desktopL1DropTargetRef.current,
+            pointer,
+        );
+        const forcedGapTarget = desktopColumnGapTargetAtPointer(
+            desktopColumnGapTargetRef.current,
+            pointer,
+        );
+        if (forcedGapTarget?.ownership === 'ordering-gap') {
+            // A card-to-card gap owns same-level ordering before the enclosing
+            // column's child zone. Keeping that ownership for the full gap also
+            // prevents 1–2px pointer moves from falling back to a stale dnd over.
+            applyDesktopChildDrop(null);
+            setDesktopOriginIndicator(null);
+            updateDesktopDropPreview(forcedGapTarget.preview);
+            recordDesktopTaskDragDebug({
+                type: 'drag-move:column-gap-forced',
+                pointer,
+                cachedValidRect: forcedGapTarget.validRect,
+                previewTargetId: forcedGapTarget.preview.targetNodeId,
+                previewPosition: forcedGapTarget.preview.displayPosition,
+            });
+            return;
+        }
         const hasChildCandidate = updateDesktopChildDropAtPoint(event.active.data.current, pointer);
         if (hasChildCandidate && desktopChildDropRef.current?.phase === 'armed') return;
         const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(event.active.data.current?.type);
@@ -818,13 +1433,18 @@ const BoardView = () => {
             && sourceSurfaceKind
             && sourceSurfaceKind !== 'workbench-unplaced-row'
         );
-        if (canUseChildDrop && !hasChildCandidate && resolveDesktopChildDropZoneAtPoint(pointer)) {
+        const blockedChildZone = canUseChildDrop && !hasChildCandidate
+            ? resolveDesktopChildDropZoneAtPoint(pointer)
+            : null;
+        if (blockedChildZone) {
             setDesktopOriginIndicator(null);
             updateDesktopDropPreview(null);
             return;
         }
         setDesktopOriginIndicator(null);
-        const preview = event.over ? buildDesktopDropPreview(event.active, event.over) : null;
+        const preview = forcedL1Target?.preview
+            || forcedGapTarget?.preview
+            || (event.over ? buildDesktopDropPreview(event.active, event.over) : null);
         updateDesktopDropPreview(preview);
     };
 
@@ -833,7 +1453,60 @@ const BoardView = () => {
         desktopDragCancelledRef.current = false;
         const { active, over } = event;
         const displayedPreview = desktopDropPreviewRef.current;
-        const currentPreview = over ? buildDesktopDropPreview(active, over) : null;
+        const releasePointerCandidate = desktopRawPointerRef.current;
+        const displayedL1Element = displayedPreview?.indicatorAxis === 'vertical'
+            ? findDesktopTaskDropElement(displayedPreview.targetDndId)
+            : null;
+        const displayedL1Rect = displayedL1Element?.getBoundingClientRect();
+        const boardRectForL1Release = displayedL1Element
+            ?.closest<HTMLElement>('[data-layout-region="board-canvas"]')
+            ?.getBoundingClientRect();
+        const displayedL1ReleaseIsValid = Boolean(
+            displayedPreview?.indicatorAxis === 'vertical'
+            && releasePointerCandidate
+            && over?.data.current?.nodeId === displayedPreview.targetNodeId
+            && (active.data.current?.type === 'wbs-column'
+                ? boardRectForL1Release
+                    && releasePointerCandidate.x >= boardRectForL1Release.left
+                    && releasePointerCandidate.x <= boardRectForL1Release.right
+                    && releasePointerCandidate.y >= boardRectForL1Release.top
+                    && releasePointerCandidate.y <= boardRectForL1Release.bottom
+                : displayedL1Rect
+                    && releasePointerCandidate.x >= displayedL1Rect.left
+                    && releasePointerCandidate.x <= displayedL1Rect.right
+                    && releasePointerCandidate.y >= displayedL1Rect.top
+                    && releasePointerCandidate.y <= displayedL1Rect.bottom)
+        );
+        const displayedL1ReleaseOver = displayedL1ReleaseIsValid && over
+            ? {
+                id: over.id,
+                data: {
+                    current: {
+                        ...over.data.current,
+                        ...(displayedPreview?.displayPosition === 'before'
+                            || displayedPreview?.displayPosition === 'after'
+                            ? { orderingPosition: displayedPreview.displayPosition }
+                            : {}),
+                    },
+                },
+            }
+            : null;
+        const releaseL1Target = desktopL1DropTargetAtPointer(
+            desktopL1DropTargetRef.current,
+            desktopRawPointerRef.current,
+        );
+        const releaseGapTarget = desktopColumnGapTargetAtPointer(
+            desktopColumnGapTargetRef.current,
+            desktopRawPointerRef.current,
+        );
+        const effectiveOver = releaseL1Target?.over
+            || displayedL1ReleaseOver
+            || releaseGapTarget?.over
+            || over;
+        const currentPreview = releaseL1Target?.preview
+            || (displayedL1ReleaseOver ? displayedPreview : null)
+            || releaseGapTarget?.preview
+            || (effectiveOver ? buildDesktopDropPreview(active, effectiveOver) : null);
         const displayedChildDrop = desktopChildDropRef.current;
         const activatorPoint = desktopDragActivatorPointRef.current;
         const releasePointer = desktopRawPointerRef.current
@@ -858,6 +1531,22 @@ const BoardView = () => {
             && releasePointer.x <= sourceRect.right
             && releasePointer.y >= sourceRect.top
             && releasePointer.y <= sourceRect.bottom);
+        recordDesktopTaskDragDebug({
+            type: 'drag-end:release-state',
+            activeType: active.data.current?.type,
+            releasePointer,
+            releaseInsideSource,
+            effectiveOverId: effectiveOver ? String(effectiveOver.id) : null,
+            effectiveOverType: effectiveOver?.data.current?.type || null,
+            displayedTargetId: displayedPreview?.targetNodeId || null,
+            displayedPosition: displayedPreview?.displayPosition || null,
+            currentTargetId: currentPreview?.targetNodeId || null,
+            currentPosition: currentPreview?.displayPosition || null,
+            releaseL1TargetRetained: Boolean(releaseL1Target),
+            displayedL1ReleaseIsValid,
+            releaseChildTargetId: releaseChildTarget?.targetNodeId || null,
+            releaseChildZoneId: releaseChildZone?.targetNodeId || null,
+        });
         const canCommitDisplayedChild = Boolean(
             displayedChildDrop
             && displayedChildDrop.phase === 'armed'
@@ -871,6 +1560,9 @@ const BoardView = () => {
         desktopDragActivatorPointRef.current = null;
         desktopRawPointerRef.current = null;
         desktopDragOverlayActiveRef.current = false;
+        desktopColumnGapTargetRef.current = null;
+        desktopL1DropTargetRef.current = null;
+        desktopL1OrderingTargetRef.current = null;
         setDesktopDragOverlayPointer(null);
         updateDesktopDropPreview(null);
         setDesktopOriginIndicator(null);
@@ -878,7 +1570,10 @@ const BoardView = () => {
         setActiveDrag(null);
         if (wasCancelled) return;
         if (!canMoveTask) return;
-        if (releaseInsideSource) return;
+        if (releaseInsideSource) {
+            recordDesktopTaskDragDebug({ type: 'drag-end:blocked-source' });
+            return;
+        }
 
         if (canCommitDisplayedChild && displayedChildDrop && releaseChildTarget) {
             const childPreview: DesktopTaskDropPreview = {
@@ -886,8 +1581,10 @@ const BoardView = () => {
                 targetNodeId: releaseChildTarget.targetNodeId,
                 targetDndId: `task-title-child:${releaseChildTarget.targetNodeId}`,
                 targetSurfaceKind: releaseChildTarget.targetSurfaceKind,
+                outcomeKind: releaseChildTarget.isOrigin ? 'origin' : 'move',
                 displayPosition: 'append',
                 intent: releaseChildTarget.intent,
+                indicatorAxis: 'horizontal',
                 indicatorRect: {
                     left: releaseChildTarget.previewRect.insertion.left,
                     top: releaseChildTarget.previewRect.insertion.top,
@@ -910,9 +1607,9 @@ const BoardView = () => {
                     canDeleteTask,
                     addNode,
                     updateNode,
-                    batchUpdateNodes,
+                    batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
                     removeNode,
-                    recalculateAncestorStatus,
+                    recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
                 },
             });
             if (result.status === 'committed') {
@@ -929,39 +1626,50 @@ const BoardView = () => {
         // A valid candidate does not own release until it has visibly armed;
         // preserve the existing same-level/lane action before the 1s dwell.
         // Invalid self/descendant/stale child zones remain blocked for safety.
-        if (releaseChildZone && !releaseChildTarget) return;
+        if (releaseChildZone && !releaseChildTarget) {
+            recordDesktopTaskDragDebug({ type: 'drag-end:blocked-invalid-child-zone' });
+            return;
+        }
 
-        if (!over) return;
+        if (!effectiveOver) {
+            recordDesktopTaskDragDebug({ type: 'drag-end:blocked-no-over' });
+            return;
+        }
 
         const activeType = active.data.current?.type;
-        const targetType = over.data.current?.type;
+        const targetType = effectiveOver.data.current?.type;
+        const isWorkbenchLane = targetType === 'task-workbench-unplaced-lane'
+            || targetType === 'task-workbench-placed-board-lane';
+        if (!isWorkbenchLane && !desktopTaskDropPreviewMatches(displayedPreview, currentPreview)) {
+            recordDesktopTaskDragDebug({ type: 'drag-end:blocked-preview-mismatch' });
+            return;
+        }
         if (activeType === 'wbs-column' && targetType === 'wbs-column') {
             const sourceId = active.data.current?.nodeId;
-            const targetId = over.data.current?.nodeId;
+            const targetId = effectiveOver.data.current?.nodeId;
             const roots = useWbsStore.getState()
                 .getRootNodesForBoard(activeBoardId || '')
                 .filter(node => !node.isArchived)
                 .sort((left, right) => left.order - right.order);
-            const sourceIndex = roots.findIndex(node => node.id === sourceId);
-            const targetIndex = roots.findIndex(node => node.id === targetId);
-            if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
-            const reordered = [...roots];
-            const [moved] = reordered.splice(sourceIndex, 1);
-            reordered.splice(targetIndex, 0, moved);
+            const moved = roots.find(node => node.id === sourceId);
+            const remaining = roots.filter(node => node.id !== sourceId);
+            const targetIndex = remaining.findIndex(node => node.id === targetId);
+            if (!moved || targetIndex < 0 || !currentPreview) return;
+            const insertionIndex = targetIndex + (currentPreview.displayPosition === 'after' ? 1 : 0);
+            const reordered = [...remaining];
+            reordered.splice(insertionIndex, 0, moved);
+            if (reordered.every((node, index) => node.id === roots[index]?.id)) return;
             const updatedAt = Date.now();
-            batchUpdateNodes(Object.fromEntries(reordered.map((node, order) => [
+            batchUpdateNodesForDesktopTaskDrag(Object.fromEntries(reordered.map((node, order) => [
                 node.id,
                 { order, updatedAt },
             ])), { label: '移動列表位置', mergeKey: `move:${sourceId}` });
             return;
         }
-        const isWorkbenchLane = targetType === 'task-workbench-unplaced-lane'
-            || targetType === 'task-workbench-placed-board-lane';
-        if (!isWorkbenchLane && !desktopTaskDropPreviewMatches(displayedPreview, currentPreview)) return;
 
         commitDesktopTaskDrag({
             activeData: active.data.current,
-            overData: over.data.current,
+            overData: effectiveOver.data.current,
             desktopPreview: isWorkbenchLane ? null : currentPreview,
             dependencies: {
                 activeBoardId,
@@ -972,9 +1680,9 @@ const BoardView = () => {
                 canDeleteTask,
                 addNode,
                 updateNode,
-                batchUpdateNodes,
+                batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
                 removeNode,
-                recalculateAncestorStatus,
+                recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
             },
         });
     };
@@ -1013,25 +1721,30 @@ const BoardView = () => {
         );
     }
 
-    const desktopIndicator = desktopDropPreview
+    const resolvedDesktopOriginIndicator = desktopDropPreview?.outcomeKind === 'origin'
+        ? desktopDragOriginIndicatorRef.current
+        : desktopOriginIndicator;
+    const desktopIndicator = desktopDropPreview?.outcomeKind === 'move'
         ? {
             kind: 'target' as const,
             targetNodeId: desktopDropPreview.targetNodeId,
             position: desktopDropPreview.displayPosition,
             surfaceKind: desktopDropPreview.targetSurfaceKind,
+            axis: desktopDropPreview.indicatorAxis,
             indicatorRect: desktopDropPreview.indicatorRect,
             fieldHeight: undefined,
             sourceTitle: undefined,
         }
-        : desktopOriginIndicator
+        : resolvedDesktopOriginIndicator
             ? {
                 kind: 'origin' as const,
-                targetNodeId: desktopOriginIndicator.sourceNodeId,
+                targetNodeId: resolvedDesktopOriginIndicator.sourceNodeId,
                 position: 'origin' as const,
-                surfaceKind: desktopOriginIndicator.sourceSurfaceKind,
-                indicatorRect: desktopOriginIndicator.fieldRect,
-                fieldHeight: desktopOriginIndicator.fieldRect.height,
-                sourceTitle: desktopOriginIndicator.sourceTitle,
+                surfaceKind: resolvedDesktopOriginIndicator.sourceSurfaceKind,
+                axis: 'origin' as const,
+                indicatorRect: resolvedDesktopOriginIndicator.fieldRect,
+                fieldHeight: resolvedDesktopOriginIndicator.fieldRect.height,
+                sourceTitle: resolvedDesktopOriginIndicator.sourceTitle,
             }
             : null;
 
@@ -1167,18 +1880,21 @@ const BoardView = () => {
             {desktopIndicator && desktopChildDrop?.phase !== 'armed' ? (
                 <div
                     className={`pointer-events-none fixed z-[86] ${
-                        desktopIndicator.kind === 'origin' ? '' : '-translate-y-1/2'
+                        desktopIndicator.kind === 'origin' || desktopIndicator.axis === 'vertical'
+                            ? ''
+                            : '-translate-y-1/2'
                     }`}
                     style={{
                         left: desktopIndicator.indicatorRect.left,
                         top: desktopIndicator.indicatorRect.top,
                         width: desktopIndicator.indicatorRect.width,
-                        height: desktopIndicator.fieldHeight,
+                        height: desktopIndicator.indicatorRect.height ?? desktopIndicator.fieldHeight,
                     }}
                     data-desktop-drop-indicator="true"
                     data-desktop-drop-target={desktopIndicator.targetNodeId}
                     data-desktop-drop-position={desktopIndicator.position}
                     data-desktop-drop-surface-kind={desktopIndicator.surfaceKind}
+                    data-desktop-drop-axis={desktopIndicator.axis}
                     data-desktop-drop-origin={desktopIndicator.kind === 'origin' ? 'true' : undefined}
                     data-desktop-drop-noop={desktopIndicator.kind === 'origin' ? 'true' : undefined}
                     data-desktop-drop-indicator-layer="fixed-overlay"
@@ -1190,7 +1906,11 @@ const BoardView = () => {
                             data-desktop-origin-field="true"
                         />
                     ) : (
-                        <KanbanInsertionMarker compact className="py-0" />
+                        desktopIndicator.axis === 'vertical' ? (
+                            <KanbanInsertionMarker axis="vertical" compact />
+                        ) : (
+                            <KanbanInsertionMarker compact className="py-0" />
+                        )
                     )}
                 </div>
             ) : null}
@@ -1201,27 +1921,21 @@ const BoardView = () => {
                     data-task-drag-source-id={activeDrag.node.id}
                     data-task-drag-descendant-count={activeDragDescendantCount}
                     data-task-drag-overlay-anchor="pointer-upper-right"
-                    data-task-drag-overlay-pointer-gap={TASK_DRAG_OVERLAY_POINTER_GAP_PX}
+                    data-task-drag-overlay-pointer-gap={DESKTOP_TASK_DRAG_OVERLAY_POINTER_GAP_PX}
+                    data-task-drag-overlay-scale={DESKTOP_TASK_DRAG_OVERLAY_SCALE}
                     data-task-drag-overlay-edge-placement={desktopDragOverlayPosition.placement}
-                    className={`task-title-text pointer-events-none fixed z-[93] flex items-center gap-2 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg ${
+                    className={`task-title-text pointer-events-none fixed z-[93] flex h-10 origin-top-left items-center gap-2 rounded-lg border border-primary/30 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-lg ${
                         activeDrag.type === 'wbs-column' ? 'w-[270px]' : 'w-[240px]'
                     }`}
                     style={{
                         left: desktopDragOverlayPosition.left,
                         top: desktopDragOverlayPosition.top,
+                        transform: `scale(${DESKTOP_TASK_DRAG_OVERLAY_SCALE})`,
                     }}
                 >
                     <span className="min-w-0 flex-1 truncate">
                         {activeDrag.title || activeDrag.node.title || '未命名任務'}
                     </span>
-                    {activeDragDescendantCount > 0 ? (
-                        <span
-                            data-task-drag-scope-summary="true"
-                            className="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700"
-                        >
-                            含 {activeDragDescendantCount} 個子任務
-                        </span>
-                    ) : null}
                 </div>
             ) : null}
             <TaskDragPresenter

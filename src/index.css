@@ -96,6 +96,7 @@
     --border: #e2e8f0;
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --radius: 8px;
+    --task-hierarchy-indent: 6px;
   }
 
   html,
@@ -145,9 +146,10 @@
   }
 
   .kanban-drag-origin-placeholder {
-    outline: 2px dashed var(--color-primary-400);
-    outline-offset: -2px;
-    background-color: rgb(238 242 255 / 45%);
+    outline: 1px dashed rgb(148 163 184);
+    outline-offset: -1px;
+    background-color: rgb(248 250 252 / 72%) !important;
+    box-shadow: none !important;
   }
 }
 
@@ -317,6 +319,47 @@ body[data-kanban-mouse-pan-active="true"],
 body[data-kanban-mouse-pan-active="true"] * {
   cursor: grabbing !important;
   user-select: none !important;
+}
+
+/* Every task hierarchy shares one depth increment. Individual surfaces keep
+   their own base inset, row height, typography, and interaction geometry. */
+.kanban-checklist-item {
+  padding-left: calc(
+    (var(--kanban-checklist-depth, 0) * var(--task-hierarchy-indent, 6px))
+    + var(--kanban-checklist-base, 4px)
+  );
+}
+
+.task-hierarchy-indented-row {
+  padding-left: calc(
+    var(--task-hierarchy-base, 0px)
+    + (var(--task-hierarchy-depth, 0) * var(--task-hierarchy-indent, 6px))
+  );
+}
+
+.task-workbench-unplaced-hierarchy-row {
+  --kanban-checklist-base: 3px;
+}
+
+.task-workbench-unplaced-subtree-rail {
+  position: relative;
+}
+
+.task-workbench-unplaced-subtree-rail::before {
+  content: '';
+  position: absolute;
+  bottom: 1px;
+  left: 2px;
+  top: 1px;
+  width: 1px;
+  background: rgb(148 163 184 / 52%);
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --task-hierarchy-indent: 5px;
+  }
 }
 
 .task-drag-hitbox,
@@ -583,8 +626,8 @@ body[data-kanban-mouse-pan-active="true"] * {
     --kanban-meta-size: 9px;
     --kanban-tag-height: 13px;
     --kanban-tag-font-size: 9px;
-    --kanban-checklist-indent: 14px;
     --kanban-checklist-base: 4px;
+    --kanban-checklist-body-pad-x: 2px;
     --kanban-l3-min-height: 20px;
   }
 
@@ -601,8 +644,8 @@ body[data-kanban-mouse-pan-active="true"] * {
     --kanban-meta-size: 22.5px;
     --kanban-tag-height: 32.5px;
     --kanban-tag-font-size: 22.5px;
-    --kanban-checklist-indent: 35px;
     --kanban-checklist-base: 10px;
+    --kanban-checklist-body-pad-x: 2px;
     --kanban-l3-min-height: 50px;
     gap: var(--kanban-board-gap) !important;
   }
@@ -683,7 +726,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   [data-mobile-pan-surface="board"][data-kanban-view-size="large"] .kanban-checklist-item {
     min-height: var(--kanban-l3-min-height) !important;
     gap: 10px !important;
-    padding-left: calc((var(--kanban-checklist-depth, 0) * var(--kanban-checklist-indent)) + var(--kanban-checklist-base)) !important;
   }
 
   [data-mobile-pan-surface="board"][data-kanban-view-size="large"] [data-kanban-column] .task-drag-hitbox,
@@ -1281,7 +1323,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   --kanban-meta-size: 9px;
   --kanban-tag-height: 13px;
   --kanban-tag-font-size: 9px;
-  --kanban-checklist-indent: 14px;
   --kanban-checklist-base: 4px;
   --kanban-l3-min-height: 20px;
   gap: var(--kanban-board-gap) !important;
@@ -1300,7 +1341,6 @@ body[data-kanban-mouse-pan-active="true"] * {
   --kanban-meta-size: 22.5px;
   --kanban-tag-height: 32.5px;
   --kanban-tag-font-size: 22.5px;
-  --kanban-checklist-indent: 35px;
   --kanban-checklist-base: 10px;
   --kanban-l3-min-height: 50px;
 }
@@ -1356,5 +1396,4 @@ body[data-kanban-mouse-pan-active="true"] * {
 
 [data-mobile-pan-surface="board"][data-kanban-mobile-surface="true"] .kanban-checklist-item {
   min-height: var(--kanban-l3-min-height) !important;
-  padding-left: calc((var(--kanban-checklist-depth, 0) * var(--kanban-checklist-indent)) + var(--kanban-checklist-base)) !important;
 }

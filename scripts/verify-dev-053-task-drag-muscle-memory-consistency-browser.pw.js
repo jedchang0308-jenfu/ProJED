@@ -284,7 +284,7 @@ async (page) => {
   page.setDefaultTimeout(6000);
   page.setDefaultNavigationTimeout(20000);
 
-  await runCase('QA-053-B01', 'desktop drag overlay preserves its appearance while DEV-068 anchors it above-right of the pointer', async () => {
+  await runCase('QA-053-B01', 'desktop drag overlay scales to 50 percent and attaches to the pointer upper-right', async () => {
     await openApp({ width: 1440, height: 900 });
     const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
     const point = await pointFor(card, 0.62, 0.34);
@@ -302,17 +302,21 @@ async (page) => {
       text: (element.textContent || '').trim(),
       anchor: element.getAttribute('data-task-drag-overlay-anchor'),
       gap: Number(element.getAttribute('data-task-drag-overlay-pointer-gap') || 0),
+      scale: Number(element.getAttribute('data-task-drag-overlay-scale') || 0),
       rect: (() => { const rect = element.getBoundingClientRect(); return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }; })(),
     }));
     const pointer = { x: point.x + 18, y: point.y + 5 };
     assert(overlayState.anchor === 'pointer-upper-right'
-      && overlayState.gap === 16
-      && overlayState.rect.left >= pointer.x + overlayState.gap - 1
-      && overlayState.rect.bottom <= pointer.y - overlayState.gap + 1,
-    'desktop overlay must use the DEV-068 pointer-upper-right placement amendment', { overlayState, pointer });
+      && overlayState.gap === 0
+      && overlayState.scale === 0.5
+      && Math.abs(overlayState.rect.left - pointer.x) <= 1
+      && Math.abs(overlayState.rect.bottom - pointer.y) <= 1,
+    'desktop overlay must render at 50 percent with its bottom-left corner attached to the pointer hotspot', { overlayState, pointer });
     assert(overlayState.className.includes('rounded-lg') && overlayState.className.includes('shadow-lg'), 'desktop overlay visual treatment should match approved baseline', overlayState);
-    assert(overlayState.rect.width >= 230 && overlayState.rect.width <= 250, 'desktop card overlay width should stay at the approved 240px baseline', overlayState);
-    const screenshotPath = `${screenshotBase}-B01-desktop-approved-overlay.png`;
+    assert(overlayState.rect.width >= 119 && overlayState.rect.width <= 121
+      && overlayState.rect.height >= 19 && overlayState.rect.height <= 21,
+    'desktop card overlay should be exactly 50 percent of the 240x40 base UI', overlayState);
+    const screenshotPath = `${screenshotBase}-B01-desktop-half-scale-pointer-anchor.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await page.keyboard.press('Escape');
     await page.mouse.up();

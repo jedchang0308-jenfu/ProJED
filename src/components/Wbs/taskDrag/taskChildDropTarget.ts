@@ -7,10 +7,10 @@ import type {
   TaskDropSurfaceKind,
 } from './taskDragTypes';
 import {
-  isTaskDropIntentOrigin,
-  resolveTaskDropIntent,
+  resolveTaskDropOutcome,
   type TaskDropIntent,
 } from './taskDropIntent';
+import { findTaskTitleAnchorElement } from './taskTitleAnchor';
 
 export const TASK_CHILD_DROP_DWELL_MS = 1000;
 export const TASK_CHILD_DROP_SURFACE_KIND = 'task-title-child' as const;
@@ -68,7 +68,6 @@ const clamp = (value: number, min: number, max: number) =>
 
 const roundGeometry = (value: number) => Math.round(value * 1000) / 1000;
 
-export const TASK_CHILD_INSERT_INDENT_PX = 14;
 export const TASK_CHILD_INSERT_MIN_WIDTH_PX = 48;
 export const TASK_CHILD_INSERT_VIEWPORT_GAP_PX = 8;
 
@@ -77,8 +76,8 @@ export const resolveTaskChildInsertionMarkerRect = ({
   primaryRect,
   subtreeRect,
   scopeKind,
-  primaryPaddingLeft,
-  directChildContentLeft,
+  directChildTitleLeft,
+  fallbackChildTitleLeft,
   directChildContentRight,
   inputMode,
   viewportWidth,
@@ -88,19 +87,14 @@ export const resolveTaskChildInsertionMarkerRect = ({
   primaryRect: TaskDragTargetRect;
   subtreeRect: TaskDragTargetRect | null;
   scopeKind: string | null;
-  primaryPaddingLeft: number;
-  directChildContentLeft: number | null;
+  directChildTitleLeft: number | null;
+  fallbackChildTitleLeft: number | null;
   directChildContentRight: number | null;
   inputMode: TaskDragInputMode;
   viewportWidth: number;
   viewportHeight: number;
 }) => {
-  const fallbackIndent = scopeKind === 'column'
-    ? Math.max(12, primaryPaddingLeft + 4)
-    : scopeKind === 'card'
-      ? Math.max(16, primaryPaddingLeft + 11)
-      : primaryPaddingLeft + TASK_CHILD_INSERT_INDENT_PX;
-  const desiredLeft = directChildContentLeft ?? primaryRect.left + fallbackIndent;
+  const desiredLeft = directChildTitleLeft ?? fallbackChildTitleLeft ?? primaryRect.left;
   const desiredRight = directChildContentRight ?? Math.min(primaryRect.right, safeRect.right);
   const right = Math.min(viewportWidth - TASK_CHILD_INSERT_VIEWPORT_GAP_PX, desiredRight);
   const left = clamp(
@@ -141,6 +135,7 @@ const getPreviewRect = (
   primaryElement: HTMLElement,
   subtreeElement: HTMLElement | null,
   directChildPrimaryElement: HTMLElement | null,
+  fallbackChildTitleAnchorElement: HTMLElement | null,
   scopeKind: string | null,
   inputMode: TaskDragInputMode,
 ): TaskChildDropPreviewRect => {
@@ -150,9 +145,11 @@ const getPreviewRect = (
     ? rawSubtreeRect
     : null;
   const directChildPrimaryRect = directChildPrimaryElement?.getBoundingClientRect() || null;
-  const primaryPaddingLeft = Number.parseFloat(getComputedStyle(primaryElement).paddingLeft) || 0;
+  const directChildTitleRect = findTaskTitleAnchorElement(
+    directChildPrimaryElement,
+  )?.getBoundingClientRect() || null;
+  const fallbackChildTitleRect = fallbackChildTitleAnchorElement?.getBoundingClientRect() || null;
   const directChildStyle = directChildPrimaryElement ? getComputedStyle(directChildPrimaryElement) : null;
-  const directChildPaddingLeft = Number.parseFloat(directChildStyle?.paddingLeft || '') || 0;
   const directChildPaddingRight = Number.parseFloat(directChildStyle?.paddingRight || '') || 0;
   const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
@@ -161,10 +158,8 @@ const getPreviewRect = (
     primaryRect: toTargetRect(primaryRect),
     subtreeRect: subtreeRect ? toTargetRect(subtreeRect) : null,
     scopeKind,
-    primaryPaddingLeft,
-    directChildContentLeft: directChildPrimaryRect
-      ? directChildPrimaryRect.left + directChildPaddingLeft
-      : null,
+    directChildTitleLeft: directChildTitleRect?.left ?? null,
+    fallbackChildTitleLeft: fallbackChildTitleRect?.left ?? null,
     directChildContentRight: directChildPrimaryRect
       ? directChildPrimaryRect.right - directChildPaddingRight
       : null,
@@ -268,6 +263,9 @@ export const resolveTaskTitleChildDropZone = ({
       const directChildPrimaryElement = directChildTarget?.querySelector<HTMLElement>(
         ':scope > [data-task-surface-source="true"]',
       ) || null;
+      const fallbackChildTitleAnchorElement = element.querySelector<HTMLElement>(
+        ':scope > [data-task-direct-child-title-anchor="true"]',
+      );
       const scopeRect = element.getBoundingClientRect();
       const primaryRect = primaryElement.getBoundingClientRect();
       if (scopeRect.width <= 0 || scopeRect.height <= 0 || primaryRect.width <= 0 || primaryRect.height <= 0) return null;
@@ -291,6 +289,7 @@ export const resolveTaskTitleChildDropZone = ({
             primaryElement,
             subtreeElement,
             directChildPrimaryElement,
+            fallbackChildTitleAnchorElement,
             element.getAttribute('data-task-hover-scope-kind'),
             inputMode,
           ),
@@ -321,17 +320,17 @@ export const resolveTaskTitleChildDropTarget = ({
   const targetNode = nodesRecord[zone.targetNodeId];
   if (!targetNode || targetNode.isArchived || zone.targetNodeId === sourceNodeId) return null;
 
-  const intent = resolveTaskDropIntent({
+  const outcome = resolveTaskDropOutcome({
     source: { nodeId: sourceNodeId, surfaceKind: sourceSurfaceKind },
     target: { nodeId: zone.targetNodeId, surfaceKind: TASK_CHILD_DROP_SURFACE_KIND },
     nodesRecord,
   });
-  if (!intent) return null;
+  if (outcome.kind === 'invalid') return null;
 
   return {
     ...zone,
     targetSurfaceKind: TASK_CHILD_DROP_SURFACE_KIND,
-    intent,
-    isOrigin: isTaskDropIntentOrigin(sourceNodeId, intent, nodesRecord),
+    intent: outcome.intent,
+    isOrigin: outcome.kind === 'origin',
   };
 };

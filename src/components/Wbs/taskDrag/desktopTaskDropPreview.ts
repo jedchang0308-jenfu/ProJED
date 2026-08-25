@@ -2,10 +2,17 @@ import type { TaskNode } from '../../../types';
 import type { TaskDragIndicatorRect, TaskDragOriginFieldRect, TaskDropSurfaceKind } from './taskDragTypes';
 import {
   desktopTargetTypeToSurfaceKind,
-  resolveTaskDropIntent,
+  resolveTaskDropOutcome,
   taskDragSourceKindToSurfaceKind,
+  type TaskDropOutcome,
   type TaskDropIntent,
 } from './taskDropIntent';
+import { findTaskTitleAnchorElement } from './taskTitleAnchor';
+import { findTaskOrderingGeometryElement } from './taskOrderingGeometry';
+import {
+  resolveDesktopL1IndicatorRect,
+  type DesktopL1ColumnGeometry,
+} from './desktopL1DropPolicy';
 
 type DesktopDragData = Record<string, any>;
 
@@ -14,8 +21,10 @@ export interface DesktopTaskDropPreview {
   targetNodeId: string;
   targetDndId: string;
   targetSurfaceKind: TaskDropSurfaceKind;
+  outcomeKind: Exclude<TaskDropOutcome['kind'], 'invalid'>;
   displayPosition: TaskDropIntent['displayPosition'];
   intent: TaskDropIntent;
+  indicatorAxis: 'horizontal' | 'vertical';
   indicatorRect: TaskDragIndicatorRect;
 }
 
@@ -53,14 +62,23 @@ export const resolveDesktopTaskDropIntent = ({
     return null;
   }
 
-  const intent = resolveTaskDropIntent({
+  const outcome = resolveTaskDropOutcome({
     source: { nodeId: activeData.nodeId, surfaceKind: sourceSurfaceKind },
-    target: { nodeId: targetData.nodeId, surfaceKind: targetSurfaceKind },
+    target: {
+      nodeId: targetData.nodeId,
+      surfaceKind: targetSurfaceKind,
+      orderingPosition: targetData.orderingPosition,
+    },
     nodesRecord,
   });
-  if (!intent) return null;
+  if (outcome.kind === 'invalid') return null;
 
-  return { intent, sourceSurfaceKind, targetSurfaceKind };
+  return {
+    intent: outcome.intent,
+    outcomeKind: outcome.kind,
+    sourceSurfaceKind,
+    targetSurfaceKind,
+  };
 };
 
 const getPrimaryGeometryElement = (targetElement: HTMLElement) => {
@@ -70,10 +88,10 @@ const getPrimaryGeometryElement = (targetElement: HTMLElement) => {
 
 const getTaskTitleElement = (targetElement: HTMLElement) => {
   const geometryElement = getPrimaryGeometryElement(targetElement);
-  return geometryElement.querySelector<HTMLElement>('.task-title-text')
-    || targetElement.closest<HTMLElement>('[data-task-surface-scope="true"]')
-      ?.querySelector<HTMLElement>('.task-title-text')
-    || null;
+  return findTaskTitleAnchorElement(geometryElement)
+    || findTaskTitleAnchorElement(
+      targetElement.closest<HTMLElement>('[data-task-surface-scope="true"]'),
+    );
 };
 
 const getAppendAnchor = (
@@ -81,7 +99,7 @@ const getAppendAnchor = (
   targetSurfaceKind: TaskDropSurfaceKind,
 ) => {
   if (targetSurfaceKind === 'column-drop') {
-    return targetElement.querySelector<HTMLElement>('[data-kanban-add-task-button="true"]') || targetElement;
+    return targetElement.querySelector<HTMLElement>('[data-kanban-column-append-anchor="true"]') || targetElement;
   }
   if (targetSurfaceKind === 'checklist-drop') {
     const card = targetElement.matches('[data-task-surface-scope="true"]')
@@ -93,18 +111,89 @@ const getAppendAnchor = (
   return targetElement;
 };
 
-const getIndicatorRect = ({
+const getColumnLastTaskBottom = (targetElement: HTMLElement) => {
+  const subtree = targetElement.querySelector<HTMLElement>(
+    ':scope > [data-kanban-column-subtree-scope]',
+  );
+  const tasks = Array.from(subtree?.children || [])
+    .filter((element): element is HTMLElement => (
+      element instanceof HTMLElement
+      && element.matches('[data-task-surface-scope="true"][data-task-id]')
+    ));
+  const lastTask = tasks[tasks.length - 1];
+  return lastTask?.getBoundingClientRect().bottom ?? null;
+};
+
+const getL1IndicatorRect = ({
   targetElement,
+  targetNodeId,
   targetSurfaceKind,
   displayPosition,
 }: {
   targetElement: HTMLElement;
+  targetNodeId: string;
+  targetSurfaceKind: TaskDropSurfaceKind;
+  displayPosition: TaskDropIntent['displayPosition'];
+}) => {
+  if (targetSurfaceKind !== 'column-header' && targetSurfaceKind !== 'root-drop') return null;
+  const boardCanvas = targetElement.closest<HTMLElement>('[data-layout-region="board-canvas"]');
+  const columnElements = Array.from(
+    boardCanvas?.querySelectorAll<HTMLElement>('[data-kanban-column="true"][data-task-id]') || [],
+  );
+  const columns: DesktopL1ColumnGeometry[] = columnElements.map((column) => {
+    const rect = column.getBoundingClientRect();
+    return {
+      id: column.getAttribute('data-task-id') || '',
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+    };
+  }).filter(column => Boolean(column.id));
+  const resolvedTargetId = targetSurfaceKind === 'root-drop'
+    ? columns[columns.length - 1]?.id || targetNodeId
+    : targetNodeId;
+  const orderingPosition = targetSurfaceKind === 'root-drop'
+    ? 'after'
+    : displayPosition === 'after' ? 'after' : 'before';
+  const rootDropElement = targetSurfaceKind === 'root-drop'
+    ? targetElement
+    : boardCanvas?.querySelector<HTMLElement>('[data-kanban-root-drop-zone="true"]');
+
+  return resolveDesktopL1IndicatorRect({
+    targetId: resolvedTargetId,
+    orderingPosition,
+    columns,
+    rootDropRect: rootDropElement?.getBoundingClientRect() || null,
+    viewportRect: boardCanvas?.getBoundingClientRect() || null,
+  });
+};
+
+const getIndicatorRect = ({
+  targetElement,
+  targetNodeId,
+  targetSurfaceKind,
+  displayPosition,
+}: {
+  targetElement: HTMLElement;
+  targetNodeId: string;
   targetSurfaceKind: TaskDropSurfaceKind;
   displayPosition: TaskDropIntent['displayPosition'];
 }): TaskDragIndicatorRect | null => {
+  const l1IndicatorRect = getL1IndicatorRect({
+    targetElement,
+    targetNodeId,
+    targetSurfaceKind,
+    displayPosition,
+  });
+  if (l1IndicatorRect) return l1IndicatorRect;
+
   const geometryElement = getPrimaryGeometryElement(targetElement);
   const geometryRect = geometryElement.getBoundingClientRect();
   if (geometryRect.width <= 0 || geometryRect.height < 0) return null;
+  const orderingGeometryRect = (
+    findTaskOrderingGeometryElement(targetElement, targetSurfaceKind) || geometryElement
+  ).getBoundingClientRect();
 
   const columnRect = targetElement.closest<HTMLElement>('[data-kanban-column="true"]')?.getBoundingClientRect();
   const titleElement = getTaskTitleElement(targetElement);
@@ -118,17 +207,22 @@ const getIndicatorRect = ({
 
   if (displayPosition === 'append') {
     const anchorRect = getAppendAnchor(targetElement, targetSurfaceKind).getBoundingClientRect();
-    const top = targetSurfaceKind === 'column-drop' || targetSurfaceKind === 'root-drop'
-      ? anchorRect.top
-      : anchorRect.height > 0
-        ? anchorRect.bottom
-        : anchorRect.top;
+    const columnLastTaskBottom = targetSurfaceKind === 'column-drop'
+      ? getColumnLastTaskBottom(targetElement)
+      : null;
+    const top = targetSurfaceKind === 'column-drop'
+      ? columnLastTaskBottom ?? anchorRect.top
+      : targetSurfaceKind === 'root-drop'
+        ? anchorRect.top
+        : anchorRect.height > 0
+          ? anchorRect.bottom
+          : anchorRect.top;
     return { left, top, width: right - left };
   }
 
   return {
     left,
-    top: displayPosition === 'after' ? geometryRect.bottom : geometryRect.top,
+    top: displayPosition === 'after' ? orderingGeometryRect.bottom : orderingGeometryRect.top,
     width: right - left,
   };
 };
@@ -151,6 +245,7 @@ export const resolveDesktopTaskDropPreview = ({
   if (!resolved) return null;
   const indicatorRect = getIndicatorRect({
     targetElement,
+    targetNodeId: targetData.nodeId,
     targetSurfaceKind: resolved.targetSurfaceKind,
     displayPosition: resolved.intent.displayPosition,
   });
@@ -161,8 +256,13 @@ export const resolveDesktopTaskDropPreview = ({
     targetNodeId: targetData.nodeId,
     targetDndId,
     targetSurfaceKind: resolved.targetSurfaceKind,
+    outcomeKind: resolved.outcomeKind,
     displayPosition: resolved.intent.displayPosition,
     intent: resolved.intent,
+    indicatorAxis: resolved.targetSurfaceKind === 'column-header'
+      || resolved.targetSurfaceKind === 'root-drop'
+      ? 'vertical'
+      : 'horizontal',
     indicatorRect,
   };
 };
@@ -180,8 +280,10 @@ export const resolveTaskOriginFieldRect = ({
 
   const titleRect = getTaskTitleElement(sourceElement)?.getBoundingClientRect();
   if (!titleRect) {
-    const horizontalInset = sourceSurfaceKind === 'column-header' ? 10
-      : sourceSurfaceKind === 'kanban-card' ? 9 : 0;
+    // Column/card placeholders intentionally remove their title DOM. Their
+    // remaining shell starts 4px/0px before the blue field respectively, so
+    // the field's fixed 6px text padding lands on the original title anchor.
+    const horizontalInset = sourceSurfaceKind === 'column-header' ? 4 : 0;
     const topInset = sourceSurfaceKind === 'column-header' ? 8
       : sourceSurfaceKind === 'kanban-card' ? 6 : 0;
     const height = Math.min(sourceSurfaceKind === 'checklist-row' ? geometryRect.height : 20, geometryRect.height - topInset);
@@ -195,7 +297,9 @@ export const resolveTaskOriginFieldRect = ({
     };
   }
 
-  const horizontalPadding = 4;
+  // TaskOriginTitleField uses px-1.5 (6px); offset the field by the same amount
+  // so its rendered text starts exactly at the source title anchor.
+  const horizontalPadding = 6;
   const verticalPadding = 2;
   const left = Math.max(geometryRect.left, titleRect.left - horizontalPadding);
   const right = geometryRect.right;
@@ -252,6 +356,8 @@ export const desktopTaskDropPreviewMatches = (
   && left.targetNodeId === right.targetNodeId
   && left.targetDndId === right.targetDndId
   && left.targetSurfaceKind === right.targetSurfaceKind
+  && left.outcomeKind === right.outcomeKind
+  && left.indicatorAxis === right.indicatorAxis
   && left.displayPosition === right.displayPosition
   && left.intent.parentId === right.intent.parentId
   && left.intent.order === right.intent.order

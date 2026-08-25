@@ -11,7 +11,13 @@ export type TaskDragSourceKind =
 
 export type MobileTaskAction = 'toggle-complete' | 'add-sibling' | 'add-child' | 'delete';
 export type MobileTaskDropPosition = 'before' | 'after';
-export type TaskDragTargetKind = 'task-position' | 'workbench-placed-lane' | 'mobile-action' | 'none';
+export type TaskDragIndicatorAxis = 'horizontal' | 'vertical';
+export type TaskDragTargetKind =
+  | 'task-position'
+  | 'workbench-unplaced-lane'
+  | 'workbench-placed-lane'
+  | 'mobile-action'
+  | 'none';
 export type TaskDragTerminalState = 'committed' | 'cancelled' | 'no-op';
 export type TaskDragPhase = 'dragging' | 'armed';
 export type TaskChildIntentPhase = 'none' | 'candidate' | 'armed';
@@ -24,6 +30,7 @@ export type TaskDropSurfaceKind =
   | 'root-drop'
   | 'checklist-drop'
   | 'workbench-unplaced-row'
+  | 'workbench-unplaced-lane'
   | 'workbench-placed-lane';
 
 export interface TaskDragSource {
@@ -38,6 +45,7 @@ export interface TaskDragIndicatorRect {
   left: number;
   top: number;
   width: number;
+  height?: number;
 }
 
 export interface TaskDragOriginFieldRect extends TaskDragIndicatorRect {
@@ -74,6 +82,7 @@ export interface TaskDragObservation {
   action: MobileTaskAction | null;
   dropPosition: MobileTaskDropPosition | null;
   indicatorRect: TaskDragIndicatorRect | null;
+  indicatorAxis: TaskDragIndicatorAxis | null;
   originFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;
   pendingTargetId: string | null;
@@ -111,6 +120,7 @@ export interface TaskDragSessionState {
   targetKind: TaskDragTargetKind;
   dropPosition: MobileTaskDropPosition | null;
   dropIndicatorRect: TaskDragIndicatorRect | null;
+  dropIndicatorAxis: TaskDragIndicatorAxis | null;
   originFieldRect: TaskDragOriginFieldRect | null;
   sourceOriginFieldRect: TaskDragOriginFieldRect | null;
   lockedTargetRect: TaskDragTargetRect | null;

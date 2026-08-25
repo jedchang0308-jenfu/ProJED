@@ -17,6 +17,13 @@ import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
+import {
+  clampTaskDetailsModalSize,
+  getTaskDetailsModalDefaultSize,
+  getTaskDetailsModalMaximumSize,
+  getTaskDetailsModalMinimumSize,
+  type TaskDetailsModalViewport,
+} from './taskDetailsModalSizing';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -40,19 +47,14 @@ const formatTaskDateForMobile = (value: string) => (
 
 const SIZE_STORAGE_KEY = 'projed.taskDetailsModal.size.v4';
 
-const getDefaultModalSize = () => {
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1120;
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 720;
-  const maxWidth = viewportWidth * 0.94;
-  const maxHeight = viewportHeight * 0.9;
+const getCurrentViewport = (): TaskDetailsModalViewport => ({
+  width: typeof window !== 'undefined' ? window.innerWidth : 1120,
+  height: typeof window !== 'undefined' ? window.innerHeight : 720,
+});
 
-  return {
-    // 任務詳情需要同時容納日期、主責／協作與備註編輯；維持大型工作區，
-    // 避免在桌面 viewport 只得到窄欄並產生水平捲軸。
-    width: Math.min(Math.max(viewportWidth * 0.78, 1040), maxWidth),
-    height: Math.min(Math.max(viewportHeight * 0.84, 680), maxHeight),
-  };
-};
+const getDefaultModalSize = () => getTaskDetailsModalDefaultSize(getCurrentViewport());
+const getMinimumModalSize = () => getTaskDetailsModalMinimumSize(getCurrentViewport());
+const getMaximumModalSize = () => getTaskDetailsModalMaximumSize(getCurrentViewport());
 
 const readSavedSize = () => {
   const defaultSize = getDefaultModalSize();
@@ -66,20 +68,14 @@ const readSavedSize = () => {
     const parsed = JSON.parse(saved);
     const savedWidth = Number(parsed.width);
     const savedHeight = Number(parsed.height);
-    // 不接受曾被縮到過小的尺寸，避免視窗在下一次開啟時持續變小。
-    if (
-      !Number.isFinite(savedWidth)
-      || !Number.isFinite(savedHeight)
-      || savedWidth < defaultSize.width
-      || savedHeight < defaultSize.height
-    ) {
+    if (!Number.isFinite(savedWidth) || !Number.isFinite(savedHeight)) {
       return defaultSize;
     }
 
-    return {
-      width: Math.min(savedWidth, window.innerWidth * 0.94),
-      height: Math.min(savedHeight, window.innerHeight * 0.9),
-    };
+    return clampTaskDetailsModalSize(
+      { width: savedWidth, height: savedHeight },
+      getCurrentViewport(),
+    );
   } catch {
     return defaultSize;
   }
@@ -131,7 +127,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
   const setPendingTitleEditNodeId = useBoardStore((state) => state.setPendingTitleEditNodeId);
   const [size, setSize] = React.useState(readSavedSize);
-  const [minimumModalSize, setMinimumModalSize] = React.useState(getDefaultModalSize);
+  const [minimumModalSize, setMinimumModalSize] = React.useState(getMinimumModalSize);
+  const [maximumModalSize, setMaximumModalSize] = React.useState(getMaximumModalSize);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [durationDraft, setDurationDraft] = React.useState<string | null>(null);
@@ -487,12 +484,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   React.useEffect(() => {
     const handleViewportResize = () => {
-      const nextMinimum = getDefaultModalSize();
+      const viewport = getCurrentViewport();
+      const nextMinimum = getTaskDetailsModalMinimumSize(viewport);
       setMinimumModalSize(nextMinimum);
-      setSize((current) => ({
-        width: Math.min(Math.max(current.width, nextMinimum.width), window.innerWidth * 0.94),
-        height: Math.min(Math.max(current.height, nextMinimum.height), window.innerHeight * 0.9),
-      }));
+      setMaximumModalSize(getTaskDetailsModalMaximumSize(viewport));
+      setSize((current) => clampTaskDetailsModalSize(current, viewport));
     };
 
     window.addEventListener('resize', handleViewportResize);
@@ -743,12 +739,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       <div
         ref={modalRef}
         data-task-details-dialog="true"
-        className="flex max-h-[90vh] max-w-[94vw] min-h-[420px] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+        className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
         style={{
           width: size.width,
           height: size.height,
           minWidth: minimumModalSize.width,
           minHeight: minimumModalSize.height,
+          maxWidth: maximumModalSize.width,
+          maxHeight: maximumModalSize.height,
           resize: 'both',
         }}
         onMouseDown={(event) => event.stopPropagation()}

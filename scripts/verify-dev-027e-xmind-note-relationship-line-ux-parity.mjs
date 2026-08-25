@@ -102,13 +102,18 @@ assert(
 );
 
 assert(
-  'Selected relationships keep endpoints while omitting redlined Bezier control visuals',
+  'Selected relationships keep endpoints and restore XMind-like direction controls without the extra center guide',
     mindMapView.includes('startRelationshipPointerDrag') &&
     mindMapView.includes("handle: RelationshipPointerDragState['handle']") &&
     mindMapView.includes('const handle = relationshipPointerDrag.handle;') &&
     relationshipInteraction.includes('data-mindmap-note-relationship-endpoint="from"') &&
     relationshipInteraction.includes('data-mindmap-note-relationship-endpoint="to"') &&
     relationshipInteraction.includes('rounded-full border-2 border-sky-500') &&
+    relationshipOverlay.includes('data-mindmap-note-relationship-direction-arm="from"') &&
+    relationshipOverlay.includes('data-mindmap-note-relationship-direction-arm="to"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-direction-joystick="from"') &&
+    relationshipInteraction.includes('data-mindmap-note-relationship-direction-joystick="to"') &&
+    !relationshipOverlay.includes('data-mindmap-note-relationship-control-guide') &&
     !relationshipOverlay.includes('data-mindmap-note-relationship-control-arm=') &&
     !relationshipOverlay.includes('data-mindmap-note-relationship-svg-control-point=') &&
     !relationshipInteraction.includes('data-mindmap-note-relationship-control-point=') &&
@@ -177,8 +182,9 @@ assert(
     browserVerifier.includes('clicking the line body should select the relationship') &&
     browserVerifier.includes('relationship style panel should be visible') &&
     browserVerifier.includes('relationship style controls should render as a right drawer instead of a floating popover') &&
-    browserVerifier.includes('selected relationship should omit redlined control arms, guides, and square points') &&
-    browserVerifier.includes('editing a relationship label should not restore redlined control elements') &&
+    browserVerifier.includes('selected relationship should omit the extra center guide and legacy duplicate controls') &&
+    browserVerifier.includes('selected relationship should restore two XMind-like direction controls') &&
+    browserVerifier.includes('editing a relationship label should retain the two direction joysticks') &&
     browserVerifier.includes('dragging endpoint to another task should reconnect the note relationship') &&
     browserVerifier.includes('Ctrl+Shift+R should start note relationship mode') &&
     browserVerifier.includes('right-clicking a task should open the task menu and should not start note relationship mode') &&

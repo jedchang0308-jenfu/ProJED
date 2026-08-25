@@ -33,7 +33,7 @@ const toTaskNode = (row: TaskWorkbenchUnplacedItemRow): TaskNode | null => {
     id: row.id,
     workspaceId: row.workspace_id,
     boardId: UNPLACED_BOARD_ID,
-    parentId: null,
+    parentId: typeof task.parentId === 'string' && task.parentId.trim() ? task.parentId : null,
     order: row.sort_order,
   };
 };

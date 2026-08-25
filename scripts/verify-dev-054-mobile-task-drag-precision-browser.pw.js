@@ -78,7 +78,7 @@ async (page) => {
     await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
-    const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
+    const sidebar = page.locator('[data-sidebar-inline="true"]').first();
     if (await sidebar.isVisible().catch(() => false)) {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(100);
@@ -178,7 +178,18 @@ async (page) => {
 
   const readNode = async (nodeId) => page.evaluate((id) => {
     const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
-    return nodes[id] || null;
+    if (nodes[id]) return nodes[id];
+    const accountId = localStorage.getItem('projed-local-test.selected-account');
+    const unplacedKeys = [
+      'projed-task-workbench-unplaced-tasks:v1',
+      accountId ? `projed-task-workbench-unplaced-tasks:v1:account:${encodeURIComponent(accountId)}` : null,
+    ].filter(Boolean);
+    for (const key of unplacedKeys) {
+      const tasks = JSON.parse(localStorage.getItem(key) || '[]');
+      const task = Array.isArray(tasks) ? tasks.find((item) => item?.id === id) : null;
+      if (task) return task;
+    }
+    return null;
   }, nodeId);
 
   const runCase = async (id, scenario, operation) => {
@@ -200,8 +211,10 @@ async (page) => {
     await openApp();
     const menuButton = page.getByRole('button', { name: '展開工作區選單' }).first();
     await nativeTouch(menuButton);
-    const sidebar = page.locator('[data-mobile-sidebar-overlay="true"]').first();
+    const sidebar = page.locator('[data-sidebar-inline="true"]').first();
     await sidebar.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.locator('[data-sidebar-overlay="true"], [data-sidebar-backdrop="true"]').count() === 0,
+      'mobile Sidebar must use the shared inline component without overlay or backdrop');
     await page.keyboard.press('Escape');
     await sidebar.waitFor({ state: 'detached', timeout: 3000 }).catch(() => undefined);
 
@@ -209,6 +222,8 @@ async (page) => {
     await nativeTouch(workbenchButton);
     const panel = page.locator('[data-task-workbench-panel="true"]').first();
     await panel.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.locator('[data-task-workbench-overlay="true"], [data-task-workbench-backdrop="true"]').count() === 0,
+      'mobile Workbench must use the shared inline component without overlay or backdrop');
     const screenshotPath = `${screenshotBase}-B01-native-topbar-touch.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     return { menuOpened: true, workbenchOpened: true, screenshotPath };
@@ -239,10 +254,10 @@ async (page) => {
     return { nodeId, beforeStatus: before.status, afterStatus: after.status, completions: completions.length, screenshotPath };
   });
 
-  await runCase('QA-054-R03', 'non-center raw finger point selects canonical same-parent order while preview remains finger-coupled', async () => {
+  await runCase('QA-054-R03', 'non-center raw finger point selects the explicit same-parent boundary while preview remains finger-coupled', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
-    const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
+    const target = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
     const sourceSurface = source.locator(':scope > [data-task-surface-source="true"]');
     const targetSurface = target.locator(':scope > [data-task-surface-source="true"]');
     const sourceId = await source.getAttribute('data-task-id');
@@ -272,16 +287,16 @@ async (page) => {
         dropPosition: indicator.getAttribute('data-mobile-drop-position'),
       };
     }, { rawY: rawPoint.y });
-    assert(geometry.targetId === targetId && geometry.dropPosition === 'after', 'mobile target must use canonical desktop same-parent moving-down intent', { sourceId, targetId, geometry });
+    assert(geometry.targetId === targetId && geometry.dropPosition === 'before', 'mobile target must preserve the explicit boundary selected by the finger', { sourceId, targetId, geometry });
     assert(geometry.previewAnchor === 'finger'
-      && Math.abs(geometry.fingerClearance - 12) <= 1
+      && Math.abs(geometry.fingerClearance - 16) <= 1
       && geometry.indicatorZ > geometry.previewZ,
     'a valid target must not pull the preview away from the finger', geometry);
     await held.end();
     const afterSource = await readNode(sourceId);
     const afterTarget = await readNode(targetId);
-    assert(afterSource.parentId === afterTarget.parentId && afterSource.order > afterTarget.order,
-      'release commit must match the visible after indicator', { afterSource, afterTarget });
+    assert(afterSource.parentId === afterTarget.parentId && afterSource.order < afterTarget.order,
+      'release commit must match the visible before indicator', { afterSource, afterTarget });
     return { sourceId, targetId, geometry, afterSourceOrder: afterSource.order, afterTargetOrder: afterTarget.order };
   });
 
@@ -364,7 +379,7 @@ async (page) => {
       'fixture must start with the checklist source below the target', { beforeSource, beforeTarget });
 
     const sourcePoint = await visiblePointFor(source, 0.5, 0.5);
-    const targetPoint = await visiblePointFor(target, 0.08, 0.5);
+    const targetPoint = await visiblePointFor(target, 0.08, 0.12);
     const held = await startHeldTouchAtPoint(sourcePoint);
     await held.moveTo({ x: targetPoint.x, y: targetPoint.y });
     const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
@@ -424,11 +439,11 @@ async (page) => {
     return { sourceId, targetId, geometry, screenshotPath };
   });
 
-  await runCase('QA-054-R06', 'rapid multi-row movement cannot retain a stale indicator or use a tall card outer rect', async () => {
+  await runCase('QA-054-R06', 'rapid multi-row movement cannot retain a stale indicator or use a title-only boundary', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id="qc-card-4"]');
     const firstTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-1"]');
-    const farTarget = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
+    const farTarget = page.locator('.kanban-task-card[data-task-id="qc-card-10"]');
     const firstTargetId = await firstTarget.getAttribute('data-task-id');
     const farTargetId = await farTarget.getAttribute('data-task-id');
     const sourceId = await source.getAttribute('data-task-id');
@@ -457,9 +472,7 @@ async (page) => {
         ? document.querySelector(`[data-mobile-drop-target][data-task-id="${indicatorTargetId}"]`)
         : null;
       const selectedRect = selectedTarget?.getBoundingClientRect();
-      const selectedSourceRect = selectedTarget?.matches('[data-task-surface-source="true"]')
-        ? selectedTarget.getBoundingClientRect()
-        : selectedTarget?.querySelector('[data-task-surface-source="true"]')?.getBoundingClientRect();
+      const selectedScopeRect = selectedTarget?.closest('[data-task-surface-scope]')?.getBoundingClientRect();
       const distanceToSelectedRect = selectedRect
         ? Math.hypot(
           Math.max(selectedRect.left - x, 0, x - selectedRect.right),
@@ -479,7 +492,7 @@ async (page) => {
         fingerClearance: previewRect ? y - previewRect.bottom : null,
         childIntentPhase: childPreview?.getAttribute('data-task-child-drop-phase') || 'none',
         indicatorY,
-        selectedSourceBottom: selectedSourceRect?.bottom ?? null,
+        selectedScopeTop: selectedScopeRect?.top ?? null,
         debug: (window.__projedMobileTaskActionDebug || []).slice(-12),
       };
     }, { x: farPoint.x, y: farPoint.y, firstTargetId, farTargetId });
@@ -494,15 +507,15 @@ async (page) => {
       && Math.abs(handover.fingerClearance - 16) <= 1,
     'a tall target must not pull the preview away from the finger', handover);
     assert(handover.indicatorY !== null
-      && handover.selectedSourceBottom !== null
-      && Math.abs(handover.indicatorY - handover.selectedSourceBottom) <= 2,
-    'a tall card indicator must use the bounded source surface rather than the neutral outer scope', handover);
+      && handover.selectedScopeTop !== null
+      && Math.abs(handover.indicatorY - handover.selectedScopeTop) <= 2,
+    'an expanded card indicator must align to the complete same-level ordering scope', handover);
     const screenshotPath = `${screenshotBase}-B06-no-distant-stale-indicator.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
     await held.end();
     const afterSource = await readNode(sourceId);
     const afterTarget = await readNode(farTargetId);
-    assert(afterSource.parentId === afterTarget.parentId && afterSource.order > afterTarget.order,
+    assert(afterSource.parentId === afterTarget.parentId && afterSource.order < afterTarget.order,
       'release must commit the far target shown by the indicator', { afterSource, afterTarget });
     return { sourceId, firstTargetId, farTargetId, handover, screenshotPath };
   });
@@ -510,7 +523,7 @@ async (page) => {
   await runCase('QA-054-R07', 'leaving a target for the invalid screen edge produces a zero-write release', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id]').first();
-    const target = page.locator('.kanban-task-card[data-task-id]').nth(1);
+    const target = page.locator('.kanban-task-card[data-task-id="qc-card-7"]');
     const before = await page.evaluate(() => localStorage.getItem('projed-local-test.nodes'));
     const held = await startHeldTouch(source.locator(':scope > [data-task-surface-source="true"]'));
     const targetPoint = await pointFor(target.locator(':scope > [data-task-surface-source="true"]'), 0.08, 0.5);
@@ -898,18 +911,34 @@ async (page) => {
     return { measurements };
   });
 
-  await runCase('QA-054-R15', 'Workbench unplaced rows suppress selection without disabling native pan and placed rows stay non-draggable', async () => {
+  await runCase('QA-054-R15', 'Workbench unplaced rows drag into the inline board while placed rows stay non-draggable', async () => {
     await openApp();
     await nativeTouch(page.locator('[data-mobile-task-workbench-nav-entry="true"]').first());
     const panel = page.locator('[data-task-workbench-panel="true"]').first();
     await panel.waitFor({ state: 'visible', timeout: 5000 });
+    assert(await page.locator('[data-task-workbench-overlay="true"], [data-task-workbench-backdrop="true"]').count() === 0,
+      'mobile Workbench must use the shared inline component without overlay or backdrop');
+    const panelBox = await panel.boundingBox();
+    const boardBox = await page.locator('[data-mobile-pan-surface="board"]').boundingBox();
+    assert(panelBox && boardBox && Math.abs(boardBox.x - (panelBox.x + panelBox.width)) <= 2,
+      'Workbench and board must be adjacent inline regions before cross-panel drag', { panelBox, boardBox });
+    const priorUnplacedIds = await page.locator('[data-task-workbench-unplaced-task-card="true"][data-task-id]')
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute('data-task-id')).filter(Boolean));
     await nativeTouch(page.locator('[data-task-workbench-unclassified-modal-add="true"]').first());
     const taskDetails = page.locator('[data-task-details-modal="true"]').first();
     await taskDetails.waitFor({ state: 'visible', timeout: 5000 });
     await page.locator('[data-task-details-modal="true"] [aria-label="關閉任務詳情"]').click();
     await taskDetails.waitFor({ state: 'detached', timeout: 5000 });
-    const unplaced = page.locator('[data-task-workbench-unplaced-task-card="true"]').first();
+    const unplacedCards = page.locator('[data-task-workbench-unplaced-task-card="true"][data-task-id]');
+    await unplacedCards.first().waitFor({ state: 'visible', timeout: 5000 });
+    const sourceId = await unplacedCards.evaluateAll((elements, existingIds) => (
+      elements.map((element) => element.getAttribute('data-task-id')).find((id) => id && !existingIds.includes(id)) || null
+    ), priorUnplacedIds);
+    assert(sourceId, 'newly created unplaced task must be identifiable', { priorUnplacedIds });
+    const unplaced = page.locator(`[data-task-workbench-unplaced-task-card="true"][data-task-id="${sourceId}"]`).first();
     await unplaced.waitFor({ state: 'visible', timeout: 5000 });
+    const beforeNode = await readNode(sourceId);
+    assert(beforeNode?.boardId === '__task_workbench_unplaced__', 'drag source must start in the unplaced lane', { sourceId, beforeNode });
     const unplacedStyle = await unplaced.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -924,12 +953,70 @@ async (page) => {
       && unplacedStyle.webkitUserSelect === 'none'
       && unplacedStyle.touchAction !== 'none',
     'unplaced row must block selection while preserving Workbench native pan', unplacedStyle);
+
+    const target = await page.evaluate(() => {
+      const board = document.querySelector('[data-mobile-pan-surface="board"]');
+      const panel = document.querySelector('[data-task-workbench-inline="true"]');
+      const boardRect = board?.getBoundingClientRect();
+      const panelRect = panel?.getBoundingClientRect();
+      if (!boardRect || !panelRect) return null;
+      const candidates = Array.from(document.querySelectorAll('.kanban-task-card > [data-mobile-drop-target][data-task-id]'));
+      for (const element of candidates) {
+        const rect = element.getBoundingClientRect();
+        const left = Math.max(rect.left, boardRect.left, panelRect.right, 0);
+        const right = Math.min(rect.right, boardRect.right, window.innerWidth);
+        const top = Math.max(rect.top, 48);
+        const bottom = Math.min(rect.bottom, window.innerHeight - 8);
+        if (right - left < 10 || bottom - top < 14) continue;
+        return {
+          id: element.getAttribute('data-task-id'),
+          surfaceKind: element.getAttribute('data-task-drop-surface-kind'),
+          x: Math.round(left + Math.min(12, (right - left) / 2)),
+          y: Math.round(top + (bottom - top) / 2),
+          rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+          boardRect: { left: boardRect.left, right: boardRect.right },
+          panelRight: panelRect.right,
+        };
+      }
+      return null;
+    });
+    assert(target?.id && target.surfaceKind === 'kanban-card', 'visible board strip must expose a direct card drop target', { target, panelBox, boardBox });
+    const targetNode = await readNode(target.id);
+    assert(targetNode?.boardId && targetNode.boardId !== '__task_workbench_unplaced__', 'drop target must belong to the active board', { target, targetNode });
+
     const heldUnplaced = await startHeldTouch(unplaced);
     const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
     await rail.waitFor({ state: 'visible', timeout: 5000 });
     assert(await page.evaluate(() => String(window.getSelection() || '')) === '', 'Workbench long press must not create native text selection');
+    await heldUnplaced.moveTo({ x: target.x, y: target.y });
+    await page.waitForFunction(({ targetId }) => (
+      document.querySelector('[data-mobile-drop-indicator="true"]')?.getAttribute('data-mobile-drop-target') === targetId
+    ), { targetId: target.id }, { timeout: 5000 });
+    const hit = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y);
+      return {
+        targetId: element?.closest?.('[data-mobile-drop-target]')?.getAttribute('data-mobile-drop-target') || null,
+        insideBoard: Boolean(element?.closest?.('[data-mobile-pan-surface="board"]')),
+        insideWorkbench: Boolean(element?.closest?.('[data-task-workbench-panel="true"]')),
+      };
+    }, { x: target.x, y: target.y });
+    assert(hit.targetId === target.id && hit.insideBoard && !hit.insideWorkbench,
+      'finger point must hit the inline board target instead of Workbench coverage', { target, hit });
+    const dragScreenshotPath = `${screenshotBase}-R15-workbench-to-inline-board.png`;
+    await page.screenshot({ path: dragScreenshotPath, fullPage: false });
     await heldUnplaced.end();
-    await page.keyboard.press('Escape');
+    await page.waitForFunction(({ nodeId }) => {
+      const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+      return nodes[nodeId]?.boardId && nodes[nodeId].boardId !== '__task_workbench_unplaced__';
+    }, { nodeId: sourceId }, { timeout: 5000 });
+    const afterNode = await readNode(sourceId);
+    const debug = await page.evaluate(() => window.__projedMobileTaskActionDebug || []);
+    const completions = debug.filter((entry) => entry.type === 'terminal:complete' && entry.nodeId === sourceId);
+    assert(afterNode?.boardId === targetNode.boardId && completions.length === 1
+      && completions[0].status === 'committed' && completions[0].reason === 'task-position-updated',
+    'unplaced task must commit exactly once into the board selected by the visible indicator', {
+      sourceId, beforeNode, afterNode, targetNode, completions,
+    });
 
     if (!await panel.isVisible().catch(() => false)) {
       await nativeTouch(page.locator('[data-mobile-task-workbench-nav-entry="true"]').first());
@@ -944,7 +1031,17 @@ async (page) => {
     assert(placedRailCount === 0, 'placed row long press must not enter action rail', { placedRailCount });
     await heldPlaced.end();
     await page.keyboard.press('Escape');
-    return { unplacedStyle, placedMarker, placedRailCount };
+    return {
+      sourceId,
+      target,
+      beforeBoardId: beforeNode.boardId,
+      afterBoardId: afterNode.boardId,
+      completions: completions.length,
+      unplacedStyle,
+      placedMarker,
+      placedRailCount,
+      dragScreenshotPath,
+    };
   });
 
   const unexpectedDiagnostics = diagnostics.filter((message) => !/favicon|ResizeObserver/i.test(message));

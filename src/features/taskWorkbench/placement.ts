@@ -1,8 +1,12 @@
 import type { InboxItem, TaskNode } from '../../types';
 import { isSupabaseBackend } from '../../services/dataBackend';
 import { supabaseTaskWorkbenchUnplacedService } from '../../services/supabase/taskWorkbenchUnplacedService';
+import {
+  normalizeTaskWorkbenchUnplacedTask,
+  TASK_WORKBENCH_UNPLACED_BOARD_ID,
+} from './placementModel';
 
-export const TASK_WORKBENCH_UNPLACED_BOARD_ID = '__task_workbench_unplaced__';
+export { normalizeTaskWorkbenchUnplacedTask, TASK_WORKBENCH_UNPLACED_BOARD_ID } from './placementModel';
 export const TASK_WORKBENCH_UNPLACED_STORAGE_KEY = 'projed-task-workbench-unplaced-tasks:v1';
 export const TASK_WORKBENCH_UNPLACED_ACCOUNT_STORAGE_KEY = `${TASK_WORKBENCH_UNPLACED_STORAGE_KEY}:account`;
 
@@ -16,13 +20,6 @@ export const isTaskWorkbenchUnplacedTaskId = (taskId: string | null | undefined)
 
 export const isTaskWorkbenchUnplacedTask = (task: Pick<TaskNode, 'boardId'> | null | undefined) =>
   task?.boardId === TASK_WORKBENCH_UNPLACED_BOARD_ID;
-
-export const normalizeTaskWorkbenchUnplacedTask = (task: TaskNode): TaskNode => ({
-  ...task,
-  boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID,
-  parentId: null,
-  nodeType: task.nodeType || 'task',
-});
 
 const parseStoredTaskWorkbenchUnplacedTasks = (stored: string | null): TaskNode[] => {
   if (!stored) return [];

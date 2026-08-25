@@ -65,6 +65,7 @@ import {
   type MindMapNoteRelationship,
   type MindMapRelationshipDraftPreview,
   type MindMapRelationshipPath,
+  type MindMapRelationshipPoint,
   type MindMapRelationshipStyle,
 } from './mindMapGeometry';
 import {
@@ -185,6 +186,7 @@ interface RelationshipPointerDragState {
   relationshipId: string;
   handle: MindMapRelationshipPointerHandle;
   initialRelationship: MindMapNoteRelationship;
+  fallbackControlPoints: readonly [MindMapRelationshipPoint, MindMapRelationshipPoint];
 }
 
 const cloneMindMapRelationship = (relationship: MindMapNoteRelationship): MindMapNoteRelationship => ({
@@ -1385,8 +1387,9 @@ const MindMapView: React.FC = () => {
       fromId,
       rect,
       getWorldPointFromClient(clientX, clientY, mapper),
+      getNodeSide(fromId),
     ));
-  }, [clearRelationshipDraftPreview, getCurrentCoordinateMapper, getLocalRect, relationshipDraft]);
+  }, [clearRelationshipDraftPreview, getCurrentCoordinateMapper, getLocalRect, getNodeSide, relationshipDraft]);
 
   React.useEffect(() => {
     if (!relationshipToolActive || !relationshipDraft) {
@@ -1416,14 +1419,23 @@ const MindMapView: React.FC = () => {
     if (!isPrimaryPointerActivation(event)) return;
     if (!canEditTask) return;
     const initialRelationship = noteRelationships.find(item => item.id === relationshipId);
-    if (!initialRelationship) return;
+    const relationshipPath = relationshipPaths.find(path => path.id === relationshipId);
+    if (!initialRelationship || !relationshipPath) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     selectRelationship(relationshipId);
     clearRelationshipLabelEdit();
-    setRelationshipPointerDrag({ relationshipId, handle, initialRelationship: cloneMindMapRelationship(initialRelationship) });
-  }, [canEditTask, clearRelationshipLabelEdit, noteRelationships, selectRelationship]);
+    setRelationshipPointerDrag({
+      relationshipId,
+      handle,
+      initialRelationship: cloneMindMapRelationship(initialRelationship),
+      fallbackControlPoints: [
+        { x: relationshipPath.c1X, y: relationshipPath.c1Y },
+        { x: relationshipPath.c2X, y: relationshipPath.c2Y },
+      ],
+    });
+  }, [canEditTask, clearRelationshipLabelEdit, noteRelationships, relationshipPaths, selectRelationship]);
 
   React.useEffect(() => {
     if (!relationshipPointerDrag) return undefined;
@@ -1441,6 +1453,7 @@ const MindMapView: React.FC = () => {
           relationshipPointerDrag.relationshipId,
           handle,
           point,
+          { fallbackControlPoints: relationshipPointerDrag.fallbackControlPoints },
         ));
         return;
       }

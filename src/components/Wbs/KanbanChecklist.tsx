@@ -171,7 +171,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        '--kanban-checklist-child-depth': depth + 1,
+      } as React.CSSProperties}
       data-task-surface-scope="true"
       data-desktop-task-hover-scope="true"
       data-task-child-drop-target="true"
@@ -180,8 +183,16 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       data-task-hover-scope-kind="checklist"
       data-task-hover-scope-source-id={child.id}
       data-task-hover-has-descendants={hasGrandchildren ? 'true' : undefined}
-      className={isDragging ? 'pointer-events-none' : undefined}
+      className={`relative ${isDragging ? 'pointer-events-none' : ''}`}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 h-px w-px opacity-0"
+        data-task-direct-child-title-anchor="true"
+        style={{
+          left: 'calc((var(--kanban-checklist-child-depth, 1) * var(--task-hierarchy-indent, 6px)) + var(--kanban-checklist-base, 4px))',
+        }}
+      />
       {/* 單一待辦項目列 — root surface 承接拖曳，互動子元件由 sensor 層防誤觸 */}
       <div
         {...dragSurfaceBindings}
@@ -235,17 +246,10 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-touch-tap-guard="true"
         data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
         data-kanban-checklist-row-visual="flat-unlined"
+        data-task-hierarchy-depth={depth}
         data-task-hierarchy-level="L3+"
         data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       >
-        {isRecordCaptureMode ? (
-          <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-            isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
-          }`}>
-            {isRecordSelected ? <Check size={9} /> : null}
-          </span>
-        ) : null}
-
         <span
           className={`task-title-text relative min-w-0 flex-1 rounded-sm pr-2 text-xs font-medium leading-tight transition-[color,background-color,box-shadow] ${
             isRecentlyChildDropped ? 'bg-primary/10 ring-2 ring-primary/40' : ''
@@ -268,6 +272,17 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             {child.title || '未命名任務'}
           </span>
         </span>
+
+        {isRecordCaptureMode ? (
+          <span
+            className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+              isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
+            }`}
+            data-task-record-capture-checkbox="true"
+          >
+            {isRecordSelected ? <Check size={9} /> : null}
+          </span>
+        ) : null}
 
         {!isDragPlaceholder && showTags && nodeTags.length > 0 ? (
           <KanbanTagSticker tags={nodeTags} compact />

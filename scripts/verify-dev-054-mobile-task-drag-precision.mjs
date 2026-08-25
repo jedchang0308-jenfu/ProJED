@@ -50,16 +50,25 @@ check('task intent and action hit testing use the raw finger point',
   source.target.indexOf("closest('[data-mobile-task-action]')") < source.target.indexOf('const intentPoint = getTaskIntentPoint(point)')
   && source.target.includes('y: rawPoint.y'));
 
-check('mobile and desktop commit use the same canonical resolver',
-  (source.commit.match(/resolveTaskDropIntent\(/g) || []).length >= 2
-  && source.intent.includes('export const resolveTaskDropIntent')
+check('mobile and desktop preview and commit use the same canonical outcome resolver',
+  source.target.includes('resolveTaskDropOutcome({')
+  && source.originPreview.includes('resolveTaskDropOutcome({')
+  && source.commit.includes('resolveTaskDropOutcome({')
+  && source.intent.includes('export const resolveTaskDropOutcome')
   && !source.target.includes('rect.top + rect.height / 2'));
 
 check('explicit target surface kinds exist for card, checklist, and column',
   source.card.includes('data-task-drop-surface-kind="kanban-card"')
   && source.card.includes('data-mobile-task-card-primary="true"')
   && source.checklist.includes('data-task-drop-surface-kind="checklist-row"')
-  && source.column.includes('data-task-drop-surface-kind="column-header"'));
+  && source.column.includes('data-task-drop-surface-kind="column-header"')
+  && /data-mobile-pan-surface="kanban-column"[\s\S]*?data-mobile-drop-target=\{nodeId\}[\s\S]*?data-task-drop-surface-kind="column-drop"/.test(source.column));
+
+check('mobile container surfaces own their geometry instead of borrowing the first descendant task',
+  source.target.includes("surfaceKind === 'column-drop'")
+  && source.target.includes("surfaceKind === 'root-drop'")
+  && source.target.includes("surfaceKind === 'checklist-drop'")
+  && source.target.includes('containerOwnsGeometry'));
 
 check('mobile hit testing is exact, title-child-first, innermost-first, and blocks ancestor fall-through',
   source.target.includes('document.elementFromPoint(point.x, point.y)')
@@ -104,6 +113,14 @@ check('Workbench keeps native pan while only eligible unplaced rows receive touc
   && source.workbench.includes('mobileActionEnabled: false')
   && !source.css.includes('[data-task-touch-gesture-surface="true"] {\n  touch-action: none;'));
 
+const workbenchChildGuard = source.target.indexOf("if (state.source.kind !== 'workbench-unplaced-row')");
+const invalidChildZoneReturn = source.target.indexOf('if (childZone) return observation;', workbenchChildGuard);
+const workbenchDirectCandidate = source.target.indexOf('const directCandidate = collectDirectCandidates(intentPoint, state)[0] || null;', invalidChildZoneReturn);
+check('Workbench unplaced rows can resolve direct board targets without enabling child-drop intent',
+  workbenchChildGuard >= 0
+  && invalidChildZoneReturn > workbenchChildGuard
+  && workbenchDirectCandidate > invalidChildZoneReturn);
+
 check('release cannot fall back to a stale previous target',
   source.session.includes('withoutTarget(latestObservation)')
   && !source.session.includes("latestObservation.targetKind === 'none'\n      ? stateToObservation"));
@@ -136,6 +153,8 @@ check('mobile source origin is a shared blue no-op title field outside normal fl
   'resolveMobileTaskOriginFieldRect',
   'findMobileSourcePlaceholder',
   'originFieldRect,',
+  "candidate.outcomeKind === 'move' ? candidate.indicatorRect : null",
+  "candidate.outcomeKind === 'origin' ? candidate.originFieldRect : null",
 ]) && hasAll(source.presenter, [
   'data-mobile-drop-origin="true"',
   'data-mobile-drop-noop="true"',
@@ -147,10 +166,10 @@ check('mobile source origin is a shared blue no-op title field outside normal fl
 ]) && source.originPreview.includes('export const resolveTaskOriginFieldRect'));
 
 check('browser verifier covers non-center raw-finger hit, single live indicator, pan ownership, boundary jitter, and deliberate handover', hasAll(source.browser, [
-  'non-center raw finger point selects canonical same-parent order',
+  'non-center raw finger point selects the explicit same-parent boundary',
   'adjacent checklist boundary jitter keeps one stable target',
   'mobile checklist drag exposes only the live target indicator',
-  'rapid multi-row movement cannot retain a stale indicator or use a tall card outer rect',
+  'rapid multi-row movement cannot retain a stale indicator or use a title-only boundary',
   'checklist source geometry cannot fall through to its expanded parent card',
   'a visible indicator must never remain on a target outside its retain region',
   'an invalid innermost source row must block fall-through to its ancestor card',
@@ -166,7 +185,7 @@ check('browser verifier covers non-center raw-finger hit, single live indicator,
   'every kanban task level owns native selection before long press activates',
   '500ms and 8px gesture boundaries separate tap pan and drag',
   'actual touch starts the dedicated drag session above the old 768px width gate',
-  'Workbench unplaced rows suppress selection without disabling native pan and placed rows stay non-draggable',
+  'Workbench unplaced rows drag into the inline board while placed rows stay non-draggable',
 ]));
 
 const placedStart = source.workbench.indexOf('const WorkbenchPlacedReadOnlyCard');
@@ -179,10 +198,11 @@ check('workbench placed row remains non-draggable',
   && placedSource.includes('canUseDragSurface={false}')
   && !placedSource.includes('useDraggable('));
 
-check('desktop approved presenter and collision path remain present', hasAll(source.board, [
+check('desktop presenter keeps its collision path while honoring the latest half-scale pointer attachment', hasAll(source.board, [
   '<DragOverlay dropAnimation={null}>{null}</DragOverlay>',
   'resolvePointerUpperRightOverlayPosition',
-  'pointer-events-none fixed z-[93] flex items-center gap-2 rounded-lg',
+  'pointer-events-none fixed z-[93] flex h-10 origin-top-left items-center gap-2 rounded-lg',
+  'data-task-drag-overlay-scale={DESKTOP_TASK_DRAG_OVERLAY_SCALE}',
   'collisionDetection={collisionDetection}',
 ]));
 

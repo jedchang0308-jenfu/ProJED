@@ -8,11 +8,13 @@ import { toast } from '../store/useToastStore';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
 import {
   clampWorkspaceSidebarWidth,
+  getSharedInlinePanelWidthStyle,
   MAX_WORKSPACE_SIDEBAR_WIDTH,
   MIN_WORKSPACE_SIDEBAR_WIDTH,
   readWorkspaceSidebarWidth,
   writeWorkspaceSidebarWidth,
 } from '../features/layout/preferences';
+import { readTaskWorkbenchPanelPrefs } from '../features/taskWorkbench/preferences';
 import {
   hydrateAccountLayoutPreferences,
   persistAccountLayoutPreferences,
@@ -313,8 +315,9 @@ const Sidebar = () => {
     }
   }, [addWorkspace, newWorkspaceTitle]);
 
+  const mobileSharedPanelWidth = readTaskWorkbenchPanelPrefs(accountId).width;
   const sidebarWidthStyle = isNarrowViewport
-    ? `min(${sidebarWidth}px, calc(100vw - 48px))`
+    ? getSharedInlinePanelWidthStyle(mobileSharedPanelWidth)
     : `${sidebarWidth}px`;
 
   const applySidebarWidth = (nextWidth: number, persist = false) => {
@@ -371,30 +374,12 @@ const Sidebar = () => {
   }
 
   return (
-    <>
-    {isNarrowViewport ? (
-      <button
-        type="button"
-        className="fixed bottom-0 right-0 top-10 z-40 bg-slate-900/20"
-        style={{ left: sidebarWidthStyle }}
-        onClick={() => setSidebarOpen(false)}
-        aria-label="關閉工作區選單遮罩"
-        data-sidebar-backdrop="true"
-        data-mobile-sidebar-backdrop="true"
-      />
-    ) : null}
     <aside
-      className={`flex-shrink-0 overflow-hidden bg-slate-50 ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'} ${
-        isNarrowViewport
-          ? 'fixed bottom-0 left-0 top-10 z-50 shadow-2xl'
-          : 'relative z-10 h-full shadow-[1px_0_0_rgba(15,23,42,0.03)]'
-      }`}
+      className={`relative z-10 h-full flex-shrink-0 overflow-hidden bg-slate-50 shadow-[1px_0_0_rgba(15,23,42,0.03)] ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'}`}
      style={{ width: sidebarWidthStyle }}
       data-sidebar-panel="expanded"
       data-layout-region="workspace-sidebar"
-      data-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
-      data-sidebar-inline={!isNarrowViewport ? 'true' : undefined}
-      data-mobile-sidebar-overlay={isNarrowViewport ? 'true' : undefined}
+      data-sidebar-inline="true"
      data-panel-previewed={previewedPanel === 'workspace-sidebar' ? 'workspace-sidebar' : undefined}
    >
       <div
@@ -686,7 +671,6 @@ const Sidebar = () => {
         </div>
       ) : null}
     </aside>
-    </>
   );
 };
 
