@@ -359,6 +359,25 @@ export type CalendarSubscriptionRow = {
   updated_at: string;
 };
 
+export type TaskWorkbenchPlacementOperationRow = {
+  owner_id: string;
+  operation_id: string;
+  direction: 'to_unplaced' | 'to_board';
+  root_task_id: string;
+  task_ids: Json;
+  source_workspace_id: string | null;
+  source_board_id: string | null;
+  target_workspace_id: string | null;
+  target_board_id: string | null;
+  status: 'pending' | 'committed' | 'failed';
+  error_code: string | null;
+  client_platform: string | null;
+  result: Json | null;
+  elapsed_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type TaskWorkbenchUnplacedItemRow = {
   owner_id: string;
   id: string;
@@ -395,6 +414,7 @@ export interface Database {
       external_rag_objects: Table<ExternalRagObjectRow>;
       calendar_subscriptions: Table<CalendarSubscriptionRow>;
       task_workbench_unplaced_items: Table<TaskWorkbenchUnplacedItemRow>;
+      task_workbench_placement_operations: Table<TaskWorkbenchPlacementOperationRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -501,6 +521,19 @@ export interface Database {
           audit_after_data?: Json | null;
         };
         Returns: string;
+      };
+      move_task_workbench_subtree: {
+        Args: {
+          p_operation_id: string;
+          p_direction: 'to_unplaced' | 'to_board';
+          p_root_task_id: string;
+          p_source_workspace_id: string | null;
+          p_source_board_id: string | null;
+          p_target_workspace_id: string | null;
+          p_target_board_id: string | null;
+          p_nodes: Json;
+        };
+        Returns: Json;
       };
     };
     Enums: {

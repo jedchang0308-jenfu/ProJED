@@ -1,8 +1,13 @@
 import type { TaskNode } from '../../types';
 import { isSupabaseConfigured, supabase } from './client';
-import type { Json, TaskWorkbenchUnplacedItemRow } from './database.types';
+import type {
+  Json,
+  TaskWorkbenchPlacementOperationRow,
+  TaskWorkbenchUnplacedItemRow,
+} from './database.types';
 
 const TABLE_NAME = 'task_workbench_unplaced_items' as const;
+const PLACEMENT_OPERATIONS_TABLE = 'task_workbench_placement_operations' as const;
 const UNPLACED_BOARD_ID = '__task_workbench_unplaced__';
 
 const requireSupabase = () => {
@@ -86,5 +91,114 @@ export const supabaseTaskWorkbenchUnplacedService = {
       throw new Error(`Remote unplaced-task table is not available yet: ${TABLE_NAME}`);
     }
     assertNoError(error);
+  },
+};
+
+export type TaskWorkbenchPlacementDirection = 'to_unplaced' | 'to_board';
+
+export type TaskWorkbenchPlacementOperationInput = {
+  operationId: string;
+  ownerId: string;
+  direction: TaskWorkbenchPlacementDirection;
+  rootTaskId: string;
+  taskIds: string[];
+  sourceWorkspaceId: string | null;
+  sourceBoardId: string | null;
+  targetWorkspaceId: string | null;
+  targetBoardId: string | null;
+  clientPlatform: string;
+};
+
+const getPlacementErrorCode = (error: unknown) => {
+  if (typeof error === 'object' && error) {
+    if ('code' in error && typeof error.code === 'string') return error.code.slice(0, 80);
+    if ('message' in error && typeof error.message === 'string') return error.message.slice(0, 80);
+  }
+  return String(error ?? 'unknown').slice(0, 80);
+};
+
+export const supabaseTaskWorkbenchPlacementService = {
+  begin: async (input: TaskWorkbenchPlacementOperationInput): Promise<void> => {
+    requireSupabase();
+    const payload = {
+      owner_id: input.ownerId,
+      operation_id: input.operationId,
+      direction: input.direction,
+      root_task_id: input.rootTaskId,
+      task_ids: input.taskIds as unknown as Json,
+      source_workspace_id: input.sourceWorkspaceId,
+      source_board_id: input.sourceBoardId,
+      target_workspace_id: input.targetWorkspaceId,
+      target_board_id: input.targetBoardId,
+      status: 'pending',
+      error_code: null,
+      client_platform: input.clientPlatform,
+      result: null,
+      elapsed_ms: null,
+    } satisfies Partial<TaskWorkbenchPlacementOperationRow>;
+    const { error } = await supabase
+      .from(PLACEMENT_OPERATIONS_TABLE)
+      .upsert(payload, {
+        onConflict: 'owner_id,operation_id',
+        ignoreDuplicates: true,
+      });
+    assertNoError(error);
+  },
+
+  commit: async (
+    input: TaskWorkbenchPlacementOperationInput,
+    nodes: TaskNode[],
+  ): Promise<Json> => {
+    requireSupabase();
+    const { data, error } = await supabase.rpc('move_task_workbench_subtree', {
+      p_operation_id: input.operationId,
+      p_direction: input.direction,
+      p_root_task_id: input.rootTaskId,
+      p_source_workspace_id: input.sourceWorkspaceId,
+      p_source_board_id: input.sourceBoardId,
+      p_target_workspace_id: input.targetWorkspaceId,
+      p_target_board_id: input.targetBoardId,
+      p_nodes: nodes as unknown as Json,
+    });
+    assertNoError(error);
+    if (!data || typeof data !== 'object') {
+      throw new Error('Supabase did not return a task placement result.');
+    }
+    return data;
+  },
+
+  read: async (
+    ownerId: string,
+    operationId: string,
+  ): Promise<TaskWorkbenchPlacementOperationRow | null> => {
+    requireSupabase();
+    const { data, error } = await supabase
+      .from(PLACEMENT_OPERATIONS_TABLE)
+      .select('*')
+      .eq('owner_id', ownerId)
+      .eq('operation_id', operationId)
+      .maybeSingle();
+    assertNoError(error);
+    return data;
+  },
+
+  fail: async (
+    ownerId: string,
+    operationId: string,
+    error: unknown,
+    elapsedMs: number,
+  ): Promise<void> => {
+    requireSupabase();
+    const { error: updateError } = await supabase
+      .from(PLACEMENT_OPERATIONS_TABLE)
+      .update({
+        status: 'failed',
+        error_code: getPlacementErrorCode(error),
+        elapsed_ms: Math.max(0, Math.round(elapsedMs)),
+      })
+      .eq('owner_id', ownerId)
+      .eq('operation_id', operationId)
+      .eq('status', 'pending');
+    assertNoError(updateError);
   },
 };

@@ -177,6 +177,7 @@ const BoardView = () => {
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
     const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);
+    const commitNodePlacementBatch = useWbsStore(s => s.commitNodePlacementBatch);
     const archiveNode = useWbsStore(s => s.archiveNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canCreateDependency } = useBoardPermissions();
@@ -214,6 +215,10 @@ const BoardView = () => {
         if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
         batchUpdateNodes(updates, options);
     }, [batchUpdateNodes]);
+    const commitNodePlacementBatchForDesktopTaskDrag: typeof commitNodePlacementBatch = React.useCallback(async (updates, options) => {
+        if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
+        await commitNodePlacementBatch(updates, options);
+    }, [commitNodePlacementBatch]);
     const recalculateAncestorStatusForDesktopTaskDrag: typeof recalculateAncestorStatus = React.useCallback((nodeId) => {
         if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.ancestorRecalculationCalls += 1;
         recalculateAncestorStatus(nodeId);
@@ -226,6 +231,10 @@ const BoardView = () => {
         if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
         batchUpdateNodes(updates, options);
     }, [batchUpdateNodes]);
+    const commitNodePlacementBatchForMobileTaskDrag: typeof commitNodePlacementBatch = React.useCallback(async (updates, options) => {
+        if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
+        await commitNodePlacementBatch(updates, options);
+    }, [commitNodePlacementBatch]);
     const recalculateAncestorStatusForMobileTaskDrag: typeof recalculateAncestorStatus = React.useCallback((nodeId) => {
         if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.ancestorRecalculationCalls += 1;
         recalculateAncestorStatus(nodeId);
@@ -489,6 +498,7 @@ const BoardView = () => {
         addNode,
         updateNode,
         batchUpdateNodes: batchUpdateNodesForMobileTaskDrag,
+        commitNodePlacementBatch: commitNodePlacementBatchForMobileTaskDrag,
         archiveNode,
         recalculateAncestorStatus: recalculateAncestorStatusForMobileTaskDrag,
         onSessionBegin: () => {
@@ -1448,7 +1458,7 @@ const BoardView = () => {
         updateDesktopDropPreview(preview);
     };
 
-    const handleDragEnd = (event: any) => {
+    const handleDragEnd = async (event: any) => {
         const wasCancelled = desktopDragCancelledRef.current;
         desktopDragCancelledRef.current = false;
         const { active, over } = event;
@@ -1591,7 +1601,7 @@ const BoardView = () => {
                     width: releaseChildTarget.previewRect.insertion.width,
                 },
             };
-            const result = commitDesktopTaskDrag({
+            const result = await commitDesktopTaskDrag({
                 activeData: active.data.current,
                 overData: {
                     type: 'wbs-task-title-child',
@@ -1608,6 +1618,7 @@ const BoardView = () => {
                     addNode,
                     updateNode,
                     batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
+                    commitNodePlacementBatch: commitNodePlacementBatchForDesktopTaskDrag,
                     archiveNode,
                     recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
                 },
@@ -1667,7 +1678,7 @@ const BoardView = () => {
             return;
         }
 
-        commitDesktopTaskDrag({
+        await commitDesktopTaskDrag({
             activeData: active.data.current,
             overData: effectiveOver.data.current,
             desktopPreview: isWorkbenchLane ? null : currentPreview,
@@ -1681,6 +1692,7 @@ const BoardView = () => {
                 addNode,
                 updateNode,
                 batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
+                commitNodePlacementBatch: commitNodePlacementBatchForDesktopTaskDrag,
                 archiveNode,
                 recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
             },

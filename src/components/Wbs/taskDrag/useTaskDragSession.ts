@@ -17,6 +17,7 @@ import {
   resolveTaskDragObservation,
 } from './taskDragTargetAdapter';
 import type {
+  TaskDragCommitResult,
   TaskDragObservation,
   TaskDragSessionState,
   TaskDragSourceKind,
@@ -93,7 +94,7 @@ const withoutTarget = (observation: TaskDragObservation): TaskDragObservation =>
 interface UseTaskDragSessionOptions extends TaskDragCommitDependencies {
   boardSurfaceRef: React.RefObject<HTMLElement | null>;
   onSessionBegin?: () => void;
-  onCommit?: (result: { status: 'committed' | 'no-op'; reason: string }, observation: TaskDragObservation) => void;
+  onCommit?: (result: TaskDragCommitResult, observation: TaskDragObservation) => void;
 }
 
 export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {

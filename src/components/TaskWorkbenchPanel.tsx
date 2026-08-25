@@ -30,6 +30,7 @@ import {
   MIN_TASK_WORKBENCH_WIDTH,
   type TaskWorkbenchPanelPrefs,
 } from '../features/taskWorkbench/preferences';
+import { TaskPlacementPendingIndicator } from './Wbs/taskDrag/TaskPlacementPendingIndicator';
 import {
   createNewUnplacedTaskNode,
   createUnplacedTaskNodeFromInboxItem,
@@ -211,6 +212,7 @@ interface WorkbenchTaskRowProps extends WorkbenchDragCardProps {
   draggableBindings?: Record<string, unknown>;
   gestureHandlers: ReturnType<typeof useTaskGestureSurface>['handlers'];
   touchGestureEnabled: boolean;
+  isPlacementPending?: boolean;
 }
 
 const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
@@ -224,6 +226,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   draggableBindings = {},
   gestureHandlers,
   touchGestureEnabled,
+  isPlacementPending = false,
 }) => {
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
@@ -294,6 +297,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-task-id={task.id}
       data-mobile-drop-target={task.id}
       data-task-drop-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
+      data-task-placement-pending={isPlacementPending ? 'true' : undefined}
     >
       {children}
     </div>
@@ -322,6 +326,9 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
         durationLocked={Boolean(task.isDurationLocked)}
         surface="workbench"
       />
+      {isPlacementPending ? (
+        <TaskPlacementPendingIndicator />
+      ) : null}
     </div>
   );
 
@@ -374,7 +381,7 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
   });
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `task-workbench-${surface}-${task.id}`,
-    disabled: !canMoveTask || taskGesture.mobileActionMode,
+    disabled: !canMoveTask || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
     data: {
       type: 'wbs-card',
       source: 'task-workbench',
@@ -385,7 +392,7 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
       title: task.title,
     },
   });
-  const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode;
+  const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode && !taskGesture.isPlacementPending;
 
   return (
     <WorkbenchTaskRow
@@ -400,6 +407,7 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
       draggableBindings={canUseDragSurface ? { ...attributes, ...listeners } : {}}
       gestureHandlers={taskGesture.handlers}
       touchGestureEnabled={taskGesture.touchGestureEnabled}
+      isPlacementPending={taskGesture.isPlacementPending}
     />
   );
 };

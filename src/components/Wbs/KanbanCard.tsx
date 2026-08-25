@@ -32,6 +32,7 @@ import {
   type TaskChildDropSuccessDetail,
 } from './taskDrag/taskChildDropFeedback';
 import { taskStatusTitleClass } from '../ui/taskStatusStyles';
+import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -121,7 +122,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
     isDragging,
   } = useSortable({
     id: nodeId,
-    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode,
+    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
     data: {
       type: 'wbs-card',
       nodeId,
@@ -159,7 +160,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       ?? (isDragging ? active?.rect.current.initial?.height : undefined),
   };
 
-  const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode
+  const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode || taskGesture.isPlacementPending
     ? {}
     : { ...attributes, ...listeners };
 
@@ -231,6 +232,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-kanban-card-visual="framed-elevated"
       data-task-hierarchy-level="L2"
       data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
+      data-task-placement-pending={taskGesture.isPlacementPending ? 'true' : undefined}
       className={`kanban-task-card relative mb-[6px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow ${
         isDragPlaceholder ? 'kanban-drag-origin-placeholder pointer-events-none !border-transparent bg-transparent shadow-none' : ''
       } ${
@@ -327,6 +329,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                   {node.title || '未命名任務'}
                 </span>
               </h4>
+              {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
               {showTags && nodeTags.length > 0 ? (
                 <KanbanTagSticker tags={nodeTags} />
               ) : null}

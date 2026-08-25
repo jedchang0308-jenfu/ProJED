@@ -18,7 +18,7 @@ export type TaskDragTargetKind =
   | 'workbench-placed-lane'
   | 'mobile-action'
   | 'none';
-export type TaskDragTerminalState = 'committed' | 'cancelled' | 'no-op';
+export type TaskDragTerminalState = 'committed' | 'cancelled' | 'no-op' | 'failed';
 export type TaskDragPhase = 'dragging' | 'armed';
 export type TaskChildIntentPhase = 'none' | 'candidate' | 'armed';
 export type TaskDropSurfaceKind =
@@ -137,6 +137,6 @@ export interface TaskDragSessionState {
 }
 
 export interface TaskDragCommitResult {
-  status: 'committed' | 'no-op';
+  status: 'committed' | 'no-op' | 'failed';
   reason: string;
 }

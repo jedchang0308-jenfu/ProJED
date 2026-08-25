@@ -11,6 +11,7 @@ import {
   TASK_GESTURE_PAN_TOLERANCE_PX,
 } from './taskGesturePolicy';
 import type { TaskDragSourceKind } from './taskDragTypes';
+import { useWbsStore } from '../../../store/useWbsStore';
 
 interface UseTaskGestureSurfaceOptions {
   task: { id: string; title?: string; status?: TaskStatus };
@@ -32,6 +33,8 @@ export const useTaskGestureSurface = ({
   const [activeSurfaceHeight, setActiveSurfaceHeight] = React.useState<number | null>(null);
   const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
   const isActive = mobileTaskAction?.state?.phase === 'dragging' && mobileTaskAction.state.nodeId === task.id;
+  const isPlacementPending = useWbsStore(state => Boolean(state.pendingPlacementNodeIds[task.id]));
+  const interactionDisabled = disabled || isPlacementPending;
 
   React.useEffect(() => {
     const update = () => setMobileActionMode(isMobileTaskActionMode());
@@ -46,7 +49,7 @@ export const useTaskGestureSurface = ({
   }, []);
 
   const handleLongPress = React.useCallback((event: React.TouchEvent) => {
-    if (disabled || isTaskGestureInteractiveTarget(event.target)) return;
+    if (interactionDisabled || isTaskGestureInteractiveTarget(event.target)) return;
     // A real TouchEvent owns the mobile drag-action path regardless of viewport
     // width. Viewport width is a layout concern and must not turn a tablet or a
     // landscape phone long press into the desktop context-menu fallback.
@@ -55,13 +58,13 @@ export const useTaskGestureSurface = ({
       return;
     }
     onNonMobileLongPress?.(event);
-  }, [disabled, mobileActionEnabled, mobileTaskAction, onNonMobileLongPress, sourceKind, task]);
+  }, [interactionDisabled, mobileActionEnabled, mobileTaskAction, onNonMobileLongPress, sourceKind, task]);
 
   const longPressHandlers = useLongPress(handleLongPress, {
     delay: TASK_GESTURE_LONG_PRESS_MS,
     tolerance: TASK_GESTURE_PAN_TOLERANCE_PX,
   });
-  const shouldBindLongPress = !disabled && canUseTaskSurfaceLongPress({
+  const shouldBindLongPress = !interactionDisabled && canUseTaskSurfaceLongPress({
     mobileActionEnabled,
     hasFallback: Boolean(onNonMobileLongPress),
   });
@@ -144,6 +147,7 @@ export const useTaskGestureSurface = ({
     mobileActionMode,
     touchGestureEnabled: shouldBindLongPress,
     isActive,
+    isPlacementPending,
     activeSurfaceHeight: isActive ? activeSurfaceHeight : null,
     shouldSuppressTap: touchTapGuard.shouldSuppressTap,
   };

@@ -30,6 +30,7 @@ import {
   type TaskChildDropSuccessDetail,
 } from './taskDrag/taskChildDropFeedback';
 import { taskStatusTitleClass } from '../ui/taskStatusStyles';
+import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -128,7 +129,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     isDragging,
   } = useSortable({
     id: childId,
-    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode,
+    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
     data: {
       type: 'wbs-checklist',
       nodeId: childId,
@@ -161,7 +162,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     };
   }, [childId]);
 
-  const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode
+  const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode || taskGesture.isPlacementPending
     ? {}
     : { ...attributes, ...listeners };
 
@@ -183,6 +184,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       data-task-hover-scope-kind="checklist"
       data-task-hover-scope-source-id={child.id}
       data-task-hover-has-descendants={hasGrandchildren ? 'true' : undefined}
+      data-task-placement-pending={taskGesture.isPlacementPending ? 'true' : undefined}
       className={`relative ${isDragging ? 'pointer-events-none' : ''}`}
     >
       <span
@@ -272,6 +274,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
             {child.title || '未命名任務'}
           </span>
         </span>
+
+        {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
 
         {isRecordCaptureMode ? (
           <span

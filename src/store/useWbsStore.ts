@@ -14,6 +14,7 @@ import {
   persistTaskWorkbenchUnplacedTask,
   readTaskWorkbenchUnplacedTasks,
 } from '../features/taskWorkbench/placement';
+import { persistTaskWorkbenchPlacementTransaction } from '../features/taskWorkbench/placementTransaction';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentNode,
@@ -48,6 +49,7 @@ export interface WbsBoardState {
   // 選項與過濾狀態
   loading: boolean;
   error: string | null;
+  pendingPlacementNodeIds: Record<string, string>;
 }
 
 export type SetNodesOptions = {
@@ -61,6 +63,7 @@ export type UpdateNodeOptions = {
   onPersistSuccess?: () => void;
   onPersistError?: (error: unknown) => void;
   skipPersistence?: boolean;
+  skipActivity?: boolean;
 };
 
 export type BatchUpdateNodesOptions = {
@@ -95,6 +98,12 @@ export interface WbsBoardActions {
    * 以單一 undo command 套用多筆任務更新，用於拖曳、重排與跨視圖歸位。
    */
   batchUpdateNodes: (updatesById: BatchNodeUpdates, options?: BatchUpdateNodesOptions) => void;
+
+  /** Persist a cross-ownership subtree move before committing it to local state. */
+  commitNodePlacementBatch: (
+    updatesById: BatchNodeUpdates,
+    options: BatchUpdateNodesOptions & { persistenceOrder: 'root-first' | 'leaves-first' },
+  ) => Promise<void>;
 
   /**
    * 封存任務節點；只標記 isArchived，保留依賴供還原後繼續使用。
@@ -170,6 +179,7 @@ const mergeLocalUnplacedTasksForSetNodes = (
   incomingNodes: TaskNode[],
   currentNodes: Record<string, TaskNode>,
   options: SetNodesOptions = {},
+  pendingPlacementNodeIds: Record<string, string> = {},
 ) => {
   const mergedNodes = new Map<string, TaskNode>();
   incomingNodes.forEach(node => mergedNodes.set(node.id, node));
@@ -178,6 +188,10 @@ const mergeLocalUnplacedTasksForSetNodes = (
   if (options.preserveOutOfScope) {
     const hasScopedBoards = scopedBoardIds.size > 0;
     Object.values(currentNodes).forEach(task => {
+      if (pendingPlacementNodeIds[task.id]) {
+        mergedNodes.set(task.id, task);
+        return;
+      }
       if (
         isTaskWorkbenchUnplacedTask(task) ||
         (hasScopedBoards && scopedBoardIds.has(task.boardId)) ||
@@ -320,6 +334,12 @@ const getNodeHierarchyDepth = (nodeId: string, nodes: Record<string, TaskNode>) 
 
 const createDependencyId = () =>
   `dep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createPlacementOperationId = () => {
+  const randomId = globalThis.crypto?.randomUUID?.()
+    || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return `placement_${randomId}`;
+};
 
 const normalizeImportedDependencies = (
   dependencies: unknown,
@@ -603,6 +623,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   kanbanConfigs: {},
   loading: false,
   error: null,
+  pendingPlacementNodeIds: {},
 
   _buildIndices: (nodesRecord) => {
     const boardIndex: Record<string, string[]> = {};
@@ -628,7 +649,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   },
 
   setNodes: (nodes, options = {}) => {
-    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options);
+    const currentState = get();
+    const nodesWithLocalUnplacedTasks = mergeLocalUnplacedTasksForSetNodes(
+      nodes,
+      currentState.nodes,
+      options,
+      currentState.pendingPlacementNodeIds,
+    );
     const nodesRecord = nodesWithLocalUnplacedTasks.reduce((acc, node) => {
       const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
       acc[normalizedNode.id] = normalizedNode;
@@ -1010,7 +1037,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       queueMicrotask(options.onPersistSuccess);
     }
 
-    if (!newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
+    if (!options?.skipActivity && !newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
         logTaskActivity(newNode, event.eventType, event.payload);
         recordMeetingTaskActivity(newNode, event.eventType, event.payload);
     });
@@ -1120,6 +1147,114 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         persistenceOrder: options.persistenceOrder,
       }),
     });
+  },
+
+  commitNodePlacementBatch: async (updatesById, options) => {
+    const entries = Object.entries(updatesById);
+    if (entries.length === 0) return;
+
+    const state = get();
+    const beforePatches: BatchNodeUpdates = {};
+    const afterPatches: BatchNodeUpdates = {};
+    const beforeNodesById: Record<string, TaskNode> = {};
+    const afterNodesById: Record<string, TaskNode> = {};
+
+    for (const [id, updates] of entries) {
+      const oldNode = state.nodes[id];
+      if (!oldNode) continue;
+      const patch = buildChangedNodePatch(oldNode, updates);
+      if (!patch) continue;
+      beforePatches[id] = patch.before;
+      afterPatches[id] = patch.after;
+      beforeNodesById[id] = oldNode;
+      afterNodesById[id] = {
+        ...oldNode,
+        ...patch.after,
+        updatedAt: typeof patch.after.updatedAt === 'number' ? patch.after.updatedAt : Date.now(),
+      };
+    }
+
+    const changedEntries = Object.entries(afterPatches);
+    if (changedEntries.length === 0) return;
+    const orderedEntries = [...changedEntries].sort(([leftId], [rightId]) => {
+      const depthDifference = getNodeHierarchyDepth(leftId, afterNodesById) - getNodeHierarchyDepth(rightId, afterNodesById);
+      return options.persistenceOrder === 'leaves-first' ? -depthDifference : depthDifference;
+    });
+    const orderedIds = orderedEntries.map(([id]) => id);
+    const operationId = createPlacementOperationId();
+    set(current => ({
+      pendingPlacementNodeIds: {
+        ...current.pendingPlacementNodeIds,
+        ...Object.fromEntries(orderedIds.map(id => [id, operationId])),
+      },
+    }));
+
+    try {
+      const transactionResult = await persistTaskWorkbenchPlacementTransaction({
+        operationId,
+        accountId: useAuthStore.getState().user?.uid,
+        beforeNodes: orderedIds.map(id => beforeNodesById[id]),
+        afterNodes: orderedIds.map(id => afterNodesById[id]),
+      });
+
+      const undoStore = useUndoStore.getState();
+      const wasApplying = undoStore.isApplying;
+      if (!wasApplying) useUndoStore.setState({ isApplying: true });
+      try {
+        orderedEntries.forEach(([id, updates]) => {
+          get().updateNode(id, updates, { skipPersistence: true, skipActivity: true });
+        });
+      } finally {
+        if (!wasApplying) useUndoStore.setState({ isApplying: false });
+      }
+
+      const committedNodes = get().nodes;
+      orderedIds.forEach(id => {
+        const oldNode = beforeNodesById[id];
+        const newNode = committedNodes[id];
+        if (!oldNode || !newNode) return;
+        const events = buildTaskUpdateActivities(oldNode, newNode, afterPatches[id]);
+        events.forEach(event => {
+          if (!transactionResult.activityLoggedRemotely) {
+            logTaskActivity(isTaskWorkbenchUnplacedTask(newNode) ? oldNode : newNode, event.eventType, {
+              ...event.payload,
+              operationId,
+              source: { workspaceId: oldNode.workspaceId, boardId: oldNode.boardId },
+              target: { workspaceId: newNode.workspaceId, boardId: newNode.boardId },
+            });
+          }
+          recordMeetingTaskActivity(newNode, event.eventType, event.payload);
+        });
+      });
+
+      if (!wasApplying) {
+        const label = options.label || (changedEntries.length > 1 ? '批次歸位任務' : '歸位任務');
+        const reverseOrder = options.persistenceOrder === 'root-first' ? 'leaves-first' : 'root-first';
+        useUndoStore.getState().pushUndo({
+          label,
+          scope: 'batch',
+          entityIds: orderedIds,
+          mergeKey: options.mergeKey,
+          undo: () => get().commitNodePlacementBatch(beforePatches, {
+            label,
+            mergeKey: options.mergeKey,
+            persistenceOrder: reverseOrder,
+          }),
+          redo: () => get().commitNodePlacementBatch(afterPatches, {
+            label,
+            mergeKey: options.mergeKey,
+            persistenceOrder: options.persistenceOrder,
+          }),
+        });
+      }
+    } finally {
+      set(current => ({
+        pendingPlacementNodeIds: Object.fromEntries(
+          Object.entries(current.pendingPlacementNodeIds)
+            .filter(([, pendingOperationId]) => pendingOperationId !== operationId),
+        ),
+      }));
+    }
   },
 
   archiveNode: (id) => {

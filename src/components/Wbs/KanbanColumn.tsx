@@ -16,6 +16,7 @@ import { useTaskInteractionBinding } from '../../interactions/task/useTaskIntera
 // Compatibility contract retains prepareNewTaskNaming(newNode.id) for post-create adapters.
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import { TaskDateBadge } from './TaskDateBadge';
+import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -83,7 +84,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     isDragging: isColumnDragging,
   } = useSortable({
     id: nodeId,
-    disabled: !canMoveTask || isSelectingMode || taskGesture.mobileActionMode,
+    disabled: !canMoveTask || isSelectingMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
     data: {
       type: 'wbs-column',
       nodeId,
@@ -109,7 +110,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     minHeight: taskGesture.activeSurfaceHeight ?? undefined,
   };
   const isColumnPlaceholder = isColumnDragging || taskGesture.isActive;
-  const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode
+  const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode || taskGesture.isPlacementPending
     ? {}
     : { ...columnAttributes, ...columnListeners };
 
@@ -161,6 +162,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       data-task-hover-scope-kind="column"
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
+      data-task-placement-pending={taskGesture.isPlacementPending ? 'true' : undefined}
       className={`relative flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all ${
         isColumnDragging ? 'pointer-events-none' : ''
       }`}
@@ -252,6 +254,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
               {node.title || '未命名任務'}
             </span>
           </h3>
+          {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
           {!isSelectingMode && (
             <TaskDateBadge
               startDate={node.startDate}

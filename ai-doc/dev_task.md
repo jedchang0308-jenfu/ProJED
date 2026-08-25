@@ -512,6 +512,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - Spec Impact：`Intentional replacement`；以 SPEC-088 取代舊「刪除任務＝isArchived」UI／action 語意，不改 schema 或 permission source。
   - 證據：`SPEC-088`、`QA-DEV-088`、`QC-DEV-088`、DEV-088 static／browser PASS、TypeScript、build:test 與 targeted regression PASS。
   - 計入交付：是（local implementation + QA/QC；未 Release）
+- ◇ DEV-089 [開發點] [驗證中] [P0] [Local RD/QA-QC PASS / Remote Migration Pending / 未 Release] 全域工作台權威任務搬移交易
+  - 摘要：修正手機／桌機跨 ownership 搬移的 optimistic 假成功；看板 WBS 與帳號級未歸位之間改為 await 單一 idempotent transaction，成功才收斂本機，失敗保留完整來源子樹。
+  - 來源 ID：`USER-20260825-TASK-PLACEMENT-MOBILE-DIVERGENCE`、`USER-20260825-CAPA-COMPLETE`。
+  - 父任務：DEV-086、DEV-039；CAPA：`CAPA-20260825-01`。
+  - 下一步：先取得 Supabase TEST 可復原 backup／restore evidence（目前唯讀 preflight：`ACTIVE_HEALTHY`、`pitr_enabled=false`、`backups=[]`），再執行 migration／RPC／RLS／rollback matrix 與 Level 3；production migration/deploy 與 Level 4 不在本輪授權。
+  - Spec Impact：`Intentional replacement`；以 SPEC-089 取代 SPEC-086 的 optimistic failure recovery，不改雙向拖曳、完整子樹、已歸位唯讀或手機範圍。
+  - 證據：`SPEC-089`、`QA-DEV-089`、`QC-DEV-089`、DEV-089 static、390×844 mobile fault injection、DEV-086／039 regression、TypeScript、build:test、source gate、targeted lint 與 diff check PASS；TEST project／backup／schema 唯讀 preflight PASS／STOP，新 migration remote 空白，mutating remote DB evidence pending。
+  - 計入交付：否（production effectiveness 尚未驗證）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -1853,6 +1861,42 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - Regression：DEV-029 static 39/39 + browser PASS；DEV-038 static 20/20 + browser PASS；DEV-044 26/26；DEV-062 PASS；DEV-070 58/58；DEV-027G 97/97；TypeScript、build:test、targeted ESLint 0 error、diff check PASS。
 - Runtime：使用本 DEV 專屬 `localhost:4001` Vite test runtime；完成前停止並確認 port 釋放。既有 `localhost:4000` primary runtime 不變。
 - 結論：`RD Implemented = PASS；QA-QC PASS；Spec Drift = In sync after intentional replacement`。未執行 commit、push、PR、merge、deploy、production data 或 release。
+
+## DEV-089：全域工作台權威任務搬移交易
+
+- 文件成熟度：`RD Implemented / Local QA-QC PASS / Remote Migration Pending`
+- 狀態：本地 CAPA implementation 完成／remote effectiveness pending／未 Release
+- 節點類型：開發點
+- 父任務：DEV-086、DEV-039
+- 是否計入產品交付完成：否（production exactly-one-source 尚未驗證）
+- 風險：P0 資料 ownership 一致性
+- Spec Impact：`Intentional replacement`；SPEC-089 取代 SPEC-086 的 optimistic failure recovery。
+
+### CAPA 與實作
+
+- Root cause：desktop optimistic state 在遠端 create 失敗時仍顯示已歸位；另一裝置／reload 依 canonical 未歸位資料呈現，形成跨裝置分歧。
+- Store 新增 awaited `commitNodePlacementBatch`；pending source 在 realtime refresh 中保持原位，成功後才寫 local state、undo、meeting activity 與 roll-up。
+- Desktop／mobile drag 共用 durable commit owner與 failed terminal result；failure toast 明確說明來源保留。
+- Supabase migration 新增 owner operation ledger 與 transaction RPC；server 驗證 full subtree、hierarchy、與 client 同源的 configurable `move_task` capability、idempotency payload、row count，並把 destination/source/activity/result 放在同一 transaction。
+- 第二次 transport response 仍遺失時，client 以 ledger row-lock serialization＋readback 辨識 committed/failed；仍無法 readback 時顯示 outcome unknown，不冒稱來源已保留。
+- 無法保留 record link／quick memo promotion link／dependency 或目的 tag 的 subtree 採 fail-safe reject，不做有損搬移。
+- 共用 `TaskPlacementPendingIndicator` 套用看板 L1／L2／L3+ 與未歸位列，沒有新增文字段落、modal 或容器。
+
+### Authoritative package
+
+- CAPA：`ai-doc/reports/CAPA-20260825-task-placement-disappears-on-mobile.md`
+- RD contract：`ai-doc/specs/SPEC-089-authoritative-task-placement-transaction.md`
+- QA plan/evidence：`ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md`
+- QC evidence：`ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md`
+- Migration：`supabase/migrations/20260825093621_dev_089_transactional_task_workbench_placement.sql`
+
+### Verification 與 release boundary
+
+- 390×844 CDP touch fault injection PASS：`回覆聖島, 發明核准` root＋child＋grandchild 在 700ms pending 期間留在來源並顯示 compact spinner；failure 後 persisted/runtime source=3、unplaced duplicate=0、parent chain preserved、pending/transient=0、ancestor roll-up=0、page error=0。
+- Static／regression：DEV-089、DEV-086、DEV-039、TypeScript、build:test、targeted lint與 diff check PASS。
+- Visual evidence：`output/playwright/dev-089/mobile-placement-failure-retains-source.png` 已複查；toast、未歸位空狀態與已歸位三層清單清楚，無額外容器或版面位移。
+- DB boundary：本機 Docker daemon 未運行；本機 PostgreSQL 18 雖 listening，但需要未提供的受控密碼，故未碰既有 DB、未執行 local migration。linked history 確認 `20260825093621` 只有 local、remote 空白，既有 remote schema lint 無 error，security advisor 僅列既有 baseline warnings。未套用 Supabase TEST／production；remote RPC success／rollback／RLS／新 object advisors、Level 3、Level 4 與 T+7／T+30 effectiveness check仍是 stop-ship gate。
+- 結論：`Local RD Implemented = PASS；Local QA-QC PASS；Remote Effectiveness = PENDING；Spec Drift = In sync after intentional replacement`。未執行 commit、push、PR、merge、deploy 或 production mutation。
 
 ## PM Update 歷史歸檔
 
