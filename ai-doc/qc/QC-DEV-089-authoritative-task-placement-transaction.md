@@ -1,7 +1,7 @@
 # QC-DEV-089 全域工作台權威任務搬移交易
 
 日期：2026-08-25  
-結論：Local QC PASS／TEST DB01-DB02 PASS／DB03 Partial／Level 3 PASS／未 Release
+結論：Local QC PASS／TEST DB01-DB03 PASS／Level 3 PASS／未 Release
 規格：SPEC-089  
 CAPA：CAPA-20260825-01
 
@@ -21,6 +21,7 @@ CAPA：CAPA-20260825-01
 | TEST project health／backup preflight | PASS | TEST `ACTIVE_HEALTHY`；physical backup unavailable (`pitr_enabled=false`、`backups=[]`)，已改以 custom-format logical dump 建立 restore evidence |
 | TEST migration／RLS／grant readback | PASS | migration version `20260825125421`；table/RPC/RLS/3 policies 存在；table ACL 僅 postgres／service_role／authenticated，`anon` REST 401；advisor 僅既有 baseline WARN |
 | TEST RPC round-trip／replay | PASS | 三層 subtree 兩方向 committed；exactly-one-source、activity 6、同 operation replay 無新增 mutation；fixture 已清理 |
+| TEST DB03 rejection matrix | PASS | authenticated outsider=`42501`；partial subtree=`22023`；linked record／dependency=`55000`；四個 rejection 後 no mutation，fixture cleanup counts=0 |
 | Level 3 authenticated preview smoke | PASS | commit `60907d3`；Firebase preview 看板→未歸位、刷新後仍存在；清除舊 service-worker cache 後無 page error；測試看板／任務已清理 |
 | Supabase local/TEST DB execution | PASS（TEST）／N/A（local） | TEST 已透過官方 Management API 套用 migration；本機 Docker daemon 未運行且 PostgreSQL 18 未碰既有 DB |
 | production migration／deploy／Level 4 | NOT RUN | 未執行 production migration；未 Release |
@@ -39,8 +40,8 @@ CAPA：CAPA-20260825-01
 - migration source 已覆蓋 owner RLS、pending→failed 欄位級 client grant（client 無法偽造 committed/result）、auth.uid、與 client 一致的 configurable `move_task` capability matrix、empty search_path、function revoke、row lock、exact full subtree、exact delete count、activity/result 同 transaction、record/dependency fail-safe。
 - operation `begin` 使用 conflict ignore，不會把 committed 記錄重設成 pending；重送必須保持 direction/root/tasks/source/target 完全相同。
 - 第二次 retry response 仍遺失時，client 以 pending→failed 條件更新和同列 readback辨識 server 是否已 committed；readback 本身不可得時回報 outcome unknown，不把未知狀態冒稱為「來源一定保留」。
-- DB01／DB02 已有 TEST 實際 apply、backup、success／round-trip／replay／RLS／grant readback；DB03 的 authenticated outsider、partial subtree、linked/dependency reject 與完整 Level 3 smoke 仍未完成，不能升級為整體 DB QC 完成。
+- DB01／DB02／DB03 已有 TEST 實際 apply、backup、success／round-trip／replay／RLS／grant readback 與 rejection matrix；所有 DB03 fixture cleanup counts=0；Level 3 smoke 亦已完成。
 
 ## QC 判定
 
-本地 CAPA implementation、TEST backup、DB01／DB02、Level 3 preview smoke 與 failure containment 為 PASS；DB03 尚部分待驗，production migration/deploy 與 Level 4 仍未完成，沒有將其冒稱為 release。任一 exactly-one-source 不變量失敗即 stop-ship。
+本地 CAPA implementation、TEST backup、DB01／DB02／DB03、Level 3 preview smoke 與 failure containment 為 PASS；production migration/deploy 與 Level 4 仍未完成，沒有將其冒稱為 release。任一 exactly-one-source 不變量失敗即 stop-ship。

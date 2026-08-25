@@ -2,7 +2,7 @@
 
 日期：2026-08-25  
 關聯：DEV-089、DEV-086、DEV-039  
-狀態：Correction + Corrective Action + Preventive Action 已完成本地實作與 QC／TEST DB01-DB02 PASS／Level 3 PASS／DB03＋production effectiveness Pending
+狀態：Correction + Corrective Action + Preventive Action 已完成本地實作與 QC／TEST DB01-DB03 PASS／Level 3 PASS／production effectiveness Pending
 
 ## 不符合與影響
 
@@ -59,7 +59,7 @@
 | Supabase TEST backup | custom-format dump + restore listing | PASS：712,269 bytes；`pg_restore --list` exit 0；SHA-256 `df4bf7008fdf46f2a36bf781fbb3592efa196398eb6369292f730386c1639b19` |
 | Supabase TEST migration／RLS | migration、operation ledger、RPC、ACL、anonymous REST | PASS：migration version `20260825125421`；RLS/3 policies；`PUBLIC/anon` ACL revoked；anonymous REST 401；advisor 僅既有 baseline WARN |
 | Supabase TEST transaction | 兩方向 success、exact subtree、activity、idempotent replay、cleanup | PASS：三層 parent chain；兩 operation committed；activity=6；replay 不新增 mutation；fixture 清理後 source/destination/ledger/activity counts=0 |
-| Supabase TEST DB03 | authenticated outsider、partial subtree、linked/dependency | Pending；匿名 REST denied 已通過，完整 authenticated matrix 尚待獨立 TEST fixture |
+| Supabase TEST DB03 | authenticated outsider、partial subtree、linked/dependency | PASS：outsider=`42501`、partial=`22023`、linked/dependency=`55000`；拒絕後 no mutation，fixture cleanup counts=0 |
 | Level 3 | Firebase preview + TEST，同帳號 authenticated 看板→未歸位＋reload | PASS：commit `60907d3`；preview `https://projed-cc78d--level3-smoke-49uruan8.web.app`；舊 service-worker cache 清除後刷新持久性通過；測試資料已精確清理 |
 | Production T+0 | Level 4 authenticated smoke，readback operation/result/source/target | Pending |
 | Production T+7／T+30 | 查 operation ledger；抽查 committed 與 failed | Pending；任何兩邊皆有／皆無／partial subtree=CAPA ineffective，立即 reopen |
@@ -68,4 +68,4 @@
 
 ## 結論與未完成邊界
 
-本 CAPA 的本地 Correction、Corrective Action、Preventive Action、TEST backup、DB01／DB02 與 Level 3 authenticated preview smoke 已完成。DB03 的完整權限／fail-safe matrix、production migration/deploy 與 Level 4 仍未完成；本輪未執行 production migration、production deploy 或 production data mutation。
+本 CAPA 的本地 Correction、Corrective Action、Preventive Action、TEST backup、DB01／DB02／DB03 與 Level 3 authenticated preview smoke 已完成。production migration/deploy 與 Level 4 仍未完成；本輪未執行 production migration、production deploy 或 production data mutation。

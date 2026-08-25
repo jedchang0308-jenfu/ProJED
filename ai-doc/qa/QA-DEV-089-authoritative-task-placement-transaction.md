@@ -46,7 +46,7 @@ CAPA：CAPA-20260825-01
 | TEST backup | custom-format logical dump + `pg_restore --list` | PASS；712,269 bytes；SHA-256 `df4bf7008fdf46f2a36bf781fbb3592efa196398eb6369292f730386c1639b19` |
 | DB01 | Supabase TEST migration apply + schema/RLS/grant readback | PASS；Management API migration version `20260825125421`；table/RPC/RLS/3 policies；`PUBLIC/anon` ACL 已撤銷；匿名 REST 401 |
 | DB02 | TEST to_unplaced/to_board success、exact subtree、activity、idempotent replay、fixture cleanup | PASS；3 層 parent chain；board=3／unplaced=0；兩方向 committed；activity=6；replay 不新增 mutation；fixture counts=0 |
-| DB03 | TEST outsider/RLS、partial subtree、linked/dependency reject | PARTIAL；匿名 Data API denied 已通過；authenticated outsider、partial subtree、linked/dependency reject 尚待獨立 TEST fixture |
+| DB03 | TEST outsider/RLS、partial subtree、linked/dependency reject | PASS；匿名 Data API 401；authenticated outsider=`42501`、partial subtree=`22023`、linked record／dependency=`55000`；拒絕後 fixture／operation counts=0 |
 | L3 | 同 commit Firebase preview + Supabase TEST authenticated smoke | PASS；preview `https://projed-cc78d--level3-smoke-49uruan8.web.app`；已登入帳號建立測試看板／任務，執行看板→未歸位、刷新持久性；清除一次舊 service-worker cache 後刷新成功；測試資料已精確清理 |
 
 ## Browser evidence
@@ -63,7 +63,8 @@ CAPA：CAPA-20260825-01
 - 同一登入帳號建立 `LEVEL3-SMOKE-20260825-2115` 看板與 `LEVEL3-SMOKE-TASK-20260825-2115` 任務（含備註），由看板拖入全域工作台「未歸位」後，畫面顯示未歸位計數 `1` 與該任務。
 - 刷新第一次遇到舊 service-worker chunk cache；使用產品內建「清除應用程式快取並回首頁」後，重新刷新通過：無錯誤頁、看板標題存在、未歸位區與測試任務仍存在（task occurrence `1`）。
 - 測試看板、任務、未歸位列與關聯資料已由 TEST exact-fixture cleanup 移除，既有資料未修改。
+- DB03 dedicated fixture cleanup：WBS、record link、knowledge record、dependency、operation ledger、unplaced counts 全部為 `0`。
 
 ## QA 結論
 
-Local RD/QA acceptance、TEST DB01／DB02、Level 3 authenticated smoke 與 CAPA 的程式矯正、手機 failure-first 證據、防再發 static gate 已完成。DB03 authenticated matrix、production Level 4 與 effectiveness check 仍是 stop-ship gate，不得把本報告解讀為 production 已修復。
+Local RD/QA acceptance、TEST DB01／DB02／DB03、Level 3 authenticated smoke 與 CAPA 的程式矯正、手機 failure-first 證據、防再發 static gate 已完成。production Level 4 與 effectiveness check 仍是 stop-ship gate，不得把本報告解讀為 production 已修復。

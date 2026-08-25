@@ -512,13 +512,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - Spec Impact：`Intentional replacement`；以 SPEC-088 取代舊「刪除任務＝isArchived」UI／action 語意，不改 schema 或 permission source。
   - 證據：`SPEC-088`、`QA-DEV-088`、`QC-DEV-088`、DEV-088 static／browser PASS、TypeScript、build:test 與 targeted regression PASS。
   - 計入交付：是（local implementation + QA/QC；未 Release）
-- ◇ DEV-089 [開發點] [驗證中] [P0] [TEST DB01-DB02 PASS / Level 3 PASS / DB03 Partial / 未 Release] 全域工作台權威任務搬移交易
+- ◇ DEV-089 [開發點] [驗證中] [P0] [TEST DB01-DB03 PASS / Level 3 PASS / 未 Release] 全域工作台權威任務搬移交易
   - 摘要：修正手機／桌機跨 ownership 搬移的 optimistic 假成功；看板 WBS 與帳號級未歸位之間改為 await 單一 idempotent transaction，成功才收斂本機，失敗保留完整來源子樹。
   - 來源 ID：`USER-20260825-TASK-PLACEMENT-MOBILE-DIVERGENCE`、`USER-20260825-CAPA-COMPLETE`。
   - 父任務：DEV-086、DEV-039；CAPA：`CAPA-20260825-01`。
-  - 下一步：TEST backup、migration、RLS/grant、兩方向 transaction、exact subtree、activity、replay 與 Level 3 authenticated preview 已通過；接續完成 authenticated outsider／partial subtree／linked-dependency DB03，production migration/deploy 與 Level 4 仍須獨立 activation decision。
+  - 下一步：TEST backup、migration、RLS/grant、兩方向 transaction、exact subtree、activity、replay、DB03 rejection matrix 與 Level 3 authenticated preview 已通過；production migration/deploy 與 Level 4 仍須獨立 activation decision。
   - Spec Impact：`Intentional replacement`；以 SPEC-089 取代 SPEC-086 的 optimistic failure recovery，不改雙向拖曳、完整子樹、已歸位唯讀或手機範圍。
-  - 證據：`SPEC-089`、`QA-DEV-089`、`QC-DEV-089`、DEV-089 static、390×844 mobile fault injection、DEV-086／039 regression、TypeScript、build:test、source gate、targeted lint 與 diff check PASS；TEST dump／migration version `20260825125421`／RLS-ACL／兩方向 round-trip／replay PASS；commit `60907d3` 的 Firebase preview authenticated 看板→未歸位與 reload PASS；DB03 authenticated matrix、production Level 4 pending。
+  - 證據：`SPEC-089`、`QA-DEV-089`、`QC-DEV-089`、DEV-089 static、390×844 mobile fault injection、DEV-086／039 regression、TypeScript、build:test、source gate、targeted lint 與 diff check PASS；TEST dump／migration version `20260825125421`／RLS-ACL／兩方向 round-trip／replay／DB03 rejection matrix PASS；commit `60907d3` 的 Firebase preview authenticated 看板→未歸位與 reload PASS；production Level 4 pending。
   - 計入交付：否（production effectiveness 尚未驗證）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
@@ -1864,8 +1864,8 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 
 ## DEV-089：全域工作台權威任務搬移交易
 
-- 文件成熟度：`RD Implemented / Local QA-QC PASS / TEST Applied / Level 3 PASS / DB03 Partial`
-- 狀態：本地 CAPA implementation 完成／TEST 與 Level 3 effectiveness PASS／DB03 partial／未 Release
+- 文件成熟度：`RD Implemented / Local QA-QC PASS / TEST Applied / DB01-DB03 PASS / Level 3 PASS`
+- 狀態：本地 CAPA implementation 完成／TEST、DB03 與 Level 3 effectiveness PASS／未 Release
 - 節點類型：開發點
 - 父任務：DEV-086、DEV-039
 - 是否計入產品交付完成：否（production exactly-one-source 尚未驗證）
@@ -1895,8 +1895,8 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - 390×844 CDP touch fault injection PASS：`回覆聖島, 發明核准` root＋child＋grandchild 在 700ms pending 期間留在來源並顯示 compact spinner；failure 後 persisted/runtime source=3、unplaced duplicate=0、parent chain preserved、pending/transient=0、ancestor roll-up=0、page error=0。
 - Static／regression：DEV-089、DEV-086、DEV-039、TypeScript、build:test、targeted lint與 diff check PASS。
 - Visual evidence：`output/playwright/dev-089/mobile-placement-failure-retains-source.png` 已複查；toast、未歸位空狀態與已歸位三層清單清楚，無額外容器或版面位移。
-- DB boundary：本機 Docker daemon 未運行；本機 PostgreSQL 18 雖 listening，但需要未提供的受控密碼，故未碰既有 DB、未執行 local migration。TEST 已透過官方 Management API 建立 logical backup、套用 migration version `20260825125421`，完成 RLS／ACL／RPC readback、兩方向 transaction／replay 與 fixture cleanup；production migration／deploy／data mutation 未執行。Level 3 preview 已通過 authenticated 看板→未歸位與 reload；DB03 authenticated outsider／partial subtree／linked-dependency、Level 4 與 T+7／T+30 effectiveness check 仍是 stop-ship gate。
-- 結論：`Local RD Implemented = PASS；Local QA-QC PASS；TEST/Level 3 Effectiveness = PASS；DB03 = PARTIAL；Production Effectiveness = PENDING；Spec Drift = In sync after intentional replacement`。commit／push 已完成；未執行 production deploy 或 mutation。
+- DB boundary：本機 Docker daemon 未運行；本機 PostgreSQL 18 雖 listening，但需要未提供的受控密碼，故未碰既有 DB、未執行 local migration。TEST 已透過官方 Management API 建立 logical backup、套用 migration version `20260825125421`，完成 RLS／ACL／RPC readback、兩方向 transaction／replay、DB03 rejection matrix 與 fixture cleanup；production migration／deploy／data mutation 未執行。Level 3 preview 已通過 authenticated 看板→未歸位與 reload；Level 4 與 T+7／T+30 effectiveness check 仍是 stop-ship gate。
+- 結論：`Local RD Implemented = PASS；Local QA-QC PASS；TEST/DB03/Level 3 Effectiveness = PASS；Production Effectiveness = PENDING；Spec Drift = In sync after intentional replacement`。commit／push 已完成；未執行 production deploy 或 mutation。
 
 ## PM Update 歷史歸檔
 
