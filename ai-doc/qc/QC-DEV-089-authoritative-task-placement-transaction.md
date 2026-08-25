@@ -1,7 +1,7 @@
 # QC-DEV-089 全域工作台權威任務搬移交易
 
 日期：2026-08-25  
-結論：Local QC PASS／TEST DB01-DB02 PASS／DB03 Partial／Level 3 Pending／未 Release  
+結論：Local QC PASS／TEST DB01-DB02 PASS／DB03 Partial／Level 3 PASS／未 Release
 規格：SPEC-089  
 CAPA：CAPA-20260825-01
 
@@ -16,11 +16,12 @@ CAPA：CAPA-20260825-01
 | TypeScript | PASS | compile contract |
 | `build:test` | PASS | test-mode bundle |
 | targeted ESLint／diff check | PASS | 新增來源無 lint error／whitespace error |
-| linked migration history／db lint | PASS（唯讀 preflight） | `20260825093621` 僅 local、remote 空白；既有 remote schema `No schema errors found`，證實 production 未變更，不代表新 migration 已執行 |
-| linked security advisor | PASS WITH BASELINE WARN | 既有 `touch_updated_at` search-path、既有 callable DEFINER functions、leaked-password protection 告警；新 migration 未 apply，故尚不能評價 DEV-089 deployed object |
+| linked migration history／db lint | PASS（唯讀 preflight） | production migration history 仍未套用 `20260825093621`；TEST 已套用 remote version `20260825125421`；既有 production schema `No schema errors found`，證實 production 未變更 |
+| linked security advisor | PASS WITH BASELINE WARN | TEST object readback 僅有既有 `touch_updated_at` search-path、既有 callable DEFINER functions、leaked-password protection baseline warnings；production 未套用 DEV-089 |
 | TEST project health／backup preflight | PASS | TEST `ACTIVE_HEALTHY`；physical backup unavailable (`pitr_enabled=false`、`backups=[]`)，已改以 custom-format logical dump 建立 restore evidence |
 | TEST migration／RLS／grant readback | PASS | migration version `20260825125421`；table/RPC/RLS/3 policies 存在；table ACL 僅 postgres／service_role／authenticated，`anon` REST 401；advisor 僅既有 baseline WARN |
 | TEST RPC round-trip／replay | PASS | 三層 subtree 兩方向 committed；exactly-one-source、activity 6、同 operation replay 無新增 mutation；fixture 已清理 |
+| Level 3 authenticated preview smoke | PASS | commit `60907d3`；Firebase preview 看板→未歸位、刷新後仍存在；清除舊 service-worker cache 後無 page error；測試看板／任務已清理 |
 | Supabase local/TEST DB execution | PASS（TEST）／N/A（local） | TEST 已透過官方 Management API 套用 migration；本機 Docker daemon 未運行且 PostgreSQL 18 未碰既有 DB |
 | production migration／deploy／Level 4 | NOT RUN | 未執行 production migration；未 Release |
 
@@ -42,4 +43,4 @@ CAPA：CAPA-20260825-01
 
 ## QC 判定
 
-本地 CAPA implementation、TEST backup、DB01／DB02 與 failure containment 為 PASS；DB03 尚部分待驗，Level 3、production migration/deploy 與 Level 4 仍未完成，沒有將其冒稱為 release。任一 exactly-one-source 不變量失敗即 stop-ship。
+本地 CAPA implementation、TEST backup、DB01／DB02、Level 3 preview smoke 與 failure containment 為 PASS；DB03 尚部分待驗，production migration/deploy 與 Level 4 仍未完成，沒有將其冒稱為 release。任一 exactly-one-source 不變量失敗即 stop-ship。
