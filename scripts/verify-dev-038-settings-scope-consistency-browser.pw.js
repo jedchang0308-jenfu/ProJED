@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+const baseUrl = page.url().split('/').slice(0, 3).join('/');
   const diagnostics = [];
   page.on('console', (message) => {
     diagnostics.push(`console:${message.type()}:${message.text()}`);
@@ -36,11 +37,11 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }, reset = true) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seedSession();
     const url = reset
-      ? 'http://localhost:4000/?qcReset=1&qcSize=18'
-      : 'http://localhost:4000/';
+      ? `${baseUrl}/?qcReset=1&qcSize=18`
+      : `${baseUrl}/`;
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await seedSession();
@@ -157,7 +158,7 @@ async (page) => {
     const trashText = await page.locator('[data-recycle-bin-view="current-board"]').innerText();
     assert(trashText.includes('目前看板回收桶'), 'trash page should use current-board title', { trashText });
     assert(trashText.includes(target.targetLabel), 'trash page should show active board target', { trashText, target });
-    assert(trashText.includes('目前看板沒有已刪除任務。'), 'empty trash should name current board scope', { trashText });
+    assert(trashText.includes('目前看板沒有封存任務。'), 'empty trash should name current board scope', { trashText });
 
     step = 'empty trash confirm wording';
     await page.evaluate(({ target }) => {
@@ -167,7 +168,7 @@ async (page) => {
         workspaceId: target.workspaceId,
         boardId: target.boardId,
         parentId: null,
-        title: 'DEV-038 已刪除任務',
+        title: 'DEV-038 封存任務',
         status: 'todo',
         nodeType: 'task',
         order: 999,
@@ -178,14 +179,14 @@ async (page) => {
       localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
       localStorage.setItem('projed-last-view', 'recycle_bin');
     }, { target });
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-recycle-bin-view="current-board"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.getByText('清空回收桶', { exact: true }).click();
     await page.locator('.global-dialog-content').waitFor({ state: 'visible', timeout: 10000 });
     const clearDialogText = await page.locator('.global-dialog-content').innerText();
     assert(clearDialogText.includes(target.boardTitle), 'empty-trash confirm should include board title', { clearDialogText, target });
-    assert(clearDialogText.includes('1 筆已刪除任務'), 'empty-trash confirm should include archived item count', { clearDialogText });
+    assert(clearDialogText.includes('1 筆封存任務'), 'empty-trash confirm should include archived item count', { clearDialogText });
     await page.locator('.global-dialog-content').getByText('取消', { exact: true }).click();
     await page.locator('.global-dialog-content').waitFor({ state: 'hidden', timeout: 10000 });
     await page.screenshot({ path: 'output/playwright/dev-038-settings-scope-desktop.png', fullPage: false });
@@ -194,7 +195,7 @@ async (page) => {
     step = 'mobile viewport settings scope';
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => localStorage.setItem('projed-last-view', 'settings'));
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-settings-view="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await assertNoHorizontalOverflow('DEV-038 mobile backup');

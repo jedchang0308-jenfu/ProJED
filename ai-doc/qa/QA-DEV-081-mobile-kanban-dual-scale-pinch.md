@@ -1,5 +1,20 @@
 # QA-DEV-081：手機看板 A／B 2～3 倍閱讀尺寸與雙指切換
 
+## 2026-08-25 DEV-087 Intentional replacement／最新回歸證據
+
+- 現行階層增量為 desktop `6px`、≤767px `5px`；手機 compact 與 large 的 depth delta 均為 `5px`，large 仍保留 base `10px` 與其他 2.5x 幾何。
+- DEV-081 static `32/32` PASS；browser `R01～R10` 共 `10/10` PASS：R01 compact delta=`5px`、R02 large delta=`5px`、R10 desktop delta=`6px`，diagnostics=0、network failures=0。
+- hierarchy indent 是 DEV-087／SPEC-001 的跨模式例外，不再算入 B/A ratio oracle；其餘欄寬、字級、列高、meta 與觸控面倍率門檻不變。
+
+## 2026-08-24 `4a947ef` regression audit／CAPA historical evidence（數值已取代）
+
+- Failure-first：1024×768 desktop 的 depth 0／1 checklist rows computed `padding-left` 均為 `0px`，title X 也相同；component recursion 與 `depth + 1` 正常，缺陷侷限於 visual consumer selector scope。
+- Corrective action：共享 `.kanban-checklist-item` 在 mobile media 外消費 `--kanban-checklist-depth`；手機 compact／large 僅覆寫 inherited scale tokens。
+- Historical gate：共享 consumer 必須位於 mobile media 前；當時 desktop/compact delta=`14px`、large delta=`35px`。現行 verifier 沿用同一卡片量測方法，但門檻已依 DEV-087 更新為 6px／5px。
+- 本輪 rendered geometry PASS：1024×768 desktop `4→18px`／title delta `14px`；390×844 compact `4→18px`／title delta `14px`；390×844 large `10→45px`／title delta `35px`。
+- Browser verifier 已新增 `QA-081-R10`；既有 full artifact 仍為舊版 R01～R09。2026-08-24 CLI browser 啟動層在執行 test code 前卡住，因此本輪不把三組只讀幾何 evidence 誤寫成新的 full 10-case artifact；待 runner 恢復後需重跑 R01～R10。
+- Commit scope audit：146 files、`+5308/-741`。DEV-076／077／078／079／081／082 targeted static contracts 分別 PASS；唯一確認的產品回歸為桌機 hierarchy indentation。原 R09 未量階層為 QA coverage defect；獨立 DEV 混於單一整併提交為 change-isolation residual risk。
+
 狀態：`Executed smoke / Automated UI PASS (9 cases) / Physical Mobile Pending / Full 20-case matrix Not Run`
 
 ## QA 定位與邊界

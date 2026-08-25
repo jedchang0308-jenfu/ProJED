@@ -1,5 +1,19 @@
 # SPEC-081：手機看板 A／B 2～3 倍閱讀尺寸與雙指切換
 
+## 2026-08-25 Intentional replacement：DEV-087 共用階層增量
+
+- 使用者明確要求把未歸位區採用的 compact depth increment 擴及看板 L3+、清單、甘特與日曆左側清單；現行權威值為 desktop `6px`、≤767px `5px`。
+- `KanbanChecklist` 仍只輸出 depth；共享 `.kanban-checklist-item` 直接消費 `--task-hierarchy-indent`。A／B 各自的 base inset 保留 `4px／10px`，但每層增量在手機兩模式皆為 `5px`。
+- 這是使用者核准的 `Intentional replacement`：取代 2026-08-24 的 compact `14px`／large `35px` 數值，不取代 B 的字級、列高、欄寬、卡片內距、觸控目標或 pinch 契約。
+- hierarchy indent 不再納入 B/A 2～3 倍 ratio oracle；它改受 `SPEC-001` 跨模式 compact hierarchy 契約治理。
+
+## 2026-08-24 Historical correction：全 viewport consumer（數值已由 DEV-087 取代）
+
+- `KanbanChecklist` 必須只輸出一個 `--kanban-checklist-depth`，由共享 `.kanban-checklist-item` 規則在所有 viewport 消費；不得把 depth consumer 限縮在 mobile／touch selector，也不得另建桌機或手機 checklist 元件。
+- 當時值為 desktop／compact `depth * 14px + 4px`、large mobile `depth * 35px + 10px`；僅保留 consumer regression 歷史，現行縮排數值見上方 DEV-087 決策。
+- 驗收必須在同一張 L2 card 內同時取得 depth 0 與 depth 1，檢查 computed padding delta 與 task title X delta；不同 column 的 row 不得互相比較。
+- Desktop negative 除了 size toggle count 與 effective compact size，還必須驗證階層幾何；此修正分類為 `Compatible correction`，不改 pinch、drag、資料、權限或元件 ownership。
+
 狀態：`Implemented / Automated UI PASS / Physical Mobile Pending / 未 Release`
 
 ## 文件定位
@@ -292,11 +306,11 @@ export interface UseMobilePanBrokerOptions<TElement extends HTMLElement> {
 | L3+ title font | 12px | 30px | 2.5 | checklist title |
 | date/tag/meta font | 9px | 22.5px | 2.5 | board inline metadata；popover 不套用 |
 | tag front/sticker height | 13px / 15px | 32.5px / 37.5px | 2.5 | inline tag sticker |
-| hierarchy indent/base | 14px / 4px | 35px / 10px | 2.5 | L3+ depth |
+| hierarchy indent/base | 5px / 4px | 5px / 10px | indent 1.0；base 2.5 | L3+ depth；indent 為 DEV-087 明確例外 |
 | card/title/meta gap | 4px | 10px | 2.5 | card content |
 
-- B 的 icon 與 protected control 不納入六組 ratio oracle，但實際 touch target 不得小於 44px；task primary card surface 會由字級、line-height 與 padding 自然放大。
-- `KanbanChecklist.tsx` 移除 inline `depth * 14 + 4` hardcode，改以 `--kanban-checklist-depth` 與 root indent/base variables 計算，避免 B 仍使用 A 的階層距離。
+- B 的 icon、protected control 與 DEV-087 hierarchy indent 不納入六組 ratio oracle，但實際 touch target 不得小於 44px；task primary card surface會由字級、line-height與padding自然放大。
+- `KanbanChecklist.tsx` 以 `--kanban-checklist-depth`、共用 `--task-hierarchy-indent` 與 board base variable 計算；不得恢復 inline `depth * 14 + 4` 或 B 專屬 depth increment。
 - add-column CTA、inline input／form button與 checklist toggle 在 B 需同步提高 font／icon／height，使可讀且可操作；不放大 app topbar、modal、tag popover、toast、drag action rail 或 fixed drag preview。
 - B 規則必須在現有 mobile density declarations 後覆寫，限定 `[data-mobile-pan-surface="board"][data-kanban-view-size="large"]` descendants；不得用全域 `button`／`.task-title-text` 規則污染其他 view。
 - 禁止 `zoom`、`transform: scale`、改 viewport meta、`user-scalable=no` 或全頁 touch-action override。
@@ -435,7 +449,7 @@ git diff --check
 - `AC-081-07`：B 無文字／圖示重疊、非預期裁切、控制項遮蔽或 App shell 水平 overflow；看板是唯一水平 scroll owner。
 - `AC-081-08`：可見 A／B 控制可用 touch、鍵盤與輔助技術操作，狀態可讀；reload 後保留同帳號同裝置偏好。
 - `AC-081-09`：modal／drawer／popover／input／action rail 內手勢不穿透；看板外 browser／OS zoom 能力未被全域禁用。
-- `AC-081-10`：清單、甘特、行事曆、心智圖與 desktop negative viewport 不受影響；console、page、request、visible error 均為 0。
+- `AC-081-10`：除 DEV-087 明確統一清單、甘特、行事曆與 desktop 的 hierarchy increment 外，其餘非看板幾何與心智圖不受影響；console、page、request、visible error 均為 0。
 
 ## 停止條件與回復
 

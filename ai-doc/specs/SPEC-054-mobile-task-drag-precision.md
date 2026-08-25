@@ -46,6 +46,7 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 - 依使用者 2026-07-17 回饋，採用「手機向桌機落點契約收斂」方向，不重新設計桌機拖拉。
 - 桌機拖拉 UI、起手、overlay、collision、click / right-click 分流與 commit 結果是 frozen baseline。
 - Workbench `placed row` 仍不能拖，不得產生 drag source，也不得在手機長按進入 action rail。
+- Workbench `unplaced row` 在共用 inline 面板中必須能命中右側看板的 direct card／checklist／column target 並完成歸位；不啟用高風險 title-center child intent。看板欄內空白區必須提供 mobile column drop target。
 - 手機不再以任務 DOM 上下半區作為隱形 `before / after` 控制。
 - 手機正常觸控 topbar、drawer、workbench 等非拖拉 UI 時，drag session 不得攔截 native click。
 - Mobile action rail 保留既有 action set，但必須同時支援「拖放到 action」與「長按放手進入 armed rail 後點擊 action」兩種一致操作。
@@ -82,6 +83,7 @@ DEV-054 的核心方向是：**保留使用者已滿意的桌機 UI 與行為，
 - 修正 mobile action rail button 的直接 tap command path，並保留 at-most-once terminal guard。
 - 新增 pure/static/browser verifier 與 iOS / Android 真機量化驗證。
 - 補上 native selection/callout、500ms/8px 邊界、寬觸控 viewport、各階層 surface 與 Workbench placed/unplaced 的啟動所有權驗證。
+- 補上 Workbench unplaced 跨 inline 分欄拖入看板的 rendered exactly-once 驗證；placed row no-drag 維持不變。
 - 保留 DEV-029 / DEV-039 / DEV-046 / DEV-053 所有仍有效回歸。
 
 ### 4.2 Out of Scope
@@ -380,8 +382,8 @@ npm.cmd run build:test
 
 ### 10.2 RD Rework 5 Automated Evidence - 2026-08-14
 
-- `verify:dev-054-mobile-task-drag-precision`：44/44 passed。
-- `verify:dev-054-mobile-task-drag-precision-browser`：15/15 passed；R12 驗證 L1/L2/L3+ `user-select:none`、零 selection／零 context menu，R13 驗證 500ms／8px 邊界，R14 驗證 844x390 與 1024x768 真實 touch 不受舊寬度 gate 影響，R15 驗證 Workbench 未歸位列保留 native pan、已歸位列仍不可拖。
+- `verify:dev-054-mobile-task-drag-precision`：45/45 passed。
+- `verify:dev-054-mobile-task-drag-precision-browser`：15/15 passed；R12 驗證 L1/L2/L3+ `user-select:none`、零 selection／零 context menu，R13 驗證 500ms／8px 邊界，R14 驗證 844x390 與 1024x768 真實 touch 不受舊寬度 gate 影響，R15 驗證 Workbench 未歸位列保留 native pan、跨 inline 分欄拖入看板且 exactly-once，已歸位列仍不可拖。
 - Browser regressions：DEV-029 41 cases、DEV-039 placement lanes、DEV-046 universal surfaces、DEV-053 10/10、DEV-055 16/16、DEV-067 8/8 passed。
 - Static regressions：DEV-029 39/39、DEV-039 31/31、DEV-046 31/31、DEV-053 30/30、DEV-055 27/27、DEV-067 13/13 passed。
 - TypeScript、targeted ESLint（0 error，2 個既有 warning）、`build:test` passed；console／network error sweep 為 0。
@@ -404,6 +406,7 @@ npm.cmd run build:test
 - Auto-scroll 單 frame 超過 3px、pan broker 在 active task drag 寫入 scroll、跳過完整 row，或 action rail 被搶占。
 - Action 與 move 同時提交、同 session batch count > 1，或 cancel 後殘留資源。
 - Workbench placed row 可拖、進 action rail 或產生 draggable source。
+- Workbench unplaced row 在 inline 工作台中無法命中右側看板 direct target，或放手後仍留在 `__task_workbench_unplaced__`。
 - 任一 required automated regression 失敗。
 - iOS / Android 任一缺少、first-release correct < 96%、wrong commit > 0，或證據不完整。
 

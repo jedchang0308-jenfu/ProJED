@@ -177,7 +177,7 @@ const BoardView = () => {
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
     const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);
-    const removeNode = useWbsStore(s => s.removeNode);
+    const archiveNode = useWbsStore(s => s.archiveNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canCreateDependency } = useBoardPermissions();
     const sensors = useDragSensors();
@@ -489,7 +489,7 @@ const BoardView = () => {
         addNode,
         updateNode,
         batchUpdateNodes: batchUpdateNodesForMobileTaskDrag,
-        removeNode,
+        archiveNode,
         recalculateAncestorStatus: recalculateAncestorStatusForMobileTaskDrag,
         onSessionBegin: () => {
             setActiveDrag(null);
@@ -1608,7 +1608,7 @@ const BoardView = () => {
                     addNode,
                     updateNode,
                     batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
-                    removeNode,
+                    archiveNode,
                     recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
                 },
             });
@@ -1681,7 +1681,7 @@ const BoardView = () => {
                 addNode,
                 updateNode,
                 batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
-                removeNode,
+                archiveNode,
                 recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
             },
         });

@@ -9,7 +9,6 @@ export type TaskActionGuardInput = {
   canDeleteTask?: boolean;
   canAssignTask?: boolean;
   canCreateDependency?: boolean;
-  dangerousActionConfirmed?: boolean;
 };
 
 export type TaskActionGuardResult = {
@@ -21,12 +20,6 @@ export const guardTaskAction = (actionId: TaskActionId, input: TaskActionGuardIn
   if (input.nodeExists === false) return { allowed: false, reason: 'task-not-found' };
   const action = getTaskActionDefinition(actionId);
   if (!action) return { allowed: false, reason: 'unknown-action' };
-  if (actionId === 'task.delete-request') {
-    if (!input.dangerousActionConfirmed) {
-      return { allowed: false, reason: 'dangerous-action-confirmation-required' };
-    }
-    return { allowed: Boolean(input.canDeleteTask), reason: input.canDeleteTask ? undefined : 'permission-delete' };
-  }
   switch (action.capability) {
     case 'create': return { allowed: Boolean(input.canCreateTask), reason: input.canCreateTask ? undefined : 'permission-create' };
     case 'edit': return { allowed: Boolean(input.canEditTask), reason: input.canEditTask ? undefined : 'permission-edit' };

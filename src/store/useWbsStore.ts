@@ -19,6 +19,7 @@ import {
   normalizeTaskAssignmentNode,
   normalizeTaskAssignmentUpdates,
 } from '../utils/taskAssignments';
+import { persistTaskCreationBeforeActivity } from '../utils/taskCreationPersistence';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
 import {
   getDeferredTaskStatusForFilters,
@@ -96,9 +97,14 @@ export interface WbsBoardActions {
   batchUpdateNodes: (updatesById: BatchNodeUpdates, options?: BatchUpdateNodesOptions) => void;
 
   /**
-   * 軟刪除任務節點 (只標記 isArchived)
+   * 封存任務節點；只標記 isArchived，保留依賴供還原後繼續使用。
    */
-  removeNode: (id: string) => void;
+  archiveNode: (id: string) => void;
+
+  /**
+   * 從回收桶永久刪除已封存任務與其子樹；不可由一般 undo 復原。
+   */
+  permanentlyDeleteNodes: (rootIds: string[]) => Promise<number>;
   duplicateNodeTree: (
     id: string,
     options?: { includeInternalDependencies?: boolean; canCreateDependency?: boolean }
@@ -657,45 +663,41 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(updatedNodes);
 
     const isUnplacedTask = isTaskWorkbenchUnplacedTask(normalizedNode);
+    const creationActivityPayload = {
+      after: {
+        parentId: normalizedNode.parentId,
+        status: normalizedNode.status,
+        assigneeIds: getTaskAssigneeIds(normalizedNode),
+        assigneeId: normalizedNode.assigneeId ?? null,
+        collaboratorIds: normalizedNode.collaboratorIds ?? [],
+        startDate: normalizedNode.startDate ?? null,
+        endDate: normalizedNode.endDate ?? null,
+        order: normalizedNode.order,
+      },
+    };
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
         void persistTaskWorkbenchUnplacedTask(normalizedNode, useAuthStore.getState().user?.uid);
     } else if (normalizedNode.workspaceId && normalizedNode.boardId) {
-        nodeService.create(normalizedNode.workspaceId, normalizedNode.boardId, normalizedNode).catch(console.error);
+        const workspaceId = normalizedNode.workspaceId;
+        const boardId = normalizedNode.boardId;
+        void persistTaskCreationBeforeActivity(
+          () => nodeService.create(workspaceId, boardId, normalizedNode),
+          () => logTaskActivity(normalizedNode, 'task_created', creationActivityPayload),
+        ).catch(error => {
+          console.error('[wbsStore] Failed to persist created task before activity logging:', error);
+        });
     }
 
     if (!isUnplacedTask) {
-      logTaskActivity(normalizedNode, 'task_created', {
-        after: {
-            parentId: normalizedNode.parentId,
-            status: normalizedNode.status,
-            assigneeIds: getTaskAssigneeIds(normalizedNode),
-            assigneeId: normalizedNode.assigneeId ?? null,
-            collaboratorIds: normalizedNode.collaboratorIds ?? [],
-            startDate: normalizedNode.startDate ?? null,
-            endDate: normalizedNode.endDate ?? null,
-            order: normalizedNode.order,
-        },
-      });
-      recordMeetingTaskActivity(normalizedNode, 'task_created', {
-        after: {
-            parentId: normalizedNode.parentId,
-            status: normalizedNode.status,
-            assigneeIds: getTaskAssigneeIds(normalizedNode),
-            assigneeId: normalizedNode.assigneeId ?? null,
-            collaboratorIds: normalizedNode.collaboratorIds ?? [],
-            startDate: normalizedNode.startDate ?? null,
-            endDate: normalizedNode.endDate ?? null,
-            order: normalizedNode.order,
-        },
-      });
+      recordMeetingTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
     }
 
     // 紀錄上一步
     useUndoStore.getState().pushUndo({
         label: '新增任務',
-        undo: () => get().removeNode(normalizedNode.id),
+        undo: () => get().archiveNode(normalizedNode.id),
         redo: () => get().addNode(normalizedNode),
     });
   },
@@ -1025,8 +1027,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     }
 
     // 紀錄上一步
-    const label = normalizedUpdates.isArchived === true ? '刪除任務' :
-                  normalizedUpdates.isArchived === false ? '復原任務' : '修改任務';
+    const label = normalizedUpdates.isArchived === true ? '封存任務' :
+                  normalizedUpdates.isArchived === false ? '還原任務' : '修改任務';
     useUndoStore.getState().pushUndo({
         label,
         undo: () => get().updateNode(id, oldValues),
@@ -1120,15 +1122,72 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     });
   },
 
-  removeNode: (id) => {
-    // B3 修復：先清理所有關聯的孤兒依賴，再軟刪除
-    // 設計意圖：避免被刪除節點的依賴殘留，導致 _applyDependencySchedule 嘗試推動已封存節點
-    const state = get();
-    const orphanDeps = state.dependencies.filter(
-      dep => dep.fromId === id || dep.toId === id
-    );
-    orphanDeps.forEach(dep => get().removeDependency(dep.id));
+  archiveNode: (id) => {
+    // 封存是可逆生命週期：依賴必須保留，還原後才能完整回到封存前狀態。
     get().updateNode(id, { isArchived: true });
+  },
+
+  permanentlyDeleteNodes: async (rootIds) => {
+    const state = get();
+    const nodeIds = new Set<string>();
+
+    for (const rootId of rootIds) {
+      const root = state.nodes[rootId];
+      if (!root) continue;
+      if (!root.isArchived) {
+        throw new Error(`只有已封存任務可以永久刪除：${root.title || '未命名任務'}`);
+      }
+      const pending = [rootId];
+      while (pending.length > 0) {
+        const nodeId = pending.pop();
+        if (!nodeId || nodeIds.has(nodeId)) continue;
+        const node = state.nodes[nodeId];
+        if (!node) continue;
+        if (node.workspaceId !== root.workspaceId || node.boardId !== root.boardId) continue;
+        nodeIds.add(nodeId);
+        (state.parentNodesIndex[nodeId] || []).forEach(childId => pending.push(childId));
+      }
+    }
+
+    if (nodeIds.size === 0) return 0;
+
+    const dependenciesToDelete = state.dependencies.filter(
+      dependency => nodeIds.has(dependency.fromId) || nodeIds.has(dependency.toId),
+    );
+    for (const dependency of dependenciesToDelete) {
+      const endpoint = state.nodes[dependency.fromId] || state.nodes[dependency.toId];
+      if (endpoint?.workspaceId && endpoint.boardId) {
+        await dependencyService.delete(endpoint.workspaceId, endpoint.boardId, dependency.id);
+      }
+    }
+
+    const nodesToDelete = [...nodeIds]
+      .map(nodeId => state.nodes[nodeId])
+      .filter((node): node is TaskNode => Boolean(node))
+      .sort((left, right) => getNodeHierarchyDepth(right.id, state.nodes) - getNodeHierarchyDepth(left.id, state.nodes));
+
+    for (const node of nodesToDelete) {
+      if (isTaskWorkbenchUnplacedTask(node)) {
+        await persistRemoveTaskWorkbenchUnplacedTask(node.id, useAuthStore.getState().user?.uid);
+      } else if (node.workspaceId && node.boardId) {
+        await nodeService.delete(node.workspaceId, node.boardId, node.id);
+      }
+    }
+
+    const latest = get();
+    const nextNodes = { ...latest.nodes };
+    nodeIds.forEach(nodeId => {
+      delete nextNodes[nodeId];
+      deleteCalendarEventBestEffort(nodeId);
+    });
+    set({
+      nodes: nextNodes,
+      dependencies: latest.dependencies.filter(
+        dependency => !nodeIds.has(dependency.fromId) && !nodeIds.has(dependency.toId),
+      ),
+    });
+    get()._buildIndices(nextNodes);
+    return nodeIds.size;
   },
 
   moveNode: (id, newParentId) => {

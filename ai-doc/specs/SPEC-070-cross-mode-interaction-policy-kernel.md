@@ -7,6 +7,12 @@
 - 風險：Medium（跨模式互動入口與共用選單；不改資料模型、API 或權限來源）
 - Spec Impact：`No contract drift / behavior-preserving architecture refactor`
 
+## DEV-088 Semantic Action 覆寫（2026-08-25）
+
+- `task.delete-request` 由 `task.archive` 取代；active task menu 只發出可還原的封存 action。
+- 永久刪除不進一般 task action catalog，只由目前看板回收桶在不可逆確認後呼叫。
+- 原 `delete_task` capability 暫時同時治理封存與永久刪除；本輪不拆 permission schema。完整生命週期見 `SPEC-088`。
+
 ## 1. 目標
 
 建立一個 typed Interaction Policy Kernel，讓清單、心智圖、看板、甘特及共用任務表面只宣告與預設不同的互動差異，並讓右鍵選單、快捷鍵、工具列與手勢共用同一份 Semantic Action、權限、Guard 與 Command。

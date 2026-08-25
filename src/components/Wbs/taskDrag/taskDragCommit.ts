@@ -30,7 +30,7 @@ export { buildTaskParentIndex, getTaskAppendOrder, isValidTaskDropIntent } from 
 
 type TaskDragStoreActions = Pick<
   WbsBoardActions,
-  'addNode' | 'updateNode' | 'batchUpdateNodes' | 'removeNode' | 'recalculateAncestorStatus'
+  'addNode' | 'updateNode' | 'batchUpdateNodes' | 'archiveNode' | 'recalculateAncestorStatus'
 >;
 
 export interface TaskDragCommitDependencies extends TaskDragStoreActions {
@@ -306,15 +306,15 @@ export const commitTaskDragAction = async ({
     return committed('child-created');
   }
 
-  if (!dependencies.canDeleteTask) return noOp('delete-permission-denied');
+  if (!dependencies.canDeleteTask) return noOp('archive-permission-denied');
   const confirmed = await useDialogStore.getState().showConfirm(
-    `確定要刪除任務「${node.title || '未命名任務'}」嗎？您可以隨時使用 Ctrl+Z 復原。`,
+    `確定要封存任務「${node.title || '未命名任務'}」嗎？之後可從目前看板回收桶還原。`,
   );
-  if (!confirmed) return noOp('delete-cancelled');
+  if (!confirmed) return noOp('archive-cancelled');
   const latestNode = useWbsStore.getState().nodes[nodeId];
   if (!latestNode || latestNode.isArchived) return noOp('source-missing-after-confirmation');
-  dependencies.removeNode(nodeId);
-  return committed('task-deleted');
+  dependencies.archiveNode(nodeId);
+  return committed('task-archived');
 };
 
 export const commitTaskDragObservation = async ({

@@ -169,7 +169,7 @@ assert(
     source.taskDragPresenter.includes('標示完成') &&
     source.taskDragPresenter.includes('新增並列任務') &&
     source.taskDragPresenter.includes('新增子任務') &&
-    source.taskDragPresenter.includes('刪除任務') &&
+    source.taskDragPresenter.includes('封存任務') &&
     source.taskDragPresenter.includes('data-mobile-task-action={item.key}') &&
     source.taskDragPresenter.includes('data-mobile-drag-preview') &&
     source.taskDragPresenter.includes('data-mobile-drop-indicator') &&
@@ -181,7 +181,7 @@ assert(
     source.taskDragSession.includes("event.key === 'Escape'") &&
     source.taskDragSession.includes("type: 'cancel:reset'") &&
     source.taskDragCommit.includes('showConfirm(') &&
-    source.taskDragCommit.includes('確定要刪除任務') &&
+    source.taskDragCommit.includes('確定要封存任務') &&
     !source.useLongPress.includes('ignoreTaskDragHandle') &&
     !source.useLongPress.includes('data-task-drag-handle') &&
     source.kanbanCard.includes('data-task-drag-surface="true"') &&
@@ -212,7 +212,7 @@ assert(
   mobileActionItemsSource.includes('toggle-complete') &&
     mobileActionItemsSource.includes('add-sibling') &&
     mobileActionItemsSource.includes('add-child') &&
-    mobileActionItemsSource.includes('delete') &&
+    mobileActionItemsSource.includes('archive') &&
     !mobileActionItemsSource.includes('icon:') &&
     !mobileActionLayerSource.includes('const Icon = item.icon') &&
     !mobileActionLayerSource.includes('<Icon') &&
@@ -239,7 +239,7 @@ assert(
     source.browserVerifier.includes('touchcancel exits mobile drag-action mode without committing') &&
     source.browserVerifier.includes('drag-action near right viewport edge auto-scrolls board') &&
     source.browserVerifier.includes('drag-action near bottom column edge auto-scrolls column') &&
-    source.browserVerifier.includes('drop on delete action opens confirmation without immediate delete') &&
+    source.browserVerifier.includes('drop on archive action opens confirmation without immediate archive') &&
     source.browserVerifier.includes('long press drag to another task reorders by task position') &&
     source.browserVerifier.includes('drop on add-child action creates a child and opens details') &&
     source.browserVerifier.includes('drop on complete action toggles task completed state') &&

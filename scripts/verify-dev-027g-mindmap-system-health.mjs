@@ -704,11 +704,11 @@ check(
 
 check(
   'Mind map user-facing messages are centralized outside the view component',
-  view.includes("import { MINDMAP_MESSAGES, getMindMapDeleteTaskConfirmMessage } from './mindMapMessages'") &&
+  view.includes("import { MINDMAP_MESSAGES, getMindMapArchiveTaskConfirmMessage } from './mindMapMessages'") &&
     [
       'MINDMAP_MESSAGES.noCreateTaskPermission',
-      'MINDMAP_MESSAGES.noDeleteTaskPermission',
-      'getMindMapDeleteTaskConfirmMessage(plan.selected.title || DEFAULT_MINDMAP_TASK_TITLE, plan.descendantIds.length)',
+      'MINDMAP_MESSAGES.noArchiveTaskPermission',
+      'getMindMapArchiveTaskConfirmMessage(plan.selected.title || DEFAULT_MINDMAP_TASK_TITLE, plan.descendantIds.length)',
       'MINDMAP_MESSAGES.noEditRelationshipPermission',
       'MINDMAP_MESSAGES.relationshipSelfLinkBlocked',
       'MINDMAP_MESSAGES.dragWouldCreateChildCycle',
@@ -720,17 +720,17 @@ check(
       "selectBoardPrompt: '請先選擇一個看板'",
       "noCreateTaskPermission: '目前沒有新增任務權限'",
       "noEditTaskPermission: '目前沒有編輯任務權限'",
-      "noDeleteTaskPermission: '目前沒有刪除任務權限'",
+      "noArchiveTaskPermission: '目前沒有封存任務權限'",
       "noEditRelationshipPermission: '目前沒有編輯關聯線權限'",
       "relationshipSelfLinkBlocked: '關聯線不能連到同一個任務'",
       "dragWouldCreateChildCycle: '不能把任務拖到自己的子任務底下'",
       "dragWouldCreateHierarchyCycle: '這個拖曳會造成階層循環'",
-      'export const getMindMapDeleteTaskConfirmMessage',
+      'export const getMindMapArchiveTaskConfirmMessage',
     ].every(token => messages.includes(token)) &&
     [
       '目前沒有新增任務權限',
       '目前沒有編輯任務權限',
-      '目前沒有刪除任務權限',
+      '目前沒有封存任務權限',
       '目前沒有編輯關聯線權限',
       '關聯線不能連到同一個任務',
       '輸入關聯線文字',

@@ -1,8 +1,10 @@
 # SPEC-068：任務完整預選範圍停留移入子任務
 
-狀態：Implemented / AI Browser QA-QC Passed / Physical Mobile 未充分驗證 / 未 Release
+狀態：Implemented / Targeted Title-Anchor Browser Passed / Adjacent L1 Placeholder Regression Open / Physical Mobile 未充分驗證 / 未 Release
 
 日期：2026-08-16
+
+本次契約更新：2026-08-25
 
 優先級：P1
 
@@ -22,12 +24,16 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 本節是 `Intentional replacement`，取代本文件先前的 shrink-wrapped title `SPAN`、title center、44px title halo、標題尾端空白負向等契約。檔名保留 legacy 名稱以維持既有連結，內容以本版為準。
 
+2026-08-25 再次 `Intentional replacement`：插入線不再對齊語意不明的「下一層任務內容」，而是對齊「放開後最終階層的同層任務標題起點」。L2 與 L3+ 的標題必須是列內第一個 flow content；展開鍵、紀錄勾選框與其他條件式元件只能放在標題之後，不得改變標題起點。沒有既有同層任務時，必須以相同版面 token 提供不可見的空層級標題錨點。
+
+2026-08-25 standard marker 垂直邊界 `Intentional replacement`：candidate 階段雖保留既有排序線，但展開 L2／L3+ 的 `after` 線不得出現在標題與其可見子樹之間，必須落在完整 task scope 底部；`before` 使用完整 scope 頂部。primary geometry 繼續負責命中，水平起點繼續對齊同層標題，最終排序結果不變。
+
 操作結果：
 
 - 來源進入有效目標的完整預選範圍即成為 `child-candidate`。
 - 同一來源、同一目標連續停留滿 1,000ms 才成為 `child-armed`。
 - `child-candidate` 只保留不可見命中與計時狀態，不顯示子任務藍框；畫面維持既有排序定位條。
-- `child-armed` 不顯示任何子任務 target 藍框或藍底，只顯示「下一子階」插入線；插入線起點依實際階層右移，只有放開才移入。
+- `child-armed` 不顯示任何子任務 target 藍框或藍底，只顯示「下一子階」插入線；插入線起點對齊放開後最終階層的同層標題起點，並依實際階層右移，只有放開才移入。
 - 若 armed 的 canonical append 結果與來源原本的父層、型態及兄弟排序完全相同，該位置是 `origin/no-op`：以其他階層既有的藍底白字 `TaskOriginTitleField` 顯示來源任務名稱，不顯示一般圓點插入線；放開不得寫入或播報移入成功。
 - 滑到內層任務時，最深、面積較小的 innermost scope 接管；父框不得搶走子框。
 - 展開鍵、連結、輸入框、文字區域、選單與其他內部控制項不建立 child intent；任務主表面即使為了可及性帶 `role="button"`，仍是有效命中範圍。
@@ -89,7 +95,7 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 
 ## 5. 預覽契約
 
-- Candidate 與 Armed 都不顯示任何子任務 target frame 或藍底；candidate 保留既有 standard insertion marker，armed 清除它並在 exact target 子樹末端顯示唯一 child insertion marker。沿用 `KanbanInsertionMarker` 的圓點＋線條，起點與下一層任務內容對齊，L2／L3／L4+ 必須逐層右移。
+- Candidate 與 Armed 都不顯示任何子任務 target frame 或藍底；candidate 保留既有 standard insertion marker，但展開任務的 standard `after` marker 必須在完整 task scope／可見子樹之後，絕不可在 L2 標題正下方切進子樹。Armed 清除 standard marker，並在 exact target 子樹末端顯示唯一 child insertion marker。沿用 `KanbanInsertionMarker` 的圓點＋線條；起點必須與放開後最終階層的同層任務標題起點相差不超過 1px。若該層已有任務，讀取實際 title anchor；若為空層，讀取同一版面 token 產生的 empty-level title anchor。L2／L3／L4+ 仍必須逐層右移。
 - Armed 若為原位 no-op，唯一 child insertion preview 改為既有 `TaskOriginTitleField`：位置沿用來源原始 title field rect、文字等於來源任務名稱、品牌藍底白字，`data-task-child-drop-origin/noop="true"`；一般 `KanbanInsertionMarker` 數量必須為 0。
 - Armed 不顯示常駐「移入…的子任務」文字框；視覺以圓點、線條與縮排位置表意，原位 no-op 才使用既有藍底白字來源名稱欄位，輔助科技仍由 `aria-live` 宣告 exact parent。
 - 全部 child preview 為 fixed overlay，不得改 normal-flow geometry、column width、scrollHeight 或 board scrollWidth。
@@ -126,9 +132,10 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - hit-scope rect 包住 primary 與可見 subtree；長中文、長英文、未命名、標題尾端空白與主表面其他空白都可候選。
 - exact innermost ownership、控制項排除、999/1000ms、target switch、armed leave、cancel/stale target、cycle、permission、undo/redo 全部通過。
 - Candidate 保留一個 standard indicator，所有子任務 target 藍框與 child insertion marker 均為 0；armed 時所有 target 藍框仍為 0，standard indicator 為 0、child insertion marker 恰為 1。
+- 展開 L2／L3+ 的 candidate standard `after` marker centerY 與完整 task scope bottom 差異不得超過 1px，且必須低於 primary bottom；桌機與手機都適用。
 - 子任務 append 回到原始位置時，armed 不顯示 target 藍框，但定位預覽必須顯示原任務名稱而非一般插入線；桌機與手機 release 的完整 node snapshot 必須相同，成功 announcement 為空。
 - 桌機 L1／L2／L3+ 與手機 long-press 拖曳期間，來源原位置各顯示唯一 2px 虛線框；量測位置與尺寸差異均不得超過 1px，取消後框數為 0。
-- L1→L2、L2→L3、L3+→下一層的 child insertion 起點必須單調右移，且線條落在 exact target 子樹末端，不得顯示在父層或兄弟層起點。
+- L1→L2、L2→L3、L3+→下一層的 child insertion 起點必須各自與最終同層標題起點相差不超過 1px，並隨階層單調右移；線條落在 exact target 子樹末端，不得顯示在父層或兄弟層起點。L2 有／無展開鍵、一般模式／紀錄選取模式的標題 left 必須一致。
 - DEV-065 的 primary-500／primary-400 樣式與 hover 行為不回歸。
 - 五個 viewport：1440x900、1024x768、390x844、430x932、320x844 無 overflow 或不可讀遮擋。
 - Physical iPhone Safari 與 Android Chrome 仍是完整 mobile sign-off 的必要 gate；synthetic touch 不取代實機。
@@ -142,15 +149,17 @@ QC：`ai-doc/qc/QC-DEV-068-task-title-center-child-drop.md`
 - `src/components/Wbs/KanbanCard.tsx`
 - `src/components/Wbs/KanbanChecklist.tsx`
 - `src/components/Wbs/taskDrag/taskChildDropTarget.ts`
+- `src/components/Wbs/taskDrag/taskTitleAnchor.ts`
 - `src/components/Wbs/taskDrag/TaskChildDropPreview.tsx`
 - `src/components/Wbs/taskDrag/taskDragTargetAdapter.ts`
 - `src/components/Wbs/taskDrag/useTaskDragSession.ts`
 
 已執行核心證據：
 
-- `verify:dev-068-task-title-center-child-drop`：73/73。
-- `verify:dev-068-task-title-center-child-drop-browser`：30/30 rendered mouse/touch；包含 candidate／armed 均零 target 藍框、armed 插入線、L2／L3／L4+ insertion-start 單調右移、桌機／手機 child-origin 名稱預覽與 zero-write，以及 desktop／mobile L1／L2／L3+ 來源虛線框原位 geometry gate。
-- 最新核心 screenshot prefix：`output/playwright/dev-068-title-child-drop-1786851252620-*`。
+- `verify:dev-068-task-title-center-child-drop`：76/76。
+- 2026-08-25 L2 standard marker boundary targeted browser：desktop 2/2、mobile 2/2（各含 error sweep）；修正後 centerY 分別等於完整 scope bottom `274.09375px`／`254.09375px`。桌機視覺證據：`output/playwright/dev-068-title-child-drop-1787592996400-desktop-candidate-expanded-l2-boundary.png`。
+- 2026-08-25 `verify:dev-068-task-title-center-child-drop-browser` 重跑：新增的 L2／L3／L4+ 最終同層 title-anchor ≤1px、empty-level anchor 等值、L2 有／無展開鍵標題起點一致等 gate 全數 PASS；完整矩陣只留下與本輪無關的既存 L1 source placeholder 高度差（28.09375px vs 32px）。
+- 本輪視覺證據：`output/playwright/dev-068-title-child-drop-1787590112800-desktop-depth-insertion.png`；既有歷史 30/30 證據保留於 `output/playwright/dev-068-title-child-drop-1786851252620-*`。
 - QA 曾先後攔下 title-only scope、控制項候選殘留、task-source `role="button"` 過度排除、candidate 搶走 standard drop、Workbench來源誤入child intent、desktop viewport-change未取消，以及 candidate 過早顯示子任務藍框；均回送 RD 修正後才採信最終結果。
 - Physical iPhone／Android：未執行。
 - 本輪未 push、deploy 或 release。

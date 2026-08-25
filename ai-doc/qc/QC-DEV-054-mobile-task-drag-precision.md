@@ -11,6 +11,7 @@
 - RD Rework 5 的本機 automated QA-QC：`PASS`。
 - 使用者回報的「手機長按先圈選文字、沒有進入任務拖拉」已由 rendered browser 證據直接覆蓋；L1、L2、L3+ 與 Workbench 未歸位列在長按前即為 `user-select:none`，active long press 的 selection 與完整 context menu 均為 0。
 - 844x390 與 1024x768 觸控 viewport 都能進入專用 touch drag session，證明不再受舊 `innerWidth <= 768` gate 影響。
+- 2026-08-24 補充 QC：390x844 shared inline Workbench 中，新建未歸位任務已跨面板命中右側 `qc-card-1`，`boardId` 從 `__task_workbench_unplaced__` 更新為 `local-test-mobile-ui-board`，`terminal:complete` exactly once；placed row 仍不可拖。
 - 整體 DEV 仍判定 `未充分驗證`：SPEC 明定的 iPhone Safari 與 Android Chrome 實機 50-trial gate 尚未執行。這是 release/completion gate，不否定本輪 automated PASS。
 
 ## 2. 根因與修正事實
@@ -27,9 +28,9 @@
 
 ### 3.1 DEV-054 targeted
 
-- Static：44/44 passed。
+- Static：45/45 passed。
 - Browser：R01-R15，15/15 passed。
-- 主要情境：native touch buttons、long-press/armed action exactly-once、same-parent/cross-level targeting、boundary jitter、stale indicator、invalid zero-write、320/390/430 viewport、L1/L2/L3+ selection ownership、430ms/7px/9px gesture boundaries、844x390/1024x768 wide touch、Workbench native pan、placed-row no-drag。
+- 主要情境：native touch buttons、long-press/armed action exactly-once、same-parent/cross-level targeting、boundary jitter、stale indicator、invalid zero-write、320/390/430 viewport、L1/L2/L3+ selection ownership、430ms/7px/9px gesture boundaries、844x390/1024x768 wide touch、Workbench native pan、unplaced 跨 inline 分欄歸位、placed-row no-drag。
 - Runtime：console errors 0、network failures 0、visible errors 0、horizontal overflow 0。
 
 ### 3.2 相鄰拖拉回歸
@@ -65,6 +66,7 @@
 ## 5. Evidence Boundary
 
 - 最新 DEV-054 rendered evidence：`output/playwright/dev-054-mobile-drag-1786719820247-*`。
+- 2026-08-24 inline Workbench rendered evidence：`output/playwright/dev-054-mobile-drag-1787570225277-R15-workbench-to-inline-board.png`；該輪 browser `15/15`、console/network error 0。
 - DEV-053 rendered regression evidence：`output/playwright/dev-053-task-drag-1786719548171-*`。
 - 本輪在既有 dirty shared worktree 內執行，未覆寫無關變更、未 commit、未 push、未 deploy。
 - Browser automation 使用 Chromium CDP 合成真實 touch lifecycle，可驗證 DOM、事件、幾何與資料寫入；不能替代 Safari/Chrome 實體裝置的 callout、手指接觸面與平台事件雜訊。

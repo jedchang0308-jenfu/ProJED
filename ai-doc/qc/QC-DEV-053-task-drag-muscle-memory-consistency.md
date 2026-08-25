@@ -10,7 +10,7 @@
 
 DEV-053 本機開發與 QA True Operation Gate 通過。T01-T14 全數 Pass，Stop Ship finding 為 0。
 
-- 電腦版保留使用者核准的既有拖拉 UI：card overlay 仍為 240px、既有 offset、border、shadow 與 drop flow；未新增 handle、lock text、progress、breadcrumb 或 desktop action rail。
+- 電腦版依 2026-08-24 使用者最新決策，保留既有 border、shadow 與 drop flow，但 card overlay 由 240x40 基底整體縮放為 120x20，gap 改為 0，左下角精準貼住滑鼠熱點右上方；未新增 handle、lock text、progress、breadcrumb 或 desktop action rail。
 - card、checklist、column header 的 click、right-click、desktop drag 與 mobile quick tap / short pan / long press 分流通過。
 - Workbench `unplaced row` 可拖入 placed lane；`placed row` 不產生 drag source，桌機反拖 no-op，手機長按無 action rail / preview / persistence，quick tap 仍開正確 details。
 - mobile reorder、action rail、edge auto-scroll、touch/pointer lifecycle 與 at-most-once commit 通過。
@@ -79,3 +79,11 @@ Build 只有既有 Browserslist `caniuse-lite` stale warning，無 compile/build
 `Stop Ship findings：0`  
 `Physical phone supplemental not executed`  
 `Production deployment：not executed`
+
+## 7. 2026-08-24 桌機來源預覽覆寫驗證
+
+- 真實 mouse drag：pointer=`(185,100)`；overlay rect=`left 185 / top 80 / right 305 / bottom 100 / 120x20`，scale=`0.5`、gap=`0`，精準以左下角貼住滑鼠熱點右上方。
+- DEV-053 static `30/30`、browser `10/10`；TypeScript、targeted ESLint（0 error）、`build:test`、`git diff --check` 通過。
+- 視覺證據：`output/playwright/dev-053-task-drag-1787575738027-B01-desktop-half-scale-pointer-anchor.png`。
+- 相鄰 DEV-068 的新 overlay geometry assertion 通過；完整 suite 另有一項既有來源虛線框高度 `28.09px → 32px` 失敗，與 fixed overlay 縮放無因果關聯，未列為本項通過。
+- 本輪未執行 production deployment。

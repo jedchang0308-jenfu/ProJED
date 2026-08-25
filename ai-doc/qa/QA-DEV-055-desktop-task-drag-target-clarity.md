@@ -52,7 +52,7 @@ Static verifier 至少檢查：
 | S02 | Desktop indicator data attrs | 程式包含 `data-desktop-drop-indicator`、`data-desktop-drop-target`、`data-desktop-drop-position` |
 | S03 | Canonical resolver reuse | desktop preview / commit helper 皆呼叫 `resolveTaskDropIntent()`，不得複製 before / after / append 規則 |
 | S04 | Source placeholder separation | desktop source placeholder 不渲染 `data-desktop-drop-indicator`，且不使用 live target wrapper |
-| S05 | Generic primary geometry | card primary geometry 有 `data-task-card-primary="true"`，既有 `data-mobile-task-card-primary="true"` 保留 |
+| S05 | Hit／display geometry separation | primary geometry 保留命中；展開 card/checklist 的 standard before／after marker 使用完整 task scope 邊界 |
 | S06 | Invalid ancestor blocking | helper 對 invalid innermost target 回傳 null，不 fallback ancestor |
 | S07 | Desktop baseline protected | `BoardView.tsx` 仍保留 `<DragOverlay dropAnimation={null}>` 與 `data-kanban-drag-overlay="true"` |
 | S08 | Workbench placed row no-drag | `workbench-placed-row-is-not-a-source` guard 或等效 no-op 仍存在 |
@@ -172,3 +172,10 @@ DEV-055 完成前必跑：
 - 使用者明示來源卡不得遮住child parent frame／ghost，因此舊位置凍結已由DEV-068取代；其餘single live indicator、fixed overlay-only marker、display/commit equivalence與no-layout-shift仍是回歸門檻。
 - 最新DEV-055 static 28/28、browser 16/16 PASS；B01-B06、B15與error sweep確認同階／跨欄／L3+落點未因來源卡獨立定位而回歸。
 - B12另攔下並修正Workbench桌機來源被完整L1 scope誤納child intent；最終未歸位任務可正常column append歸位，placed row仍不可拖。
+
+## 11. 展開 L2 standard marker 邊界回歸（2026-08-25）
+
+- Failure-first rendered gate 量到完整 L2 scope bottom=`274.09375px`、primary title bottom=`201.09375px`，舊 marker centerY=`201.09375px`，確認預覽線錯落在標題與 62px 可見子樹之間。
+- 修正後桌機 marker centerY=`274.09375px`，等於完整 scope bottom；primary rect 與 hit scope 仍分離，未改 collision ownership。
+- DEV-055 static 29/29、完整 browser B01-B16 16/16 PASS；此邊界另由 DEV-068 `DEV068-DESK-900` 真實 mouse drag gate 驗證，並保留 `output/playwright/dev-068-title-child-drop-1787592996400-desktop-candidate-expanded-l2-boundary.png`。最新 DEV-055 evidence base：`output/playwright/dev-055-desktop-drag-1787593310935-*`。
+- TypeScript 與 `build:test` PASS；本輪未部署、未 release，既有 2026-07-17 production 歷史證據不被改寫。

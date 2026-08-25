@@ -6,6 +6,12 @@
 是否計入產品交付完成: 是，限手機看板主要操作可用性
 建立日期: 2026-07-04
 
+## DEV-088 任務生命週期覆寫（2026-08-25）
+
+- 現行 mobile compact action rail 使用「完成／取消完成、新增並列、新增子任務、封存任務」。
+- 下方「刪除任務」與 mobile action key `delete` 均為歷史語意，已由 `SPEC-088` 的 `archive` 契約取代。
+- 封存可由目前看板回收桶還原；永久刪除只允許在回收桶確認後執行。
+
 ## DEV-051 Rollback Addendum（2026-07-16）
 
 - DEV-051 實作已撤回；手機拖拉 runtime 回復 `main`，本 SPEC 重新成為 active baseline。

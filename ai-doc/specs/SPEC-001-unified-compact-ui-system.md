@@ -74,6 +74,7 @@ ProJED 目前有四個主要工作模式：清單、看板、甘特圖、月曆�
 | `space.task.gap` | 4px | 任務卡、任務列、任務條間距 |
 | `space.task.padding.x` | 8px | 任務內容水平內距 |
 | `space.task.padding.y` | 2px | 任務內容垂直內距 |
+| `space.task.hierarchy.indent` | desktop 6px；≤767px 5px | 看板 L3+、清單、甘特與月曆左側清單每增加一層的共同位移 |
 
 ### 尺寸
 
@@ -152,6 +153,7 @@ ProJED 目前有四個主要工作模式：清單、看板、甘特圖、月曆�
 需求：
 - 預設 row height 使用 `size.task.row.compact`。
 - row padding、indent、icon size 由 token 控制。
+- 甘特圖與月曆共用同一個 `--task-hierarchy-indent`；有子節點的展開鍵與 leaf placeholder 必須等寬，避免可見文字位移偏離 token。
 - 不因甘特圖/月曆模式而出現不同 row density。
 
 ## 四模式套用規格
@@ -161,6 +163,7 @@ ProJED 目前有四個主要工作模式：清單、看板、甘特圖、月曆�
 - 外層內容 padding 使用 `space.shell.x` / `space.shell.y`。
 - 表頭高度與月曆 weekday header 接近，避免切換時高度跳動。
 - 任務列使用 `font.size.task.title`，row padding 使用 `2px 10px`。
+- 每層 title X 位移使用 `space.task.hierarchy.indent`；不得再以 `rem` 另算縮排。
 - 任務列內 icon、日期、工期、鎖定按鈕使用共用 token。
 
 ### 看板模式
@@ -169,10 +172,12 @@ ProJED 目前有四個主要工作模式：清單、看板、甘特圖、月曆�
 - 欄位間距與畫布左右 padding 維持 10px。
 - 任務卡內距維持 8px / 2px。
 - 卡片內 meta、badge、子任務列需改用共用 token。
+- L3+ 每層位移使用 `space.task.hierarchy.indent`；手機 A／B 可保留各自 base inset、字級與列高，但不得另放大 depth increment。
 
 ### 甘特圖模式
 
 - 側邊任務清單 row height 與 `SharedTaskSidebar` 一致。
+- 左側任務清單每層 title X 位移使用 `space.task.hierarchy.indent`。
 - 時間軸 row height 與側邊任務列對齊。
 - 任務條高度使用 `size.gantt.bar.height`。
 - 時間軸 header 高度納入 token，不得與其他 toolbar 重疊或跳動。
@@ -183,6 +188,7 @@ ProJED 目前有四個主要工作模式：清單、看板、甘特圖、月曆�
 - 週標頭、週列最小高度、任務 lane 高度由 token 控制。
 - 月曆任務條字級與甘特任務條一致。
 - 側邊任務清單 row height 與甘特圖一致。
+- 左側任務清單每層 title X 位移與甘特圖完全相同。
 
 ## 驗收標準
 
@@ -192,6 +198,7 @@ ProJED 目前有四個主要工作模式：清單、看板、甘特圖、月曆�
 - 四模式中相同語意 badge 的高度、padding、radius、border style 一致。
 - 甘特圖側邊任務列與時間軸任務列垂直對齊。
 - 月曆側邊任務列與月曆週列切換時不造成 toolbar 位置跳動。
+- 四模式相鄰階層的 computed padding 與 title X 差皆為 desktop `6±1px`、≤767px `5±1px`。
 - 看板緊湊度不退化，畫布左距仍為 10px，欄距仍為 10px。
 - 以瀏覽器實測 DOM 量測至少包含：toolbar height、mode button height、task row height、calendar week row height、gantt bar height。
 - `npm.cmd run lint -- --quiet` 通過。

@@ -9,6 +9,12 @@
 建立日期：2026-06-29
 實作日期：2026-07-06
 
+## DEV-088 任務生命週期覆寫（2026-08-25）
+
+- 回收桶現行文案以「封存任務／封存時間／還原／永久刪除」為準；下方「已刪除任務」是歷史 UI 文案。
+- 回收桶的永久刪除必須呼叫真正的持久層刪除，不得再次把 `isArchived` 設為 `true`。
+- active task surfaces 只提供封存；永久刪除只存在於目前看板回收桶。完整契約見 `SPEC-088`。
+
 ## Implementation Status - 2026-07-06
 
 DEV-038 已完成本機 RD、自動化 QC 與 2026-07-06 Firebase Hosting production release。實作範圍限制在 Settings / Backup / RecycleBin / BoardMembersPanel / AppInstallAssistant 與 verifier，未修改 `exportData` / `importData` 資料格式，未新增 DB schema、RLS 或 migration。

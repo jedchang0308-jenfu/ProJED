@@ -15,63 +15,98 @@ interface CalendarState {
     isHoliday: (dateStr: string) => boolean; // 支援 "YYYY-MM-DD" 與 "YYYYMMDD"
 }
 
+export type CalendarHolidayMap = Record<string, boolean>;
+
+/**
+ * 以前一年度相同月日的例外（平日放假／週末補班）預估目標年度。
+ * 只複製相對於標準週休二日的例外，避免把去年的所有週末誤套到新年度。
+ */
+export const projectCalendarYearFromPrevious = (
+    holidays: CalendarHolidayMap,
+    sourceYear: number,
+    targetYear: number,
+): CalendarHolidayMap => Object.entries(holidays).reduce<CalendarHolidayMap>((projected, [dateStr, isHoliday]) => {
+    if (!dateStr.startsWith(String(sourceYear)) || !/^\d{8}$/.test(dateStr)) return projected;
+
+    const sourceDate = dayjs(`${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`);
+    if (!sourceDate.isValid() || sourceDate.format('YYYYMMDD') !== dateStr) return projected;
+
+    const dayOfWeek = sourceDate.day();
+    const isStandardWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    if (isHoliday !== isStandardWeekend) {
+        projected[`${targetYear}${dateStr.slice(4)}`] = isHoliday;
+    }
+
+    return projected;
+}, {});
+
 export const useCalendarStore = create<CalendarState>((set, get) => ({
     holidays: {},
     loadedYears: [],
     
     fetchYears: async (years: number[]) => {
         const { loadedYears, holidays } = get();
-        const yearsToFetch = years.filter(y => !loadedYears.includes(y));
-        if (yearsToFetch.length === 0) return;
+        const currentYear = dayjs().year();
+        const requestedYears = [...new Set(years.filter(Number.isInteger))];
+        const yearsToResolve = new Set(
+            requestedYears.filter(year => !loadedYears.includes(year)),
+        );
+
+        // 若直接要求未來年度，先補齊今年到目標年度之間的預估基準。
+        requestedYears.forEach(year => {
+            if (year <= currentYear) return;
+            for (let sourceYear = currentYear; sourceYear < year; sourceYear += 1) {
+                if (!loadedYears.includes(sourceYear)) yearsToResolve.add(sourceYear);
+            }
+        });
+
+        if (yearsToResolve.size === 0) return;
 
         const newHolidays = { ...holidays };
+        const resolvedYears = new Set(loadedYears);
 
-        const applyFallback = (year: number) => {
-            console.warn(`[Calendar] 尚未取得 ${year} 年人事局行事曆資料，啟用前一年度預估模式 (Fallback)。`);
-            // Fallback 預估模式：參考 year-1 的國定假日來推算
-            Object.entries(newHolidays).forEach(([dateStr, isHol]) => {
-                if (dateStr.startsWith(String(year - 1))) {
-                    const d = dayjs(dateStr); // dateStr: "YYYYMMDD"
-                    const dayOfWeek = d.day();
-                    const nextYearDateStr = String(year) + dateStr.slice(4);
-                    
-                    // 1. 若去年此日是「平日」但放假 (即國定假日、連假)
-                    if (isHol && dayOfWeek !== 0 && dayOfWeek !== 6) {
-                        newHolidays[nextYearDateStr] = true;
-                    }
-                    // 2. 若去年此日是「假日」但不放假 (即補班日)
-                    else if (!isHol && (dayOfWeek === 0 || dayOfWeek === 6)) {
-                        newHolidays[nextYearDateStr] = false;
-                    }
-                }
-            });
+        const applyFallback = (year: number, expectedFutureProjection: boolean) => {
+            const sourceYear = year - 1;
+            const projected = projectCalendarYearFromPrevious(newHolidays, sourceYear, year);
+            if (Object.keys(projected).length === 0) {
+                console.warn(`[Calendar] ${year} 年無官方資料，且缺少 ${sourceYear} 年基準；暫以週休二日估算。`);
+                return false;
+            }
+
+            Object.assign(newHolidays, projected);
+            if (expectedFutureProjection) {
+                console.info(`[Calendar] ${year} 年官方資料尚未提供，先以 ${sourceYear} 年行事曆預估。`);
+            } else {
+                console.warn(`[Calendar] ${year} 年官方資料讀取失敗，先以 ${sourceYear} 年行事曆預估。`);
+            }
+            return true;
         };
-        
-        await Promise.all(yearsToFetch.map(async (year) => {
-            try {
-                if (year > dayjs().year()) {
-                    applyFallback(year);
-                    return;
-                }
 
+        // 必須依年度循序處理，確保下一年度投影時，前一年度資料已經可用。
+        for (const year of [...yearsToResolve].sort((left, right) => left - right)) {
+            if (resolvedYears.has(year)) continue;
+
+            try {
                 // 使用 ruyut/TaiwanCalendar 的 CDN 資料
                 const res = await fetch(`https://cdn.jsdelivr.net/gh/ruyut/TaiwanCalendar/data/${year}.json`);
-                if (res.ok) {
-                    const data: CalendarDay[] = await res.json();
-                    data.forEach(d => {
-                        newHolidays[d.date] = d.isHoliday;
-                    });
-                } else {
-                    throw new Error("HTTP 404");
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const data: CalendarDay[] = await res.json();
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error('Calendar payload is empty');
                 }
-            } catch (error) {
-                applyFallback(year);
+                data.forEach(day => {
+                    newHolidays[day.date] = day.isHoliday;
+                });
+                resolvedYears.add(year);
+            } catch {
+                if (applyFallback(year, year > currentYear)) resolvedYears.add(year);
             }
-        }));
+        }
 
         set(state => ({
-            holidays: newHolidays,
-            loadedYears: [...state.loadedYears, ...yearsToFetch]
+            holidays: { ...state.holidays, ...newHolidays },
+            loadedYears: [...new Set([...state.loadedYears, ...resolvedYears])],
         }));
     },
     

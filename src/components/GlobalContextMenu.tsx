@@ -47,7 +47,7 @@ export const GlobalContextMenu: React.FC = () => {
   const showStartDate = useBoardStore((state) => state.showStartDate);
   const toggleStartDate = useBoardStore((state) => state.toggleStartDate);
   const addNode = useWbsStore((state) => state.addNode);
-  const removeNode = useWbsStore((state) => state.removeNode);
+  const archiveNode = useWbsStore((state) => state.archiveNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const duplicateNodeTree = useWbsStore((state) => state.duplicateNodeTree);
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency, canCreateBoard, canDeleteWorkspace, canEditBoardSettings, canMoveBoardBetweenWorkspaces } = useBoardPermissions();
@@ -97,9 +97,7 @@ export const GlobalContextMenu: React.FC = () => {
       canAssignTask,
       canCreateDependency,
     }),
-    // Delete opens a confirmation first; the destructive guard is evaluated
-    // again by handleDelete after the user confirms.
-    'task.delete-request': canDeleteTask,
+    'task.archive': canDeleteTask,
   };
   const getWorkspace = (workspaceId: string) => workspaces.find(workspace => workspace.id === workspaceId);
   const getWorkspaceRole = (workspaceId: string) => {
@@ -439,13 +437,12 @@ export const GlobalContextMenu: React.FC = () => {
     }
   };
 
-  const handleDelete = () => {
+  const handleArchive = () => {
     if (!canDeleteTask) return;
     if (!contextMenuState) return;
 
-    const dangerousActionConfirmed = window.confirm(`確定要刪除「${contextMenuState.title}」嗎？`);
-    if (guardTaskAction('task.delete-request', { canDeleteTask, dangerousActionConfirmed }).allowed) {
-      removeNode(contextMenuState.nodeId);
+    if (guardTaskAction('task.archive', { canDeleteTask }).allowed) {
+      archiveNode(contextMenuState.nodeId);
     }
     closeContextMenu();
   };
@@ -468,7 +465,7 @@ export const GlobalContextMenu: React.FC = () => {
       case 'task.dependency-end': return enterDependencyMode('end');
       case 'task.promote': return handleMoveUp();
       case 'task.demote': return handleMoveDown();
-      case 'task.delete-request': return handleDelete();
+      case 'task.archive': return handleArchive();
       default: return undefined;
     }
   };

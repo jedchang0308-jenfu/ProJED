@@ -2540,7 +2540,7 @@ async (page) => {
 
   await runCase('DEV068-MOB-ACTION-MATRIX', 'all mobile action-rail targets own release and never also perform a child move', async () => {
     const actionEvidence = [];
-    for (const action of ['toggle-complete', 'add-sibling', 'add-child', 'delete']) {
+    for (const action of ['toggle-complete', 'add-sibling', 'add-child', 'archive']) {
       await openApp({ width: 390, height: 844 });
       const [sourceId, targetId] = (await fixtureIds()).l2Pair;
       const beforeNodes = await readNodes();
@@ -2555,7 +2555,7 @@ async (page) => {
         `${action} must clear child candidate before release`);
       await held.end();
 
-      if (action === 'delete') {
+      if (action === 'archive') {
         const confirm = page.getByRole('button', { name: '確認' }).last();
         await confirm.waitFor({ state: 'visible', timeout: 5000 });
         await confirm.click();

@@ -1,5 +1,17 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-25（DEV-088 任務生命週期）
+
+Spec Impact：`Intentional replacement`。使用者採用 `完成／取消完成 → 封存 → 永久刪除`；SPEC-088 成為任務生命週期 authoritative source。DEV-029／038／070 的「刪除任務＝isArchived」舊語意保留為歷史，active task surfaces 改為封存，永久刪除只在目前看板回收桶。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-088-task-lifecycle-complete-archive-delete.md` | RD Implemented / QA-QC PASS / 未 Release | DEV-088 | 固定完成、封存、還原、永久刪除狀態轉換、權限、失敗與驗收契約。 |
+| `ai-doc/qa/QA-DEV-088-task-lifecycle-complete-archive-delete.md` | Executed / PASS | DEV-088 | P0/P1 FMEA、static、browser、dependency round trip、hard-delete reload、錯誤與 viewport gate。 |
+| `ai-doc/qc/QC-DEV-088-task-lifecycle-complete-archive-delete.md` | PASS / local-test | DEV-088 | 完成切換、封存還原、failure injection、永久刪除、桌機／手機 rendered evidence 與 regression 結論。 |
+| `SPEC-029`、`SPEC-038`、`SPEC-070` | Intentional replacement addendum | DEV-088／DEV-029／DEV-038／DEV-070 | 舊刪除 terminology 與 action key 被 archive semantics 取代；schema 與 permission source 不變。 |
+| `ai-doc/dev_task.md` | RD Implemented / QA-QC PASS / 未 Release | DEV-088 | 本機 RD／QA／QC 已完成；不含 deploy、production data 或 release。 |
+
 ## Documentation Map Update - 2026-08-25（DEV-087 跨模式任務階層縮排一致化）
 
 Spec Impact：`Intentional replacement / cross-view consolidation`。依使用者明確指示，以 `SPEC-001` 的共用 spacing contract 統一看板 L3+、清單、甘特與日曆左側清單的每層增量：desktop `6px`、≤767px `5px`。各模式保留原本 base inset、字級、列高、卡片內距與操作面；DEV-081 的 mobile large `35px` indent 舊例外被此決策取代，A/B 仍保留其餘 2.5x 閱讀與操作幾何。

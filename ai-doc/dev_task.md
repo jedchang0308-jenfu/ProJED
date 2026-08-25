@@ -504,6 +504,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - Spec Impact：`Intentional replacement / cross-view consolidation`；只取代分散的 20px／14px／35px depth increment，不改資料、排序、拖曳、字級、列高或權限。
   - 證據：`SPEC-001`、`SPEC-081`、DEV-087 static 9/9、browser 8/8、DEV-081 static 32/32＋browser 10/10、DEV-086 static／browser PASS、TypeScript、`output/playwright/dev-087/result.json` 與八張截圖。
   - 計入交付：是（local implementation + QA/QC；未 Release）
+- ✓ DEV-088 [交付點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 任務完成、封存與永久刪除生命週期
+  - 摘要：採用「完成／取消完成 → 封存 → 永久刪除」；active 任務表面只提供可還原封存，永久刪除只在目前看板回收桶確認後執行，並修正回收桶原本誤呼叫軟封存的資料缺口。
+  - 來源 ID：`USER-20260825-TASK-LIFECYCLE-COMPLETE-ARCHIVE-DELETE`
+  - 父任務：DEV-029、DEV-038、DEV-044、DEV-062、DEV-070
+  - 下一步：若要正式交付，另走 deployment/release gate 並驗證 production backend 的不可逆刪除邊界；本輪不 deploy 或 release。
+  - Spec Impact：`Intentional replacement`；以 SPEC-088 取代舊「刪除任務＝isArchived」UI／action 語意，不改 schema 或 permission source。
+  - 證據：`SPEC-088`、`QA-DEV-088`、`QC-DEV-088`、DEV-088 static／browser PASS、TypeScript、build:test 與 targeted regression PASS。
+  - 計入交付：是（local implementation + QA/QC；未 Release）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -1802,6 +1810,48 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - DEV-086 真實 drag browser PASS：工作台未歸位 6px／5px、定位線與跨工作區子樹 round-trip 未回歸。
 - Artifact：`output/playwright/dev-087/result.json`、`board-*`、`list-*`、`gantt-*`、`calendar-*` 八張畫面；已人工確認無重疊、額外容器或 document-level overflow。
 - Runtime：重用既有同專案 `localhost:4000` primary runtime（listener PID 24272），本 DEV 未啟動或停止；自有 Playwright sessions 均已結束。
+- 結論：`RD Implemented = PASS；QA-QC PASS；Spec Drift = In sync after intentional replacement`。未執行 commit、push、PR、merge、deploy、production data 或 release。
+
+## DEV-088：任務完成、封存與永久刪除生命週期
+
+- 文件成熟度：`RD Implemented / QA-QC PASS / Human Confirmed`
+- 狀態：本機實作與 QA/QC 完成／未 Release
+- 節點類型：交付點
+- 父任務：DEV-029、DEV-038、DEV-044、DEV-062、DEV-070
+- 是否計入產品交付完成：是（local implementation + QA/QC；未 Release）
+- 原始需求邊界：使用者採用 `完成／取消完成 → 封存 → 永久刪除`。
+- 風險等級：Medium（跨任務入口與不可逆刪除，不改 schema、provider 或角色來源）
+- Spec Impact：`Intentional replacement`
+
+### 目標與範圍
+
+- active 任務表面保留完成切換並把「刪除任務」改為中性「封存任務」。
+- 封存只改 `isArchived` 並保留依賴；回收桶還原後資料與關聯可恢復。
+- 回收桶新增真正持久層永久刪除，命中子樹與 dependency，失敗不得假成功。
+- 更新 DEV-029／038／070 authoritative addendum、targeted verifier 與 browser evidence。
+- 不做 production migration、正式資料刪除、deploy、release、retention 或 permission schema 拆分。
+
+### 驗收與停止條件
+
+- active surface 無「刪除任務」；永久刪除只在回收桶且必須確認。
+- archive／restore 保留 status、parent、identity 與 dependency；permanent delete reload 後不復活。
+- P0/P1 static／browser／regression、TypeScript、build:test 與 visible-error gate全數通過。
+- 任一永久刪除假成功、orphan、依賴遺失、無確認、非預期 4xx/5xx 或 UI 可見錯誤即停止並回 RD。
+
+### 直接文件
+
+- `ai-doc/specs/SPEC-088-task-lifecycle-complete-archive-delete.md`
+- `ai-doc/qa/QA-DEV-088-task-lifecycle-complete-archive-delete.md`
+- `ai-doc/qc/QC-DEV-088-task-lifecycle-complete-archive-delete.md`
+
+### RD／QA／QC 結果（2026-08-25）
+
+- RD：active task action 統一為 `task.archive`；mobile action key 改為 `archive`；WBS store 分離 `archiveNode` 與 `permanentlyDeleteNodes`；回收桶提供還原、單筆永久刪除與清空確認。
+- Data：封存只更新 `isArchived`；還原保留 task identity／status／parent／dependency；永久刪除 cycle-safe 收集子樹、先清 dependency、再 leaves-first 刪 task，持久層成功後才收斂前端 state。
+- DEV-088 browser：完成→取消完成、archive→restore、dependency fingerprint、取消刪除、注入 persistence failure、2 筆子樹永久刪除與 reload 均 PASS；console／page／response error 為 0。
+- Rendered QC：1440×900 與 390×844 無 overflow；人工檢查發現 mobile action icon 對比不足後已提高綠色還原／紅色永久刪除辨識度，重驗 PASS。
+- Regression：DEV-029 static 39/39 + browser PASS；DEV-038 static 20/20 + browser PASS；DEV-044 26/26；DEV-062 PASS；DEV-070 58/58；DEV-027G 97/97；TypeScript、build:test、targeted ESLint 0 error、diff check PASS。
+- Runtime：使用本 DEV 專屬 `localhost:4001` Vite test runtime；完成前停止並確認 port 釋放。既有 `localhost:4000` primary runtime 不變。
 - 結論：`RD Implemented = PASS；QA-QC PASS；Spec Drift = In sync after intentional replacement`。未執行 commit、push、PR、merge、deploy、production data 或 release。
 
 ## PM Update 歷史歸檔

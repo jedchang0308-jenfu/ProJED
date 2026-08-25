@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Archive,
   Copy,
   CornerLeftUp,
   CornerRightDown,
@@ -7,7 +8,6 @@ import {
   Link2,
   PanelRight,
   Plus,
-  Trash2,
   UserRound,
 } from 'lucide-react';
 import { getTaskActionCatalog, getTaskActionDefinition } from './taskActionCatalog';
@@ -34,7 +34,7 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
   'task.dependency-end': <GitBranch size={14} className="flex-shrink-0 text-purple-500" />,
   'task.promote': <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />,
   'task.demote': <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />,
-  'task.delete-request': <Trash2 size={14} className="flex-shrink-0 text-red-500" />,
+  'task.archive': <Archive size={14} className="flex-shrink-0 text-amber-600" />,
 };
 
 const LABELS: Partial<Record<TaskActionId, string>> = {
@@ -48,7 +48,7 @@ const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.dependency-end': '設定依賴關係（結束日）',
   'task.promote': '往上一階',
   'task.demote': '往下一階',
-  'task.delete-request': '刪除任務',
+  'task.archive': '封存任務',
 };
 
 const TITLES: Partial<Record<TaskActionId, string>> = {
@@ -57,7 +57,7 @@ const TITLES: Partial<Record<TaskActionId, string>> = {
   'task.create-relationship': '以目前任務為起點選擇目標',
 };
 
-const SECTION_ORDER = ['create', 'assignment', 'dependency', 'hierarchy', 'danger'] as const;
+const SECTION_ORDER = ['create', 'assignment', 'dependency', 'hierarchy', 'lifecycle', 'danger'] as const;
 
 const actionLabel = (actionId: TaskActionId) => (
   LABELS[actionId] || getTaskActionDefinition(actionId)?.label || actionId
@@ -119,7 +119,7 @@ export const TaskActionMenu = ({
         disabled={!actionEnabled}
         title={TITLES[actionId]}
         data-task-action-id={actionId}
-        className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.delete-request' ? 'text-red-600 hover:bg-red-50 dark:text-red-400' : 'text-gray-700 hover:bg-gray-100'}`}
+        className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.archive' ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-400' : 'text-gray-700 hover:bg-gray-100'}`}
       >
         {ICONS[actionId]}
         <span>{actionLabel(actionId)}</span>

@@ -9,7 +9,7 @@ export type TaskDragSourceKind =
   | 'wbs-list-row'
   | 'workbench-unplaced-row';
 
-export type MobileTaskAction = 'toggle-complete' | 'add-sibling' | 'add-child' | 'delete';
+export type MobileTaskAction = 'toggle-complete' | 'add-sibling' | 'add-child' | 'archive';
 export type MobileTaskDropPosition = 'before' | 'after';
 export type TaskDragIndicatorAxis = 'horizontal' | 'vertical';
 export type TaskDragTargetKind =

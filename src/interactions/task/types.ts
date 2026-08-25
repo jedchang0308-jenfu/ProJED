@@ -61,7 +61,7 @@ export type TaskActionId =
   | 'task.promote'
   | 'task.demote'
   | 'task.toggle-complete'
-  | 'task.delete-request'
+  | 'task.archive'
   | 'mindmap.select-parent'
   | 'mindmap.select-first-child'
   | 'mindmap.select-previous'
@@ -101,7 +101,7 @@ export type TaskInteractionDispatchOutcome = {
   commandOutcome: TaskCommandOutcome | null;
 };
 
-export type TaskMenuSection = 'create' | 'assignment' | 'dependency' | 'hierarchy' | 'danger';
+export type TaskMenuSection = 'create' | 'assignment' | 'dependency' | 'hierarchy' | 'lifecycle' | 'danger';
 
 export type TaskActionDefinition = {
   id: TaskActionId;

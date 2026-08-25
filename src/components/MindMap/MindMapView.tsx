@@ -57,7 +57,7 @@ import {
   getMindMapNodeId,
   isMindMapRelationshipInteractionElement,
 } from './mindMapDomSelectors';
-import { MINDMAP_MESSAGES, getMindMapDeleteTaskConfirmMessage } from './mindMapMessages';
+import { MINDMAP_MESSAGES, getMindMapArchiveTaskConfirmMessage } from './mindMapMessages';
 import {
   makeRelationshipDraftPreview,
   type MindMapConnectorPath,
@@ -234,7 +234,7 @@ const MindMapView: React.FC = () => {
   const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
   const addNode = useWbsStore(state => state.addNode);
   const updateNode = useWbsStore(state => state.updateNode);
-  const removeNode = useWbsStore(state => state.removeNode);
+  const archiveTask = useWbsStore(state => state.archiveNode);
   const statusFilters = useBoardStore(state => state.statusFilters);
   const dueWithinDays = useBoardStore(state => state.dueWithinDays);
   const overdueOnly = useBoardStore(state => state.overdueOnly);
@@ -1207,22 +1207,22 @@ const MindMapView: React.FC = () => {
     const targetNodeId = nodeId || selectionStore.getSelectedNodeId();
     if (!targetNodeId) return;
     if (!canDeleteTask) {
-      toast.warning(MINDMAP_MESSAGES.noDeleteTaskPermission);
+      toast.warning(MINDMAP_MESSAGES.noArchiveTaskPermission);
       return;
     }
     const plan = getMindMapArchiveTaskPlan({ selectedNodeId: targetNodeId, nodes, parentNodesIndex, boardId, rootNodes, getChildren });
     if (!plan) return;
     const confirmed = plan.descendantIds.length === 0
       ? true
-      : await useDialogStore.getState().showConfirm(getMindMapDeleteTaskConfirmMessage(plan.selected.title || DEFAULT_MINDMAP_TASK_TITLE, plan.descendantIds.length));
+      : await useDialogStore.getState().showConfirm(getMindMapArchiveTaskConfirmMessage(plan.selected.title || DEFAULT_MINDMAP_TASK_TITLE, plan.descendantIds.length));
 
     if (!confirmed) return;
 
     setInlineTitleEditNodeId(null);
     setInlineTitleEditFocusNodeId(null);
-    [plan.selected.id, ...plan.descendantIds].forEach(id => removeNode(id));
+    [plan.selected.id, ...plan.descendantIds].forEach(id => archiveTask(id));
     selectNode(plan.nextSelectionId);
-  }, [boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, removeNode, rootNodes, selectNode, selectionStore]);
+  }, [archiveTask, boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, rootNodes, selectNode, selectionStore]);
 
   const startRelationshipLabelEdit = React.useCallback((relationshipId: string) => {
     const relationship = noteRelationships.find(item => item.id === relationshipId);

@@ -10,7 +10,7 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.dependency-end', label: '建立結束依賴', icon: 'arrow-right-left', section: 'dependency', kind: 'transient', capability: 'dependency' },
   { id: 'task.promote', label: '提升階層', icon: 'corner-left-up', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.demote', label: '降為子任務', icon: 'corner-right-down', section: 'hierarchy', kind: 'mutation', capability: 'move' },
-  { id: 'task.delete-request', label: '刪除任務', icon: 'trash-2', section: 'danger', kind: 'danger', capability: 'delete' },
+  { id: 'task.archive', label: '封存任務', icon: 'archive', section: 'lifecycle', kind: 'mutation', capability: 'delete' },
   { id: 'task.select', label: '選取任務', icon: 'mouse-pointer-2', section: null, kind: 'selection' },
   { id: 'task.open-details', label: '開啟詳情', icon: 'panel-right', section: null, kind: 'navigation' },
   { id: 'task.open-details-for-naming', label: '開啟詳情並命名', icon: 'panel-right', section: null, kind: 'navigation' },

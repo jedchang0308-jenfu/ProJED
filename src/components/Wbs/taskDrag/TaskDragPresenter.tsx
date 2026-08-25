@@ -44,11 +44,11 @@ const mobileActionItems: Array<{
     idleClassName: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
   },
   {
-    key: 'delete',
-    label: '刪除任務',
+    key: 'archive',
+    label: '封存任務',
     permission: 'delete',
-    activeClassName: 'bg-red-500 text-white',
-    idleClassName: 'bg-red-50 text-red-600 hover:bg-red-100',
+    activeClassName: 'bg-amber-500 text-white',
+    idleClassName: 'bg-amber-50 text-amber-700 hover:bg-amber-100',
   },
 ];
 

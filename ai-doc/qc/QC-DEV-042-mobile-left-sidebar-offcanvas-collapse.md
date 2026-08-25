@@ -1,18 +1,42 @@
-# QC-DEV-042: 手機左側欄收疊零佔寬與全域任務平台 Off-Canvas 事實驗證
+# QC-DEV-042: 手機與桌機共用左側 Inline 面板事實驗證
 
 關聯 DEV: DEV-042
 關聯 SPEC: `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
 關聯 QA: `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態: Production Release Deployed / Local + Production + User-Reported Physical Phone QC Passed
+狀態: 2026-08-24 Shared Inline Layout Rework Width Alignment Local QC Passed / Production Not Deployed / Physical Phone Supplemental Not Executed；2026-07-06 Off-Canvas Production Evidence 僅為歷史版本
 建立日期: 2026-07-05
 
 ## 驗證結論
 
-- 判定：通過，本機 static + browser viewport matrix + regression gate 通過；2026-07-06 使用者回報 DEV-042 真機驗證通過。
-- 範圍：手機與桌機 closed Sidebar / TaskWorkbench zero-width off-canvas、overlay 開啟/關閉、DEV-029 pan-first 與 DEV-039 workbench regression。
-- 限制：DB/RLS/migration/RPC 或正式資料修復未執行；production deploy 與正式站 smoke 已於 2026-07-06 完成；真機 supplemental 為使用者回報通過，repo 內未附裝置錄影或瀏覽器裝置 log。
+- 判定：Local QC Passed。Shared Inline 實作確認手機與桌機共用 `Sidebar`、`TaskWorkbenchPanel`，且兩者在 390x844／320x844 的 computed width 分別一致為 340px／272px。
+- Sidebar／Workbench 與 Board 邊界相接，面板開啟會縮小相鄰 main／Board；共同 width helper 與 viewport clamp 已由 static、browser 及 rendered screenshots 證實。
+- 未歸位任務已用真實 touch lifecycle 從 inline Workbench 拖入右側看板，`boardId` 由 `__task_workbench_unplaced__` 變更為 `local-test-mobile-ui-board`，`terminal:complete` 只有 1 筆；已歸位列仍無 drag ownership。
+- 限制：本輪未部署 production，未執行本增補後的實體 iOS／Android 補充驗證；2026-07-06 production／真機通過證據只代表已被取代的 Off-Canvas 版本。
 
-## RD 修正事實
+## 2026-08-24 Shared Inline Rework Width Alignment 執行證據（目前權威）
+
+| Gate | Result | Evidence |
+|---|---|---|
+| `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas` | Pass, 22/22 | 同一元件、inline flow、無 overlay/backdrop、Sidebar／Workbench 共用 width helper 與 viewport clamp、文件契約 |
+| `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser` | Pass, 8/8 | 390／320 mobile computed width 一致、1440 desktop、雙面板、Escape、visible-error；rendered screenshots 已更新 |
+| `npm.cmd run verify:dev-054-mobile-task-drag-precision` | Pass, 45/45 | Workbench unplaced 允許 direct board target；column body 為 mobile drop target；placed row 仍 readonly |
+| `npm.cmd run verify:dev-054-mobile-task-drag-precision-browser` | Pass, 15/15 | R15 跨 inline 分欄命中 `qc-card-1`、歸位至 active board、exactly-once；console/network error 0 |
+| `npm.cmd run verify:dev-039-task-workbench-placement-lanes` | Pass, 31/31 | placement lane、shared context menu、inline closed/open 契約 |
+| `npm.cmd run verify:dev-029-mobile-pan-first-interactions` | Pass, 39/39 | mobile pan-first 靜態回歸 |
+| `npx.cmd tsc --noEmit --pretty false` | Pass | exit 0 |
+| Targeted ESLint | Pass | exit 0，無輸出 |
+| `npm.cmd run build:test` | Pass | Vite test build 完成；僅 caniuse-lite 時效 warning |
+| `git diff --check` | Pass | 僅 LF/CRLF 通知，無 whitespace error |
+
+關鍵 UI 證據：
+
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787572120319-mobile-sidebar-inline.png`
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787572120319-mobile-workbench-inline.png`
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787572120319-mobile-320-inline.png`
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787572120319-desktop-sidebar-workbench-inline-side-by-side.png`
+- `output/playwright/dev-054-mobile-drag-1787572317649-R15-workbench-to-inline-board.png`
+
+## RD 修正事實（2026-07 Off-Canvas 歷史版本）
 
 - `src/components/Sidebar.tsx`：mobile / coarse pointer closed state 不再回傳 in-flow collapsed rail；expanded state 改為 fixed overlay drawer，支援 backdrop click 與 `Escape`。
 - `src/components/Sidebar.tsx`：expanded Sidebar 不再保留 `全域任務平台` 重複入口；底部僅保留 `紀錄庫` 與 `設定`。
@@ -22,7 +46,18 @@
 - `scripts/verify-dev-039-task-workbench-placement-lanes-browser.pw.js`：mobile section 從舊 collapsed rail 契約更新為 DEV-042 no in-flow rail + top nav entry + Workbench overlay 契約。
 - `scripts/verify-dev-029-mobile-pan-first-interactions-browser.pw.js`：mobile workbench 開啟入口改走 top nav entry，避免 Sidebar 內重複入口回流。
 
-## 執行項目
+## 2026-08-24 手機預設開啟與 234px 寬度增補事實（歷史契約，已被 Shared Inline 取代）
+
+- `src/components/TaskWorkbenchPanel.tsx`：手機 `mobileOverlayOpen` 預設開啟契約維持；本輪將 mobile overlay 寬度調整為 `min(234px, calc(100vw - 128px))`，桌面仍使用 `panelPrefs.open` 與原 `panelWidth`。
+- Static gate：`npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas`，Pass 20/20。
+- Browser gate：`npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser`，Pass 9/9；390×844 實測 `234px`，320×844 實測 `192px` 並保留 128px 安全邊距，1440×900 desktop regression 同步通過。
+- TypeScript、targeted ESLint、`build:test`：Pass。
+- UI evidence：`output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787564070988-mobile-default-open.png`、`output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787564070988-mobile-320-safe-width.png`；390×844 工作台以 234px overlay 首屏可見，320×844 安全縮為 192px；標題、收合鍵、篩選、任務列與日期均可讀，main / Board canvas 沒有被重新縮窄，無可見重疊、截斷或水平 overflow。
+- Visible error sweep：0 console errors，無 `.inline-error`、`[role=alert]`、HTTP 4xx/5xx 或 route error text。
+- Visible error sweep：0 console errors，無 `.inline-error`、`[role=alert]`、HTTP 4xx/5xx 或 route error text。
+- 證據邊界：本輪未部署 production、未執行 physical-phone supplemental；既有 2026-07-06 production／真機證據不得代替本增補的正式環境驗證。
+
+## 執行項目（2026-07／舊增補歷史證據）
 
 | Gate | Result | Evidence |
 |---|---|---|
@@ -36,7 +71,7 @@
 | `git diff --check` | Pass with LF/CRLF warnings only | no whitespace error |
 | `npm.cmd run build:test` | Pass | Vite test build completed; Browserslist data warning only |
 
-## Browser Evidence
+## Browser Evidence（2026-07／舊增補歷史證據）
 
 Screenshots:
 

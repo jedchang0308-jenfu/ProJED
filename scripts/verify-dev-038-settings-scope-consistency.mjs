@@ -79,9 +79,9 @@ assert(
   source.recycleBinView.includes('data-recycle-bin-view="current-board"') &&
     source.recycleBinView.includes('目前看板回收桶') &&
     source.recycleBinView.includes('目標：{targetLabel}') &&
-    source.recycleBinView.includes('目前看板沒有已刪除任務。') &&
-    source.recycleBinView.includes('archivedItems.length') &&
-    source.recycleBinView.includes('將永久刪除 ${archivedItems.length} 筆已刪除任務'),
+    source.recycleBinView.includes('目前看板沒有封存任務。') &&
+    source.recycleBinView.includes('collectPermanentDeleteScope') &&
+    source.recycleBinView.includes('將永久刪除 ${deleteCount} 筆封存任務'),
 );
 
 assert(

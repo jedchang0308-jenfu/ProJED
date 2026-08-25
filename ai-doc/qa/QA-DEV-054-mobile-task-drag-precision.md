@@ -145,7 +145,7 @@ Debug trace 至少記錄：
 | QA-054-R12 | 390x844 | 分別長按 L1、L2、L3+ 的可拖 task surface | computed `user-select` / `-webkit-user-select` 為 `none`；selection 為空；只進 mobile rail，不開桌機 menu |
 | QA-054-R13 | 390x844 | 430ms 放手、7px 後跨 500ms、9px 後跨 500ms | 430ms 不啟動；7px 仍啟動；9px 取消，維持 500ms／8px 契約 |
 | QA-054-R14 | 844x390、1024x768 touch | 長按 L2 task | 即使 width > 768 仍進 dedicated mobile session；無文字選取、無桌機 menu |
-| QA-054-R15 | 390x844 Workbench | unplaced／placed row 分別長按並檢查 computed style | unplaced 防選取但 `touch-action != none` 且可進 rail；placed 無 ownership marker、無 rail |
+| QA-054-R15 | 390x844 shared inline Workbench | 新增 unplaced task，長按跨面板拖到右側可見看板卡片，再長按 placed row | unplaced 防選取且保留 native pan；finger 命中 Board direct target；`boardId` 離開未歸位並 exactly-once commit；placed 無 ownership marker、無 rail |
 
 ## 7. Desktop Frozen Baseline Regression
 
@@ -284,12 +284,12 @@ Automated QA 判定：`PASS`。整體 DEV 判定：`未充分驗證`（僅因 re
 
 | 驗證層 | 結果 | 主要覆蓋 |
 |---|---|---|
-| DEV-054 static | 44/44 passed | TouchEvent 不受 viewport gate、selection/callout ownership、Workbench native pan、placed no-drag、no TouchSensor |
-| DEV-054 browser | 15/15 passed | native topbar touch、action rail exactly-once、同層／跨層落點、jitter、stale target、invalid zero-write、320/390/430、L1/L2/L3+ 零圈選、430ms/7px/9px、844x390/1024x768 touch、Workbench |
+| DEV-054 static | 45/45 passed | TouchEvent 不受 viewport gate、selection/callout ownership、Workbench native pan、unplaced direct board target、column blank target、placed no-drag、no TouchSensor |
+| DEV-054 browser | 15/15 passed | native topbar touch、action rail exactly-once、同層／跨層落點、jitter、stale target、invalid zero-write、320/390/430、L1/L2/L3+ 零圈選、430ms/7px/9px、844x390/1024x768 touch、Workbench unplaced 跨 inline 分欄歸位 |
 | Mobile pan regression | DEV-029 static 39/39；browser 41 cases passed | quick tap、horizontal/vertical pan、long press、cancel、edge scroll、CTA、互動控制、無 click-through |
 | Shared drag regressions | DEV-046 static 31/31 + browser passed；DEV-053 static 30/30 + browser 10/10 | 全表面拖拉、click/right-click、invalid no-op、cancel recovery、placed row readonly |
 | Desktop / L1 regressions | DEV-055 static 27/27 + browser 16/16；DEV-067 static 13/13 + browser 8/8 | 桌機 approved overlay、同欄／跨欄／復原、L1 promotion/reorder、錯誤提交為 0 |
-| Workbench regression | DEV-039 static 31/31 + placement-lanes browser passed | scoped v2 prefs、未歸位可拖、已歸位不可拖、mobile overlay、lane filtering |
+| Workbench regression | DEV-039 static 31/31 + DEV-042 browser 8/8 | scoped v2 prefs、未歸位可拖、已歸位不可拖、mobile／desktop 共用 inline 元件、lane filtering |
 | Engineering gates | TypeScript passed；targeted ESLint 0 error；`build:test` passed | 編譯、型別、規範、可建置性 |
 | Runtime sweep | console errors 0；network failures 0；visible errors 0 | DEV-054、DEV-053 與相鄰 rendered suites |
 

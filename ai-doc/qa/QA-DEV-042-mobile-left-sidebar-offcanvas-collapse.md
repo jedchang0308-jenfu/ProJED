@@ -2,16 +2,44 @@
 
 關聯 DEV：DEV-042
 關聯 SPEC：`ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態：Production Release Deployed / Local + Production Smoke Passed / User-Reported Physical Phone Supplemental Passed
+狀態：2026-08-24 Shared Inline Layout Rework Width Alignment Local QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed；舊 Off-Canvas 證據保留為歷史版本
 建立日期：2026-07-05
 
 ## 驗證目標
 
-確認手機版左側導覽與全域任務平台在收疊狀態下不再保留 in-flow rail，不壓縮主看板內容；展開時以 overlay / drawer 顯示，關閉後回到完整主畫面。桌機版仍保留既有 compact rail 能力，且不得破壞 DEV-029 mobile pan-first 與 DEV-039 工作台行為。
+確認手機與桌機共用 inline 元件：`Sidebar` 與 `TaskWorkbenchPanel` 開啟時都參與 flex 排列並縮小相鄰看板，不得存在 overlay 或 backdrop；收疊後不保留 rail。不得破壞 DEV-029 mobile pan-first、DEV-039 工作台行為或未歸位任務拖入看板流程。
 
 使用思考習慣：#目的、#限制條件、#可驗證性
 
-## Zero-Tolerance Failures
+## 2026-08-24 Shared Inline Rework 驗證覆寫
+
+本節為目前權威 QA；下方舊版中所有要求 mobile overlay、backdrop、234px、128px gutter 或預設強制開啟的案例只保留歷史，不得用來判定目前版本失敗。
+
+目前零容忍失敗：
+
+- 手機 Sidebar 或 TaskWorkbench 出現 `position: fixed`、overlay selector、dimming backdrop，或以 z-index 覆蓋 Board canvas。
+- 手機開啟面板後，main／Board 寬度與開啟前相同，表示面板仍是覆蓋而非 inline reflow。
+- 手機與桌機使用不同內容元件、重複狀態或新增 mobile-only Sidebar／Workbench 元件。
+- inline 面板與 Board canvas 左右邊界不相接、彼此重疊、留下空白 gutter，或文件層出現水平 overflow。
+- `320x844` 開啟單一面板後可見看板寬度小於 47px。
+- 同一 mobile viewport 下 Sidebar 與 TaskWorkbench computed width 差距超過 `1px`，或兩者沒有共用同一 width helper／viewport clamp。
+- 未歸位工作台任務長按後無法命中右側看板卡片／欄內空白區，或已歸位工作台列變成可拖來源。
+
+目前 browser cases：
+
+| ID | Viewport | 操作 | 通過標準 |
+|---|---|---|---|
+| QA-042-B01 | 390x844 | 開啟工作區與看板 | 同一 `Sidebar` inline，computed width `340px`；main 左移量與寬度差等於面板寬；overlay/backdrop=0 |
+| QA-042-B02 | 390x844 | 開啟全域任務平台 | 同一 `TaskWorkbenchPanel` inline，computed width `340px`；Board 左界接在面板右界；overlay/backdrop=0 |
+| QA-042-B03 | 390x844 | 依序切換兩面板 | 維持共用 inline 元件且 mobile 互斥，不產生第二套 overlay UI |
+| QA-042-B04 | 390x844 | Escape 關閉兩面板 | 面板 unmount、看板寬度恢復、無 rail／backdrop 殘留 |
+| QA-042-B05A | 320x844 | 分別開啟 Sidebar／工作台 | 兩者 computed width 同為 `272px`、共用 viewport clamp、看板至少 47px、無水平 overflow |
+| QA-042-B10/B11 | 1440x900 | 單面板及雙面板 | 桌機 inline／resize／相鄰邊界契約不回歸 |
+| QA-054-R15 | 390x844 | 未歸位任務長按拖到看板 | 看板落點可見並只提交一次；placed row 仍不可拖 |
+
+目前執行結果：DEV-042 static `22/22`、browser `8/8`、DEV-054 static `45/45`、browser `15/15`、DEV-039 `31/31`、DEV-029 `39/39`、TypeScript、targeted ESLint、`build:test` 與 `git diff --check` 均通過。390x844 兩面板 computed width 均為 `340px`，320x844 均為 `272px`；實體 iOS／Android 補充驗證與 production release 未執行。
+
+## 歷史 Zero-Tolerance Failures（已由上方 Shared Inline Rework 覆寫）
 
 - `320px` 或 `390px` mobile viewport 收疊狀態仍可看到兩條左側垂直 rail。
 - Mobile collapsed `Sidebar` 仍在 flex layout 中佔 `w-10` 或任何非零寬度。
@@ -23,8 +51,13 @@
 - 出現 horizontal overflow。
 - DEV-029 手機短滑 pan、quick tap 開詳情、長按 action rail 失效。
 - DEV-039 工作台 placement lanes、filter popover、cross-board source 行為失效。
+- `<= 767px` 重新載入 BoardView 時，全域任務平台未預設開啟，或被已儲存的 `open=false` 壓回關閉。
+- `1440x900` 桌面版因本增補而忽略既有 `open=false` 偏好並強制開啟工作台。
+- 手機 Workbench overlay 在 390px viewport 實測偏離 `234px ± 1px`，或在 320px viewport 未保留 `128px` 安全邊距。
+- `320x844` 窄版 Workbench overlay 實測應為 `192px ± 1px`，並不得造成水平 overflow。
+- 寬度調整後標題、過濾器、收合鍵、任務列或日期出現截斷、重疊或水平 overflow。
 
-## Static Verification
+## 歷史 Static Verification（Off-Canvas 版本）
 
 Recommended gate：
 
@@ -42,8 +75,10 @@ npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas
 | QA-042-S06 | Focus safety | hidden mobile collapsed controls 不留可 tab focus 的 descendants |
 | QA-042-S07 | Scope guard | 不修改 DB schema、RLS、RPC、migration、profile/save/copy 工作台功能 |
 | QA-042-S08 | Regression selectors | 保留或替代 `data-sidebar-task-workbench-button`、`data-task-workbench-*` 主要 selectors |
+| QA-042-S09 | Mobile default-open initialization | `mobileOverlayOpen` 由窄版 viewport 初始化，帳號偏好 hydration 不得以 `open=false` 覆寫；桌面 `panelPrefs.open` 不變 |
+| QA-042-S10 | Mobile overlay safe width | 窄版 `panelOverlayWidth` 使用 `min(234px, calc(100vw - 128px))`；桌面仍直接使用完整 `panelWidth` |
 
-## Browser Verification
+## 歷史 Browser Verification（Off-Canvas 版本）
 
 Recommended gate：
 
@@ -53,11 +88,11 @@ npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser
 
 | Case | Viewport | 操作 | 預期 |
 |---|---|---|---|
-| QA-042-B01 | 320x844 | 載入 BoardView，Sidebar closed，Workbench closed | 左側無 in-flow rail；主內容 left edge <= 4px；無 horizontal overflow |
-| QA-042-B02 | 390x844 | 同上 | 不出現兩條垂直欄；看板任務可見寬度接近 full viewport |
+| QA-042-B01 | 390x844 | 預先儲存 Workbench `open=false` 後重新載入 BoardView | Workbench 仍預設開啟且寬 `234px ± 1px`；Sidebar 不同時開啟；main / board 不被縮窄；無 horizontal overflow |
+| QA-042-B02 | 390x844 | 關閉預設開啟的 Workbench | 不出現 in-flow rail 或左側 gutter；看板回到完整 viewport 寬度 |
 | QA-042-B03 | 430x932 | 點 top nav menu 開 Sidebar | Sidebar 以 overlay drawer 顯示；main / board canvas computed width 不縮小 |
 | QA-042-B04 | 430x932 | 關閉 Sidebar overlay | 回到零佔寬 collapsed state；無遮罩殘留 |
-| QA-042-B05 | 390x844 | 開啟全域任務平台 | Workbench 以 overlay drawer 顯示；main / board canvas computed width 不縮小 |
+| QA-042-B05 | 390x844 | 開啟全域任務平台 | Workbench 以 234px overlay 顯示；main / board canvas computed width 不縮小 |
 | QA-042-B06 | 390x844 | 關閉全域任務平台 | 不留下 `w-6` rail、count badge 或左側 gutter |
 | QA-042-B07 | 390x844 | 在 BoardView 短滑任務卡與空白處 | DEV-029 pan-first 不誤開詳情、不誤觸 overlay |
 | QA-042-B08 | 390x844 | 長按任務 | DEV-029 mobile action rail 仍位於頂部且不被 Sidebar / Workbench entry 遮蔽 |
@@ -65,6 +100,7 @@ npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser
 | QA-042-B10 | 1440x900 | Sidebar / Workbench collapsed | desktop compact rails 可用：Sidebar <= 40px，Workbench <= 24px，count badge 不撐寬 |
 | QA-042-B11 | 390x844 | Keyboard Escape / overlay click | overlay 可關閉，focus 回到合理入口 |
 | QA-042-B12 | 390x844 | visible error sweep | 無 `.inline-error`、`[role=alert]`、visible 4xx/5xx、route error text |
+| QA-042-B13 | 1440x900 | 預先儲存 Workbench `open=false` 後重新載入 | Desktop Workbench 維持關閉，仍由既有偏好控制 |
 
 ## Regression Gate
 
@@ -93,6 +129,17 @@ npm.cmd run build:test
   - `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1783263537691-mobile-sidebar-overlay.png`
   - `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1783263537691-mobile-workbench-overlay.png`
   - `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1783263537691-desktop-collapsed-rails.png`
+
+## Mobile Default-Open + 234px Width Addendum Local QC Evidence - 2026-08-24
+
+- `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas`：Pass，20/20；包含手機窄版初始化不受已儲存 `open=false` 覆寫、mobile 234px 安全寬度與 desktop 原寬度靜態契約。
+- `npm.cmd run verify:dev-042-mobile-left-sidebar-offcanvas-browser`：Pass，9/9；390×844 實測 overlay 寬 `234px`，320×844 實測安全縮為 `192px`；預設開啟、關閉零佔寬、Sidebar 互斥、top-nav toggle、Escape、visible-error sweep 與 1440×900 desktop inline regression 全部通過。
+- `npm.cmd exec tsc -- --noEmit`：Pass。
+- `npm.cmd exec eslint -- src/components/TaskWorkbenchPanel.tsx scripts/verify-dev-042-mobile-left-sidebar-offcanvas.mjs scripts/verify-dev-042-mobile-left-sidebar-offcanvas-browser.pw.js`：Pass。
+- `npm.cmd run build:test`：Pass，Vite test artifact 建置完成。
+- Screenshots：`output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787564070988-mobile-default-open.png`、`output/playwright/dev-042-mobile-left-sidebar-offcanvas-1787564070988-mobile-320-safe-width.png`；390×844 首屏以 234px 顯示，320×844 保留 128px 安全邊距；標題、收合鍵、篩選、任務列與日期均可讀，無可見重疊、截斷或水平 overflow。
+- Console：0 errors；2 warnings，visible-error gate 無 `.inline-error`、`[role=alert]`、HTTP 4xx/5xx 或 route error text。
+- Production deploy 與 physical-phone supplemental 未執行；本證據只適用目前本機 source state 與 test runtime。
 
 ## Manual UX Review
 

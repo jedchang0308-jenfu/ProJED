@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+const baseUrl = page.url().split('/').slice(0, 3).join('/');
   const diagnostics = [];
   page.on('console', (message) => diagnostics.push(`console:${message.type()}:${message.text()}`));
   page.on('pageerror', (error) => diagnostics.push(`pageerror:${error.message}`));
@@ -93,9 +94,9 @@ async (page) => {
 
   const openApp = async (viewport = { width: 390, height: 844 }) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seedAuxiliaryState();
-    await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/?qcReset=1&qcSize=72`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
   };
@@ -652,11 +653,11 @@ async (page) => {
         items.map((item) => item.textContent?.trim()).filter(Boolean)
       );
       assert(
-        JSON.stringify(actionKeys.sort()) === JSON.stringify(['add-child', 'add-sibling', 'delete', 'toggle-complete'].sort()),
+        JSON.stringify(actionKeys.sort()) === JSON.stringify(['add-child', 'add-sibling', 'archive', 'toggle-complete'].sort()),
         'mobile action rail should expose only compact allowed actions',
         { actionKeys, actionLabels },
       );
-      ['標示完成', '新增並列任務', '新增子任務', '刪除任務'].forEach((label) => {
+      ['標示完成', '新增並列任務', '新增子任務', '封存任務'].forEach((label) => {
         assert(actionLabels.includes(label), 'mobile action rail should expose readable text labels', { label, actionLabels });
       });
       const compactLayout = await assertCompactMobileActionRail('card long press compact rail', card());
@@ -786,15 +787,15 @@ async (page) => {
       return { before, after, mobileActionDebug };
     });
 
-    await runCase('QA-029-C04', 'drop on delete action opens confirmation without immediate delete', async () => {
+    await runCase('QA-029-C04', 'drop on archive action opens confirmation without immediate archive', async () => {
       const taskId = await card().getAttribute('data-task-id');
-      await dispatchLongPressDragToLocator(card(), mobileAction('delete'), { ratioY: 0.12 });
+      await dispatchLongPressDragToLocator(card(), mobileAction('archive'), { ratioY: 0.12 });
       const dialog = page.locator('.global-dialog-content').first();
       await dialog.waitFor({ state: 'visible', timeout: 5000 });
       const message = await dialog.innerText();
       const stillExists = await page.locator(`[data-task-id="${taskId}"]`).count();
-      assert(message.includes('確定要刪除任務'), 'delete drop should open delete confirmation', { message });
-      assert(stillExists > 0, 'delete drop should not archive task before confirmation', { taskId, stillExists });
+      assert(message.includes('確定要封存任務'), 'archive drop should open archive confirmation', { message });
+      assert(stillExists > 0, 'archive drop should not archive task before confirmation', { taskId, stillExists });
       return { taskId, message };
     });
 

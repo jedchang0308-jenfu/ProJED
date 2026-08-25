@@ -146,11 +146,11 @@ runCase('QA-070-011', () => {
   return { catalogActions: ids.length, stableIds: ids };
 });
 runCase('QA-070-012', () => {
-  assert.equal(guardTaskAction('task.delete-request', { canDeleteTask: true }).allowed, false);
-  assert.equal(guardTaskAction('task.delete-request', { canDeleteTask: true }).reason, 'dangerous-action-confirmation-required');
-  assert.equal(guardTaskAction('task.delete-request', { canDeleteTask: true, dangerousActionConfirmed: true }).allowed, true);
-  assert.ok(source.globalMenu.includes('window.confirm'));
-  return { unconfirmedMutation: 0, confirmedMutation: 1 };
+  assert.equal(guardTaskAction('task.archive', { canDeleteTask: true }).allowed, true);
+  assert.equal(guardTaskAction('task.archive', { canDeleteTask: false }).reason, 'permission-delete');
+  assert.ok(source.globalMenu.includes('archiveNode(contextMenuState.nodeId)'));
+  assert.equal(source.globalMenu.includes('permanentlyDeleteNodes'), false);
+  return { archiveMutation: 1, permanentDeleteInTaskMenu: 0 };
 });
 runCase('QA-070-013', () => {
   const ids = getTaskMenuActionIds();
@@ -181,9 +181,9 @@ runCase('QA-070-016', () => {
 });
 runCase('QA-070-017', () => {
   const base = getTaskMenuActionIds();
-  const excluded = getTaskMenuActionIds([{ menu: { exclude: ['task.delete-request'] } }]);
-  assert.equal(excluded.includes('task.delete-request'), false);
-  assert.equal(base.filter(id => id !== 'task.delete-request').length, excluded.length);
+  const excluded = getTaskMenuActionIds([{ menu: { exclude: ['task.archive'] } }]);
+  assert.equal(excluded.includes('task.archive'), false);
+  assert.equal(base.filter(id => id !== 'task.archive').length, excluded.length);
   return { defaultMenuCount: base.length };
 });
 runCase('QA-070-018', () => {
@@ -258,7 +258,7 @@ runCase('QA-070-052', () => { assert.ok(read('src/interactions/task/types.ts').i
 runCase('QA-070-053', () => { assert.ok(read('src/components/Gantt/GanttTaskBar.tsx').includes('drag-established')); return { blocker: 'drag-established' }; });
 runCase('QA-070-054', () => { assert.ok(read('src/hooks/useCoarsePointer.ts').includes('matchMedia')); assert.equal(mobile?.width, 390); return { viewport: '390x844' }; });
 runCase('QA-070-055', () => { assert.ok(read('src/components/Wbs/taskDrag/useTaskGestureSurface.ts').includes('longPress')); return { longPress: true }; });
-runCase('QA-070-056', () => { assert.ok(source.globalMenu.includes('dangerousActionConfirmed')); return { confirmationGuard: true }; });
+runCase('QA-070-056', () => { assert.ok(source.globalMenu.includes("guardTaskAction('task.archive'")); return { archiveGuard: true }; });
 runCase('QA-070-057', () => { assert.ok(source.globalMenu.includes('handleTaskAction')); return { actionExecutor: true }; });
 runCase('QA-070-058', () => { assert.ok(read('src/components/Wbs/taskDrag/useTaskGestureSurface.ts').includes('onTouchCancel')); return { cancelLifecycle: true }; });
 runCase('QA-070-059', () => { regressionFiles.forEach(([, present]) => assert.equal(present, true)); return { regressionSources: regressionFiles.length }; });
