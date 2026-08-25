@@ -2,16 +2,16 @@
 
 ## Documentation Map Update - 2026-08-25（DEV-089／CAPA-20260825-01 權威任務搬移交易）
 
-Spec Impact：`Intentional replacement`。SPEC-089 取代 SPEC-086 的 optimistic failure recovery：看板 WBS 與帳號級未歸位之間必須先完成 idempotent canonical transaction，再收斂 local placement；failure 保留完整來源子樹。新增 operation ledger／RPC migration、手機 fault injection 與 exactly-one-source release gate；production migration、Level 3／4 尚未執行。
+Spec Impact：`Intentional replacement`。SPEC-089 取代 SPEC-086 的 optimistic failure recovery：看板 WBS 與帳號級未歸位之間必須先完成 idempotent canonical transaction，再收斂 local placement；failure 保留完整來源子樹。新增 operation ledger／RPC migration、手機 fault injection 與 exactly-one-source release gate；TEST DB01-DB03 與 Level 3 已通過，production migration／Level 4 尚未執行。
 
 | 文件／程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/reports/CAPA-20260825-task-placement-disappears-on-mobile.md` | Local action complete / Remote effectiveness pending | DEV-089／CAPA-20260825-01 | 記錄跨裝置分歧、五層 root cause、containment、Correction／CA／PA 與 T+7／T+30 effectiveness threshold。 |
+| `ai-doc/reports/CAPA-20260825-task-placement-disappears-on-mobile.md` | TEST DB01-DB03 + Level 3 PASS / Production effectiveness pending | DEV-089／CAPA-20260825-01 | 記錄跨裝置分歧、五層 root cause、containment、Correction／CA／PA、DB03 rejection matrix 與 T+7／T+30 effectiveness threshold。 |
 | `ai-doc/specs/SPEC-089-authoritative-task-placement-transaction.md` | Authoritative / RD Implemented / Local QA-QC PASS | DEV-089／DEV-086 | 固定 await-before-local、exactly-one-source、exact subtree、idempotency、pending、failure、security 與 release boundary。 |
-| `ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md`、`ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md` | Local PASS / Remote DB pending | DEV-089 | FMEA、source contract、390×844 mobile fault injection、visual evidence、未執行 remote 邊界。 |
+| `ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md`、`ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md` | Local PASS / TEST DB01-DB03 PASS / Level 3 PASS / 未 Release | DEV-089 | FMEA、source contract、390×844 mobile fault injection、TEST transaction/RLS/rejection matrix、authenticated preview smoke 與 production 未執行邊界。 |
 | `placementTransaction.ts`、`useWbsStore.ts`、`taskDragCommit.ts`、`TaskPlacementPendingIndicator.tsx` | Implemented / Local PASS | DEV-089 | awaited durable commit、pending source stability、desktop/mobile failed result、success effects only 與共用 compact spinner。 |
-| `20260825093621_dev_089_transactional_task_workbench_placement.sql`、`taskWorkbenchUnplacedService.ts` | Source reviewed / Remote migration pending | DEV-089 | owner operation ledger、RLS/grants、full-subtree transaction RPC、與 client 一致的 configurable `move_task` capability、row lock、fail-safe link/dependency guard、same-ID retry；linked history 確認 migration 僅 local、remote 空白。 |
-| `scripts/verify-dev-089-*`、`output/playwright/dev-089/mobile-placement-failure-retains-source.png` | Static + Browser PASS | DEV-089 | 手機 fault 後 source=3、destination duplicate=0、parents preserved、roll-up=0、pending/transient=0、page error=0。 |
+| `20260825093621_dev_089_transactional_task_workbench_placement.sql`、`taskWorkbenchUnplacedService.ts` | TEST Applied `20260825125421` / Production migration pending | DEV-089 | owner operation ledger、RLS/grants、full-subtree transaction RPC、與 client 一致的 configurable `move_task` capability、row lock、fail-safe link/dependency guard、same-ID retry；TEST ACL/RLS/readback 與 backup evidence 已完成，production 未套用。 |
+| `scripts/verify-dev-089-*`、`output/playwright/dev-089/mobile-placement-failure-retains-source.png` | Static + Browser + TEST DB01-DB03 + Level 3 PASS | DEV-089 | 手機 fault 後 source=3、destination duplicate=0、parents preserved、roll-up=0、pending/transient=0、page error=0；authenticated preview 看板→未歸位與 reload 通過，DB03 rejection 後 fixture=0。 |
 
 ## Documentation Map Update - 2026-08-25（DEV-088 任務生命週期）
 
