@@ -1,71 +1,115 @@
-# CAPA-20260825-01 手機跨看板搬移後任務看似消失
+# CAPA-20260825-01 跨 ownership 任務搬移失效
 
-日期：2026-08-25  
-關聯：DEV-089、DEV-086、DEV-039  
-狀態：Correction + Corrective Action + Preventive Action 已完成本地實作與 QC／TEST DB01-DB03 PASS／Level 3 PASS／production effectiveness Pending
+建立：2026-08-25
+成效失敗重啟：2026-08-26
+關聯：DEV-089、DEV-086、DEV-039、SPEC-089 Rework 1
+狀態：Effectiveness Reopened／RD Rework 1 Local PASS／Supabase TEST／Level 3／Production Effectiveness Pending／P0 Stop-Ship
 
-## 不符合與影響
+## 1. 不符合與影響
 
-使用者將 `回覆聖島, 發明核准` 從全域工作台未歸位拖入看板後，桌機保留已歸位的 optimistic 畫面，但另一裝置依遠端 canonical readback 無法在目的看板取得同一 task。production read-only 診斷顯示該 task 仍只存在 `task_workbench_unplaced_items`，目的 `wbs_items` 沒有對應列。
+### 1.1 原始不符合
 
-風險為 P0：不是單純 RWD 隱藏，而是 client state 與 canonical ownership 分歧，會造成「看似消失」、重做搬移、duplicate、完成率與 activity log 失真。
+使用者將 `回覆聖島, 發明核准` 從全域工作台未歸位拖入看板後，一個裝置曾呈現 optimistic 已歸位，另一裝置依 canonical readback 找不到目的 task。production 唯讀診斷顯示來源仍在 `task_workbench_unplaced_items`，未發生資料遺失，但形成跨裝置 ownership 分歧風險。
 
-## Containment
+### 1.2 2026-08-26 成效失敗
 
-- 未對 production task 做刪除、複製或人工改表；canonical 未歸位來源仍存在，沒有資料遺失證據。
-- release 前維持 stop-ship：不把既有 optimistic provider path 當成 production 修復。
-- 故障時的新 client 行為固定保留來源並顯示可恢復訊息，避免使用者重複建立任務。
+原 CAPA 上線後，在 production 真實「未歸位 → 看板」操作出現：
 
-## Root Cause Analysis（多層次）
+```text
+歸位失敗，任務已保留在未歸位。
+Error: Task placement transaction must cross the unplaced ownership boundary.
+```
 
-| 層次 | 根因 |
-|---|---|
-| UI | desktop 在 drop 後立即以 local Zustand 顯示目的 placement，造成成功錯覺；手機／重載則依 canonical data 呈現不同結果。 |
-| State | `batchUpdateNodes` 是同步 optimistic action，呼叫端無法 await 跨 ownership persistence，也無法把 rejection 回傳 drag session。 |
-| Provider | destination create 與 source delete 分散在多次非原子呼叫；舊 helper catch 後只 warning/local fallback，沒有 rollback-to-source 契約。 |
-| Database | `wbs_items` 與 `task_workbench_unplaced_items` 之間沒有單一 transaction RPC、idempotency ledger 或 exactly-one-source constraint owner。 |
-| Verification | DEV-086 主要使用 localStorage fixture 驗證成功路徑與 persistence order，沒有 Supabase failure injection、跨裝置 canonical readback 或「失敗不得 optimistic commit」release gate。 |
-| Governance | SPEC-086 明列「失敗可由 undo 或重載恢復」，把資料 ownership failure 錯當一般 UI optimistic update，風險分級不足。 |
+operation ledger 為 0，證明錯誤發生在 RPC 前；來源 task 仍在未歸位，故 containment 有效，但 intended successful flow 不可用。依既定 threshold「任何 exactly-one-source／雙向功能不符合即 reopen」，本 CAPA 判定 ineffective 並重啟。
 
-## Correction
+風險仍為 P0：使用者無法把未歸位任務歸位或跨板搬移，且若錯誤地放寬 guard，可能轉為跨看板重排、duplicate 或 task loss。
 
-- 建立 `commitNodePlacementBatch`：先標記 pending、await persistence，成功才修改 local placement；failure finally 清 pending，來源不動。
-- desktop／mobile drag owner 都 await durable action並回傳 `failed` terminal result；failure 不執行 roll-up。
-- pending subtree 在 realtime refresh 中保留來源投影，避免 RPC response 前被 destination event 提前替換。
-- 共用 compact `TaskPlacementPendingIndicator` 套用看板 L1／L2／L3+ 與未歸位列；錯誤只說明任務保留位置。
+## 2. Immediate containment
 
-## Corrective Action
+- 不刪除、不複製、不人工搬動 production 來源 task；canonical 未歸位來源已確認存在。
+- 維持 ownership boundary guard，不以移除 exception 作為 hotfix。
+- DEV-089、SPEC-089、QA、QC 全部重啟；2026-08-25 PASS 只標為歷史基線。
+- production release 維持 stop-ship，直到 v2 command、DB／UI雙向證據及 migration history gate 全數通過。
 
-- 新增 owner-scoped `task_workbench_placement_operations`，以 immutable operation ID 支援 replay/readback、elapsed/error code 與 client platform；authenticated client 只能建立 pending 或記錄 failed，不能偽造 committed/result。
-- 新增單一 PostgreSQL RPC：server 從 root 重建 canonical subtree，驗證 exact set／hierarchy／來源或目的看板的 configurable `move_task` capability，於同 transaction 寫目的、刪來源、寫 activity、提交 operation result。
-- operation conflict 採 ignore，committed replay 直接回原 result；transport ambiguity 只重送同一 ID 一次，第二次仍遺失時以 ledger row lock 序列化後 readback，不能確認時不冒稱來源已保留。
-- exact delete row count 不符即 rollback；來源有 record link／quick memo promotion link／dependency，或目的缺 tag／assigned member 時 fail-safe reject。
-- server 由 locked canonical source 重建 title／notes／assignment／tags／dates；client payload 只決定經驗證的 placement，避免只有 `move_task` 權限者趁搬移竄改內容。
-- local／Firestore fallback 維持 await＋compensation，但 production acceptance 只以 Supabase transaction path 為 authoritative。
+## 3. Root Cause Analysis（多層次）
 
-## Preventive Action
-
-- 新增 `verify:dev-089-task-placement-transaction`，把 await order、pending stability、idempotency、exact subtree、`move_task` capability matrix、RLS/search_path/revoke、delete count、UI共用與文件邊界設為 source gate。
-- 新增 390×844 mobile fault injection：持久化延遲後失敗，必須證明 persisted/runtime/DOM 來源保留、無 unplaced duplicate、parent chain 不變、success effect=0。
-- SPEC-089 取代 SPEC-086 的 optimistic failure 契約；未來任何 ownership transfer 都必須有 exactly-one-source、idempotent operation 與 provider fault test。
-- release gate 強制 Supabase TEST success／rollback／replay／partial subtree／outsider RLS／linked/dependency reject，再進 Level 3；production 後才做 Level 4。
-
-## Effectiveness Check
-
-| 時點 | 指標／抽樣 | 判定 |
+| 層次 | 原始根因 | 2026-08-26 補充根因 |
 |---|---|---|
-| Local | fault injection 1 次、完整三層 subtree | PASS：來源 3／目的 0、parent chain preserved、page error 0 |
-| Linked remote preflight | migration history、schema lint、security advisor（唯讀） | PASS WITH BASELINE WARN：新 migration remote 空白、production 未變更；既有 remote schema 無 error，既有 advisor warnings 留列，不得視為新 object 已通過 |
-| Supabase TEST backup | custom-format dump + restore listing | PASS：712,269 bytes；`pg_restore --list` exit 0；SHA-256 `df4bf7008fdf46f2a36bf781fbb3592efa196398eb6369292f730386c1639b19` |
-| Supabase TEST migration／RLS | migration、operation ledger、RPC、ACL、anonymous REST | PASS：migration version `20260825125421`；RLS/3 policies；`PUBLIC/anon` ACL revoked；anonymous REST 401；advisor 僅既有 baseline WARN |
-| Supabase TEST transaction | 兩方向 success、exact subtree、activity、idempotent replay、cleanup | PASS：三層 parent chain；兩 operation committed；activity=6；replay 不新增 mutation；fixture 清理後 source/destination/ledger/activity counts=0 |
-| Supabase TEST DB03 | authenticated outsider、partial subtree、linked/dependency | PASS：outsider=`42501`、partial=`22023`、linked/dependency=`55000`；拒絕後 no mutation，fixture cleanup counts=0 |
-| Level 3 | Firebase preview + TEST，同帳號 authenticated 看板→未歸位＋reload | PASS：commit `60907d3`；preview `https://projed-cc78d--level3-smoke-49uruan8.web.app`；舊 service-worker cache 清除後刷新持久性通過；測試資料已精確清理 |
-| Production T+0 | Level 4 authenticated smoke，readback operation/result/source/target | Pending |
-| Production T+7／T+30 | 查 operation ledger；抽查 committed 與 failed | Pending；任何兩邊皆有／皆無／partial subtree=CAPA ineffective，立即 reopen |
+| UI/Gesture | optimistic UI 曾造成成功錯覺 | mobile gesture 已成功進入共用 commit；不是 touch-only defect |
+| Intent | drag intent 可描述 target | intent 被展開為 generic node update batch，責任過大 |
+| State/Ordering | client 先改 local ownership | `buildTaskParentIndex` 只用 `parentId || 'root'`，把不同 board/workspace root 混成 siblings |
+| Commit adapter | create/delete 舊路徑不原子 | `normalizeTaskMoveUpdates` 把非目的看板 root siblings 夾帶進 cross-boundary batch |
+| Boundary guard | 原本沒有 exactly-one-source owner | 新 guard 正確拒絕混合 batch；問題在 guard 上游，不能放寬 |
+| Database | 缺單一 transaction／ledger | v1 RPC 已存在但本次未被呼叫；v1 仍過度依賴 client placement/order payload |
+| Verification | local success／failure coverage 不足 | Level 3 只驗看板→未歸位，沒有同 artifact 反向 UI＋reload |
+| Governance | ownership failure 被低估 | CAPA exit 沒把「雙向 UI evidence completeness」做成 machine/enforced stop condition |
 
-建議 effectiveness threshold：每次 committed operation 的 task IDs 在 canonical readback 必須 100% exactly-one-source；任何單筆違反即 P0。`failed / total > 1%` 或相同 error code 連續 3 次觸發 RD review，但單純 permission／linked-data fail-safe 不計資料一致性失效。
+## 4. 五個為什麼（本次 reopen）
 
-## 結論與未完成邊界
+1. 為什麼歸位失敗？因 client transaction validator 判定 batch 沒有乾淨跨越未歸位 boundary。
+2. 為什麼 batch 不乾淨？因它同時含 moved subtree 與其他看板 root siblings。
+3. 為什麼會混入其他看板？因 sibling index 只用 parent key，忽略 workspace／board ownership scope。
+4. 為什麼 client 會傳 sibling patches？因 API 契約讓 gesture layer負責展開目的排序，而不是只傳 anchor/position 意圖。
+5. 為什麼 release 前沒發現？因 Level 3 只完成單向看板→未歸位，驗證 gate 沒強制雙向同 artifact。
 
-本 CAPA 的本地 Correction、Corrective Action、Preventive Action、TEST backup、DB01／DB02／DB03 與 Level 3 authenticated preview smoke 已完成。production migration/deploy 與 Level 4 仍未完成；本輪未執行 production migration、production deploy 或 production data mutation。
+系統根因：`placement scope 未成為一級領域概念，且 client／server 責任切分錯置`。
+
+## 5. Correction／CA／PA 對策
+
+| 類型 | 對策 | Owner | 完成證據 | 狀態 |
+|---|---|---|---|---|
+| Correction | 保留來源、維持 pending/failure訊息與 boundary guard | RD | production來源存在、ledger=0、無 mutation | 已確認 |
+| Correction | 導入 discriminated ownership：看板=`workspace+board`、未歸位=`auth account`；`PlacementScope=ownership+parent` | RD | property 1,000 fixtures 非 affected scope deep equal，未歸位仍是全域單一 lane | Local PASS |
+| CA | 跨 ownership 改用 `MoveTaskSubtreeCommand v2`；client 只送 subtree IDs、source、destination parent、anchor、position | RD | source contract與request capture | Local PASS |
+| CA | server 依穩定順序鎖 exact subtree＋source/destination siblings，計算 canonical dense order，原子寫入目的／刪來源／activity／ledger | RD/DB | TEST DB02 success/readback | Local PostgreSQL harness PASS；TEST待執行 |
+| CA | forward-only migration新增 v2 RPC與 immutable ledger欄位，不修改已套用 migration | RD/DB | DB01 migration/RLS/grants/history | Migration created／local compile PASS；TEST待執行 |
+| CA | same operation replay、parallel placements、wrong-scope anchor 全部具明確結果 | RD/QA | DB03/DB04 matrix | Replay/mismatch local PASS；parallel/TEST待執行 |
+| PA | source gate 禁止 cross-boundary v1 fallback、generic patches、parent-only index | QA | static verifier | PASS |
+| PA | randomized multi-workspace/board property test | QA | seed/fixture/result artifact | PASS／1,000 fixtures |
+| PA | Level 3／Level 4 強制 desktop＋mobile雙向、跨板、reload、ledger/canonical readback | QA/QC | evidence matrix完整 | 待實作 |
+| PA | production migration history mismatch 成為 predeploy stop condition | Release owner | repo/remote history一致 | 待執行 |
+
+## 6. 核准的架構原則
+
+```text
+mobile / desktop gesture
+  → shared DropIntent
+  → MoveTaskSubtreeCommand v2
+  → single Supabase atomic transaction
+  → canonical placement/order result
+  → frontend apply success effects
+```
+
+此設計不以 client filter 掩蓋單一 bug，而是收斂 mutation authority：client 描述意圖，server決定 exact affected rows 與 order。手機與桌機不分叉，未來新增看板或 workspace 也不會因同為 `parentId=null` 被誤認為 siblings。
+
+## 7. Preventive gate 與 effectiveness plan
+
+| 時點 | 指標／抽樣 | 通過條件 | 目前狀態 |
+|---|---|---|---|
+| Historical Local | 390×844 failure injection | 來源3／目的0、parent chain preserved | 歷史 PASS；不代表 successful reverse flow |
+| Historical TEST | v1 DB01-DB03 | transaction/RLS/rejection | 歷史 PASS；不代表 v2/scope isolation |
+| Historical Level 3 | 看板→未歸位＋reload | 單向 canonical persisted | 歷史 PASS；coverage incomplete |
+| Production 2026-08-26 | 未歸位→看板 | 成功且 exactly-one-source | FAIL；CAPA reopened |
+| Rework source/property | S01-S08＋1,000 randomized graphs | 非 affected scope 100% deep equal | PASS |
+| Rework local DB harness | disposable PostgreSQL 18 migration／雙向／nested／replay／postcondition | exactly-one-source、canonical moved IDs完整、dense order | PASS；非Supabase TEST evidence |
+| Rework local rendered UI | desktop＋390×844＋320×844雙向／跨工作區／failure containment | 完整子樹、parent links、無unexpected pageerror | PASS |
+| Rework TEST DB01-DB04 | migration/security/success/rejection/replay/concurrency | 全部 PASS、fixture cleanup=0 | NOT RUN |
+| Rework Level 3 | desktop＋mobile雙向／跨板／reload | 同 artifact、ledger/canonical一致、visible error=0 | NOT RUN |
+| Rework Level 4 T+0 | production exact fixture雙向 | 100% exactly-one-source、無 scope leak | NOT RUN |
+| T+7／T+30 | ledger errors＋canonical抽查 | 0 lost/duplicate/partial；同 code不連續3次 | NOT RUN |
+
+任何一筆兩邊皆有、兩邊皆無、partial subtree、非 affected scope mutation或 optimistic 假成功，立即判 CAPA ineffective；`failed / total > 1%` 或同 error code 連續3次觸發 RD review。permission／linked-data預期拒絕須有穩定 error code，另行統計。
+
+## 8. 文件與追溯
+
+- RD contract：`ai-doc/specs/SPEC-089-authoritative-task-placement-transaction.md`
+- QA plan：`ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md`
+- QC verdict：`ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md`
+- PM index：`ai-doc/dev_task.md` 的 DEV-089
+- 文件索引：`ai-doc/documentation_map.md`
+
+## 9. 結論與 release boundary
+
+CAPA 的原始 failure containment 仍有效，任務沒有遺失；production intended reverse flow 的既有 artifact 已證實失敗。Rework 1 的程式、forward-only migration、1,000-fixture property、local transaction harness與desktop/mobile rendered UI 已完成並通過；但這只支持 `RD local correction implemented`，不支持 production effectiveness closure。
+
+本文件不授權 production migration、deploy或資料 mutation。CAPA 仍保持 open／stop-ship；只有在 Supabase TEST DB01-DB04、Level 3雙向、migration history reconciliation、production Level 4與後續T+7/T+30通過後才能關閉。

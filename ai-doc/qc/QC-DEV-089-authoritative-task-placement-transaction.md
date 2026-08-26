@@ -1,47 +1,91 @@
 # QC-DEV-089 全域工作台權威任務搬移交易
 
-日期：2026-08-25  
-結論：Local QC PASS／TEST DB01-DB03 PASS／Level 3 PASS／未 Release
-規格：SPEC-089  
+建立：2026-08-25
+重啟：2026-08-26
+目前判定：RD Local Rework PASS／Production Known FAIL／Supabase TEST／Level 3 NOT RUN／P0 Stop-Ship
+規格：SPEC-089 Rework 1
 CAPA：CAPA-20260825-01
 
-## 事實驗證
+## 1. QC 判定原則
 
-| Evidence | 結果 | 可證明範圍 |
+production 真實入口的反例權重高於 local、TEST 與單向 preview smoke。2026-08-25 的 PASS 保留為歷史 evidence，不刪除也不改寫；但它不能繼續支持「功能已完成」或「CAPA 有效」。
+
+## 2. 2026-08-26 production 事實驗證
+
+| Evidence | 觀察事實 | 可排除／證明 |
+|---|---|---|
+| 手機／窄版 rendered UI | 未歸位 task 拖入看板後顯示 `歸位失敗，任務已保留在未歸位。` | 反向 flow 未通過；不是畫面靜默消失 |
+| Browser runtime log | `[taskDrag] Failed to place task subtree... Task placement transaction must cross the unplaced ownership boundary.` | client placement validation 主動拒絕 |
+| operation ledger readback | 本次操作紀錄數為 0 | error 發生在 RPC begin 前，不是 DB rollback／permission／network timeout |
+| canonical source readback | 來源 task 仍在 `task_workbench_unplaced_items` | 無資料遺失；failure containment 有效 |
+| target board readback | 目的為 canonical board，不是暫存或手機專用 ID | 排除錯誤 target identity 為主要根因 |
+| code trace | `buildTaskParentIndex` 以 parent-only `root` 分組；`normalizeTaskMoveUpdates` 對混合 root bucket reindex | 根因為 cross-board/workspace scope leakage |
+| shared path trace | desktop／mobile 共用 commit／transaction owner | 缺陷非 mobile-only；兩平台皆須重驗 |
+
+## 3. 多層次因果判定
+
+| 層次 | QC 結論 |
+|---|---|
+| Gesture/UI | mobile 已送出有效 drop 並進入共用 commit；不是 500ms sensor 未觸發。 |
+| Intent | target intent 存在，但後續 normalization 擴張了 mutation scope。 |
+| State/ordering | parent-only root bucket 把不同 board/workspace nodes 當 siblings，是直接 defect。 |
+| Transaction boundary | guard 正確阻擋混合 ownership batch，因而避免錯誤 mutation；不能透過放寬 guard 修復。 |
+| Database | RPC 尚未被呼叫；既有 v1 DB transaction 不是這次直接故障點。 |
+| Verification | Level 3 只驗看板→未歸位，缺反向真實 UI，造成錯誤 PASS。 |
+| Governance | CAPA effectiveness criteria 雖寫雙向 transaction，但 release evidence 沒有 enforce 雙向 UI completeness。 |
+
+## 4. Historical evidence register
+
+| Evidence | 歷史結果 | 現行判讀 |
 |---|---:|---|
-| `verify:dev-089-task-placement-transaction` | PASS | authoritative await、pending、idempotency、SQL/RLS contract、文件追溯 |
-| `verify:dev-089-task-placement-failure-browser` | PASS | 390×844 真實 touch fault injection；來源保留、無副本、UI cleanup |
-| DEV-086 subtree verifier | PASS | 完整子樹與 parent link success baseline |
-| DEV-039 placement/cross-device static | PASS | 既有工作台 lane 與帳號範圍 contract |
-| TypeScript | PASS | compile contract |
-| `build:test` | PASS | test-mode bundle |
-| targeted ESLint／diff check | PASS | 新增來源無 lint error／whitespace error |
-| linked migration history／db lint | PASS（唯讀 preflight） | production migration history 仍未套用 `20260825093621`；TEST 已套用 remote version `20260825125421`；既有 production schema `No schema errors found`，證實 production 未變更 |
-| linked security advisor | PASS WITH BASELINE WARN | TEST object readback 僅有既有 `touch_updated_at` search-path、既有 callable DEFINER functions、leaked-password protection baseline warnings；production 未套用 DEV-089 |
-| TEST project health／backup preflight | PASS | TEST `ACTIVE_HEALTHY`；physical backup unavailable (`pitr_enabled=false`、`backups=[]`)，已改以 custom-format logical dump 建立 restore evidence |
-| TEST migration／RLS／grant readback | PASS | migration version `20260825125421`；table/RPC/RLS/3 policies 存在；table ACL 僅 postgres／service_role／authenticated，`anon` REST 401；advisor 僅既有 baseline WARN |
-| TEST RPC round-trip／replay | PASS | 三層 subtree 兩方向 committed；exactly-one-source、activity 6、同 operation replay 無新增 mutation；fixture 已清理 |
-| TEST DB03 rejection matrix | PASS | authenticated outsider=`42501`；partial subtree=`22023`；linked record／dependency=`55000`；四個 rejection 後 no mutation，fixture cleanup counts=0 |
-| Level 3 authenticated preview smoke | PASS | commit `60907d3`；Firebase preview 看板→未歸位、刷新後仍存在；清除舊 service-worker cache 後無 page error；測試看板／任務已清理 |
-| Supabase local/TEST DB execution | PASS（TEST）／N/A（local） | TEST 已透過官方 Management API 套用 migration；本機 Docker daemon 未運行且 PostgreSQL 18 未碰既有 DB |
-| production migration／deploy／Level 4 | NOT RUN | 未執行 production migration；未 Release |
+| `verify:dev-089-task-placement-transaction` | PASS | v1 await／pending／SQL source baseline；不證明 scope-safe command |
+| 390×844 failure injection | PASS | 證明來源保留；不證明 successful unplaced→board |
+| DEV-086 subtree verifier | PASS | local fixture baseline；未覆蓋多 board root collision |
+| TEST DB01-DB03 | PASS | v1 transaction/RLS/rejection baseline |
+| Level 3 commit `60907d3` | PASS | 只證明看板→未歸位＋reload；coverage incomplete |
+| 2026-08-26 production reverse flow | FAIL | 現行產品反例；觸發 CAPA reopen |
 
-## Fault injection readback
+## 5. 不接受的修復方式
 
-- root／child／grandchild 的 persisted board ID 均維持 `dev089-board-a`。
-- persisted parent chain 維持 `dev089-column → dev089-root → dev089-child`。
-- runtime readback 與 persisted readback一致；未歸位 local cache／DOM 的該 root 數量皆為 0。
-- pending 時來源 scope 留在原位並顯示共用 compact spinner；failure 後 pending、drop indicator、drag preview、action rail 全數為 0。
-- durable placement action 呼叫 1 次；success-only ancestor recalculation 0 次；page error 0。
-- 人工目視 screenshot：toast 可讀、任務仍在已歸位投影、未歸位為空，沒有新增容器或版面重排。
+- 只在 `normalizeTaskMoveUpdates` 加單點 `boardId` filter 後宣告完成。
+- 放寬 `must cross the unplaced ownership boundary` invariant。
+- mobile 另寫特殊 commit/fallback 或失敗後直接本機搬移。
+- client 繼續傳完整 node body／destination siblings，讓 server信任 stale order patches。
+- 只重跑原單向 Level 3、只驗 toast 或只驗 localStorage。
 
-## SQL／security review boundary
+這些作法可能移除目前 error，卻未消除 scope leakage、race 與跨層責任錯置。
 
-- migration source 已覆蓋 owner RLS、pending→failed 欄位級 client grant（client 無法偽造 committed/result）、auth.uid、與 client 一致的 configurable `move_task` capability matrix、empty search_path、function revoke、row lock、exact full subtree、exact delete count、activity/result 同 transaction、record/dependency fail-safe。
-- operation `begin` 使用 conflict ignore，不會把 committed 記錄重設成 pending；重送必須保持 direction/root/tasks/source/target 完全相同。
-- 第二次 retry response 仍遺失時，client 以 pending→failed 條件更新和同列 readback辨識 server 是否已 committed；readback 本身不可得時回報 outcome unknown，不把未知狀態冒稱為「來源一定保留」。
-- DB01／DB02／DB03 已有 TEST 實際 apply、backup、success／round-trip／replay／RLS／grant readback 與 rejection matrix；所有 DB03 fixture cleanup counts=0；Level 3 smoke 亦已完成。
+## 6. RD return contract
 
-## QC 判定
+QC 只在以下事實可重現後接受重新送驗：
 
-本地 CAPA implementation、TEST backup、DB01／DB02／DB03、Level 3 preview smoke 與 failure containment 為 PASS；production migration/deploy 與 Level 4 仍未完成，沒有將其冒稱為 release。任一 exactly-one-source 不變量失敗即 stop-ship。
+1. cross-boundary UI 產生 `MoveTaskSubtreeCommand v2`，不產生 generic sibling patches。
+2. ordering scope 固定為 ownership＋parent：看板 ownership 使用 workspace＋board，未歸位使用 server-derived account owner，不按 provenance workspace 分裂。
+3. server 依穩定 scope 順序鎖定 source／destination siblings、決定 canonical order 並回傳 canonical result。
+4. property case 證明所有非 affected scope deep equal。
+5. DB rejection／idempotency／concurrency matrix PASS。
+6. 桌機與 390×844 手機以真實 drag 完成雙向＋跨板＋reload。
+7. Level 3 同 release candidate 雙向 PASS，migration history一致。
+
+### 6.1 2026-08-26 RD local return evidence
+
+| Evidence | 結果 | QC 判讀 |
+|---|---:|---|
+| `verify:dev-089-task-placement-transaction` | PASS | v2 command、shared owner、no client sibling patch、security、exactly-one-source postcondition與文件追溯通過。 |
+| `verify:dev-089-placement-scope-isolation` | PASS／1,000 fixtures | 多 workspace／board root collision、兩方向、帳號級未歸位、非 affected scope deep equal。 |
+| Disposable PostgreSQL 18 harness | PASS | migration compile、root/nested subtree雙向、dense order、replay、payload mismatch、來源零殘留、canonical moved IDs完整。非 Supabase TEST/RLS/concurrency證據。 |
+| DEV-086 rendered browser regression | PASS | desktop、390×844、320×844 真實拖曳；desktop/mobile皆完成看板→未歸位，並跨工作區歸位完整三層子樹。 |
+| DEV-089 390×844 failure injection | PASS | pending來源可見；失敗後source=3、destination=0、parent chain preserved、success-only roll-up=0、transient=0、pageerror=0。 |
+| TypeScript／ESLint | PASS | `tsc --noEmit` PASS；ESLint 0 error（53 existing warnings）。 |
+
+RD return contract 1-4 已有 local evidence；第 5 點 concurrency/security 尚需 Supabase TEST；第 6 點 local bidirectional 已通過但 reload/ledger 仍需 Level 3；第 7 點未執行。因此可接受 RD 本機實作送交下一階段，仍不可解除 release stop-ship。
+
+## 7. QC stop conditions
+
+以下任一出現即維持 FAIL：v1 fallback、parent-only index、跨 scope mutation、單向 evidence、missing ledger/canonical/reload readback、migration mismatch、console error、partial subtree、duplicate、lost task、optimistic 假成功。
+
+## 8. QC 結論
+
+目前 QC 判定為：`DEV-089 Rework 1 local implementation／property／transaction harness／rendered UI PASS；production現況仍為已知 FAIL；Supabase TEST、Level 3、migration history與Level 4尚未通過；禁止 release`。
+
+SPEC-089 已達 RD Implemented 並有新 local evidence；不得沿用 2026-08-25 單向 PASS，也不得把 local harness 誤標為 Supabase TEST／production effectiveness PASS。

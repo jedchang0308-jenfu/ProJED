@@ -185,7 +185,10 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
 
     if (!enabled) return;
 
-    if (!activeBoardId) return;
+    if (!activeBoardId) {
+      useWbsStore.setState({ loading: false, error: null });
+      return;
+    }
 
     // 找出 activeBoardId 所屬的 workspace
     const activeWs = useBoardStore.getState().workspaces.find(ws =>
@@ -196,6 +199,7 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
 
     const boardPath = `workspaces/${activeWs.id}/boards/${activeBoardId}`;
     const firestoreDb = requireFirebaseDb();
+    useWbsStore.setState({ loading: true, error: null });
 
     // 3c. 監聽 Dependencies
     unsubDeps.current = onSnapshot(
@@ -234,9 +238,15 @@ export function useFirestoreSync(options: { enabled?: boolean } = {}) {
               scopeBoardIds: [activeBoardId],
               preserveOutOfScope: true,
             });
+            if (useBoardStore.getState().activeBoardId === activeBoardId) {
+              useWbsStore.setState({ loading: false, error: null });
+            }
         },
         (error) => {
             console.error('[useFirestoreSync] Nodes snapshot error:', error);
+            if (useBoardStore.getState().activeBoardId === activeBoardId) {
+              useWbsStore.setState({ loading: false, error: error.message || '任務載入失敗' });
+            }
         }
     );
 

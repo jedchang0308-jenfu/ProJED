@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, GitBranch, Plus, RefreshCw, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
+import { AlertTriangle, CalendarDays, GitBranch, Plus, RefreshCw, Search, SlidersHorizontal, Tag, UserRound } from 'lucide-react';
 import useBoardStore from '../../store/useBoardStore';
+import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useTagStore } from '../../store/useTagStore';
@@ -62,32 +63,34 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
-  const statusFilters = useBoardStore(s => s.statusFilters);
-  const toggleStatusFilter = useBoardStore(s => s.toggleStatusFilter);
   const showDependencies = useBoardStore(s => s.showDependencies);
   const toggleDependencies = useBoardStore(s => s.toggleDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
   const toggleStartDate = useBoardStore(s => s.toggleStartDate);
   const showTags = useBoardStore(s => s.showTags);
   const toggleTags = useBoardStore(s => s.toggleTags);
-  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
-  const setDueWithinDays = useBoardStore(s => s.setDueWithinDays);
-  const overdueOnly = useBoardStore(s => s.overdueOnly);
-  const toggleOverdueFilter = useBoardStore(s => s.toggleOverdueFilter);
-  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
-  const toggleAssigneeFilter = useBoardStore(s => s.toggleAssigneeFilter);
-  const clearAssigneeFilters = useBoardStore(s => s.clearAssigneeFilters);
   const activeBoardId = useBoardStore(s => s.activeBoardId);
+  const filters = useTaskFilterStore(s => s.filters);
+  const toggleStatusFilter = useTaskFilterStore(s => s.toggleStatusFilter);
+  const setDueWithinDays = useTaskFilterStore(s => s.setDueWithinDays);
+  const toggleOverdueFilter = useTaskFilterStore(s => s.toggleOverdueFilter);
+  const toggleAssigneeFilter = useTaskFilterStore(s => s.toggleAssigneeFilter);
+  const clearAssigneeFilters = useTaskFilterStore(s => s.clearAssigneeFilters);
+  const toggleTagFilter = useTaskFilterStore(s => s.toggleTagFilter);
+  const clearTagFilters = useTaskFilterStore(s => s.clearTagFilters);
+  const setKeyword = useTaskFilterStore(s => s.setKeyword);
+  const resetFilters = useTaskFilterStore(s => s.resetFilters);
+  const retrySync = useTaskFilterStore(s => s.retrySync);
+  const syncStatus = useTaskFilterStore(s => s.syncStatus);
+  const syncWarning = useTaskFilterStore(s => s.warning);
+  const { statusFilters, dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, keyword } = filters;
   const nodes = useWbsStore(s => s.nodes);
   const { canEditTask } = useBoardPermissions();
   const workspaceMembers = useMemberStore(s => s.workspaceMembers);
   const boardMembers = useMemberStore(s => s.boardMembers);
 
   const tags = useTagStore(s => s.tags);
-  const selectedTagIds = useTagStore(s => s.selectedTagIds);
   const createTag = useTagStore(s => s.createTag);
-  const toggleTagFilter = useTagStore(s => s.toggleTagFilter);
-  const clearTagFilters = useTagStore(s => s.clearTagFilters);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -146,10 +149,11 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
     overdueOnly,
     selectedAssigneeIds,
     selectedTagIds,
-    keyword: '',
+    keyword,
   });
   const hasActiveFilter = activeFilterCount > 0;
   const hasPendingUpdate = pendingUpdateCount > 0;
+  const hasSyncFailure = syncStatus === 'sync-error';
 
   const handleDueDaysChange = (value: string) => {
     if (value === '') {
@@ -195,6 +199,7 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
         )}
         data-task-filter-control-group="true"
         data-task-filter-control-pending={hasPendingUpdate ? 'true' : 'false'}
+        data-task-filter-sync-error={hasSyncFailure ? 'true' : 'false'}
       >
         <button
           ref={triggerRef}
@@ -230,6 +235,19 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
             >
               {pendingUpdateCount > 99 ? '99+' : pendingUpdateCount}
             </span>
+          </button>
+        ) : null}
+
+        {hasSyncFailure ? (
+          <button
+            type="button"
+            onClick={() => void retrySync()}
+            className="inline-flex h-full w-8 items-center justify-center border-0 border-l border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
+            title={syncWarning || '重新同步篩選偏好'}
+            aria-label={syncWarning || '重新同步篩選偏好'}
+            data-task-filter-sync-warning="true"
+          >
+            <AlertTriangle size={13} aria-hidden="true" />
           </button>
         ) : null}
       </div>
@@ -324,6 +342,18 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
                 <span>天內</span>
               </label>
             </div>
+            <label className="mt-2 flex h-[30px] items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-600 shadow-sm focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10">
+              <Search size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={keyword}
+                onChange={event => setKeyword(event.target.value)}
+                placeholder="搜尋任務名稱"
+                aria-label="任務關鍵字"
+                className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-slate-300"
+                data-task-filter-keyword="true"
+              />
+            </label>
           </div>
 
           <div className="px-3 pt-2 pb-3" data-task-display-settings="true">
@@ -463,6 +493,22 @@ export const StatusFilterBar: React.FC<StatusFilterBarProps> = ({
               )}
             </div>
           </div>
+
+          {hasActiveFilter ? (
+            <>
+              <div className="mx-3 h-px bg-slate-100" />
+              <div className="px-3 py-2">
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="w-full rounded-md px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  data-task-filter-reset="true"
+                >
+                  清除全部篩選
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>,
         document.body
       )}

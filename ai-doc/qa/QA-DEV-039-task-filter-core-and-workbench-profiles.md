@@ -1,10 +1,11 @@
 # QA-DEV-039: 任務過濾器核心與全域任務平台兩欄篩選驗證計畫
 
-關聯 DEV：DEV-039
+關聯 DEV：DEV-039、DEV-090
 關聯 SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
-狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Phase 2B Release Gate Passed / Authenticated Smoke Pending / Local Automated QC Passed / All-Phase Coverage Complete
+狀態：Phase 1/1A QA Passed / Phase 1B QA Passed / Phase 1C QA Passed / Phase 2 Cross-Board Source Slice QA Passed / Phase 2A Drag Trigger Parity QA Passed / Phase 2B Release Gate Passed / Authenticated Smoke Pending / Local Automated QC Passed / DEV-090 Board-filter Follow-up Superseded by QA-DEV-090
 建立日期：2026-07-02
 最新修正：
+- 2026-08-26 DEV-090 supersession：本文件中 `completed:false`、default active count=1、板內偏好只存 uid-scoped localStorage、不得跨裝置，以及 board reset 不需遠端 persistence 的驗收，已由 `QA-DEV-090-default-show-all-account-board-filter-consistency.md` 取代。工作台仍維持獨立 active state；DEV-090 只要求 shared default/migration reset，不把工作台 filter 上傳到新板內偏好表。
 - 2026-08-07 account-scoped filter memory follow-up：新增看板與工作台篩選狀態的帳號隔離驗證；以兩個本機測試帳號實際點選「負責人/協作」，確認看板與工作台各自寫入帳號 uid scope，帳號 B 不繼承帳號 A，切回帳號 A 可恢復。舊版共用 key 的一次性遷移與行事曆訂閱 owner/RLS 邊界另以 static gate 驗證。
 - 2026-08-04 status-filter refresh follow-up：狀態更新需立即寫入任務；只有直接任務或此次 ancestor roll-up 在目前 filter 下跨越命中／未命中邊界時，篩選結果才保持在變更前投影並顯示待更新。兩個狀態都命中或都不命中時不得出現 `更新`；membership 回到既有投影時需取消待更新。工具列將過濾器與最短文案 `更新`／唯一任務數 badge 合併為共用外框、零間距與內部分隔線的複合控制，點擊才重算。驗證需覆蓋無影響狀態變更、結果受影響的狀態變更、祖先 roll-up 不重複計數、共同區域、桌機位置、手機圖示／`aria-label` 與無水平 overflow。
 - 2026-07-03，新增一顆按鈕契約驗證：全域任務平台主畫面不得常駐顯示看板 select；看板選擇必須在 `過濾器` popover 內，並與同看板任務過濾條件一起操作。後續 UI 契約：下方顯示區改名 `所有任務排序`，需包含未歸位任務，並依到期日由早到晚排序，未設到期日者排最後。
@@ -25,7 +26,7 @@
 
 ## 2026-08-07 Account-scoped Filter Memory Addendum
 
-本次需求將「自動記憶」限定為登入帳號範圍，不新增 profile/save/copy UI，也不宣稱跨裝置同步。
+本段保留 2026-08-07 歷史驗證邊界；2026-08-26 起，板內五模式的帳號 × 看板 persistence 與跨裝置 reload/relogin 驗收改由 QA-DEV-090 管理。工作台此段仍只宣稱 uid-scoped local persistence。
 
 | Case | 操作 | 預期 |
 |---|---|---|
@@ -137,7 +138,7 @@ npm.cmd run verify:dev-039-task-filter-core
 | QA-039-B05 | 開啟過濾器 popover | Popover 內看板欄預設為目前 active board；任務清單跨看板顯示目前已載入任務 |
 | QA-039-B06 | 在 popover 內切換看板欄 | 只切換正在編輯的看板 filter state；任務清單仍保留其他看板任務 |
 | QA-039-B07 | 開啟工作台過濾器並關閉某狀態 | 只影響目前選擇看板的任務在跨看板清單中的顯示 |
-| QA-039-B08 | 點擊重設 | 目前看板過濾器回到預設，不需要儲存或 profile |
+| QA-039-B08（Historical / DEV-090 Superseded） | 點擊重設 | 歷史預期為只回本機預設；目前板內驗收改由 QA-090-B09 驗證 remote row delete＋default-all |
 | QA-039-B09 | 新增未歸位任務 | 新增後立即以完整任務卡顯示在未歸位 lane，且 reload 後仍可見 |
 | QA-039-B10 | 切換看板與套用過濾器 | 未歸位 lane 不受看板 selector 或過濾器隱藏；過濾器只作用於已歸位看板 lane |
 | QA-039-B11 | 390px mobile viewport | 工作台 closed state 不顯示 in-flow rail；透過 Sidebar / top-nav 入口開啟 overlay 後不水平 overflow |
@@ -449,7 +450,7 @@ QC 回報至少包含：
 | Workbench drag trigger surface parity | Same Spec Phase | Phase 2A | 已通過 static/browser 真實操作 gate；production release 仍需另行授權 |
 | Board/workbench filter result parity | Same Spec Phase | Phase 1C | 已通過本機自動化 QC；已比對 canonical matched task IDs 與 context-only ancestors |
 | Filter UI section componentization | Same Spec Phase | Phase 3 | 不改產品語意，不新增儲存 |
-| Profile backend sync, migration, conflict handling | Cancelled for DEV-039 | No active QA target | 使用者已取消儲存/profile 類功能 |
+| Board-filter backend sync, migration, conflict handling | New corrective DEV | DEV-090 / QA-DEV-090 | DEV-039 當時取消；2026-08-26 依使用者新決策，以專用帳號 × 看板偏好表重新啟動。工作台 cloud filter persistence 仍不在 scope。 |
 | Calendar subscription source scope | New DEV | DEV-037 | 只在觸及 CalendarSubscriptions 程式碼時做 conditional regression |
 | Production smoke, remote migration, data repair/delete | Blocked Human Re-entry | deployment-release-gate / Supabase gate | 不可由 DEV-039 local QC 自動涵蓋；且不得早於 Phase 1C QC passed |
 

@@ -362,13 +362,19 @@ export type CalendarSubscriptionRow = {
 export type TaskWorkbenchPlacementOperationRow = {
   owner_id: string;
   operation_id: string;
+  command_version: number;
   direction: 'to_unplaced' | 'to_board';
+  source_kind: 'board' | 'account_unplaced' | null;
+  target_kind: 'board' | 'account_unplaced' | null;
   root_task_id: string;
   task_ids: Json;
   source_workspace_id: string | null;
   source_board_id: string | null;
   target_workspace_id: string | null;
   target_board_id: string | null;
+  target_parent_task_id: string | null;
+  anchor_task_id: string | null;
+  position: 'before' | 'after' | 'append' | null;
   status: 'pending' | 'committed' | 'failed';
   error_code: string | null;
   client_platform: string | null;
@@ -386,6 +392,23 @@ export type TaskWorkbenchUnplacedItemRow = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+};
+
+export type AccountBoardTaskFilterPreferenceRow = {
+  account_id: string;
+  project_id: string;
+  preference_version: number;
+  filters: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+type AccountBoardTaskFilterPreferenceTable = {
+  Row: AccountBoardTaskFilterPreferenceRow;
+  Insert: Pick<AccountBoardTaskFilterPreferenceRow, 'account_id' | 'project_id' | 'filters'>
+    & Partial<Pick<AccountBoardTaskFilterPreferenceRow, 'preference_version' | 'created_at' | 'updated_at'>>;
+  Update: Partial<Pick<AccountBoardTaskFilterPreferenceRow, 'preference_version' | 'filters' | 'updated_at'>>;
+  Relationships: [];
 };
 
 export interface Database {
@@ -413,6 +436,7 @@ export interface Database {
       rag_sync_jobs: Table<RagSyncJobRow>;
       external_rag_objects: Table<ExternalRagObjectRow>;
       calendar_subscriptions: Table<CalendarSubscriptionRow>;
+      account_board_task_filter_preferences: AccountBoardTaskFilterPreferenceTable;
       task_workbench_unplaced_items: Table<TaskWorkbenchUnplacedItemRow>;
       task_workbench_placement_operations: Table<TaskWorkbenchPlacementOperationRow>;
     };
@@ -532,6 +556,24 @@ export interface Database {
           p_target_workspace_id: string | null;
           p_target_board_id: string | null;
           p_nodes: Json;
+        };
+        Returns: Json;
+      };
+      move_task_workbench_subtree_v2: {
+        Args: {
+          p_operation_id: string;
+          p_root_task_id: string;
+          p_expected_subtree_ids: Json;
+          p_source_kind: 'board' | 'account_unplaced';
+          p_source_workspace_id: string | null;
+          p_source_board_id: string | null;
+          p_target_kind: 'board' | 'account_unplaced';
+          p_target_workspace_id: string | null;
+          p_target_board_id: string | null;
+          p_target_parent_task_id: string | null;
+          p_anchor_task_id: string | null;
+          p_position: 'before' | 'after' | 'append';
+          p_client_platform: 'desktop' | 'mobile';
         };
         Returns: Json;
       };

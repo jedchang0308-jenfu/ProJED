@@ -22,7 +22,7 @@
 import React, { useState, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import { useTagStore } from '../store/useTagStore';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
 import {
     ChevronLeft, ChevronRight, Calendar,
@@ -59,6 +59,8 @@ import { useCoarsePointer } from '../hooks/useCoarsePointer';
 import { normalizeManualTaskStatus } from '../utils/taskStatus';
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
+import { projectTaskFilterResults } from '../features/taskFilters';
+import { TaskFilterResultState } from './ui/TaskFilterResultState';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -163,26 +165,21 @@ function buildWeekSegments(flattenedItems, weeks) {
 const CalendarView = () => {
     const {
         activeBoardId,
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
     } = useBoardStore();
-    const selectedTagIds = useTagStore(state => state.selectedTagIds);
-    const taskFilters = useMemo(() => ({
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        selectedTagIds,
-        keyword: '',
-    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    const taskFilters = useTaskFilterStore(state => state.filters);
+    const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState(new Set());
     const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
     const nodes = useWbsStore(s => s.nodes);
     const parentNodesIndex = useWbsStore(s => s.parentNodesIndex);
+    const taskLoading = useWbsStore(s => s.loading);
+    const taskLoadError = useWbsStore(s => s.error);
+    const filterProjection = useMemo(
+        () => projectTaskFilterResults(nodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, nodes, taskFilters],
+    );
     const isCoarsePointer = useCoarsePointer();
     const ganttRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
 
@@ -203,10 +200,10 @@ const CalendarView = () => {
             nodes,
             parentNodesIndex,
             activeBoardId,
-            taskFilters,
+            visibleTaskIds: filterProjection.visibleTaskIds,
             collapsedIds,
         }).items;
-    }, [activeBoardId, nodes, parentNodesIndex, taskFilters, collapsedIds]);
+    }, [activeBoardId, nodes, parentNodesIndex, filterProjection, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -292,8 +289,15 @@ const CalendarView = () => {
                 )}
             />
 
+            <TaskFilterResultState
+                projection={filterProjection}
+                loading={taskLoading}
+                error={taskLoadError}
+                onReset={resetTaskFilters}
+            />
+
             {/* ── 主體 ── */}
-            <div className="flex-1 flex overflow-hidden">
+            {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
                 {/* 左側側邊欄 */}
                 {/* ── 左側：任務清單側邊欄（複用共用側邊欄，支援拖曳）── */}
                 <SharedTaskSidebar
@@ -308,7 +312,15 @@ const CalendarView = () => {
                 />
 
                 {/* 右側月曆主體 */}
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="relative flex-1 flex flex-col overflow-hidden">
+                    {weekSegments.length === 0 ? (
+                        <div
+                            className="pointer-events-none absolute inset-x-0 top-14 z-20 text-center text-xs text-slate-500"
+                            data-task-date-empty-hint="calendar"
+                        >
+                            符合篩選的任務未在本月排程
+                        </div>
+                    ) : null}
                     {/* 週標頭（固定，不隨內容捲動）*/}
                     <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 shrink-0">
                         {weekDayNames.map((name, i) => (
@@ -463,7 +475,7 @@ const CalendarView = () => {
                         })}
                     </div>
                 </div>
-            </div>
+            </div> : null}
         </div>
     );
 };

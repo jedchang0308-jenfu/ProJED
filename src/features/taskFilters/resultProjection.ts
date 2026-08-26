@@ -100,7 +100,9 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
     Array.from(visibleContainerIds).filter(id => !matchedTaskIds.has(id)),
   );
 
-  matchedTasks.sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+  matchedTasks.sort((left, right) => (
+    (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id)
+  ));
 
   return {
     matchedTaskIds,
@@ -112,6 +114,25 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
     totalTaskCount: boardTaskIds.size,
   };
 };
+
+export const orderTaskFilterIdentitySet = <T extends Pick<TaskNode, 'id' | 'order'>>(
+  ids: ReadonlySet<string>,
+  nodesById: Record<string, T | null | undefined>,
+): string[] => Array.from(ids).sort((leftId, rightId) => {
+  const left = nodesById[leftId];
+  const right = nodesById[rightId];
+  return (left?.order ?? 0) - (right?.order ?? 0) || leftId.localeCompare(rightId);
+});
+
+export const snapshotTaskFilterProjectionIdentities = <T extends Pick<TaskNode, 'id' | 'order'>>(
+  projection: TaskFilterResultProjection,
+  nodesById: Record<string, T | null | undefined>,
+) => ({
+  boardTaskIds: orderTaskFilterIdentitySet(projection.boardTaskIds, nodesById),
+  matchedTaskIds: orderTaskFilterIdentitySet(projection.matchedTaskIds, nodesById),
+  visibleTaskIds: orderTaskFilterIdentitySet(projection.visibleTaskIds, nodesById),
+  contextOnlyContainerIds: orderTaskFilterIdentitySet(projection.contextOnlyContainerIds, nodesById),
+});
 
 export const isTaskVisibleInFilterProjection = (
   projection: TaskFilterResultProjection | null | undefined,

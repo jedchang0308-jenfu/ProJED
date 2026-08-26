@@ -90,6 +90,9 @@ async (page) => {
   };
 
   const accountKey = (base, uid) => `${base}:account:${encodeURIComponent(uid)}`;
+  const accountBoardKey = (base, uid, boardId) => (
+    `${base}:account:${encodeURIComponent(uid)}:board:${encodeURIComponent(boardId)}`
+  );
   const seedAccountA = async () => {
     await page.evaluate(({ account, workspace, nodes }) => {
       localStorage.clear();
@@ -158,14 +161,17 @@ async (page) => {
     await memberButtonA.click();
     await page.locator('[data-task-surface-source="true"][data-task-id="account-filter-task-member"]').waitFor({ state: 'visible', timeout: 10000 });
     assert(await page.locator('[data-task-surface-source="true"][data-task-id="account-filter-task-viewer"]').count() === 0, 'Account A board filter should actually filter tasks');
-    const boardPrefsA = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), accountKey('projed-task-filters:v2', accountA.uid));
+    const boardPrefsA = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) || 'null'),
+      accountBoardKey('projed-task-filters:v4', accountA.uid, workspace.boards[0].id),
+    );
     assert(boardPrefsA?.filters?.selectedAssigneeIds?.includes('local-test-member'), 'Account A board filter should be stored under Account A key', { boardPrefsA });
     await page.locator('[data-task-filter-control-group="true"] > button').first().click();
 
     const workbenchPopoverA = await openWorkbenchFilter();
     const viewerButtonA = workbenchPopoverA.locator('[data-task-condition-filter-controls="true"]').getByRole('button', { name: '本機測試檢視者', exact: true });
     await viewerButtonA.click();
-    const workbenchPrefsA = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), accountKey('projed-task-workbench-filters:v2', accountA.uid));
+    const workbenchPrefsA = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), accountKey('projed-task-workbench-filters:v4', accountA.uid));
     assert(
       Object.values(workbenchPrefsA?.filtersByBoardId || {}).some(filters => filters.selectedAssigneeIds?.includes('local-test-viewer')),
       'Account A workbench filter should be stored under Account A key',
@@ -181,8 +187,11 @@ async (page) => {
     const workbenchPopoverB = await openWorkbenchFilter();
     const viewerButtonB = workbenchPopoverB.locator('[data-task-condition-filter-controls="true"]').getByRole('button', { name: '本機測試檢視者', exact: true });
     assert(await viewerButtonB.getAttribute('aria-pressed') === 'false', 'Account B must not inherit Account A workbench filter');
-    const boardPrefsB = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), accountKey('projed-task-filters:v2', accountB.uid));
-    const workbenchPrefsB = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), accountKey('projed-task-workbench-filters:v2', accountB.uid));
+    const boardPrefsB = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) || 'null'),
+      accountBoardKey('projed-task-filters:v4', accountB.uid, workspace.boards[0].id),
+    );
+    const workbenchPrefsB = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), accountKey('projed-task-workbench-filters:v4', accountB.uid));
     assert(!boardPrefsB?.filters?.selectedAssigneeIds?.length, 'Account B should have independent board filter storage', { boardPrefsB });
     assert(!Object.values(workbenchPrefsB?.filtersByBoardId || {}).some(filters => filters.selectedAssigneeIds?.length), 'Account B should have independent workbench filter storage', { workbenchPrefsB });
 

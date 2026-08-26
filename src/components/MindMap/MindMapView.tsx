@@ -4,13 +4,14 @@ import { useWbsStore } from '../../store/useWbsStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import useDialogStore from '../../store/useDialogStore';
 import { toast } from '../../store/useToastStore';
-import { useTagStore } from '../../store/useTagStore';
+import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import type { TaskNode } from '../../types';
 import MindMapCanvasShell from './MindMapCanvasShell';
 import MindMapConnectorOverlay from './MindMapConnectorOverlay';
 import MindMapDragPreviewBadge from './MindMapDragPreviewBadge';
 import MindMapDragPreviewLayer, { type MindMapDragPreviewModel } from './MindMapDragPreviewLayer';
-import MindMapEmptyState from './MindMapEmptyState';
+import { projectTaskFilterResults } from '../../features/taskFilters';
+import { TaskFilterResultState } from '../ui/TaskFilterResultState';
 import MindMapNode, {
   type MindMapDirection,
   type MindMapDropMode,
@@ -231,18 +232,17 @@ const MindMapView: React.FC = () => {
   const activeBoard = useBoardStore(state => state.getActiveBoard());
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const nodes = useWbsStore(state => state.nodes);
+  const taskLoading = useWbsStore(state => state.loading);
+  const taskLoadError = useWbsStore(state => state.error);
   const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
   const addNode = useWbsStore(state => state.addNode);
   const updateNode = useWbsStore(state => state.updateNode);
   const archiveTask = useWbsStore(state => state.archiveNode);
-  const statusFilters = useBoardStore(state => state.statusFilters);
-  const dueWithinDays = useBoardStore(state => state.dueWithinDays);
-  const overdueOnly = useBoardStore(state => state.overdueOnly);
-  const selectedAssigneeIds = useBoardStore(state => state.selectedAssigneeIds);
+  const taskFilters = useTaskFilterStore(state => state.filters);
+  const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
   const showStartDate = useBoardStore(state => state.showStartDate);
   const setSelectedTaskId = useBoardStore(state => state.setSelectedTaskId);
   const setContextMenuState = useBoardStore(state => state.setContextMenuState);
-  const selectedTagIds = useTagStore(state => state.selectedTagIds);
   const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, isReadOnly } = useBoardPermissions();
 
   const [selectionStore] = React.useState<MindMapSelectionStore>(() => createMindMapSelectionStore());
@@ -590,18 +590,14 @@ const MindMapView: React.FC = () => {
     };
   }, [activeBoardId]);
 
-  const mindMapFilters = React.useMemo(() => ({
-    statusFilters,
-    dueWithinDays,
-    overdueOnly,
-    selectedAssigneeIds,
-    selectedTagIds,
-    keyword: '',
-  }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+  const filterProjection = React.useMemo(
+    () => projectTaskFilterResults(nodes, taskFilters, { boardId }),
+    [boardId, nodes, taskFilters],
+  );
 
   const rootNodes = React.useMemo(() => {
-    return getMindMapRootNodes(nodes, parentNodesIndex, boardId, mindMapFilters);
-  }, [boardId, mindMapFilters, nodes, parentNodesIndex]);
+    return getMindMapRootNodes(nodes, parentNodesIndex, boardId, filterProjection.visibleTaskIds);
+  }, [boardId, filterProjection, nodes, parentNodesIndex]);
 
   React.useLayoutEffect(() => {
     const surface = mapSurfaceRef.current;
@@ -736,8 +732,8 @@ const MindMapView: React.FC = () => {
   }, [editingRelationshipId]);
 
   const getChildren = React.useCallback((nodeId: string) =>
-    getMindMapChildren(nodes, parentNodesIndex, boardId, mindMapFilters, nodeId),
-  [boardId, mindMapFilters, nodes, parentNodesIndex]);
+    getMindMapChildren(nodes, parentNodesIndex, boardId, filterProjection.visibleTaskIds, nodeId),
+  [boardId, filterProjection, nodes, parentNodesIndex]);
 
   const navigationIndex = React.useMemo(() => {
     return buildMindMapNavigationIndex(rootsBySide, expandedNodeIds, getChildren);
@@ -1860,8 +1856,17 @@ const MindMapView: React.FC = () => {
         sceneStyle={sceneStyle}
         relationshipToolActive={relationshipToolActive}
         relationshipDraftFromId={relationshipDraft?.fromId || ''}
-        hasContent={rootNodes.length > 0}
-        emptyState={<MindMapEmptyState canCreateTask={canCreateTask} onCreateRoot={handleCreateRoot} />}
+        hasContent={!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0}
+        emptyState={(
+          <TaskFilterResultState
+            projection={filterProjection}
+            loading={taskLoading}
+            error={taskLoadError}
+            onReset={resetTaskFilters}
+            onCreate={handleCreateRoot}
+            canCreate={canCreateTask}
+          />
+        )}
         onMouseDown={startMiddleMousePan}
         onPointerDown={startLeftMousePan}
         onContentClick={handleSurfaceClick}

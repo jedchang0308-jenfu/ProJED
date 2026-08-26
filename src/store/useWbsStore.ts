@@ -14,7 +14,13 @@ import {
   persistTaskWorkbenchUnplacedTask,
   readTaskWorkbenchUnplacedTasks,
 } from '../features/taskWorkbench/placement';
-import { persistTaskWorkbenchPlacementTransaction } from '../features/taskWorkbench/placementTransaction';
+import { persistTaskWorkbenchPlacementCommand } from '../features/taskWorkbench/placementTransaction';
+import {
+  assertMoveTaskSubtreeCommand,
+  buildRestoreDestination,
+  withNewTaskPlacementOperation,
+  type MoveTaskSubtreeCommand,
+} from '../features/taskWorkbench/taskPlacementCommand';
 import {
   getTaskAssigneeIds,
   normalizeTaskAssignmentNode,
@@ -27,7 +33,7 @@ import {
   useDeferredTaskFilterRefreshStore,
 } from '../features/taskFilters/deferredRefresh';
 import { matchesTaskFiltersWithStatus } from '../features/taskFilters/predicates';
-import type { TaskFilterState } from '../features/taskFilters/types';
+import { useTaskFilterStore } from './useTaskFilterStore';
 
 /**
  * WbsStore 狀態定義
@@ -72,6 +78,11 @@ export type BatchUpdateNodesOptions = {
   persistenceOrder?: 'parallel' | 'root-first' | 'leaves-first';
 };
 
+export type TaskPlacementCommandOptions = {
+  label?: string;
+  mergeKey?: string;
+};
+
 export interface WbsBoardActions {
   // ===== 基礎資料操作 (CRUD) =====
   
@@ -99,10 +110,10 @@ export interface WbsBoardActions {
    */
   batchUpdateNodes: (updatesById: BatchNodeUpdates, options?: BatchUpdateNodesOptions) => void;
 
-  /** Persist a cross-ownership subtree move before committing it to local state. */
-  commitNodePlacementBatch: (
-    updatesById: BatchNodeUpdates,
-    options: BatchUpdateNodesOptions & { persistenceOrder: 'root-first' | 'leaves-first' },
+  /** Execute a scope-safe cross-ownership move and apply only the canonical result. */
+  commitTaskPlacementCommand: (
+    command: MoveTaskSubtreeCommand,
+    options?: TaskPlacementCommandOptions,
   ) => Promise<void>;
 
   /**
@@ -254,17 +265,7 @@ const getTaskAndAncestorIds = (
   return ids;
 };
 
-const getCurrentTaskFilters = (): TaskFilterState => {
-  const boardState = useBoardStore.getState();
-  return {
-    statusFilters: boardState.statusFilters,
-    dueWithinDays: boardState.dueWithinDays,
-    overdueOnly: boardState.overdueOnly,
-    selectedAssigneeIds: boardState.selectedAssigneeIds,
-    selectedTagIds: useTagStore.getState().selectedTagIds,
-    keyword: '',
-  };
-};
+const getCurrentTaskFilters = () => useTaskFilterStore.getState().filters;
 
 const buildChangedNodePatch = (
   oldNode: TaskNode,
@@ -334,12 +335,6 @@ const getNodeHierarchyDepth = (nodeId: string, nodes: Record<string, TaskNode>) 
 
 const createDependencyId = () =>
   `dep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-
-const createPlacementOperationId = () => {
-  const randomId = globalThis.crypto?.randomUUID?.()
-    || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-  return `placement_${randomId}`;
-};
 
 const normalizeImportedDependencies = (
   dependencies: unknown,
@@ -1149,78 +1144,62 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     });
   },
 
-  commitNodePlacementBatch: async (updatesById, options) => {
-    const entries = Object.entries(updatesById);
-    if (entries.length === 0) return;
-
+  commitTaskPlacementCommand: async (command, options = {}) => {
     const state = get();
-    const beforePatches: BatchNodeUpdates = {};
-    const afterPatches: BatchNodeUpdates = {};
-    const beforeNodesById: Record<string, TaskNode> = {};
-    const afterNodesById: Record<string, TaskNode> = {};
-
-    for (const [id, updates] of entries) {
-      const oldNode = state.nodes[id];
-      if (!oldNode) continue;
-      const patch = buildChangedNodePatch(oldNode, updates);
-      if (!patch) continue;
-      beforePatches[id] = patch.before;
-      afterPatches[id] = patch.after;
-      beforeNodesById[id] = oldNode;
-      afterNodesById[id] = {
-        ...oldNode,
-        ...patch.after,
-        updatedAt: typeof patch.after.updatedAt === 'number' ? patch.after.updatedAt : Date.now(),
-      };
-    }
-
-    const changedEntries = Object.entries(afterPatches);
-    if (changedEntries.length === 0) return;
-    const orderedEntries = [...changedEntries].sort(([leftId], [rightId]) => {
-      const depthDifference = getNodeHierarchyDepth(leftId, afterNodesById) - getNodeHierarchyDepth(rightId, afterNodesById);
-      return options.persistenceOrder === 'leaves-first' ? -depthDifference : depthDifference;
-    });
-    const orderedIds = orderedEntries.map(([id]) => id);
-    const operationId = createPlacementOperationId();
+    assertMoveTaskSubtreeCommand(command, state.nodes);
+    const beforeNodes = state.nodes;
+    const reverseDestination = buildRestoreDestination(command.rootTaskId, beforeNodes);
+    const pendingIds = [...command.expectedSubtreeIds];
     set(current => ({
       pendingPlacementNodeIds: {
         ...current.pendingPlacementNodeIds,
-        ...Object.fromEntries(orderedIds.map(id => [id, operationId])),
+        ...Object.fromEntries(pendingIds.map(id => [id, command.operationId])),
       },
     }));
 
     try {
-      const transactionResult = await persistTaskWorkbenchPlacementTransaction({
-        operationId,
+      const result = await persistTaskWorkbenchPlacementCommand({
+        command,
         accountId: useAuthStore.getState().user?.uid,
-        beforeNodes: orderedIds.map(id => beforeNodesById[id]),
-        afterNodes: orderedIds.map(id => afterNodesById[id]),
+        nodesRecord: beforeNodes,
       });
+      if (result.movedTaskIds.length !== command.expectedSubtreeIds.length
+        || result.movedTaskIds.some((id, index) => command.expectedSubtreeIds[index] !== id)) {
+        throw new Error('Canonical task placement result changed the expected subtree identity.');
+      }
+      const canonicalById = new Map(result.canonicalNodes.map(node => [node.id, node]));
+      const missingMovedId = command.expectedSubtreeIds.find(id => !canonicalById.has(id));
+      if (missingMovedId) {
+        throw new Error(`Canonical task placement result is missing moved task: ${missingMovedId}`);
+      }
 
       const undoStore = useUndoStore.getState();
       const wasApplying = undoStore.isApplying;
       if (!wasApplying) useUndoStore.setState({ isApplying: true });
       try {
-        orderedEntries.forEach(([id, updates]) => {
-          get().updateNode(id, updates, { skipPersistence: true, skipActivity: true });
+        result.canonicalNodes.forEach((canonical) => {
+          if (!get().nodes[canonical.id]) return;
+          get().updateNode(canonical.id, canonical, { skipPersistence: true, skipActivity: true });
         });
       } finally {
         if (!wasApplying) useUndoStore.setState({ isApplying: false });
       }
 
       const committedNodes = get().nodes;
-      orderedIds.forEach(id => {
-        const oldNode = beforeNodesById[id];
+      command.expectedSubtreeIds.forEach(id => {
+        const oldNode = beforeNodes[id];
         const newNode = committedNodes[id];
-        if (!oldNode || !newNode) return;
-        const events = buildTaskUpdateActivities(oldNode, newNode, afterPatches[id]);
-        events.forEach(event => {
-          if (!transactionResult.activityLoggedRemotely) {
+        const canonical = canonicalById.get(id);
+        if (!oldNode || !newNode || !canonical) return;
+        const patch = buildChangedNodePatch(oldNode, canonical);
+        if (!patch) return;
+        buildTaskUpdateActivities(oldNode, newNode, patch.after).forEach(event => {
+          if (!result.activityLoggedRemotely) {
             logTaskActivity(isTaskWorkbenchUnplacedTask(newNode) ? oldNode : newNode, event.eventType, {
               ...event.payload,
-              operationId,
-              source: { workspaceId: oldNode.workspaceId, boardId: oldNode.boardId },
-              target: { workspaceId: newNode.workspaceId, boardId: newNode.boardId },
+              operationId: command.operationId,
+              source: command.source,
+              target: command.destination.ownership,
             });
           }
           recordMeetingTaskActivity(newNode, event.eventType, event.payload);
@@ -1228,30 +1207,33 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       });
 
       if (!wasApplying) {
-        const label = options.label || (changedEntries.length > 1 ? '批次歸位任務' : '歸位任務');
-        const reverseOrder = options.persistenceOrder === 'root-first' ? 'leaves-first' : 'root-first';
+        const reverseTemplate: MoveTaskSubtreeCommand = {
+          ...command,
+          operationId: command.operationId,
+          source: command.destination.ownership,
+          destination: reverseDestination,
+        };
+        const label = options.label || '搬移任務';
         useUndoStore.getState().pushUndo({
           label,
           scope: 'batch',
-          entityIds: orderedIds,
+          entityIds: [...command.expectedSubtreeIds],
           mergeKey: options.mergeKey,
-          undo: () => get().commitNodePlacementBatch(beforePatches, {
-            label,
-            mergeKey: options.mergeKey,
-            persistenceOrder: reverseOrder,
-          }),
-          redo: () => get().commitNodePlacementBatch(afterPatches, {
-            label,
-            mergeKey: options.mergeKey,
-            persistenceOrder: options.persistenceOrder,
-          }),
+          undo: () => get().commitTaskPlacementCommand(
+            withNewTaskPlacementOperation(reverseTemplate),
+            { label, mergeKey: options.mergeKey },
+          ),
+          redo: () => get().commitTaskPlacementCommand(
+            withNewTaskPlacementOperation(command),
+            { label, mergeKey: options.mergeKey },
+          ),
         });
       }
     } finally {
       set(current => ({
         pendingPlacementNodeIds: Object.fromEntries(
           Object.entries(current.pendingPlacementNodeIds)
-            .filter(([, pendingOperationId]) => pendingOperationId !== operationId),
+            .filter(([, pendingOperationId]) => pendingOperationId !== command.operationId),
         ),
       }));
     }

@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
-import { useTagStore } from '../store/useTagStore';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
 import { Calendar, GitBranch } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
@@ -12,6 +12,8 @@ import { compactClassNames, compactSegmentedButtonClass } from './ui/compactToke
 import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
+import { projectTaskFilterResults } from '../features/taskFilters';
+import { TaskFilterResultState } from './ui/TaskFilterResultState';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -19,21 +21,10 @@ const GanttView = () => {
     const {
         activeBoardId,
         activeWorkspaceId,
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
         showDependencies,
     } = useBoardStore();
-    const selectedTagIds = useTagStore(state => state.selectedTagIds);
-    const taskFilters = useMemo(() => ({
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        selectedTagIds,
-        keyword: '',
-    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    const taskFilters = useTaskFilterStore(state => state.filters);
+    const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
 
     const [isTaskListOpen, setIsTaskListOpen] = useState(true);
     const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -63,6 +54,12 @@ const GanttView = () => {
     // Subscribe to nodes so GanttView re-renders when task dates or orders change
     const nodes = useWbsStore(s => s.nodes);
     const parentNodesIndex = useWbsStore(s => s.parentNodesIndex);
+    const taskLoading = useWbsStore(s => s.loading);
+    const taskLoadError = useWbsStore(s => s.error);
+    const filterProjection = useMemo(
+        () => projectTaskFilterResults(nodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, nodes, taskFilters],
+    );
 
 
     const { flattenedItems, groups, gridStart, gridEnd, totalUnits } = useMemo(() => {
@@ -86,7 +83,7 @@ const GanttView = () => {
             nodes,
             parentNodesIndex,
             activeBoardId,
-            taskFilters,
+            visibleTaskIds: filterProjection.visibleTaskIds,
             collapsedIds,
         });
         items.forEach(item => updateBounds(item.startDate || null, item.endDate || null));
@@ -125,7 +122,11 @@ const GanttView = () => {
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, taskFilters, mode, collapsedIds, nodes, parentNodesIndex]);
+    }, [activeBoardId, filterProjection, mode, collapsedIds, nodes, parentNodesIndex]);
+    const isTimelineEligible = (item: any) => [item.startDate, item.endDate]
+        .some(value => Boolean(value && dayjs(value).isValid()));
+    const timelineItems = flattenedItems.filter(isTimelineEligible);
+    const hasScheduledItems = timelineItems.length > 0;
 
     const colWidth = getColWidth(mode);
 
@@ -195,7 +196,13 @@ const GanttView = () => {
                 )}
             />
 
-            <div className="flex-1 flex overflow-hidden">
+            <TaskFilterResultState
+                projection={filterProjection}
+                loading={taskLoading}
+                error={taskLoadError}
+                onReset={resetTaskFilters}
+            />
+            {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <div className="flex-1 flex overflow-hidden">
                 {/* Left Sidebar */}
                 <SharedTaskSidebar
                     flattenedItems={flattenedItems}
@@ -210,6 +217,11 @@ const GanttView = () => {
 
                 {/* Right Timeline */}
                 <div className="flex-1 overflow-hidden relative">
+                    {!hasScheduledItems ? (
+                        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 text-center text-xs text-slate-500" data-task-date-empty-hint="gantt">
+                            符合篩選的任務尚未設定日期
+                        </div>
+                    ) : null}
                     <div
                         ref={scrollAreaRef}
                         onScroll={handleScroll}
@@ -224,7 +236,7 @@ const GanttView = () => {
                             
                             <GanttRow groups={groups} colWidth={colWidth} mode={mode} gridStart={gridStart} />
 
-                            {flattenedItems.map((item: any) => (
+                            {timelineItems.map((item: any) => (
                                 <GanttTaskBar
                                     key={`${item.type}-${item.id}`}
                                     item={item}
@@ -248,7 +260,7 @@ const GanttView = () => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> : null}
         </div>
     );
 };

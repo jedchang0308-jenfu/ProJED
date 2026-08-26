@@ -1,4 +1,11 @@
 import type { TaskNode } from '../../types';
+import type {
+  MoveTaskSubtreeCommand,
+  MoveTaskSubtreeResult,
+  PlacementScope,
+  TaskOwnershipRef,
+  TaskPlacementCanonicalNode,
+} from '../../features/taskWorkbench/taskPlacementCommand';
 import { isSupabaseConfigured, supabase } from './client';
 import type {
   Json,
@@ -94,21 +101,6 @@ export const supabaseTaskWorkbenchUnplacedService = {
   },
 };
 
-export type TaskWorkbenchPlacementDirection = 'to_unplaced' | 'to_board';
-
-export type TaskWorkbenchPlacementOperationInput = {
-  operationId: string;
-  ownerId: string;
-  direction: TaskWorkbenchPlacementDirection;
-  rootTaskId: string;
-  taskIds: string[];
-  sourceWorkspaceId: string | null;
-  sourceBoardId: string | null;
-  targetWorkspaceId: string | null;
-  targetBoardId: string | null;
-  clientPlatform: string;
-};
-
 const getPlacementErrorCode = (error: unknown) => {
   if (typeof error === 'object' && error) {
     if ('code' in error && typeof error.code === 'string') return error.code.slice(0, 80);
@@ -117,22 +109,102 @@ const getPlacementErrorCode = (error: unknown) => {
   return String(error ?? 'unknown').slice(0, 80);
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const parseOwnership = (value: unknown): TaskOwnershipRef => {
+  if (!isRecord(value)) throw new Error('Supabase returned an invalid task placement ownership.');
+  if (value.kind === 'account_unplaced') return { kind: 'account_unplaced' };
+  if (value.kind === 'board' && typeof value.workspaceId === 'string' && typeof value.boardId === 'string') {
+    return { kind: 'board', workspaceId: value.workspaceId, boardId: value.boardId };
+  }
+  throw new Error('Supabase returned an invalid task placement ownership.');
+};
+
+const parsePlacementScope = (value: unknown): PlacementScope => {
+  if (!isRecord(value)) throw new Error('Supabase returned an invalid task placement scope.');
+  return {
+    ownership: parseOwnership(value.ownership),
+    parentId: typeof value.parentId === 'string' && value.parentId ? value.parentId : null,
+  };
+};
+
+const parseCanonicalNode = (value: unknown): TaskPlacementCanonicalNode => {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || typeof value.workspaceId !== 'string'
+    || typeof value.boardId !== 'string'
+    || typeof value.order !== 'number'
+    || typeof value.nodeType !== 'string'
+    || typeof value.updatedAt !== 'number') {
+    throw new Error('Supabase returned an invalid canonical task placement node.');
+  }
+  return {
+    id: value.id,
+    workspaceId: value.workspaceId,
+    boardId: value.boardId,
+    parentId: typeof value.parentId === 'string' && value.parentId ? value.parentId : null,
+    order: value.order,
+    nodeType: value.nodeType as TaskNode['nodeType'],
+    kanbanStageId: typeof value.kanbanStageId === 'string' ? value.kanbanStageId : undefined,
+    updatedAt: value.updatedAt,
+  };
+};
+
+const parsePlacementResult = (value: unknown, operationId: string): MoveTaskSubtreeResult => {
+  if (!isRecord(value)
+    || value.status !== 'committed'
+    || value.operationId !== operationId
+    || (value.direction !== 'to_board' && value.direction !== 'to_unplaced')
+    || !Array.isArray(value.movedTaskIds)
+    || !Array.isArray(value.canonicalNodes)
+    || !Array.isArray(value.affectedScopes)) {
+    throw new Error('Supabase did not return a valid task placement result.');
+  }
+  const movedTaskIds = value.movedTaskIds.filter((id): id is string => typeof id === 'string');
+  if (movedTaskIds.length !== value.movedTaskIds.length || movedTaskIds.length === 0) {
+    throw new Error('Supabase returned invalid moved task ids.');
+  }
+  return {
+    operationId,
+    status: 'committed',
+    direction: value.direction,
+    movedTaskIds,
+    canonicalNodes: value.canonicalNodes.map(parseCanonicalNode),
+    affectedScopes: value.affectedScopes.map(parsePlacementScope),
+  };
+};
+
 export const supabaseTaskWorkbenchPlacementService = {
-  begin: async (input: TaskWorkbenchPlacementOperationInput): Promise<void> => {
+  begin: async (
+    ownerId: string,
+    command: MoveTaskSubtreeCommand,
+  ): Promise<void> => {
     requireSupabase();
+    const direction = command.source.kind === 'account_unplaced' ? 'to_board' : 'to_unplaced';
+    const sourceBoard = command.source.kind === 'board' ? command.source : null;
+    const targetBoard = command.destination.ownership.kind === 'board'
+      ? command.destination.ownership
+      : null;
     const payload = {
-      owner_id: input.ownerId,
-      operation_id: input.operationId,
-      direction: input.direction,
-      root_task_id: input.rootTaskId,
-      task_ids: input.taskIds as unknown as Json,
-      source_workspace_id: input.sourceWorkspaceId,
-      source_board_id: input.sourceBoardId,
-      target_workspace_id: input.targetWorkspaceId,
-      target_board_id: input.targetBoardId,
+      owner_id: ownerId,
+      operation_id: command.operationId,
+      command_version: command.commandVersion,
+      direction,
+      source_kind: command.source.kind,
+      target_kind: command.destination.ownership.kind,
+      root_task_id: command.rootTaskId,
+      task_ids: command.expectedSubtreeIds as unknown as Json,
+      source_workspace_id: sourceBoard?.workspaceId ?? null,
+      source_board_id: sourceBoard?.boardId ?? null,
+      target_workspace_id: targetBoard?.workspaceId ?? null,
+      target_board_id: targetBoard?.boardId ?? null,
+      target_parent_task_id: command.destination.parentId,
+      anchor_task_id: command.destination.anchorTaskId,
+      position: command.destination.position,
       status: 'pending',
       error_code: null,
-      client_platform: input.clientPlatform,
+      client_platform: command.clientPlatform,
       result: null,
       elapsed_ms: null,
     } satisfies Partial<TaskWorkbenchPlacementOperationRow>;
@@ -145,27 +217,32 @@ export const supabaseTaskWorkbenchPlacementService = {
     assertNoError(error);
   },
 
-  commit: async (
-    input: TaskWorkbenchPlacementOperationInput,
-    nodes: TaskNode[],
-  ): Promise<Json> => {
+  commit: async (command: MoveTaskSubtreeCommand): Promise<MoveTaskSubtreeResult> => {
     requireSupabase();
-    const { data, error } = await supabase.rpc('move_task_workbench_subtree', {
-      p_operation_id: input.operationId,
-      p_direction: input.direction,
-      p_root_task_id: input.rootTaskId,
-      p_source_workspace_id: input.sourceWorkspaceId,
-      p_source_board_id: input.sourceBoardId,
-      p_target_workspace_id: input.targetWorkspaceId,
-      p_target_board_id: input.targetBoardId,
-      p_nodes: nodes as unknown as Json,
+    const sourceBoard = command.source.kind === 'board' ? command.source : null;
+    const targetBoard = command.destination.ownership.kind === 'board'
+      ? command.destination.ownership
+      : null;
+    const { data, error } = await supabase.rpc('move_task_workbench_subtree_v2', {
+      p_operation_id: command.operationId,
+      p_root_task_id: command.rootTaskId,
+      p_expected_subtree_ids: command.expectedSubtreeIds as unknown as Json,
+      p_source_kind: command.source.kind,
+      p_source_workspace_id: sourceBoard?.workspaceId ?? null,
+      p_source_board_id: sourceBoard?.boardId ?? null,
+      p_target_kind: command.destination.ownership.kind,
+      p_target_workspace_id: targetBoard?.workspaceId ?? null,
+      p_target_board_id: targetBoard?.boardId ?? null,
+      p_target_parent_task_id: command.destination.parentId,
+      p_anchor_task_id: command.destination.anchorTaskId,
+      p_position: command.destination.position,
+      p_client_platform: command.clientPlatform,
     });
     assertNoError(error);
-    if (!data || typeof data !== 'object') {
-      throw new Error('Supabase did not return a task placement result.');
-    }
-    return data;
+    return parsePlacementResult(data, command.operationId);
   },
+
+  parseResult: (value: Json, operationId: string) => parsePlacementResult(value, operationId),
 
   read: async (
     ownerId: string,

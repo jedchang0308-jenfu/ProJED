@@ -137,11 +137,12 @@ assert(
     source.spec.includes('context-only') &&
     source.qa.includes('Phase 1C Filter Result Parity Verification') &&
     source.qc.includes('Phase 1C QC Gate') &&
-    source.devTask.includes('DEV-039 [交付點] [完成]') &&
+    source.devTask.includes('DEV-039 [交付點] [驗證中]') &&
     source.documentationMap.includes('Phase 1C') &&
     source.backlog.includes('Phase 1C') &&
     source.devTask.includes('QA/QC-DEV-039') &&
-    source.qc.includes('Phase 1C QC Gate（Passed）'),
+    source.qc.includes('Phase 1C QC Gate（Passed）') &&
+    source.qa.includes('DEV-090 Board-filter Follow-up Superseded by QA-DEV-090'),
 );
 
 const failed = results.filter(result => !result.ok);

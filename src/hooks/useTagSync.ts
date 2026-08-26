@@ -14,15 +14,18 @@ export function useTagSync() {
   const activeBoardId = useBoardStore(s => s.activeBoardId);
   const workspaces = useBoardStore(s => s.workspaces);
   const setTags = useTagStore(s => s.setTags);
+  const beginTagLoad = useTagStore(s => s.beginTagLoad);
+  const failTagLoad = useTagStore(s => s.failTagLoad);
   const loadTags = useTagStore(s => s.loadTags);
 
   useEffect(() => {
     if (!activeWorkspaceId) {
-      setTags([]);
+      setTags([], null);
       return;
     }
 
     if (dataBackend === 'firebase') {
+      beginTagLoad(activeWorkspaceId);
       const firestoreDb = requireFirebaseDb();
       const unsubscribe = onSnapshot(
         collection(firestoreDb, 'workspaces', activeWorkspaceId, 'tags'),
@@ -31,10 +34,11 @@ export function useTagSync() {
             ...(docSnap.data() as TaskTag),
             id: docSnap.id,
             workspaceId: activeWorkspaceId,
-          })));
+          })), activeWorkspaceId);
         },
         (error) => {
           console.error('[useTagSync] Firebase tag snapshot error:', error);
+          failTagLoad(error);
         }
       );
       return unsubscribe;
@@ -42,22 +46,26 @@ export function useTagSync() {
 
     if (dataBackend === 'supabase') {
       if (!isSupabaseConfigured) {
-        setTags([]);
+        setTags([], null);
         return;
       }
       if (workspaces.length === 0 || !workspaces.some(workspace => workspace.id === activeWorkspaceId)) {
-        setTags([]);
+        setTags([], null);
         return;
       }
 
+      beginTagLoad(activeWorkspaceId);
       let cancelled = false;
       const loadSupabaseTags = async () => {
         const tags = await supabaseTagService.listByWorkspace(activeWorkspaceId);
-        if (!cancelled) setTags(tags);
+        if (!cancelled) setTags(tags, activeWorkspaceId);
       };
 
       const tagRefresh = createCoalescedAsyncRefresh(loadSupabaseTags, {
-        onError: error => console.error('[useTagSync] Supabase tag load error:', error),
+        onError: error => {
+          console.error('[useTagSync] Supabase tag load error:', error);
+          if (!cancelled) failTagLoad(error);
+        },
       });
       tagRefresh.request({ immediate: true });
 
@@ -88,5 +96,5 @@ export function useTagSync() {
     }
 
     void loadTags(activeWorkspaceId);
-  }, [activeWorkspaceId, activeBoardId, workspaces, setTags, loadTags]);
+  }, [activeWorkspaceId, activeBoardId, workspaces, setTags, beginTagLoad, failTagLoad, loadTags]);
 }

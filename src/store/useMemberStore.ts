@@ -10,6 +10,8 @@ interface MemberState {
   currentBoardAccess: CurrentBoardAccess | null;
   loading: boolean;
   error: string | null;
+  loadedWorkspaceId: string | null;
+  loadedBoardId: string | null;
 }
 
 interface MemberActions {
@@ -30,6 +32,8 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
   currentBoardAccess: null,
   loading: false,
   error: null,
+  loadedWorkspaceId: null,
+  loadedBoardId: null,
 
   clearMembers: () => set({
     workspaceMembers: [],
@@ -38,6 +42,8 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
     currentBoardAccess: null,
     loading: false,
     error: null,
+    loadedWorkspaceId: null,
+    loadedBoardId: null,
   }),
 
   updateMemberProfile: (userId, profile) => set(state => {
@@ -70,11 +76,13 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
         currentBoardAccess: null,
         loading: false,
         error: null,
+        loadedWorkspaceId: null,
+        loadedBoardId: null,
       });
       return;
     }
 
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, loadedWorkspaceId: null, loadedBoardId: null });
     try {
       const workspaceMembers = await memberService.listWorkspaceMembers(workspaceId);
       const boardMembers = boardId
@@ -95,6 +103,8 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
         currentBoardAccess,
         loading: false,
         error: null,
+        loadedWorkspaceId: workspaceId,
+        loadedBoardId: boardId || null,
       });
     } catch (error) {
       console.error('[useMemberStore] loadMembers failed:', error);
@@ -105,6 +115,8 @@ export const useMemberStore = create<MemberStore>((set, get) => ({
         currentBoardAccess: null,
         loading: false,
         error: error instanceof Error ? error.message : String(error),
+        loadedWorkspaceId: null,
+        loadedBoardId: null,
       });
     }
   },

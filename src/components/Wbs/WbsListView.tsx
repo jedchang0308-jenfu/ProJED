@@ -12,8 +12,9 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useDragSensors } from '../../hooks/useDragSensors';
 import { ViewToolbar } from '../ui/ViewToolbar';
 import { compactClassNames } from '../ui/compactTokens';
-import { useTagStore } from '../../store/useTagStore';
-import { matchesTaskFilters } from '../../features/taskFilters';
+import { projectTaskFilterResults } from '../../features/taskFilters';
+import { useTaskFilterStore } from '../../store/useTaskFilterStore';
+import { TaskFilterResultState } from '../ui/TaskFilterResultState';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { prepareNewTaskNaming } from '../../utils/taskInteractions';
 
@@ -23,19 +24,8 @@ interface WbsListViewProps {
 
 export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const activeWorkspaceId = useBoardStore(s => s.activeWorkspaceId);
-  const statusFilters = useBoardStore(s => s.statusFilters);
-  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
-  const overdueOnly = useBoardStore(s => s.overdueOnly);
-  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
-  const selectedTagIds = useTagStore(s => s.selectedTagIds);
-  const taskFilters = React.useMemo(() => ({
-    statusFilters,
-    dueWithinDays,
-    overdueOnly,
-    selectedAssigneeIds,
-    selectedTagIds,
-    keyword: '',
-  }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+  const taskFilters = useTaskFilterStore(s => s.filters);
+  const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
   const dependencySelection = useBoardStore(s => s.dependencySelection);
   const setDependencySelection = useBoardStore(s => s.setDependencySelection);
   // 從全域 Store 取出顯示狀態
@@ -178,14 +168,21 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // ===== 列表計算 =====
   const rootIds = useWbsStore(s => s.parentNodesIndex['root']);
   const altRootIds = useWbsStore(s => s.parentNodesIndex[boardId]);
+  const nodes = useWbsStore(s => s.nodes);
+  const taskLoading = useWbsStore(s => s.loading);
+  const taskLoadError = useWbsStore(s => s.error);
+  const filterProjection = React.useMemo(
+    () => projectTaskFilterResults(nodes, taskFilters, { boardId }),
+    [boardId, nodes, taskFilters],
+  );
 
   // ✅ 只有當索引陣列變更時 (Add/Remove/Move)，才重新評估根節點集合
   const rootNodes = React.useMemo(() => {
-      const state = useWbsStore.getState();
-      const arr1 = (rootIds || []).map(id => state.nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && matchesTaskFilters(node, taskFilters));
-      const arr2 = (altRootIds || []).map(id => state.nodes[id]).filter(node => node && !node.isArchived && matchesTaskFilters(node, taskFilters));
-      return [...arr1, ...arr2].sort((a, b) => a.order - b.order);
-  }, [rootIds, altRootIds, boardId, taskFilters]);
+      const arr1 = (rootIds || []).map(id => nodes[id]).filter(node => node && node.boardId === boardId && !node.isArchived && filterProjection.visibleTaskIds.has(node.id));
+      const arr2 = (altRootIds || []).map(id => nodes[id]).filter(node => node && !node.isArchived && filterProjection.visibleTaskIds.has(node.id));
+      return Array.from(new Map([...arr1, ...arr2].map(node => [node.id, node])).values())
+        .sort((a, b) => a.order - b.order);
+  }, [rootIds, altRootIds, boardId, filterProjection, nodes]);
 
   const handleCreateRootNode = () => {
     if (!canCreateTask) return;
@@ -251,14 +248,15 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
 
       {/* 清單容器 */}
       <div className="scroll-container mobile-pan-surface flex-1 overflow-auto w-full pb-[10px] pr-0 custom-scrollbar" data-mobile-pan-surface="wbs-list" data-task-hierarchy-surface="list">
-        {rootNodes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
-            <p className="mb-4">此專案目前沒有任何任務</p>
-            <Button variant="outline" as any onClick={handleCreateRootNode} disabled={!canCreateTask}>
-              開始建立第一個節點
-            </Button>
-          </div>
-        ) : (
+        <TaskFilterResultState
+          projection={filterProjection}
+          loading={taskLoading}
+          error={taskLoadError}
+          onReset={resetTaskFilters}
+          onCreate={handleCreateRootNode}
+          canCreate={canCreateTask}
+        />
+        {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? (
           <div className="relative flex flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-task shadow-[0_4px_12px_rgba(15,23,42,0.05)]">
             {/* Header Column Titles (Tree Grid) */}
             <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[32px] py-[6px] px-[10px] bg-surface-panel border-b border-border-strong text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
@@ -280,7 +278,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             >
                 <SortableContext items={rootNodes.map(n => n.id)} strategy={verticalListSortingStrategy}>
                     {rootNodes.map(node => (
-                        <WbsNodeItem key={node.id} nodeId={node.id} level={0} />
+                        <WbsNodeItem key={node.id} nodeId={node.id} level={0} filterProjection={filterProjection} />
                     ))}
                 </SortableContext>
                 
@@ -293,7 +291,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
                 </DragOverlay>
             </DndContext>
           </div>
-        )}
+        ) : null}
       </div>
       </div>
     </div>

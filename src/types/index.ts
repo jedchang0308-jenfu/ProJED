@@ -127,6 +127,7 @@ export const BOARD_ROLE_CAPABILITIES = {
     'create_task',
     'edit_task',
     'move_task',
+    'delete_task',
     'assign_task',
     'create_dependency',
     'read_activity',
@@ -623,15 +624,10 @@ export interface BoardState {
   currentView: ViewMode;
   isSidebarOpen: boolean;
   editingItem: EditingItem | null;
-  statusFilters: StatusFilters;
-
   showDependencies: boolean;
   showStartDate: boolean;
   showTags: boolean;
   showTagNames: boolean;
-  dueWithinDays: number | null;
-  overdueOnly: boolean;
-  selectedAssigneeIds: string[];
 
   dependencySelection: { id: string; side: 'start' | 'end'; title: string } | null;
   contextMenuState: BoardContextMenuState | null;
@@ -669,16 +665,11 @@ export interface BoardActions {
   showHome: () => void;
   openModal: (type: EditableItemType, itemId: string, listId: string, extra?: Record<string, unknown>) => void;
   closeModal: () => void;
-  toggleStatusFilter: (status: TaskStatus) => void;
   toggleDependencies: () => void;
   toggleStartDate: () => void;
   toggleTags: () => void;
   toggleTagNames: () => void;
-  setDueWithinDays: (days: number | null) => void;
-  toggleOverdueFilter: () => void;
-  toggleAssigneeFilter: (assigneeId: string) => void;
-  clearAssigneeFilters: () => void;
-  hydrateTaskFilterPrefs: () => void;
+  hydrateTaskDisplayPrefs: () => void;
 
   setDependencySelection: (state: { id: string; side: 'start' | 'end'; title: string } | null) => void;
   setContextMenuState: (state: BoardContextMenuState | null) => void;

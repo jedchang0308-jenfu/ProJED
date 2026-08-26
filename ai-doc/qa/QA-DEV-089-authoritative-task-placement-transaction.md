@@ -1,70 +1,135 @@
 # QA-DEV-089 全域工作台權威任務搬移交易
 
-日期：2026-08-25  
-狀態：Executed／Local QA PASS／TEST DB01-DB02 PASS／Level 3 PASS／未 Release
-規格：SPEC-089  
+建立：2026-08-25
+重啟：2026-08-26
+狀態：Reopened／Rework Local QA Executed／Source-Property-Rendered UI PASS／Supabase TEST／Level 3 NOT RUN／P0 Stop-Ship
+規格：SPEC-089 Rework 1
 CAPA：CAPA-20260825-01
 
-## 驗證策略
+## 1. 驗證狀態說明
 
-風險為 P0 資料 ownership 一致性。測試分為 source contract、手機 fault injection、既有成功 flow regression、DB transaction/RLS matrix 與 exactly-one-source release effectiveness。local-test 證據不能替代 Supabase TEST 或 production。
+2026-08-25 的 Local／TEST DB01-DB03／Level 3 PASS 保留為歷史基線，但該 Level 3 只完成「看板 → 未歸位＋reload」，沒有以相同 artifact 驗證反向「未歸位 → 看板」。2026-08-26 production 反向操作出現 client-side scope boundary rejection，因此先前結果不得作為現行版本完成或 CAPA 有效的證據。
 
-## FMEA
+本計畫針對 SPEC-089 Rework 1 的 scope-safe command architecture 重新驗證。2026-08-26 已完成 source/property、可丟棄 PostgreSQL transaction harness與 local rendered UI；Supabase TEST、RLS/concurrency、Level 3 與 production Level 4 仍為 `NOT RUN`，不得由 local evidence 替代。
+
+## 2. Risk lane 與驗證策略
+
+Risk lane：`P0 / High`。理由是跨 ownership、完整子樹、server transaction、RLS、ordering 與 production migration 同時受影響。
+
+驗證分六層：
+
+1. source contract：client 不再產生跨 scope generic patches。
+2. property：隨機多 workspace／board／parent 生成圖，驗證 scope 隔離。
+3. DB transaction：exact subtree、anchor、ordering、idempotency、concurrency、security、rollback。
+4. rendered UI：桌機與 390×844 手機以真實 drag 操作雙向流程。
+5. Level 3：同 release candidate、Supabase TEST、雙向＋reload。
+6. Level 4：production 同 artifact、雙向＋canonical/ledger readback。
+
+localStorage／直接 store/API mutation 只能作 unit support，不得替代 DB、UI 或 release evidence。
+
+## 3. Rework FMEA
 
 | 失效模式 | 影響 | 預防／偵測 | Gate |
 |---|---|---|---|
-| 前端先搬、遠端失敗 | 跨裝置假成功／看似消失 | await-before-local-commit＋fault injection | P0 |
-| 只搬 root | orphan／階層破裂 | server recursive exact full subtree | P0 |
-| create 成功、delete 失敗 | duplicate／完成率失真 | single DB transaction＋exact delete count | P0 |
-| delete 成功、create 失敗 | 任務遺失 | destination/source 同 transaction | P0 |
-| response 丟失後重送 | 重複 mutation | immutable owner-scoped idempotency key | P0 |
-| 第二次 response 仍遺失 | 把已 committed 誤報為失敗 | pending→failed row-lock serialization＋ledger readback＋unknown outcome message | P0 |
-| realtime 提前替換 pending source | UI 在結果前跳位 | pending source wins refresh merge | P1 |
-| 連結／相依資料被 cascade 消失 | 知識或排程破壞 | unsupported subtree fail-safe reject | P0 |
-| 跨帳號讀／寫 operation，或繞過 `move_task` 設定 | 資料外洩／未授權搬移 | RLS、auth.uid、capability matrix、revokes | P0 |
-| failure 仍寫 activity／undo／roll-up | 稽核與狀態失真 | success-effects-only assertion | P1 |
+| parent-only `root` bucket 混入其他看板 tasks | 正常歸位被 boundary guard 拒絕 | `PlacementScope` key＋randomized isolation property | P0 |
+| client 把目的 siblings 當 subtree patches 傳送 | 跨看板重排／資料竄改面擴大 | command request schema 禁止 node body/sibling patches | P0 |
+| 只加 board filter，排序仍由 client 計算 | race／stale order／多端不同結果 | server 依穩定順序 locks source/destination siblings and reindexes | P0 |
+| 把帳號級未歸位按 provenance workspace 分組 | 「全域」lane 被切割、跨工作區 order 不一致 | discriminated ownership；unplaced owner由 `auth.uid()` 推導 | P0 |
+| anchor 不屬於目的 scope | 插錯層或越權定位 | server exact-scope anchor validation | P0 |
+| two concurrent placements 讀到相同 order | duplicate order／不穩定排序 | row locks＋dense canonical order＋parallel DB case | P0 |
+| same operation retry 再次重排 | idempotency 失效 | immutable command v2 ledger＋result replay | P0 |
+| 手機與桌機使用不同 commit path | 單平台復發 | shared command builder static＋兩 viewport UI | P0 |
+| 只驗看板→未歸位 | 反向 production 缺陷漏網 | Level 3/4 bidirectional completeness gate | P0 |
+| frontend 上線早於 v2 RPC | 所有搬移立即失敗 | migration history＋RPC existence predeploy gate | P0 |
+| repo／remote migration history mismatch | 無法證明 artifact/schema 一致 | linked history reconciliation stop condition | P0 |
+| failure 仍寫 activity／undo／roll-up | 稽核與狀態失真 | success-effects-only readback | P1 |
+| transport unknown 被當失敗重做 | duplicate mutation | same operation retry＋ledger readback＋unknown UI | P0 |
 
-## 案例與結果
+## 4. Rework test data
 
-| ID | 驗證 | 結果 |
+固定 fixture 必須至少包含：
+
+- Workspace A：Board A1 有兩個 root siblings，其中一個有 child＋grandchild；Board A2 有至少兩個 root siblings。
+- Workspace B：Board B1 有 root siblings。
+- 帳號級未歸位：一棵三層 subtree 及一筆獨立 root。
+- 相同 `parentId=null`／legacy `root` 語意同時出現在所有 boards，刻意重現舊缺陷條件。
+- permission-denied account、wrong-scope anchor、record-linked、dependency、missing-tag/member fixtures。
+
+每案都要保存 before snapshot；成功案只允許 source subtree 及 source／destination direct sibling scopes 改變，其他 scope 使用 deep equality 比對。
+
+## 5. Source／property cases
+
+| ID | 驗證 | 預期 | 狀態 |
+|---|---|---|---|
+| RW-S01 | cross-boundary path 搜尋 `normalizeTaskMoveUpdates`／`BatchNodeUpdates` | 不被呼叫；request 無 sibling patches | PASS（static） |
+| RW-S02 | mobile／desktop commit owner | 都呼叫同一 `buildMoveTaskSubtreeCommand` 與 store action | PASS（static＋rendered UI） |
+| RW-S03 | v1 RPC usage audit | 新 UI path 不可呼叫或 fallback 至 v1 | PASS（service request contract） |
+| RW-S04 | placement scope index | board key含workspaceId、boardId、parentId；unplaced key含account owner、parentId且不含provenance workspace | PASS（static＋property） |
+| RW-S05 | 1,000 組 randomized placement graphs | 非 affected scope 100% deep equal | PASS（seed `0x5908926`） |
+| RW-S06 | intent mapping table | before／after／append 對 parent/anchor 唯一映射 | PASS（property） |
+| RW-S07 | task content boundary | command／RPC args 不含 title、notes、assignment、tags、dates | PASS（static） |
+| RW-S08 | pending／success effects source contract | RPC 成功前 ownership 不變；failure 無 undo/activity/roll-up | PASS（390×844 fault injection） |
+
+## 6. DB01-DB04 matrix
+
+| ID | 驗證 | 預期 | 狀態 |
+|---|---|---|---|
+| RW-DB01-A | TEST backup、forward migration、history、RPC／columns／RLS／grants readback | schema 與 repo一致；v2 可呼叫，anon/public denied | LOCAL SQL compile PASS；Supabase TEST NOT RUN |
+| RW-DB01-B | security advisor／schema lint | 無新 ERROR；新 function search_path/revoke 正確 | Static PASS；Supabase advisor NOT RUN |
+| RW-DB02-A | unplaced→empty board root | exactly-one-source；dense canonical order | LOCAL property PASS；TEST NOT RUN |
+| RW-DB02-B | unplaced→before／after existing root | anchor placement 正確；其他 boards unchanged | LOCAL property／PostgreSQL harness PASS；TEST NOT RUN |
+| RW-DB02-C | unplaced→append child | 只有 moved root 取得 target parent；descendant links preserved | LOCAL property PASS；TEST NOT RUN |
+| RW-DB02-D | board→unplaced | root parent=null；subtree完整；來源 board siblings dense | LOCAL property／PostgreSQL harness PASS；TEST NOT RUN |
+| RW-DB02-E | cross-workspace unplaced→board | 權限／tag/member 合法時成功；所有非目的 workspace scope unchanged | LOCAL property／rendered UI PASS；TEST NOT RUN |
+| RW-DB03-A | partial subtree | rollback；source unchanged；no committed result | Client/property guard PASS；TEST RPC NOT RUN |
+| RW-DB03-B | wrong-scope／missing anchor | rollback with stable error code | Client/property guard PASS；TEST RPC NOT RUN |
+| RW-DB03-C | outsider／source or destination permission denied | `42501`；no mutation | NOT RUN |
+| RW-DB03-D | linked／dependency／missing tag/member／collision | fail-safe rejection；no mutation | NOT RUN |
+| RW-DB03-E | exact delete mismatch／injected exception | destination/activity/result 全 rollback | Local server postcondition harness PASS；TEST NOT RUN |
+| RW-DB04-A | same operation replay | 同 canonical result；mutation/activity count不增加 | Local PostgreSQL harness PASS；TEST NOT RUN |
+| RW-DB04-B | two concurrent appends to same scope | serialized；unique dense order；無 lost task | NOT RUN |
+| RW-DB04-C | response lost then ledger readback | committed／failed／unknown 三種分支正確 | Source contract PASS；TEST transport NOT RUN |
+| RW-DB04-D | immutable payload changed under same operation | reject；原 result 不變 | Local PostgreSQL harness PASS；TEST NOT RUN |
+
+## 7. Rendered browser cases
+
+每案以產品真實入口操作；禁止 direct store/API mutation、DOM patch、`dispatchEvent` 製造完成狀態或只驗 function return。
+
+| ID | Viewport／入口 | 操作與 readback | 狀態 |
+|---|---|---|---|
+| RW-B01 | desktop | 看板→未歸位→原看板；每步 DOM、canonical、ledger、reload | LOCAL雙向 DOM／persistence PASS；ledger/reload待Level 3 |
+| RW-B02 | desktop | 未歸位→Board A1，切換 Board A2，再移到 A2；reload | LOCAL跨工作區 Board B PASS；reload待Level 3 |
+| RW-B03 | 390×844 mobile | 500ms long-press 未歸位→before existing card；定位線與成功 readback | LOCAL long-press／定位線／selected board歸位 PASS；before-card待Level 3 |
+| RW-B04 | 390×844 mobile | 看板→未歸位→另一看板；切板後 canonical only one source | LOCAL PASS（完整三層 subtree） |
+| RW-B05 | desktop＋mobile | pending delay；來源整棵原位、spinner、不可二次拖 | MOBILE PASS；desktop pending待Level 3 |
+| RW-B06 | desktop＋mobile | provider failure；正確 toast、來源保留、success effects=0 | MOBILE PASS；desktop failure待Level 3 |
+| RW-B07 | desktop＋mobile | permission denied／wrong anchor | 原位保留、無假成功、可見錯誤 | NOT RUN |
+| RW-B08 | 390×844 | 窄版無水平 overflow；定位線、toast、task均可見 | LOCAL PASS（另含320×844） |
+| RW-B09 | all | console／pageerror／requestfailed／unhandled rejection sweep | 0 unexpected error | LOCAL PASS（fault注入的預期console error除外） |
+
+## 8. Level 3／Level 4 gate
+
+| Gate | 環境 | 必要流程 | 判定 |
+|---|---|---|---|
+| RW-L3 | Firebase preview＋Supabase TEST，同 release candidate | 桌機與手機各完成看板→未歸位→同看板；再完成未歸位→另一看板；reload＋ledger＋canonical readback | NOT RUN；少一方向即 FAIL |
+| RW-L4 | production，同一 deployed artifact | 精確建立可刪 fixture，雙向操作、跨板操作、reload、visible error sweep、ledger/readback、精確 cleanup | NOT RUN；任何假成功／scope leak 即 P0 FAIL |
+
+## 9. Historical baseline（不得作現行 PASS）
+
+| 舊證據 | 歷史結果 | 現行用途 |
 |---|---|---|
-| S01 | store persistence await 發生在 local update 前 | PASS；DEV-089 static |
-| S02 | pending source refresh、整棵 disabled、共用 spinner | PASS；DEV-089 static/browser |
-| S03 | operation begin `ignoreDuplicates`，RPC immutable payload | PASS；DEV-089 static |
-| S04 | migration exact subtree、row locks、delete count、RLS/search_path/revoke | PASS；DEV-089 static；TEST migration/RLS readback PASS |
-| S05 | server `move_task` 判定與 client configurable role matrix 一致，來源／目的皆檢查 | PASS；DEV-089 static；TEST owner round-trip PASS |
-| S06 | 第二次 transport ambiguity 以同 operation ledger readback 判定；client 不可偽造 committed | PASS；DEV-089 static；TEST idempotent replay PASS |
-| F01 | 390×844 touch board→unplaced，注入 700ms delay＋failure | PASS；fault injection |
-| F02 | pending 時原 board root 可見且 subtree spinner=3 | PASS；rendered DOM |
-| F03 | failure 後 local/runtime 三節點仍在 source board，parents=`column/root/child` | PASS |
-| F04 | failure 後 unplaced copy=0、pending/transient=0 | PASS |
-| F05 | failure toast 正確；durable commit attempt=1、ancestor roll-up=0 | PASS |
-| R01 | DEV-086 subtree success source contract | PASS |
-| R02 | DEV-039 workbench placement/cross-device static | PASS |
-| R03 | TypeScript、build:test、targeted lint、diff check | PASS |
-| R04 | linked migration history、schema error lint、security advisor 唯讀 preflight | PASS WITH BASELINE WARN；production 未變更；TEST advisors 僅既有 baseline WARN |
-| TEST backup | custom-format logical dump + `pg_restore --list` | PASS；712,269 bytes；SHA-256 `df4bf7008fdf46f2a36bf781fbb3592efa196398eb6369292f730386c1639b19` |
-| DB01 | Supabase TEST migration apply + schema/RLS/grant readback | PASS；Management API migration version `20260825125421`；table/RPC/RLS/3 policies；`PUBLIC/anon` ACL 已撤銷；匿名 REST 401 |
-| DB02 | TEST to_unplaced/to_board success、exact subtree、activity、idempotent replay、fixture cleanup | PASS；3 層 parent chain；board=3／unplaced=0；兩方向 committed；activity=6；replay 不新增 mutation；fixture counts=0 |
-| DB03 | TEST outsider/RLS、partial subtree、linked/dependency reject | PASS；匿名 Data API 401；authenticated outsider=`42501`、partial subtree=`22023`、linked record／dependency=`55000`；拒絕後 fixture／operation counts=0 |
-| L3 | 同 commit Firebase preview + Supabase TEST authenticated smoke | PASS；preview `https://projed-cc78d--level3-smoke-49uruan8.web.app`；已登入帳號建立測試看板／任務，執行看板→未歸位、刷新持久性；清除一次舊 service-worker cache 後刷新成功；測試資料已精確清理 |
+| 2026-08-25 Local static／390×844 failure injection | PASS | 證明 failure containment 舊基線 |
+| Supabase TEST DB01-DB03 | PASS | 證明 v1 transaction/security 舊基線 |
+| Level 3 commit `60907d3` 看板→未歸位＋reload | PASS | 單向 baseline；不證明反向 placement |
+| 2026-08-26 production 未歸位→看板 | FAIL | 目前最高權重反例；CAPA ineffective |
 
-## Browser evidence
+## 10. QA exit criteria
 
-- Viewport：390×844，CDP touch emulation，500ms 長按既有 mobile drag owner。
-- Fixture：`回覆聖島, 發明核准` root＋child＋grandchild。
-- fault injection：只在 `import.meta.env.MODE === 'test'` 生效；production build 不提供控制入口。
-- Screenshot：`output/playwright/dev-089/mobile-placement-failure-retains-source.png`。
-- 視覺複查：未歸位為空；已歸位列表仍顯示完整三層；頂部 failure toast 明確表示來源保留，沒有額外 modal／說明文字或 layout overflow。
+只有下列全部成立才能將 QA 改為 PASS：
 
-## Level 3 authenticated smoke
+- SPEC-089 Rework 1 無 P0/P1 readiness gap，WP1-WP6 全部完成。
+- RW-S01-S08、RW-DB01-DB04、RW-B01-B09 全部 PASS，evidence 可追溯。
+- Level 3 同 artifact 雙向 PASS，且 production migration history 已 reconciled。
+- QA handoff 包含 commit SHA、migration version、TEST backup、fixture cleanup、DOM/DB/ledger/reload readback 與 visible-error sweep。
 
-- Commit：`60907d3`；Firebase Hosting preview：`https://projed-cc78d--level3-smoke-49uruan8.web.app`。
-- 同一登入帳號建立 `LEVEL3-SMOKE-20260825-2115` 看板與 `LEVEL3-SMOKE-TASK-20260825-2115` 任務（含備註），由看板拖入全域工作台「未歸位」後，畫面顯示未歸位計數 `1` 與該任務。
-- 刷新第一次遇到舊 service-worker chunk cache；使用產品內建「清除應用程式快取並回首頁」後，重新刷新通過：無錯誤頁、看板標題存在、未歸位區與測試任務仍存在（task occurrence `1`）。
-- 測試看板、任務、未歸位列與關聯資料已由 TEST exact-fixture cleanup 移除，既有資料未修改。
-- DB03 dedicated fixture cleanup：WBS、record link、knowledge record、dependency、operation ledger、unplaced counts 全部為 `0`。
-
-## QA 結論
-
-Local RD/QA acceptance、TEST DB01／DB02／DB03、Level 3 authenticated smoke 與 CAPA 的程式矯正、手機 failure-first 證據、防再發 static gate 已完成。production Level 4 與 effectiveness check 仍是 stop-ship gate，不得把本報告解讀為 production 已修復。
+目前結論：`Local source/property/rendered UI QA PASS；可丟棄 PostgreSQL harness PASS；Supabase TEST DB/RLS/concurrency、Level 3、production Level 4 NOT RUN；Production known FAIL；Stop-Ship`。

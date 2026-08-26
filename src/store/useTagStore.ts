@@ -2,63 +2,62 @@ import { create } from 'zustand';
 import type { TagColor, TaskTag } from '../types';
 import { tagService } from '../services/dataBackend';
 import { createTagId, DEFAULT_TAG_COLOR, sortTags } from '../utils/tags';
-import { readBoardTaskFilterPrefs, writeBoardTaskFilterPrefs } from '../features/taskFilters';
 
 interface TagState {
   tags: TaskTag[];
-  selectedTagIds: string[];
   loading: boolean;
   error: string | null;
+  loadedWorkspaceId: string | null;
 }
 
 interface TagActions {
-  setTags: (tags: TaskTag[]) => void;
-  hydrateSelectedTagFilter: () => void;
+  setTags: (tags: TaskTag[], workspaceId?: string | null) => void;
+  beginTagLoad: (workspaceId: string | null) => void;
+  failTagLoad: (error: unknown) => void;
   loadTags: (workspaceId: string | null | undefined) => Promise<void>;
   createTag: (workspaceId: string, name: string, color?: TagColor) => Promise<TaskTag | null>;
   updateTag: (workspaceId: string, tagId: string, updates: Partial<TaskTag>) => Promise<void>;
   deleteTag: (workspaceId: string, tagId: string) => Promise<void>;
-  toggleTagFilter: (tagId: string) => void;
-  clearTagFilters: () => void;
 }
 
 const normalizeTagName = (name: string) => name.trim().slice(0, 40);
-const getStoredSelectedTagIds = () => readBoardTaskFilterPrefs().filters.selectedTagIds;
-const persistSelectedTagIds = (selectedTagIds: string[]) => {
-  writeBoardTaskFilterPrefs({ filters: { selectedTagIds } });
-};
 
 export const useTagStore = create<TagState & TagActions>((set, get) => ({
   tags: [],
-  selectedTagIds: getStoredSelectedTagIds(),
   loading: false,
   error: null,
+  loadedWorkspaceId: null,
 
-  setTags: (tags) => set({ tags: sortTags(tags) }),
-  hydrateSelectedTagFilter: () => set({ selectedTagIds: getStoredSelectedTagIds() }),
+  setTags: (tags, workspaceId = null) => set({
+    tags: sortTags(tags),
+    loading: false,
+    error: null,
+    loadedWorkspaceId: workspaceId,
+  }),
+  beginTagLoad: () => set({ loading: true, error: null, loadedWorkspaceId: null }),
+  failTagLoad: error => set({
+    loading: false,
+    error: error instanceof Error ? error.message : '無法載入標籤。',
+    loadedWorkspaceId: null,
+  }),
 
   loadTags: async (workspaceId) => {
     if (!workspaceId) {
-      set({ tags: [], selectedTagIds: [], loading: false, error: null });
-      persistSelectedTagIds([]);
+      set({ tags: [], loading: false, error: null, loadedWorkspaceId: null });
       return;
     }
 
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, loadedWorkspaceId: null });
     try {
       const tags = await tagService.listByWorkspace(workspaceId);
-      set((state) => {
-        const nextSelectedTagIds = state.selectedTagIds.filter(id => tags.some(tag => tag.id === id));
-        persistSelectedTagIds(nextSelectedTagIds);
-        return {
-          tags: sortTags(tags),
-          selectedTagIds: nextSelectedTagIds,
-          loading: false,
-        };
-      });
+      set({ tags: sortTags(tags), loading: false, error: null, loadedWorkspaceId: workspaceId });
     } catch (error) {
       console.error('[useTagStore] loadTags failed:', error);
-      set({ loading: false, error: error instanceof Error ? error.message : '無法載入標籤。' });
+      set({
+        loading: false,
+        error: error instanceof Error ? error.message : '無法載入標籤。',
+        loadedWorkspaceId: null,
+      });
     }
   },
 
@@ -123,9 +122,7 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
     const previous = get().tags;
     set((state) => ({
       tags: state.tags.filter(tag => tag.id !== tagId),
-      selectedTagIds: state.selectedTagIds.filter(id => id !== tagId),
     }));
-    persistSelectedTagIds(get().selectedTagIds.filter(id => id !== tagId));
 
     try {
       await tagService.delete(workspaceId, tagId);
@@ -133,20 +130,5 @@ export const useTagStore = create<TagState & TagActions>((set, get) => ({
       console.error('[useTagStore] deleteTag failed:', error);
       set({ tags: previous, error: error instanceof Error ? error.message : '無法刪除標籤。' });
     }
-  },
-
-  toggleTagFilter: (tagId) => {
-    set((state) => {
-      const selectedTagIds = state.selectedTagIds.includes(tagId)
-        ? state.selectedTagIds.filter(id => id !== tagId)
-        : [...state.selectedTagIds, tagId];
-      persistSelectedTagIds(selectedTagIds);
-      return { selectedTagIds };
-    });
-  },
-
-  clearTagFilters: () => {
-    persistSelectedTagIds([]);
-    set({ selectedTagIds: [] });
   },
 }));

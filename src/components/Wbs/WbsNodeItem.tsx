@@ -13,7 +13,7 @@ import { useMemberStore } from '../../store/useMemberStore';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
-import { matchesTaskFilters } from '../../features/taskFilters';
+import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
@@ -27,9 +27,10 @@ interface WbsNodeItemProps {
   nodeId: string;
   level?: number;
   ancestorIds?: string[];
+  filterProjection: TaskFilterResultProjection;
 }
 
-export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [] }) => {
+export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [], filterProjection }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -96,20 +97,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const showTags = useBoardStore(s => s.showTags);
   
   const updateNode = useWbsStore(s => s.updateNode);
-  const statusFilters = useBoardStore(s => s.statusFilters);
-  const dueWithinDays = useBoardStore(s => s.dueWithinDays);
-  const overdueOnly = useBoardStore(s => s.overdueOnly);
-  const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
   const tags = useTagStore(s => s.tags);
-  const selectedTagIds = useTagStore(s => s.selectedTagIds);
-  const taskFilters = React.useMemo(() => ({
-    statusFilters,
-    dueWithinDays,
-    overdueOnly,
-    selectedAssigneeIds,
-    selectedTagIds,
-    keyword: '',
-  }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
   const boardMembers = useMemberStore(s => s.boardMembers);
   const membersLoading = useMemberStore(s => s.loading);
   const assigneeOptions = React.useMemo(
@@ -131,9 +119,9 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       return (childrenIds || [])
         .filter(id => !nextAncestors.has(id))
         .map(id => state.nodes[id])
-        .filter(n => n && !n.isArchived && matchesTaskFilters(n, taskFilters))
+        .filter(n => n && !n.isArchived && filterProjection.visibleTaskIds.has(n.id))
         .sort((a,b) => a.order - b.order);
-  }, [childrenIds, taskFilters, nextAncestorKey]);
+  }, [childrenIds, filterProjection, nextAncestorKey]);
 
   const hasChildren = children.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
@@ -550,7 +538,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
         <div className="flex flex-col w-full">
           <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
             {children.map(child => (
-              <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} ancestorIds={nextAncestorIds} />
+              <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} ancestorIds={nextAncestorIds} filterProjection={filterProjection} />
             ))}
           </SortableContext>
         </div>

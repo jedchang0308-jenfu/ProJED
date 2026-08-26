@@ -27,3 +27,22 @@ export type BoardTaskFilterPrefs = {
   displaySettings: TaskDisplaySettings;
   updatedAt: number;
 };
+
+export type AccountBoardTaskFilterScope = {
+  accountId: string;
+  boardId: string;
+};
+
+export type TaskFilterPreferenceCache = {
+  version: number;
+  filters: TaskFilterState;
+  updatedAt: number;
+};
+
+export type TaskFilterPreferenceMutation = {
+  id: string;
+  version: number;
+  kind: 'upsert' | 'delete';
+  filters?: TaskFilterState;
+  updatedAt: number;
+};

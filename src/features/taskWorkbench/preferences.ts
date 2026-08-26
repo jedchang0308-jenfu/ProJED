@@ -1,6 +1,5 @@
 import {
   BOARD_TASK_FILTER_PREFS_VERSION,
-  migrateLegacyDefaultTaskFilters,
   normalizeTaskFilters,
   type TaskFilterState,
 } from '../taskFilters';
@@ -14,7 +13,8 @@ import {
 export const LEGACY_TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v1';
 export const TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v2';
 export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v1';
-export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v2';
+export const LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY = 'projed-task-workbench-filters:v2';
+export const TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v4';
 const TASK_WORKBENCH_OPEN_PREFS_VERSION = 1;
 export const DEFAULT_TASK_WORKBENCH_WIDTH = 340;
 export const MIN_TASK_WORKBENCH_WIDTH = 182;
@@ -53,25 +53,6 @@ const DEFAULT_PANEL_PREFS: TaskWorkbenchPanelPrefs = {
 const DEFAULT_FILTER_PREFS: TaskWorkbenchFilterPrefs = {
   selectedBoardId: null,
   filtersByBoardId: {},
-};
-
-const readScopedOrLegacy = <T>(
-  baseKey: string,
-  legacyKey: string,
-  accountId: string | null | undefined,
-): T | null => {
-  const scopedKey = getAccountScopedStorageKey(baseKey, accountId);
-  if (!scopedKey) return null;
-
-  const scoped = readStorageJson<T>(scopedKey);
-  if (scoped) return scoped;
-
-  const legacy = readStorageJson<T>(legacyKey);
-  if (!legacy) return null;
-
-  writeStorageJson(scopedKey, legacy);
-  removeStorageKey(legacyKey);
-  return legacy;
 };
 
 export const readTaskWorkbenchPanelPrefs = (
@@ -127,34 +108,55 @@ export const writeTaskWorkbenchPanelPrefs = (
 export const readTaskWorkbenchFilterPrefs = (
   accountId: string | null | undefined,
 ): TaskWorkbenchFilterPrefs => {
-  const parsed = readScopedOrLegacy<Partial<TaskWorkbenchFilterPrefs & { version: number }>>(
-    TASK_WORKBENCH_FILTER_PREFS_KEY,
-    LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY,
-    accountId,
-  );
-  if (!parsed) {
+  const scopedKey = getAccountScopedStorageKey(TASK_WORKBENCH_FILTER_PREFS_KEY, accountId);
+  const parsed = readStorageJson<Partial<TaskWorkbenchFilterPrefs & { version: number }>>(scopedKey);
+  if (parsed?.version === BOARD_TASK_FILTER_PREFS_VERSION) {
+    const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterState>>(
+      (acc, [boardId, filters]) => {
+        if (typeof boardId === 'string' && filters && typeof filters === 'object') {
+          acc[boardId] = normalizeTaskFilters(filters as Partial<TaskFilterState>);
+        }
+        return acc;
+      },
+      {},
+    );
+    return {
+      selectedBoardId: typeof parsed.selectedBoardId === 'string' ? parsed.selectedBoardId : null,
+      filtersByBoardId,
+    };
+  }
+
+  const legacyScopedV2Key = getAccountScopedStorageKey(LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY, accountId);
+  const legacyCandidates = [
+    { key: legacyScopedV2Key, value: readStorageJson<Partial<TaskWorkbenchFilterPrefs>>(legacyScopedV2Key) },
+    { key: LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY, value: readStorageJson<Partial<TaskWorkbenchFilterPrefs>>(LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY) },
+    { key: LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY, value: readStorageJson<Partial<TaskWorkbenchFilterPrefs>>(LEGACY_TASK_WORKBENCH_FILTER_PREFS_KEY) },
+  ];
+  const legacy = legacyCandidates.find(candidate => candidate.value)?.value;
+  if (!legacy) {
     return {
       selectedBoardId: DEFAULT_FILTER_PREFS.selectedBoardId,
       filtersByBoardId: {},
     };
   }
 
-  const prefsVersion = typeof parsed.version === 'number' ? parsed.version : 1;
-  const filtersByBoardId = Object.entries(parsed.filtersByBoardId || {}).reduce<Record<string, TaskFilterState>>(
-    (acc, [boardId, filters]) => {
-      if (typeof boardId === 'string' && filters && typeof filters === 'object') {
-        acc[boardId] = normalizeTaskFilters(
-          migrateLegacyDefaultTaskFilters(filters as Partial<TaskFilterState>, prefsVersion),
-        );
-      }
-      return acc;
-    },
-    {},
-  );
-
+  const migrated = {
+    version: BOARD_TASK_FILTER_PREFS_VERSION,
+    selectedBoardId: typeof legacy.selectedBoardId === 'string' ? legacy.selectedBoardId : null,
+    filtersByBoardId: {},
+    updatedAt: Date.now(),
+  };
+  if (writeStorageJson(scopedKey, migrated)) {
+    const readback = readStorageJson<{ version?: number }>(scopedKey);
+    if (readback?.version === BOARD_TASK_FILTER_PREFS_VERSION) {
+      legacyCandidates.forEach(candidate => {
+        if (candidate.value) removeStorageKey(candidate.key);
+      });
+    }
+  }
   return {
-    selectedBoardId: typeof parsed.selectedBoardId === 'string' ? parsed.selectedBoardId : null,
-    filtersByBoardId,
+    selectedBoardId: migrated.selectedBoardId,
+    filtersByBoardId: {},
   };
 };
 

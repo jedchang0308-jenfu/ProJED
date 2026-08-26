@@ -1,6 +1,4 @@
 import type { TaskNode } from '../types';
-import { matchesTaskFilters } from '../features/taskFilters';
-import type { TaskFilterState } from '../features/taskFilters/types';
 
 export type HierarchicalTaskViewItem = TaskNode & {
   type: 'list' | 'card' | 'checklist';
@@ -21,7 +19,7 @@ type BuildHierarchicalTaskItemsArgs = {
   nodes: Record<string, TaskNode>;
   parentNodesIndex: Record<string, string[]>;
   activeBoardId: string | null | undefined;
-  taskFilters: TaskFilterState;
+  visibleTaskIds: ReadonlySet<string>;
   collapsedIds: ReadonlySet<string>;
 };
 
@@ -29,7 +27,7 @@ export const buildHierarchicalTaskItems = ({
   nodes,
   parentNodesIndex,
   activeBoardId,
-  taskFilters,
+  visibleTaskIds,
   collapsedIds,
 }: BuildHierarchicalTaskItemsArgs): {
   items: HierarchicalTaskViewItem[];
@@ -44,7 +42,7 @@ export const buildHierarchicalTaskItems = ({
   const traverse = (nodeId: string, level: number) => {
     const node = nodes[nodeId];
     if (!node || node.isArchived || node.boardId !== activeBoardId) return -1;
-    if (!matchesTaskFilters(node, taskFilters)) return -1;
+    if (!visibleTaskIds.has(node.id)) return -1;
 
     const startRow = currentRow;
     const type = level === 0 ? 'list' : level === 1 ? 'card' : 'checklist';

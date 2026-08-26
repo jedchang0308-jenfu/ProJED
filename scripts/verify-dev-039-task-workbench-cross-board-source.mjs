@@ -69,7 +69,9 @@ assert(
     source.wbsStore.includes('scopeBoardIds?: string[]') &&
     source.wbsStore.includes('preserveOutOfScope?: boolean') &&
     source.wbsStore.includes('setNodes: (nodes: TaskNode[], options?: SetNodesOptions) => void') &&
-    source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes(nodes, get().nodes, options)') &&
+    source.wbsStore.includes('mergeLocalUnplacedTasksForSetNodes(') &&
+    source.wbsStore.includes('currentState.nodes,') &&
+    source.wbsStore.includes('currentState.pendingPlacementNodeIds,') &&
     source.wbsStore.includes('options.preserveOutOfScope') &&
     source.wbsStore.includes('const hasScopedBoards = scopedBoardIds.size > 0') &&
     source.wbsStore.includes('scopedBoardIds.has(task.boardId)'),

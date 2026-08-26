@@ -16,6 +16,8 @@ import useBoardStore from './store/useBoardStore';
 import useAuthStore from './store/useAuthStore';
 import { useMemberStore } from './store/useMemberStore';
 import { useTagStore } from './store/useTagStore';
+import { useWbsStore } from './store/useWbsStore';
+import { useTaskFilterStore } from './store/useTaskFilterStore';
 import useRecordStore from './store/useRecordStore';
 import { useDataSync } from './hooks/useDataSync';
 import { boardInviteService, dataBackend } from './services/dataBackend';
@@ -38,6 +40,7 @@ import { seedLocalTestEnvironment } from './utils/localTestEnvironment';
 import { useMeetingDraftRecovery } from './hooks/useMeetingDraftRecovery';
 import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
 import { KanbanViewSizeProvider } from './features/kanbanViewSize/KanbanViewSizeProvider';
+import { createBoardAssigneeFilterOptions } from './features/taskFilters';
 
 const BoardView = lazy(() => import('./components/BoardView'));
 const GanttView = lazy(() => import('./components/GanttView'));
@@ -80,6 +83,17 @@ function AppContent() {
   const userDisplayName = user?.displayName ?? null;
   const loadRecords = useRecordStore(s => s.loadRecords);
   const recordsLoading = useRecordStore(s => s.loading);
+  const nodes = useWbsStore(s => s.nodes);
+  const tags = useTagStore(s => s.tags);
+  const tagsLoadedWorkspaceId = useTagStore(s => s.loadedWorkspaceId);
+  const tagsLoading = useTagStore(s => s.loading);
+  const tagsError = useTagStore(s => s.error);
+  const workspaceMembers = useMemberStore(s => s.workspaceMembers);
+  const boardMembers = useMemberStore(s => s.boardMembers);
+  const membersLoadedWorkspaceId = useMemberStore(s => s.loadedWorkspaceId);
+  const membersLoadedBoardId = useMemberStore(s => s.loadedBoardId);
+  const membersLoading = useMemberStore(s => s.loading);
+  const membersError = useMemberStore(s => s.error);
   const recordsScopeKey = activeWorkspaceId && activeBoardId ? `${activeWorkspaceId}:${activeBoardId}` : null;
   const [recordsLoadedScope, setRecordsLoadedScope] = useState<string | null>(null);
   // 確保遷移只執行一次，不因 re-render 重複觸發
@@ -96,12 +110,68 @@ function AppContent() {
     recordsLoaded: Boolean(recordsScopeKey && !recordsLoading && recordsLoadedScope === recordsScopeKey),
   });
 
-  // Zustand store 會在模組載入時先建立；登入帳號確定後重新載入帳號範圍的篩選，避免沿用前一個帳號的記憶。
+  // Display preferences remain account-scoped. Task conditions activate on the
+  // exact account × board scope and clear immediately on logout/switch.
   useLayoutEffect(() => {
-    if (!userId) return;
-    useBoardStore.getState().hydrateTaskFilterPrefs();
-    useTagStore.getState().hydrateSelectedTagFilter();
-  }, [userId]);
+    if (!userId) {
+      useTaskFilterStore.getState().clearScope();
+      return;
+    }
+    useBoardStore.getState().hydrateTaskDisplayPrefs();
+    if (!activeBoardId) {
+      useTaskFilterStore.getState().clearScope();
+      return;
+    }
+    void useTaskFilterStore.getState().activateScope(userId, activeBoardId);
+  }, [activeBoardId, userId]);
+
+  useEffect(() => {
+    const retryVisibleScope = () => {
+      if (document.visibilityState === 'visible') void useTaskFilterStore.getState().retrySync();
+    };
+    window.addEventListener('online', retryVisibleScope);
+    document.addEventListener('visibilitychange', retryVisibleScope);
+    return () => {
+      window.removeEventListener('online', retryVisibleScope);
+      document.removeEventListener('visibilitychange', retryVisibleScope);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !activeWorkspaceId
+      || tagsLoading
+      || tagsError
+      || tagsLoadedWorkspaceId !== activeWorkspaceId
+    ) return;
+    useTaskFilterStore.getState().reconcileTagIds(new Set(tags.map(tag => tag.id)));
+  }, [activeWorkspaceId, tags, tagsError, tagsLoadedWorkspaceId, tagsLoading]);
+
+  useEffect(() => {
+    if (
+      !activeWorkspaceId
+      || !activeBoardId
+      || membersLoading
+      || membersError
+      || membersLoadedWorkspaceId !== activeWorkspaceId
+      || membersLoadedBoardId !== activeBoardId
+    ) return;
+    const validIds = new Set(
+      createBoardAssigneeFilterOptions(activeBoardId, boardMembers, nodes, workspaceMembers)
+        .map(option => option.id),
+    );
+    useTaskFilterStore.getState().reconcileAssigneeIds(validIds);
+  }, [
+    activeBoardId,
+    activeWorkspaceId,
+    boardMembers,
+    membersError,
+    membersLoadedBoardId,
+    membersLoadedWorkspaceId,
+    membersLoading,
+    nodes,
+    workspaceMembers,
+  ]);
 
   useEffect(() => {
     if (!userId || !activeWorkspaceId || !activeBoardId || !recordsScopeKey) {

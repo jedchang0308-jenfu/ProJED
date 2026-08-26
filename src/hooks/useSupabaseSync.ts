@@ -120,12 +120,17 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
 
   // ── Effect 2: Load board data (nodes + dependencies) ───────────────
   useEffect(() => {
-    if (!enabled || !isSupabaseConfigured || !userId || !activeBoardId) return;
+    if (!enabled) return;
+    if (!isSupabaseConfigured || !userId || !activeBoardId) {
+      useWbsStore.setState({ loading: false, error: null });
+      return;
+    }
     if (workspaces.length === 0 || !activeBoardExists) return;
     if (!resolvedActiveWorkspaceId) return;
 
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    useWbsStore.setState({ loading: true, error: null });
     const loadBoardData = async () => {
       const [nodes, dependencies] = await Promise.all([
         supabaseNodeService.listByProject(resolvedActiveWorkspaceId, activeBoardId),
@@ -136,11 +141,19 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
         scopeBoardIds: [activeBoardId],
         preserveOutOfScope: true,
       });
-      useWbsStore.setState({ dependencies });
+      useWbsStore.setState({ dependencies, loading: false, error: null });
     };
 
     const boardRefresh = createCoalescedAsyncRefresh(loadBoardData, {
-      onError: error => console.error('[useSupabaseSync] Board load error:', error),
+      onError: error => {
+        console.error('[useSupabaseSync] Board load error:', error);
+        if (!cancelled && useBoardStore.getState().activeBoardId === activeBoardId) {
+          useWbsStore.setState({
+            loading: false,
+            error: error instanceof Error ? error.message : '任務載入失敗',
+          });
+        }
+      },
     });
 
     const subscribeBoardChanges = async () => {

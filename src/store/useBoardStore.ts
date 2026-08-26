@@ -8,9 +8,8 @@ import type { BoardContextMenuState } from '../types';
 import type { TaskHostMode, TaskInteractionLocation, TaskInteractionSurfaceId } from '../interactions/task/types';
 import {
     createDefaultTaskDisplaySettings,
-    createDefaultTaskFilters,
-    readBoardTaskFilterPrefs,
-    writeBoardTaskFilterPrefs,
+    readBoardTaskDisplaySettings,
+    writeBoardTaskDisplaySettings,
 } from '../features/taskFilters';
 
 // ===== Helper: 取得當前登入使用者的 uid =====
@@ -26,49 +25,19 @@ const WS_STORAGE_KEY = 'projed-last-ws';
 const BOARD_STORAGE_KEY = 'projed-last-board';
 const MODAL_STORAGE_KEY = 'projed-last-modal';
 
-const getDefaultFilters = () => ({
-    statusFilters: createDefaultTaskFilters().statusFilters,
+const getDefaultDisplaySettings = () => ({
     showDependencies: createDefaultTaskDisplaySettings().showDependencies,
     showStartDate: createDefaultTaskDisplaySettings().showStartDate,
     showTags: createDefaultTaskDisplaySettings().showTags,
     showTagNames: createDefaultTaskDisplaySettings().showTagNames,
-    dueWithinDays: createDefaultTaskFilters().dueWithinDays,
-    overdueOnly: createDefaultTaskFilters().overdueOnly,
-    selectedAssigneeIds: createDefaultTaskFilters().selectedAssigneeIds,
 });
 
-const getStoredFilters = () => {
+const getStoredDisplaySettings = () => {
     try {
-        const prefs = readBoardTaskFilterPrefs();
-        return {
-            ...getDefaultFilters(),
-            statusFilters: prefs.filters.statusFilters,
-            showDependencies: prefs.displaySettings.showDependencies,
-            showStartDate: prefs.displaySettings.showStartDate,
-            showTags: prefs.displaySettings.showTags,
-            showTagNames: prefs.displaySettings.showTagNames,
-            dueWithinDays: prefs.filters.dueWithinDays,
-            overdueOnly: prefs.filters.overdueOnly,
-            selectedAssigneeIds: prefs.filters.selectedAssigneeIds,
-        };
+        return readBoardTaskDisplaySettings(useAuthStore.getState().user?.uid ?? null);
     } catch { /* ignore */ }
-    return getDefaultFilters();
+    return getDefaultDisplaySettings();
 };
-
-const persistBoardTaskFilters = (state, updates = {}) => writeBoardTaskFilterPrefs({
-    filters: {
-        statusFilters: updates.statusFilters ?? state.statusFilters,
-        dueWithinDays: updates.dueWithinDays ?? state.dueWithinDays,
-        overdueOnly: updates.overdueOnly ?? state.overdueOnly,
-        selectedAssigneeIds: updates.selectedAssigneeIds ?? state.selectedAssigneeIds,
-    },
-    displaySettings: {
-        showDependencies: updates.showDependencies ?? state.showDependencies,
-        showStartDate: updates.showStartDate ?? state.showStartDate,
-        showTags: updates.showTags ?? state.showTags,
-        showTagNames: updates.showTagNames ?? state.showTagNames,
-    },
-});
 
 const safeSetItem = (key: string, value: string | null) => {
     try {
@@ -136,52 +105,34 @@ const getStoredModal = () => {
     return null;
 };
 
-const cloneBoardTaskFilterSnapshot = (state) => ({
-    statusFilters: { ...state.statusFilters },
+const cloneBoardDisplaySnapshot = (state) => ({
     showDependencies: Boolean(state.showDependencies),
     showStartDate: Boolean(state.showStartDate),
     showTags: Boolean(state.showTags),
     showTagNames: Boolean(state.showTagNames),
-    dueWithinDays: state.dueWithinDays ?? null,
-    overdueOnly: Boolean(state.overdueOnly),
-    selectedAssigneeIds: [...(state.selectedAssigneeIds || [])],
 });
 
-const writeBoardTaskFilterSnapshot = (snapshot) => writeBoardTaskFilterPrefs({
-    filters: {
-        statusFilters: snapshot.statusFilters,
-        dueWithinDays: snapshot.dueWithinDays,
-        overdueOnly: snapshot.overdueOnly,
-        selectedAssigneeIds: snapshot.selectedAssigneeIds,
-    },
-    displaySettings: {
-        showDependencies: snapshot.showDependencies,
-        showStartDate: snapshot.showStartDate,
-        showTags: snapshot.showTags,
-        showTagNames: snapshot.showTagNames,
-    },
-});
+const writeBoardDisplaySnapshot = (snapshot) => writeBoardTaskDisplaySettings(
+    snapshot,
+    useAuthStore.getState().user?.uid ?? null,
+);
 
-const applyBoardTaskFilterSnapshot = (set, snapshot) => {
-    writeBoardTaskFilterSnapshot(snapshot);
+const applyBoardDisplaySnapshot = (set, snapshot) => {
+    writeBoardDisplaySnapshot(snapshot);
     set({
-        statusFilters: { ...snapshot.statusFilters },
         showDependencies: snapshot.showDependencies,
         showStartDate: snapshot.showStartDate,
         showTags: snapshot.showTags,
         showTagNames: snapshot.showTagNames,
-        dueWithinDays: snapshot.dueWithinDays,
-        overdueOnly: snapshot.overdueOnly,
-        selectedAssigneeIds: [...snapshot.selectedAssigneeIds],
     });
 };
 
-const pushBoardTaskFilterUndo = (set, label, before, after) => {
+const pushBoardDisplayUndo = (set, label, before, after) => {
     useUndoStore.getState().pushUndo({
         label,
         scope: 'filter',
-        undo: () => applyBoardTaskFilterSnapshot(set, before),
-        redo: () => applyBoardTaskFilterSnapshot(set, after),
+        undo: () => applyBoardDisplaySnapshot(set, before),
+        redo: () => applyBoardDisplaySnapshot(set, after),
     });
 };
 
@@ -196,7 +147,7 @@ const useBoardStore = create<BoardStore>()(
         // without competing with the task workbench on initial load.
         isSidebarOpen: false,
         editingItem: getStoredModal(),
-        ...getStoredFilters(),
+        ...getStoredDisplaySettings(),
         dependencySelection: null,
         contextMenuState: null,
         lastTaskInteractionLocation: null,
@@ -332,74 +283,32 @@ const useBoardStore = create<BoardStore>()(
             });
         },
 
-        toggleStatusFilter: (status) => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const newFilters = {
-                ...before.statusFilters,
-                [status]: !before.statusFilters[status]
-            };
-            const after = { ...before, statusFilters: newFilters };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '修改篩選條件', before, after);
-        },
-
         // 切換 UI 顯示
         toggleDependencies: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showDependencies: !before.showDependencies };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換依賴顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換依賴顯示', before, after);
         },
         toggleStartDate: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showStartDate: !before.showStartDate };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換開始時間顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換開始時間顯示', before, after);
         },
         toggleTags: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showTags: !before.showTags };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換標籤顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換標籤顯示', before, after);
         },
         toggleTagNames: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
+            const before = cloneBoardDisplaySnapshot(get());
             const after = { ...before, showTagNames: !before.showTagNames };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換標籤名稱顯示', before, after);
+            applyBoardDisplaySnapshot(set, after);
+            pushBoardDisplayUndo(set, '切換標籤名稱顯示', before, after);
         },
-        setDueWithinDays: (days) => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const nextDays = days === null || days === undefined ? null : Math.max(0, Math.min(365, Math.floor(days)));
-            if (before.dueWithinDays === nextDays) return;
-            const after = { ...before, dueWithinDays: nextDays };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '修改到期篩選', before, after);
-        },
-        toggleOverdueFilter: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const after = { ...before, overdueOnly: !before.overdueOnly };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '切換逾期篩選', before, after);
-        },
-        toggleAssigneeFilter: (assigneeId) => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            const currentIds = Array.isArray(before.selectedAssigneeIds) ? before.selectedAssigneeIds : [];
-            const nextAssigneeIds = currentIds.includes(assigneeId)
-                ? currentIds.filter(id => id !== assigneeId)
-                : [...currentIds, assigneeId];
-            const after = { ...before, selectedAssigneeIds: nextAssigneeIds };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '修改負責人篩選', before, after);
-        },
-        clearAssigneeFilters: () => {
-            const before = cloneBoardTaskFilterSnapshot(get());
-            if (before.selectedAssigneeIds.length === 0) return;
-            const after = { ...before, selectedAssigneeIds: [] };
-            applyBoardTaskFilterSnapshot(set, after);
-            pushBoardTaskFilterUndo(set, '清除負責人篩選', before, after);
-        },
-        hydrateTaskFilterPrefs: () => set(getStoredFilters()),
+        hydrateTaskDisplayPrefs: () => set(getStoredDisplaySettings()),
 
         // ===== Navigation =====
         showHome: () => {

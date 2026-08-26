@@ -63,8 +63,8 @@ async (page) => {
   };
 
   const setFilters = async (overrides = {}) => {
-    await page.evaluate(({ defaultFilters, overrides }) => {
-      const legacyFilters = {
+    await page.evaluate(async ({ defaultFilters, overrides }) => {
+      const next = {
         ...defaultFilters,
         ...overrides,
         statusFilters: {
@@ -72,27 +72,25 @@ async (page) => {
           ...(overrides.statusFilters || {}),
         },
       };
-      localStorage.setItem('projed-filters', JSON.stringify(legacyFilters));
-      const prefs = {
-        version: 3,
+      const filterModule = await import('/src/store/useTaskFilterStore.ts');
+      filterModule.useTaskFilterStore.setState({
         filters: {
-          statusFilters: legacyFilters.statusFilters,
-          dueWithinDays: legacyFilters.dueWithinDays,
-          selectedAssigneeIds: legacyFilters.selectedAssigneeIds,
+          statusFilters: next.statusFilters,
+          dueWithinDays: next.dueWithinDays,
+          overdueOnly: false,
+          selectedAssigneeIds: next.selectedAssigneeIds,
           selectedTagIds: [],
           keyword: '',
         },
-        displaySettings: {
-          showDependencies: legacyFilters.showDependencies,
-          showStartDate: legacyFilters.showStartDate,
-          showTags: legacyFilters.showTags,
-        },
-        updatedAt: Date.now(),
-      };
-      localStorage.setItem('projed-task-filters:v1', JSON.stringify(prefs));
-      localStorage.setItem('projed-task-filters:v2:account:local-test-user', JSON.stringify(prefs));
+      });
+      const boardModule = await import('/src/store/useBoardStore.ts');
+      boardModule.default.setState({
+        showDependencies: next.showDependencies,
+        showStartDate: next.showStartDate,
+        showTags: next.showTags,
+      });
     }, { defaultFilters, overrides });
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(80);
     await enterMindMap();
   };
 
@@ -116,25 +114,31 @@ async (page) => {
   await openApp();
   await page.evaluate((defaultFilters) => {
     window.__PROJED_QC__?.reset(18);
-    localStorage.setItem('projed-filters', JSON.stringify(defaultFilters));
-    const prefs = {
-      version: 3,
+    const boardId = localStorage.getItem('projed-last-board');
+    if (!boardId) throw new Error('Missing active board for DEV-027D initial fixture');
+    localStorage.setItem(`projed-task-filters:v4:account:local-test-user:board:${encodeURIComponent(boardId)}`, JSON.stringify({
+      version: 4,
       filters: {
         statusFilters: defaultFilters.statusFilters,
         dueWithinDays: defaultFilters.dueWithinDays,
+        overdueOnly: false,
         selectedAssigneeIds: defaultFilters.selectedAssigneeIds,
         selectedTagIds: [],
         keyword: '',
       },
+      updatedAt: Date.now(),
+    }));
+    localStorage.setItem('projed-task-display:v4:account:local-test-user', JSON.stringify({
+      version: 4,
       displaySettings: {
         showDependencies: defaultFilters.showDependencies,
         showStartDate: defaultFilters.showStartDate,
         showTags: defaultFilters.showTags,
+        showTagNames: true,
       },
       updatedAt: Date.now(),
-    };
-    localStorage.setItem('projed-task-filters:v1', JSON.stringify(prefs));
-    localStorage.setItem('projed-task-filters:v2:account:local-test-user', JSON.stringify(prefs));
+    }));
+    localStorage.setItem('projed-task-filter-migration:v4:account:local-test-user', JSON.stringify({ version: 4, migratedAt: Date.now() }));
   }, defaultFilters);
 
   const titles = await page.evaluate(() => {
@@ -155,32 +159,42 @@ async (page) => {
     const completedStart = dateAtOffset(-4);
     const completedEnd = dateAtOffset(-2);
 
-    Object.assign(roots[0], {
-      title: nearTitle,
+    const applySubtree = (rootId, updates) => {
+      const queue = [rootId];
+      while (queue.length) {
+        const nodeId = queue.shift();
+        const node = nodes[nodeId];
+        if (!node) continue;
+        Object.assign(node, updates, { updatedAt: Date.now() });
+        Object.values(nodes)
+          .filter(candidate => candidate?.parentId === nodeId)
+          .forEach(candidate => queue.push(candidate.id));
+      }
+    };
+
+    roots[0].title = nearTitle;
+    applySubtree(roots[0].id, {
       status: 'todo',
       startDate: nearStart,
       endDate: nearEnd,
       assigneeId: 'local-test-user',
       tagIds: [],
-      updatedAt: Date.now(),
     });
-    Object.assign(roots[1], {
-      title: futureTitle,
+    roots[1].title = futureTitle;
+    applySubtree(roots[1].id, {
       status: 'todo',
       startDate: futureStart,
       endDate: futureEnd,
       assigneeId: 'local-test-user',
       tagIds: [],
-      updatedAt: Date.now(),
     });
-    Object.assign(roots[2], {
-      title: completedTitle,
+    roots[2].title = completedTitle;
+    applySubtree(roots[2].id, {
       status: 'completed',
       startDate: completedStart,
       endDate: completedEnd,
       assigneeId: 'local-test-pm',
       tagIds: [],
-      updatedAt: Date.now(),
     });
     localStorage.setItem('projed-local-test.nodes', JSON.stringify(nodes));
     return { nearTitle, futureTitle, completedTitle, nearStart, nearEnd };

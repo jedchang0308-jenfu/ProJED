@@ -7,6 +7,8 @@ const source = {
   accountStorage: read('src/utils/accountScopedStorage.ts'),
   boardStore: read('src/store/useBoardStore.ts'),
   tagStore: read('src/store/useTagStore.ts'),
+  taskFilterStore: read('src/store/useTaskFilterStore.ts'),
+  preferenceRepository: read('src/features/taskFilters/preferenceRepository.ts'),
   app: read('src/App.tsx'),
   workbenchPrefs: read('src/features/taskWorkbench/preferences.ts'),
   workbenchPanel: read('src/components/TaskWorkbenchPanel.tsx'),
@@ -22,38 +24,49 @@ const checks = [
       source.accountStorage.includes('encodeURIComponent(accountId)'),
   ],
   [
-    'board filter storage reads the auth uid and persists only v2 account keys',
-    source.storage.includes("useAuthStore.getState().user?.uid") &&
-      source.storage.includes("ACCOUNT_BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v2'") &&
-      source.storage.includes('getAccountScopedStorageKey(ACCOUNT_BOARD_TASK_FILTER_STORAGE_KEY, accountId)') &&
+    'board filter cache and journal use exact v4 account-board keys',
+    source.accountStorage.includes('getAccountBoardScopedStorageKey') &&
+      source.storage.includes("BOARD_TASK_FILTER_CACHE_STORAGE_KEY = 'projed-task-filters:v4'") &&
+      source.storage.includes("BOARD_TASK_FILTER_PENDING_STORAGE_KEY = 'projed-task-filter-pending:v4'") &&
+      source.storage.includes('getAccountBoardScopedStorageKey(BOARD_TASK_FILTER_CACHE_STORAGE_KEY, accountId, boardId)') &&
+      source.storage.includes('getAccountBoardScopedStorageKey(BOARD_TASK_FILTER_PENDING_STORAGE_KEY, accountId, boardId)') &&
       !source.storage.includes('writeStorageJson(BOARD_TASK_FILTER_STORAGE_KEY') &&
       !source.storage.includes('writeStorageJson(LEGACY_BOARD_FILTER_STORAGE_KEY'),
   ],
   [
-    'legacy board filter settings migrate once and are removed from shared keys',
-    source.storage.includes('removeStorageKey(BOARD_TASK_FILTER_STORAGE_KEY)') &&
-      source.storage.includes('removeStorageKey(LEGACY_BOARD_FILTER_STORAGE_KEY)'),
+    'legacy board filters are discarded only after display readback and migration marker',
+    source.storage.includes('extractLegacyDisplaySettings') &&
+      source.storage.includes('if (!writeStorageJson(targetDisplayKey, payload)) return false') &&
+      source.storage.includes('readback?.version !== BOARD_TASK_FILTER_PREFS_VERSION') &&
+      source.storage.includes('BOARD_TASK_FILTER_MIGRATION_MARKER_KEY') &&
+      source.storage.includes('legacyCandidates.forEach'),
   ],
   [
-    'board and tag stores hydrate after the account is known',
-    source.boardStore.includes('hydrateTaskFilterPrefs: () => set(getStoredFilters())') &&
-      source.tagStore.includes('hydrateSelectedTagFilter: () => set({ selectedTagIds: getStoredSelectedTagIds() })') &&
-      source.app.includes('useBoardStore.getState().hydrateTaskFilterPrefs()') &&
-      source.app.includes('useTagStore.getState().hydrateSelectedTagFilter()'),
+    'display and task filter stores hydrate only after account-board scope is known',
+    source.boardStore.includes('hydrateTaskDisplayPrefs') &&
+      !source.boardStore.includes('statusFilters:') &&
+      !source.tagStore.includes('selectedTagIds:') &&
+      source.taskFilterStore.includes('activateScope: async (accountId, boardId)') &&
+      source.app.includes('useBoardStore.getState().hydrateTaskDisplayPrefs()') &&
+      source.app.includes('useTaskFilterStore.getState().activateScope(userId, activeBoardId)'),
   ],
   [
-    'workbench panel and all per-board filters use account-scoped v2 keys',
+    'workbench panel stays account-scoped and filters use v4 without cloud coupling',
     source.workbenchPrefs.includes("TASK_WORKBENCH_PANEL_PREFS_KEY = 'projed-task-workbench-panel:v2'") &&
-      source.workbenchPrefs.includes("TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v2'") &&
+      source.workbenchPrefs.includes("TASK_WORKBENCH_FILTER_PREFS_KEY = 'projed-task-workbench-filters:v4'") &&
       source.workbenchPrefs.includes('getAccountScopedStorageKey') &&
       source.workbenchPanel.includes('useAuthStore(state => state.user?.uid ?? null)') &&
       source.workbenchPanel.includes('writeTaskWorkbenchFilterPrefs') &&
-      source.workbenchCommands.includes('useAuthStore.getState().user?.uid'),
+      source.workbenchCommands.includes('useAuthStore.getState().user?.uid') &&
+      !source.workbenchPrefs.includes('taskFilterPreferenceService'),
   ],
   [
-    'workbench v1 preferences migrate once to the current account',
-    source.workbenchPrefs.includes('readScopedOrLegacy') &&
-      source.workbenchPrefs.includes('removeStorageKey(legacyKey)'),
+    'workbench v1-v3 filters reset while selected board survives verified migration',
+    source.workbenchPrefs.includes('LEGACY_TASK_WORKBENCH_FILTER_PREFS_V2_KEY') &&
+      source.workbenchPrefs.includes('selectedBoardId: typeof legacy.selectedBoardId') &&
+      source.workbenchPrefs.includes('filtersByBoardId: {}') &&
+      source.workbenchPrefs.includes('readback?.version === BOARD_TASK_FILTER_PREFS_VERSION') &&
+      source.workbenchPrefs.includes('legacyCandidates.forEach'),
   ],
   [
     'calendar subscription filters are server-side and owner-scoped',

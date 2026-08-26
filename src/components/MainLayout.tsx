@@ -44,6 +44,7 @@ import {
   useDeferredTaskFilterRefreshStore,
 } from '../features/taskFilters/deferredRefresh';
 import { useWbsStore } from '../store/useWbsStore';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
 import { useKanbanViewSize } from '../features/kanbanViewSize/KanbanViewSizeProvider';
 
@@ -117,7 +118,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     // Refresh both node-driven projections and list roots whose memoization is
     // keyed by the active filter object.
     useWbsStore.setState(state => ({ nodes: { ...state.nodes } }));
-    useBoardStore.setState(state => ({ statusFilters: { ...state.statusFilters } }));
+    useTaskFilterStore.getState().refreshProjection();
   }, []);
 
   const returnToBoard = useCallback(() => {

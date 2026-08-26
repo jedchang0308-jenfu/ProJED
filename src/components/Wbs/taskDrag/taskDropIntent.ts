@@ -1,4 +1,11 @@
 import type { TaskNode } from '../../../types';
+import {
+  getPlacementScopeKey,
+  getTaskPlacementScope,
+  getTaskOwnershipRef,
+  taskOwnershipEquals,
+  type PlacementScope,
+} from '../../../features/taskWorkbench/taskPlacementCommand';
 import type { TaskDropSurfaceKind } from './taskDragTypes';
 
 export interface TaskDropDescriptor {
@@ -23,7 +30,7 @@ export const buildTaskParentIndex = (nodesRecord: Record<string, TaskNode>) => {
   const parentIndex: Record<string, string[]> = {};
   Object.values(nodesRecord).forEach((node) => {
     if (node.isArchived) return;
-    const key = node.parentId || 'root';
+    const key = getPlacementScopeKey(getTaskPlacementScope(node));
     if (!parentIndex[key]) parentIndex[key] = [];
     parentIndex[key].push(node.id);
   });
@@ -44,17 +51,20 @@ export const isTaskDropIntentOrigin = (
   if ((draggedNode.parentId || null) !== intent.parentId) return false;
   if ((intent.nodeType ?? draggedNode.nodeType) !== draggedNode.nodeType) return false;
 
-  const parentKey = intent.parentId || 'root';
-  const originalOrder = buildTaskParentIndex(nodesRecord)[parentKey] || [];
+  const originalScopeKey = getPlacementScopeKey(getTaskPlacementScope(draggedNode));
+  const movedNode = {
+    ...draggedNode,
+    parentId: intent.parentId,
+    nodeType: intent.nodeType ?? draggedNode.nodeType,
+    order: intent.order,
+  };
+  const movedScopeKey = getPlacementScopeKey(getTaskPlacementScope(movedNode));
+  if (originalScopeKey !== movedScopeKey) return false;
+  const originalOrder = buildTaskParentIndex(nodesRecord)[originalScopeKey] || [];
   const movedOrder = buildTaskParentIndex({
     ...nodesRecord,
-    [draggedNodeId]: {
-      ...draggedNode,
-      parentId: intent.parentId,
-      nodeType: intent.nodeType ?? draggedNode.nodeType,
-      order: intent.order,
-    },
-  })[parentKey] || [];
+    [draggedNodeId]: movedNode,
+  })[movedScopeKey] || [];
 
   return originalOrder.length === movedOrder.length
     && originalOrder.every((nodeId, index) => nodeId === movedOrder[index]);
@@ -65,11 +75,19 @@ export const getTaskAppendOrder = (
   excludeId: string | undefined,
   nodesRecord: Record<string, TaskNode>,
   parentIndex = buildTaskParentIndex(nodesRecord),
-) => (parentIndex[parentId] || []).reduce((max, id) => {
-  if (id === excludeId) return max;
-  const node = nodesRecord[id];
-  return node ? Math.max(max, node.order ?? 0) : max;
-}, -1) + 1;
+) => {
+  const parentNode = nodesRecord[parentId];
+  if (!parentNode) return 0;
+  const scope: PlacementScope = {
+    ownership: getTaskOwnershipRef(parentNode),
+    parentId,
+  };
+  return (parentIndex[getPlacementScopeKey(scope)] || []).reduce((max, id) => {
+    if (id === excludeId) return max;
+    const node = nodesRecord[id];
+    return node ? Math.max(max, node.order ?? 0) : max;
+  }, -1) + 1;
+};
 
 const isDescendantOf = (
   nodeId: string,
@@ -148,6 +166,7 @@ export const resolveTaskDropIntent = ({
   if (
     target.surfaceKind === 'task-title-child'
     && (draggedNode.workspaceId !== targetNode.workspaceId || draggedNode.boardId !== targetNode.boardId)
+    && getTaskOwnershipRef(draggedNode).kind !== 'account_unplaced'
   ) return null;
 
   const sourceIsColumn = source.surfaceKind === 'column-header';
@@ -211,11 +230,23 @@ export const resolveTaskDropOutcome = ({
   source: TaskDropDescriptor;
   target: TaskDropDescriptor;
   nodesRecord: Record<string, TaskNode>;
-}): TaskDropOutcome => classifyTaskDropOutcome({
-  draggedNodeId: source.nodeId,
-  intent: resolveTaskDropIntent({ source, target, nodesRecord }),
-  nodesRecord,
-});
+}): TaskDropOutcome => {
+  const intent = resolveTaskDropIntent({ source, target, nodesRecord });
+  if (!intent) return { kind: 'invalid', intent: null };
+  const sourceNode = nodesRecord[source.nodeId];
+  const targetNode = nodesRecord[target.nodeId];
+  if (sourceNode && targetNode && !taskOwnershipEquals(
+    getTaskOwnershipRef(sourceNode),
+    getTaskOwnershipRef(targetNode),
+  )) {
+    return { kind: 'move', intent };
+  }
+  return classifyTaskDropOutcome({
+    draggedNodeId: source.nodeId,
+    intent,
+    nodesRecord,
+  });
+};
 
 export const taskDragSourceKindToSurfaceKind = (
   sourceKind: string,

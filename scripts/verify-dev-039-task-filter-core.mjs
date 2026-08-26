@@ -15,6 +15,7 @@ const files = {
   boardStore: 'src/store/useBoardStore.ts',
   wbsStore: 'src/store/useWbsStore.ts',
   tagStore: 'src/store/useTagStore.ts',
+  taskFilterStore: 'src/store/useTaskFilterStore.ts',
   statusFilterBar: 'src/components/ui/StatusFilterBar.tsx',
   mainLayout: 'src/components/MainLayout.tsx',
   app: 'src/App.tsx',
@@ -72,7 +73,7 @@ assert(
     !source.types.includes('TaskWorkbenchFilterProfile') &&
     source.defaults.includes('TASK_STATUS_OPTIONS') &&
     source.defaults.includes('createDefaultTaskFilters') &&
-    source.defaults.includes('completed: false') &&
+    source.defaults.includes('completed: true') &&
     !source.defaults.includes('createDefaultTaskWorkbenchProfile') &&
     source.predicates.includes('matchesTaskFilters') &&
     source.predicates.includes('matchesKeywordFilter') &&
@@ -82,7 +83,7 @@ assert(
     source.describe.includes('countActiveTaskFilters') &&
     source.describe.includes('describeTaskFilters') &&
     source.storage.includes("BOARD_TASK_FILTER_STORAGE_KEY = 'projed-task-filters:v1'") &&
-    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 3') &&
+    source.storage.includes('BOARD_TASK_FILTER_PREFS_VERSION = 4') &&
     source.storage.includes('migrateLegacyDefaultTaskFilters') &&
     !source.storage.includes('TASK_WORKBENCH_FILTER_PROFILES_STORAGE_KEY') &&
     !source.storage.includes('readTaskWorkbenchProfiles') &&
@@ -114,8 +115,8 @@ assert(
     source.wbsStore.includes('matchesTaskFiltersWithStatus(currentNode, taskFilters, change.baselineStatus)') &&
     source.wbsStore.includes('reconcileStatusOperation(') &&
     source.mainLayout.includes('selectPendingTaskFilterRefreshCount') &&
-    source.mainLayout.includes("useWbsStore.setState(state => ({ nodes: { ...state.nodes } }))") &&
-    source.mainLayout.includes("useBoardStore.setState(state => ({ statusFilters: { ...state.statusFilters } }))"),
+    source.mainLayout.includes('useTaskFilterStore.getState().refreshProjection()') &&
+    source.wbsStore.includes('useTaskFilterStore.getState().filters'),
 );
 
 assert(
@@ -134,12 +135,15 @@ assert(
 );
 
 assert(
-  'board and tag stores use versioned storage adapter while keeping legacy key compatibility',
-  source.boardStore.includes('readBoardTaskFilterPrefs') &&
-    source.boardStore.includes('writeBoardTaskFilterPrefs') &&
-    !source.boardStore.includes("const FILTER_STORAGE_KEY = 'projed-filters'") &&
-    source.tagStore.includes('persistSelectedTagIds') &&
-    source.tagStore.includes('writeBoardTaskFilterPrefs({ filters: { selectedTagIds } })'),
+  'task filter ownership is independent from board display and tag data stores',
+  source.boardStore.includes('readBoardTaskDisplaySettings') &&
+    source.boardStore.includes('writeBoardTaskDisplaySettings') &&
+    !source.boardStore.includes('statusFilters:') &&
+    !source.boardStore.includes('selectedAssigneeIds:') &&
+    !source.tagStore.includes('selectedTagIds:') &&
+    source.taskFilterStore.includes('filters: TaskFilterState') &&
+    source.taskFilterStore.includes('toggleTagFilter') &&
+    source.taskFilterStore.includes('toggleAssigneeFilter'),
 );
 
 assert(
@@ -151,17 +155,11 @@ assert(
     !source.statusFilterBar.includes('!showDependencies || !showTags'),
 );
 
-const taskFilterViews = [
-  ['wbsListView', source.wbsListView],
-  ['wbsNodeItem', source.wbsNodeItem],
-  ['ganttView', source.ganttView],
-  ['calendarView', source.calendarView],
-  ['mindMapTree', source.mindMapTree],
-];
-
-for (const [label, content] of taskFilterViews) {
-  assert(`${label} uses matchesTaskFilters`, content.includes('matchesTaskFilters'));
-}
+assert('wbsListView uses canonical projection', source.wbsListView.includes('projectTaskFilterResults') && source.wbsListView.includes('filterProjection={filterProjection}'));
+assert('wbsNodeItem uses canonical visible IDs', source.wbsNodeItem.includes('filterProjection.visibleTaskIds.has(n.id)') && !source.wbsNodeItem.includes('matchesTaskFilters'));
+assert('ganttView uses canonical projection', source.ganttView.includes('projectTaskFilterResults') && source.ganttView.includes('visibleTaskIds: filterProjection.visibleTaskIds'));
+assert('calendarView uses canonical projection', source.calendarView.includes('projectTaskFilterResults') && source.calendarView.includes('visibleTaskIds: filterProjection.visibleTaskIds'));
+assert('mindMapTree uses canonical visible IDs', source.mindMapTree.includes('visibleTaskIds') && !source.mindMapTree.includes('matchesTaskFilters'));
 
 assert(
   'board hierarchy uses filter result projection so matching descendants keep context ancestors visible',
@@ -175,18 +173,19 @@ assert(
 );
 
 assert(
-  'Gantt and Calendar include tag filter state',
-  source.ganttView.includes('selectedTagIds = useTagStore') &&
-    source.ganttView.includes('selectedTagIds,') &&
-    source.calendarView.includes('selectedTagIds = useTagStore') &&
-    source.calendarView.includes('selectedTagIds,'),
+  'Gantt and Calendar consume the complete task-filter store object',
+  source.ganttView.includes('useTaskFilterStore(state => state.filters)') &&
+    source.calendarView.includes('useTaskFilterStore(state => state.filters)') &&
+    !source.ganttView.includes('useTagStore') &&
+    !source.calendarView.includes('useTagStore'),
 );
 
 assert(
   'mindmap mode exposes the task filter entry',
   source.mainLayout.includes("['list', 'mindmap', 'board', 'gantt', 'calendar'].includes(currentView)") &&
-    source.mindMapView.includes("keyword: ''") &&
-    source.mindMapTree.includes('type MindMapFilterState = TaskFilterState'),
+    source.mindMapView.includes('useTaskFilterStore(state => state.filters)') &&
+    source.mindMapView.includes('projectTaskFilterResults') &&
+    source.mindMapTree.includes('visibleTaskIds'),
 );
 
 assert(
@@ -294,9 +293,10 @@ assert(
     source.spec.includes('Deferred Scope Audit') &&
     source.qa.includes('All-Phase QA Coverage Matrix') &&
     source.qa.includes('Phase Exit Decision Rules') &&
-    source.devTask.includes('DEV-039 [交付點] [完成]') &&
+    source.devTask.includes('DEV-039 [交付點] [驗證中]') &&
     source.devTask.includes('完成任務 filter core、跨看板工作台、row-root parity') &&
     source.documentationMap.includes('All-Phase Coverage Complete') &&
+    source.qa.includes('DEV-090 Board-filter Follow-up Superseded by QA-DEV-090') &&
     source.backlog.includes('All-Phase Coverage Matrix'),
 );
 

@@ -1,8 +1,36 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-08-25（DEV-089／CAPA-20260825-01 權威任務搬移交易）
+## Documentation Map Update - 2026-08-26（DEV-090 預設全顯示與帳號看板篩選一致性）
 
-Spec Impact：`Intentional replacement`。SPEC-089 取代 SPEC-086 的 optimistic failure recovery：看板 WBS 與帳號級未歸位之間必須先完成 idempotent canonical transaction，再收斂 local placement；failure 保留完整來源子樹。新增 operation ledger／RPC migration、手機 fault injection 與 exactly-one-source release gate；TEST DB01-DB03 與 Level 3 已通過，production migration／Level 4 尚未執行。
+Spec Impact：`Intentional replacement + corrective follow-up`。使用者確認未設定篩選時必須顯示全部任務，主動篩選喜好歸屬個人帳號並按看板隔離；production 診斷同時證實現行 uid-only 本機偏好與清單／心智圖逐層 predicate 會造成同看板跨模式結果不一致。DEV-090 已完成 default／v4 migration、專用 preference table與RLS、version-safe repository、獨立store、五模式canonical projection、互斥visible states及local automated QA-QC；狀態為 `Implemented / Local QA-QC PASS / Not Released / Release Gate Required`。本狀態不授權 remote migration、正式資料、deploy 或 release。
+
+| 文件 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | Implemented / Local QA-QC PASS / Not Released | DEV-090／DEV-039 | WP1～WP6與驗收清單完成；正式上線仍須獨立release gate。 |
+| `ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md` | Authoritative Addendum / Implemented / Local QA-QC PASS | DEV-090／DEV-039 | v4 state、table/RLS、repository、legacy reset、consumer matrix、failure recovery與release boundary已落實。 |
+| `ai-doc/decisions/ADR-045-account-board-task-filter-preferences.md` | Accepted / Implemented / Local QA-QC PASS | DEV-090 | 專用 `account_board_task_filter_preferences`、exact-scope cache、unknown-version guard與五模式ownership已實作。 |
+| `ai-doc/qa/QA-DEV-090-default-show-all-account-board-filter-consistency.md` | Executed / Local Automated QA PASS / QC PASS | DEV-090 | source/model、isolated PostgreSQL grants/RLS、五模式browser、failure feedback、viewport與targeted regressions全部PASS。 |
+| `ai-doc/qc/QC-DEV-090-default-show-all-account-board-filter-consistency.md` | Local Automated QC PASS / Release Gate Required | DEV-090 | 彙整source boundary、DB/UI artifacts、第一次B18反例與修正後重跑結果；明確維持Not Released。 |
+| task-filter core/store/projection、五模式 consumers、Supabase adapter/types/migration、DEV-090 scripts | Implemented / Verified Locally | DEV-090 | forward-only migration與client已完成；production target、migration apply、deploy與smoke待獨立release gate。 |
+
+## Documentation Map Update - 2026-08-26（DEV-089 Production Reopen／Scope-safe Placement Command）
+
+Spec Impact：`Compatible corrective amendment + Intentional replacement`。2026-08-26 production 證實「未歸位→看板」在 RPC 前因 parent-only root bucket 混入其他 workspace／board siblings 而被 ownership boundary guard 拒絕；先前 Local／TEST／單向 Level 3 PASS 降為歷史 baseline。SPEC-089 Rework 1 保留原子性與失敗保留 invariants，以共用 `MoveTaskSubtreeCommand v2`＋server canonical ordering 取代跨 ownership generic node batch／client sibling patches。2026-08-26 已完成RD local實作、1,000-fixture property、可丟棄PostgreSQL transaction harness與desktop/mobile rendered UI；Supabase TEST、Level 3及production仍stop-ship。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | Rework 1 RD Implemented / Local QA-QC PASS / P0 Stop-Ship | DEV-089 | 原 DEV 重啟、不另建重複 DEV；登錄 production error、root cause、WP1-WP6、local evidence、QA/QC acceptance與 release re-entry boundary。 |
+| `ai-doc/reports/CAPA-20260825-task-placement-disappears-on-mobile.md` | Reopened / RD Local Correction PASS / Effectiveness Pending | DEV-089／CAPA-20260825-01 | 保留來源未遺失的 containment；CA/PA local evidence已完成，Supabase TEST、Level 3、Level 4、T+7/T+30仍待執行。 |
+| `ai-doc/specs/SPEC-089-authoritative-task-placement-transaction.md` | Authoritative / Rework 1 RD Implemented / Local PASS | DEV-089／DEV-086 | 固定 `PlacementScope`、command/canonical response、v2 RPC、server locks/order、exactly-one-source postcondition、UI Entry Contract、AC與release boundary。 |
+| `ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md` | Local source/property/UI PASS / TEST-Level 3 NOT RUN | DEV-089 | 1,000 randomized property、local DB harness與desktop/mobile雙向通過；Supabase DB01-DB04完整矩陣、Level 3/4仍不可替代。 |
+| `ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md` | RD Local Rework PASS / Production Known FAIL | DEV-089 | local return evidence可交下一階段；production既有反例仍有效，禁止在TEST/Level 3/Level 4前解除stop-ship。 |
+| `taskPlacementCommand.ts`、`taskDropIntent.ts`、`taskDragCommit.ts`、`placementTransaction.ts`、`useWbsStore.ts`、Supabase service/types | Implemented / Local PASS | DEV-089 | discriminated ownership＋scope-safe index、shared desktop/mobile v2 command、canonical result store owner、fallback compensation與v2 provider adapter。 |
+| `20260826083940_dev_089_scope_safe_task_placement_command.sql` | Created / Local PostgreSQL Harness PASS / TEST NOT APPLIED | DEV-089 | forward-only ledger amendment、v2 RPC、deterministic scope locks、dense order、exactly-one-source/canonical postconditions與explicit grants；既有 `20260825093621`未改寫。 |
+| `scripts/verify-dev-089-*`、DEV-086 browser regression | Static + 1,000 Property + Local DB/UI PASS / Level 3-4 NOT RUN | DEV-089 | desktop、390×844、320×844雙向/跨工作區與failure containment通過；Supabase ledger/reload/concurrency仍須同artifact Level 3/4。 |
+
+## Historical Snapshot - 2026-08-25（DEV-089／CAPA-20260825-01；已被 2026-08-26 production reopen 取代）
+
+歷史 Spec Impact：`Intentional replacement`。本節只保存當日 evidence，不代表目前狀態；目前權威結論以正上方 2026-08-26 update 為準。當時 SPEC-089 取代 SPEC-086 的 optimistic failure recovery：看板 WBS 與帳號級未歸位之間必須先完成 idempotent canonical transaction，再收斂 local placement；failure 保留完整來源子樹。新增 operation ledger／RPC migration、手機 fault injection 與 exactly-one-source release gate；TEST DB01-DB03 與單向 Level 3 當時通過。
 
 | 文件／程式 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|

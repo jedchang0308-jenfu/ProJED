@@ -1,9 +1,10 @@
 # SPEC-039: 任務過濾器核心與全域任務平台兩欄篩選重構
 
-關聯 DEV：DEV-039
+關聯 DEV：DEV-039、DEV-090
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / All-Phase Coverage Complete
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / Release Gate Required
 
+2026-08-26 DEV-090 default-show-all and account-board preference addendum：使用者確認「系統預設全部顯示，不得預設過濾任何任務；過濾喜好記錄在個人帳號上」。本 addendum 刻意取代既有 `completed: false` 預設、僅以 uid 區隔的瀏覽器本機看板篩選，以及清單／心智圖逐層直接套 predicate 的行為。目標狀態是：新帳號與未設定過的看板 active filter count 為 0；所有狀態、負責人、標籤與日期條件皆不限制；使用者主動調整後才以「帳號 × 看板」保存；同一看板的看板、清單、心智圖、甘特與行事曆共用 canonical matched identities，階層模式可額外顯示 context-only ancestors。2026-08-26 已完成 RD 實作與本地自動化 QA-QC：專用 preference table migration、v4 cache／migration、獨立 filter store、version-safe repository、五模式 canonical projection、互斥可見狀態與 failure recovery 均有 source/model、實體 PostgreSQL RLS、正常 UI browser、viewport 與 regression 證據。狀態為 `Implemented / Local Automated QA-QC Passed / Release Gate Required`；未套用遠端 migration、未修改正式資料、未 deploy 或 release。
 2026-08-07 account-scoped filter memory addendum：使用者要求過濾器狀態改為每個登入帳號各自記憶。本 addendum 覆寫本文中「工作台篩選只存在當次元件 state、不得保存」的舊決策，但不引入 profile、儲存按鈕、另存、複製或團隊共用設定。看板與工作台的狀態篩選、到期／逾期、負責人/協作、標籤、關鍵字、顯示設定及工作台選定看板，均以登入帳號 uid 作為 localStorage scope；既有未分帳號 key 只在首次登入時遷移給當前帳號，遷移後刪除共用 key。行事曆訂閱篩選仍由 Supabase `owner_user_id` 與 RLS 隔離，不改其資料模型。
 2026-08-10 cross-device unplaced-task addendum：使用者指出同一帳號手機與電腦的「未歸位」任務不一致，並確認「請執行」。本 addendum 覆寫本文中「未歸位跨裝置同步不在 scope」的舊決策：Supabase backend 的未歸位任務改存 `task_workbench_unplaced_items`，以登入帳號 `owner_id` + 任務 `id` 隔離；首次載入時將既有本機 localStorage 任務以 updatedAt 合併到雲端，成功後清除本機 staging cache。Firebase / local-test backend 保留原有本機 fallback 語意；正式 migration / deploy 已完成，authenticated two-device smoke 待補。
 2026-08-04 DEV-062 addendum：狀態 filter 依 `SPEC-062` 只暴露待辦、進行中、暫緩、完成；legacy delayed／unsure 在前端收斂為待辦。「逾期」是到期日衍生條件，位於到期日區，不是第五種人工狀態。
@@ -27,6 +28,297 @@
 > Current Supersession Note - 2026-07-17：`SPEC-053` 是 placed-row drag scope 的最新權威來源。
 > `placed row 不能拖` 為 Human Confirmed 決策；DEV-039 既有 Phase 1B / Phase 2A
 > 雙向拖移與 draggable parity 文字只作歷史脈絡，不得作為新 RD 驗收條件。
+
+## Human Decision Brief - 2026-08-26 Default Show All and Account-owned Filter Preferences
+
+文件成熟度：`Implemented / Local Automated QA-QC Passed / Human Confirmed`
+
+決策來源：使用者回報同一「鉦富研發部」看板在看板模式只見部分任務、清單與心智圖空白；production 資料查核確認任務存在，Jed 帳號啟用的負責人條件排除朱宇鴻，而不同模式對不符合條件的父節點採用不同投影。使用者進一步確認預設全部顯示、不得預設隱藏任何任務，並要求個人帳號記憶其主動選擇的篩選喜好。
+
+### 問題與使用者價值
+
+- 現行預設將完成狀態關閉，未操作過篩選器也不是「全部任務」。
+- 看板篩選偏好目前是瀏覽器本機 uid scope，未按看板分區，也不等於跨裝置的個人帳號偏好。
+- 負責人與標籤是看板相依資料；跨看板共用同一 selected-id 集合可能把另一張看板過濾成空白。
+- 看板已使用 ancestor-aware projection，但清單與心智圖直接過濾根／子節點；父節點未命中時，命中的後代無法被呈現。
+- 空白狀態目前無法區分「看板真的沒有任務」與「篩選結果為 0」，造成使用者誤判資料遺失或協作未同步。
+
+完成後，未設定條件的使用者應可靠地看到全部任務；主動篩選後，偏好只影響本人及該看板；所有任務模式對同一條件得到相同 matched task identities，階層模式仍保留理解路徑所需的最小祖先脈絡。
+
+### 已確認產品契約
+
+1. `createDefaultTaskFilters()` 是唯一「無篩選」定義：待辦、進行中、暫緩、完成全部開啟；到期日不限、僅逾期關閉、負責人／協作與標籤為空集合、關鍵字為空，active filter count 必須為 0。
+2. `清除／重設篩選` 必須回到同一個無篩選定義，不得維護第二套 reset default。
+3. 使用者未主動設定過的帳號／看板一律顯示全部任務；只有使用者主動選取條件後才縮小結果。
+4. 看板內任務篩選偏好歸屬登入帳號，並按 `boardId` 分區；A 帳號、B 帳號與同帳號的不同看板不得互相污染。
+5. Supabase backend 的 canonical source 是 ADR-045 定義的 `account_board_task_filter_preferences` 專用資料列；不得放入 `profiles.ui_preferences` whole-json。localStorage v4 只作精確帳號 × 看板 cache、離線 fallback 與 pending journal。
+6. 同一看板的板內模式共用同一個 canonical projection：`matchedTaskIds` 代表真正符合條件、`visibleTaskIds` 代表命中任務加必要祖先、`contextOnlyContainerIds` 只供階層脈絡、`totalTaskCount` 代表看板真實任務數。
+7. 階層模式使用 `visibleTaskIds`；扁平結果與統計只使用 `matchedTaskIds`。context-only ancestor 不得被計入符合結果。
+8. 空白狀態分成真無資料、篩選為 0 與載入失敗；只有篩選為 0 時提供最小 `清除篩選` 恢復動作，不新增常駐教學或額外摘要面板。
+9. 既有 v1～v3 偏好沒有「使用者主動設定／舊預設」來源標記；DEV-090 一次性重設舊板內與工作台 filter 條件為全部顯示，保留純顯示／panel／selected-board 設定，且不得把 legacy filter 上傳到遠端。
+
+### 初步 Scope
+
+- 統一無篩選 default、active count、reset 與舊偏好 migration 語意。
+- 將板內任務篩選狀態收斂為帳號 × 看板 ownership，並明確區分遠端來源與本機 fallback。
+- 建立單一 canonical task-filter projection consumer contract，接回看板、清單、心智圖、甘特與行事曆等實際任務模式。
+- 依 `totalTaskCount` 與 `matchedTaskIds` 修正空白／無結果／錯誤的可見狀態。
+- 補 migration、帳號隔離、看板隔離、跨模式 identity parity、ancestor context、RWD 與 visible-error 驗證方向。
+
+### Out of Scope
+
+- 不新增團隊共用篩選設定、篩選 profile、另存、複製或管理介面。
+- 不改任務資料、任務 RLS、看板成員權限、Realtime 或任務指派模型。
+- 不把 `created_by`／`updated_by` 稽核追溯缺口綁入 DEV-090；該議題需另案評估。
+- 不在本 brief 執行 Supabase migration、production data reset、deploy 或 release。
+
+### 主要流程與驗收方向
+
+| 情境 | 預期結果 |
+|---|---|
+| 新帳號第一次進入既有看板 | 所有狀態與負責人任務皆可見，active filter count = 0。 |
+| 使用者在看板 A 主動選取朱宇鴻 | 重新整理／重新登入後，看板 A 恢復該帳號偏好。 |
+| 同帳號切換未設定的看板 B | 看板 B 預設全部顯示，不繼承看板 A 的負責人或標籤 ID。 |
+| B 帳號登入同看板 | 不繼承 A 帳號的條件；未設定時全部顯示。 |
+| 父任務不命中、後代命中 | 階層模式顯示 context-only 父層與命中後代；扁平計數只計後代。 |
+| 同條件切換任務模式 | canonical `matchedTaskIds` 一致，不得出現看板有資料而清單／心智圖為空。 |
+| 看板有任務但無符合結果 | 顯示「沒有符合目前篩選的任務」與單一清除動作，不得顯示「尚無任務」。 |
+| 偏好讀取失敗 | 保留可用的本機 fallback 或全部顯示，顯示最小錯誤／恢復訊號，不得靜默套用其他帳號或看板的條件。 |
+
+### 風險、停止條件與下一步
+
+- 風險等級：Medium；涉及使用者可見空白狀態、跨模式投影、帳號偏好與 UI／cache／Supabase 跨層資料路徑。
+- Spec Impact：`Intentional replacement + corrective follow-up`；本 brief 取代 `completed: false` 預設、uid-only board filter memory 與 mode-local hierarchy filtering，但不改 DEV-039 已交付的工作台 placement、Realtime 或任務權限契約。
+- ADR：`ADR-045` 已 Accepted；專用帳號 × 看板資料列取代 `profiles.ui_preferences` whole-json 方案，避免 layout/filter namespace lost update。
+- Implementation stop condition：若 migration/RLS 未通過 DB role matrix、scope hydration 會套用 stale response、任一模式未接 canonical projection，或 fallback 可讀到其他 scope，RD 必須停止送驗並回修。
+- 下一步：RD 依下方 WP1～WP6 執行本地產品、migration file 與測試修改；QA/QC 通過後才可進入 deployment-release gate。
+
+## DEV-090 Current Phase RD Handoff Contract
+
+文件狀態：`Implemented / Local Automated QA-QC Passed / Release Gate Required`
+
+風險 lane：本地實作 `Medium`；含 schema/RLS 的 release `High / Release Gate Required`。
+
+權威決策：本節、Human Decision Brief 與 `ADR-045`。若歷史 DEV-039 文字仍寫 `completed: false`、uid-only localStorage、board filter 不跨裝置或逐模式直接 predicate，以本節為準。
+
+Readiness conclusion：目前產品與工程決策均已收斂，無剩餘 P0/P1 文件缺口；尚未完成的是 RD 實作、QA/QC evidence 與後續 release gate，不是 readiness blocker。
+
+### Purpose and Execution Boundary
+
+- 目前可執行：本 repo 的 task-filter core、store、consumer、local cache、Supabase adapter/types、forward-only migration file、自動化測試與 QA/QC evidence。
+- 目前不可執行：套用任何 remote migration、修改 production 資料、deploy、release、production smoke、刪除既有 preference/profile 資料。
+- 完成定義：RD 實作後，必須由 QA/QC 在同一 source state 證明 default、migration、RLS、failure recovery、五模式 identity parity 與實際 UI delivery path；只有程式碼、build、API 或 DB 成功不足以完成 DEV-090。
+
+### Current Architecture Impact
+
+本變更影響跨模組 filter ownership、Supabase schema/RLS、local cache migration、Zustand state、五模式 hierarchy projection 與可見空白／錯誤狀態。`ADR-045` 是 Architecture Memory Source；任務資料、任務 RLS、Realtime、行事曆訂閱 snapshot、工作台 placement transaction 與 task lifecycle 不受影響。
+
+### Repository / Module Impact
+
+| Path | RD contract |
+|---|---|
+| `src/features/taskFilters/defaults.ts`、`describe.ts` | 將所有人工狀態 default 設為 true；`createDefaultTaskFilters()` 同時作 row-absence、reset、migration fallback；active count 為 0。 |
+| `src/features/taskFilters/storage.ts`、`types.ts`、`index.ts` | 升級 v4；拆出純顯示設定；新增精確 account × board cache、pending upsert/delete journal、legacy reset 與 normalization。 |
+| `src/utils/accountScopedStorage.ts` | 新增可驗證寫入結果與 account-board scoped key helper；migration 必須先確認新值可讀回才移除 legacy key。 |
+| `src/features/taskFilters/preferenceRepository.ts`（new） | 實作 remote/local/default arbitration、scope-keyed write queue、retry、unknown-version guard 與 adapter boundary。不得依賴 React。 |
+| `src/services/supabase/taskFilterPreferenceService.ts`（new） | 對專用表執行 select/upsert/delete；payload 永遠顯式帶 account/project/version/full filters；不得讀寫 `profiles.ui_preferences`。 |
+| `src/store/useTaskFilterStore.ts`（new） | 擁有 active account/board、完整 `TaskFilterState`、hydrate/sync/error state 與 filter actions；以 request generation 防止快速切板 stale apply。 |
+| `src/store/useBoardStore.ts`、`src/types/index.ts` | 移除板內 filter condition ownership；保留 navigation、純顯示設定與既有 display undo。 |
+| `src/store/useTagStore.ts`、`src/store/useWbsStore.ts` | Tag store 只管理標籤資料；selected tag filter 移至 task-filter store。WBS deferred refresh 改讀同一 active filter。 |
+| `src/App.tsx`、`src/components/MainLayout.tsx` | 帳號／active board 改變時 hydrate/clear scope；pending status refresh 改使 task-filter projection 重算，不再 patch `useBoardStore.statusFilters`。 |
+| `src/components/ui/StatusFilterBar.tsx` | 所有條件與 reset 只走 task-filter store；顯示同步失敗最小 warning/toast，不新增 save/profile UI。 |
+| `src/features/taskFilters/resultProjection.ts` | 保留 pure canonical projector；補 stable ordered identity helper／cycle-orphan tests。matched 與 visible 語意不得被 consumer 改寫。 |
+| `src/components/BoardView.tsx`、`Wbs/WbsListView.tsx`、`Wbs/WbsNodeItem.tsx` | 一次計算 projection；root/children 以 `visibleTaskIds` 呈現，不再各自 `matchesTaskFilters()`。 |
+| `src/components/MindMap/MindMapView.tsx`、`MindMap/mindMapTree.ts` | root/children 接收 projection/visible IDs；父不命中但後代命中時保留祖先脈絡。 |
+| `src/utils/taskHierarchy.ts`、`src/components/GanttView.tsx`、`src/components/CalendarView.tsx` | hierarchy builder 改以 canonical `visibleTaskIds` traversal；matched IDs 不由 Gantt/Calendar 自行重算。 |
+| `src/components/ui/TaskFilterResultState.tsx`（new） | 共用 task loading/error、真無資料與 filtered-zero 判斷；filtered-zero 只有單一 reset CTA。 |
+| `src/services/supabase/database.types.ts` | 增加 preference row/table type；不得手寫成與 migration 不同的 nullable/default contract。 |
+| `supabase/migrations/<timestamp>_dev_090_account_board_task_filter_preferences.sql`（new） | 建表、constraint/index、trigger、explicit grants、四個 RLS policies；不 backfill、不改 production。 |
+| `scripts/verify-dev-090-*`、`package.json` | 新增 model/static、browser、DB/RLS gates，並修訂既有 DEV-039 verifier 的 `completed:false`／active-count=1 歷史預期。 |
+
+### Canonical Filter and Projection Contract
+
+`TaskFilterState` v4 正規化後必須包含：
+
+| Field | Default / validation | Match rule |
+|---|---|---|
+| `statusFilters` | todo/in_progress/onhold/completed 與 legacy delayed/unsure 全為 true；缺 key 以 default 補齊 | 先用既有 manual-status normalization，再查 normalized status key |
+| `dueWithinDays` | `null`；非 null clamp 為整數 0～365 | 沿用既有 due-date predicate |
+| `overdueOnly` | `false` | 沿用既有 overdue predicate |
+| `selectedAssigneeIds` | 去重字串陣列，預設 `[]` | assignee/collaborator 任一命中；保留 `__unassigned__` |
+| `selectedTagIds` | 去重字串陣列，預設 `[]` | 任一 selected tag 命中 |
+| `keyword` | trim 後字串，預設空字串 | case-insensitive title match |
+
+- `projectTaskFilterResults(nodes, filters, { boardId })` 是唯一 identity truth。
+- `boardTaskIds`／`totalTaskCount`：該看板有效可見、非 archived、無 archived/missing/cyclic ancestor 的全部 WBS identities；包含作為任務結構的 container。
+- `matchedTaskIds`：`boardTaskIds` 中真正符合 predicate 的 identities；flat count、filtered-zero 判斷與 parity assertion 只用它。
+- `visibleTaskIds`：matched identities 加上連回合法 root 所需的 ancestors；階層 renderer 只用它。
+- `contextOnlyContainerIds`：visible 但未 matched 的 ancestors；可作視覺脈絡，不得計入 match badge/statistic。
+- default filters 下 `matchedTaskIds` 必須等於 `boardTaskIds`，active count 為 0。五模式可有不同 layout，但不得有不同 matched identity。
+
+### Persistence Schema and API Contract
+
+`public.account_board_task_filter_preferences` migration 必須符合：
+
+| Column / object | Contract |
+|---|---|
+| `account_id uuid` | not null，FK `profiles(id) on delete cascade` |
+| `project_id uuid` | not null，FK `projects(id) on delete cascade` |
+| `preference_version smallint` | not null，current = 4，check `> 0` |
+| `filters jsonb` | not null，check `jsonb_typeof(filters) = 'object'`；client 寫完整 normalized state |
+| `created_at / updated_at timestamptz` | not null default `now()`；update 使用既有 `public.touch_updated_at()` trigger |
+| Primary/index | PK `(account_id, project_id)`；另建 `project_id` index 支援 FK cascade / cleanup |
+
+Migration 必須 `enable row level security`，先明確 revoke anon/authenticated，再只 grant authenticated `select, insert, update, delete`；service_role 不得出現在 client contract。每個 operation 使用獨立 policy：
+
+```text
+own_row := account_id = (select auth.uid())
+readable_project := exists projects p where p.id = project_id
+                    and private.current_user_can_read_project(p.tenant_id, p.id)
+SELECT/DELETE USING      own_row and readable_project
+INSERT       WITH CHECK own_row and readable_project
+UPDATE       USING      own_row and readable_project
+             WITH CHECK own_row and readable_project
+```
+
+DB role matrix：
+
+| Actor | Own readable project row | Other account row | Own inaccessible project row | anon |
+|---|---|---|---|---|
+| owner/admin/project_manager/member/viewer | CRUD allowed | denied | denied | n/a |
+| unauthenticated | n/a | n/a | n/a | all denied |
+
+No RPC、no audit event、no Realtime publication。Viewer 保存自己的 view preference 不等於取得任務寫入權限。
+
+### Preference Repository State Machine and I/O
+
+Store scope 為 `{ accountId, boardId, generation }`；state 至少區分 `idle | hydrating | ready | fallback` 與 `synced | pending-upsert | pending-delete | sync-error`。
+
+1. `activateScope(accountId, boardId)`：先清除前一 scope 的 in-memory conditions；只可套用 exact-scope v4 cache，否則立即用 default-all。之後啟動 remote hydrate。
+2. Remote 有 v4 row：若本機沒有 pending mutation，normalize 後套用並更新 cache；若 scope/generation 已改變，丟棄 response。
+3. Remote 無 row：若本機沒有 pending mutation，清除該 scope cache 並套用 default-all；不得把舊 v3 或其他 board cache 當 preference。
+4. Remote read 失敗／table 未部署：使用 exact-scope cache；無 cache 時 default-all。顯示一次非阻斷 warning「篩選偏好無法同步，已使用此裝置設定」；不得顯示別的 scope 或假裝已同步。
+5. 使用者 change：先 normalize、立即更新 UI 與 v4 cache，再以 `(accountId, boardId)` queue/coalesce 完整 upsert。快速連點最終只要求最後 normalized state 落盤。
+6. 使用者 reset：立即套用 default、寫 `pending-delete` journal，再刪除 remote row；成功後移除 cache/journal。不得 upsert 一列冗餘 default。
+7. Remote write/delete 失敗：保留 pending journal 與本機結果，採 bounded retry（當次短退避，之後於 focus／reload／re-enter board 重試）；顯示「篩選偏好未同步，已保留在此裝置」。不得 rollback 使用者目前可見篩選。
+8. Account logout/switch：立即清除 active in-memory state與 generation；舊帳號尚未送出的 remote job 不得在新 auth session 執行，pending journal 留給舊帳號下次登入重試。
+9. 同帳號同看板跨裝置同時修改：不做欄位 merge；最後成功 commit 的完整 object 是下次 hydrate 結果。同時開啟 session 不要求即時變更。
+10. 遠端 `preference_version > 4`：不得由舊 client 覆寫；以 default/cache fallback 與 upgrade warning fail safe。`< 4` 不應存在於新表；若出現同樣不自動上傳。
+11. Assignee/tag options 成功載入後才清理不存在的 selected IDs；loading/error 期間不得因暫時空 option list 清掉偏好。清理後走正常 persist path。
+12. Filter undo/redo 必須捕捉 exact account/board scope並走同一 repository；切換帳號或看板時先清空既有 undo/redo stack，再 activate 新 scope，禁止舊 scope command 寫入目前看板。
+
+### Legacy Local Migration v1 → v4
+
+- Board legacy candidates：`projed-filters`、`projed-task-filters:v1`、`projed-task-filters:v2:account:<uid>`；因 payload 沒有可靠 board ownership，filter conditions 全部丟棄且不得上傳。
+- `displaySettings` 先搬到新的 account-scoped display key；新值寫入並 readback 成功後才移除 legacy payload。失敗時不寫 migration marker，下一次可安全重試。
+- Workbench `projed-task-workbench-filters:v1/v2`：保留合法 `selectedBoardId`，將 `filtersByBoardId` 重設為 `{}`，寫 version 4；panel open/width/show-container 類偏好不變。
+- migration marker 必須 account-scoped、idempotent；private mode/localStorage quota failure 時可重跑，不得造成非 default filter 回流。
+- DB migration 只建空表，無 server backfill、無 production data reset；現有 `profiles.ui_preferences` 原封不動。
+
+### Cross-mode Consumer Matrix
+
+| Mode | Source | Renderer gate | Prohibited implementation |
+|---|---|---|---|
+| 看板 | active v4 filter + canonical projection | root/card/checklist 使用 `visibleTaskIds` | parent 自行 predicate 後整支截斷 |
+| 清單 | 同上 | root 與 recursive child 使用同一 projection | `WbsListView`／`WbsNodeItem` 各自 `matchesTaskFilters()` |
+| 心智圖 | 同上 | root/child tree builder 使用 `visibleTaskIds` | `mindMapTree` 逐層直接 predicate |
+| 甘特 | 同上 | hierarchy builder traversal 使用 `visibleTaskIds` | `buildHierarchicalTaskItems` 遇到 parent 不 match 就 return |
+| 行事曆 | 同上 | 與甘特共用 hierarchy result | Calendar 再做另一套 filter |
+
+Mode-specific layout eligibility 不得反向改寫 filter truth：Calendar grid只為有有效日期的 matched task 建 segment，Gantt只為有日期的 matched task 建 bar，但兩者的 SharedTaskSidebar／canonical source仍保留全部 matched identities。`有 matched task、但目前時間視覺化沒有可排程項目` 不是 true empty或filtered zero，必須沿用/提供模式內的日期提示，不得宣稱任務不存在。
+
+行事曆「訂閱建立器／ICS snapshot」不是板內行事曆模式，仍依 DEV-045 的 per-board snapshot，不受本表 active preference 即時覆寫。
+
+### UI Entry Contract and Observable States
+
+- Target actor：任何已登入且可讀 active board 的角色；viewer 也可操作自己的 filter。
+- 正常入口：登入 → Workspace/Board → 看板／清單／心智圖／甘特／行事曆任一板內模式 → 上方既有 `過濾器` control。不得以 direct URL 或 dev-only control 作唯一入口。
+- 主要流程：進入看板時 hydrate 該帳號 × 看板；點 filter 條件立即更新目前模式；切模式保留同一 active state；reload/relogin/re-enter board 從 canonical row 恢復；`清除／重設` 回到全部顯示。
+- 不新增 profile/save/copy/manage UI。偏好自動保存；remote failure 只用既有 toast/最小 warning，不增加常駐設定面板。
+- Desktop 五模式均需驗證；mobile 依既有產品政策只驗證可達的 Board filter，390×844 不得 overflow、遮住 CTA 或讓 warning 佔滿主畫面。
+
+共用可見狀態的優先序：
+
+| State | Condition | Observable result |
+|---|---|---|
+| Task loading | WBS load in progress | 沿用模式 loading；不得先宣稱空資料 |
+| Task load failed | WBS `error` | 顯示可見錯誤與既有 retry/reload path；不得用 preference fallback 掩蓋 |
+| True empty | `totalTaskCount = 0` | 顯示「此看板尚無任務」；有 create 權限時可保留既有新增 CTA |
+| Filtered zero | `totalTaskCount > 0 && matchedTaskIds.size = 0` | 顯示「沒有符合目前篩選的任務」＋單一「清除篩選」；不得顯示尚無任務 |
+| Results | `matchedTaskIds.size > 0` | 依 mode 呈現 matched + 必要 context ancestors |
+| Preference sync failed | task data 正常、preference remote 失敗 | 照 cache/default 顯示資料並出現非阻斷 warning；不得變成空白或假成功 |
+
+Fail condition：入口不存在、active count 在 default 不是 0、切 mode 改變 matched IDs、父不命中使後代消失、A/B 帳號或 board A/B 互相污染、remote failure 靜默套用別的 scope、畫面有 alert/4xx/5xx/不合理空白，均視為未通過。
+
+### RD Work Packages
+
+1. WP1 Default/migration：更新 default、normalizer、v4 storage 與 legacy reset；先補會失敗的 model/static tests。
+2. WP2 Persistence：建立 ADR-045 migration file、database types、Supabase adapter與 pure preference repository；完成 local DB role matrix。
+3. WP3 State ownership：新增 task-filter store，搬移 Board/Tag filter condition/actions，接 App scope hydration、undo/deferred refresh與 failure toast。
+4. WP4 Canonical consumers：依 consumer matrix改 Board/List/MindMap/Gantt/Calendar；刪除 mode-local predicate wiring。
+5. WP5 Visible states：接 shared loading/error/true-empty/filtered-zero component，保持最小 UI 與既有 mode layout。
+6. WP6 Verification：新增 DEV-090 scripts、修訂 DEV-039 歷史預期，執行 source/model/DB/browser/regression/viewport gates並移交 QC。
+
+### Final Acceptance Criteria
+
+- [ ] 新帳號、新看板、legacy migrated 帳號在沒有 v4 row 時，全部任務可見且 active count = 0。
+- [ ] 使用者主動設定後，只恢復本人同看板偏好；同帳號另一看板與另一帳號同看板維持獨立。
+- [ ] Reload、relogin 或重新進入看板可從 Supabase row 恢復；Firebase/local-test 只宣稱 exact-scope local fallback。
+- [ ] Reset 刪除 remote row；下次 hydrate 仍為 default-all。
+- [ ] v1～v3 filter 不上傳且全部 reset；display／panel／selectedBoardId 按契約保留。
+- [ ] 五模式對同 fixture 的 `matchedTaskIds` 完全一致；階層模式只額外呈現 context ancestors。
+- [ ] parent 不 match、grandchild match；missing parent、archived ancestor、cycle、status deferred refresh 均符合 canonical projection。
+- [ ] 真無資料、filtered zero、task load failed、preference sync failed 四種 observable state 不混淆。
+- [ ] 快速切板／切帳號／連續切 filter 不會套用 stale response 或把舊帳號 job 用新 session 寫出。
+- [ ] RLS role matrix、explicit grants、FK cascade、version/JSON constraints 通過；other-account 與 inaccessible-project paths 均 denied。
+- [ ] 1440×900 五模式與 390×844 可達 Board UI 無 visible error、水平 overflow、重疊或 CTA 裁切。
+
+### Verification Integrity Matrix
+
+| Acceptance / risk | Normal delivery path | Fixture boundary | Forbidden shortcut | Fail condition | Required evidence |
+|---|---|---|---|---|---|
+| Default truly shows all | 正常登入並從 sidebar 進入有 todo/in-progress/onhold/completed 的看板 | 可 seed 四狀態與階層任務；不得先寫 filter row | 只 assert `completed:true` source | UI 少任一狀態、count 非 0 | UI 截圖＋task IDs＋active count＋model result |
+| Account/board persistence | UI 在 A/board-1 選 assignee，reload/relogin，再切 board-2 與 B account | 可預建帳號、membership、tasks；偏好必須由 UI 操作產生 | 直接 DB insert 預期 preference 後宣稱 UI save 成功 | 任一 scope 污染或 reload 不恢復 | 操作錄、DB readback、A/B與board1/2畫面 |
+| Five-mode parity | 從同看板 mode switcher 逐一切五模式 | 可 seed parent-miss/child-match fixture | 只呼叫 projector 或 direct URL 單模式 | 任一 mode matched ID 不同或 descendant 消失 | 每模式 route/viewport/DOM task IDs＋projection snapshot |
+| Filtered-zero recovery | UI 選擇不命中條件後按「清除篩選」 | 可 seed有資料但不命中的 assignee | 直接清 localStorage 或 store set default | 文案誤為無任務、CTA 不可達、reset 後仍空 | 操作前後截圖＋row delete/readback |
+| RLS isolation | authenticated client 以 owner/viewer/other account 執行 CRUD | 可 seed project membership與 preference parent data | service-role 或 postgres 成功取代 authenticated proof | other account可讀寫、無權 project可寫、anon有 grant | local/TEST DB role matrix與 row counts |
+| Failure recovery | 正常 UI 觸發 remote read/write failure injection | 可攔 preference request；不得攔 task data後當同案例 | 只證明 success API 或 console warning | 跨 scope fallback、假 synced、使用者資料畫面空白 | visible warning、local journal、retry後 DB readback |
+| Visible error/RWD | 正常 entry 在 1440×900、390×844 操作 filter/mode | 代表性長名稱、階層與多任務資料 | build/lint 取代畫面 | alert、4xx/5xx、zero critical data、overflow/overlap | screenshot、console/pageerror/network sweep |
+
+### QA/QC Gates and Evidence
+
+RD 必須新增並由 `package.json` 註冊等價 gate：
+
+```powershell
+npm.cmd run verify:dev-090-task-filter-contract
+npm.cmd run verify:dev-090-task-filter-projection
+npm.cmd run verify:dev-090-task-filter-db
+npm.cmd run verify:dev-090-task-filter-browser
+npm.cmd run verify:dev-039-task-filter-core
+npm.cmd run verify:dev-039-filter-result-parity
+npm.cmd run verify:dev-027d-mindmap-date-display-filter
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build:test
+```
+
+- `QA-DEV-090` 在 QC 前凍結；若實作改變 schema、scope、fallback 或 mode consumer，先記錄 drift 並更新本節／ADR／QA，再重跑受影響案例。
+- QC evidence 必須記錄 source revision 或 dirty boundary、build artifact、base URL、role/account、workspace/board、fixture source、route/mode、viewport、時間、實際命令與結果。
+- Browser gate 必須從正常入口逐 mode 操作，並做 visible error sweep；direct URL、static source、projector unit test、DB row 或 RD 自述都不能單獨取代 UI evidence。
+- DB gate 至少涵蓋 owner/viewer own-row CRUD、same-project other-account deny、inaccessible-project deny、anon deny、reset delete、project/profile cascade；service-role 只可建立 fixture，不可作 acceptance actor。
+- 任一必要案例失敗為 QC `未通過`；缺 Supabase authenticated/RLS 或 UI evidence為 `未充分驗證`，DEV 保持驗證中。
+
+### Stop Conditions and Release Feasibility Note
+
+- RD stop：發現 active board ID 在 Supabase 不是可安全映射的 project UUID、migration 與 generated type 不一致、RLS 需要放寬到跨帳號、v4 migration 無法保留 display settings、或任何 consumer 無法使用 canonical projection，停止並更新 contract，不以 localStorage/global filter workaround 繞過。
+- QA/QC stop：正常入口不可達、資料 fixture 非預期空白、visible error、DB role matrix失敗、scope stale apply、或證據 provenance 不完整，不得標完成。
+- Release feasibility：新增 forward-only table、trigger、grants與 policies，無 backfill；client具 table-missing fallback，但不構成可跳過 migration 的 release 理由。正式環境必須由 deployment-release gate 決定 target、backup、migration ordering、deploy、smoke 與 release evidence；本文件不產生其可執行指令。
+
+### Deferred Scope Audit
+
+- Team-shared filter presets／save-copy-manage UI：`Future Phase Captured / Not Requested`；若使用者要求共用或治理才重進產品決策與新 DEV。
+- 同 session 即時跨裝置同步：`Future Phase Captured / Not Requested`；若要求即時收斂，再評估 Broadcast/Realtime、衝突 UX與負載，不得在 DEV-090 偷加。
+- 工作台 filter cloud persistence：`Future Phase Captured / Not Requested`；目前只重設 legacy default並保留獨立 active state，若要求跨裝置再擴充 ADR/schema。
+- Production migration/deploy/data repair：`Release Gate Required`；不阻塞本地 RD 開始，但未完成正式 gate 前不得宣稱 Released。
 
 ## 背景
 

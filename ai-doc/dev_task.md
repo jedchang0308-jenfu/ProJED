@@ -512,14 +512,23 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - Spec Impact：`Intentional replacement`；以 SPEC-088 取代舊「刪除任務＝isArchived」UI／action 語意，不改 schema 或 permission source。
   - 證據：`SPEC-088`、`QA-DEV-088`、`QC-DEV-088`、DEV-088 static／browser PASS、TypeScript、build:test 與 targeted regression PASS。
   - 計入交付：是（local implementation + QA/QC；未 Release）
-- ◇ DEV-089 [開發點] [驗證中] [P0] [TEST DB01-DB03 PASS / Level 3 PASS / 未 Release] 全域工作台權威任務搬移交易
-  - 摘要：修正手機／桌機跨 ownership 搬移的 optimistic 假成功；看板 WBS 與帳號級未歸位之間改為 await 單一 idempotent transaction，成功才收斂本機，失敗保留完整來源子樹。
-  - 來源 ID：`USER-20260825-TASK-PLACEMENT-MOBILE-DIVERGENCE`、`USER-20260825-CAPA-COMPLETE`。
+- ◐ DEV-089 [開發點] [執行中] [P0] [Production Reopen / Rework 1 RD Implementation Ready / Stop-Ship] 全域工作台權威任務搬移交易
+  - 摘要：production 證實「未歸位→看板」在 RPC 前被混合 ownership batch 拒絕；重構為共用 `MoveTaskSubtreeCommand v2`，由 server 依完整 PlacementScope 鎖定目的 siblings 並回傳 canonical order，失敗保留完整來源子樹。
+  - 來源 ID：`USER-20260825-TASK-PLACEMENT-MOBILE-DIVERGENCE`、`USER-20260825-CAPA-COMPLETE`、`USER-20260826-UNPLACED-TO-BOARD-SCOPE-LEAK`、`USER-20260826-RD-ARCHITECTURE-REVIEW`。
   - 父任務：DEV-086、DEV-039；CAPA：`CAPA-20260825-01`。
-  - 下一步：TEST backup、migration、RLS/grant、兩方向 transaction、exact subtree、activity、replay、DB03 rejection matrix 與 Level 3 authenticated preview 已通過；production migration/deploy 與 Level 4 仍須獨立 activation decision。
-  - Spec Impact：`Intentional replacement`；以 SPEC-089 取代 SPEC-086 的 optimistic failure recovery，不改雙向拖曳、完整子樹、已歸位唯讀或手機範圍。
-  - 證據：`SPEC-089`、`QA-DEV-089`、`QC-DEV-089`、DEV-089 static、390×844 mobile fault injection、DEV-086／039 regression、TypeScript、build:test、source gate、targeted lint 與 diff check PASS；TEST dump／migration version `20260825125421`／RLS-ACL／兩方向 round-trip／replay／DB03 rejection matrix PASS；commit `60907d3` 的 Firebase preview authenticated 看板→未歸位與 reload PASS；production Level 4 pending。
-  - 計入交付：否（production effectiveness 尚未驗證）
+  - 下一步：RD 依 SPEC-089 Rework 1 完成 WP1-WP6；QA 執行 scope property、DB01-DB04、桌機／手機雙向與 Level 3；完成前禁止 production release。
+  - Spec Impact：`Compatible corrective amendment + Intentional replacement`；保留 v1 transaction invariants，但以 v2 intent command 取代跨 ownership generic node batch／client sibling order。
+  - 證據：production toast、browser boundary error、operation ledger=0、canonical來源保留與 parent-only root bucket code trace；2026-08-25 Local／TEST／單向 Level 3 只列歷史基線，不再構成現行 PASS。
+  - 計入交付：否（Rework 未實作、QA/QC 未通過、production stop-ship）
+- ✓ DEV-090 [交付點] [P1] [RD Implemented / Local QA-QC PASS / Not Released / Release Gate Required] 預設全顯示與帳號看板篩選一致性
+  - 摘要：將未設定篩選改為全部任務，以專用 RLS 資料列保存個人帳號 × 看板偏好，並讓五種板內模式共用 canonical matched identities 與 ancestor-aware projection。
+  - 來源 ID：`USER-20260826-FILTER-DEFAULT-SHOW-ALL`、
+    `USER-20260826-ACCOUNT-FILTER-PREFERENCES`、`PROD-20260826-CROSS-MODE-FILTER-EMPTY`。
+  - 父任務：DEV-039；相容 DEV-028、DEV-045、DEV-062。
+  - 下一步：如需正式上線，另啟 deployment/release gate 執行 remote migration、deploy與 authenticated smoke；本輪不自動進入release。
+  - 執行邊界：可修改本地產品、forward-only migration file與測試；不得套用 remote migration、修改正式資料、deploy或release。
+  - 證據：`SPEC-039` DEV-090 addendum、`ADR-045`、`QA-DEV-090`、`QC-DEV-090`；contract 10/10、projection 5/5、isolated PostgreSQL RLS、五模式browser、390×844、targeted regressions、TypeScript與build全部PASS。
+  - 計入交付：是
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -1864,39 +1873,161 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 
 ## DEV-089：全域工作台權威任務搬移交易
 
-- 文件成熟度：`RD Implemented / Local QA-QC PASS / TEST Applied / DB01-DB03 PASS / Level 3 PASS`
-- 狀態：本地 CAPA implementation 完成／TEST、DB03 與 Level 3 effectiveness PASS／未 Release
+- 文件成熟度：Rework 1 `RD Implemented / Local QA-QC PASS`；2026-08-25 實作／TEST／Level 3 為歷史 baseline
+- 狀態：Production Reopen／Local Rework PASS／Supabase TEST與Level 3待執行／P0 Stop-Ship／未 Release
 - 節點類型：開發點
 - 父任務：DEV-086、DEV-039
-- 是否計入產品交付完成：否（production exactly-one-source 尚未驗證）
+- 是否計入產品交付完成：否（RD local完成；production 反向 flow仍是既知失敗，release gates未通過）
 - 風險：P0 資料 ownership 一致性
-- Spec Impact：`Intentional replacement`；SPEC-089 取代 SPEC-086 的 optimistic failure recovery。
+- Spec Impact：`Compatible corrective amendment + Intentional replacement`；保留 SPEC-089 v1 的 transaction/security invariants，以 v2 intent command 取代 generic placement batch 與 client sibling order。
 
-### CAPA 與實作
+### Production reopen 事實
 
-- Root cause：desktop optimistic state 在遠端 create 失敗時仍顯示已歸位；另一裝置／reload 依 canonical 未歸位資料呈現，形成跨裝置分歧。
-- Store 新增 awaited `commitNodePlacementBatch`；pending source 在 realtime refresh 中保持原位，成功後才寫 local state、undo、meeting activity 與 roll-up。
-- Desktop／mobile drag 共用 durable commit owner與 failed terminal result；failure toast 明確說明來源保留。
-- Supabase migration 新增 owner operation ledger 與 transaction RPC；server 驗證 full subtree、hierarchy、與 client 同源的 configurable `move_task` capability、idempotency payload、row count，並把 destination/source/activity/result 放在同一 transaction。
-- 第二次 transport response 仍遺失時，client 以 ledger row-lock serialization＋readback 辨識 committed/failed；仍無法 readback 時顯示 outcome unknown，不冒稱來源已保留。
-- 無法保留 record link／quick memo promotion link／dependency 或目的 tag 的 subtree 採 fail-safe reject，不做有損搬移。
-- 共用 `TaskPlacementPendingIndicator` 套用看板 L1／L2／L3+ 與未歸位列，沒有新增文字段落、modal 或容器。
+- 2026-08-26 production 真實操作「未歸位→看板」顯示 `歸位失敗，任務已保留在未歸位。`。
+- Browser error：`Task placement transaction must cross the unplaced ownership boundary.`
+- operation ledger 本次紀錄為 0，故 defect 位於 RPC 前的 client normalization／validation，不是 DB permission 或 rollback。
+- canonical task 仍在未歸位，目的看板 identity 正常，無資料遺失。
+- 直接 root cause：`buildTaskParentIndex` 只以 `parentId || 'root'` 分組；`normalizeTaskMoveUpdates` 因而夾帶不同 workspace／board root siblings，形成 mixed ownership batch。
+- 桌機／手機共用 path，不能定義為 mobile-only hotfix；Level 3 先前只驗看板→未歸位，coverage 不完整。
+
+### Rework 1 RD handoff contract
+
+- 架構：`shared DropIntent → MoveTaskSubtreeCommand v2 → single Supabase atomic transaction → canonical placement/order result → frontend apply`。
+- `TaskOwnershipRef` 區分 `board(workspaceId, boardId)` 與 `account_unplaced(auth.uid)`；`PlacementScope=ownership+parentId`，未歸位保持帳號級單一全域 lane，placement／reorder 不得再用 parent-only index。
+- cross-boundary client 只送 root、exact subtree IDs、source、destination parent、anchor、before/after/append；不得送 task content、generic `BatchNodeUpdates` 或目的 sibling patches。
+- server 鎖定 exact source subtree及 source／destination direct siblings，驗證 anchor scope、permission、hierarchy、idempotency，依穩定 scope 順序取 lock 並計算 dense order，在單一 transaction 內寫目的、刪來源、activity與 ledger result。
+- 新增 forward-only v2 migration，不修改已套用 v1 migration；v1 不得成為新 UI path fallback。
+- pending／failure／unknown 保留既有來源穩定與 success-effects-only；不改雙向拖曳、500ms mobile gesture、定位線、已歸位唯讀或視覺排版。
+
+### RD work packages
+
+1. WP1：`taskDropIntent.ts`／`taskDragCommit.ts` 導入 scope-safe index，補 randomized multi-board property test。
+2. WP2：新增共用 `taskPlacementCommand.ts`，建立 intent→command 唯一 adapter。
+3. WP3：`useWbsStore.ts` cross-boundary durable owner 改送 v2 command，成功才套 canonical result。
+4. WP4：Supabase service／types 新增 v2 RPC adapter，移除新 path 的 v1 fallback。
+5. WP5：建立 `20260826083940_dev_089_scope_safe_task_placement_command.sql`，完成 ledger amendment、locks、ordering、RLS/grants。
+6. WP6：補 source/property、DB01-DB04、桌機／手機 rendered UI、Level 3/4 雙向 gates。
 
 ### Authoritative package
 
 - CAPA：`ai-doc/reports/CAPA-20260825-task-placement-disappears-on-mobile.md`
 - RD contract：`ai-doc/specs/SPEC-089-authoritative-task-placement-transaction.md`
-- QA plan/evidence：`ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md`
-- QC evidence：`ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md`
-- Migration：`supabase/migrations/20260825093621_dev_089_transactional_task_workbench_placement.sql`
+- QA plan：`ai-doc/qa/QA-DEV-089-authoritative-task-placement-transaction.md`
+- QC verdict：`ai-doc/qc/QC-DEV-089-authoritative-task-placement-transaction.md`
+- Historical v1 migration：`supabase/migrations/20260825093621_dev_089_transactional_task_workbench_placement.sql`
+- Implemented v2 migration：`supabase/migrations/20260826083940_dev_089_scope_safe_task_placement_command.sql`
 
-### Verification 與 release boundary
+### QA／QC acceptance 與 stop conditions
 
-- 390×844 CDP touch fault injection PASS：`回覆聖島, 發明核准` root＋child＋grandchild 在 700ms pending 期間留在來源並顯示 compact spinner；failure 後 persisted/runtime source=3、unplaced duplicate=0、parent chain preserved、pending/transient=0、ancestor roll-up=0、page error=0。
-- Static／regression：DEV-089、DEV-086、DEV-039、TypeScript、build:test、targeted lint與 diff check PASS。
-- Visual evidence：`output/playwright/dev-089/mobile-placement-failure-retains-source.png` 已複查；toast、未歸位空狀態與已歸位三層清單清楚，無額外容器或版面位移。
-- DB boundary：本機 Docker daemon 未運行；本機 PostgreSQL 18 雖 listening，但需要未提供的受控密碼，故未碰既有 DB、未執行 local migration。TEST 已透過官方 Management API 建立 logical backup、套用 migration version `20260825125421`，完成 RLS／ACL／RPC readback、兩方向 transaction／replay、DB03 rejection matrix 與 fixture cleanup；production migration／deploy／data mutation 未執行。Level 3 preview 已通過 authenticated 看板→未歸位與 reload；Level 4 與 T+7／T+30 effectiveness check 仍是 stop-ship gate。
-- 結論：`Local RD Implemented = PASS；Local QA-QC PASS；TEST/DB03/Level 3 Effectiveness = PASS；Production Effectiveness = PENDING；Spec Drift = In sync after intentional replacement`。commit／push 已完成；未執行 production deploy 或 mutation。
+- Property：至少 1,000 組 multi-workspace／board／parent fixtures，所有非 affected scope deep equal。
+- DB：TEST backup、migration/RLS/grants、兩方向／before／after／append／跨 workspace、rejection、replay、parallel placement 全部 PASS。
+- Browser：desktop 與 390×844 mobile 都要真實拖曳「看板→未歸位→同看板」及「未歸位→另一看板」，每步 canonical／ledger／reload readback。
+- Level 3／Level 4 必須同 artifact 雙向完成；單向 evidence 不得判 PASS。
+- v1 fallback、generic patches、parent-only index、跨 scope mutation、missing readback、migration mismatch、visible error、partial/duplicate/lost task 任一出現即 stop-ship。
+
+### Rework evidence、historical baseline 與 release boundary
+
+- 2026-08-26 RD：WP1-WP5 已完成；cross-boundary desktop/mobile 共用 `MoveTaskSubtreeCommand v2`，client不再送 sibling patches；server 回 canonical placement，並以 exactly-one-source／canonical moved IDs postcondition fail-safe rollback。
+- Source/property：DEV-089 static contract PASS；seed `0x5908926` 的1,000組 multi-workspace／board fixtures雙向 PASS；DEV-039、DEV-068、DEV-086 targeted regression PASS；TypeScript與ESLint 0 error。
+- Local DB：可丟棄 PostgreSQL 18 instance 完成 migration compile、root/nested雙向、dense order、same-operation replay、immutable mismatch、來源零殘留與canonical moved IDs完整；runtime已停止、port 55489釋放、資料目錄移除。此證據不等於Supabase TEST/RLS/concurrency。
+- Rendered UI：desktop、390×844、320×844成功路徑PASS；390×844完成看板→未歸位→跨工作區另一看板；DEV-089 fault injection證明來源三層子樹保留、目的0、parent chain preserved、transient/pending清空。localhost:4000 runtime已停止並確認釋放。
+
+- 2026-08-25 Local、TEST DB01-DB03、commit `60907d3` 單向 Level 3 保留作 v1 baseline，不代表 Rework 1 或 production通過。
+- 2026-08-26 production reverse flow 是目前最高權重 evidence，QC 判定 FAIL、CAPA ineffective。
+- 本文件只授權 RD 依契約實作與送驗，不授權 production migration、deploy 或 data mutation。
+- 重新進入 release 前，必須 reconcile repo／production migration history，再由獨立 deployment/release gate 執行 backup、migration、deploy與 Level 4。
+- 結論：`RD Implemented／Local QA-QC PASS；Supabase TEST DB/RLS/concurrency與Level 3 NOT RUN；Production known FAIL；Production Stop-Ship`。
+
+## DEV-090：預設全顯示與帳號看板篩選一致性
+
+- 文件成熟度：`Implemented / Local Automated QA-QC Passed / Human Confirmed`
+- 狀態：完成本地開發與QA-QC／未套用remote migration／未 Deploy／未 Release
+- 節點類型：交付點
+- 父交付點：DEV-039
+- 是否計入產品交付完成：是
+- 原始需求邊界：`USER-20260826-FILTER-DEFAULT-SHOW-ALL`、
+  `USER-20260826-ACCOUNT-FILTER-PREFERENCES`、`PROD-20260826-CROSS-MODE-FILTER-EMPTY`
+- 風險等級：本地實作 Medium；schema/RLS release High
+- Spec Impact：`Intentional replacement + corrective follow-up`；取代 `completed: false` 預設、
+  uid-only 看板篩選記憶與 mode-local hierarchy filtering；不改任務資料、任務權限、
+  Realtime、工作台 placement 或任務生命週期。
+- ADR：`ADR-045 Accepted`；採專用 `account_board_task_filter_preferences`，不延伸 `profiles.ui_preferences` whole-json。
+
+### 任務目標
+
+- 正式資料存在，但個人負責人篩選與各模式不一致的 ancestor handling 造成看板只顯示部分任務、清單與心智圖誤顯示空白。
+- 交付後「未設定條件＝全部任務」是唯一 default；使用者主動選取後只保存到本人該看板；同條件切換看板、清單、心智圖、甘特與行事曆時 canonical matched identities 一致。
+
+### 開發範圍
+
+- [x] WP1：統一全狀態 default、active count 0、reset 與 v1～v4 migration；板內／工作台
+  legacy filters reset，display/panel/selected-board 保留。
+- [x] WP2：新增 preference table migration、explicit grants、四個 RLS policies、DB types、
+  Supabase adapter 與 pure repository；local cache只作 exact-scope fallback/pending journal。
+- [x] WP3：新增 `useTaskFilterStore`，搬移 Board/Tag filter ownership，實作 account/board
+  generation guard、queue/retry、logout與failure feedback。
+- [x] WP4：看板、清單、心智圖、甘特、行事曆只消費 canonical projection；hierarchy使用 visible IDs，match/count使用 matched IDs。
+- [x] WP5：統一 loading、task load failed、true empty、filtered zero與preference sync failed的可見狀態；不新增 profile/save/copy UI。
+- [x] WP6：新增 DEV-090 source/model/DB/browser gates，修訂 DEV-039 歷史 default assertions，
+  執行 targeted regression與 QA/QC handoff。
+
+### Out of Scope
+
+- 團隊共用篩選、filter profile、另存／複製／管理 UI。
+- 任務資料與其 RLS、成員權限、Realtime、指派模型、工作台 placement、工作台 filter cloud persistence。
+- `created_by`／`updated_by` 稽核修復、production migration、deploy 或 release。
+
+### 驗收標準
+
+- [x] 新帳號、未設定看板與 migration 後帳號全部顯示，active filter count = 0；reset 刪除 remote row並維持同一 default。
+- [x] A／B 帳號隔離、同帳號 board A／B 隔離；reload/relogin/re-enter只恢復本人該看板最後成功提交的完整偏好。
+- [x] 父節點不命中而後代命中時，階層模式保留 context-only ancestors，matched count不多算祖先。
+- [x] 看板、清單、心智圖、甘特與行事曆對同 fixture 的 canonical matched IDs一致；archived/missing/cyclic ancestor不殘留。
+- [x] 真無資料、filtered zero、task load failed與preference sync failed採不同畫面／warning；filtered zero只有單一reset CTA。
+- [x] remote read/write/delete failure保留exact-scope cache或default與pending journal，不跨 scope、不假 synced；retry後DB收斂。
+- [x] owner/viewer own-row CRUD通過；other-account、inaccessible-project、anon全拒絕；FK cascade與constraint通過。
+- [x] 1440×900五模式與390×844可達Board UI無visible error、overflow、重疊或CTA裁切。
+
+### RD 執行計畫與依賴
+
+- [x] 依 `SPEC-039` 的 Repository Impact與 WP 順序修改；不得以保留 global BoardStore filter、
+  mode-local predicate或 `profiles.ui_preferences` whole-json 作捷徑。
+- [x] Migration 使用 forward-only 新檔，不改寫既有 migration；無server backfill、無Realtime publication。
+- [x] QA 在 QC 前凍結 `QA-DEV-090`；若 schema/scope/fallback/consumer漂移，先更新 authoritative contract再重跑受影響案例。
+- [x] 依 QA-DEV-090 建立 disposable fixture、failure injection與 evidence provenance；不以
+  direct URL、service-role、DB row或build取代正常UI delivery path。
+
+### 驗證計畫與結果
+
+- [x] `verify:dev-090-task-filter-contract`、`projection`、`db`、`browser` 全部通過。
+- [x] DEV-039 core/parity、DEV-027D mindmap、account-scoped preference targeted regressions通過；
+  既有 `completed:false`／count=1 assertion須改成新契約，不得刪測試求PASS。
+- [x] TypeScript `--noEmit` 與 `build:test` 通過。
+- [x] QC report 收齊 source/dirty boundary、artifact、環境、role/account、workspace/board、
+  fixture、route/mode、viewport、時間、命令與截圖/DB evidence。
+- 結果：`Local Automated QA-QC PASS`。DEV-090 browser五模式 IDs一致，DB/RLS矩陣、390×844、targeted regressions、TypeScript與build均通過；未執行remote migration、deploy或release。
+
+### Stop Conditions / Release Boundary
+
+- RD stop：migration/type/RLS不一致、board ID無法安全對應 project UUID、stale hydrate可套用、
+  fallback可跨scope或任一mode無法接canonical projection。
+- QA/QC stop：正常入口不可達、fixture不合理空白、visible alert/4xx/5xx、RLS矩陣失敗或證據不足。
+- Release boundary：本 DEV 只授權本地實作、migration file與驗證；remote migration、
+  production data、deploy、smoke與release artifact須另走 deployment-release gate。
+
+### 相關文件
+
+- SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
+- ADR：`ai-doc/decisions/ADR-045-account-board-task-filter-preferences.md`
+- QA：`ai-doc/qa/QA-DEV-090-default-show-all-account-board-filter-consistency.md`
+- QC：`ai-doc/qc/QC-DEV-090-default-show-all-account-board-filter-consistency.md`
+
+### 變更紀錄
+
+- 2026-08-26：建立 Brief Ready／Human Confirmed。
+- 2026-08-26：完成 repo/schema/RLS/migration/failure/五模式/QA-QC readiness review，
+  升級為 `RD Implementation Ready`；未實作、未驗證、未 Release。
+- 2026-08-26：完成RD實作與local automated QA-QC；contract/projection/DB/browser/regression/TypeScript/build全部PASS。狀態更新為`Implemented / Local QA-QC PASS / Not Released`。
 
 ## PM Update 歷史歸檔
 

@@ -224,9 +224,10 @@ assert(
     source.taskDragCommit.includes("activeData?.source === 'task-workbench' && activeData?.placement !== 'unplaced'") &&
     source.taskDragCommit.includes("overData?.type === 'task-workbench-unplaced-lane'") &&
     source.taskDragCommit.includes("overData?.type === 'task-workbench-placed-board-lane'") &&
-    source.taskDragCommit.includes('buildTaskSubtreePlacementUpdates') &&
-    source.taskDragCommit.includes('targetBoardId: TASK_WORKBENCH_UNPLACED_BOARD_ID') &&
-    source.taskDragCommit.includes('targetBoardId: overData.boardId'),
+    source.taskDragCommit.includes('buildMoveTaskSubtreeCommand') &&
+    source.taskDragCommit.includes("ownership: { kind: 'account_unplaced' }") &&
+    source.taskDragCommit.includes('boardId: overData.boardId') &&
+    source.taskDragCommit.includes('commitTaskPlacementCommand'),
 );
 
 assert(

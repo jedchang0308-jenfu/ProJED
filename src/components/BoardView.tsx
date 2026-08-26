@@ -21,13 +21,14 @@ import useUndoStore from '../store/useUndoStore';
 import useRecordStore from '../store/useRecordStore';
 import useDialogStore from '../store/useDialogStore';
 import { useMemberStore } from '../store/useMemberStore';
-import { useTagStore } from '../store/useTagStore';
 import { KanbanColumn } from './Wbs/KanbanColumn';
 import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
 import { KanbanRootDropZone } from './Wbs/KanbanRootDropZone';
 import TaskWorkbenchPanel from './TaskWorkbenchPanel';
 import { compactClassNames } from './ui/compactTokens';
 import { projectTaskFilterResults } from '../features/taskFilters';
+import { useTaskFilterStore } from '../store/useTaskFilterStore';
+import { TaskFilterResultState } from './ui/TaskFilterResultState';
 import { MobileTaskActionContext } from './Wbs/mobileTaskActionContext';
 import { TaskDragPresenter } from './Wbs/taskDrag/TaskDragPresenter';
 import { TaskOriginTitleField } from './Wbs/taskDrag/TaskOriginTitleField';
@@ -177,7 +178,7 @@ const BoardView = () => {
     const addNode = useWbsStore(s => s.addNode);
     const updateNode = useWbsStore(s => s.updateNode);
     const batchUpdateNodes = useWbsStore(s => s.batchUpdateNodes);
-    const commitNodePlacementBatch = useWbsStore(s => s.commitNodePlacementBatch);
+    const commitTaskPlacementCommand = useWbsStore(s => s.commitTaskPlacementCommand);
     const archiveNode = useWbsStore(s => s.archiveNode);
     const recalculateAncestorStatus = useWbsStore(s => s.recalculateAncestorStatus);
     const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canCreateDependency } = useBoardPermissions();
@@ -215,10 +216,10 @@ const BoardView = () => {
         if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
         batchUpdateNodes(updates, options);
     }, [batchUpdateNodes]);
-    const commitNodePlacementBatchForDesktopTaskDrag: typeof commitNodePlacementBatch = React.useCallback(async (updates, options) => {
+    const commitTaskPlacementCommandForDesktopTaskDrag: typeof commitTaskPlacementCommand = React.useCallback(async (command, options) => {
         if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
-        await commitNodePlacementBatch(updates, options);
-    }, [commitNodePlacementBatch]);
+        await commitTaskPlacementCommand(command, options);
+    }, [commitTaskPlacementCommand]);
     const recalculateAncestorStatusForDesktopTaskDrag: typeof recalculateAncestorStatus = React.useCallback((nodeId) => {
         if (import.meta.env.MODE === 'test') desktopTaskDragCommitSpyRef.current.ancestorRecalculationCalls += 1;
         recalculateAncestorStatus(nodeId);
@@ -231,10 +232,10 @@ const BoardView = () => {
         if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
         batchUpdateNodes(updates, options);
     }, [batchUpdateNodes]);
-    const commitNodePlacementBatchForMobileTaskDrag: typeof commitNodePlacementBatch = React.useCallback(async (updates, options) => {
+    const commitTaskPlacementCommandForMobileTaskDrag: typeof commitTaskPlacementCommand = React.useCallback(async (command, options) => {
         if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.batchUpdateNodesCalls += 1;
-        await commitNodePlacementBatch(updates, options);
-    }, [commitNodePlacementBatch]);
+        await commitTaskPlacementCommand(command, options);
+    }, [commitTaskPlacementCommand]);
     const recalculateAncestorStatusForMobileTaskDrag: typeof recalculateAncestorStatus = React.useCallback((nodeId) => {
         if (import.meta.env.MODE === 'test') mobileTaskDragCommitSpyRef.current.ancestorRecalculationCalls += 1;
         recalculateAncestorStatus(nodeId);
@@ -498,7 +499,7 @@ const BoardView = () => {
         addNode,
         updateNode,
         batchUpdateNodes: batchUpdateNodesForMobileTaskDrag,
-        commitNodePlacementBatch: commitNodePlacementBatchForMobileTaskDrag,
+        commitTaskPlacementCommand: commitTaskPlacementCommandForMobileTaskDrag,
         archiveNode,
         recalculateAncestorStatus: recalculateAncestorStatusForMobileTaskDrag,
         onSessionBegin: () => {
@@ -1200,19 +1201,10 @@ const BoardView = () => {
     const rootIds = useWbsStore(s => s.parentNodesIndex['root']);
     const boardRootIds = useWbsStore(s => s.parentNodesIndex[activeBoardId || '']);
     const storeNodes = useWbsStore(s => s.nodes);
-    const statusFilters = useBoardStore(s => s.statusFilters);
-    const dueWithinDays = useBoardStore(s => s.dueWithinDays);
-    const overdueOnly = useBoardStore(s => s.overdueOnly);
-    const selectedAssigneeIds = useBoardStore(s => s.selectedAssigneeIds);
-    const selectedTagIds = useTagStore(s => s.selectedTagIds);
-    const taskFilters = useMemo(() => ({
-        statusFilters,
-        dueWithinDays,
-        overdueOnly,
-        selectedAssigneeIds,
-        selectedTagIds,
-        keyword: '',
-    }), [dueWithinDays, overdueOnly, selectedAssigneeIds, selectedTagIds, statusFilters]);
+    const taskLoading = useWbsStore(s => s.loading);
+    const taskLoadError = useWbsStore(s => s.error);
+    const taskFilters = useTaskFilterStore(s => s.filters);
+    const resetTaskFilters = useTaskFilterStore(s => s.resetFilters);
     const filterProjection = useMemo(
         () => projectTaskFilterResults(storeNodes, taskFilters, { boardId: activeBoardId }),
         [activeBoardId, storeNodes, taskFilters],
@@ -1618,7 +1610,7 @@ const BoardView = () => {
                     addNode,
                     updateNode,
                     batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
-                    commitNodePlacementBatch: commitNodePlacementBatchForDesktopTaskDrag,
+                    commitTaskPlacementCommand: commitTaskPlacementCommandForDesktopTaskDrag,
                     archiveNode,
                     recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
                 },
@@ -1692,7 +1684,7 @@ const BoardView = () => {
                 addNode,
                 updateNode,
                 batchUpdateNodes: batchUpdateNodesForDesktopTaskDrag,
-                commitNodePlacementBatch: commitNodePlacementBatchForDesktopTaskDrag,
+                commitTaskPlacementCommand: commitTaskPlacementCommandForDesktopTaskDrag,
                 archiveNode,
                 recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
             },
@@ -1843,7 +1835,14 @@ const BoardView = () => {
                         data-kanban-mouse-pan-surface="true"
                         data-layout-region="board-canvas"
                     >
-                        <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
+                        <TaskFilterResultState
+                            projection={filterProjection}
+                            loading={taskLoading}
+                            error={taskLoadError}
+                            onReset={resetTaskFilters}
+                            className="w-full min-w-[18rem] self-stretch"
+                        />
+                        {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? <SortableContext items={rootNodes.map(n => n.id)} strategy={horizontalListSortingStrategy}>
                             {rootNodes.map(node => (
                                 <KanbanColumn
                                     key={node.id}
@@ -1851,10 +1850,10 @@ const BoardView = () => {
                                     filterProjection={filterProjection}
                                 />
                             ))}
-                        </SortableContext>
+                        </SortableContext> : null}
 
                         {/* 新增列表按鈕 */}
-                        <KanbanRootDropZone
+                        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || filterProjection.totalTaskCount === 0) ? <KanbanRootDropZone
                             boardId={activeBoardId}
                             anchorNodeId={rootNodes[rootNodes.length - 1]?.id}
                             canMoveTask={canMoveTask}
@@ -1872,7 +1871,7 @@ const BoardView = () => {
                                 <Plus size={24} className="transition-transform duration-300 group-hover:rotate-90" aria-hidden="true" />
                                 <span>新增列表</span>
                             </button>
-                        </KanbanRootDropZone>
+                        </KanbanRootDropZone> : null}
                     </div>
                 </div>
             </div>

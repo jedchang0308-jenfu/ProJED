@@ -25,31 +25,24 @@ const pkg = read(files.packageJson);
 
 assert(
   'MindMapView reads the shared board task filter state',
-  mindMapView.includes("import { useTagStore } from '../../store/useTagStore';") &&
-    mindMapView.includes('statusFilters = useBoardStore') &&
-    mindMapView.includes('dueWithinDays = useBoardStore') &&
-    mindMapView.includes('selectedAssigneeIds = useBoardStore') &&
+  mindMapView.includes("import { useTaskFilterStore } from '../../store/useTaskFilterStore';") &&
+    mindMapView.includes('useTaskFilterStore(state => state.filters)') &&
     mindMapView.includes('showStartDate = useBoardStore') &&
-    mindMapView.includes('selectedTagIds = useTagStore') &&
-    mindMapView.includes('const mindMapFilters = React.useMemo(() => ({') &&
-    mindMapView.includes('keyword:') &&
-    mindMapView.includes('getMindMapRootNodes(nodes, parentNodesIndex, boardId, mindMapFilters)') &&
-    mindMapView.includes('getMindMapChildren(nodes, parentNodesIndex, boardId, mindMapFilters, nodeId)'),
+    mindMapView.includes('projectTaskFilterResults') &&
+    mindMapView.includes('filterProjection.visibleTaskIds'),
 );
 
 assert(
-  'MindMap root and child traversal apply the shared task filter predicate',
-  mindMapTree.includes("import { matchesTaskFilters, type TaskFilterState } from '../../features/taskFilters';") &&
-    mindMapTree.includes('export type MindMapFilterState = TaskFilterState;') &&
-    mindMapTree.includes('const matchesMindMapFilters = (node: TaskNode, filters: MindMapFilterState) =>') &&
-    mindMapTree.includes('matchesTaskFilters(node, filters)') &&
-    mindMapTree.includes('matchesMindMapFilters(node, filters)'),
+  'MindMap root and child traversal use canonical projection visible IDs',
+  mindMapTree.includes('visibleTaskIds: ReadonlySet<string>') &&
+    mindMapTree.includes('visibleTaskIds.has(node.id)') &&
+    !mindMapTree.includes('matchesTaskFilters'),
 );
 
 assert(
   'MindMapNode renders filter-controlled compact date metadata',
   mindMapNode.includes("import dayjs from 'dayjs';") &&
-    mindMapNode.includes('Calendar, ChevronDown, ChevronRight') &&
+    mindMapNode.includes('Calendar, Minus, Plus') &&
     mindMapNode.includes('showStartDate: boolean') &&
     mindMapNode.includes('const hasVisibleDates = (showStartDate && node.startDate) || node.endDate;') &&
     mindMapNode.includes("date.format('MM/DD')") &&
