@@ -254,8 +254,8 @@ async (page) => {
       return {
         unplacedLane: readBg('[data-task-workbench-unclassified-section="true"]'),
         placedLane: readBg('[data-task-workbench-placed-board-lane="true"]'),
-        unplacedHeader: readBg('[data-task-workbench-section-header="unplaced"]'),
-        placedHeader: readBg('[data-task-workbench-section-header="all-tasks"]'),
+        unplacedHeader: readBg('[data-task-workbench-section-label="unplaced"]'),
+        placedHeader: readBg('[data-task-workbench-section-label="all-tasks"]'),
         unplacedAccentCount: document.querySelectorAll('[data-task-workbench-header-accent="unplaced"]').length,
         placedAccentCount: document.querySelectorAll('[data-task-workbench-header-accent="placed"]').length,
       };

@@ -142,15 +142,18 @@ const WorkbenchUnclassifiedSection: React.FC<{
   return (
     <section
       ref={setNodeRef}
-      className={`min-h-0 flex-1 basis-0 flex flex-col overflow-hidden bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+      className={`scrollbar-subtle min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
     >
-      <div className="relative z-20 mt-2 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2">
+      <div
+        className="sticky top-0 z-20 mt-2 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2 bg-slate-100"
+        data-task-workbench-section-header="unplaced"
+      >
         <div
           className="box-border mb-px flex h-8 min-w-0 w-[104px] shrink items-center gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
-          data-task-workbench-section-header="unplaced"
+          data-task-workbench-section-label="unplaced"
         >
           <span className="min-w-0 truncate text-[13px] font-black leading-5 text-white">未歸位</span>
         </div>
@@ -171,7 +174,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
         </span>
       </div>
 
-      <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-unclassified-list="true">
+      <div className="space-y-px" data-task-workbench-unclassified-list="true">
         <WorkbenchUnplacedHierarchy tasks={tasks} canMoveTask={canMoveTask} />
         {isOver ? (
           <div
@@ -1116,16 +1119,19 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
         <div
           ref={setPlacedBoardLaneRef}
-          className={`min-h-0 flex-1 basis-0 flex flex-col overflow-hidden bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+          className={`scrollbar-subtle min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
           data-task-workbench-placed-board-lane="true"
           data-task-workbench-lane-drop-target="placed-board"
           data-board-id={selectedBoardOption?.boardId || undefined}
           data-workspace-id={selectedBoardOption?.workspaceId || undefined}
         >
-          <div className="relative z-20 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2">
+          <div
+            className="sticky top-0 z-20 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2 bg-slate-100"
+            data-task-workbench-section-header="all-tasks"
+          >
             <div
               className="box-border mb-px flex h-8 min-w-0 w-[104px] shrink items-center gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
-              data-task-workbench-section-header="all-tasks"
+              data-task-workbench-section-label="all-tasks"
             >
               <span className="min-w-0 truncate text-[13px] font-black leading-5 text-white">已歸位</span>
             </div>
@@ -1134,7 +1140,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
             </span>
           </div>
 
-          <div className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-all-tasks-list="true">
+          <div className="space-y-px" data-task-workbench-all-tasks-list="true">
             {sortedPlacedTasks.map(task => (
               <WorkbenchDragCard
                 key={`all-${task.id}`}

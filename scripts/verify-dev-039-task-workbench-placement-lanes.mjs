@@ -92,8 +92,8 @@ assert(
     !source.taskWorkbench.includes('TaskDragHandle') &&
     !source.taskWorkbench.includes('data-task-drag-handle') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-list="true"') &&
-    source.taskWorkbench.includes('className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-all-tasks-list="true"') &&
-    source.taskWorkbench.includes('className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px" data-task-workbench-unclassified-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-all-tasks-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes('getTaskHierarchyDepth') &&
     source.taskWorkbench.includes('hierarchyDepth={getTaskHierarchyDepth(task, nodes)}') &&
     source.taskWorkbench.includes('data-task-workbench-hierarchy-depth') &&
@@ -160,8 +160,9 @@ assert(
 
 assert(
   'Task Workbench lane titles render as sticky section headers above scrollable task rows',
-  source.taskWorkbench.includes('min-h-0 flex-1 basis-0 flex flex-col overflow-hidden') &&
-    source.taskWorkbench.includes('scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-px') &&
+  source.taskWorkbench.includes('scrollbar-subtle min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-all-tasks-list="true"') &&
+    source.taskWorkbench.includes('className="space-y-px" data-task-workbench-unclassified-list="true"') &&
     source.taskWorkbench.includes("isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
     source.taskWorkbench.includes("isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''") &&
     source.taskWorkbench.includes('rounded-md border border-slate-600 bg-slate-700') &&
@@ -182,7 +183,9 @@ assert(
     source.taskWorkbench.includes('title="新增未歸位任務並開啟任務彈窗"') &&
     source.taskWorkbench.includes('data-task-workbench-section-header="unplaced"') &&
     source.taskWorkbench.includes('data-task-workbench-section-header="all-tasks"') &&
-    source.taskWorkbench.includes('relative z-20') &&
+    source.taskWorkbench.includes('data-task-workbench-section-label="unplaced"') &&
+    source.taskWorkbench.includes('data-task-workbench-section-label="all-tasks"') &&
+    source.taskWorkbench.includes('sticky top-0 z-20') &&
     source.taskWorkbench.includes('className="sr-only" data-task-workbench-all-tasks-count="true"') &&
     source.taskWorkbench.includes('className="sr-only" data-task-workbench-unclassified-count="true"') &&
     source.taskWorkbench.includes('data-task-workbench-all-tasks-count="true"') &&
