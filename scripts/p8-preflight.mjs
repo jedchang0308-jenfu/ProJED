@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import './load-server-verification-env.mjs';
+import { resolveCredentialRotationPolicyDecision } from './release/credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
 
@@ -35,6 +36,12 @@ const isPlaceholder = value =>
   !value || placeholderPatterns.some(pattern => pattern.test(value));
 
 const results = [];
+const projectRef = (() => {
+  try { return new URL(process.env.SUPABASE_URL ?? '').hostname.split('.')[0] || null; } catch { return null; }
+})();
+const credentialRotationPolicy = projectRef
+  ? resolveCredentialRotationPolicyDecision({ projectRef })
+  : null;
 
 const addResult = (name, status, extra = {}) => {
   results.push({ name, status, ...extra });
@@ -69,10 +76,11 @@ for (const key of requiredEnv) {
 
 for (const gate of manualGates) {
   const confirmedBy = gate.env.find(key => process.env[key] === 'true');
-  addResult(gate.name, confirmedBy ? 'pass' : strict ? 'fail' : 'pending', {
+  const policyDecision = gate.name === 'credential-rotation' ? credentialRotationPolicy : null;
+  addResult(gate.name, confirmedBy || policyDecision ? 'pass' : strict ? 'fail' : 'pending', {
     env: gate.env,
-    confirmed_by: confirmedBy,
-    reason: confirmedBy ? undefined : 'manual gate not confirmed',
+    confirmed_by: confirmedBy ?? (policyDecision ? `policy:${policyDecision.policy_id}` : undefined),
+    reason: confirmedBy || policyDecision ? undefined : 'manual gate not confirmed',
   });
 }
 

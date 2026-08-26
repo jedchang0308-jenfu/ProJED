@@ -465,7 +465,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：本輪未授權遠端 migration 或 deploy；沒有 authenticated two-user fixture，不宣稱正式環境即時同步已啟用。
   - 證據：`SPEC-082`、`scripts/verify-dev-082-board-realtime-sync.ts` PASS、TypeScript、targeted ESLint、`build:test`、DEV-081 rendered browser 9/9 PASS（console／page／network errors=0）、`git diff --check`。
   - 計入交付：是（本地實作完成；Remote Gate Pending）
-- ✓ DEV-083 [交付點] [完成] [P0] [Released / FMEA Credential Exception Accepted] 正式發版環境隔離與 artifact 完整性閘門
+- ✓ DEV-083 [交付點] [完成] [P0] [Released / Permanent Credential Unrecoverable Policy] 正式發版環境隔離與 artifact 完整性閘門
   - 摘要：以 production env隔離、sealed artifact與單一正式發版入口，阻止測試Supabase／localhost設定再次進入production。
   - 來源 ID：`USER-20260821-PRODUCTION-OAUTH-LOCALHOST-INCIDENT`
   - 下一步：後續正式發版回到 P1 `release:production`；Management PAT輪替與P2技術防繞過保留為已接受資安／治理債，不阻塞本次release結案。
@@ -1519,26 +1519,26 @@ ADR not needed：本輪不更換 provider 或既有 realtime 架構，只把現�
 
 ## DEV-083：正式發版環境隔離與 artifact 完整性閘門
 
-- 文件成熟度：`Implemented / Released / FMEA Credential Exception Accepted`
-- 狀態：P0＋P1已實作並發布；Edge Functions新key遷移與legacy停用完成；Management PAT輪替／strict gate依使用者FMEA例外跳過
+- 文件成熟度：`Implemented / Released / Permanent Credential Unrecoverable Policy`
+- 狀態：P0＋P1已實作並發布；Edge Functions新key遷移與legacy停用完成；DEV-083 retired credential set 已由使用者永久判定不可回收，strict gate改採 project-bound policy waiver
 - 節點類型：交付點
 - 父交付點：無（Release Governance；相容延伸 ADR-037）
 - 是否計入產品交付完成：是（實作與 QC 通過前不得計為已交付）
 - 原始需求邊界：使用者確認執行P0＋P1並不做P2；P0＋P1程式與開發文件已完成，P2不納入。
-- 風險等級：Medium implementation／Lane 2 release；正式Edge Function與legacy停用為Lane 3；PAT未輪替為已接受High residual risk
-- Spec Impact：P0＋P1為 `Compatible extension`；2026-08-22使用者以FMEA明確核准一次性release exception，僅跳過PAT輪替／strict credential gate，其餘candidate、activation與canonical smoke保留，分類為`Intentional replacement`。
+- 風險等級：Medium implementation／Lane 2 release；正式Edge Function與legacy停用為Lane 3；歷史 PAT 值不可回收為已接受High residual risk，現行 credential active probe仍保留
+- Spec Impact：P0＋P1為 `Compatible extension`；2026-08-26使用者以`Intentional replacement`明確核准 DEV-083 retired credential set 的永久 policy waiver，僅對該 credential set 缺值時不再阻擋，其餘candidate、activation與canonical smoke保留。
 - 規格／驗證權威：`ai-doc/specs/SPEC-083-production-release-environment-integrity.md`、
   `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md`
 
 ### Human Confirmed Execution Boundary
 
 - Current phase：P0環境／artifact fail-closed與P1入口已完成；sealed release `20260821144058-509110`通過candidate後啟用正式Hosting，canonical smoke PASS。
-- Credential phase：`calendar-feed`／`match_project_knowledge`已改用新key、部署與停用legacy均完成；使用者於2026-08-22接受FMEA後明確跳過Management PAT輪替與strict gate，舊PAT保持有效。
+- Credential phase：`calendar-feed`／`match_project_knowledge`已改用新key、部署與停用legacy均完成；使用者於2026-08-26確認 DEV-083 retired credential set 永久不可回收，policy 綁定production project ref，現行 PAT／publishable／secret key 仍保持 active probe。
 - P2：使用者明確不採用；不建立CI workflow、protected environment、IAM或direct-deploy技術封鎖。
 - 必要人類決策：本次production activation go/no-go已由使用者確認；未發生額外re-auth／2FA。
 - 本機一次性 env profile migration 已提供 `npm run migrate:test-env-profile`；目前 dry-run 因 `.env.local` 與 `.env.test.local` 的 `VITE_DATA_BACKEND` 值不同而 fail-closed，未自動覆寫，需人類先決定保留哪個 test profile。
 - 成本：P0＋P1沿用既有 Firebase Hosting／Supabase／Playwright，不新增固定月費；candidate／activation仍可能消耗既有 Hosting preview quota與網路流量。
-- 本輪已完成local、candidate與canonical production驗證；release完成但帶有明確credential exception，不得宣稱strict credential gate PASS。
+- 本輪已完成local、candidate與canonical production驗證；credential policy 已納入 release gate，strict check 在缺少既定 retired credential set 值時可通過，但不得套用到新 project 或新 credential generation。
 
 ### 問題、影響與使用者價值
 
@@ -1589,7 +1589,7 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - P0：OAuth manual boolean gate改為不登入、不寫資料的safe cancel callback 302-chain verifier。
 - P1：唯一正式入口`release:production`分成prepare、candidate、activate三phase；candidate不可自動activation。
 - P1：inactive Firebase candidate與live production都需remote entry hash、release-meta與OAuth provenance。
-- P1 remediation：Edge Functions已改讀新publishable／secret JSON key maps，production smoke後已停用legacy；PAT輪替／strict gate由本次FMEA例外取代，保留為殘留風險。
+- P1 remediation：Edge Functions已改讀新publishable／secret JSON key maps，production smoke後已停用legacy；DEV-083 retired credential set 由永久 policy 取代找回要求，並保留現行 credential active probe與 project-bound scope。
 - 完整loader、public/server keys、manifest schema、逐檔impact、failure recovery與phase contract見`SPEC-083`。
 
 ### Out of Scope
@@ -1611,7 +1611,7 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - prepare沒有remote side effect、candidate不啟用live、activate缺獨立approval release ID必須失敗。
 - canonical smoke驗證HTTP／asset、app shell、errors、remote hashes、release-meta、Supabase ref與OAuth callback。
 - P2不得出現在code/config；manual direct deploy仍可繞過P1，列為使用者已接受殘留風險。
-- 本次一次性例外不得被解讀為strict credential gate通過；舊Management PAT仍active，後續release預設恢復原P1 gate。
+- 本次永久 policy 僅對 `scripts/release/credential-rotation-policy.json` 明列的 DEV-083 retired credential set 生效；strict gate 對該 set 缺值時通過，提供值時仍探測，其他 project／generation／release gates 不受豁免。
 
 ### RD Slices、QA/QC 與 Evidence
 
@@ -1621,7 +1621,7 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - S3：OAuth safe cancel self-check與production-bound adapter。
 - S4：`release:production` prepare／candidate／activate orchestration與browser provenance。
 - S5：依`QA-DEV-083`完成local mandatory matrix、Spec Drift與QC handoff；第一個失敗即停止。
-- S6：Function rollback snapshot、新key部署／smoke、legacy停用／readback已完成；Management PAT輪替與strict gate由使用者FMEA例外跳過並保存客觀未完成狀態。
+- S6：Function rollback snapshot、新key部署／smoke、legacy停用／readback已完成；Management PAT歷史值以永久不可回收 policy 收斂，現行 credential active probe與 strict gate evidence 已通過。
 - Evidence root：`output/release/dev-083/<release-id>/`；generated artifact/evidence不加入Git，secret不落盤。
 
 ### 文件、執行與 Release Boundary
@@ -1633,7 +1633,7 @@ Rollback 只修復目前事故，未改變造成錯誤的發版機制。本 DEV 
 - 實作與證據：`npm run verify:source` PASS（lint 0 errors／tsc／sealed build／既有 Supabase static、migration alias、calendar、core regression、P9 gate）；
   `npm run verify:dev-083-production-release-gate` PASS（19項 local fixture／negative／sanitized runtime child／credential evidence mode／full-manifest remote hash／supported command contract／live-channel snapshot與phase safety；QA-083-01～05 local PASS）；
   `npm run verify:production-artifact` PASS（最新 manifest tree／contract／ref／secret／tamper scan）；
-  `npm run verify:dev-083-oauth-cancel` PASS（valid／invalid synthetic 302 chain）；`npm run verify:dev-083-layer2` PASS（exact artifact browser／provenance／cleanup）；`node scripts/p8-preflight.mjs --strict` PASS、`npm run verify:production-bound-readiness` PASS。`node scripts/p8-credential-rotation-check.mjs --strict`目前因三組old credential只有`human-attested`而如預期BLOCK；candidate前需客觀inactive probe或明確release exception。
+  `npm run verify:dev-083-oauth-cancel` PASS（valid／invalid synthetic 302 chain）；`npm run verify:dev-083-layer2` PASS（exact artifact browser／provenance／cleanup）；`node scripts/p8-preflight.mjs --strict` PASS、`npm run verify:production-bound-readiness` PASS。`node scripts/p8-credential-rotation-check.mjs --strict` PASS（policy `DEV-083-retired-credential-set-20260826`；current keys active，retired set 缺值以`permanently-unrecoverable`通過）；flags=false fixture亦 PASS。
 - Release evidence：commit `4ee8bf8024daf3c7a92a208c733404d7cc63058a`、release `20260821144058-509110`、tree `c8abe0ce...b113c54`；candidate `https://projed-cc78d--production-candidate-k86qbpc8.web.app`／version `880dfc3bbbc5d8b3`，live version `ca48cc7d514432d8`。
 - Candidate與canonical均39/39 entries hash、release-meta、browser root、console/page/network、OAuth callback PASS；既有authenticated Chrome session重載後留在canonical URL、工作區與真實資料可見、無visible alert／inline error／localhost。回滾reference為version `93c2a80ddc1a798e`。
 - Generated evidence：`output/release/dev-083/20260821144058-509110/{risk-acceptance,candidate-evidence,activation-evidence}.json`（gitignored、無secret）。

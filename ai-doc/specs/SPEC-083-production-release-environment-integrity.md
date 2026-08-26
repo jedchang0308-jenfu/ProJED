@@ -1,11 +1,11 @@
 # SPEC-083：正式發版環境隔離與 artifact 完整性閘門
 
-- 文件狀態：`Implemented / Released / FMEA Credential Exception Accepted`
+- 文件狀態：`Implemented / Released / Permanent Credential Unrecoverable Policy`
 - 關聯 DEV：DEV-083
 - 權威邊界：本文件是 DEV-083 P0＋P1 的工程契約；ADR-037 仍是 ProJED／ProJED-TEST／Level 3 分工權威
-- Spec Impact：P0＋P1為`Compatible extension`；2026-08-22使用者接受FMEA後，以一次性`Intentional replacement`跳過Management PAT輪替／strict credential gate，不更換provider、不改資料或登入產品語意
-- 決策來源：使用者先核准P0＋P1、不做P2及Edge Functions／legacy remediation；2026-08-22再明確核准「跳過PAT輪替與strict credential gate，其餘candidate、activation與正式站smoke保留」
-- 實作證據：release `20260821144058-509110`／commit `4ee8bf8`已通過sealed artifact、candidate、39/39 remote hash、OAuth、activation與canonical authenticated smoke；PAT strict gate未執行且不宣稱PASS。
+- Spec Impact：P0＋P1為`Compatible extension`；2026-08-26使用者以`Intentional replacement`將DEV-083既有 retired credential set 永久標記為不可回收，strict gate改採明確 policy waiver，不更換provider、不改資料或登入產品語意
+- 決策來源：使用者先核准P0＋P1、不做P2及Edge Functions／legacy remediation；2026-08-22的一次性例外由2026-08-26的永久 credential policy 取代，candidate、activation與正式站smoke仍保留
+- 實作證據：`scripts/release/credential-rotation-policy.json`（policy `DEV-083-retired-credential-set-20260826`）綁定production project ref；缺少該 retired set 的值時以`permanently-unrecoverable`通過，若有人提供值仍照常探測。
 
 ## 1. 目標與成功狀態
 
@@ -28,7 +28,7 @@
 - P2 不建立 future implementation capsule；只有使用者日後明確改變決策時才重新登錄。
 - 人類保留的必要決策只有 production activation go/no-go；遇到 Firebase／Google／Supabase re-auth 或 2FA 時，
   人類需完成身分驗證，但不需手動編輯 env、artifact 或部署指令。
-- Edge Functions新key runtime smoke、legacy disable與readback已完成；Management PAT輪替／strict gate由2026-08-22 FMEA一次性例外取代，舊PAT保持active並列為High residual risk。
+- Edge Functions新key runtime smoke、legacy disable與readback已完成；Management PAT歷史值已由使用者確認永久不可回收，strict gate改採 tracked policy waiver；現行 PAT／publishable／secret key 仍必須通過 active probe。
 - 一次性 `.env.local` → `.env.test.local` migration 由 `npm run migrate:test-env-profile` 執行；遇到不同值即停止且不覆寫，保留人類決策權。
 
 ## 3. Scope
@@ -229,13 +229,13 @@ Supabase 官方契約依據：`redirectTo` 必須符合專案 allowlist，produc
 | `scripts/migrate-test-env-profile.mjs` | 新增 | 以 key-only dry-run／conflict stop 執行 `.env.local` → `.env.test.local` 一次性搬移；不自動覆寫 |
 | `scripts/load-server-verification-env.mjs` | 新增 | 只載入 server verification keys，不做 VITE alias |
 | `scripts/p7-release-gate.mjs` | 修改 | per-step env allowlist、移除通用 loader與 manual OAuth boolean gate |
-| `scripts/p5-supabase-crud-smoke.mjs`、`scripts/p6-supabase-readiness.mjs`、`scripts/p8-credential-rotation-check.mjs`、`scripts/p8-browser-smoke-cleanup.mjs` | 修改 | P7/P8 server verification chain統一使用 server-only loader；credential strict gate只接受客觀`probed-inactive`，不得以human attestation或probe error冒充PASS |
+| `scripts/p5-supabase-crud-smoke.mjs`、`scripts/p6-supabase-readiness.mjs`、`scripts/p8-credential-rotation-check.mjs`、`scripts/p8-browser-smoke-cleanup.mjs` | 修改 | P7/P8 server verification chain統一使用 server-only loader；credential strict gate只接受`probed-inactive`或production project 綁定的`permanently-unrecoverable` policy，不接受human attestation或probe error冒充PASS |
 | `scripts/p8-preflight.mjs` | 修改 | server-only preflight；OAuth gate改讀自動 evidence |
 | `scripts/p8-production-readiness.mjs` | 修改 | 不傳完整 process env，串接自動 callback與artifact evidence |
 | `vite.config.js` | 修改 | release profile使用 task-owned isolated `envDir`；既有 test mode維持 |
 | `scripts/release/production-contract.mjs` | 新增 | non-secret target、public allowlist、forbidden identities與phase constants |
 | `scripts/release/env-boundary.mjs` | 新增 | dotenv parse、public/server sanitize、profile migration與不輸值診斷 |
-| `scripts/release/credential-rotation-evidence.mjs` | 新增 | old credential evidence mode分類與safe summary；strict release可區分客觀probe、人工聲明、未提供與probe error |
+| `scripts/release/credential-rotation-evidence.mjs`、`scripts/release/credential-rotation-policy.json` | 新增 | old credential evidence mode分類、production project綁定的永久不可回收 policy與safe summary；新 credential 若被提供仍必須客觀probe |
 | `scripts/release/build-production-artifact.mjs` | 新增 | build once、isolated envDir、release-meta、manifest與task-owned config |
 | `scripts/release/verify-production-artifact.mjs` | 新增 | identity/secret/tamper/tree hash verifier與remote provenance比對 |
 | `scripts/release/verify-oauth-cancel-callback.mjs` | 新增 | mocked self-check與production-bound safe callback |
@@ -262,7 +262,7 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 | S3 | OAuth safe cancel callback self-check與remote adapter | S2 | mock valid/invalid chain PASS；不輸出state或key |
 | S4 | `release:production`三 phase與browser provenance | S1-S3 | prepare不得remote、candidate不得activate、activate缺approval必敗 |
 | S5 | QA/QC local gate與Spec Drift | S0-S4 | QA-DEV-083 local必測項PASS；`In sync`；仍未release |
-| S6 | Production credential rotation | S5＋使用者明確授權 | rollback snapshot、兩個 Function deploy/smoke、legacy disable/readback、PAT rotate與 strict gate客觀PASS |
+| S6 | Production credential rotation | S5＋使用者明確授權 | rollback snapshot、兩個 Function deploy/smoke、legacy disable/readback、現行 key active probe與 retired credential policy evidence PASS |
 
 第一個 failing slice、secret exposure、artifact identity mismatch、scope drift或需改 Supabase/Auth remote config時立即停止。
 
@@ -295,7 +295,7 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
 - [x] canonical post-deploy必要項任一失敗時release狀態不是complete。
 - [x] P2未新增，且文件清楚揭露manual direct deploy仍可繞過P1的殘留風險。
 - [x] production Edge Functions不再讀legacy key env；停用前後smoke與legacy disabled readback均通過。
-- [ ] Management PAT輪替／strict inactive probe未執行；2026-08-22由使用者FMEA例外明確取代本次acceptance，不得標示PASS。
+- [x] DEV-083 retired credential set 已由使用者永久判定不可回收；policy `DEV-083-retired-credential-set-20260826` 綁定production project ref，strict check 在缺值時以`permanently-unrecoverable`通過，現行 credentials 仍需active probe。
 
 ## 15. QA/QC、Stop Conditions 與 Evidence
 
@@ -306,7 +306,7 @@ Local-only data migration：RD實作時將 `.env.local` 的 release-controlled t
   missing production-bound candidate、candidate auto-activation、wrong target、hash mismatch、OAuth final target mismatch、
   expired auth、canonical smoke fail。
 - QC只執行驗證與蒐證，不修改產品或release scripts；失敗回送RD。
-- 本次release exception僅適用release `20260821144058-509110`；除PAT／strict gate外，其餘stop conditions均未豁免。
+- 本次永久 policy 僅適用 policy 明列的 DEV-083 retired credential set；不豁免新 project、新 credential generation、current credential active probe或其他 release stop conditions。
 
 ## 16. Release Feasibility Note
 

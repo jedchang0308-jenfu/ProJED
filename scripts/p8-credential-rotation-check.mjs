@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import './load-server-verification-env.mjs';
-import { classifyOldCredentialEvidence } from './release/credential-rotation-evidence.mjs';
+import {
+  classifyOldCredentialEvidence,
+  loadCredentialRotationPolicy,
+  resolvePermanentCredentialWaiver,
+} from './release/credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
 
@@ -45,6 +49,7 @@ const parseProjectRef = (url) => {
 };
 
 const projectRef = parseProjectRef(supabaseUrl);
+const credentialRotationPolicy = projectRef ? loadCredentialRotationPolicy({ projectRef }) : null;
 
 const decodeJwtPayload = (token) => {
   const parts = token?.split('.') ?? [];
@@ -172,7 +177,12 @@ const checkCurrentAccessToken = async (name, token) => {
 
 const checkOldRestKeyInactive = async (name, key, envName) => {
   if (!key) {
-    const evidence = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed, envName });
+    const evidence = classifyOldCredentialEvidence({
+      credentialProvided: false,
+      manualRotationConfirmed,
+      envName,
+      permanentWaiver: resolvePermanentCredentialWaiver({ policy: credentialRotationPolicy, envName }),
+    });
     addResult(name, evidence.status, evidence);
     return;
   }
@@ -192,7 +202,12 @@ const checkOldRestKeyInactive = async (name, key, envName) => {
 
 const checkOldServiceRoleInactive = async (name, key, envName) => {
   if (!key) {
-    const evidence = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed, envName });
+    const evidence = classifyOldCredentialEvidence({
+      credentialProvided: false,
+      manualRotationConfirmed,
+      envName,
+      permanentWaiver: resolvePermanentCredentialWaiver({ policy: credentialRotationPolicy, envName }),
+    });
     addResult(name, evidence.status, evidence);
     return;
   }
@@ -212,7 +227,12 @@ const checkOldServiceRoleInactive = async (name, key, envName) => {
 
 const checkOldAccessTokenInactive = async (name, token, envName) => {
   if (!token) {
-    const evidence = classifyOldCredentialEvidence({ credentialProvided: false, manualRotationConfirmed, envName });
+    const evidence = classifyOldCredentialEvidence({
+      credentialProvided: false,
+      manualRotationConfirmed,
+      envName,
+      permanentWaiver: resolvePermanentCredentialWaiver({ policy: credentialRotationPolicy, envName }),
+    });
     addResult(name, evidence.status, evidence);
     return;
   }
@@ -277,6 +297,9 @@ console.log(JSON.stringify({
   strict,
   project_ref: projectRef,
   manual_rotation_confirmed: manualRotationConfirmed,
+  credential_rotation_policy: credentialRotationPolicy
+    ? { policy_id: credentialRotationPolicy.policyId, decision: credentialRotationPolicy.decision }
+    : null,
   results,
 }, null, 2));
 

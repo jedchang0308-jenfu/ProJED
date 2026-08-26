@@ -1,8 +1,15 @@
 import { spawn } from 'node:child_process';
 import './load-server-verification-env.mjs';
 import { buildSanitizedChildEnv } from './release/env-boundary.mjs';
+import { resolveCredentialRotationPolicyDecision } from './release/credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
+const projectRef = (() => {
+  try { return new URL(process.env.SUPABASE_URL ?? '').hostname.split('.')[0] || null; } catch { return null; }
+})();
+const credentialRotationPolicy = projectRef
+  ? resolveCredentialRotationPolicyDecision({ projectRef })
+  : null;
 
 const run = (command, args, env = {}) => new Promise((resolve) => {
   const spawnOptions = {
@@ -82,10 +89,12 @@ const manualGates = [
 
 for (const gate of manualGates) {
   const confirmed = gate.env.some(envName => process.env[envName] === 'true');
+  const policyDecision = gate.name === 'credential-rotation' ? credentialRotationPolicy : null;
   results.push({
     name: gate.name,
-    status: confirmed ? 'pass' : strict ? 'fail' : 'pending',
-    reason: confirmed ? undefined : `set one of ${gate.env.join(', ')}=true after completing the manual gate`,
+    status: confirmed || policyDecision ? 'pass' : strict ? 'fail' : 'pending',
+    confirmed_by: confirmed ? gate.env.find(envName => process.env[envName] === 'true') : policyDecision ? `policy:${policyDecision.policy_id}` : undefined,
+    reason: confirmed || policyDecision ? undefined : `set one of ${gate.env.join(', ')}=true after completing the manual gate`,
   });
 }
 

@@ -86,20 +86,20 @@ Spec Impact：`Compatible correction / raw-input isolation`。新增單一 pure 
 | `ai-doc/specs/SPEC-053-task-drag-muscle-memory-consistency.md`、`SPEC-076-mindmap-left-mouse-canvas-pan.md`、`SPEC-077-mindmap-relationship-redline-cleanup.md` | Existing behavior authority / Regression required | DEV-053 / DEV-076 / DEV-077 / DEV-084 | 保留8px mouse drag、keyboard/mobile owner、left/middle canvas pan與relationship左鍵endpoint行為。 |
 | `src/interactions/pointerActivation.ts`、`src/hooks/useDragSensors.ts`、Gantt／三個panel resizer、Mindmap relationship layer、三個modal backdrop | Implemented / Static + rendered evidence PASS | DEV-084 | 共用 primary guard 已在第一個 side effect 前接入五類 owner；artifact `output/playwright/dev-084-primary-pointer-isolation/result.json`，Calendar local fixture rendered PASS；physical mobile維持 supplemental Not Run。 |
 
-## Documentation Map Update - 2026-08-22（DEV-083 Released／FMEA Credential Exception Accepted／P2不採用）
+## Documentation Map Update - 2026-08-26（DEV-083 Released／Permanent Credential Unrecoverable Policy／P2不採用）
 
 Spec Impact：`Compatible extension`。保留 ADR-037 的 ProJED production、ProJED-TEST staging／test
 與 Firebase `level3-smoke` 分工；P0固定production public/server env隔離、sealed artifact與OAuth callback
 fail-closed，P1固定單一`release:production`的prepare／candidate／activate phase。P2 CI/IAM防繞過由使用者
-明確不採用。2026-08-22使用者接受FMEA並核准一次性例外：只跳過Management PAT輪替與strict credential gate；exact sealed artifact、candidate、remote provenance、activation與canonical smoke均保留並已PASS。
+明確不採用。2026-08-26使用者確認 DEV-083 retired credential set 永久不可回收：strict gate 對該 set 的缺值採 project-bound policy waiver；exact sealed artifact、candidate、remote provenance、activation與canonical smoke均保留。
 
 | 文件／權威 | 狀態 | 關聯 DEV | 說明 |
 |---|---|---|---|
-| `ai-doc/dev_task.md` | Released / FMEA Credential Exception Accepted | DEV-083 / Release Governance | 記錄release identity、candidate/live evidence、回滾點、accepted residual risk與下一步。 |
-| `ai-doc/specs/SPEC-083-production-release-environment-integrity.md` | Implemented / Released / Authoritative Exception Recorded | DEV-083 | 固定P0＋P1契約；本次僅PAT／strict gate由FMEA例外取代，P2仍排除。 |
-| `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md` | Candidate＋Activation＋Canonical PASS / Credential Exception | DEV-083 | 保留FMEA、QA-083-06～12實際結果、candidate／activation／authenticated smoke與證據邊界。 |
+| `ai-doc/dev_task.md` | Released / Permanent Credential Unrecoverable Policy | DEV-083 / Release Governance | 記錄release identity、candidate/live evidence、回滾點、policy waiver、accepted residual risk與下一步。 |
+| `ai-doc/specs/SPEC-083-production-release-environment-integrity.md` | Implemented / Released / Permanent Policy Recorded | DEV-083 | 固定P0＋P1契約；DEV-083 retired credential set 缺值時由 project-bound policy 取代找回要求，P2仍排除。 |
+| `ai-doc/qa/QA-DEV-083-production-release-environment-integrity.md` | Candidate＋Activation＋Canonical PASS / Permanent Credential Policy | DEV-083 | 保留QA-083-06～12實際結果、policy evidence、candidate／activation／authenticated smoke與證據邊界。 |
 | `ai-doc/decisions/ADR-037-fixed-test-environment-and-level3-release-gate.md` | Existing Authority / Compatible Extension | DEV-083 / Release Governance | TEST／Level 3決策維持；DEV-083不更換provider、Level 3 authority或activation ownership，ADR不需修改。 |
-| `scripts/release/*`、`scripts/load-server-verification-env.mjs`、`scripts/p7-release-gate.mjs`、`scripts/p8-*.mjs`、`scripts/verify-dev-083-layer2.mjs` | Implemented / Local Gate PASS | DEV-083 | production contract、isolated envDir、sanitized preview/browser child、sealed artifact、full-manifest remote hash、credential evidence mode、OAuth safe-cancel、Layer2 browser provenance、live-channel-only snapshot與三 phase release orchestration。 |
+| `scripts/release/*`、`scripts/load-server-verification-env.mjs`、`scripts/p7-release-gate.mjs`、`scripts/p8-*.mjs`、`scripts/verify-dev-083-layer2.mjs` | Implemented / Local Gate PASS | DEV-083 | production contract、isolated envDir、sanitized preview/browser child、sealed artifact、full-manifest remote hash、project-bound permanent credential policy、credential evidence mode、OAuth safe-cancel、Layer2 browser provenance、live-channel-only snapshot與三 phase release orchestration。 |
 | `scripts/load-local-env.mjs`、`vite.config.js`、`package.json`、`.env.production`、`.env.test.example` | Implemented / Boundary PASS | DEV-083 | local/test loader拒絕production profile；Vite sealed envDir；build與release命令已收斂到DEV-083入口。 |
 | `scripts/migrate-test-env-profile.mjs` | Fail-closed / Human choice pending | DEV-083 | 只搬移release-controlled test keys；偵測 `.env.local`／`.env.test.local` conflict 時不覆寫、不輸出值；目前 `VITE_DATA_BACKEND` conflict 已被阻擋。 |
 | Firebase live version `ca48cc7d514432d8`／release `20260821144058-509110` | Released / Canonical Smoke PASS | DEV-083 | commit `4ee8bf8`、39/39 remote hashes、release-meta、OAuth與authenticated smoke PASS；previous version `93c2a80ddc1a798e`保留為rollback reference。 |

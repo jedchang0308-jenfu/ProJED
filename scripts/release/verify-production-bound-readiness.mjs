@@ -1,11 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import { loadServerVerificationEnv, readEnvFile, resolveProductionPublicEnv } from './env-boundary.mjs';
 import { PRODUCTION_CONTRACT } from './production-contract.mjs';
+import { resolveCredentialRotationPolicyDecision } from './credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
 const serverEnv = loadServerVerificationEnv();
 const productionEnv = readEnvFile('.env.production');
 const results = [];
+const projectRef = (() => {
+  try { return new URL(serverEnv.SUPABASE_URL ?? '').hostname.split('.')[0] || null; } catch { return null; }
+})();
+const credentialRotationPolicy = projectRef
+  ? resolveCredentialRotationPolicyDecision({ projectRef })
+  : null;
 
 const add = (name, status, extra = {}) => results.push({ name, status, ...extra });
 const failOrPending = () => strict ? 'fail' : 'pending';
@@ -31,7 +38,11 @@ add('production-redirect', productionEnv.VITE_SUPABASE_AUTH_REDIRECT_URL === PRO
 add('server-verification-redirect-present', serverEnv.SUPABASE_AUTH_REDIRECT_URL ? 'pass' : failOrPending());
 add('server-public-key-shape', validPublicKey(serverEnv.SUPABASE_ANON_KEY) ? 'pass' : 'fail');
 add('server-admin-key-shape', validAdminKey(serverEnv.SUPABASE_SERVICE_ROLE_KEY) ? 'pass' : 'fail');
-add('credential-rotation-confirmed', ['SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED', 'P7_CREDENTIAL_ROTATION_CONFIRMED'].some(key => serverEnv[key] === 'true') ? 'pass' : failOrPending());
+const credentialRotationConfirmedBy = ['SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED', 'P7_CREDENTIAL_ROTATION_CONFIRMED']
+  .find(key => serverEnv[key] === 'true');
+add('credential-rotation-confirmed', credentialRotationConfirmedBy || credentialRotationPolicy ? 'pass' : failOrPending(), {
+  confirmed_by: credentialRotationConfirmedBy ?? (credentialRotationPolicy ? `policy:${credentialRotationPolicy.policy_id}` : undefined),
+});
 
 if (serverEnv.SUPABASE_URL && serverEnv.SUPABASE_ANON_KEY && serverEnv.SUPABASE_SERVICE_ROLE_KEY && serverEnv.SUPABASE_ACCESS_TOKEN) {
   try {

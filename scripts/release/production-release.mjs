@@ -79,9 +79,10 @@ const runCredentialRotationGate = async () => {
       ].filter(key => process.env[key]).map(key => [key, process.env[key]])),
     }),
   });
+  let parsed;
   let evidence;
   try {
-    const parsed = JSON.parse(result.stdout);
+    parsed = JSON.parse(result.stdout);
     evidence = summarizeCredentialRotationEvidence(parsed.results);
   } catch {
     throw new Error('DEV-083 credential rotation gate did not return valid JSON evidence.');
@@ -90,7 +91,13 @@ const runCredentialRotationGate = async () => {
     const unresolved = evidence.filter(item => item.status !== 'pass').map(item => `${item.name}:${item.evidence_mode}`);
     throw new Error(`DEV-083 credential rotation gate failed (${unresolved.join(', ')}).`);
   }
-  return { ok: true, gate: 'p8-credential-rotation', strict: true, oldCredentialEvidence: evidence };
+  return {
+    ok: true,
+    gate: 'p8-credential-rotation',
+    strict: true,
+    policy: parsed.credential_rotation_policy ?? null,
+    oldCredentialEvidence: evidence,
+  };
 };
 
 export const buildReleaseRuntimeEnv = (parentEnv = process.env) => buildSanitizedChildEnv(parentEnv, {

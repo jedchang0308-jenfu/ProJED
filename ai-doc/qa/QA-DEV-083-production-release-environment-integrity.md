@@ -226,7 +226,7 @@ output/release/dev-083/<release-id>/
 |---|---|---|---|
 | QA-083-01 | P1 Blocker → **Resolved locally** | 原實作呼叫不存在的 `hosting:releases:list`；RD 已改為 `firebase hosting:channel:list --project <project> --site <site> --json`；CLI `--help`、source contract與channel fixture均通過。 | local gate 已證明受支援 command contract與缺 live release fail-closed；實際 Firebase read 仍待具權限帳號執行。 |
 | QA-083-02 | P1 High → **Resolved locally** | 原實作比較 site-level releases 全清單；RD 已只保存 `live` channel 的 current `release.name`／`release.version.name`。 | candidate channel delta fixture PASS；live release change與missing live release fixture均正確 fail；不再因 preview delta誤判。 |
-| QA-083-03 | P1 Medium → **Resolved locally / release evidence pending** | old credential evidence 已固定區分 `probed-inactive`、`probed-active`、`human-attested`、`not-provided` 與 `probe-error`；strict gate 不再接受 attestation-only 或 probe error。 | pure evidence-mode verifier PASS；實際 strict probe 因三組 old credential 都只有 `human-attested` 而如預期非零退出。candidate 前仍需提供 old credential 做 inactive probe，或另走明確 release exception 決策。 |
+| QA-083-03 | P1 Medium → **Resolved locally / permanent policy recorded** | old credential evidence 已固定區分 `probed-inactive`、`probed-active`、`human-attested`、`not-provided`、`probe-error` 與 `permanently-unrecoverable`；strict gate 只接受客觀 inactive probe 或 production project 綁定的永久 policy。 | pure evidence-mode verifier、policy project-mismatch negative test與 strict probe PASS；缺少 DEV-083 retired credential 值時由 policy 明確通過，若提供值仍執行 inactive probe。 |
 | QA-083-04 | P1 Medium → **Resolved locally** | `runLayer2Smoke()` 的 Vite preview 與 `runBrowserSmokeAtUrl()` 的 PowerShell／Playwright child 已改用 sanitized runtime env。 | child env sentinel test證明 server secret、DB password、parent `VITE_*`、Gemini key與unrelated secret均未繼承；release profile仍固定為production。 |
 | QA-083-05 | P1 Medium → **Resolved locally** | `verifyRemoteArtifact()` 改為逐一下載並比對 manifest全部entries的size與SHA-256，再解析同一已驗證bytes中的`release-meta.json`／`index.html`。 | full-entry fixture PASS；篡改不在`entryAssets`中的lazy asset會被size/hash gate攔截。實際Firebase candidate仍需remote read-back。 |
 
@@ -235,7 +235,7 @@ output/release/dev-083/<release-id>/
 - P0 env／artifact 本地控制：`PASS`。
 - P1 release orchestration：QA-083-01～05 **local QA PASS**；release `20260821144058-509110`的candidate、activation與canonical smoke已PASS。
 - 本次同一immutable artifact已取得candidate與live 39/39 remote hash、release-meta、OAuth callback及authenticated session evidence；rollback版本不再被用來替代新artifact證據。
-- P2未執行；Management PAT輪替與strict credential gate由2026-08-22使用者FMEA例外跳過，QA不得將例外記成PASS。
+- P2未執行；Management PAT歷史值由2026-08-26使用者明確判定永久不可回收，改由 tracked policy waiver 通過；現行 credential active probe與其餘 release gates仍是必要條件。
 
 ### 13.5 Production Credential Rotation QA（使用者已授權）
 
@@ -247,13 +247,14 @@ output/release/dev-083/<release-id>/
 | QA-083-09 | Legacy disable/readback | Management API回報disabled；legacy anon/service-role均客觀`probed-inactive` | 立即重新啟用legacy並重跑smoke |
 | QA-083-10 | New-key post-disable smoke | 現行publishable／secret key仍active；兩個Functions與production app必要read-only smoke通過 | 恢復legacy |
 | QA-083-11 | Management PAT rotation | 新PAT先通過projects probe並寫入gitignored authority；舊PAT撤銷後回401/403 | 新PAT未驗證時不得撤銷舊PAT |
-| QA-083-12 | Strict gate | current三組PASS；old anon／service／PAT三組皆`probed-inactive`；exit 0 | 不進candidate |
+| QA-083-12 | Strict gate | current三組PASS；old anon／service／PAT三組為`probed-inactive`或 policy `permanently-unrecoverable`；exit 0 | 不進candidate |
 
-### 13.6 Controlled Rapid Release Exception 與 QC 結果（2026-08-22）
+### 13.6 Permanent Credential Policy 與 QC 結果（2026-08-26）
 
-- Human decision：使用者明確接受FMEA，僅跳過Management PAT輪替與strict credential gate；保留exact artifact、inactive candidate、activation與canonical smoke。
+- Human decision：使用者明確判定DEV-083 retired credential set 永久不可回收；保留exact artifact、inactive candidate、activation與canonical smoke，並不放寬現行 credential active probe。
 - QA-083-06～10：`PASS`。兩個Functions新key版本已部署，legacy API keys disabled/readback與停用後smoke通過。
-- QA-083-11～12：`WAIVED / NOT PASS`。新PAT未建立、舊PAT未撤銷、strict gate未執行；既有PAT保持active。
+- QA-083-11～12：`POLICY PASS`。歷史 Management PAT 值不可回收且未探測；`credential-rotation-policy.json` 綁定production project ref，strict gate 缺值時以 `permanently-unrecoverable` 通過；現行 PAT 保持 active 並完成 active probe。
+- Policy evidence：`scripts/release/credential-rotation-policy.json`、`output/release/dev-083/20260825134813-0b54a6/credential-search-evidence-20260826.json`、`output/release/dev-083/20260825134813-0b54a6/credential-rotation-exception-20260826.json`。
 - Candidate：`https://projed-cc78d--production-candidate-k86qbpc8.web.app`，Firebase version `880dfc3bbbc5d8b3`；39/39 entries、tree hash、release-meta、browser、OAuth 302 PASS，live snapshot未改變。
 - Activation：canonical live version `ca48cc7d514432d8`；39/39 entries、release-meta、browser root、console/page/network與OAuth PASS。
 - Authenticated smoke：既有正式Chrome session重載後仍在`https://projed-cc78d.web.app/`，工作區與真實資料可見，無visible alert／inline error／localhost；乾淨browser critical errors為0。
@@ -261,9 +262,9 @@ output/release/dev-083/<release-id>/
 
 | 殘留失效模式 | S/O/D | RPN | Release判定 |
 |---|---:|---:|---|
-| P2未實作且manual direct deploy仍可繞過P1 | 5/3/5 | 75 | 使用者接受；保留為治理債，不屬本次一次性credential例外 |
+| P2未實作且manual direct deploy仍可繞過P1 | 5/3/5 | 75 | 使用者接受；保留為治理債，不屬本次 credential policy waiver |
 | DEV-082 production migration／完整two-user remote gate pending | 4/4/3 | 48 | 不宣稱DEV-082正式交付 |
-| 舊Management PAT保持active | 5/2/4 | 40 | 使用者接受；後續仍建議輪替 |
+| 歷史Management PAT值不可回收 | 5/2/4 | 40 | 使用者永久接受；不得把缺值誤述為客觀失效，policy 僅適用既定 DEV-083 retired credential set |
 | DEV-081 iPhone／Android physical gate pending | 3/3/4 | 36 | 不宣稱實機QA完成 |
 
 - Generated evidence：`output/release/dev-083/20260821144058-509110/{risk-acceptance,candidate-evidence,activation-evidence}.json`；gitignored且不含secret。

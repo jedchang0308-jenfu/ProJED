@@ -6,7 +6,11 @@ import { resolveProductionPublicEnv, buildSanitizedChildEnv } from './release/en
 import { PRODUCTION_CONTRACT } from './release/production-contract.mjs';
 import { scanArtifact, verifyManifest } from './release/verify-production-artifact.mjs';
 import { runSelfCheck as runOAuthSelfCheck } from './release/verify-oauth-cancel-callback.mjs';
-import { classifyOldCredentialEvidence } from './release/credential-rotation-evidence.mjs';
+import {
+  classifyOldCredentialEvidence,
+  loadCredentialRotationPolicy,
+  resolvePermanentCredentialWaiver,
+} from './release/credential-rotation-evidence.mjs';
 import {
   assertCandidateEvidence,
   buildReleaseRuntimeEnv,
@@ -74,6 +78,19 @@ try {
     if (inactive.status !== 'pass' || inactive.evidence_mode !== 'probed-inactive') throw new Error('inactive probe evidence was not classified as pass');
     const probeError = classifyOldCredentialEvidence({ credentialProvided: true, probeError: 'network unavailable' });
     if (probeError.status !== 'pending' || probeError.evidence_mode !== 'probe-error') throw new Error('probe error was accepted as inactive evidence');
+    const policy = loadCredentialRotationPolicy({ projectRef: PRODUCTION_CONTRACT.supabaseProjectRef });
+    const waiver = resolvePermanentCredentialWaiver({ policy, envName: 'OLD_SUPABASE_ACCESS_TOKEN' });
+    const permanentlyUnrecoverable = classifyOldCredentialEvidence({ credentialProvided: false, envName: 'OLD_SUPABASE_ACCESS_TOKEN', permanentWaiver: waiver });
+    if (permanentlyUnrecoverable.status !== 'pass' || permanentlyUnrecoverable.evidence_mode !== 'permanently-unrecoverable') {
+      throw new Error('permanent unrecoverable credential policy was not classified as pass-with-policy-waiver');
+    }
+    let mismatchThrown = false;
+    try {
+      loadCredentialRotationPolicy({ projectRef: 'fhisnnufoeulxqrchldf' });
+    } catch {
+      mismatchThrown = true;
+    }
+    if (!mismatchThrown) throw new Error('credential rotation policy incorrectly applied to the test project');
   });
   const liveChannelBefore = JSON.stringify({ channels: [
     { name: `sites/${PRODUCTION_CONTRACT.siteId}/channels/live`, url: PRODUCTION_CONTRACT.canonicalOrigin, release: { name: `sites/${PRODUCTION_CONTRACT.siteId}/releases/live-a`, version: { name: `sites/${PRODUCTION_CONTRACT.siteId}/versions/version-a` } } },
