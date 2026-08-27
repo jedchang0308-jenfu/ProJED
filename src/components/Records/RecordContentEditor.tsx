@@ -28,6 +28,7 @@ interface RecordContentEditorProps {
   nodes: Record<string, TaskNode>;
   placeholder?: string;
   editorClassName?: string;
+  editorContainerClassName?: string;
   cursorOffset: number | null;
   onChange: (value: string) => void;
   onCursorOffsetChange: (offset: number) => void;
@@ -181,11 +182,12 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
   value,
   placeholder,
   editorClassName,
+  editorContainerClassName,
   onChange,
   onCursorOffsetChange,
 }) => (
   <LexicalComposer initialConfig={editorConfig}>
-    <div className="relative mt-1">
+    <div className={`relative mt-1 ${editorContainerClassName || ''}`}>
       {!value ? (
         <div className="pointer-events-none absolute left-3 top-2 z-10 text-sm leading-6 text-slate-400">
           {placeholder}

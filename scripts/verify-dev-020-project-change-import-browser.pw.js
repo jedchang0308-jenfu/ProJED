@@ -68,10 +68,15 @@ async (page) => {
   assert((await page.locator('[data-record-composer-header]').count()) === 1, 'work log should use the shared composer header');
   assert((await page.locator('[data-record-composer-close]').count()) === 1, 'work log should expose the shared close tool slot');
   assert((await page.locator('[data-record-composer-close][aria-label="離開紀錄"]').count()) === 1, 'work log close control should use the unified exit record name');
+  assert((await page.locator('[data-record-sidebar-title]').count()) === 1, 'work log should show the compact record title without a decorative icon');
+  assert((await page.locator('[data-record-sidebar-collapse-toggle][aria-label="收合紀錄面板"]').count()) === 1, 'work log should expose the inside-facing collapse control');
+  assert((await page.locator('[data-record-sidebar-header] button[aria-label="紀錄功能說明"]').count()) === 0, 'record sidebar should not expose the removed help control');
   assert((await page.locator('[data-record-composer-summary]').count()) === 1, 'work log should show the shared composer summary');
-  assert((await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').count()) === 1, 'work log should expose the unified linked-task toggle');
-  await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').click();
-  assert((await page.locator('[data-record-linked-tasks-list] button', { hasText: '選取任務' }).count()) === 1, 'work log should use the unified linked-task action label after expanding linked tasks');
+  assert((await page.locator('[data-record-composer-linked-tasks][data-record-linked-tasks-toggle]').count()) === 0, 'empty linked-task summary should stay hidden');
+  assert((await page.locator('[data-record-linked-tasks-empty-action]').count()) === 1, 'work log should keep a minimal linked-task action without the empty summary');
+  await page.locator('[data-record-linked-tasks-empty-action]').click();
+  await page.getByText('選取紀錄關聯任務', { exact: false }).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('button', { hasText: '完成' }).first().click();
   assert((await page.locator('[data-meeting-workflow-arrow-stepper]').count()) === 0, 'work log should not show meeting workflow');
   assert((await page.locator('[data-record-workflow-kind="work-log"]').count()) === 1, 'work log should show the work-log workflow card');
   assert((await page.locator('[data-work-log-workflow-step]').count()) === 4, 'work log workflow should show import/write/save/publish steps');
@@ -87,13 +92,6 @@ async (page) => {
   assert((await page.locator('[data-project-change-import-panel] button', { hasText: '整個看板' }).count()) === 1, 'project change import should support board scope');
   assert((await page.locator('[data-project-change-import-panel] button', { hasText: '整個工作區' }).count()) === 1, 'project change import should support workspace scope');
   assert((await page.locator('[data-project-change-import-panel] button', { hasText: '最近 24 小時' }).count()) === 0, 'project change import should not expose quick range chips');
-
-  await page.locator('button[aria-label="紀錄功能說明"]').click();
-  await page.locator('[data-record-help-dialog]').waitFor({ state: 'visible', timeout: 10000 });
-  assert((await page.locator('[data-record-help-dialog]', { hasText: '使用流程' }).count()) === 1, 'help dialog should include flow guide');
-  assert((await page.locator('[data-record-help-dialog]', { hasText: '專案變化匯入' }).count()) === 1, 'help dialog should explain project change import');
-  await page.locator('[data-record-help-dialog] button[title="關閉功能說明"]').click();
-  await page.locator('[data-record-help-dialog]').waitFor({ state: 'hidden', timeout: 10000 });
 
   const titleInput = page.locator('aside label', { hasText: '標題' }).locator('input').first();
   await titleInput.fill('DEV-020 未儲存測試');

@@ -64,7 +64,6 @@ const mindMapKeyboard = read(files.mindMapKeyboard);
 const ganttView = read(files.ganttView);
 const ganttTaskBar = read(files.ganttTaskBar);
 const sharedTaskSidebar = read(files.sharedTaskSidebar);
-const recordSidebar = read(files.recordSidebar);
 const tagPicker = read(files.tagPicker);
 const statusFilterBar = read(files.statusFilterBar);
 const ragSidebar = read(files.ragSidebar);
@@ -134,8 +133,6 @@ assert(
     taskDetailsModal.includes('onClose()') &&
     globalContextMenu.includes("event.key !== 'Escape' || event.isComposing || isMoving") &&
     globalContextMenu.includes('BoardWorkspaceTransferDialog') &&
-    recordSidebar.includes('data-record-help-dialog') &&
-    recordSidebar.includes("event.key !== 'Escape'") &&
     tagPicker.includes('data-tag-picker-panel') &&
     tagPicker.includes('if (editingTagId)') &&
     tagPicker.includes('setIsOpen(false)') &&

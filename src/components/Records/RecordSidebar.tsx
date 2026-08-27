@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BookOpenText, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, FileCheck, FileText, Loader2, PanelRightClose, PanelRightOpen, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, UsersRound, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, UsersRound, X } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -35,6 +35,81 @@ const toInputDateTime = (value?: number) =>
 
 const fromInputDateTime = (value: string) =>
   value ? dayjs(value).valueOf() : undefined;
+
+const toTextDateTime = (value?: number) =>
+  value ? dayjs(value).format('YYYY/MM/DD HH:mm') : '';
+
+const fromTextDateTime = (value: string) => {
+  const match = value.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})$/);
+  if (!match) return undefined;
+
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) return undefined;
+
+  const parsed = dayjs(`${yearText}-${monthText.padStart(2, '0')}-${dayText.padStart(2, '0')}T${hourText.padStart(2, '0')}:${minuteText}`);
+  return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 && parsed.date() === day && parsed.hour() === hour && parsed.minute() === minute
+    ? parsed.valueOf()
+    : undefined;
+};
+
+const RecordTextDateTimeInput: React.FC<{
+  value?: number;
+  onChange: (value?: number) => void;
+  dataAttribute: string;
+}> = ({ value, onChange, dataAttribute }) => {
+  const [draftValue, setDraftValue] = React.useState<string | null>(null);
+  const lastCommittedValueRef = React.useRef(value);
+
+  React.useEffect(() => {
+    if (lastCommittedValueRef.current !== value) {
+      lastCommittedValueRef.current = value;
+      setDraftValue(null);
+    }
+  }, [value]);
+
+  const inputValue = draftValue ?? toTextDateTime(value);
+  const handleChange = (nextValue: string) => {
+    setDraftValue(nextValue);
+    if (!nextValue.trim()) {
+      lastCommittedValueRef.current = undefined;
+      onChange(undefined);
+      return;
+    }
+
+    const parsed = fromTextDateTime(nextValue);
+    if (parsed === undefined) return;
+    lastCommittedValueRef.current = parsed;
+    onChange(parsed);
+  };
+
+  const handleBlur = () => {
+    const parsed = fromTextDateTime(draftValue ?? inputValue);
+    if (parsed === undefined) {
+      setDraftValue(null);
+      return;
+    }
+    lastCommittedValueRef.current = parsed;
+    setDraftValue(toTextDateTime(parsed));
+  };
+
+  return (
+    <input
+      type="text"
+      value={inputValue}
+      onChange={event => handleChange(event.target.value)}
+      onBlur={handleBlur}
+      data-record-datetime-input={dataAttribute}
+      placeholder="YYYY/MM/DD HH:mm"
+      autoComplete="off"
+      className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+    />
+  );
+};
 
 const recordTypeLabel = (type: KnowledgeRecordType) =>
   type === 'meeting' ? '會議紀錄' : '個人工作紀錄';
@@ -112,7 +187,7 @@ const getMeetingWorkflowArrowClass = (step: MeetingWorkflowArrowStepItem) => {
     return 'border-emerald-700 bg-emerald-700 text-white shadow-sm hover:bg-emerald-800';
   }
   if (step.visualState === 'processing' || step.visualState === 'current') {
-    return 'border-emerald-700 bg-emerald-700 text-white shadow-sm';
+    return `border-emerald-700 bg-emerald-700 text-white shadow-sm${step.enabled ? ' hover:bg-emerald-800' : ''}`;
   }
   if (step.visualState === 'complete') {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
@@ -124,21 +199,6 @@ const getMeetingWorkflowArrowClass = (step: MeetingWorkflowArrowStepItem) => {
     return 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50';
   }
   return 'border-slate-200 bg-slate-50 text-slate-400';
-};
-
-const getProjectImportStepHint = (
-  status: ProjectChangeImportStatus,
-  stepState: ProjectChangeImportStepState,
-  isExpanded: boolean,
-  eventCount: number,
-) => {
-  if (status === 'loading') return '整理中';
-  if (stepState === 'inserted') return eventCount > 0 ? `${eventCount} 筆` : '已插入';
-  if (stepState === 'skipped') return '已略過';
-  if (status === 'ready') return '可插入';
-  if (status === 'empty') return '無變化';
-  if (status === 'error') return '需處理';
-  return isExpanded ? '設定中' : '選用';
 };
 
 const getProjectImportStepTitle = (
@@ -153,25 +213,19 @@ const getProjectImportStepTitle = (
   return isExpanded ? '收合專案變化匯入設定。' : '展開專案變化匯入設定。';
 };
 
-const getMeetingWorkflowStepIcon = (step: MeetingWorkflowArrowStepItem) => {
-  if (step.visualState === 'complete') return <CheckCircle2 size={12} />;
-  if (step.visualState === 'processing') return <Loader2 size={12} className="animate-spin" />;
-  if (step.stage === 'project_import') return <FileText size={12} />;
-  if (step.stage === 'capture') return <PenLine size={12} />;
-  if (step.stage === 'ai_suggestion') return <Sparkles size={12} />;
-  if (step.stage === 'review') return <FileCheck size={12} />;
-  return <SendHorizontal size={12} />;
-};
-
-const getMeetingWorkflowStepHint = (step: MeetingWorkflowArrowStepItem) => {
-  if (step.stage === 'project_import') return getProjectImportStepHint(step.importStatus, step.importStepState, step.isExpanded, step.eventCount);
-  if (step.visualState === 'locked') return step.statusLabel;
-  if (step.visualState === 'processing') return step.statusLabel;
-  if (step.visualState === 'complete') return step.statusLabel;
-  if (step.stage === 'capture') return '草稿不發布';
-  if (step.stage === 'ai_suggestion') return '產生建議';
-  if (step.stage === 'review') return '校稿草稿';
-  return '發布內容';
+const getProjectImportStepStatusLabel = (
+  status: ProjectChangeImportStatus,
+  stepState: ProjectChangeImportStepState,
+  isExpanded: boolean,
+  eventCount: number,
+) => {
+  if (status === 'loading') return '整理中';
+  if (stepState === 'inserted') return eventCount > 0 ? `${eventCount} 筆` : '已插入';
+  if (stepState === 'skipped') return '已略過';
+  if (status === 'ready') return '可插入';
+  if (status === 'empty') return '無變化';
+  if (status === 'error') return '需處理';
+  return isExpanded ? '設定中' : '選用';
 };
 
 const AI_MEETING_SYNTHESIS_TOOLTIP = 'AI整理會保留目前手寫內容，並將任務變更與手動紀錄統整成同一份草稿。';
@@ -254,7 +308,7 @@ const MeetingWorkflowArrowStepper: React.FC<{
           disabled={!step.enabled}
           onClick={() => handleStepClick(step)}
           title={getMeetingWorkflowStepTitle(step)}
-          className={`relative flex h-12 min-w-0 flex-1 flex-col items-center justify-center border text-center transition disabled:cursor-not-allowed ${index > 0 ? '-ml-2' : ''} ${getMeetingWorkflowArrowClass(step)}`}
+          className={`relative flex h-9 min-w-0 flex-1 flex-col items-center justify-center border text-center transition ${step.enabled ? 'cursor-pointer' : 'cursor-not-allowed'} disabled:cursor-not-allowed ${index > 0 ? '-ml-2' : ''} ${getMeetingWorkflowArrowClass(step)}`}
           style={{
             clipPath: getMeetingWorkflowArrowClipPath(index, steps.length),
             paddingLeft: index === 0 ? '0.35rem' : '0.85rem',
@@ -262,13 +316,7 @@ const MeetingWorkflowArrowStepper: React.FC<{
             zIndex: steps.length - index,
           }}
         >
-          <span className="flex min-w-0 items-center justify-center gap-1 text-[10px] font-semibold leading-3">
-            <span className="shrink-0">{getMeetingWorkflowStepIcon(step)}</span>
-            <span className="truncate">{step.label}</span>
-          </span>
-          <span className="mt-0.5 flex min-w-0 max-w-full items-center justify-center text-[8px] font-semibold leading-3 opacity-90">
-            <span className="truncate">{getMeetingWorkflowStepHint(step)}</span>
-          </span>
+          <span className="truncate text-[10px] font-semibold leading-3">{step.label}</span>
         </button>
       ))}
     </div>
@@ -456,75 +504,6 @@ const createInitialProjectChangeImportState = (): ProjectChangeImportState => ({
   message: null,
 });
 
-const RecordHelpDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.isComposing) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [onClose]);
-
-  return (
-  <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 p-4">
-    <div data-record-help-dialog className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
-      <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
-          <CircleHelp size={16} className="text-blue-500" />
-          <h3 className="text-sm font-semibold text-slate-800">紀錄功能說明</h3>
-        </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="關閉功能說明">
-          <X size={16} />
-        </button>
-      </div>
-      <div className="space-y-4 p-4 text-xs leading-5 text-slate-600">
-        <section>
-          <h4 className="mb-2 text-sm font-semibold text-slate-800">使用流程</h4>
-          <div className="grid gap-2 text-center text-[11px] font-semibold text-slate-700 sm:grid-cols-5">
-            {['選擇紀錄類型', '匯入', '撰寫內容', '存草稿或 AI整理', '發布或離開'].map((label, index) => (
-              <div key={label} className="rounded-md border border-blue-100 bg-blue-50 px-2 py-2">
-                <div className="mb-1 text-blue-600">{index + 1}</div>
-                {label}
-              </div>
-            ))}
-          </div>
-        </section>
-        <section>
-          <h4 className="mb-1 text-sm font-semibold text-slate-800">三種紀錄情境</h4>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="rounded-md border border-emerald-100 bg-emerald-50 p-2">
-              <div className="font-semibold text-emerald-800">會議速記</div>
-              <div>會議正在進行時使用，會進入會議模式與四階段流程。</div>
-            </div>
-            <div className="rounded-md border border-blue-100 bg-blue-50 p-2">
-              <div className="font-semibold text-blue-800">會後會議紀錄</div>
-              <div>會後補寫或整理，不進入會議模式，但可匯入專案變化。</div>
-            </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
-              <div className="font-semibold text-slate-800">個人工作紀錄</div>
-              <div>記錄自己的工作過程，可先匯入專案變化，也可直接撰寫、存草稿或發布。</div>
-            </div>
-          </div>
-        </section>
-        <section>
-          <h4 className="mb-1 text-sm font-semibold text-slate-800">專案變化匯入</h4>
-          <p>`匯入` 是紀錄流程的選用第一步。預設收合，點擊後可整理指定時間範圍內的任務變化；系統會先產生預覽，按「插入紀錄並開始撰寫」後才會寫入內容。</p>
-        </section>
-        <section className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800">
-          <h4 className="mb-1 text-sm font-semibold">保存與離開風險</h4>
-          <p>`存草稿` 不會發布；`發布` 會保存目前 editor 內容為正式紀錄；`離開` 不等於發布。有未儲存變更時，系統會詢問要存草稿、直接離開或取消。</p>
-        </section>
-      </div>
-    </div>
-  </div>
-  );
-};
-
 const ProjectChangeImportPanel: React.FC<{
   state: ProjectChangeImportState;
   disabled: boolean;
@@ -648,8 +627,6 @@ const RecordSidebar: React.FC = () => {
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const [sidebarWidth, setSidebarWidth] = React.useState(readRecordSidebarWidth);
   const [isResizing, setIsResizing] = React.useState(false);
-  const [isHelpOpen, setIsHelpOpen] = React.useState(false);
-  const [isMeetingActivitySourceOpen, setIsMeetingActivitySourceOpen] = React.useState(false);
   const [isLinkedTasksOpen, setIsLinkedTasksOpen] = React.useState(false);
   const [isProjectImportExpanded, setIsProjectImportExpanded] = React.useState(false);
   const [projectChangeImport, setProjectChangeImport] = React.useState(createInitialProjectChangeImportState);
@@ -734,7 +711,6 @@ const RecordSidebar: React.FC = () => {
   React.useEffect(() => {
     setProjectChangeImport(createInitialProjectChangeImportState());
     setIsProjectImportExpanded(false);
-    setIsMeetingActivitySourceOpen(false);
     setIsLinkedTasksOpen(false);
   }, [draft?.id]);
 
@@ -767,7 +743,7 @@ const RecordSidebar: React.FC = () => {
         : meetingDraftRecovery.cloudStatus === 'saving'
           ? '本機已保存，雲端保存中…'
           : meetingDraftRecovery.cloudStatus === 'saved'
-            ? '本機已保存，雲端已完成 checkpoint'
+            ? '雲端已保存'
             : String(meetingDraftRecovery.localStatus) === 'saving'
               ? '本機保存中…'
               : String(meetingDraftRecovery.localStatus) === 'degraded'
@@ -779,6 +755,13 @@ const RecordSidebar: React.FC = () => {
                     : meetingActionState.isDirty
                       ? '本機保存排程中…'
                       : '等待輸入，尚未保存';
+  const shouldShowMeetingRecoveryStatus = !(
+    meetingDraftRecovery.cloudStatus === 'saved' &&
+    meetingDraftRecovery.localStatus === 'saved'
+  ) && !(
+    meetingDraftRecovery.cloudStatus === 'idle' &&
+    meetingDraftRecovery.localStatus === 'idle'
+  );
   const visibleRecords = isMeetingRecordUnavailable
     ? records.filter(record => record.type !== 'meeting')
     : records;
@@ -832,7 +815,7 @@ const RecordSidebar: React.FC = () => {
         ? 'current'
         : 'optional';
   const projectImportStepEnabled = canUseProjectChangeImport && !saving && !isSynthesizing;
-  const projectImportStatusLabel = getProjectImportStepHint(
+  const projectImportStatusLabel = getProjectImportStepStatusLabel(
     projectChangeImport.status,
     projectChangeImport.stepState,
     isProjectImportExpanded,
@@ -1102,10 +1085,13 @@ const RecordSidebar: React.FC = () => {
         <button
           type="button"
           onClick={togglePanelCollapsed}
+          data-record-sidebar-expand-toggle
+          data-record-sidebar-expand-direction="left"
+          aria-label="展開紀錄欄"
           className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
           title="展開紀錄欄"
         >
-          <PanelRightOpen size={17} />
+          <ChevronLeft size={17} />
         </button>
         <div className="mt-0 flex text-[11px] font-medium text-slate-500 [writing-mode:horizontal-tb] sm:mt-3 sm:[writing-mode:vertical-rl]">
           {sidebarRecordTitle}
@@ -1146,27 +1132,20 @@ const RecordSidebar: React.FC = () => {
       </div>
       <div data-record-sidebar-header data-record-composer-header className="flex h-11 items-center justify-between border-b border-slate-200 px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <BookOpenText size={16} className="text-blue-500" />
-          <span className="truncate text-sm font-semibold text-slate-800">{sidebarRecordTitle}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setIsHelpOpen(true)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-            title="功能說明"
-            aria-label="紀錄功能說明"
-          >
-            <CircleHelp size={16} />
-          </button>
           <button
             type="button"
             onClick={togglePanelCollapsed}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+            data-record-sidebar-collapse-toggle
+            data-record-sidebar-collapse-direction="right"
+            aria-label={isMeetingMode ? '收合會議速記面板' : '收合紀錄面板'}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
             title={isMeetingMode ? '收合會議速記面板' : '收合紀錄面板'}
           >
-            <PanelRightClose size={16} />
+            <ChevronRight size={16} />
           </button>
+          <span data-record-sidebar-title className="truncate text-sm font-semibold text-slate-800">{sidebarRecordTitle}</span>
+        </div>
+        <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
             data-record-composer-close
@@ -1180,10 +1159,10 @@ const RecordSidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <section className="border-b border-slate-100 p-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        <section className="flex min-h-0 flex-1 flex-col border-b border-slate-100 p-3">
           {draft ? (
-            <div className="space-y-3">
+            <div className="flex min-h-0 flex-1 flex-col space-y-3">
               <RecordContextSummary
                 draft={draft}
                 typeState={isMeetingMode ? 'meeting-mode-locked' : 'draft-type-locked'}
@@ -1198,15 +1177,6 @@ const RecordSidebar: React.FC = () => {
                   data-project-change-import-expanded={isProjectImportExpanded ? 'true' : 'false'}
                   className="rounded-md border border-slate-200 bg-white p-2"
                 >
-                  <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-semibold text-slate-700">會議流程</div>
-                      <div className="truncate text-[10px] text-slate-500">速記、AI整理、校稿與發布在同一條流程上操作。</div>
-                    </div>
-                    <span className="shrink-0 rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-                      AI選用
-                    </span>
-                  </div>
                   <MeetingWorkflowArrowStepper
                     steps={meetingWorkflowStepsWithImport}
                     onSaveDraft={() => handleSave('draft')}
@@ -1220,23 +1190,25 @@ const RecordSidebar: React.FC = () => {
                     </div>
                   ) : null}
 
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    data-meeting-draft-recovery-status
-                    className={cn(
-                      'mt-1.5 flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] leading-4',
-                      meetingDraftRecovery.cloudStatus === 'conflict' || meetingDraftRecovery.cloudStatus === 'error' || meetingDraftRecovery.localStatus === 'error'
-                        ? 'border-amber-200 bg-amber-50 text-amber-800'
-                        : 'border-slate-200 bg-slate-50 text-slate-600',
-                    )}
-                    title={meetingDraftRecovery.message ?? meetingActionState.riskMessage ?? meetingActionState.exitWarning ?? ''}
-                  >
-                    {meetingDraftRecovery.cloudStatus === 'conflict' || meetingDraftRecovery.cloudStatus === 'error' || meetingDraftRecovery.localStatus === 'error'
-                      ? <AlertTriangle size={11} className="shrink-0" />
-                      : null}
-                    <span className="truncate">{meetingRecoveryStatus}</span>
-                  </div>
+                  {shouldShowMeetingRecoveryStatus ? (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      data-meeting-draft-recovery-status
+                      className={cn(
+                        'mt-1.5 flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] leading-4',
+                        meetingDraftRecovery.cloudStatus === 'conflict' || meetingDraftRecovery.cloudStatus === 'error' || meetingDraftRecovery.localStatus === 'error'
+                          ? 'border-amber-200 bg-amber-50 text-amber-800'
+                          : 'border-slate-200 bg-slate-50 text-slate-600',
+                      )}
+                      title={meetingDraftRecovery.message ?? meetingActionState.riskMessage ?? meetingActionState.exitWarning ?? ''}
+                    >
+                      {meetingDraftRecovery.cloudStatus === 'conflict' || meetingDraftRecovery.cloudStatus === 'error' || meetingDraftRecovery.localStatus === 'error'
+                        ? <AlertTriangle size={11} className="shrink-0" />
+                        : null}
+                      <span className="truncate">{meetingRecoveryStatus}</span>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <WorkLogWorkflowCard
@@ -1254,27 +1226,28 @@ const RecordSidebar: React.FC = () => {
                 />
               )}
 
-              <div data-record-composer-meta className="space-y-3">
-                <label className="block text-xs font-medium text-slate-500">
-                  標題
-                  <input
-                    value={draft.title}
-                    onChange={event => updateDraft({ title: event.target.value })}
-                    className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </label>
-
+              <div data-record-composer-meta className="flex flex-1 flex-col space-y-3">
                 {draft.type === 'meeting' ? (
                   <>
-                    <label className="block text-xs font-medium text-slate-500">
-                      紀錄時間
-                      <input
-                        type="datetime-local"
-                        value={toInputDateTime(draft.occurredAt)}
-                        onChange={event => updateDraft({ occurredAt: fromInputDateTime(event.target.value) })}
-                        className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
+                    <div data-record-meeting-meta-grid className="grid grid-cols-2 gap-2">
+                      <label className="block min-w-0 text-xs font-medium text-slate-500">
+                        標題
+                        <input
+                          data-record-title-input
+                          value={draft.title}
+                          onChange={event => updateDraft({ title: event.target.value })}
+                          className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block min-w-0 text-xs font-medium text-slate-500">
+                        紀錄時間
+                        <RecordTextDateTimeInput
+                          value={draft.occurredAt}
+                          onChange={occurredAt => updateDraft({ occurredAt })}
+                          dataAttribute="meeting-occurred-at"
+                        />
+                      </label>
+                    </div>
                     <label className="block text-xs font-medium text-slate-500">
                       參與人員
                       <div className="mt-1 flex items-center gap-2">
@@ -1291,32 +1264,43 @@ const RecordSidebar: React.FC = () => {
                     </label>
                   </>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
+                  <>
                     <label className="block text-xs font-medium text-slate-500">
-                      開始時間
+                      標題
                       <input
-                        type="datetime-local"
-                        value={toInputDateTime(draft.startedAt)}
-                        onChange={event => updateDraft({ startedAt: fromInputDateTime(event.target.value) })}
+                        data-record-title-input
+                        value={draft.title}
+                        onChange={event => updateDraft({ title: event.target.value })}
                         className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                       />
                     </label>
-                    <label className="block text-xs font-medium text-slate-500">
-                      結束時間
-                      <input
-                        type="datetime-local"
-                        value={toInputDateTime(draft.endedAt)}
-                        onChange={event => updateDraft({ endedAt: fromInputDateTime(event.target.value) })}
-                        className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <div className="col-span-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500">
-                      記錄人員：{user?.displayName || user?.email || user?.uid || '目前使用者'}
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block text-xs font-medium text-slate-500">
+                        開始時間
+                        <input
+                          type="datetime-local"
+                          value={toInputDateTime(draft.startedAt)}
+                          onChange={event => updateDraft({ startedAt: fromInputDateTime(event.target.value) })}
+                          className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block text-xs font-medium text-slate-500">
+                        結束時間
+                        <input
+                          type="datetime-local"
+                          value={toInputDateTime(draft.endedAt)}
+                          onChange={event => updateDraft({ endedAt: fromInputDateTime(event.target.value) })}
+                          className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <div className="col-span-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-500">
+                        記錄人員：{user?.displayName || user?.email || user?.uid || '目前使用者'}
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
-                <label className="block text-xs font-medium text-slate-500">
+                <label className={`flex flex-1 flex-col text-xs font-medium text-slate-500 ${isMeetingMode ? 'min-h-[220px]' : 'min-h-[150px]'}`}>
                   內容
                   <RecordContentEditor
                     value={draft.content}
@@ -1325,7 +1309,8 @@ const RecordSidebar: React.FC = () => {
                     onChange={content => updateDraft({ content })}
                     onCursorOffsetChange={setContentCursorOffset}
                     placeholder="記錄討論、決議、進度、風險、待追蹤事項..."
-                    editorClassName={isMeetingMode ? 'min-h-[220px]' : undefined}
+                    editorClassName={isMeetingMode ? 'min-h-[220px] flex-1' : 'min-h-[150px] flex-1'}
+                    editorContainerClassName={isMeetingMode ? 'flex min-h-[220px] flex-1 flex-col' : 'flex min-h-[150px] flex-1 flex-col'}
                   />
                 </label>
               </div>
@@ -1385,21 +1370,21 @@ const RecordSidebar: React.FC = () => {
               ) : null}
 
               <div data-record-compact-controls className="rounded-md border border-slate-200 bg-white">
-                <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3">
-                  <div data-record-status-summary className="min-w-0 bg-white px-2.5 py-2">
-                    <div className="text-[10px] font-semibold leading-4 text-slate-400">目前狀態</div>
+                <div className={`grid grid-cols-2 gap-px bg-slate-100 ${selectedLinks.length || !isMeetingMode ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                  <div data-record-status-summary className={`min-w-0 bg-white ${isMeetingMode ? 'flex items-center gap-2 px-2 py-1' : 'px-2.5 py-2'}`}>
+                    <div className={`${isMeetingMode ? 'shrink-0' : ''} text-[10px] font-semibold ${isMeetingMode ? 'leading-3' : 'leading-4'} text-slate-400`}>目前狀態</div>
                     <div className="truncate text-xs font-semibold text-slate-700">
                       {isMeetingMode
                         ? meetingActionState.isPublished ? '已發布' : meetingActionState.hasAiDraft ? '校稿中' : '草稿'
                         : isPublished ? '已發布' : hasSavedDraftRecord && !draftIsDirty ? '已存草稿' : '撰寫中'}
                     </div>
                   </div>
-                  <label data-record-visibility-control className="min-w-0 bg-white px-2.5 py-2">
-                    <span className="block text-[10px] font-semibold leading-4 text-slate-400">紀錄分享範圍</span>
+                  <label data-record-visibility-control className={`min-w-0 bg-white ${isMeetingMode ? 'flex items-center gap-1.5 px-2 py-1' : 'px-2.5 py-2'}`}>
+                    <span className={`${isMeetingMode ? 'shrink-0' : 'block'} text-[10px] font-semibold ${isMeetingMode ? 'leading-3' : 'leading-4'} text-slate-400`}>{isMeetingMode ? '分享範圍' : '紀錄分享範圍'}</span>
                     <select
                       value={draft.visibility}
                       onChange={event => updateDraft({ visibility: event.target.value as KnowledgeRecordVisibility })}
-                      className="mt-0.5 h-7 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                      className={`${isMeetingMode ? 'h-6 min-w-0 flex-1 px-1 text-[11px]' : 'mt-0.5 h-7 w-full px-1.5 text-xs'} rounded-md border border-slate-200 bg-white text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100`}
                       aria-label="紀錄分享範圍"
                     >
                       <option value="private">私人</option>
@@ -1407,29 +1392,43 @@ const RecordSidebar: React.FC = () => {
                       <option value="tenant">目前工作區</option>
                     </select>
                   </label>
-                  <button
-                    type="button"
-                    data-record-composer-linked-tasks
-                    data-record-linked-tasks-toggle
-                    aria-expanded={isLinkedTasksOpen}
-                    onClick={() => setIsLinkedTasksOpen(value => !value)}
-                    className="col-span-2 flex min-w-0 items-center justify-between gap-2 bg-white px-2.5 py-2 text-left hover:bg-slate-50 sm:col-span-1"
-                  >
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      {isLinkedTasksOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      <span className="truncate text-xs font-semibold text-slate-700">關聯任務</span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
-                        {selectedLinks.length}
+                  {selectedLinks.length ? (
+                    <button
+                      type="button"
+                      data-record-composer-linked-tasks
+                      data-record-linked-tasks-toggle
+                      aria-expanded={isLinkedTasksOpen}
+                      onClick={() => setIsLinkedTasksOpen(value => !value)}
+                      className="col-span-2 flex min-w-0 items-center justify-between gap-2 bg-white px-2.5 py-2 text-left hover:bg-slate-50 sm:col-span-1"
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {isLinkedTasksOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        <span className="truncate text-xs font-semibold text-slate-700">關聯任務</span>
                       </span>
-                      <span className="text-[11px] text-slate-400">
-                        {selectedLinks.length ? '已關聯' : '未選取'}
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {selectedLinks.length}
+                        </span>
+                        <span className="text-[11px] text-slate-400">已關聯</span>
                       </span>
-                    </span>
-                  </button>
+                    </button>
+                  ) : !isMeetingMode ? (
+                    <button
+                      type="button"
+                      data-record-composer-linked-tasks
+                      data-record-linked-tasks-empty-action
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => enterTaskSelectionMode()}
+                      className="col-span-2 inline-flex min-w-0 items-center justify-center gap-1.5 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:col-span-1"
+                      title="從看板選取任務並建立紀錄關聯"
+                      aria-label="選取任務"
+                    >
+                      <Plus size={13} />
+                      選取任務
+                    </button>
+                  ) : null}
                 </div>
-                {isLinkedTasksOpen ? (
+                {selectedLinks.length && isLinkedTasksOpen ? (
                   <div data-record-linked-tasks-list className="border-t border-slate-100">
                     <div className="flex justify-end px-2 py-2">
                       <button
@@ -1466,44 +1465,6 @@ const RecordSidebar: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  </div>
-                ) : null}
-                {isMeetingMode ? (
-                  <div className="border-t border-slate-100">
-                    <button
-                      type="button"
-                      data-meeting-activity-source-toggle
-                      aria-expanded={isMeetingActivitySourceOpen}
-                      onClick={() => setIsMeetingActivitySourceOpen(value => !value)}
-                      className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-slate-50"
-                    >
-                      <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-700">
-                        {isMeetingActivitySourceOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                        <span className="truncate">AI整理來源：任務變更</span>
-                      </span>
-                      <span className="rounded-md border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700">
-                        {meetingActivities.length}
-                      </span>
-                    </button>
-                    {isMeetingActivitySourceOpen ? (
-                      <div data-meeting-activity-source-list className="max-h-32 overflow-auto border-t border-slate-100 p-2">
-                        {meetingActivities.length ? (
-                          meetingActivities.slice(-6).reverse().map(activity => (
-                            <div key={`${activity.occurredAt}-${activity.nodeId}-${activity.summary}`} className="mb-1.5 rounded-md bg-slate-50 px-2 py-1.5 text-xs leading-5 text-slate-700">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="truncate font-semibold" title={activity.title}>{activity.title}</span>
-                                <span className="shrink-0 text-[10px] text-slate-400">{dayjs(activity.occurredAt).format('HH:mm')}</span>
-                              </div>
-                              <div className="whitespace-normal break-words text-slate-500" title={activity.summary}>{activity.summary}</div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-center text-xs text-slate-400">
-                            尚未偵測到任務變更
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1589,7 +1550,6 @@ const RecordSidebar: React.FC = () => {
         ) : null}
       </div>
     </aside>
-    {isHelpOpen ? <RecordHelpDialog onClose={() => setIsHelpOpen(false)} /> : null}
     </>
   );
 };

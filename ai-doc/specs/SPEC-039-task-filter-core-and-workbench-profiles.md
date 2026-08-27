@@ -1,9 +1,10 @@
 # SPEC-039: 任務過濾器核心與全域任務平台兩欄篩選重構
 
-關聯 DEV：DEV-039、DEV-090
+關聯 DEV：DEV-039、DEV-090、DEV-091
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
-狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / Release Gate Required
+狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / Release Gate Required
 
+2026-08-27 DEV-091 lane-height preference addendum：使用者要求在 `未歸位` 與 `已歸位` 的 Y 軸版面之間增加可上下調整的分隔線，並把個人配置記錄在登入帳號。本 addendum 是 `Compatible extension`：兩個 lane 的 placement、獨立捲動、sticky header、未歸位可拖與已歸位唯讀契約不變；只新增 18%～82% 的比例式 layout preference、pointer／鍵盤 separator 與既有 `profiles.ui_preferences.layout` 帳號持久化路徑。2026-08-27 已完成本地 RD 與自動化／rendered QA-QC；未 deploy 或 release。
 2026-08-26 DEV-090 default-show-all and account-board preference addendum：使用者確認「系統預設全部顯示，不得預設過濾任何任務；過濾喜好記錄在個人帳號上」。本 addendum 刻意取代既有 `completed: false` 預設、僅以 uid 區隔的瀏覽器本機看板篩選，以及清單／心智圖逐層直接套 predicate 的行為。目標狀態是：新帳號與未設定過的看板 active filter count 為 0；所有狀態、負責人、標籤與日期條件皆不限制；使用者主動調整後才以「帳號 × 看板」保存；同一看板的看板、清單、心智圖、甘特與行事曆共用 canonical matched identities，階層模式可額外顯示 context-only ancestors。2026-08-26 已完成 RD 實作與本地自動化 QA-QC：專用 preference table migration、v4 cache／migration、獨立 filter store、version-safe repository、五模式 canonical projection、互斥可見狀態與 failure recovery 均有 source/model、實體 PostgreSQL RLS、正常 UI browser、viewport 與 regression 證據。狀態為 `Implemented / Local Automated QA-QC Passed / Release Gate Required`；未套用遠端 migration、未修改正式資料、未 deploy 或 release。
 2026-08-07 account-scoped filter memory addendum：使用者要求過濾器狀態改為每個登入帳號各自記憶。本 addendum 覆寫本文中「工作台篩選只存在當次元件 state、不得保存」的舊決策，但不引入 profile、儲存按鈕、另存、複製或團隊共用設定。看板與工作台的狀態篩選、到期／逾期、負責人/協作、標籤、關鍵字、顯示設定及工作台選定看板，均以登入帳號 uid 作為 localStorage scope；既有未分帳號 key 只在首次登入時遷移給當前帳號，遷移後刪除共用 key。行事曆訂閱篩選仍由 Supabase `owner_user_id` 與 RLS 隔離，不改其資料模型。
 2026-08-10 cross-device unplaced-task addendum：使用者指出同一帳號手機與電腦的「未歸位」任務不一致，並確認「請執行」。本 addendum 覆寫本文中「未歸位跨裝置同步不在 scope」的舊決策：Supabase backend 的未歸位任務改存 `task_workbench_unplaced_items`，以登入帳號 `owner_id` + 任務 `id` 隔離；首次載入時將既有本機 localStorage 任務以 updatedAt 合併到雲端，成功後清除本機 staging cache。Firebase / local-test backend 保留原有本機 fallback 語意；正式 migration / deploy 已完成，authenticated two-device smoke 待補。
@@ -28,6 +29,34 @@
 > Current Supersession Note - 2026-07-17：`SPEC-053` 是 placed-row drag scope 的最新權威來源。
 > `placed row 不能拖` 為 Human Confirmed 決策；DEV-039 既有 Phase 1B / Phase 2A
 > 雙向拖移與 draggable parity 文字只作歷史脈絡，不得作為新 RD 驗收條件。
+
+## DEV-091：未歸位／已歸位 Y 軸分隔線與帳號偏好
+
+文件成熟度：`Implemented / Local Automated QA-QC Passed / Human Confirmed`
+
+### 產品與 UX 契約
+
+- `未歸位` 與 `已歸位` 保持兩個獨立 vertical scroll owners；中間只有一個水平 separator，不新增設定面板、說明文案或第二個 layout control。
+- 初始比例為 50%／50%；使用者沿 Y 軸拖曳 separator 時即時預覽，pointer up／cancel 後才提交，避免拖曳期間高頻寫入遠端偏好。
+- `ArrowUp`／`ArrowDown` 每次約調整 24px，`Home`／`End` 到 18%／82% 邊界；separator 提供 accessible name、orientation、min/max/now/value text 與可見 focus。
+- preference 值為 `unplacedRatio`（0～1 比例），正規化到 18%～82% 並保留三位小數；不同 viewport 高度使用同一比例，不保存裝置像素高度。
+- 本機 cache 為 `projed-task-workbench-panel:v2:account:<uid>.unplacedRatio`；帳號 canonical layout namespace 沿用 `profiles.ui_preferences.layout.taskWorkbenchUnplacedRatio`。無登入帳號時不做 remote write。
+- remote 失敗沿用 `accountPreferencesService` 的本機 fallback 與 warning；不新增 schema、migration、RLS、API、Realtime 或 preference 管理 UI。
+
+### 相容與排除範圍
+
+- 保留 DEV-039／053／086／089 的 task identity、placement、未歸位 drag、已歸位 readonly、drop target、sticky header、filter 與獨立捲動語意。
+- separator 只接受 primary pointer；不得讓中鍵／右鍵啟動 resize，也不得成為 task drag source／drop command owner。
+- 不改工作台整體 X 軸寬度 resizer、看板畫布寬度、任務資料、權限、排序、狀態、封存或 release 行為。
+- ADR 不需要：此為局部可逆 layout preference，使用既有 account preference 架構，無新 schema／provider／外部契約。
+
+### 驗收與 evidence
+
+- 預設兩區高度差 ≤4px，divider 正好位於兩區之間且無重疊；18%／82% 時兩個 header 與捲動區仍可用。
+- pointer 上下拖曳、方向鍵、Home／End、ARIA value text、hover／focus／active 回饋均可從正常 UI 入口操作。
+- 放開後 panel cache 與 account UI preference 得到相同比例；reload 恢復本人比例，A／B 帳號 local scope 隔離。
+- 1440×900 與 390×844 沒有 document overflow、裁切、重疊或 visible/runtime errors；placement drag 回歸通過。
+- Evidence：`verify:dev-091-task-workbench-lane-resize`、`verify:dev-091-task-workbench-lane-resize-browser`、DEV-039 placement static/browser、TypeScript、targeted ESLint、`build:test`、兩張 rendered screenshots。
 
 ## Human Decision Brief - 2026-08-26 Default Show All and Account-owned Filter Preferences
 

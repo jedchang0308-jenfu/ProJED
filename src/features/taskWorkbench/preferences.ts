@@ -19,6 +19,9 @@ const TASK_WORKBENCH_OPEN_PREFS_VERSION = 1;
 export const DEFAULT_TASK_WORKBENCH_WIDTH = 340;
 export const MIN_TASK_WORKBENCH_WIDTH = 182;
 export const MAX_TASK_WORKBENCH_WIDTH = 560;
+export const DEFAULT_TASK_WORKBENCH_UNPLACED_RATIO = 0.5;
+export const MIN_TASK_WORKBENCH_UNPLACED_RATIO = 0.18;
+export const MAX_TASK_WORKBENCH_UNPLACED_RATIO = 0.82;
 
 export const clampTaskWorkbenchPanelWidth = (value: number) => {
   const viewportWidth = typeof window === 'undefined' ? 1365 : window.innerWidth;
@@ -29,11 +32,20 @@ export const clampTaskWorkbenchPanelWidth = (value: number) => {
   return Math.round(Math.min(Math.max(value, MIN_TASK_WORKBENCH_WIDTH), viewportMaxWidth));
 };
 
+export const clampTaskWorkbenchUnplacedRatio = (value: number) => {
+  if (!Number.isFinite(value)) return DEFAULT_TASK_WORKBENCH_UNPLACED_RATIO;
+  return Math.round(Math.min(
+    Math.max(value, MIN_TASK_WORKBENCH_UNPLACED_RATIO),
+    MAX_TASK_WORKBENCH_UNPLACED_RATIO,
+  ) * 1000) / 1000;
+};
+
 export type TaskWorkbenchPanelPrefs = {
   open: boolean;
   filtersOpen: boolean;
   showContainersInAllTasks: boolean;
   width: number;
+  unplacedRatio: number;
   openPreferenceVersion: number;
 };
 
@@ -47,6 +59,7 @@ const DEFAULT_PANEL_PREFS: TaskWorkbenchPanelPrefs = {
   filtersOpen: false,
   showContainersInAllTasks: false,
   width: DEFAULT_TASK_WORKBENCH_WIDTH,
+  unplacedRatio: DEFAULT_TASK_WORKBENCH_UNPLACED_RATIO,
   openPreferenceVersion: TASK_WORKBENCH_OPEN_PREFS_VERSION,
 };
 
@@ -70,6 +83,11 @@ export const readTaskWorkbenchPanelPrefs = (
       width: clampTaskWorkbenchPanelWidth(
         typeof scoped.width === 'number' ? scoped.width : DEFAULT_TASK_WORKBENCH_WIDTH,
       ),
+      unplacedRatio: clampTaskWorkbenchUnplacedRatio(
+        typeof scoped.unplacedRatio === 'number'
+          ? scoped.unplacedRatio
+          : DEFAULT_TASK_WORKBENCH_UNPLACED_RATIO,
+      ),
       openPreferenceVersion: TASK_WORKBENCH_OPEN_PREFS_VERSION,
     };
   }
@@ -83,6 +101,11 @@ export const readTaskWorkbenchPanelPrefs = (
       showContainersInAllTasks: Boolean(legacy.showContainersInAllTasks),
       width: clampTaskWorkbenchPanelWidth(
         typeof legacy.width === 'number' ? legacy.width : DEFAULT_TASK_WORKBENCH_WIDTH,
+      ),
+      unplacedRatio: clampTaskWorkbenchUnplacedRatio(
+        typeof legacy.unplacedRatio === 'number'
+          ? legacy.unplacedRatio
+          : DEFAULT_TASK_WORKBENCH_UNPLACED_RATIO,
       ),
     };
     writeStorageJson(scopedKey, migrated);

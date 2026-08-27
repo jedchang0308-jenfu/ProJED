@@ -529,6 +529,18 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 執行邊界：可修改本地產品、forward-only migration file與測試；不得套用 remote migration、修改正式資料、deploy或release。
   - 證據：`SPEC-039` DEV-090 addendum、`ADR-045`、`QA-DEV-090`、`QC-DEV-090`；contract 10/10、projection 5/5、isolated PostgreSQL RLS、五模式browser、390×844、targeted regressions、TypeScript與build全部PASS。
   - 計入交付：是
+- ✓ DEV-091 [開發點] [完成] [P1] [Local QA-QC PASS / 未 Release] 工作台上下區域高度調整與帳號偏好
+  - 摘要：在未歸位與已歸位之間加入可上下拖曳、可鍵盤操作的分隔線，並以登入帳號保存兩區比例。
+  - 來源 ID：`USER-20260827-TASK-WORKBENCH-Y-SPLIT`
+  - 父任務：DEV-039
+  - 證據：`SPEC-039` DEV-091 addendum、`QA-DEV-091`、`QC-DEV-091`；static 16 checks、DEV-039 31/31、desktop／390×844 rendered browser、TypeScript、ESLint與build:test全部PASS。
+  - 計入交付：否
+- ✓ DEV-092 [開發點] [完成] [P2] [Local QA-QC PASS / 未 Release] 會議紀錄側欄資訊精簡
+  - 摘要：依瀏覽器留言移除裝飾性標題 icon、說明入口、會議流程標題與輔助說明、各階段 icon／副標題、AI badge與常駐成功 checkpoint 文案；新會議標題不自動附加時間，紀錄時間改為 24 小時制；會議標題與紀錄時間同列；收合控制改用全域工作台同款方向並移到右側抽屜最左側，會議空白關聯任務不再顯示選取 action。
+  - 來源 ID：`USER-20260827-RECORD-SIDEBAR-QUIETNESS`
+  - 父任務：DEV-020
+  - 證據：`SPEC-020` UI 精簡 addendum、`QA-DEV-092`、`QC-DEV-092`；static 43 checks、1440×900／390×844 rendered browser、內容區剩餘高度／最小高度與不重疊、收合／展開、表單同列與緊湊控制列、空白狀態檢查、TypeScript、ESLint與git diff --check PASS。
+  - 計入交付：否
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -2028,6 +2040,96 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - 2026-08-26：完成 repo/schema/RLS/migration/failure/五模式/QA-QC readiness review，
   升級為 `RD Implementation Ready`；未實作、未驗證、未 Release。
 - 2026-08-26：完成RD實作與local automated QA-QC；contract/projection/DB/browser/regression/TypeScript/build全部PASS。狀態更新為`Implemented / Local QA-QC PASS / Not Released`。
+
+## DEV-091：工作台上下區域高度調整與帳號偏好
+
+- 文件成熟度：`Implemented / Local Automated QA-QC Passed / Human Confirmed`
+- 狀態：本地開發與 QA-QC 完成／未 Deploy／未 Release
+- 節點類型：開發點
+- 父交付點：DEV-039
+- 是否計入產品交付完成：否
+- 原始需求邊界：`USER-20260827-TASK-WORKBENCH-Y-SPLIT`
+- 風險等級：Medium（主要 UI 互動＋帳號 layout preference 路徑）
+- Spec Impact：`Compatible extension`；保留未歸位 staging、已歸位唯讀、任務拖曳與篩選契約，只新增版面比例控制。
+
+### 任務目標與範圍
+
+- [x] 在未歸位／已歸位兩個獨立捲動區之間加入單一水平分隔線，沿 Y 軸拖曳即可改變空間比例。
+- [x] 分隔線支援 `ArrowUp`／`ArrowDown` 微調及 `Home`／`End` 邊界，提供 separator role、水平 orientation、目前比例與可存取名稱。
+- [x] 比例限制在 18%～82%，預設 50%，以比例而非像素保存，避免不同裝置高度直接套用錯誤尺寸。
+- [x] 只在 pointer 結束時提交偏好；本機帳號 cache 即時保存，Supabase backend 沿用 `profiles.ui_preferences.layout.taskWorkbenchUnplacedRatio` 跨裝置路徑。
+- [x] 不新增說明面板、設定頁、按鈕、資料 schema、migration、任務狀態或新的 placement drag owner。
+
+### 驗收與驗證結果
+
+- [x] 初始兩區各半且不重疊；分隔線位於兩區邊界，視覺只保留一條細線與 hover／focus／active 回饋。
+- [x] 向下拖曳時未歸位增高、已歸位降低；向上相反；邊界時兩個 sticky header 與獨立捲動仍可用。
+- [x] pointer 與鍵盤結果寫入本人 panel cache 與 account UI preference；reload 還原，A／B 帳號 storage scope 不互相污染。
+- [x] 1440×900 與 390×844 無文件級水平溢出、重疊、裁切、visible alert、HTTP 4xx/5xx、console error 或 page error。
+- [x] `verify:dev-091-task-workbench-lane-resize` 16 checks、DEV-091 browser PASS、DEV-039 placement static 31/31 與 browser PASS。
+- [x] TypeScript、targeted ESLint、`build:test`、`git diff --check` 通過；build僅保留既有 chunk-size／Browserslist warning。
+
+### 邊界與相關文件
+
+- Remote authenticated two-device smoke 未在本輪執行；遠端欄位沿用已存在的 account preference JSON 路徑，未新增 migration 或正式環境操作。
+- 本輪未 commit、push、deploy 或 release；若要正式交付，另走 deployment/release gate。
+- SPEC：`ai-doc/specs/SPEC-039-task-filter-core-and-workbench-profiles.md`
+- QA：`ai-doc/qa/QA-DEV-091-task-workbench-lane-resize.md`
+- QC：`ai-doc/qc/QC-DEV-091-task-workbench-lane-resize.md`
+
+### 變更紀錄
+
+- 2026-08-27：依使用者附圖建立並完成 DEV-091；本地 RD、QA、QC 與真實畫面檢查通過。
+
+## DEV-092：會議紀錄側欄資訊精簡
+
+- 文件成熟度：`Implemented / Local Automated QA-QC Passed / Human Confirmed`
+- 狀態：本地開發與 QA-QC 完成／未 Deploy／未 Release
+- 節點類型：開發點
+- 父交付點：DEV-020
+- 是否計入產品交付完成：否
+- 原始需求邊界：`USER-20260827-RECORD-SIDEBAR-QUIETNESS`（瀏覽器留言 Comments 1–7）
+- 風險等級：Medium（使用者可見側欄互動與流程入口精簡）
+- Spec Impact：`Intentional replacement`；SPEC-020 原有功能說明入口視為歷史契約，現行以 UI 精簡 addendum 為準；不改紀錄資料、保存、AI整理或未儲存防呆。
+
+### 任務目標與範圍
+
+- [x] 標題只保留紀錄文字，移除裝飾性 icon與 `紀錄功能說明` 按鈕／modal。
+- [x] 移除會議流程標題、輔助說明、各階段 icon／副標題、`AI選用` 與正常完成 checkpoint 常駐文案；新會議標題不自動附加時間，紀錄時間改為 24 小時制；保存失敗、衝突、暫停與保存中狀態仍可見。
+- [x] 收合控制改用 `ChevronRight`，放在右側抽屜最左側、位於標題前；收合後以 `ChevronLeft` 展開。
+- [x] 會議模式標題與紀錄時間位於同一橫列；會議空白關聯任務不顯示 `0 / 未選取` 摘要或 `選取任務` action；個人工作紀錄入口與已有關聯任務管理維持。
+- [x] 會議流程階段按鈕高度縮為 `h-9`；可操作階段使用 pointer cursor／既有 hover 回饋（含目前階段），停用階段維持不可操作游標。
+- [x] 移除會議底部 `AI整理來源：任務變更` 摘要／展開列；任務變更仍保留給 AI整理流程使用。
+- [x] 會議模式狀態／分享範圍控制列改為單列緊湊版，使用可讀短標籤且約縮減 50% 高度；個人工作紀錄排列維持。
+- [x] drawer 內層改為縱向 flex 高度鏈，內容編輯器填滿流程／欄位／狀態／action 固定後的剩餘空間；會議至少 220px、工作紀錄至少 150px，窄版不足時捲動且不與控制列重疊。
+
+### 驗收與驗證結果
+
+- [x] `verify:dev-092-record-sidebar-quietness` 43 checks 通過。
+- [x] 1440×900 與 390×844 實際頁面通過：無 help／AI badge／成功 checkpoint 文案，collapse control 位於右側抽屜最左側且方向正確，標題／時間同列，會議空白任務摘要與選取 action 隱藏。
+- [x] 收合／展開互動、窄版無水平溢出、visible error sweep、console/page error 均通過。
+- [x] `verify:dev-020-record-workflow-redesign`、`verify:dev-002-records`、`verify:dev-028-cross-mode-task-interactions`、TypeScript、targeted ESLint與`git diff --check`通過。
+
+### 邊界與相關文件
+
+- 本輪不新增資料 schema、migration、API、權限或保存格式；不修改功能流程與未儲存防呆。
+- 本輪未 commit、push、deploy 或 release；若要正式交付，另走 deployment/release gate。
+- SPEC：`ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md`
+- QA：`ai-doc/qa/QA-DEV-092-record-sidebar-quietness.md`
+- QC：`ai-doc/qc/QC-DEV-092-record-sidebar-quietness.md`
+
+### 變更紀錄
+
+- 2026-08-27：依瀏覽器 Comments 1–7 完成側欄資訊精簡與實際畫面驗證。
+- 2026-08-27：依新增瀏覽器留言移除會議流程標題與輔助說明，並重跑靜態與 rendered browser 驗證。
+- 2026-08-27：依新增瀏覽器留言將會議流程階段列改為緊湊高度，並補上可操作階段 pointer cursor／停用階段不可操作游標。
+- 2026-08-27：依新增瀏覽器留言移除會議底部 `AI整理來源：任務變更` 摘要／展開列，保留任務變更資料供 AI整理流程使用。
+- 2026-08-27：依新增瀏覽器留言將會議模式狀態／分享範圍控制列改為單列緊湊版，約縮減 50% 高度。
+- 2026-08-27：依新增瀏覽器留言讓內容編輯器填滿側欄剩餘空間，並補上桌機／窄版最小高度與不重疊驗證。
+- 2026-08-27：依新增瀏覽器留言移除新會議標題時間片段，並將紀錄時間改為無上午／下午的 24 小時制輸入。
+- 2026-08-27：依新增瀏覽器留言移除會議流程各階段的 icon 與副標題，並保留五個主要階段操作。
+- 2026-08-27：依新增瀏覽器留言修正右側面板收合／展開箭頭方向、將會議標題與紀錄時間排在同一橫列，並移除空白狀態 `選取任務` action。
+- 2026-08-27：依新增瀏覽器留言將收合控制移到右側抽屜 header 最左側、位於紀錄標題前。
 
 ## PM Update 歷史歸檔
 

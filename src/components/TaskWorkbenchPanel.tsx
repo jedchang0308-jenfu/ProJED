@@ -26,8 +26,11 @@ import {
   writeTaskWorkbenchFilterPrefs,
   writeTaskWorkbenchPanelPrefs,
   clampTaskWorkbenchPanelWidth,
+  clampTaskWorkbenchUnplacedRatio,
   MAX_TASK_WORKBENCH_WIDTH,
+  MAX_TASK_WORKBENCH_UNPLACED_RATIO,
   MIN_TASK_WORKBENCH_WIDTH,
+  MIN_TASK_WORKBENCH_UNPLACED_RATIO,
   type TaskWorkbenchPanelPrefs,
 } from '../features/taskWorkbench/preferences';
 import { TaskPlacementPendingIndicator } from './Wbs/taskDrag/TaskPlacementPendingIndicator';
@@ -67,6 +70,13 @@ const persistTaskWorkbenchWidth = (width: number, accountId: string | null) => {
   const currentPrefs = readTaskWorkbenchPanelPrefs(accountId);
   writeTaskWorkbenchPanelPrefs({ ...currentPrefs, width: clampedWidth }, accountId);
   persistAccountLayoutPreferences(accountId, { taskWorkbenchWidth: clampedWidth });
+};
+
+const persistTaskWorkbenchUnplacedRatio = (ratio: number, accountId: string | null) => {
+  const clampedRatio = clampTaskWorkbenchUnplacedRatio(ratio);
+  const currentPrefs = readTaskWorkbenchPanelPrefs(accountId);
+  writeTaskWorkbenchPanelPrefs({ ...currentPrefs, unplacedRatio: clampedRatio }, accountId);
+  persistAccountLayoutPreferences(accountId, { taskWorkbenchUnplacedRatio: clampedRatio });
 };
 
 type BoardOption = {
@@ -129,7 +139,8 @@ const WorkbenchUnclassifiedSection: React.FC<{
   canCreateTask: boolean;
   canMoveTask: boolean;
   onCreateTask: () => void;
-}> = ({ tasks, canCreateTask, canMoveTask, onCreateTask }) => {
+  style?: React.CSSProperties;
+}> = ({ tasks, canCreateTask, canMoveTask, onCreateTask, style }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'task-workbench-unplaced-lane',
     disabled: !canMoveTask,
@@ -142,7 +153,8 @@ const WorkbenchUnclassifiedSection: React.FC<{
   return (
     <section
       ref={setNodeRef}
-      className={`scrollbar-subtle min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+      className={`scrollbar-subtle min-h-0 shrink-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+      style={style}
       data-task-workbench-unclassified-section="true"
       data-task-workbench-unplaced-lane="true"
       data-task-workbench-lane-drop-target="unplaced"
@@ -644,9 +656,14 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const { previewedPanel } = usePanelPreview();
   const [panelPrefs, setPanelPrefs] = React.useState<PanelPrefs>(() => readTaskWorkbenchPanelPrefs(accountId));
   const [panelWidth, setPanelWidth] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).width);
+  const [unplacedRatio, setUnplacedRatio] = React.useState(() => readTaskWorkbenchPanelPrefs(accountId).unplacedRatio);
   const [isResizing, setIsResizing] = React.useState(false);
+  const [isResizingLanes, setIsResizingLanes] = React.useState(false);
   const panelWidthRef = React.useRef(panelWidth);
+  const unplacedRatioRef = React.useRef(unplacedRatio);
   const resizeCleanupRef = React.useRef<(() => void) | null>(null);
+  const laneResizeCleanupRef = React.useRef<(() => void) | null>(null);
+  const laneStackRef = React.useRef<HTMLDivElement>(null);
   const [selectedBoardId, setSelectedBoardId] = React.useState<string | null>(() => readTaskWorkbenchFilterPrefs(accountId).selectedBoardId);
   const [filtersByBoardId, setFiltersByBoardId] = React.useState<Record<string, TaskFilterState>>(() => readTaskWorkbenchFilterPrefs(accountId).filtersByBoardId);
   const filterToggleRef = React.useRef<HTMLButtonElement>(null);
@@ -681,19 +698,39 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     setPanelPrefs(nextPanelPrefs);
     panelWidthRef.current = nextPanelPrefs.width;
     setPanelWidth(nextPanelPrefs.width);
+    unplacedRatioRef.current = nextPanelPrefs.unplacedRatio;
+    setUnplacedRatio(nextPanelPrefs.unplacedRatio);
     const filterPrefs = readTaskWorkbenchFilterPrefs(accountId);
     setSelectedBoardId(filterPrefs.selectedBoardId);
     setFiltersByBoardId(filterPrefs.filtersByBoardId);
 
     let cancelled = false;
     void hydrateAccountLayoutPreferences(accountId).then(preferences => {
-      if (cancelled || typeof preferences.taskWorkbenchWidth !== 'number') return;
-      const hydratedWidth = clampTaskWorkbenchPanelWidth(preferences.taskWorkbenchWidth);
+      if (cancelled) return;
+      const hasHydratedWidth = typeof preferences.taskWorkbenchWidth === 'number';
+      const hasHydratedRatio = typeof preferences.taskWorkbenchUnplacedRatio === 'number';
+      if (!hasHydratedWidth && !hasHydratedRatio) return;
       const currentPrefs = readTaskWorkbenchPanelPrefs(accountId);
-      const hydratedPrefs = { ...currentPrefs, width: hydratedWidth };
+      const hydratedWidth = hasHydratedWidth
+        ? clampTaskWorkbenchPanelWidth(preferences.taskWorkbenchWidth!)
+        : currentPrefs.width;
+      const hydratedRatio = hasHydratedRatio
+        ? clampTaskWorkbenchUnplacedRatio(preferences.taskWorkbenchUnplacedRatio!)
+        : currentPrefs.unplacedRatio;
+      const hydratedPrefs = {
+        ...currentPrefs,
+        width: hydratedWidth,
+        unplacedRatio: hydratedRatio,
+      };
       panelWidthRef.current = hydratedWidth;
+      unplacedRatioRef.current = hydratedRatio;
       setPanelWidth(hydratedWidth);
-      setPanelPrefs(current => ({ ...current, width: hydratedWidth }));
+      setUnplacedRatio(hydratedRatio);
+      setPanelPrefs(current => ({
+        ...current,
+        width: hydratedWidth,
+        unplacedRatio: hydratedRatio,
+      }));
       writeTaskWorkbenchPanelPrefs(hydratedPrefs, accountId);
     });
 
@@ -705,6 +742,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   React.useEffect(() => {
     panelWidthRef.current = panelWidth;
   }, [panelWidth]);
+
+  React.useEffect(() => {
+    unplacedRatioRef.current = unplacedRatio;
+  }, [unplacedRatio]);
 
   React.useEffect(() => {
     const handleViewportResize = () => {
@@ -720,7 +761,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     return () => window.removeEventListener('resize', handleViewportResize);
   }, [accountId]);
 
-  React.useEffect(() => () => resizeCleanupRef.current?.(), []);
+  React.useEffect(() => () => {
+    resizeCleanupRef.current?.();
+    laneResizeCleanupRef.current?.();
+  }, []);
 
   React.useEffect(() => {
     const open = () => {
@@ -1005,6 +1049,72 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     applyPanelWidth(panelWidth + (event.key === 'ArrowRight' ? 24 : -24), true);
   };
 
+  const applyUnplacedRatio = (nextRatio: number, persist = false) => {
+    const clampedRatio = clampTaskWorkbenchUnplacedRatio(nextRatio);
+    unplacedRatioRef.current = clampedRatio;
+    setUnplacedRatio(clampedRatio);
+    if (persist) {
+      setPanelPrefs(current => ({ ...current, unplacedRatio: clampedRatio }));
+      persistTaskWorkbenchUnplacedRatio(clampedRatio, accountId);
+    }
+  };
+
+  const handleLaneResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPrimaryPointerActivation(event)) return;
+    const laneStackHeight = laneStackRef.current?.getBoundingClientRect().height ?? 0;
+    if (laneStackHeight <= 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    laneResizeCleanupRef.current?.();
+
+    const startY = event.clientY;
+    const startRatio = unplacedRatioRef.current;
+    const availableHeight = Math.max(laneStackHeight - 12, 1);
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    setIsResizingLanes(true);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      applyUnplacedRatio(startRatio + (moveEvent.clientY - startY) / availableHeight);
+    };
+
+    const cleanup = () => {
+      setIsResizingLanes(false);
+      setPanelPrefs(current => ({ ...current, unplacedRatio: unplacedRatioRef.current }));
+      persistTaskWorkbenchUnplacedRatio(unplacedRatioRef.current, accountId);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+      laneResizeCleanupRef.current = null;
+    };
+
+    laneResizeCleanupRef.current = cleanup;
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  const handleLaneResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const laneStackHeight = laneStackRef.current?.getBoundingClientRect().height ?? 0;
+    const keyboardStep = laneStackHeight > 0 ? 24 / Math.max(laneStackHeight - 12, 1) : 0.05;
+    let nextRatio: number | null = null;
+
+    if (event.key === 'ArrowUp') nextRatio = unplacedRatio - keyboardStep;
+    if (event.key === 'ArrowDown') nextRatio = unplacedRatio + keyboardStep;
+    if (event.key === 'Home') nextRatio = MIN_TASK_WORKBENCH_UNPLACED_RATIO;
+    if (event.key === 'End') nextRatio = MAX_TASK_WORKBENCH_UNPLACED_RATIO;
+    if (nextRatio === null) return;
+
+    event.preventDefault();
+    applyUnplacedRatio(nextRatio, true);
+  };
+
   React.useEffect(() => {
     if (!isExpanded) {
       markLeftPanelClosed('task-workbench');
@@ -1110,52 +1220,81 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
           ) : null}
         </div>
 
-        <WorkbenchUnclassifiedSection
-          tasks={unplacedTasks}
-          canCreateTask={canCreateTask}
-          canMoveTask={canMoveTask}
-          onCreateTask={handleCreateUnplacedTask}
-        />
-
         <div
-          ref={setPlacedBoardLaneRef}
-          className={`scrollbar-subtle min-h-0 flex-1 basis-0 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
-          data-task-workbench-placed-board-lane="true"
-          data-task-workbench-lane-drop-target="placed-board"
-          data-board-id={selectedBoardOption?.boardId || undefined}
-          data-workspace-id={selectedBoardOption?.workspaceId || undefined}
+          ref={laneStackRef}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          data-task-workbench-lane-stack="true"
         >
+          <WorkbenchUnclassifiedSection
+            tasks={unplacedTasks}
+            canCreateTask={canCreateTask}
+            canMoveTask={canMoveTask}
+            onCreateTask={handleCreateUnplacedTask}
+            style={{ flexBasis: `calc(${unplacedRatio * 100}% - 6px)` }}
+          />
+
           <div
-            className="sticky top-0 z-20 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2 bg-slate-100"
-            data-task-workbench-section-header="all-tasks"
+            role="separator"
+            aria-label="調整未歸位與已歸位區域高度"
+            aria-orientation="horizontal"
+            aria-valuemin={Math.round(MIN_TASK_WORKBENCH_UNPLACED_RATIO * 100)}
+            aria-valuemax={Math.round(MAX_TASK_WORKBENCH_UNPLACED_RATIO * 100)}
+            aria-valuenow={Math.round(unplacedRatio * 100)}
+            aria-valuetext={`未歸位 ${Math.round(unplacedRatio * 100)}%，已歸位 ${Math.round((1 - unplacedRatio) * 100)}%`}
+            tabIndex={0}
+            onPointerDown={handleLaneResizeStart}
+            onKeyDown={handleLaneResizeKeyDown}
+            title="拖拉調整未歸位與已歸位高度；上下方向鍵也可微調"
+            className={`group relative z-30 flex h-3 shrink-0 touch-none cursor-row-resize items-center bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${isResizingLanes ? 'bg-primary/5' : ''}`}
+            data-task-workbench-lane-resize-handle="true"
           >
-            <div
-              className="box-border mb-px flex h-8 min-w-0 w-[104px] shrink items-center gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
-              data-task-workbench-section-label="all-tasks"
-            >
-              <span className="min-w-0 truncate text-[13px] font-black leading-5 text-white">已歸位</span>
-            </div>
-            <span className="sr-only" data-task-workbench-all-tasks-count="true">
-              {sortedPlacedTasks.length}
-            </span>
+            <span
+              aria-hidden="true"
+              className={`h-px w-full transition-colors ${isResizingLanes ? 'bg-primary' : 'bg-slate-400 group-hover:bg-primary group-focus-visible:bg-primary'}`}
+              data-task-workbench-lane-divider-line="true"
+            />
           </div>
 
-          <div className="space-y-px" data-task-workbench-all-tasks-list="true">
-            {sortedPlacedTasks.map(task => (
-              <WorkbenchDragCard
-                key={`all-${task.id}`}
-                task={task}
-                canMoveTask={canMoveTask}
-                placement="placed"
-                surface="all-tasks"
-                hierarchyDepth={getTaskHierarchyDepth(task, nodes)}
-              />
-            ))}
-            {sortedPlacedTasks.length === 0 ? (
-              <div className="px-1 py-1 text-sm font-semibold text-slate-500">
-                目前沒有可排序的任務。
+          <div
+            ref={setPlacedBoardLaneRef}
+            className={`scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+            data-task-workbench-placed-board-lane="true"
+            data-task-workbench-lane-drop-target="placed-board"
+            data-board-id={selectedBoardOption?.boardId || undefined}
+            data-workspace-id={selectedBoardOption?.workspaceId || undefined}
+          >
+            <div
+              className="sticky top-0 z-20 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2 bg-slate-100"
+              data-task-workbench-section-header="all-tasks"
+            >
+              <div
+                className="box-border mb-px flex h-8 min-w-0 w-[104px] shrink items-center gap-2 rounded-md border border-slate-600 bg-slate-700 px-3 text-white"
+                data-task-workbench-section-label="all-tasks"
+              >
+                <span className="min-w-0 truncate text-[13px] font-black leading-5 text-white">已歸位</span>
               </div>
-            ) : null}
+              <span className="sr-only" data-task-workbench-all-tasks-count="true">
+                {sortedPlacedTasks.length}
+              </span>
+            </div>
+
+            <div className="space-y-px" data-task-workbench-all-tasks-list="true">
+              {sortedPlacedTasks.map(task => (
+                <WorkbenchDragCard
+                  key={`all-${task.id}`}
+                  task={task}
+                  canMoveTask={canMoveTask}
+                  placement="placed"
+                  surface="all-tasks"
+                  hierarchyDepth={getTaskHierarchyDepth(task, nodes)}
+                />
+              ))}
+              {sortedPlacedTasks.length === 0 ? (
+                <div className="px-1 py-1 text-sm font-semibold text-slate-500">
+                  目前沒有可排序的任務。
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 

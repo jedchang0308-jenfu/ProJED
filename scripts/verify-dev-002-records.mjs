@@ -86,7 +86,7 @@ const checks = [
     path: 'src/components/Records/RecordSidebar.tsx',
     label: 'record right sidebar',
     snippets: [
-      'PanelRightClose',
+      'ChevronLeft',
       'RecordContentEditor',
       'openNewRecord',
       'enterTaskSelectionMode',
@@ -121,7 +121,7 @@ const checks = [
       'isRecordSelectionMode',
       'insertRecordTaskMention(nodeId',
       'isRecordSelected',
-      'border-blue-500 bg-blue-500',
+      'border-primary bg-primary text-white',
     ],
   },
   {
@@ -131,7 +131,7 @@ const checks = [
       'isRecordSelectionMode',
       'insertRecordTaskMention(child.id',
       'isRecordSelected',
-      'border-blue-500 bg-blue-500',
+      'border-primary bg-primary text-white',
     ],
   },
   {

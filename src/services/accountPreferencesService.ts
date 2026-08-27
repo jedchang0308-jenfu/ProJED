@@ -5,6 +5,7 @@ import {
   WORKSPACE_SIDEBAR_WIDTH_PREFS_KEY,
 } from '../features/layout/preferences';
 import {
+  clampTaskWorkbenchUnplacedRatio,
   TASK_WORKBENCH_PANEL_PREFS_KEY,
 } from '../features/taskWorkbench/preferences';
 import {
@@ -18,6 +19,7 @@ const ACCOUNT_UI_PREFERENCES_KEY = 'projed-ui-preferences:v1';
 export type AccountLayoutPreferences = {
   workspaceSidebarWidth?: number;
   taskWorkbenchWidth?: number;
+  taskWorkbenchUnplacedRatio?: number;
 };
 
 type UiPreferences = {
@@ -42,6 +44,9 @@ const normalizeLayoutPreferences = (value: unknown): AccountLayoutPreferences =>
   }
   if (typeof value.taskWorkbenchWidth === 'number' && Number.isFinite(value.taskWorkbenchWidth)) {
     layout.taskWorkbenchWidth = value.taskWorkbenchWidth;
+  }
+  if (typeof value.taskWorkbenchUnplacedRatio === 'number' && Number.isFinite(value.taskWorkbenchUnplacedRatio)) {
+    layout.taskWorkbenchUnplacedRatio = clampTaskWorkbenchUnplacedRatio(value.taskWorkbenchUnplacedRatio);
   }
   return layout;
 };
@@ -72,6 +77,13 @@ const readLegacyLayoutPreferences = (accountId: string): AccountLayoutPreference
     Number.isFinite(legacyPanelPrefs.width)
   ) {
     layout.taskWorkbenchWidth = legacyPanelPrefs.width;
+  }
+  if (
+    isRecord(legacyPanelPrefs) &&
+    typeof legacyPanelPrefs.unplacedRatio === 'number' &&
+    Number.isFinite(legacyPanelPrefs.unplacedRatio)
+  ) {
+    layout.taskWorkbenchUnplacedRatio = clampTaskWorkbenchUnplacedRatio(legacyPanelPrefs.unplacedRatio);
   }
   return layout;
 };

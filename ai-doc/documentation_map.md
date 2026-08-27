@@ -1,5 +1,26 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-27（DEV-092 會議紀錄側欄資訊精簡）
+
+Spec Impact：`Intentional replacement`。依使用者瀏覽器 Comments 1–7 與後續留言，SPEC-020 原有功能說明入口視為歷史契約；現行側欄移除裝飾 icon、說明 modal、會議流程標題與輔助說明、各階段 icon／副標題、`AI選用`、`AI整理來源：任務變更` 摘要列與正常完成 checkpoint 常駐文案，新會議標題不自動附加時間，紀錄時間改為 24 小時制且不顯示上午／下午，會議標題與紀錄時間同列，內容編輯器填滿其他固定區塊後的剩餘高度並保留窄版最小高度，會議模式狀態／分享範圍控制列採單列緊湊版、使用可讀短標籤並約縮減 50% 高度，會議流程階段列採緊湊高度並依可操作狀態提供 pointer／hover／不可操作游標，收合控制改用全域工作台同款方向並移到右側抽屜最左側、位於標題前，會議空白關聯任務不顯示摘要或 `選取任務` action，個人工作紀錄入口維持。保存失敗／衝突／暫停與保存中狀態、紀錄資料與未儲存防呆不變。DEV-092 狀態為 `Implemented / Local QA-QC PASS / 未 Release`。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` | In sync | DEV-092／DEV-020 | 新增 UI 精簡 addendum，明確取代功能說明入口與空白摘要的歷史視覺契約。 |
+| `RecordSidebar.tsx`、DEV-092 scripts | Implemented / Verified | DEV-092 | header、緊湊 workflow／控制列、內容編輯器剩餘高度 flex-fill、可操作游標／hover、AI整理來源列移除、標題／時間同列、空白任務狀態、收合／展開方向與 RWD 互動已落地。 |
+| `QA-DEV-092`、`QC-DEV-092` | Executed / PASS | DEV-092 | static 43 checks、1440×900／390×844 rendered browser、內容區最小高度／控制列不重疊、互動、overflow 與 error sweep PASS。 |
+
+## Documentation Map Update - 2026-08-27（DEV-091 工作台 Y 軸分隔線）
+
+Spec Impact：`Compatible extension`。使用者要求調整未歸位／已歸位的 Y 軸版面並把喜好記錄在帳號；DEV-091 以單一水平 separator、18%～82% 比例、pointer／keyboard 操作與既有 account UI preference 路徑交付，不改 placement、task data、schema、permission 或 release。狀態為 `Implemented / Local QA-QC PASS / 未 Release`。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md`、`SPEC-039` DEV-091 addendum | In sync / Local QA-QC PASS | DEV-091／DEV-039 | 固定比例式split、互動／A11y、帳號偏好、out-of-scope與release boundary。 |
+| `TaskWorkbenchPanel.tsx`、task workbench／account preference modules | Implemented / Verified | DEV-091 | pointer move只更新UI、結束後保存；local cache＋`profiles.ui_preferences.layout.taskWorkbenchUnplacedRatio` hydration。 |
+| `QA-DEV-091`、`QC-DEV-091`、DEV-091 scripts | Executed / PASS | DEV-091 | static 16 checks、1440×900／390×844 rendered、reload、keyboard、overflow、error sweep與DEV-039 regression PASS。 |
+| `output/playwright/dev-091/*.png` | Human-inspected rendered evidence | DEV-091 | 桌機／窄版分隔線、兩區幾何與無重疊／裁切證據。 |
+
 ## Documentation Map Update - 2026-08-26（DEV-090 預設全顯示與帳號看板篩選一致性）
 
 Spec Impact：`Intentional replacement + corrective follow-up`。使用者確認未設定篩選時必須顯示全部任務，主動篩選喜好歸屬個人帳號並按看板隔離；production 診斷同時證實現行 uid-only 本機偏好與清單／心智圖逐層 predicate 會造成同看板跨模式結果不一致。DEV-090 已完成 default／v4 migration、專用 preference table與RLS、version-safe repository、獨立store、五模式canonical projection、互斥visible states及local automated QA-QC；狀態為 `Implemented / Local QA-QC PASS / Not Released / Release Gate Required`。本狀態不授權 remote migration、正式資料、deploy 或 release。
