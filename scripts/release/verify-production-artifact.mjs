@@ -102,7 +102,11 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
 const latestManifest = () => {
   const root = path.resolve(process.cwd(), 'output', 'release', 'dev-083');
   if (!fs.existsSync(root)) return null;
-  const dirs = fs.readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort().reverse();
+  const dirs = fs.readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && /^\d{14}-[a-z0-9]+$/i.test(entry.name))
+    .map(entry => entry.name)
+    .sort()
+    .reverse();
   for (const dir of dirs) {
     const manifestPath = path.join(root, dir, 'manifest.json');
     if (!fs.existsSync(manifestPath)) continue;
