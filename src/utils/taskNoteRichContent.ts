@@ -233,27 +233,3 @@ export const taskNoteToAiMarkdown = (note: Pick<TaskDetailNote, 'content' | 'ric
   const projection = taskNoteRichContentToMarkdown(note.richContent);
   return projection || note.content.trim();
 };
-
-export const appendPlainTextToTaskNote = (note: TaskDetailNote, appendText: string): TaskDetailNote => {
-  const normalizedAppend = appendText.replace(/\r\n?/g, '\n').trim();
-  if (!normalizedAppend) return note;
-
-  const base = isTaskNoteRichContent(note.richContent)
-    ? note.richContent
-    : createPlainTaskNoteRichContent(note.content);
-  const clonedState = JSON.parse(JSON.stringify(base.editorState)) as SerializedEditorState;
-  const root = clonedState.root as unknown as TaskNoteSerializedNode;
-  const currentChildren = normalizeChildren(root.children);
-  const hasExistingContent = currentChildren.some(child => serializePlainBlock(child).trim().length > 0);
-  root.children = [
-    ...(hasExistingContent ? currentChildren : []),
-    ...normalizedAppend.split('\n').map(createParagraphNode),
-  ];
-  const richContent = createTaskNoteRichContent(clonedState);
-
-  return {
-    ...note,
-    richContent,
-    content: taskNoteRichContentToPlainText(richContent),
-  };
-};

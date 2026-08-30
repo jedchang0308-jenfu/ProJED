@@ -141,6 +141,7 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
         scopeBoardIds: [activeBoardId],
         preserveOutOfScope: true,
       });
+      void useWbsStore.getState().loadTrackingReferences(resolvedActiveWorkspaceId);
       useWbsStore.setState({ dependencies, loading: false, error: null });
     };
 
@@ -194,11 +195,31 @@ export function useSupabaseSync(options: { enabled?: boolean } = {}) {
             },
             () => boardRefresh.request()
           )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'wbs_item_placements',
+              filter: `project_id=eq.${projectId}`,
+            },
+            () => boardRefresh.request()
+          )
           // Postgres Changes cannot reliably filter DELETE payloads. Rare hard
           // deletes therefore trigger one bounded active-board consistency read.
           .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'wbs_items' }, () => boardRefresh.request())
           .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'wbs_dependencies' }, () => boardRefresh.request())
           .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'wbs_item_tags' }, () => boardRefresh.request())
+          .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'wbs_item_placements' }, () => boardRefresh.request())
+          // Canonical source tasks may live on another board while this board
+          // displays a tracking projection. RLS still filters the change
+          // stream; the tenant-scoped listener keeps source edits realtime.
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'wbs_items',
+            filter: `tenant_id=eq.${tenantId}`,
+          }, () => boardRefresh.request())
           .subscribe((status, error) => {
             // Refreshing only after the channel is live prevents a change made
             // between the initial REST read and subscription from being missed.

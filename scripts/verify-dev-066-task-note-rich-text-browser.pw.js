@@ -253,33 +253,61 @@ async (page) => {
   await laptopToggle.click();
   await laptopToolbar.waitFor({ state: 'hidden', timeout: 5000 });
 
-  const richBeforeMobile = JSON.stringify((await readStoredTask()).detailNotes[0].richContent.editorState.root.children);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForFunction(() => document.querySelectorAll('[data-task-note-mobile-readonly="true"]').length === 2, null, { timeout: 10000 });
-  assert(await modal.locator('[data-task-note-format-toggle="true"]').count() === 0, 'mobile has no format toggle');
+  await page.waitForFunction(() => document.querySelectorAll('[data-task-note-editor-loaded="true"]').length === 2, null, { timeout: 10000 });
+  assert(await modal.locator('[data-task-note-format-toggle="true"]').count() === 2, 'mobile shows one format toggle per note');
   assert(await modal.locator('[data-task-note-toolbar-popover="true"]').count() === 0, 'mobile has no toolbar');
-  assert(await modal.locator('[data-task-note-editor-loaded="true"]').count() === 0, 'mobile does not mount desktop editor');
-  assert(await modal.locator('[contenteditable="true"]').count() === 0, 'mobile has zero contenteditable');
-  assert(await modal.locator('[data-task-note-mobile-append-input="true"]').count() === 2, 'mobile has one plain append field per note');
-  assert(await modal.locator('[data-task-note-readonly-content="true"] h3').count() === 1, 'mobile renderer preserves heading');
-  assert(await modal.locator('[data-task-note-readonly-content="true"] ul').count() === 1, 'mobile renderer preserves list');
-  assert(await modal.locator('[data-task-note-readonly-content="true"] .font-semibold').count() >= 1, 'mobile renderer preserves bold text');
+  assert(await modal.locator('[data-task-note-editor-loaded="true"]').count() === 2, 'mobile mounts the same editor for every note');
+  assert(await modal.locator('[contenteditable="true"]').count() === 2, 'mobile exposes one contenteditable per note');
+  assert(await modal.locator('[data-task-note-mobile-append-input="true"]').count() === 0, 'mobile append field is removed');
+  assert(await modal.getByText('追加文字', { exact: true }).count() === 0, 'mobile append label is removed');
+  assert(await modal.locator('[data-task-detail-note-content-input="true"] h3').count() === 1, 'mobile editor preserves heading');
+  assert(await modal.locator('[data-task-detail-note-content-input="true"] ul').count() === 1, 'mobile editor preserves list');
+  assert(await modal.locator('[data-task-detail-note-content-input="true"] .font-semibold').count() >= 1, 'mobile editor preserves bold text');
 
   const firstMobileCard = modal.locator('[data-task-detail-note-card="true"]').first();
-  const appendText = '手機追加內容 ' + Date.now().toString(36);
-  await firstMobileCard.locator('[data-task-note-mobile-append-input="true"]').fill(appendText);
-  await firstMobileCard.locator('[data-task-note-mobile-append-submit="true"]').click();
-  await page.waitForFunction(appendText => {
+  const firstMobileEditor = firstMobileCard.locator('[data-task-detail-note-content-input="true"]');
+  const mobileText = '手機直接編輯 ' + Date.now().toString(36);
+  await firstMobileEditor.click();
+  await firstMobileEditor.press('Control+End');
+  await firstMobileEditor.type(mobileText);
+  await page.waitForFunction(mobileText => {
     const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev066-task'];
-    return task?.detailNotes?.[0]?.content?.includes(appendText);
-  }, appendText, { timeout: 10000 });
-  const storedAfterMobile = await readStoredTask();
-  const mobileChildren = storedAfterMobile.detailNotes[0].richContent.editorState.root.children;
-  const oldChildren = JSON.parse(richBeforeMobile);
-  assert(JSON.stringify(mobileChildren.slice(0, oldChildren.length)) === richBeforeMobile, 'mobile append preserves original rich nodes byte-for-byte');
-  assert(mobileChildren.length === oldChildren.length + 1, 'mobile append adds exactly one paragraph');
-  assert(mobileChildren[1].children[0].format === 1, 'mobile append preserves original bold bit');
-  await firstMobileCard.getByText(appendText, { exact: true }).waitFor({ state: 'visible', timeout: 5000 });
+    return task?.detailNotes?.[0]?.content?.includes(mobileText);
+  }, mobileText, { timeout: 10000 });
+  const storedAfterMobileTyping = await readStoredTask();
+  const mobileRootAfterTyping = storedAfterMobileTyping.detailNotes[0].richContent.editorState.root;
+  assert(mobileRootAfterTyping.children[0].type === 'heading', 'mobile direct editing preserves the existing heading node');
+  assert((mobileRootAfterTyping.children[1].children[0].format & 1) === 1, 'mobile direct editing preserves the existing bold bit');
+  assert(JSON.stringify(mobileRootAfterTyping).includes('https://example.com/spec'), 'mobile direct editing preserves the existing safe link');
+
+  await firstMobileEditor.click();
+  await firstMobileEditor.press('Control+a');
+  const firstMobileToggle = firstMobileCard.locator('[data-task-note-format-toggle="true"]');
+  await firstMobileToggle.click();
+  const firstMobileToolbar = firstMobileCard.locator('[data-task-note-toolbar-popover="true"]');
+  await firstMobileToolbar.waitFor({ state: 'visible', timeout: 5000 });
+  const mobileToolbarBounds = await getGeometry(firstMobileToolbar);
+  const mobileToolbarViewport = await page.evaluate(() => ({ width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+  assert(mobileToolbarBounds.x >= 0 && mobileToolbarBounds.x + mobileToolbarBounds.width <= mobileToolbarViewport.width + 1, 'mobile toolbar stays inside viewport', { mobileToolbarBounds, mobileToolbarViewport });
+  assert(mobileToolbarBounds.width >= 280, 'mobile toolbar uses the note header width instead of collapsing to one button', { mobileToolbarBounds });
+  await firstMobileToolbar.getByRole('button', { name: '底線' }).click();
+  await page.waitForFunction(() => {
+    const task = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev066-task'];
+    return (task?.detailNotes?.[0]?.richContent?.editorState?.root?.children?.[0]?.children?.[0]?.format & 8) === 8;
+  }, null, { timeout: 10000 });
+  await firstMobileEditor.press('Control+s');
+  await modal.locator('[data-task-details-save-status="saved"]', { hasText: '已儲存' }).waitFor({ state: 'visible', timeout: 5000 });
+  await page.screenshot({ path: 'output/playwright/dev-066-task-note-mobile-390-toolbar.png', fullPage: true });
+  await firstMobileToggle.click();
+  await firstMobileToolbar.waitFor({ state: 'hidden', timeout: 5000 });
+
+  await modal.getByRole('button', { name: '關閉任務詳情' }).click();
+  await modal.waitFor({ state: 'hidden', timeout: 10000 });
+  const reopenedMobileModal = await openModal();
+  await reopenedMobileModal.locator('[data-task-note-editor-loaded="true"]').first().waitFor({ state: 'visible', timeout: 10000 });
+  assert(await reopenedMobileModal.getByText(mobileText, { exact: false }).count() >= 1, 'mobile direct edit persists after closing and reopening');
+  assert(await reopenedMobileModal.locator('[data-task-detail-note-content-input="true"] h3 .underline').count() >= 1, 'mobile formatting persists after closing and reopening');
 
   const mobileHealth = await page.evaluate(() => {
     const visibleAlerts = Array.from(document.querySelectorAll('.inline-error,[role="alert"]'))
@@ -299,6 +327,22 @@ async (page) => {
   assert(diagnostics.length === 0, 'browser console and page errors must stay empty', { diagnostics });
   await page.screenshot({ path: 'output/playwright/dev-066-task-note-mobile-390.png', fullPage: true });
 
+  const responsiveHealth = [];
+  for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(150);
+    const health = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      dialogScrollWidth: document.querySelector('[data-task-details-dialog="true"]')?.scrollWidth || 0,
+      dialogClientWidth: document.querySelector('[data-task-details-dialog="true"]')?.clientWidth || 0,
+    }));
+    responsiveHealth.push({ viewport, health });
+    assert(health.documentScrollWidth <= health.viewportWidth + 1, 'responsive viewport has no document overflow', { viewport, health });
+    assert(health.dialogScrollWidth <= health.dialogClientWidth + 1, 'responsive viewport has no dialog horizontal overflow', { viewport, health });
+    assert(await reopenedMobileModal.locator('[data-task-note-editor-loaded="true"]').count() === 2, 'responsive viewport keeps the unified editors mounted', { viewport });
+  }
+
   console.log(JSON.stringify({
     desktop: {
       editorCount: 2,
@@ -309,10 +353,14 @@ async (page) => {
     },
     laptop: { toolbarBounds: laptopBounds, viewport: laptopViewport },
     mobile: {
-      editorCount: 0,
-      formatToggleCount: 0,
-      appendPreservedRichState: true,
+      editorCount: 2,
+      formatToggleCount: 2,
+      appendFieldCount: 0,
+      directEditRoundTrip: true,
+      formatRoundTrip: true,
+      toolbarBounds: mobileToolbarBounds,
       health: mobileHealth,
+      responsiveHealth,
     },
     diagnostics,
   }, null, 2));

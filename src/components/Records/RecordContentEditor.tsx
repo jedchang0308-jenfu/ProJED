@@ -10,8 +10,8 @@ import {
   COMMAND_PRIORITY_HIGH,
   KEY_DOWN_COMMAND,
   TextNode,
+  $getRoot,
   type EditorState,
-  type LexicalEditor,
 } from 'lexical';
 import type { TaskNode } from '../../types';
 import { TaskMentionNode } from './TaskMentionNode';
@@ -32,6 +32,9 @@ interface RecordContentEditorProps {
   cursorOffset: number | null;
   onChange: (value: string) => void;
   onCursorOffsetChange: (offset: number) => void;
+  focusRequestId?: number;
+  focusPending?: boolean;
+  onFocusConsumed?: () => void;
 }
 
 const editorTheme = {
@@ -156,7 +159,7 @@ const RecordContentOnChangePlugin: React.FC<{
 }> = ({ onChange, onCursorOffsetChange }) => {
   const lastContentRef = React.useRef<string | null>(null);
 
-  const handleChange = React.useCallback((editorState: EditorState, _editor: LexicalEditor) => {
+  const handleChange = React.useCallback((editorState: EditorState) => {
     editorState.read(() => {
       const nextValue = $serializeEditorContentToRecordString();
       if (lastContentRef.current !== nextValue) {
@@ -178,6 +181,23 @@ const RecordContentOnChangePlugin: React.FC<{
   );
 };
 
+const EditorFocusRequestPlugin: React.FC<{ requestId?: number; pending?: boolean; onConsumed?: () => void }> = ({ requestId, pending, onConsumed }) => {
+  const [editor] = useLexicalComposerContext();
+  const lastRequestIdRef = React.useRef<number | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (!pending || requestId === undefined || requestId === lastRequestIdRef.current) return;
+    lastRequestIdRef.current = requestId;
+    editor.focus();
+    editor.update(() => {
+      $getRoot().selectEnd();
+    });
+    onConsumed?.();
+  }, [editor, onConsumed, pending, requestId]);
+
+  return null;
+};
+
 const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
   value,
   placeholder,
@@ -185,6 +205,9 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
   editorContainerClassName,
   onChange,
   onCursorOffsetChange,
+  focusRequestId,
+  focusPending,
+  onFocusConsumed,
 }) => (
   <LexicalComposer initialConfig={editorConfig}>
     <div className={`relative mt-1 ${editorContainerClassName || ''}`}>
@@ -197,6 +220,7 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
         contentEditable={(
           <ContentEditable
             className={`${editorClassName || 'min-h-[150px]'} w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100`}
+            data-record-content-editor="true"
             aria-placeholder={placeholder || ''}
             placeholder={<span />}
           />
@@ -208,6 +232,7 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
       <TaskMentionTokenTransformPlugin />
       <ScopedKeyboardPlugin />
       <EditorContentSyncPlugin value={value} onCursorOffsetChange={onCursorOffsetChange} />
+      <EditorFocusRequestPlugin requestId={focusRequestId} pending={focusPending} onConsumed={onFocusConsumed} />
       <RecordContentOnChangePlugin onChange={onChange} onCursorOffsetChange={onCursorOffsetChange} />
     </div>
   </LexicalComposer>

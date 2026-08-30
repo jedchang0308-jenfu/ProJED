@@ -196,7 +196,8 @@ assert(
     source.taskWorkbench.includes('data-task-workbench-filter-popover="true"') &&
     source.taskWorkbench.includes('data-task-workbench-filter-panel="true"') &&
     source.taskWorkbench.includes('data-task-workbench-task-card="true"') &&
-    source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    (source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('matchedTaskIds.add(taskId)'))) &&
     source.taskWorkbench.includes("source: 'task-workbench'") &&
     source.boardView.includes('<TaskWorkbenchPanel canMoveTask={canMoveTask} />') &&
     source.boardView.includes("activeData?.source === 'task-workbench'") &&

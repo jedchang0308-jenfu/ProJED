@@ -419,6 +419,8 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
         <div
             data-task-id={item.id}
             data-gantt-task-bar="true"
+            data-gantt-placement-kind={item.isTrackingReference ? 'tracking-reference' : 'primary'}
+            aria-label={item.isTrackingReference ? `追蹤副本：${item.title || '未命名任務'}` : item.title || '未命名任務'}
             {...touchTapGuard.handlers}
             onMouseDown={(e) => {
                 // 只允許左鍵觸發拖曳（防止右鍵誤觸跳轉）
@@ -443,7 +445,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             }}
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}
             data-touch-tap-guard="true"
-            className={`mobile-pan-item absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-pointer' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+            className={`mobile-pan-item absolute flex items-center transition-all ${isDragging ? '' : (isMoveLocked || !canEditSchedule ? '' : 'hover:brightness-110')} ${isMoveLocked || !canEditSchedule ? 'cursor-pointer' : 'cursor-pointer'} group rounded-[6px] shadow-[0_2px_4px_rgba(15,23,42,0.10)] ring-1 ring-white/70 ${baseStyleClass} ${item.isTrackingReference ? 'border-2 border-dashed border-violet-300' : ''} ${isInfiniteFallback ? 'opacity-30 border-2 border-dashed border-slate-400/40' : ''} z-20 ${isRelated ? 'ring-2 ring-primary ring-offset-1' : ''} ${selectedTaskId === item.id ? 'ring-2 ring-primary ring-offset-2' : ''}`}
             style={{
                 left: x1,
                 width: width,

@@ -4,7 +4,7 @@ import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import dayjs from 'dayjs';
-import { Calendar, GitBranch } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import SharedTaskSidebar from './SharedTaskSidebar';
 import { ViewToolbar } from './ui/ViewToolbar';
 import { GanttHeader, GanttGrid, GanttRow, GanttTaskBar, getColWidth, getX, BAR_HEIGHT } from './Gantt';
@@ -14,6 +14,7 @@ import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { useCoarsePointer } from '../hooks/useCoarsePointer';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { TaskFilterResultState } from './ui/TaskFilterResultState';
+import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
 
 const DEFAULT_GRID_START = dayjs().startOf('year');
 
@@ -53,12 +54,24 @@ const GanttView = () => {
 
     // Subscribe to nodes so GanttView re-renders when task dates or orders change
     const nodes = useWbsStore(s => s.nodes);
-    const parentNodesIndex = useWbsStore(s => s.parentNodesIndex);
+    const trackingReferences = useWbsStore(s => s.trackingReferences);
+    const projectionTasks = useMemo(
+        () => buildCollapsedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
+        [activeBoardId, nodes, trackingReferences],
+    );
+    const projectionNodes = useMemo(
+        () => Object.fromEntries(projectionTasks.map(task => [task.id, task])),
+        [projectionTasks],
+    );
+    const projectionParentNodesIndex = useMemo(
+        () => buildProjectionParentIndex(projectionTasks),
+        [projectionTasks],
+    );
     const taskLoading = useWbsStore(s => s.loading);
     const taskLoadError = useWbsStore(s => s.error);
     const filterProjection = useMemo(
-        () => projectTaskFilterResults(nodes, taskFilters, { boardId: activeBoardId }),
-        [activeBoardId, nodes, taskFilters],
+        () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, projectionNodes, taskFilters],
     );
 
 
@@ -80,8 +93,8 @@ const GanttView = () => {
         };
 
         const { items, groups } = buildHierarchicalTaskItems({
-            nodes,
-            parentNodesIndex,
+            nodes: projectionNodes,
+            parentNodesIndex: projectionParentNodesIndex,
             activeBoardId,
             visibleTaskIds: filterProjection.visibleTaskIds,
             collapsedIds,
@@ -122,7 +135,7 @@ const GanttView = () => {
             gridEnd: calculatedGridEnd,
             totalUnits: units
         };
-    }, [activeBoardId, filterProjection, mode, collapsedIds, nodes, parentNodesIndex]);
+    }, [activeBoardId, filterProjection, mode, collapsedIds, projectionNodes, projectionParentNodesIndex]);
     const isTimelineEligible = (item: any) => [item.startDate, item.endDate]
         .some(value => Boolean(value && dayjs(value).isValid()));
     const timelineItems = flattenedItems.filter(isTimelineEligible);
@@ -166,7 +179,7 @@ const GanttView = () => {
     }, [mode, colWidth, gridStart]);
 
     const handleItemClick = (item: any) => {
-        selectAndOpenTaskDetails(item.id);
+        selectAndOpenTaskDetails(item.id, item.trackingReferenceId);
     };
 
     return (

@@ -1,15 +1,16 @@
 import type {
   KnowledgeRecordStatus,
-  KnowledgeRecordType,
+  EditableKnowledgeRecordType,
   KnowledgeRecordVisibility,
   RecordTaskLinkRole,
 } from '../types';
+import { getMeetingProjectChangeImportMetadataForSignature } from './meetingProjectChangeImport';
 
 export type MeetingSynthesisWorkflowStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
 export type MeetingRecordWorkflowStage = 'capture' | 'ai_suggestion' | 'review' | 'published';
 
-export type MeetingWorkflowStepCommand = 'saveDraft' | 'runAi' | 'publish';
+export type MeetingWorkflowStepCommand = 'focusContent' | 'saveDraft' | 'runAi' | 'publish';
 
 export type MeetingWorkflowStepVisualState =
   | 'current'
@@ -40,7 +41,7 @@ export type MeetingWorkflowStepAction = {
 
 export type MeetingRecordDraftLike = {
   id?: string;
-  type: KnowledgeRecordType;
+  type: EditableKnowledgeRecordType;
   title: string;
   content: string;
   status: KnowledgeRecordStatus;
@@ -50,6 +51,7 @@ export type MeetingRecordDraftLike = {
   startedAt?: number;
   endedAt?: number;
   recordedBy?: string | null;
+  metadata?: Record<string, unknown>;
   taskLinks: Array<{ nodeId: string; role: RecordTaskLinkRole }>;
 };
 
@@ -111,6 +113,7 @@ export const getRecordDraftSignature = (draft: MeetingRecordDraftLike | null) =>
     startedAt: draft.startedAt ?? null,
     endedAt: draft.endedAt ?? null,
     recordedBy: draft.recordedBy ?? null,
+    meetingProjectChangeImport: getMeetingProjectChangeImportMetadataForSignature(draft.metadata),
     taskLinks: normalizeTaskLinks(draft),
   });
 };
@@ -315,15 +318,15 @@ export const getMeetingWorkflowStepActions = (
     createMeetingWorkflowStepAction({
       stage: 'capture',
       label: '速記',
-      actionLabel: state.hasAiDraft ? '存校稿' : '存草稿',
-      outcomeLabel: state.hasAiDraft ? '確認後存草稿' : '存草稿，不發布',
-      command: 'saveDraft',
+      actionLabel: '移至內容',
+      outcomeLabel: '移至內容編輯',
+      command: 'focusContent',
       visualState: captureVisualState,
       tone: 'primary',
       isOptional: false,
-      ariaDescription: '速記階段。按下後會保存草稿，不會發布。',
-      disabledReason: state.saveDraftDisabledReason,
-      enabled: canUseActions && state.canSaveDraft,
+      ariaDescription: '速記階段。按下後移至內容編輯，不會保存或發布。',
+      disabledReason: null,
+      enabled: canUseActions,
       isComplete: captureComplete,
       isRecommended: recommendedStage === 'capture' && !state.isPublished,
     }),

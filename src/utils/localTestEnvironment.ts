@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { localTestStorage } from '../services/localTestService';
+import { resetLocalTaskTrackingReferences } from '../features/taskTracking/localService';
 import type { Board, TaskNode, ViewMode, Workspace } from '../types';
 
 const LOCAL_TEST_WS_ID = 'local-test-workspace';
@@ -251,6 +252,7 @@ export const seedLocalTestEnvironment = (options: SeedOptions = {}) => {
     currentView: nextView,
   });
   useWbsStore.getState().setNodes(Object.values(nextNodes));
+  void useWbsStore.getState().loadTrackingReferences(nextActiveWorkspaceId);
   useWbsStore.setState({ dependencies: localTestStorage.readDependencies() });
   installLocalTestQcApi();
 
@@ -265,6 +267,7 @@ export const resetLocalTestEnvironment = (taskCount?: number) => {
   localTestStorage.writeDependencies([]);
   localTestStorage.writeBoardMembers({});
   localTestStorage.writeBoardInvites({});
+  resetLocalTaskTrackingReferences();
   return seedLocalTestEnvironment({ force: true, taskCount });
 };
 

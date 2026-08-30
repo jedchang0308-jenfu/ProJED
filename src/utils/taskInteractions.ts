@@ -4,6 +4,20 @@ export const OPEN_TASK_DETAILS_EVENT = 'open-task-details';
 export const CLEAR_TASK_SELECTION_EVENT = 'clear-task-selection';
 export const START_MINDMAP_RELATIONSHIP_EVENT = 'start-mindmap-relationship';
 
+let taskDetailsReturnFocus: HTMLElement | null = null;
+
+export const rememberTaskDetailsReturnFocus = (element: HTMLElement | null) => {
+  taskDetailsReturnFocus = element;
+};
+
+export const restoreTaskDetailsReturnFocus = () => {
+  const target = taskDetailsReturnFocus;
+  taskDetailsReturnFocus = null;
+  if (!target?.isConnected) return false;
+  target.focus({ preventScroll: true });
+  return document.activeElement === target;
+};
+
 export const isCoarsePointer = () => (
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -32,8 +46,10 @@ export const isTaskPrimaryActionTarget = (target: EventTarget | null) => (
   ].join(',')))
 );
 
-export const openTaskDetails = (taskId: string) => {
-  document.dispatchEvent(new CustomEvent(OPEN_TASK_DETAILS_EVENT, { detail: { taskId } }));
+export const openTaskDetails = (taskId: string, trackingReferenceId?: string) => {
+  document.dispatchEvent(new CustomEvent(OPEN_TASK_DETAILS_EVENT, {
+    detail: { taskId, trackingReferenceId },
+  }));
 };
 
 export const requestMindMapRelationshipStart = (taskId: string) => {
@@ -51,9 +67,9 @@ export const clearTaskSelection = () => {
   }
 };
 
-export const selectAndOpenTaskDetails = (taskId: string) => {
+export const selectAndOpenTaskDetails = (taskId: string, trackingReferenceId?: string) => {
   selectTask(taskId);
-  openTaskDetails(taskId);
+  openTaskDetails(taskId, trackingReferenceId);
 };
 
 export const prepareNewTaskNaming = (taskId: string) => {

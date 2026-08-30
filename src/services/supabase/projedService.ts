@@ -18,6 +18,7 @@ import type {
   CollaborationRole,
   CurrentBoardAccess,
   Dependency,
+  EditableKnowledgeRecord,
   KnowledgeRecord,
   KnowledgeRecordInput,
   MeetingDraftCheckpointInput,
@@ -26,6 +27,7 @@ import type {
   RecordTaskLink,
   TagColor,
   TaskNode,
+  TaskCollectionRecord,
   TaskTag,
   Workspace,
   WorkspaceMember,
@@ -48,6 +50,12 @@ import {
   type BackupImportCounts,
   type BackupImportPlan,
 } from '../../features/backup/types';
+import { TaskCollectionError } from '../../features/taskCollection/errors';
+import type {
+  TaskCollectionPreview,
+  TaskCollectionResult,
+  TaskCollectionSummary,
+} from '../../features/taskCollection/types';
 
 type WbsItemInsert = Partial<WbsItemRow>;
 type BoardInviteInsert = Partial<BoardInviteRow>;
@@ -229,7 +237,7 @@ const mapProjectToBoard = (project: ProjectRow): Board => ({
   createdAt: toTimestamp(project.created_at),
 });
 
-const mapWbsItemToTaskNode = (
+export const mapWbsItemToTaskNode = (
   item: WbsItemRow,
   nodeIdByDbId: Map<string, string> = new Map(),
   requestedWorkspaceId?: string,
@@ -358,11 +366,13 @@ const mapKnowledgeRecord = (
   requestedBoardId: string
 ): KnowledgeRecord => {
   const recordId = legacyOrId(row.id, row.legacy_record_id);
-  return {
+  const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+    ? row.metadata as Record<string, unknown>
+    : undefined;
+  const baseRecord = {
     id: recordId,
     workspaceId: requestedWorkspaceId,
     boardId: requestedBoardId,
-    type: row.record_type,
     title: row.title,
     content: row.content,
     status: row.status,
@@ -378,12 +388,39 @@ const mapKnowledgeRecord = (
     updatedAt: toTimestamp(row.updated_at),
     ragEnabled: row.rag_enabled,
     sourceDocumentId: row.source_document_id,
-    metadata: row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
-      ? row.metadata as Record<string, unknown>
-      : undefined,
+    metadata,
     taskLinks: (row.record_task_links ?? []).map(link =>
       mapRecordTaskLink(link, recordId, requestedWorkspaceId, requestedBoardId)
     ),
+  };
+  if (row.record_type === 'task_collection') {
+    const snapshot = metadata?.taskCollection && typeof metadata.taskCollection === 'object'
+      ? metadata.taskCollection as Record<string, unknown>
+      : null;
+    if (row.status !== 'published' || row.visibility !== 'project' || row.rag_enabled !== false
+      || !row.collection_operation_id || !row.collection_version || row.collection_schema_version !== 1
+      || !row.collection_snapshot_hash || !row.source_root_item_id || snapshot?.schema !== 'task-collection-v1') {
+      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏資產欄位或快照版本無效。');
+    }
+    const snapshotSource = snapshot?.source && typeof snapshot.source === 'object'
+      ? snapshot.source as Record<string, unknown>
+      : null;
+    return {
+      ...baseRecord,
+      type: 'task_collection',
+      collectionOperationId: row.collection_operation_id,
+      collectionVersion: row.collection_version,
+      collectionSchemaVersion: row.collection_schema_version,
+      collectionSnapshotHash: row.collection_snapshot_hash,
+      sourceRootItemId: row.source_root_item_id,
+      sourceRootStorageId: typeof snapshotSource?.rootStorageId === 'string'
+        ? snapshotSource.rootStorageId
+        : row.source_root_item_id,
+    };
+  }
+  return {
+    ...baseRecord,
+    type: row.record_type as 'meeting' | 'work_log',
   };
 };
 
@@ -1777,7 +1814,7 @@ const toCheckpointError = (error: unknown): MeetingDraftCheckpointError => {
 };
 
 export const supabaseRecordService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> => {
+  listByProject: async (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
@@ -1786,14 +1823,16 @@ export const supabaseRecordService = {
       .select(recordSelect)
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId)
+      .neq('record_type', 'task_collection')
       .neq('status', 'archived')
       .order('updated_at', { ascending: false });
     assertNoError(error);
     return ((data ?? []) as unknown as KnowledgeRecordWithLinks[])
-      .map(row => mapKnowledgeRecord(row, workspaceId, boardId));
+      .map(row => mapKnowledgeRecord(row, workspaceId, boardId))
+      .filter((record): record is EditableKnowledgeRecord => record.type !== 'task_collection');
   },
 
-  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> => {
+  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<EditableKnowledgeRecord[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
@@ -1803,16 +1842,18 @@ export const supabaseRecordService = {
       .select(`record:knowledge_records!record_task_links_record_id_fkey(${recordSelect})`)
       .eq('tenant_id', tenantId)
       .eq('project_id', projectId)
+      .neq('record.record_type', 'task_collection')
       .eq('item_id', itemId);
     assertNoError(error);
     return ((data ?? []) as unknown as Array<{ record?: KnowledgeRecordWithLinks | null }>)
       .map(row => row.record)
       .filter((record): record is KnowledgeRecordWithLinks => Boolean(record && record.status !== 'archived'))
       .map(record => mapKnowledgeRecord(record, workspaceId, boardId))
+      .filter((record): record is EditableKnowledgeRecord => record.type !== 'task_collection')
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   },
 
-  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
@@ -1912,7 +1953,7 @@ export const supabaseRecordService = {
       .single();
     assertNoError(reloadError);
     if (!reloaded) throw new Error('Supabase did not return the saved knowledge record.');
-    return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId);
+    return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) as EditableKnowledgeRecord;
   },
 
   checkpointDraft: async (workspaceId: string, boardId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
@@ -1960,6 +2001,10 @@ export const supabaseRecordService = {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
+    const typeQuery = supabase.from('knowledge_records').select('record_type').eq('tenant_id', tenantId).eq('project_id', projectId);
+    const { data: targetType, error: targetTypeError } = await (isUuid(recordId) ? typeQuery.eq('id', recordId).maybeSingle() : typeQuery.eq('legacy_record_id', recordId).maybeSingle());
+    assertNoError(targetTypeError);
+    if (targetType?.record_type === 'task_collection') throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務為不可變資產，不能從一般紀錄刪除。');
     const query = supabase
       .from('knowledge_records')
       .update({ status: 'archived', rag_enabled: false })
@@ -1977,6 +2022,221 @@ export const supabaseRecordService = {
         .eq('id', data.source_document_id);
       assertNoError(documentError);
     }
+  },
+};
+
+const mapTaskCollectionPreview = (value: unknown): TaskCollectionPreview => {
+  if (!value || typeof value !== 'object') throw new TaskCollectionError('SNAPSHOT_INVALID', 'Supabase 未回傳有效的典藏預覽。');
+  const payload = value as Record<string, unknown>;
+  const readString = (camel: string, snake: string) => {
+    const raw = payload[camel] ?? payload[snake];
+    return typeof raw === 'string' ? raw : '';
+  };
+  const readSafeCount = (camel: string, snake: string, fallback = 0) => {
+    const raw = payload[camel] ?? payload[snake];
+    const value = raw === undefined || raw === null || raw === '' ? fallback : typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isSafeInteger(value) || value < 0) throw new TaskCollectionError('SNAPSHOT_INVALID', `Supabase 回傳的典藏計數無效：${camel}。`);
+    return value;
+  };
+  const snapshot = payload.snapshot;
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new TaskCollectionError('SNAPSHOT_INVALID', 'Supabase 未回傳典藏快照。');
+  const schema = snapshot as Record<string, unknown>;
+  if (schema.schema !== 'task-collection-v1') throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏快照版本不受支援。');
+  const operationId = readString('operationId', 'operation_id');
+  const rootItemId = readString('rootItemId', 'root_task_id') || readString('rootItemId', 'root_item_id');
+  const previewToken = readString('previewToken', 'preview_token');
+  const snapshotHash = readString('snapshotHash', 'snapshot_hash');
+  if (!operationId || !rootItemId || !previewToken || !/^[0-9a-f]{64}$/i.test(snapshotHash)) throw new TaskCollectionError('SNAPSHOT_INVALID', 'Supabase 典藏預覽缺少必要欄位。');
+  return {
+    operationId,
+    rootItemId,
+    sourceBoardId: readString('sourceBoardId', 'source_board_id'),
+    subtreeNodeCount: readSafeCount('subtreeNodeCount', 'task_count'),
+    dependencyCount: readSafeCount('dependencyCount', 'dependency_count'),
+    activityEventCount: readSafeCount('activityEventCount', 'activity_count'),
+    linkedRecordCount: readSafeCount('linkedRecordCount', 'related_record_count'),
+    nextVersion: readSafeCount('nextVersion', 'collection_version', 1) || 1,
+    snapshotHash: snapshotHash.toLowerCase(),
+    previewToken,
+    snapshot: schema as TaskCollectionPreview['snapshot'],
+  };
+};
+
+const toTaskCollectionError = (error: unknown): TaskCollectionError => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const codeMatch = message.match(/TASK_COLLECTION:([A-Z_]+)/);
+  if (codeMatch) {
+    const code = codeMatch[1] as TaskCollectionError['code'];
+    if (['BACKEND_UNSUPPORTED', 'PERMISSION_DENIED', 'OPERATION_CONFLICT', 'SOURCE_NOT_FOUND', 'SOURCE_ARCHIVED', 'SOURCE_BUSY', 'SOURCE_INVALID_TREE', 'SOURCE_CHANGED', 'LIMIT_EXCEEDED', 'SNAPSHOT_INVALID', 'TRANSIENT', 'UNKNOWN'].includes(code)) {
+      return new TaskCollectionError(code, `典藏任務未完成（${code}）。`, { cause: error });
+    }
+  }
+  if (/permission|42501|unauthor/i.test(message)) return new TaskCollectionError('PERMISSION_DENIED', '你沒有典藏任務的權限。', { cause: error });
+  if (/already archived|root is archived/i.test(message)) return new TaskCollectionError('SOURCE_ARCHIVED', '此根任務已封存，請先從回收桶還原後再建立新版本。', { cause: error });
+  if (/not found|P0002/i.test(message)) return new TaskCollectionError('SOURCE_NOT_FOUND', '找不到要典藏的根任務。', { cause: error });
+  return new TaskCollectionError('UNKNOWN', message || '典藏任務失敗。', { cause: error });
+};
+
+const toSupabaseCollectionSummary = (record: TaskCollectionRecord): TaskCollectionSummary => {
+  const snapshot = record.metadata?.taskCollection as { sourceBoardTitle?: string | null; nodes?: unknown[]; historyCoverage?: TaskCollectionSummary['historyCoverage'] } | undefined;
+  return {
+    recordId: record.id,
+    title: record.title,
+    collectionVersion: record.collectionVersion ?? 1,
+    occurredAt: record.occurredAt ?? record.createdAt ?? 0,
+    sourceBoardTitle: snapshot?.sourceBoardTitle ?? null,
+    taskCount: snapshot?.nodes?.length ?? record.taskLinks.length,
+    historyCoverage: snapshot?.historyCoverage ?? { activityEvents: 0, linkedRecords: 0, oldestActivityAt: null, newestActivityAt: null },
+  };
+};
+
+export const supabaseTaskCollectionService = {
+  previewDeleteImpact: async (workspaceId: string, boardId: string) => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { count, error } = await supabase.from('knowledge_records').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('project_id', projectId).eq('record_type', 'task_collection').neq('status', 'archived');
+    if (error) throw error;
+    const taskCollectionCount = count ?? 0;
+    return { blocked: false, unknown: false, reasons: taskCollectionCount > 0 ? ['task_collection_assets_exist'] : [], taskCollectionCount };
+  },
+  previewWorkspaceDeleteImpact: async (workspaceId: string) => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const { count, error } = await supabase.from('knowledge_records').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('record_type', 'task_collection').neq('status', 'archived');
+    if (error) throw error;
+    const taskCollectionCount = count ?? 0;
+    return { blocked: false, unknown: false, reasons: taskCollectionCount > 0 ? ['task_collection_assets_exist'] : [], taskCollectionCount };
+  },
+  preview: async (workspaceId: string, boardId: string, rootItemId: string, operationId: string): Promise<TaskCollectionPreview> => {
+    requireSupabase();
+    try {
+      const tenantId = await resolveWorkspaceId(workspaceId);
+      const projectId = await resolveProjectId(tenantId, boardId);
+      const itemId = await requireNodeId(tenantId, projectId, rootItemId);
+      const { data, error } = await supabase.rpc('preview_task_collection_subtree', {
+        p_operation_id: operationId,
+        p_tenant_id: tenantId,
+        p_project_id: projectId,
+        p_root_item_id: itemId,
+      });
+      assertNoError(error);
+      return { ...mapTaskCollectionPreview(data), rootItemId };
+    } catch (error) {
+      if (error instanceof TaskCollectionError) throw error;
+      throw toTaskCollectionError(error);
+    }
+  },
+
+  collect: async (workspaceId: string, boardId: string, rootItemId: string, operationId: string, previewToken: string, annotation?: string | null): Promise<TaskCollectionResult> => {
+    requireSupabase();
+    let previewForRecovery: TaskCollectionPreview | null = null;
+    const resultFromRecord = (record: TaskCollectionRecord, preview: TaskCollectionPreview): TaskCollectionResult => {
+      const summary = toSupabaseCollectionSummary(record);
+      return {
+        record,
+        preview,
+        recordId: record.id,
+        operationId,
+        sourceRootTaskId: rootItemId,
+        collectionVersion: record.collectionVersion ?? preview.nextVersion,
+        collectedAt: record.occurredAt ?? record.createdAt ?? Date.now(),
+        sourceRootUpdatedAt: record.occurredAt ?? record.updatedAt ?? Date.now(),
+        taskCount: summary.taskCount,
+        summary,
+      };
+    };
+    try {
+      const preview = await supabaseTaskCollectionService.preview(workspaceId, boardId, rootItemId, operationId);
+      previewForRecovery = preview;
+      const tenantId = await resolveWorkspaceId(workspaceId);
+      const projectId = await resolveProjectId(tenantId, boardId);
+      const itemId = await requireNodeId(tenantId, projectId, rootItemId);
+      const { data, error } = await supabase.rpc('collect_task_subtree', {
+        p_operation_id: operationId,
+        p_tenant_id: tenantId,
+        p_project_id: projectId,
+        p_root_item_id: itemId,
+        p_preview_token: previewToken,
+        p_annotation: annotation ?? null,
+      });
+      assertNoError(error);
+      const result = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+      const recordId = String(result.recordId ?? result.record_id ?? '');
+      const record = await supabaseTaskCollectionService.getById(workspaceId, boardId, recordId);
+      if (!record) throw new TaskCollectionError('UNKNOWN', '典藏完成但找不到典藏紀錄。');
+      return resultFromRecord(record, preview);
+    } catch (error) {
+      // RPC success may be committed even when its HTTP response is lost. Read
+      // back by the immutable operation id before surfacing a retryable error;
+      // this prevents a second version from being created by the UI retry.
+      if (previewForRecovery) {
+        try {
+          const recovered = await supabaseTaskCollectionService.getOperationResult(workspaceId, boardId, operationId);
+          if (recovered) return resultFromRecord(recovered, previewForRecovery);
+        } catch {
+          // Preserve the original error when the recovery read is also unavailable.
+        }
+      }
+      if (error instanceof TaskCollectionError) throw error;
+      throw toTaskCollectionError(error);
+    }
+  },
+
+  getOperationResult: async (workspaceId: string, boardId: string, operationId: string): Promise<TaskCollectionRecord | null> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const { data, error } = await supabase.from('knowledge_records').select(recordSelect).eq('tenant_id', tenantId).eq('project_id', projectId).eq('record_type', 'task_collection').eq('collection_operation_id', operationId).maybeSingle();
+    assertNoError(error);
+    const mapped = data ? mapKnowledgeRecord(data as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) : null;
+    if (!mapped || mapped.type !== 'task_collection') return null;
+    return mapped;
+  },
+
+  getById: async (workspaceId: string, boardId: string, recordId: string): Promise<TaskCollectionRecord | null> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const query = supabase.from('knowledge_records').select(recordSelect).eq('tenant_id', tenantId).eq('project_id', projectId).eq('record_type', 'task_collection');
+    const { data, error } = await (isUuid(recordId) ? query.eq('id', recordId).maybeSingle() : query.eq('legacy_record_id', recordId).maybeSingle());
+    assertNoError(error);
+    const mapped = data ? mapKnowledgeRecord(data as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) : null;
+    if (!mapped || mapped.type !== 'task_collection') return null;
+    return mapped;
+  },
+
+  listSummaries: async (workspaceId: string, boardId: string, search?: string): Promise<TaskCollectionSummary[]> => {
+    requireSupabase();
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const projectId = await resolveProjectId(tenantId, boardId);
+    const normalizedSearch = (search ?? '').trim();
+    const safeSearch = Array.from(normalizedSearch).length === 0 || Array.from(normalizedSearch).length >= 2 ? Array.from(normalizedSearch).slice(0, 100).join('') : '';
+    const { data, error } = await supabase.rpc('list_task_collection_summaries', {
+      p_tenant_id: tenantId,
+      p_project_id: projectId,
+      p_search: safeSearch || null,
+      p_cursor_occurred_at: null,
+      p_cursor_id: null,
+      p_limit: 50,
+    });
+    assertNoError(error);
+    return ((data ?? []) as Array<Record<string, unknown>>).map(row => ({
+      recordId: String(row.record_id ?? ''),
+      title: String(row.title ?? ''),
+      collectionVersion: Number(row.collection_version ?? 1),
+      occurredAt: new Date(String(row.occurred_at)).getTime(),
+      sourceBoardTitle: row.source_board_title ? String(row.source_board_title) : null,
+      taskCount: Number(row.task_count ?? 0),
+      historyCoverage: (() => {
+        try {
+          const parsed = JSON.parse(String(row.history_coverage ?? '{}')) as TaskCollectionSummary['historyCoverage'];
+          return parsed;
+        } catch {
+          throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏摘要的歷程涵蓋格式無效。');
+        }
+      })(),
+    }));
   },
 };
 
@@ -2007,8 +2267,11 @@ export const supabaseEventLogService = {
     let request = supabase
       .from('activity_events')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .gte('created_at', new Date(query.startedAt).toISOString())
+      .eq('tenant_id', tenantId);
+    request = query.startBoundary === 'exclusive'
+      ? request.gt('created_at', new Date(query.startedAt).toISOString())
+      : request.gte('created_at', new Date(query.startedAt).toISOString());
+    request = request
       .lte('created_at', new Date(query.endedAt).toISOString())
       .order('created_at', { ascending: true });
 
@@ -2147,7 +2410,7 @@ export const supabaseBackupService: BackupBackendAdapter = {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
-    const [{ data: project, error: projectError }, tasks, dependencies, workspaceTags] = await Promise.all([
+    const [{ data: project, error: projectError }, tasks, dependencies, workspaceTags, trackingResult] = await Promise.all([
       supabase
         .from('projects')
         .select('*')
@@ -2157,10 +2420,27 @@ export const supabaseBackupService: BackupBackendAdapter = {
       supabaseNodeService.listByProject(workspaceId, boardId),
       supabaseDependencyService.listByProject(workspaceId, boardId),
       supabaseTagService.listByWorkspace(workspaceId),
+      supabase.rpc('list_task_tracking_references_v1', { p_tenant_id: tenantId }),
     ]);
     assertNoError(projectError);
     if (!project) throw new BackupError('INVALID_FILE', '找不到要備份的看板。');
     const referencedTagIds = new Set(tasks.flatMap(task => task.tagIds ?? []));
+    const trackingReferences = Array.isArray(trackingResult.data)
+      ? trackingResult.data
+        .filter((row: any) => row?.project_id === projectId && !row?.removed_at)
+        .map((row: any) => ({
+          id: String(row.id),
+          taskId: String(row.task_id),
+          workspaceId,
+          boardId,
+          parentPlacementId: row.parent_placement_id ? String(row.parent_placement_id) : null,
+          order: Number(row.sort_order ?? 0),
+          kanbanStageId: row.kanban_stage_id ? String(row.kanban_stage_id) : undefined,
+          revision: Number(row.revision ?? 1),
+          createdAt: row.created_at ? new Date(String(row.created_at)).getTime() : Date.now(),
+          updatedAt: row.updated_at ? new Date(String(row.updated_at)).getTime() : Date.now(),
+        }))
+      : [];
     return {
       workspaceId,
       boardId,
@@ -2168,6 +2448,7 @@ export const supabaseBackupService: BackupBackendAdapter = {
       tasks,
       dependencies,
       tags: workspaceTags.filter(tag => referencedTagIds.has(tag.id)),
+      trackingReferences,
     };
   },
 
@@ -2215,6 +2496,12 @@ export const supabaseBackupService: BackupBackendAdapter = {
       sourceTaskIdMap: Object.fromEntries(
         Object.entries(asBackupRecord(record.sourceTaskIdMap)).map(([sourceId, targetId]) => [sourceId, String(targetId)])
       ),
+      sourceTrackingReferenceIdMap: record.sourceTrackingReferenceIdMap && typeof record.sourceTrackingReferenceIdMap === 'object'
+        ? Object.fromEntries(
+          Object.entries(record.sourceTrackingReferenceIdMap as Record<string, unknown>)
+            .map(([sourceId, targetId]) => [sourceId, String(targetId)]),
+        )
+        : undefined,
       postWriteFingerprint: String(record.postWriteFingerprint ?? ''),
       idempotentReplay: record.idempotentReplay === true,
     } satisfies BackupExecutionResult;

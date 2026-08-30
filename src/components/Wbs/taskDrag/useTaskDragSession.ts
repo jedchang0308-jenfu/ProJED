@@ -44,6 +44,7 @@ const stateToObservation = (state: TaskDragSessionState): TaskDragObservation =>
   source: state.source,
   targetKind: state.targetKind,
   targetNodeId: state.hoverTargetId,
+  targetPlacementId: state.hoverTargetPlacementId,
   targetBoardId: state.targetBoardId,
   targetWorkspaceId: state.targetWorkspaceId,
   targetSurfaceKind: state.targetSurfaceKind,
@@ -71,6 +72,7 @@ const withoutTarget = (observation: TaskDragObservation): TaskDragObservation =>
   ...observation,
   targetKind: 'none',
   targetNodeId: null,
+  targetPlacementId: null,
   targetBoardId: null,
   targetWorkspaceId: null,
   targetSurfaceKind: null,
@@ -208,12 +210,25 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   }, [applyState, hasTerminated, options.boardSurfaceRef, resolveObservation]);
 
   const begin = React.useCallback<MobileTaskActionContextValue['begin']>((
-    task: { id: string; title?: string; status?: TaskStatus },
+    task: {
+      id: string;
+      title?: string;
+      status?: TaskStatus;
+      placementId?: string;
+      placementKind?: 'primary' | 'tracking_reference';
+      boardId?: string;
+      trackingReferenceId?: string;
+      canEditCanonicalTask?: boolean;
+      canCreateCanonicalTask?: boolean;
+      canDeleteCanonicalTask?: boolean;
+    },
     event: React.TouchEvent,
     sourceKind: TaskDragSourceKind = 'kanban-card',
   ) => {
     const permissions = dependenciesRef.current;
-    if (!permissions.canMoveTask && !permissions.canEditTask && !permissions.canCreateTask && !permissions.canDeleteTask) {
+    if (task.placementKind === 'tracking_reference'
+      ? !permissions.canManageTaskReference
+      : !permissions.canMoveTask && !permissions.canEditTask && !permissions.canCreateTask && !permissions.canDeleteTask) {
       return false;
     }
     const point = readTaskTouchPoint(event);
@@ -247,9 +262,15 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       phase: 'dragging',
       source: {
         nodeId: node.id,
+        placementId: task.placementId,
+        placementKind: task.placementKind,
+        trackingReferenceId: task.trackingReferenceId,
+        canEditCanonicalTask: task.canEditCanonicalTask,
+        canCreateCanonicalTask: task.canCreateCanonicalTask,
+        canDeleteCanonicalTask: task.canDeleteCanonicalTask,
         kind: sourceKind,
         inputMode: 'touch',
-        originBoardId: node.boardId || null,
+        originBoardId: task.boardId || node.boardId || null,
         originWorkspaceId: node.workspaceId || null,
       },
       nodeId: node.id,
@@ -262,6 +283,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       hasMoved: false,
       hoverAction: null,
       hoverTargetId: null,
+      hoverTargetPlacementId: null,
       targetBoardId: null,
       targetWorkspaceId: null,
       targetSurfaceKind: null,
@@ -419,6 +441,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
         phase: 'armed',
         hoverAction: null,
         hoverTargetId: null,
+        hoverTargetPlacementId: null,
         targetBoardId: null,
         targetWorkspaceId: null,
         targetSurfaceKind: null,
@@ -649,10 +672,11 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     end,
     cancel,
     activateAction,
-    isActive: (nodeId?: string) => {
+    isActive: (nodeId?: string, placementId?: string) => {
       const activeState = stateRef.current;
       if (!activeState || activeState.phase !== 'dragging') return false;
-      return nodeId ? activeState.nodeId === nodeId : true;
+      if (nodeId && activeState.nodeId !== nodeId) return false;
+      return placementId ? activeState.source.placementId === placementId : true;
     },
   }), [activateAction, begin, cancel, end, move, state]);
 

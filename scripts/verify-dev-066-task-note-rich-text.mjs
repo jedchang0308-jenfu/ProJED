@@ -126,26 +126,13 @@ const originalNote = {
   content: richText.taskNoteRichContentToPlainText(richContent),
   richContent,
 };
-const originalChildren = JSON.stringify(richContent.editorState.root.children);
-const appended = richText.appendPlainTextToTaskNote(originalNote, '手機補記\n下一段');
-const appendedChildren = appended.richContent.editorState.root.children;
-assertEqual(
-  'mobile append preserves every original rich node',
-  JSON.stringify(appendedChildren.slice(0, richContent.editorState.root.children.length)),
-  originalChildren,
-);
-assertEqual(
-  'mobile append adds two paragraphs only',
-  appendedChildren.length,
-  richContent.editorState.root.children.length + 2,
-);
-assert('mobile append keeps original bold format bit', appendedChildren[1].children[0].format === 1);
-assert('mobile append updates plain compatibility alias', appended.content.endsWith('手機補記\n下一段'));
-
 const legacy = { id: 'legacy', title: '舊備註', content: '舊純文字' };
-const upgraded = richText.appendPlainTextToTaskNote(legacy, '新補記');
+const upgraded = {
+  ...legacy,
+  richContent: richText.createPlainTaskNoteRichContent(legacy.content),
+};
 assert('legacy note lazy upgrades', richText.isTaskNoteRichContent(upgraded.richContent));
-assertEqual('legacy note keeps old and appended text', upgraded.content, '舊純文字\n新補記');
+assertEqual('legacy note keeps its plain compatibility text', richText.taskNoteRichContentToPlainText(upgraded.richContent), '舊純文字');
 
 const node = {
   id: 'task_a',
@@ -188,18 +175,19 @@ const legacyRag = rag.buildWbsRagDocuments({
 assert('RAG keeps description fallback when notes are absent', legacyRag.documents[0].content.includes('legacy fallback'));
 
 const fieldSource = readFileSync('src/components/TaskNotes/TaskDetailNoteField.tsx', 'utf8');
-const desktopSource = readFileSync('src/components/TaskNotes/TaskDetailNoteDesktopEditor.tsx', 'utf8');
-assert('mobile field lazy-loads desktop editor', fieldSource.includes("React.lazy(() => import('./TaskDetailNoteDesktopEditor'))"));
-assert('mobile branch has no contenteditable', !fieldSource.toLowerCase().includes('contenteditable'));
-assert('mobile branch exposes append-only hooks', fieldSource.includes('data-task-note-mobile-append-input') && fieldSource.includes('appendPlainTextToTaskNote'));
-assert('desktop toolbar is anchored left of its header toggle', desktopSource.includes('data-task-note-toolbar-placement="header-left"') && desktopSource.includes('absolute right-8 top-1/2') && desktopSource.includes('-translate-y-1/2'));
-assert('desktop toolbar stays open until its toggle is clicked again', desktopSource.includes('data-task-note-toolbar-persistence="toggle-only"') && !desktopSource.includes("document.addEventListener('pointerdown', handlePointerDown") && !desktopSource.includes("setIsOpen(false)"));
-assert('ambiguous paragraph and heading glyphs are replaced by visible labels', desktopSource.includes('wide>\n              本文') && desktopSource.includes('wide>\n              小標題'));
-assert('bold italic and underline restore familiar icons', desktopSource.includes('<Bold size={15} />') && desktopSource.includes('<Italic size={15} />') && desktopSource.includes('<Underline size={15} />'));
-assert('strikethrough uses an Aa line icon instead of an ambiguous S glyph', desktopSource.includes('data-task-note-strikethrough-icon="aa-line"') && desktopSource.includes('<ALargeSmall size={17}') && !desktopSource.includes('  Strikethrough,'));
-assert('renderer does not use raw HTML', !fieldSource.includes('dangerouslySetInnerHTML') && !desktopSource.includes('dangerouslySetInnerHTML'));
-assert('readonly desktop hides formatting and disables Lexical editing', desktopSource.includes('if (!canEdit) return null') && desktopSource.includes('<EditorEditablePlugin editable={canEdit}'));
-assert('readonly mobile omits the append controls', fieldSource.includes('{canEdit ? (') && fieldSource.includes('data-task-note-mobile-append="true"'));
+const editorSource = readFileSync('src/components/TaskNotes/TaskDetailNoteEditor.tsx', 'utf8');
+const richTextSource = readFileSync('src/utils/taskNoteRichContent.ts', 'utf8');
+assert('every viewport lazy-loads the same task note editor', fieldSource.includes("React.lazy(() => import('./TaskDetailNoteEditor'))"));
+assert('field has no viewport-specific editor gate', !fieldSource.includes('matchMedia') && !fieldSource.includes('TaskDetailNoteMobile'));
+assert('append-only mobile UI and write helper are removed', !fieldSource.includes('data-task-note-mobile-append') && !fieldSource.includes('追加文字') && !richTextSource.includes('appendPlainTextToTaskNote'));
+assert('responsive toolbar keeps desktop-left and mobile-below placement', editorSource.includes('data-task-note-toolbar-placement="desktop-left-mobile-below"') && editorSource.includes('order-last') && editorSource.includes('md:absolute md:right-8 md:top-1/2'));
+assert('toolbar stays open until its toggle is clicked again', editorSource.includes('data-task-note-toolbar-persistence="toggle-only"') && !editorSource.includes("document.addEventListener('pointerdown', handlePointerDown") && !editorSource.includes("setIsOpen(false)"));
+assert('touch toolbar controls preserve editor selection', editorSource.includes('onPointerDown={event => event.preventDefault()}'));
+assert('ambiguous paragraph and heading glyphs are replaced by visible labels', editorSource.includes('label="本文"') && editorSource.includes('label="小標題"'));
+assert('bold italic and underline restore familiar icons', editorSource.includes('<Bold size={15} />') && editorSource.includes('<Italic size={15} />') && editorSource.includes('<Underline size={15} />'));
+assert('strikethrough uses an Aa line icon instead of an ambiguous S glyph', editorSource.includes('data-task-note-strikethrough-icon="aa-line"') && editorSource.includes('<ALargeSmall size={17}') && !editorSource.includes('  Strikethrough,'));
+assert('renderer does not use raw HTML', !fieldSource.includes('dangerouslySetInnerHTML') && !editorSource.includes('dangerouslySetInnerHTML'));
+assert('readonly behavior is shared across viewports', editorSource.includes('if (!canEdit) return null') && editorSource.includes('<EditorEditablePlugin editable={canEdit}'));
 
 if (failures.length > 0) {
   console.error('DEV-066 task note rich-text verification failed:');
@@ -207,4 +195,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('DEV-066 task note rich-text verification passed: semantic, mobile-append, safety, AI and UI-boundary contract suite.');
+console.log('DEV-066 task note rich-text verification passed: semantic, unified responsive editor, safety, AI and UI-boundary contract suite.');

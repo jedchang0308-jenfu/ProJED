@@ -10,10 +10,12 @@ import type {
 const TASK_DEFAULT_PROFILE: TaskInteractionProfile = Object.freeze({
   triggers: Object.freeze({
     'pointer.primary': 'task.open-details',
+    'pointer.double': 'task.open-details',
     'pointer.secondary': 'task.open-menu',
     'gesture.tap': 'task.open-details',
     'task.post-create': 'task.open-details-for-naming',
     'keyboard.escape': 'task.clear-selection',
+    'keyboard.space': 'task.open-details',
   }),
 });
 

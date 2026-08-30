@@ -16,7 +16,8 @@ import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDr
 import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
-import type { KnowledgeRecord, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
+import MeetingProjectChangeImportControl from './MeetingProjectChangeImportControl';
+import type { EditableKnowledgeRecord, EditableKnowledgeRecordType, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
 
 type ProjectChangeImportStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -112,7 +113,7 @@ const RecordTextDateTimeInput: React.FC<{
 };
 
 const recordTypeLabel = (type: KnowledgeRecordType) =>
-  type === 'meeting' ? '會議紀錄' : '個人工作紀錄';
+  type === 'meeting' ? '會議紀錄' : type === 'task_collection' ? '典藏任務' : '個人工作紀錄';
 
 const statusLabel = (status: KnowledgeRecordStatus) =>
   status === 'published' ? '已發布' : status === 'archived' ? '已封存' : '草稿';
@@ -179,13 +180,6 @@ type ProjectImportMeetingWorkflowStep = Omit<MeetingWorkflowStepAction, 'stage' 
 type MeetingWorkflowArrowStepItem = MeetingWorkflowStepAction | ProjectImportMeetingWorkflowStep;
 
 const getMeetingWorkflowArrowClass = (step: MeetingWorkflowArrowStepItem) => {
-  if (
-    step.stage === 'project_import' &&
-    step.importStepState === 'pending' &&
-    step.visualState === 'optional'
-  ) {
-    return 'border-emerald-700 bg-emerald-700 text-white shadow-sm hover:bg-emerald-800';
-  }
   if (step.visualState === 'processing' || step.visualState === 'current') {
     return `border-emerald-700 bg-emerald-700 text-white shadow-sm${step.enabled ? ' hover:bg-emerald-800' : ''}`;
   }
@@ -282,12 +276,14 @@ const getMeetingWorkflowStepTitle = (step: MeetingWorkflowArrowStepItem) => {
 const MeetingWorkflowArrowStepper: React.FC<{
   steps: MeetingWorkflowArrowStepItem[];
   onSaveDraft: () => void;
+  onFocusContent: () => void;
   onRunAi: () => void;
   onPublish: () => void;
-  onToggleProjectImport: () => void;
-}> = ({ steps, onSaveDraft, onRunAi, onPublish, onToggleProjectImport }) => {
+  onImportProjectChanges: () => void;
+}> = ({ steps, onSaveDraft, onFocusContent, onRunAi, onPublish, onImportProjectChanges }) => {
   const handleStepClick = (step: MeetingWorkflowArrowStepItem) => {
-    if (step.command === 'toggleProjectImport') onToggleProjectImport();
+    if (step.command === 'toggleProjectImport') onImportProjectChanges();
+    if (step.command === 'focusContent') onFocusContent();
     if (step.command === 'saveDraft') onSaveDraft();
     if (step.command === 'runAi') onRunAi();
     if (step.command === 'publish') onPublish();
@@ -462,7 +458,7 @@ const WorkLogWorkflowCard: React.FC<{
 };
 
 const RecordContextSummary: React.FC<{
-  draft: { id?: string; type: KnowledgeRecordType; status: KnowledgeRecordStatus; taskLinks: unknown[] };
+  draft: { id?: string; type: EditableKnowledgeRecordType; status: KnowledgeRecordStatus; taskLinks: unknown[] };
   typeState?: 'draft-type-locked' | 'meeting-mode-locked';
 }> = ({ draft, typeState = 'draft-type-locked' }) => {
   return (
@@ -596,7 +592,7 @@ const ProjectChangeImportPanel: React.FC<{
   );
 };
 
-const RecordListItem: React.FC<{ record: KnowledgeRecord; onOpen: () => void }> = ({ record, onOpen }) => (
+const RecordListItem: React.FC<{ record: EditableKnowledgeRecord; onOpen: () => void }> = ({ record, onOpen }) => (
   <button
     type="button"
     onClick={onOpen}
@@ -655,6 +651,13 @@ const RecordSidebar: React.FC = () => {
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const meetingDraftRecovery = useRecordStore(state => state.meetingDraftRecovery);
   const draftBaselineSignature = useRecordStore(state => state.draftBaselineSignature);
+  const contentFocusRequestId = useRecordStore(state => state.contentFocusRequestId);
+  const contentFocusPending = useRecordStore(state => state.contentFocusPending);
+  const meetingProjectImportStatus = useRecordStore(state => state.meetingProjectImportStatus);
+  const meetingProjectImportMessage = useRecordStore(state => state.meetingProjectImportMessage);
+  const requestContentFocus = useRecordStore(state => state.requestContentFocus);
+  const consumeContentFocus = useRecordStore(state => state.consumeContentFocus);
+  const importMeetingProjectChanges = useRecordStore(state => state.importMeetingProjectChanges);
   const setDraftTaskRole = useRecordStore(state => state.setDraftTaskRole);
   const enterTaskSelectionMode = useRecordStore(state => state.enterTaskSelectionMode);
   const synthesizeMeetingDraft = useRecordStore(state => state.synthesizeMeetingDraft);
@@ -807,13 +810,11 @@ const RecordSidebar: React.FC = () => {
     ? '離開紀錄；離開不等於發布，若有未儲存變更會先詢問是否存草稿。'
     : '離開紀錄；若有未儲存變更會先詢問是否存草稿。';
   const sidebarRecordTitle = draft ? recordTypeLabel(draft.type) : '紀錄';
-  const projectImportVisualState = projectChangeImport.status === 'loading'
+  const meetingProjectImportVisualState = meetingProjectImportStatus === 'loading'
     ? 'processing'
-    : projectChangeImport.stepState === 'inserted' || projectChangeImport.stepState === 'skipped'
+    : meetingProjectImportStatus === 'complete'
       ? 'complete'
-      : isProjectImportExpanded
-        ? 'current'
-        : 'optional';
+      : 'optional';
   const projectImportStepEnabled = canUseProjectChangeImport && !saving && !isSynthesizing;
   const projectImportStatusLabel = getProjectImportStepStatusLabel(
     projectChangeImport.status,
@@ -824,22 +825,22 @@ const RecordSidebar: React.FC = () => {
   const projectImportMeetingStep: ProjectImportMeetingWorkflowStep = {
     stage: 'project_import',
     label: '匯入',
-    actionLabel: '設定匯入',
-    outcomeLabel: projectChangeImport.stepState === 'inserted' ? '已插入專案變化' : '選用：匯入專案變化',
-    statusLabel: projectImportStatusLabel,
+    actionLabel: '帶入上次會議後變更',
+    outcomeLabel: meetingProjectImportStatus === 'complete' ? '已完成' : '選用：帶入上次會議後變更',
+    statusLabel: meetingProjectImportStatus === 'complete' ? '完成' : meetingProjectImportStatus === 'loading' ? '處理中' : '選用',
     command: 'toggleProjectImport',
-    visualState: projectImportVisualState,
+    visualState: meetingProjectImportVisualState,
     tone: 'optional',
     isOptional: true,
-    ariaDescription: '匯入專案變化是選用步驟。按下後可展開日期、範圍、預覽、插入與跳過。',
+    ariaDescription: '匯入專案變化是選用步驟。按下後直接帶入上次會議後變更。',
     disabledReason: projectImportStepEnabled ? null : '已發布或系統處理中，不能調整專案變化匯入。',
     enabled: projectImportStepEnabled,
-    isComplete: projectChangeImport.stepState === 'inserted',
-    isRecommended: isProjectImportExpanded,
-    importStatus: projectChangeImport.status,
-    importStepState: projectChangeImport.stepState,
-    isExpanded: isProjectImportExpanded,
-    eventCount: projectChangeImport.eventCount,
+    isComplete: meetingProjectImportStatus === 'complete',
+    isRecommended: false,
+    importStatus: meetingProjectImportStatus === 'loading' ? 'loading' : meetingProjectImportStatus === 'complete' ? 'ready' : meetingProjectImportStatus,
+    importStepState: meetingProjectImportStatus === 'complete' ? 'inserted' : 'pending',
+    isExpanded: false,
+    eventCount: 0,
   };
   const meetingWorkflowStepsWithImport: MeetingWorkflowArrowStepItem[] = [
     projectImportMeetingStep,
@@ -889,7 +890,7 @@ const RecordSidebar: React.FC = () => {
     });
   };
 
-  const handleGuardedOpenExistingRecord = (record: KnowledgeRecord) => {
+  const handleGuardedOpenExistingRecord = (record: EditableKnowledgeRecord) => {
     void guardRecordDraft(() => openExistingRecord(record), {
       title: '開啟另一筆紀錄？',
       message: '開啟另一筆紀錄會替換目前編輯中的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
@@ -1180,15 +1181,20 @@ const RecordSidebar: React.FC = () => {
                   <MeetingWorkflowArrowStepper
                     steps={meetingWorkflowStepsWithImport}
                     onSaveDraft={() => handleSave('draft')}
+                    onFocusContent={requestContentFocus}
                     onRunAi={() => void handleSynthesizeMeetingDraft()}
                     onPublish={() => handleSave('published')}
-                    onToggleProjectImport={() => setIsProjectImportExpanded(value => !value)}
+                    onImportProjectChanges={() => void importMeetingProjectChanges({ nodes })}
                   />
-                  {projectChangeImportPanel ? (
-                    <div className="mt-2">
-                      {projectChangeImportPanel}
-                    </div>
-                  ) : null}
+                  <div className="mt-2">
+                    <MeetingProjectChangeImportControl
+                      status={meetingProjectImportStatus}
+                      message={meetingProjectImportMessage}
+                      disabled={!projectImportStepEnabled}
+                      onImport={() => void importMeetingProjectChanges({ nodes })}
+                      onCustomImport={(startedAt, endedAt) => void importMeetingProjectChanges({ mode: 'custom', startedAt, endedAt, nodes })}
+                    />
+                  </div>
 
                   {shouldShowMeetingRecoveryStatus ? (
                     <div
@@ -1209,6 +1215,30 @@ const RecordSidebar: React.FC = () => {
                       <span className="truncate">{meetingRecoveryStatus}</span>
                     </div>
                   ) : null}
+                  <div data-record-meeting-actions className="mt-2 flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                    <button
+                      type="button"
+                      data-record-meeting-save-draft
+                      disabled={!meetingActionState.canSaveDraft || saving || isSynthesizing}
+                      onClick={() => handleSave('draft')}
+                      title={meetingActionState.saveDraftDisabledReason ?? '保存目前會議內容為草稿。'}
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                    >
+                      <Save size={13} />
+                      存草稿
+                    </button>
+                    <button
+                      type="button"
+                      data-record-meeting-publish
+                      disabled={!meetingActionState.canPublish || saving || isSynthesizing}
+                      onClick={() => handleSave('published')}
+                      title={meetingActionState.publishDisabledReason ?? '發布目前會議內容。'}
+                      className="inline-flex h-8 items-center gap-1 rounded-md bg-slate-900 px-2.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      <Send size={13} />
+                      {isPublished ? '已發布' : '發布'}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <WorkLogWorkflowCard
@@ -1308,6 +1338,9 @@ const RecordSidebar: React.FC = () => {
                     cursorOffset={contentCursorOffset}
                     onChange={content => updateDraft({ content })}
                     onCursorOffsetChange={setContentCursorOffset}
+                    focusRequestId={contentFocusRequestId}
+                    focusPending={contentFocusPending}
+                    onFocusConsumed={consumeContentFocus}
                     placeholder="記錄討論、決議、進度、風險、待追蹤事項..."
                     editorClassName={isMeetingMode ? 'min-h-[220px] flex-1' : 'min-h-[150px] flex-1'}
                     editorContainerClassName={isMeetingMode ? 'flex min-h-[220px] flex-1 flex-col' : 'flex min-h-[150px] flex-1 flex-col'}

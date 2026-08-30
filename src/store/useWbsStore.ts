@@ -34,6 +34,11 @@ import {
 } from '../features/taskFilters/deferredRefresh';
 import { matchesTaskFiltersWithStatus } from '../features/taskFilters/predicates';
 import { useTaskFilterStore } from './useTaskFilterStore';
+import { isTaskCollectionPending } from '../features/taskCollection/pending';
+import { getTaskTrackingReferenceService } from '../services/dataBackend';
+import { TaskTrackingError } from '../features/taskTracking/errors';
+import { buildProjectionNodes, getReferenceSubtree, primaryPlacementId } from '../features/taskTracking/model';
+import type { TaskProjectionNode, TaskTrackingReference, TaskTrackingReferenceCapability } from '../features/taskTracking/types';
 
 /**
  * WbsStore 狀態定義
@@ -56,6 +61,9 @@ export interface WbsBoardState {
   loading: boolean;
   error: string | null;
   pendingPlacementNodeIds: Record<string, string>;
+  /** Non-owning placements; task content remains in `nodes` only. */
+  trackingReferences: TaskTrackingReference[];
+  trackingReferenceCapability: TaskTrackingReferenceCapability;
 }
 
 export type SetNodesOptions = {
@@ -120,6 +128,8 @@ export interface WbsBoardActions {
    * 封存任務節點；只標記 isArchived，保留依賴供還原後繼續使用。
    */
   archiveNode: (id: string) => void;
+  /** Apply a durable collection result to the local projection only. */
+  applyCollectedTaskRoot: (input: { taskId: string; updatedAt: number }) => void;
 
   /**
    * 從回收桶永久刪除已封存任務與其子樹；不可由一般 undo 復原。
@@ -129,6 +139,13 @@ export interface WbsBoardActions {
     id: string,
     options?: { includeInternalDependencies?: boolean; canCreateDependency?: boolean }
   ) => Promise<{ rootId: string; nodeCount: number; dependencyCount: number } | null>;
+
+  loadTrackingReferences: (workspaceId: string) => Promise<void>;
+  createTrackingReference: (taskId: string) => Promise<TaskTrackingReference | null>;
+  moveTrackingReference: (input: { referenceId: string; targetBoardId: string; targetParentPlacementId: string | null; anchorPlacementId?: string | null; position?: 'before' | 'after' | 'append' }) => Promise<TaskTrackingReference | null>;
+  removeTrackingReference: (referenceId: string) => Promise<void>;
+  restoreTrackingReference: (referenceId: string) => Promise<TaskTrackingReference | null>;
+  getProjectionNodesForBoard: (workspaceId: string, boardId: string, access?: { canEditCanonicalTask?: boolean; canManageReferenceHere?: boolean }) => TaskProjectionNode[];
 
   /**
    * 變更節點的階層關係 (拖曳到另一個父節點下)
@@ -619,6 +636,8 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   loading: false,
   error: null,
   pendingPlacementNodeIds: {},
+  trackingReferences: [],
+  trackingReferenceCapability: { supported: false, reason: 'schema_not_ready' },
 
   _buildIndices: (nodesRecord) => {
     const boardIndex: Record<string, string[]> = {};
@@ -662,6 +681,199 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     get()._buildIndices(nodesRecord);
   },
 
+  loadTrackingReferences: async (workspaceId) => {
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    try {
+      const capability = await service.getCapability();
+      if (!capability.supported) {
+        set({ trackingReferences: [], trackingReferenceCapability: capability });
+        return;
+      }
+      const references = await service.listByWorkspace(workspaceId);
+      set({ trackingReferences: references, trackingReferenceCapability: capability });
+      // A Supabase board load is intentionally scoped to the active board. A
+      // cross-board reference still needs its canonical source task hydrated,
+      // but that read must follow the derived-reference permission path rather
+      // than failing just because the source Board itself is private.
+      const missingTaskIds = Array.from(new Set(
+        references.filter(reference => !get().nodes[reference.taskId]).map(reference => reference.taskId),
+      ));
+      if (missingTaskIds.length > 0 && service.listCanonicalTasksByIds) {
+        try {
+          const canonicalTasks = await service.listCanonicalTasksByIds(workspaceId, missingTaskIds);
+          if (canonicalTasks.length > 0) get().setNodes(canonicalTasks, { preserveOutOfScope: true });
+        } catch (error) {
+          // Keep the reference list usable even if canonical hydration is
+          // temporarily unavailable; the next sync/focus refresh retries it.
+          console.warn('[taskTracking] Canonical derived-read hydration failed:', error);
+        }
+      }
+
+      // Local-test and legacy providers may not implement the derived-read
+      // helper. Fall back per source Board so one unreadable Board never hides
+      // references that were already returned for a readable target Board.
+      const missingSourceBoards = Array.from(new Set(
+        references
+          .filter(reference => !get().nodes[reference.taskId])
+          .map(reference => reference.sourceBoardId || reference.boardId)
+          .filter(Boolean),
+      ));
+      if (missingSourceBoards.length > 0) {
+        const sourceResults = await Promise.all(missingSourceBoards.map(async boardId => {
+          try {
+            return await nodeService.listByProject(workspaceId, boardId);
+          } catch (error) {
+            console.warn('[taskTracking] Source Board hydration skipped:', { workspaceId, boardId, error });
+            return [];
+          }
+        }));
+        const sourceNodes = sourceResults.flat();
+        if (sourceNodes.length > 0) get().setNodes(sourceNodes, { preserveOutOfScope: true });
+      }
+    } catch (error) {
+      console.warn('[taskTracking] Failed to hydrate references:', error);
+      set({ trackingReferenceCapability: { supported: false, reason: 'schema_not_ready' } });
+    }
+  },
+
+  createTrackingReference: async (taskId) => {
+    const task = get().nodes[taskId];
+    if (!task || task.isArchived || !task.workspaceId || !task.boardId) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const createdReference = await service.create(task.workspaceId, {
+      sourcePlacementId: primaryPlacementId(taskId),
+      clientPlatform: 'web',
+    });
+    const reference = { ...createdReference, taskId: task.id, workspaceId: task.workspaceId, boardId: task.boardId };
+    set(state => ({ trackingReferences: [...state.trackingReferences.filter(item => item.id !== reference.id), reference] }));
+    useUndoStore.getState().pushUndo({
+      label: '建立追蹤副本',
+      undo: () => get().removeTrackingReference(reference.id),
+      redo: () => get().restoreTrackingReference(reference.id).then(() => undefined),
+    });
+    return reference;
+  },
+
+  moveTrackingReference: async ({ referenceId, targetBoardId, targetParentPlacementId, anchorPlacementId, position }) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && !item.removedAt);
+    if (!reference) return null;
+    const originalSibling = get().trackingReferences
+      .filter(item => !item.removedAt
+        && item.id !== reference.id
+        && item.boardId === reference.boardId
+        && item.parentPlacementId === reference.parentPlacementId
+        && item.order > reference.order)
+      .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))[0];
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const movedResult = await service.move(reference.workspaceId, {
+      sourcePlacementId: referenceId,
+      expectedRevision: reference.revision,
+      targetBoardId,
+      targetParentPlacementId,
+      anchorPlacementId,
+      position,
+      clientPlatform: 'web',
+    });
+    const moved = { ...movedResult, taskId: reference.taskId, workspaceId: reference.workspaceId, boardId: targetBoardId, sourceBoardId: reference.sourceBoardId };
+    // A move RPC updates the complete tracking subtree and may normalize the
+    // destination siblings.  Re-read the workspace scope so the normalized
+    // placement state (including child board IDs and sibling order) cannot
+    // drift from the provider.  Preserve local tombstones used by undo.
+    let fresh: TaskTrackingReference[] | null = null;
+    try {
+      fresh = await service.listByWorkspace(reference.workspaceId);
+    } catch (error) {
+      // The command already committed; a recovery read must not surface as a
+      // false mutation failure.  Keep the root result and let the next reload
+      // reconcile the complete scope.
+      console.warn('[taskTracking] Move committed but refresh failed:', error);
+    }
+    if (!fresh) {
+      set(state => ({ trackingReferences: state.trackingReferences.map(item => item.id === moved.id ? moved : item) }));
+      useUndoStore.getState().pushUndo({
+        label: '移動追蹤副本',
+        undo: () => get().moveTrackingReference({ referenceId, targetBoardId: reference.boardId, targetParentPlacementId: reference.parentPlacementId, anchorPlacementId: originalSibling?.id ?? null, position: originalSibling ? 'before' : 'append' }).then(() => undefined),
+        redo: () => get().moveTrackingReference({ referenceId, targetBoardId, targetParentPlacementId, anchorPlacementId: anchorPlacementId ?? null, position }).then(() => undefined),
+      });
+      return moved;
+    }
+    set(state => {
+      const freshById = new Map(fresh.map(item => [item.id, item]));
+      const retained = state.trackingReferences.filter(item =>
+        item.workspaceId !== reference.workspaceId || (!freshById.has(item.id) && Boolean(item.removedAt)),
+      );
+      return { trackingReferences: [...retained, ...fresh] };
+    });
+    useUndoStore.getState().pushUndo({
+      label: '移動追蹤副本',
+      undo: () => get().moveTrackingReference({
+          referenceId,
+          targetBoardId: reference.boardId,
+          targetParentPlacementId: reference.parentPlacementId,
+          anchorPlacementId: originalSibling?.id ?? null,
+          position: originalSibling ? 'before' : 'append',
+        }).then(() => undefined),
+      redo: () => get().moveTrackingReference({
+          referenceId,
+          targetBoardId,
+          targetParentPlacementId,
+          anchorPlacementId: anchorPlacementId ?? null,
+          position,
+        }).then(() => undefined),
+    });
+    return moved;
+  },
+
+  removeTrackingReference: async (referenceId) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && !item.removedAt);
+    if (!reference) return;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    await service.remove(reference.workspaceId, { sourcePlacementId: referenceId, expectedRevision: reference.revision, clientPlatform: 'web' });
+    const removedIds = new Set(getReferenceSubtree(get().trackingReferences, referenceId).map(item => item.id));
+    set(state => ({ trackingReferences: state.trackingReferences.map(item => removedIds.has(item.id) ? { ...item, removedAt: Date.now(), revision: item.revision + 1 } : item) }));
+    useUndoStore.getState().pushUndo({
+      label: '移除此處追蹤',
+      undo: () => get().restoreTrackingReference(referenceId).then(() => undefined),
+      redo: () => get().removeTrackingReference(referenceId),
+    });
+  },
+
+  restoreTrackingReference: async (referenceId) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && item.removedAt);
+    if (!reference) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const restored = await service.restore(reference.workspaceId, { sourcePlacementId: referenceId, expectedRevision: reference.revision, clientPlatform: 'web' });
+    const normalizedRestored = { ...restored, taskId: reference.taskId, workspaceId: reference.workspaceId, boardId: reference.boardId, sourceBoardId: reference.sourceBoardId };
+    // Restore RPC restores the entire reference subtree.  Refresh the active
+    // workspace scope so nested placements become visible together; retain
+    // unrelated tombstones for ordinary undo history.
+    let fresh: TaskTrackingReference[] | null = null;
+    try {
+      fresh = await service.listByWorkspace(reference.workspaceId);
+    } catch (error) {
+      console.warn('[taskTracking] Restore committed but refresh failed:', error);
+    }
+    if (!fresh) {
+      set(state => ({ trackingReferences: state.trackingReferences.map(item => item.id === normalizedRestored.id ? normalizedRestored : item) }));
+      return normalizedRestored;
+    }
+    set(state => {
+      const freshById = new Map(fresh.map(item => [item.id, item]));
+      const retained = state.trackingReferences.filter(item =>
+        item.workspaceId !== reference.workspaceId || (!freshById.has(item.id) && Boolean(item.removedAt)),
+      );
+      return { trackingReferences: [...retained, ...fresh] };
+    });
+    return normalizedRestored;
+  },
+
+  getProjectionNodesForBoard: (workspaceId, boardId, access = {}) => buildProjectionNodes(
+    Object.values(get().nodes).filter(node => node.workspaceId === workspaceId),
+    get().trackingReferences,
+    boardId,
+    { canEditCanonicalTask: access.canEditCanonicalTask ?? false, canManageReferenceHere: access.canManageReferenceHere ?? false },
+  ),
+
   hydrateUnplacedTasks: (tasks) => {
     if (tasks.length === 0) return;
     const currentNodes = get().nodes;
@@ -678,6 +890,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   addNode: (node) => {
     const state = get();
+    if (node.parentId && isTaskCollectionPending(node.parentId)) return;
     const normalizedNode = normalizeTaskStatusNode(normalizeTaskAssignmentNode(node));
     // 使用 Immutable 更新 nodes
     const updatedNodes = { ...state.nodes, [normalizedNode.id]: normalizedNode };
@@ -726,6 +939,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   duplicateNodeTree: async (id, options = {}) => {
     const state = get();
+    if (isTaskCollectionPending(id)) return null;
     const sourceNode = state.nodes[id];
     if (!sourceNode || sourceNode.isArchived) return null;
 
@@ -941,6 +1155,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   updateNode: (id, updates, options) => {
     const state = get();
     if (!state.nodes[id]) return;
+    if (isTaskCollectionPending(id)) return;
 
     const oldNode = state.nodes[id];
     const normalizedUpdates = normalizeTaskAssignmentUpdates(
@@ -1068,6 +1283,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const beforeNodes: Record<string, TaskNode> = {};
 
     for (const [id, updates] of entries) {
+      if (isTaskCollectionPending(id)) continue;
       const oldNode = state.nodes[id];
       if (!oldNode) continue;
 
@@ -1146,7 +1362,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   commitTaskPlacementCommand: async (command, options = {}) => {
     const state = get();
+    if (command.destination.ownership.kind === 'account_unplaced') {
+      const blocked = command.expectedSubtreeIds.some(taskId => state.trackingReferences.some(reference => reference.taskId === taskId && !reference.removedAt));
+      if (blocked) throw new TaskTrackingError('TRACKING_REFERENCE_BLOCKS_UNPLACED', '請先移除所有追蹤副本，才能將任務移至未歸位。');
+    }
     assertMoveTaskSubtreeCommand(command, state.nodes);
+    if (command.expectedSubtreeIds.some(isTaskCollectionPending)) throw new Error('典藏任務進行中，暫時無法搬移此子樹。');
     const beforeNodes = state.nodes;
     const reverseDestination = buildRestoreDestination(command.rootTaskId, beforeNodes);
     const pendingIds = [...command.expectedSubtreeIds];
@@ -1241,7 +1462,16 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   archiveNode: (id) => {
     // 封存是可逆生命週期：依賴必須保留，還原後才能完整回到封存前狀態。
+    if (isTaskCollectionPending(id)) return;
     get().updateNode(id, { isArchived: true });
+  },
+
+  applyCollectedTaskRoot: ({ taskId, updatedAt }) => {
+    const current = get().nodes[taskId];
+    if (!current) return;
+    const nextNodes = { ...get().nodes, [taskId]: { ...current, isArchived: true, updatedAt } };
+    set({ nodes: nextNodes });
+    get()._buildIndices(nextNodes);
   },
 
   permanentlyDeleteNodes: async (rootIds) => {
@@ -1251,6 +1481,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     for (const rootId of rootIds) {
       const root = state.nodes[rootId];
       if (!root) continue;
+      if (isTaskCollectionPending(rootId)) throw new Error('典藏任務進行中，暫時無法刪除此子樹。');
       if (!root.isArchived) {
         throw new Error(`只有已封存任務可以永久刪除：${root.title || '未命名任務'}`);
       }
@@ -1302,6 +1533,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       dependencies: latest.dependencies.filter(
         dependency => !nodeIds.has(dependency.fromId) && !nodeIds.has(dependency.toId),
       ),
+      // Supabase removes placement rows through the task FK cascade; the
+      // local-test projection must mirror that lifecycle explicitly so a
+      // deleted canonical task never leaves a dangling ghost reference.
+      trackingReferences: latest.trackingReferences.filter(reference => !nodeIds.has(reference.taskId)),
     });
     get()._buildIndices(nextNodes);
     return nodeIds.size;
@@ -1749,13 +1984,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
   // ===== Import / Export =====
   exportData: () => {
-      const { nodes, dependencies } = get();
+      const { nodes, dependencies, trackingReferences } = get();
       const workspaces = useBoardStore.getState().workspaces;
       const tags = useTagStore.getState().tags;
       const exportObj = {
           version: 'wbs-1.2',
           nodes,
           dependencies,
+          trackingReferences,
           tags,
           workspaces,
           timestamp: Date.now()
@@ -1826,6 +2062,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   importedNodeIds = new Set(nodesArray.map(node => node.id));
                   get().setNodes(nodesArray);
                   await nodeService.replaceAllByProject(currentWsId, currentBoardId, nodesArray);
+              }
+
+              if (Array.isArray(parsed.trackingReferences)) {
+                  const importedReferences = parsed.trackingReferences.filter((reference: any) =>
+                      reference
+                      && typeof reference.id === 'string'
+                      && typeof reference.taskId === 'string'
+                      && reference.workspaceId === currentWsId
+                      && reference.boardId === currentBoardId
+                      && !reference.removedAt
+                  );
+                  set({ trackingReferences: importedReferences });
               }
 
               if (Array.isArray(parsed.tags)) {

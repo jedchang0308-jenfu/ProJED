@@ -12,6 +12,12 @@ import {
 } from '../../features/backup/types';
 import { buildBackupPayload, calculateBackupChecksum, validateBackupPayload } from '../../features/backup/package';
 import { localTestMemberService, localTestStorage } from '../localTestService';
+import {
+  readLocalTaskTrackingReferences,
+  writeLocalTaskTrackingReferences,
+  TASK_TRACKING_REFERENCES_STORAGE_KEY,
+} from '../../features/taskTracking/localService';
+import type { TaskTrackingReference } from '../../features/taskTracking/types';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -88,12 +94,14 @@ const buildBoardSource = (
     nodes: Record<string, TaskNode>;
     dependencies: Dependency[];
     tags: TaskTag[];
+    trackingReferences?: import('../../features/taskTracking/types').TaskTrackingReference[];
   }
 ): BoardBackupSource => {
   const workspaces = state?.workspaces ?? localTestStorage.readWorkspaces();
   const nodes = state?.nodes ?? localTestStorage.readNodes();
   const dependencies = state?.dependencies ?? localTestStorage.readDependencies();
   const tags = state?.tags ?? localTestStorage.readTags();
+  const trackingReferences = state?.trackingReferences ?? readLocalTaskTrackingReferences();
   const workspace = workspaces.find(item => item.id === workspaceId);
   const board = workspace?.boards.find(item => item.id === boardId);
   if (!workspace || !board) throw new BackupError('INVALID_FILE', '找不到指定的工作區或看板。');
@@ -111,6 +119,7 @@ const buildBoardSource = (
     tasks,
     dependencies: scopedDependencies,
     tags: tags.filter(tag => tag.workspaceId === workspaceId && referencedTagIds.has(tag.id)),
+    trackingReferences,
   };
 };
 
@@ -192,6 +201,9 @@ const planImport = async (request: BackupBackendPlanRequest): Promise<BackupImpo
   const unresolvedPeople = getUnresolvedPeople(request, knownUserIds);
   const tagPlan = getTagPlan(request);
   counts.dependencies = request.package.payload.dependencies.length;
+  if (request.package.payload.trackingReferences?.length) {
+    counts.trackingReferences = request.package.payload.trackingReferences.length;
+  }
   counts.tagsToCreate = tagPlan.create;
   counts.tagsToReuse = tagPlan.reuse;
   counts.unresolvedPeople = unresolvedPeople.length;
@@ -431,11 +443,46 @@ const executeImport = async (request: BackupBackendExecuteRequest): Promise<Back
   }));
   const nextDependencies = [...retainedDependencies, ...importedDependencies];
 
+  const existingReferences = readLocalTaskTrackingReferences();
+  const referenceIdMap = new Map<string, string>();
+  (request.package.payload.trackingReferences ?? []).forEach(reference => {
+    referenceIdMap.set(reference.sourceId, request.plan.mode === 'copy_to_new_board' ? createId('local_ref') : reference.sourceId);
+  });
+  const importedReferences = (request.package.payload.trackingReferences ?? [])
+    .map((reference): TaskTrackingReference | null => {
+      const taskId = taskIdMap.get(reference.taskSourceId);
+      if (!taskId) return null;
+      const parentSourceId = reference.parentSourceId;
+      const parentPlacementId = parentSourceId
+        ? referenceIdMap.get(parentSourceId) ?? (taskIdMap.has(parentSourceId) ? `primary:${taskIdMap.get(parentSourceId)}` : null)
+        : null;
+      const now = Date.now();
+      return {
+        id: referenceIdMap.get(reference.sourceId) as string,
+        taskId,
+        workspaceId,
+        boardId: targetBoardId as string,
+        sourceBoardId: targetBoardId as string,
+        parentPlacementId,
+        order: reference.order,
+        kanbanStageId: reference.kanbanStageSourceId ? taskIdMap.get(reference.kanbanStageSourceId) : undefined,
+        revision: reference.revision,
+        createdAt: now,
+        updatedAt: now,
+      } satisfies TaskTrackingReference;
+    })
+    .filter((reference): reference is TaskTrackingReference => Boolean(reference));
+  const retainedReferences = existingReferences.filter(reference =>
+    !(request.plan.mode === 'replace_current_board' && reference.workspaceId === workspaceId && reference.boardId === targetBoardId)
+  );
+  const nextReferences = [...retainedReferences, ...importedReferences];
+
   const postWriteFingerprint = await calculateSourceFingerprint(buildBoardSource(workspaceId, targetBoardId, {
     workspaces: nextWorkspaces,
     nodes: nextNodes,
     dependencies: nextDependencies,
     tags,
+    trackingReferences: nextReferences,
   }));
   const result: BackupExecutionResult = {
     executionId: request.plan.executionId,
@@ -446,6 +493,7 @@ const executeImport = async (request: BackupBackendExecuteRequest): Promise<Back
     counts: refreshedPlan.counts,
     warnings: refreshedPlan.warnings,
     sourceTaskIdMap: Object.fromEntries(taskIdMap),
+    sourceTrackingReferenceIdMap: Object.fromEntries(referenceIdMap),
     postWriteFingerprint,
     idempotentReplay: false,
   };
@@ -455,8 +503,10 @@ const executeImport = async (request: BackupBackendExecuteRequest): Promise<Back
     [DEPENDENCIES_KEY]: nextDependencies,
     [TAGS_KEY]: tags,
     [BOARD_MEMBERS_KEY]: nextMembers,
+    [TASK_TRACKING_REFERENCES_STORAGE_KEY]: nextReferences,
     [EXECUTIONS_KEY]: { ...readExecutions(), [request.plan.executionId]: result },
   });
+  writeLocalTaskTrackingReferences(nextReferences);
   return result;
 };
 

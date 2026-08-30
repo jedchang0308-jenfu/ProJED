@@ -48,8 +48,10 @@ import {
   Link,
   List,
   ListOrdered,
+  Plus,
   Redo2,
   RemoveFormatting,
+  Trash2,
   Undo2,
   Underline,
 } from 'lucide-react';
@@ -61,7 +63,7 @@ import {
   taskNoteRichContentToPlainText,
 } from '../../utils/taskNoteRichContent';
 
-interface TaskDetailNoteDesktopEditorProps {
+interface TaskDetailNoteEditorProps {
   canEdit: boolean;
   note: TaskDetailNote;
   noteIndex: number;
@@ -152,13 +154,14 @@ const ToolbarButton: React.FC<{
   <button
     type="button"
     onMouseDown={event => event.preventDefault()}
+    onPointerDown={event => event.preventDefault()}
     onClick={onClick}
     aria-label={label}
     aria-pressed={active}
     title={label}
     className={[
-      'inline-flex h-8 shrink-0 items-center justify-center rounded-md border text-slate-600 transition',
-      wide ? 'min-w-10 px-2 text-xs font-medium' : 'w-8',
+      'inline-flex h-9 shrink-0 items-center justify-center rounded-md border text-slate-600 transition md:h-8',
+      wide ? 'min-w-11 px-2 text-xs font-medium md:min-w-10' : 'w-9 md:w-8',
       'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
       active
         ? 'border-blue-200 bg-blue-50 text-blue-700'
@@ -345,10 +348,11 @@ const NoteToolbarPlugin: React.FC<{
   if (!canEdit) return null;
 
   return (
-    <div className="relative shrink-0" data-task-note-format-control="true">
+    <div className="contents md:relative md:block md:shrink-0" data-task-note-format-control="true">
       <button
         type="button"
         onMouseDown={event => event.preventDefault()}
+        onPointerDown={event => event.preventDefault()}
         onClick={() => {
           setLinkError('');
           setIsOpen(current => !current);
@@ -358,7 +362,7 @@ const NoteToolbarPlugin: React.FC<{
         aria-haspopup="true"
         title="文字格式"
         className={[
-          'inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent transition-colors',
+          'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-0 bg-transparent transition-colors md:h-7 md:w-7',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
           isOpen ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
         ].join(' ')}
@@ -370,9 +374,9 @@ const NoteToolbarPlugin: React.FC<{
         <div
           role="toolbar"
           aria-label={'文字格式工具：' + (noteTitle || '未命名備註')}
-          className="absolute right-8 top-1/2 z-40 max-w-[calc(100vw-5rem)] -translate-y-1/2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
+          className="order-last z-40 mt-1 w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl md:absolute md:right-8 md:top-1/2 md:order-none md:mt-0 md:w-auto md:max-w-[calc(100vw-5rem)] md:-translate-y-1/2"
           data-task-note-toolbar-popover="true"
-          data-task-note-toolbar-placement="header-left"
+          data-task-note-toolbar-placement="desktop-left-mobile-below"
           data-task-note-toolbar-persistence="toggle-only"
         >
           <div className="flex w-max items-center gap-0.5">
@@ -443,7 +447,7 @@ const NoteChangePlugin: React.FC<{
   );
 };
 
-const TaskDetailNoteDesktopEditor: React.FC<TaskDetailNoteDesktopEditorProps> = ({
+const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   canEdit,
   note,
   noteIndex,
@@ -466,7 +470,7 @@ const TaskDetailNoteDesktopEditor: React.FC<TaskDetailNoteDesktopEditorProps> = 
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <div className="relative min-w-0" data-task-detail-note-card="true" data-task-note-editor-loaded="true">
-        <div className="mb-1 flex min-w-0 items-center gap-1" data-task-detail-note-header="true">
+        <div className="relative mb-1 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
           <input
             type="text"
             value={note.title}
@@ -487,7 +491,7 @@ const TaskDetailNoteDesktopEditor: React.FC<TaskDetailNoteDesktopEditorProps> = 
               aria-label="新增備註欄"
               data-task-detail-note-add="true"
             >
-              <span aria-hidden="true" className="text-lg leading-none">+</span>
+              <Plus size={14} />
             </button>
           ) : null}
           <button
@@ -499,7 +503,7 @@ const TaskDetailNoteDesktopEditor: React.FC<TaskDetailNoteDesktopEditorProps> = 
             aria-label={'刪除備註欄：' + (note.title || '未命名備註')}
             data-task-detail-note-delete="true"
           >
-            <span aria-hidden="true" className="text-base leading-none">×</span>
+            <Trash2 size={14} />
           </button>
         </div>
         <div className="relative">
@@ -537,4 +541,4 @@ const TaskDetailNoteDesktopEditor: React.FC<TaskDetailNoteDesktopEditorProps> = 
   );
 };
 
-export default TaskDetailNoteDesktopEditor;
+export default TaskDetailNoteEditor;

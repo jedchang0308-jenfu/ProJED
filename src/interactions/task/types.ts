@@ -11,6 +11,16 @@ export type TaskInteractionLocation = {
   origin: TaskInteractionOrigin;
 };
 
+export type TaskPlacementInteractionContext = {
+  taskId: string;
+  placementId: string;
+  placementKind: 'primary' | 'tracking_reference';
+  boardId: string;
+  parentPlacementId: string | null;
+  canEditCanonicalTask: boolean;
+  canManageReferenceHere: boolean;
+};
+
 export type TaskInteractionSurfaceId =
   | 'list.row'
   | 'mindmap.node'
@@ -28,6 +38,7 @@ export type InteractionTrigger =
   | 'pointer.double'
   | 'pointer.secondary'
   | 'keyboard.enter'
+  | 'keyboard.space'
   | 'keyboard.tab'
   | 'keyboard.arrow-up'
   | 'keyboard.arrow-down'
@@ -55,6 +66,8 @@ export type TaskActionId =
   | 'task.create-child'
   | 'task.create-relationship'
   | 'task.duplicate'
+  | 'task.create-tracking-reference'
+  | 'task.remove-tracking-reference'
   | 'task.assign'
   | 'task.dependency-start'
   | 'task.dependency-end'
@@ -62,6 +75,7 @@ export type TaskActionId =
   | 'task.demote'
   | 'task.toggle-complete'
   | 'task.archive'
+  | 'task.collect'
   | 'mindmap.select-parent'
   | 'mindmap.select-first-child'
   | 'mindmap.select-previous'
@@ -109,7 +123,7 @@ export type TaskActionDefinition = {
   icon: string;
   section: TaskMenuSection | null;
   kind: 'navigation' | 'selection' | 'presentation' | 'mutation' | 'transient' | 'danger';
-  capability?: 'create' | 'edit' | 'move' | 'delete' | 'assign' | 'dependency';
+  capability?: 'create' | 'edit' | 'move' | 'delete' | 'collect' | 'assign' | 'dependency' | 'tracking-reference';
 };
 
 export type TaskInteractionProfile = {

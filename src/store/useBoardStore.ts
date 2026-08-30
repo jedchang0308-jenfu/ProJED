@@ -228,6 +228,9 @@ const useBoardStore = create<BoardStore>()(
         },
 
         removeWorkspace: async (wsId) => {
+            const impact = await workspaceService.previewDeleteImpact(wsId);
+            if (impact.unknown) throw new Error('無法確認工作區內的典藏資產，已阻止刪除。');
+            if (impact.blocked) throw new Error(`此工作區仍有 ${impact.taskCollectionCount} 筆典藏任務，請先處理紀錄庫資產。`);
             await workspaceService.delete(wsId);
             set((state) => {
                 const deletedWorkspace = state.workspaces.find(ws => ws.id === wsId);
@@ -578,14 +581,17 @@ const useBoardStore = create<BoardStore>()(
             return tempId;
         },
 
-        removeBoard: (wsId, bId) => {
+        removeBoard: async (wsId, bId) => {
+            const impact = await boardService.previewDeleteImpact(wsId, bId);
+            if (impact.unknown) throw new Error('無法確認看板內的典藏資產，已阻止刪除。');
+            if (impact.blocked) throw new Error(`此看板仍有 ${impact.taskCollectionCount} 筆典藏任務，請先處理紀錄庫資產。`);
+            await boardService.delete(wsId, bId);
             set((state) => ({
                 workspaces: state.workspaces.map(ws => {
                     if (ws.id !== wsId) return ws;
                     return { ...ws, boards: ws.boards.filter(b => b.id !== bId) };
                 })
             }));
-            boardService.delete(wsId, bId).catch(console.error);
         },
 
         // ===== Export / Import =====

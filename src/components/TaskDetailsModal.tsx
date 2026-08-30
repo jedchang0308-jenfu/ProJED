@@ -1,13 +1,13 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, Send, Unlock, X } from 'lucide-react';
+import { AlertCircle, Archive, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, MoreHorizontal, Send, Unlock, X } from 'lucide-react';
 import { useWbsStore } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
 import { TagPicker } from './Tags/TagPicker';
 import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
-import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
 import useBoardStore from '../store/useBoardStore';
 import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { MANUAL_TASK_STATUSES, normalizeManualTaskStatus, TASK_STATUS_LABELS } from '../utils/taskStatus';
@@ -17,6 +17,9 @@ import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
+import TaskCollectionDialog from './TaskCollectionDialog';
+import { taskCollectionService } from '../services/dataBackend';
+import useTaskCollectionStore from '../store/useTaskCollectionStore';
 import {
   clampTaskDetailsModalSize,
   getTaskDetailsModalDefaultSize,
@@ -27,6 +30,8 @@ import {
 
 interface TaskDetailsModalProps {
   nodeId: string;
+  /** Placement identity used to resolve target/source capabilities independently. */
+  trackingReferenceId?: string;
   onClose: () => void;
 }
 
@@ -111,17 +116,29 @@ const getTouchDistance = (touches: React.TouchList) => {
   return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
 };
 
-export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onClose }) => {
+export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trackingReferenceId, onClose }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const nodes = useWbsStore((state) => state.nodes);
   const updateNode = useWbsStore((state) => state.updateNode);
   const dependencies = useWbsStore((state) => state.dependencies);
+  const trackingReference = useWbsStore((state) => trackingReferenceId
+    ? state.trackingReferences.find(reference => reference.id === trackingReferenceId && !reference.removedAt) || null
+    : null);
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
   const titleInputRef = React.useRef<HTMLInputElement | null>(null);
-  const { canEditTask, canAssignTask } = useBoardPermissions();
+  const collectionTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const taskActionMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const placementPermissions = useTaskPlacementPermissions(node, trackingReference);
+  // The same details component is used for primary and tracking placements.
+  // Canonical mutations are enabled only by source-board capabilities; target
+  // placement membership contributes derived read/manage-reference access.
+  const canEditTask = placementPermissions.canEditTask;
+  const canAssignTask = placementPermissions.canAssignTask;
+  const canCollectTask = placementPermissions.canCollectTask;
+  const taskCollectionPending = useTaskCollectionStore(state => Boolean(node && state.pendingByTaskId[node.id]));
   const canPersistTask = canEditTask || canAssignTask;
   const pendingTitleEditNodeId = useBoardStore((state) => state.pendingTitleEditNodeId);
   const pendingTitleEditInitialValue = useBoardStore((state) => state.pendingTitleEditInitialValue);
@@ -136,6 +153,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
   const [isTaskKnowledgeOpen, setIsTaskKnowledgeOpen] = React.useState(false);
+  const [isCollectionDialogOpen, setIsCollectionDialogOpen] = React.useState(false);
+  const [isTaskActionMenuOpen, setIsTaskActionMenuOpen] = React.useState(false);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
   const skipNextNotesSave = React.useRef(true);
@@ -341,11 +360,30 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
   }, [canPersistTask, onClose, persistTaskUpdates, savePendingTaskDetails]);
 
   React.useEffect(() => {
+    if (!isTaskActionMenuOpen) return;
+    const closeFromOutside = (event: PointerEvent) => {
+      if (!taskActionMenuRef.current?.contains(event.target as Node)) setIsTaskActionMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeFromOutside, true);
+    return () => document.removeEventListener('pointerdown', closeFromOutside, true);
+  }, [isTaskActionMenuOpen]);
+
+  React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing) return;
       if (event.target instanceof Element && event.target.closest('[data-task-details-title-input="true"]')) return;
-      const hasNestedOverlay = Boolean(document.querySelector(
-        '[data-tag-picker-panel], .global-dialog-content, [data-task-note-toolbar-popover="true"]',
+      if (isTaskActionMenuOpen || (event.target instanceof Element && event.target.closest('[data-task-details-overflow-menu="true"], [data-task-details-overflow-trigger="true"]'))) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        setIsTaskActionMenuOpen(false);
+        collectionTriggerRef.current?.focus();
+        return;
+      }
+      const eventWithinCollectionDialog = event.target instanceof Element
+        && Boolean(event.target.closest('[data-task-collection-dialog]'));
+      const hasNestedOverlay = eventWithinCollectionDialog || Boolean(document.querySelector(
+        '[data-tag-picker-panel], .global-dialog-content, [data-task-note-toolbar-popover="true"], [data-task-collection-dialog]',
       ));
       if (hasNestedOverlay) return;
       event.preventDefault();
@@ -356,7 +394,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [handleClose]);
+  }, [handleClose, isTaskActionMenuOpen]);
 
   React.useEffect(() => () => {
     clearSaveFeedbackTimer();
@@ -435,6 +473,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
 
   React.useEffect(() => {
     setIsTaskKnowledgeOpen(false);
+    setIsCollectionDialogOpen(false);
   }, [currentNodeId]);
 
   React.useEffect(() => {
@@ -726,6 +765,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
     <div
       data-task-details-modal="true"
       data-task-id={node.id}
+      data-task-tracking-reference-id={trackingReferenceId}
+      data-task-details-readonly={!canPersistTask ? 'true' : undefined}
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
       data-task-details-pinch-close="true"
       onTouchStart={handlePinchTouchStart}
@@ -733,6 +774,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
       onTouchEnd={handlePinchTouchEnd}
       onTouchCancel={() => { pinchCloseRef.current = null; }}
       onMouseDown={(event) => {
+        // A real double-click on a task opens after the first click; its second
+        // mousedown can then land on the newly mounted backdrop.  Do not treat
+        // that continuation as an explicit backdrop-close gesture.
+        if (event.detail > 1) return;
         if (event.target === event.currentTarget && isPrimaryPointerActivation(event)) handleClose();
       }}
     >
@@ -830,6 +875,42 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
                   <AlertCircle size={14} aria-hidden="true" />
                   儲存失敗，請重試
                 </button>
+              ) : null}
+            </div>
+          ) : null}
+          {canCollectTask && taskCollectionService.supported ? (
+            <div ref={taskActionMenuRef} className="relative shrink-0" data-task-details-overflow-container="true">
+              <button
+                ref={collectionTriggerRef}
+                type="button"
+                onClick={() => setIsTaskActionMenuOpen(current => !current)}
+                aria-expanded={isTaskActionMenuOpen}
+                aria-haspopup="menu"
+                aria-label="更多任務操作"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                data-task-details-overflow-trigger="true"
+              >
+                <MoreHorizontal size={18} aria-hidden="true" />
+              </button>
+              {isTaskActionMenuOpen ? (
+                <div
+                  role="menu"
+                  aria-label="任務操作"
+                  data-task-details-overflow-menu="true"
+                  className="absolute right-0 top-[calc(100%+0.35rem)] z-20 min-w-[9rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-xl"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={taskCollectionPending}
+                    onClick={() => { setIsTaskActionMenuOpen(false); setIsCollectionDialogOpen(true); }}
+                    className="flex min-h-9 w-full items-center gap-2 px-3 py-1.5 text-left font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-50"
+                    data-task-collection-open="true"
+                  >
+                    <Archive size={14} aria-hidden="true" />
+                    <span>典藏任務</span>
+                  </button>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -1162,6 +1243,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, onCl
           ) : null}
         </div>
       </div>
+      {isCollectionDialogOpen ? <TaskCollectionDialog workspaceId={node.workspaceId} boardId={node.boardId} rootItemId={node.id} rootTitle={node.title} onClose={() => { setIsCollectionDialogOpen(false); window.requestAnimationFrame(() => (collectionTriggerRef.current || modalRef.current)?.focus()); }} onViewCollection={() => { if (canPersistTask) handleClose(); else onClose(); }} /> : null}
     </div>
   );
 };

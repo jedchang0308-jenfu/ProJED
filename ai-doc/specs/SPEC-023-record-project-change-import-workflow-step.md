@@ -7,6 +7,12 @@
 優先級: P1  
 是否計入產品交付完成: 否
 
+## 2026-08-28 DEV-094 compatibility note
+
+- 本文件的 `匯入是 optional first step`、work-log 設定／scope／preview、protected content 與 AI preserve 契約繼續有效。
+- meeting 的「點匯入後展開日期、範圍、預覽、插入與跳過」互動已由 `SPEC-020` 的 DEV-094 addendum intentional replacement：meeting 改為 `帶入上次會議後變更` one-click，另以次要 `自訂日期` 按需揭露；不再走 preview／第二次 insert。
+- DEV-023 的既有 Browser QC PASS 是歷史實作證據，不代表 DEV-094 已實作或通過；current meeting acceptance 與 future verifier 以 `QA-DEV-094` 為準。
+
 ## 背景
 
 DEV-020 已完成紀錄功能重構，並把「先匯入專案變化」放在紀錄流程前方。使用者後續實測指出，獨立大型匯入卡片與下方「會議流程」形成上下分離，實際上同屬一段紀錄作業，卻被 UI 表達成兩個作業區。這會增加版面高度、降低流程連續性，也讓使用者誤以為匯入是紀錄流程外的前置功能。

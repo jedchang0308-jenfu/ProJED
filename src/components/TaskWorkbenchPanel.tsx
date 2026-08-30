@@ -15,7 +15,6 @@ import {
   createBoardAssigneeFilterOptions,
   createDefaultTaskFilters,
   countActiveTaskFilters,
-  isTaskEffectivelyVisible,
   normalizeTaskFilters,
   projectTaskFilterResults,
   type TaskFilterState,
@@ -62,6 +61,7 @@ import { useTaskGestureSurface } from './Wbs/taskDrag/useTaskGestureSurface';
 import TaskConditionFilterControls from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
 import { getSharedInlinePanelWidthStyle } from '../features/layout/preferences';
+import { buildWorkbenchProjectionTasks } from '../features/taskTracking/model';
 
 type PanelPrefs = TaskWorkbenchPanelPrefs;
 
@@ -224,6 +224,8 @@ interface WorkbenchTaskRowProps extends WorkbenchDragCardProps {
   isDragging: boolean;
   canUseDragSurface: boolean;
   setNodeRef?: (element: HTMLElement | null) => void;
+  dropRef?: (element: HTMLElement | null) => void;
+  dropTargetActive?: boolean;
   draggableBindings?: Record<string, unknown>;
   gestureHandlers: ReturnType<typeof useTaskGestureSurface>['handlers'];
   touchGestureEnabled: boolean;
@@ -238,6 +240,8 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   isDragging,
   canUseDragSurface,
   setNodeRef,
+  dropRef,
+  dropTargetActive = false,
   draggableBindings = {},
   gestureHandlers,
   touchGestureEnabled,
@@ -249,6 +253,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   const interactionBinding = useTaskInteractionBinding({
     taskId: task.id,
     title: task.title,
+    trackingReferenceId: task.trackingReferenceId,
     surfaceId: placement === 'unplaced' ? 'task-workbench.unplaced-row' : 'task-workbench.placed-row',
     origin: 'task-workbench',
     nodeRole: placement === 'unplaced' ? 'unplaced' : (task.nodeType || 'task'),
@@ -281,7 +286,10 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
     unplacedLane: boolean;
   }) => (
     <div
-      ref={canUseDragSurface ? setNodeRef : undefined}
+      ref={(element) => {
+        if (canUseDragSurface) setNodeRef?.(element);
+        dropRef?.(element);
+      }}
       {...draggableBindings}
       {...gestureHandlers}
       onClick={(event) => {
@@ -290,9 +298,11 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
         void interactionBinding.dispatch('pointer.primary');
       }}
       onContextMenu={handleContextMenu}
-      className={className}
+      className={`${className} ${task.isTrackingReference ? 'border-l-2 border-dashed border-violet-300 bg-violet-50/20' : ''} ${dropTargetActive ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
+      aria-label={task.isTrackingReference ? `追蹤副本：${task.title || '未命名任務'}` : task.title || '未命名任務'}
       style={style}
       data-task-workbench-task-card="true"
+      data-task-workbench-tracking-reference={task.isTrackingReference ? 'true' : undefined}
       data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}
       data-task-drag-surface={canUseDragSurface ? 'true' : undefined}
       data-task-drag-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
@@ -314,6 +324,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-task-drop-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
       data-task-placement-pending={isPlacementPending ? 'true' : undefined}
     >
+      {task.isTrackingReference ? <span className="sr-only">追蹤副本</span> : null}
       {children}
     </div>
   );
@@ -438,6 +449,16 @@ const WorkbenchPlacedReadOnlyCard: React.FC<WorkbenchDragCardProps> = ({
     sourceKind: null,
     mobileActionEnabled: false,
   });
+  const { setNodeRef: setDropNodeRef, isOver: isDropTargetActive } = useDroppable({
+    id: `task-workbench-placed-task-${task.id}`,
+    data: {
+      type: 'task-workbench-placed-task',
+      nodeId: task.id,
+      boardId: task.boardId,
+      workspaceId: task.workspaceId,
+      parentId: task.parentId || null,
+    },
+  });
 
   return (
     <WorkbenchTaskRow
@@ -448,6 +469,8 @@ const WorkbenchPlacedReadOnlyCard: React.FC<WorkbenchDragCardProps> = ({
       hierarchyDepth={hierarchyDepth}
       isDragging={false}
       canUseDragSurface={false}
+      dropRef={setDropNodeRef}
+      dropTargetActive={isDropTargetActive}
       gestureHandlers={taskGesture.handlers}
       touchGestureEnabled={taskGesture.touchGestureEnabled}
     />
@@ -672,6 +695,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const nodes = useWbsStore(state => state.nodes);
+  const trackingReferences = useWbsStore(state => state.trackingReferences);
   const setNodes = useWbsStore(state => state.setNodes);
   const hydrateUnplacedTasks = useWbsStore(state => state.hydrateUnplacedTasks);
   const addNode = useWbsStore(state => state.addNode);
@@ -824,7 +848,6 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     })),
   ), [workspaces]);
   const boardScopeIds = React.useMemo(() => boardOptions.map(option => option.boardId), [boardOptions]);
-  const boardScopeIdSet = React.useMemo(() => new Set(boardScopeIds), [boardScopeIds]);
 
   React.useEffect(() => {
     if (boardOptions.length === 0) return;
@@ -902,29 +925,45 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     () => createBoardAssigneeFilterOptions(selectedBoardId, boardMembers, nodes, workspaceMembers),
     [boardMembers, nodes, selectedBoardId, workspaceMembers],
   );
+  const workbenchProjectionTasks = React.useMemo(
+    () => buildWorkbenchProjectionTasks(Object.values(nodes), trackingReferences, boardScopeIds),
+    [boardScopeIds, nodes, trackingReferences],
+  );
+  const workbenchProjectionByBoardId = React.useMemo(() => {
+    const lookup = new Map<string, TaskNode[]>();
+    boardOptions.forEach(option => {
+      lookup.set(option.boardId, buildWorkbenchProjectionTasks(Object.values(nodes), trackingReferences, [option.boardId]));
+    });
+    return lookup;
+  }, [boardOptions, nodes, trackingReferences]);
   const filterProjectionByBoardId = React.useMemo(() => {
     const lookup = new Map<string, ReturnType<typeof projectTaskFilterResults>>();
     boardOptions.forEach(option => {
+      const projectedTasks = workbenchProjectionByBoardId.get(option.boardId) || [];
       lookup.set(
         option.boardId,
-        projectTaskFilterResults(nodes, filtersByBoardId[option.boardId] || createDefaultTaskFilters(), { boardId: option.boardId }),
+        projectTaskFilterResults(
+          Object.fromEntries(projectedTasks.map(task => [task.id, task])),
+          filtersByBoardId[option.boardId] || createDefaultTaskFilters(),
+          { boardId: option.boardId },
+        ),
       );
     });
     return lookup;
-  }, [boardOptions, filtersByBoardId, nodes]);
+  }, [boardOptions, filtersByBoardId, workbenchProjectionByBoardId]);
 
-  const loadedPlacedTasks = React.useMemo(() => Object.values(nodes)
+  const loadedPlacedTasks = React.useMemo(() => workbenchProjectionTasks
     .filter((task): task is TaskNode => {
       if (!task || !task.boardId || isTaskWorkbenchUnplacedTask(task)) return false;
       if (!panelPrefs.showContainersInAllTasks && !isTaskWorkbenchSortableTask(task)) return false;
-      if (!boardScopeIdSet.has(task.boardId)) return false;
-      return isTaskEffectivelyVisible(task, nodes, { boardId: task.boardId });
-    }), [boardScopeIdSet, nodes, panelPrefs.showContainersInAllTasks]);
+      return true;
+    }), [panelPrefs.showContainersInAllTasks, workbenchProjectionTasks]);
 
-  const visiblePlacedTasks = React.useMemo(
-    () => loadedPlacedTasks.filter(task => filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)),
-    [filterProjectionByBoardId, loadedPlacedTasks],
-  );
+  const visiblePlacedTasks = React.useMemo(() => {
+    const matchedTaskIds = new Set<string>();
+    filterProjectionByBoardId.forEach(projection => projection.matchedTaskIds.forEach(taskId => matchedTaskIds.add(taskId)));
+    return loadedPlacedTasks.filter(task => matchedTaskIds.has(task.id));
+  }, [filterProjectionByBoardId, loadedPlacedTasks]);
 
   const unplacedTasks = React.useMemo(() => sortTasks(Object.values(nodes)
     .filter((task): task is TaskNode => (
@@ -1260,8 +1299,10 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
             className={`scrollbar-subtle min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-100 px-3 pb-3 transition-colors ${isPlacedBoardLaneOver ? 'bg-primary/10 ring-2 ring-inset ring-primary/30' : ''}`}
             data-task-workbench-placed-board-lane="true"
             data-task-workbench-lane-drop-target="placed-board"
+            data-task-workbench-reference-drop-target="true"
             data-board-id={selectedBoardOption?.boardId || undefined}
             data-workspace-id={selectedBoardOption?.workspaceId || undefined}
+            title="將追蹤副本拖到此處可移至目前選定看板的根層"
           >
             <div
               className="sticky top-0 z-20 mb-px box-border flex h-8 w-full min-w-0 shrink-0 items-center gap-2 bg-slate-100"

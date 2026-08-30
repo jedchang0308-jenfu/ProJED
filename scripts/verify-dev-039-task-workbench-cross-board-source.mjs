@@ -97,12 +97,15 @@ assert(
     source.taskWorkbench.includes('isTaskWorkbenchSortableTask(task)') &&
     source.taskWorkbench.includes('!panelPrefs.showContainersInAllTasks && !isTaskWorkbenchSortableTask(task)') &&
     source.taskWorkbench.includes('boardScopeIds') &&
-    source.taskWorkbench.includes('boardScopeIdSet.has(task.boardId)') &&
-    source.taskWorkbench.includes('isTaskEffectivelyVisible(task, nodes, { boardId: task.boardId })') &&
+    ((source.taskWorkbench.includes('boardScopeIdSet.has(task.boardId)') &&
+      source.taskWorkbench.includes('isTaskEffectivelyVisible(task, nodes, { boardId: task.boardId })') &&
+      source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)')) ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('workbenchProjectionByBoardId') && source.taskWorkbench.includes('matchedTaskIds.add(taskId)'))) &&
     source.taskWorkbench.includes('sortTasksByDueDate(visiblePlacedTasks)') &&
     source.taskWorkbench.includes('tasks={unplacedTasks}') &&
     source.taskWorkbench.includes('placement="placed"') &&
-    source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') &&
+    (source.taskWorkbench.includes('filterProjectionByBoardId.get(task.boardId)?.matchedTaskIds.has(task.id)') ||
+      (source.taskWorkbench.includes('buildWorkbenchProjectionTasks') && source.taskWorkbench.includes('workbenchProjectionByBoardId'))) &&
     !source.taskWorkbench.includes('mergeUnplacedTasks') &&
     !source.taskWorkbench.includes('Object.values(nodes)\n    .filter((task): task is TaskNode => Boolean(task) && !task.isArchived'),
 );

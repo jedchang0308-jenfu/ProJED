@@ -36,6 +36,7 @@ import type {
   TaskDragTargetRect,
   TaskDropSurfaceKind,
 } from './taskDragTypes';
+import { primaryPlacementId } from '../../../features/taskTracking/model';
 
 export const MOBILE_PREVIEW_FINGER_CLEARANCE_PX = 12;
 export const MOBILE_TARGET_RETAIN_PX = 12;
@@ -57,6 +58,7 @@ type Point = { x: number; y: number };
 
 interface TaskTargetCandidate {
   nodeId: string;
+  placementId: string;
   boardId: string | null;
   workspaceId: string | null;
   surfaceKind: TaskDropSurfaceKind;
@@ -105,6 +107,7 @@ const emptyObservation = (
   source: state.source,
   targetKind: 'none',
   targetNodeId: null,
+  targetPlacementId: null,
   targetBoardId: null,
   targetWorkspaceId: null,
   targetSurfaceKind: null,
@@ -139,9 +142,10 @@ const readSurfaceKind = (element: HTMLElement): TaskDropSurfaceKind | null => {
   return null;
 };
 
-const findMobileSourcePlaceholder = (nodeId: string) =>
+const findMobileSourcePlaceholder = (nodeId: string, placementId?: string) =>
   Array.from(document.querySelectorAll<HTMLElement>('[data-kanban-drag-source-placeholder="true"][data-task-id]'))
-    .find((element) => element.getAttribute('data-task-id') === nodeId) || null;
+    .find((element) => element.getAttribute('data-task-id') === nodeId
+      && (!placementId || element.getAttribute('data-task-placement-id') === placementId)) || null;
 
 const pointInsideRect = (point: Point, rect: TaskDragTargetRect, outset = 0) =>
   point.x >= rect.left - outset
@@ -164,7 +168,7 @@ const pointInsideTargetCore = (point: Point, rect: TaskDragTargetRect) => {
 const resolveMobileTaskSourceOriginFieldRect = (state: TaskDragSessionState) => {
   const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
   if (!sourceSurfaceKind || sourceSurfaceKind === 'workbench-unplaced-row') return null;
-  const sourceElement = findMobileSourcePlaceholder(state.nodeId);
+  const sourceElement = findMobileSourcePlaceholder(state.nodeId, state.source.placementId);
   if (!sourceElement) return null;
   return resolveTaskOriginFieldRect({ sourceElement, sourceSurfaceKind });
 };
@@ -175,7 +179,7 @@ export const resolveMobileTaskOriginFieldRect = (
 ) => {
   const originFieldRect = resolveMobileTaskSourceOriginFieldRect(state);
   if (!originFieldRect) return null;
-  const sourceElement = findMobileSourcePlaceholder(state.nodeId);
+  const sourceElement = findMobileSourcePlaceholder(state.nodeId, state.source.placementId);
   if (!sourceElement) return null;
   const sourceRect = toTargetRect(sourceElement.getBoundingClientRect());
   if (!pointInsideRect(point, sourceRect)) return null;
@@ -231,7 +235,8 @@ const buildCandidate = (
   const dropPosition: MobileTaskDropPosition = intent.displayPosition === 'before' ? 'before' : 'after';
   return {
     nodeId,
-    boardId: targetNode.boardId || null,
+    placementId: targetElement.getAttribute('data-task-placement-id') || primaryPlacementId(nodeId),
+    boardId: targetElement.getAttribute('data-task-placement-board-id') || targetNode.boardId || null,
     workspaceId: targetNode.workspaceId || null,
     surfaceKind,
     outcomeKind: outcome.kind,
@@ -488,6 +493,7 @@ const candidateObservation = (
   ...base,
   targetKind: 'task-position',
   targetNodeId: candidate.nodeId,
+  targetPlacementId: candidate.placementId,
   targetBoardId: candidate.boardId,
   targetWorkspaceId: candidate.workspaceId,
   targetSurfaceKind: candidate.surfaceKind,
@@ -510,6 +516,7 @@ const lockedObservation = (
   ...base,
   targetKind: state.targetKind === 'task-position' ? 'task-position' : 'none',
   targetNodeId: state.hoverTargetId,
+  targetPlacementId: state.hoverTargetPlacementId,
   targetBoardId: state.targetBoardId,
   targetWorkspaceId: state.targetWorkspaceId,
   targetSurfaceKind: state.targetSurfaceKind,
@@ -676,6 +683,7 @@ export const resolveTaskDragObservation = ({
           ...observation,
           targetKind: 'task-position',
           targetNodeId: childTarget.targetNodeId,
+          targetPlacementId: childTarget.targetPlacementId,
           targetBoardId: targetNode?.boardId || null,
           targetWorkspaceId: targetNode?.workspaceId || null,
           targetSurfaceKind: childTarget.targetSurfaceKind,
@@ -723,6 +731,7 @@ export const observationToSessionState = (
   pointerY: observation.pointer?.y ?? state.pointerY,
   hoverAction: observation.action,
   hoverTargetId: observation.targetNodeId,
+  hoverTargetPlacementId: observation.targetPlacementId,
   targetBoardId: observation.targetBoardId,
   targetWorkspaceId: observation.targetWorkspaceId,
   targetSurfaceKind: observation.targetSurfaceKind,

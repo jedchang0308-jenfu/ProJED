@@ -2,7 +2,7 @@
 
 - 關聯 DEV：DEV-066
 - 規格：SPEC-066、ADR-042
-- QA 狀態：Rework 4 Pre-implementation Plan / 尚未執行
+- QA 狀態：Rework 4 Executed / Local Simulated PASS / Physical Device Pending
 - 歷史證據：Rework 1～3 Executed / PASS；見 QC-DEV-066
 
 ## 風險優先順序（FMEA）
@@ -56,8 +56,8 @@
 ## 歷史 Execution Result 與 Rework 4 證據邊界
 
 - Rework 1～3：2026-08-12 的 QA-066-001～013 舊版案例 PASS；詳細數據、screenshots 與非阻塞 findings 見 `ai-doc/qc/QC-DEV-066-task-note-semantic-rich-text.md`。
-- Rework 4：尚未實作、尚未執行。舊 mobile zero-editor／append preservation PASS 僅是歷史事實，不能作為目前統一 editor 契約的通過證據。
-- RD 完成後必須依本文件更新後的 QA-066-001～015 重跑；缺 iOS Safari／Android Chrome 實機 touch evidence 時，QC 不得宣稱 mobile fully verified。
+- Rework 4：2026-08-28 已實作並執行 local simulated scope。QA-066-001～010、012～013 與 QA-066-014 的 viewport／overflow 部分通過；QA-066-011 的直接編輯、格式套用、保存重開通過，但真實 touch selection、中文 IME、貼上與 soft keyboard 未由桌機模擬證明。
+- QA-066-015 與 QA-066-014 的 soft-keyboard 部分仍待 iOS Safari／Android Chrome 實機；缺實機 evidence 時，QC 不得宣稱 mobile fully verified。舊 mobile zero-editor／append preservation PASS 僅是歷史事實，不能作為目前統一 editor 契約的通過證據。
 
 ## Evidence Required
 

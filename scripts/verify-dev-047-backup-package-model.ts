@@ -212,6 +212,53 @@ const main = async () => {
     })));
   });
 
+  await test('MOD-047-009A external tracking references fail closed instead of being cloned or dropped', async () => {
+    const internalReferenceSource: BoardBackupSource = {
+      ...source,
+      trackingReferences: [{
+        id: 'reference-on-source-board',
+        taskId: 'task-root',
+        workspaceId: 'workspace-a',
+        boardId: 'board-a',
+        sourceBoardId: 'board-a',
+        parentPlacementId: null,
+        order: 1,
+        revision: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }],
+    };
+    const internalPackage = await createBackupPackage(internalReferenceSource, 'local-test');
+    assert.equal(internalPackage.schemaVersion, 3);
+    assert.equal(internalPackage.payload.trackingReferences?.length, 1);
+
+    const v2Compatible = structuredClone(internalPackage) as any;
+    v2Compatible.schemaVersion = 2;
+    delete v2Compatible.payload.trackingReferences;
+    delete v2Compatible.manifest.entities.trackingReferences;
+    v2Compatible.manifest.includes = v2Compatible.manifest.includes.filter((item: string) => item !== '追蹤副本與投影位置');
+    v2Compatible.manifest.checksum.value = await calculateBackupChecksum(v2Compatible.payload);
+    const v2Inspection = await inspectBackupText(JSON.stringify(v2Compatible));
+    assert.equal(v2Inspection.package.payload.trackingReferences, undefined);
+
+    const externalReferenceSource: BoardBackupSource = {
+      ...source,
+      trackingReferences: [{
+        id: 'reference-on-other-board',
+        taskId: 'canonical-on-source-board',
+        workspaceId: 'workspace-a',
+        boardId: 'board-a',
+        sourceBoardId: 'board-b',
+        parentPlacementId: null,
+        order: 0,
+        revision: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }],
+    };
+    await expectBackupError('OUT_OF_PACKAGE_REFERENCE', () => createBackupPackage(externalReferenceSource, 'local-test'));
+  });
+
   await test('MOD-047-010 entity and file limits fail closed', async () => {
     const atTaskLimit = structuredClone(packageValue.payload);
     atTaskLimit.tasks = Array.from({ length: BACKUP_MAX_TASKS }, (_, index) => ({
@@ -246,7 +293,7 @@ const main = async () => {
 
   await test('MOD-047-011 unsupported schema and manifest count mismatch are blocked', async () => {
     const unsupported = structuredClone(packageValue) as BackupPackageV2 & { schemaVersion: number };
-    unsupported.schemaVersion = 3;
+    unsupported.schemaVersion = 4;
     await expectBackupError('UNSUPPORTED_VERSION', () => inspectBackupText(JSON.stringify(unsupported)));
     const wrongManifest = structuredClone(packageValue);
     wrongManifest.manifest.entities.tasks = 99;
@@ -271,7 +318,7 @@ const main = async () => {
     const legacyNode = { id: 'legacy-a', workspaceId: 'workspace-a', boardId: 'board-a', parentId: null, title: 'Legacy', status: 'todo', order: 0 };
     const single = await inspectBackupText(JSON.stringify({ version: 'wbs-1.2', nodes: [legacyNode] }));
     assert.equal(single.sourceKind, 'legacy-converted');
-    assert.equal(single.package.schemaVersion, 2);
+    assert.equal(single.package.schemaVersion, 3);
     await expectBackupError('LEGACY_SCOPE_AMBIGUOUS', () => inspectBackupText(JSON.stringify({
       version: 'wbs-2.0',
       nodes: [legacyNode, { ...legacyNode, id: 'legacy-b', boardId: 'board-b' }],

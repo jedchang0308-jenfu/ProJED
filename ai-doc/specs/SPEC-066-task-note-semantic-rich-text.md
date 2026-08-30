@@ -1,7 +1,7 @@
 # SPEC-066：任務備註語意富文字與 AI 可讀內容
 
 - 關聯 DEV：DEV-066
-- 成熟度：Rework 4 Brief Ready / Human Confirmed；Rework 1～3 Historical QC PASS / 未 Release
+- 成熟度：Rework 4 Implemented / Local Simulated QC PASS / Physical Device Pending；Rework 1～3 Historical QC PASS / 未 Release
 - 風險：Medium
 - 使用者決策：`2A／3A／4A`；舊 `1A` 已由 2026-08-20 `4A` 取代
 - Spec Impact：`Intentional replacement`（只取代手機 zero-editor／append-only 行為）
@@ -70,7 +70,7 @@ interface TaskDetailNote {
 - `src/types/index.ts`
 - `src/utils/taskNoteRichContent.ts`
 - `src/components/TaskNotes/TaskDetailNoteField.tsx`
-- `src/components/TaskNotes/TaskDetailNoteDesktopEditor.tsx`（泛化／重新命名為裝置中立 editor；不得新增手機 editor）
+- `src/components/TaskNotes/TaskDetailNoteEditor.tsx`（由原 desktop editor 泛化／重新命名；不得新增手機 editor）
 - `src/components/TaskDetailsModal.tsx`
 - `src/services/rag/wbsRagAdapter.ts`
 - `package.json`、`package-lock.json`

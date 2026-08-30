@@ -4,6 +4,7 @@ import {
   clearTaskSelection,
   isCoarsePointer,
   prepareNewTaskNaming,
+  rememberTaskDetailsReturnFocus,
   selectAndOpenTaskDetails,
 } from '../../utils/taskInteractions';
 import { resolveTaskInteraction } from './resolveTaskInteraction';
@@ -16,6 +17,7 @@ import type {
   TaskInteractionDispatchOutcome,
   TaskInteractionModality,
   TaskInteractionOrigin,
+  TaskPlacementInteractionContext,
   TaskInteractionSurfaceId,
   TaskTransientOwner,
 } from './types';
@@ -31,6 +33,9 @@ const nextInteractionId = () => {
 export type UseTaskInteractionBindingOptions = {
   taskId: string;
   title?: string;
+  /** Placement-only identity, present when the row is a tracking projection. */
+  trackingReferenceId?: string;
+  placementContext?: TaskPlacementInteractionContext;
   surfaceId: TaskInteractionSurfaceId;
   origin?: TaskInteractionOrigin;
   nodeRole?: InteractionContext['nodeRole'];
@@ -48,6 +53,8 @@ export type TaskInteractionBinding = {
 export const useTaskInteractionBinding = ({
   taskId,
   title = '',
+  trackingReferenceId,
+  placementContext,
   surfaceId,
   origin,
   nodeRole = 'task',
@@ -63,12 +70,20 @@ export const useTaskInteractionBinding = ({
     'task.select': ({ taskId: targetTaskId }) => {
       useBoardStore.getState().setSelectedTaskId(targetTaskId);
     },
-    'task.open-details': ({ taskId: targetTaskId }) => selectAndOpenTaskDetails(targetTaskId),
+    'task.open-details': ({ taskId: targetTaskId }) => {
+      const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const placementElement = placementContext?.placementId
+        ? Array.from(document.querySelectorAll<HTMLElement>('[data-task-placement-id]'))
+          .find(element => element.getAttribute('data-task-placement-id') === placementContext.placementId) || null
+        : null;
+      rememberTaskDetailsReturnFocus(activeElement?.closest<HTMLElement>('[data-task-placement-id]') || placementElement || activeElement);
+      selectAndOpenTaskDetails(targetTaskId, trackingReferenceId);
+    },
     'task.open-details-for-naming': ({ taskId: targetTaskId }) => prepareNewTaskNaming(targetTaskId),
     'task.switch-to-list': () => setView('list'),
     'task.clear-selection': () => clearTaskSelection(),
     ...commandDependencies,
-  }), [commandDependencies, setView]);
+  }), [commandDependencies, placementContext, setView, trackingReferenceId]);
 
   const createContext = useCallback((): InteractionContext => ({
     interactionId: nextInteractionId(),
@@ -102,13 +117,15 @@ export const useTaskInteractionBinding = ({
         y: position.y,
         nodeId: taskId,
         title,
+        trackingReferenceId,
+        taskPlacementContext: placementContext,
         interactionLocation: context.location,
         surfaceId,
         interactionId: context.interactionId,
       });
     }
     return { resolved, commandOutcome: null };
-  }, [createContext, setContextMenuState, surfaceId, taskId, title]);
+  }, [createContext, placementContext, setContextMenuState, surfaceId, taskId, title, trackingReferenceId]);
 
   return { dispatch, openMenu };
 };

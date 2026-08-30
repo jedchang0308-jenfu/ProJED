@@ -15,7 +15,8 @@ export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue'
 export type CollaborationRole = 'owner' | 'admin' | 'project_manager' | 'member' | 'viewer';
 export type MembershipStatus = 'active' | 'invited' | 'suspended';
 export type BoardInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
-export type KnowledgeRecordType = 'meeting' | 'work_log';
+export type KnowledgeRecordType = 'meeting' | 'work_log' | 'task_collection';
+export type EditableKnowledgeRecordType = 'meeting' | 'work_log';
 export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type KnowledgeRecordVisibility = 'private' | 'project' | 'tenant';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
@@ -37,6 +38,8 @@ export type PermissionCapability =
   | 'edit_task'
   | 'move_task'
   | 'delete_task'
+  | 'manage_task_reference'
+  | 'collect_task'
   | 'assign_task'
   | 'create_dependency'
   | 'delete_dependency'
@@ -82,6 +85,8 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
+    'collect_task',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -99,6 +104,8 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
+    'collect_task',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -116,6 +123,8 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
+    'collect_task',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -128,6 +137,8 @@ export const BOARD_ROLE_CAPABILITIES = {
     'edit_task',
     'move_task',
     'delete_task',
+    'manage_task_reference',
+    'collect_task',
     'assign_task',
     'create_dependency',
     'read_activity',
@@ -288,6 +299,7 @@ export type ActivityEventType =
   | 'task_moved'
   | 'task_dates_changed'
   | 'task_archived'
+  | 'task_collected'
   | 'task_restored'
   | 'task_tags_changed'
   | 'dependency_created'
@@ -324,6 +336,8 @@ export interface ActivityEventListQuery {
   scope: CollaborationScope;
   startedAt: number;
   endedAt: number;
+  /** Defaults to inclusive for legacy work-log imports; meetings use exclusive. */
+  startBoundary?: 'inclusive' | 'exclusive';
   eventTypes?: ActivityEventType[];
 }
 
@@ -337,11 +351,10 @@ export interface RecordTaskLink {
   createdAt?: number;
 }
 
-export interface KnowledgeRecord {
+export interface KnowledgeRecordBase {
   id: string;
   workspaceId: string;
   boardId: string;
-  type: KnowledgeRecordType;
   title: string;
   content: string;
   status: KnowledgeRecordStatus;
@@ -361,9 +374,31 @@ export interface KnowledgeRecord {
   taskLinks: RecordTaskLink[];
 }
 
+export interface EditableKnowledgeRecord extends KnowledgeRecordBase {
+  type: EditableKnowledgeRecordType;
+  collectionOperationId?: never;
+  collectionVersion?: never;
+  collectionSchemaVersion?: never;
+  collectionSnapshotHash?: never;
+  sourceRootItemId?: never;
+  sourceRootStorageId?: never;
+}
+
+export interface TaskCollectionRecord extends KnowledgeRecordBase {
+  type: 'task_collection';
+  collectionOperationId: string;
+  collectionVersion: number;
+  collectionSchemaVersion: number;
+  collectionSnapshotHash: string;
+  sourceRootItemId: string;
+  sourceRootStorageId: string;
+}
+
+export type KnowledgeRecord = EditableKnowledgeRecord | TaskCollectionRecord;
+
 export interface KnowledgeRecordInput {
   id?: string;
-  type: KnowledgeRecordType;
+  type: EditableKnowledgeRecordType;
   title: string;
   content: string;
   status: KnowledgeRecordStatus;
@@ -476,6 +511,14 @@ export interface TaskNode {
 
   // Optional compatibility metadata for board/kanban presentation only.
   kanbanStageId?: string;
+  /** Ephemeral projection marker; never persist this presentation-only flag. */
+  isTrackingReference?: boolean;
+  /** Ephemeral placement identity for projection-only drag/click handling. */
+  trackingReferenceId?: string;
+  /** Ephemeral parent placement identity for projection-only drag handling. */
+  trackingReferenceParentPlacementId?: string | null;
+  /** Ephemeral canonical task identity when a placement-scoped projection uses its own id. */
+  canonicalTaskId?: string;
 
   order: number;
   createdAt?: number;
@@ -583,6 +626,9 @@ export type BoardContextMenuState =
       y: number;
       nodeId: string;
       title: string;
+      /** Placement-only context; when set, this row is a tracking projection. */
+      trackingReferenceId?: string;
+      taskPlacementContext?: import('../interactions/task/types').TaskPlacementInteractionContext;
       interactionLocation?: TaskInteractionLocation;
       surfaceId?: TaskInteractionSurfaceId;
       interactionId?: string;
@@ -654,7 +700,7 @@ export interface BoardActions {
   updateWorkspaceTitle: (workspaceId: string, newTitle: string) => void;
 
   addBoard: (workspaceId: string, boardName: string) => string | void;
-  removeBoard: (wsId: string, bId: string) => void;
+  removeBoard: (wsId: string, bId: string) => Promise<void>;
   updateBoardTitle: (workspaceId: string, boardId: string, newTitle: string) => void;
   moveBoardToWorkspace: (workspaceId: string, boardId: string, targetWorkspaceId: string, expectedBoardTitle: string) => Promise<void>;
   switchBoard: (workspaceId: string, boardId: string) => void;

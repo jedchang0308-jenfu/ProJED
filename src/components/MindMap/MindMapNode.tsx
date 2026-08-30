@@ -31,6 +31,7 @@ interface MindMapNodeProps {
   isRelationshipModeActive?: boolean;
   showStartDate: boolean;
   canMoveTask: boolean;
+  canManageTaskReference?: boolean;
   isTitleEditing?: boolean;
   autoFocusTitleInput?: boolean;
   onTitleEditCommit?: (nodeId: string, title: string, restoreNodeFocus?: boolean) => void;
@@ -39,7 +40,7 @@ interface MindMapNodeProps {
   onTitleEditDelete?: (nodeId: string) => void;
   onSelect: (nodeId: string) => void;
   onPointerPrimary: (nodeId: string) => void;
-  onOpenDetails: (nodeId: string) => void;
+  onOpenDetails: (nodeId: string, trackingReferenceId?: string) => void;
   onOpenContextMenu: (nodeId: string, title: string, event: React.MouseEvent) => void;
   onToggleExpanded: (nodeId: string) => void;
   onDragStart: (nodeId: string, event: React.DragEvent<HTMLDivElement>) => void;
@@ -121,6 +122,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   isRelationshipModeActive = false,
   showStartDate,
   canMoveTask,
+  canManageTaskReference = false,
   isTitleEditing = false,
   autoFocusTitleInput = true,
   onTitleEditCommit,
@@ -142,6 +144,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 }) => {
   const isCoarsePointer = useCoarsePointer();
   const touchTapGuard = useTouchTapGuard();
+  const isTrackingReference = Boolean(node.isTrackingReference && node.trackingReferenceId);
+  const canonicalTaskId = node.canonicalTaskId || node.id;
   const isExpanded = expandedNodeIds.has(node.id);
   const hasChildren = childrenNodes.length > 0;
   const isLeft = direction === 'left';
@@ -155,11 +159,12 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   }, [node.title]);
   const interactionCommandDependencies = React.useMemo(() => ({
     'task.select': () => isCoarsePointer ? onSelect(node.id) : onPointerPrimary(node.id),
-    'task.open-details': () => onOpenDetails(node.id),
-  }), [isCoarsePointer, node.id, onOpenDetails, onPointerPrimary, onSelect]);
+    'task.open-details': () => onOpenDetails(node.id, node.trackingReferenceId),
+  }), [isCoarsePointer, node.id, node.trackingReferenceId, onOpenDetails, onPointerPrimary, onSelect]);
   const interactionBinding = useTaskInteractionBinding({
-    taskId: node.id,
+    taskId: canonicalTaskId,
     title: node.title || '未命名任務',
+    trackingReferenceId: node.trackingReferenceId,
     surfaceId: 'mindmap.node',
     origin: 'mode-primary',
     commandDependencies: interactionCommandDependencies,
@@ -219,13 +224,16 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           tabIndex={0}
           aria-expanded={hasChildren ? isExpanded : undefined}
           data-mindmap-node={node.id}
+          data-task-placement-id={node.trackingReferenceId || `primary:${node.id}`}
+          data-mindmap-placement-kind={isTrackingReference ? 'tracking-reference' : 'primary'}
+          aria-label={isTrackingReference ? `追蹤副本：${node.title || '未命名任務'}` : node.title || '未命名任務'}
           data-mindmap-node-title={node.title || '未命名任務'}
           data-mindmap-node-level={level}
           data-mindmap-node-direction={direction}
           data-mindmap-parent-id={node.parentId || ''}
           data-mindmap-node-order={node.order}
           data-mindmap-inline-title-editing={isTitleEditing ? 'true' : 'false'}
-          draggable={canMoveTask && !isCoarsePointer}
+          draggable={(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer}
           {...touchTapGuard.handlers}
           onClick={(event) => {
             event.stopPropagation();
@@ -262,7 +270,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             if (!isRelationshipModeActive) onSelect(node.id);
           }}
           onDragStart={(event) => {
-            if (!canMoveTask || isCoarsePointer) {
+            if ((isTrackingReference ? !canManageTaskReference : !canMoveTask) || isCoarsePointer) {
               event.preventDefault();
               return;
             }
@@ -275,7 +283,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
           data-touch-tap-guard="true"
-          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isLeft ? 'flex-row-reverse' : ''} ${canMoveTask && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${getDropClasses(dropTarget, node.id)}`}
+          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isLeft ? 'flex-row-reverse' : ''} ${(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isTrackingReference ? 'border-2 border-dashed border-violet-300 bg-violet-50/40' : ''} ${getDropClasses(dropTarget, node.id)}`}
         >
           <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
             <span className="relative inline-block max-w-full">

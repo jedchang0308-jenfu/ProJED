@@ -11,13 +11,15 @@ import { toast } from '../store/useToastStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useDialogStore from '../store/useDialogStore';
 import useAuthStore from '../store/useAuthStore';
-import { boardService } from '../services/dataBackend';
+import { boardService, taskCollectionService } from '../services/dataBackend';
 import {
   clearTaskSelection,
   OPEN_TASK_DETAILS_EVENT,
   isTextInputTarget,
   prepareNewTaskNaming,
+  rememberTaskDetailsReturnFocus,
   requestMindMapRelationshipStart,
+  restoreTaskDetailsReturnFocus,
   selectAndOpenTaskDetails,
 } from '../utils/taskInteractions';
 import { getTaskAssigneeIds } from '../utils/taskAssignments';
@@ -25,6 +27,10 @@ import { resolveTaskMenu } from '../interactions/task/resolveTaskInteraction';
 import { getTaskActionEnabledMap, guardTaskAction } from '../interactions/task/taskActionGuards';
 import { TaskActionMenu } from '../interactions/task/TaskActionMenu';
 import type { InteractionContext } from '../interactions/task/types';
+import TaskCollectionDialog from './TaskCollectionDialog';
+import useTaskCollectionStore from '../store/useTaskCollectionStore';
+import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
+import { getReferenceSubtree, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -50,16 +56,37 @@ export const GlobalContextMenu: React.FC = () => {
   const archiveNode = useWbsStore((state) => state.archiveNode);
   const updateNode = useWbsStore((state) => state.updateNode);
   const duplicateNodeTree = useWbsStore((state) => state.duplicateNodeTree);
-  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canAssignTask, canCreateDependency, canCreateBoard, canDeleteWorkspace, canEditBoardSettings, canMoveBoardBetweenWorkspaces } = useBoardPermissions();
+  const createTrackingReference = useWbsStore((state) => state.createTrackingReference);
+  const moveTrackingReference = useWbsStore((state) => state.moveTrackingReference);
+  const removeTrackingReference = useWbsStore((state) => state.removeTrackingReference);
+  const trackingReferenceCapability = useWbsStore((state) => state.trackingReferenceCapability);
+  const { canCreateTask: boardCanCreateTask, canEditTask: boardCanEditTask, canMoveTask: boardCanMoveTask, canDeleteTask: boardCanDeleteTask, canCollectTask: boardCanCollectTask, canAssignTask: boardCanAssignTask, canCreateDependency: boardCanCreateDependency, canManageTaskReference: boardCanManageTaskReference, canCreateBoard, canDeleteWorkspace, canEditBoardSettings, canMoveBoardBetweenWorkspaces } = useBoardPermissions();
+  const currentNode = useWbsStore((state) => contextMenuState?.kind === 'task' ? state.nodes[contextMenuState.nodeId] : null);
+  const currentTrackingReference = useWbsStore((state) => contextMenuState?.kind === 'task' && contextMenuState.trackingReferenceId
+    ? state.trackingReferences.find(reference => reference.id === contextMenuState.trackingReferenceId && !reference.removedAt) || null
+    : null);
+  const taskPlacementPermissions = useTaskPlacementPermissions(currentNode, currentTrackingReference);
+  const canCreateTask = currentNode ? taskPlacementPermissions.canCreateTask : boardCanCreateTask;
+  const canEditTask = currentNode ? taskPlacementPermissions.canEditTask : boardCanEditTask;
+  const canMoveTask = currentTrackingReference
+    ? taskPlacementPermissions.canManageTaskReference
+    : (currentNode ? taskPlacementPermissions.canMoveTask : boardCanMoveTask);
+  const canDeleteTask = currentNode ? taskPlacementPermissions.canDeleteTask : boardCanDeleteTask;
+  const canCollectTask = currentNode ? taskPlacementPermissions.canCollectTask : boardCanCollectTask;
+  const canAssignTask = currentNode ? taskPlacementPermissions.canAssignTask : boardCanAssignTask;
+  const canCreateDependency = currentNode ? taskPlacementPermissions.canCreateDependency : boardCanCreateDependency;
+  const canManageTaskReference = currentNode ? taskPlacementPermissions.canManageTaskReference : boardCanManageTaskReference;
   const currentUserId = useAuthStore((state) => state.user?.uid);
   const workspaceMembers = useMemberStore((state) => state.workspaceMembers);
   const currentBoardAccess = useMemberStore((state) => state.currentBoardAccess);
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const [detailsNodeId, setDetailsNodeId] = useState<string | null>(null);
+  const [detailsTrackingReferenceId, setDetailsTrackingReferenceId] = useState<string | null>(null);
   const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
+  const [taskCollectionTarget, setTaskCollectionTarget] = useState<{ workspaceId: string; boardId: string; nodeId: string; title: string } | null>(null);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12, maxHeight: 320 });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const openedAtRef = useRef(0);
@@ -69,9 +96,6 @@ export const GlobalContextMenu: React.FC = () => {
   const VIEWPORT_PADDING = 12;
   const menuKind = contextMenuState?.kind || 'task';
   const isTaskMenu = menuKind === 'task';
-  const taskMenuHostMode = contextMenuState?.kind === 'task'
-    ? contextMenuState.interactionLocation?.hostMode
-    : currentView;
   const taskMenuInteractionContext: InteractionContext | null = isTaskMenu && contextMenuState?.kind === 'task'
     ? {
       interactionId: contextMenuState.interactionId || 'legacy-context-menu',
@@ -83,21 +107,32 @@ export const GlobalContextMenu: React.FC = () => {
       blockers: [],
     }
     : null;
-  const resolvedTaskMenuActionIds = taskMenuInteractionContext ? resolveTaskMenu(taskMenuInteractionContext) : [];
+  const candidateTaskMenuActionIds = taskMenuInteractionContext
+    ? resolveTaskMenu(taskMenuInteractionContext).filter(actionId =>
+      (actionId !== 'task.collect' || taskCollectionService.supported)
+        && (actionId !== 'task.create-tracking-reference' || (!currentTrackingReference && trackingReferenceCapability.supported))
+        && (actionId !== 'task.remove-tracking-reference' || Boolean(currentTrackingReference && trackingReferenceCapability.supported))
+    )
+    : [];
+  const candidateTaskActionEnabled = getTaskActionEnabledMap(candidateTaskMenuActionIds, {
+    nodeExists: Boolean(currentNode),
+    canCreateTask,
+    canEditTask,
+    canMoveTask,
+    canDeleteTask,
+    canCollectTask,
+    canAssignTask,
+    canCreateDependency,
+    canManageTaskReference: canManageTaskReference && trackingReferenceCapability.supported,
+  });
+  const resolvedTaskMenuActionIds = candidateTaskMenuActionIds.filter(actionId => candidateTaskActionEnabled[actionId]);
   const isDependencySupportedView = resolvedTaskMenuActionIds.includes('task.dependency-start')
     && resolvedTaskMenuActionIds.includes('task.dependency-end');
-  const currentNode = isTaskMenu && contextMenuState ? useWbsStore.getState().nodes[contextMenuState.nodeId] : null;
+  const taskCollectionPending = useTaskCollectionStore(state => Boolean(currentNode && state.pendingByTaskId[currentNode.id]));
   const taskActionEnabled = {
-    ...getTaskActionEnabledMap(resolvedTaskMenuActionIds, {
-      nodeExists: Boolean(currentNode),
-      canCreateTask,
-      canEditTask,
-      canMoveTask,
-      canDeleteTask,
-      canAssignTask,
-      canCreateDependency,
-    }),
+    ...candidateTaskActionEnabled,
     'task.archive': canDeleteTask,
+    'task.collect': canCollectTask && !taskCollectionPending,
   };
   const getWorkspace = (workspaceId: string) => workspaces.find(workspace => workspace.id === workspaceId);
   const getWorkspaceRole = (workspaceId: string) => {
@@ -173,10 +208,11 @@ export const GlobalContextMenu: React.FC = () => {
 
   useEffect(() => {
     const handleOpenTaskDetails = (event: Event) => {
-      const customEvent = event as CustomEvent<{ taskId: string }>;
+      const customEvent = event as CustomEvent<{ taskId: string; trackingReferenceId?: string }>;
       if (customEvent.detail?.taskId) {
         setSelectedTaskId(customEvent.detail.taskId);
         setDetailsNodeId(customEvent.detail.taskId);
+        setDetailsTrackingReferenceId(customEvent.detail.trackingReferenceId || null);
       }
     };
 
@@ -350,11 +386,42 @@ export const GlobalContextMenu: React.FC = () => {
     closeContextMenu({ preserveTaskSelection: true });
   };
 
-  const handleMoveUp = () => {
+  const handleMoveUp = async () => {
     if (!canMoveTask) return;
     if (!contextMenuState) return;
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
+
+    if (currentTrackingReference) {
+      const parentPlacementId = currentTrackingReference.parentPlacementId;
+      if (!parentPlacementId) {
+        toast.warning('已經是最上層任務，無法再往上移動。');
+        closeContextMenu();
+        return;
+      }
+      const parentReference = parentPlacementId.startsWith(PRIMARY_PLACEMENT_PREFIX)
+        ? null
+        : state.trackingReferences.find(reference => reference.id === parentPlacementId && !reference.removedAt);
+      const parentTask = parentPlacementId.startsWith(PRIMARY_PLACEMENT_PREFIX)
+        ? state.nodes[parentPlacementId.slice(PRIMARY_PLACEMENT_PREFIX.length)]
+        : null;
+      const targetParentPlacementId = parentReference?.parentPlacementId
+        ?? (parentTask?.parentId ? primaryPlacementId(parentTask.parentId) : null);
+      try {
+        await moveTrackingReference({
+          referenceId: currentTrackingReference.id,
+          targetBoardId: currentTrackingReference.boardId,
+          targetParentPlacementId,
+          anchorPlacementId: parentPlacementId,
+          position: 'after',
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。');
+      } finally {
+        closeContextMenu({ preserveTaskSelection: true });
+      }
+      return;
+    }
 
     if (!node || !node.parentId) {
       toast.warning('已經是最上層任務，無法再往上移動。');
@@ -373,12 +440,56 @@ export const GlobalContextMenu: React.FC = () => {
     closeContextMenu();
   };
 
-  const handleMoveDown = () => {
+  const handleMoveDown = async () => {
     if (!canMoveTask) return;
     if (!contextMenuState) return;
     const state = useWbsStore.getState();
     const node = state.nodes[contextMenuState.nodeId];
     if (!node) return;
+
+    if (currentTrackingReference) {
+      const parentPlacementId = currentTrackingReference.parentPlacementId;
+      const primarySiblings = parentPlacementId === null
+        ? Object.values(state.nodes).filter(task => task.boardId === currentTrackingReference.boardId && !task.parentId && !task.isArchived)
+        : parentPlacementId.startsWith(PRIMARY_PLACEMENT_PREFIX)
+          ? Object.values(state.nodes).filter(task => task.boardId === currentTrackingReference.boardId
+            && task.parentId === parentPlacementId.slice(PRIMARY_PLACEMENT_PREFIX.length)
+            && !task.isArchived)
+          : [];
+      const placementSiblings = [
+        ...primarySiblings.map(task => ({ placementId: primaryPlacementId(task.id), order: task.order, task })),
+        ...state.trackingReferences
+          .filter(reference => !reference.removedAt
+            && reference.boardId === currentTrackingReference.boardId
+            && reference.parentPlacementId === parentPlacementId)
+          .map(reference => ({ placementId: reference.id, order: reference.order, task: state.nodes[reference.taskId] })),
+      ].sort((left, right) => left.order - right.order || left.placementId.localeCompare(right.placementId));
+      const currentIndex = placementSiblings.findIndex(sibling => sibling.placementId === currentTrackingReference.id);
+      if (currentIndex <= 0) {
+        toast.warning('沒有前一個相鄰的任務，無法往下移動成為其下層任務。');
+        closeContextMenu();
+        return;
+      }
+      const previousSibling = placementSiblings[currentIndex - 1];
+      if (previousSibling.task?.status === 'completed') {
+        toast.warning('無法移動到已完成的任務之下。');
+        closeContextMenu();
+        return;
+      }
+      try {
+        await moveTrackingReference({
+          referenceId: currentTrackingReference.id,
+          targetBoardId: currentTrackingReference.boardId,
+          targetParentPlacementId: previousSibling.placementId,
+          position: 'append',
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。');
+      } finally {
+        closeContextMenu({ preserveTaskSelection: true });
+      }
+      return;
+    }
 
     const siblings = (state.parentNodesIndex[node.parentId || 'root'] || [])
       .map(id => state.nodes[id])
@@ -447,11 +558,49 @@ export const GlobalContextMenu: React.FC = () => {
     closeContextMenu();
   };
 
+  const handleCreateTrackingReference = async () => {
+    if (!canManageTaskReference || currentTrackingReference || !trackingReferenceCapability.supported || !contextMenuState || contextMenuState.kind !== 'task') return;
+    try {
+      const reference = await createTrackingReference(contextMenuState.nodeId);
+      if (reference) toast.success('已建立追蹤副本；請拖曳虛線副本到要追蹤的位置。');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '建立追蹤副本失敗。');
+    } finally {
+      closeContextMenu({ preserveTaskSelection: true });
+    }
+  };
+
+  const handleRemoveTrackingReference = async () => {
+    if (!canManageTaskReference || !currentTrackingReference || !trackingReferenceCapability.supported) return;
+    const subtreeCount = getReferenceSubtree(useWbsStore.getState().trackingReferences, currentTrackingReference.id).length;
+    if (subtreeCount > 1 && !window.confirm(`將移除此處的 ${subtreeCount} 個追蹤位置，正本任務不會被刪除。確定繼續？`)) return;
+    try {
+      await removeTrackingReference(currentTrackingReference.id);
+      toast.success(subtreeCount > 1 ? `已移除此處的 ${subtreeCount} 個追蹤位置。` : '已移除此處追蹤。');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '移除追蹤副本失敗，原位置已保留。');
+    } finally {
+      closeContextMenu({ preserveTaskSelection: true });
+    }
+  };
+
+  const handleCollect = () => {
+    if (!canCollectTask || taskCollectionPending || !contextMenuState || contextMenuState.kind !== 'task') return;
+    const node = useWbsStore.getState().nodes[contextMenuState.nodeId];
+    if (!node) return;
+    setTaskCollectionTarget({ workspaceId: node.workspaceId, boardId: node.boardId, nodeId: node.id, title: node.title });
+    closeContextMenu({ preserveTaskSelection: true });
+  };
+
   const handleTaskAction = (actionId) => {
     switch (actionId) {
       case 'task.open-details':
         if (contextMenuState?.kind !== 'task') return;
-        selectAndOpenTaskDetails(contextMenuState.nodeId);
+        rememberTaskDetailsReturnFocus(contextMenuState.taskPlacementContext?.placementId
+          ? Array.from(document.querySelectorAll<HTMLElement>('[data-task-placement-id]'))
+            .find(element => element.getAttribute('data-task-placement-id') === contextMenuState.taskPlacementContext?.placementId) || null
+          : null);
+        selectAndOpenTaskDetails(contextMenuState.nodeId, contextMenuState.trackingReferenceId);
         return closeContextMenu({ preserveTaskSelection: true });
       case 'task.create-sibling': return handleAddSibling();
       case 'task.create-child': return handleAddChild();
@@ -461,11 +610,14 @@ export const GlobalContextMenu: React.FC = () => {
         return closeContextMenu({ preserveTaskSelection: true });
       }
       case 'task.duplicate': return handleDuplicate();
+      case 'task.create-tracking-reference': return handleCreateTrackingReference();
+      case 'task.remove-tracking-reference': return handleRemoveTrackingReference();
       case 'task.dependency-start': return enterDependencyMode('start');
       case 'task.dependency-end': return enterDependencyMode('end');
       case 'task.promote': return handleMoveUp();
       case 'task.demote': return handleMoveDown();
       case 'task.archive': return handleArchive();
+      case 'task.collect': return handleCollect();
       default: return undefined;
     }
   };
@@ -495,7 +647,19 @@ export const GlobalContextMenu: React.FC = () => {
     if (!contextMenuState || contextMenuState.kind !== 'workspace') return;
     if (!canDeleteWorkspaceInWorkspace(contextMenuState.workspaceId)) return;
     const { workspaceId, title } = contextMenuState;
-    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${title}」嗎？這會一併刪除底下的看板。`);
+    let impact;
+    try {
+      impact = await boardService.previewWorkspaceDeleteImpact(workspaceId);
+    } catch {
+      toast.error('無法確認工作區內的典藏資產，已阻止刪除。');
+      return;
+    }
+    if (impact.unknown) {
+      toast.error('無法確認工作區內的典藏資產，已阻止刪除。');
+      return;
+    }
+    const warning = impact.taskCollectionCount > 0 ? `\n\n此工作區包含 ${impact.taskCollectionCount} 筆典藏任務，刪除後也會永久刪除這些典藏資產。` : '';
+    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${title}」嗎？這會一併刪除底下的看板。${warning}`);
     if (confirmed) {
       setIsDeletingWorkspace(true);
       try {
@@ -551,11 +715,25 @@ export const GlobalContextMenu: React.FC = () => {
     if (!contextMenuState || contextMenuState.kind !== 'board') return;
     if (!canEditBoardSettingsInWorkspace(contextMenuState.workspaceId)) return;
     const { workspaceId, boardId, title } = contextMenuState;
-    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${title}」嗎？`);
+    let impact;
+    try {
+      impact = await boardService.previewDeleteImpact(workspaceId, boardId);
+    } catch {
+      toast.error('無法確認看板內的典藏資產，已阻止刪除。');
+      return;
+    }
+    if (impact.unknown) {
+      toast.error('無法確認看板內的典藏資產，已阻止刪除。');
+      return;
+    }
+    const warning = impact.taskCollectionCount > 0 ? `\n\n此看板包含 ${impact.taskCollectionCount} 筆典藏任務，刪除後也會永久刪除這些典藏資產。` : '';
+    const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${title}」嗎？${warning}`);
     if (confirmed) {
-      removeBoard(workspaceId, boardId);
-      if (activeBoardId === boardId) {
-        showHome();
+      try {
+        await removeBoard(workspaceId, boardId);
+        if (activeBoardId === boardId) showHome();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '刪除看板失敗，請重新整理後再試。');
       }
     }
     closeContextMenu();
@@ -706,10 +884,22 @@ export const GlobalContextMenu: React.FC = () => {
       {detailsNodeId && (
         <TaskDetailsModal
           nodeId={detailsNodeId}
+          trackingReferenceId={detailsTrackingReferenceId || undefined}
           onClose={() => {
             setDetailsNodeId(null);
+            setDetailsTrackingReferenceId(null);
             clearTaskSelection();
+            window.requestAnimationFrame(() => restoreTaskDetailsReturnFocus());
           }}
+        />
+      )}
+      {taskCollectionTarget && (
+        <TaskCollectionDialog
+          workspaceId={taskCollectionTarget.workspaceId}
+          boardId={taskCollectionTarget.boardId}
+          rootItemId={taskCollectionTarget.nodeId}
+          rootTitle={taskCollectionTarget.title}
+          onClose={() => setTaskCollectionTarget(null)}
         />
       )}
       {transferBoardTarget && (

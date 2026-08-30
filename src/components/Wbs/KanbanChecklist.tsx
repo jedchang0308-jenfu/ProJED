@@ -7,8 +7,6 @@
  */
 import React from 'react';
 import { useDndContext } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Check, Link } from 'lucide-react';
 import { useWbsStore } from '../../store/useWbsStore';
 import useBoardStore from '../../store/useBoardStore';
@@ -20,17 +18,19 @@ import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
 import { KanbanTagSticker } from '../Tags/KanbanTagSticker';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
-import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
-import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 import { TaskDateBadge } from './TaskDateBadge';
-import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import {
   TASK_CHILD_DROP_HIGHLIGHT_EVENT,
   type TaskChildDropSuccessDetail,
 } from './taskDrag/taskChildDropFeedback';
 import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
+import { primaryPlacementId } from '../../features/taskTracking/model';
+import type { TaskTrackingReference } from '../../features/taskTracking/types';
+import { TaskSurfaceFrame } from './TaskSurfaceFrame';
+import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
+import { useTaskPlacementController } from './useTaskPlacementController';
 
 interface KanbanChecklistProps {
   parentId: string;   // 父節點 ID (Level 2 或更深)
@@ -38,6 +38,8 @@ interface KanbanChecklistProps {
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
   ancestorIds?: string[];
+  ancestorPlacementIds?: string[];
+  parentPlacementId?: string;
   filterProjection?: TaskFilterResultProjection | null;
 }
 
@@ -51,6 +53,8 @@ interface ChecklistItemProps {
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
   ancestorIds?: string[];
+  ancestorPlacementIds?: string[];
+  trackingReference?: TaskTrackingReference;
   filterProjection?: TaskFilterResultProjection | null;
 }
 
@@ -60,6 +64,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   previewNodes,
   previewParentIndex,
   ancestorIds = [],
+  ancestorPlacementIds = [],
+  trackingReference,
   filterProjection,
 }) => {
   const storeChild = useWbsStore(s => s.nodes[initialChild.id]);
@@ -67,15 +73,17 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const storeGrandchildIds = useWbsStore(s => s.parentNodesIndex[initialChild.id]);
   const grandchildIds = previewParentIndex?.[initialChild.id] || storeGrandchildIds;
   const childId = child?.id || initialChild.id;
-  const isInvalidChild = !child || child.isArchived || ancestorIds.includes(childId);
+  const placementId = trackingReference?.id || primaryPlacementId(childId);
+  const isInvalidChild = !child || child.isArchived || ancestorPlacementIds.includes(placementId)
+    || (!trackingReference && ancestorIds.includes(childId));
 
   const status = child?.status || 'todo';
   const tags = useTagStore(s => s.tags);
   const nodeTags = getNodeTags(child, tags);
-  const hasGrandchildren = grandchildIds && grandchildIds.length > 0;
+  const hasGrandchildren = !trackingReference && Boolean(grandchildIds && grandchildIds.length > 0);
   const showTags = useBoardStore(s => s.showTags);
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
-  const { canMoveTask, canCreateDependency } = useBoardPermissions();
+  const trackingReferences = useWbsStore(s => s.trackingReferences);
   const { active } = useDndContext();
   const activeType = active?.data.current?.type;
   // 看板依賴選取 Context
@@ -90,32 +98,32 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   const isSelfStart = isSelectingMode && dependencySelection?.id === childId && dependencySelection?.side === 'start';
   const isSelfEnd = isSelectingMode && dependencySelection?.id === childId && dependencySelection?.side === 'end';
   const isSelfNode = isSelfStart || isSelfEnd;
+  const hasTrackingGrandchildren = React.useMemo(() => trackingReferences.some(reference =>
+    !reference.removedAt
+      && reference.boardId === (trackingReference?.boardId || child?.boardId)
+      && reference.parentPlacementId === (trackingReference?.id || primaryPlacementId(childId))
+      && (!filterProjection || filterProjection.visibleTaskIds.has(reference.taskId))
+      && Boolean(useWbsStore.getState().nodes[reference.taskId])
+  ), [child?.boardId, childId, filterProjection, trackingReference?.boardId, trackingReference?.id, trackingReferences]);
 
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(childId, wbsDependencies);
-  const taskGesture = useTaskGestureSurface({
-    task: { id: childId, title: child?.title, status: child?.status },
-    sourceKind: 'checklist-row',
-    disabled: isSelectingMode || isRecordCaptureMode,
-    onNonMobileLongPress: (event) => {
-      if (!child) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const touch = event.touches[0];
-      void interactionBinding.openMenu({ x: touch.clientX, y: touch.clientY });
-    },
-  });
-  const interactionBinding = useTaskInteractionBinding({
-    taskId: childId,
-    title: child?.title,
+  const placementController = useTaskPlacementController({
+    task: child || initialChild,
+    reference: trackingReference,
     surfaceId: 'board.checklist-row',
-    nodeRole: child?.nodeType || 'task',
+    sortableType: 'wbs-checklist',
+    sortableData: { parentId: child?.parentId },
+    sourceKind: 'checklist-row',
+    interactionDisabled: isSelectingMode || isRecordCaptureMode,
     transientOwners: [
       ...(isSelectingMode ? ['dependency-selection' as const] : []),
       ...(isRecordCaptureMode ? ['record-capture' as const] : []),
     ],
   });
+  const { activationProps, interactionBinding, permissions, taskGesture } = placementController;
+  const { canCreateDependency } = permissions;
 
   // 每個任務都是可拖曳元素
   // data.type = 'wbs-checklist' 供 handleDragEnd 辨識
@@ -127,19 +135,11 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({
-    id: childId,
-    disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
-    data: {
-      type: 'wbs-checklist',
-      nodeId: childId,
-      parentId: child?.parentId,
-    },
-  });
+  } = placementController.sortable;
 
   const freezeDesktopTaskLayout = Boolean(active && ['wbs-card', 'wbs-checklist'].includes(activeType || ''));
   const style = {
-    transform: freezeDesktopTaskLayout ? undefined : CSS.Transform.toString(transform),
+    transform: freezeDesktopTaskLayout || !transform ? undefined : `translate3d(${transform.x}px, ${transform.y}px, 0)`,
     transition: freezeDesktopTaskLayout ? undefined : transition,
     minHeight: taskGesture.activeSurfaceHeight ?? undefined,
   };
@@ -170,8 +170,12 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   if (isInvalidChild || !child) return null;
 
   return (
-    <div
+    <TaskSurfaceFrame
+      task={child}
+      reference={trackingReference}
+      surfaceKind="checklist-row"
       ref={setNodeRef}
+      {...activationProps}
       style={{
         ...style,
         '--kanban-checklist-child-depth': depth + 1,
@@ -181,6 +185,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       data-task-child-drop-target="true"
       data-task-child-drop-level="L3+"
       data-task-id={child.id}
+      data-task-placement-id={placementId}
+      data-task-placement-kind={trackingReference ? 'tracking-reference' : 'primary'}
       data-task-hover-scope-kind="checklist"
       data-task-hover-scope-source-id={child.id}
       data-task-hover-has-descendants={hasGrandchildren ? 'true' : undefined}
@@ -238,7 +244,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
         data-mobile-drop-target={child.id}
         data-task-drop-surface-kind="checklist-row"
         data-desktop-drop-surface="true"
-        data-desktop-drop-id={child.id}
+        data-desktop-drop-id={placementId}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
         data-task-surface-source="true"
@@ -341,63 +347,93 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
       </div>
 
       {/* 遞迴渲染更深層的子節點 */}
-      {!isDragPlaceholder && hasGrandchildren && (
+      {!isDragPlaceholder && (hasGrandchildren || hasTrackingGrandchildren) && (
         <div data-task-surface-subtree="true">
           <KanbanChecklist
             parentId={child.id}
+            parentPlacementId={trackingReference?.id}
             depth={depth + 1}
             previewNodes={previewNodes}
             previewParentIndex={previewParentIndex}
             ancestorIds={ancestorIds}
+            ancestorPlacementIds={ancestorPlacementIds}
             filterProjection={filterProjection}
           />
         </div>
       )}
-    </div>
+    </TaskSurfaceFrame>
   );
 };
 
 // =====================================================
 // KanbanChecklist — 主要容器元件
 // =====================================================
-export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, depth = 0, previewNodes, previewParentIndex, ancestorIds = [], filterProjection }) => {
-  const isRecursiveParent = ancestorIds.includes(parentId);
+export const KanbanChecklist: React.FC<KanbanChecklistProps> = ({ parentId, parentPlacementId, depth = 0, previewNodes, previewParentIndex, ancestorIds = [], ancestorPlacementIds = [], filterProjection }) => {
+  const effectiveParentPlacementId = parentPlacementId || primaryPlacementId(parentId);
+  const isRecursiveParent = ancestorPlacementIds.includes(effectiveParentPlacementId)
+    || (!parentPlacementId && ancestorIds.includes(parentId));
   const nextAncestorIds = [...ancestorIds, parentId];
   const nextAncestorKey = nextAncestorIds.join('|');
   // 訂閱該父節點的子節點 ID 陣列
   const storeChildIds = useWbsStore(s => s.parentNodesIndex[parentId]);
   const childIds = previewParentIndex?.[parentId] || storeChildIds;
+  const trackingReferences = useWbsStore(s => s.trackingReferences);
 
   // 取得子節點的完整資料，按 order 排序
   const children = React.useMemo(() => {
     const state = useWbsStore.getState();
     const nodes = previewNodes || state.nodes;
     const nextAncestors = new Set(nextAncestorKey.split('|'));
+    if (parentPlacementId) return [];
     return (childIds || [])
       .filter(id => !nextAncestors.has(id))
       .map(id => nodes[id])
       .filter(n => n && !n.isArchived && (!filterProjection || filterProjection.visibleTaskIds.has(n.id)))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, filterProjection, previewNodes, nextAncestorKey]);
+  }, [childIds, filterProjection, parentPlacementId, previewNodes, nextAncestorKey]);
+
+  const trackingChildren = React.useMemo(() => {
+    const state = useWbsStore.getState();
+    const nodes = previewNodes || state.nodes;
+    const parentNode = nodes[parentId];
+    const parentReference = parentPlacementId
+      ? trackingReferences.find(reference => reference.id === parentPlacementId)
+      : null;
+    const effectiveBoardId = parentReference?.boardId || parentNode?.boardId;
+    return trackingReferences
+      .filter(reference => !reference.removedAt
+        && reference.boardId === effectiveBoardId
+        && reference.parentPlacementId === effectiveParentPlacementId
+        && (!filterProjection || filterProjection.visibleTaskIds.has(reference.taskId)))
+      .map(reference => ({ reference, task: nodes[reference.taskId] }))
+      .filter((row): row is { reference: typeof trackingReferences[number]; task: TaskNode } => Boolean(row.task));
+  }, [effectiveParentPlacementId, filterProjection, parentId, parentPlacementId, previewNodes, trackingReferences]);
+  const renderRows = React.useMemo(() => buildTaskPlacementTreeRows({
+    primaryTasks: parentPlacementId ? [] : children,
+    trackingReferences: trackingChildren.map(row => row.reference),
+    tasksById: previewNodes || useWbsStore.getState().nodes,
+    parentPlacementId: effectiveParentPlacementId,
+  }), [children, effectiveParentPlacementId, parentPlacementId, previewNodes, trackingChildren]);
 
   // 無子節點則不渲染
-  if (isRecursiveParent || children.length === 0) return null;
+  if (isRecursiveParent || renderRows.length === 0) return null;
 
   return (
     <div className={depth === 0 ? 'kanban-checklist-root mt-px' : ''}>
-      <SortableContext items={children.map(child => child.id)} strategy={verticalListSortingStrategy}>
-        {children.map(child => (
+      <TaskPlacementTree rows={renderRows}>
+        {row => (
           <ChecklistItem
-            key={child.id}
-            child={child}
+            child={row.task}
+            trackingReference={row.reference}
             depth={depth}
             previewNodes={previewNodes}
             previewParentIndex={previewParentIndex}
             ancestorIds={nextAncestorIds}
+            ancestorPlacementIds={[...ancestorPlacementIds, effectiveParentPlacementId]}
             filterProjection={filterProjection}
           />
-        ))}
-      </SortableContext>
+        )}
+      </TaskPlacementTree>
     </div>
   );
 };

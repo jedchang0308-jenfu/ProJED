@@ -10,7 +10,7 @@ import {
   saveEmergencyMeetingDraftSnapshot,
   saveMeetingDraftSnapshot,
 } from '../services/meetingDraftRecoveryService';
-import type { KnowledgeRecord, KnowledgeRecordInput, MeetingDraftRecoverySnapshot, MeetingTaskActivity } from '../types';
+import type { EditableKnowledgeRecord, KnowledgeRecordInput, MeetingDraftRecoverySnapshot, MeetingTaskActivity } from '../types';
 import {
   acquireCheckpointLease,
   CHECKPOINT_IDLE_MS,
@@ -97,7 +97,7 @@ const buildRecoverySnapshot = (
   };
 };
 
-const getRecordRecoverySignature = (record: KnowledgeRecord): string | null => {
+const getRecordRecoverySignature = (record: EditableKnowledgeRecord): string | null => {
   const recovery = record.metadata?.projedDraftRecovery;
   if (recovery && typeof recovery === 'object' && !Array.isArray(recovery)) {
     const signature = (recovery as { localSignature?: unknown }).localSignature;

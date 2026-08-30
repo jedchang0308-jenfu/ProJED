@@ -185,7 +185,8 @@ const checks = [
       contents.recordSidebar.includes('data-meeting-workflow-step={step.stage}') &&
       contents.recordSidebar.includes('meetingWorkflowStepsWithImport') &&
       contents.recordSidebar.includes('projectImportMeetingStep') &&
-      contents.recordSidebar.includes('onToggleProjectImport'),
+      contents.recordSidebar.includes('onImportProjectChanges') &&
+      contents.recordSidebar.includes('MeetingProjectChangeImportControl'),
   },
   {
     name: 'RecordSidebar implements project import as the first work-log workflow step',
@@ -201,7 +202,7 @@ const checks = [
       contents.recordSidebar.includes('isProjectImportExpanded') &&
       contents.recordSidebar.includes('setIsProjectImportExpanded(false)') &&
       contents.recordSidebar.includes('const shouldShowProjectChangeImport = Boolean(canUseProjectChangeImport && isProjectImportExpanded)') &&
-      contents.recordSidebar.includes('{projectChangeImportPanel ? (') &&
+      contents.recordSidebar.includes('projectImportPanel={projectChangeImportPanel}') &&
       contents.recordSidebar.includes('data-project-change-import-panel'),
   },
   {

@@ -3,6 +3,11 @@
 對應 DEV：DEV-020  
 狀態：Passed
 
+## 2026-08-28 DEV-094 supersession boundary
+
+- 本文件記錄 DEV-020 當時的歷史 PASS；其中 meeting 的必經日期／preview／insert／skip 驗收已由 `SPEC-020` DEV-094 addendum 取代。
+- work-log 舊匯入與 DEV-020 入口、保存、發布、未儲存防呆回歸仍有效。current meeting one-click、direct-note、focus與 cutoff 驗收以 `QA-DEV-094` 為準，且目前 NOT RUN。
+
 ## 驗證目標
 
 確認紀錄功能已從「一堆分散按鈕」改為清楚的工作流：

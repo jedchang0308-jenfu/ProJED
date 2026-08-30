@@ -13,7 +13,18 @@ export type MobileTaskActionState = TaskDragSessionState;
 export type MobileTaskActionContextValue = {
   state: MobileTaskActionState | null;
   begin: (
-    task: { id: string; title?: string; status?: TaskStatus },
+    task: {
+      id: string;
+      title?: string;
+      status?: TaskStatus;
+      placementId?: string;
+      placementKind?: 'primary' | 'tracking_reference';
+      boardId?: string;
+      trackingReferenceId?: string;
+      canEditCanonicalTask?: boolean;
+      canCreateCanonicalTask?: boolean;
+      canDeleteCanonicalTask?: boolean;
+    },
     event: React.TouchEvent,
     sourceKind?: TaskDragSourceKind,
   ) => boolean;
@@ -21,7 +32,7 @@ export type MobileTaskActionContextValue = {
   end: (event: React.TouchEvent) => void;
   cancel: (event?: React.TouchEvent) => void;
   activateAction: (action: MobileTaskAction) => void;
-  isActive: (nodeId?: string) => boolean;
+  isActive: (nodeId?: string, placementId?: string) => boolean;
 };
 
 export const MobileTaskActionContext = React.createContext<MobileTaskActionContextValue | null>(null);

@@ -12,6 +12,7 @@ import MindMapDragPreviewBadge from './MindMapDragPreviewBadge';
 import MindMapDragPreviewLayer, { type MindMapDragPreviewModel } from './MindMapDragPreviewLayer';
 import { projectTaskFilterResults } from '../../features/taskFilters';
 import { TaskFilterResultState } from '../ui/TaskFilterResultState';
+import { buildExpandedProjectionTasks, buildProjectionParentIndex } from '../../features/taskTracking/model';
 import MindMapNode, {
   type MindMapDirection,
   type MindMapDropMode,
@@ -232,18 +233,35 @@ const MindMapView: React.FC = () => {
   const activeBoard = useBoardStore(state => state.getActiveBoard());
   const activeBoardId = useBoardStore(state => state.activeBoardId);
   const nodes = useWbsStore(state => state.nodes);
+  const trackingReferences = useWbsStore(state => state.trackingReferences);
   const taskLoading = useWbsStore(state => state.loading);
   const taskLoadError = useWbsStore(state => state.error);
   const parentNodesIndex = useWbsStore(state => state.parentNodesIndex);
+  const projectionTasks = React.useMemo(
+    () => buildExpandedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
+    [activeBoardId, nodes, trackingReferences],
+  );
+  const projectionNodes = React.useMemo(
+    () => Object.fromEntries(projectionTasks.map(task => [task.id, task])),
+    [projectionTasks],
+  );
+  const getCanonicalTaskId = React.useCallback((nodeId: string) => (
+    projectionNodes[nodeId]?.canonicalTaskId || nodeId
+  ), [projectionNodes]);
+  const projectionParentNodesIndex = React.useMemo(
+    () => buildProjectionParentIndex(projectionTasks),
+    [projectionTasks],
+  );
   const addNode = useWbsStore(state => state.addNode);
   const updateNode = useWbsStore(state => state.updateNode);
+  const moveTrackingReference = useWbsStore(state => state.moveTrackingReference);
   const archiveTask = useWbsStore(state => state.archiveNode);
   const taskFilters = useTaskFilterStore(state => state.filters);
   const resetTaskFilters = useTaskFilterStore(state => state.resetFilters);
   const showStartDate = useBoardStore(state => state.showStartDate);
   const setSelectedTaskId = useBoardStore(state => state.setSelectedTaskId);
   const setContextMenuState = useBoardStore(state => state.setContextMenuState);
-  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, isReadOnly } = useBoardPermissions();
+  const { canCreateTask, canEditTask, canMoveTask, canDeleteTask, canManageTaskReference, isReadOnly } = useBoardPermissions();
 
   const [selectionStore] = React.useState<MindMapSelectionStore>(() => createMindMapSelectionStore());
   const dev075ProbeEnabled = React.useMemo(() => isDev075ProbeEnabled(), []);
@@ -591,13 +609,13 @@ const MindMapView: React.FC = () => {
   }, [activeBoardId]);
 
   const filterProjection = React.useMemo(
-    () => projectTaskFilterResults(nodes, taskFilters, { boardId }),
-    [boardId, nodes, taskFilters],
+    () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId }),
+    [boardId, projectionNodes, taskFilters],
   );
 
   const rootNodes = React.useMemo(() => {
-    return getMindMapRootNodes(nodes, parentNodesIndex, boardId, filterProjection.visibleTaskIds);
-  }, [boardId, filterProjection, nodes, parentNodesIndex]);
+    return getMindMapRootNodes(projectionNodes, projectionParentNodesIndex, boardId, filterProjection.visibleTaskIds);
+  }, [boardId, filterProjection, projectionNodes, projectionParentNodesIndex]);
 
   React.useLayoutEffect(() => {
     const surface = mapSurfaceRef.current;
@@ -690,7 +708,7 @@ const MindMapView: React.FC = () => {
 
   React.useEffect(() => {
     const boardNodes = boardId
-      ? Object.values(nodes).filter(node => node.boardId === boardId && !node.isArchived)
+      ? Object.values(projectionNodes).filter(node => node.boardId === boardId && !node.isArchived)
       : [];
     const validNodeIds = new Set(boardNodes.map(node => node.id));
     const boardChanged = expansionBoardRef.current !== boardId;
@@ -712,15 +730,15 @@ const MindMapView: React.FC = () => {
       const next = pruneMindMapExpandedNodeIds(prev, validNodeIds);
       return next;
     });
-  }, [boardId, nodes]);
+  }, [boardId, projectionNodes]);
 
   React.useEffect(() => {
     const selectedNodeId = selectionStore.getSelectedNodeId();
     if (!selectedNodeId) return;
-    const selectedNode = nodes[selectedNodeId];
+    const selectedNode = projectionNodes[selectedNodeId] || nodes[selectedNodeId];
     if (selectedNode && selectedNode.boardId === boardId && !selectedNode.isArchived) return;
     selectNode(null);
-  }, [boardId, nodes, selectNode, selectionStore]);
+  }, [boardId, nodes, projectionNodes, selectNode, selectionStore]);
 
   React.useEffect(() => {
     if (!editingRelationshipId) return;
@@ -732,8 +750,8 @@ const MindMapView: React.FC = () => {
   }, [editingRelationshipId]);
 
   const getChildren = React.useCallback((nodeId: string) =>
-    getMindMapChildren(nodes, parentNodesIndex, boardId, filterProjection.visibleTaskIds, nodeId),
-  [boardId, filterProjection, nodes, parentNodesIndex]);
+    getMindMapChildren(projectionNodes, projectionParentNodesIndex, boardId, filterProjection.visibleTaskIds, nodeId),
+  [boardId, filterProjection, projectionNodes, projectionParentNodesIndex]);
 
   const navigationIndex = React.useMemo(() => {
     return buildMindMapNavigationIndex(rootsBySide, expandedNodeIds, getChildren);
@@ -746,12 +764,12 @@ const MindMapView: React.FC = () => {
   }, [dev075ProbeEnabled, navigationIndex, syncDev075ProbeAttributes]);
 
   const getNodeSide = React.useCallback((nodeId: string): MindMapDirection => {
-    const rootId = getMindMapRootAncestorId(nodes, nodeId);
+    const rootId = getMindMapRootAncestorId(projectionNodes, nodeId);
     const branch = getMindMapNodeElement(mapContentRef.current, rootId);
     const domDirection = branch?.getAttribute(MINDMAP_NODE_DIRECTION_ATTRIBUTE);
     if (domDirection === 'left' || domDirection === 'right') return domDirection;
     return sideOverrides[rootId] || 'right';
-  }, [nodes, sideOverrides]);
+  }, [projectionNodes, sideOverrides]);
 
   const getLocalRect = React.useCallback((element: HTMLElement): MindMapLayoutRect => {
     const mapper = getCurrentCoordinateMapper();
@@ -904,7 +922,11 @@ const MindMapView: React.FC = () => {
     event: React.DragEvent<HTMLElement>,
     patch: Omit<DragPreviewState, 'x' | 'y' | 'title' | 'nodeId'> & Partial<Pick<DragPreviewState, 'title' | 'nodeId'>>,
   ) => {
-    const dragged = patch.nodeId ? nodes[patch.nodeId] : draggedNodeId ? nodes[draggedNodeId] : null;
+    const dragged = patch.nodeId
+      ? projectionNodes[patch.nodeId] || nodes[patch.nodeId]
+      : draggedNodeId
+        ? projectionNodes[draggedNodeId] || nodes[draggedNodeId]
+        : null;
     if (!dragged) return;
     setDragPreview({
       x: event.clientX,
@@ -913,7 +935,7 @@ const MindMapView: React.FC = () => {
       nodeId: patch.nodeId || dragged.id,
       ...patch,
     });
-  }, [draggedNodeId, nodes]);
+  }, [draggedNodeId, nodes, projectionNodes]);
 
   React.useEffect(() => {
     if (!draggedNodeId) return undefined;
@@ -1202,6 +1224,11 @@ const MindMapView: React.FC = () => {
   const archiveNode = React.useCallback(async (nodeId?: string) => {
     const targetNodeId = nodeId || selectionStore.getSelectedNodeId();
     if (!targetNodeId) return;
+    const projected = projectionNodes[targetNodeId] || nodes[targetNodeId];
+    if (projected?.isTrackingReference) {
+      toast.warning('追蹤副本只能移除此處追蹤，不能封存原任務。');
+      return;
+    }
     if (!canDeleteTask) {
       toast.warning(MINDMAP_MESSAGES.noArchiveTaskPermission);
       return;
@@ -1218,7 +1245,7 @@ const MindMapView: React.FC = () => {
     setInlineTitleEditFocusNodeId(null);
     [plan.selected.id, ...plan.descendantIds].forEach(id => archiveTask(id));
     selectNode(plan.nextSelectionId);
-  }, [archiveTask, boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, rootNodes, selectNode, selectionStore]);
+  }, [archiveTask, boardId, canDeleteTask, getChildren, nodes, parentNodesIndex, projectionNodes, rootNodes, selectNode, selectionStore]);
 
   const startRelationshipLabelEdit = React.useCallback((relationshipId: string) => {
     const relationship = noteRelationships.find(item => item.id === relationshipId);
@@ -1304,38 +1331,45 @@ const MindMapView: React.FC = () => {
 
   const handleNodePointerPrimary = React.useCallback((nodeId: string) => {
     handleNodeSelect(nodeId);
-    if (!canEditTask || relationshipToolActive || draggedNodeId) return;
+    const projected = projectionNodes[nodeId] || nodes[nodeId];
+    // A tracking projection may open the canonical details, but it must not
+    // enter inline editing because the reference has no local task content.
+    if (!canEditTask || projected?.isTrackingReference || relationshipToolActive || draggedNodeId) return;
     pointerQuickTitleTimerRef.current = window.setTimeout(() => {
       pointerQuickTitleTimerRef.current = null;
       setInlineTitleEditNodeId(nodeId);
       setInlineTitleEditFocusNodeId(null);
     }, MINDMAP_POINTER_QUICK_TITLE_DELAY_MS);
-  }, [canEditTask, draggedNodeId, handleNodeSelect, relationshipToolActive]);
+  }, [canEditTask, draggedNodeId, handleNodeSelect, nodes, projectionNodes, relationshipToolActive]);
 
-  const handleNodeOpenDetails = React.useCallback((nodeId: string) => {
+  const handleNodeOpenDetails = React.useCallback((nodeId: string, trackingReferenceId?: string) => {
     if (relationshipToolActive || draggedNodeId) return;
+    const taskId = getCanonicalTaskId(nodeId);
     selectNode(nodeId);
-    setSelectedTaskId(nodeId);
-    openTaskDetails(nodeId);
-  }, [draggedNodeId, relationshipToolActive, selectNode, setSelectedTaskId]);
+    setSelectedTaskId(taskId);
+    openTaskDetails(taskId, trackingReferenceId);
+  }, [draggedNodeId, getCanonicalTaskId, relationshipToolActive, selectNode, setSelectedTaskId]);
 
   const handleNodeContextMenu = React.useCallback((nodeId: string, title: string, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    const projected = projectionNodes[nodeId] || nodes[nodeId];
+    const taskId = projected?.canonicalTaskId || nodeId;
     selectNode(nodeId);
-    setSelectedTaskId(nodeId);
+    setSelectedTaskId(taskId);
     setContextMenuState({
       kind: 'task',
       isOpen: true,
       x: event.clientX,
       y: event.clientY,
-      nodeId,
+      nodeId: taskId,
       title,
+      trackingReferenceId: projected?.trackingReferenceId,
       interactionLocation: { hostMode: 'mindmap', origin: 'mode-primary' },
       surfaceId: 'mindmap.node',
       interactionId: `mindmap-context-${nodeId}-${Date.now().toString(36)}`,
     });
-  }, [selectNode, setContextMenuState, setSelectedTaskId]);
+  }, [nodes, projectionNodes, selectNode, setContextMenuState, setSelectedTaskId]);
 
   React.useEffect(() => {
     const handleStartRelationship = (event: Event) => {
@@ -1662,11 +1696,11 @@ const MindMapView: React.FC = () => {
   }, [removeRelationshipAndClearSelection, startRelationshipLabelEdit]);
 
   const handleDragOverNode = React.useCallback((event: React.DragEvent<HTMLDivElement>, nodeId: string) => {
-    if (!canMoveTask || !draggedNodeId || draggedNodeId === nodeId) return;
+    if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId || draggedNodeId === nodeId) return;
     event.preventDefault();
     event.stopPropagation();
     const mode = getDropModeFromPointer(event.currentTarget, event);
-    const target = nodes[nodeId];
+    const target = projectionNodes[nodeId] || nodes[nodeId];
     const direction = getNodeSide(nodeId);
     const insertionPreview = getDragInsertionPreview(event.currentTarget, target, mode, direction);
     setNodeDropPreviewTarget({ nodeId, mode });
@@ -1679,16 +1713,46 @@ const MindMapView: React.FC = () => {
       direction,
       ...insertionPreview,
     });
-  }, [canMoveTask, draggedNodeId, getDragInsertionPreview, getNodeSide, nodes, setNodeDropPreviewTarget, updateDragPreview]);
+  }, [canManageTaskReference, canMoveTask, draggedNodeId, getDragInsertionPreview, getNodeSide, nodes, projectionNodes, setNodeDropPreviewTarget, updateDragPreview]);
 
   const handleDropOnNode = React.useCallback((event: React.DragEvent<HTMLDivElement>, nodeId: string) => {
-    if (!canMoveTask || !draggedNodeId || draggedNodeId === nodeId) return;
+    if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId || draggedNodeId === nodeId) return;
     event.preventDefault();
     event.stopPropagation();
     const mode = dropTarget?.nodeId === nodeId ? dropTarget.mode : getDropModeFromPointer(event.currentTarget, event);
-    const target = nodes[nodeId];
-    const dragged = nodes[draggedNodeId];
+    const target = projectionNodes[nodeId] || nodes[nodeId];
+    const dragged = projectionNodes[draggedNodeId] || nodes[draggedNodeId];
     if (!target || !dragged) return;
+
+    // A canonical primary placement cannot be nested below a non-owning
+    // reference; only the reference placement itself may be moved there.
+    if (target.isTrackingReference && !dragged.isTrackingReference) {
+      toast.warning('主要任務不能放到追蹤副本下。');
+      clearDragState();
+      return;
+    }
+
+    if (dragged.isTrackingReference && dragged.trackingReferenceId) {
+      if (!canManageTaskReference) return;
+      const targetPlacementId = target.trackingReferenceId || `primary:${target.id}`;
+      const targetParentPlacementId = mode === 'child'
+        ? targetPlacementId
+        : target.trackingReferenceParentPlacementId
+          ?? (target.parentId ? `primary:${target.parentId}` : null);
+      void moveTrackingReference({
+        referenceId: dragged.trackingReferenceId,
+        targetBoardId: boardId,
+        targetParentPlacementId,
+        anchorPlacementId: mode === 'child' ? null : targetPlacementId,
+        position: mode === 'child' ? 'append' : mode,
+      }).catch(error => {
+        toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。');
+      });
+      if (mode === 'child') expandNode(target.id);
+      clearDragState();
+      return;
+    }
+    if (!canMoveTask) return;
 
     const result = getMindMapNodeDropResult({
       boardId,
@@ -1712,21 +1776,34 @@ const MindMapView: React.FC = () => {
     }
 
     clearDragState();
-  }, [boardId, canMoveTask, clearDragState, draggedNodeId, dropTarget, expandNode, getChildren, getNodeSide, nodes, parentNodesIndex, updateNode, updateRootSide]);
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, draggedNodeId, dropTarget, expandNode, getChildren, getNodeSide, moveTrackingReference, nodes, parentNodesIndex, projectionNodes, updateNode, updateRootSide]);
 
   const handleDropOnCenter = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    if (!canMoveTask || !draggedNodeId) return;
+    if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
     event.preventDefault();
-    const dragged = nodes[draggedNodeId];
+    const dragged = projectionNodes[draggedNodeId] || nodes[draggedNodeId];
     if (!dragged) return;
+    if (dragged.isTrackingReference && dragged.trackingReferenceId) {
+      if (canManageTaskReference) {
+        void moveTrackingReference({
+          referenceId: dragged.trackingReferenceId,
+          targetBoardId: boardId,
+          targetParentPlacementId: null,
+          position: 'append',
+        }).catch(error => toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。'));
+      }
+      clearDragState();
+      return;
+    }
+    if (!canMoveTask) return;
     const update = getMindMapCenterDropUpdate({ draggedNodeId, rootNodes, sideOverrides });
     updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
     if (update.rootSide) updateRootSide(update.nodeId, update.rootSide);
     clearDragState();
-  }, [canMoveTask, clearDragState, draggedNodeId, nodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, draggedNodeId, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
 
   const handleDragOverCenter = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    if (!canMoveTask || !draggedNodeId) return;
+    if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
     event.preventDefault();
     setRootDropPreviewTarget(null);
     updateDragPreview(event, {
@@ -1735,10 +1812,10 @@ const MindMapView: React.FC = () => {
       direction: sideOverrides[draggedNodeId] || 'right',
       connectorPath: getDragPreviewConnectorPath(event, event.currentTarget, sideOverrides[draggedNodeId] || 'right'),
     });
-  }, [canMoveTask, draggedNodeId, getDragPreviewConnectorPath, setRootDropPreviewTarget, sideOverrides, updateDragPreview]);
+  }, [canManageTaskReference, canMoveTask, draggedNodeId, getDragPreviewConnectorPath, setRootDropPreviewTarget, sideOverrides, updateDragPreview]);
 
   const handleDragOverSide = React.useCallback((event: React.DragEvent<HTMLDivElement>, direction: MindMapDirection) => {
-    if (!canMoveTask || !draggedNodeId) return;
+    if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
     event.preventDefault();
     event.stopPropagation();
     setRootDropPreviewTarget(direction);
@@ -1749,14 +1826,27 @@ const MindMapView: React.FC = () => {
       direction,
       connectorPath: getDragPreviewConnectorPath(event, center || event.currentTarget, direction),
     });
-  }, [canMoveTask, draggedNodeId, getDragPreviewConnectorPath, setRootDropPreviewTarget, updateDragPreview]);
+  }, [canManageTaskReference, canMoveTask, draggedNodeId, getDragPreviewConnectorPath, setRootDropPreviewTarget, updateDragPreview]);
 
   const handleDropOnSide = React.useCallback((event: React.DragEvent<HTMLDivElement>, direction: MindMapDirection) => {
-    if (!canMoveTask || !draggedNodeId) return;
+    if ((!canMoveTask && !canManageTaskReference) || !draggedNodeId) return;
     event.preventDefault();
     event.stopPropagation();
-    const dragged = nodes[draggedNodeId];
+    const dragged = projectionNodes[draggedNodeId] || nodes[draggedNodeId];
     if (!dragged) return;
+    if (dragged.isTrackingReference && dragged.trackingReferenceId) {
+      if (canManageTaskReference) {
+        void moveTrackingReference({
+          referenceId: dragged.trackingReferenceId,
+          targetBoardId: boardId,
+          targetParentPlacementId: null,
+          position: 'append',
+        }).catch(error => toast.error(error instanceof Error ? error.message : '移動追蹤副本失敗，原位置已保留。'));
+      }
+      clearDragState();
+      return;
+    }
+    if (!canMoveTask) return;
     const update = getMindMapSideDropUpdate({
       draggedNodeId,
       direction,
@@ -1768,7 +1858,7 @@ const MindMapView: React.FC = () => {
     if (update.rootSide) updateRootSide(update.nodeId, update.rootSide);
     updateNode(update.nodeId, { parentId: update.parentId, order: update.order });
     clearDragState();
-  }, [canMoveTask, clearDragState, dragPreview, draggedNodeId, getNodeSide, nodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
+  }, [boardId, canManageTaskReference, canMoveTask, clearDragState, dragPreview, draggedNodeId, getNodeSide, moveTrackingReference, nodes, projectionNodes, rootNodes, sideOverrides, updateNode, updateRootSide]);
 
   const handleNodeDragStart = React.useCallback((nodeId: string, event: React.DragEvent<HTMLDivElement>) => {
     setTransparentDragImage(event.dataTransfer);
@@ -1799,7 +1889,8 @@ const MindMapView: React.FC = () => {
       dropTarget={dropTarget}
       isRelationshipModeActive={relationshipToolActive}
       showStartDate={showStartDate}
-      canMoveTask={canMoveTask}
+      canMoveTask={canMoveTask || canManageTaskReference}
+      canManageTaskReference={canManageTaskReference}
       isTitleEditing={inlineTitleEditNodeId === node.id}
       autoFocusTitleInput={inlineTitleEditFocusNodeId === node.id}
       onTitleEditCommit={commitInlineTitleEdit}

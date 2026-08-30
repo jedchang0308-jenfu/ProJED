@@ -1,6 +1,5 @@
 import React from 'react';
 import { useDndContext, useDroppable } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Link } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -9,30 +8,32 @@ import useBoardStore from '../../store/useBoardStore';
 import { KanbanDependencyContext } from '../BoardView';
 import { KanbanCard } from './KanbanCard';
 import type { TaskNode } from '../../types';
-import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
-import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 // Compatibility contract retains prepareNewTaskNaming(newNode.id) for post-create adapters.
-import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
+import { primaryPlacementId } from '../../features/taskTracking/model';
+import type { TaskTrackingReference } from '../../features/taskTracking/types';
+import { TaskSurfaceFrame } from './TaskSurfaceFrame';
+import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
+import { useTaskPlacementController } from './useTaskPlacementController';
 
 interface KanbanColumnProps {
   nodeId: string;
   previewNodes?: Record<string, TaskNode> | null;
   previewParentIndex?: Record<string, string[]> | null;
   filterProjection?: TaskFilterResultProjection | null;
+  trackingReference?: TaskTrackingReference;
 }
 
-export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes, previewParentIndex, filterProjection }) => {
+export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes, previewParentIndex, filterProjection, trackingReference }) => {
   const storeNode = useWbsStore((state) => state.nodes[nodeId]);
   const node = previewNodes?.[nodeId] || storeNode;
   const wbsDependencies = useWbsStore((state) => state.dependencies);
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
-  const { canMoveTask, canCreateDependency } = useBoardPermissions();
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
@@ -43,29 +44,24 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const { active, over } = useDndContext();
   const activeType = active?.data.current?.type;
   const activeNodeId = active?.data.current?.nodeId;
-  const taskGesture = useTaskGestureSurface({
-    task: { id: nodeId, title: node?.title, status: node?.status },
-    sourceKind: 'column-header',
-    disabled: isSelectingMode,
-    onNonMobileLongPress: (event) => {
-      if (!node) return;
-      event.preventDefault();
-      const touch = event.touches[0];
-      void interactionBinding.openMenu({ x: touch.clientX, y: touch.clientY });
-    },
-  });
-  const interactionBinding = useTaskInteractionBinding({
-    taskId: nodeId,
-    title: node?.title,
+  const placementController = useTaskPlacementController({
+    task: node || ({ id: nodeId, workspaceId: '', boardId: '', parentId: null, title: '', status: 'todo', order: 0 } as TaskNode),
+    reference: trackingReference,
     surfaceId: 'board.column-header',
-    nodeRole: node?.nodeType || 'task',
+    sortableType: 'wbs-column',
+    sourceKind: 'column-header',
+    interactionDisabled: isSelectingMode,
     transientOwners: isSelectingMode ? ['dependency-selection'] : [],
   });
+  const { activationProps, interactionBinding, permissions, taskGesture } = placementController;
+  const { canCreateDependency } = permissions;
 
   const storeChildIds = useWbsStore((state) => state.parentNodesIndex[nodeId]);
   const childIds = previewParentIndex?.[nodeId] || storeChildIds;
+  const trackingReferences = useWbsStore((state) => state.trackingReferences);
 
   const children = React.useMemo(() => {
+    if (trackingReference) return [];
     const state = useWbsStore.getState();
     const nodes = previewNodes || state.nodes;
 
@@ -73,7 +69,20 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       .map((id) => nodes[id])
       .filter((child) => child && !child.isArchived && (!filterProjection || filterProjection.visibleTaskIds.has(child.id)))
       .sort((a, b) => a.order - b.order);
-  }, [childIds, filterProjection, previewNodes]);
+  }, [childIds, filterProjection, previewNodes, trackingReference]);
+  const trackingChildren = React.useMemo(() => trackingReferences
+    .filter(reference => !reference.removedAt
+      && reference.boardId === (trackingReference?.boardId || node?.boardId)
+      && reference.parentPlacementId === (trackingReference?.id || primaryPlacementId(nodeId))
+      && (!filterProjection || filterProjection.visibleTaskIds.has(reference.taskId)))
+    .filter(reference => Boolean(useWbsStore.getState().nodes[reference.taskId])),
+  [filterProjection, node?.boardId, nodeId, trackingReference?.boardId, trackingReference?.id, trackingReferences]);
+  const childRenderRows = React.useMemo(() => buildTaskPlacementTreeRows({
+    primaryTasks: children,
+    trackingReferences: trackingChildren,
+    tasksById: previewNodes || useWbsStore.getState().nodes,
+    parentPlacementId: trackingReference?.id || primaryPlacementId(nodeId),
+  }), [children, nodeId, previewNodes, trackingChildren, trackingReference?.id]);
 
   const {
     attributes: columnAttributes,
@@ -82,21 +91,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
     transform: columnTransform,
     transition: columnTransition,
     isDragging: isColumnDragging,
-  } = useSortable({
-    id: nodeId,
-    disabled: !canMoveTask || isSelectingMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
-    data: {
-      type: 'wbs-column',
-      nodeId,
-    },
-  });
+  } = placementController.sortable;
 
   const { setNodeRef: setDropNodeRef, isOver } = useDroppable({
-    id: `${nodeId}-drop`,
-    disabled: !canMoveTask,
+    id: `${placementController.placementId}-drop`,
+    disabled: !permissions.canMoveTask && !permissions.canManageTaskReference,
     data: {
       type: 'wbs-column-drop',
       nodeId,
+      placementId: placementController.placementId,
+      placementKind: placementController.placementKind,
+      trackingReference: trackingReference || undefined,
     },
   });
 
@@ -151,14 +156,20 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   }
 
   return (
-    <div
+    <TaskSurfaceFrame
+      task={node}
+      reference={trackingReference}
+      surfaceKind="kanban-column"
       ref={setColumnNodeRef}
+      {...activationProps}
       style={columnStyle}
       data-kanban-column="true"
       data-desktop-task-hover-scope="true"
       data-task-child-drop-target="true"
       data-task-child-drop-level="L1"
       data-task-id={nodeId}
+      data-task-placement-id={placementController.placementId}
+      data-task-placement-kind={trackingReference ? 'tracking-reference' : 'primary'}
       data-task-hover-scope-kind="column"
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
@@ -182,7 +193,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-mobile-drop-target={nodeId}
         data-task-drop-surface-kind="column-header"
         data-desktop-drop-surface="true"
-        data-desktop-drop-id={nodeId}
+        data-desktop-drop-id={placementController.placementId}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="kanban-column-header"
         data-task-surface-source="true"
@@ -317,24 +328,24 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         data-mobile-drop-target={nodeId}
         data-task-drop-surface-kind="column-drop"
         data-desktop-drop-surface="true"
-        data-desktop-drop-id={`${nodeId}-drop`}
+          data-desktop-drop-id={`${placementController.placementId}-drop`}
       >
         <div
           data-kanban-column-subtree-scope={children.length > 0 ? 'true' : undefined}
           className={children.length > 0 ? 'rounded-md' : undefined}
         >
-          <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
-            {children.map((child) => (
+          <TaskPlacementTree rows={childRenderRows}>
+            {row => (
               <KanbanCard
-                key={child.id}
-                nodeId={child.id}
+                nodeId={row.task.id}
                 columnId={nodeId}
                 previewNodes={previewNodes}
                 previewParentIndex={previewParentIndex}
                 filterProjection={filterProjection}
+                trackingReference={row.reference}
               />
-            ))}
-          </SortableContext>
+            )}
+          </TaskPlacementTree>
           <span
             aria-hidden="true"
             className="pointer-events-none block h-0 w-full"
@@ -344,6 +355,6 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
 
         <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />
       </div>
-    </div>
+    </TaskSurfaceFrame>
   );
 };

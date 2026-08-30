@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import dayjs from 'dayjs';
-import { recordService } from '../services/dataBackend';
+import { eventLogService, recordService } from '../services/dataBackend';
 import { synthesizeMeetingRecord } from '../services/meetingSynthesisService';
 import useAuthStore from './useAuthStore';
 import useBoardStore from './useBoardStore';
@@ -24,11 +24,23 @@ import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerg
 import { useMemberStore } from './useMemberStore';
 import { useTagStore } from './useTagStore';
 import { summarizeTaskActivity } from '../utils/meetingActivitySummary';
+import {
+  createMeetingActivityQuery,
+  createMeetingProjectChangeImportBatch,
+  listMeetingProjectChangeDelta,
+  markMeetingProjectChangeImportAiIntegrated,
+  parseMeetingProjectChangeImportMetadata,
+  projectMeetingProjectChangeImportMetadata,
+  reconcileMeetingProjectChangeImportMetadata,
+  resolveMeetingProjectChangeImportWindow,
+  MeetingProjectChangeImportError,
+} from '../utils/meetingProjectChangeImport';
+import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent } from '../utils/projectChangeImport';
 import type {
-  KnowledgeRecord,
+  EditableKnowledgeRecord,
   KnowledgeRecordInput,
+  EditableKnowledgeRecordType,
   KnowledgeRecordStatus,
-  KnowledgeRecordType,
   KnowledgeRecordVisibility,
   MeetingDraftRecoverySnapshot,
   MeetingDraftRecoveryState,
@@ -62,8 +74,10 @@ type RecordSaveFeedback = {
   savedAt: number;
 } | null;
 
+const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
+
 interface RecordStoreState {
-  records: KnowledgeRecord[];
+  records: EditableKnowledgeRecord[];
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -86,6 +100,11 @@ interface RecordStoreState {
   lastSaveFeedback: RecordSaveFeedback;
   meetingDraftRecovery: MeetingDraftRecoveryState;
   meetingDraftRecoveryClearToken: number;
+  contentFocusRequestId: number;
+  contentFocusPending: boolean;
+  meetingProjectImportStatus: 'idle' | 'loading' | 'complete' | 'empty' | 'error';
+  meetingProjectImportMessage: string | null;
+  meetingProjectImportRequestId: number;
 }
 
 interface RecordStoreActions {
@@ -93,8 +112,8 @@ interface RecordStoreActions {
   openPanel: () => void;
   closePanel: () => void;
   togglePanelCollapsed: () => void;
-  openNewRecord: (type: KnowledgeRecordType, initialNodeId?: string) => void;
-  openExistingRecord: (record: KnowledgeRecord) => void;
+  openNewRecord: (type: EditableKnowledgeRecordType, initialNodeId?: string) => void;
+  openExistingRecord: (record: EditableKnowledgeRecord) => void;
   startMeetingRecord: () => void;
   exitMeetingMode: () => void;
   toggleMeetingTaskCapture: () => void;
@@ -108,12 +127,20 @@ interface RecordStoreActions {
   synthesizeMeetingDraft: (nodes?: Record<string, TaskNode>) => Promise<boolean>;
   enterTaskSelectionMode: (options?: TaskSelectionModeOptions) => void;
   exitTaskSelectionMode: (restorePanel?: boolean) => void;
-  saveDraft: (options?: SaveDraftOptions) => Promise<KnowledgeRecord | null>;
+  saveDraft: (options?: SaveDraftOptions) => Promise<EditableKnowledgeRecord | null>;
   archiveRecord: (recordId: string) => Promise<void>;
   clearSaveFeedback: () => void;
   setMeetingDraftRecovery: (updates: Partial<MeetingDraftRecoveryState>) => void;
   restoreMeetingDraftSnapshot: (snapshot: MeetingDraftRecoverySnapshot) => void;
   requestMeetingDraftRecoveryClear: () => void;
+  requestContentFocus: () => void;
+  consumeContentFocus: () => void;
+  importMeetingProjectChanges: (options?: {
+    mode?: 'default' | 'custom';
+    startedAt?: number;
+    endedAt?: number;
+    nodes?: Record<string, TaskNode>;
+  }) => Promise<boolean>;
 }
 
 const createId = () =>
@@ -122,7 +149,7 @@ const createId = () =>
     : `record_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 const createDefaultDraft = (
-  type: KnowledgeRecordType,
+  type: EditableKnowledgeRecordType,
   userId: string | null,
   initialNodeId?: string
 ): RecordDraft => {
@@ -152,7 +179,8 @@ const createDefaultDraft = (
 
 const uniqueLinks = uniqueRecordTaskLinks;
 
-const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({
+const toRecordInput = (record: EditableKnowledgeRecord): KnowledgeRecordInput => {
+  return {
   id: record.id,
   type: record.type,
   title: record.title,
@@ -165,12 +193,13 @@ const toRecordInput = (record: KnowledgeRecord): KnowledgeRecordInput => ({
   endedAt: record.endedAt,
   recordedBy: record.recordedBy,
   metadata: record.metadata,
-  taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
-});
+    taskLinks: record.taskLinks.map(link => ({ nodeId: link.nodeId, role: link.role })),
+  };
+};
 
 const toDraftFromRecordInput = (
   input: KnowledgeRecordInput,
-  saved: KnowledgeRecord,
+  saved: EditableKnowledgeRecord,
 ): RecordDraft => ({
   ...input,
   id: saved.id,
@@ -401,6 +430,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   lastSaveFeedback: null,
   meetingDraftRecovery: initialMeetingDraftRecoveryState,
   meetingDraftRecoveryClearToken: 0,
+  contentFocusRequestId: 0,
+  contentFocusPending: false,
+  meetingProjectImportStatus: 'idle',
+  meetingProjectImportMessage: null,
+  meetingProjectImportRequestId: 0,
 
   loadRecords: async (workspaceId, boardId) => {
     set({ loading: true, error: null });
@@ -434,6 +468,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     meetingDraftRecoveryClearToken: state.draft?.type === 'meeting'
       ? state.meetingDraftRecoveryClearToken + 1
       : state.meetingDraftRecoveryClearToken,
+    contentFocusRequestId: state.contentFocusRequestId,
+    contentFocusPending: false,
+    meetingProjectImportRequestId: state.meetingProjectImportRequestId + 1,
+    meetingProjectImportStatus: 'idle',
+    meetingProjectImportMessage: null,
   })),
 
   togglePanelCollapsed: () => set(state => ({ isPanelCollapsed: !state.isPanelCollapsed })),
@@ -458,6 +497,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       lastSaveFeedback: null,
       error: null,
       meetingDraftRecovery: initialMeetingDraftRecoveryState,
+      contentFocusRequestId: type === 'meeting' ? get().contentFocusRequestId + 1 : get().contentFocusRequestId,
+      contentFocusPending: type === 'meeting',
+      meetingProjectImportStatus: 'idle',
+      meetingProjectImportMessage: null,
+      meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
     });
   },
 
@@ -498,6 +542,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       lastSaveFeedback: null,
       error: null,
       meetingDraftRecovery: initialMeetingDraftRecoveryState,
+      contentFocusRequestId: get().contentFocusRequestId,
+      contentFocusPending: false,
+      meetingProjectImportStatus: 'idle',
+      meetingProjectImportMessage: null,
+      meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
     });
   },
 
@@ -540,6 +589,11 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         lastSaveFeedback: null,
         error: null,
         meetingDraftRecovery: isExistingMeetingDraft ? state.meetingDraftRecovery : initialMeetingDraftRecoveryState,
+        contentFocusRequestId: isExistingMeetingDraft ? state.contentFocusRequestId : state.contentFocusRequestId + 1,
+        contentFocusPending: !isExistingMeetingDraft,
+        meetingProjectImportStatus: isExistingMeetingDraft ? state.meetingProjectImportStatus : 'idle',
+        meetingProjectImportMessage: isExistingMeetingDraft ? state.meetingProjectImportMessage : null,
+        meetingProjectImportRequestId: state.meetingProjectImportRequestId + 1,
       };
     });
   },
@@ -555,16 +609,138 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     meetingTaskCaptureEnabled: !state.meetingTaskCaptureEnabled,
   })),
 
-  updateDraft: (updates) => set(state => ({
-    draft: state.draft
-      ? typeof updates.content === 'string'
-        ? syncDraftContentLinks({ ...state.draft, ...updates }, updates.content)
-        : { ...state.draft, ...updates }
-      : state.draft,
-    lastSaveFeedback: null,
-  })),
+  updateDraft: (updates) => set(state => {
+    if (!state.draft) return {};
+    const nextDraft = typeof updates.content === 'string'
+      ? syncDraftContentLinks({ ...state.draft, ...updates }, updates.content)
+      : { ...state.draft, ...updates };
+    const reconciledDraft = nextDraft.type === 'meeting' && typeof updates.content === 'string' && activeBoardIdForMeeting()
+      ? {
+          ...nextDraft,
+          metadata: reconcileMeetingProjectChangeImportMetadata(
+            nextDraft.metadata,
+            activeBoardIdForMeeting() as string,
+            nextDraft.content,
+          ),
+        }
+      : nextDraft;
+    return { draft: reconciledDraft, lastSaveFeedback: null };
+  }),
 
   setContentCursorOffset: (offset) => set({ contentCursorOffset: offset }),
+
+  requestContentFocus: () => set(state => ({
+    contentFocusRequestId: state.contentFocusRequestId + 1,
+    contentFocusPending: true,
+  })),
+
+  consumeContentFocus: () => set({ contentFocusPending: false }),
+
+  importMeetingProjectChanges: async (options = {}) => {
+    const initial = get();
+    const { draft, isMeetingMode } = initial;
+    const { activeWorkspaceId, activeBoardId } = useBoardStore.getState();
+    if (!draft || draft.type !== 'meeting' || !isMeetingMode || !activeWorkspaceId || !activeBoardId) {
+      set({ meetingProjectImportStatus: 'error', meetingProjectImportMessage: '目前沒有可匯入的會議草稿。' });
+      return false;
+    }
+    const requestId = initial.meetingProjectImportRequestId + 1;
+    const clickedAt = Date.now();
+    set({
+      meetingProjectImportRequestId: requestId,
+      meetingProjectImportStatus: 'loading',
+      meetingProjectImportMessage: null,
+      error: null,
+    });
+
+    const isCurrentRequest = () => {
+      const current = get();
+      return current.meetingProjectImportRequestId === requestId && current.draft?.id === draft.id && current.isMeetingMode;
+    };
+
+    try {
+      const records = await recordService.listByProject(activeWorkspaceId, activeBoardId);
+      if (!isCurrentRequest()) return false;
+      set({ records });
+      const window = resolveMeetingProjectChangeImportWindow({
+        draftOccurredAt: draft.occurredAt,
+        clickedAt,
+        records,
+        boardId: activeBoardId,
+        mode: options.mode ?? 'default',
+        customStartedAt: options.startedAt,
+        customEndedAt: options.endedAt,
+      });
+      const events = await eventLogService.listActivity(createMeetingActivityQuery({
+        workspaceId: activeWorkspaceId,
+        boardId: activeBoardId,
+        startedAt: window.rangeStartedAt,
+        endedAt: window.rangeEndedAt,
+        eventTypes: PROJECT_CHANGE_EVENT_TYPES,
+      }));
+      if (!isCurrentRequest()) return false;
+      const currentDraft = get().draft;
+      if (!currentDraft || currentDraft.type !== 'meeting') return false;
+      const parsed = parseMeetingProjectChangeImportMetadata(currentDraft.metadata, activeBoardId);
+      const existingEventIds = parsed?.batches.flatMap(batch => batch.sourceEventIds) ?? [];
+      const deltaEvents = listMeetingProjectChangeDelta(events, existingEventIds);
+      if (deltaEvents.length === 0) {
+        set({ meetingProjectImportStatus: 'empty', meetingProjectImportMessage: '沒有可帶入的變更。' });
+        return false;
+      }
+      const result = await synthesizeMeetingRecord(createProjectChangeSynthesisInput(
+        currentDraft.title || '專案變化紀錄',
+        deltaEvents,
+        options.nodes ?? {},
+      ));
+      if (!isCurrentRequest()) return false;
+      const latestDraft = get().draft;
+      if (!latestDraft || latestDraft.type !== 'meeting' || latestDraft.status === 'published') return false;
+      const importedBlock = wrapProjectChangeImportContent(result.content);
+      if (!importedBlock) {
+        set({ meetingProjectImportStatus: 'empty', meetingProjectImportMessage: '沒有可帶入的變更。' });
+        return false;
+      }
+      const latestContent = latestDraft.content;
+      const nextContent = [latestContent.trim(), importedBlock].filter(Boolean).join('\n\n');
+      const batch = createMeetingProjectChangeImportBatch({
+        mode: options.mode ?? 'default',
+        rangeStartedAt: window.rangeStartedAt,
+        rangeEndedAt: window.rangeEndedAt,
+        events: deltaEvents,
+        beforeContentSignature: getRecordDraftSignature(latestDraft) ?? '',
+        importedAt: clickedAt,
+        content: nextContent,
+      });
+      const nextMetadata = {
+        ...(latestDraft.metadata ?? {}),
+        meetingProjectChangeImport: {
+          schemaVersion: 1 as const,
+          boardId: activeBoardId,
+          batches: [...(parsed?.batches ?? []), batch],
+        },
+      };
+      set(current => {
+        if (current.meetingProjectImportRequestId !== requestId || current.draft?.id !== draft.id) return current;
+        const nextDraft = syncDraftContentLinks({ ...current.draft!, metadata: nextMetadata }, nextContent);
+        return {
+          draft: nextDraft,
+          contentCursorOffset: nextContent.length,
+          meetingProjectImportStatus: 'complete',
+          meetingProjectImportMessage: '已完成',
+          lastSaveFeedback: null,
+        };
+      });
+      return true;
+    } catch (error) {
+      if (!isCurrentRequest()) return false;
+      const message = error instanceof MeetingProjectChangeImportError || error instanceof Error
+        ? error.message
+        : String(error);
+      set({ meetingProjectImportStatus: 'error', meetingProjectImportMessage: message });
+      return false;
+    }
+  },
 
   setDraftTaskRole: (nodeId, role) => set(state => {
     if (!state.draft) return {};
@@ -691,10 +867,14 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
         },
         mergedContent,
       );
+      const activeBoardId = useBoardStore.getState().activeBoardId;
+      const aiIntegratedDraft = activeBoardId && nextDraft.type === 'meeting'
+        ? { ...nextDraft, metadata: markMeetingProjectChangeImportAiIntegrated(nextDraft.metadata, activeBoardId) }
+        : nextDraft;
 
       set({
         saving: false,
-        draft: nextDraft,
+        draft: aiIntegratedDraft,
         contentCursorOffset: mergedContent.length,
         meetingSynthesisStatus: 'ready',
         meetingSynthesisError: null,
@@ -771,6 +951,9 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     const { legacyTaskLinkNodeIds, ...serializableDraft } = draft;
     void legacyTaskLinkNodeIds;
+    const projectedMetadata = draft.type === 'meeting'
+      ? projectMeetingProjectChangeImportMetadata(draft.metadata, activeBoardId, wantsPublish ? 'published' : 'draft')
+      : draft.metadata;
     const payload: KnowledgeRecordInput = {
       ...serializableDraft,
       title: draft.title.trim(),
@@ -779,6 +962,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       taskLinks: uniqueLinks(draft.taskLinks),
       status: draft.status as KnowledgeRecordStatus,
       visibility: draft.visibility as KnowledgeRecordVisibility,
+      metadata: projectedMetadata,
     };
     const previousRecord = payload.id
       ? get().records.find(record => record.id === payload.id)
@@ -969,6 +1153,10 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       cloudSavedAt: snapshot.remoteSignature === snapshot.localSignature ? snapshot.savedAt : null,
       restoredAt: Date.now(),
     },
+    meetingProjectImportStatus: 'idle',
+    meetingProjectImportMessage: null,
+    meetingProjectImportRequestId: get().meetingProjectImportRequestId + 1,
+    contentFocusPending: false,
   }),
 
   requestMeetingDraftRecoveryClear: () => set(state => ({

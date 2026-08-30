@@ -6,6 +6,12 @@
 狀態: Browser QC Passed
 優先級: P1
 
+## 2026-08-28 DEV-094 supersession boundary
+
+- 下列 DEV-023 meeting panel／preview／insert cases 是既有版本的歷史 PASS，不能作為 DEV-094 current acceptance。
+- DEV-094 實作時必須更新 DEV-023 verifier：meeting 改驗 one-click／custom-date secondary disclosure；work-log 仍驗日期、scope、preview、insert，DEV-021／022 preserve regressions維持。
+- DEV-094 的 current QA source 是 `ai-doc/qa/QA-DEV-094-meeting-direct-note-and-delta-import.md`；在該計畫實測前維持 NOT RUN。
+
 ## 驗證目標
 
 確認 `先匯入專案變化` 不再作為獨立大型前置卡片，而是整併為會議紀錄與個人工作紀錄流程的第一個 optional step。驗證必須包含自動化檢查與真實操作測試，不能只用靜態字串或 RD 自述判定通過。

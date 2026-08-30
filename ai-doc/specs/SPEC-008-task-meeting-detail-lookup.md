@@ -50,3 +50,7 @@
 - DEV-007 寫入的「會議中任務變更」可在任務知識區塊顯示。
 - 點擊紀錄片段可開啟原始紀錄。
 - 不新增或修改資料模型。
+
+## DEV-093 compatible consumer extension（2026-08-28）
+
+本文件「不改 KnowledgeRecord」是 DEV-008 當期範圍，不阻擋後續 DEV-093。來源 task 尚存在時，任務知識區可顯示關聯 `task_collection` 的唯讀摘要；點擊必須開啟 `TaskCollectionDetail`，不得交給 meeting／work_log editor。來源永久刪除造成 `record_task_links` cascade 後，典藏資產仍依自身 `task-collection-v1` snapshot 可讀；詳細契約以 SPEC-093 為準。

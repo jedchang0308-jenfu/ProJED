@@ -1,8 +1,8 @@
 # QC-DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 關聯：DEV-066、SPEC-066、ADR-042、QA-DEV-066
-- 執行日期：2026-08-12
-- 結論：Historical PASS（Rework 1～3）；Rework 4 尚未執行，非目前 release acceptance
+- 執行日期：2026-08-12（Rework 1～3）、2026-08-28（Rework 4 local simulated）
+- 結論：Rework 4 Local Simulated QC PASS / Physical Device Not Verified；Rework 1～3 Historical PASS
 - Release：未執行；本輪沒有部署授權
 
 ## Evidence Validity Notice（2026-08-20）
@@ -10,9 +10,33 @@
 - 使用者已明確以 Rework 4 取代舊手機 zero-editor／append-only 契約：手機與電腦應共用同一個既有 Lexical 任務備註 editor，不新增手機專用模組，並完全移除「追加文字」區塊。
 - 本報告中的 390px `0 editor／0 format toggle／append preservation` 是 2026-08-12 舊契約的真實歷史證據，保留不可改寫，但不再能證明目前 SPEC-066／QA-DEV-066 的 Rework 4 acceptance。
 - desktop toolbar、canonical rich state、plain compatibility alias、AI safe projection、legacy compatibility 與既有 regression 結果可作為 Rework 4 baseline；手機直接編輯、touch selection、soft keyboard、responsive toolbar 與 append UI absence 必須在 RD 完成後另行驗證。
-- Rework 4 尚未實作或 QC；在新增實測結果前，本文件不得被引用為 DEV-066 目前版本 `QC PASS` 或 release-ready 證據。
+- Rework 4 已於 2026-08-28 完成本機實作與 simulated viewport QC；本文件只支持 local browser acceptance，不支持 iOS Safari／Android Chrome 實機 touch／IME／soft-keyboard gate，也不是 release-ready 證據。
 
-## 交付結果
+## Rework 4：所有 viewport 共用任務備註 editor（2026-08-28）
+
+- RD：移除 `useDesktopNoteEditor`、`TaskDetailNoteMobile`、追加 label／textarea／button、append-only error surface 與未再使用的 `appendPlainTextToTaskNote`；現有 editor 泛化為 `TaskDetailNoteEditor`，所有 viewport 共用同一 lazy component、Lexical state、format commands 與 save path。
+- Mobile UI：390px 每則備註顯示同一 `contenteditable` 與格式切換；工具列在窄版改為備註標頭下方的單列水平 scroll surface，不遮住 editor 內容，touch controls 使用 36px target 與 pointer-down selection protection。手機 DOM 的 append selectors 與「追加文字」皆為 0。
+- Data：手機直接編輯後既有 heading、bold bit 與 safe link 保留；套用底線、Ctrl+S、關閉、重開後 rich state 與 plain alias round-trip 通過。未改 schema、API、permission、format allowlist、RAG adapter 或會議 editor。
+- Visual correction：第一輪 rendered QC 發現 mobile toolbar 被 36px wrapper 限寬，只顯示單一工具；QC 判定 fail 並回送 RD。修正後 toolbar 寬度使用整個 note header，390px browser 斷言寬度 ≥280px，目視確認完整首排工具可見且 editor 內容不被覆蓋。
+
+| Gate | 結果 | Rework 4 證據 |
+|---|---|---|
+| `verify:dev-066-task-note-rich-text` | PASS | 單一 editor module、零 breakpoint／append branch、legacy、安全 URL、AI projection 與 responsive toolbar source contract |
+| Targeted ESLint／`tsc --noEmit` | PASS | 受影響 component、utility 與 verifier 無 error；TypeScript 通過 |
+| `build:test` | PASS | Vite 7.3.6，2037 modules；產生 `TaskDetailNoteEditor` lazy chunk |
+| DEV-066 browser | PASS | 1440／1024／390／320／844x390；390px 為 2 editors／2 format toggles／0 append fields，直接編輯與格式保存重開通過，visible alert、console/page error 與水平 overflow 為 0 |
+| DEV-033 browser | PASS | 任務標題與備註 autosave、關閉前 flush、重開內容與 390px modal regression 通過 |
+| DEV-050 static／browser | PASS | 每則備註刪除與刪除最後一則後 blank fallback 通過 |
+| iOS Safari／Android Chrome | NOT VERIFIED | 真實觸控選字、中文 IME、貼上、soft keyboard、鍵盤收合與保存重開仍需實機 evidence |
+
+### Rework 4 Screenshot Evidence
+
+- `output/playwright/dev-066-task-note-desktop-1440.png`
+- `output/playwright/dev-066-task-note-laptop-1024.png`
+- `output/playwright/dev-066-task-note-mobile-390.png`
+- `output/playwright/dev-066-task-note-mobile-390-toolbar.png`
+
+## 歷史交付結果（Rework 1～3）
 
 - Desktop／laptop：每則備註獨立 Lexical editor 與 Gmail-like 底線 A 格式按鈕；工具列預設不 render，開啟後顯示在 header actions 同列、A 按鈕左側，並保持顯示直到再次點 A。
 - Mobile：390px 分支零格式按鈕、零 toolbar、零 Lexical editor、零 contenteditable；只顯示安全格式 renderer 與每則備註的純文字追加欄。

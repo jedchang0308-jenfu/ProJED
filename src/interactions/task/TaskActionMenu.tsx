@@ -6,6 +6,7 @@ import {
   CornerRightDown,
   GitBranch,
   Link2,
+  Unlink,
   PanelRight,
   Plus,
   UserRound,
@@ -29,12 +30,15 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
   'task.create-child': <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />,
   'task.create-relationship': <Link2 size={14} className="flex-shrink-0 text-indigo-500" />,
   'task.duplicate': <Copy size={14} className="flex-shrink-0 text-slate-500" />,
+  'task.create-tracking-reference': <Link2 size={14} className="flex-shrink-0 text-violet-500" />,
+  'task.remove-tracking-reference': <Unlink size={14} className="flex-shrink-0 text-rose-500" />,
   'task.assign': <UserRound size={14} className="flex-shrink-0 text-blue-500" />,
   'task.dependency-start': <GitBranch size={14} className="flex-shrink-0 text-amber-500" />,
   'task.dependency-end': <GitBranch size={14} className="flex-shrink-0 text-purple-500" />,
   'task.promote': <CornerLeftUp size={14} className="flex-shrink-0 text-emerald-500" />,
   'task.demote': <CornerRightDown size={14} className="flex-shrink-0 text-emerald-500" />,
   'task.archive': <Archive size={14} className="flex-shrink-0 text-amber-600" />,
+  'task.collect': <Archive size={14} className="flex-shrink-0 text-blue-600" />,
 };
 
 const LABELS: Partial<Record<TaskActionId, string>> = {
@@ -43,12 +47,15 @@ const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.create-child': '新增子任務',
   'task.create-relationship': '建立關聯線',
   'task.duplicate': '複製任務',
+  'task.create-tracking-reference': '建立追蹤副本',
+  'task.remove-tracking-reference': '移除此處追蹤',
   'task.assign': '主責／協作',
   'task.dependency-start': '設定依賴關係（開始日）',
   'task.dependency-end': '設定依賴關係（結束日）',
   'task.promote': '往上一階',
   'task.demote': '往下一階',
   'task.archive': '封存任務',
+  'task.collect': '典藏任務',
 };
 
 const TITLES: Partial<Record<TaskActionId, string>> = {
@@ -119,7 +126,7 @@ export const TaskActionMenu = ({
         disabled={!actionEnabled}
         title={TITLES[actionId]}
         data-task-action-id={actionId}
-        className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.archive' ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-400' : 'text-gray-700 hover:bg-gray-100'}`}
+          className={`flex min-h-9 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700 ${actionId === 'task.remove-tracking-reference' ? 'text-rose-700 hover:bg-rose-50 dark:text-rose-400' : actionId === 'task.archive' ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-400' : actionId === 'task.collect' ? 'text-blue-700 hover:bg-blue-50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100'}`}
       >
         {ICONS[actionId]}
         <span>{actionLabel(actionId)}</span>

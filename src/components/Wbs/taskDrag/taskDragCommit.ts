@@ -29,13 +29,14 @@ import {
   resolveDesktopTaskDropIntent,
   type DesktopTaskDropPreview,
 } from './desktopTaskDropPreview';
+import { primaryPlacementId } from '../../../features/taskTracking/model';
 export { buildTaskSubtreePlacementUpdates } from './taskSubtreePlacement';
 
 export { buildTaskParentIndex, getTaskAppendOrder, isValidTaskDropIntent } from './taskDropIntent';
 
 type TaskDragStoreActions = Pick<
   WbsBoardActions,
-  'addNode' | 'updateNode' | 'batchUpdateNodes' | 'commitTaskPlacementCommand' | 'archiveNode' | 'recalculateAncestorStatus'
+  'addNode' | 'updateNode' | 'batchUpdateNodes' | 'commitTaskPlacementCommand' | 'archiveNode' | 'recalculateAncestorStatus' | 'moveTrackingReference'
 >;
 
 export interface TaskDragCommitDependencies extends TaskDragStoreActions {
@@ -45,6 +46,7 @@ export interface TaskDragCommitDependencies extends TaskDragStoreActions {
   canEditTask: boolean;
   canCreateTask: boolean;
   canDeleteTask: boolean;
+  canManageTaskReference: boolean;
 }
 
 const committed = (reason: string): TaskDragCommitResult => ({ status: 'committed', reason });
@@ -187,6 +189,64 @@ export const commitDesktopTaskDrag = async ({
   desktopPreview?: DesktopTaskDropPreview | null;
   dependencies: TaskDragCommitDependencies;
 }): Promise<TaskDragCommitResult> => {
+  const activeReference = activeData?.trackingReference;
+  if (activeReference) {
+    if (!dependencies.canManageTaskReference) return noOp('reference-permission-denied');
+    const state = useWbsStore.getState();
+    const sourceReference = state.trackingReferences.find(reference => reference.id === activeReference.id && !reference.removedAt);
+    if (!sourceReference) return noOp('reference-source-missing');
+    if (overData?.type === 'task-workbench-unplaced-lane'
+      || (overData?.source === 'task-workbench' && overData?.placement === 'unplaced')) {
+      return noOp('reference-cannot-be-unplaced');
+    }
+    try {
+      if (overData?.type === 'task-workbench-placed-board-lane' && overData.boardId && overData.workspaceId) {
+        await dependencies.moveTrackingReference({
+          referenceId: sourceReference.id,
+          targetBoardId: overData.boardId,
+          targetParentPlacementId: null,
+          position: 'append',
+        });
+        return committed('reference-placed-on-board');
+      }
+
+      const targetNode = state.nodes[overData?.nodeId || overData?.item?.id];
+      const targetReference = overData?.trackingReference
+        || state.trackingReferences.find(reference => reference.id === overData?.placementId && !reference.removedAt);
+      const targetPlacementId = overData?.placementId
+        || targetReference?.id
+        || (targetNode ? primaryPlacementId(targetNode.id) : null);
+      const targetBoardId = overData?.boardId || targetReference?.boardId || targetNode?.boardId;
+      if (!targetPlacementId || !targetBoardId || targetPlacementId === sourceReference.id) {
+        return noOp('no-valid-reference-target');
+      }
+      const appendChild = desktopPreview?.displayPosition === 'append'
+        || ['wbs-column-drop', 'wbs-card-drop', 'wbs-checklist-drop', 'wbs-task-title-child'].includes(overData?.type);
+      const rootAppend = overData?.type === 'wbs-root-drop';
+      const displayPosition = overData?.orderingPosition
+        || desktopPreview?.displayPosition
+        || 'after';
+      await dependencies.moveTrackingReference({
+        referenceId: sourceReference.id,
+        targetBoardId,
+        targetParentPlacementId: rootAppend
+          ? null
+          : appendChild
+            ? targetPlacementId
+            : targetReference?.parentPlacementId
+              ?? (targetNode?.parentId ? primaryPlacementId(targetNode.parentId) : null),
+        anchorPlacementId: appendChild || rootAppend ? null : targetPlacementId,
+        position: appendChild || rootAppend
+          ? 'append'
+          : displayPosition === 'before' ? 'before' : 'after',
+      });
+      return committed(appendChild ? 'reference-appended-as-child' : 'reference-position-updated');
+    } catch (error) {
+      console.error('[taskDrag] Failed to move tracking placement.', error);
+      placementFailureToast(error, '搬移失敗，追蹤副本已保留在原位置。');
+      return failed('reference-placement-persistence-failed');
+    }
+  }
   if (!dependencies.canMoveTask) return noOp('move-permission-denied');
   if (activeData?.source === 'task-workbench' && activeData?.placement !== 'unplaced') {
     return noOp('workbench-placed-row-is-not-a-source');
@@ -393,6 +453,50 @@ export const commitTaskDragObservation = async ({
   observation: TaskDragObservation;
   dependencies: TaskDragCommitDependencies;
 }): Promise<TaskDragCommitResult> => {
+  if (observation.source.trackingReferenceId) {
+    if (observation.targetKind === 'mobile-action' && observation.action) {
+      return commitTaskDragAction({
+        action: observation.action,
+        nodeId: observation.source.nodeId,
+        dependencies: {
+          ...dependencies,
+          canEditTask: observation.source.canEditCanonicalTask ?? dependencies.canEditTask,
+          canCreateTask: observation.source.canCreateCanonicalTask ?? dependencies.canCreateTask,
+          canDeleteTask: observation.source.canDeleteCanonicalTask ?? dependencies.canDeleteTask,
+        },
+      });
+    }
+    if (!dependencies.canManageTaskReference) return noOp('reference-permission-denied');
+    if (observation.targetKind !== 'task-position'
+      || !observation.targetNodeId
+      || !observation.targetPlacementId
+      || !observation.dropPosition) return noOp('no-valid-reference-target');
+    const state = useWbsStore.getState();
+    const targetNode = state.nodes[observation.targetNodeId];
+    if (!targetNode || targetNode.isArchived) return noOp('target-missing');
+    const targetReference = state.trackingReferences.find(reference =>
+      !reference.removedAt && reference.id === observation.targetPlacementId);
+    const appendChild = observation.childIntentPhase === 'armed'
+      && observation.childTargetId === observation.targetNodeId;
+    try {
+      await dependencies.moveTrackingReference({
+        referenceId: observation.source.trackingReferenceId,
+        targetBoardId: targetReference?.boardId || observation.targetBoardId || targetNode.boardId,
+        targetParentPlacementId: appendChild
+          ? observation.targetPlacementId
+          : targetReference?.parentPlacementId
+            ?? (targetNode.parentId ? primaryPlacementId(targetNode.parentId) : null),
+        anchorPlacementId: appendChild ? null : observation.targetPlacementId,
+        position: appendChild ? 'append' : observation.dropPosition,
+      });
+      return committed(appendChild ? 'reference-appended-as-child' : 'reference-position-updated');
+    } catch (error) {
+      console.error('[taskDrag] Failed to move tracking placement.', error);
+      placementFailureToast(error, '搬移失敗，追蹤副本已保留在原位置。');
+      return failed('reference-placement-persistence-failed');
+    }
+  }
+
   if (observation.targetKind === 'mobile-action' && observation.action) {
     return commitTaskDragAction({
       action: observation.action,

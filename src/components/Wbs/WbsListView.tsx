@@ -8,7 +8,6 @@ import { Plus, GitBranch, Link, X, Edit2, ArrowRight, Trash2 } from 'lucide-reac
 import type { TaskNode, TaskStatus } from '../../types';
 import useDialogStore from '../../store/useDialogStore';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDragSensors } from '../../hooks/useDragSensors';
 import { ViewToolbar } from '../ui/ViewToolbar';
 import { compactClassNames } from '../ui/compactTokens';
@@ -17,6 +16,9 @@ import { useTaskFilterStore } from '../../store/useTaskFilterStore';
 import { TaskFilterResultState } from '../ui/TaskFilterResultState';
 import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { prepareNewTaskNaming } from '../../utils/taskInteractions';
+import type { TaskTrackingReference } from '../../features/taskTracking/types';
+import { buildTaskFilterNodesWithTrackingReferences, primaryPlacementId } from '../../features/taskTracking/model';
+import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
 
 interface WbsListViewProps {
   boardId: string;
@@ -31,8 +33,8 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   // 從全域 Store 取出顯示狀態
   const showDependencies = useBoardStore(s => s.showDependencies);
   const showStartDate = useBoardStore(s => s.showStartDate);
-  const { dependencies, addDependency, removeDependency, updateDependency, addNode, batchUpdateNodes } = useWbsStore();
-  const { canCreateTask, canMoveTask, canCreateDependency } = useBoardPermissions();
+  const { dependencies, addDependency, removeDependency, updateDependency, addNode, batchUpdateNodes, trackingReferences, moveTrackingReference } = useWbsStore();
+  const { canCreateTask, canMoveTask, canManageTaskReference, canCreateDependency } = useBoardPermissions();
 
   // DnD 狀態
   const sensors = useDragSensors();
@@ -59,8 +61,25 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const handleDragEnd = (event: any) => {
       const { active, over } = event;
       setActiveSortableItem(null);
-      if (!canMoveTask) return;
+      if (!canMoveTask && !canManageTaskReference) return;
       if (!over || active.id === over.id) return;
+
+      const trackingReference = active.data.current?.trackingReference as TaskTrackingReference | undefined;
+      if (trackingReference) {
+          const target = over.data.current?.item as TaskNode | undefined;
+          const targetReference = over.data.current?.trackingReference as TaskTrackingReference | undefined;
+          if (!target && !targetReference) return;
+          void moveTrackingReference({
+            referenceId: trackingReference.id,
+            targetBoardId: boardId,
+            targetParentPlacementId: targetReference
+              ? targetReference.parentPlacementId
+              : (target?.parentId ? primaryPlacementId(target.parentId) : null),
+            anchorPlacementId: targetReference ? targetReference.id : primaryPlacementId(target!.id),
+            position: 'after',
+          });
+          return;
+      }
 
       const activeItem = active.data.current?.item;
       const overItem = over.data.current?.item;
@@ -172,8 +191,12 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
   const taskLoading = useWbsStore(s => s.loading);
   const taskLoadError = useWbsStore(s => s.error);
   const filterProjection = React.useMemo(
-    () => projectTaskFilterResults(nodes, taskFilters, { boardId }),
-    [boardId, nodes, taskFilters],
+    () => projectTaskFilterResults(
+      buildTaskFilterNodesWithTrackingReferences(Object.values(nodes), trackingReferences, boardId),
+      taskFilters,
+      { boardId },
+    ),
+    [boardId, nodes, taskFilters, trackingReferences],
   );
 
   // ✅ 只有當索引陣列變更時 (Add/Remove/Move)，才重新評估根節點集合
@@ -183,6 +206,17 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
       return Array.from(new Map([...arr1, ...arr2].map(node => [node.id, node])).values())
         .sort((a, b) => a.order - b.order);
   }, [rootIds, altRootIds, boardId, filterProjection, nodes]);
+
+  const boardTrackingReferences = React.useMemo(
+    () => trackingReferences.filter(reference => reference.boardId === boardId && !reference.removedAt),
+    [trackingReferences, boardId],
+  );
+  const rootRenderRows = React.useMemo(() => buildTaskPlacementTreeRows({
+    primaryTasks: rootNodes,
+    trackingReferences: boardTrackingReferences,
+    tasksById: nodes,
+    parentPlacementId: null,
+  }), [rootNodes, boardTrackingReferences, nodes]);
 
   const handleCreateRootNode = () => {
     if (!canCreateTask) return;
@@ -256,7 +290,7 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
           onCreate={handleCreateRootNode}
           canCreate={canCreateTask}
         />
-        {!taskLoading && !taskLoadError && filterProjection.matchedTaskIds.size > 0 ? (
+        {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || boardTrackingReferences.length > 0) ? (
           <div className="relative flex flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-task shadow-[0_4px_12px_rgba(15,23,42,0.05)]">
             {/* Header Column Titles (Tree Grid) */}
             <div className={`grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[32px] py-[6px] px-[10px] bg-surface-panel border-b border-border-strong text-xs font-semibold text-slate-500 sticky top-0 z-10`}>
@@ -272,15 +306,26 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
-                onDragStart={(e) => { if (canMoveTask) setActiveSortableItem(e.active.data.current?.item); }}
+                onDragStart={(e) => {
+                  const item = e.active.data.current?.item as TaskNode | undefined;
+                  const reference = e.active.data.current?.trackingReference as TaskTrackingReference | undefined;
+                  if (reference ? canManageTaskReference : canMoveTask) {
+                    setActiveSortableItem(item || nodes[reference?.taskId || ''] || null);
+                  }
+                }}
                 onDragCancel={() => setActiveSortableItem(null)}
                 onDragEnd={handleDragEnd}
             >
-                <SortableContext items={rootNodes.map(n => n.id)} strategy={verticalListSortingStrategy}>
-                    {rootNodes.map(node => (
-                        <WbsNodeItem key={node.id} nodeId={node.id} level={0} filterProjection={filterProjection} />
-                    ))}
-                </SortableContext>
+                <TaskPlacementTree rows={rootRenderRows}>
+                  {row => (
+                    <WbsNodeItem
+                      nodeId={row.task.id}
+                      trackingReference={row.reference}
+                      level={0}
+                      filterProjection={filterProjection}
+                    />
+                  )}
+                </TaskPlacementTree>
                 
                 <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
                     {activeSortableItem ? (

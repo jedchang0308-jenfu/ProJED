@@ -25,6 +25,7 @@ export interface TaskChildIntentSnapshot {
 
 export interface TaskChildDropTarget {
   targetNodeId: string;
+  targetPlacementId: string;
   targetTitle: string;
   targetSurfaceKind: typeof TASK_CHILD_DROP_SURFACE_KIND;
   intent: TaskDropIntent;
@@ -34,6 +35,7 @@ export interface TaskChildDropTarget {
 
 export interface TaskTitleChildDropZone {
   targetNodeId: string;
+  targetPlacementId: string;
   targetTitle: string;
   previewRect: TaskChildDropPreviewRect;
 }
@@ -283,6 +285,7 @@ export const resolveTaskTitleChildDropZone = ({
         depth: getElementDepth(element),
         zone: {
           targetNodeId,
+          targetPlacementId: element.getAttribute('data-task-placement-id') || `primary:${targetNodeId}`,
           targetTitle: targetNode?.title || primaryElement.getAttribute('aria-label') || '未命名任務',
           previewRect: getPreviewRect(
             safeRect,

@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../src/components/TaskDetailsModal.tsx', import.meta.url), 'utf8');
 const fieldSource = readFileSync(new URL('../src/components/TaskNotes/TaskDetailNoteField.tsx', import.meta.url), 'utf8');
-const desktopSource = readFileSync(new URL('../src/components/TaskNotes/TaskDetailNoteDesktopEditor.tsx', import.meta.url), 'utf8');
-const noteUiSource = fieldSource + '\n' + desktopSource;
+const editorSource = readFileSync(new URL('../src/components/TaskNotes/TaskDetailNoteEditor.tsx', import.meta.url), 'utf8');
+const noteUiSource = fieldSource + '\n' + editorSource;
 
 const checks = [
   {
     name: 'TaskDetailsModal imports a delete icon for note removal',
-    pass: noteUiSource.includes('Trash2') && fieldSource.includes("from 'lucide-react'"),
+    pass: noteUiSource.includes('Trash2') && editorSource.includes("from 'lucide-react'"),
   },
   {
     name: 'TaskDetailsModal defines deleteNote guarded by edit permission and confirmation',

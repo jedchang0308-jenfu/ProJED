@@ -35,6 +35,12 @@ export type TaskDropSurfaceKind =
 
 export interface TaskDragSource {
   nodeId: string;
+  placementId?: string;
+  placementKind?: 'primary' | 'tracking_reference';
+  trackingReferenceId?: string;
+  canEditCanonicalTask?: boolean;
+  canCreateCanonicalTask?: boolean;
+  canDeleteCanonicalTask?: boolean;
   kind: TaskDragSourceKind;
   inputMode: TaskDragInputMode;
   originBoardId?: string | null;
@@ -76,6 +82,7 @@ export interface TaskDragObservation {
   source: TaskDragSource;
   targetKind: TaskDragTargetKind;
   targetNodeId: string | null;
+  targetPlacementId: string | null;
   targetBoardId: string | null;
   targetWorkspaceId: string | null;
   targetSurfaceKind: TaskDropSurfaceKind | null;
@@ -114,6 +121,7 @@ export interface TaskDragSessionState {
   hasMoved: boolean;
   hoverAction: MobileTaskAction | null;
   hoverTargetId: string | null;
+  hoverTargetPlacementId: string | null;
   targetBoardId: string | null;
   targetWorkspaceId: string | null;
   targetSurfaceKind: TaskDropSurfaceKind | null;

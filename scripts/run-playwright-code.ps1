@@ -38,11 +38,12 @@ try {
       if ($ArtifactWindowKey -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
         throw 'ArtifactWindowKey must be a valid window identifier.'
       }
-      $artifactEvalOutput = & npx.cmd --yes --package @playwright/cli playwright-cli -s $session eval "() => window['$ArtifactWindowKey']" 2>&1
+      $artifactEvalOutput = & npx.cmd --yes --package @playwright/cli playwright-cli -s $session eval "() => window['$ArtifactWindowKey'] || JSON.parse(sessionStorage.getItem('$ArtifactWindowKey') || localStorage.getItem('$ArtifactWindowKey') || 'null')" 2>&1
       $artifactEvalText = ($artifactEvalOutput -join "`n")
       $artifactMatch = [regex]::Match($artifactEvalText, '(?s)### Result\s*(\{.*\})\s*### Ran Playwright code')
       if (-not $artifactMatch.Success) {
-        throw "Playwright artifact '$ArtifactWindowKey' is missing or not an object."
+        $artifactPreview = if ($artifactEvalText.Length -gt 4000) { $artifactEvalText.Substring(0, 4000) } else { $artifactEvalText }
+        throw "Playwright artifact '$ArtifactWindowKey' is missing or not an object. Eval output: $artifactPreview"
       }
       $artifactJson = $artifactMatch.Groups[1].Value.Trim()
       $artifact = $artifactJson | ConvertFrom-Json

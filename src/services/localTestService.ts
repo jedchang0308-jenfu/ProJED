@@ -10,6 +10,8 @@ import {
   type Dependency,
   type ActivityEvent,
   type KnowledgeRecord,
+  type EditableKnowledgeRecord,
+  type TaskCollectionRecord,
   type KnowledgeRecordInput,
   type MeetingDraftCheckpointInput,
   type MeetingDraftCheckpointResult,
@@ -21,6 +23,28 @@ import {
 import { hashBoardInviteToken } from '../utils/boardInviteToken';
 import { getLocalTestProfileOverride } from './localTestProfileService';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
+import {
+  buildTaskCollectionSnapshot,
+} from '../features/taskCollection/snapshot';
+import { canonicalJsonSha256, canonicalJsonStringify } from '../features/taskCollection/canonicalJson';
+import { projectTaskCollectionContent } from '../features/taskCollection/contentProjection';
+import { TaskCollectionError } from '../features/taskCollection/errors';
+import {
+  completeTaskCollectionJournal,
+  clearTaskCollectionJournal,
+  readTaskCollectionJournal,
+  prepareTaskCollectionJournal,
+  setTaskCollectionJournalAfter,
+} from '../features/taskCollection/localJournal';
+import {
+  TASK_COLLECTION_LIMITS,
+} from '../features/taskCollection/types';
+import type {
+  TaskCollectionPreview,
+  TaskCollectionResult,
+  TaskCollectionSnapshot,
+  TaskCollectionSummary,
+} from '../features/taskCollection/types';
 
 const WORKSPACES_KEY = 'projed-local-test.workspaces';
 const NODES_KEY = 'projed-local-test.nodes';
@@ -32,6 +56,7 @@ const BOARD_ROLE_PERMISSIONS_KEY = 'projed-local-test.boardRolePermissions';
 const KNOWLEDGE_RECORDS_KEY = 'projed-local-test.knowledgeRecords';
 const ACTIVITY_EVENTS_KEY = 'projed-local-test.activityEvents';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
+const TASK_COLLECTION_FAULT_KEY = 'projed-local-test.taskCollectionFault';
 
 const readJson = <T>(key: string, fallback: T): T => {
   try {
@@ -163,9 +188,26 @@ const readKnowledgeRecords = () => readJson<KnowledgeRecord[]>(KNOWLEDGE_RECORDS
 const writeKnowledgeRecords = (records: KnowledgeRecord[]) => writeJson(KNOWLEDGE_RECORDS_KEY, records);
 const readActivityEvents = () => readJson<ActivityEvent[]>(ACTIVITY_EVENTS_KEY, []);
 const writeActivityEvents = (events: ActivityEvent[]) => writeJson(ACTIVITY_EVENTS_KEY, events);
+const writeStrict = (key: string, value: unknown) => {
+  if (typeof localStorage === 'undefined') throw new Error('Local storage is unavailable.');
+  localStorage.setItem(key, JSON.stringify(value));
+};
 const getBoardMemberKey = (workspaceId: string, boardId: string) => `${workspaceId}:${boardId}`;
 const readCurrentLocalUserId = () =>
   readJson<{ uid?: string } | null>(LOCAL_TEST_SESSION_KEY, null)?.uid || 'local-test-user';
+
+/**
+ * Browser QA only: consume a one-shot fault requested through local storage.
+ * This keeps timeout/error recovery coverage on the product delivery path
+ * without changing normal local-test or production behaviour.
+ */
+const consumeTaskCollectionFault = (fault: string): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_COLLECTION_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_COLLECTION_FAULT_KEY);
+  return true;
+};
 const canManageBoard = (workspaceId: string, boardId: string, userId = readCurrentLocalUserId()) => {
   const records = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
   const role = records.find(member => member.userId === userId)?.role;
@@ -786,29 +828,33 @@ export const localTestTagService = {
 };
 
 export const localTestRecordService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<KnowledgeRecord[]> =>
+  listByProject: async (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> =>
     readKnowledgeRecords()
-      .filter(record => record.workspaceId === workspaceId && record.boardId === boardId && record.status !== 'archived')
+      .filter((record): record is EditableKnowledgeRecord => record.workspaceId === workspaceId && record.boardId === boardId && record.status !== 'archived' && record.type !== 'task_collection')
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
 
-  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<KnowledgeRecord[]> =>
+  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<EditableKnowledgeRecord[]> =>
     readKnowledgeRecords()
-      .filter(record =>
+      .filter((record): record is EditableKnowledgeRecord =>
         record.workspaceId === workspaceId &&
         record.boardId === boardId &&
-        record.status !== 'archived' &&
+        record.status !== 'archived' && record.type !== 'task_collection' &&
         record.taskLinks.some(link => link.nodeId === nodeId)
       )
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
 
-  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<KnowledgeRecord> => {
+  upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
+    if ((input as unknown as { type?: string }).type === 'task_collection') {
+      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務不可透過一般紀錄編輯。');
+    }
     const now = Date.now();
     const records = readKnowledgeRecords();
     const existing = input.id ? records.find(record => record.id === input.id) : undefined;
+    const existingEditable = existing?.type === 'task_collection' ? undefined : existing;
     const recordId = existing?.id || input.id || createId('local_record');
     const actorId = readCurrentLocalUserId();
-    const record: KnowledgeRecord = {
-      ...(existing || {}),
+    const record: EditableKnowledgeRecord = {
+      ...(existingEditable || {}),
       id: recordId,
       workspaceId,
       boardId,
@@ -851,6 +897,7 @@ export const localTestRecordService = {
     const now = Date.now();
     const records = readKnowledgeRecords();
     const existing = records.find(record => record.id === input.record.id);
+    const existingEditable = existing?.type === 'task_collection' ? undefined : existing;
     const existingRecovery = existing?.metadata?.projedDraftRecovery;
     const existingSignature = existingRecovery && typeof existingRecovery === 'object' && !Array.isArray(existingRecovery)
       ? (existingRecovery as { localSignature?: unknown }).localSignature
@@ -864,7 +911,7 @@ export const localTestRecordService = {
     const actorId = input.record.recordedBy ?? readCurrentLocalUserId();
     const recordId = input.record.id;
     const record: KnowledgeRecord = {
-      ...(existing || {}),
+      ...(existingEditable || {}),
       id: recordId,
       workspaceId,
       boardId,
@@ -900,12 +947,352 @@ export const localTestRecordService = {
 
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {
     const now = Date.now();
+    const target = readKnowledgeRecords().find(record => record.workspaceId === workspaceId && record.boardId === boardId && record.id === recordId);
+    if (target?.type === 'task_collection') throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務不可從一般紀錄流程刪除。');
     writeKnowledgeRecords(readKnowledgeRecords().map(record =>
       record.workspaceId === workspaceId && record.boardId === boardId && record.id === recordId
         ? { ...record, status: 'archived', updatedAt: now }
         : record
     ));
   },
+};
+
+const localTaskCollectionPermission = (workspaceId: string, boardId: string): boolean => {
+  const userId = readCurrentLocalUserId();
+  const members = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
+  const role = members.find(member => member.userId === userId)?.role;
+  if (!role || role === 'viewer') return false;
+  const configured = readBoardRolePermissions()[getBoardMemberKey(workspaceId, boardId)]?.[role];
+  if (!configured) return ['owner', 'admin', 'project_manager', 'member'].includes(role);
+  return configured.includes('collect_task') || configured.includes('delete_task');
+};
+
+const findLocalCollectionRecord = (workspaceId: string, boardId: string, operationId: string): TaskCollectionRecord | undefined => (
+  readKnowledgeRecords().find((record): record is TaskCollectionRecord => (
+    record.workspaceId === workspaceId && record.boardId === boardId && record.type === 'task_collection'
+    && record.collectionOperationId === operationId
+  ))
+);
+const localCollectionPreviewCache = new Map<string, TaskCollectionPreview>();
+const recoverLocalTaskCollectionJournal = () => {
+  const entries = readTaskCollectionJournal();
+  entries.forEach(entry => {
+    const snapshot = (entry.state === 'committed' ? entry.after : entry.before) as { records?: KnowledgeRecord[]; nodes?: Record<string, TaskNode>; activities?: ActivityEvent[] } | undefined;
+    if (snapshot?.records && snapshot.nodes && snapshot.activities) {
+      writeStrict(KNOWLEDGE_RECORDS_KEY, snapshot.records);
+      writeStrict(NODES_KEY, snapshot.nodes);
+      writeStrict(ACTIVITY_EVENTS_KEY, snapshot.activities);
+    }
+    clearTaskCollectionJournal(entry.operationId);
+  });
+};
+
+const buildLocalCollectionPreview = async (
+  workspaceId: string,
+  boardId: string,
+  rootItemId: string,
+  operationId: string,
+): Promise<TaskCollectionPreview> => {
+  const nodes = Object.values(readNodes()).filter(node => node.workspaceId === workspaceId && node.boardId === boardId);
+  const root = nodes.find(node => node.id === rootItemId);
+  if (!root) throw new TaskCollectionError('SOURCE_NOT_FOUND', '找不到要典藏的根任務。');
+  if (root.isArchived) throw new TaskCollectionError('SOURCE_ARCHIVED', '此根任務已封存，請先從回收桶還原後再建立新版本。');
+  const workspaces = readWorkspaces();
+  const workspace = workspaces.find(workspace => workspace.id === workspaceId);
+  const boardTitle = workspace?.boards?.find(board => board.id === boardId)?.title ?? null;
+  let snapshot: TaskCollectionSnapshot;
+  try {
+    snapshot = buildTaskCollectionSnapshot({
+      workspaceId,
+      workspaceTitle: workspace?.title ?? workspaceId,
+      boardId,
+      boardTitle,
+      rootItemId,
+      collectedAt: Date.now(),
+      collectedBy: { userId: readCurrentLocalUserId(), displayName: getLocalProfile(readCurrentLocalUserId())?.displayName ?? null },
+      nodes,
+      dependencies: readDependencies(),
+      activityEvents: readActivityEvents(),
+      linkedRecords: readKnowledgeRecords(),
+    });
+  } catch (error) {
+    if (error instanceof TaskCollectionError) throw error;
+    throw new TaskCollectionError('SOURCE_INVALID_TREE', '來源任務樹無效，尚未移出看板。', { cause: error });
+  }
+  // collectedAt is presentation metadata; excluding it keeps a preview token
+  // valid between the preview and commit requests.
+  const sourceMaterial = { ...snapshot, collectedAt: 0, collectedBy: { userId: '', displayName: null }, annotation: null };
+  const snapshotHash = await canonicalJsonSha256(sourceMaterial);
+  const previewContent = projectTaskCollectionContent({ ...snapshot, collectedAt: 0 });
+  const snapshotBytes = new TextEncoder().encode(canonicalJsonStringify(snapshot)).byteLength;
+  const contentBytes = new TextEncoder().encode(previewContent).byteLength;
+  const limits = [
+    [snapshot.nodes.length, TASK_COLLECTION_LIMITS.taskCount, 'tasks'],
+    [snapshot.dependencies.length, TASK_COLLECTION_LIMITS.dependencyCount, 'dependencies'],
+    [snapshot.activityEvents.length, TASK_COLLECTION_LIMITS.activityCount, 'activities'],
+    [snapshot.linkedRecords.length, TASK_COLLECTION_LIMITS.relatedRecordCount, 'related records'],
+    [snapshotBytes, TASK_COLLECTION_LIMITS.snapshotUtf8Bytes, 'snapshot bytes'],
+    [contentBytes, TASK_COLLECTION_LIMITS.contentUtf8Bytes, 'content bytes'],
+  ] as const;
+  const exceeded = limits.find(([actual, limit]) => actual > limit);
+  if (exceeded) throw new TaskCollectionError('LIMIT_EXCEEDED', `此任務樹超過目前典藏上限（${exceeded[2]}），尚未移出看板。`);
+  const previousVersions = readKnowledgeRecords()
+    .filter(record => record.type === 'task_collection' && record.workspaceId === workspaceId && record.boardId === boardId && record.sourceRootItemId === rootItemId)
+    .map(record => record.collectionVersion ?? 0);
+  const nextVersion = Math.max(0, ...previousVersions) + 1;
+  return {
+    operationId,
+    rootItemId,
+    sourceBoardId: boardId,
+    subtreeNodeCount: snapshot.nodes.length,
+    dependencyCount: snapshot.dependencies.length,
+    activityEventCount: snapshot.activityEvents.length,
+    linkedRecordCount: snapshot.linkedRecords.length,
+    nextVersion,
+    snapshotHash,
+    previewToken: `v1:${await canonicalJsonSha256(['task-collection-preview-v1', operationId, readCurrentLocalUserId(), workspaceId, boardId, rootItemId, snapshotHash])}`,
+    snapshot,
+  };
+};
+
+const toLocalCollectionSummary = (record: TaskCollectionRecord): TaskCollectionSummary => {
+  const snapshot = record.metadata?.taskCollection as { sourceBoardTitle?: string | null; nodes?: unknown[]; historyCoverage?: TaskCollectionSummary['historyCoverage'] } | undefined;
+  return {
+    recordId: record.id,
+    title: record.title,
+    collectionVersion: record.collectionVersion ?? 1,
+    occurredAt: record.occurredAt ?? record.createdAt ?? 0,
+    sourceBoardTitle: snapshot?.sourceBoardTitle ?? null,
+    taskCount: snapshot?.nodes?.length ?? record.taskLinks.length,
+    historyCoverage: snapshot?.historyCoverage ?? { activityEvents: 0, linkedRecords: 0, oldestActivityAt: null, newestActivityAt: null },
+  };
+};
+
+export const localTestTaskCollectionService = {
+  previewDeleteImpact: async (workspaceId: string, boardId: string) => {
+    recoverLocalTaskCollectionJournal();
+    const taskCollectionCount = readKnowledgeRecords().filter(record => record.workspaceId === workspaceId && record.boardId === boardId && record.type === 'task_collection').length;
+    return { blocked: false, unknown: false, reasons: taskCollectionCount > 0 ? ['task_collection_assets_exist'] : [], taskCollectionCount };
+  },
+  previewWorkspaceDeleteImpact: async (workspaceId: string) => {
+    recoverLocalTaskCollectionJournal();
+    const taskCollectionCount = readKnowledgeRecords().filter(record => record.workspaceId === workspaceId && record.type === 'task_collection').length;
+    return { blocked: false, unknown: false, reasons: taskCollectionCount > 0 ? ['task_collection_assets_exist'] : [], taskCollectionCount };
+  },
+  preview: async (workspaceId: string, boardId: string, rootItemId: string, operationId: string): Promise<TaskCollectionPreview> => {
+    recoverLocalTaskCollectionJournal();
+    if (!localTaskCollectionPermission(workspaceId, boardId)) throw new TaskCollectionError('PERMISSION_DENIED', '你沒有典藏任務的權限。');
+    const preview = await buildLocalCollectionPreview(workspaceId, boardId, rootItemId, operationId);
+    localCollectionPreviewCache.set(operationId, preview);
+    return preview;
+  },
+
+  collect: async (
+    workspaceId: string,
+    boardId: string,
+    rootItemId: string,
+    operationId: string,
+    previewToken: string,
+    annotation?: string | null,
+  ): Promise<TaskCollectionResult> => {
+    recoverLocalTaskCollectionJournal();
+    if (!localTaskCollectionPermission(workspaceId, boardId)) throw new TaskCollectionError('PERMISSION_DENIED', '你沒有典藏任務的權限。');
+    if (annotation && annotation.length > TASK_COLLECTION_LIMITS.annotationChars) throw new TaskCollectionError('LIMIT_EXCEEDED', '典藏註記不可超過 500 字。');
+    if (consumeTaskCollectionFault('transient-once')) {
+      throw new TaskCollectionError('TRANSIENT', '典藏服務暫時無法完成，請重試。');
+    }
+    if (consumeTaskCollectionFault('limit-once')) {
+      throw new TaskCollectionError('LIMIT_EXCEEDED', '此任務樹超過目前典藏上限（測試注入），尚未移出看板。');
+    }
+    const existing = findLocalCollectionRecord(workspaceId, boardId, operationId);
+    if (existing) {
+      if (existing.sourceRootItemId && existing.sourceRootItemId !== rootItemId) {
+        throw new TaskCollectionError('OPERATION_CONFLICT', '此操作識別碼已用於其他根任務。');
+      }
+      const snapshot = existing.metadata?.taskCollection as TaskCollectionPreview['snapshot'];
+      const preview: TaskCollectionPreview = {
+        operationId,
+        rootItemId,
+        sourceBoardId: boardId,
+        subtreeNodeCount: snapshot?.nodes?.length ?? existing.taskLinks.length,
+        dependencyCount: snapshot?.dependencies?.length ?? 0,
+        activityEventCount: snapshot?.activityEvents?.length ?? 0,
+        linkedRecordCount: snapshot?.linkedRecords?.length ?? 0,
+        nextVersion: existing.collectionVersion ?? 1,
+        snapshotHash: existing.collectionSnapshotHash ?? '',
+        previewToken: `${operationId}:${existing.collectionSnapshotHash ?? ''}`,
+        snapshot,
+      };
+      return {
+        record: existing,
+        preview,
+        recordId: existing.id,
+        operationId,
+        sourceRootTaskId: rootItemId,
+        collectionVersion: existing.collectionVersion ?? 1,
+        collectedAt: existing.occurredAt ?? existing.createdAt ?? 0,
+        sourceRootUpdatedAt: existing.occurredAt ?? existing.updatedAt ?? 0,
+        taskCount: preview.subtreeNodeCount,
+        summary: toLocalCollectionSummary(existing),
+      };
+    }
+    const cachedPreview = localCollectionPreviewCache.get(operationId);
+    const freshPreview = await buildLocalCollectionPreview(workspaceId, boardId, rootItemId, operationId);
+    if (cachedPreview && cachedPreview.previewToken !== freshPreview.previewToken) {
+      throw new TaskCollectionError('SOURCE_CHANGED', '來源任務在預覽後已有變更，請重新整理預覽。');
+    }
+    const preview = freshPreview;
+    if (preview.previewToken !== previewToken) throw new TaskCollectionError('SOURCE_CHANGED', '典藏預覽已變更，請重新確認。');
+      const now = Date.now();
+    const recordsBefore = readKnowledgeRecords();
+    const nodesBefore = readNodes();
+    const activitiesBefore = readActivityEvents();
+    let durableCommitCompleted = false;
+    let committedResult: TaskCollectionResult | null = null;
+    prepareTaskCollectionJournal(operationId, {
+      records: recordsBefore,
+      nodes: nodesBefore,
+      activities: activitiesBefore,
+    });
+    try {
+      const recordId = createId('local_task_collection');
+      const root = preview.snapshot.nodes.find(node => node.id === rootItemId);
+      const finalSnapshot = { ...preview.snapshot, collectedAt: now, annotation: annotation?.trim() || null };
+      const projectedContent = projectTaskCollectionContent(finalSnapshot);
+      if (new TextEncoder().encode(projectedContent).byteLength > TASK_COLLECTION_LIMITS.contentUtf8Bytes) {
+        throw new TaskCollectionError('LIMIT_EXCEEDED', '此任務樹超過目前典藏內容上限，尚未移出看板。');
+      }
+      const finalSnapshotHash = await canonicalJsonSha256({ snapshot: finalSnapshot, content: projectedContent });
+      const record: TaskCollectionRecord = {
+        id: recordId,
+        workspaceId,
+        boardId,
+        type: 'task_collection',
+        title: root?.title || rootItemId,
+        content: projectedContent,
+        status: 'published',
+        visibility: 'project',
+        occurredAt: now,
+        recordedBy: readCurrentLocalUserId(),
+        createdBy: readCurrentLocalUserId(),
+        updatedBy: readCurrentLocalUserId(),
+        createdAt: now,
+        updatedAt: now,
+        ragEnabled: false,
+        collectionOperationId: operationId,
+        collectionVersion: preview.nextVersion,
+        collectionSchemaVersion: preview.snapshot.schemaVersion,
+        collectionSnapshotHash: finalSnapshotHash,
+        sourceRootItemId: rootItemId,
+        sourceRootStorageId: finalSnapshot.source.rootStorageId,
+        metadata: {
+          taskCollection: finalSnapshot,
+          collectionOperationId: operationId,
+          collectionVersion: preview.nextVersion,
+          collectionSchemaVersion: preview.snapshot.schemaVersion,
+          collectionSnapshotHash: finalSnapshotHash,
+          sourceRootItemId: rootItemId,
+          sourceRootStorageId: finalSnapshot.source.rootStorageId,
+          annotation: annotation ?? null,
+        },
+        taskLinks: preview.snapshot.nodes.map((node, index) => ({
+          id: `${recordId}_link_${node.id}`,
+          recordId,
+          workspaceId,
+          boardId,
+          nodeId: node.id,
+          role: index === 0 ? 'main' : 'related',
+          createdAt: now,
+        })),
+      };
+      const nextNodes = {
+        ...nodesBefore,
+        [rootItemId]: { ...nodesBefore[rootItemId], isArchived: true, updatedAt: now },
+      };
+      const activity: ActivityEvent = {
+        id: createId('local_activity'),
+        workspaceId,
+        boardId,
+        actorId: readCurrentLocalUserId(),
+        eventType: 'task_collected',
+        entityTable: 'wbs_items',
+        entityId: rootItemId,
+        payload: { operationId, recordId, collectionVersion: preview.nextVersion, subtreeNodeCount: preview.subtreeNodeCount },
+        createdAt: now,
+      };
+      setTaskCollectionJournalAfter(operationId, {
+        records: [record, ...recordsBefore],
+        nodes: nextNodes,
+        activities: [activity, ...activitiesBefore].slice(0, 1000),
+      });
+      writeStrict(KNOWLEDGE_RECORDS_KEY, [record, ...recordsBefore]);
+      writeStrict(NODES_KEY, nextNodes);
+      writeStrict(ACTIVITY_EVENTS_KEY, [activity, ...activitiesBefore].slice(0, 1000));
+      completeTaskCollectionJournal(operationId);
+      clearTaskCollectionJournal(operationId);
+      committedResult = {
+        record,
+        preview: { ...preview, snapshot: finalSnapshot, snapshotHash: finalSnapshotHash },
+        recordId: record.id,
+        operationId,
+        sourceRootTaskId: rootItemId,
+        collectionVersion: record.collectionVersion ?? 1,
+        collectedAt: now,
+        sourceRootUpdatedAt: now,
+        taskCount: finalSnapshot.nodes.length,
+        summary: toLocalCollectionSummary(record),
+      };
+      durableCommitCompleted = true;
+      // Browser QA only: model a committed RPC whose response is lost. The
+      // catch path must read back this operation rather than create a v2.
+      if (consumeTaskCollectionFault('response-lost-once')) {
+        throw new TaskCollectionError('TRANSIENT', '典藏已提交但回應遺失，正在讀回。');
+      }
+      return committedResult;
+    } catch (error) {
+      if (durableCommitCompleted && committedResult) {
+        try {
+          const recovered = await localTestTaskCollectionService.getOperationResult(workspaceId, boardId, operationId);
+          if (recovered) {
+            return {
+              ...committedResult,
+              record: recovered,
+              recordId: recovered.id,
+              summary: toLocalCollectionSummary(recovered),
+            };
+          }
+        } catch {
+          // Preserve the original response-lost error when the readback fails.
+        }
+        if (error instanceof TaskCollectionError) throw error;
+        throw new TaskCollectionError('TRANSIENT', '典藏已提交，但目前無法讀回操作結果，請稍後重試。', { cause: error });
+      }
+      try {
+        writeStrict(NODES_KEY, nodesBefore);
+        writeStrict(KNOWLEDGE_RECORDS_KEY, recordsBefore);
+        writeStrict(ACTIVITY_EVENTS_KEY, activitiesBefore);
+        clearTaskCollectionJournal(operationId);
+      } catch {
+        // Preserve the original error while leaving a prepared journal for recovery tooling.
+      }
+      if (error instanceof TaskCollectionError) throw error;
+      throw new TaskCollectionError('UNKNOWN', '典藏任務未完成，原資料已復原。', { cause: error });
+    }
+  },
+
+  getOperationResult: async (workspaceId: string, boardId: string, operationId: string): Promise<TaskCollectionRecord | null> => findLocalCollectionRecord(workspaceId, boardId, operationId) ?? null,
+
+  getById: async (workspaceId: string, boardId: string, recordId: string): Promise<TaskCollectionRecord | null> => readKnowledgeRecords().find((record): record is TaskCollectionRecord => record.workspaceId === workspaceId && record.boardId === boardId && record.id === recordId && record.type === 'task_collection') ?? null,
+
+  listSummaries: async (workspaceId: string, boardId: string, search?: string): Promise<TaskCollectionSummary[]> => readKnowledgeRecords()
+    .filter((record): record is TaskCollectionRecord => record.workspaceId === workspaceId && record.boardId === boardId && record.type === 'task_collection')
+    .filter(record => {
+      const normalizedSearch = (search ?? '').trim();
+      const query = Array.from(normalizedSearch).length === 1 ? '' : normalizedSearch;
+      return !query || `${record.title}\n${record.content}`.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+    })
+    .sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
+    .map(toLocalCollectionSummary),
 };
 
 export const localTestEventLogService = {
@@ -926,6 +1313,7 @@ export const localTestEventLogService = {
     scope: 'workspace' | 'board';
     startedAt: number;
     endedAt: number;
+    startBoundary?: 'inclusive' | 'exclusive';
     eventTypes?: string[];
   }): Promise<ActivityEvent[]> => {
     const eventTypeSet = query.eventTypes?.length ? new Set(query.eventTypes) : null;
@@ -935,7 +1323,8 @@ export const localTestEventLogService = {
       .filter(event => !eventTypeSet || eventTypeSet.has(event.eventType))
       .filter(event => {
         const createdAt = event.createdAt ?? 0;
-        return createdAt >= query.startedAt && createdAt <= query.endedAt;
+        const afterStart = query.startBoundary === 'exclusive' ? createdAt > query.startedAt : createdAt >= query.startedAt;
+        return afterStart && createdAt <= query.endedAt;
       })
       .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   },

@@ -14,7 +14,18 @@ import type { TaskDragSourceKind } from './taskDragTypes';
 import { useWbsStore } from '../../../store/useWbsStore';
 
 interface UseTaskGestureSurfaceOptions {
-  task: { id: string; title?: string; status?: TaskStatus };
+  task: {
+    id: string;
+    title?: string;
+    status?: TaskStatus;
+    placementId?: string;
+    placementKind?: 'primary' | 'tracking_reference';
+    boardId?: string;
+    trackingReferenceId?: string;
+    canEditCanonicalTask?: boolean;
+    canCreateCanonicalTask?: boolean;
+    canDeleteCanonicalTask?: boolean;
+  };
   sourceKind: TaskDragSourceKind | null;
   mobileActionEnabled?: boolean;
   disabled?: boolean;
@@ -32,7 +43,9 @@ export const useTaskGestureSurface = ({
   const touchTapGuard = useTouchTapGuard({ threshold: TASK_GESTURE_PAN_TOLERANCE_PX });
   const [activeSurfaceHeight, setActiveSurfaceHeight] = React.useState<number | null>(null);
   const [mobileActionMode, setMobileActionMode] = React.useState(() => isMobileTaskActionMode());
-  const isActive = mobileTaskAction?.state?.phase === 'dragging' && mobileTaskAction.state.nodeId === task.id;
+  const isActive = mobileTaskAction?.state?.phase === 'dragging'
+    && mobileTaskAction.state.nodeId === task.id
+    && (!task.placementId || mobileTaskAction.state.source.placementId === task.placementId);
   const isPlacementPending = useWbsStore(state => Boolean(state.pendingPlacementNodeIds[task.id]));
   const interactionDisabled = disabled || isPlacementPending;
 
@@ -80,7 +93,7 @@ export const useTaskGestureSurface = ({
       }
     },
     onTouchMove: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
+      if (mobileTaskAction?.isActive(task.id, task.placementId)) {
         mobileTaskAction.move(event);
         return;
       }
@@ -88,7 +101,7 @@ export const useTaskGestureSurface = ({
       if (shouldBindLongPress) longPressHandlers.onTouchMove(event);
     },
     onTouchEnd: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
+      if (mobileTaskAction?.isActive(task.id, task.placementId)) {
         touchTapGuard.handlers.onTouchEnd(event);
         mobileTaskAction.end(event);
         longPressHandlers.onTouchEnd(event);
@@ -100,7 +113,7 @@ export const useTaskGestureSurface = ({
       setActiveSurfaceHeight(null);
     },
     onTouchCancel: (event: React.TouchEvent) => {
-      if (mobileTaskAction?.isActive(task.id)) {
+      if (mobileTaskAction?.isActive(task.id, task.placementId)) {
         touchTapGuard.handlers.onTouchCancel(event);
         mobileTaskAction.cancel(event);
         longPressHandlers.onTouchCancel(event);
@@ -113,7 +126,7 @@ export const useTaskGestureSurface = ({
     },
     onPointerDown: touchTapGuard.handlers.onPointerDown,
     onPointerMove: (event: React.PointerEvent) => {
-      if (event.pointerType !== 'touch' || mobileTaskAction?.isActive(task.id)) return;
+      if (event.pointerType !== 'touch' || mobileTaskAction?.isActive(task.id, task.placementId)) return;
       touchTapGuard.handlers.onPointerMove(event);
       if (shouldBindLongPress) longPressHandlers.onPointerMove(event);
     },
@@ -140,7 +153,7 @@ export const useTaskGestureSurface = ({
         longPressHandlers.onClickCapture(event);
       }
     },
-  }), [longPressHandlers, mobileTaskAction, shouldBindLongPress, task.id, touchTapGuard.handlers]);
+  }), [longPressHandlers, mobileTaskAction, shouldBindLongPress, task.id, task.placementId, touchTapGuard.handlers]);
 
   return {
     handlers,

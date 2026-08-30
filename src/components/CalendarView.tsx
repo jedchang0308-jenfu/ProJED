@@ -61,6 +61,7 @@ import { selectAndOpenTaskDetails } from '../utils/taskInteractions';
 import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { TaskFilterResultState } from './ui/TaskFilterResultState';
+import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -173,12 +174,24 @@ const CalendarView = () => {
     const [collapsedIds, setCollapsedIds] = useState(new Set());
     const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
     const nodes = useWbsStore(s => s.nodes);
-    const parentNodesIndex = useWbsStore(s => s.parentNodesIndex);
+    const trackingReferences = useWbsStore(s => s.trackingReferences);
+    const projectionTasks = useMemo(
+        () => buildCollapsedProjectionTasks(Object.values(nodes), trackingReferences, activeBoardId || ''),
+        [activeBoardId, nodes, trackingReferences],
+    );
+    const projectionNodes = useMemo(
+        () => Object.fromEntries(projectionTasks.map(task => [task.id, task])),
+        [projectionTasks],
+    );
+    const projectionParentNodesIndex = useMemo(
+        () => buildProjectionParentIndex(projectionTasks),
+        [projectionTasks],
+    );
     const taskLoading = useWbsStore(s => s.loading);
     const taskLoadError = useWbsStore(s => s.error);
     const filterProjection = useMemo(
-        () => projectTaskFilterResults(nodes, taskFilters, { boardId: activeBoardId }),
-        [activeBoardId, nodes, taskFilters],
+        () => projectTaskFilterResults(projectionNodes, taskFilters, { boardId: activeBoardId }),
+        [activeBoardId, projectionNodes, taskFilters],
     );
     const isCoarsePointer = useCoarsePointer();
     const ganttRowHeight = isCoarsePointer ? 22 : BAR_HEIGHT;
@@ -197,13 +210,13 @@ const CalendarView = () => {
     // ── 資料扁平化（與 GanttView 共用階層排序與收疊邏輯）────────
     const flattenedItems = useMemo(() => {
         return buildHierarchicalTaskItems({
-            nodes,
-            parentNodesIndex,
+            nodes: projectionNodes,
+            parentNodesIndex: projectionParentNodesIndex,
             activeBoardId,
             visibleTaskIds: filterProjection.visibleTaskIds,
             collapsedIds,
         }).items;
-    }, [activeBoardId, nodes, parentNodesIndex, filterProjection, collapsedIds]);
+    }, [activeBoardId, projectionNodes, projectionParentNodesIndex, filterProjection, collapsedIds]);
 
     // ── 月曆週陣列：weeks[weekIdx][col(0-6)] = dayInfo ──
     const weeks = useMemo(() => {
@@ -255,7 +268,7 @@ const CalendarView = () => {
 
     // ── 事件處理 ──────────────────────────────────────────
     const handleItemClick = (item) => {
-        selectAndOpenTaskDetails(item.id);
+        selectAndOpenTaskDetails(item.id, item.trackingReferenceId);
     };
 
     const goToPrevMonth = () => setCurrentMonth(prev => prev.subtract(1, 'month'));
@@ -424,6 +437,8 @@ const CalendarView = () => {
                                                     key={`seg-${seg.item.id}-${wIdx}-${sIdx}`}
                                                     data-calendar-task-segment="true"
                                                     data-task-id={seg.item.id}
+                                                    data-calendar-placement-kind={seg.item.isTrackingReference ? 'tracking-reference' : 'primary'}
+                                                    aria-label={seg.item.isTrackingReference ? `追蹤副本：${seg.item.title || '未命名任務'}` : seg.item.title || '未命名任務'}
                                                     onClick={() => handleItemClick(seg.item)}
                                                     onContextMenu={(e) => {
                                                         e.preventDefault();
@@ -452,6 +467,7 @@ const CalendarView = () => {
                                                     className={`
                                                         flex items-center overflow-hidden cursor-pointer
                                                         ${styles.bar}
+                                                        ${seg.item.isTrackingReference ? 'border-2 border-dashed border-violet-300' : ''}
                                                         ${roundLeft} ${roundRight}
                                                         ${horizontalPadding}
                                                         shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-white/70 hover:brightness-95 transition-all

@@ -3,6 +3,7 @@ import React from 'react';
 import { Layout as LayoutIcon, Plus, Trash2, Trello } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useDialogStore from '../store/useDialogStore';
+import { boardService } from '../services/dataBackend';
 
 const HomeView = () => {
     const { workspaces, addBoard, removeBoard, switchBoard } = useBoardStore();
@@ -85,9 +86,22 @@ const HomeView = () => {
                                                 <button
                                                     onClick={async (event) => {
                                                         event.stopPropagation();
-                                                        const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。`);
+                                                        let impact;
+                                                        try {
+                                                            impact = await boardService.previewDeleteImpact(workspace.id, board.id);
+                                                        } catch (error) {
+                                                            console.error('[HomeView] delete impact failed:', error);
+                                                            return;
+                                                        }
+                                                        if (impact.unknown) return;
+                                                        const warning = impact.taskCollectionCount > 0 ? `\n\n此看板包含 ${impact.taskCollectionCount} 筆典藏任務，刪除後也會永久刪除這些典藏資產。` : '';
+                                                        const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。${warning}`);
                                                         if (confirmed) {
-                                                            removeBoard(workspace.id, board.id);
+                                                            try {
+                                                                await removeBoard(workspace.id, board.id);
+                                                            } catch (error) {
+                                                                console.error('[HomeView] delete board failed:', error);
+                                                            }
                                                         }
                                                     }}
                                                     className="absolute right-2 top-2 z-20 rounded-lg border border-slate-100 bg-white p-1.5 text-slate-300 opacity-0 shadow-sm transition-all hover:border-red-100 hover:text-red-500 group-hover:opacity-100"

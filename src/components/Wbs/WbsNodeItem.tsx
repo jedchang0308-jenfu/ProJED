@@ -4,56 +4,51 @@ import useBoardStore from '../../store/useBoardStore';
 import type { TaskStatus } from '../../types';
 import { ChevronRight, ChevronDown, Link, Lock, Unlock } from 'lucide-react';
 import { WbsDependencyContext } from './WbsListView';
-import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useTagStore } from '../../store/useTagStore';
 import { useMemberStore } from '../../store/useMemberStore';
-import { useBoardPermissions } from '../../hooks/useBoardPermissions';
 import { getNodeTags } from '../../utils/tags';
 import { TagChip } from '../Tags/TagChip';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { compactClassNames } from '../ui/compactTokens';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
-import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
-import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
-import { isMobileTaskActionMode } from './mobileTaskActionContext';
 import TaskAssignmentPicker from '../TaskAssignmentPicker';
 import { getTaskProgressFillClass, getTaskStatusSelectClass, taskStatusTitleClass } from '../ui/taskStatusStyles';
 import { normalizeManualTaskStatus } from '../../utils/taskStatus';
+import { primaryPlacementId } from '../../features/taskTracking/model';
+import type { TaskTrackingReference } from '../../features/taskTracking/types';
+import { TaskSurfaceFrame } from './TaskSurfaceFrame';
+import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
+import { useTaskPlacementController } from './useTaskPlacementController';
 
 interface WbsNodeItemProps {
   nodeId: string;
   level?: number;
   ancestorIds?: string[];
+  ancestorPlacementIds?: string[];
+  trackingReference?: TaskTrackingReference;
   filterProjection: TaskFilterResultProjection;
 }
 
-export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [], filterProjection }) => {
+export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, ancestorIds = [], ancestorPlacementIds = [], trackingReference, filterProjection }) => {
   const node = useWbsStore(s => s.nodes[nodeId]); // ✅ 從 Store 中 Reactively 綁定該節點的最新狀態
   const [isExpanded, setIsExpanded] = useState(true);
   
   const wbsDependencies = useWbsStore(s => s.dependencies);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
 
-  const isRecursiveNode = ancestorIds.includes(nodeId);
+  const placementId = trackingReference?.id || primaryPlacementId(nodeId);
+  const isRecursiveNode = ancestorPlacementIds.includes(placementId)
+    || (!trackingReference && ancestorIds.includes(nodeId));
 
   const nextAncestorIds = [...ancestorIds, nodeId];
+  const nextAncestorPlacementIds = [...ancestorPlacementIds, placementId];
   const nextAncestorKey = nextAncestorIds.join('|');
 
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const isEndDateEffectivelyLocked = lockStatus.endLocked || Boolean(node?.isDurationLocked);
-  const { canEditTask, canAssignTask, canMoveTask, canCreateDependency } = useBoardPermissions();
   const selectedTaskId = useBoardStore(s => s.selectedTaskId);
-  const interactionBinding = useTaskInteractionBinding({
-    taskId: nodeId,
-    title: node?.title,
-    surfaceId: 'list.row',
-    nodeRole: node?.nodeType || 'task',
-  });
-  const touchTapGuard = useTouchTapGuard();
-  const mobileActionMode = isMobileTaskActionMode();
 
   // 取得全域顯示設定與依賴選取狀態
   const dependencyContext = React.useContext(WbsDependencyContext);
@@ -70,12 +65,23 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   const [localStartDate, setLocalStartDate] = useState(node?.startDate || '');
   const [localEndDate, setLocalEndDate] = useState(node?.endDate || '');
 
-  // DnD Sortable Hook
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-      id: nodeId,
-      disabled: !canMoveTask || isSelectingMode || mobileActionMode,
-      data: { item: node }
+  const placementController = useTaskPlacementController({
+    task: node || ({ id: nodeId, workspaceId: '', boardId: '', parentId: null, title: '', status: 'todo', order: 0 } as any),
+    reference: trackingReference,
+    surfaceId: 'list.row',
+    sortableType: 'wbs-list-row',
+    interactionDisabled: isSelectingMode,
+    transientOwners: isSelectingMode ? ['dependency-selection'] : [],
   });
+  const { activationProps, interactionBinding, permissions, taskGesture } = placementController;
+  const {
+    canEditTask,
+    canAssignTask,
+    canCreateDependency,
+  } = permissions;
+
+  // DnD Sortable Hook
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = placementController.sortable;
 
   const dndStyle = {
       transform: CSS.Transform.toString(transform),
@@ -84,7 +90,7 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
       zIndex: isDragging ? 50 : 1,
   };
 
-  const dragSurfaceBindings = mobileActionMode || isSelectingMode
+  const dragSurfaceBindings = isSelectingMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending
     ? {}
     : { ...attributes, ...listeners };
 
@@ -111,19 +117,33 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
   
   // ✅ 使用 Stable Selector 訂閱「子節點 ID 陣列」，避免 Zustand 無限 Render Loop
   const childrenIds = useWbsStore(s => s.parentNodesIndex[nodeId]); 
+  const trackingReferences = useWbsStore(s => s.trackingReferences);
   
   // ✅ 只有當 childrenIds 陣列變更時，才重新抓取最新的 node references
   const children = React.useMemo(() => {
       const state = useWbsStore.getState();
       const nextAncestors = new Set(nextAncestorKey.split('|'));
+      if (trackingReference) return [];
       return (childrenIds || [])
         .filter(id => !nextAncestors.has(id))
         .map(id => state.nodes[id])
         .filter(n => n && !n.isArchived && filterProjection.visibleTaskIds.has(n.id))
         .sort((a,b) => a.order - b.order);
-  }, [childrenIds, filterProjection, nextAncestorKey]);
+  }, [childrenIds, filterProjection, nextAncestorKey, trackingReference]);
 
-  const hasChildren = children.length > 0;
+  const childParentPlacementId = trackingReference?.id || primaryPlacementId(nodeId);
+  const visibleTrackingReferences = React.useMemo(() => trackingReferences
+    .filter(reference => !reference.removedAt
+      && reference.boardId === (trackingReference?.boardId || node?.boardId)
+      && filterProjection.visibleTaskIds.has(reference.taskId))
+  , [filterProjection, node?.boardId, trackingReference?.boardId, trackingReferences]);
+  const childRenderRows = React.useMemo(() => buildTaskPlacementTreeRows({
+    primaryTasks: trackingReference ? [] : children,
+    trackingReferences: visibleTrackingReferences,
+    tasksById: useWbsStore.getState().nodes,
+    parentPlacementId: childParentPlacementId,
+  }), [childParentPlacementId, children, trackingReference, visibleTrackingReferences]);
+  const hasChildren = childRenderRows.length > 0;
   const progress = useWbsStore(s => s.getNodeProgress(nodeId)); // 進度是原始型別 (number)，安全且具備 Reactive
   const nodeTags = getNodeTags(node, tags);
   const isDueToday = node?.status !== 'completed' && !!localEndDate && dayjs(localEndDate).isSame(dayjs(), 'day');
@@ -281,11 +301,15 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
 
   return (
     <>
-      <div 
+      <TaskSurfaceFrame
+        task={node}
+        reference={trackingReference}
+        surfaceKind="wbs-list-row"
         ref={setNodeRef}
         style={dndStyle}
+        {...activationProps}
         {...dragSurfaceBindings}
-        {...touchTapGuard.handlers}
+        {...taskGesture.handlers}
         onContextMenu={(e) => {
             e.preventDefault();
             void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
@@ -296,12 +320,15 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
             void interactionBinding.dispatch('pointer.primary');
         }}
         data-task-id={node.id}
+        data-task-placement-id={placementId}
+        data-task-placement-kind={trackingReference ? 'tracking-reference' : 'primary'}
         data-mobile-drop-target={node.id}
         data-task-drag-surface="true"
         data-task-drag-surface-kind="wbs-list-row"
         data-task-surface-source="true"
         data-task-selected={selectedTaskId === node.id ? 'true' : undefined}
         data-touch-tap-guard="true"
+        data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
         className={`mobile-pan-item grid ${showStartDate ? 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_130px_80px]' : 'grid-cols-[minmax(300px,1fr)_100px_100px_130px_80px]'} min-h-[30px] items-center py-0.5 px-[10px] border-b border-l-[3px] border-l-transparent ${level === 0 ? 'border-b-slate-200 bg-surface-panel/80' : level === 1 ? 'border-b-slate-100 bg-white' : 'border-b-slate-100 bg-slate-50/40'} group hover:bg-primary/5 transition-colors ${compactClassNames.taskTitle} active:bg-slate-100 cursor-pointer ${isDragging ? 'opacity-50 bg-slate-100/50' : ''}`}
       >
         
@@ -318,7 +345,10 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
           data-task-id={node.id}
         >
           <button 
-            onClick={handleToggle}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleToggle();
+            }}
             className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors text-slate-400 ${!hasChildren && 'invisible'}`}
             title={isExpanded ? '收合' : '展開'}
           >
@@ -531,17 +561,22 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
              />
         </div>
 
-      </div>
+      </TaskSurfaceFrame>
 
       {/* 遞迴渲染子節點 */}
       {isExpanded && hasChildren && (
-        <div className="flex flex-col w-full">
-          <SortableContext items={children.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            {children.map(child => (
-              <WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} ancestorIds={nextAncestorIds} filterProjection={filterProjection} />
-            ))}
-          </SortableContext>
-        </div>
+        <TaskPlacementTree rows={childRenderRows} className="flex w-full flex-col">
+          {row => (
+            <WbsNodeItem
+              nodeId={row.task.id}
+              trackingReference={row.reference}
+              level={level + 1}
+              ancestorIds={nextAncestorIds}
+              ancestorPlacementIds={nextAncestorPlacementIds}
+              filterProjection={filterProjection}
+            />
+          )}
+        </TaskPlacementTree>
       )}
     </>
   );

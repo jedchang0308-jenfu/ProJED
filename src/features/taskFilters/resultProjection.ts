@@ -4,7 +4,7 @@ import type { TaskFilterState, TaskFilterableNode } from './types';
 
 export type TaskFilterProjectionNode = Pick<
   TaskNode,
-  'boardId' | 'id' | 'isArchived' | 'order' | 'parentId'
+  'boardId' | 'id' | 'isArchived' | 'order' | 'parentId' | 'canonicalTaskId'
 > & TaskFilterableNode;
 
 export type TaskFilterResultProjection = {
@@ -66,22 +66,27 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   const visibleContainerIds = new Set<string>();
   const visibleTaskIds = new Set<string>();
   const matchedTasks: TaskFilterProjectionNode[] = [];
+  const matchedProjectionNodes: TaskFilterProjectionNode[] = [];
+  const matchedPlacementIds = new Set<string>();
   const { boardId = null } = options;
 
   Object.values(nodesById).forEach(node => {
     if (!isTaskEffectivelyVisible(node, nodesById, { boardId })) return;
-    boardTaskIds.add(node.id);
+    const canonicalTaskId = node.canonicalTaskId || node.id;
+    boardTaskIds.add(canonicalTaskId);
     if (matchesTaskFilters(node, filters)) {
-      matchedTaskIds.add(node.id);
-      matchedTasks.push(node);
+      if (!matchedTaskIds.has(canonicalTaskId)) matchedTasks.push(node);
+      matchedTaskIds.add(canonicalTaskId);
+      matchedPlacementIds.add(node.id);
+      matchedProjectionNodes.push(node);
     }
   });
 
-  matchedTaskIds.forEach(taskId => {
-    visibleTaskIds.add(taskId);
+  matchedProjectionNodes.forEach(matchedNode => {
+    visibleTaskIds.add(matchedNode.id);
 
-    let currentParentId = nodesById[taskId]?.parentId || null;
-    const visited = new Set<string>([taskId]);
+    let currentParentId = matchedNode.parentId || null;
+    const visited = new Set<string>([matchedNode.id]);
 
     while (currentParentId) {
       if (visited.has(currentParentId)) break;
@@ -97,7 +102,7 @@ export const projectTaskFilterResults = <T extends TaskFilterProjectionNode>(
   });
 
   const contextOnlyContainerIds = new Set<string>(
-    Array.from(visibleContainerIds).filter(id => !matchedTaskIds.has(id)),
+    Array.from(visibleContainerIds).filter(id => !matchedPlacementIds.has(id) && !matchedTaskIds.has(id)),
   );
 
   matchedTasks.sort((left, right) => (
