@@ -49,7 +49,7 @@ B01. mock `onNeedRefresh` 或注入 update state。
 - Expected: 畫面出現「有新版本」類提示。
 
 B02. 更新提示包含明確更新按鈕。
-- Expected: 按鈕文字可辨識，例如「一鍵更新到最新版」，不是單純「確定」。
+- Expected: 按鈕文字為精簡且可辨識的「一鍵更新」，不使用已被 DEV-096 取代的「一鍵更新到最新版」。
 
 B03. 更新提示可 dismiss / later。
 - Expected: 本 session 不反覆彈出；service 仍保留已知更新狀態，且不因 dismiss 清掉 queued callback。
