@@ -15,6 +15,10 @@ async (page) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => window.__projedPwaUpdateTest.reset());
     await page.evaluate(() => window.__projedPwaUpdateTest.simulateUpdateAvailable());
+    await page.waitForFunction(() => {
+      const state = window.__projedPwaUpdateTest.getState();
+      return state.status === 'update-available' && state.updateAvailable && !state.dismissedAt;
+    }, null, { timeout: 10000 });
     const prompt = page.locator('[data-pwa-update-prompt]');
     await prompt.waitFor({ state: 'visible', timeout: 10000 });
 
@@ -41,22 +45,26 @@ async (page) => {
   const runApplyMatrix = async () => {
     await page.evaluate(() => window.__projedPwaUpdateTest.reset());
     await page.evaluate(() => window.__projedPwaUpdateTest.simulateUpdateAvailable());
+    await page.waitForFunction(() => {
+      const state = window.__projedPwaUpdateTest.getState();
+      return state.status === 'update-available' && state.updateAvailable && !state.dismissedAt;
+    }, null, { timeout: 10000 });
     await page.locator('[data-pwa-update-prompt]').waitFor({ state: 'visible', timeout: 10000 });
     const appliedPromise = page.evaluate(() => new Promise((resolve) => {
-      const result = { queuedCallbackApplied: false, latestReloadApplied: false };
+      const result = { queuedCallbackApplied: false, transactionComplete: false };
       window.addEventListener('projed:pwa-update-test-applied', () => {
         result.queuedCallbackApplied = true;
       }, { once: true });
-      window.addEventListener('projed:pwa-update-test-latest-reload', () => {
-        result.latestReloadApplied = true;
+      window.addEventListener('projed:pwa-update-test-transaction-complete', () => {
+        result.transactionComplete = true;
         resolve(result);
       }, { once: true });
       window.setTimeout(() => resolve(result), 5000);
     }));
     await page.locator('[data-pwa-update-action]').click();
     const applied = await appliedPromise;
-    assert(applied.latestReloadApplied === true, 'update button should invoke one-click latest reload flow', applied);
-    assert(applied.queuedCallbackApplied === false, 'update button should not invoke stale queued update callback', applied);
+    assert(applied.transactionComplete === true, 'update button should complete the one-click update transaction', applied);
+    assert(applied.queuedCallbackApplied === false, 'update button should not invoke a stale queued update callback', applied);
     const state = await page.evaluate(() => window.__projedPwaUpdateTest.getState());
     assert(state.updateAvailable === false && state.status === 'idle', 'state should reset after successful simulated update', state);
   };
@@ -65,6 +73,7 @@ async (page) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.evaluate(() => window.__projedPwaUpdateTest.reset());
     await page.evaluate(() => window.__projedPwaUpdateTest.simulateRecoverableCacheError('chunk load failed for browser verifier'));
+    await page.waitForFunction(() => window.__projedPwaUpdateTest.getState().status === 'recoverable-cache-error', null, { timeout: 10000 });
     const prompt = page.locator('[data-pwa-update-prompt]');
     await prompt.waitFor({ state: 'visible', timeout: 10000 });
     const text = await prompt.innerText();
@@ -73,24 +82,20 @@ async (page) => {
     assert(await page.locator('[data-pwa-update-error]').count() === 1, 'recovery prompt should show error detail');
   };
 
-  const runUpdatedMatrix = async () => {
+  const runCurrentVersionMatrix = async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => window.__projedPwaUpdateTest.reset());
     await page.evaluate(() => window.__projedPwaUpdateTest.simulateUpdated());
-    const prompt = page.locator('[data-pwa-update-prompt]');
-    await prompt.waitFor({ state: 'visible', timeout: 10000 });
-    const text = await prompt.innerText();
-    assert(/已更新到新版/.test(text), 'updated prompt should confirm the newest version is loaded', { text });
-    await page.locator('[data-pwa-updated-confirm]').click();
-    await prompt.waitFor({ state: 'hidden', timeout: 5000 });
+    await page.waitForFunction(() => window.__projedPwaUpdateTest.getState().status === 'updated', null, { timeout: 10000 });
     const state = await page.evaluate(() => window.__projedPwaUpdateTest.getState());
-    assert(state.status === 'updated' && state.dismissedAt, 'updated prompt should be dismissible without changing update state', state);
+    assert(await page.locator('[data-pwa-update-prompt]').count() === 0, 'same-version state should not show a stale update prompt', state);
+    assert(state.status === 'updated' && state.updateAvailable === false && state.currentVersion === state.latestVersion, 'same-version state should reconcile without an update prompt', state);
   };
 
   await runMobileMatrix();
   await runApplyMatrix();
   await runRecoveryMatrix();
-  await runUpdatedMatrix();
+  await runCurrentVersionMatrix();
 
   const criticalDiagnostics = diagnostics.filter(line => (
     /pageerror|console:error/i.test(line) &&
@@ -103,9 +108,9 @@ async (page) => {
     verified: [
       'mobile update prompt visible and tappable',
       'dismiss keeps queued update state',
-      'update button invokes one-click latest reload flow',
+      'update button completes one-click update transaction',
       'recovery prompt exposes cache action',
-      'updated prompt confirms newest loaded version',
+      'same-version state suppresses stale update prompt',
     ],
     diagnostics: diagnostics.slice(-20),
   }, null, 2);
