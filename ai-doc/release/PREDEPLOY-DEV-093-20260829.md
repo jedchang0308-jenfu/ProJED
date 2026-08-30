@@ -2,43 +2,42 @@
 
 ## 結論
 
-截至最新 follow-up，Supabase TEST gate、production feature-schema gate 與 hosted Level 3 authenticated smoke 均已通過；正式 Firebase candidate／activation 尚未完成，整體仍為 `NOT READY / Lane 3 High / 不得啟用`，直到 candidate gate 與 activation 完成。
+截至最新 follow-up，Supabase TEST gate、production feature-schema gate、hosted Level 3 authenticated smoke、inactive candidate 與 canonical production activation 均已通過；本次 release 已完成，狀態為 `READY / RELEASED`。
 
-目前剩餘 gate 為：
+保留事項：
 
-1. 尚未建立並驗證 inactive production candidate，也尚未執行正式 canonical activation。
-2. migration history 仍有 local-only／remote-only 不一致；本次未執行 `repair`／`pull`，而是以獨立、可追溯的 migration workspace 套用目標 migration，歷史對齊仍需 release owner 決策。
-3. source gate 與 release artifact 必須在本次最終 commit 上重新產生，才能進入 candidate／activation。
+1. migration history 仍有 local-only／remote-only 不一致；本次未執行 `repair`／`pull`，而是以獨立、可追溯的 migration workspace 套用目標 migration。此歷史對齊可另行安排，不影響本次已驗證 release。
+2. 正式站已完成 activation，後續依既有監控與 rollback runbook 觀察。
 
 ## Release identity
 
 | 項目 | 結果 |
 |---|---|
 | Branch | `持續優化3` |
-| HEAD | `dd3245c3fb2625aa0ce8e7cb8273fe2f06e79ee4` |
+| Release source commit | `43b3a0a3c34326b50a6d76c6e74e6540e66706fe` |
 | Upstream | `origin/持續優化3`；ahead 1 |
-| Artifact | `20260829182820-a44fec` |
-| Manifest | `output/release/dev-083/20260829182820-a44fec/manifest.json` |
-| Artifact tree SHA-256 | `ba02e458bccedf3714e5bf67ebc8027110825f632609adce89507fc32ad512b8` |
+| Artifact | `20260830065810-45d161` |
+| Manifest | `output/release/dev-083/20260830065810-45d161/manifest.json` |
+| Artifact tree SHA-256 | `498bbde543a461cf51eb2ac26e6f7400d7ee1d699d0ebce43c42121c3e5f47ed` |
 | Contract SHA-256 | `4614850f0ce568ca8d6b53fe84ad78c7c40a68cb48153a976dbcc6009ad37a74` |
 | Firebase target | `projed-cc78d`／`https://projed-cc78d.web.app` |
 | Production Supabase ref | `knodlkxqpcqyrtgwpdst` |
-| Artifact source dirty | `true`；不得直接 deploy |
-| Latest source-gate evidence | `20260829182820-a44fec`；exact manifest integrity `ok=true`，仍為 DEV-083 pipeline artifact，不是 DEV-093 candidate |
-| Latest source-gate manifest | `output/release/dev-083/20260829182820-a44fec/manifest.json` |
+| Artifact source dirty | `false` |
+| Latest source-gate evidence | `20260830065729-006a90`；exact manifest integrity `ok=true`；prepare／candidate／activation 均使用 release artifact `20260830065810-45d161` |
+| Latest source-gate manifest | `output/release/dev-083/20260830065729-006a90/manifest.json` |
 
 ## Gate 結果
 
 | Layer／Gate | 結果 | 證據／範圍 |
 |---|---|---|
-| Source and risk | `PENDING` | 最終 migration／evidence commit 後須重跑 source gate；Lane 3 High（schema／RLS／migration） |
+| Source and risk | `PASS` | 最終 release source commit clean；Lane 3 High（schema／RLS／migration）已完成加強驗證 |
 | Env boundary | `PASS` | `env_probe.py`、`verify:test-env`、`verify:local-origin`、`verify:production-auth-mode` |
 | Layer 1 local | `PARTIAL` | DEV-093 static 48、local 15、pure 22、journal 7、negative compile 2、isolated DB 25、local Supabase DB 25、browser 21/21、required regressions與全域 `npm run verify:source` 均PASS；全域 lint 保留 52 warnings，未形成 error。 |
-| Layer 2 artifact | `PENDING` | 最終 source gate 後重新建立 sealed artifact，並執行 exact manifest `verify:production-artifact` |
+| Layer 2 artifact | `PASS` | source gate PASS；prepare、candidate、activation 均使用 exact sealed artifact `20260830065810-45d161` |
 | Layer 3 integration | `PASS` | staging env／artifact secrets PASS；Level 3 hosted authenticated workspace／board/task/note/refresh/placement smoke PASS，fixture 已典藏清理 |
-| Layer 4 production-bound | `PASS*` | `verify:production-bound-readiness --strict` 16/16 PASS；production schema／RPC／RLS／placement helper readback PASS；inactive candidate 與 activation 尚待完成 |
-| Migration／data | `PASS*` | TEST／production 5 個目標 migration 均 dry-run 僅列出新 migration 後成功 push；未執行 repair／pull，歷史 mismatch 仍保留並已隔離處理 |
-| Activation／canonical production smoke | `NOT RUN` | 未取得 activation decision，正式站未以本 artifact 驗證 |
+| Layer 4 production-bound | `PASS` | `verify:production-bound-readiness --strict` 16/16 PASS；production schema／RPC／RLS／placement helper readback PASS；candidate authenticated smoke PASS |
+| Migration／data | `PASS` | TEST／production 5 個目標 migration 均 dry-run 僅列出新 migration 後成功 push；未執行 repair／pull，歷史 mismatch 已隔離處理 |
+| Activation／canonical production smoke | `PASS` | release runner activation PASS；canonical production provenance、browser smoke、OAuth cancel PASS |
 
 ## Release tooling findings
 
@@ -91,13 +90,15 @@
 - 2026-08-30 13:26（Asia/Taipei）production 唯讀 probe 顯示 `knodlkxqpcqyrtgwpdst` 尚無 DEV-093／DEV-095 目標表與 RPC；`verify:production-bound-readiness --strict` 雖 16/16 PASS，仍不足以證明 feature schema readiness。未執行 production migration、Firebase candidate／activation 或正式部署，整體狀態維持 `NOT READY`。
 - 2026-08-30 14:51（Asia/Taipei）TEST 與 production 以獨立 migration workspace 完成 `20260828090000_dev_093_task_collection_assets.sql`、`20260828100000_dev_095_task_tracking_references.sql`、`20260830130000_dev_095_task_tracking_reference_grant_hardening.sql`、`20260830150000_dev_095_restore_private_policy_helper_grants.sql`、`20260830160000_dev_095_restore_placement_helper_grants.sql`；兩邊均先 dry-run 僅列出目標 migration，再成功 push。production schema／RPC／RLS readback 通過，placement helper ACL 亦恢復。
 - 2026-08-30 14:51（Asia/Taipei）指定 3 個 preflight 重跑全部 PASS：Supabase TEST readonly 6/6、staging env、staging artifact secrets；均無 preflight mutation。Level 3 hosted authenticated smoke 通過既有 workspace／TEST board：建立、改名、備註、未歸位→已歸位、重新整理持久化均通過；fixture `LEVEL3-SMOKE-20260830-1439` 已由 UI 典藏，重新整理後不再出現，原有 `L3TASK1428` 未變更。
+- 2026-08-30 15:01（Asia/Taipei）release runner `prepare`、`candidate`、`activate` 全部 PASS；release `20260830065810-45d161` 已完成 canonical production activation。candidate 與正式站 provenance／browser smoke／OAuth cancel 均通過，live channel unchanged gate 通過。
 
 ## Artifact smoke 與 cleanup
 
-- 暫時 runtime：exact artifact preview，`127.0.0.1:49795`，task-owned `node.exe`；browser smoke 使用 `dev083-artifact-preview`。
-- 結果：HTTP 200、app root 非空、主 JS/CSS hash asset 可載入、release identity match、service worker ready／controller、critical console/pageerror/request failure 均為 0。
-- Cleanup：preview process 已終止，`49795` listener 已釋放；既有 primary Vite `4000` 未停止。
+- `prepare`：release artifact `20260830065810-45d161`，Layer 2 HTTP／app shell／hashed assets／service worker／release identity／critical errors 全部 PASS。
+- `candidate`：inactive Firebase channel provenance、browser smoke、OAuth cancel 與 live channel unchanged 全部 PASS；candidate evidence 已寫入 `output/release/dev-083/20260830065810-45d161/candidate-evidence.json`。
+- `activation`：canonical production deploy、provenance、browser smoke、OAuth cancel 全部 PASS；activation evidence 已寫入 `output/release/dev-083/20260830065810-45d161/activation-evidence.json`。
+- Cleanup：`level3-smoke` 與 `production-candidate` 暫存 channel 已刪除；agent 建立的 browser tab 已關閉；primary Vite `4000` 未停止。
 
-## 下一步
+## Release completion
 
-以最終 clean commit 重新執行 source gate，建立 exact sealed artifact；再依 deployment/release gate 建立 inactive production candidate、完成 candidate authenticated smoke，取得本次 activation decision 後才執行 canonical production activation。完成前維持 `NOT READY / 未 Release`。
+本次已完成 migration、preflight、source gate、Level 3 authenticated smoke、candidate gate 與 canonical production activation。後續僅需依既有監控／rollback runbook 觀察正式站；migration history reconciliation（`repair`／`pull`）不在本次 scope。
