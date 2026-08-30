@@ -1,5 +1,23 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-30（DEV-096 PWA 更新交易收斂與提示精簡 Implemented / Local QA-QC PASS / 未 Release）
+
+Spec Impact：`Implementation needs correction / Corrective addendum authoritative`。DEV-096 沿用同一任務完成 `RD Implemented / Local QA-QC PASS / 未 Release`；SPEC-041 已加入修正附錄，固定不可變 release ID、crash-safe target transaction、controllerchange reload fallback、跨分頁 lease、post-reload 對帳、有界限 recovery 與精簡 UI。舊 DEV-041 production evidence 仍是歷史事實，但舊 CTA、normal cache purge 與 background apply 不再是現行實作權威。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / Local QA-QC PASS / 未 Release | DEV-096 / DEV-041 | Authoritative DEV；transaction、version identity、Web Locks／IndexedDB 原子鎖、controllerchange reload fallback、retarget、post-reload 對帳與 compact UI 已落地；static 25/25、browser、real-SW、regression、TypeScript、build 與 targeted lint 通過。 |
+| `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md` | DEV-096 Corrective Addendum / Implemented / Local QA-QC PASS / Historical DEV-041 release retained | DEV-041 / DEV-096 | 修正現行 update authority：normal flow 走 waiting worker／controllerchange reload fallback；startup current===target 才完成；cache purge 只作人工 recovery。 |
+| `ai-doc/qa/QA-DEV-096-pwa-update-transaction-convergence.md` | Local QA Executed / Core Acceptance PASS / Production Not Authorized | DEV-096 | CT／UI／TX／SW／MT-01／REG 核心 evidence 已執行；immutable A／B／C fixture、真實 SW、多分頁、retarget、viewport、visible-error、build 與 regression artifacts 已留下。 |
+| `ai-doc/qc/QC-DEV-096-pwa-update-transaction-convergence.md` | Local Implementation QC PASS / 未 Deploy / 未 Release | DEV-096 | 獨立 readback local candidate；記錄 root-cause 修正、首輪失敗保留、static/UI/real-SW/雙分頁/storage safety/regression 結果與 production boundary。 |
+| `ai-doc/qa/QA-DEV-041-pwa-update-notification-cache-recovery.md` | Historical Phase 1 baseline / DEV-096 authority note added | DEV-041 / DEV-096 | 歷史 PASS 保留；B02 舊 CTA 與 C01～C04 normal apply 語意已被 DEV-096 取代，其餘 cases 作 regression。 |
+| `src/services/pwaUpdateTransaction.ts` | Implemented / pure PASS / WP-096-A | DEV-096 | transaction schema、strict parser、legal transition、lease／takeover 與 completed suppression 已建立。 |
+| `src/services/pwaUpdateService.ts`、`src/components/AppUpdatePrompt.tsx` | Implemented / browser＋real-SW PASS / WP-096-C～D | DEV-096 | 已收斂多 writer、移除 background apply／normal cache purge、加入 startup verification、retarget、quiesce、bounded recovery 與 exact compact visible set。 |
+| `vite.config.js`、`src/vite-env.d.ts`、`scripts/release/verify-production-artifact.mjs` | Implemented / artifact parity PASS / WP-096-B | DEV-096 / DEV-083 | sealed build 的 `PROJED_RELEASE_ID` 已注入 client；bundle／meta／manifest 三方 parity gate 通過。 |
+| DEV-041 verifiers、DEV-096 static／browser／real-SW verifiers、`package.json` | Implemented / local evidence PASS / WP-096-E | DEV-041 / DEV-096 / DEV-034 | 已新增 A→B→C、B waiting→C、多分頁、post-reload、UI 與 regression evidence；結果存於 `output/qa/dev-096`、`output/playwright/dev-096`。 |
+
+Execution boundary：WP-096-A→B→C→D→E 已在本地完成並交付 QA／QC evidence；不需 DB／migration。未以 DEV-041 歷史 release 充當本次 evidence。未授權 commit、merge、push、deploy 或 release；正式站 A→B 驗證仍需另走 deployment-release-gate。
+
 ## Documentation Map Update - 2026-08-29（DEV-095 RD Implementation Ready／Interaction Parity Rework Required／Existing Baseline Scoped／未 Release）
 
 Spec Impact：`Compatible product extension + Intentional data-model expansion + Intentional interaction-contract replacement`。identity／placement、single primary roll-up、dynamic derived read、same-Workspace與provider boundary維持；最新使用者決策要求tracking reference除外層虛線與placement command route外，與primary共用相同surface view、click／context action、pointer／keyboard／mobile DnD及recursive child tree。程式審查確認現行`TrackingReferenceItem`仍複製List／card／checklist內容、直接處理details並使用獨立subtree renderer，因此舊B01～B16 16/16、QC01～QC07 7/7只能保留為identity／placement／外觀historical baseline；B16固定唯讀context acceptance已被capability-aware shared interaction contract取代。`SPEC-095`、`ADR-046`、`QA-DEV-095`與`QC-DEV-095`已同步到`RD Implementation Ready / Interaction Parity Rework Required`；新parity尚未實作或驗證，remote Supabase TEST、migration與release亦未執行。

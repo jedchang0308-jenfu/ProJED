@@ -87,6 +87,11 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
     if (meta.releaseId !== manifest.releaseId) errors.push('release metadata id mismatch');
     if (meta.contractSha256 !== manifest.contractSha256) errors.push('release metadata contract mismatch');
   }
+  if (distDir && typeof manifest.releaseId === 'string' && manifest.releaseId.length > 0) {
+    const clientBundles = walkFiles(distDir).filter(filePath => /\.js$/i.test(filePath));
+    const releaseIdInjected = clientBundles.some(filePath => fs.readFileSync(filePath, 'utf8').includes(manifest.releaseId));
+    if (!releaseIdInjected) errors.push('client bundle release identity missing');
+  }
   if (distDir) {
     const scan = scanArtifact({ distDir, root });
     errors.push(...scan.errors);
@@ -98,7 +103,17 @@ const latestManifest = () => {
   const root = path.resolve(process.cwd(), 'output', 'release', 'dev-083');
   if (!fs.existsSync(root)) return null;
   const dirs = fs.readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort().reverse();
-  return dirs.map(dir => path.join(root, dir, 'manifest.json')).find(fs.existsSync) ?? null;
+  for (const dir of dirs) {
+    const manifestPath = path.join(root, dir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (manifest.taskId === PRODUCTION_CONTRACT.taskId && typeof manifest.releaseId === 'string' && manifest.artifact?.distDir) return manifestPath;
+    } catch {
+      // Ignore non-artifact directories and continue to the next candidate.
+    }
+  }
+  return null;
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {

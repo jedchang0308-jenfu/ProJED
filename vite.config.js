@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => ({
         'import.meta.env.VITE_SUPABASE_AUTO_TEST_LOGIN': JSON.stringify('false'),
         'import.meta.env.VITE_SUPABASE_TEST_EMAIL': JSON.stringify(''),
         'import.meta.env.VITE_SUPABASE_TEST_PASSWORD': JSON.stringify(''),
+        'import.meta.env.VITE_PROJED_RELEASE_ID': JSON.stringify(process.env.PROJED_RELEASE_ID || ''),
       }
     : undefined,
   plugins: [

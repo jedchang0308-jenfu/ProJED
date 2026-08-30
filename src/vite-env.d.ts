@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_SUPABASE_AUTH_REDIRECT_URL?: string;
   readonly VITE_PROJED_APP_URL?: string;
+  readonly VITE_PROJED_RELEASE_ID?: string;
   readonly VITE_SUPABASE_AUTH_MODE?: string;
   readonly VITE_SUPABASE_TEST_EMAIL?: string;
   readonly VITE_SUPABASE_TEST_PASSWORD?: string;

@@ -117,7 +117,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
             <CalendarSubscriptionsView />
           </div>
         )}
-        {activeSection === 'app' && <AppInstallAssistant mode="settings" />}
+        {activeSection === 'app' && (
+          <div className="space-y-2">
+            <p className="text-xs leading-4 text-slate-500">管理此裝置與目前帳號的快速開啟提示。</p>
+            <AppInstallAssistant mode="settings" />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, RefreshCw, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, X } from 'lucide-react';
 import {
   applyPwaUpdate,
   clearPwaApplicationCacheAndReload,
@@ -11,10 +11,9 @@ import {
 import { Button } from './ui/Button';
 
 const isVisibleState = (state: PwaUpdateState) => (
-  (state.updateAvailable && !state.dismissedAt) ||
-  (state.status === 'updated' && !state.dismissedAt) ||
-  state.status === 'recoverable-cache-error' ||
-  state.status === 'failed'
+  (state.updateAvailable && !state.dismissedAt)
+  || state.status === 'recoverable-cache-error'
+  || state.status === 'failed'
 );
 
 export const AppUpdatePrompt: React.FC = () => {
@@ -22,35 +21,17 @@ export const AppUpdatePrompt: React.FC = () => {
   const [isApplying, setIsApplying] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
 
-  useEffect(() => subscribePwaUpdateState(setState), []);
+  useEffect(() => {
+    const unsubscribe = subscribePwaUpdateState(setState);
+    return unsubscribe;
+  }, []);
 
   const visible = isVisibleState(state);
   const isRecovery = state.status === 'recoverable-cache-error' || state.status === 'failed';
-  const isUpdated = state.status === 'updated';
-  const content = useMemo(() => {
-    if (isRecovery) {
-      return {
-        title: '載入新版時發生問題',
-        description: '請重新整理；若仍無法開啟，可清除應用程式快取後再載入。',
-        actionLabel: '重新整理',
-      };
-    }
-    if (isUpdated) {
-      return {
-        title: state.previousVersion ? '已更新到新版' : '目前已是最新版本',
-        description: '你現在看到的是最新版本，之後有新版時會在這裡提示。',
-        actionLabel: '知道了',
-      };
-    }
-    return {
-      title: '有新版本可用',
-      description: '按下後會一次套用到目前最新版並重新整理畫面；不會清除任務資料或登入資料。',
-      actionLabel: '一鍵更新到最新版',
-    };
-  }, [isRecovery, isUpdated, state.previousVersion]);
+  const isUpdating = isApplying || state.status === 'applying' || state.status === 'awaiting-controller' || state.status === 'verifying';
 
   const handleUpdate = async () => {
-    if (isApplying) return;
+    if (isUpdating) return;
     setIsApplying(true);
     await applyPwaUpdate();
     setIsApplying(false);
@@ -67,96 +48,87 @@ export const AppUpdatePrompt: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-[9999] px-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] sm:px-5 sm:pb-5"
+      className="fixed inset-x-0 bottom-0 z-[9999] px-3 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] sm:px-5 sm:pb-4"
       data-pwa-update-prompt
       role="status"
       aria-live="polite"
     >
-      <div className="mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-900/20 sm:p-4">
-        <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${isRecovery ? 'bg-amber-50 text-amber-600' : isUpdated ? 'bg-emerald-50 text-emerald-600' : 'bg-primary/10 text-primary'}`}>
-          {isRecovery ? <AlertTriangle size={18} /> : isUpdated ? <CheckCircle2 size={18} /> : <RefreshCw size={18} />}
-        </span>
+      <div className="mx-auto flex max-w-xl items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-xl shadow-slate-900/15 sm:px-4 sm:py-3">
+        {isRecovery && (
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-600" aria-hidden="true">
+            <AlertTriangle size={17} />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold leading-5 text-slate-900">{content.title}</h2>
-              <p className="mt-1 text-sm leading-5 text-slate-600">{content.description}</p>
-            </div>
-            {!isRecovery && (
-              <button
+          <h2 className="truncate text-sm font-bold leading-5 text-slate-900">
+            {isRecovery ? '載入新版時發生問題' : '有新版本可用'}
+          </h2>
+          {isRecovery && (
+            <p className="mt-0.5 break-words text-xs leading-4 text-slate-600" data-pwa-update-error>
+              {state.errorMessage || '請重新整理；若仍無法開啟，可清除應用程式快取後再載入。'}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {isRecovery ? (
+            <>
+              <Button
                 type="button"
-                onClick={dismissPwaUpdatePrompt}
-                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label={isUpdated ? '關閉更新提示' : '稍後更新'}
-                data-pwa-update-dismiss
+                size="sm"
+                onClick={() => window.location.reload()}
+                className="h-8 px-2.5 text-xs"
+                data-pwa-update-action
               >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            {isRecovery ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => window.location.reload()}
-                  className="gap-2"
-                  data-pwa-update-action
-                >
-                  <RefreshCw size={15} />
-                  {content.actionLabel}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  isLoading={isRecovering}
-                  onClick={handleRecovery}
-                  data-pwa-cache-recovery
-                >
-                  清除快取後重整
-                </Button>
-              </>
-            ) : isUpdated ? (
+                重新整理
+              </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={dismissPwaUpdatePrompt}
-                data-pwa-updated-confirm
+                isLoading={isRecovering}
+                onClick={handleRecovery}
+                className="h-8 px-2.5 text-xs"
+                data-pwa-cache-recovery
               >
-                {content.actionLabel}
+                清除快取後重整
               </Button>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  isLoading={isApplying || state.status === 'applying'}
-                  onClick={handleUpdate}
-                  className="gap-2"
-                  data-pwa-update-action
-                >
-                  <RefreshCw size={15} />
-                  {state.status === 'applying' || isApplying ? '更新中' : content.actionLabel}
-                </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                isLoading={isUpdating}
+                onClick={handleUpdate}
+                className="h-8 px-2.5 text-xs"
+                data-pwa-update-action
+              >
+                {isUpdating ? '更新中' : '一鍵更新'}
+              </Button>
+              {!isUpdating && (
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
                   onClick={dismissPwaUpdatePrompt}
+                  className="h-8 px-2 text-xs"
                   data-pwa-update-later
                 >
                   稍後
                 </Button>
-              </>
-            )}
-          </div>
-          {state.errorMessage && (
-            <p className="mt-2 break-words text-xs leading-5 text-slate-500" data-pwa-update-error>
-              {state.errorMessage}
-            </p>
+              )}
+              {!isUpdating && (
+                <button
+                  type="button"
+                  onClick={dismissPwaUpdatePrompt}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  aria-label="關閉更新提示"
+                  data-pwa-update-dismiss
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

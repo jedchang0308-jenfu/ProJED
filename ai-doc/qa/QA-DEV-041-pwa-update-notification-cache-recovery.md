@@ -5,6 +5,8 @@
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md`
 建立日期: 2026-07-05
 
+> 2026-08-30 authority note：本文件保留 DEV-041 Phase 1 與既有 production release 的歷史驗證事實。DEV-096 已重新開啟「同版本提示重複出現」缺陷；B02 的舊 CTA「一鍵更新到最新版」與 C01～C04 的 normal cache-purge apply 語意，已由 SPEC-041 `DEV-096 Corrective Addendum` 及 `ai-doc/qa/QA-DEV-096-pwa-update-transaction-convergence.md` 取代。其他 DEV-041 cases 仍是 regression；不得以本文件歷史 PASS 宣稱 DEV-096 已通過。
+
 ## QA 目標
 
 驗證新版本發布後，使用者能看見更新提示、主動按更新按鈕套用新版本，且 stale cache / chunk-load 類異常有可恢復流程。此 QA 不驗證正式部署本身；正式部署需另走 deployment-release-gate。

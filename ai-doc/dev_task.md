@@ -602,6 +602,13 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     placement identity，不得複製任務列或以 `parentIds[]` 代替。
   - 證據：current `output/qa/dev-095/interaction-parity-source-result.json`、`output/playwright/dev-095/interaction-parity-result.json`、三張1440／390／320 PNG及`output/qc/dev-095/interaction-parity-qc-result.json`；historical model／DB／B01～B16另保留。Supabase TEST／migration history與release阻塞維持原紀錄。
   - 計入交付：是（本地interaction slice已完成；整體交付仍待Supabase TEST與release gate，不標為完成）
+- ✓ DEV-096 [交付點] [完成] [P0] [RD Implemented / Local QA-QC PASS / 未 Release] PWA 更新交易收斂與提示精簡
+  - 摘要：以持久化 transaction、owner fence、Web Locks＋PWA-owned IndexedDB 原子鎖、waiting-worker retarget、controllerchange reload fallback 與 post-reload current/target 對帳，修正一次更新後同版本提示又出現、需連續按數次的問題；同時依使用者紅線指示移除一般更新提示的圖示與說明，將 CTA 縮為「一鍵更新」並壓縮留白。
+  - 來源 ID：`USER-20260830-PWA-UPDATE-REPEATED-PROMPT-AND-COMPACT-UI`
+  - 父任務：DEV-041；相容 DEV-034。
+  - 下一步：如需正式上線，另行授權 deployment/release gate；本輪不 commit、merge、push、deploy 或 release。
+  - 證據：`src/services/pwaUpdateTransaction.ts`、`src/services/pwaUpdateService.ts`、`src/components/AppUpdatePrompt.tsx`、`vite.config.js`、`scripts/verify-dev-096-pwa-update-transaction-convergence.*`、`QA-DEV-096`、`QC-DEV-096`；static 25/25、local UI browser、real SW A/B/C＋雙分頁＋retarget、DEV-041／034 regression、TypeScript、build:test、artifact parity 與 targeted ESLint 均 PASS。
+  - 計入交付：是（本地 implementation + QA/QC；未 Release）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -2639,6 +2646,181 @@ Sequencing 固定 A→B→C→D→E；A 未通過不得接 active UI。P0產品�
 - 2026-08-28：補齊 Gantt／Calendar／共用側欄／Mind Map 的 placement-only dashed projection marker 與 placement-aware drag；跨板 reference 不再沿用 canonical child toggle，backup v3 對 payload 外 canonical task 以 `OUT_OF_PACKAGE_REFERENCE` fail closed。model／source contract artifacts 已產生並 PASS；完整 cross-mode、Supabase TEST、QC 與 release 仍 pending。
 - 2026-08-28：重跑 browser B01～B07、B09～B11 共 10/10 PASS，並補強 WbsList／Kanban／Board 根層與巢狀 reference subtree renderer、reference drop anchor、tracking subtree workspace refresh 與唯讀管理 guard；`npx tsc --noEmit`、targeted ESLint、`build:test`、model/source contract 與 isolated PostgreSQL matrix 均再次 PASS。完整 QA/QC、Supabase TEST、performance/EXPLAIN 與 release 仍 pending。
 - 2026-08-28：依使用者「單一任務、多看板／多父位置追蹤」需求建立 DEV-095，經 grill-me 三輪確認純投影、單一主要彙總、衍生讀取權、虛線副本拖曳、生命週期與不自動建立 dependency；文件達 `Brief Ready / Human Confirmed`，產品尚未實作或驗證。
+
+## DEV-096：PWA 更新交易收斂與提示精簡
+
+- 文件成熟度：`RD Implemented / Local QA-QC PASS / 未 Release`
+- 狀態：本地實作完成／核心 QA・QC 通過／未 Deploy／未 Release
+- 節點類型：交付點
+- 父交付點：DEV-041；相容 DEV-034、DEV-083
+- 是否計入產品交付完成：是（本地 implementation + QA/QC；正式 release 另行授權）
+- 原始需求邊界：`USER-20260830-PWA-UPDATE-REPEATED-PROMPT-AND-COMPACT-UI`
+- 風險等級：Medium（P0 更新失效模式：跨 reload、Service Worker 與多分頁共享狀態）
+- Spec Impact：`Implementation needs correction / SPEC-041 DEV-096 Corrective Addendum is authoritative`
+
+### Human Decision Brief
+
+- 使用者確認問題：按一次更新後，同一個更新提示可能立即再次出現，必須連按數次才停止。
+- 使用者確認 UI：紅線代表刪除其下元素；一般更新提示刪除左側圖示與說明，CTA 改為「一鍵更新」，版面縮緊。
+- 固定產品語意：同一 `targetVersion` 一次使用者確認、一次 apply transaction、一次 `updateSW`；每個受 controller 接管影響的 client 最多一次正常 reload，成功必須以 reload 後版本對帳成立為準。
+- 固定安全語意：一般更新不清除 SW／Cache Storage；全量 unregister／cache delete 只保留為使用者主動選擇的錯誤恢復，且不得觸碰登入或業務資料。
+- 不需人類再決定：target identity、交易欄位、timeout、跨分頁協調、狀態轉移、檔案邊界與測試矩陣均已在本契約固定。
+- 需要人類重新授權：production deploy／release、強制更新、遠端版本服務、遙測或擴大 storage 清除範圍。
+
+### 問題、根因與使用者價值
+
+修正前的更新流程同時存在 app-shell hash check、`onNeedRefresh`、background／`pagehide` apply、以及按鈕觸發的 unregister／cache delete／reload 等多個 writer，卻沒有持久化同一目標版本從「可用」到「接管、reload、版本驗證」的唯一交易。局部 callback 完成或 state 提早回到 `idle`，不等於新 bundle 已載入，因此同版本可以再次被判定為待更新。
+
+完成後，同一 target 只由一個分頁擁有 apply lease 並送出一次 `updateSW`；每個受接管影響的頁面最多正常 reload 一次，新頁面以不可變 release ID 對帳成功後才完成交易。若失敗，流程進入有界限 recovery／failed，不再把同一 CTA 當作重試迴圈。
+
+已確認證據邊界：2026-08-30 唯讀抽查正式站 8 次 no-store app shell 均回傳 `index-yMpCxp-i.js`，`sw.js` 也引用同一 bundle，未支持 CDN 長時間交錯版本為主因；特定使用者裝置的完整 event timeline 尚未取得，因此 QA 必須用真實 SW 生命週期尋找反例，不把單一 race 假說當既成事實。
+
+### Scope／Out of Scope
+
+Scope：
+- 建立 crash-safe `targetVersion` transaction、同分頁重入防護、跨分頁 owner lease 與結果同步。
+- 以既有 sealed release `releaseId` 對帳 production current／latest，local／test 才允許 bundle hash fallback。
+- 正常更新改走 `registration.update()`、waiting worker、`updateSW()`／controlling reload 與 startup verification。
+- 移除 background／`pagehide` 自動 apply；visibility 僅可檢查更新，不可在未點擊時接管或 reload。
+- 一般提示刪除圖示與說明，精簡 CTA 與 spacing；recovery／failed 保留必要原因和動作。
+- 建立 pure、test-mode browser 與真實 SW A→B→C／多分頁 evidence。
+
+Out of Scope：
+- 不改 Supabase schema／RLS／RPC，不清登入資料、IndexedDB 或非 PWA-owned storage。
+- 不做強制更新、release notes API、analytics、push／email 或原生商店更新。
+- 不在本 DEV 的 RD／QA／QC 工作包中 deploy 或 release；正式站驗證另走 release gate。
+- 不把 recovery／failed 文案一起刪除，也不以 test-mode synthetic event 取代真實 SW evidence。
+
+### 版本真值契約
+
+- Canonical 格式：production 為 `release:<releaseId>`；local／test fallback 為 `bundle:<entryHash>`。不同 namespace 不得直接判定相等。
+- Current production identity：`scripts/release/build-production-artifact.mjs` 已把 `PROJED_RELEASE_ID` 帶入 sealed Vite child process；`vite.config.js` 必須將它 define 成 `import.meta.env.VITE_PROJED_RELEASE_ID`，`src/vite-env.d.ts` 補型別。空值或 malformed production ID 必須 fail closed。
+- Latest production identity：每次檢查以 `cache: 'no-store'` 讀 `/release-meta.json?projed_update_check=<nonce>`，只接受 `schemaVersion === 1` 與非空 `releaseId`，轉成相同 namespace 後比較。
+- Local／test：缺 release metadata 時可由 app-shell entry asset 解析 `bundle:<hash>`；production 不得靜默退回不可靠的空 ID。無法取得可信 latest 時保留 current state，記錄可診斷錯誤，不顯示假更新。
+- `scripts/release/verify-production-artifact.mjs` 必須新增 artifact 內注入 ID、`release-meta.json` 與 manifest 三者一致檢查；不一致為 release artifact P0 failure。
+
+### 交易資料與所有權契約
+
+新增 pure module `src/services/pwaUpdateTransaction.ts`，唯一 schema 為：
+
+```ts
+type PwaUpdatePhase =
+  | 'available'
+  | 'applying'
+  | 'awaiting-controller'
+  | 'verifying'
+  | 'recovering'
+  | 'failed'
+
+interface PwaUpdateTransactionV1 {
+  schemaVersion: 1
+  transactionId: string
+  sourceVersion: string
+  targetVersion: string
+  phase: PwaUpdatePhase
+  ownerTabId: string
+  ownerFence: number
+  normalReloadReserved: boolean
+  recoveryAttemptCount: 0 | 1
+  createdAt: number
+  updatedAt: number
+  leaseExpiresAt: number
+  errorCode?: string
+}
+```
+
+- PWA-owned keys 固定為 localStorage `projed.pwa-update.transaction.v1`、`projed.pwa-update.completed-version.v1`；sessionStorage `projed.pwa-update.tab-id.v1`、`projed.pwa-update.dismissed-target.v1`、`projed.pwa-update.recovery.v1`。另允許獨立 PWA IndexedDB `projed-pwa-update-v1`／`locks` store 作不支援 Web Locks 時的原子鎖 fallback；不得存入或清除業務 IndexedDB。parser 對未知 schema、非法 phase、空 version、非正整數 fence、非有限 timestamp fail closed；不得清除其他 key。
+- 同 target 只允許一個 active `transactionId` 與 owner。優先以 `navigator.locks.request('projed.pwa-update.apply.v1', { mode: 'exclusive', ifAvailable: true })` 取得互斥；不支援 Web Locks 時，必須以獨立 PWA IndexedDB 單一 readwrite transaction 原子讀寫 lock record，不得只靠 localStorage read-then-write。
+- owner lease 為 30 秒、active owner 每 10 秒續租；每次取得／接管遞增 `ownerFence`。任何 effect 或 commit 前都必須 reread 並確認 transactionId／ownerTabId／ownerFence／lease；其他分頁只投影狀態，不得呼叫 skip-waiting。owner 關閉或逾期後，另一分頁才可接管；舊 fence 永久失效。
+- 跨分頁 channel 固定為 `BroadcastChannel('projed.pwa-update.v1')`，並用 localStorage `storage` event 作 fallback。訊息只傳 transaction／completed change signal；接收端一律重讀並驗證 persisted state，不信任訊息 payload。
+- 同分頁 apply promise 必須 singleton；重複 click、visibility、`pagehide`、舊 callback 或重複 `onNeedRefresh` 不得產生第二筆 transaction。
+- completed version 只有 `currentVersion === targetVersion` 時可寫入；同 target 後續 `onNeedRefresh`／meta check 必須被抑制。只有有效 owner 在 `applying` 的 stable-target preflight 可於同一 transaction retarget 一次；進入 `awaiting-controller` 後不得改 target。完成舊 target 後再偵測到更高版本時，才建立新交易。
+
+### 狀態機與時序契約
+
+公開 UI state 保留既有狀態並新增 `awaiting-controller`、`verifying`、`recovering`；正常路徑如下：
+
+1. `onNeedRefresh` 或 foreground check 取得可信 latest；`latest !== current` 且不等於 completed／dismissed target 時，persist `available` 並顯示提示。`onNeedRefresh` 只保存最新 queued `updateSW`，不得 background apply。
+2. 使用者按「一鍵更新」後取得 30 秒 owner lease，state 進 `applying`，UI 立即 disable CTA 並阻止 later／close 造成第二入口。
+3. owner 呼叫 `registration.update()`，等待 registration 出現 waiting worker，timeout 15 秒。再 no-store 讀 latest；若 target 改變，更新 transaction target 並重做一次 preflight。最多兩輪仍變動則以 `TARGET_UNSTABLE` 失敗，0 次 reload。
+4. waiting target 穩定後，先 persist `awaiting-controller` 且 `normalReloadReserved=true`，再呼叫最新 queued `updateSW()`，並以目前 registration 的 waiting worker 直接送 `SKIP_WAITING` 作 callback race fallback。controllerchange 先停止舊頁面 writer；套件 controlling handler 或 coordinator 短延遲 fallback 完成唯一有效的 normal reload。
+5. startup 先 hydrate transaction，進 `verifying` 並取得 current identity。`current === target` 時原子式寫 completed、移除 active transaction、廣播完成；同 target 提示不再出現。
+6. normal reload 後 mismatch 時，若 `recoveryAttemptCount === 0`，寫 `recovering/1` 並只做一次帶 nonce 的 cache-busting navigation；此步仍不 unregister／delete cache。再次 mismatch 或 15 秒內無可信 current，進 `failed`，停止自動 reload。
+7. `failed` 只提供明確重試檢查與「清除應用程式快取後重整」人工 recovery。後者才可處理同 origin SW registration／Cache Storage，且要檢查每個 boolean 結果；失敗保留可見 error，不得假裝成功。
+
+非法轉移、舊 owner commit、target downgrade、第二次 normal reload、第二次 automatic recovery、或未點擊就 apply 必須 fail closed。transaction 超過 5 分鐘仍未完成時可標 `failed/TRANSACTION_STALE`，不可靜默刪除後重新提示。
+
+### UI Entry Contract
+
+- Entry：`AppUpdatePrompt` 維持 `src/App.tsx` 的全域掛載、位於 AuthGate 外；actor 為任何已開啟 ProJED web／PWA 的使用者，登入狀態不影響更新能力。
+- Trigger：可信 target 可用且非 completed／本 session dismissed；或 transaction 進 recovery／failed。Visibility change 只可觸發 check。
+- Normal visible set 必須且只能包含：標題「有新版本可用」、關閉按鈕、primary CTA「一鍵更新」、secondary「稍後」。刪除左側 Refresh 圖示、說明段落、版本 badge 與「到最新版」字樣。
+- Applying／awaiting：primary 顯示「更新中」且 disabled；later／close 隱藏或 disabled，避免狀態看似可中止但 effect 已開始。Recovery／failed 可另顯示最小原因、恢復 action 與 icon，不受 normal delete 規則限制。
+- Layout：使用一層扁平 surface，縮小 icon 移除後的左側空洞、內距、段距與 action gap；不得新增框中框。1440×900、390×844、320×844 均無水平 overflow、文字截斷、按鈕擠壓或 safe-area 遮蔽。
+- Accessibility：dialog／status role 與 aria-live 不重複朗讀；close 有可辨識 label；keyboard focus 不落到 disabled／hidden control；apply 前後 focus 與 visible state 一致。
+- Exit：稍後只寫本 session dismissed target；關閉同義。版本 target 改變可再次提示。成功 reload 後由 startup verification 結束，不以 callback resolve 提早結束。
+
+### Repo Impact 與 Work Packages
+
+| WP | 修改範圍 | RD 輸出與完成條件 |
+|---|---|---|
+| WP-096-A | `src/services/pwaUpdateTransaction.ts`（新增） | schema、strict parser、transition、lease／takeover、completed suppression 與 pure tests；無 browser／storage side effect。 |
+| WP-096-B | `vite.config.js`、`src/vite-env.d.ts`、`scripts/release/verify-production-artifact.mjs` | production release ID 注入與 artifact 三方一致 gate；既有 sealed build contract 不降級。 |
+| WP-096-C | `src/services/pwaUpdateService.ts` | 重構 `fetchLatestAppShellVersion`、`recordLoadedAppVersion`、`runQueuedUpdate`、`applyPwaUpdate`、`setupPwaLifecycle` 為單一 transaction orchestrator；加入 latest meta、waiting preflight、標準 updateSW、startup verify、BroadcastChannel／Web Locks／IDB fallback 與 bounded recovery；刪除 `applyUpdateWhenBackgrounded` 綁定及 normal cache purge。 |
+| WP-096-D | `src/components/AppUpdatePrompt.tsx` | 重構 `AppUpdatePrompt` 的 fixed visible set、緊湊 layout、applying／recovery／failed state 與 accessibility；`src/App.tsx` 預期只做 regression，除非掛載 contract 確有必要才修改。 |
+| WP-096-E | DEV-041 verifiers、`package.json`、新增 DEV-096 static／browser／real-SW verifier | 舊 assertion 改依 DEV-096 authority；產生 pure、test-mode、A→B→C、多分頁與 storage safety evidence。 |
+| WP-096-F | `ai-doc/dev_task.md`、SPEC-041 addendum、`QA-DEV-096`、後續 QC | RD 回填實際 diff／commands；QA 依 frozen candidate 執行；QC 獨立事實驗證，不修改產品。 |
+
+`src/main.tsx`、`src/components/GlobalErrorBoundary.tsx` 與 DEV-034 install flow 預期只做相容性 regression；若實作必須修改其 public behavior、build pipeline 產不出穩定 release ID、或 `vite-plugin-pwa` 實際 controlling 行為與已檢查版本不同，立即停止 WP 並 Human Re-entry，不可自行換成第二套 reload writer。
+
+### Acceptance／QA／QC Contract
+
+- AC-096-01：同 target 在單頁、連點、hide/show、`pagehide`、reload 與多分頁競態下最多一筆 transaction、一個有效 owner fence 與一次 `updateSW`；每個受 controller 接管影響的 client 最多一次正常 reload，不得形成任一 client 的 reload loop。
+- AC-096-02：A→B、B→C、B waiting 時發布 C 均收斂到最新穩定 target；reload 後只有 current===target 才 completed，同版本 normal CTA 不再出現。
+- AC-096-03：owner crash 可於 lease 到期後被接管，舊 owner 不得 commit；malformed／stale state 進可見 failed，不形成 loop。
+- AC-096-04：正常流程不 unregister SW、不 delete Cache Storage、不清業務 storage；人工 recovery 僅處理 PWA cache 範圍並有結果 readback。
+- AC-096-05：一般提示 exact visible set 與 1440／390／320 viewport、focus／ARIA 全通過，visible error、console error、pageerror、HTTP 4xx／5xx、白畫面均為 0。
+- AC-096-06：DEV-041 更新 verifier 後通過、DEV-034 regressions 通過、TypeScript 與 `build:test` exit 0；合成 event 不得單獨支持 SW lifecycle PASS。
+
+QA authority：`ai-doc/qa/QA-DEV-096-pwa-update-transaction-convergence.md`。它固定 CT、UI、TX、SW、MT、SAFE、REG cases、FMEA、真實 immutable A／B／C fixture、evidence path 與 stop conditions；核心 acceptance 已執行並由 `QC-DEV-096` 完成 local fact readback。
+
+本次 local QA/QC 已依序執行：
+
+```text
+npm.cmd run verify:dev-096-pwa-update-transaction-convergence
+npm.cmd run verify:dev-096-pwa-update-transaction-convergence-browser
+npm.cmd run verify:dev-096-pwa-update-transaction-convergence-sw
+npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery
+npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser
+npm.cmd run verify:dev-034-pwa-install-guidance
+npm.cmd run verify:dev-034-pwa-install-guidance-browser
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build:test
+```
+
+前三個 DEV-096 commands／scripts 已建立並通過；QA／QC 保留 result JSON、real-SW trace、console／network observation、A/B/C artifact、雙分頁 transaction evidence 與 rendered screenshots。production deploy／remote smoke／release 仍維持未授權邊界。
+
+### FMEA／Fail-Seeking 與 Stop Conditions
+
+最高風險反例：兩分頁同時在 B waiting 時按更新，而 C 又在 preflight 期間發布。驗證必須刻意讓兩頁競搶 owner、讓第一輪 target 改變並中止一個 owner，證明最後只有一個有效 fence／一次 `updateSW` 收斂 C、沒有 B 回退、任一 client 第二次 reload 或同版本提示。
+
+以下任一成立即 P0 stop，不得標 implemented／QA PASS／QC PASS：current≠target 卻 completed、同 target 兩 owner／兩 reload、未點擊自動 apply、production identity 空值仍當成功、正常路徑清 SW／Cache、清除業務資料、同版本 CTA 再出現、缺真實 SW 或多分頁 evidence、任一 visible error／白畫面。資料層、強制更新、release policy 或 production 行為需要擴 scope 時 Human Re-entry。
+
+### Spec Governance、執行邊界與下一步
+
+- `SPEC-041` 已加入 `DEV-096 Corrective Addendum`，明確取代 2026-07-07 normal cache-purge hotfix、舊 CTA 與 background apply；DEV-041 歷史 release evidence 不被改寫。
+- `QA-DEV-041` 保留歷史 Phase 1 baseline；B02 舊 CTA 與 C01～C04 normal apply 語意由 `QA-DEV-096` 取代，其餘仍做 regression。
+- ADR：不新增。此變更仍在既有 `vite-plugin-pwa` prompt 架構與 DEV-083 release artifact governance 內，沒有跨子系統不可逆決策。
+- 衝突：0 個 `Unresolved conflict`；P0／P1 readiness gap 為 0。文件與產品狀態為 `RD Implemented / Local QA-QC PASS / 未 Release`。
+- Git／執行邊界：readiness baseline 為 branch `持續優化3`、HEAD `5326a1446f166e25ffa9e205344c8622fa8de8b0`。RD 只可修改 WP-096 列出的產品、測試與文件；保留工作樹既有未提交內容，五個 update-dialog PNG 為既有使用者 artifact，不得修改或刪除。不得 commit、merge、push、deploy 或 release，除非使用者另行授權。
+- 下一步：如需正式上線，重新取得使用者授權後進 deployment/release gate；本輪不 commit、merge、push、deploy 或 release。
+
+### 變更紀錄
+
+- 2026-08-30：依使用者重複更新提示回報、紅線刪除與緊湊版面要求建立 DEV-096；文件達 `Brief Ready`，未修改產品程式、未 deploy 或 release。
+- 2026-08-30：升級為 `RD Implementation Ready / Human Confirmed`；固定 release ID、transaction schema、lease、狀態機、bounded recovery、UI Entry Contract、逐檔 WP 與 `QA-DEV-096`。產品與 verifier 尚未實作，QA／QC 未執行，未 Deploy／未 Release。
+- 2026-08-30：完成 WP-096-A～E 本地實作；加入 transaction／fence、release identity、waiting-worker retarget、controllerchange quiesce／reload fallback、bounded recovery、compact prompt、artifact parity 與 static／browser／real-SW verifier。
+- 2026-08-30：local QA/QC fresh evidence 通過：static 25/25、real-SW A→B／B→C／B waiting→C retarget、雙分頁、DEV-041／034 regression、TypeScript、build:test、artifact parity、targeted ESLint；更新 `QA-DEV-096`、`QC-DEV-096` 與 evidence JSON。未 Deploy／未 Release。
 
 ## PM Update 歷史歸檔
 
