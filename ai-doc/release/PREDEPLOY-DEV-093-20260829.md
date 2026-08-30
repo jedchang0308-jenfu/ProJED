@@ -2,13 +2,13 @@
 
 ## 結論
 
-截至最新 follow-up，Supabase TEST gate 已解除；整體仍為 `NOT READY / Lane 3 High / 不得啟用`。本次已在 TEST 執行指定 migration 與 grant hardening，尚未執行 Firebase deploy、production Supabase migration、repair、pull、正式資料變更或 activation。
+截至最新 follow-up，Supabase TEST gate、production feature-schema gate 與 hosted Level 3 authenticated smoke 均已通過；正式 Firebase candidate／activation 尚未完成，整體仍為 `NOT READY / Lane 3 High / 不得啟用`，直到 candidate gate 與 activation 完成。
 
-主要阻塞為：
+目前剩餘 gate 為：
 
-1. production Supabase `knodlkxqpcqyrtgwpdst` 尚未套用 DEV-093／DEV-095，且唯讀 schema probe 尚未找到 `wbs_item_placements`、`task_tracking_reference_operations` 或 7 個 task-tracking RPC；在 production migration 未完成前不得部署相依的正式 artifact。
-2. migration history 仍有 local-only／remote-only 不一致；本次只以獨立、可追溯的 migration workspace 套用 TEST 目標 migration，未執行 `repair`／`pull`，歷史對齊仍需 release owner 決策。
-3. 尚未建立 inactive production candidate、執行 candidate authenticated smoke 或取得 activation decision；因此不能以本地／TEST 證據代替 Layer 4。
+1. 尚未建立並驗證 inactive production candidate，也尚未執行正式 canonical activation。
+2. migration history 仍有 local-only／remote-only 不一致；本次未執行 `repair`／`pull`，而是以獨立、可追溯的 migration workspace 套用目標 migration，歷史對齊仍需 release owner 決策。
+3. source gate 與 release artifact 必須在本次最終 commit 上重新產生，才能進入 candidate／activation。
 
 ## Release identity
 
@@ -31,13 +31,13 @@
 
 | Layer／Gate | 結果 | 證據／範圍 |
 |---|---|---|
-| Source and risk | `BLOCKED` | dirty worktree；Lane 3 High（schema／RLS／migration） |
+| Source and risk | `PENDING` | 最終 migration／evidence commit 後須重跑 source gate；Lane 3 High（schema／RLS／migration） |
 | Env boundary | `PASS` | `env_probe.py`、`verify:test-env`、`verify:local-origin`、`verify:production-auth-mode` |
 | Layer 1 local | `PARTIAL` | DEV-093 static 48、local 15、pure 22、journal 7、negative compile 2、isolated DB 25、local Supabase DB 25、browser 21/21、required regressions與全域 `npm run verify:source` 均PASS；全域 lint 保留 52 warnings，未形成 error。 |
-| Layer 2 artifact | `PASS` | `npm run build`；exact manifest `verify:production-artifact`；release browser smoke：HTTP／app shell／hashed JS+CSS／service worker／release identity／pageerror／failed request均通過 |
-| Layer 3 integration | `PARTIAL` | `verify:staging-env`與`verify:staging-artifact-secrets` PASS；尚未部署或驗證 staging candidate |
-| Layer 4 production-bound | `PARTIAL` | `verify:production-bound-readiness --strict` 16 checks PASS（最新 2026-08-30T02:33:00+08:00、read-only）；inactive candidate、authenticated acceptance與migration readback未完成 |
-| Migration／data | `BLOCKED` | read-only linked list 最新 2026-08-30T02:34:20+08:00；dry-run exit 1；未執行 repair／pull／push |
+| Layer 2 artifact | `PENDING` | 最終 source gate 後重新建立 sealed artifact，並執行 exact manifest `verify:production-artifact` |
+| Layer 3 integration | `PASS` | staging env／artifact secrets PASS；Level 3 hosted authenticated workspace／board/task/note/refresh/placement smoke PASS，fixture 已典藏清理 |
+| Layer 4 production-bound | `PASS*` | `verify:production-bound-readiness --strict` 16/16 PASS；production schema／RPC／RLS／placement helper readback PASS；inactive candidate 與 activation 尚待完成 |
+| Migration／data | `PASS*` | TEST／production 5 個目標 migration 均 dry-run 僅列出新 migration 後成功 push；未執行 repair／pull，歷史 mismatch 仍保留並已隔離處理 |
 | Activation／canonical production smoke | `NOT RUN` | 未取得 activation decision，正式站未以本 artifact 驗證 |
 
 ## Release tooling findings
@@ -89,6 +89,8 @@
 - 2026-08-30 08:45（Asia/Taipei）Supabase TEST read-only preflight仍為 `BLOCKED`：T08與DEV-095 placements／projection／capability schema checks共3項因 remote schema尚未套用而阻塞；T01～T07 two-user lifecycle、remote migration、deploy與release未執行，`mutationsPerformed=false`。
 - 2026-08-30 13:24～13:26（Asia/Taipei）完成 TEST migration gate：`20260828090000_dev_093_task_collection_assets.sql`、`20260828100000_dev_095_task_tracking_references.sql` 與 `20260830130000_dev_095_task_tracking_reference_grant_hardening.sql` 已套用；三個 preflight（Supabase TEST readonly、staging env、staging artifact secrets）均 PASS。TEST readback：7 個公開 RPC 為 `anon_execute=false`／`authenticated_execute=true`，`wbs_item_placements` 與 `task_tracking_reference_operations` 均 `rls_enabled=true`；`db lint` 無 error。此項 TEST blocker 已解除。
 - 2026-08-30 13:26（Asia/Taipei）production 唯讀 probe 顯示 `knodlkxqpcqyrtgwpdst` 尚無 DEV-093／DEV-095 目標表與 RPC；`verify:production-bound-readiness --strict` 雖 16/16 PASS，仍不足以證明 feature schema readiness。未執行 production migration、Firebase candidate／activation 或正式部署，整體狀態維持 `NOT READY`。
+- 2026-08-30 14:51（Asia/Taipei）TEST 與 production 以獨立 migration workspace 完成 `20260828090000_dev_093_task_collection_assets.sql`、`20260828100000_dev_095_task_tracking_references.sql`、`20260830130000_dev_095_task_tracking_reference_grant_hardening.sql`、`20260830150000_dev_095_restore_private_policy_helper_grants.sql`、`20260830160000_dev_095_restore_placement_helper_grants.sql`；兩邊均先 dry-run 僅列出目標 migration，再成功 push。production schema／RPC／RLS readback 通過，placement helper ACL 亦恢復。
+- 2026-08-30 14:51（Asia/Taipei）指定 3 個 preflight 重跑全部 PASS：Supabase TEST readonly 6/6、staging env、staging artifact secrets；均無 preflight mutation。Level 3 hosted authenticated smoke 通過既有 workspace／TEST board：建立、改名、備註、未歸位→已歸位、重新整理持久化均通過；fixture `LEVEL3-SMOKE-20260830-1439` 已由 UI 典藏，重新整理後不再出現，原有 `L3TASK1428` 未變更。
 
 ## Artifact smoke 與 cleanup
 
@@ -98,4 +100,4 @@
 
 ## 下一步
 
-先由 release owner 明確確認 production release scope（需將哪些 dirty changes 納入），再依 deployment/release gate 完成 migration history reconciliation、backup/readback、Supabase TEST／authenticated smoke、inactive candidate與獨立 activation decision。未完成前維持 `NOT READY / 未 Release`。
+以最終 clean commit 重新執行 source gate，建立 exact sealed artifact；再依 deployment/release gate 建立 inactive production candidate、完成 candidate authenticated smoke，取得本次 activation decision 後才執行 canonical production activation。完成前維持 `NOT READY / 未 Release`。
