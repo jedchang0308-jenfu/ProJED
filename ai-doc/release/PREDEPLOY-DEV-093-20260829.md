@@ -2,13 +2,13 @@
 
 ## 結論
 
-`NOT READY / Lane 3 High / 不得啟用`。本次只完成部署前驗證，未執行 Firebase deploy、Supabase migration、repair、pull、push、正式資料變更或 activation。
+截至最新 follow-up，Supabase TEST gate 已解除；整體仍為 `NOT READY / Lane 3 High / 不得啟用`。本次已在 TEST 執行指定 migration 與 grant hardening，尚未執行 Firebase deploy、production Supabase migration、repair、pull、正式資料變更或 activation。
 
 主要阻塞為：
 
-1. release source 為 dirty working tree，包含 DEV-093／DEV-094／DEV-095 與其他既有變更，尚未完成 production release scope 分類與確認。
-2. linked Supabase migration history 不一致：local 51／remote 49；DEV-093 `20260828090000` 尚未套用，另有 3 筆 remote-only revision。`db push --linked --dry-run` 以 `LegacyDbPushMissingLocalError` exit 1 結束。
-3. 尚未建立 inactive production candidate、執行 candidate authenticated smoke 或取得 activation decision；因此不能以本地／staging 證據代替 Layer 4。
+1. production Supabase `knodlkxqpcqyrtgwpdst` 尚未套用 DEV-093／DEV-095，且唯讀 schema probe 尚未找到 `wbs_item_placements`、`task_tracking_reference_operations` 或 7 個 task-tracking RPC；在 production migration 未完成前不得部署相依的正式 artifact。
+2. migration history 仍有 local-only／remote-only 不一致；本次只以獨立、可追溯的 migration workspace 套用 TEST 目標 migration，未執行 `repair`／`pull`，歷史對齊仍需 release owner 決策。
+3. 尚未建立 inactive production candidate、執行 candidate authenticated smoke 或取得 activation decision；因此不能以本地／TEST 證據代替 Layer 4。
 
 ## Release identity
 
@@ -87,6 +87,8 @@
 - 2026-08-30 08:35～08:43（Asia/Taipei）fresh local gates：DEV-093 static 48、local 15、pure 22、journal 7、negative compile 2、isolated PostgreSQL與local Supabase DB均PASS；DEV-094 contract 13、pure 7；DEV-095 model／S07～S10／QC-IP01～08／I01～I12／backup／targeted QC與isolated PostgreSQL performance均PASS；DEV-007／023／039／047／050／066既有回歸均PASS，所有 task-owned DB runtime與disposable database已清理。
 - 2026-08-30 08:39～08:45（Asia/Taipei）fresh browser／production-bound preflight：DEV-093 B00～B19 21/21 PASS、DEV-094 desktop/mobile PASS、DEV-095 current interaction B17～B24 8/8 PASS（1440／390／320、pointer／keyboard／TouchEvent、shared surface／recursive subtree／capability與fault recovery，diagnostics=0）；`verify:production-bound-readiness --strict` 16/16 PASS。舊 `verify:dev-095-task-tracking-references-browser` B01～B16 4/16 PASS、12/16 FAIL，依 QA 契約屬 historical baseline，失敗案例與現行 B17～B24 acceptance 相反，不能用作 current candidate PASS。
 - 2026-08-30 08:45（Asia/Taipei）Supabase TEST read-only preflight仍為 `BLOCKED`：T08與DEV-095 placements／projection／capability schema checks共3項因 remote schema尚未套用而阻塞；T01～T07 two-user lifecycle、remote migration、deploy與release未執行，`mutationsPerformed=false`。
+- 2026-08-30 13:24～13:26（Asia/Taipei）完成 TEST migration gate：`20260828090000_dev_093_task_collection_assets.sql`、`20260828100000_dev_095_task_tracking_references.sql` 與 `20260830130000_dev_095_task_tracking_reference_grant_hardening.sql` 已套用；三個 preflight（Supabase TEST readonly、staging env、staging artifact secrets）均 PASS。TEST readback：7 個公開 RPC 為 `anon_execute=false`／`authenticated_execute=true`，`wbs_item_placements` 與 `task_tracking_reference_operations` 均 `rls_enabled=true`；`db lint` 無 error。此項 TEST blocker 已解除。
+- 2026-08-30 13:26（Asia/Taipei）production 唯讀 probe 顯示 `knodlkxqpcqyrtgwpdst` 尚無 DEV-093／DEV-095 目標表與 RPC；`verify:production-bound-readiness --strict` 雖 16/16 PASS，仍不足以證明 feature schema readiness。未執行 production migration、Firebase candidate／activation 或正式部署，整體狀態維持 `NOT READY`。
 
 ## Artifact smoke 與 cleanup
 
