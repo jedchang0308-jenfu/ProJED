@@ -759,7 +759,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       ? '儲存完成後關閉'
       : canPersistTask
         ? '關閉（變更會自動儲存）'
-        : '關閉';
+      : '關閉';
+  const taskDetailsHasLocalChanges = Boolean(
+    canPersistTask
+    && node
+    && (
+      titleValue.trim() !== (node.title || '').trim()
+      || !areDetailNotesEqual(notes, getDisplayedDetailNotes(node))
+      || saveState === 'saving'
+      || saveState === 'error'
+    ),
+  );
 
   return (
     <div
@@ -767,6 +777,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       data-task-id={node.id}
       data-task-tracking-reference-id={trackingReferenceId}
       data-task-details-readonly={!canPersistTask ? 'true' : undefined}
+      data-pwa-task-details-state={taskDetailsHasLocalChanges ? 'dirty' : 'safe'}
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-[2px]"
       data-task-details-pinch-close="true"
       onTouchStart={handlePinchTouchStart}

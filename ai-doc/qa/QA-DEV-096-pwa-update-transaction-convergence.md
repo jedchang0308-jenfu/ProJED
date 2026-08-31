@@ -1,12 +1,19 @@
 # QA-DEV-096: PWA 更新交易收斂與提示精簡驗證計畫
 
-狀態: `Local QA Executed / Core Acceptance PASS / Production Not Authorized`
-關聯 DEV: DEV-096 / DEV-041 / DEV-034
+狀態: `Local QA Executed / Core Acceptance PASS / DEV-096 Historical Baseline after DEV-097 / Production Not Authorized`
+關聯 DEV: DEV-096 / DEV-097 / DEV-041 / DEV-034
 關聯 SPEC: `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md` DEV-096 Corrective Addendum
 風險等級: Medium（P0 更新失效模式）
 建立日期: 2026-08-30
 
 ## QA 目標與證據邊界
+
+Authority note：本計畫保留 DEV-096 已執行的 click-to-apply transaction evidence，不回寫歷史
+PASS。DEV-097已取代normal update一律等待點擊的產品語意；safe／dirty、natural boundary、
+flush-and-reload、application-owned Workbox與per-document controller／cache isolation以
+`ai-doc/qa/QA-DEV-097-pwa-safe-reload-orchestration.md` 為新 QA authority。UI-01～UI-03、
+「未點擊不得 apply」與每個 target 必須點擊一次，只能作 DEV-096 regression baseline，不能
+支持 DEV-097 PASS。
 
 驗證使用者對同一目標版本只需按一次「一鍵更新」，系統就能將 worker activation、controller 接管、reload 與 post-reload 版本對帳收斂成單一交易。更新完成後，同一 target 的「有新版本可用」不得再出現；失敗必須進入有界限恢復或可見錯誤，不把重複點擊當成正常恢復流程。
 

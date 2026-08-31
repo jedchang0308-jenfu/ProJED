@@ -240,7 +240,9 @@ assert(
 
 assert(
   'mind map keeps shared select/double-details actions while DEV-073 host owns the quick-title exception',
-  mindMapView.includes('openTaskDetails(nodeId)') &&
+  mindMapView.includes('const taskId = getCanonicalTaskId(nodeId)') &&
+    mindMapView.includes('setSelectedTaskId(taskId)') &&
+    mindMapView.includes('openTaskDetails(taskId, trackingReferenceId)') &&
     mindMapView.includes('CLEAR_TASK_SELECTION_EVENT') &&
     mindMapView.includes('clearTaskSelection();') &&
     mindMapView.includes('initialSelectionBoardRef') &&
@@ -263,7 +265,7 @@ assert(
 
 assert(
   'gantt task bar and sidebar open details without switching back to list',
-  ganttView.includes('selectAndOpenTaskDetails(item.id)') &&
+  ganttView.includes('selectAndOpenTaskDetails(item.id, item.trackingReferenceId)') &&
     !ganttView.includes("setView('list')") &&
     ganttTaskBar.includes('const latestDragState = dragStateRef.current') &&
     ganttTaskBar.includes('!latestDragState.hasDragged') &&

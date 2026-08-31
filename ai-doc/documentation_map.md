@@ -1,5 +1,21 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-08-31（DEV-097 RD Implemented / Local Automated QA + Independent QC PASS / Physical Device Supplemental Not Verified / 未 Release）
+
+Spec Impact：`Intentional replacement / ADR-047 architecture authority / SPEC-041 DEV-097 executable authority / RD implemented / Local Automated QA PASS / Independent QC PASS`。使用者確認`1A／2A／3A`後，RD技術主管審查發現原方案仍受`virtual:pwa-register`內建reload、`clientsClaim:true`、all-live completion／五分鐘stale衝突、heartbeat TTL safety推論與one-frame readiness影響。文件已完成corrective replacement，且DEV-097已落地application-owned Workbox registration、non-claiming activation、release-scoped cache retention、activation transaction／per-client convergence split、explicit readiness、typed owner manifest與compact UI；九-owner、雙分頁、flush／取消／失敗讀回、A→B→C real-SW及相鄰regressions已由local automated QA與independent QC通過。physical device supplemental與release仍待執行。
+
+| 文件／程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `ai-doc/dev_task.md` | RD Implemented / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified / Not Released | DEV-097 / DEV-041 / DEV-096 | Authoritative DEV；固定ADR、Workbox／cache isolation、local interface、typed manifest、transaction split、owner matrix、WP-097-A～F、commands與stop conditions。 |
+| `ai-doc/decisions/ADR-047-pwa-per-client-reload-isolation.md` | Accepted / RD Implemented / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified | DEV-097 / DEV-096 / DEV-041 | Architecture Memory Source：application-owned Workbox、`clientsClaim:false`、release cache retention、per-client convergence與old-cache reclamation future capsule。 |
+| `ai-doc/specs/SPEC-041-pwa-update-notification-cache-recovery.md` | DEV-097 Addendum Authoritative / RD Implemented / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified | DEV-041 / DEV-096 / DEV-097 | 產品與實作authority：local safe boundary、dirty exact set、effect ownership、application navigation/cache retention isolation、transaction split、owner／failure／verification contract；shared-scope controllerchange boundary已記錄。 |
+| `ai-doc/qa/QA-DEV-097-pwa-safe-reload-orchestration.md` | QA Executed / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified / Not Released | DEV-097 | 記錄九-owner、dual-tab、flush／cancel／failed readback、A→B→C real-SW、RWD、visible-error與相鄰regression fresh evidence。 |
+| `ai-doc/qc/QC-DEV-097-pwa-safe-reload-orchestration.md` | Local Independent QC PASS / Physical Device Supplemental Not Verified / Not Released | DEV-097 | 獨立事實驗證、artifact provenance、runtime cleanup與實機環境缺口。 |
+| `src/services/pwaReloadSafety.ts`、`src/services/pwaReloadOwnerManifest.ts`、`src/hooks/usePwaReloadSafetyOwner.ts`、`src/components/PwaReloadSafetyBridge.tsx` | Implemented / Targeted Verifier PASS | DEV-097 | local safety domain、typed owner manifest、React adapter與boundary intent bridge；9 類 owner adapter已接入。 |
+| `package.json`／lock、`vite.config.js`、`src/services/pwaUpdateService.ts`、`src/components/AppUpdatePrompt.tsx`及owner matrix components | Implemented / Static＋browser＋real-SW QA／QC PASS | DEV-096 / DEV-097 | application-owned Workbox、release cache namespace、explicit readiness、local safety gate與compact prompt已落地；physical device supplemental與release pending。 |
+
+Execution boundary：本輪已完成DEV-097 A→F的產品、verifier、build/package、QA evidence與文件變更；未修改migration或release artifact。Cross-spec為明示的`Intentional replacement`；原技術主管P0／P1 findings已由新architecture contract收斂，unresolved conflict=0。`Local Automated QA PASS`與`Independent QC PASS`均不等於release PASS；iOS／Android實機補充為`Not Verified`，固定結果已產生於`output/qa/dev-097`與`output/playwright/dev-097`。
+
 ## Documentation Map Update - 2026-08-30（DEV-096 PWA 更新交易收斂與提示精簡 Implemented / Local QA-QC PASS / 未 Release）
 
 Spec Impact：`Implementation needs correction / Corrective addendum authoritative`。DEV-096 沿用同一任務完成 `RD Implemented / Local QA-QC PASS / 未 Release`；SPEC-041 已加入修正附錄，固定不可變 release ID、crash-safe target transaction、controllerchange reload fallback、跨分頁 lease、post-reload 對帳、有界限 recovery 與精簡 UI。舊 DEV-041 production evidence 仍是歷史事實，但舊 CTA、normal cache purge 與 background apply 不再是現行實作權威。

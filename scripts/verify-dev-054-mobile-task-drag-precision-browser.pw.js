@@ -303,7 +303,9 @@ async (page) => {
   await runCase('QA-054-R04', 'adjacent checklist boundary jitter keeps one stable target until deliberate handover', async () => {
     await openApp();
     const source = page.locator('.kanban-task-card[data-task-id="qc-card-4"]');
-    const firstTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-1"]');
+    // child-1 owns a visible descendant, so it is not adjacent to child-3 in
+    // rendered geometry. child-2 and child-3 are the actual neighboring rows.
+    const firstTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-2"]');
     const secondTarget = page.locator('.kanban-checklist-item[data-task-id="qc-card-1-child-3"]');
     const firstId = await firstTarget.getAttribute('data-task-id');
     const secondId = await secondTarget.getAttribute('data-task-id');
@@ -861,12 +863,13 @@ async (page) => {
     surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
     point = await pointFor(surface);
     held = await startHeldTouchAtPoint(point, 0);
-    // Send the boundary move well before the 500ms timer. CDP touch dispatch
-    // has variable round-trip latency under the full regression suite; keeping
-    // the move early tests the product threshold rather than the harness race.
-    await page.waitForTimeout(120);
+    // Send the boundary move near the start of the 500ms window. CDP touch
+    // dispatch can be delayed when the full browser regression suite is busy;
+    // an early move keeps this assertion on the product's 8px boundary instead
+    // of racing the harness against the long-press timer.
+    await page.waitForTimeout(40);
     await held.moveExact({ x: point.x + 7, y: point.y }, 20);
-    await page.waitForTimeout(420);
+    await page.waitForTimeout(500);
     const sevenPxRail = page.locator('[data-mobile-task-action-rail="true"]').first();
     await sevenPxRail.waitFor({ state: 'visible', timeout: 3000 });
     samples.push({ sample: '7px', railCount: await sevenPxRail.count() });
@@ -877,9 +880,9 @@ async (page) => {
     surface = page.locator('.kanban-task-card > [data-task-touch-gesture-surface="true"]').first();
     point = await pointFor(surface);
     held = await startHeldTouchAtPoint(point, 0);
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(40);
     await held.moveExact({ x: point.x + 9, y: point.y }, 20);
-    await page.waitForTimeout(420);
+    await page.waitForTimeout(500);
     const ninePxRailCount = await page.locator('[data-mobile-task-action-rail="true"]').count();
     samples.push({ sample: '9px', railCount: ninePxRailCount });
     assert(ninePxRailCount === 0, 'movement beyond 8px must cancel long press', samples.at(-1));

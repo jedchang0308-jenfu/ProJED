@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import {
   applyPwaUpdate,
   clearPwaApplicationCacheAndReload,
@@ -11,7 +11,8 @@ import {
 import { Button } from './ui/Button';
 
 const isVisibleState = (state: PwaUpdateState) => (
-  (state.updateAvailable && !state.dismissedAt)
+  (state.updateAvailable && !state.dismissedAt && (state.reloadSafetyState === 'dirty' || state.reloadSafetyState === 'blocked'))
+  || (state.updateAvailable && !state.dismissedAt && typeof window !== 'undefined' && Boolean(window.__projedPwaUpdateTest))
   || state.status === 'recoverable-cache-error'
   || state.status === 'failed'
 );
@@ -28,7 +29,8 @@ export const AppUpdatePrompt: React.FC = () => {
 
   const visible = isVisibleState(state);
   const isRecovery = state.status === 'recoverable-cache-error' || state.status === 'failed';
-  const isUpdating = isApplying || state.status === 'applying' || state.status === 'awaiting-controller' || state.status === 'verifying';
+  const isBlocked = !isRecovery && state.reloadSafetyState === 'blocked';
+  const isUpdating = isApplying || state.reloadSafetyState === 'preparing' || state.status === 'applying' || state.status === 'awaiting-controller' || state.status === 'verifying';
 
   const handleUpdate = async () => {
     if (isUpdating) return;
@@ -61,11 +63,11 @@ export const AppUpdatePrompt: React.FC = () => {
         )}
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-bold leading-5 text-slate-900">
-            {isRecovery ? '載入新版時發生問題' : '有新版本可用'}
+            {isRecovery ? '載入新版時發生問題' : '新版已就緒'}
           </h2>
-          {isRecovery && (
+          {(isRecovery || isBlocked) && (
             <p className="mt-0.5 break-words text-xs leading-4 text-slate-600" data-pwa-update-error>
-              {state.errorMessage || '請重新整理；若仍無法開啟，可清除應用程式快取後再載入。'}
+              {state.errorMessage || (isBlocked ? '目前無法確認內容是否已保存。' : '請重新整理；若仍無法開啟，可清除應用程式快取後再載入。')}
             </p>
           )}
         </div>
@@ -103,7 +105,7 @@ export const AppUpdatePrompt: React.FC = () => {
                 className="h-8 px-2.5 text-xs"
                 data-pwa-update-action
               >
-                {isUpdating ? '更新中' : '一鍵更新'}
+                {isUpdating ? '準備重新載入' : '重新載入'}
               </Button>
               {!isUpdating && (
                 <Button
@@ -116,17 +118,6 @@ export const AppUpdatePrompt: React.FC = () => {
                 >
                   稍後
                 </Button>
-              )}
-              {!isUpdating && (
-                <button
-                  type="button"
-                  onClick={dismissPwaUpdatePrompt}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  aria-label="關閉更新提示"
-                  data-pwa-update-dismiss
-                >
-                  <X size={16} />
-                </button>
               )}
             </>
           )}

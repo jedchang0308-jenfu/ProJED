@@ -87,19 +87,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
                 type="button"
                 onClick={() => setActiveSection(section.id)}
                 data-settings-section-tab={section.id}
-                className={`flex min-h-11 min-w-0 items-center gap-2 border px-3 py-2 text-left transition-colors ${
+                className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 overflow-hidden border px-2 py-2 text-center transition-colors sm:min-h-11 sm:flex-row sm:justify-start sm:gap-2 sm:px-3 sm:text-left ${
                   isActive
                     ? 'border-primary bg-white text-slate-900 shadow-sm ring-2 ring-primary/10'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
                 }`}
                 aria-pressed={isActive}
               >
-                <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+                <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md sm:h-7 sm:w-7 ${
                   isActive ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'
                 }`}>
                   <Icon size={16} />
                 </span>
-                <span className="min-w-0 text-xs font-bold leading-4 sm:text-sm">{section.label}</span>
+                <span className="w-full min-w-0 break-words text-[11px] font-bold leading-4 sm:w-auto sm:text-sm">{section.label}</span>
               </button>
             );
           })}

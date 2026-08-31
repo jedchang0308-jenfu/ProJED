@@ -23,6 +23,7 @@ import {
 import { isLocalTestBackend, isSupabaseBackend } from '../services/dataBackend';
 import { seedLocalTestEnvironment } from '../utils/localTestEnvironment';
 import { BOARD_INVITE_TOKEN_PARAM } from '../utils/boardInviteToken';
+import { refreshPwaReloadSafety, setPwaReloadReadiness } from '../services/pwaReloadSafety';
 
 // 偵測是否為 App 內建瀏覽器 (Line, FB, IG 等)
 const detectInAppBrowser = (): boolean => {
@@ -148,6 +149,25 @@ export default function AuthGate({ children }: AuthGateProps) {
       .catch(e => console.error('[AuthGate] 遷移例外:', e))
       .finally(() => setMigrationState('done'));
   }, [user?.uid]);
+
+  useEffect(() => {
+    const ready = !loading && (!user || migrationState === 'done');
+    const epoch = `${user?.uid ?? 'anonymous'}:${migrationState}`;
+    setPwaReloadReadiness('auth-shell', epoch, ready);
+    return () => setPwaReloadReadiness('auth-shell', epoch, false);
+  }, [loading, migrationState, user?.uid]);
+
+  useEffect(() => {
+    if (loading || user) return;
+
+    // 未登入時 AuthGate 就是目前的完整可見畫面；AppContent 尚未掛載，
+    // 因此必須由登入 shell 接手 active-view readiness，避免等待中的新版
+    // 永遠停在 booting，既不能安全自動套用，也不會出現 dirty 提示。
+    const epoch = `anonymous-auth-shell:${migrationState}`;
+    setPwaReloadReadiness('active-view', epoch, true);
+    refreshPwaReloadSafety(null);
+    return () => setPwaReloadReadiness('active-view', epoch, false);
+  }, [loading, migrationState, user?.uid]);
 
   // 載入中：顯示 spinner
   if (loading) {

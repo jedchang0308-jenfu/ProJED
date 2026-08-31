@@ -144,8 +144,14 @@ const readSurfaceKind = (element: HTMLElement): TaskDropSurfaceKind | null => {
 
 const findMobileSourcePlaceholder = (nodeId: string, placementId?: string) =>
   Array.from(document.querySelectorAll<HTMLElement>('[data-kanban-drag-source-placeholder="true"][data-task-id]'))
-    .find((element) => element.getAttribute('data-task-id') === nodeId
-      && (!placementId || element.getAttribute('data-task-placement-id') === placementId)) || null;
+    .find((element) => {
+      if (element.getAttribute('data-task-id') !== nodeId) return false;
+      if (!placementId) return true;
+      const owningPlacement = element.getAttribute('data-task-placement-id')
+        || element.closest<HTMLElement>('[data-task-surface-frame="true"][data-task-placement-id]')
+          ?.getAttribute('data-task-placement-id');
+      return owningPlacement === placementId;
+    }) || null;
 
 const pointInsideRect = (point: Point, rect: TaskDragTargetRect, outset = 0) =>
   point.x >= rect.left - outset
@@ -550,8 +556,11 @@ const stabilizeCandidate = (
 
   const withinRetainRegion = pointInsideRect(intentPoint, state.lockedTargetRect, MOBILE_TARGET_RETAIN_PX);
   if (!candidate) {
-    const stillFresh = state.lastStableAt !== null && now - state.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS;
-    return withinRetainRegion && stillFresh
+    // Retain controls what remains visible while the finger jitters across a
+    // narrow DOM gap. Freshness is a release-time commit guard, not a display
+    // timeout; applying it here makes a valid indicator disappear whenever a
+    // slow browser/test frame crosses the 120 ms boundary.
+    return withinRetainRegion
       ? lockedObservation(base, state, null, null)
       : base;
   }

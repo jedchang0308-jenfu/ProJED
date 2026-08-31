@@ -356,7 +356,11 @@ const BackupSettings: React.FC = () => {
   };
 
   return (
-    <section className="border border-slate-200 bg-white" data-backup-settings-section="true">
+    <section
+      className="border border-slate-200 bg-white"
+      data-backup-settings-section="true"
+      data-pwa-backup-state={inspectLoading || planLoading || executeLoading || inspection || plan ? 'dirty' : 'safe'}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-slate-900">

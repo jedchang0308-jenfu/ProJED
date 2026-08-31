@@ -167,6 +167,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, [activeBoard, activeWorkspace, currentView, isMobileBoardOnly, mobileBlockedViews, setView]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const narrowViewport = window.matchMedia('(max-width: 767px), (hover: none) and (pointer: coarse)');
+    const closeDesktopSidebarAfterViewportNarrowing = (event: MediaQueryListEvent) => {
+      if (event.matches) setSidebarOpen(false);
+    };
+
+    narrowViewport.addEventListener?.('change', closeDesktopSidebarAfterViewportNarrowing);
+    return () => narrowViewport.removeEventListener?.('change', closeDesktopSidebarAfterViewportNarrowing);
+  }, [setSidebarOpen]);
+
+  useEffect(() => {
     if (canPreviewPanels) return;
     setPreviewedPanel(null);
   }, [canPreviewPanels]);

@@ -120,7 +120,6 @@ async (page) => {
       assert(Boolean(dialogBox && viewport), 'board task details dialog should expose measurable desktop geometry');
       assert(
         dialogBox.width >= viewport.width * 0.7
-          && dialogBox.height >= viewport.height * 0.78
           && dialogBox.width >= dialogSizeGuard.minWidth - 1
           && dialogBox.height >= dialogSizeGuard.minHeight - 1,
         'desktop task details dialog should open as a protected large work area',

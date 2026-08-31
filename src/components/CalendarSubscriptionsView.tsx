@@ -241,6 +241,7 @@ const CalendarSubscriptionSubmitBar: React.FC<CalendarSubscriptionSubmitBarProps
 
 const LOCAL_CALENDAR_FIXTURE_QUERY = 'qcCalendarSubscription';
 const LOCAL_CALENDAR_FIXTURE_ID = 'dev-084-local-calendar-subscription';
+const DEFAULT_CALENDAR_SUBSCRIPTION_NAME = '我的工作行事曆';
 
 type CalendarSubscriptionDeleteDialogProps = {
   subscription: CalendarSubscription;
@@ -358,7 +359,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [boardRefs, setBoardRefs] = useState<CalendarBoardRef[]>([]);
   const [members, setMembers] = useState<CalendarWorkspaceMember[]>([]);
   const [generatedUrls, setGeneratedUrls] = useState<Record<string, string>>({});
-  const [name, setName] = useState('我的工作行事曆');
+  const [name, setName] = useState(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
   const [filters, setFilters] = useState<CalendarSubscriptionFilters>(() =>
     emptyFilters(activeWorkspace?.id, activeBoard?.id)
   );
@@ -377,6 +378,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [subscriptionToDelete, setSubscriptionToDelete] = useState<CalendarSubscription | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [localPreviewDirty, setLocalPreviewDirty] = useState(false);
   const localCalendarFixtureEnabled = isLocalTestBackend
     && typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get(LOCAL_CALENDAR_FIXTURE_QUERY) === '1';
@@ -601,7 +603,7 @@ const CalendarSubscriptionsView: React.FC = () => {
   }, [selectedWorkspaceKey, effectiveMemberWorkspaceIds]);
 
   const resetForm = () => {
-    setName('我的工作行事曆');
+    setName(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
     setFilters(emptyFilters(activeWorkspace?.id, activeBoard?.id));
     setBuilderPayload(null);
     setBuilderValidation({
@@ -777,12 +779,17 @@ const CalendarSubscriptionsView: React.FC = () => {
 
   if (!isSupabaseBackend) {
     return (
-      <div className="h-full overflow-auto bg-slate-50 p-4 sm:p-6">
+      <div
+        className="h-full overflow-auto bg-slate-50 p-4 sm:p-6"
+        data-calendar-subscription-root="true"
+        data-pwa-calendar-state={localPreviewDirty || isDeleting ? 'dirty' : 'safe'}
+      >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {isLocalTestBackend && (
             <section
               className="border border-slate-200 bg-white p-4"
               data-calendar-subscription-local-preview="true"
+              data-calendar-subscription-view-mode={localPreviewDirty ? 'builder' : 'list'}
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
@@ -798,8 +805,26 @@ const CalendarSubscriptionsView: React.FC = () => {
                 namePlaceholder="例如：我的跨看板任務"
                 disabled
                 blockedReason="目前只能預覽；請到已連接 Supabase 的環境建立訂閱。"
-                onNameChange={setName}
+                onNameChange={(value) => {
+                  setName(value);
+                  setLocalPreviewDirty(value !== DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
+                }}
               />
+
+              {localPreviewDirty ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setName(DEFAULT_CALENDAR_SUBSCRIPTION_NAME);
+                    setBuilderRevision(current => current + 1);
+                    setLocalPreviewDirty(false);
+                  }}
+                  className="mb-3 h-9 border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  data-calendar-subscription-local-cancel="true"
+                >
+                  取消預覽變更
+                </button>
+              ) : null}
 
               <CalendarSubscriptionBuilderPreview
                 boards={boardOptions}
@@ -854,7 +879,12 @@ const CalendarSubscriptionsView: React.FC = () => {
   }
 
   return (
-    <div ref={scrollContainerRef} className="h-full overflow-auto bg-slate-50">
+    <div
+      ref={scrollContainerRef}
+      className="h-full overflow-auto bg-slate-50"
+      data-calendar-subscription-root="true"
+      data-pwa-calendar-state={viewMode === 'builder' || isSaving || isDeleting ? 'dirty' : 'safe'}
+    >
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 sm:p-6">
         <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

@@ -16,11 +16,13 @@ interface RagState {
   isOpen: boolean;
   isLoading: boolean;
   error: string | null;
+  queryDraft: string;
   chatHistory: ChatMessage[];
   generationModel: string;
 
   togglePanel: () => void;
   setIsOpen: (isOpen: boolean) => void;
+  setQueryDraft: (query: string) => void;
   setGenerationModel: (model: string) => void;
   clearHistory: () => void;
   submitQuery: (query: string, tenantId: string, projectId: string | null) => Promise<void>;
@@ -32,11 +34,13 @@ const useRagStore = create<RagState>((set, get) => ({
   isOpen: false,
   isLoading: false,
   error: null,
+  queryDraft: '',
   chatHistory: [],
   generationModel: 'gemini-3.1-flash-lite',
 
   togglePanel: () => set((state) => ({ isOpen: !state.isOpen })),
   setIsOpen: (isOpen) => set({ isOpen }),
+  setQueryDraft: (query) => set({ queryDraft: query }),
   setGenerationModel: (model) => set({ generationModel: model }),
   clearHistory: () => set({ chatHistory: [], error: null }),
 
@@ -51,6 +55,7 @@ const useRagStore = create<RagState>((set, get) => ({
 
     set({
       chatHistory: newChatHistory,
+      queryDraft: '',
       isLoading: true,
       error: null
     });

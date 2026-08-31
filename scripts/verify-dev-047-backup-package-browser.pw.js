@@ -84,7 +84,7 @@ async (page) => {
     const target = await getCurrentTarget();
     assert(target.workspaceId && target.boardId && target.boardTitle, 'current board fixture must exist', target);
 
-    step = 'canonical export and V2 download';
+    step = 'canonical export and V3 download';
     const pageText = await page.locator('[data-backup-settings-section="true"]').innerText();
     assert(pageText.includes('建立看板備份') && pageText.includes('匯入或還原'), 'backup page must expose the two task sections', { pageText });
     assert(!pageText.includes('匯出全域快照'), 'backup page must not claim a global snapshot', { pageText });
@@ -106,11 +106,11 @@ async (page) => {
     let validText = '';
     for await (const chunk of stream) validText += chunk.toString('utf8');
     const packageValue = JSON.parse(validText);
-    assert(packageValue.format === 'projed-backup' && packageValue.schemaVersion === 2, 'download must be a V2 package', packageValue);
+    assert(packageValue.format === 'projed-backup' && packageValue.schemaVersion === 3, 'new export must use the current V3 package contract', packageValue);
     assert(packageValue.scope?.type === 'board', 'download scope must be one board', packageValue.scope);
     assert(packageValue.source.boardId === target.boardId, 'download source must match selected board', { source: packageValue.source, target });
 
-    step = 'all-board export as separate V2 downloads';
+    step = 'all-board export as separate V3 downloads';
     const allBoardCount = await page.evaluate(() => JSON.parse(localStorage.getItem('projed-local-test.workspaces') || '[]')
       .reduce((sum, workspace) => sum + (workspace.boards?.length || 0), 0));
     await page.locator('[data-backup-source-board-select="true"]').selectOption('__all_boards__');
@@ -143,7 +143,7 @@ async (page) => {
       let batchText = '';
       for await (const chunk of batchStream) batchText += chunk.toString('utf8');
       const batchPackage = JSON.parse(batchText);
-      assert(batchPackage.format === 'projed-backup' && batchPackage.schemaVersion === 2, 'batch download must be a V2 package', batchPackage);
+      assert(batchPackage.format === 'projed-backup' && batchPackage.schemaVersion === 3, 'batch download must use the current V3 package contract', batchPackage);
       assert(batchPackage.scope?.type === 'board', 'batch download must stay single-board scoped', batchPackage.scope);
       batchBoardIds.add(batchPackage.source.boardId);
     }
@@ -168,7 +168,7 @@ async (page) => {
     const inspectText = await page.locator('[data-backup-inspection-ready="true"]').innerText();
     assert(inspectText.includes('檔案已通過完整性檢查'), 'inspection must show checksum success', { inspectText });
     assert(inspectText.includes('SHA-256'), 'inspection must expose checksum identity', { inspectText });
-    assert(inspectText.includes('V2'), 'inspection must show schema version', { inspectText });
+    assert(inspectText.includes('V3'), 'inspection must show the current schema version', { inspectText });
     assert(JSON.stringify((await getCurrentTarget()).sourceNodes) === sourceBeforeInspect, 'inspection must not mutate current board');
     assert(await page.locator('[data-backup-mode-copy="true"]').getAttribute('aria-checked') === 'true', 'copy must be the default mode');
     await screenshot('1440-inspection.png');

@@ -82,7 +82,8 @@ check('target stability tracks lock, pending handover, and freshness', hasAll(so
 ]) && hasAll(source.target, [
   'stabilizeCandidate', 'pointInsideTargetCore',
   'if (!withinRetainRegion)', 'MOBILE_RELEASE_FRESHNESS_MS',
-]));
+]) && source.session.includes('Date.now() - releaseObservation.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS')
+  && !source.target.includes('now - state.lastStableAt <= MOBILE_RELEASE_FRESHNESS_MS'));
 
 check('task drag owns touch movement after long press and pan broker yields', hasAll(source.panBroker, [
   'isTaskDragTouchActive', 'document.body.hasAttribute', 'task-drag-owner',
@@ -143,11 +144,16 @@ check('preview remains finger-coupled and preserves z-order',
   && source.presenter.includes('z-[95]'));
 
 check('mobile source placeholders do not impersonate the live drop indicator',
-  source.card.includes('data-kanban-drag-source-placeholder-neutral="true"')
+  source.card.includes('data-kanban-drag-source-placeholder={isDragPlaceholder')
+  && source.card.includes('kanban-drag-origin-placeholder')
   && !source.card.includes('showSourceInsertionMarker')
   && !source.checklist.includes('showSourceInsertionMarker')
   && !source.checklist.includes("import { KanbanInsertionMarker }")
   && source.presenter.includes('data-mobile-drop-indicator="true"'));
+
+check('mobile source lookup keeps placement identity across nested source surfaces',
+  source.target.includes('data-task-surface-frame="true"][data-task-placement-id]')
+  && source.target.includes('owningPlacement === placementId'));
 
 check('mobile source origin is a shared blue no-op title field outside normal flow', hasAll(source.target, [
   'resolveMobileTaskOriginFieldRect',

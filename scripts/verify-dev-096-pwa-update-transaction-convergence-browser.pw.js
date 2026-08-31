@@ -34,10 +34,10 @@ async (page) => {
         buttonCount: prompt?.querySelectorAll('button').length ?? 0,
       };
     });
-    assert(/有新版本可用/.test(text), 'normal prompt should announce a new version', { text });
-    assert(/一鍵更新/.test(text) && !/一鍵更新到最新版/.test(text), 'normal prompt should use compact CTA', { text });
+    assert(/新版已就緒/.test(text), 'normal prompt should announce a ready version', { text });
+    assert(/重新載入/.test(text) && !/一鍵更新到最新版/.test(text), 'normal prompt should use compact reload CTA', { text });
     assert(metrics.normalIconCount === 0 && metrics.paragraphCount === 0, 'normal prompt should remove non-core icon and description', metrics);
-    assert(metrics.buttonCount === 3, 'normal prompt should have update, later and close controls', metrics);
+    assert(metrics.buttonCount === 2, 'normal prompt should have reload and later controls', metrics);
     assert(metrics.scrollWidth <= metrics.clientWidth + 1, 'prompt should not cause horizontal overflow', metrics);
     assert(metrics.promptRect && metrics.promptRect.top >= 0 && metrics.promptRect.bottom <= height, 'prompt should stay within viewport', metrics);
     assert(metrics.actionRect && metrics.actionRect.width >= 44 && metrics.actionRect.height >= 32, 'update action should be tappable', metrics);

@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const outputPath = path.join(root, 'output', 'playwright', 'dev-096', 'sw-integration-result.json');
 const artifactIds = ['dev096-A', 'dev096-B', 'dev096-C'];
 const artifacts = new Map();
 const runtime = {
@@ -20,144 +21,113 @@ const run = (command, args, options = {}) => new Promise((resolve, reject) => {
   const child = spawn(command, args, { ...options, shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', (chunk) => { stdout += chunk; });
-  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  child.stdout.on('data', chunk => { stdout += chunk; });
+  child.stderr.on('data', chunk => { stderr += chunk; });
   child.on('error', reject);
-  child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr, pid: child.pid }));
+  child.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
 });
 
 const buildArtifacts = async () => {
   const { buildProductionArtifact } = await import('./release/build-production-artifact.mjs');
   for (const releaseId of artifactIds) {
-    const result = await buildProductionArtifact({ releaseId });
-    artifacts.set(releaseId, { releaseId, distDir: result.distDir, manifestPath: result.manifestPath });
+    const releaseDir = path.join(root, 'output', 'release', 'dev-083', releaseId);
+    const manifestPath = path.join(releaseDir, 'manifest.json');
+    const reusable = process.env.DEV096_REUSE_ARTIFACTS === '1' && fs.existsSync(manifestPath);
+    const result = reusable
+      ? {
+          releaseId,
+          releaseDir,
+          distDir: path.join(releaseDir, 'dist'),
+          manifestPath,
+          manifest: JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+        }
+      : await buildProductionArtifact({ releaseId });
+    artifacts.set(releaseId, result);
+    const serviceWorker = fs.readFileSync(path.join(result.distDir, 'sw.js'), 'utf8');
+    if (!serviceWorker.includes(`projed-${releaseId}`)) throw new Error(`SW cache namespace missing for ${releaseId}`);
+    if (serviceWorker.includes('clientsClaim()') || serviceWorker.includes('cleanupOutdatedCaches()')) {
+      throw new Error(`SW isolation flags regressed for ${releaseId}`);
+    }
   }
 };
 
-const contentType = (filePath) => {
-  const extension = path.extname(filePath).toLowerCase();
-  return ({
-    '.html': 'text/html; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.webmanifest': 'application/manifest+json; charset=utf-8',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-  })[extension] || 'application/octet-stream';
-};
+const contentType = filePath => ({
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+}[path.extname(filePath).toLowerCase()] || 'application/octet-stream');
 
 const createServer = async () => {
   let activeReleaseId = artifactIds[0];
+  let metadataReleaseId = artifactIds[0];
   const switchHistory = [];
   const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url || '/', 'http://127.0.0.1');
     if (requestUrl.pathname === '/__dev096/switch') {
-      const next = requestUrl.searchParams.get('release');
-      if (!artifacts.has(next)) {
+      const active = requestUrl.searchParams.get('release');
+      const metadata = requestUrl.searchParams.get('metadata') || active;
+      if (!artifacts.has(active) || !artifacts.has(metadata)) {
         response.writeHead(400, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ ok: false, error: 'unknown release' }));
         return;
       }
-      activeReleaseId = next;
-      switchHistory.push({ releaseId: next, at: new Date().toISOString() });
+      activeReleaseId = active;
+      metadataReleaseId = metadata;
+      switchHistory.push({ activeReleaseId: active, metadataReleaseId: metadata, at: new Date().toISOString() });
       response.writeHead(200, { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ ok: true, releaseId: next }));
+      response.end(JSON.stringify({ ok: true, activeReleaseId, metadataReleaseId }));
       return;
     }
     if (requestUrl.pathname === '/__dev096/status') {
       response.writeHead(200, { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ ok: true, activeReleaseId, switchHistory }));
+      response.end(JSON.stringify({ ok: true, activeReleaseId, metadataReleaseId, switchHistory }));
       return;
     }
-
-    const artifact = artifacts.get(activeReleaseId);
     const requested = decodeURIComponent(requestUrl.pathname.replace(/^\//, ''));
     const relativePath = requested && !requested.endsWith('/') ? requested : 'index.html';
+    const servedReleaseId = relativePath === 'release-meta.json' ? metadataReleaseId : activeReleaseId;
+    const artifact = artifacts.get(servedReleaseId);
     const candidate = path.resolve(artifact.distDir, relativePath);
     const safeRoot = path.resolve(artifact.distDir) + path.sep;
     const filePath = candidate.startsWith(safeRoot) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()
       ? candidate
       : path.join(artifact.distDir, 'index.html');
-    const headers = {
+    response.writeHead(200, {
       'Content-Type': contentType(filePath),
       'Cache-Control': /(^|\/)(index\.html|release-meta\.json|sw\.js)$/.test(relativePath) ? 'no-store' : 'public, max-age=0, must-revalidate',
-    };
-    response.writeHead(200, headers);
+    });
     fs.createReadStream(filePath).pipe(response);
   });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   runtime.port = server.address().port;
   return { server, switchHistory };
 };
 
-const browserCode = (baseUrl) => `
+const browserCode = baseUrl => `
 async (page) => {
-  const observations = [];
+  const context = page.context();
+  const diagnostics = [];
   const assert = (condition, message, details = {}) => {
     if (!condition) throw new Error(message + ': ' + JSON.stringify(details));
   };
-  const switchRelease = async (releaseId) => {
-    const response = await page.evaluate(async (id) => {
-      const result = await fetch('/__dev096/switch?release=' + encodeURIComponent(id));
-      return { ok: result.ok, status: result.status };
-    }, releaseId);
-    assert(response.ok, 'fixture release switch should succeed', { releaseId, status: response.status });
-  };
-  const waitForCurrent = async (releaseId, targetPage = page) => {
-    try {
-      await targetPage.waitForFunction((expected) => localStorage.getItem('projed.pwa-update.current-version.v1') === 'release:' + expected, releaseId, { timeout: 30000 });
-    } catch (error) {
-      const diagnostic = await targetPage.evaluate(async () => {
-        const registration = await navigator.serviceWorker.getRegistration();
-        return {
-          href: window.location.href,
-          current: localStorage.getItem('projed.pwa-update.current-version.v1'),
-          transaction: localStorage.getItem('projed.pwa-update.transaction.v1'),
-          completed: localStorage.getItem('projed.pwa-update.completed-version.v1'),
-          controller: navigator.serviceWorker.controller?.scriptURL ?? null,
-          registration: {
-            installing: registration?.installing?.state ?? null,
-            waiting: registration?.waiting?.state ?? null,
-            active: registration?.active?.state ?? null,
-          },
-          activationMessages: window.__DEV096_ACTIVATION_MESSAGES ?? [],
-          serviceWorkerEvents: window.__DEV096_SW_EVENTS ?? [],
-          transactionWrites: JSON.parse(sessionStorage.getItem('__DEV096_TX_WRITES') || '[]'),
-          prompt: document.querySelector('[data-pwa-update-prompt]')?.textContent ?? null,
-        };
-      });
-      throw new Error('current version did not converge to ' + releaseId + ': ' + JSON.stringify(diagnostic) + '; ' + (error instanceof Error ? error.message : error));
-    }
-    const current = await targetPage.evaluate(() => localStorage.getItem('projed.pwa-update.current-version.v1'));
-    assert(current === 'release:' + releaseId, 'startup should record the loaded release', { expected: releaseId, current });
-  };
-  const waitForUpdatePrompt = async (targetPage = page) => {
-    await targetPage.locator('[data-pwa-update-prompt]').waitFor({ state: 'visible', timeout: 30000 });
-    const text = await targetPage.locator('[data-pwa-update-prompt]').innerText();
-    assert(text.includes('一鍵更新') && !text.includes('一鍵更新到最新版'), 'real SW prompt should use compact CTA', { text });
-  };
-  const registration = async (targetPage = page) => targetPage.evaluate(async () => {
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) throw new Error('service worker registration missing');
-    await registration.update();
-    return { waiting: Boolean(registration.waiting), installing: Boolean(registration.installing), controller: Boolean(navigator.serviceWorker.controller) };
-  });
-  const waitForWaitingWorker = async (targetPage = page) => {
-    return targetPage.evaluate(async () => {
-      const registration = await navigator.serviceWorker.getRegistration();
-      const deadline = Date.now() + 30000;
-      while (Date.now() < deadline && !registration?.waiting) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      return { waiting: Boolean(registration?.waiting), installing: Boolean(registration?.installing), controller: Boolean(navigator.serviceWorker.controller) };
+  const attach = target => {
+    target.on('pageerror', error => diagnostics.push({ type: 'pageerror', message: error.message }));
+    target.on('console', message => {
+      if (message.type() === 'error' || message.text().includes('[PWA]')) diagnostics.push({ type: 'console-' + message.type(), message: message.text() });
+    });
+    target.on('response', response => {
+      if (response.status() >= 500) diagnostics.push({ type: 'http', status: response.status(), url: response.url() });
     });
   };
-
-  await page.addInitScript(() => {
-    window.__DEV096_ACTIVATION_MESSAGES = [];
-    window.__DEV096_SW_EVENTS = [];
+  attach(page);
+  await context.addInitScript(() => {
+    sessionStorage.setItem('__DEV096_LOAD_COUNT', String(Number(sessionStorage.getItem('__DEV096_LOAD_COUNT') || '0') + 1));
+    window.__DEV096_SW_MESSAGES = JSON.parse(sessionStorage.getItem('__DEV096_SW_MESSAGES') || '[]');
     if (!window.__DEV096_STORAGE_HOOKED) {
       window.__DEV096_STORAGE_HOOKED = true;
       const transactionKey = 'projed.pwa-update.transaction.v1';
@@ -165,8 +135,8 @@ async (page) => {
       const originalRemoveItem = Storage.prototype.removeItem;
       const record = (operation, value) => {
         const entries = JSON.parse(sessionStorage.getItem('__DEV096_TX_WRITES') || '[]');
-        entries.push({ operation, value, current: localStorage.getItem('projed.pwa-update.current-version.v1'), at: Date.now() });
-        sessionStorage.setItem('__DEV096_TX_WRITES', JSON.stringify(entries.slice(-40)));
+        entries.push({ operation, value, at: Date.now() });
+        sessionStorage.setItem('__DEV096_TX_WRITES', JSON.stringify(entries.slice(-120)));
       };
       Storage.prototype.setItem = function(key, value) {
         if (this === localStorage && key === transactionKey) record('set', value);
@@ -177,21 +147,84 @@ async (page) => {
         return originalRemoveItem.call(this, key);
       };
     }
-    const originalPostMessage = ServiceWorker.prototype.postMessage;
-    ServiceWorker.prototype.postMessage = function(message, transfer) {
-      window.__DEV096_ACTIVATION_MESSAGES.push({ message, url: this.scriptURL });
-      return originalPostMessage.call(this, message, transfer);
-    };
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.__DEV096_SW_EVENTS.push({ type: 'controllerchange', at: Date.now() });
-    });
+    if (!window.__DEV096_SW_HOOKED) {
+      window.__DEV096_SW_HOOKED = true;
+      const originalPostMessage = ServiceWorker.prototype.postMessage;
+      ServiceWorker.prototype.postMessage = function(message, transfer) {
+        window.__DEV096_SW_MESSAGES.push({ message, scriptURL: this.scriptURL, at: Date.now() });
+        sessionStorage.setItem('__DEV096_SW_MESSAGES', JSON.stringify(window.__DEV096_SW_MESSAGES.slice(-30)));
+        return originalPostMessage.call(this, message, transfer);
+      };
+    }
   });
+
+  const readState = target => target.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const cacheResponse = await (await caches.open('dev096-business-data')).match('/__dev096/business-marker');
+    const indexedDb = await new Promise(resolve => {
+      const request = indexedDB.open('dev096-business-db');
+      request.onsuccess = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains('markers')) { database.close(); resolve(null); return; }
+        const read = database.transaction('markers', 'readonly').objectStore('markers').get('marker');
+        read.onsuccess = () => { database.close(); resolve(read.result ?? null); };
+        read.onerror = () => { database.close(); resolve(null); };
+      };
+      request.onerror = () => resolve(null);
+    });
+    return {
+      current: sessionStorage.getItem('projed.pwa-update.current-version.v1'),
+      completed: localStorage.getItem('projed.pwa-update.completed-version.v1'),
+      transaction: JSON.parse(localStorage.getItem('projed.pwa-update.transaction.v1') || 'null'),
+      reservation: JSON.parse(sessionStorage.getItem('projed.pwa-reload.reserved-target.v1') || 'null'),
+      loadCount: Number(sessionStorage.getItem('__DEV096_LOAD_COUNT') || '0'),
+      localMarker: localStorage.getItem('__DEV096_BUSINESS_LOCAL_MARKER'),
+      sessionMarker: sessionStorage.getItem('__DEV096_BUSINESS_SESSION_MARKER'),
+      cacheMarker: cacheResponse ? await cacheResponse.text() : null,
+      indexedDb,
+      promptCount: document.querySelectorAll('[data-pwa-update-prompt]').length,
+      waiting: registration?.waiting?.scriptURL ?? null,
+      active: registration?.active?.scriptURL ?? null,
+      controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+      cacheNames: await caches.keys(),
+      transactionWrites: JSON.parse(sessionStorage.getItem('__DEV096_TX_WRITES') || '[]'),
+      workerMessages: JSON.parse(sessionStorage.getItem('__DEV096_SW_MESSAGES') || '[]'),
+    };
+  });
+  const waitForCurrent = async (target, releaseId) => {
+    try {
+      await target.waitForFunction(expected => sessionStorage.getItem('projed.pwa-update.current-version.v1') === 'release:' + expected, releaseId, { timeout: 60000 });
+    } catch (error) {
+      throw new Error('current did not converge to ' + releaseId + ': ' + JSON.stringify(await readState(target)) + '; ' + error.message);
+    }
+  };
+  const setFixture = async (releaseId, metadataReleaseId = releaseId) => {
+    const result = await page.evaluate(async value => {
+      const response = await fetch('/__dev096/switch?release=' + encodeURIComponent(value.releaseId) + '&metadata=' + encodeURIComponent(value.metadataReleaseId));
+      return { ok: response.ok, status: response.status };
+    }, { releaseId, metadataReleaseId });
+    assert(result.ok, 'fixture switch should succeed', { releaseId, metadataReleaseId, result });
+  };
+  const triggerUpdate = target => target.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) throw new Error('service worker registration missing');
+    await registration.update();
+  }).catch(() => undefined);
+  const transactionIdsFor = (states, releaseId) => [...new Set(states.flatMap(state => state.transactionWrites).flatMap(write => {
+    if (write.operation !== 'set' || !write.value) return [];
+    try {
+      const parsed = JSON.parse(write.value);
+      return parsed.targetVersion === 'release:' + releaseId && parsed.transactionId ? [parsed.transactionId] : [];
+    } catch { return []; }
+  }))];
+  const skipWaitingCount = states => states.flatMap(state => state.workerMessages).filter(entry => JSON.stringify(entry.message).includes('SKIP_WAITING')).length;
+
   await page.goto('${baseUrl}/', { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller) || Boolean(navigator.serviceWorker.ready), null, { timeout: 30000 });
-  await waitForCurrent('dev096-A');
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 30000 });
+  await waitForCurrent(page, 'dev096-A');
   await page.evaluate(async () => {
     localStorage.setItem('__DEV096_BUSINESS_LOCAL_MARKER', 'keep-local');
-    sessionStorage.setItem('__DEV096_BUSINESS_SESSION_MARKER', 'keep-session');
+    sessionStorage.setItem('__DEV096_BUSINESS_SESSION_MARKER', 'tab-a');
     const cache = await caches.open('dev096-business-data');
     await cache.put('/__dev096/business-marker', new Response('keep-cache'));
     await new Promise((resolve, reject) => {
@@ -207,107 +240,88 @@ async (page) => {
       request.onerror = () => reject(request.error);
     });
   });
-  observations.push({ step: 'initial-A', current: await page.evaluate(() => localStorage.getItem('projed.pwa-update.current-version.v1')) });
-
-  const secondPage = await page.context().newPage();
+  const secondPage = await context.newPage();
+  attach(secondPage);
   await secondPage.goto('${baseUrl}/', { waitUntil: 'networkidle' });
-  await waitForCurrent('dev096-A', secondPage);
-  await switchRelease('dev096-B');
-  const [bRegistration, secondRegistration] = await Promise.all([registration(), registration(secondPage)]);
-  const [bWaiting, secondWaiting] = await Promise.all([
-    bRegistration.waiting ? Promise.resolve(bRegistration) : waitForWaitingWorker(),
-    secondRegistration.waiting ? Promise.resolve(secondRegistration) : waitForWaitingWorker(secondPage),
-  ]);
-  assert(bWaiting.waiting && secondWaiting.waiting, 'B should be waiting in both tabs before user applies update', { first: bWaiting, second: secondWaiting });
-  await Promise.all([waitForUpdatePrompt(), waitForUpdatePrompt(secondPage)]);
-  const transactionIdsBeforeApply = await Promise.all([
-    page.evaluate(() => JSON.parse(localStorage.getItem('projed.pwa-update.transaction.v1') || 'null')?.transactionId),
-    secondPage.evaluate(() => JSON.parse(localStorage.getItem('projed.pwa-update.transaction.v1') || 'null')?.transactionId),
-  ]);
-  assert(transactionIdsBeforeApply[0] && transactionIdsBeforeApply[0] === transactionIdsBeforeApply[1], 'both tabs should share one transaction before apply', { transactionIdsBeforeApply });
-  await page.screenshot({ path: 'output/playwright/dev-096/real-sw-a-to-b-before-apply.png' });
-  await Promise.all([
-    page.locator('[data-pwa-update-action]').click(),
-    secondPage.locator('[data-pwa-update-action]').click(),
-  ]);
-  await Promise.all([waitForCurrent('dev096-B'), waitForCurrent('dev096-B', secondPage)]);
-  const completedB = await page.evaluate(() => localStorage.getItem('projed.pwa-update.completed-version.v1'));
-  assert(completedB === 'release:dev096-B', 'A→B should complete only after post-reload version reconciliation', { completedB });
-  assert(await secondPage.evaluate(() => localStorage.getItem('projed.pwa-update.completed-version.v1')) === 'release:dev096-B', 'both tabs should reconcile completed B');
-  await Promise.all([page.waitForTimeout(1000), secondPage.waitForTimeout(1000)]);
-  assert(await page.locator('[data-pwa-update-prompt]').count() === 0, 'completed B should not show the same update prompt again');
-  assert(await secondPage.locator('[data-pwa-update-prompt]').count() === 0, 'completed B should hide the prompt in the second tab');
-  const safetyReadback = await page.evaluate(async () => {
-    const cacheResponse = await (await caches.open('dev096-business-data')).match('/__dev096/business-marker');
-    const databaseValue = await new Promise((resolve) => {
-      const request = indexedDB.open('dev096-business-db');
-      request.onsuccess = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains('markers')) { database.close(); resolve(null); return; }
-        const read = database.transaction('markers', 'readonly').objectStore('markers').get('marker');
-        read.onsuccess = () => { database.close(); resolve(read.result ?? null); };
-        read.onerror = () => { database.close(); resolve(null); };
-      };
-      request.onerror = () => resolve(null);
+  await secondPage.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 30000 });
+  await waitForCurrent(secondPage, 'dev096-A');
+  await secondPage.evaluate(() => sessionStorage.setItem('__DEV096_BUSINESS_SESSION_MARKER', 'tab-b'));
+  const pages = [page, secondPage];
+  const initial = await Promise.all(pages.map(readState));
+
+  const converge = async releaseId => {
+    const before = await Promise.all(pages.map(readState));
+    await setFixture(releaseId);
+    await Promise.all(pages.map(triggerUpdate));
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      const states = await Promise.all(pages.map(target => readState(target).catch(() => null)));
+      if (states.some(state => state?.current === 'release:' + releaseId)) break;
+      await page.waitForTimeout(100);
+    }
+    for (const target of pages) {
+      const state = await readState(target);
+      if (state.current !== 'release:' + releaseId) {
+        await target.bringToFront();
+        await target.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))).catch(() => undefined);
+      }
+    }
+    await Promise.all(pages.map(target => waitForCurrent(target, releaseId)));
+    const after = await Promise.all(pages.map(readState));
+    const transactionIds = transactionIdsFor(after, releaseId);
+    assert(transactionIds.length === 1, 'release should use one transaction identity', { releaseId, transactionIds });
+    assert(skipWaitingCount(after) === (releaseId === 'dev096-B' ? 1 : 2), 'release should add one activation message', { releaseId, after });
+    after.forEach((state, index) => {
+      assert(state.current === 'release:' + releaseId && state.completed === 'release:' + releaseId, 'both tabs should reconcile target', { releaseId, index, state });
+      assert(state.loadCount === before[index].loadCount + 1, 'each tab should navigate exactly once', { releaseId, index, before: before[index], after: state });
+      assert(state.promptCount === 0 && state.reservation === null, 'safe convergence should be silent and clear reservation', { releaseId, index, state });
+      assert(state.localMarker === 'keep-local' && state.cacheMarker === 'keep-cache' && state.indexedDb === 'keep-indexeddb', 'business storage should survive', { releaseId, index, state });
+      assert(state.sessionMarker === (index === 0 ? 'tab-a' : 'tab-b'), 'session storage should survive', { releaseId, index, state });
     });
-    return {
-      local: localStorage.getItem('__DEV096_BUSINESS_LOCAL_MARKER'),
-      session: sessionStorage.getItem('__DEV096_BUSINESS_SESSION_MARKER'),
-      cache: cacheResponse ? await cacheResponse.text() : null,
-      indexeddb: databaseValue,
-    };
-  });
-  assert(safetyReadback.local === 'keep-local' && safetyReadback.session === 'keep-session' && safetyReadback.cache === 'keep-cache' && safetyReadback.indexeddb === 'keep-indexeddb', 'normal update should preserve business storage markers', safetyReadback);
-  observations.push({ step: 'business-storage-preserved', safetyReadback });
-  observations.push({ step: 'completed-B-multitab', current: completedB, sharedTransactionId: transactionIdsBeforeApply[0] });
+    return { releaseId, before, after, transactionIds };
+  };
+
+  const releaseB = await converge('dev096-B');
+  const releaseC = await converge('dev096-C');
   await secondPage.close();
-
-  await switchRelease('dev096-C');
-  const cRegistration = await registration();
-  const cWaiting = cRegistration.waiting ? cRegistration : await waitForWaitingWorker();
-  assert(cWaiting.waiting, 'C should be waiting after B→C publication', cWaiting);
-  await waitForUpdatePrompt();
-  await page.locator('[data-pwa-update-action]').click();
-  await waitForCurrent('dev096-C');
-  const completedC = await page.evaluate(() => localStorage.getItem('projed.pwa-update.completed-version.v1'));
-  assert(completedC === 'release:dev096-C', 'B→C should converge to C', { completedC });
-  observations.push({ step: 'completed-C', current: completedC });
-
   await page.evaluate(async () => {
     for (const key of Object.keys(localStorage)) if (key.startsWith('projed.pwa-update.')) localStorage.removeItem(key);
+    for (const key of Object.keys(sessionStorage)) if (key.startsWith('projed.pwa-') || key.startsWith('__DEV096_')) sessionStorage.removeItem(key);
     for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
     for (const cacheName of await caches.keys()) await caches.delete(cacheName);
   });
-  await switchRelease('dev096-A');
+  await setFixture('dev096-A');
   await page.reload({ waitUntil: 'networkidle' });
-  await waitForCurrent('dev096-A');
-  await switchRelease('dev096-B');
-  const waitingB = await registration();
-  const bWaitingForRetarget = waitingB.waiting ? waitingB : await waitForWaitingWorker();
-  assert(bWaitingForRetarget.waiting, 'B should be waiting in retarget fixture', bWaitingForRetarget);
-  await waitForUpdatePrompt();
-  await switchRelease('dev096-C');
-  await page.locator('[data-pwa-update-action]').click();
-  await waitForCurrent('dev096-C');
-  const retargetedCompleted = await page.evaluate(() => localStorage.getItem('projed.pwa-update.completed-version.v1'));
-  assert(retargetedCompleted === 'release:dev096-C', 'B waiting followed by C publication should retarget before activation', { retargetedCompleted });
-  observations.push({ step: 'retargeted-B-to-C', current: retargetedCompleted });
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  if (!await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
+    await page.reload({ waitUntil: 'networkidle' });
+  }
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 30000 });
+  await waitForCurrent(page, 'dev096-A');
+  const retargetBaseline = await readState(page);
+  await setFixture('dev096-B', 'dev096-A');
+  await triggerUpdate(page);
+  await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration())?.waiting), null, { timeout: 30000 });
+  await page.waitForTimeout(500);
+  const waitingB = await readState(page);
+  assert(waitingB.current === 'release:dev096-A' && waitingB.loadCount === retargetBaseline.loadCount, 'B should remain waiting while metadata still points to A', { retargetBaseline, waitingB });
+  await setFixture('dev096-C');
+  await triggerUpdate(page);
+  await waitForCurrent(page, 'dev096-C');
+  const retargeted = await readState(page);
+  const retargetTransactionIds = transactionIdsFor([retargeted], 'dev096-C');
+  assert(retargeted.completed === 'release:dev096-C' && retargeted.loadCount === retargetBaseline.loadCount + 1, 'B waiting should retarget directly to C with one navigation', { retargetBaseline, retargeted });
+  assert(retargetTransactionIds.length === 1 && skipWaitingCount([retargeted]) === 1, 'retarget should use one C transaction and one activation message', { retargetTransactionIds, retargeted });
+  assert(retargeted.promptCount === 0, 'retarget safe path should remain silent', retargeted);
+  assert(diagnostics.length === 0, 'real SW regression should have no browser errors', { diagnostics });
   await page.screenshot({ path: 'output/playwright/dev-096/real-sw-retargeted-c.png' });
-
-  const artifact = {
-    ok: true,
-    source: 'dev-096-real-service-worker-fixture',
-    baseUrl: '${baseUrl}',
-    artifacts: ['dev096-A', 'dev096-B', 'dev096-C'],
-    observations,
-    finalCurrent: await page.evaluate(() => localStorage.getItem('projed.pwa-update.current-version.v1')),
-  };
-  await page.evaluate((value) => { window.__DEV096_SW_ARTIFACT = value; }, artifact);
+  const artifact = { ok: true, source: 'dev-096-real-service-worker-convergence', initial, releases: [releaseB, releaseC], retarget: { baseline: retargetBaseline, waitingB, final: retargeted, transactionIds: retargetTransactionIds }, diagnostics };
+  await page.evaluate(value => { window.__DEV096_SW_ARTIFACT = value; }, artifact);
   return JSON.stringify(artifact, null, 2);
 }
 `;
 
-const runBrowser = async (baseUrl) => {
+const runBrowser = async baseUrl => {
   const session = `dev096-sw-${Date.now()}`;
   const codePath = path.join(os.tmpdir(), `${session}.pw.js`);
   fs.writeFileSync(codePath, browserCode(baseUrl), 'utf8');
@@ -324,26 +338,46 @@ const runBrowser = async (baseUrl) => {
   }
 };
 
-const closeServer = (server) => new Promise((resolve) => {
+const closeServer = server => new Promise(resolve => {
   if (!server.listening) return resolve();
   server.close(() => resolve());
 });
 
+const parsePlaywrightResult = output => {
+  const match = output.match(/### Result\s*\n([\s\S]*?)(?=\n### Ran Playwright code|\n### Events|$)/);
+  if (!match) return null;
+  try { return JSON.parse(JSON.parse(match[1].trim())); } catch { return null; }
+};
+
 let server;
+let artifact = {
+  devId: 'DEV-096',
+  generatedAt: new Date().toISOString(),
+  sourceRevision: process.env.GITHUB_SHA || 'working-tree',
+  command: 'npm.cmd run verify:dev-096-pwa-update-transaction-convergence-sw',
+  fixture: 'immutable dev096-A/B/C artifacts + two tabs + controlled metadata retarget',
+  ok: false,
+  assertions: null,
+  runtime,
+};
 try {
   await buildArtifacts();
   const running = await createServer();
   server = running.server;
   console.log(JSON.stringify({ event: 'runtime-started', ...runtime }));
-  const output = await runBrowser(`http://127.0.0.1:${runtime.port}`);
-  console.log(output);
-  const result = await fetch(`http://127.0.0.1:${runtime.port}/__dev096/status`).then((response) => response.json());
-  console.log(JSON.stringify({ event: 'fixture-status', result }));
-  console.log(JSON.stringify({ ok: true, runtime: { ...runtime, portReleased: false } }));
+  const browserOutput = await runBrowser(`http://127.0.0.1:${runtime.port}`);
+  const assertions = parsePlaywrightResult(browserOutput);
+  artifact = { ...artifact, ok: assertions?.ok === true, assertions, runtime: { ...runtime, portReleased: false } };
+  console.log(browserOutput);
+  if (!artifact.ok) throw new Error('DEV-096 real SW result was not parseable or did not pass.');
 } catch (error) {
+  artifact = { ...artifact, error: error instanceof Error ? error.message : String(error) };
   console.error(error instanceof Error ? error.stack || error.message : error);
   process.exitCode = 1;
 } finally {
   if (server) await closeServer(server);
-  console.log(JSON.stringify({ event: 'runtime-cleanup', project: runtime.project, purpose: runtime.purpose, port: runtime.port, cleanupCondition: runtime.cleanupCondition, portReleased: true }));
+  artifact = { ...artifact, runtime: { ...runtime, portReleased: true } };
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+  console.log(JSON.stringify({ event: 'runtime-cleanup', project: runtime.project, purpose: runtime.purpose, port: runtime.port, cleanupCondition: runtime.cleanupCondition, portReleased: true, artifact: outputPath }));
 }

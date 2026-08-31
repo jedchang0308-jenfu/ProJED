@@ -609,6 +609,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 下一步：如需正式上線，另行授權 deployment/release gate；本輪不 commit、merge、push、deploy 或 release。
   - 證據：`src/services/pwaUpdateTransaction.ts`、`src/services/pwaUpdateService.ts`、`src/components/AppUpdatePrompt.tsx`、`vite.config.js`、`scripts/verify-dev-096-pwa-update-transaction-convergence.*`、`QA-DEV-096`、`QC-DEV-096`；static 25/25、local UI browser、real SW A/B/C＋雙分頁＋retarget、DEV-041／034 regression、TypeScript、build:test、artifact parity 與 targeted ESLint 均 PASS。
   - 計入交付：是（本地 implementation + QA/QC；未 Release）
+- ◐ DEV-097 [交付點] [驗證中] [P1] [RD Implemented / Local Automated QA + Independent QC PASS / Physical Device Supplemental Not Verified / 未 Release] PWA 安全重新載入協調
+  - 摘要：把更新機制從「請使用者同意取得新版」改為只在可能中斷工作時協調 reload；
+    safe client 於自然邊界靜默收斂，dirty／unsafe client 才顯示最小提示。
+  - 來源 ID：`USER-20260831-PWA-SAFE-RELOAD-DESIGN-CRITIQUE`
+  - 父任務：DEV-041；建立於 DEV-096 的版本真值與單次 activation transaction，架構決策見 ADR-047。
+  - 下一步：補DEV-054 iOS／Android實機，或確認不納入本次release；若需正式上線，另走deployment/release gate。
+  - 證據：`ADR-047`、`SPEC-041` DEV-097 addendum、`QA-DEV-097`、`QC-DEV-097`；static 23/23、真實九-owner／dual-tab／flush-cancel-failure readback browser、real-SW A→B→C two-tab convergence、DEV-028／034／041／045／047／054／069／092／095／RAG regressions、TypeScript、32-file ESLint 0 errors、`build:test`與`git diff --check` PASS。
+  - 計入交付：是（RD已實作且local automated QA／independent QC PASS；實機補充與release gate尚未完成，對完成率貢獻仍為0）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -2821,6 +2829,503 @@ npm.cmd run build:test
 - 2026-08-30：升級為 `RD Implementation Ready / Human Confirmed`；固定 release ID、transaction schema、lease、狀態機、bounded recovery、UI Entry Contract、逐檔 WP 與 `QA-DEV-096`。產品與 verifier 尚未實作，QA／QC 未執行，未 Deploy／未 Release。
 - 2026-08-30：完成 WP-096-A～E 本地實作；加入 transaction／fence、release identity、waiting-worker retarget、controllerchange quiesce／reload fallback、bounded recovery、compact prompt、artifact parity 與 static／browser／real-SW verifier。
 - 2026-08-30：local QA/QC fresh evidence 通過：static 25/25、real-SW A→B／B→C／B waiting→C retarget、雙分頁、DEV-041／034 regression、TypeScript、build:test、artifact parity、targeted ESLint；更新 `QA-DEV-096`、`QC-DEV-096` 與 evidence JSON。未 Deploy／未 Release。
+
+## DEV-097：PWA 安全重新載入協調
+
+- 文件成熟度：`RD Implementation Ready / Human Confirmed / Tech Lead Review Remediated`
+- 狀態：RD Implemented／Local Automated QA PASS／Independent QC PASS／Physical Device Supplemental Not Verified／未 Release
+- 節點類型：交付點
+- 父交付點：DEV-041；依賴DEV-096，並相容DEV-034、DEV-083；架構authority為ADR-047
+- 是否計入產品交付完成：是（RD 已實作且local automated QA與independent QC PASS；實機補充與release gate尚未完成，對完成率貢獻仍為0）
+- 原始需求邊界：`USER-20260831-PWA-SAFE-RELOAD-DESIGN-CRITIQUE`、
+  `USER-20260831-GUIDED-DECISIONS-1A-2A-3A`
+- 風險等級：Medium（改變所有 web／PWA 使用者可見的更新時機與中斷行為）
+- Spec Impact：`Intentional replacement / SPEC-041 DEV-097 addendum is product-and-implementation authority / RD implemented`。
+  本契約取代 DEV-096「一般更新一律等待使用者點擊」的產品語意；目前已完成RD實作、
+  local automated QA與independent QC，但實機補充與release gate前不得宣稱正式交付。
+
+### Human Decision Brief
+
+- `1A`：只有可能遺失或中斷工作的狀態阻止自動 reload。包含未儲存文字／表單、
+  active drag、尚未 durable 的 import／publish、pending write 與 dirty modal。
+- 可恢復且已有 durable server identity 的背景 AI／server job、唯讀 modal 不阻止 reload；
+  若結果只存在 client memory 或 reload 後無法取回，仍視為 dirty／unsafe。
+- `2A`：自然安全邊界依序為下一次開啟、回到前景且 safe，以及目前操作完成後的
+  route transition；不得用任意 idle timeout 在原畫面中途 reload。
+- `3A`：normal update 在 dirty 期間不以時間強制；dirty 清除後於下一個自然邊界收斂。
+  舊版本超出支援期限時另進 critical policy，不偷渡到 normal update。
+- Rejected：任何工作執行中一律阻止、dirty 清除立即在原畫面 reload、只等下次開啟、
+  固定期限後強制 reload，以及讓使用者永久拒絕同一 normal target。
+- Current phase 無剩餘 P0／P1 人類產品決策；repo mapping 與介面細節由後續 RD readiness
+  review 決定，不回頭詢問產品選擇。
+
+### 問題與批判結論
+
+瀏覽器在首次開站、無既有 Service Worker 控制或已取得新 app shell 時，本來就會直接載入
+目前版本；此時沒有舊版介面可先詢問使用者。已被舊 Service Worker 控制的 client 則可能
+先執行舊 bundle，偵測新版後才有機會顯示提示。因此「電腦沒提示、手機仍顯示舊 UI」
+可能是 lifecycle／cache state 不同，而不是裝置類型的產品差異。
+
+現行提示把選擇描述成「是否更新」，但系統真正需要使用者決定的是「現在 reload 是否會
+中斷工作」。任何更新都要求同意會形成假選擇、增加版本碎片與支援成本。舊版 client 在
+完成更新前也只能顯示舊 bundle 內建 UI，新 UI 無法回頭改變已執行的舊程式，必須以
+N→N+1 實際轉版驗證。
+
+### 產品核心與使用者價值
+
+更新機制的核心不是取得「使用新版本」的同意，而是同時完成四件事：
+
+1. 讓 client 在合理時間內收斂到可信且受支援的版本。
+2. 不在編輯、拖曳、送出或其他不可安全中斷的工作中突然 reload。
+3. 保留登入、業務資料與尚未提交內容，失敗時提供有界限恢復。
+4. 同一版本只處理一次，跨分頁結果一致，不把通知本身當成功條件。
+
+使用者只在其選擇會改變結果時被打擾。沒有工作中斷風險時，系統自行完成技術維護；有資料遺失或流程中斷風險時，系統才讓使用者選擇重新載入時機。
+
+### 主要流程
+
+1. 系統偵測 N+1 並在背景完成可安全執行的準備，不先用提示打斷使用者。
+2. 每個document依自己的產品層owners判定`safe`或`dirty／unsafe`；readiness或signal未知時
+   local fail closed。
+3. safe document可在自己的下一個自然邊界activation／reload；不顯示一般提示，也不在操作中途
+   強制navigation。activation不claim其他documents，舊release cache保留。
+4. 任一 client dirty／unsafe 時，只在該 client 顯示「新版已就緒／重新載入／稍後」。
+5. 點「重新載入」先請local dirty owners flush、commit或安全取消transient action；全部成功後才
+   取得activation owner或執行local reload。任一失敗不得navigation。
+6. 點「稍後」只延後 reload；dirty 清除後於下一個自然邊界靜默收斂，不再次要求同意。
+7. reload 後沿用 DEV-096 current／target 對帳、completed suppression 與跨分頁 transaction；
+   相同 target 不再提示或重載。
+8. 更新失敗或版本不一致時進入有界限 recovery／failed UI，才顯示必要原因與恢復動作。
+
+### Current Phase RD Handoff Contract
+
+#### Scope
+
+- 定義 normal update 的 `safe`、`dirty／unsafe` 與 recovery 可見狀態，以及各狀態是否需要使用者決策。
+- 建立產品層 reload-safety authority，由編輯、拖曳、匯入／發布、pending write 與 modal
+  owners 依本文件固定 interface 提供可聚合訊號。
+- `safe` client 在自然邊界靜默套用，`dirty／unsafe` client 才顯示最小重新載入提示。
+- 跨分頁採 controller／cache isolation，不採 heartbeat all-safe gate；任一 dirty client只延後
+  自己的reload，其他分頁可activation waiting worker，但不得接管、刪除其舊資產或迫使它navigation。
+- 桌機與手機採同一狀態契約；只有排版依 viewport 響應。
+- 保留 DEV-096 release identity、單一 transaction、跨分頁 owner、post-reload verification、
+  bounded recovery 與 business storage 安全邊界。
+- 以真實 Service Worker N→N+1 fixture 驗證 safe、dirty、跨分頁與舊 UI bootstrap 路徑。
+
+#### Out of Scope
+
+- 不承諾在 fresh／uncontrolled client 首次取得目前 app shell 前詢問更新同意，也不做每位使用者的 server-side 版本 pinning。
+- 不新增 backend coordination、公共 lifecycle platform、第二套 router 或第二個 global store；
+  repo file list、interface、Workbox ownership、cache isolation、failure code與測試命令已於下方固定。
+- 不擴充 release notes API、analytics、push／email、原生 App Store／Play Store 更新流程。
+- 不在 normal update 清除登入或業務資料；cache／Service Worker 清理仍限可見的失敗恢復。
+- critical／security mandatory update 不納入 normal update 第一版實作，另以下方 future capsule 保存。
+
+#### 行為、所有權與相容契約
+
+- `safe`／`dirty` 只描述目前 document。所有目前 scope 要求的 owner 都已 ready，且沒有可能
+  遺失或不可恢復的 client-only 工作時才是 safe；未知 owner、manifest缺口、signal fault或
+  prepare timeout一律 unsafe。
+- `dirty／unsafe`：至少一個 local owner 有未 durable工作、active drag、未完成 mutation、dirty
+  modal，或 background job結果只存在 client memory。
+- Durable background job／唯讀 modal不阻止；重新載入後必須可由 stable ID重新查詢或恢復。
+- Natural boundary限 app open、foreground resume且safe，或目前操作完成後的view transition。
+  view intent必須在reload後保留；`pagehide`、hidden、任意idle timer不得自行apply。
+- 跨分頁安全不採 all-live consensus。依 ADR-047，worker activation固定不 claim既有documents、
+  舊release cache保留；因此另一分頁dirty只阻止自己的reload，不阻止safe分頁activation，且不會
+  被controllerchange或套件fallback迫使navigation。
+- 點「重新載入」是 local flush-and-reload，不是放棄變更。所有 local owners成功確認
+  durable／recoverable後才可取得DEV-096 apply owner或執行per-client reload；失敗或timeout保留原頁。
+- 點「稍後」只隱藏目前document／target的normal prompt；不清target、不標local已收斂，也不
+  形成永久版本pin。dirty→safe後等待自己的下一個natural boundary。
+- DEV-096 transaction只約束target detection／activation／有效owner reload／current===target
+  verification並保留五分鐘stale；其他documents的延後收斂是session-local obligation，不是
+  transaction `verifying`，不得因長時間dirty把已成功activation改判失敗。
+
+#### UI Entry Contract
+
+- Actor：所有 web／PWA 使用者，登入狀態與業務角色不改變更新能力。
+- Fresh／uncontrolled 或 controlled-safe：沒有一般更新提示；只在 natural boundary reload。
+- Controlled-dirty exact visible set：「新版已就緒」、「重新載入」、「稍後」。不顯示 icon、
+  說明段落、版本 badge、close 或一般成功宣告。
+- Applying：主動作改為「準備重新載入」或等效最短狀態並 disabled；「稍後」不可重入。
+- Prepare 失敗或另一分頁仍 dirty：保留最短原因與恢復動作，不得 reload 或清除資料。
+- Recovery／failed：可顯示必要原因、重試與人工 cache recovery；不受 normal exact set 限制。
+- 1440×900、390×844、320×844 必須無 overflow、重疊、裁切、safe-area 遮擋與焦點遺失。
+
+#### 資料、API、權限與依賴
+
+- Backend／DB／schema／RLS／RPC／業務 API：預期無變更；若 RD 發現必須新增，停止並回到
+  contract review，不得自行擴 scope。
+- Client storage：沿用 DEV-096 PWA-owned metadata；不得讀寫 auth token、業務 IndexedDB
+  或非 PWA-owned keys。reload-safety owner 只回報狀態或執行既有 save／flush 能力。
+- Permission：AuthGate 內外與所有業務角色套用相同更新契約；不新增管理者 override。
+- 依賴：DEV-096 version truth／transaction、既有 draft recovery／save 行為、view lifecycle、
+  drag lifecycle，以及 cross-tab change signal。實作固定如下，不得另建 router、第二套 global
+  state framework 或 backend coordination service。
+
+### RD Implementation Architecture
+
+#### Effect ownership 與啟動順序
+
+1. 先完成 ADR-047 的 worker isolation。`package.json`把 `workbox-window`列為直接依賴；
+   `src/services/pwaUpdateService.ts`移除`virtual:pwa-register`，自行建立`Workbox` instance、監聽
+   waiting／activated／redundant並送`messageSkipWaiting()`。不得保留套件內建reload handler。
+2. `vite.config.js`維持`injectRegister:false`，改為`clientsClaim:false`、`skipWaiting:false`、
+   `cleanupOutdatedCaches:false`，並以DEV-083不可變release ID設定release-scoped `cacheId`。production
+   release ID缺失時fail closed；不同release不得共用precache namespace。
+3. 新增`src/services/pwaReloadSafety.ts`，只持有目前document的owner registry、readiness tokens、
+   prepare aggregation、boundary gate與session reload reservation；不得持有heartbeat／TTL或用遠端
+   client狀態決定local safety，也不得import React、Zustand或業務service。
+4. 新增`src/services/pwaReloadOwnerManifest.ts`，以typed owner ID、repo authority、適用surface與
+   readiness scope固定mandatory owner set；static verifier必須證明matrix每個owner均有adapter與case。
+5. 新增`src/hooks/usePwaReloadSafetyOwner.ts`，只把React component的signal／prepare callback註冊到
+   domain service。component與owner不得呼叫worker、navigation、transaction writer或cache recovery。
+6. 新增`src/components/PwaReloadSafetyBridge.tsx`。AuthGate外層只回報app-open、hidden→visible與
+   `currentView` intent，不得宣告safe；`AuthGate`與`AppContent`內部分別明確回報`auth-shell`、
+   `active-view` readiness。專案沒有React Router，view transition仍沿用
+   `useBoardStore.currentView`，不得引入router。
+7. `pwaUpdateService.ts`是detection、single activation、navigation、verification與recovery的唯一
+   effect owner。owner、Bridge與prompt只能送intent；`controllerchange`／Workbox event只更新狀態，
+   不直接reload。
+8. 初始document為`booting`且不可auto apply。只有version readback、auth-shell、active-view與目前
+   manifest-required owners全部ready後才可分類`safe／dirty`；animation frame只可debounce revision，
+   不得作為owner完整註冊的證據。任何readiness缺口fail closed為`blocked`。
+
+#### Natural-boundary orchestration
+
+- `app-open`：Bridge ready、document visible、目前 app shell 完成 version readback後送一次。
+- `foreground`：只接受 `hidden → visible`；hidden、`pagehide`、一般 timer 不是 boundary。
+- `view-transition`：Bridge 觀察 `currentView` 真正變更後送出；reload 前必須 readback
+  `localStorage['projed-last-view'] === currentView`。workspace／board intent 沿用既有
+  `projed-last-ws`、`projed-last-board`。readback 失敗回 `VIEW_INTENT_NOT_DURABLE` 並留在原頁。
+- 使用者點「重新載入」在 owners prepare 成功後本身即為 explicit boundary；不必再等待下一個
+  view transition。dirty 自行清除不是 boundary，不得立刻在原畫面 reload。
+- waiting worker已由其他client activation、但目前document仍是N時，不再送`messageSkipWaiting()`或
+  重開activation transaction；目前client只在自己的下一個boundary取得session reservation後reload。
+- activation後舊document的application不得自動navigation；若old lazy asset／API無法readback、
+  application因controllerchange意外reload或normal path刪除舊cache，視為`OLD_RELEASE_ISOLATION_FAILED`
+  並停止交付。controllerchange本身需記錄，但不是單獨 failure。
+
+### Local Reload-Safety Interface 與 Transaction Boundary
+
+```ts
+export type PwaReloadSafetyState = 'booting' | 'safe' | 'dirty' | 'preparing' | 'blocked';
+export type PwaReloadBoundary = 'app-open' | 'foreground' | 'view-transition' | 'user-confirmed';
+export type PwaReloadReadinessScope = 'version-shell' | 'auth-shell' | 'active-view';
+
+export type PwaReloadSafetyReason =
+  | 'RECORD_DRAFT_UNSAVED'
+  | 'RECORD_SAVE_IN_FLIGHT'
+  | 'CLIENT_JOB_IN_FLIGHT'
+  | 'FORM_DRAFT_UNSAVED'
+  | 'PENDING_WRITE'
+  | 'BACKUP_RESTORE_IN_FLIGHT'
+  | 'TRANSIENT_DRAG_ACTIVE'
+  | 'DIRTY_MODAL'
+  | 'OWNER_SIGNAL_UNKNOWN';
+
+export type PwaReloadSafetyFailureCode =
+  | 'SAFETY_NOT_READY'
+  | 'OWNER_SIGNAL_FAULT'
+  | 'OWNER_ACTION_REQUIRED'
+  | 'OWNER_PREPARE_FAILED'
+  | 'OWNER_PREPARE_TIMEOUT'
+  | 'LOCAL_READBACK_DIRTY'
+  | 'OWNER_MANIFEST_INCOMPLETE'
+  | 'VIEW_INTENT_NOT_DURABLE'
+  | 'RELOAD_RESERVATION_FAILED'
+  | 'RELOAD_NAVIGATION_NOT_STARTED'
+  | 'WORKER_ACTIVATION_FAILED'
+  | 'OLD_RELEASE_ISOLATION_FAILED';
+
+export interface PwaReloadSafetyOwnerSnapshot {
+  ownerId: string;
+  state: 'safe' | 'dirty';
+  reasonCodes: PwaReloadSafetyReason[];
+  revision: number;
+}
+
+export interface PwaReloadSafetyOwner {
+  ownerId: string;
+  getSnapshot(): PwaReloadSafetyOwnerSnapshot;
+  prepareForReload(): Promise<
+    | { ok: true; revision: number }
+    | { ok: false; code: PwaReloadSafetyFailureCode }
+  >;
+}
+
+export type PwaReloadGateResult =
+  | { ok: true; code: null; localState: 'safe' }
+  | {
+      ok: false;
+      code: PwaReloadSafetyFailureCode;
+      localState: PwaReloadSafetyState;
+    };
+
+export function registerPwaReloadSafetyOwner(owner: PwaReloadSafetyOwner): () => void;
+export function setPwaReloadReadiness(
+  scope: PwaReloadReadinessScope,
+  epoch: string,
+  ready: boolean,
+): void;
+export function requestPwaReloadBoundary(
+  boundary: PwaReloadBoundary,
+  currentView: ViewMode | null,
+): Promise<PwaReloadGateResult>;
+export function preparePwaReloadOwners(): Promise<PwaReloadGateResult>;
+export function reservePwaReloadForTarget(targetVersion: string): boolean;
+```
+
+- `ownerId` 在同一 document 必須唯一；duplicate、throw、invalid revision 或未知 reason 均為
+  `OWNER_SIGNAL_FAULT`。prepare 使用同一個 15 秒 global deadline 平行執行，完成後重新讀取所有
+  owner snapshots；任一仍 dirty、revision 倒退或 timeout 都不得 navigation。
+- `src/services/pwaReloadOwnerManifest.ts`固定typed owner IDs、適用surface與readiness producer；目前
+  scope宣告ready時若expected owner未註冊，回`OWNER_MANIFEST_INCOMPLETE`。owner mount數量或一個
+  animation frame不得替代manifest對帳。
+- session reservation key固定為`projed.pwa-reload.reserved-target.v1`，同一document／target最多一次
+  normal reload。reservation只保存target與startedAt，不存user／workspace／board／內容。
+- 不建立per-document heartbeat、TTL、all-live ack array或remote safety record。跨分頁只沿用
+  DEV-096 transaction／completed change signal；任何absence／expired metadata都不得推論遠端safe。
+- `PwaUpdateTransactionV1`維持schema 1與五分鐘stale。它在有效owner document
+  `currentVersion===targetVersion`時completed，不等待其他documents；其他documents的
+  `currentVersion!==latestVersion`只形成local pending target，不讓global transaction維持verifying。
+- 修正DEV-096 suppression：`completedVersion===latestVersion`只有在目前document同時
+  `currentVersion===latestVersion`時可suppress。舊／恢復client看到global completed後，仍依local
+  owner safety在自己的boundary收斂。
+- `controllerchange`、Workbox `activated`與BroadcastChannel只更新target／controller狀態，不得直接
+  navigation。跨分頁dirty protection由`clientsClaim:false`與release cache isolation提供，不以
+  preflight timing或local hard gate宣稱阻止套件內部reload。
+- reservation 在呼叫 reload前寫入並 readback；新 document只有在 `currentVersion===reservedTarget`
+  時清除。若 reload後仍 mismatch，保留 reservation並進 DEV-096 bounded recovery，不再 normal
+  reload；若3秒內未收到本 document的 `pagehide`，清除本次 reservation、回
+  `RELOAD_NAVIGATION_NOT_STARTED`，讓使用者可在原頁重試。transaction完成retarget後，舊 target
+  reservation才可由 service以新 target取代。
+- normal activation不得清除precache。每個production release使用獨立cache namespace，且新worker
+  不claim舊document；N dirty tab在N+1 activation後仍須能由N controller載入N lazy asset。自動舊
+  cache回收留在ADR-047 future capsule，不能以TTL或「應該沒有分頁」猜測實作。
+
+### V1 Reload-Safety Owner Matrix
+
+以下是 repo audit 後的 mandatory owner set；未列出的唯讀 panel、filter、popover、單純 pan／resize
+與已有 durable stable ID 的 server job 不註冊。RD 不得只實作 record draft 或單一 drag surface。
+
+| Owner ID／檔案 | Dirty signal | `prepareForReload`／readback |
+|---|---|---|
+| `record-draft`：`src/components/Records/RecordSidebar.tsx`、`src/hooks/useMeetingDraftRecovery.ts`、`src/store/useRecordStore.ts` | draft signature≠baseline、`saving`、meeting synthesis／project-import client job in flight | 一般紀錄呼叫既有 `saveDraft` 並驗 signature；會議草稿先 `saveMeetingDraftSnapshot`，只接受 `saved／degraded` 且可 load readback。client-only job 等待完成；deadline 到則失敗，不中止並假裝 durable。 |
+| `task-details`：`src/components/TaskDetailsModal.tsx` | local title／notes 與 node 不同、pending persist count、failed updates、collection pending | 重用 `savePendingTaskDetails／retryFailedSave`；等待 pending=0 且 failed map empty，否則 prepare failed／timeout。 |
+| `calendar-subscription-form`：`src/components/CalendarSubscriptionsView.tsx` | builder payload／name 已改、`isSaving` | 已送出的 save 等待 readback；未提交／不完整 form 不自動建立訂閱，回 `OWNER_ACTION_REQUIRED`，要求先儲存或取消。 |
+| `backup-import`：`src/components/BackupSettings.tsx` | selected inspection／plan 尚未完成，或 `inspectLoading／planLoading／executeLoading` | inspection／plan draft 回 action-required；execute 中禁止 cancel／reload，等待完成或 timeout。沿用目前 `beforeunload` guard。 |
+| `rag-query`：`src/components/Rag/RagSidebar.tsx`、`src/store/useRagStore.ts` | 未送出的 input，或 `isLoading` 且結果僅在 client memory | 未送 input 回 action-required；現行 RAG 無 stable job ID，in-flight 一律等完成或 timeout，不能誤列 durable job。 |
+| `board-member-invite`：`src/components/BoardMembersPanel.tsx` | invite form 已輸入或 invite write in flight | 未送 form 回 action-required；pending write 等 settled readback。 |
+| `inline-editor`：`src/components/Sidebar.tsx`、`src/components/Tags/TagPicker.tsx`、`src/components/MindMap/MindMapNode.tsx`、`src/components/MindMap/MindMapView.tsx` | workspace／board／tag／mind-map title 或 relationship label local draft | 呼叫各 component 既有 commit callback並比對 store／local durable value；invalid value 回 action-required。不得靠 synthetic blur 當成功證據。 |
+| `dirty-dialog`：`src/components/GlobalDialog.tsx` | input dialog 有尚未決定的 value／action | 不替使用者確認 destructive 或 semantic action；回 action-required。純 confirm／read-only dialog 不 dirty。 |
+| `task-drag`：`src/components/BoardView.tsx`、`src/components/Wbs/WbsListView.tsx`、`src/components/SharedTaskSidebar.tsx`、`src/components/Gantt/GanttTaskBar.tsx`、`src/components/MindMap/MindMapView.tsx`、`src/components/Wbs/taskDrag/useTaskDragSession.ts` | 任一 desktop／mobile drag、Gantt resize、mind-map node／relationship pointer drag active | 呼叫現有 cancel／clear path，Gantt 清 preview不 commit，再驗 active state、overlay、simulated dates 全清。不得半套 commit task position。 |
+
+新增 local editor、modal、client-only job 或 pending mutation 時，若可能在 reload 遺失，必須在同一
+PR 註冊 owner 並補 verifier；這是 extension rule，不是本 DEV 要建立通用 workflow platform。
+
+### State、Failure 與 UI Mapping
+
+`PwaUpdateState`增加`reloadSafetyState`、`reloadSafetyCode`、`pendingBoundary`、
+`pendingLocalTarget`；不新增第二個global store。normal target detected時：
+
+- `safe`：`updateAvailable=true` 可供 orchestration，但 `AppUpdatePrompt` 不 render；boundary取得
+  gate 後進既有 `applying／awaiting-controller／verifying`。
+- `dirty`：render exact set「新版已就緒／重新載入／稍後」。點 primary 後為 `preparing`，
+  文字固定「準備重新載入」、兩按鈕 disabled。
+- `booting`：不 apply、不顯示 normal prompt；readiness完成後再決定。
+- `blocked`：留在原頁；可見文字依 code 最短化，不能清資料。`recovering／failed` 仍沿用
+  DEV-096必要 retry／cache-recovery UI。
+
+| Code | 觸發 | 可見／恢復行為 |
+|---|---|---|
+| `SAFETY_NOT_READY`、`OWNER_SIGNAL_FAULT`、`OWNER_MANIFEST_INCOMPLETE` | readiness未完成、owner缺漏／throw／invalid | 不reload；「目前無法確認內容是否已保存。」 |
+| `OWNER_ACTION_REQUIRED` | form／dirty dialog 不能代替使用者 commit | 不 reload；「請先儲存或取消目前編輯。」 |
+| `OWNER_PREPARE_FAILED`、`OWNER_PREPARE_TIMEOUT` | save／flush／cancel failure 或超過 15 秒 | 不 reload；「內容尚未保存，請完成後再試。」 |
+| `LOCAL_READBACK_DIRTY` | prepare 後 snapshot 仍 dirty／revision 不可信 | 不 reload；同 prepare failure。 |
+| `VIEW_INTENT_NOT_DURABLE` | `projed-last-view` readback 不符 destination | 不 reload；保留已切換畫面並允許稍後重試。 |
+| `RELOAD_RESERVATION_FAILED` | session target reservation無法寫入／readback | 不 reload，避免同 target loop。 |
+| `RELOAD_NAVIGATION_NOT_STARTED` | 呼叫reload後3秒仍無`pagehide` | 清本次reservation、保留頁面並允許重試。 |
+| `WORKER_ACTIVATION_FAILED` | waiting worker未進activated／redundant／message失敗 | 不reload；沿用DEV-096 bounded recovery。 |
+| `OLD_RELEASE_ISOLATION_FAILED` | 舊document被claim、舊lazy asset遺失或normal path刪precache | P0 Stop-Ship；保留資料並進recovery，不宣稱safe rollout。 |
+
+DEV-096 的 `TARGET_UNSTABLE`、`CONTROLLER_TIMEOUT`、`OWNER_LEASE_LOST`、
+`POST_RELOAD_MISMATCH`、`TRANSACTION_STALE`、`COMPLETED_VERSION_WRITE_FAILED` 維持原 recovery
+authority；不得用 safety code 吞掉 transaction failure。
+
+### Repo Impact 與 RD Work Packages
+
+| WP | 檔案／模組 | 交付內容 | Exit evidence |
+|---|---|---|---|
+| WP-097-A Workbox isolation | 修改`package.json`／lock、`vite.config.js`、`src/services/pwaUpdateService.ts` | `workbox-window`直接依賴；移除virtual helper；`clientsClaim=false`、release cacheId、no normal cleanup；application-owned waiting／activation events | source assertion＋real-SW證明無內建reload、N cache／controller在N+1 activation後仍可用 |
+| WP-097-B Local safety／readiness | 新增`src/services/pwaReloadSafety.ts`、`src/services/pwaReloadOwnerManifest.ts`、`src/hooks/usePwaReloadSafetyOwner.ts`、`src/components/PwaReloadSafetyBridge.tsx`；修改`src/App.tsx`與`AuthGate.tsx` | local registry、typed manifest、explicit version/auth/view readiness、prepare deadline、boundary、session reservation；無heartbeat／TTL／all-live gate | pure＋browser覆蓋manifest缺漏、readiness epochs、revision、same-target reservation與三種boundary |
+| WP-097-C Owner adapters | 修改 owner matrix 所列 component／hook／store | mandatory local drafts、pending writes、client jobs與全部 drag surfaces 註冊 signal／prepare／readback | owner matrix fixture逐項 PASS；任一省略即未完成 |
+| WP-097-D Transaction split／UI | 修改`src/services/pwaUpdateService.ts`、`src/components/AppUpdatePrompt.tsx`；`src/services/pwaUpdateTransaction.ts`只允許相容assertion、不升schema | activation transaction與per-client convergence分離、local boundary reload、completed suppression correction、compact prompt／failure mapping | browser＋real-SW N→N+1／N+2、多分頁dirty isolation、5分鐘stale與同target reload count |
+| WP-097-E Verifiers | 新增 `scripts/verify-dev-097-pwa-safe-reload.ts`、`scripts/verify-dev-097-pwa-safe-reload-browser.pw.js`、`scripts/verify-dev-097-pwa-safe-reload-sw.mjs`；修改 `package.json` | static／browser／real-SW commands 與 deterministic result JSON | 三個 DEV-097 commands exit 0 且 artifacts complete |
+| WP-097-F QA／QC handoff | 更新 DEV、SPEC-041、QA-DEV-097、documentation map；RD完成後新增 QC evidence | frozen revision、fresh rerun、visible-error、runtime cleanup、regression | QA／QC各自 evidence；readiness 不等於 PASS |
+
+Backend／Supabase／migration／RLS／hosting capability預期無變更；`vite.config.js`、package dependency與
+build artifact cache namespace是本期明確scope。`PwaUpdateTransactionV1`維持schema 1，不新增client
+heartbeat metadata或business migration。normal path不得刪Cache Storage、SW registration、auth、
+draft-recovery或業務localStorage／IndexedDB；normal release在舊client收斂期間必須維持API相容，
+否則停止並轉critical／mandatory contract。
+
+### Executable Verification Contract
+
+RD 完成後依序執行，任一 fail 不得交 QA：
+
+```powershell
+npm.cmd run verify:dev-097-pwa-safe-reload
+npm.cmd run verify:dev-097-pwa-safe-reload-browser
+npm.cmd run verify:dev-097-pwa-safe-reload-sw
+npm.cmd run verify:dev-096-pwa-update-transaction-convergence
+npm.cmd run verify:dev-096-pwa-update-transaction-convergence-browser
+npm.cmd run verify:dev-096-pwa-update-transaction-convergence-sw
+npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery
+npm.cmd run verify:dev-041-pwa-update-notification-cache-recovery-browser
+npm.cmd run verify:dev-034-pwa-install-guidance
+npm.cmd run verify:dev-034-pwa-install-guidance-browser
+npm.cmd run verify:dev-069-meeting-draft-recovery
+npm.cmd run verify:dev-092-record-sidebar-quietness
+npm.cmd run verify:dev-045-calendar-subscription-builder-preview
+npm.cmd run verify:dev-047-backup-package-contract
+npm.cmd run verify:p9-rag-local
+npm.cmd run verify:dev-028-cross-mode-task-interactions
+npm.cmd run verify:dev-054-mobile-task-drag-precision
+npm.cmd run verify:dev-095-task-tracking-interaction-parity
+npm.cmd exec tsc -- --noEmit
+$dev097LintFiles = @(
+  'vite.config.js', 'src/App.tsx', 'src/components/AuthGate.tsx',
+  'src/services/pwaUpdateService.ts', 'src/services/pwaUpdateTransaction.ts',
+  'src/services/pwaReloadSafety.ts', 'src/services/pwaReloadOwnerManifest.ts',
+  'src/hooks/usePwaReloadSafetyOwner.ts', 'src/components/PwaReloadSafetyBridge.tsx',
+  'src/components/AppUpdatePrompt.tsx', 'src/components/Records/RecordSidebar.tsx',
+  'src/hooks/useMeetingDraftRecovery.ts', 'src/store/useRecordStore.ts',
+  'src/components/TaskDetailsModal.tsx', 'src/components/CalendarSubscriptionsView.tsx',
+  'src/components/BackupSettings.tsx', 'src/components/Rag/RagSidebar.tsx',
+  'src/store/useRagStore.ts', 'src/components/BoardMembersPanel.tsx',
+  'src/components/GlobalDialog.tsx', 'src/components/Sidebar.tsx',
+  'src/components/Tags/TagPicker.tsx', 'src/components/MindMap/MindMapNode.tsx',
+  'src/components/MindMap/MindMapView.tsx', 'src/components/BoardView.tsx',
+  'src/components/Wbs/WbsListView.tsx', 'src/components/SharedTaskSidebar.tsx',
+  'src/components/Gantt/GanttTaskBar.tsx',
+  'src/components/Wbs/taskDrag/useTaskDragSession.ts'
+)
+npm.cmd exec eslint -- $dev097LintFiles
+npm.cmd run build:test
+git diff --check
+```
+
+固定 artifacts：`output/qa/dev-097/static-result.json`、
+`output/playwright/dev-097/ui-result.json`、
+`output/playwright/dev-097/sw-integration-result.json`，以及同目錄 1440×900、390×844、320×844
+screenshots。real-SW result必須含immutable N／N+1／N+2 identity、served-byte parity、Workbox
+registration owner、waiting／activated state、N／N+1 controller與cache namespace、local
+boundary／reason、transaction／fence、activation count、per-client navigation count、completed write
+與runtime cleanup。上述verifier已在2026-08-31 frozen candidate fresh執行並通過；詳細結果以
+`QA-DEV-097` execution record與固定JSON為準，仍不等同independent QC或production release evidence。
+
+### Acceptance、Evidence 與 Stop Conditions
+
+- Fresh／uncontrolled client 直接取得目前版本且不顯示更新提示；此結果屬預期行為，不宣稱使用者曾同意版本切換。
+- controlled-safe client 只在 natural boundary 收斂 N+1；無一般提示、不在操作中途 reload，
+  reload 後 current===target。
+- controlled-dirty client 只顯示 exact visible set，不遺失未提交內容；flush 成功後才執行一次
+  transaction，flush 失敗則保持原頁並顯示可恢復錯誤。
+- Tab A safe可由單一owner activation N+1；Tab B dirty保持 application navigation count=0、N release
+  asset與原資料可 readback；shared-scope `controllerchange`若發生不得觸發 application reload。B只在
+  自己的boundary reload，且不重開activation transaction。
+- activation transaction在有效owner document `current===target`後completed；其他dirty／hidden client
+  不延長五分鐘transaction，也不能被global completed誤判為local已收斂。
+- 同一 lifecycle 與 dirty state 的桌機／手機行為一致；1440×900、390×844、320×844 的必要提示無 overflow、遮擋或不可達操作。
+- 真實 N 舊 bundle 必須先顯示 N 內建 UI，完成 N→N+1 後才驗證新 UI；不得用 N+1 fresh load 截圖冒充舊 client 已獲得新提示。
+- 連點、hide／show、reload、多分頁、owner crash 與 target retarget 後，相同 target 仍只有一筆有效 transaction、一次有效 apply，且 completed 後不再出現。
+- Evidence 分開記錄 source／artifact identity、真實 SW trace、dirty fixture、跨分頁 gate、
+  使用者操作與 viewport screenshot；build 或 synthetic event 不單獨支持 UI／SW PASS。
+- QA authority：`ai-doc/qa/QA-DEV-097-pwa-safe-reload-orchestration.md`。
+
+以下任一成立即 stop：dirty work／登入或業務資料遺失、任一分頁可迫使另一dirty分頁reload、
+任意 idle／pagehide apply、normal target 以時間強制、safe path 顯示一般提示、dirty path 缺 CTA
+或多出被刪除元素、同 target 多 transaction／多 apply／重複提示、current≠target 卻 completed、
+仍import`virtual:pwa-register`、`clientsClaim=true`、activation刪除舊release資產、ready只靠animation
+frame、owner manifest缺漏、visible error／白畫面，或缺真實N→N+1／多分頁／viewport evidence卻
+宣稱PASS。
+
+### Future Phase Capsule：Critical／Security Mandatory Update
+
+狀態：`Future Phase Captured / Not Requested`。
+
+- 目的：在安全漏洞、資料相容性破壞或後端不再支援舊 client 時，縮短不可接受的版本暴露時間。
+- 邊界：不得直接沿用 normal update 的靜默規則；需要版本支援政策、critical 判定來源、draft save／restore、倒數或阻擋語意與可稽核 release evidence。
+- 驗收方向：先保存可恢復工作，再清楚告知原因並要求重新載入；不得造成登入或業務資料遺失，也不得形成 reload loop。
+- Re-entry trigger：產品確認需要 mandatory update，或 release／security incident 明確宣告舊版本必須停止使用時，另升級 contract；目前不建立獨立 DEV。
+
+### Future Phase Capsule：Verified Old-Cache Reclamation
+
+狀態：`Future Phase Captured / Not Requested`；Architecture Memory Source為ADR-047。
+
+- 目的：在不破壞仍由舊controller服務的documents前提下，自動回收已無client使用的release cache。
+- 邊界／依賴：需要可靠的Service Worker client census、client↔release identity、PWA-owned cache
+  allowlist、quota failure evidence與版本支援政策；heartbeat／TTL或record absence不得當成client死亡證據。
+- 驗收方向：N client仍存在時N lazy assets持續可用；最後client離開後只刪允許的舊release cache；
+  census未知或不支援時fail safe為不刪除。
+- Re-entry trigger：至少一個DEV-097 release完成真實production lifecycle驗證，且產品要求自動回收
+  Cache Storage時另立DEV／spec；本期normal path固定不自動清precache。
+
+### Spec Governance、執行邊界與下一步
+
+- Cross-spec：`Intentional replacement`。SPEC-041 DEV-097 addendum 成為新產品／實作 contract；
+  DEV-096 保留歷史 implementation／evidence，現行程式標 `Implementation needs correction`。
+- ADR：已建立`ADR-047`，固定application-owned Workbox registration、`clientsClaim:false`、
+  release-scoped cache retention、activation transaction／per-client convergence分離與explicit readiness。
+- Deferred Scope Audit：critical／security mandatory update與verified old-cache reclamation皆已以上方
+  capsule保存；兩者未被偷渡到normal第一版。
+- Tech Lead Review Remediation：已移除virtual helper隱藏reload、all-live completion／五分鐘stale衝突、
+  heartbeat TTL safety推論與one-frame readiness；QA同時擴到全部owner adapters與相鄰regressions。
+- Readiness Gate：scope、ADR、repo／module impact、Workbox／cache contract、local owner interface、
+  transaction boundary、failure／recovery、work packages、commands、evidence與stop conditions已固定；
+  P0／P1 readiness gap=0，可直接由RD依WP-097-A～F實作。
+- 執行邊界：本輪已修改DEV-097 scope內產品、verifier、build config、package lock與文件；未修改
+  migration、deploy或release。`Local Automated QA PASS`與`Independent QC PASS`均不代表production
+  release PASS；實機補充仍未驗證。
+- Git boundary：readiness baseline固定為branch `持續優化3`、HEAD
+  `3a924ae5890f958d1010beb66db4c57c9cd76e20`（相對`origin/持續優化3` ahead 15）。目前文件變更
+  未提交，屬本 DEV既有工作樹；RD開工前須重讀status並保留其他未提交變更，不得自動commit／push。
+- 下一步：若納入本次release，先補DEV-054 iOS／Android實機或由產品明確確認不納入，再走
+  deployment-release-gate與production smoke。不得由本次HeadlessChrome evidence取代實機gate。
+
+### 變更紀錄
+
+- 2026-08-31：依使用者對更新機制核心用意、合理性與批判性設計要求建立 DEV-097；文件達 `Brief Ready / Need Human Decisions`，未修改產品程式或現行 SPEC authority。
+- 2026-08-31：使用者以引導模式確認 `1A／2A／3A`；固定 risk-based dirty scope、natural
+  boundary 與 normal no-time-force policy，文件升級 `RD Contract Ready / Human Confirmed`，
+  同步 SPEC-041 DEV-097 addendum 與 QA-DEV-097；產品尚未實作或驗證。
+- 2026-08-31：完成 repo／module audit，固定 client-only reload-safety service、per-document
+  heartbeat／ack schema、所有 mandatory dirty owners、view-transition bridge、failure codes、
+  WP-097-A～F、verifier commands／artifacts 與 migration／storage boundary；升級為
+  `RD Implementation Ready / Human Confirmed / Not Implemented`。本輪未修改產品或執行 QA／QC。
+- 2026-08-31：RD技術主管審查判定原契約不通過：`virtual:pwa-register`仍可繞過gate reload、
+  all-live completion與五分鐘stale／dirty無期限延後互斥、heartbeat TTL不能證明client死亡、
+  one-frame readiness與QA覆蓋不足。新增ADR-047並完成corrective replacement：改採application-owned
+  Workbox、`clientsClaim:false`、release-scoped cache retention、per-client local convergence、explicit
+  readiness／typed owner manifest及完整owner regression gate；重新通過RD Readiness Gate，仍未實作。
+- 2026-08-31：依使用者授權完成 DEV-097 WP-097-A～E：改為 application-owned Workbox registration、
+  release-scoped cache namespace、local readiness／typed owner manifest、9 類 owner adapter、
+  boundary safety／session reservation、compact prompt 與三層 verifier；`verify:dev-097-pwa-safe-reload`
+  11/11、browser smoke、real-SW N→N+1 isolation、TypeScript、targeted ESLint、`build:test` 與 DEV-096
+  static／browser／real-SW regressions fresh PASS。完整 QA／QC、production deploy／release 尚未執行。
+- 2026-08-31：QA回送並完成根因修正：readiness最後producer立即重評、九個真實owner UI訊號／取消與
+  readback、stable waiting-worker activation、桌面縮手機寬時收側欄，以及DEV-047 V3 verifier同步。
+  DEV-097 static `23/23`、browser九-owner／雙分頁／失敗讀回、DEV-096／097 real-SW A→B→C、
+  DEV-028／034／041／045／047／054／069／092／095／RAG regressions、TypeScript、32-file ESLint
+  （0 errors）、`build:test`與`git diff --check` fresh PASS。DEV-054 8px案例修正harness競態後連續兩輪
+  `15/15`。當時狀態升為`Local Automated QA PASS / Independent QC Pending / 未 Release`，後續已由獨立QC
+  完成複核並更新為`Independent QC PASS / Physical Device Supplemental Not Verified / 未 Release`。
+- 2026-08-31：依使用者授權執行獨立本機QC：DEV-097／DEV-096／DEV-041／DEV-034／DEV-028／DEV-045／
+  DEV-047／DEV-054／DEV-069／DEV-092／DEV-095／RAG static與browser fresh PASS，DEV-096／097 real-SW
+  亦PASS；artifact hash、runtime cleanup與hardware discovery均留存於`QC-DEV-097`。因本機無`adb`、
+  `idevice_id`或可操作Portable Device，iOS／Android實機補充標記`Not Verified`，未執行deploy／release。
 
 ## PM Update 歷史歸檔
 

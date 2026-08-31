@@ -23,8 +23,8 @@ async (page) => {
     await prompt.waitFor({ state: 'visible', timeout: 10000 });
 
     const text = await prompt.innerText();
-    assert(/有新版本可用/.test(text), 'update prompt should announce a new version', { text });
-    assert(/一鍵更新/.test(text) && !/一鍵更新到最新版/.test(text), 'update prompt should expose the compact one-click update action text', { text });
+    assert(/新版已就緒/.test(text), 'update prompt should announce a ready version', { text });
+    assert(/重新載入/.test(text) && !/一鍵更新到最新版/.test(text), 'update prompt should expose the compact reload action text', { text });
 
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,

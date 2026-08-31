@@ -1,13 +1,18 @@
 # SPEC-041: PWA 更新通知與快取恢復
 
-狀態: DEV-041 Historical Production Release Deployed / DEV-096 Corrective Addendum Implemented / Local QA-QC PASS / Not Released
-關聯 DEV: DEV-041 / DEV-096
+狀態: DEV-041 Historical Production Release Deployed / DEV-096 Implemented Local Baseline / DEV-097 RD Implemented / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified / Not Released
+關聯 DEV: DEV-041 / DEV-096 / DEV-097
+關聯 ADR: ADR-047 PWA每分頁重新載入隔離與Workbox effect ownership
 節點類型: 交付點
 父交付點: Production release readiness / PWA lifecycle reliability
 是否計入產品交付完成: 是，限正式部署前的使用者更新可見性、快取恢復與版本切換可靠性
 建立日期: 2026-07-05
 
 ## Human Decision Brief
+
+Authority note：本節保留 DEV-041 原始決策的歷史背景；normal update 的現行產品契約以
+本文後段 `DEV-097 Contract Addendum` 為準。DEV-096 保留已實作 baseline 與 local evidence，
+但其「一般更新一律等待點擊」語意已由使用者 2026-08-31 的 `1A／2A／3A` 決策取代。
 
 原始需求:
 - 使用者想把新版本部署到正式環境，但觀察到使用者常常不知道有更新，或快取未清造成異常。
@@ -407,6 +412,236 @@ DEV-096 三個 verifier 已建立並執行；static 25/25、test-mode browser、
 - DB／migration：無；release feasibility 依既有 DEV-083 sealed artifact pipeline，WP-096-B parity gate 已完成，不新增 backend service。
 - P0／P1 readiness gap：0。文件狀態為 `Implemented / Local QA-QC PASS / Not Released`；production deploy／remote smoke 仍需另行授權與 release gate。
 
+## DEV-097 Contract Addendum（2026-08-31）
+
+### Authority 與 Human Confirmed Decisions
+
+本附錄是DEV-097的`RD Implementation Ready`產品與實作權威，保留DEV-096已完成的release identity、
+單一activation transaction、owner fence、post-reload verification、bounded recovery與storage safety；
+ADR-047並有意取代DEV-096的virtual registration、`clientsClaim:true`、controlling reload fallback與
+下列normal update語意：
+
+- `1A`：只有可能遺失或中斷工作的 client state 阻止 reload。未儲存文字／表單、active
+  drag、尚未 durable 的 import／publish、pending write 與 dirty modal 為 unsafe。
+- 可由 stable ID 在 reload 後取回的 background AI／server job，以及唯讀 modal，不阻止；
+  只存在 client memory 或 reload 後無法恢復者仍為 unsafe。
+- `2A`：normal update 只在 app open、foreground resume 且 safe，或目前操作完成後的 route
+  transition 套用；不採任意 idle timeout。
+- `3A`：dirty 期間不以時間強制 reload。dirty 清除後於下一個 natural boundary 收斂；
+  超出支援期限時另走 critical policy。
+
+因此，DEV-096「未點擊不得接管或reload」、「可信target一律顯示normal prompt」與
+「未點擊自動apply一律P0 failure」只保留為DEV-096歷史baseline。DEV-097允許目前document經
+explicit readiness與local safety gate證明safe後，在自己的natural boundary靜默activation／reload；
+仍禁止hidden、`pagehide`、任意idle timer或無safety readback的自動reload。另一document的dirty
+保護由non-claiming controller與release cache isolation提供，不建立origin-wide all-safe consensus。
+
+### Reload-Safety Terms
+
+- `durable`：資料或 job 已有 reload 後可重新讀取的 stable identity，且不依賴目前頁面的
+  client-only memory 才能完成或顯示結果。
+- `dirty／unsafe`：至少一個 reload-safety owner 有未 durable 工作、active transient action、
+  pending mutation、dirty modal，或 signal 無法可信讀取。
+- `safe`：目前document在version／auth／active-view readiness完整後，所有manifest-required local
+  owners都明確回報無資料遺失或不可恢復中斷風險；不代表其他documents也safe。
+- `natural boundary`：app open、foreground resume 且 safe，或目前操作完成後的 route
+  transition；不得擴張為一般 idle、hidden 或 `pagehide`。
+- `critical update`：由未來獨立 policy 判定的 mandatory path；不屬本 normal contract。
+
+### Behavior 與 Effect Ownership Contract
+
+1. Detection／registration：`pwaUpdateService`以直接`workbox-window` registration偵測waiting target；
+   不使用`virtual:pwa-register`，Workbox event不得自行reload。
+2. Local signal：編輯、拖曳、匯入／發布、pending write、modal與background job owners提供目前
+   document的reload-safety狀態。readiness、manifest、owner讀取或prepare未知時fail closed。
+3. Activation isolation：safe document在自己的natural boundary取得DEV-096 owner／fence後，可送
+   `messageSkipWaiting()`。`clientsClaim:false`與release-scoped old cache retention要求 activation
+   不得觸發其他既有documents的application navigation／reload，也不得移除其所需資產；同一 scope
+   的既有 controlled document 仍可能收到 `controllerchange`，不把 controller identity 永不變列為 invariant。
+4. Safe path：目前document safe且進入natural boundary時，一個DEV-096 owner執行activation／reload；
+   一般提示不存在，view destination reload後保留。
+5. Dirty path：只在目前dirty／unsafe document顯示最小prompt。點「重新載入」先請所有local
+   owners flush、commit或安全取消transient action；全部成功後才activation或local reload。
+6. Cross-tab isolation：另一document dirty不阻止safe document activation，也不參與all-live gate；
+   dirty document的application navigation count必須維持0、原資料與舊版本資產可 readback，直到自己的boundary。
+7. Later：點「稍後」只隱藏目前document／target prompt。dirty→safe後不再次要求同意，而是在
+   自己的下一個natural boundary收斂；同target不得永久pin。
+8. Completion split：DEV-096 transaction只追蹤target activation與有效owner document驗證；
+   `current===target`即可completed並維持五分鐘stale policy。其他documents的延後收斂是local
+   obligation，不使global transaction維持`verifying`，也不重開activation transaction。
+9. Recovery：prepare、activation、navigation或verification失敗保留頁面並進有界限
+   recovery／failed；只有使用者主動的人工recovery可處理PWA cache範圍。
+
+ADR-047固定registration ownership、application navigation/cache retention isolation與transaction split。RD必須維持
+single activation、per-client dirty protection、explicit readiness與bounded recovery，不得以heartbeat
+TTL、all-live consensus、router、backend coordination或第二套global state framework替代。
+
+### UI Entry Contract
+
+- Actor／entry：所有 web／PWA 使用者；更新能力位於 AuthGate 外，不依賴登入或業務角色。
+- Fresh／uncontrolled：直接取得目前 app shell，無提示；這不是「已取得更新同意」。
+- Controlled-safe：偵測 target 後無 normal UI；只在 natural boundary 進入 apply／reload。
+- Controlled-dirty exact visible set：「新版已就緒」、「重新載入」、「稍後」。不得有 close、
+  Refresh icon、一般說明、版本 badge、成功宣告或刪除元素留下的空白欄。
+- Preparing：primary 顯示「準備重新載入」或等效最短狀態並 disabled；稍後不可重入。
+- Prepare／cross-tab failure：保留最短原因與恢復動作；不得 navigation 或清除 business data。
+- Recovery／failed：保留必要原因、重試與人工 cache recovery，不受 normal exact set 限制。
+- Layout／a11y：1440×900、390×844、320×844 無 overflow、重疊、裁切、safe-area 遮擋、
+  焦點遺失或重複 ARIA live announcement；normal UI 維持單一主動作與一層扁平 surface。
+
+### Data、API、Permission 與 Compatibility
+
+- Backend／DB／schema／RLS／RPC／業務 API：不變。若實作必須增加，視為 scope expansion，
+  停止並回到 contract review。
+- Client storage：沿用 DEV-096 PWA-owned transaction metadata；不得讀寫 auth token、業務
+  IndexedDB 或其他 owner storage。owner 只回報 safety 或呼叫既有 save／flush 能力。
+- Permission：所有角色使用相同契約，不新增 admin override 或 per-user version pinning。
+- Backward compatibility：N client 在更新前只能顯示 N bundle 內建 UI；N+1 UI 的 acceptance
+  必須用真實 N→N+1 fixture，不能用 fresh N+1 畫面代替。
+- Migration：無backend／business data migration。新增`workbox-window`直接依賴與release-scoped
+  precache namespace；normal path不自動清歷史precache，也不建立heartbeat／TTL client schema。
+  DEV-096 completed suppression須加local current readback。
+
+### Implementation Authority
+
+#### Module／effect boundary
+
+- `package.json`把`workbox-window`列為direct dependency；`vite-plugin-pwa`只產生manifest／worker，
+  `injectRegister:false`維持。
+- `vite.config.js`固定`clientsClaim:false`、`skipWaiting:false`、
+  `cleanupOutdatedCaches:false`與release-scoped `cacheId`。production release ID缺失沿DEV-083
+  build gate fail closed。
+- `src/services/pwaUpdateService.ts`移除`virtual:pwa-register`，自行建立Workbox instance並成為唯一
+  detection／activation／reload／verify effect owner；`controllerchange`／waiting／activated listener
+  只更新狀態，不直接navigation。`AppUpdatePrompt.tsx`只render state與送user intent。
+- `src/services/pwaReloadSafety.ts`（new）是local pure domain owner：owner registry、explicit readiness、
+  prepare aggregation、boundary與session reservation；不含heartbeat、TTL或remote client gate。
+- `src/services/pwaReloadOwnerManifest.ts`（new）固定typed owner ID、repo authority、適用surface與
+  readiness scope；expected owner未註冊即`OWNER_MANIFEST_INCOMPLETE`。
+- `src/hooks/usePwaReloadSafetyOwner.ts`（new）只做React registration；不得觸發worker、transaction、
+  navigation或recovery。
+- `src/components/PwaReloadSafetyBridge.tsx`（new）在AuthGate外只送app-open、hidden→visible與
+  `currentView` intent。`AuthGate`／`AppContent`內部分別回報`auth-shell`／`active-view` readiness；
+  animation frame只可debounce，不是readiness authority。
+- `PwaUpdateTransactionV1`維持schema 1與五分鐘stale，只追蹤activation；不加入client ack array。
+
+#### Controller／cache isolation
+
+- waiting worker由唯一owner送`messageSkipWaiting()`；因`clientsClaim:false`，activation不得改變其他
+  既有documents的controller或觸發其reload。
+- 每個release使用獨立precache namespace，activation不清舊release cache。N dirty document在N+1
+  activation後仍須由N controller載入N navigation與lazy assets。
+- normal path不做自動舊cache reclamation。可靠client census與cache GC由ADR-047 future capsule管理；
+  heartbeat、TTL、record absence或固定release數量不得作為刪除依據。
+- normal release須在per-client convergence期間維持backend／API／資料格式相容；無法相容者必須
+  停止normal rollout並進critical／mandatory update contract。
+
+#### Activation transaction 與 per-client convergence
+
+- local owner safe且進入natural boundary後，尚有waiting worker的client可取得DEV-096 owner／fence
+  並activation；另一document dirty不阻止activation，也不得被迫reload。
+- activation transaction在有效owner document `current===target`後completed；其他舊documents不讓
+  transaction維持`verifying`，所以合法dirty延後不受五分鐘stale影響。
+- `completedVersion===latestVersion`不能單獨suppress；目前document也必須
+  `currentVersion===latestVersion`。舊／恢復document看到completed target後建立local pending target，
+  於自己的boundary使用一次session reservation reload，不再送`messageSkipWaiting()`或建立transaction。
+- reload前view boundary必須readback`projed-last-view`；不符回`VIEW_INTENT_NOT_DURABLE`。hidden、
+  `pagehide`、idle timer皆無apply effect。
+- session reservation先write/readback再reload；新document只在current等於reserved target時清除。
+  mismatch保留reservation並進DEV-096 bounded recovery；呼叫reload後3秒未見`pagehide`則清本次
+  reservation、回`RELOAD_NAVIGATION_NOT_STARTED`並留在原頁。retarget後才可換成新target。
+
+#### Mandatory V1 owners
+
+| Owner | Repo authority | Dirty／prepare contract |
+|---|---|---|
+| Record draft／meeting job | `RecordSidebar.tsx`、`useMeetingDraftRecovery.ts`、`useRecordStore.ts` | signature、saving、synthesis／project import；save draft或 meeting snapshot `saved／degraded`＋load readback |
+| Task details | `TaskDetailsModal.tsx` | title／notes local draft、pending／failed writes、collection pending；save／retry後 pending=0、failed=0 |
+| Calendar subscription | `CalendarSubscriptionsView.tsx` | local builder／saving；未提交 form 回 action-required，不替使用者建立訂閱 |
+| Backup import | `BackupSettings.tsx` | inspection／plan／execute；draft action-required，execute 等 settled，不 cancel transaction |
+| RAG query | `RagSidebar.tsx`、`useRagStore.ts` | unsent input／client-only query；現行無 stable job ID，等待完成或 timeout |
+| Invite／input dialog | `BoardMembersPanel.tsx`、`GlobalDialog.tsx` | unsent semantic input action-required；pending invite 等 readback；read-only confirm 不 dirty |
+| Inline editors | `Sidebar.tsx`、`TagPicker.tsx`、`MindMapNode.tsx`、`MindMapView.tsx` | commit workspace／board／tag／title／relationship label並做 store readback；invalid draft action-required |
+| All task drag surfaces | `BoardView.tsx`、`WbsListView.tsx`、`SharedTaskSidebar.tsx`、`GanttTaskBar.tsx`、`MindMapView.tsx`、`useTaskDragSession.ts` | active drag unsafe；prepare走既有 cancel／clear，Gantt不 commit preview，驗 overlay／simulation全清 |
+
+唯讀 modal、filter、popover、pan／resize 與可用 stable ID reload recovery 的 server job不註冊。
+任何新增 local editor、client-only job 或 pending write 必須同 PR 註冊 owner並加 verifier。
+
+#### Failure／UI mapping
+
+- `SAFETY_NOT_READY／OWNER_SIGNAL_FAULT／OWNER_MANIFEST_INCOMPLETE`：
+  「目前無法確認內容是否已保存。」
+- `OWNER_ACTION_REQUIRED`：「請先儲存或取消目前編輯。」
+- `OWNER_PREPARE_FAILED／OWNER_PREPARE_TIMEOUT／LOCAL_READBACK_DIRTY`：
+  「內容尚未保存，請完成後再試。」
+- `VIEW_INTENT_NOT_DURABLE／RELOAD_RESERVATION_FAILED／RELOAD_NAVIGATION_NOT_STARTED`：
+  保留頁面與retry；navigation未開始時清本次reservation。
+- `WORKER_ACTIVATION_FAILED`：保留頁面並進DEV-096 bounded recovery。
+- `OLD_RELEASE_ISOLATION_FAILED`：P0 Stop-Ship；不宣稱normal安全更新成立。
+  DEV-096 transaction failure codes仍由既有 recovery／failed UI處理。
+- normal dirty UI exact set仍是「新版已就緒／重新載入／稍後」；preparing primary固定
+  「準備重新載入」且兩按鈕 disabled。safe／booting不 render normal prompt。
+
+#### Work packages／verifier artifacts
+
+- WP-097-A：Workbox registration／controller-cache isolation；WP-097-B：local safety、typed manifest與
+  explicit readiness；WP-097-C：全部owner adapters；WP-097-D：activation transaction／per-client
+  convergence與prompt；WP-097-E：三層verifier／package scripts；WP-097-F：QA／QC handoff。
+  逐檔exit contract以`ai-doc/dev_task.md` DEV-097為準，順序固定A→B→C→D→E→F。
+- future commands固定為 `verify:dev-097-pwa-safe-reload`、
+  `verify:dev-097-pwa-safe-reload-browser`、`verify:dev-097-pwa-safe-reload-sw`；再跑 DEV-096、
+  DEV-041、DEV-034、DEV-069、DEV-092、DEV-045、DEV-047、RAG、DEV-028、DEV-054、DEV-095
+  targeted regressions、TypeScript、全部touched owner files ESLint、`build:test`、`git diff --check`。
+- artifacts固定為 `output/qa/dev-097/static-result.json`、
+  `output/playwright/dev-097/ui-result.json`、
+  `output/playwright/dev-097/sw-integration-result.json` 與三個 required viewport screenshots。
+  RD scripts／results 已建立並完成 targeted execution；固定 artifacts 為
+  `output/qa/dev-097/static-result.json`、`output/playwright/dev-097/ui-result.json`、
+  `output/playwright/dev-097/sw-integration-result.json`。這些結果只代表 local targeted evidence，
+  不取代完整 owner matrix／multi-tab／viewport／獨立 QA-QC。
+
+### Acceptance、Evidence 與 Stop Conditions
+
+- Fresh／uncontrolled 直接載入 current，沒有 normal prompt。
+- controlled-safe 只在 natural boundary 靜默收斂，操作中途、idle、hidden、`pagehide` 不 reload。
+- controlled-dirty 只顯示 exact visible set；flush 成功後一次 apply，flush 失敗保持原頁與資料。
+- Tab A safe可由單一owner activation；Tab B dirty保持 navigation count=0、原資料與舊 release
+  asset可用，直到B自己的natural boundary才reload。shared-scope `controllerchange`若發生只可作
+  lifecycle state，不得觸發 application navigation；controller identity 永不變不是本設計可保證的 invariant。
+- activation transaction在有效owner document `current===target`後completed；其他dirty／hidden
+  documents不延長五分鐘transaction，也不能被global completed誤判為local已收斂。
+- 「稍後」不重複打擾、不丟 target、不永久 pin；dirty 清除後於 natural boundary 收斂。
+- 桌機／手機由 lifecycle＋safety state 決定相同行為；三個 required viewports UI 可見可操作。
+- 同 target 在連點、visibility、route、reload、多分頁、owner crash 與 retarget 下不重複提示、
+  transaction 或 apply；current≠target 不得 completed。
+- Evidence必須包含source／artifact identity、直接Workbox owner、真實SW N→N+1 trace、N／N+1
+  controller與cache namespace、dirty owner fixture、multi-tab isolation、view intent、viewport screenshot、
+  visible-error sweep與runtime cleanup。
+
+任一dirty data loss、跨分頁強制reload、normal time-force、idle／pagehide apply、safe path顯示
+一般提示、dirty exact set錯誤、同target多activation／多reload、current≠target completed、仍使用
+`virtual:pwa-register` internal reload、`clientsClaim:true`、activation刪除舊release資產、manifest／
+readiness缺漏、登入或business storage異動、visible error／白畫面，或缺真實SW／多分頁／UI evidence
+卻宣稱PASS，皆為P0 Stop-Ship。QA authority為
+`ai-doc/qa/QA-DEV-097-pwa-safe-reload-orchestration.md`。
+
+### Readiness、Governance 與 Execution Boundary
+
+- 成熟度：`RD Implementation Ready / Human Confirmed / Tech Lead Review Remediated`；產品與工程
+  P0／P1 readiness gap皆為0。
+- 實作狀態：RD已完成DEV-097 WP-097-A～F，並通過local automated QA與independent QC；physical device supplemental尚未驗證。
+  DEV-096 code／QA／QC只作相容回歸與歷史baseline，不可單獨宣稱DEV-097 PASS。
+- ADR：`ADR-047` Accepted，固定application-owned Workbox registration、non-claiming activation、
+  release-scoped cache retention、activation transaction／per-client convergence split與explicit readiness。
+- Tech Lead Review Remediation：已移除hidden reload effect、all-live completion／五分鐘stale矛盾、
+  heartbeat TTL safety oracle與one-frame readiness，並把全部owner adapters納入QA／lint／regression。
+- Release feasibility：沿用DEV-083 sealed artifact與DEV-096 release identity，但artifact必須產生
+  release-scoped cacheId，且normal rollout期間維持舊client API相容；實作、QA／QC未完成前不得進
+  DEV-097 release gate。
+- Execution boundary：本輪已修改DEV-097 scope內產品、verifier、build config、package lock與文件，
+  未修改migration、deploy或release artifact。`Local Automated QA PASS`與`Independent QC PASS`均不代表
+  production release PASS；iOS／Android實機補充仍為`Not Verified`，release另依gate執行。
+
 ## All-Phase Coverage Matrix
 
 | Phase | 名稱 | 文件狀態 | 授權狀態 | Exit Evidence |
@@ -414,8 +649,9 @@ DEV-096 三個 verifier 已建立並執行；static 25/25、test-mode browser、
 | 0 | PM/RD Contract | Complete | Authorized for documentation only | SPEC/QA/dev_task/documentation_map/backlog updated |
 | 1 | Visible PWA Update Prompt & Cache Recovery | Local + Browser QC Passed | Authorized / Complete | local static/browser verifier、TypeScript、build:test、DEV-034 regression |
 | 1A | DEV-096 Update Transaction Convergence | Implemented / Local QA-QC PASS | Authorized / Complete | static 25/25、UI、real-SW A→B／B→C／retarget／multi-tab／storage safety、QC-DEV-096 |
+| 1B | DEV-097 Safe Reload Orchestration | RD Implemented / Local Automated QA PASS / Independent QC PASS / Physical Device Supplemental Not Verified | Local implementation and automated QC complete / Not Released | DEV-097 static 23/23、九-owner／dual-tab browser、A→B→C real-SW、TypeScript、changed-file lint、build:test、相鄰regressions；physical device supplemental not verified |
 | 2 | Production Release Gate | Production Release Deployed / Post-Deploy Smoke Passed | Authorized / Complete | deployment-release-gate evidence、post-deploy smoke、rollback readiness |
-| 3 | Optional Release Metadata / Mandatory Policy | RD Contract Ready | Not Authorized | separate human decision、SPEC addendum or new DEV |
+| 3 | Mandatory Policy / Verified Old-Cache Reclamation | Future Phase Captured / Not Requested | Not Requested | human re-entry、ADR-047 future capsule、separate contract or new DEV |
 
 ## Historical RD Start Checklist
 

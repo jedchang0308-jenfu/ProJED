@@ -457,6 +457,7 @@ const Sidebar = () => {
                     }}
                     className={TITLE_INPUT_CLASS}
                     aria-label="編輯工作區名稱"
+                    data-workspace-title-input="true"
                   />
                 ) : (
                   <span
@@ -534,6 +535,7 @@ const Sidebar = () => {
                           }}
                           className={`${TITLE_INPUT_CLASS} text-sm ${isMainBoardActive ? 'text-slate-700' : ''}`}
                           aria-label="編輯看板名稱"
+                          data-board-title-input="true"
                         />
                       ) : (
                         <span

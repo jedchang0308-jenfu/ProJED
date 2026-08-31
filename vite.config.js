@@ -5,6 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  ...(mode === 'production' && !process.env.PROJED_RELEASE_ID
+    ? (() => { throw new Error('DEV-097: sealed production build requires PROJED_RELEASE_ID.'); })()
+    : {}),
   // DEV-083 P0: sealed production builds point Vite at an isolated env directory,
   // preventing root .env.local auto-loading and parent-process collisions.
   envDir: process.env.PROJED_RELEASE_ENV_DIR || process.cwd(),
@@ -50,8 +53,9 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
+        cacheId: `projed-${process.env.PROJED_RELEASE_ID || 'test'}`,
+        cleanupOutdatedCaches: false,
+        clientsClaim: false,
         skipWaiting: false,
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/__/],
