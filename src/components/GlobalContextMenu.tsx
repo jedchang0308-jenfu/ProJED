@@ -11,7 +11,7 @@ import { toast } from '../store/useToastStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import useDialogStore from '../store/useDialogStore';
 import useAuthStore from '../store/useAuthStore';
-import { boardService, taskCollectionService } from '../services/dataBackend';
+import { boardService, taskCollectionService, workspaceService } from '../services/dataBackend';
 import {
   clearTaskSelection,
   OPEN_TASK_DETAILS_EVENT,
@@ -649,7 +649,7 @@ export const GlobalContextMenu: React.FC = () => {
     const { workspaceId, title } = contextMenuState;
     let impact;
     try {
-      impact = await boardService.previewWorkspaceDeleteImpact(workspaceId);
+      impact = await workspaceService.previewDeleteImpact(workspaceId);
     } catch {
       toast.error('無法確認工作區內的典藏資產，已阻止刪除。');
       return;
