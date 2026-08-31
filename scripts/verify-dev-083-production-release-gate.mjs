@@ -170,7 +170,21 @@ try {
     const scan = scanArtifact({ distDir: scanDir, root });
     if (!scan.errors.some(error => error.includes('app.js'))) throw new Error('app-owned loopback was not reported');
   });
-  const latest = fs.readdirSync(path.join(root, 'output', 'release', 'dev-083'), { withFileTypes: true }).filter(entry => entry.isDirectory() && !entry.name.startsWith('self-check-')).map(entry => entry.name).sort().reverse()[0];
+  const latest = fs.readdirSync(path.join(root, 'output', 'release', 'dev-083'), { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && !entry.name.startsWith('self-check-'))
+    .map(entry => {
+      const manifestPath = path.join(root, 'output', 'release', 'dev-083', entry.name, 'manifest.json');
+      if (!fs.existsSync(manifestPath)) return null;
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        return manifest.artifact?.treeSha256 && manifest.artifact?.distDir ? entry.name : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort()
+    .reverse()[0];
   if (latest) {
     const sourceManifestPath = path.join(root, 'output', 'release', 'dev-083', latest, 'manifest.json');
     const tampered = JSON.parse(fs.readFileSync(sourceManifestPath, 'utf8'));
