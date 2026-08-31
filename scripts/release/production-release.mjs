@@ -156,7 +156,12 @@ export const runLayer2Smoke = async (distDir, manifest) => {
     if (String(error.message).includes('already owned')) throw error;
   }
   const viteBin = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
-  const child = spawn(process.execPath, [viteBin, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort', '--outDir', distDir], { cwd: root, env: buildReleaseRuntimeEnv(process.env), stdio: ['ignore', 'ignore', 'ignore'] });
+  const childEnv = buildSanitizedChildEnv(process.env, {
+    releaseEnvDir: path.join(manifest.artifact.releaseDir, 'env'),
+    releaseId: manifest.releaseId,
+    extra: { NODE_ENV: 'production' },
+  });
+  const child = spawn(process.execPath, [viteBin, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort', '--outDir', distDir], { cwd: root, env: childEnv, stdio: ['ignore', 'ignore', 'ignore'] });
   let result;
   let primaryError;
   try {
