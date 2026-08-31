@@ -301,7 +301,8 @@ const canonicalBundleVersion = (hash: string | null) => hash ? `bundle:${hash}` 
 const getCurrentAppVersion = () => {
   const releaseVersion = canonicalReleaseVersion(getProductionReleaseId());
   if (releaseVersion) return releaseVersion;
-  if (import.meta.env.PROD) return null;
+  // Vite's staging build also sets PROD=true. It does not receive the sealed
+  // release ID, so it must use the app-shell hash for update convergence.
   return canonicalBundleVersion(getCurrentBundleHash());
 };
 
@@ -311,7 +312,9 @@ const extractAppShellVersionFromHtml = (html: string) => (
 
 const fetchLatestAppVersion = async () => {
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  if (import.meta.env.PROD) {
+  // Sealed production artifacts publish release-meta.json. Preview/staging
+  // artifacts do not, so compare their current index.html bundle hash.
+  if (getProductionReleaseId()) {
     const response = await fetch(`/release-meta.json?projed_update_check=${nonce}`, {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' },
