@@ -5,6 +5,8 @@ import {
   PRODUCTION_CONTRACT,
   contractDigest,
   isLoopbackUrl,
+  releaseTaskSlug,
+  resolveReleaseTaskId,
   sha256,
 } from './production-contract.mjs';
 import { collectTestPublicForbiddenValues } from './env-boundary.mjs';
@@ -43,10 +45,10 @@ const secretPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
 ];
 
-export function scanArtifact({ distDir, root = process.cwd() } = {}) {
+export function scanArtifact({ distDir, root = process.cwd(), productionEnvPath } = {}) {
   if (!distDir || !fs.existsSync(distDir)) throw new Error('DEV-083 P0: artifact dist directory is missing.');
   const errors = [];
-  const testValues = collectTestPublicForbiddenValues({ root });
+  const testValues = collectTestPublicForbiddenValues({ root, productionEnvPath });
   const supabaseRefPattern = /https:\/\/([a-z0-9]+)\.supabase\.co/gi;
   for (const filePath of walkFiles(distDir)) {
     const relativePath = path.relative(distDir, filePath).replaceAll(path.sep, '/');
@@ -66,11 +68,12 @@ export function scanArtifact({ distDir, root = process.cwd() } = {}) {
   return { ok: errors.length === 0, errors };
 }
 
-export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
-  if (!manifestPath || !fs.existsSync(manifestPath)) throw new Error('DEV-083 P1: manifest path is missing.');
+export function verifyManifest(manifestPath, { root = process.cwd(), expectedTaskId: requestedTaskId, productionEnvPath } = {}) {
+  const expectedTaskId = resolveReleaseTaskId(requestedTaskId);
+  if (!manifestPath || !fs.existsSync(manifestPath)) throw new Error(`${expectedTaskId} P1: manifest path is missing.`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const errors = [];
-  if (manifest.taskId !== PRODUCTION_CONTRACT.taskId) errors.push('manifest task id mismatch');
+  if (manifest.taskId !== expectedTaskId) errors.push('manifest task id mismatch');
   if (manifest.target?.projectId !== PRODUCTION_CONTRACT.projectId) errors.push('Firebase project mismatch');
   if (manifest.target?.origin !== PRODUCTION_CONTRACT.canonicalOrigin) errors.push('canonical origin mismatch');
   if (manifest.environment?.supabaseProjectRef !== PRODUCTION_CONTRACT.supabaseProjectRef) errors.push('Supabase project mismatch');
@@ -84,6 +87,7 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
   if (!metaPath || !fs.existsSync(metaPath)) errors.push('release-meta.json missing');
   else {
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    if (meta.taskId !== manifest.taskId) errors.push('release metadata task id mismatch');
     if (meta.releaseId !== manifest.releaseId) errors.push('release metadata id mismatch');
     if (meta.contractSha256 !== manifest.contractSha256) errors.push('release metadata contract mismatch');
   }
@@ -93,14 +97,21 @@ export function verifyManifest(manifestPath, { root = process.cwd() } = {}) {
     if (!releaseIdInjected) errors.push('client bundle release identity missing');
   }
   if (distDir) {
-    const scan = scanArtifact({ distDir, root });
+    const scan = scanArtifact({ distDir, root, productionEnvPath });
     errors.push(...scan.errors);
+  }
+  const capsulePath = manifest.artifact?.releaseDir ? path.join(manifest.artifact.releaseDir, 'release-capsule.json') : '';
+  if (manifest.gates && (!capsulePath || !fs.existsSync(capsulePath))) errors.push('release capsule missing');
+  else if (capsulePath && fs.existsSync(capsulePath)) {
+    const capsule = JSON.parse(fs.readFileSync(capsulePath, 'utf8'));
+    if (capsule.taskId !== manifest.taskId || capsule.releaseId !== manifest.releaseId) errors.push('release capsule identity mismatch');
+    if (capsule.artifact?.treeSha256 !== manifest.artifact.treeSha256) errors.push('release capsule artifact mismatch');
   }
   return { ok: errors.length === 0, errors, manifest };
 }
 
-const latestManifest = () => {
-  const root = path.resolve(process.cwd(), 'output', 'release', 'dev-083');
+const latestManifest = taskId => {
+  const root = path.resolve(process.cwd(), 'output', 'release', releaseTaskSlug(taskId));
   if (!fs.existsSync(root)) return null;
   const dirs = fs.readdirSync(root, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && /^\d{14}-[a-z0-9]+$/i.test(entry.name))
@@ -112,7 +123,7 @@ const latestManifest = () => {
     if (!fs.existsSync(manifestPath)) continue;
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (manifest.taskId === PRODUCTION_CONTRACT.taskId && typeof manifest.releaseId === 'string' && manifest.artifact?.distDir) return manifestPath;
+      if (manifest.taskId === taskId && typeof manifest.releaseId === 'string' && manifest.artifact?.distDir) return manifestPath;
     } catch {
       // Ignore non-artifact directories and continue to the next candidate.
     }
@@ -121,11 +132,15 @@ const latestManifest = () => {
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  const taskIndex = process.argv.indexOf('--task-id');
+  const taskId = resolveReleaseTaskId(taskIndex >= 0 ? process.argv[taskIndex + 1] : undefined);
+  const envIndex = process.argv.indexOf('--production-env');
+  const productionEnvPath = envIndex >= 0 ? process.argv[envIndex + 1] : undefined;
   const index = process.argv.indexOf('--manifest');
-  const manifestPath = index >= 0 ? process.argv[index + 1] : latestManifest();
+  const manifestPath = index >= 0 ? process.argv[index + 1] : latestManifest(taskId);
   try {
-    const result = verifyManifest(manifestPath);
-    console.log(JSON.stringify({ ok: result.ok, manifestPath, releaseId: result.manifest?.releaseId, errors: result.errors }, null, 2));
+    const result = verifyManifest(manifestPath, { expectedTaskId: taskId, productionEnvPath });
+    console.log(JSON.stringify({ ok: result.ok, taskId, manifestPath, releaseId: result.manifest?.releaseId, errors: result.errors }, null, 2));
     if (!result.ok) process.exit(1);
   } catch (error) {
     console.error(error.message);

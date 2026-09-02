@@ -35,10 +35,14 @@ export function readEnvFile(filePath) {
 const unique = values => [...new Set(values)];
 const present = value => typeof value === 'string' && value.length > 0;
 
-export function resolveProductionPublicEnv({ root = process.cwd(), parentEnv = process.env } = {}) {
-  const envPath = path.join(root, '.env.production');
+const resolveAuthorityPath = (root, explicitPath, fallbackName) => explicitPath
+  ? path.resolve(root, explicitPath)
+  : path.join(root, fallbackName);
+
+export function resolveProductionPublicEnv({ root = process.cwd(), parentEnv = process.env, envPath: explicitEnvPath } = {}) {
+  const envPath = resolveAuthorityPath(root, explicitEnvPath, '.env.production');
   const localPath = path.join(root, '.env.production.local');
-  if (!fs.existsSync(envPath)) throw new Error('DEV-083 P0: missing .env.production; production public env has no authority.');
+  if (!fs.existsSync(envPath)) throw new Error('RELEASE P0: production public env authority file is missing.');
   const env = readEnvFile(envPath);
   const errors = [];
   for (const key of PRODUCTION_CONTRACT.publicRequiredKeys) {
@@ -59,7 +63,7 @@ export function resolveProductionPublicEnv({ root = process.cwd(), parentEnv = p
   if (unexpectedParent.length > 0) errors.push(`parent process contains non-contract VITE keys (${unexpectedParent.join(', ')})`);
   const conflictingParent = parentVite.filter(key => PUBLIC_ENV_KEYS.includes(key) && parentEnv[key] !== env[key]);
   if (conflictingParent.length > 0) errors.push(`parent process conflicts with .env.production for ${conflictingParent.join(', ')}`);
-  if (errors.length > 0) throw new Error(`DEV-083 P0 production env boundary failed: ${errors.join('; ')}`);
+  if (errors.length > 0) throw new Error(`RELEASE P0 production env boundary failed: ${errors.join('; ')}`);
   return Object.fromEntries(PUBLIC_ENV_KEYS.filter(key => key in env).map(key => [key, env[key]]));
 }
 
@@ -76,8 +80,8 @@ export function buildSanitizedChildEnv(parentEnv = process.env, { publicEnv = {}
   return sanitized;
 }
 
-export function loadServerVerificationEnv({ root = process.cwd(), parentEnv = process.env } = {}) {
-  const fileEnv = readEnvFile(path.join(root, '.env.p8.local'));
+export function loadServerVerificationEnv({ root = process.cwd(), parentEnv = process.env, envPath: explicitEnvPath } = {}) {
+  const fileEnv = readEnvFile(resolveAuthorityPath(root, explicitEnvPath, '.env.p8.local'));
   const verificationKeys = [...SERVER_ONLY_KEYS, 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_AUTH_REDIRECT_URL', 'SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED', 'P7_CREDENTIAL_ROTATION_CONFIRMED', 'OLD_SUPABASE_ANON_KEY', 'OLD_SUPABASE_SERVICE_ROLE_KEY', 'OLD_SUPABASE_ACCESS_TOKEN', 'P8_OLD_SUPABASE_ANON_KEY', 'P8_OLD_SUPABASE_SERVICE_ROLE_KEY', 'P8_OLD_SUPABASE_ACCESS_TOKEN'];
   const result = {};
   for (const key of verificationKeys) {
@@ -87,10 +91,10 @@ export function loadServerVerificationEnv({ root = process.cwd(), parentEnv = pr
   return result;
 }
 
-export function collectTestPublicForbiddenValues({ root = process.cwd() } = {}) {
+export function collectTestPublicForbiddenValues({ root = process.cwd(), productionEnvPath } = {}) {
   const files = ['.env.test.local', '.env.local', '.env.staging.local'];
   const keys = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_AUTH_REDIRECT_URL', 'VITE_GOOGLE_CLIENT_ID', 'VITE_SUPABASE_TEST_EMAIL', 'VITE_SUPABASE_TEST_PASSWORD'];
-  const production = readEnvFile(path.join(root, '.env.production'));
+  const production = readEnvFile(resolveAuthorityPath(root, productionEnvPath, '.env.production'));
   const productionValues = new Set(keys.map(key => production[key]).filter(present));
   const values = [];
   for (const file of files) {
@@ -102,5 +106,5 @@ export function collectTestPublicForbiddenValues({ root = process.cwd() } = {}) 
 
 export function assertNoServerKeys(env = {}) {
   const leaked = SERVER_ONLY_KEYS.filter(key => present(env[key]));
-  if (leaked.length > 0) throw new Error(`DEV-083 P0 server-only keys leaked into client build environment: ${leaked.join(', ')}`);
+  if (leaked.length > 0) throw new Error(`RELEASE P0 server-only keys leaked into client build environment: ${leaked.join(', ')}`);
 }

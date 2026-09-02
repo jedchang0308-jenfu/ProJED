@@ -29,6 +29,7 @@
     "verify:source": "npm run lint && tsc --noEmit && npm run build && npm run verify:production-auth-mode && npm run verify:supabase:static && npm run verify:supabase:migration-aliases && npm run verify:calendar-feed-ics && npm run verify:core-regression-static && npm run verify:p9-edge-function",
     "verify:release-browser-smoke": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix release-browser-smoke -Filename scripts/verify-release-browser-smoke.pw.js -OutputDirectory output/playwright",
     "verify:production-artifact": "node scripts/release/verify-production-artifact.mjs --latest",
+    "verify:release-layer2": "node scripts/verify-dev-083-layer2.mjs",
     "verify:dev-083-production-release-gate": "node scripts/verify-dev-083-production-release-gate.mjs && node scripts/verify-dev-083-edge-key-rotation.mjs",
     "verify:dev-083-edge-key-rotation": "node scripts/verify-dev-083-edge-key-rotation.mjs",
     "verify:dev-083-layer2": "node scripts/verify-dev-083-layer2.mjs",

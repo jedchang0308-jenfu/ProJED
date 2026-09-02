@@ -5,9 +5,20 @@ import { fileURLToPath } from 'node:url';
 import { buildProductionArtifact } from './build-production-artifact.mjs';
 import { verifyManifest } from './verify-production-artifact.mjs';
 import { verifyRemoteOAuthCancel } from './verify-oauth-cancel-callback.mjs';
-import { PRODUCTION_CONTRACT, sha256 } from './production-contract.mjs';
-import { buildSanitizedChildEnv, readEnvFile } from './env-boundary.mjs';
+import {
+  PRODUCTION_CONTRACT,
+  canonicalJson,
+  releaseTaskSlug,
+  resolveReleaseTaskId,
+  sha256,
+} from './production-contract.mjs';
+import {
+  buildSanitizedChildEnv,
+  loadServerVerificationEnv,
+  resolveProductionPublicEnv,
+} from './env-boundary.mjs';
 import { summarizeCredentialRotationEvidence } from './credential-rotation-evidence.mjs';
+import { updateReleaseCapsule } from './release-capsule.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const firebaseCommand = process.platform === 'win32' ? 'firebase.cmd' : 'firebase';
@@ -35,49 +46,30 @@ const run = (command, args, options = {}) => new Promise((resolve, reject) => {
   child.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
 });
 
-const runServerReadinessGate = async () => {
+const verificationEnv = (parentEnv, serverEnvPath) => loadServerVerificationEnv({ root, parentEnv, envPath: serverEnvPath });
+
+const runServerReadinessGate = async ({ parentEnv = process.env, serverEnvPath, taskId = PRODUCTION_CONTRACT.taskId } = {}) => {
   const result = await run(process.execPath, [path.join(root, 'scripts', 'p8-preflight.mjs'), '--strict'], {
     cwd: root,
-    env: buildSanitizedChildEnv(process.env, {
-      extra: Object.fromEntries([
-        'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY',
-        'SUPABASE_AUTH_REDIRECT_URL', 'SUPABASE_ACCESS_TOKEN', 'SUPABASE_DB_PASSWORD',
-        'SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED',
-        'P7_CREDENTIAL_ROTATION_CONFIRMED',
-      ].filter(key => process.env[key]).map(key => [key, process.env[key]])),
-    }),
+    env: buildSanitizedChildEnv(parentEnv, { extra: verificationEnv(parentEnv, serverEnvPath) }),
   });
-  if (result.code !== 0) throw new Error('DEV-083 production-bound server readiness gate failed.');
+  if (result.code !== 0) throw new Error(`${taskId} production-bound server readiness gate failed.`);
   return { ok: true, gate: 'p8-preflight', strict: true };
 };
 
-const runProductionBoundReadiness = async () => {
+const runProductionBoundReadiness = async ({ parentEnv = process.env, serverEnvPath, taskId = PRODUCTION_CONTRACT.taskId } = {}) => {
   const result = await run(process.execPath, [path.join(root, 'scripts', 'release', 'verify-production-bound-readiness.mjs'), '--strict'], {
     cwd: root,
-    env: buildSanitizedChildEnv(process.env, {
-      extra: Object.fromEntries([
-        'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY',
-        'SUPABASE_AUTH_REDIRECT_URL', 'SUPABASE_ACCESS_TOKEN', 'SUPABASE_DB_PASSWORD',
-        'SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED',
-        'P7_CREDENTIAL_ROTATION_CONFIRMED',
-      ].filter(key => process.env[key]).map(key => [key, process.env[key]])),
-    }),
+    env: buildSanitizedChildEnv(parentEnv, { extra: verificationEnv(parentEnv, serverEnvPath) }),
   });
-  if (result.code !== 0) throw new Error('DEV-083 production-bound read-only readiness failed.');
+  if (result.code !== 0) throw new Error(`${taskId} production-bound read-only readiness failed.`);
   return { ok: true, gate: 'production-bound-readiness', strict: true };
 };
 
-const runCredentialRotationGate = async () => {
+const runCredentialRotationGate = async ({ parentEnv = process.env, serverEnvPath, taskId = PRODUCTION_CONTRACT.taskId } = {}) => {
   const result = await run(process.execPath, [path.join(root, 'scripts', 'p8-credential-rotation-check.mjs'), '--strict'], {
     cwd: root,
-    env: buildSanitizedChildEnv(process.env, {
-      extra: Object.fromEntries([
-        'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ACCESS_TOKEN',
-        'OLD_SUPABASE_ANON_KEY', 'OLD_SUPABASE_SERVICE_ROLE_KEY', 'OLD_SUPABASE_ACCESS_TOKEN',
-        'P8_OLD_SUPABASE_ANON_KEY', 'P8_OLD_SUPABASE_SERVICE_ROLE_KEY', 'P8_OLD_SUPABASE_ACCESS_TOKEN',
-        'SUPABASE_CREDENTIAL_ROTATION_VERIFIED', 'P8_CREDENTIAL_ROTATION_VERIFIED', 'P7_CREDENTIAL_ROTATION_CONFIRMED',
-      ].filter(key => process.env[key]).map(key => [key, process.env[key]])),
-    }),
+    env: buildSanitizedChildEnv(parentEnv, { extra: verificationEnv(parentEnv, serverEnvPath) }),
   });
   let parsed;
   let evidence;
@@ -85,11 +77,11 @@ const runCredentialRotationGate = async () => {
     parsed = JSON.parse(result.stdout);
     evidence = summarizeCredentialRotationEvidence(parsed.results);
   } catch {
-    throw new Error('DEV-083 credential rotation gate did not return valid JSON evidence.');
+    throw new Error(`${taskId} credential rotation gate did not return valid JSON evidence.`);
   }
   if (result.code !== 0) {
     const unresolved = evidence.filter(item => item.status !== 'pass').map(item => `${item.name}:${item.evidence_mode}`);
-    throw new Error(`DEV-083 credential rotation gate failed (${unresolved.join(', ')}).`);
+    throw new Error(`${taskId} credential rotation gate failed (${unresolved.join(', ')}).`);
   }
   return {
     ok: true,
@@ -104,11 +96,12 @@ export const buildReleaseRuntimeEnv = (parentEnv = process.env) => buildSanitize
   extra: { PROJED_RELEASE_PROFILE: 'production' },
 });
 
-const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix }) => {
+const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix, taskId = PRODUCTION_CONTRACT.taskId }) => {
   const url = new URL(baseUrl);
+  url.searchParams.set('projedReleaseId', releaseId);
   url.searchParams.set('dev083ReleaseId', releaseId);
   const smoke = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js'), '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()], { cwd: root, env: buildReleaseRuntimeEnv(process.env) });
-  if (smoke.code !== 0) throw new Error(`DEV-083 browser smoke failed: ${redact((smoke.stderr || smoke.stdout).trim().slice(-1200))}`);
+  if (smoke.code !== 0) throw new Error(`${taskId} browser smoke failed: ${redact((smoke.stderr || smoke.stdout).trim().slice(-1200))}`);
   return { ok: true, baseUrl: url.origin, expectedReleaseId: releaseId };
 };
 
@@ -117,20 +110,20 @@ const git = async args => {
   return result.code === 0 ? result.stdout.trim() : '';
 };
 
-const assertCleanWorktree = async () => {
+const assertCleanWorktree = async (taskId = PRODUCTION_CONTRACT.taskId) => {
   const status = await git(['status', '--porcelain']);
-  if (status) throw new Error('DEV-083 P1 prepare requires a clean tracked worktree; commit or separately resolve changes before release preparation.');
+  if (status) throw new Error(`${taskId} P1 prepare requires a clean tracked worktree; commit or separately resolve changes before release preparation.`);
 };
 
-const assertLevel3 = (args, expectedCommit) => {
-  if (!args.level3_evidence) throw new Error('DEV-083 P1 requires --level3-evidence <same-commit evidence path>; no remote deploy is attempted without it.');
+const assertLevel3 = (args, expectedCommit, taskId = PRODUCTION_CONTRACT.taskId) => {
+  if (!args.level3_evidence) throw new Error(`${taskId} P1 requires --level3-evidence <same-commit evidence path>; no remote deploy is attempted without it.`);
   const evidencePath = path.resolve(root, args.level3_evidence);
-  if (!fs.existsSync(evidencePath)) throw new Error('DEV-083 P1 Level3 evidence path does not exist.');
+  if (!fs.existsSync(evidencePath)) throw new Error(`${taskId} P1 Level3 evidence path does not exist.`);
   let evidence;
-  try { evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')); } catch { throw new Error('DEV-083 P1 Level3 evidence must be JSON with source commit identity.'); }
+  try { evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')); } catch { throw new Error(`${taskId} P1 Level3 evidence must be JSON with source commit identity.`); }
   const commit = evidence.sourceCommit ?? evidence.commit ?? evidence.source?.commit;
-  if (!commit) throw new Error('DEV-083 P1 Level3 evidence has no source commit identity.');
-  if (expectedCommit && commit !== expectedCommit) throw new Error('DEV-083 P1 Level3 evidence source commit does not match the immutable artifact.');
+  if (!commit) throw new Error(`${taskId} P1 Level3 evidence has no source commit identity.`);
+  if (expectedCommit && commit !== expectedCommit) throw new Error(`${taskId} P1 Level3 evidence source commit does not match the immutable artifact.`);
 };
 
 const waitForHttp = async (url, timeoutMs = 20000) => {
@@ -148,10 +141,11 @@ const waitForHttp = async (url, timeoutMs = 20000) => {
 };
 
 export const runLayer2Smoke = async (distDir, manifest) => {
+  const taskId = resolveReleaseTaskId(manifest.taskId);
   const port = 4174;
   try {
     const existing = await fetch(`http://127.0.0.1:${port}/`);
-    if (existing) throw new Error(`DEV-083 Layer2 port ${port} is already owned by another runtime; refusing to stop it.`);
+    if (existing) throw new Error(`${taskId} Layer2 port ${port} is already owned by another runtime; refusing to stop it.`);
   } catch (error) {
     if (String(error.message).includes('already owned')) throw error;
   }
@@ -167,7 +161,7 @@ export const runLayer2Smoke = async (distDir, manifest) => {
   try {
     await waitForHttp(`http://127.0.0.1:${port}/`);
     const provenance = await verifyRemoteArtifact({ manifest, baseUrl: `http://127.0.0.1:${port}/` });
-    const smoke = await runBrowserSmokeAtUrl({ baseUrl: `http://127.0.0.1:${port}/`, releaseId: manifest.releaseId, sessionPrefix: 'dev083-layer2' });
+    const smoke = await runBrowserSmokeAtUrl({ baseUrl: `http://127.0.0.1:${port}/`, releaseId: manifest.releaseId, sessionPrefix: `${releaseTaskSlug(taskId)}-layer2`, taskId });
     result = { ok: true, baseUrl: `http://127.0.0.1:${port}/`, port, processPid: child.pid, provenance, smoke, cleanup: 'task-owned process tree terminated and port probe failed' };
   } catch (error) {
     primaryError = error;
@@ -179,7 +173,7 @@ export const runLayer2Smoke = async (distDir, manifest) => {
       else child.kill('SIGTERM');
     }
     const remaining = await fetch(`http://127.0.0.1:${port}/`);
-    if (remaining.ok) cleanupError = new Error(`DEV-083 Layer2 cleanup failed: port ${port} is still responding.`);
+    if (remaining.ok) cleanupError = new Error(`${taskId} Layer2 cleanup failed: port ${port} is still responding.`);
   } catch {
     // Expected state after cleanup is a connection failure.
   }
@@ -188,10 +182,10 @@ export const runLayer2Smoke = async (distDir, manifest) => {
   return result;
 };
 
-const readManifestPath = value => {
-  if (!value) throw new Error('DEV-083 P1 requires --manifest <path>.');
+const readManifestPath = (value, taskId = PRODUCTION_CONTRACT.taskId) => {
+  if (!value) throw new Error(`${taskId} P1 requires --manifest <path>.`);
   const manifestPath = path.resolve(root, value);
-  if (!fs.existsSync(manifestPath)) throw new Error('DEV-083 manifest path does not exist.');
+  if (!fs.existsSync(manifestPath)) throw new Error(`${taskId} manifest path does not exist.`);
   return manifestPath;
 };
 
@@ -255,15 +249,44 @@ const readLiveReleaseSnapshot = async () => {
 };
 
 export const assertCandidateEvidence = (manifest, evidencePath) => {
-  if (!fs.existsSync(evidencePath)) throw new Error('DEV-083 P1 activation requires candidate-evidence.json from the inactive preview channel.');
+  const taskId = resolveReleaseTaskId(manifest.taskId);
+  if (!fs.existsSync(evidencePath)) throw new Error(`${taskId} P1 activation requires candidate-evidence.json from the inactive preview channel.`);
   let evidence;
-  try { evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')); } catch { throw new Error('DEV-083 candidate evidence is not valid JSON.'); }
-  if (evidence.phase !== 'candidate' || evidence.releaseId !== manifest.releaseId) throw new Error('DEV-083 candidate evidence release identity does not match the immutable manifest.');
+  try { evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')); } catch { throw new Error(`${taskId} candidate evidence is not valid JSON.`); }
+  if (evidence.taskId !== taskId || evidence.phase !== 'candidate' || evidence.releaseId !== manifest.releaseId) throw new Error(`${taskId} candidate evidence release identity does not match the immutable manifest.`);
   const expectedManifestPath = path.join(manifest.artifact.releaseDir, 'manifest.json');
-  if (!evidence.manifestPath || path.resolve(evidence.manifestPath) !== path.resolve(expectedManifestPath)) throw new Error('DEV-083 candidate evidence manifest path does not match the immutable artifact.');
-  if (evidence.provenance?.ok !== true || evidence.provenance?.releaseId !== manifest.releaseId) throw new Error('DEV-083 candidate provenance evidence is incomplete or mismatched.');
-  if (evidence.oauth?.ok !== true) throw new Error('DEV-083 candidate OAuth safe-cancel evidence is incomplete.');
+  if (!evidence.manifestPath || path.resolve(evidence.manifestPath) !== path.resolve(expectedManifestPath)) throw new Error(`${taskId} candidate evidence manifest path does not match the immutable artifact.`);
+  if (evidence.provenance?.ok !== true || evidence.provenance?.releaseId !== manifest.releaseId) throw new Error(`${taskId} candidate provenance evidence is incomplete or mismatched.`);
+  if (evidence.oauth?.ok !== true) throw new Error(`${taskId} candidate OAuth safe-cancel evidence is incomplete.`);
   return { ok: true, releaseId: evidence.releaseId, previewUrl: evidence.provenance.baseUrl };
+};
+
+export const assertFeatureEvidence = (manifest, candidateEvidence, evidencePath) => {
+  if (!evidencePath || !fs.existsSync(evidencePath)) throw new Error(`${manifest.taskId} P1 requires production-bound feature evidence before activation.`);
+  let evidence;
+  try { evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')); } catch { throw new Error(`${manifest.taskId} feature evidence is not valid JSON.`); }
+  const errors = [];
+  if (evidence.taskId !== manifest.taskId) errors.push('task id mismatch');
+  if (evidence.releaseId !== manifest.releaseId) errors.push('release id mismatch');
+  if (evidence.artifactTreeSha256 !== manifest.artifact.treeSha256) errors.push('artifact digest mismatch');
+  if (evidence.environment !== 'production-bound-candidate') errors.push('environment must be production-bound-candidate');
+  if (evidence.baseUrl !== candidateEvidence.previewUrl) errors.push('candidate URL mismatch');
+  if (evidence.status !== 'PASS') errors.push('feature smoke status is not PASS');
+  if (evidence.fixture?.isolated !== true || evidence.cleanup?.residualRows !== 0 || evidence.cleanup?.status !== 'PASS') errors.push('isolated fixture cleanup is incomplete');
+  if (!Array.isArray(evidence.scenarios) || evidence.scenarios.length === 0 || evidence.scenarios.some(item => item.status !== 'PASS')) errors.push('feature scenario evidence is incomplete');
+  if (errors.length > 0) throw new Error(`${manifest.taskId} feature evidence failed: ${errors.join('; ')}.`);
+  return { ok: true, evidencePath: path.resolve(evidencePath), scenarios: evidence.scenarios.length };
+};
+
+const assertCandidateAcceptance = (manifest, candidateEvidence) => {
+  if (!manifest.gates?.featureAcceptanceRequired) return { ok: true, required: false };
+  const acceptancePath = path.join(manifest.artifact.releaseDir, 'candidate-acceptance.json');
+  if (!fs.existsSync(acceptancePath)) throw new Error(`${manifest.taskId} P1 activation requires candidate-acceptance.json.`);
+  const acceptance = JSON.parse(fs.readFileSync(acceptancePath, 'utf8'));
+  if (acceptance.taskId !== manifest.taskId || acceptance.releaseId !== manifest.releaseId || acceptance.previewUrl !== candidateEvidence.previewUrl || acceptance.featureEvidence?.ok !== true) {
+    throw new Error(`${manifest.taskId} candidate acceptance identity is incomplete or mismatched.`);
+  }
+  return { ok: true, required: true, evidencePath: acceptancePath };
 };
 
 export const verifyRemoteArtifact = async ({ manifest, baseUrl, fetchImpl = fetch }) => {
@@ -296,62 +319,97 @@ export const verifyRemoteArtifact = async ({ manifest, baseUrl, fetchImpl = fetc
 };
 
 const prepare = async args => {
-  await assertCleanWorktree();
-  const artifact = await buildProductionArtifact();
-  assertLevel3(args, artifact.manifest.source.commit);
-  const verified = verifyManifest(artifact.manifestPath, { root });
-  if (!verified.ok) throw new Error(`DEV-083 P0 artifact verification failed: ${verified.errors.join('; ')}`);
+  const taskId = resolveReleaseTaskId(args.task_id);
+  await assertCleanWorktree(taskId);
+  const artifact = await buildProductionArtifact({
+    taskId,
+    productionEnvPath: args.production_env,
+    requireFeatureEvidence: Boolean(args.require_feature_evidence),
+  });
+  assertLevel3(args, artifact.manifest.source.commit, taskId);
+  const verified = verifyManifest(artifact.manifestPath, { root, expectedTaskId: taskId, productionEnvPath: args.production_env });
+  if (!verified.ok) throw new Error(`${taskId} P0 artifact verification failed: ${verified.errors.join('; ')}`);
   const layer2 = await runLayer2Smoke(artifact.distDir, verified.manifest);
   const evidencePath = path.join(artifact.releaseDir, 'prepare-evidence.json');
-  fs.writeFileSync(evidencePath, `${JSON.stringify({ taskId: PRODUCTION_CONTRACT.taskId, phase: 'prepare', releaseId: artifact.releaseId, manifestPath: artifact.manifestPath, level3Evidence: path.resolve(root, args.level3_evidence), layer2 }, null, 2)}\n`);
+  fs.writeFileSync(evidencePath, `${JSON.stringify({ taskId, phase: 'prepare', releaseId: artifact.releaseId, manifestPath: artifact.manifestPath, level3Evidence: path.resolve(root, args.level3_evidence), layer2 }, null, 2)}\n`);
+  updateReleaseCapsule(verified.manifest, { state: 'ARTIFACT_READY', evidence: { prepare: evidencePath } });
   return { ok: true, phase: 'prepare', releaseId: artifact.releaseId, manifestPath: artifact.manifestPath, evidencePath };
 };
 
 const candidate = async args => {
-  const manifestPath = readManifestPath(args.manifest);
-  const verified = verifyManifest(manifestPath, { root });
-  if (!verified.ok) throw new Error(`DEV-083 P1 candidate artifact verification failed: ${verified.errors.join('; ')}`);
-  assertLevel3(args, verified.manifest.source.commit);
-  const serverReadiness = await runServerReadinessGate();
-  const productionBoundReadiness = await runProductionBoundReadiness();
-  const credentialRotation = await runCredentialRotationGate();
+  const taskId = resolveReleaseTaskId(args.task_id);
+  const manifestPath = readManifestPath(args.manifest, taskId);
+  const verified = verifyManifest(manifestPath, { root, expectedTaskId: taskId, productionEnvPath: args.production_env });
+  if (!verified.ok) throw new Error(`${taskId} P1 candidate artifact verification failed: ${verified.errors.join('; ')}`);
+  assertLevel3(args, verified.manifest.source.commit, taskId);
+  const publicEnv = resolveProductionPublicEnv({ root, parentEnv: process.env, envPath: args.production_env });
+  if (sha256(canonicalJson(publicEnv)) !== verified.manifest.environment.publicEnvSha256) throw new Error(`${taskId} production environment fingerprint does not match the immutable artifact.`);
+  const gateContext = { taskId, serverEnvPath: args.server_env };
+  const serverReadiness = await runServerReadinessGate(gateContext);
+  const productionBoundReadiness = await runProductionBoundReadiness(gateContext);
+  const credentialRotation = await runCredentialRotationGate(gateContext);
   const liveBefore = await readLiveReleaseSnapshot();
   const deployment = await deployExactArtifact({ manifest: verified.manifest, phase: 'candidate' });
   const provenance = await verifyRemoteArtifact({ manifest: verified.manifest, baseUrl: deployment.previewUrl });
-  const browser = await runBrowserSmokeAtUrl({ baseUrl: deployment.previewUrl, releaseId: verified.manifest.releaseId, sessionPrefix: 'dev083-candidate' });
-  const productionEnv = readEnvFile(path.join(root, '.env.production'));
-  const oauth = await verifyRemoteOAuthCancel({ anonKey: productionEnv.VITE_SUPABASE_ANON_KEY, supabaseUrl: productionEnv.VITE_SUPABASE_URL });
+  const browser = await runBrowserSmokeAtUrl({ baseUrl: deployment.previewUrl, releaseId: verified.manifest.releaseId, sessionPrefix: `${releaseTaskSlug(taskId)}-candidate`, taskId });
+  const oauth = await verifyRemoteOAuthCancel({ anonKey: publicEnv.VITE_SUPABASE_ANON_KEY, supabaseUrl: publicEnv.VITE_SUPABASE_URL });
   const liveAfter = await readLiveReleaseSnapshot();
-  if (JSON.stringify(liveBefore) !== JSON.stringify(liveAfter)) throw new Error('DEV-083 candidate deployment changed the live channel release; refusing to produce candidate evidence.');
+  if (JSON.stringify(liveBefore) !== JSON.stringify(liveAfter)) throw new Error(`${taskId} candidate deployment changed the live channel release; refusing to produce candidate evidence.`);
   const evidencePath = path.join(verified.manifest.artifact.releaseDir, 'candidate-evidence.json');
-  fs.writeFileSync(evidencePath, `${JSON.stringify({ taskId: PRODUCTION_CONTRACT.taskId, phase: 'candidate', releaseId: verified.manifest.releaseId, manifestPath, target: deployment.previewUrl ?? 'firebase-preview-channel', serverReadiness, productionBoundReadiness, credentialRotation, liveBefore, liveAfter, provenance, browser, oauth, level3Evidence: path.resolve(root, args.level3_evidence) }, null, 2)}\n`);
-  return { ok: true, phase: 'candidate', releaseId: verified.manifest.releaseId, evidencePath, previewUrl: deployment.previewUrl };
+  fs.writeFileSync(evidencePath, `${JSON.stringify({ taskId, phase: 'candidate', releaseId: verified.manifest.releaseId, manifestPath, target: deployment.previewUrl ?? 'firebase-preview-channel', serverReadiness, productionBoundReadiness, credentialRotation, liveBefore, liveAfter, provenance, browser, oauth, level3Evidence: path.resolve(root, args.level3_evidence) }, null, 2)}\n`);
+  const activationReady = !verified.manifest.gates?.featureAcceptanceRequired;
+  updateReleaseCapsule(verified.manifest, {
+    state: activationReady ? 'CANDIDATE_READY' : 'CANDIDATE_DEPLOYED',
+    evidence: { candidate: evidencePath },
+    promotion: { candidate: deployment.previewUrl },
+  });
+  return { ok: true, phase: 'candidate', releaseId: verified.manifest.releaseId, evidencePath, previewUrl: deployment.previewUrl, activationReady };
+};
+
+const acceptCandidate = async args => {
+  const taskId = resolveReleaseTaskId(args.task_id);
+  const manifestPath = readManifestPath(args.manifest, taskId);
+  const verified = verifyManifest(manifestPath, { root, expectedTaskId: taskId, productionEnvPath: args.production_env });
+  if (!verified.ok) throw new Error(`${taskId} P1 candidate acceptance artifact verification failed: ${verified.errors.join('; ')}`);
+  const candidatePath = path.join(verified.manifest.artifact.releaseDir, 'candidate-evidence.json');
+  const candidateEvidence = assertCandidateEvidence(verified.manifest, candidatePath);
+  const featureEvidencePath = typeof args.feature_evidence === 'string' ? path.resolve(root, args.feature_evidence) : null;
+  const featureEvidence = assertFeatureEvidence(verified.manifest, candidateEvidence, featureEvidencePath);
+  const evidencePath = path.join(verified.manifest.artifact.releaseDir, 'candidate-acceptance.json');
+  fs.writeFileSync(evidencePath, `${JSON.stringify({ taskId, phase: 'accept-candidate', releaseId: verified.manifest.releaseId, previewUrl: candidateEvidence.previewUrl, featureEvidence }, null, 2)}\n`);
+  updateReleaseCapsule(verified.manifest, { state: 'CANDIDATE_READY', evidence: { candidateAcceptance: evidencePath } });
+  return { ok: true, phase: 'accept-candidate', releaseId: verified.manifest.releaseId, evidencePath };
 };
 
 const activate = async args => {
-  const manifestPath = readManifestPath(args.manifest);
-  if (!args.approve_release) throw new Error('DEV-083 P1 activate requires explicit --approve-release <release-id>; candidate verification never activates production.');
-  const verified = verifyManifest(manifestPath, { root });
-  if (!verified.ok) throw new Error(`DEV-083 P1 activation artifact verification failed: ${verified.errors.join('; ')}`);
-  assertLevel3(args, verified.manifest.source.commit);
-  if (args.approve_release !== verified.manifest.releaseId) throw new Error('DEV-083 P1 approval release id does not match the verified immutable manifest.');
+  const taskId = resolveReleaseTaskId(args.task_id);
+  const manifestPath = readManifestPath(args.manifest, taskId);
+  if (!args.approve_release) throw new Error(`${taskId} P1 activate requires explicit --approve-release <release-id>; candidate verification never activates production.`);
+  const verified = verifyManifest(manifestPath, { root, expectedTaskId: taskId, productionEnvPath: args.production_env });
+  if (!verified.ok) throw new Error(`${taskId} P1 activation artifact verification failed: ${verified.errors.join('; ')}`);
+  assertLevel3(args, verified.manifest.source.commit, taskId);
+  if (args.approve_release !== verified.manifest.releaseId) throw new Error(`${taskId} P1 approval release id does not match the verified immutable manifest.`);
   const evidencePath = path.join(verified.manifest.artifact.releaseDir, 'candidate-evidence.json');
   const candidateEvidence = assertCandidateEvidence(verified.manifest, evidencePath);
-  const serverReadiness = await runServerReadinessGate();
-  const productionBoundReadiness = await runProductionBoundReadiness();
-  const credentialRotation = await runCredentialRotationGate();
+  const candidateAcceptance = assertCandidateAcceptance(verified.manifest, candidateEvidence);
+  const publicEnv = resolveProductionPublicEnv({ root, parentEnv: process.env, envPath: args.production_env });
+  if (sha256(canonicalJson(publicEnv)) !== verified.manifest.environment.publicEnvSha256) throw new Error(`${taskId} production environment fingerprint does not match the immutable artifact.`);
+  const gateContext = { taskId, serverEnvPath: args.server_env };
+  const serverReadiness = await runServerReadinessGate(gateContext);
+  const productionBoundReadiness = await runProductionBoundReadiness(gateContext);
+  const credentialRotation = await runCredentialRotationGate(gateContext);
   const liveBefore = await readLiveReleaseSnapshot();
   const evidencePathOut = path.join(verified.manifest.artifact.releaseDir, 'activation-evidence.json');
   try {
     const deployment = await deployExactArtifact({ manifest: verified.manifest, phase: 'activate' });
     const provenance = await verifyRemoteArtifact({ manifest: verified.manifest, baseUrl: PRODUCTION_CONTRACT.canonicalOrigin });
-    const browser = await runBrowserSmokeAtUrl({ baseUrl: PRODUCTION_CONTRACT.canonicalOrigin, releaseId: verified.manifest.releaseId, sessionPrefix: 'dev083-canonical' });
-    const productionEnv = readEnvFile(path.join(root, '.env.production'));
-    const oauth = await verifyRemoteOAuthCancel({ anonKey: productionEnv.VITE_SUPABASE_ANON_KEY, supabaseUrl: productionEnv.VITE_SUPABASE_URL });
-    fs.writeFileSync(evidencePathOut, `${JSON.stringify({ taskId: PRODUCTION_CONTRACT.taskId, phase: 'activate', releaseId: verified.manifest.releaseId, previousLiveRelease: liveBefore, candidateEvidence, serverReadiness, productionBoundReadiness, credentialRotation, deployment, provenance, browser, oauth, level3Evidence: path.resolve(root, args.level3_evidence) }, null, 2)}\n`);
+    const browser = await runBrowserSmokeAtUrl({ baseUrl: PRODUCTION_CONTRACT.canonicalOrigin, releaseId: verified.manifest.releaseId, sessionPrefix: `${releaseTaskSlug(taskId)}-canonical`, taskId });
+    const oauth = await verifyRemoteOAuthCancel({ anonKey: publicEnv.VITE_SUPABASE_ANON_KEY, supabaseUrl: publicEnv.VITE_SUPABASE_URL });
+    fs.writeFileSync(evidencePathOut, `${JSON.stringify({ taskId, phase: 'activate', releaseId: verified.manifest.releaseId, previousLiveRelease: liveBefore, candidateEvidence, candidateAcceptance, serverReadiness, productionBoundReadiness, credentialRotation, deployment, provenance, browser, oauth, level3Evidence: path.resolve(root, args.level3_evidence) }, null, 2)}\n`);
+    updateReleaseCapsule(verified.manifest, { state: 'LIVE_VERIFIED', evidence: { activation: evidencePathOut }, promotion: { live: deployment } });
     return { ok: true, phase: 'activate', releaseId: verified.manifest.releaseId, evidencePath: evidencePathOut };
   } catch (error) {
-    fs.writeFileSync(path.join(verified.manifest.artifact.releaseDir, 'activation-failure.json'), `${JSON.stringify({ taskId: PRODUCTION_CONTRACT.taskId, phase: 'activate', releaseId: verified.manifest.releaseId, previousLiveRelease: liveBefore, error: redact(error.message) }, null, 2)}\n`);
+    fs.writeFileSync(path.join(verified.manifest.artifact.releaseDir, 'activation-failure.json'), `${JSON.stringify({ taskId, phase: 'activate', releaseId: verified.manifest.releaseId, previousLiveRelease: liveBefore, error: redact(error.message) }, null, 2)}\n`);
     throw error;
   }
 };
@@ -359,9 +417,10 @@ const activate = async args => {
 export async function runRelease(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const phase = args.phase;
-  if (!['prepare', 'candidate', 'activate'].includes(phase)) throw new Error('DEV-083 P1 usage: npm run release:production -- --phase <prepare|candidate|activate> [args].');
+  if (!['prepare', 'candidate', 'accept-candidate', 'activate'].includes(phase)) throw new Error('RELEASE P1 usage: npm run release:production -- --phase <prepare|candidate|accept-candidate|activate> [args].');
   if (phase === 'prepare') return prepare(args);
   if (phase === 'candidate') return candidate(args);
+  if (phase === 'accept-candidate') return acceptCandidate(args);
   return activate(args);
 }
 

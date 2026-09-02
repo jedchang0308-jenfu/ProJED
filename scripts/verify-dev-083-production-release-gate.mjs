@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolveProductionPublicEnv, buildSanitizedChildEnv } from './release/env-boundary.mjs';
-import { PRODUCTION_CONTRACT } from './release/production-contract.mjs';
+import { PRODUCTION_CONTRACT, releaseTaskSlug, resolveReleaseTaskId } from './release/production-contract.mjs';
 import { scanArtifact, verifyManifest } from './release/verify-production-artifact.mjs';
 import { runSelfCheck as runOAuthSelfCheck } from './release/verify-oauth-cancel-callback.mjs';
 import {
@@ -13,6 +13,7 @@ import {
 } from './release/credential-rotation-evidence.mjs';
 import {
   assertCandidateEvidence,
+  assertFeatureEvidence,
   buildReleaseRuntimeEnv,
   runRelease,
   summarizeLiveChannel,
@@ -21,6 +22,7 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const selfCheckDir = path.join(root, 'output', 'release', 'dev-083', `self-check-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`);
+const productionEnvPath = process.env.PROJED_PRODUCTION_ENV_PATH;
 const results = [];
 
 const check = async (name, fn) => {
@@ -44,10 +46,14 @@ const expectThrow = (name, fn) => {
 fs.mkdirSync(selfCheckDir, { recursive: true });
 try {
   await check('production-contract', () => {
-    const env = resolveProductionPublicEnv({ root, parentEnv: { PATH: process.env.PATH } });
+    const env = resolveProductionPublicEnv({ root, parentEnv: { PATH: process.env.PATH }, envPath: productionEnvPath });
     if (env.VITE_SUPABASE_URL !== PRODUCTION_CONTRACT.supabaseUrl) throw new Error('production Supabase contract mismatch');
   });
-  expectThrow('parent-vite-conflict', () => resolveProductionPublicEnv({ root, parentEnv: { VITE_SUPABASE_URL: 'https://fhisnnufoeulxqrchldf.supabase.co' } }));
+  await check('release-task-context', () => {
+    if (resolveReleaseTaskId('dev-099') !== 'DEV-099' || releaseTaskSlug('DEV-099') !== 'dev-099') throw new Error('release task context was not normalized');
+  });
+  expectThrow('invalid-release-task-context', () => resolveReleaseTaskId('CAPA-001'));
+  expectThrow('parent-vite-conflict', () => resolveProductionPublicEnv({ root, parentEnv: { VITE_SUPABASE_URL: 'https://fhisnnufoeulxqrchldf.supabase.co' }, envPath: productionEnvPath }));
   const missingRoot = path.join(selfCheckDir, 'missing');
   fs.mkdirSync(missingRoot, { recursive: true });
   fs.writeFileSync(path.join(missingRoot, '.env.production'), 'VITE_DATA_BACKEND=supabase\n');
@@ -199,17 +205,53 @@ try {
   const evidenceDir = path.join(selfCheckDir, 'candidate');
   fs.mkdirSync(evidenceDir, { recursive: true });
   const evidencePath = path.join(evidenceDir, 'candidate-evidence.json');
-  fs.writeFileSync(evidencePath, JSON.stringify({ phase: 'candidate', releaseId: 'release-a', manifestPath: path.join(evidenceDir, 'manifest.json'), provenance: { ok: true, releaseId: 'release-a', baseUrl: 'https://candidate.web.app' }, oauth: { ok: true } }));
+  fs.writeFileSync(evidencePath, JSON.stringify({ taskId: 'DEV-099', phase: 'candidate', releaseId: 'release-a', manifestPath: path.join(evidenceDir, 'manifest.json'), provenance: { ok: true, releaseId: 'release-a', baseUrl: 'https://candidate.web.app' }, oauth: { ok: true } }));
   await check('candidate-evidence-identity', () => {
-    const result = assertCandidateEvidence({ releaseId: 'release-a', artifact: { releaseDir: evidenceDir } }, evidencePath);
+    const result = assertCandidateEvidence({ taskId: 'DEV-099', releaseId: 'release-a', artifact: { releaseDir: evidenceDir } }, evidencePath);
     if (!result.ok) throw new Error('candidate evidence was not accepted');
   });
   await check('candidate-evidence-mismatch', () => {
     try {
-      assertCandidateEvidence({ releaseId: 'release-b', artifact: { releaseDir: evidenceDir } }, evidencePath);
+      assertCandidateEvidence({ taskId: 'DEV-099', releaseId: 'release-b', artifact: { releaseDir: evidenceDir } }, evidencePath);
       throw new Error('mismatched candidate evidence passed');
     } catch (error) {
       if (!/identity|mismatch/i.test(error.message)) throw error;
+    }
+  });
+  const featurePath = path.join(evidenceDir, 'feature-evidence.json');
+  fs.writeFileSync(featurePath, JSON.stringify({
+    taskId: 'DEV-099',
+    releaseId: 'release-a',
+    artifactTreeSha256: 'tree-a',
+    environment: 'production-bound-candidate',
+    baseUrl: 'https://candidate.web.app',
+    status: 'PASS',
+    fixture: { isolated: true },
+    cleanup: { status: 'PASS', residualRows: 0 },
+    scenarios: [{ id: 'save-terminal-convergence', status: 'PASS' }],
+  }));
+  await check('feature-evidence-contract', () => {
+    const result = assertFeatureEvidence(
+      { taskId: 'DEV-099', releaseId: 'release-a', artifact: { treeSha256: 'tree-a' } },
+      { previewUrl: 'https://candidate.web.app' },
+      featurePath,
+    );
+    if (!result.ok) throw new Error('valid feature evidence was not accepted');
+  });
+  await check('feature-evidence-cleanup-gate', () => {
+    const invalidPath = path.join(evidenceDir, 'feature-evidence-invalid.json');
+    const invalid = JSON.parse(fs.readFileSync(featurePath, 'utf8'));
+    invalid.cleanup.residualRows = 1;
+    fs.writeFileSync(invalidPath, JSON.stringify(invalid));
+    try {
+      assertFeatureEvidence(
+        { taskId: 'DEV-099', releaseId: 'release-a', artifact: { treeSha256: 'tree-a' } },
+        { previewUrl: 'https://candidate.web.app' },
+        invalidPath,
+      );
+      throw new Error('feature evidence with residual rows passed');
+    } catch (error) {
+      if (!/cleanup/i.test(error.message)) throw error;
     }
   });
   await check('phase-safety', async () => {

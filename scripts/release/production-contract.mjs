@@ -62,6 +62,14 @@ export const SERVER_ONLY_KEYS = Object.freeze([
   ...PRODUCTION_CONTRACT.serverOnlyKeys,
 ]);
 
+export const resolveReleaseTaskId = value => {
+  const taskId = String(value ?? PRODUCTION_CONTRACT.taskId).trim().toUpperCase();
+  if (!/^DEV-\d{3,}$/.test(taskId)) throw new Error('Release task id must match DEV-<number>.');
+  return taskId;
+};
+
+export const releaseTaskSlug = value => resolveReleaseTaskId(value).toLowerCase();
+
 const sortForJson = value => {
   if (Array.isArray(value)) return value.map(sortForJson);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, sortForJson(value[key])]));
