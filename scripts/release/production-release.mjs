@@ -99,7 +99,6 @@ export const buildReleaseRuntimeEnv = (parentEnv = process.env) => buildSanitize
 const runBrowserSmokeAtUrl = async ({ baseUrl, releaseId, sessionPrefix, taskId = PRODUCTION_CONTRACT.taskId }) => {
   const url = new URL(baseUrl);
   url.searchParams.set('projedReleaseId', releaseId);
-  url.searchParams.set('dev083ReleaseId', releaseId);
   const smoke = await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'run-playwright-code.ps1'), '-SessionPrefix', sessionPrefix, '-Filename', path.join(root, 'scripts', 'verify-release-browser-smoke.pw.js'), '-OutputDirectory', path.join(root, 'output', 'playwright', sessionPrefix), '-BaseUrl', url.toString()], { cwd: root, env: buildReleaseRuntimeEnv(process.env) });
   if (smoke.code !== 0) throw new Error(`${taskId} browser smoke failed: ${redact((smoke.stderr || smoke.stdout).trim().slice(-1200))}`);
   return { ok: true, baseUrl: url.origin, expectedReleaseId: releaseId };

@@ -22,7 +22,8 @@ async (page) => {
     const scripts = Array.from(document.querySelectorAll('script[src]')).map((script) => script.getAttribute('src'));
     const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map((link) => link.getAttribute('href'));
     const bodyText = document.body.innerText.slice(0, 1200);
-    const expectedReleaseId = new URL(window.location.href).searchParams.get('dev083ReleaseId');
+    const searchParams = new URL(window.location.href).searchParams;
+    const expectedReleaseId = searchParams.get('projedReleaseId') ?? searchParams.get('dev083ReleaseId');
     let releaseMeta = null;
     try {
       const response = await fetch('/release-meta.json', { cache: 'no-store' });
