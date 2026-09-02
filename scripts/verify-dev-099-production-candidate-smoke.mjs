@@ -179,8 +179,17 @@ try {
     await boardButton.waitFor({ state: 'visible', timeout: 20000 });
     await boardButton.click();
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 20000 });
+    const closeVisibleTaskModals = async () => {
+      const visibleModals = page.locator('[data-task-details-modal="true"]:visible');
+      while (await visibleModals.count()) {
+        const currentModal = visibleModals.first();
+        await currentModal.locator('button[aria-label="關閉任務詳情"]').click();
+        await currentModal.waitFor({ state: 'hidden', timeout: 10000 });
+      }
+    };
     const openTask = async () => {
-      await page.locator('[data-task-id="' + payload.taskUiId + '"]').first().click();
+      await closeVisibleTaskModals();
+      await page.locator('[data-task-workbench-task-card="true"][data-task-id="' + payload.taskUiId + '"]').first().click();
       const modal = page.locator('[data-task-details-modal="true"][data-task-id="' + payload.taskUiId + '"]').first();
       await modal.waitFor({ state: 'visible', timeout: 15000 });
       return modal;
@@ -196,6 +205,7 @@ try {
     modal = await openTask();
     const reopenedValue = await modal.locator('[data-task-details-title-input="true"]').inputValue();
     await modal.locator('button[aria-label="關閉任務詳情"]').click();
+    await modal.waitFor({ state: 'hidden', timeout: 5000 });
     await page.reload({ waitUntil: 'networkidle' });
     await page.getByRole('button', { name: new RegExp(payload.boardName) }).first().click();
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 20000 });
