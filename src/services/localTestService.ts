@@ -58,6 +58,7 @@ const ACTIVITY_EVENTS_KEY = 'projed-local-test.activityEvents';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 const TASK_COLLECTION_FAULT_KEY = 'projed-local-test.taskCollectionFault';
 const TASK_PERSISTENCE_FAULT_KEY = 'projed-local-test.taskPersistenceFault';
+const TASK_PERSISTENCE_READBACK_FAULT_KEY = 'projed-local-test.taskPersistenceReadbackFault';
 const TASK_PERSISTENCE_TRACE_KEY = 'projed-local-test.taskPersistenceTrace';
 
 const readJson = <T>(key: string, fallback: T): T => {
@@ -217,6 +218,13 @@ const consumeTaskPersistenceFault = (
   const configured = localStorage.getItem(TASK_PERSISTENCE_FAULT_KEY);
   if (configured !== fault) return false;
   localStorage.removeItem(TASK_PERSISTENCE_FAULT_KEY);
+  return true;
+};
+const consumeTaskPersistenceReadbackFault = (fault: 'unavailable-once'): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_PERSISTENCE_READBACK_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_PERSISTENCE_READBACK_FAULT_KEY);
   return true;
 };
 const recordTaskPersistenceAttempt = (nodeId: string, updates: Partial<TaskNode>) => {
@@ -735,10 +743,14 @@ export const localTestBoardService = {
 };
 
 export const localTestNodeService = {
-  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> =>
-    Object.values(readNodes())
+  listByProject: async (workspaceId: string, boardId: string): Promise<TaskNode[]> => {
+    if (consumeTaskPersistenceReadbackFault('unavailable-once')) {
+      throw new Error('local-test injected persistence readback unavailability');
+    }
+    return Object.values(readNodes())
       .filter(node => node.workspaceId === workspaceId && node.boardId === boardId)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  },
 
   create: async (_workspaceId: string, _boardId: string, node: TaskNode): Promise<TaskNode> => {
     writeNodes({ ...readNodes(), [node.id]: node });

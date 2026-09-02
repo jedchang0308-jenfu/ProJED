@@ -21,6 +21,9 @@ async (page) => {
     localStorage.setItem('projed-local-test.taskPersistenceFault', value);
     localStorage.setItem('projed-local-test.taskPersistenceTrace', '[]');
   }, fault);
+  const setReadbackFault = (fault) => page.evaluate((value) => {
+    localStorage.setItem('projed-local-test.taskPersistenceReadbackFault', value);
+  }, fault);
   const readPersistenceTrace = () => page.evaluate(() => (
     JSON.parse(localStorage.getItem('projed-local-test.taskPersistenceTrace') || '[]')
   ));
@@ -125,6 +128,26 @@ async (page) => {
   const timeoutTraceAfterRetry = await readPersistenceTrace();
   assert(timeoutTraceAfterRetry.length === 2, 'Retry must create one new provider attempt', { timeoutTraceAfterRetry });
 
+  // B05: the provider commits but the first canonical readback is unavailable.
+  // The UI must expose unknown rather than false success, then recover through
+  // an explicit Retry that creates exactly one new provider attempt.
+  const unknownTitle = `DEV099 unknown ${Date.now().toString(36)}`;
+  await setPersistenceFault('timeout-commit-once');
+  await setReadbackFault('unavailable-once');
+  await saveTitle(modal, unknownTitle);
+  await waitForSaveState(modal, 'unknown', 20000);
+  const unknownTraceBeforeRetry = await readPersistenceTrace();
+  assert(unknownTraceBeforeRetry.length === 1, 'unknown readback must have one provider attempt before Retry', { unknownTraceBeforeRetry });
+  assert(await modal.locator('[data-task-details-save-retry="true"]').count() === 1, 'unknown state must expose one Retry action');
+  await modal.locator('[data-task-details-save-retry="true"]').click();
+  await page.waitForFunction(({ taskId, unknownTitle }) => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    return nodes[taskId]?.title === unknownTitle;
+  }, { taskId, unknownTitle }, { timeout: 10000 });
+  await waitForSaveState(modal, 'saved');
+  const unknownTraceAfterRetry = await readPersistenceTrace();
+  assert(unknownTraceAfterRetry.length === 2, 'unknown Retry must create one new provider attempt', { unknownTraceAfterRetry });
+
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(250);
@@ -149,18 +172,21 @@ async (page) => {
     taskId,
     originalTitle,
     savedTitle: nextTitle,
-    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback'],
+    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry'],
     providerAttemptCounts: {
       B02: rejectedTrace.length,
       B03BeforeRetry: timeoutTraceBeforeRetry.length,
       B03AfterRetry: timeoutTraceAfterRetry.length,
       B04: responseLostTrace.length,
+      B05BeforeRetry: unknownTraceBeforeRetry.length,
+      B05AfterRetry: unknownTraceAfterRetry.length,
     },
     cases: [
       { id: 'B01', status: 'PASS' },
       { id: 'B02', status: 'PASS' },
       { id: 'B03', status: 'PASS' },
       { id: 'B04', status: 'PASS' },
+      { id: 'B05', status: 'PASS' },
       { id: 'B12-390', status: 'PASS' },
       { id: 'B12-320', status: 'PASS' },
     ],
