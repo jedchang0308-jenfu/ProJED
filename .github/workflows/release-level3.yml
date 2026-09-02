@@ -34,6 +34,7 @@ jobs:
       - run: npm run verify:dev-099-task-persistence-convergence
       - run: npm run verify:dev-099-task-persistence-property
       - run: node scripts/verify-dev-083-production-release-gate.mjs
+      - run: npm run verify:dev-099-production-candidate-smoke
       - run: node scripts/release/write-level3-evidence.mjs
       - uses: actions/upload-artifact@v4
         with:

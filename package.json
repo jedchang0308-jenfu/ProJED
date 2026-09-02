@@ -154,6 +154,7 @@
     "verify:dev-096-pwa-update-transaction-convergence": "tsx scripts/verify-dev-096-pwa-update-transaction-convergence.ts",
     "verify:dev-099-task-persistence-convergence": "tsx scripts/verify-dev-099-task-persistence-convergence.ts",
     "verify:dev-099-task-persistence-property": "tsx scripts/verify-dev-099-task-persistence-property.ts",
+    "verify:dev-099-production-candidate-smoke": "node scripts/verify-dev-099-production-candidate-smoke.mjs --self-check",
     "verify:dev-099-task-persistence-convergence-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev099-task-persistence -Filename scripts/verify-dev-099-task-persistence-convergence-browser.pw.js -OutputDirectory output/playwright/dev-099 -BaseUrl http://127.0.0.1:4010/ -ArtifactWindowKey __DEV099_ARTIFACT -ArtifactPath output/playwright/dev-099/result.json",
     "verify:dev-096-pwa-update-transaction-convergence-browser": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix dev096-pwa-update -Filename scripts/verify-dev-096-pwa-update-transaction-convergence-browser.pw.js -OutputDirectory output/playwright/dev-096 -BaseUrl http://localhost:4000/ -ArtifactWindowKey __DEV096_ARTIFACT -ArtifactPath output/playwright/dev-096/ui-result.json",
     "verify:dev-096-pwa-update-transaction-convergence-sw": "node scripts/verify-dev-096-pwa-update-transaction-convergence-sw.mjs",

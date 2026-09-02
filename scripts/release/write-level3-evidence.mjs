@@ -27,6 +27,7 @@ const evidence = {
     'dev-099-static-convergence',
     'dev-099-property',
     'production-release-adapter-contract',
+    'production-candidate-fixture-contract',
   ],
   createdAt: new Date().toISOString(),
 };
