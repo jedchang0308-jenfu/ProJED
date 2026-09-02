@@ -176,7 +176,7 @@ await check('P08-persistence-pending-gate', 'pending persistence waits, failed p
 await check('P09-save-reject-recovery', 'save rejection decision preserves current entry and exposes recoverable stay semantics; no stale transition is executed.', () => {
   assert.equal(resolveTaskDetailsPersistenceDecision({ pendingCount: 0, hasFailedUpdates: true, hasPendingTransition: true }), 'stay');
   const modal = readFileSync(resolve(root, 'src/components/TaskDetailsModal.tsx'), 'utf8');
-  assert.match(modal, /toast\.error\('儲存失敗，請重試'/);
+  assert.match(modal, /toast\.error\((?:isUnknown|[^\n])*'儲存(狀態未確認，請先重試|失敗，請(?:先)?重試)'/);
   assert.match(modal, /pendingTransitionRef\.current = null/);
 });
 

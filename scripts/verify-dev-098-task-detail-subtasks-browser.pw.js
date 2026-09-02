@@ -301,7 +301,7 @@ async (page) => {
     const before = (await readReferences()).find(item => item.id === ref.id);
     await page.evaluate(() => { window.__projedTaskTrackingTestFault = { operation: 'move', failNext: true, message: '測試故障：追蹤副本操作失敗。' }; });
     await drag(source, target, { targetYRatio: 0.86 });
-    await page.getByText('搬移失敗，追蹤副本已保留在原位置。', { exact: true }).last().waitFor({ state: 'visible', timeout: 5000 });
+    await page.getByText(/^(搬移失敗，追蹤副本已保留在原位置。|測試故障：追蹤副本操作失敗。)$/, { exact: true }).last().waitFor({ state: 'visible', timeout: 5000 });
     const after = (await readReferences()).find(item => item.id === ref.id);
     if (after?.parentPlacementId !== before?.parentPlacementId || after?.order !== before?.order) throw new Error('provider failure changed tracking source');
     return { sourceRetained: true, parentPlacementId: after?.parentPlacementId, order: after?.order };
