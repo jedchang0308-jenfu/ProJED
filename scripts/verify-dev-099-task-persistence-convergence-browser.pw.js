@@ -19,7 +19,11 @@ async (page) => {
   const readNodes = () => page.evaluate(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}'));
   const setPersistenceFault = (fault) => page.evaluate((value) => {
     localStorage.setItem('projed-local-test.taskPersistenceFault', value);
+    localStorage.setItem('projed-local-test.taskPersistenceTrace', '[]');
   }, fault);
+  const readPersistenceTrace = () => page.evaluate(() => (
+    JSON.parse(localStorage.getItem('projed-local-test.taskPersistenceTrace') || '[]')
+  ));
   const saveTitle = async (modal, nextTitle) => {
     const titleInput = modal.locator('[data-task-details-title-input="true"]');
     await titleInput.fill(`${nextTitle}   `);
@@ -75,6 +79,8 @@ async (page) => {
   await setPersistenceFault('reject-once');
   await saveTitle(modal, rejectedTitle);
   await waitForSaveState(modal, 'error');
+  const rejectedTrace = await readPersistenceTrace();
+  assert(rejectedTrace.length === 1, 'Enter+blur reject must issue exactly one provider attempt', { rejectedTrace });
   assert(await modal.locator('[data-task-details-save-retry="true"]').count() === 1, 'failed save must expose one Retry action');
   const rejectedNodes = await readNodes();
   assert(rejectedNodes[taskId]?.title !== rejectedTitle, 'rejected provider must not change canonical local readback');
@@ -92,6 +98,8 @@ async (page) => {
   await setPersistenceFault('timeout-commit-once');
   await saveTitle(modal, responseLostTitle);
   await waitForSaveState(modal, 'saved', 20000);
+  const responseLostTrace = await readPersistenceTrace();
+  assert(responseLostTrace.length === 1, 'response-lost readback must not retry the provider operation', { responseLostTrace });
   const responseLostNodes = await readNodes();
   assert(responseLostNodes[taskId]?.title === responseLostTitle, 'committed response-lost readback must be canonical');
   assert(await modal.locator('[data-task-details-save-status="saving"]').count() === 0, 'response-lost flow must not remain saving');
@@ -103,6 +111,8 @@ async (page) => {
   await setPersistenceFault('timeout-no-commit-once');
   await saveTitle(modal, timeoutTitle);
   await waitForSaveState(modal, 'error', 20000);
+  const timeoutTraceBeforeRetry = await readPersistenceTrace();
+  assert(timeoutTraceBeforeRetry.length === 1, 'timeout must issue one provider attempt before Retry', { timeoutTraceBeforeRetry });
   assert(await modal.locator('[data-task-details-save-retry="true"]').count() === 1, 'timeout mismatch must expose one Retry action');
   const timeoutNodes = await readNodes();
   assert(timeoutNodes[taskId]?.title !== timeoutTitle, 'uncommitted timeout must not report canonical success');
@@ -112,6 +122,8 @@ async (page) => {
     return nodes[taskId]?.title === timeoutTitle;
   }, { taskId, timeoutTitle }, { timeout: 10000 });
   await waitForSaveState(modal, 'saved');
+  const timeoutTraceAfterRetry = await readPersistenceTrace();
+  assert(timeoutTraceAfterRetry.length === 2, 'Retry must create one new provider attempt', { timeoutTraceAfterRetry });
 
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 844 }]) {
     await page.setViewportSize(viewport);
@@ -138,6 +150,12 @@ async (page) => {
     originalTitle,
     savedTitle: nextTitle,
     faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback'],
+    providerAttemptCounts: {
+      B02: rejectedTrace.length,
+      B03BeforeRetry: timeoutTraceBeforeRetry.length,
+      B03AfterRetry: timeoutTraceAfterRetry.length,
+      B04: responseLostTrace.length,
+    },
     cases: [
       { id: 'B01', status: 'PASS' },
       { id: 'B02', status: 'PASS' },
