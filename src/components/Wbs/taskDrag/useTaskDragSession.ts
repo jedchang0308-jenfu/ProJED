@@ -94,7 +94,10 @@ const withoutTarget = (observation: TaskDragObservation): TaskDragObservation =>
 });
 
 interface UseTaskDragSessionOptions extends TaskDragCommitDependencies {
-  boardSurfaceRef: React.RefObject<HTMLElement | null>;
+  boardSurfaceRef?: React.RefObject<HTMLElement | null>;
+  dragSurfaceRef?: React.RefObject<HTMLElement | null>;
+  scrollSurfaceRef?: React.RefObject<HTMLElement | null>;
+  targetScopeRef?: React.RefObject<HTMLElement | null>;
   onSessionBegin?: () => void;
   onCommit?: (result: TaskDragCommitResult, observation: TaskDragObservation) => void;
 }
@@ -102,7 +105,7 @@ interface UseTaskDragSessionOptions extends TaskDragCommitDependencies {
 export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
   const [state, setState] = React.useState<TaskDragSessionState | null>(null);
   const stateRef = React.useRef<TaskDragSessionState | null>(null);
-  const dependenciesRef = React.useRef<TaskDragCommitDependencies>(options);
+  const dependenciesRef = React.useRef<UseTaskDragSessionOptions>(options);
   const onSessionBeginRef = React.useRef(options.onSessionBegin);
   const onCommitRef = React.useRef(options.onCommit);
   const terminalSessionIdsRef = React.useRef<string[]>([]);
@@ -171,6 +174,8 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     point,
     state: activeState,
     canMoveTask: dependenciesRef.current.canMoveTask,
+    canManageTaskReference: dependenciesRef.current.canManageTaskReference,
+    scopeElement: dependenciesRef.current.targetScopeRef?.current || null,
   }), []);
 
   const startAutoScroll = React.useCallback((point: { x: number; y: number }) => {
@@ -183,11 +188,14 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
       const activeState = stateRef.current;
       if (!currentPoint || !activeState || hasTerminated(activeState.sessionId)) return;
 
-      const boardSurface = options.boardSurfaceRef.current
+      const latestOptions = dependenciesRef.current;
+      const scrollSurfaceRef = latestOptions.scrollSurfaceRef || latestOptions.dragSurfaceRef || latestOptions.boardSurfaceRef;
+      const boardSurface = scrollSurfaceRef?.current
         || document.querySelector<HTMLElement>('[data-mobile-pan-surface="board"]');
       const scrollResult = autoScrollTaskDragSurfaces({
         point: currentPoint,
         boardSurface,
+        scopeElement: latestOptions.targetScopeRef?.current || null,
       });
       recordTaskDragDebug({
         type: 'edge-scroll:attempt',
@@ -207,7 +215,7 @@ export const useTaskDragSession = (options: UseTaskDragSessionOptions) => {
     };
 
     autoScrollFrameRef.current = window.requestAnimationFrame(tick);
-  }, [applyState, hasTerminated, options.boardSurfaceRef, resolveObservation]);
+  }, [applyState, hasTerminated, resolveObservation]);
 
   const begin = React.useCallback<MobileTaskActionContextValue['begin']>((
     task: {

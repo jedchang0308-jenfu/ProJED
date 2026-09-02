@@ -58,6 +58,7 @@ interface TaskDragPresenterProps {
   canCreateTask: boolean;
   canDeleteTask: boolean;
   onAction: (action: MobileTaskAction) => void;
+  overlayBaseZIndex?: number;
 }
 
 export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
@@ -66,6 +67,7 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
   canCreateTask,
   canDeleteTask,
   onAction,
+  overlayBaseZIndex = 80,
 }) => {
   if (!state) return null;
 
@@ -103,8 +105,8 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
     <>
       {state.phase === 'dragging' ? (
         <div
-          className="pointer-events-none fixed z-[80] flex h-10 w-[240px] max-w-[calc(100vw-1rem)] items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
-          style={{ left: previewHorizontalPosition.left, top: previewTop }}
+          className="pointer-events-none fixed flex h-10 w-[240px] max-w-[calc(100vw-1rem)] items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
+          style={{ left: previewHorizontalPosition.left, top: previewTop, zIndex: overlayBaseZIndex }}
           data-mobile-drag-preview="true"
           data-task-id={state.nodeId}
           data-task-drag-session-id={state.sessionId}
@@ -141,12 +143,13 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
       && state.originFieldRect
       && sourceSurfaceKind ? (
         <div
-          className="pointer-events-none fixed z-[90]"
+          className="pointer-events-none fixed"
           style={{
             left: state.originFieldRect.left,
             top: state.originFieldRect.top,
             width: state.originFieldRect.width,
             height: state.originFieldRect.height,
+            zIndex: overlayBaseZIndex + 10,
           }}
           data-mobile-drop-origin="true"
           data-mobile-drop-noop="true"
@@ -164,7 +167,7 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
         && state.childIntentPhase !== 'armed'
         && state.dropIndicatorRect ? (
         <div
-          className={`pointer-events-none fixed z-[90] ${
+          className={`pointer-events-none fixed ${
             state.dropIndicatorAxis === 'vertical' ? '' : '-translate-y-1/2'
           }`}
           style={{
@@ -174,6 +177,7 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
             height: state.dropIndicatorAxis === 'vertical'
               ? state.dropIndicatorRect.height
               : undefined,
+            zIndex: overlayBaseZIndex + 10,
           }}
           data-mobile-drop-indicator="true"
           data-mobile-drop-axis={state.dropIndicatorAxis || 'horizontal'}
@@ -191,8 +195,8 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
       ) : null}
 
       <div
-        className="fixed left-1/2 z-[95] flex w-[calc(100vw-0.5rem)] max-w-[430px] -translate-x-1/2 gap-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
-        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+        className="fixed left-1/2 flex w-[calc(100vw-0.5rem)] max-w-[430px] -translate-x-1/2 gap-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg"
+        style={{ top: 'env(safe-area-inset-top, 0px)', zIndex: overlayBaseZIndex + 15 }}
         data-mobile-task-action-rail="true"
         data-mobile-task-action-rail-placement="top"
         data-mobile-task-action-rail-mode={state.phase}

@@ -5,7 +5,8 @@ import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import { primaryPlacementId } from '../../features/taskTracking/model';
 import { useTaskPlacementPermissions } from '../../hooks/useTaskPlacementPermissions';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
-import type { TaskInteractionSurfaceId, TaskTransientOwner } from '../../interactions/task/types';
+import type { TaskCommandDependencies } from '../../interactions/task/taskCommandExecutor';
+import type { TaskInteractionOrigin, TaskInteractionSurfaceId, TaskTransientOwner } from '../../interactions/task/types';
 import { useTaskGestureSurface } from './taskDrag/useTaskGestureSurface';
 import type { TaskDragSourceKind } from './taskDrag/taskDragTypes';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
@@ -17,6 +18,8 @@ export const useTaskPlacementController = ({
   sortableType,
   sortableData,
   sourceKind = null,
+  origin,
+  commandDependencies,
   interactionDisabled = false,
   transientOwners = [],
 }: {
@@ -26,6 +29,8 @@ export const useTaskPlacementController = ({
   sortableType: string;
   sortableData?: Record<string, unknown>;
   sourceKind?: TaskDragSourceKind | null;
+  origin?: TaskInteractionOrigin;
+  commandDependencies?: TaskCommandDependencies;
   interactionDisabled?: boolean;
   transientOwners?: readonly TaskTransientOwner[];
 }) => {
@@ -47,8 +52,10 @@ export const useTaskPlacementController = ({
       canManageReferenceHere: permissions.canManageTaskReference,
     },
     surfaceId,
+    origin,
     nodeRole: task.nodeType || 'task',
     transientOwners,
+    commandDependencies,
   });
   const taskGesture = useTaskGestureSurface({
     task: {

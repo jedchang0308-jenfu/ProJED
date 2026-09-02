@@ -82,8 +82,11 @@ export const isLocalTestBackend = dataBackend === 'local-test';
 const unsupportedTaskTrackingReferenceService: TrackingReferenceService = {
   getCapability: async () => ({ supported: false, reason: 'backend_unsupported' }),
   listByWorkspace: async () => [],
+  listStagedByWorkspace: async () => [],
   create: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
   move: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
+  stage: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本暫存。'); },
+  placeStaged: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本暫存。'); },
   remove: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
   restore: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
 };

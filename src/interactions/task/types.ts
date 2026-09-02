@@ -31,7 +31,8 @@ export type TaskInteractionSurfaceId =
   | 'shared-task-sidebar.row'
   | 'calendar.segment'
   | 'task-workbench.placed-row'
-  | 'task-workbench.unplaced-row';
+  | 'task-workbench.unplaced-row'
+  | 'task-details.subtask-row';
 
 export type InteractionTrigger =
   | 'pointer.primary'

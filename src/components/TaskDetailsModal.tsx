@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, Archive, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, MoreHorizontal, Send, Unlock, X } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, MoreHorizontal, Send, Unlock, X } from 'lucide-react';
 import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -34,12 +34,18 @@ import {
   getTaskDetailsModalMinimumSize,
   type TaskDetailsModalViewport,
 } from './taskDetailsModalSizing';
+import { TaskDetailsSubtaskSection } from './TaskDetailsSubtaskSection';
+import { resolveTaskDetailsPersistenceDecision, TASK_DETAILS_NAVIGATE_EVENT } from './taskDetailsNavigation';
 
 interface TaskDetailsModalProps {
   nodeId: string;
   /** Placement identity used to resolve target/source capabilities independently. */
   trackingReferenceId?: string;
   onClose: () => void;
+  canGoBack?: boolean;
+  onBack?: () => void;
+  onNavigateToTask?: (taskId: string, trackingReferenceId?: string, placementId?: string) => void;
+  onCreateChild?: (taskId: string) => void;
 }
 
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = MANUAL_TASK_STATUSES.map(value => ({
@@ -148,7 +154,21 @@ const getTouchDistance = (touches: React.TouchList) => {
   return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
 };
 
-export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trackingReferenceId, onClose }) => {
+type TaskDetailsTransition =
+  | { kind: 'close' }
+  | { kind: 'back' }
+  | { kind: 'navigate'; taskId: string; trackingReferenceId?: string; placementId?: string }
+  | { kind: 'create-child'; parentId: string };
+
+export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
+  nodeId,
+  trackingReferenceId,
+  onClose,
+  canGoBack = false,
+  onBack,
+  onNavigateToTask,
+  onCreateChild,
+}) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const nodes = useWbsStore((state) => state.nodes);
   const updateNode = useWbsStore((state) => state.updateNode);
@@ -160,6 +180,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const boardMembers = useMemberStore((state) => state.boardMembers);
   const membersLoading = useMemberStore((state) => state.loading);
   const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const bodyRef = React.useRef<HTMLDivElement | null>(null);
   const titleInputRef = React.useRef<HTMLInputElement | null>(null);
   const collectionTriggerRef = React.useRef<HTMLButtonElement | null>(null);
   const taskActionMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -207,7 +228,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const unknownUpdatesRef = React.useRef<Partial<TaskNode>>({});
   const unknownUpdateVersionsRef = React.useRef<Record<string, number>>({});
   const persistenceOwnerNodeIdRef = React.useRef<string | undefined>(undefined);
-  const closeRequestedRef = React.useRef(false);
+  const pendingTransitionRef = React.useRef<TaskDetailsTransition | null>(null);
   const previousNodeIdRef = React.useRef<string | undefined>(undefined);
   const pinchCloseRef = React.useRef<{
     initialDistance: number;
@@ -244,6 +265,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     clearSaveFeedbackTimer();
     if (pendingPersistCountRef.current === 0) setSaveState('idle');
   }, [clearSaveFeedbackTimer]);
+
+  const runTransition = React.useCallback((transition: TaskDetailsTransition) => {
+    setIsClosePending(false);
+    if (transition.kind === 'close') {
+      onClose();
+    } else if (transition.kind === 'back') {
+      onBack?.();
+    } else if (transition.kind === 'create-child') {
+      onCreateChild?.(transition.parentId);
+    } else {
+      onNavigateToTask?.(transition.taskId, transition.trackingReferenceId, transition.placementId);
+    }
+  }, [onBack, onClose, onCreateChild, onNavigateToTask]);
 
   const settlePersistence = React.useCallback((
     sourceNodeId: string,
@@ -298,30 +332,37 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       });
     }
 
-    if (pendingPersistCountRef.current > 0) return;
-
     const hasFailedUpdates = Object.keys(failedUpdatesRef.current).length > 0;
-    if (hasFailedUpdates) {
+    const persistenceDecision = resolveTaskDetailsPersistenceDecision({
+      pendingCount: pendingPersistCountRef.current,
+      hasFailedUpdates,
+      hasPendingTransition: Boolean(pendingTransitionRef.current),
+    });
+    if (persistenceDecision === 'wait') return;
+
+    if (persistenceDecision === 'stay') {
       clearSaveFeedbackTimer();
-      const hasUnknownUpdates = Object.keys(unknownUpdatesRef.current).length > 0;
-      setSaveState(hasUnknownUpdates ? 'unknown' : 'error');
-      if (closeRequestedRef.current) {
-        closeRequestedRef.current = false;
+      setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown' : 'error');
+      if (pendingTransitionRef.current) {
+        pendingTransitionRef.current = null;
         setIsClosePending(false);
-        toast.error(hasUnknownUpdates ? '儲存狀態未確認，請重試' : '儲存失敗，請重試', { duration: 1800 });
+        toast.error(
+          Object.keys(unknownUpdatesRef.current).length > 0 ? '儲存狀態未確認，請重試' : '儲存失敗，請重試',
+          { duration: 1800 },
+        );
       }
       return;
     }
 
-    if (closeRequestedRef.current) {
-      closeRequestedRef.current = false;
-      setIsClosePending(false);
-      onClose();
+    if (persistenceDecision === 'run' && pendingTransitionRef.current) {
+      const transition = pendingTransitionRef.current;
+      pendingTransitionRef.current = null;
+      runTransition(transition);
       return;
     }
 
     showSaveFeedback();
-  }, [clearSaveFeedbackTimer, onClose, showSaveFeedback]);
+  }, [clearSaveFeedbackTimer, runTransition, showSaveFeedback]);
 
   const recordRejectedPersistence = React.useCallback((
     requestUpdates: Partial<TaskNode>,
@@ -473,49 +514,60 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     const didQueueDraft = savePendingTaskDetails();
     if (didQueueDraft || pendingPersistCountRef.current > 0) return;
     if (retryFailedSave()) return;
-    if (Object.keys(failedUpdatesRef.current).length > 0) {
-      setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown' : 'error');
-      return;
-    }
     showSaveFeedback();
   }, [retryFailedSave, savePendingTaskDetails, showSaveFeedback]);
 
-  const handleClose = React.useCallback(() => {
+  const requestTransition = React.useCallback((transition: TaskDetailsTransition) => {
+    if (pendingTransitionRef.current || isClosePending) return;
     if (!canPersistTask) {
-      onClose();
+      runTransition(transition);
       return;
     }
-    if (closeRequestedRef.current) return;
-
     if (titleAutosaveTimerRef.current !== null) {
       window.clearTimeout(titleAutosaveTimerRef.current);
       titleAutosaveTimerRef.current = null;
     }
-    titleEditSequenceRef.current += 1;
 
-    closeRequestedRef.current = true;
+    pendingTransitionRef.current = transition;
     setIsClosePending(true);
 
-    const failedUpdates = { ...failedUpdatesRef.current };
-    failedUpdatesRef.current = {};
-    failedUpdateVersionsRef.current = {};
-    const didQueueRetry = Object.keys(failedUpdates).length > 0
-      ? persistTaskUpdates(failedUpdates)
-      : false;
+    // A rejected write is an explicit recovery state.  Navigation must not
+    // silently retry a failed draft; the user must press the visible Retry
+    // control first, then request the transition again.
+    if (Object.keys(failedUpdatesRef.current).length > 0) {
+      pendingTransitionRef.current = null;
+      setIsClosePending(false);
+      const isUnknown = Object.keys(unknownUpdatesRef.current).length > 0;
+      setSaveState(isUnknown ? 'unknown' : 'error');
+      toast.error(isUnknown ? '儲存狀態未確認，請先重試' : '儲存失敗，請先重試', { duration: 1800 });
+      return;
+    }
     const didQueueDraft = savePendingTaskDetails();
 
-    if (!didQueueRetry && !didQueueDraft && pendingPersistCountRef.current === 0) {
-      if (Object.keys(failedUpdatesRef.current).length > 0) {
-        closeRequestedRef.current = false;
-        setIsClosePending(false);
-        setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown' : 'error');
-        return;
-      }
-      closeRequestedRef.current = false;
-      setIsClosePending(false);
-      onClose();
+    if (!didQueueDraft && pendingPersistCountRef.current === 0) {
+      pendingTransitionRef.current = null;
+      runTransition(transition);
     }
-  }, [canPersistTask, onClose, persistTaskUpdates, savePendingTaskDetails]);
+  }, [canPersistTask, isClosePending, runTransition, savePendingTaskDetails]);
+
+  React.useEffect(() => {
+    const handleDetailsNavigate = (event: Event) => {
+      const detail = (event as CustomEvent<{ taskId?: string; trackingReferenceId?: string; returnFocusPlacementId?: string }>).detail;
+      if (!detail?.taskId) return;
+      requestTransition({
+        kind: 'navigate',
+        taskId: detail.taskId,
+        trackingReferenceId: detail.trackingReferenceId,
+        placementId: detail.returnFocusPlacementId,
+      });
+    };
+    document.addEventListener(TASK_DETAILS_NAVIGATE_EVENT, handleDetailsNavigate);
+    return () => document.removeEventListener(TASK_DETAILS_NAVIGATE_EVENT, handleDetailsNavigate);
+  }, [requestTransition]);
+
+  const handleClose = React.useCallback(() => {
+    requestTransition({ kind: 'close' });
+  }, [requestTransition]);
 
   React.useEffect(() => {
     if (!isTaskActionMenuOpen) return;
@@ -540,8 +592,16 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       }
       const eventWithinCollectionDialog = event.target instanceof Element
         && Boolean(event.target.closest('[data-task-collection-dialog]'));
+      // Let dnd-kit cancel an active keyboard drag before the modal owns Escape.
+      // The sortable source exposes aria-pressed while the sensor is active;
+      // keeping this event in the DnD layer prevents Escape from closing the
+      // surrounding details surface.
+      const hasActiveKeyboardTaskDrag = Boolean(document.querySelector(
+        '[data-task-details-modal="true"] [data-task-surface-source="true"][aria-pressed="true"]',
+      ));
+      if (hasActiveKeyboardTaskDrag) return;
       const hasNestedOverlay = eventWithinCollectionDialog || Boolean(document.querySelector(
-        '[data-tag-picker-panel], .global-dialog-content, [data-task-note-toolbar-popover="true"], [data-task-collection-dialog]',
+        '[data-tag-picker-panel], .global-dialog-content, [data-task-note-toolbar-popover="true"], [data-task-collection-dialog], [data-global-context-menu="true"]',
       ));
       if (hasNestedOverlay) return;
       event.preventDefault();
@@ -604,7 +664,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     failedUpdateVersionsRef.current = {};
     unknownUpdatesRef.current = {};
     unknownUpdateVersionsRef.current = {};
-    closeRequestedRef.current = false;
+    pendingTransitionRef.current = null;
     setIsClosePending(false);
     setSaveState('idle');
     if (titleAutosaveTimerRef.current !== null) {
@@ -955,7 +1015,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const currentStatus = normalizeManualTaskStatus(node.status);
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
   const closeButtonTitle = saveState === 'error' || saveState === 'unknown'
-    ? '確認儲存結果或重試後關閉'
+    ? '重試確認儲存後關閉'
     : saveState === 'saving' || isClosePending
       ? '儲存完成後關閉'
       : canPersistTask
@@ -1013,6 +1073,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
           className="flex items-start gap-2 px-5 py-3"
           data-task-details-header="true"
         >
+          {canGoBack ? (
+            <button
+              type="button"
+              onClick={() => requestTransition({ kind: 'back' })}
+              disabled={isClosePending}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
+              aria-label="返回上一個任務詳情"
+              title="返回上一個任務詳情"
+              data-task-details-back="true"
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+            </button>
+          ) : null}
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-col gap-0.5">
               {canEditTask ? (
@@ -1152,7 +1225,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto px-4 py-4">
+        <div ref={bodyRef} className="flex-1 overflow-auto px-4 py-4" data-task-details-scroll-surface="true">
           <section className="pb-2" data-task-details-meta-section="true">
             <div
               className="grid gap-y-3 lg:grid-cols-[5.5rem_23.5rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
@@ -1435,6 +1508,20 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
               ))}
             </div>
           </section>
+
+          <TaskDetailsSubtaskSection
+            node={node}
+            trackingReference={trackingReference}
+            bodyRef={bodyRef}
+            canCreateTask={placementPermissions.canCreateTask && !trackingReference}
+            onCreateChild={parentId => requestTransition({ kind: 'create-child', parentId })}
+            onOpenDetails={(taskId, targetTrackingReferenceId, placementId) => requestTransition({
+              kind: 'navigate',
+              taskId,
+              trackingReferenceId: targetTrackingReferenceId,
+              placementId,
+            })}
+          />
 
           <div className="flex justify-end pt-2" data-task-knowledge-trigger="true">
             <button

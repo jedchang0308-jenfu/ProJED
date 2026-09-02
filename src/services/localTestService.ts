@@ -57,6 +57,7 @@ const KNOWLEDGE_RECORDS_KEY = 'projed-local-test.knowledgeRecords';
 const ACTIVITY_EVENTS_KEY = 'projed-local-test.activityEvents';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 const TASK_COLLECTION_FAULT_KEY = 'projed-local-test.taskCollectionFault';
+const TASK_NODE_FAULT_KEY = 'projed-local-test.taskNodeFault';
 const TASK_PERSISTENCE_FAULT_KEY = 'projed-local-test.taskPersistenceFault';
 const TASK_PERSISTENCE_READBACK_FAULT_KEY = 'projed-local-test.taskPersistenceReadbackFault';
 const TASK_PERSISTENCE_TRACE_KEY = 'projed-local-test.taskPersistenceTrace';
@@ -209,6 +210,14 @@ const consumeTaskCollectionFault = (fault: string): boolean => {
   const configured = localStorage.getItem(TASK_COLLECTION_FAULT_KEY);
   if (configured !== fault) return false;
   localStorage.removeItem(TASK_COLLECTION_FAULT_KEY);
+  return true;
+};
+/** Browser QA only: inject one node persistence rejection in local-test mode. */
+const consumeTaskNodeFault = (fault: string): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_NODE_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_NODE_FAULT_KEY);
   return true;
 };
 const consumeTaskPersistenceFault = (
@@ -761,7 +770,7 @@ export const localTestNodeService = {
     const nodes = readNodes();
     if (!nodes[nodeId]) return;
     recordTaskPersistenceAttempt(nodeId, updates);
-    if (consumeTaskPersistenceFault('reject-once')) {
+    if (consumeTaskPersistenceFault('reject-once') || consumeTaskNodeFault('update-once')) {
       throw new Error('local-test injected task persistence rejection');
     }
     const nextNodes = {
@@ -772,8 +781,6 @@ export const localTestNodeService = {
       writeNodes(nextNodes);
       return new Promise<void>(() => {});
     }
-    // Commit immediately but delay the provider response so the browser
-    // verifier can exercise an out-of-order (stale) completion safely.
     if (consumeTaskPersistenceFault('delay-response-once')) {
       writeNodes(nextNodes);
       return new Promise<void>((resolve) => {
@@ -783,9 +790,7 @@ export const localTestNodeService = {
     if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
       return new Promise<void>(() => {});
     }
-    writeNodes({
-      ...nextNodes,
-    });
+    writeNodes(nextNodes);
   },
 
   delete: async (_workspaceId: string, _boardId: string, nodeId: string): Promise<void> => {
@@ -795,6 +800,9 @@ export const localTestNodeService = {
   },
 
   batchUpdate: async (_workspaceId: string, _boardId: string, updates: { id: string; data: Partial<TaskNode> }[]): Promise<void> => {
+    if (consumeTaskNodeFault('batch-once')) {
+      throw new Error('測試故障：任務批次儲存失敗。');
+    }
     const nodes = readNodes();
     updates.forEach(update => {
       if (!nodes[update.id]) return;

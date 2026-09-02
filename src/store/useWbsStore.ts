@@ -38,7 +38,12 @@ import { isTaskCollectionPending } from '../features/taskCollection/pending';
 import { getTaskTrackingReferenceService } from '../services/dataBackend';
 import { TaskTrackingError } from '../features/taskTracking/errors';
 import { buildProjectionNodes, getReferenceSubtree, primaryPlacementId } from '../features/taskTracking/model';
-import type { TaskProjectionNode, TaskTrackingReference, TaskTrackingReferenceCapability } from '../features/taskTracking/types';
+import type {
+  StagedTaskTrackingReference,
+  TaskProjectionNode,
+  TaskTrackingReference,
+  TaskTrackingReferenceCapability,
+} from '../features/taskTracking/types';
 
 /**
  * WbsStore 狀態定義
@@ -63,6 +68,8 @@ export interface WbsBoardState {
   pendingPlacementNodeIds: Record<string, string>;
   /** Non-owning placements; task content remains in `nodes` only. */
   trackingReferences: TaskTrackingReference[];
+  /** Account-owned reference roots temporarily held outside every Board. */
+  stagedTrackingReferences: StagedTaskTrackingReference[];
   trackingReferenceCapability: TaskTrackingReferenceCapability;
 }
 
@@ -160,6 +167,8 @@ export interface WbsBoardActions {
   loadTrackingReferences: (workspaceId: string) => Promise<void>;
   createTrackingReference: (taskId: string) => Promise<TaskTrackingReference | null>;
   moveTrackingReference: (input: { referenceId: string; targetBoardId: string; targetParentPlacementId: string | null; anchorPlacementId?: string | null; position?: 'before' | 'after' | 'append' }) => Promise<TaskTrackingReference | null>;
+  stageTrackingReference: (referenceId: string) => Promise<StagedTaskTrackingReference | null>;
+  placeStagedTrackingReference: (input: { referenceId: string; targetBoardId: string; targetParentPlacementId: string | null; anchorPlacementId?: string | null; position?: 'before' | 'after' | 'append' }) => Promise<TaskTrackingReference | null>;
   removeTrackingReference: (referenceId: string) => Promise<void>;
   restoreTrackingReference: (referenceId: string) => Promise<TaskTrackingReference | null>;
   getProjectionNodesForBoard: (workspaceId: string, boardId: string, access?: { canEditCanonicalTask?: boolean; canManageReferenceHere?: boolean }) => TaskProjectionNode[];
@@ -658,6 +667,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
   error: null,
   pendingPlacementNodeIds: {},
   trackingReferences: [],
+  stagedTrackingReferences: [],
   trackingReferenceCapability: { supported: false, reason: 'schema_not_ready' },
 
   _buildIndices: (nodesRecord) => {
@@ -707,17 +717,26 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     try {
       const capability = await service.getCapability();
       if (!capability.supported) {
-        set({ trackingReferences: [], trackingReferenceCapability: capability });
+        set({ trackingReferences: [], stagedTrackingReferences: [], trackingReferenceCapability: capability });
         return;
       }
-      const references = await service.listByWorkspace(workspaceId);
-      set({ trackingReferences: references, trackingReferenceCapability: capability });
+      const [references, stagedReferences] = await Promise.all([
+        service.listByWorkspace(workspaceId),
+        service.listStagedByWorkspace(workspaceId),
+      ]);
+      set({
+        trackingReferences: references,
+        stagedTrackingReferences: stagedReferences,
+        trackingReferenceCapability: capability,
+      });
       // A Supabase board load is intentionally scoped to the active board. A
       // cross-board reference still needs its canonical source task hydrated,
       // but that read must follow the derived-reference permission path rather
       // than failing just because the source Board itself is private.
       const missingTaskIds = Array.from(new Set(
-        references.filter(reference => !get().nodes[reference.taskId]).map(reference => reference.taskId),
+        [...references, ...stagedReferences]
+          .filter(reference => !get().nodes[reference.taskId])
+          .map(reference => reference.taskId),
       ));
       if (missingTaskIds.length > 0 && service.listCanonicalTasksByIds) {
         try {
@@ -734,9 +753,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       // helper. Fall back per source Board so one unreadable Board never hides
       // references that were already returned for a readable target Board.
       const missingSourceBoards = Array.from(new Set(
-        references
+        [...references, ...stagedReferences]
           .filter(reference => !get().nodes[reference.taskId])
-          .map(reference => reference.sourceBoardId || reference.boardId)
+          .map(reference => reference.sourceBoardId || ('boardId' in reference ? reference.boardId : reference.originalBoardId))
           .filter(Boolean),
       ));
       if (missingSourceBoards.length > 0) {
@@ -843,6 +862,89 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         }).then(() => undefined),
     });
     return moved;
+  },
+
+  stageTrackingReference: async (referenceId) => {
+    const reference = get().trackingReferences.find(item => item.id === referenceId && !item.removedAt);
+    if (!reference) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const staged = await service.stage(reference.workspaceId, {
+      sourcePlacementId: referenceId,
+      expectedRevision: reference.revision,
+      clientPlatform: 'web',
+    });
+    try {
+      const [freshReferences, freshStaged] = await Promise.all([
+        service.listByWorkspace(reference.workspaceId),
+        service.listStagedByWorkspace(reference.workspaceId),
+      ]);
+      set(state => ({
+        trackingReferences: [
+          ...state.trackingReferences.filter(item => item.workspaceId !== reference.workspaceId || Boolean(item.removedAt)),
+          ...freshReferences,
+        ],
+        stagedTrackingReferences: [
+          ...state.stagedTrackingReferences.filter(item => item.workspaceId !== reference.workspaceId),
+          ...freshStaged,
+        ],
+      }));
+    } catch (error) {
+      console.warn('[taskTracking] Stage committed but refresh failed:', error);
+      const stagedIds = new Set(getReferenceSubtree(get().trackingReferences, referenceId).map(item => item.id));
+      set(state => ({
+        trackingReferences: state.trackingReferences.filter(item => !stagedIds.has(item.id)),
+        stagedTrackingReferences: [
+          ...state.stagedTrackingReferences.filter(item => item.referenceId !== staged.referenceId),
+          { ...staged, taskId: reference.taskId, workspaceId: reference.workspaceId, sourceBoardId: reference.sourceBoardId, originalBoardId: reference.boardId },
+        ],
+      }));
+    }
+    return staged;
+  },
+
+  placeStagedTrackingReference: async ({ referenceId, targetBoardId, targetParentPlacementId, anchorPlacementId, position }) => {
+    const staged = get().stagedTrackingReferences.find(item => item.referenceId === referenceId);
+    if (!staged) return null;
+    const service = getTaskTrackingReferenceService(() => Object.values(get().nodes));
+    const placedResult = await service.placeStaged(staged.workspaceId, {
+      sourcePlacementId: referenceId,
+      expectedRevision: staged.revision,
+      targetBoardId,
+      targetParentPlacementId,
+      anchorPlacementId,
+      position,
+      clientPlatform: 'web',
+    });
+    const placed = {
+      ...placedResult,
+      taskId: staged.taskId,
+      workspaceId: staged.workspaceId,
+      boardId: targetBoardId,
+      sourceBoardId: staged.sourceBoardId,
+    };
+    try {
+      const [freshReferences, freshStaged] = await Promise.all([
+        service.listByWorkspace(staged.workspaceId),
+        service.listStagedByWorkspace(staged.workspaceId),
+      ]);
+      set(state => ({
+        trackingReferences: [
+          ...state.trackingReferences.filter(item => item.workspaceId !== staged.workspaceId || Boolean(item.removedAt)),
+          ...freshReferences,
+        ],
+        stagedTrackingReferences: [
+          ...state.stagedTrackingReferences.filter(item => item.workspaceId !== staged.workspaceId),
+          ...freshStaged,
+        ],
+      }));
+    } catch (error) {
+      console.warn('[taskTracking] Staged placement committed but refresh failed:', error);
+      set(state => ({
+        trackingReferences: [...state.trackingReferences.filter(item => item.id !== placed.id), placed],
+        stagedTrackingReferences: state.stagedTrackingReferences.filter(item => item.referenceId !== referenceId),
+      }));
+    }
+    return placed;
   },
 
   removeTrackingReference: async (referenceId) => {
@@ -1310,9 +1412,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const label = normalizedUpdates.isArchived === true ? '封存任務' :
                   normalizedUpdates.isArchived === false ? '還原任務' : '修改任務';
     useUndoStore.getState().pushUndo({
-      label,
-      undo: () => { get().updateNode(id, oldValues); },
-      redo: () => { get().updateNode(id, normalizedUpdates); },
+        label,
+        undo: () => { get().updateNode(id, oldValues); },
+        redo: () => { get().updateNode(id, normalizedUpdates); },
     });
 
     return { accepted: true, operationId, completion };
@@ -1582,6 +1684,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       // local-test projection must mirror that lifecycle explicitly so a
       // deleted canonical task never leaves a dangling ghost reference.
       trackingReferences: latest.trackingReferences.filter(reference => !nodeIds.has(reference.taskId)),
+      stagedTrackingReferences: latest.stagedTrackingReferences.filter(reference => !nodeIds.has(reference.taskId)),
     });
     get()._buildIndices(nextNodes);
     return nodeIds.size;
