@@ -1,7 +1,7 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import { AlertCircle, Archive, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, MoreHorizontal, Send, Unlock, X } from 'lucide-react';
-import { useWbsStore } from '../store/useWbsStore';
+import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
 import { TagPicker } from './Tags/TagPicker';
@@ -18,8 +18,15 @@ import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
 import { toast } from '../store/useToastStore';
 import { isPrimaryPointerActivation } from '../interactions/pointerActivation';
 import TaskCollectionDialog from './TaskCollectionDialog';
-import { taskCollectionService } from '../services/dataBackend';
+import { nodeService, taskCollectionService } from '../services/dataBackend';
 import useTaskCollectionStore from '../store/useTaskCollectionStore';
+import {
+  arePersistedValuesEqual,
+  readbackToTerminalOutcome,
+  settlePersistenceOperationOnce,
+  type TaskPersistenceReadback,
+  type TaskPersistenceTerminalOutcome,
+} from '../utils/taskPersistenceConvergence';
 import {
   clampTaskDetailsModalSize,
   getTaskDetailsModalDefaultSize,
@@ -102,11 +109,36 @@ const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) =>
   ))
 );
 
+const readbackTaskPersistence = async (
+  sourceNode: TaskNode,
+  requestUpdates: Partial<TaskNode>,
+  persistedKeys: string[],
+): Promise<TaskPersistenceReadback> => {
+  if (!sourceNode.workspaceId || !sourceNode.boardId) return 'unavailable';
+
+  try {
+    const canonicalNodes = await nodeService.listByProject(sourceNode.workspaceId, sourceNode.boardId);
+    const canonicalNode = canonicalNodes.find(item => item.id === sourceNode.id);
+    if (!canonicalNode) return 'mismatch';
+
+    return persistedKeys.every((key) => arePersistedValuesEqual(
+      (canonicalNode as unknown as Record<string, unknown>)[key],
+      (requestUpdates as Record<string, unknown>)[key],
+    ))
+      ? 'confirmed'
+      : 'mismatch';
+  } catch {
+    return 'unavailable';
+  }
+};
+
 const PINCH_CLOSE_MIN_DISTANCE_DELTA = 36;
 const PINCH_CLOSE_MAX_DISTANCE_RATIO = 0.78;
 const TASK_DETAILS_AUTOSAVE_DELAY_MS = 900;
+const TASK_DETAILS_PERSISTENCE_DEADLINE_MS = 10_000;
+const TASK_DETAILS_PERSISTENCE_READBACK_DEADLINE_MS = 5_000;
 
-type TaskDetailsSaveState = 'idle' | 'saving' | 'saved' | 'error';
+type TaskDetailsSaveState = 'idle' | 'saving' | 'saved' | 'error' | 'unknown';
 
 const getTouchDistance = (touches: React.TouchList) => {
   const first = touches[0];
@@ -164,10 +196,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const saveFeedbackTimerRef = React.useRef<number | null>(null);
   const titleAutosaveTimerRef = React.useRef<number | null>(null);
   const pendingPersistCountRef = React.useRef(0);
+  const pendingPersistOperationsRef = React.useRef(new Set<string>());
   const persistVersionRef = React.useRef(0);
   const latestPersistVersionByKeyRef = React.useRef<Record<string, number>>({});
   const failedUpdatesRef = React.useRef<Partial<TaskNode>>({});
   const failedUpdateVersionsRef = React.useRef<Record<string, number>>({});
+  const unknownUpdatesRef = React.useRef<Partial<TaskNode>>({});
+  const unknownUpdateVersionsRef = React.useRef<Record<string, number>>({});
+  const persistenceOwnerNodeIdRef = React.useRef<string | undefined>(undefined);
   const closeRequestedRef = React.useRef(false);
   const previousNodeIdRef = React.useRef<string | undefined>(undefined);
   const pinchCloseRef = React.useRef<{
@@ -207,19 +243,31 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   }, [clearSaveFeedbackTimer]);
 
   const settlePersistence = React.useCallback((
-    succeeded: boolean,
+    sourceNodeId: string,
+    operationId: string,
+    outcome: TaskPersistenceTerminalOutcome,
     requestUpdates: Partial<TaskNode>,
     requestVersion: number,
     persistedKeys: string[],
   ) => {
+    if (persistenceOwnerNodeIdRef.current !== sourceNodeId) {
+      pendingPersistOperationsRef.current.delete(operationId);
+      return;
+    }
+    if (!settlePersistenceOperationOnce(pendingPersistOperationsRef.current, operationId)) return;
     pendingPersistCountRef.current = Math.max(0, pendingPersistCountRef.current - 1);
 
-    if (succeeded) {
+    if (outcome === 'persisted') {
       persistedKeys.forEach((key) => {
         const failedVersion = failedUpdateVersionsRef.current[key];
         if (failedVersion !== undefined && failedVersion <= requestVersion) {
           delete failedUpdateVersionsRef.current[key];
           delete (failedUpdatesRef.current as Record<string, unknown>)[key];
+        }
+        const unknownVersion = unknownUpdateVersionsRef.current[key];
+        if (unknownVersion !== undefined && unknownVersion <= requestVersion) {
+          delete unknownUpdateVersionsRef.current[key];
+          delete (unknownUpdatesRef.current as Record<string, unknown>)[key];
         }
       });
     } else {
@@ -229,6 +277,15 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
           requestUpdates as Record<string, unknown>
         )[key];
         failedUpdateVersionsRef.current[key] = requestVersion;
+        if (outcome === 'unknown') {
+          (unknownUpdatesRef.current as Record<string, unknown>)[key] = (
+            requestUpdates as Record<string, unknown>
+          )[key];
+          unknownUpdateVersionsRef.current[key] = requestVersion;
+        } else {
+          delete (unknownUpdatesRef.current as Record<string, unknown>)[key];
+          delete unknownUpdateVersionsRef.current[key];
+        }
       });
     }
 
@@ -237,11 +294,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     const hasFailedUpdates = Object.keys(failedUpdatesRef.current).length > 0;
     if (hasFailedUpdates) {
       clearSaveFeedbackTimer();
-      setSaveState('error');
+      const hasUnknownUpdates = Object.keys(unknownUpdatesRef.current).length > 0;
+      setSaveState(hasUnknownUpdates ? 'unknown' : 'error');
       if (closeRequestedRef.current) {
         closeRequestedRef.current = false;
         setIsClosePending(false);
-        toast.error('儲存失敗，請重試', { duration: 1800 });
+        toast.error(hasUnknownUpdates ? '儲存狀態未確認，請重試' : '儲存失敗，請重試', { duration: 1800 });
       }
       return;
     }
@@ -256,8 +314,28 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     showSaveFeedback();
   }, [clearSaveFeedbackTimer, onClose, showSaveFeedback]);
 
-  const persistTaskUpdates = React.useCallback((updates: Partial<TaskNode>) => {
-    if (!currentNodeId || !canPersistTask || Object.keys(updates).length === 0) return false;
+  const recordRejectedPersistence = React.useCallback((
+    requestUpdates: Partial<TaskNode>,
+    persistedKeys: string[],
+  ) => {
+    const requestVersion = persistVersionRef.current + 1;
+    persistVersionRef.current = requestVersion;
+    persistedKeys.forEach((key) => {
+      latestPersistVersionByKeyRef.current[key] = requestVersion;
+      (failedUpdatesRef.current as Record<string, unknown>)[key] = (
+        requestUpdates as Record<string, unknown>
+      )[key];
+      failedUpdateVersionsRef.current[key] = requestVersion;
+    });
+    clearSaveFeedbackTimer();
+    setSaveState('error');
+  }, [clearSaveFeedbackTimer]);
+
+  const persistTaskUpdates = React.useCallback((
+    updates: Partial<TaskNode>,
+    options: { forcePersistence?: boolean; skipActivity?: boolean } = {},
+  ) => {
+    if (!currentNodeId || !node || !canPersistTask || Object.keys(updates).length === 0) return false;
 
     const requestUpdates: Partial<TaskNode> = {
       ...updates,
@@ -265,6 +343,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     };
     const persistedKeys = Object.keys(requestUpdates).filter((key) => key !== 'updatedAt');
     if (persistedKeys.length === 0) return false;
+
+    const dispatchResult: UpdateNodeDispatchResult = updateNode(currentNodeId, requestUpdates, {
+      forcePersistence: options.forcePersistence,
+      skipActivity: options.skipActivity,
+    });
+    if (!dispatchResult.accepted) {
+      if (dispatchResult.reason !== 'no_changes') {
+        recordRejectedPersistence(requestUpdates, persistedKeys);
+      }
+      return false;
+    }
 
     const requestVersion = persistVersionRef.current + 1;
     persistVersionRef.current = requestVersion;
@@ -274,18 +363,57 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
 
     clearSaveFeedbackTimer();
     setSaveState('saving');
+    pendingPersistOperationsRef.current.add(dispatchResult.operationId);
     pendingPersistCountRef.current += 1;
 
-    try {
-      updateNode(currentNodeId, requestUpdates, {
-        onPersistSuccess: () => settlePersistence(true, requestUpdates, requestVersion, persistedKeys),
-        onPersistError: () => settlePersistence(false, requestUpdates, requestVersion, persistedKeys),
+    let deadlineTimer: number | null = null;
+    const finish = (outcome: TaskPersistenceTerminalOutcome) => {
+      if (deadlineTimer !== null) {
+        window.clearTimeout(deadlineTimer);
+        deadlineTimer = null;
+      }
+      settlePersistence(
+        currentNodeId,
+        dispatchResult.operationId,
+        outcome,
+        requestUpdates,
+        requestVersion,
+        persistedKeys,
+      );
+    };
+
+    void dispatchResult.completion.then(
+      (status) => finish(status === 'persisted' ? 'persisted' : 'failed'),
+      () => finish('failed'),
+    );
+
+    deadlineTimer = window.setTimeout(() => {
+      console.warn('[TaskDetails] Persistence deadline exceeded; running canonical readback', {
+        operationId: dispatchResult.operationId,
+        taskId: currentNodeId,
       });
-    } catch {
-      settlePersistence(false, requestUpdates, requestVersion, persistedKeys);
-    }
+      const readbackDeadline = new Promise<TaskPersistenceReadback>((resolve) => {
+        window.setTimeout(() => resolve('unavailable'), TASK_DETAILS_PERSISTENCE_READBACK_DEADLINE_MS);
+      });
+      void Promise.race([
+        readbackTaskPersistence(node, requestUpdates, persistedKeys),
+        readbackDeadline,
+      ]).then(
+        (readback) => finish(readbackToTerminalOutcome(readback)),
+        () => finish('unknown'),
+      );
+    }, TASK_DETAILS_PERSISTENCE_DEADLINE_MS);
+
     return true;
-  }, [canPersistTask, clearSaveFeedbackTimer, currentNodeId, settlePersistence, updateNode]);
+  }, [
+    canPersistTask,
+    clearSaveFeedbackTimer,
+    currentNodeId,
+    node,
+    recordRejectedPersistence,
+    settlePersistence,
+    updateNode,
+  ]);
 
   const savePendingTaskDetails = React.useCallback(() => {
     if (!node || !canEditTask) return false;
@@ -319,13 +447,19 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
 
     failedUpdatesRef.current = {};
     failedUpdateVersionsRef.current = {};
-    return persistTaskUpdates(failedUpdates);
+    unknownUpdatesRef.current = {};
+    unknownUpdateVersionsRef.current = {};
+    return persistTaskUpdates(failedUpdates, { forcePersistence: true, skipActivity: true });
   }, [persistTaskUpdates]);
 
   const handleSaveDetails = React.useCallback(() => {
     const didQueueDraft = savePendingTaskDetails();
     if (didQueueDraft || pendingPersistCountRef.current > 0) return;
     if (retryFailedSave()) return;
+    if (Object.keys(failedUpdatesRef.current).length > 0) {
+      setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown' : 'error');
+      return;
+    }
     showSaveFeedback();
   }, [retryFailedSave, savePendingTaskDetails, showSaveFeedback]);
 
@@ -353,6 +487,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     const didQueueDraft = savePendingTaskDetails();
 
     if (!didQueueRetry && !didQueueDraft && pendingPersistCountRef.current === 0) {
+      if (Object.keys(failedUpdatesRef.current).length > 0) {
+        closeRequestedRef.current = false;
+        setIsClosePending(false);
+        setSaveState(Object.keys(unknownUpdatesRef.current).length > 0 ? 'unknown' : 'error');
+        return;
+      }
       closeRequestedRef.current = false;
       setIsClosePending(false);
       onClose();
@@ -436,8 +576,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   }, []);
 
   React.useEffect(() => {
+    persistenceOwnerNodeIdRef.current = currentNodeId;
     if (previousNodeIdRef.current === currentNodeId) return;
     previousNodeIdRef.current = currentNodeId;
+    pendingPersistOperationsRef.current.clear();
+    pendingPersistCountRef.current = 0;
+    failedUpdatesRef.current = {};
+    failedUpdateVersionsRef.current = {};
+    unknownUpdatesRef.current = {};
+    unknownUpdateVersionsRef.current = {};
+    closeRequestedRef.current = false;
+    setIsClosePending(false);
     setSaveState('idle');
     if (titleAutosaveTimerRef.current !== null) {
       window.clearTimeout(titleAutosaveTimerRef.current);
@@ -753,8 +902,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
   const currentStatus = normalizeManualTaskStatus(node.status);
   const isDueToday = currentStatus !== 'completed' && !!endDate && dayjs(endDate).isSame(dayjs(), 'day');
-  const closeButtonTitle = saveState === 'error'
-    ? '重試儲存成功後關閉'
+  const closeButtonTitle = saveState === 'error' || saveState === 'unknown'
+    ? '確認儲存結果或重試後關閉'
     : saveState === 'saving' || isClosePending
       ? '儲存完成後關閉'
       : canPersistTask
@@ -768,6 +917,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       || !areDetailNotesEqual(notes, getDisplayedDetailNotes(node))
       || saveState === 'saving'
       || saveState === 'error'
+      || saveState === 'unknown'
     ),
   );
 
@@ -875,16 +1025,16 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
                   <CheckCircle2 size={14} aria-hidden="true" />
                   已儲存
                 </span>
-              ) : saveState === 'error' ? (
+              ) : saveState === 'error' || saveState === 'unknown' ? (
                 <button
                   type="button"
                   onClick={retryFailedSave}
                   className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-100"
-                  title="重新儲存未同步的變更"
+                  title={saveState === 'unknown' ? '重新讀取並重試未確認的變更' : '重新儲存未同步的變更'}
                   data-task-details-save-retry="true"
                 >
                   <AlertCircle size={14} aria-hidden="true" />
-                  儲存失敗，請重試
+                  {saveState === 'unknown' ? '狀態未確認，請重試' : '儲存失敗，請重試'}
                 </button>
               ) : null}
             </div>

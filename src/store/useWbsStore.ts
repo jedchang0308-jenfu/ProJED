@@ -76,9 +76,22 @@ export type BatchNodeUpdates = Record<string, Partial<TaskNode>>;
 export type UpdateNodeOptions = {
   onPersistSuccess?: () => void;
   onPersistError?: (error: unknown) => void;
+  /** Re-send the current canonical values after a prior persistence failure. */
+  forcePersistence?: boolean;
   skipPersistence?: boolean;
   skipActivity?: boolean;
 };
+
+export type UpdateNodeDispatchResult =
+  | {
+      accepted: false;
+      reason: 'missing_node' | 'collection_pending' | 'no_changes';
+    }
+  | {
+      accepted: true;
+      operationId: string;
+      completion: Promise<'persisted' | 'failed'>;
+    };
 
 export type BatchUpdateNodesOptions = {
   label?: string;
@@ -111,7 +124,11 @@ export interface WbsBoardActions {
   /**
    * 更新任務節點 (部分欄位)
    */
-  updateNode: (id: string, updates: Partial<TaskNode>, options?: UpdateNodeOptions) => void;
+  updateNode: (
+    id: string,
+    updates: Partial<TaskNode>,
+    options?: UpdateNodeOptions,
+  ) => UpdateNodeDispatchResult;
 
   /**
    * 以單一 undo command 套用多筆任務更新，用於拖曳、重排與跨視圖歸位。
@@ -335,6 +352,10 @@ const persistNodeTransition = async (
     }
   }
 };
+
+const createUpdateNodeOperationId = () => (
+  `task-update-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+);
 
 const getNodeHierarchyDepth = (nodeId: string, nodes: Record<string, TaskNode>) => {
   let depth = 0;
@@ -1152,10 +1173,10 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     };
   },
 
-  updateNode: (id, updates, options) => {
+  updateNode: (id, updates, options): UpdateNodeDispatchResult => {
     const state = get();
-    if (!state.nodes[id]) return;
-    if (isTaskCollectionPending(id)) return;
+    if (!state.nodes[id]) return { accepted: false, reason: 'missing_node' };
+    if (isTaskCollectionPending(id)) return { accepted: false, reason: 'collection_pending' };
 
     const oldNode = state.nodes[id];
     const normalizedUpdates = normalizeTaskAssignmentUpdates(
@@ -1172,7 +1193,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
             hasChanges = true;
         }
     }
-    if (!hasChanges) return;
+    if (!hasChanges && !options?.forcePersistence) {
+      return { accepted: false, reason: 'no_changes' };
+    }
 
     const newNode = { ...oldNode, ...normalizedUpdates, updatedAt: Date.now() };
     const updatedNodes = { ...state.nodes, [id]: newNode };
@@ -1231,20 +1254,40 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     }
 
     const newIsUnplaced = isTaskWorkbenchUnplacedTask(newNode);
+    const operationId = createUpdateNodeOperationId();
+    let completion: Promise<'persisted' | 'failed'>;
     if (!options?.skipPersistence) {
       const persistence = persistNodeTransition(id, oldNode, newNode, normalizedUpdates);
-      if (options?.onPersistSuccess || options?.onPersistError) {
-        void persistence
-          .then(() => options.onPersistSuccess?.())
-          .catch((error) => {
-            console.error('[WbsStore] Failed to persist task update:', error);
-            options.onPersistError?.(error);
-          });
-      } else {
-        void persistence.catch(console.error);
-      }
+      completion = persistence.then(
+        () => {
+          try {
+            options?.onPersistSuccess?.();
+          } catch (callbackError) {
+            console.error('[WbsStore] Persist success callback failed:', callbackError);
+          }
+          return 'persisted' as const;
+        },
+        (error) => {
+          console.error('[WbsStore] Failed to persist task update:', error);
+          try {
+            options?.onPersistError?.(error);
+          } catch (callbackError) {
+            console.error('[WbsStore] Persist error callback failed:', callbackError);
+          }
+          return 'failed' as const;
+        },
+      );
     } else if (options?.onPersistSuccess) {
-      queueMicrotask(options.onPersistSuccess);
+      completion = Promise.resolve().then(() => {
+        try {
+          options.onPersistSuccess?.();
+        } catch (callbackError) {
+          console.error('[WbsStore] Persist success callback failed:', callbackError);
+        }
+        return 'persisted' as const;
+      });
+    } else {
+      completion = Promise.resolve('persisted' as const);
     }
 
     if (!options?.skipActivity && !newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
@@ -1267,10 +1310,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const label = normalizedUpdates.isArchived === true ? '封存任務' :
                   normalizedUpdates.isArchived === false ? '還原任務' : '修改任務';
     useUndoStore.getState().pushUndo({
-        label,
-        undo: () => get().updateNode(id, oldValues),
-        redo: () => get().updateNode(id, normalizedUpdates),
+      label,
+      undo: () => { get().updateNode(id, oldValues); },
+      redo: () => { get().updateNode(id, normalizedUpdates); },
     });
+
+    return { accepted: true, operationId, completion };
   },
 
   batchUpdateNodes: (updatesById, options = {}) => {
