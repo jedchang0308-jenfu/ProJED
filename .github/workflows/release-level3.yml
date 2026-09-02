@@ -1,0 +1,41 @@
+name: Release Level 3
+
+on:
+  push:
+    branches:
+      - codex/capa-001-dev099-integrated
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: Release task identity
+        required: true
+        default: DEV-099
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROJED_RELEASE_TASK_ID: ${{ inputs.task_id || 'DEV-099' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build:test
+      - run: npm run verify:dev-099-task-persistence-convergence
+      - run: npm run verify:dev-099-task-persistence-property
+      - run: node scripts/verify-dev-083-production-release-gate.mjs
+      - run: node scripts/release/write-level3-evidence.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-level3-${{ github.sha }}
+          path: output/qa/dev-099/level3-evidence.json
+          if-no-files-found: error
+          retention-days: 30

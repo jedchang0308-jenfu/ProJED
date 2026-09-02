@@ -22,7 +22,7 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const selfCheckDir = path.join(root, 'output', 'release', 'dev-083', `self-check-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`);
-const productionEnvPath = process.env.PROJED_PRODUCTION_ENV_PATH;
+let productionEnvPath = process.env.PROJED_PRODUCTION_ENV_PATH;
 const results = [];
 
 const check = async (name, fn) => {
@@ -45,6 +45,25 @@ const expectThrow = (name, fn) => {
 
 fs.mkdirSync(selfCheckDir, { recursive: true });
 try {
+  if (!productionEnvPath) {
+    productionEnvPath = path.join(selfCheckDir, '.env.production');
+    const safeCiPublicEnv = {
+      ...PRODUCTION_CONTRACT.fixedPublicValues,
+      VITE_SUPABASE_URL: PRODUCTION_CONTRACT.supabaseUrl,
+      VITE_SUPABASE_ANON_KEY: 'ci-public-anon-key',
+      VITE_SUPABASE_AUTH_REDIRECT_URL: PRODUCTION_CONTRACT.canonicalRedirectUrl,
+      VITE_GOOGLE_CLIENT_ID: 'ci-public-client-id',
+      VITE_FIREBASE_API_KEY: 'ci-public-firebase-api-key',
+      VITE_FIREBASE_APP_ID: 'ci-public-firebase-app-id',
+      VITE_FIREBASE_AUTH_DOMAIN: 'projed-cc78d.firebaseapp.com',
+      VITE_FIREBASE_MEASUREMENT_ID: 'ci-public-measurement-id',
+      VITE_FIREBASE_MESSAGING_SENDER_ID: 'ci-public-sender-id',
+      VITE_FIREBASE_PROJECT_ID: PRODUCTION_CONTRACT.projectId,
+      VITE_FIREBASE_STORAGE_BUCKET: 'projed-cc78d.firebasestorage.app',
+      VITE_PROJED_APP_URL: PRODUCTION_CONTRACT.canonicalOrigin,
+    };
+    fs.writeFileSync(productionEnvPath, `${Object.entries(safeCiPublicEnv).map(([key, value]) => `${key}=${value}`).join('\n')}\n`);
+  }
   await check('production-contract', () => {
     const env = resolveProductionPublicEnv({ root, parentEnv: { PATH: process.env.PATH }, envPath: productionEnvPath });
     if (env.VITE_SUPABASE_URL !== PRODUCTION_CONTRACT.supabaseUrl) throw new Error('production Supabase contract mismatch');
