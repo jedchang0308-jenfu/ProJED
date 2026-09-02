@@ -4,8 +4,10 @@ import { PRODUCTION_CONTRACT } from './production-contract.mjs';
 import { resolveCredentialRotationPolicyDecision } from './credential-rotation-evidence.mjs';
 
 const strict = process.argv.includes('--strict');
-const serverEnv = loadServerVerificationEnv();
-const productionEnv = readEnvFile('.env.production');
+const productionEnvPath = process.env.PROJED_PRODUCTION_ENV_PATH;
+const serverEnvPath = process.env.PROJED_SERVER_ENV_PATH;
+const serverEnv = loadServerVerificationEnv({ envPath: serverEnvPath });
+const productionEnv = readEnvFile(productionEnvPath ?? '.env.production');
 const results = [];
 const projectRef = (() => {
   try { return new URL(serverEnv.SUPABASE_URL ?? '').hostname.split('.')[0] || null; } catch { return null; }
@@ -25,7 +27,7 @@ const validPublicKey = token => token?.startsWith('sb_publishable_') || decodeJw
 const validAdminKey = token => token?.startsWith('sb_secret_') || decodeJwt(token)?.role === 'service_role';
 
 try {
-  resolveProductionPublicEnv({ parentEnv: {} });
+  resolveProductionPublicEnv({ parentEnv: {}, envPath: productionEnvPath });
   add('production-public-contract', 'pass');
 } catch (error) {
   add('production-public-contract', 'fail', { reason: error.message });

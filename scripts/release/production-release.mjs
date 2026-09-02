@@ -57,10 +57,16 @@ const runServerReadinessGate = async ({ parentEnv = process.env, serverEnvPath, 
   return { ok: true, gate: 'p8-preflight', strict: true };
 };
 
-const runProductionBoundReadiness = async ({ parentEnv = process.env, serverEnvPath, taskId = PRODUCTION_CONTRACT.taskId } = {}) => {
+const runProductionBoundReadiness = async ({ parentEnv = process.env, serverEnvPath, productionEnvPath, taskId = PRODUCTION_CONTRACT.taskId } = {}) => {
   const result = await run(process.execPath, [path.join(root, 'scripts', 'release', 'verify-production-bound-readiness.mjs'), '--strict'], {
     cwd: root,
-    env: buildSanitizedChildEnv(parentEnv, { extra: verificationEnv(parentEnv, serverEnvPath) }),
+    env: buildSanitizedChildEnv(parentEnv, {
+      extra: {
+        ...verificationEnv(parentEnv, serverEnvPath),
+        ...(productionEnvPath ? { PROJED_PRODUCTION_ENV_PATH: path.resolve(root, productionEnvPath) } : {}),
+        ...(serverEnvPath ? { PROJED_SERVER_ENV_PATH: path.resolve(root, serverEnvPath) } : {}),
+      },
+    }),
   });
   if (result.code !== 0) throw new Error(`${taskId} production-bound read-only readiness failed.`);
   return { ok: true, gate: 'production-bound-readiness', strict: true };
@@ -343,7 +349,7 @@ const candidate = async args => {
   assertLevel3(args, verified.manifest.source.commit, taskId);
   const publicEnv = resolveProductionPublicEnv({ root, parentEnv: process.env, envPath: args.production_env });
   if (sha256(canonicalJson(publicEnv)) !== verified.manifest.environment.publicEnvSha256) throw new Error(`${taskId} production environment fingerprint does not match the immutable artifact.`);
-  const gateContext = { taskId, serverEnvPath: args.server_env };
+  const gateContext = { taskId, serverEnvPath: args.server_env, productionEnvPath: args.production_env };
   const serverReadiness = await runServerReadinessGate(gateContext);
   const productionBoundReadiness = await runProductionBoundReadiness(gateContext);
   const credentialRotation = await runCredentialRotationGate(gateContext);
@@ -393,7 +399,7 @@ const activate = async args => {
   const candidateAcceptance = assertCandidateAcceptance(verified.manifest, candidateEvidence);
   const publicEnv = resolveProductionPublicEnv({ root, parentEnv: process.env, envPath: args.production_env });
   if (sha256(canonicalJson(publicEnv)) !== verified.manifest.environment.publicEnvSha256) throw new Error(`${taskId} production environment fingerprint does not match the immutable artifact.`);
-  const gateContext = { taskId, serverEnvPath: args.server_env };
+  const gateContext = { taskId, serverEnvPath: args.server_env, productionEnvPath: args.production_env };
   const serverReadiness = await runServerReadinessGate(gateContext);
   const productionBoundReadiness = await runProductionBoundReadiness(gateContext);
   const credentialRotation = await runCredentialRotationGate(gateContext);
