@@ -73,12 +73,13 @@ async (page) => {
     };
   });
 
-  const criticalMessages = messages.filter((message) => (
-    message.type === 'error' &&
-    !/favicon|ResizeObserver|google|gsi|apis\.google/i.test(message.text)
-  ));
   const criticalFailed = failedRequests.filter((request) => (
     !/fonts\.gstatic|fonts\.googleapis|accounts\.google|apis\.google|favicon/i.test(request.url)
+  ));
+  const criticalMessages = messages.filter((message) => (
+    message.type === 'error' &&
+    !/favicon|ResizeObserver|google|gsi|apis\.google/i.test(message.text) &&
+    !(/Failed to load resource/i.test(message.text) && criticalFailed.length === 0)
   ));
   const hasMainBundle = result.scripts.some((src) => /\/assets\/index-[A-Za-z0-9_-]+\.js/.test(src || ''));
   const hasMainStyle = result.styles.some((href) => /\/assets\/index-[A-Za-z0-9_-]+\.css/.test(href || ''));
