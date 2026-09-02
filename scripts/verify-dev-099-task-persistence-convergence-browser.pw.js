@@ -247,6 +247,59 @@ async (page) => {
   await closeButton.click();
   await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 5000 });
 
+  // B11: DEV-097 reload-safety must treat task-details saving, failed and
+  // unknown states as dirty; only a canonical saved readback may return safe.
+  modal = await openTaskDetails(taskId);
+  const readPwaSnapshot = () => page.evaluate(() => window.__projedPwaReloadSafetyTest?.getSnapshot() ?? null);
+  const requestPwaBoundary = (boundary) => page.evaluate((nextBoundary) => (
+    window.__projedPwaReloadSafetyTest?.requestBoundary(nextBoundary, 'board') ?? null
+  ), boundary);
+  await page.waitForFunction(() => Boolean(window.__projedPwaReloadSafetyTest), null, { timeout: 10000 });
+  const initialPwaSnapshot = await readPwaSnapshot();
+  assert(initialPwaSnapshot?.state === 'safe', 'B11 initial task-details reload state must be safe', { initialPwaSnapshot });
+
+  const b11SavingTitle = `DEV099 pwa-saving ${Date.now().toString(36)}`;
+  await setPersistenceFault('timeout-no-commit-once');
+  await saveTitle(modal, b11SavingTitle);
+  await waitForSaveState(modal, 'saving');
+  await page.waitForFunction(() => window.__projedPwaReloadSafetyTest?.getSnapshot().state === 'dirty', null, { timeout: 5000 });
+  const savingPwaSnapshot = await readPwaSnapshot();
+  const savingPwaGate = await requestPwaBoundary('app-open');
+  assert(savingPwaSnapshot?.state === 'dirty', 'B11 saving task-details owner must be dirty', { savingPwaSnapshot });
+  assert(savingPwaGate?.ok === false && savingPwaGate.code === 'OWNER_ACTION_REQUIRED', 'B11 saving boundary must be blocked', { savingPwaGate });
+  await waitForSaveState(modal, 'error', 20000);
+  const failedPwaSnapshot = await readPwaSnapshot();
+  const failedPwaGate = await requestPwaBoundary('app-open');
+  assert(failedPwaSnapshot?.state === 'dirty', 'B11 failed task-details owner must remain dirty', { failedPwaSnapshot });
+  assert(failedPwaGate?.ok === false && failedPwaGate.code === 'OWNER_ACTION_REQUIRED', 'B11 failed boundary must be blocked', { failedPwaGate });
+  await modal.locator('[data-task-details-save-retry="true"]').click();
+  await page.waitForFunction(({ taskId, b11SavingTitle }) => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    return nodes[taskId]?.title === b11SavingTitle;
+  }, { taskId, b11SavingTitle }, { timeout: 10000 });
+  await waitForSaveState(modal, 'saved');
+
+  const b11UnknownTitle = `DEV099 pwa-unknown ${Date.now().toString(36)}`;
+  await setPersistenceFault('timeout-commit-once');
+  await setReadbackFault('unavailable-once');
+  await saveTitle(modal, b11UnknownTitle);
+  await waitForSaveState(modal, 'unknown', 20000);
+  await page.waitForFunction(() => window.__projedPwaReloadSafetyTest?.getSnapshot().state === 'dirty', null, { timeout: 5000 });
+  const unknownPwaSnapshot = await readPwaSnapshot();
+  const unknownPwaGate = await requestPwaBoundary('app-open');
+  assert(unknownPwaSnapshot?.state === 'dirty', 'B11 unknown task-details owner must be dirty', { unknownPwaSnapshot });
+  assert(unknownPwaGate?.ok === false && unknownPwaGate.code === 'OWNER_ACTION_REQUIRED', 'B11 unknown boundary must be blocked', { unknownPwaGate });
+  await modal.locator('[data-task-details-save-retry="true"]').click();
+  await page.waitForFunction(({ taskId, b11UnknownTitle }) => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    return nodes[taskId]?.title === b11UnknownTitle;
+  }, { taskId, b11UnknownTitle }, { timeout: 10000 });
+  await waitForSaveState(modal, 'saved');
+  const safePwaSnapshot = await readPwaSnapshot();
+  assert(safePwaSnapshot?.state === 'safe', 'B11 canonical saved readback must return safe', { safePwaSnapshot });
+  await modal.locator('button[aria-label="關閉任務詳情"]').click();
+  await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 5000 });
+
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 844 }]) {
     modal = await openTaskDetails(taskId);
     await page.setViewportSize(viewport);
@@ -275,7 +328,7 @@ async (page) => {
     taskId,
     originalTitle,
     savedTitle: nextTitle,
-    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-newest-wins', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup', 'B10-close-pending-recovery'],
+    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-newest-wins', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup', 'B10-close-pending-recovery', 'B11-pwa-reload-safety-owner'],
     providerAttemptCounts: {
       B02: rejectedTrace.length,
       B03BeforeRetry: timeoutTraceBeforeRetry.length,
@@ -288,6 +341,9 @@ async (page) => {
       B08: switchTrace.length,
       B10BeforeRetry: closeTraceBeforeRetry.length,
       B10AfterRetry: closeTraceAfterRetry.length,
+      B11BeforeRetry: 1,
+      B11UnknownBeforeRetry: 1,
+      B11UnknownAfterRetry: 2,
     },
     cases: [
       { id: 'B01', status: 'PASS' },
@@ -300,6 +356,7 @@ async (page) => {
       { id: 'B08', status: 'PASS' },
       { id: 'B09', status: 'PASS' },
       { id: 'B10', status: 'PASS' },
+      { id: 'B11', status: 'PASS' },
       { id: 'B12-390', status: 'PASS' },
       { id: 'B12-320', status: 'PASS' },
     ],
