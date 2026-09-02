@@ -163,6 +163,14 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
     setNodeRef(element);
   }, [setNodeRef]);
   const isDragPlaceholder = isDragging || taskGesture.isActive;
+  const [rowHeight, setRowHeight] = React.useState<number | null>(null);
+
+  React.useLayoutEffect(() => {
+    const element = rowScopeRef.current;
+    if (!element) return;
+    const measuredHeight = element.getBoundingClientRect().height;
+    if (measuredHeight > 0) setRowHeight(previous => previous === measuredHeight ? previous : measuredHeight);
+  }, [childId, isDragPlaceholder, taskGesture.activeSurfaceHeight]);
 
   const freezeDesktopTaskLayout = Boolean(active && ['wbs-card', 'wbs-checklist'].includes(activeType || ''));
   const style = {
@@ -173,8 +181,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
     // an expanded descendant shifts every following card and makes a valid
     // sibling-row target appear to move under the pointer.
     minHeight: isDragPlaceholder
-      ? rowScopeRef.current?.getBoundingClientRect().height
-        ?? active?.rect.current.initial?.height
+      ? rowHeight ?? taskGesture.activeSurfaceHeight ?? undefined
       : taskGesture.activeSurfaceHeight ?? undefined,
   };
   const [isRecentlyChildDropped, setIsRecentlyChildDropped] = React.useState(false);
