@@ -220,7 +220,7 @@ try {
       pageErrors,
       criticalMessages: messages.filter(message => message.type === 'error' && !/favicon|google|gsi|Failed to load resource/i.test(message.text)),
     };
-    window.__DEV099_PRODUCTION_CANDIDATE_ARTIFACT = result;
+    await page.evaluate(result => { window.__DEV099_PRODUCTION_CANDIDATE_ARTIFACT = result; }, result);
     console.log(JSON.stringify(result, null, 2));
   }`;
   fs.mkdirSync(path.dirname(tempScriptPath), { recursive: true });
