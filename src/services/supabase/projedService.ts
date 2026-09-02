@@ -1225,10 +1225,11 @@ export const supabaseNodeService = {
         .update(updatePayload)
         .eq('tenant_id', tenantId)
         .eq('project_id', projectId);
-      const { error } = await (isUuid(nodeId)
+      const { data, error } = await (isUuid(nodeId)
         ? query.eq('id', nodeId)
-        : query.eq('legacy_node_id', nodeId));
+        : query.eq('legacy_node_id', nodeId)).select('id').single();
       assertNoError(error);
+      if (!data) throw new Error('Supabase did not update the requested WBS item.');
     }
     if ('tagIds' in updates) {
       await supabaseTagService.setNodeTags(workspaceId, boardId, nodeId, updates.tagIds ?? []);

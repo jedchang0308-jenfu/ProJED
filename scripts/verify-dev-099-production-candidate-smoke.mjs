@@ -139,6 +139,12 @@ try {
     name: namespace,
     sort_order: 1,
   }).select('id,name,legacy_board_id').single());
+  assertOk('isolated project membership', await userClient.from('project_members').upsert({
+    tenant_id: tenantId,
+    project_id: project.id,
+    user_id: userId,
+    role: 'owner',
+  }).select('project_id,user_id,role').single());
   const task = assertOk('isolated task', await userClient.from('wbs_items').insert({
     tenant_id: tenantId,
     project_id: project.id,
