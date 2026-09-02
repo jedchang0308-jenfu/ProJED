@@ -197,6 +197,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const titleAutosaveTimerRef = React.useRef<number | null>(null);
   const titleEditSequenceRef = React.useRef(0);
   const titleSaveAttemptRef = React.useRef<{ nodeId: string; value: string } | null>(null);
+  const optimisticTitleRef = React.useRef<{ nodeId: string; value: string; version: number; settled: boolean } | null>(null);
   const pendingPersistCountRef = React.useRef(0);
   const pendingPersistOperationsRef = React.useRef(new Set<string>());
   const persistVersionRef = React.useRef(0);
@@ -258,6 +259,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     }
     if (!settlePersistenceOperationOnce(pendingPersistOperationsRef.current, operationId)) return;
     pendingPersistCountRef.current = Math.max(0, pendingPersistCountRef.current - 1);
+    if (
+      optimisticTitleRef.current?.nodeId === sourceNodeId
+      && optimisticTitleRef.current.version === requestVersion
+    ) {
+      optimisticTitleRef.current = { ...optimisticTitleRef.current, settled: true };
+    }
 
     if (outcome === 'persisted') {
       persistedKeys.forEach((key) => {
@@ -362,6 +369,14 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     persistedKeys.forEach((key) => {
       latestPersistVersionByKeyRef.current[key] = requestVersion;
     });
+    if (typeof requestUpdates.title === 'string') {
+      optimisticTitleRef.current = {
+        nodeId: currentNodeId,
+        value: requestUpdates.title,
+        version: requestVersion,
+        settled: false,
+      };
+    }
 
     clearSaveFeedbackTimer();
     setSaveState('saving');
@@ -584,6 +599,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     previousNodeIdRef.current = currentNodeId;
     pendingPersistOperationsRef.current.clear();
     pendingPersistCountRef.current = 0;
+    optimisticTitleRef.current = null;
     failedUpdatesRef.current = {};
     failedUpdateVersionsRef.current = {};
     unknownUpdatesRef.current = {};
@@ -600,6 +616,25 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
 
   React.useEffect(() => {
     if (!currentNodeId) return;
+    const optimisticTitle = optimisticTitleRef.current;
+    if (optimisticTitle?.nodeId === currentNodeId) {
+      if (!optimisticTitle.settled) {
+        if (currentNodeTitle !== optimisticTitle.value) setTitleValue(optimisticTitle.value);
+        return;
+      }
+      if (currentNodeTitle === optimisticTitle.value) {
+        optimisticTitleRef.current = null;
+      } else {
+        setTitleValue((current) => {
+          const isEditingTitle = document.activeElement === titleInputRef.current;
+          const hasNewerLocalDraft = isEditingTitle
+            && current.trim() !== currentNodeTitle
+            && current.trim() !== optimisticTitle.value;
+          return hasNewerLocalDraft ? current : optimisticTitle.value;
+        });
+        return;
+      }
+    }
     setTitleValue((current) => {
       const isEditingTitle = document.activeElement === titleInputRef.current;
       const hasLocalDraft = isEditingTitle && current.trim() !== currentNodeTitle;
