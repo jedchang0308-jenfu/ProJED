@@ -123,7 +123,7 @@ async (page) => {
   assert(diagnostics.pageErrors.length === 0, 'real provider/back flow emitted a pageerror', { diagnostics });
   const artifact = {
     id: 'CAPA-001 / DEV-099 / Supabase TEST UI provider/back',
-    sourceRevision: 'production-base/13888b2 + DEV-099@e00d9ac + DEV-098 integration overlay; isolated hotfix-boundary smoke',
+    sourceRevision: 'production-base/13888b2 + codex/capa-001-dev099-integrated@105fdbc; DEV-098 + DEV-099 isolated hotfix-boundary smoke',
     generatedAt: new Date().toISOString(),
     environment: 'supabase-test-local-ui',
     origin: boardUrl,
