@@ -4,7 +4,7 @@ async (page) => {
   const cases = [];
   const diagnostics = [];
   page.on('console', message => {
-    if (message.text().includes('測試故障：任務儲存失敗') || message.text().includes('測試故障：追蹤副本操作失敗')) return;
+    if (message.text().includes('測試故障：任務儲存失敗') || message.text().includes('測試故障：追蹤副本操作失敗') || message.text().includes('local-test injected task persistence rejection')) return;
     if (message.type() === 'error' || message.type() === 'warning') diagnostics.push('console:' + message.type() + ':' + message.text());
   });
   page.on('pageerror', error => diagnostics.push('pageerror:' + error.message));
