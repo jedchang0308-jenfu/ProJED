@@ -57,6 +57,8 @@ const KNOWLEDGE_RECORDS_KEY = 'projed-local-test.knowledgeRecords';
 const ACTIVITY_EVENTS_KEY = 'projed-local-test.activityEvents';
 const LOCAL_TEST_SESSION_KEY = 'projed-local-test.session';
 const TASK_COLLECTION_FAULT_KEY = 'projed-local-test.taskCollectionFault';
+const TASK_PERSISTENCE_FAULT_KEY = 'projed-local-test.taskPersistenceFault';
+const TASK_PERSISTENCE_TRACE_KEY = 'projed-local-test.taskPersistenceTrace';
 
 const readJson = <T>(key: string, fallback: T): T => {
   try {
@@ -207,6 +209,23 @@ const consumeTaskCollectionFault = (fault: string): boolean => {
   if (configured !== fault) return false;
   localStorage.removeItem(TASK_COLLECTION_FAULT_KEY);
   return true;
+};
+const consumeTaskPersistenceFault = (
+  fault: 'reject-once' | 'timeout-no-commit-once' | 'timeout-commit-once',
+): boolean => {
+  if (typeof localStorage === 'undefined') return false;
+  const configured = localStorage.getItem(TASK_PERSISTENCE_FAULT_KEY);
+  if (configured !== fault) return false;
+  localStorage.removeItem(TASK_PERSISTENCE_FAULT_KEY);
+  return true;
+};
+const recordTaskPersistenceAttempt = (nodeId: string, updates: Partial<TaskNode>) => {
+  const attempts = readJson<Array<{ nodeId: string; keys: string[]; at: number }>>(
+    TASK_PERSISTENCE_TRACE_KEY,
+    [],
+  );
+  attempts.push({ nodeId, keys: Object.keys(updates).sort(), at: Date.now() });
+  writeJson(TASK_PERSISTENCE_TRACE_KEY, attempts.slice(-20));
 };
 const canManageBoard = (workspaceId: string, boardId: string, userId = readCurrentLocalUserId()) => {
   const records = readBoardMembers()[getBoardMemberKey(workspaceId, boardId)] || defaultBoardMemberRecords;
@@ -729,9 +748,23 @@ export const localTestNodeService = {
   update: async (_workspaceId: string, _boardId: string, nodeId: string, updates: Partial<TaskNode>): Promise<void> => {
     const nodes = readNodes();
     if (!nodes[nodeId]) return;
-    writeNodes({
+    recordTaskPersistenceAttempt(nodeId, updates);
+    if (consumeTaskPersistenceFault('reject-once')) {
+      throw new Error('local-test injected task persistence rejection');
+    }
+    const nextNodes = {
       ...nodes,
       [nodeId]: { ...nodes[nodeId], ...updates, updatedAt: Date.now() },
+    };
+    if (consumeTaskPersistenceFault('timeout-commit-once')) {
+      writeNodes(nextNodes);
+      return new Promise<void>(() => {});
+    }
+    if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
+      return new Promise<void>(() => {});
+    }
+    writeNodes({
+      ...nextNodes,
     });
   },
 

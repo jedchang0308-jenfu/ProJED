@@ -195,6 +195,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   const [isClosePending, setIsClosePending] = React.useState(false);
   const saveFeedbackTimerRef = React.useRef<number | null>(null);
   const titleAutosaveTimerRef = React.useRef<number | null>(null);
+  const titleEditSequenceRef = React.useRef(0);
+  const titleSaveAttemptRef = React.useRef<{ nodeId: string; value: string } | null>(null);
   const pendingPersistCountRef = React.useRef(0);
   const pendingPersistOperationsRef = React.useRef(new Set<string>());
   const persistVersionRef = React.useRef(0);
@@ -474,6 +476,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       window.clearTimeout(titleAutosaveTimerRef.current);
       titleAutosaveTimerRef.current = null;
     }
+    titleEditSequenceRef.current += 1;
 
     closeRequestedRef.current = true;
     setIsClosePending(true);
@@ -592,6 +595,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       window.clearTimeout(titleAutosaveTimerRef.current);
       titleAutosaveTimerRef.current = null;
     }
+    titleEditSequenceRef.current += 1;
   }, [currentNodeId]);
 
   React.useEffect(() => {
@@ -768,6 +772,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     markDraftDirty();
     setTitleValue(value);
     if (titleAutosaveTimerRef.current !== null) window.clearTimeout(titleAutosaveTimerRef.current);
+    const editSequence = titleEditSequenceRef.current + 1;
+    titleEditSequenceRef.current = editSequence;
 
     const trimmed = value.trim();
     if (!trimmed || trimmed === node.title) {
@@ -776,6 +782,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
     }
 
     titleAutosaveTimerRef.current = window.setTimeout(() => {
+      if (titleEditSequenceRef.current !== editSequence) return;
       titleAutosaveTimerRef.current = null;
       persistTaskUpdates({ title: trimmed });
       setTitleValue(trimmed);
@@ -783,6 +790,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
   };
 
   const saveTitle = () => {
+    titleEditSequenceRef.current += 1;
     if (titleAutosaveTimerRef.current !== null) {
       window.clearTimeout(titleAutosaveTimerRef.current);
       titleAutosaveTimerRef.current = null;
@@ -802,8 +810,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ nodeId, trac
       setTitleValue(node.title || '');
       return;
     }
-    if (trimmed !== node.title) {
-      persistTaskUpdates({ title: trimmed });
+    if (currentNodeId && trimmed !== node.title) {
+      const duplicateAttempt = titleSaveAttemptRef.current?.nodeId === currentNodeId
+        && titleSaveAttemptRef.current.value === trimmed;
+      if (!duplicateAttempt) {
+        const attempt = { nodeId: currentNodeId, value: trimmed };
+        titleSaveAttemptRef.current = attempt;
+        void Promise.resolve().then(() => {
+          if (titleSaveAttemptRef.current === attempt) titleSaveAttemptRef.current = null;
+        });
+        persistTaskUpdates({ title: trimmed });
+      }
     }
     setTitleValue(trimmed);
   };
