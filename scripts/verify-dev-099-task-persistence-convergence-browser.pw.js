@@ -220,7 +220,35 @@ async (page) => {
   await waitForSaveState(modal, 'idle');
   assert(await modal.getAttribute('data-pwa-task-details-state') === 'safe', 'reopened canonical task must be safe after unmount');
 
+  // B10: an explicit close while an accepted provider operation is still
+  // unresolved must not discard the draft or unmount the owner.  After the
+  // bounded readback reports failure, Retry must recover the draft; only a
+  // subsequent close after saved may unmount the modal.
+  const closePendingTitle = `DEV099 close-pending ${Date.now().toString(36)}`;
+  await setPersistenceFault('timeout-no-commit-once');
+  await saveTitle(modal, closePendingTitle);
+  await waitForSaveState(modal, 'saving');
+  const closeButton = modal.locator('button[aria-label="關閉任務詳情"]');
+  await closeButton.click();
+  assert(await page.locator('[data-task-details-modal="true"]').count() === 1, 'close during pending must retain modal owner');
+  await waitForSaveState(modal, 'error', 20000);
+  assert(await page.locator('[data-task-details-modal="true"]').count() === 1, 'failed close must retain draft for recovery');
+  assert(await modal.locator('[data-task-details-save-retry="true"]').count() === 1, 'failed close must expose Retry');
+  const closeTraceBeforeRetry = await readPersistenceTrace();
+  assert(closeTraceBeforeRetry.length === 1, 'close-pending flow must issue one provider attempt before Retry', { closeTraceBeforeRetry });
+  await modal.locator('[data-task-details-save-retry="true"]').click();
+  await page.waitForFunction(({ taskId, closePendingTitle }) => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    return nodes[taskId]?.title === closePendingTitle;
+  }, { taskId, closePendingTitle }, { timeout: 10000 });
+  await waitForSaveState(modal, 'saved');
+  const closeTraceAfterRetry = await readPersistenceTrace();
+  assert(closeTraceAfterRetry.length === 2, 'close-pending Retry must issue one new provider attempt', { closeTraceAfterRetry });
+  await closeButton.click();
+  await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 5000 });
+
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 844 }]) {
+    modal = await openTaskDetails(taskId);
     await page.setViewportSize(viewport);
     await page.waitForTimeout(250);
     const geometry = await modal.evaluate((element) => ({
@@ -232,8 +260,11 @@ async (page) => {
     assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth, 'modal overflows viewport', { viewport, geometry });
     assert(geometry.documentWidth <= geometry.viewportWidth, 'modal introduces horizontal overflow', { viewport, geometry });
     await page.screenshot({ path: `output/playwright/dev-099/task-details-saved-${viewport.width}x${viewport.height}.png`, fullPage: true });
+    await modal.locator('button[aria-label="關閉任務詳情"]').click();
+    await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 5000 });
   }
 
+  await page.waitForTimeout(2000);
   const visibleErrors = await page.locator('.inline-error:visible, [role="alert"]:visible').allTextContents();
   assert(visibleErrors.length === 0, 'visible error present in successful save flow', { visibleErrors });
   const artifact = {
@@ -244,7 +275,7 @@ async (page) => {
     taskId,
     originalTitle,
     savedTitle: nextTitle,
-    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-newest-wins', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup'],
+    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-newest-wins', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup', 'B10-close-pending-recovery'],
     providerAttemptCounts: {
       B02: rejectedTrace.length,
       B03BeforeRetry: timeoutTraceBeforeRetry.length,
@@ -255,6 +286,8 @@ async (page) => {
       B06: sameValueTrace.length,
       B07: rapidTrace.length,
       B08: switchTrace.length,
+      B10BeforeRetry: closeTraceBeforeRetry.length,
+      B10AfterRetry: closeTraceAfterRetry.length,
     },
     cases: [
       { id: 'B01', status: 'PASS' },
@@ -266,6 +299,7 @@ async (page) => {
       { id: 'B07', status: 'PASS' },
       { id: 'B08', status: 'PASS' },
       { id: 'B09', status: 'PASS' },
+      { id: 'B10', status: 'PASS' },
       { id: 'B12-390', status: 'PASS' },
       { id: 'B12-320', status: 'PASS' },
     ],
