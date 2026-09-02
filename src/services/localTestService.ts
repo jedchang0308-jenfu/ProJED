@@ -212,7 +212,7 @@ const consumeTaskCollectionFault = (fault: string): boolean => {
   return true;
 };
 const consumeTaskPersistenceFault = (
-  fault: 'reject-once' | 'timeout-no-commit-once' | 'timeout-commit-once',
+  fault: 'reject-once' | 'timeout-no-commit-once' | 'timeout-commit-once' | 'delay-response-once',
 ): boolean => {
   if (typeof localStorage === 'undefined') return false;
   const configured = localStorage.getItem(TASK_PERSISTENCE_FAULT_KEY);
@@ -771,6 +771,14 @@ export const localTestNodeService = {
     if (consumeTaskPersistenceFault('timeout-commit-once')) {
       writeNodes(nextNodes);
       return new Promise<void>(() => {});
+    }
+    // Commit immediately but delay the provider response so the browser
+    // verifier can exercise an out-of-order (stale) completion safely.
+    if (consumeTaskPersistenceFault('delay-response-once')) {
+      writeNodes(nextNodes);
+      return new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 750);
+      });
     }
     if (consumeTaskPersistenceFault('timeout-no-commit-once')) {
       return new Promise<void>(() => {});

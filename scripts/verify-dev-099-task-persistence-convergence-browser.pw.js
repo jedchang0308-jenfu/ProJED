@@ -159,11 +159,11 @@ async (page) => {
   assert(await modal.locator('[data-task-details-save-status="saving"]').count() === 0, 'same-value save must not enter saving');
 
   // B07: two rapid title saves must converge to the newest canonical value;
-  // each actual provider operation is observable once and stale feedback
-  // cannot replace the newer value.
+  // the first provider response is intentionally delayed after its commit,
+  // so the stale completion arrives after the newer operation.
   const rapidTitleOne = `DEV099 rapid-one ${Date.now().toString(36)}`;
   const rapidTitleTwo = `DEV099 rapid-two ${Date.now().toString(36)}`;
-  await setPersistenceFault('');
+  await setPersistenceFault('delay-response-once');
   const rapidTitleInput = modal.locator('[data-task-details-title-input="true"]');
   await rapidTitleInput.fill(`${rapidTitleOne}   `);
   await rapidTitleInput.press('Enter');
@@ -177,8 +177,10 @@ async (page) => {
   await waitForSaveState(modal, 'saved');
   const rapidTrace = await readPersistenceTrace();
   assert(rapidTrace.length === 2, 'rapid title saves must issue two observable attempts', { rapidTrace });
+  await page.waitForTimeout(1000);
   const rapidNodes = await readNodes();
   assert(rapidNodes[taskId]?.title === rapidTitleTwo, 'newest rapid title must win canonical readback', { rapidNodes });
+  assert(await modal.locator('[data-task-details-save-status="error"]').count() === 0, 'stale completion must not regress save state', { rapidNodes });
 
   // B08: switching task identity while an operation is unresolved must clean
   // the old UI owner and leave the new task free of stale saving/error state.
@@ -328,7 +330,7 @@ async (page) => {
     taskId,
     originalTitle,
     savedTitle: nextTitle,
-    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-newest-wins', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup', 'B10-close-pending-recovery', 'B11-pwa-reload-safety-owner'],
+    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-stale-completion', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup', 'B10-close-pending-recovery', 'B11-pwa-reload-safety-owner'],
     providerAttemptCounts: {
       B02: rejectedTrace.length,
       B03BeforeRetry: timeoutTraceBeforeRetry.length,
