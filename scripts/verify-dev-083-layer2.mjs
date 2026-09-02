@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { runLayer2Smoke } from './release/production-release.mjs';
 import { releaseTaskSlug, resolveReleaseTaskId } from './release/production-contract.mjs';
+import { releaseCapsulePath, updateReleaseCapsule } from './release/release-capsule.mjs';
 
 const root = process.cwd();
 const taskIndex = process.argv.indexOf('--task-id');
@@ -39,4 +40,7 @@ const releaseDir = path.join(releaseRoot, releaseId);
 const result = await runLayer2Smoke(manifest.artifact.distDir, manifest);
 const evidencePath = path.join(releaseDir, 'layer2-evidence.json');
 fs.writeFileSync(evidencePath, `${JSON.stringify({ taskId, phase: 'prepare-layer2', releaseId, manifestPath, ...result }, null, 2)}\n`);
+if (fs.existsSync(releaseCapsulePath(manifest))) {
+  updateReleaseCapsule(manifest, { state: 'ARTIFACT_READY', evidence: { layer2: evidencePath } });
+}
 console.log(JSON.stringify({ ok: true, releaseId, evidencePath, ...result }, null, 2));
