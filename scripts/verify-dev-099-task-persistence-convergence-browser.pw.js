@@ -46,7 +46,8 @@ async (page) => {
   };
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('http://127.0.0.1:4010/', { waitUntil: 'domcontentloaded' });
+  const testOrigin = page.url().replace(/\/[^/]*$/, '');
+  await page.goto(`${testOrigin}/`, { waitUntil: 'domcontentloaded' });
   await page.evaluate((currentAccount) => {
     localStorage.setItem('projed-local-test.selected-account', currentAccount.id);
     localStorage.setItem('projed-local-test.session', JSON.stringify(currentAccount));
@@ -64,7 +65,7 @@ async (page) => {
   const before = await readNodes();
   const originalTitle = before[taskId]?.title;
   assert(Boolean(originalTitle), 'fixture task missing', { taskId });
-  const modal = await openTaskDetails(taskId);
+  let modal = await openTaskDetails(taskId);
   const nextTitle = `DEV099 convergence ${Date.now().toString(36)}`;
   await saveTitle(modal, nextTitle);
   await page.waitForFunction(({ taskId, nextTitle }) => {
@@ -148,6 +149,77 @@ async (page) => {
   const unknownTraceAfterRetry = await readPersistenceTrace();
   assert(unknownTraceAfterRetry.length === 2, 'unknown Retry must create one new provider attempt', { unknownTraceAfterRetry });
 
+  // B06: a same-value save is a deterministic no-op. It must not create a
+  // provider request or leave the modal in saving.
+  await setPersistenceFault('');
+  await saveTitle(modal, unknownTitle);
+  await page.waitForTimeout(250);
+  const sameValueTrace = await readPersistenceTrace();
+  assert(sameValueTrace.length === 0, 'same-value save must not issue a provider attempt', { sameValueTrace });
+  assert(await modal.locator('[data-task-details-save-status="saving"]').count() === 0, 'same-value save must not enter saving');
+
+  // B07: two rapid title saves must converge to the newest canonical value;
+  // each actual provider operation is observable once and stale feedback
+  // cannot replace the newer value.
+  const rapidTitleOne = `DEV099 rapid-one ${Date.now().toString(36)}`;
+  const rapidTitleTwo = `DEV099 rapid-two ${Date.now().toString(36)}`;
+  await setPersistenceFault('');
+  const rapidTitleInput = modal.locator('[data-task-details-title-input="true"]');
+  await rapidTitleInput.fill(`${rapidTitleOne}   `);
+  await rapidTitleInput.press('Enter');
+  await rapidTitleInput.focus();
+  await rapidTitleInput.fill(`${rapidTitleTwo}   `);
+  await rapidTitleInput.press('Enter');
+  await page.waitForFunction(({ taskId, rapidTitleTwo }) => {
+    const nodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
+    return nodes[taskId]?.title === rapidTitleTwo;
+  }, { taskId, rapidTitleTwo }, { timeout: 10000 });
+  await waitForSaveState(modal, 'saved');
+  const rapidTrace = await readPersistenceTrace();
+  assert(rapidTrace.length === 2, 'rapid title saves must issue two observable attempts', { rapidTrace });
+  const rapidNodes = await readNodes();
+  assert(rapidNodes[taskId]?.title === rapidTitleTwo, 'newest rapid title must win canonical readback', { rapidNodes });
+
+  // B08: switching task identity while an operation is unresolved must clean
+  // the old UI owner and leave the new task free of stale saving/error state.
+  const switchedTaskId = 'qc-card-1-child-2';
+  const switchedFixture = await readNodes();
+  assert(Boolean(switchedFixture[switchedTaskId]?.title), 'switch fixture task missing', { switchedTaskId });
+  const switchTitle = `DEV099 switch-pending ${Date.now().toString(36)}`;
+  await setPersistenceFault('timeout-no-commit-once');
+  await saveTitle(modal, switchTitle);
+  await waitForSaveState(modal, 'saving');
+  await page.evaluate((nextTaskId) => {
+    document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId: nextTaskId } }));
+  }, switchedTaskId);
+  const switchedModal = page.locator(`[data-task-details-modal="true"][data-task-id="${switchedTaskId}"]`);
+  await switchedModal.waitFor({ state: 'visible', timeout: 10000 });
+  assert(await switchedModal.locator('[data-task-details-save-status="saving"]').count() === 0, 'switched task must not inherit old saving state');
+  assert(await switchedModal.locator('[data-task-details-save-status="error"]').count() === 0, 'switched task must not inherit old error state');
+  assert(await switchedModal.locator('[data-task-details-save-status="unknown"]').count() === 0, 'switched task must not inherit old unknown state');
+  const switchTrace = await readPersistenceTrace();
+  assert(switchTrace.length === 1, 'task switch fixture must record only the old unresolved attempt', { switchTrace });
+
+  // B09: unmount during an unresolved operation must not write a false
+  // canonical value or emit a page error after reload.
+  await page.evaluate((nextTaskId) => {
+    document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId: nextTaskId } }));
+  }, taskId);
+  modal = await page.locator(`[data-task-details-modal="true"][data-task-id="${taskId}"]`).first();
+  await modal.waitFor({ state: 'visible', timeout: 10000 });
+  const unmountTitle = `DEV099 unmount-pending ${Date.now().toString(36)}`;
+  await setPersistenceFault('timeout-no-commit-once');
+  await saveTitle(modal, unmountTitle);
+  await waitForSaveState(modal, 'saving');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
+  assert(await page.locator('[data-task-details-modal="true"]').count() === 0, 'reload must unmount task details modal');
+  const unmountNodes = await readNodes();
+  assert(unmountNodes[taskId]?.title !== unmountTitle, 'uncommitted unmount must not report canonical success', { unmountNodes });
+  modal = await openTaskDetails(taskId);
+  await waitForSaveState(modal, 'idle');
+  assert(await modal.getAttribute('data-pwa-task-details-state') === 'safe', 'reopened canonical task must be safe after unmount');
+
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(250);
@@ -172,7 +244,7 @@ async (page) => {
     taskId,
     originalTitle,
     savedTitle: nextTitle,
-    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry'],
+    faultCases: ['B01-success', 'B02-reject-retry', 'B03-timeout-no-commit-retry', 'B04-response-lost-readback', 'B05-unknown-readback-retry', 'B06-same-value-noop', 'B07-rapid-save-newest-wins', 'B08-task-switch-owner-cleanup', 'B09-unmount-owner-cleanup'],
     providerAttemptCounts: {
       B02: rejectedTrace.length,
       B03BeforeRetry: timeoutTraceBeforeRetry.length,
@@ -180,6 +252,9 @@ async (page) => {
       B04: responseLostTrace.length,
       B05BeforeRetry: unknownTraceBeforeRetry.length,
       B05AfterRetry: unknownTraceAfterRetry.length,
+      B06: sameValueTrace.length,
+      B07: rapidTrace.length,
+      B08: switchTrace.length,
     },
     cases: [
       { id: 'B01', status: 'PASS' },
@@ -187,6 +262,10 @@ async (page) => {
       { id: 'B03', status: 'PASS' },
       { id: 'B04', status: 'PASS' },
       { id: 'B05', status: 'PASS' },
+      { id: 'B06', status: 'PASS' },
+      { id: 'B07', status: 'PASS' },
+      { id: 'B08', status: 'PASS' },
+      { id: 'B09', status: 'PASS' },
       { id: 'B12-390', status: 'PASS' },
       { id: 'B12-320', status: 'PASS' },
     ],
