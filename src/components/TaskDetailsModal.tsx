@@ -1194,7 +1194,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                     data-task-collection-open="true"
                   >
                     <Archive size={14} aria-hidden="true" />
-                    <span>典藏任務</span>
+                    <span>收藏任務</span>
                   </button>
                 </div>
               ) : null}

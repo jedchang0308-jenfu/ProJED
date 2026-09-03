@@ -55,7 +55,7 @@ const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.promote': '往上一階',
   'task.demote': '往下一階',
   'task.archive': '封存任務',
-  'task.collect': '典藏任務',
+  'task.collect': '收藏任務',
 };
 
 const TITLES: Partial<Record<TaskActionId, string>> = {

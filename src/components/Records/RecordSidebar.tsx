@@ -113,7 +113,7 @@ const RecordTextDateTimeInput: React.FC<{
 };
 
 const recordTypeLabel = (type: KnowledgeRecordType) =>
-  type === 'meeting' ? '會議紀錄' : type === 'task_collection' ? '典藏任務' : '個人工作紀錄';
+  type === 'meeting' ? '會議紀錄' : type === 'task_collection' ? '收藏任務' : '個人工作紀錄';
 
 const statusLabel = (status: KnowledgeRecordStatus) =>
   status === 'published' ? '已發布' : status === 'archived' ? '已封存' : '草稿';

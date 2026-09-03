@@ -94,7 +94,7 @@ const HomeView = () => {
                                                             return;
                                                         }
                                                         if (impact.unknown) return;
-                                                        const warning = impact.taskCollectionCount > 0 ? `\n\n此看板包含 ${impact.taskCollectionCount} 筆典藏任務，刪除後也會永久刪除這些典藏資產。` : '';
+                                                        const warning = impact.taskCollectionCount > 0 ? `\n\n此看板包含 ${impact.taskCollectionCount} 筆收藏任務，刪除後也會永久刪除這些典藏資產。` : '';
                                                         const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${board.title}」嗎？您可以隨時使用 Ctrl+Z 復原。${warning}`);
                                                         if (confirmed) {
                                                             try {

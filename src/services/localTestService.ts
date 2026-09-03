@@ -906,7 +906,7 @@ export const localTestRecordService = {
 
   upsert: async (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
     if ((input as unknown as { type?: string }).type === 'task_collection') {
-      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務不可透過一般紀錄編輯。');
+      throw new TaskCollectionError('SNAPSHOT_INVALID', '收藏任務不可透過一般紀錄編輯。');
     }
     const now = Date.now();
     const records = readKnowledgeRecords();
@@ -1009,7 +1009,7 @@ export const localTestRecordService = {
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {
     const now = Date.now();
     const target = readKnowledgeRecords().find(record => record.workspaceId === workspaceId && record.boardId === boardId && record.id === recordId);
-    if (target?.type === 'task_collection') throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務不可從一般紀錄流程刪除。');
+    if (target?.type === 'task_collection') throw new TaskCollectionError('SNAPSHOT_INVALID', '收藏任務不可從一般紀錄流程刪除。');
     writeKnowledgeRecords(readKnowledgeRecords().map(record =>
       record.workspaceId === workspaceId && record.boardId === boardId && record.id === recordId
         ? { ...record, status: 'archived', updatedAt: now }
@@ -1142,7 +1142,7 @@ export const localTestTaskCollectionService = {
   },
   preview: async (workspaceId: string, boardId: string, rootItemId: string, operationId: string): Promise<TaskCollectionPreview> => {
     recoverLocalTaskCollectionJournal();
-    if (!localTaskCollectionPermission(workspaceId, boardId)) throw new TaskCollectionError('PERMISSION_DENIED', '你沒有典藏任務的權限。');
+    if (!localTaskCollectionPermission(workspaceId, boardId)) throw new TaskCollectionError('PERMISSION_DENIED', '你沒有收藏任務的權限。');
     const preview = await buildLocalCollectionPreview(workspaceId, boardId, rootItemId, operationId);
     localCollectionPreviewCache.set(operationId, preview);
     return preview;
@@ -1157,7 +1157,7 @@ export const localTestTaskCollectionService = {
     annotation?: string | null,
   ): Promise<TaskCollectionResult> => {
     recoverLocalTaskCollectionJournal();
-    if (!localTaskCollectionPermission(workspaceId, boardId)) throw new TaskCollectionError('PERMISSION_DENIED', '你沒有典藏任務的權限。');
+    if (!localTaskCollectionPermission(workspaceId, boardId)) throw new TaskCollectionError('PERMISSION_DENIED', '你沒有收藏任務的權限。');
     if (annotation && annotation.length > TASK_COLLECTION_LIMITS.annotationChars) throw new TaskCollectionError('LIMIT_EXCEEDED', '典藏註記不可超過 500 字。');
     if (consumeTaskCollectionFault('transient-once')) {
       throw new TaskCollectionError('TRANSIENT', '典藏服務暫時無法完成，請重試。');
@@ -1337,7 +1337,7 @@ export const localTestTaskCollectionService = {
         // Preserve the original error while leaving a prepared journal for recovery tooling.
       }
       if (error instanceof TaskCollectionError) throw error;
-      throw new TaskCollectionError('UNKNOWN', '典藏任務未完成，原資料已復原。', { cause: error });
+      throw new TaskCollectionError('UNKNOWN', '收藏任務未完成，原資料已復原。', { cause: error });
     }
   },
 

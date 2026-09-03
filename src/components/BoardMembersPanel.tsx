@@ -62,7 +62,7 @@ const PERMISSION_ROWS: { capability: PermissionCapability; label: string }[] = [
   { capability: 'edit_task', label: '編輯任務' },
   { capability: 'move_task', label: '移動任務' },
   { capability: 'delete_task', label: '封存／永久刪除任務' },
-  { capability: 'collect_task', label: '典藏任務' },
+  { capability: 'collect_task', label: '收藏任務' },
   { capability: 'assign_task', label: '指派任務' },
   { capability: 'create_dependency', label: '建立相依關係' },
   { capability: 'manage_board_members', label: '管理看板成員' },

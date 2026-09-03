@@ -541,8 +541,8 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 父任務：DEV-020
   - 證據：`SPEC-020` UI 精簡 addendum、`QA-DEV-092`、`QC-DEV-092`；static 43 checks、1440×900／390×844 rendered browser、內容區剩餘高度／最小高度與不重疊、收合／展開、表單同列與緊湊控制列、空白狀態檢查、TypeScript、ESLint與git diff --check PASS。
   - 計入交付：否
-- ◐ DEV-093 [交付點] [開發中] [P1] [RD Implementation In Progress / Human Confirmed / local static 48＋pure 22＋negative compile 2＋journal 7＋TypeScript＋isolated DB 25-check PASS＋local Supabase DB 25-check PASS / browser B00-B19 21/21 PASS / required regressions PASS / targeted Local QC fact PASS / 未 Release] 典藏任務與子任務資產化
-  - 摘要：新增 `task_collection` 不可變資產；以單一交易保存完整 canonical 子樹與可取得歷程、建立版本並封存來源 root；典藏任務、會議紀錄與個人工作紀錄在紀錄庫分區呈現。
+- ◐ DEV-093 [交付點] [開發中] [P1] [RD Implementation In Progress / Human Confirmed / local static 48＋pure 22＋negative compile 2＋journal 7＋TypeScript＋isolated DB 25-check PASS＋local Supabase DB 25-check PASS / browser B00-B19 21/21 PASS / required regressions PASS / targeted Local QC fact PASS / 未 Release] 收藏任務與子任務資產化
+  - 摘要：新增 `task_collection` 不可變資產；以單一交易保存完整 canonical 子樹與可取得歷程、建立版本並封存來源 root；收藏任務、會議紀錄與個人工作紀錄在紀錄庫分區呈現。
   - 來源 ID：`USER-20260828-TASK-COLLECTION-WITH-SUBTREE`、`USER-20260828-RECORDS-SEPARATE-SECTIONS`
   - 父任務：DEV-002、DEV-007、DEV-008、DEV-088
   - 下一步：依 deployment/release gate 授權對齊 remote/local migration history，補 Supabase TEST（含真實 response-lost／reload、RLS與 authenticated readback；read-only migration list 顯示 DEV-093 local `20260828090000` 尚未出現在 remote，remote history 另有本機缺少的既有 revisions；既有 local runtime 也尚未初始化 project schema），再交 remote readback／release QC；本輪已完成 product wiring、local-test 15／15、pure 22／22、negative compile 2／2、journal 7／7、static 48／TypeScript／build、全域 `npm run verify:source` fresh PASS、isolated PostgreSQL 25-check matrix、local Supabase disposable 25-check matrix、browser B00～B19 21/21 Records／collection evidence（最新 browser artifact `2026-08-29T18:27:38.123Z`；B02 深連結 focus、B08 response-lost retry/readback、B11 mobile deep-link／cold fallback、B14 tab／tabpanel ARIA＋reduced-motion、B16 五態 state trace、B18 非零歷程／關聯紀錄 counts、B19 五節點一般任務內容 parity／桌機與 390×844 mobile 唯讀 controls）與 fresh targeted Local QC fact report，且 required regressions 已全部 PASS，未執行 production migration、deploy 或 release。
@@ -2207,7 +2207,7 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - 2026-08-27：依新增瀏覽器留言修正右側面板收合／展開箭頭方向、將會議標題與紀錄時間排在同一橫列，並移除空白狀態 `選取任務` action。
 - 2026-08-27：依新增瀏覽器留言將收合控制移到右側抽屜 header 最左側、位於紀錄標題前。
 
-## DEV-093：典藏任務與子任務資產化
+## DEV-093：收藏任務與子任務資產化
 
 - 文件成熟度：`RD Implementation In Progress / Human Confirmed`
 - 狀態：RD Implementation In Progress／local static 45（generated `2026-08-28T15:00:59.515Z`）＋pure 22（`2026-08-28T15:14:00.723Z`）＋negative compile 2（`2026-08-28T15:14:23.211Z`）＋journal 7（`2026-08-28T15:14:07.467Z`）＋TypeScript＋build＋全域 `verify:source` PASS＋isolated DB 25-check PASS（`2026-08-28T15:14:47.7264271Z`）／browser B00-B19 21/21 PASS（latest generated `2026-08-29T15:48:38.491Z`）／required regressions PASS／targeted Local QC fact PASS／未 Release
@@ -2228,31 +2228,31 @@ DEV-093 的目標是把「工作中的任務」轉成「可長期查閱的任務
 
 ### Human Decision Brief
 
-- [x] 使用者可見動作與資產類型名稱固定為「典藏任務」，不得以「封存」「案例快照」「工作紀錄」取代主名稱。
+- [x] 使用者可見動作與資產類型名稱固定為「收藏任務」，不得以「封存」「案例快照」「工作紀錄」取代主名稱。
 - [x] 典藏父任務時必須能連同子任務一起保存；第一階段採一個根任務對應一筆典藏資產，子任務保留原階層，不拆成多筆紀錄。
 - [x] 典藏的產品目的為累積可再利用資產，同時讓來源工作不再出現在 active 看板。
-- [x] 典藏任務與會議紀錄不得混在同一清單；既有紀錄庫保留為單一頂層入口，頁內將「典藏任務」「會議紀錄」「個人工作紀錄」整理成三個同層分區。
+- [x] 收藏任務與會議紀錄不得混在同一清單；既有紀錄庫保留為單一頂層入口，頁內將「收藏任務」「會議紀錄」「個人工作紀錄」整理成三個同層分區。
 - 本期固定：為避免孤兒節點與額外範圍選擇，有子任務時收錄同看板完整 canonical descendant subtree；葉節點則只典藏自己。若未來要支援「只典藏父任務、子任務留在看板」，必須另定 reparent 規則，不併入本期。
 
 ### 產品語意與主要流程
 
-1. 使用者從任務詳情 overflow 或支援完整 task action catalog 的任務選單選擇「典藏任務」。mobile compact action rail 維持 DEV-088 的四項，不增加第五個常駐動作。
+1. 使用者從任務詳情 overflow 或支援完整 task action catalog 的任務選單選擇「收藏任務」。mobile compact action rail 維持 DEV-088 的四項，不增加第五個常駐動作。
 2. 系統以 cycle-safe canonical parent 關係解析來源根任務與全部同看板 descendants，顯示根任務名稱、總任務數與「典藏後會移出看板」的精簡確認；可提供一行「典藏說明（選填）」，不得要求使用者重填既有任務內容。
 3. 系統建立一筆 `record_type='task_collection'`、published、project-visible、immutable 的典藏資產。資產同時保存人類可讀 content 與 `task-collection-v1` structured snapshot；所有原始 task ID 只作追溯索引，不能成為日後閱讀的唯一來源。
 4. Supabase 在同一 transaction 內建立 asset／links、封存來源 root 並寫入 `task_collected` event；任一步失敗全部 rollback。descendants 仍由原 parent chain 隨 root 離開 active projection，避免逐節點封存造成還原語意破裂。
 5. backend durable success 後前端才收斂 `isArchived`，顯示低干擾回饋並提供「查看典藏」；不自動把使用者強制導離目前工作畫面。
-6. 在紀錄庫切換至獨立的「典藏任務」分區並開啟唯讀詳情。還原來源任務不刪除既有典藏；從回收桶永久刪除來源子樹時，典藏內容仍可閱讀。
+6. 在紀錄庫切換至獨立的「收藏任務」分區並開啟唯讀詳情。還原來源任務不刪除既有典藏；從回收桶永久刪除來源子樹時，典藏內容仍可閱讀。
 
 ### 紀錄庫分區契約
 
-- 紀錄庫維持單一頂層頁面與單一頁首；頁內使用同層、可鍵盤操作的三個分區控制：`典藏任務`、`會議紀錄`、`個人工作紀錄`。不得把三類資料交錯顯示在同一預設清單，也不得為每一區複製頁首或建立框中框面板。
-- 從一般側欄進入時，支援 meeting 的桌機／筆電以 `會議紀錄` 為 cold default；mobile meeting unavailable 環境以 `個人工作紀錄` 為 cold default。從典藏成功回饋的「查看典藏」進入時，直接選取 `典藏任務` 並開啟剛建立的資產；本期不保存跨 session 最後分區。
+- 紀錄庫維持單一頂層頁面與單一頁首；頁內使用同層、可鍵盤操作的三個分區控制：`收藏任務`、`會議紀錄`、`個人工作紀錄`。不得把三類資料交錯顯示在同一預設清單，也不得為每一區複製頁首或建立框中框面板。
+- 從一般側欄進入時，支援 meeting 的桌機／筆電以 `會議紀錄` 為 cold default；mobile meeting unavailable 環境以 `個人工作紀錄` 為 cold default。從典藏成功回饋的「查看典藏」進入時，直接選取 `收藏任務` 並開啟剛建立的資產；本期不保存跨 session 最後分區。
 - 搜尋、排序、載入、空白、錯誤與筆數皆以目前分區為 scope；切換分區不得把前一區的查詢結果、空白訊息或 pending action 誤帶到新分區。
-- `典藏任務` 只顯示典藏資產，主要欄位為名稱、典藏時間、來源看板與收錄任務數；標題本身是詳情入口，不另增「查看」欄。其正常狀態不提供新增按鈕，典藏仍只能從 task context 發起。
+- `收藏任務` 只顯示典藏資產，主要欄位為名稱、典藏時間、來源看板與收錄任務數；標題本身是詳情入口，不另增「查看」欄。其正常狀態不提供新增按鈕，典藏仍只能從 task context 發起。
 - 典藏詳情選取任一快照節點後，必須如一般任務詳情顯示內容／備註、日期、工期、狀態、主責／協作與標籤；優先共用 `TaskDetailNoteContent`、`TaskAssignmentPicker`、`TagChip` 與既有狀態樣式。快照內容保持唯讀，內容區不可出現可寫入 controls。
 - `會議紀錄` 只顯示 meeting records，並保留適用的「補一筆會後紀錄」入口；`個人工作紀錄` 只顯示 work logs。兩區既有編輯、草稿、發布與防呆流程不因 DEV-093 改變。
-- 桌機／筆電顯示三個可辨識文字分區。依 SPEC-069，coarse pointer 或 `<=640px` 不 render meeting records／meeting section，因此 320／390px 只顯示 `典藏任務` 與 `個人工作紀錄`；兩者仍為獨立 section，不降級成 icon-only，也不產生文件級或雙重水平 overflow。
-- 每區空白狀態只顯示該區事實。`典藏任務` 空白時不建立第二個「回看板典藏」CTA；沿用既有頁首返回看板即可。錯誤回饋靠近目前分區並保留可重試入口，不用全頁成功／說明面板。
+- 桌機／筆電顯示三個可辨識文字分區。依 SPEC-069，coarse pointer 或 `<=640px` 不 render meeting records／meeting section，因此 320／390px 只顯示 `收藏任務` 與 `個人工作紀錄`；兩者仍為獨立 section，不降級成 icon-only，也不產生文件級或雙重水平 overflow。
+- 每區空白狀態只顯示該區事實。`收藏任務` 空白時不建立第二個「回看板典藏」CTA；沿用既有頁首返回看板即可。錯誤回饋靠近目前分區並保留可重試入口，不用全頁成功／說明面板。
 
 ### 典藏快照方向
 
@@ -2268,7 +2268,7 @@ DEV-093 的目標是把「工作中的任務」轉成「可長期查閱的任務
 
 ### Architecture Memory Capsule
 
-- 延伸既有 `KnowledgeRecord` 與 `RecordsView`，不新增另一套資產頁或把完整快照塞回 `TaskNode`。內部型別固定為 `task_collection`，使用者介面固定顯示「典藏任務」。現行 `RecordsView` 把非 meeting 一律標為個人工作紀錄；實作必須先依 record type 建立 exhaustive classifier，再交由各分區 renderer，不能只改顯示文案。
+- 延伸既有 `KnowledgeRecord` 與 `RecordsView`，不新增另一套資產頁或把完整快照塞回 `TaskNode`。內部型別固定為 `task_collection`，使用者介面固定顯示「收藏任務」。現行 `RecordsView` 把非 meeting 一律標為個人工作紀錄；實作必須先依 record type 建立 exhaustive classifier，再交由各分區 renderer，不能只改顯示文案。
 - `content` 保存可搜尋、可閱讀的 deterministic canonical text；`metadata` 保存帶版本的 `task-collection-v1` structured snapshot；`record_task_links` 在來源存在時連結根任務與 descendants，但典藏閱讀不得依賴 links 存續。
 - 禁止把典藏偽裝成 `work_log + metadata.assetType`：現行 `work_log` 有工時欄位與個人工作紀錄語意，會讓篩選、時間驗證、RAG 與未來 migration 長期混淆。`SPEC-093` 已固定第三種 record type、forward-only migration、獨立 service 與第一階段 `rag_enabled=false`。
 - 現行 `KnowledgeRecord.boardId`／資料庫 `knowledge_records.project_id` 為 required 且 board delete cascade，因此本期最多保證「來源 task 永久刪除後，典藏仍存在」；不能宣稱來源 board 刪除後仍保存。
@@ -2277,7 +2277,7 @@ DEV-093 的目標是把「工作中的任務」轉成「可長期查閱的任務
 
 ### 初步範圍
 
-- 任務詳情與完整 task action menu 的「典藏任務」入口、精簡確認、成功／失敗回饋。
+- 任務詳情與完整 task action menu 的「收藏任務」入口、精簡確認、成功／失敗回饋。
 - 同看板 root＋完整 descendant subtree 的穩定收集、結構／歷程／關聯快照與來源封存。
 - 紀錄庫的三個同層分區、各自的列表／搜尋／空白／錯誤狀態、典藏唯讀詳情與來源仍存在時的導回連結。
 - local-test 與 Supabase provider 的一致 atomicity、idempotency、version、permission／RLS、reload 與 failure recovery；Firebase／Firestore 第一版明確 `BACKEND_UNSUPPORTED` 且不顯示入口，不得以空歷程冒充支援。
@@ -2289,14 +2289,14 @@ DEV-093 的目標是把「工作中的任務」轉成「可長期查閱的任務
 - 自動摘要、AI 評分、最佳實務推薦、模板化、相似案例比對或由 AI 自動決定哪些任務值得典藏。
 - 自動典藏規則、批次典藏多個不相鄰 root、定時保留政策或 production migration／deploy／release。
 - 「只典藏父任務、子任務留在看板」所需的 reparent／order／dependency 改寫。
-- 為典藏任務新增第二個頂層導航頁、自訂分區順序、跨分區混合的「全部」清單，或改造既有會議／工作紀錄 editor。
+- 為收藏任務新增第二個頂層導航頁、自訂分區順序、跨分區混合的「全部」清單，或改造既有會議／工作紀錄 editor。
 - Firebase／Firestore provider、編輯／刪除典藏、RAG indexing 與 AI 摘要／推薦。
 
 ### 驗收方向
 
-- 任務入口名稱、紀錄庫分類與資產標籤皆顯示「典藏任務」；不得與 DEV-088 的「封存任務」混稱。
-- 從側欄正常進入紀錄庫在支援 meeting 的 viewport 可看見三個同層分區；`典藏任務` 清單不出現 meeting／work_log，`會議紀錄` 不出現典藏／work_log，`個人工作紀錄` 不出現典藏／meeting。mobile 只依 SPEC-069 隱藏 meeting，不得以資料類型 badge 掩蓋混合清單。
-- 從典藏成功回饋點擊「查看典藏」會進入 `典藏任務` 分區並開啟正確資產；返回列表後仍停在典藏分區。一般側欄 cold entry 不因曾查看典藏而被永久改寫。
+- 任務入口名稱、紀錄庫分類與資產標籤皆顯示「收藏任務」；不得與 DEV-088 的「封存任務」混稱。
+- 從側欄正常進入紀錄庫在支援 meeting 的 viewport 可看見三個同層分區；`收藏任務` 清單不出現 meeting／work_log，`會議紀錄` 不出現典藏／work_log，`個人工作紀錄` 不出現典藏／meeting。mobile 只依 SPEC-069 隱藏 meeting，不得以資料類型 badge 掩蓋混合清單。
+- 從典藏成功回饋點擊「查看典藏」會進入 `收藏任務` 分區並開啟正確資產；返回列表後仍停在典藏分區。一般側欄 cold entry 不因曾查看典藏而被永久改寫。
 - 三區搜尋與空白／載入／錯誤狀態互不污染；會議新增 action 只在 `會議紀錄` 分區出現，典藏空白狀態不顯示無法就地完成的新增 action。
 - leaf 產生一筆單節點典藏；三層以上 parent 產生一筆保留順序與 parent chain 的完整子樹典藏，數量與確認畫面一致。
 - transaction commit 前來源 root 與 active projection 完全不變；commit 成功後來源子樹從看板／清單／甘特／日曆／心智圖等 active views 消失並可由回收桶還原。
@@ -2353,8 +2353,8 @@ RD sequencing 固定 A → B → C → D → E；A／B contract tests 未通過�
 
 ### 變更紀錄
 
-- 2026-08-28：依使用者決定名稱為「典藏任務」且需支援連同子任務典藏，建立 Brief Ready／Human Confirmed 開發文件；未進入 RD。
-- 2026-08-28：依 response annotation 確認典藏任務與會議紀錄需分區整理；補上紀錄庫三分區、deep-link、搜尋／狀態 scope、RWD／accessibility 與 DEV-016 相容性契約。
+- 2026-08-28：依使用者決定名稱為「收藏任務」且需支援連同子任務典藏，建立 Brief Ready／Human Confirmed 開發文件；未進入 RD。
+- 2026-08-28：依 response annotation 確認收藏任務與會議紀錄需分區整理；補上紀錄庫三分區、deep-link、搜尋／狀態 scope、RWD／accessibility 與 DEV-016 相容性契約。
 - 2026-08-28：補齊 `SPEC-093`，固定 `task_collection`、immutable version、same-operation idempotency、`collect_task`、Supabase atomic RPC、RLS／grants、hard limits、provider support、mobile meeting compatibility、WP-093-A～D 與 QA/QC stop conditions；升級為 RD Contract Ready，仍未實作。
 - 2026-08-28：繼續升級為 `RD Implementation Ready`；補齊 RPC signatures、metadata/hash/token、operation conflict、stable lock、local journal、唯一 store owner、board/workspace delete impact、WP-093-E、`QA-DEV-093`、future verifier commands/evidence與 migration/release feasibility；P0/P1 readiness gap為0，產品仍未實作／未驗證／未 Release。
 - 2026-08-28：繼續補齊開發文件；固定row normalization、provider-neutral canonical JSON、operation/detail/timeline read paths、delete-impact signatures、dialog五態focus契約、WP slice gates與AC-093-001～015 evidence traceability。狀態仍為可執行／未實作／未驗證／未 Release。
@@ -2390,7 +2390,7 @@ RD sequencing 固定 A → B → C → D → E；A／B contract tests 未通過�
 - 2026-08-29：依使用者「繼續」重新執行 Supabase 唯讀 migration gate；`migration list --linked --output-format json`（`2026-08-29T14:18:58.3105104Z`）仍讀回 local 51／remote 49、5 筆 local-only（含 DEV-093 `20260828090000`）與 3 筆 remote-only；`db push --linked --dry-run` 同一時間以 exit 1／`LegacyDbPushMissingLocalError` 結束。已更新 `output/qa/dev-093/supabase-migration-list.json`、`supabase-migration-history-reconciliation.json`、`supabase-db-push-dry-run.json`；未執行 repair／pull／push、migration、reset 或資料變更，remote gate 仍需明確授權。
 - 2026-08-29：依使用者要求執行部署前驗證並建立 `ai-doc/release/PREDEPLOY-DEV-093-20260829.md`；sealed production artifact `20260829143505-9798dc` build／exact manifest verification／Layer 2 local artifact browser smoke PASS，production-bound readiness 16 項唯讀檢查 PASS，staging env／artifact secret checks PASS；但 dirty working tree、Lane 3 migration history mismatch、inactive candidate／authenticated smoke／activation decision未完成，判定 `NOT READY / 未 Release`，未執行 deploy 或任何遠端 mutation。
 - 2026-08-29：部署前全域 gate 首次因未追蹤 `scripts/verify-dev-093-debug-overflow.pw.js` 觸發 1 個 ESLint error（另 52 warnings）而阻擋；已補上既有 Playwright verifier 的 lint 邊界，fresh `npm run verify:source` 改為 PASS（0 errors／52 warnings；TypeScript、production build、Supabase static／migration aliases、calendar ICS、core static、P9 edge均通過）。`verify:dev-083-production-release-gate` 仍因 `--latest` lexicographic 選到 `production-backup-40fc817` 缺少標準 artifact 欄位而失敗；exact manifest驗證仍 PASS，未修改 release tooling，未執行 deploy。
-- 2026-08-29：依使用者「記錄庫裡的典藏任務必須要跟一般任務一樣看到內容」完成 UI 差距修正：`TaskCollectionDetail` 對快照節點提供選取式唯讀內容面板，呈現內容／備註、日期、工期、狀態、主責／協作與標籤，並共用 `TaskDetailNoteContent`、`TaskAssignmentPicker`、`TagChip` 與狀態樣式；新增 B19 parity／唯讀 browser case，fresh B00～B19 21/21 PASS（`2026-08-29T15:00:34.253Z`）。未改變 Supabase／release boundary。
+- 2026-08-29：依使用者「記錄庫裡的收藏任務必須要跟一般任務一樣看到內容」完成 UI 差距修正：`TaskCollectionDetail` 對快照節點提供選取式唯讀內容面板，呈現內容／備註、日期、工期、狀態、主責／協作與標籤，並共用 `TaskDetailNoteContent`、`TaskAssignmentPicker`、`TagChip` 與狀態樣式；新增 B19 parity／唯讀 browser case，fresh B00～B19 21/21 PASS（`2026-08-29T15:00:34.253Z`）。未改變 Supabase／release boundary。
 - 2026-08-29：目前工作樹 fresh `npm run verify:dev-093-task-collection-browser` 重新收斂 B00～B19 21/21 PASS（`2026-08-29T15:48:38.491Z`）；`npm run verify:source` 亦由 1 個 debug verifier lint error 修正為 0 errors／52 warnings，未改變產品契約或遠端 release boundary。
 - 2026-08-29：目前工作樹再 fresh rerun DEV-093 static 45/45（`2026-08-29T15:52:51.590Z`）、local 15/15（`2026-08-29T15:53:00.664Z`）、pure 22/22（`2026-08-29T15:53:01.654Z`）、journal 7/7（`2026-08-29T15:53:02.419Z`）與 negative compile 2/2（`2026-08-29T15:53:05.911Z`）均 PASS；browser B00～B19 21/21 artifact 維持 `2026-08-29T15:48:38.491Z`。未改變 Supabase TEST／remote readback／release boundary。
 - 2026-08-29：再執行 task-owned isolated PostgreSQL 18 matrix；DEV-093 25/25 checks PASS（`2026-08-29T15:55:43.9630649Z`），port `57751` released、temporary path removed，未觸及 remote Supabase；Supabase TEST／remote readback／release boundary 不變。

@@ -77,4 +77,4 @@ ADR not needed：使用者已直接選定單一路徑，既有 `status`／`isArc
 
 ## 9. DEV-093 compatible extension（2026-08-28）
 
-「典藏任務」不新增第四個 task endpoint 或 status。SPEC-093 的 dedicated transaction 先建立不可變 asset，並在同一 durable commit 把來源 root 設為 `isArchived=true`；後續仍由本規格的回收桶還原／永久刪除承接。典藏使用新 `collect_task` capability，不改本規格既有 `delete_task` 對一般封存／永久刪除的 authority。來源 task 永久刪除不得刪除 task_collection snapshot；來源 board 刪除仍會依現行 board-scoped cascade 刪除典藏，確認畫面需揭露數量。
+「收藏任務」不新增第四個 task endpoint 或 status。SPEC-093 的 dedicated transaction 先建立不可變 asset，並在同一 durable commit 把來源 root 設為 `isArchived=true`；後續仍由本規格的回收桶還原／永久刪除承接。典藏使用新 `collect_task` capability，不改本規格既有 `delete_task` 對一般封存／永久刪除的 authority。來源 task 永久刪除不得刪除 task_collection snapshot；來源 board 刪除仍會依現行 board-scoped cascade 刪除典藏，確認畫面需揭露數量。

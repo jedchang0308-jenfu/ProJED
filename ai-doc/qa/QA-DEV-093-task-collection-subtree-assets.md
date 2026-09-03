@@ -1,4 +1,4 @@
-# QA-DEV-093：典藏任務與子任務資產化驗證計畫
+# QA-DEV-093：收藏任務與子任務資產化驗證計畫
 
 - 狀態：`In Progress / static 48＋TypeScript＋local 15＋pure 22＋negative compile 2＋journal 7＋build＋isolated DB 25-check PASS＋local Supabase DB 25-check PASS / browser B00-B19 21/21 PASS / required regressions PASS / targeted Local QC fact PASS / 真實 Supabase response-lost・Supabase TEST・remote readback・release pending / 未 Release`
 - 日期：2026-08-28
@@ -147,7 +147,7 @@ DB gate 只能使用 disposable PostgreSQL runtime。2026-08-29 已以 `npm run 
 
 | ID | Viewport／流程 | Readback | 狀態 |
 |---|---|---|---|
-| B00 | 1440×900／390×844 Records entry＋section shell | 紀錄庫標題、分區控制、典藏任務切換與 horizontal overflow readback；desktop 三個同層分區、mobile 依既有會議限制顯示兩個 tab | PASS |
+| B00 | 1440×900／390×844 Records entry＋section shell | 紀錄庫標題、分區控制、收藏任務切換與 horizontal overflow readback；desktop 三個同層分區、mobile 依既有會議限制顯示兩個 tab | PASS |
 | B01 | 1440×900 task full menu → preview → cancel | counts正確；0 mutation；focus回原action | PASS |
 | B02 | 1440×900 task detail overflow → collect | pending保留來源；success後active view移除；查看典藏開正確detail | PASS |
 | B03 | 1024×768 Records cold entry | 三個互斥section；meeting default；無全部清單 | PASS |

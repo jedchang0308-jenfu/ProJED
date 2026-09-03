@@ -1514,7 +1514,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       if (blocked) throw new TaskTrackingError('TRACKING_REFERENCE_BLOCKS_UNPLACED', '請先移除所有追蹤副本，才能將任務移至未歸位。');
     }
     assertMoveTaskSubtreeCommand(command, state.nodes);
-    if (command.expectedSubtreeIds.some(isTaskCollectionPending)) throw new Error('典藏任務進行中，暫時無法搬移此子樹。');
+    if (command.expectedSubtreeIds.some(isTaskCollectionPending)) throw new Error('收藏任務進行中，暫時無法搬移此子樹。');
     const beforeNodes = state.nodes;
     const reverseDestination = buildRestoreDestination(command.rootTaskId, beforeNodes);
     const pendingIds = [...command.expectedSubtreeIds];
@@ -1628,7 +1628,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     for (const rootId of rootIds) {
       const root = state.nodes[rootId];
       if (!root) continue;
-      if (isTaskCollectionPending(rootId)) throw new Error('典藏任務進行中，暫時無法刪除此子樹。');
+      if (isTaskCollectionPending(rootId)) throw new Error('收藏任務進行中，暫時無法刪除此子樹。');
       if (!root.isArchived) {
         throw new Error(`只有已封存任務可以永久刪除：${root.title || '未命名任務'}`);
       }

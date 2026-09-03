@@ -670,7 +670,7 @@ export const GlobalContextMenu: React.FC = () => {
       toast.error('無法確認工作區內的典藏資產，已阻止刪除。');
       return;
     }
-    const warning = impact.taskCollectionCount > 0 ? `\n\n此工作區包含 ${impact.taskCollectionCount} 筆典藏任務，刪除後也會永久刪除這些典藏資產。` : '';
+    const warning = impact.taskCollectionCount > 0 ? `\n\n此工作區包含 ${impact.taskCollectionCount} 筆收藏任務，刪除後也會永久刪除這些典藏資產。` : '';
     const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除工作區「${title}」嗎？這會一併刪除底下的看板。${warning}`);
     if (confirmed) {
       setIsDeletingWorkspace(true);
@@ -738,7 +738,7 @@ export const GlobalContextMenu: React.FC = () => {
       toast.error('無法確認看板內的典藏資產，已阻止刪除。');
       return;
     }
-    const warning = impact.taskCollectionCount > 0 ? `\n\n此看板包含 ${impact.taskCollectionCount} 筆典藏任務，刪除後也會永久刪除這些典藏資產。` : '';
+    const warning = impact.taskCollectionCount > 0 ? `\n\n此看板包含 ${impact.taskCollectionCount} 筆收藏任務，刪除後也會永久刪除這些典藏資產。` : '';
     const confirmed = await useDialogStore.getState().showConfirm(`確定要刪除看板「${title}」嗎？${warning}`);
     if (confirmed) {
       try {

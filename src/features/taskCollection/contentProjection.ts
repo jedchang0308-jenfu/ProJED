@@ -9,7 +9,7 @@ export const projectTaskCollectionContent = (snapshot: TaskCollectionSnapshot): 
   const nodesByParent = new Map<string | null, typeof snapshot.nodes>();
   snapshot.nodes.forEach(node => nodesByParent.set(node.parentId, [...(nodesByParent.get(node.parentId) ?? []), node]));
   const lines: string[] = [
-    `典藏任務：${escapeProjectionText(snapshot.nodes.find(node => node.id === snapshot.rootItemId)?.title || snapshot.rootItemId)}`,
+    `收藏任務：${escapeProjectionText(snapshot.nodes.find(node => node.id === snapshot.rootItemId)?.title || snapshot.rootItemId)}`,
     `來源看板：${escapeProjectionText(snapshot.sourceBoardTitle || snapshot.sourceBoardId)}`,
     `典藏時間：${new Date(snapshot.collectedAt).toISOString()}`,
     '',

@@ -1,4 +1,4 @@
-# QC-DEV-093：典藏任務與子任務資產化
+# QC-DEV-093：收藏任務與子任務資產化
 
 - 結論：`Targeted Local QC PASS / isolated PostgreSQL＋local Supabase DB 25-check PASS / Full QA matrix、remote Supabase TEST、production 與 release gate pending`
 - Source：working-tree boundary；initial QC base HEAD `dd3245c3fb2625aa0ce8e7cb8273fe2f06e79ee4`，本次 re-audit 仍保留既有工作樹變更，不宣稱 immutable commit
@@ -24,7 +24,7 @@
 
 ## UI／資料事實
 
-- Records 維持單一「紀錄庫」主頁；同層分區為「典藏任務／會議紀錄／個人工作紀錄」，mobile 依 meeting restriction 隱藏會議分區，不混合「全部」清單。
+- Records 維持單一「紀錄庫」主頁；同層分區為「收藏任務／會議紀錄／個人工作紀錄」，mobile 依 meeting restriction 隱藏會議分區，不混合「全部」清單。
 - B02 readback：典藏成功後 root archive、collection count=1，唯讀詳情包含任務樹／相依／歷程／相關紀錄。
 - B07 readback：來源永久刪除並 reload 後，asset 仍可讀且顯示來源不存在。
 - B15 readback：page error、request failure、HTTP 4xx/5xx、額外 role=alert 均為 0。

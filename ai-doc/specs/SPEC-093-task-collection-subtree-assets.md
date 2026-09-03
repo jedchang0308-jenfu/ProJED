@@ -1,4 +1,4 @@
-# SPEC-093：典藏任務與子任務資產化
+# SPEC-093：收藏任務與子任務資產化
 
 - 狀態：`RD Implementation In Progress / Human Confirmed / local static 48＋TypeScript＋build＋isolated DB 25-check PASS / browser B00-B19 21/21 PASS / required regressions PASS / 未 Release`
 - 日期：2026-08-28
@@ -10,7 +10,7 @@
 
 ## 1. 交付結果與已確認決策
 
-DEV-093 把仍在運作的任務子樹轉成可長期查閱的唯讀案例資產，並在資產保存成功後把來源根任務移出 active 看板。產品名稱、操作名稱與紀錄庫分區名稱均固定為「典藏任務」。
+DEV-093 把仍在運作的任務子樹轉成可長期查閱的唯讀案例資產，並在資產保存成功後把來源根任務移出 active 看板。產品名稱、操作名稱與紀錄庫分區名稱均固定為「收藏任務」。
 
 本規格固定以下單一路徑，RD 不需再做產品選型：
 
@@ -20,7 +20,7 @@ DEV-093 把仍在運作的任務子樹轉成可長期查閱的唯讀案例資產
 4. 同一 `operationId` 的網路重試只回傳既有結果，不建立新版本；新的使用者確認才建立新 operation／版本。
 5. 新增 `collect_task` board capability。owner／admin／project_manager／member 預設可典藏，viewer 不可典藏但可依 `read_board` 閱讀 project-visible 典藏。
 6. Supabase 以單一 authoritative transaction 完成「驗證來源 → 建立典藏 → 建立尚可成立的 links → 封存 root → 寫 activity」；任一步失敗都不建立資產且不移出來源。
-7. 紀錄庫仍是單一頂層頁面，但資料固定分成 `典藏任務`、`會議紀錄`、`個人工作紀錄` 三個同層 section，不提供混合「全部」清單。
+7. 紀錄庫仍是單一頂層頁面，但資料固定分成 `收藏任務`、`會議紀錄`、`個人工作紀錄` 三個同層 section，不提供混合「全部」清單。
 8. 本期資產仍屬 board scope；來源 task 永久刪除後可讀，但來源 board／workspace 刪除後不保證存續。
 9. `task_collection` 第一階段不進入既有 record editor、草稿、undo 或 RAG mirror；只提供 section search 與唯讀詳情，`rag_enabled=false`、`source_document_id=null`。
 
@@ -46,12 +46,12 @@ DEV-093 把仍在運作的任務子樹轉成可長期查閱的唯讀案例資產
 
 ## 3. 使用者流程與狀態轉換
 
-1. 具權限使用者從任務詳情 overflow 或支援完整 action catalog 的任務選單選擇「典藏任務」。mobile compact action rail 仍只保留 DEV-088 的四個常駐動作；典藏放在完整／overflow menu。
+1. 具權限使用者從任務詳情 overflow 或支援完整 action catalog 的任務選單選擇「收藏任務」。mobile compact action rail 仍只保留 DEV-088 的四個常駐動作；典藏放在完整／overflow menu。
 2. client 建立 `operationId`，呼叫 `taskCollectionService.preview()`。preview 回傳 root 名稱、總任務數、已封存 descendant 數、dependency／activity／related-record 計數、限制檢查與 `previewToken`。
 3. 確認對話框顯示「典藏〈任務名稱〉與 N 個任務？」及「成功後來源會移出看板，可從回收桶還原」。可輸入最多 500 字的「典藏說明（選填）」，不得要求重填既有內容。
 4. 確認後以同一 `operationId + previewToken` 呼叫 `collect()`。操作期間 action、重複確認與來源 drag/move/edit disabled，畫面保留來源並顯示局部 pending。
 5. backend 成功後回傳 asset summary 與 archived root identity；store 才更新 root `isArchived=true`、刷新紀錄庫 summary，並顯示低干擾成功訊息與「查看典藏」。
-6. 「查看典藏」切到紀錄庫 `典藏任務` section 並開啟剛建立的唯讀詳情；關閉詳情後仍留在同一 section。
+6. 「查看典藏」切到紀錄庫 `收藏任務` section 並開啟剛建立的唯讀詳情；關閉詳情後仍留在同一 section。
 
 以下狀態不得混用：
 
@@ -484,16 +484,16 @@ RPC 回傳後，client 以 result 收斂 local store；不得再呼叫現行 non
 
 ### 7.1 Section contract
 
-- 紀錄庫只有一個頁首與內容區；section control 使用 tab／等價 selection semantics，順序固定 `典藏任務`、`會議紀錄`、`個人工作紀錄`。
+- 紀錄庫只有一個頁首與內容區；section control 使用 tab／等價 selection semantics，順序固定 `收藏任務`、`會議紀錄`、`個人工作紀錄`。
 - 不提供跨 family 的「全部」清單。搜尋、排序、cursor、loading、empty、error、筆數與 retry 全都以目前 section 為 scope；切換時取消／忽略前一 section 的 stale response。
-- 桌機／筆電 cold entry 預設 `會議紀錄`；符合 SPEC-069 的 coarse pointer 或 `<=640px` 環境不 render meeting rows／section，該環境只顯示 `典藏任務` 與 `個人工作紀錄`，cold default 為 `個人工作紀錄`。這是既有 mobile meeting restriction，不代表兩類資料混在一起。
-- 從「查看典藏」進入時無論 viewport 都直接選 `典藏任務` 並開啟指定 ID；一般 cold default 不因這次 deep-link 永久改寫。
+- 桌機／筆電 cold entry 預設 `會議紀錄`；符合 SPEC-069 的 coarse pointer 或 `<=640px` 環境不 render meeting rows／section，該環境只顯示 `收藏任務` 與 `個人工作紀錄`，cold default 為 `個人工作紀錄`。這是既有 mobile meeting restriction，不代表兩類資料混在一起。
+- 從「查看典藏」進入時無論 viewport 都直接選 `收藏任務` 並開啟指定 ID；一般 cold default 不因這次 deep-link 永久改寫。
 - 320／390px section control 不可 icon-only；可在控制列自身單向水平捲動，但不得造成頁面與內容列表雙重水平 overflow。
 
 ### 7.2 Collection list／detail
 
 - summary row 顯示標題、`vN`、典藏時間、來源看板、收錄任務數與歷程 coverage；標題本身開啟詳情，不增加「查看」欄。
-- section 內沒有新增按鈕；典藏只能從 task context 發起。空白狀態只陳述「尚無典藏任務」，不新增無法就地完成的 CTA。
+- section 內沒有新增按鈕；典藏只能從 task context 發起。空白狀態只陳述「尚無收藏任務」，不新增無法就地完成的 CTA。
 - `TaskCollectionDetail` 是獨立 read-only renderer，不開 `RecordSidebar`、不建立 draft、不顯示儲存／發布／封存紀錄 action。
 - detail 顯示來源／版本／典藏者／時間／說明、可收合任務樹、dependency、歷程與相關紀錄片段；選取任一快照節點後，必須以一般任務詳情同等資訊密度呈現標題、內容／備註、日期、工期、狀態、主責／協作與標籤，並沿用共用備註 renderer、狀態樣式、指派元件與 tag chip。內容只讀，不建立 draft、save、editor mutation或刪除 action。來源 task 尚存在時可「開啟來源任務」；來源已刪除時顯示中性「來源任務已不存在」，不得錯誤或隱藏資產。
 - meeting／work_log 仍走既有 editor、draft guard 與 mobile availability；`formatRecordType`、icon、time selector 與 open handler 必須改成 exhaustive classifier，禁止「非 meeting 一律 work_log」。
@@ -503,7 +503,7 @@ RPC 回傳後，client 以 result 收斂 local store；不得再呼叫現行 non
 
 confirm 後 `pendingByTaskId` 使用 preview 回傳的 `sourceTaskIds` 鎖住整棵子樹；task edit、drag、move、archive、duplicate 與再次 collect guard 都必須查此 map。backend success 前不改 `useWbsStore.nodes`；success 後只呼叫新增的 `applyCollectedTaskRoot({ taskId, updatedAt })`，以 `skip persistence / skip activity / no undo` 的 canonical projection 將 root 標為 archived並重建 indices。若 projection 失敗，清 pending後重新載入 nodes與collection summaries，不得補呼叫 `archiveNode()`。
 
-`TaskCollectionDialog` 是獨立 controlled dialog，不擴充只支援單行 prompt 的 `GlobalDialog`。狀態依序為 preview loading → confirmation → committing → success／recoverable error；annotation 使用 textarea、500 字 visible counter。success state 提供「查看典藏」與「留在目前畫面」，前者設定 `activeSection='task_collection'`、指定 detail ID 再 `setView('records')`；若 dialog 由 `TaskDetailsModal` 開啟，必須透過 `onViewCollection` 同步關閉父 modal，避免父層遮罩攔截典藏任務樹操作。timeout 先 `getOperationResult`；有結果即收斂成功，無結果保留同一 operation/token 的 retry，絕不自動產生新 UUID。
+`TaskCollectionDialog` 是獨立 controlled dialog，不擴充只支援單行 prompt 的 `GlobalDialog`。狀態依序為 preview loading → confirmation → committing → success／recoverable error；annotation 使用 textarea、500 字 visible counter。success state 提供「查看典藏」與「留在目前畫面」，前者設定 `activeSection='task_collection'`、指定 detail ID 再 `setView('records')`；若 dialog 由 `TaskDetailsModal` 開啟，必須透過 `onViewCollection` 同步關閉父 modal，避免父層遮罩攔截收藏任務樹操作。timeout 先 `getOperationResult`；有結果即收斂成功，無結果保留同一 operation/token 的 retry，絕不自動產生新 UUID。
 
 dialog state／action／focus契約固定如下；任一非當前主要action不得與主要action同權重：
 
@@ -521,7 +521,7 @@ dialog state／action／focus契約固定如下；任一非當前主要action不
 
 ### 7.3 Board／workspace deletion disclosure
 
-因本期 `knowledge_records.project_id on delete cascade` 不變，board 永久刪除確認若命中 task_collection，必須顯示典藏數量與「典藏任務也會永久刪除」。`boardService.previewDeleteImpact()` 在 `GlobalContextMenu` 與 `HomeView` 兩個入口確認前執行；impact 讀取失敗即 fail closed，不顯示可執行確認。`removeBoard` 改為 awaited backend-success-first，刪除失敗不得先從 sidebar/home 移除。
+因本期 `knowledge_records.project_id on delete cascade` 不變，board 永久刪除確認若命中 task_collection，必須顯示典藏數量與「收藏任務也會永久刪除」。`boardService.previewDeleteImpact()` 在 `GlobalContextMenu` 與 `HomeView` 兩個入口確認前執行；impact 讀取失敗即 fail closed，不顯示可執行確認。`removeBoard` 改為 awaited backend-success-first，刪除失敗不得先從 sidebar/home 移除。
 
 workspace delete 同樣會 cascade 其下所有 project collections；`workspaceService.previewDeleteImpact()` 回傳總典藏數，`GlobalContextMenu` 的 workspace 確認一併揭露。兩種 impact 都只傳 scalar count，不讀完整 snapshot。不得用「典藏」一詞暗示已跨 board／workspace 永久保存。
 
@@ -567,7 +567,7 @@ export type TaskCollectionErrorCode =
 - `src/types/index.ts`：新增 `EditableKnowledgeRecordType`、discriminated `KnowledgeRecord`、`task_collected`、`collect_task` 與 default matrix；`KnowledgeRecordInput.type` 改為 editable-only。
 - `src/features/taskCollection/types.ts`：集中 snapshot、command、result、summary、error與 limits，不讓 UI 自行重宣告。
 - `src/services/supabase/database.types.ts`：同步五欄、三支 RPC、result rows；禁止長期保留 `(supabase as any).rpc`。
-- `src/components/BoardMembersPanel.tsx`：新增「典藏任務」permission row，與「封存／永久刪除任務」分列。
+- `src/components/BoardMembersPanel.tsx`：新增「收藏任務」permission row，與「封存／永久刪除任務」分列。
 - CLI 產生的 `supabase/migrations/<actual>_dev_093_task_collection_assets.sql`：record type/shape/index、permission backfill、helpers、RPC、RLS、grants、schema reload。
 
 完成條件：fresh migration、既有 meeting/work_log data preservation、constraint negative cases、effective capability fixture、function signature/revoke readback與 TypeScript database contract同步。A 未通過前不得做 active UI wiring。
@@ -667,7 +667,7 @@ RD handoff 必須列：實際 migration filename、commit SHA／working tree bou
 | 標籤 | `TagPicker` 編輯、`TagChip` 呈現 | 無 tag detail | 重用 `TagChip` 呈現快照 ID／名稱／顏色；不提供 `TagPicker` |
 | 資產邊界 | 可依權限編輯與儲存 | 若直接套 editor 會破壞 immutable asset | 典藏內容禁止 `input`／`textarea`／`select` 與 save／delete action；B19 實際驗證 editable controls=0 |
 
-此差距分析只承諾「閱讀 parity」，不把典藏快照變回可編輯 task，也不複製一套獨立 renderer；典藏任務、會議紀錄、個人工作紀錄仍放在既有單一「紀錄庫」頁的同層分區，互不混排。
+此差距分析只承諾「閱讀 parity」，不把典藏快照變回可編輯 task，也不複製一套獨立 renderer；收藏任務、會議紀錄、個人工作紀錄仍放在既有單一「紀錄庫」頁的同層分區，互不混排。
 
 ## 10. QA／QC verification contract
 
@@ -688,7 +688,7 @@ authoritative QA plan：`ai-doc/qa/QA-DEV-093-task-collection-subtree-assets.md`
 
 - 1440×900、1024×768：三 section 分離、cold default、search/error/empty 隔離、preview、success deep-link、read-only detail、restore/recollect v2；快照節點內容欄位與一般任務詳情 parity 可讀。
 - 390×844、320×844：meeting section 依 SPEC-069 不 render；典藏／個人工作分區可辨識，compact rail 仍四項，典藏只在 overflow，無 document horizontal overflow／遮擋／icon-only。
-- keyboard／accessibility：menu、dialog五態、tabs、detail disclosure、Escape、cancel、focus trap/return、pending disabled、live region、200% zoom與reduced motion；screen reader name 不以 icon 代替「典藏任務」。
+- keyboard／accessibility：menu、dialog五態、tabs、detail disclosure、Escape、cancel、focus trap/return、pending disabled、live region、200% zoom與reduced motion；screen reader name 不以 icon 代替「收藏任務」。
 - data sanity／quietness：非空fixture的preview/list/detail counts不得全0或空白假PASS；單一主焦點／主action，無重複helper、成功面板或card shell。
 - source task permanent delete 後 reload：asset content／tree／history 可讀，失效 links 不 crash。
 - board delete confirmation：命中 collection 時顯示數量與 cascade 警示。
@@ -742,7 +742,7 @@ static／DB artifacts固定 `output/qa/dev-093/static-result.json`、`output/qa/
 
 ## 11. Acceptance Criteria
 
-- AC-093-001：所有入口、確認、成功回饋、紀錄庫 section 與詳情均使用「典藏任務」，且與「封存任務」語意分離。
+- AC-093-001：所有入口、確認、成功回饋、紀錄庫 section 與詳情均使用「收藏任務」，且與「封存任務」語意分離。
 - AC-093-002：leaf 建立一筆單節點 asset；選定 parent 建立一筆含完整 canonical descendant subtree 的 asset，preview／snapshot／UI 計數一致。
 - AC-093-003：asset insert、links、root archive 與 `task_collected` event 為同一 transaction；任一步失敗皆無 asset 且來源保持 active。
 - AC-093-004：same operation retry 回同一 record/version；來源還原後新的確認建立下一 immutable version，不覆寫舊 asset。
@@ -793,7 +793,7 @@ release 相依順序固定為「TEST backup/readback → forward migration → R
 
 ## 14. 變更紀錄
 
-- 2026-08-28：依使用者決定建立「典藏任務」Brief，固定完整子樹與紀錄庫分區方向。
+- 2026-08-28：依使用者決定建立「收藏任務」Brief，固定完整子樹與紀錄庫分區方向。
 - 2026-08-28：升級 RD Contract；固定 `task_collection`、immutable version、operation idempotency、`collect_task`、Supabase atomic RPC、local-test adapter、Firebase explicit unsupported、mobile meeting compatibility、hard limits、RLS／grants、逐檔 patch 與 QA/QC gates。
 - 2026-08-28：升級 `RD Implementation Ready`；補齊 metadata envelope、preview/token/hash、RPC signatures、operation conflict、stable subtree lock、activity allowlist、local journal、唯一 store owner、delete impact、逐檔 patch、QA-DEV-093、executable commands、evidence paths與 release feasibility。產品仍未實作／未驗證／未 Release。
 - 2026-08-28：補齊 implementation handoff ambiguity；固定row null normalization、provider-neutral canonical JSON、SQL wire/readback/detail/timeline paths、delete-impact signatures、dialog state/focus contract，以及AC-093-014～015。成熟度不變，仍未實作／未驗證／未 Release。

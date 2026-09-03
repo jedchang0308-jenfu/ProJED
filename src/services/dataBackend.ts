@@ -590,7 +590,7 @@ export const recordService = {
       : firestoreRecordService.delete(workspaceId, boardId, recordId),
 };
 
-const unsupportedTaskCollection = <T,>(): Promise<T> => Promise.reject(new TaskCollectionError('BACKEND_UNSUPPORTED', '目前資料後端尚未提供典藏任務。'));
+const unsupportedTaskCollection = <T,>(): Promise<T> => Promise.reject(new TaskCollectionError('BACKEND_UNSUPPORTED', '目前資料後端尚未提供收藏任務。'));
 
 // The URL override is intentionally limited to the local-test provider so the
 // browser verifier can exercise the Firebase-style unsupported capability

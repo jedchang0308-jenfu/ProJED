@@ -96,14 +96,14 @@ export const TaskCollectionDialog: React.FC<TaskCollectionDialogProps> = ({ work
       setState('success');
       toast.success('任務已典藏，歷程已保留在紀錄庫。');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '典藏任務失敗。');
+      setError(cause instanceof Error ? cause.message : '收藏任務失敗。');
       setState('recoverable-error');
     } finally {
       pendingTaskIds.forEach(taskId => useTaskCollectionStore.getState().clearPending(taskId));
     }
   };
 
-  const title = state === 'success' ? '典藏完成' : state === 'recoverable-error' ? '典藏未完成' : '典藏任務';
+  const title = state === 'success' ? '典藏完成' : state === 'recoverable-error' ? '典藏未完成' : '收藏任務';
   return (
     <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-slate-950/35 px-4 py-6" role="presentation">
       <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-busy={state === 'committing'} aria-labelledby="task-collection-dialog-title" data-task-collection-dialog="true" data-task-collection-dialog-state={state} className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900">

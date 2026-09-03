@@ -13,7 +13,7 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.promote', label: '提升階層', icon: 'corner-left-up', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.demote', label: '降為子任務', icon: 'corner-right-down', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.archive', label: '封存任務', icon: 'archive', section: 'lifecycle', kind: 'mutation', capability: 'delete' },
-  { id: 'task.collect', label: '典藏任務', icon: 'archive-box', section: 'lifecycle', kind: 'mutation', capability: 'collect' },
+  { id: 'task.collect', label: '收藏任務', icon: 'archive-box', section: 'lifecycle', kind: 'mutation', capability: 'collect' },
   { id: 'task.select', label: '選取任務', icon: 'mouse-pointer-2', section: null, kind: 'selection' },
   { id: 'task.open-details', label: '開啟詳情', icon: 'panel-right', section: null, kind: 'navigation' },
   { id: 'task.open-details-for-naming', label: '開啟詳情並命名', icon: 'panel-right', section: null, kind: 'navigation' },

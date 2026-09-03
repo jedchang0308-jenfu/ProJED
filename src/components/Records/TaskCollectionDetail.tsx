@@ -202,7 +202,7 @@ const TaskCollectionDetail: React.FC<Props> = ({ record, onBack }) => {
   }, [rootNode, selectedNodeStorageId]);
 
   if (!snapshot || snapshot.schema !== 'task-collection-v1' || !Array.isArray(snapshot.nodes)) {
-    return <div className="flex h-full flex-col bg-slate-50" data-task-collection-detail-id={record.id} data-task-collection-source-state="incompatible"><div className="flex h-14 items-center border-b border-slate-200 bg-white px-5"><button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600"><ArrowLeft size={15} />返回典藏任務</button></div><div className="p-5"><div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">此典藏資產的快照版本目前無法顯示；資產仍予以保留。</div></div></div>;
+    return <div className="flex h-full flex-col bg-slate-50" data-task-collection-detail-id={record.id} data-task-collection-source-state="incompatible"><div className="flex h-14 items-center border-b border-slate-200 bg-white px-5"><button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600"><ArrowLeft size={15} />返回收藏任務</button></div><div className="p-5"><div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">此典藏資產的快照版本目前無法顯示；資產仍予以保留。</div></div></div>;
   }
 
   const openSource = () => {
@@ -245,7 +245,7 @@ const TaskCollectionDetail: React.FC<Props> = ({ record, onBack }) => {
 
   return <div className="flex h-full flex-col bg-slate-50" data-task-collection-detail-id={record.id}>
     <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
-      <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600"><ArrowLeft size={15} />返回典藏任務</button>
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600"><ArrowLeft size={15} />返回收藏任務</button>
       <span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><Archive size={14} />版本 {record.collectionVersion ?? 1}</span>
     </div>
     <div className="flex-1 overflow-auto p-5">

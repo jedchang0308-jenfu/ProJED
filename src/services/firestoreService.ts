@@ -273,7 +273,7 @@ export const recordService = {
 
   upsert: async (wsId: string, bId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
     if ((input as unknown as { type?: string }).type === 'task_collection') {
-      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務不可透過一般紀錄編輯。');
+      throw new TaskCollectionError('SNAPSHOT_INVALID', '收藏任務不可透過一般紀錄編輯。');
     }
     const db = requireFirebaseDb();
     const recordRef = input.id
@@ -375,7 +375,7 @@ export const recordService = {
     const targetRef = doc(db, 'workspaces', wsId, 'boards', bId, 'records', recordId);
     const target = await getDoc(targetRef);
     if (target.exists() && (target.data() as KnowledgeRecord).type === 'task_collection') {
-      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務為不可變資產，不能從一般紀錄刪除。');
+      throw new TaskCollectionError('SNAPSHOT_INVALID', '收藏任務為不可變資產，不能從一般紀錄刪除。');
     }
     await updateDoc(targetRef, {
       status: 'archived',

@@ -2005,7 +2005,7 @@ export const supabaseRecordService = {
     const typeQuery = supabase.from('knowledge_records').select('record_type').eq('tenant_id', tenantId).eq('project_id', projectId);
     const { data: targetType, error: targetTypeError } = await (isUuid(recordId) ? typeQuery.eq('id', recordId).maybeSingle() : typeQuery.eq('legacy_record_id', recordId).maybeSingle());
     assertNoError(targetTypeError);
-    if (targetType?.record_type === 'task_collection') throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務為不可變資產，不能從一般紀錄刪除。');
+    if (targetType?.record_type === 'task_collection') throw new TaskCollectionError('SNAPSHOT_INVALID', '收藏任務為不可變資產，不能從一般紀錄刪除。');
     const query = supabase
       .from('knowledge_records')
       .update({ status: 'archived', rag_enabled: false })
@@ -2069,13 +2069,13 @@ const toTaskCollectionError = (error: unknown): TaskCollectionError => {
   if (codeMatch) {
     const code = codeMatch[1] as TaskCollectionError['code'];
     if (['BACKEND_UNSUPPORTED', 'PERMISSION_DENIED', 'OPERATION_CONFLICT', 'SOURCE_NOT_FOUND', 'SOURCE_ARCHIVED', 'SOURCE_BUSY', 'SOURCE_INVALID_TREE', 'SOURCE_CHANGED', 'LIMIT_EXCEEDED', 'SNAPSHOT_INVALID', 'TRANSIENT', 'UNKNOWN'].includes(code)) {
-      return new TaskCollectionError(code, `典藏任務未完成（${code}）。`, { cause: error });
+      return new TaskCollectionError(code, `收藏任務未完成（${code}）。`, { cause: error });
     }
   }
-  if (/permission|42501|unauthor/i.test(message)) return new TaskCollectionError('PERMISSION_DENIED', '你沒有典藏任務的權限。', { cause: error });
+  if (/permission|42501|unauthor/i.test(message)) return new TaskCollectionError('PERMISSION_DENIED', '你沒有收藏任務的權限。', { cause: error });
   if (/already archived|root is archived/i.test(message)) return new TaskCollectionError('SOURCE_ARCHIVED', '此根任務已封存，請先從回收桶還原後再建立新版本。', { cause: error });
   if (/not found|P0002/i.test(message)) return new TaskCollectionError('SOURCE_NOT_FOUND', '找不到要典藏的根任務。', { cause: error });
-  return new TaskCollectionError('UNKNOWN', message || '典藏任務失敗。', { cause: error });
+  return new TaskCollectionError('UNKNOWN', message || '收藏任務失敗。', { cause: error });
 };
 
 const toSupabaseCollectionSummary = (record: TaskCollectionRecord): TaskCollectionSummary => {

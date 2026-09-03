@@ -161,15 +161,15 @@ async (page) => {
     const bodyText = await page.locator('body').innerText();
     assert(await heading.isVisible(), `${name}: 紀錄庫標題不可見`);
     assert(await sectionControls.isVisible(), `${name}: 紀錄庫分區控制不可見`);
-    assert(tabs.includes('典藏任務'), `${name}: 缺少典藏任務分區`);
+    assert(tabs.includes('收藏任務'), `${name}: 缺少收藏任務分區`);
     assert(tabs.includes('個人工作紀錄'), `${name}: 缺少個人工作紀錄分區`);
     assert(!bodyText.includes('collection_operation_id'), `${name}: 洩漏內部 operation 欄位`);
 
     const collectionTab = page.locator('[data-record-section-tab="task_collection"]');
     await collectionTab.click();
     await page.waitForTimeout(150);
-    assert(await collectionSection.isVisible(), `${name}: 典藏任務分區無法切換顯示`);
-    assert((await collectionSection.locator('h2').allTextContents()).includes('典藏任務'), `${name}: 典藏任務分區標題缺失`);
+    assert(await collectionSection.isVisible(), `${name}: 收藏任務分區無法切換顯示`);
+    assert((await collectionSection.locator('h2').allTextContents()).includes('收藏任務'), `${name}: 收藏任務分區標題缺失`);
 
     const overflow = await page.evaluate(() => ({
       viewportWidth: window.innerWidth,
@@ -180,7 +180,7 @@ async (page) => {
     return {
       id: `B00-${name}`,
       status: caseFailures.length ? 'FAIL' : 'PASS',
-      expected: 'Records 入口、分區控制、典藏任務切換可用，且不發生水平溢位或內部欄位洩漏',
+      expected: 'Records 入口、分區控制、收藏任務切換可用，且不發生水平溢位或內部欄位洩漏',
       actual: {
         viewport: { width, height },
         route: page.url(),
@@ -254,7 +254,7 @@ async (page) => {
       await page.setViewportSize({ width: 1024, height: 768 });
       await openRecords();
       const tabs = await page.locator('[data-record-section-tab]').allTextContents();
-      assert(tabs.length === 3 && tabs.includes('典藏任務') && tabs.includes('會議紀錄') && tabs.includes('個人工作紀錄'), `B03: 分區數或名稱不符 (${tabs.join('、')})`);
+      assert(tabs.length === 3 && tabs.includes('收藏任務') && tabs.includes('會議紀錄') && tabs.includes('個人工作紀錄'), `B03: 分區數或名稱不符 (${tabs.join('、')})`);
       await page.locator('[data-record-section-tab="meeting"]').click();
       assert(await page.locator('[data-record-section="meeting"]').isVisible(), 'B03: 會議紀錄分區無法成為 active panel');
       return { viewport: { width: 1024, height: 768 }, tabs, activeSection: await page.locator('[data-records-active-section]').getAttribute('data-records-active-section') };
@@ -270,7 +270,7 @@ async (page) => {
       const search = page.locator('#task-collection-search');
       await search.fill('不存在的典藏');
       await page.waitForTimeout(250);
-      const emptyTextVisible = await page.getByText('尚無典藏任務。', { exact: false }).isVisible();
+      const emptyTextVisible = await page.getByText('尚無收藏任務。', { exact: false }).isVisible();
       assert(emptyTextVisible, 'B04: 無結果狀態未顯示');
       await search.fill('品質驗證');
       await page.waitForTimeout(250);
@@ -394,7 +394,7 @@ async (page) => {
       await dialog.getByRole('button', { name: '確認典藏', exact: true }).click();
       await page.locator('[data-task-collection-dialog-state="recoverable-error"]').waitFor({ state: 'visible', timeout: 15000 });
       const permissionError = await dialog.locator('[role="alert"]').innerText();
-      assert(permissionError.includes('沒有典藏任務的權限'), 'B09: 權限撤銷未顯示精確錯誤');
+      assert(permissionError.includes('沒有收藏任務的權限'), 'B09: 權限撤銷未顯示精確錯誤');
       const permissionReadback = await page.evaluate(() => ({
         rootArchived: JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['qc-card-1']?.isArchived === true,
         collectionCount: JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]').filter(record => record.type === 'task_collection').length,
@@ -499,7 +499,7 @@ async (page) => {
       const confirm = page.locator('[data-global-dialog="true"]');
       await confirm.waitFor({ state: 'visible', timeout: 10000 });
       const message = await confirm.locator('h3').innerText();
-      assert(message.includes('1 筆典藏任務'), 'B10: 刪除確認未揭露典藏數量');
+      assert(message.includes('1 筆收藏任務'), 'B10: 刪除確認未揭露典藏數量');
       await confirm.getByRole('button', { name: '取消', exact: true }).click();
       const state = await page.evaluate(() => ({ boards: JSON.parse(localStorage.getItem('projed-local-test.workspaces') || '[]').flatMap(workspace => workspace.boards || []).length, collections: JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]').filter(record => record.type === 'task_collection').length }));
       assert(state.collections === 1, 'B10: 取消刪除後典藏資產數量改變');
@@ -511,11 +511,11 @@ async (page) => {
       await page.locator('[data-task-collection-detail-id]').waitFor({ state: 'visible', timeout: 15000 });
       const deepLinkDetail = await page.locator('[data-task-collection-detail-id]').getAttribute('data-task-collection-detail-id');
       await closeTaskDetails();
-      await page.locator('[data-task-collection-detail-id]').getByRole('button', { name: /返回典藏任務/ }).click({ force: true });
+      await page.locator('[data-task-collection-detail-id]').getByRole('button', { name: /返回收藏任務/ }).click({ force: true });
       await page.locator('[data-record-section-controls="true"]').waitFor({ state: 'visible', timeout: 15000 });
       await page.setViewportSize({ width: 390, height: 844 });
       const tabs = await page.locator('[data-record-section-tab]').allTextContents();
-      assert(tabs.length === 2 && tabs.includes('典藏任務') && tabs.includes('個人工作紀錄') && !tabs.includes('會議紀錄'), 'B11: mobile 分區不符合既有 meeting restriction');
+      assert(tabs.length === 2 && tabs.includes('收藏任務') && tabs.includes('個人工作紀錄') && !tabs.includes('會議紀錄'), 'B11: mobile 分區不符合既有 meeting restriction');
       await page.locator('[data-record-section-tab="task_collection"]').click();
       assert(await page.locator('[data-record-section="task-collections"]').isVisible(), 'B11: mobile 典藏分區不可 deep-link');
       const coldBeforeReload = page.url();
@@ -742,7 +742,7 @@ async (page) => {
         mutationActions: await content.locator('button:not([disabled])').count(),
         sharedNoteRenderer: await content.locator('[data-task-detail-note-content="true"]').count() === 1,
       };
-      assert(contentParity.contentSectionCount === 1, 'B19: 典藏任務內容區塊缺失', contentParity);
+      assert(contentParity.contentSectionCount === 1, 'B19: 收藏任務內容區塊缺失', contentParity);
       assert(contentParity.noteContent && contentParity.startDate && contentParity.endDate && contentParity.duration && contentParity.status, 'B19: 一般任務內容欄位未完整顯示或工期語意不一致', contentParity);
       assert(contentParity.assignment && contentParity.tags && contentParity.assignmentText && contentParity.tagText, 'B19: 主責／協作或標籤欄位內容缺失', contentParity);
       assert(contentParity.editableControls === 0 && contentParity.mutationActions === 0 && contentParity.sharedNoteRenderer, 'B19: 典藏內容不符合唯讀或未共用備註 renderer', contentParity);
