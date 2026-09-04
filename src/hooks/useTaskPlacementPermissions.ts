@@ -12,7 +12,6 @@ type CanonicalTaskCapabilities = {
   canEditTask: boolean;
   canMoveTask: boolean;
   canDeleteTask: boolean;
-  canCollectTask: boolean;
   canAssignTask: boolean;
   canCreateDependency: boolean;
 };
@@ -23,7 +22,6 @@ const EMPTY_CANONICAL_CAPABILITIES: CanonicalTaskCapabilities = {
   canEditTask: false,
   canMoveTask: false,
   canDeleteTask: false,
-  canCollectTask: false,
   canAssignTask: false,
   canCreateDependency: false,
 };
@@ -39,7 +37,6 @@ const toCanonicalCapabilities = (
     canEditTask: allowed.has('edit_task'),
     canMoveTask: allowed.has('move_task'),
     canDeleteTask: allowed.has('delete_task'),
-    canCollectTask: allowed.has('collect_task'),
     canAssignTask: allowed.has('assign_task'),
     canCreateDependency: allowed.has('create_dependency'),
   };

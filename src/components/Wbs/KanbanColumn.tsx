@@ -11,13 +11,13 @@ import type { TaskNode } from '../../types';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
 // Compatibility contract retains prepareNewTaskNaming(newNode.id) for post-create adapters.
-import { TaskDateBadge } from './TaskDateBadge';
 import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
 import { primaryPlacementId } from '../../features/taskTracking/model';
 import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
 import { useTaskPlacementController } from './useTaskPlacementController';
+import { KANBAN_COLUMN_FRAME_CLASS, KanbanColumnPresentation } from './KanbanColumnPresentation';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -174,7 +174,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
       data-task-hover-scope-source-id={nodeId}
       data-task-hover-has-descendants={children.length > 0 ? 'true' : undefined}
       data-task-placement-pending={taskGesture.isPlacementPending ? 'true' : undefined}
-      className={`relative flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all ${
+      className={`${KANBAN_COLUMN_FRAME_CLASS} ${
         isColumnDragging ? 'pointer-events-none' : ''
       }`}
     >
@@ -186,149 +186,99 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           left: 'calc(var(--kanban-column-body-pad, 8px) + 1px + var(--kanban-card-pad-x, 9px))',
         }}
       />
-      <div
-        {...columnHeaderDragBindings}
-        {...taskGesture.handlers}
-        data-task-id={nodeId}
-        data-mobile-drop-target={nodeId}
-        data-task-drop-surface-kind="column-header"
-        data-desktop-drop-surface="true"
-        data-desktop-drop-id={placementController.placementId}
-        data-task-drag-surface="true"
-        data-task-drag-surface-kind="kanban-column-header"
-        data-task-surface-source="true"
-        data-kanban-drag-source-placeholder={isColumnPlaceholder ? 'true' : undefined}
-        data-desktop-task-hover-preview={!isColumnPlaceholder && !isSelectingMode ? 'true' : undefined}
-        data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
-        data-touch-tap-guard="true"
-        data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
-        data-kanban-column-header="true"
-        data-kanban-header-visual="tonal-borderless"
-        className={`group mobile-pan-item flex flex-col gap-1 bg-slate-50 px-[10px] py-[8px] transition-colors hover:bg-white ${
-            isColumnPlaceholder ? 'kanban-drag-origin-placeholder pointer-events-none' : ''
+      <KanbanColumnPresentation
+        title={node.title}
+        status={status}
+        startDate={node.startDate ?? null}
+        endDate={node.endDate ?? null}
+        isDurationLocked={Boolean(node.isDurationLocked)}
+        startLocked={lockStatus.startLocked}
+        endLocked={lockStatus.endLocked}
+        placeholder={isColumnPlaceholder}
+        showDate={!isSelectingMode}
+        headerProps={{
+          ...columnHeaderDragBindings,
+          ...taskGesture.handlers,
+          'data-task-id': nodeId,
+          'data-mobile-drop-target': nodeId,
+          'data-task-drop-surface-kind': 'column-header',
+          'data-desktop-drop-surface': 'true',
+          'data-desktop-drop-id': placementController.placementId,
+          'data-task-drag-surface': 'true',
+          'data-task-drag-surface-kind': 'kanban-column-header',
+          'data-task-surface-source': 'true',
+          'data-kanban-drag-source-placeholder': isColumnPlaceholder ? 'true' : undefined,
+          'data-desktop-task-hover-preview': !isColumnPlaceholder && !isSelectingMode ? 'true' : undefined,
+          'data-task-selected': selectedTaskId === nodeId ? 'true' : undefined,
+          'data-touch-tap-guard': 'true',
+          'data-task-touch-gesture-surface': taskGesture.touchGestureEnabled ? 'true' : undefined,
+          'data-kanban-column-header': 'true',
+          'data-kanban-header-visual': 'tonal-borderless',
+          onClick: (event) => {
+            if (isColumnPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
+            void interactionBinding.dispatch('pointer.primary');
+          },
+          onContextMenu: (event) => {
+            event.preventDefault();
+            void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });
+          },
+        } as React.HTMLAttributes<HTMLDivElement>}
+        headerClassName={`${
+          isColumnPlaceholder ? 'kanban-drag-origin-placeholder pointer-events-none' : ''
         } ${
-            isSelectingMode
-                ? isSelfNode
-                    ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
-                    : 'cursor-crosshair hover:bg-amber-50/30'
-                : ''
+          isSelectingMode
+            ? isSelfNode
+              ? 'cursor-crosshair ring-2 ring-inset ring-amber-400 bg-amber-50/50'
+              : 'cursor-crosshair hover:bg-amber-50/30'
+            : ''
         }`}
-        onClick={(event) => {
-          if (isColumnPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;
-          // Compatibility contract: selectAndOpenTaskDetails(nodeId) is dispatched by the interaction kernel.
-          void interactionBinding.dispatch('pointer.primary');
-        }}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          void interactionBinding.openMenu({ x: event.clientX, y: event.clientY });
-        }}
-      >
-        {isColumnPlaceholder ? (
-          <div
-            className="invisible flex min-w-0 items-center gap-1.5"
-            data-kanban-drag-source-placeholder-neutral="true"
-            aria-hidden="true"
-          >
-            <h3
-              className="task-title-text relative min-w-0 flex-1 text-sm font-semibold text-slate-800"
-              data-task-title-slot="true"
-            >
-              <span className="inline-block max-w-full truncate align-top">
-                {node.title || '未命名任務'}
-              </span>
-            </h3>
-            <TaskDateBadge
-              startDate={node.startDate}
-              endDate={node.endDate}
-              status={status}
-              showStartDate={false}
-              startLocked={lockStatus.startLocked}
-              endLocked={lockStatus.endLocked}
-              durationLocked={Boolean(node.isDurationLocked)}
-              surface="checklist"
-              className="ml-0.5"
-            />
-          </div>
-        ) : (
-        <>
-        <div className="flex min-w-0 items-center gap-1.5">
-          <h3
-            className="task-title-text relative min-w-0 flex-1 text-sm font-semibold text-slate-800"
-            aria-label={node.title || '未命名任務'}
-            data-task-title-slot="true"
-            data-task-id={nodeId}
-          >
-            <span
-              className="inline-block max-w-full truncate align-top"
-              data-task-id={nodeId}
-            >
-              {node.title || '未命名任務'}
-            </span>
-          </h3>
-          {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
-          {!isSelectingMode && (
-            <TaskDateBadge
-              startDate={node.startDate}
-              endDate={node.endDate}
-              status={status}
-              showStartDate={false}
-              startLocked={lockStatus.startLocked}
-              endLocked={lockStatus.endLocked}
-              durationLocked={Boolean(node.isDurationLocked)}
-              surface="checklist"
-              className="ml-0.5"
-            />
-          )}
-        </div>
-
-        {/* 日期依賴選取模式維持原有互動；一般模式由標題列的共用日期徽章呈現。 */}
-        {isSelectingMode && (
+        titleProps={{
+          'aria-label': node.title || '未命名任務',
+          'data-task-title-slot': 'true',
+          'data-task-id': nodeId,
+        } as React.HTMLAttributes<HTMLHeadingElement>}
+        titleTextProps={{ 'data-task-id': nodeId } as React.HTMLAttributes<HTMLSpanElement>}
+        titleTrailing={taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
+        headerMeta={isSelectingMode ? (
           <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
-              {/* 開始日按鈕 */}
-              <button
-                disabled={!canCreateDependency}
-                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
-                  isSelfStart
-                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                    : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
-                }`}
-                title="點擊選取此列表的開始日為依賴目標"
-              >
-                <Link size={9} />
-                <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
-              </button>
-              {/* 結束日按鈕 */}
-              <button
-                disabled={!canCreateDependency}
-                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
-                  isSelfEnd
-                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                    : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
-                }`}
-                title="點擊選取此列表的結束日為依賴目標"
-              >
-                <Link size={9} />
-                <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
-              </button>
+            <button
+              disabled={!canCreateDependency}
+              onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+              className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-all ${
+                isSelfStart
+                  ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                  : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
+              }`}
+              title="點擊選取此列表的開始日為依賴目標"
+            >
+              <Link size={9} />
+              <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
+            </button>
+            <button
+              disabled={!canCreateDependency}
+              onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+              className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-all ${
+                isSelfEnd
+                  ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                  : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 cursor-crosshair'
+              }`}
+              title="點擊選取此列表的結束日為依賴目標"
+            >
+              <Link size={9} />
+              <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
+            </button>
           </div>
-        )}
-        </>
-        )}
-      </div>
-
-      <div
-        ref={setDropNodeRef}
-        className={`scroll-container mobile-pan-surface flex-1 overflow-y-auto rounded-md px-[8px] py-[8px] scrollbar-thin scrollbar-thumb-slate-300 transition-[background-color,box-shadow] duration-100 mx-0 mb-0 bg-surface-panel ${
-          isCardLayerTargeted ? 'bg-primary/10 ring-1 ring-inset ring-primary/30' : ''
-        }`}
-        data-mobile-pan-surface="kanban-column"
-        data-task-id={nodeId}
-        data-mobile-drop-target={nodeId}
-        data-task-drop-surface-kind="column-drop"
-        data-desktop-drop-surface="true"
-          data-desktop-drop-id={`${placementController.placementId}-drop`}
+        ) : null}
+        bodyRef={setDropNodeRef}
+        bodyProps={{
+          'data-mobile-pan-surface': 'kanban-column',
+          'data-task-id': nodeId,
+          'data-mobile-drop-target': nodeId,
+          'data-task-drop-surface-kind': 'column-drop',
+          'data-desktop-drop-surface': 'true',
+          'data-desktop-drop-id': `${placementController.placementId}-drop`,
+        } as React.HTMLAttributes<HTMLDivElement>}
+        bodyClassName={isCardLayerTargeted ? 'bg-primary/10 ring-1 ring-inset ring-primary/30' : ''}
       >
         <div
           data-kanban-column-subtree-scope={children.length > 0 ? 'true' : undefined}
@@ -353,8 +303,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           />
         </div>
 
-        <div className="mobile-pan-rail" data-mobile-pan-rail="kanban-column" aria-hidden="true" />
-      </div>
+      </KanbanColumnPresentation>
     </TaskSurfaceFrame>
   );
 };

@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+  const appBaseUrl = await page.evaluate(() => window.location.origin);
   const results = [];
   const diagnostics = [];
   const networkFailures = [];
@@ -98,9 +99,9 @@ async (page) => {
 
   const openApp = async (viewport) => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seedSession();
-    await page.goto('http://localhost:4000/?qcReset=1&qcSize=72', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/?qcReset=1&qcSize=72`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 15000 });
     await closeSidebarIfOpen();
@@ -529,6 +530,14 @@ async (page) => {
     assert(longPressState.actionRailCount === 0 && longPressState.previewCount === 0, 'placed row long press must not enter mobile drag mode', longPressState);
     assert(longPressState.dragSurface === null && longPressState.genericDragSurface === null, 'placed row must not expose draggable attributes', longPressState);
     assert(longPressState.afterStorage === beforeStorage, 'placed row long press must not write unplaced persistence', { beforeStorage, longPressState });
+    // A held compatibility touch may still dispatch the row's normal click
+    // on touchend.  Close that read-only details view before issuing the
+    // independent quick-tap assertion below.
+    const longPressModal = page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"], [data-task-details-modal="true"] button[title="關閉"]').first();
+    if (await longPressModal.count()) {
+      await longPressModal.click({ force: true, timeout: 1200 }).catch(() => undefined);
+      await page.waitForTimeout(100);
+    }
     await dispatchTouch(placedRow, { compatibilityClick: true });
     const modal = page.locator('[data-task-details-modal="true"]').first();
     await modal.waitFor({ state: 'visible', timeout: 5000 });
@@ -549,7 +558,16 @@ async (page) => {
     for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
       await openApp(viewport);
       const card = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]').first();
-      const target = page.locator('.kanban-task-card[data-task-id] > [data-task-card-primary="true"]').nth(1);
+      const targetCard = page.locator('.kanban-task-card[data-task-id]').nth(1);
+      const targetToggle = targetCard.locator('.kanban-checklist-toggle').first();
+      // DEV-068 deliberately owns the complete expanded task scope.  Collapse
+      // this regression's destination so the case remains a standard
+      // same-level insertion assertion rather than a 1s child-intent test.
+      if (await targetToggle.getAttribute('aria-expanded') === 'true') {
+        await targetToggle.click();
+        await page.waitForTimeout(120);
+      }
+      const target = targetCard.locator(':scope > [data-task-card-primary="true"][data-task-surface-source="true"]');
       await card.waitFor({ state: 'visible', timeout: 5000 });
       const heldTouch = await startHeldTouch(card);
       const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
@@ -561,7 +579,17 @@ async (page) => {
       // continues to verify the original same-level insertion indicator.
       await heldTouch.moveTo(await pointFor(target, 0.08, 0.82));
       const indicator = page.locator('[data-mobile-drop-indicator="true"]').first();
-      await indicator.waitFor({ state: 'visible', timeout: 5000 });
+      try {
+        await indicator.waitFor({ state: 'visible', timeout: 5000 });
+      } catch (error) {
+        const mobileDebug = await page.evaluate(() => ({
+          debug: (window.__projedMobileTaskActionDebug || []).slice(-40),
+          active: document.body.getAttribute('data-task-drag-touch-active'),
+          taskIndicators: Array.from(document.querySelectorAll('[data-mobile-drop-indicator="true"]')).map((element) => element.outerHTML.slice(0, 500)),
+          targetRects: Array.from(document.querySelectorAll('.kanban-task-card[data-task-id] > [data-task-card-primary="true"][data-task-surface-source="true"]')).slice(0, 4).map((element) => { const rect = element.getBoundingClientRect(); return { id: element.getAttribute('data-task-id'), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }; }),
+        }));
+        throw new Error(`${error.message} ${JSON.stringify(mobileDebug)}`);
+      }
       const railRect = await rail.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };

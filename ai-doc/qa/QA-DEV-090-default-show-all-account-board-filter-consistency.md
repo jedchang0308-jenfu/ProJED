@@ -92,7 +92,7 @@ DB fixture cleanup 只可刪除本案例建立且已核對 identity 的 disposab
 | QA-090-B07 | 在同 fixture依序切看板/清單/心智圖/甘特/行事曆 | 五模式 matched IDs一致，無模式誤空白 | 每模式 route、DOM IDs、screenshots |
 | QA-090-B08 | 套用 parent不命中、grandchild命中條件 | 五模式保留可理解 ancestor path；match count只含真正命中者 | matched/visible/context snapshot |
 | QA-090-B09 | 套用不命中任何 task條件，再按清除 | 顯示 filtered-zero文案＋單一清除；清除後全部恢復且remote row刪除 | 操作前後 screenshot＋DB row=0 |
-| QA-090-B10 | 進入真無 task board | 顯示 true-empty；不得顯示 filtered-zero或同步錯誤 | screenshot＋fixture row count |
+| QA-090-B10 | 進入真無 task board | 不渲染冗餘空狀態佔位；新增列表入口仍存在且貼齊畫布左側；不得顯示 filtered-zero 或同步錯誤 | screenshot＋fixture row count |
 | QA-090-B11 | preference read故障、task data正常 | exact cache或default可用，出現非阻斷 warning；不得空白或跨 scope | warning、UI IDs、journal/source |
 | QA-090-B12 | UI改 filter時注入upsert/delete故障，之後解除 | 目前UI保留選擇、顯示未同步、journal pending；retry後DB收斂且warning消失/不重複 | failure/recovery screenshot、DB readback |
 | QA-090-B13 | 延遲 board-1 response，快速切 board-2/account B | 延遲結果被丟棄；目前scope不變；舊job不以新auth送出 | request timeline、scope telemetry、UI |

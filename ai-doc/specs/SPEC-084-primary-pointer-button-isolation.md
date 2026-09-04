@@ -2,7 +2,7 @@
 
 日期：2026-08-22
 狀態：Implemented / QA-QC PASS / 未 Release
-父層 DEV：DEV-070；相容權威 DEV-028、DEV-053、DEV-076、DEV-077
+父層 DEV：DEV-070；相容權威 DEV-028、DEV-053、DEV-077
 原始需求：`USER-20260822-NON-PRIMARY-POINTER-ISOLATION`
 風險：Medium（跨模式 UI 互動；錯誤路徑可能改動任務順序、日期、關係線或持久化面板寬度）
 Spec Impact：`Compatible correction / raw-input isolation`。修正非主按鍵被錯誤解讀為主按鍵的實作漂移；既有左鍵、鍵盤、觸控、右鍵選單與心智圖中鍵平移契約維持。
@@ -101,7 +101,7 @@ export const isPrimaryPointerActivation = (
 | `src/components/TaskWorkbenchPanel.tsx` | 同上 | placement／filter／panel preference 不變 |
 | `src/components/Records/RecordSidebar.tsx` | 同上；加 `data-record-sidebar-resize-handle="true"` | resize 方向、clamp、record workflow 不變 |
 | `src/components/MindMap/MindMapRelationshipInteractionLayer.tsx` | 將 relationship pointer/mouse selection handler 型別收斂為含 button 的事件並先 guard；被拒絕時不得 prevent/stop/select；endpoint 維持呼叫 View adapter | keyboard click、double-click label edit、hover、label editor 不變 |
-| `src/components/MindMap/MindMapView.tsx` | `startRelationshipPointerDrag` 在 permission、preventDefault、stopPropagation、capture 與 state 前先 guard | middle pan、left pan、scene geometry、relationship storage contract 不變 |
+| `src/components/MindMap/MindMapView.tsx` | `startRelationshipPointerDrag` 在 permission、preventDefault、stopPropagation、capture 與 state 前先 guard | middle pan、scene geometry、relationship storage contract 不變 |
 | `src/components/TaskDetailsModal.tsx` | backdrop 只在 `target===currentTarget && primary` 時關閉 | X／Escape／pinch close、自動儲存契約不變 |
 | `src/components/BoardMembersPanel.tsx` | 同上；加 `data-board-share-backdrop="true"` | dialog content、permission／member mutation 不變 |
 | `src/components/CalendarSubscriptionsView.tsx` | delete backdrop 只接受 primary；加 `data-calendar-subscription-delete-backdrop="true"` | `isDeleting` guard、確認／取消與 subscription mutation 不變 |
@@ -157,8 +157,6 @@ npm.cmd run verify:dev-054-mobile-task-drag-precision
 npm.cmd run verify:dev-054-mobile-task-drag-precision-browser
 npm.cmd run verify:dev-070-interaction-kernel
 npm.cmd run verify:dev-070-interaction-kernel-browser
-npm.cmd run verify:dev-076-mindmap-left-mouse-pan
-npm.cmd run verify:dev-076-mindmap-left-mouse-pan-browser
 npm.cmd run verify:dev-077-mindmap-relationship-redline-cleanup
 npm.cmd run verify:dev-077-mindmap-relationship-redline-cleanup-browser
 npm.cmd run verify:dev-017-record-sidebar-resize

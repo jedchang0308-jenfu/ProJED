@@ -7,7 +7,6 @@ export type TaskActionGuardInput = {
   canEditTask?: boolean;
   canMoveTask?: boolean;
   canDeleteTask?: boolean;
-  canCollectTask?: boolean;
   canAssignTask?: boolean;
   canCreateDependency?: boolean;
   canManageTaskReference?: boolean;
@@ -27,7 +26,6 @@ export const guardTaskAction = (actionId: TaskActionId, input: TaskActionGuardIn
     case 'edit': return { allowed: Boolean(input.canEditTask), reason: input.canEditTask ? undefined : 'permission-edit' };
     case 'move': return { allowed: Boolean(input.canMoveTask), reason: input.canMoveTask ? undefined : 'permission-move' };
     case 'delete': return { allowed: Boolean(input.canDeleteTask), reason: input.canDeleteTask ? undefined : 'permission-delete' };
-    case 'collect': return { allowed: Boolean(input.canCollectTask), reason: input.canCollectTask ? undefined : 'permission-collect' };
     case 'assign': return { allowed: Boolean(input.canAssignTask), reason: input.canAssignTask ? undefined : 'permission-assign' };
     case 'dependency': return { allowed: Boolean(input.canCreateDependency), reason: input.canCreateDependency ? undefined : 'permission-dependency' };
     case 'tracking-reference': return { allowed: Boolean(input.canManageTaskReference), reason: input.canManageTaskReference ? undefined : 'permission-tracking-reference' };

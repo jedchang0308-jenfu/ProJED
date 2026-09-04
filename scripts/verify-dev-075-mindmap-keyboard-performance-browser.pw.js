@@ -370,9 +370,16 @@ async (page) => {
 
   if (phase === 'after') {
     await openFixture(50);
+    await page.waitForFunction(() => (
+      document.querySelector('[data-mindmap-node][aria-selected="true"]')?.getAttribute('data-mindmap-node') === 'dev075-node-0000'
+    ), null, { timeout: 5000 }).catch(() => {});
     const initialSelectedIds = await page.locator('[data-mindmap-node][aria-selected="true"]')
       .evaluateAll(elements => elements.map(element => element.getAttribute('data-mindmap-node')).filter(Boolean));
-    assert(initialSelectedIds.length === 1 && initialSelectedIds[0] === 'dev075-node-0000', 'initial selection must have one model-first root', { initialSelectedIds });
+    const initialSelectionTelemetry = await readTelemetry();
+    assert(initialSelectedIds.length === 1 && initialSelectedIds[0] === 'dev075-node-0000', 'initial selection must have one model-first root', {
+      initialSelectedIds,
+      initialSelectionTelemetry,
+    });
     const rightRoot = page.locator('[data-mindmap-node="dev075-node-0000"]');
     const leftRoot = page.locator('[data-mindmap-node="dev075-node-0001"]');
     assert(

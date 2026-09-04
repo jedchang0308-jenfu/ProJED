@@ -25,6 +25,8 @@ const MINDMAP_RELATIONSHIP_INTERACTION_SELECTOR = [
   '[data-mindmap-note-relationship-curve-click-target]',
   '[data-mindmap-note-relationship-endpoint]',
   '[data-mindmap-note-relationship-control-point]',
+  '[data-mindmap-note-relationship-direction-joystick]',
+  '[data-mindmap-note-relationship-label-input]',
   '[data-mindmap-note-relationship-style-panel]',
 ].join(',');
 

@@ -15,7 +15,6 @@ export const useBoardPermissions = () => {
     const canMoveTask = can('move_task');
     const canDeleteTask = can('delete_task');
     const canManageTaskReference = can('manage_task_reference');
-    const canCollectTask = can('collect_task');
     const canAssignTask = can('assign_task');
     const canCreateDependency = can('create_dependency');
     const canDeleteDependency = can('delete_dependency');
@@ -29,7 +28,6 @@ export const useBoardPermissions = () => {
       canMoveTask,
       canDeleteTask,
       canManageTaskReference,
-      canCollectTask,
       canAssignTask,
       canCreateDependency,
       canDeleteDependency,
@@ -45,7 +43,6 @@ export const useBoardPermissions = () => {
         !canMoveTask &&
         !canDeleteTask &&
         !canManageTaskReference &&
-        !canCollectTask &&
         !canAssignTask &&
         !canCreateDependency &&
         !canDeleteDependency,

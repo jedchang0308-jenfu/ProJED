@@ -17,21 +17,19 @@ import { useTagStore } from '../../store/useTagStore';
 import { getNodeTags } from '../../utils/tags';
 import { KanbanTagSticker } from '../Tags/KanbanTagSticker';
 import dayjs from 'dayjs';
-import type { TaskStatus } from '../../types';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
-import { TaskDateBadge } from './TaskDateBadge';
 import {
   TASK_CHILD_DROP_HIGHLIGHT_EVENT,
   TASK_CHILD_DROP_SUCCESS_EVENT,
   type TaskChildDropSuccessDetail,
 } from './taskDrag/taskChildDropFeedback';
-import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 import { TaskPlacementPendingIndicator } from './taskDrag/TaskPlacementPendingIndicator';
 import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import { primaryPlacementId } from '../../features/taskTracking/model';
 import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { useTaskPlacementController } from './useTaskPlacementController';
+import { KANBAN_CARD_FRAME_CLASS, KanbanCardPresentation } from './KanbanCardPresentation';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -233,7 +231,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       data-task-hierarchy-level="L2"
       data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       data-task-placement-pending={taskGesture.isPlacementPending ? 'true' : undefined}
-      className={`kanban-task-card relative mb-[6px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow ${
+      className={`${KANBAN_CARD_FRAME_CLASS} ${
         isDragPlaceholder ? 'kanban-drag-origin-placeholder pointer-events-none !border-transparent bg-transparent shadow-none' : ''
       } ${
         isRecentlyChildDropped ? 'ring-2 ring-primary/50 ring-offset-1' : ''
@@ -249,42 +247,52 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
       />
       <>
         {/* 來源 surface 與子樹 surface 為 sibling；scope 只負責版面與整棵樹的排序位移。 */}
-          <div
-            {...dragSurfaceBindings}
-            {...cardLongPressHandlers}
-            onClick={(e) => {
-              if (isRecordCaptureMode) {
+          <KanbanCardPresentation
+            model={{
+              title: node.title,
+              status,
+              startDate: node.startDate,
+              endDate: node.endDate,
+              isDurationLocked: Boolean(node.isDurationLocked),
+              startLocked: lockStatus.startLocked,
+              endLocked: lockStatus.endLocked,
+            }}
+            bodyProps={{
+              ...dragSurfaceBindings,
+              ...cardLongPressHandlers,
+              onClick: (e) => {
+                if (isRecordCaptureMode) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  insertRecordTaskMention(nodeId, node.title || nodeId);
+                  return;
+                }
+                if (isDragPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
+                void interactionBinding.dispatch('pointer.primary');
+              },
+              onContextMenu: (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                insertRecordTaskMention(nodeId, node.title || nodeId);
-                return;
-              }
-              if (isDragPlaceholder || isSelectingMode || isTaskPrimaryActionTarget(e.target)) return;
-              // Compatibility contract: selectAndOpenTaskDetails(nodeId) is dispatched by the interaction kernel.
-              void interactionBinding.dispatch('pointer.primary');
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              if (isRecordCaptureMode) return;
-              void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
-            }}
-            data-task-id={nodeId}
-            data-mobile-drop-target={nodeId}
-            data-task-drop-surface-kind="kanban-card"
-            data-desktop-drop-surface="true"
-            data-desktop-drop-id={placementController.placementId}
-            data-task-drag-surface="true"
-            data-task-drag-surface-kind="kanban-card"
-            data-task-surface-source="true"
-            data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
-            data-desktop-task-hover-preview={!isDragPlaceholder && !isSelectingMode && !isRecordCaptureMode ? 'true' : undefined}
-            data-task-selected={selectedTaskId === nodeId ? 'true' : undefined}
-            data-touch-tap-guard="true"
-            data-task-touch-gesture-surface={taskGesture.touchGestureEnabled ? 'true' : undefined}
-            data-task-card-primary="true"
-            data-task-card-primary-content="true"
-            data-mobile-task-card-primary="true"
-            className={`kanban-task-card-body mobile-pan-item kanban-scroll-touch group min-w-0 px-[9px] py-[6px] transition-[background-color,box-shadow] ${
+                if (isRecordCaptureMode) return;
+                void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
+              },
+              'data-task-id': nodeId,
+              'data-mobile-drop-target': nodeId,
+              'data-task-drop-surface-kind': 'kanban-card',
+              'data-desktop-drop-surface': 'true',
+              'data-desktop-drop-id': placementController.placementId,
+              'data-task-drag-surface': 'true',
+              'data-task-drag-surface-kind': 'kanban-card',
+              'data-task-surface-source': 'true',
+              'data-kanban-drag-source-placeholder': isDragPlaceholder ? 'true' : undefined,
+              'data-desktop-task-hover-preview': !isDragPlaceholder && !isSelectingMode && !isRecordCaptureMode ? 'true' : undefined,
+              'data-task-selected': selectedTaskId === nodeId ? 'true' : undefined,
+              'data-touch-tap-guard': 'true',
+              'data-task-touch-gesture-surface': taskGesture.touchGestureEnabled ? 'true' : undefined,
+              'data-task-card-primary': 'true',
+              'data-task-card-primary-content': 'true',
+              'data-mobile-task-card-primary': 'true',
+            } as React.HTMLAttributes<HTMLElement>}
+            bodyClassName={`${
               isDragPlaceholder ? 'kanban-drag-source-placeholder pointer-events-none' : ''
             } ${
               showChecklistSurface ? 'rounded-t-[7px]' : 'rounded-[7px]'
@@ -299,121 +307,91 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                     : 'cursor-crosshair hover:bg-amber-50/40'
                   : 'cursor-pointer hover:bg-slate-50/70'
             }`}
-          >
-            {/* 標題列 */}
-          <div
-            className="kanban-task-title-row flex items-start justify-between gap-1"
-          >
-            <div className="kanban-task-title-content flex items-center gap-1 flex-1 min-w-0">
-              {/* 行內編輯：編輯模式 → input；一般模式 → 點擊觸發編輯 */}
-              <h4
-                className={`task-title-text relative min-w-0 flex-1 pr-2 text-sm font-medium leading-tight transition-colors ${taskStatusTitleClass[status as TaskStatus]}`}
-                aria-label={node.title || '未命名任務'}
-                data-task-title-slot="true"
-                data-task-id={nodeId}
-                onClick={(e) => {
-                  if (isRecordCaptureMode) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    insertRecordTaskMention(nodeId, node.title || nodeId);
-                  }
-                }}
-              >
-                <span
-                  className="inline-block max-w-full truncate align-top"
-                  data-task-id={nodeId}
-                >
-                  {node.title || '未命名任務'}
-                </span>
-              </h4>
-              {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
-              {showTags && nodeTags.length > 0 ? (
-                <KanbanTagSticker tags={nodeTags} />
-              ) : null}
-              {isRecordCaptureMode ? (
-                <span
-                  className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                    isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
-                  }`}
-                  data-task-record-capture-checkbox="true"
-                >
-                  {isRecordSelected ? <Check size={11} /> : null}
-                </span>
-              ) : null}
-              {showChecklistSurface ? (
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsChecklistExpanded(current => !current);
-                  }}
-                  className="kanban-checklist-toggle relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors after:absolute after:-inset-1 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-expanded={isChecklistExpanded}
-                  aria-controls={checklistRegionId}
-                  aria-label={checklistToggleLabel}
-                  title={checklistToggleLabel}
-                  data-kanban-checklist-toggle="true"
-                  data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
-                >
-                  <ChevronRight
-                    size={16}
-                    aria-hidden="true"
-                    className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
-                  />
-                </button>
-              ) : null}
-            </div>
-            {!isSelectingMode && (
-              <TaskDateBadge
-                startDate={node.startDate}
-                endDate={node.endDate}
-                status={status}
-                showStartDate={false}
-                startLocked={lockStatus.startLocked}
-                endLocked={lockStatus.endLocked}
-                durationLocked={Boolean(node.isDurationLocked)}
-                surface="checklist"
-                className="ml-0.5 self-center"
-              />
+            titleProps={{
+              'aria-label': node.title || '未命名任務',
+              'data-task-title-slot': 'true',
+              'data-task-id': nodeId,
+              onClick: (e) => {
+                if (isRecordCaptureMode) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  insertRecordTaskMention(nodeId, node.title || nodeId);
+                }
+              },
+            } as React.HTMLAttributes<HTMLElement>}
+            titleTextProps={{ 'data-task-id': nodeId } as React.HTMLAttributes<HTMLElement>}
+            showDate={!isSelectingMode}
+            showTags={showTags}
+            tags={showTags && nodeTags.length > 0 ? <KanbanTagSticker tags={nodeTags} /> : null}
+            titleTrailing={(
+              <>
+                {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
+                {isRecordCaptureMode ? (
+                  <span
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      isRecordSelected ? 'border-primary bg-primary text-white' : 'border-primary/40 bg-white'
+                    }`}
+                    data-task-record-capture-checkbox="true"
+                  >
+                    {isRecordSelected ? <Check size={11} /> : null}
+                  </span>
+                ) : null}
+                {showChecklistSurface ? (
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsChecklistExpanded(current => !current);
+                    }}
+                    className="kanban-checklist-toggle relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors after:absolute after:-inset-1 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-expanded={isChecklistExpanded}
+                    aria-controls={checklistRegionId}
+                    aria-label={checklistToggleLabel}
+                    title={checklistToggleLabel}
+                    data-kanban-checklist-toggle="true"
+                    data-kanban-checklist-state={isChecklistExpanded ? 'expanded' : 'collapsed'}
+                  >
+                    <ChevronRight
+                      size={16}
+                      aria-hidden="true"
+                      className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
+                    />
+                  </button>
+                ) : null}
+              </>
             )}
-          </div>
-
-          {isSelectingMode && (
-            <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta flex flex-wrap items-center gap-1 mt-px text-[10px] text-slate-400">
-
-              {/* 選取模式：始終顯示兩顆日期按鈕（無日期時顯示 "..."） */}
-              {/* 開始日按鈕 — 始終顯示 */}
-              <button
-                disabled={!canCreateDependency}
-                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
-                className={`flex items-center gap-1 px-1.5 py-0 rounded-full border text-[10px] font-semibold transition-all ${
-                  isSelfStart
-                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                    : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-sm cursor-crosshair'
-                }`}
-                title="點擊選取此開始日作為依賴目標"
-              >
-                <Link size={9} />
-                <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
-              </button>
-              {/* 結束日按鈕 — 始終顯示 */}
-              <button
-                disabled={!canCreateDependency}
-                onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
-                className={`flex items-center gap-1 px-1.5 py-0 rounded-full border text-[10px] font-semibold transition-all ${
-                  isSelfEnd
-                    ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
-                    : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-sm cursor-crosshair'
-                }`}
-                title="點擊選取此結束日作為依賴目標"
-              >
-                <Link size={9} />
-                <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
-              </button>
-            </div>
-          )}
-          </div>
+            meta={isSelectingMode ? (
+              <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta mt-px flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                <button
+                  disabled={!canCreateDependency}
+                  onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'start', node.title); }}
+                  className={`flex items-center gap-1 rounded-full border px-1.5 py-0 text-[10px] font-semibold transition-all ${
+                    isSelfStart
+                      ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                      : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-sm cursor-crosshair'
+                  }`}
+                  title="點擊選取此開始日作為依賴目標"
+                >
+                  <Link size={9} />
+                  <span>開始 {node.startDate ? dayjs(node.startDate).format('MM/DD') : '...'}</span>
+                </button>
+                <button
+                  disabled={!canCreateDependency}
+                  onClick={(e) => { e.stopPropagation(); if (canCreateDependency) kanbanDepCtx?.handleKanbanDependencySelect(nodeId, 'end', node.title); }}
+                  className={`flex items-center gap-1 rounded-full border px-1.5 py-0 text-[10px] font-semibold transition-all ${
+                    isSelfEnd
+                      ? 'bg-amber-100 border-amber-400 text-amber-700 ring-2 ring-amber-300'
+                      : 'bg-primary-light border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-sm cursor-crosshair'
+                  }`}
+                  title="點擊選取此結束日作為依賴目標"
+                >
+                  <Link size={9} />
+                  <span>結束 {node.endDate ? dayjs(node.endDate).format('MM/DD') : '...'}</span>
+                </button>
+              </div>
+            ) : null}
+          />
 
           {/* Level 3+ 下層任務展開區 */}
           {!isDragPlaceholder && showChecklistSurface && (

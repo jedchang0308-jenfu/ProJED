@@ -48,7 +48,8 @@ export const TaskFilterResultState: React.FC<TaskFilterResultStateProps> = ({
     totalTaskCount: projection.totalTaskCount,
     matchedTaskCount: projection.matchedTaskIds.size,
   });
-  if (state === 'results') return null;
+  const hasTrueEmptyAction = state === 'true-empty' && canCreate && Boolean(onCreate);
+  if (state === 'results' || (state === 'true-empty' && !hasTrueEmptyAction)) return null;
 
   return (
     <div
@@ -66,7 +67,6 @@ export const TaskFilterResultState: React.FC<TaskFilterResultStateProps> = ({
       ) : null}
       {state === 'true-empty' ? (
         <>
-          <p>此看板尚無任務</p>
           {canCreate && onCreate ? <Button variant="secondary" onClick={onCreate}>新增第一個任務</Button> : null}
         </>
       ) : null}

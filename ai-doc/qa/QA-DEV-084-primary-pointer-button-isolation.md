@@ -144,8 +144,6 @@ npm.cmd run verify:dev-054-mobile-task-drag-precision
 npm.cmd run verify:dev-054-mobile-task-drag-precision-browser
 npm.cmd run verify:dev-070-interaction-kernel
 npm.cmd run verify:dev-070-interaction-kernel-browser
-npm.cmd run verify:dev-076-mindmap-left-mouse-pan
-npm.cmd run verify:dev-076-mindmap-left-mouse-pan-browser
 npm.cmd run verify:dev-077-mindmap-relationship-redline-cleanup
 npm.cmd run verify:dev-077-mindmap-relationship-redline-cleanup-browser
 npm.cmd run verify:dev-017-record-sidebar-resize

@@ -83,7 +83,8 @@ async (page) => {
         : `${String(year).slice(-2)}/${month}/${day}`;
     };
 
-    const badges = Array.from(document.querySelectorAll('[data-task-date-badge="true"]'))
+    const boardSurface = document.querySelector('[data-mobile-pan-surface="board"]');
+    const badges = Array.from(boardSurface?.querySelectorAll('[data-task-date-badge="true"]') || [])
       .filter(element => element instanceof HTMLElement && element.offsetParent !== null)
       .map(element => {
         const dueDate = element.getAttribute('data-task-due-date') || '';
@@ -168,7 +169,7 @@ async (page) => {
 
     await setStartDatePreference(false);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.locator('[data-task-date-badge="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('[data-mobile-pan-surface="board"] [data-task-date-badge="true"]').first().waitFor({ state: 'visible', timeout: 15000 });
     const preferenceOff = await collectDateEvidence();
     record(
       'QA-060-002',
@@ -188,7 +189,7 @@ async (page) => {
         await page.locator('[data-main-sidebar-toggle="true"]').click();
         await mobileSidebar.waitFor({ state: 'hidden', timeout: 5000 });
       }
-      await page.locator('[data-task-date-badge="true"]').first().scrollIntoViewIfNeeded();
+      await page.locator('[data-mobile-pan-surface="board"] [data-task-date-badge="true"]').first().scrollIntoViewIfNeeded();
       await page.waitForTimeout(100);
       const evidence = await collectDateEvidence();
       const sweep = await visibleErrorSweep();

@@ -418,6 +418,8 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
     return (
         <div
             data-task-id={item.id}
+            data-task-canonical-id={item.id}
+            data-task-placement-hover-surface="true"
             data-gantt-task-bar="true"
             data-gantt-placement-kind={item.isTrackingReference ? 'tracking-reference' : 'primary'}
             aria-label={item.isTrackingReference ? `追蹤副本：${item.title || '未命名任務'}` : item.title || '未命名任務'}

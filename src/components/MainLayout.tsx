@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import {
   BookOpenText,
-  ALargeSmall,
   CalendarDays,
   ChevronRight,
   ClipboardList,
@@ -46,7 +45,6 @@ import {
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
-import { useKanbanViewSize } from '../features/kanbanViewSize/KanbanViewSizeProvider';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -79,7 +77,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [isShareDialogOpen, setShareDialogOpen] = React.useState(false);
   const [previewedPanel, setPreviewedPanel] = React.useState<PanelPreviewId | null>(null);
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
-  const { viewSize, requestViewSize } = useKanbanViewSize();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
   const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
@@ -336,25 +333,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       pendingUpdateCount={pendingTaskFilterRefreshCount}
                       onApplyPendingUpdate={handleApplyTaskFilterRefresh}
                     />
-                  ) : null}
-
-                  {currentView === 'board' && isMobileBoardOnly ? (
-                    <button
-                      type="button"
-                      className={cn(
-                        topbarClassNames.iconButton,
-                        'ml-1 border-primary-200 text-primary-700 hover:border-primary-400 hover:bg-primary-50',
-                      )}
-                      onClick={() => requestViewSize(viewSize === 'compact' ? 'large' : 'compact', { kind: 'toolbar' })}
-                      disabled={isSelectingMode}
-                      aria-pressed={viewSize === 'large'}
-                      aria-label={viewSize === 'compact' ? '切換為放大看板（2.5 倍）' : '切回緊湊看板'}
-                      title={viewSize === 'compact' ? '切換為放大看板（2.5 倍）' : '切回緊湊看板'}
-                      data-kanban-size-toggle="true"
-                      data-kanban-size-current={viewSize}
-                    >
-                      <ALargeSmall size={15} />
-                    </button>
                   ) : null}
 
                   <div className="ml-1 hidden items-center gap-1 border-l border-slate-300 pl-2 sm:flex">

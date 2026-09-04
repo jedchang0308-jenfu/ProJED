@@ -1,5 +1,5 @@
 import type { TaskNode } from '../../../types';
-import type { BatchNodeUpdates, WbsBoardActions } from '../../../store/useWbsStore';
+import type { WbsBoardActions } from '../../../store/useWbsStore';
 import { useWbsStore } from '../../../store/useWbsStore';
 import useDialogStore from '../../../store/useDialogStore';
 import { toast } from '../../../store/useToastStore';
@@ -7,8 +7,6 @@ import { prepareNewTaskNaming } from '../../../utils/taskInteractions';
 import { isTaskPlacementOutcomeUnknownError } from '../../../features/taskWorkbench/placementTransaction';
 import {
   buildMoveTaskSubtreeCommand,
-  getPlacementScopeKey,
-  getTaskPlacementScope,
   getTaskOwnershipRef,
   type TaskOwnershipRef,
 } from '../../../features/taskWorkbench/taskPlacementCommand';
@@ -18,13 +16,13 @@ import type {
   TaskDragObservation,
 } from './taskDragTypes';
 import {
-  buildTaskParentIndex,
   getTaskAppendOrder,
   isValidTaskDropIntent,
   resolveTaskDropOutcome,
   taskDragSourceKindToSurfaceKind,
   type TaskDropIntent,
 } from './taskDropIntent';
+import { normalizeTaskMoveUpdates } from './taskMoveUpdateNormalization';
 import {
   resolveDesktopTaskDropIntent,
   type DesktopTaskDropPreview,
@@ -36,7 +34,7 @@ export { buildTaskParentIndex, getTaskAppendOrder, isValidTaskDropIntent } from 
 
 type TaskDragStoreActions = Pick<
   WbsBoardActions,
-  'addNode' | 'updateNode' | 'batchUpdateNodes' | 'commitTaskPlacementCommand' | 'archiveNode' | 'recalculateAncestorStatus' | 'moveTrackingReference'
+  'addNode' | 'updateNode' | 'batchUpdateNodes' | 'commitTaskPlacementCommand' | 'archiveNode' | 'recalculateAncestorStatus' | 'moveTrackingReference' | 'stageTrackingReference' | 'placeStagedTrackingReference'
 >;
 
 export interface TaskDragCommitDependencies extends TaskDragStoreActions {
@@ -89,47 +87,7 @@ const commitTaskSubtreeToUnplaced = async (
   }
 };
 
-export const normalizeTaskMoveUpdates = (
-  draggedNodeId: string,
-  intent: TaskDropIntent,
-  nodesRecord: Record<string, TaskNode>,
-): BatchNodeUpdates => {
-  const draggedNode = nodesRecord[draggedNodeId];
-  if (!draggedNode) return {};
-  const originalParentIndex = buildTaskParentIndex(nodesRecord);
-  const movedNodes = {
-    ...nodesRecord,
-    [draggedNodeId]: {
-      ...nodesRecord[draggedNodeId],
-      parentId: intent.parentId,
-      nodeType: intent.nodeType,
-      order: intent.order,
-    },
-  };
-  const movedParentIndex = buildTaskParentIndex(movedNodes);
-  const affectedParentKeys = Array.from(new Set([
-    getPlacementScopeKey(getTaskPlacementScope(draggedNode)),
-    getPlacementScopeKey(getTaskPlacementScope(movedNodes[draggedNodeId])),
-  ]));
-  const updates: BatchNodeUpdates = {};
-
-  affectedParentKeys.forEach((parentKey) => {
-    const ids = parentKey === getPlacementScopeKey(getTaskPlacementScope(movedNodes[draggedNodeId]))
-      ? (movedParentIndex[parentKey] || [])
-      : (originalParentIndex[parentKey] || []).filter((id) => id !== draggedNodeId);
-    ids.forEach((id, index) => {
-      updates[id] = { ...(updates[id] || {}), order: index };
-    });
-  });
-
-  updates[draggedNodeId] = {
-    ...(updates[draggedNodeId] || {}),
-    parentId: intent.parentId,
-    nodeType: intent.nodeType,
-    updatedAt: Date.now(),
-  };
-  return updates;
-};
+export { normalizeTaskMoveUpdates } from './taskMoveUpdateNormalization';
 
 const getBoardDestination = (
   targetOwnership: TaskOwnershipRef,
@@ -194,15 +152,46 @@ export const commitDesktopTaskDrag = async ({
     if (!dependencies.canManageTaskReference) return noOp('reference-permission-denied');
     const state = useWbsStore.getState();
     const sourceReference = state.trackingReferences.find(reference => reference.id === activeReference.id && !reference.removedAt);
-    if (!sourceReference) return noOp('reference-source-missing');
+    const stagedReference = state.stagedTrackingReferences.find(reference => reference.referenceId === activeReference.id);
+    if (!sourceReference && !stagedReference) return noOp('reference-source-missing');
+    if (overData?.type === 'wbs-root-drop' && !overData?.nodeId) {
+      if (!overData?.boardId || !overData?.workspaceId) return noOp('placement-target-missing');
+      try {
+        const place = stagedReference
+          ? dependencies.placeStagedTrackingReference
+          : dependencies.moveTrackingReference;
+        await place({
+          referenceId: activeReference.id,
+          targetBoardId: overData.boardId,
+          targetParentPlacementId: null,
+          position: 'append',
+        });
+        return committed('reference-placed-on-empty-board');
+      } catch (error) {
+        console.error('[taskDrag] Failed to place tracking placement on the empty board.', error);
+        placementFailureToast(error, '歸位失敗，追蹤副本仍保留在未歸位。');
+        return failed('reference-placement-persistence-failed');
+      }
+    }
     if (overData?.type === 'task-workbench-unplaced-lane'
       || (overData?.source === 'task-workbench' && overData?.placement === 'unplaced')) {
-      return noOp('reference-cannot-be-unplaced');
+      if (stagedReference) return noOp('reference-already-unplaced');
+      try {
+        await dependencies.stageTrackingReference(activeReference.id);
+        return committed('reference-moved-to-unplaced');
+      } catch (error) {
+        console.error('[taskDrag] Failed to stage tracking placement.', error);
+        placementFailureToast(error, '搬移失敗，追蹤副本已保留在原位置。');
+        return failed('reference-staging-persistence-failed');
+      }
     }
     try {
       if (overData?.type === 'task-workbench-placed-board-lane' && overData.boardId && overData.workspaceId) {
-        await dependencies.moveTrackingReference({
-          referenceId: sourceReference.id,
+        const place = stagedReference
+          ? dependencies.placeStagedTrackingReference
+          : dependencies.moveTrackingReference;
+        await place({
+          referenceId: activeReference.id,
           targetBoardId: overData.boardId,
           targetParentPlacementId: null,
           position: 'append',
@@ -217,7 +206,7 @@ export const commitDesktopTaskDrag = async ({
         || targetReference?.id
         || (targetNode ? primaryPlacementId(targetNode.id) : null);
       const targetBoardId = overData?.boardId || targetReference?.boardId || targetNode?.boardId;
-      if (!targetPlacementId || !targetBoardId || targetPlacementId === sourceReference.id) {
+      if (!targetPlacementId || !targetBoardId || targetPlacementId === activeReference.id) {
         return noOp('no-valid-reference-target');
       }
       const appendChild = desktopPreview?.displayPosition === 'append'
@@ -226,8 +215,11 @@ export const commitDesktopTaskDrag = async ({
       const displayPosition = overData?.orderingPosition
         || desktopPreview?.displayPosition
         || 'after';
-      await dependencies.moveTrackingReference({
-        referenceId: sourceReference.id,
+      const place = stagedReference
+        ? dependencies.placeStagedTrackingReference
+        : dependencies.moveTrackingReference;
+      await place({
+        referenceId: activeReference.id,
         targetBoardId,
         targetParentPlacementId: rootAppend
           ? null
@@ -292,10 +284,52 @@ export const commitDesktopTaskDrag = async ({
     }
   }
 
-  const latest = resolveDesktopTaskDropIntent({ activeData, targetData: overData, nodesRecord: state.nodes });
+  if (overData?.type === 'wbs-root-drop' && !overData?.nodeId) {
+    if (activeData?.source !== 'task-workbench') return noOp('empty-board-source-must-be-unplaced');
+    if (!overData?.boardId || !overData?.workspaceId) return noOp('placement-target-missing');
+    try {
+      await commitTaskSubtreeToBoard({
+        draggedNode,
+        nodesRecord: state.nodes,
+        destinationOwnership: {
+          kind: 'board',
+          workspaceId: overData.workspaceId,
+          boardId: overData.boardId,
+        },
+        intent: {
+          parentId: null,
+          order: 0,
+          nodeType: draggedNode.nodeType || 'task',
+          displayPosition: 'append',
+        },
+        anchorTaskId: null,
+        dependencies,
+        clientPlatform: 'desktop',
+        label: '歸位任務',
+      });
+      dependencies.recalculateAncestorStatus(draggedNode.id);
+      return committed('placed-on-empty-board');
+    } catch (error) {
+      console.error('[taskDrag] Failed to place task subtree on the empty board.', error);
+      placementFailureToast(error, '歸位失敗，任務已保留在未歸位。');
+      return failed('placement-persistence-failed');
+    }
+  }
+
+  // Revalidate against the same pointer-derived edge that was rendered.  The
+  // dnd-kit `over` payload can omit `orderingPosition`, in which case the
+  // fallback resolver infers direction from the source/target order and may
+  // invert an already-displayed before/after marker (especially after a
+  // prior cross-level move in a mixed drag sequence).
+  const latestTargetData = desktopPreview
+    && desktopPreview.displayPosition !== 'append'
+    ? { ...overData, orderingPosition: desktopPreview.displayPosition }
+    : overData;
+  const latest = resolveDesktopTaskDropIntent({ activeData, targetData: latestTargetData, nodesRecord: state.nodes });
   if (!latest) return noOp('invalid-drop-intent');
   if (desktopPreview) {
-    if (desktopPreview.sourceNodeId !== draggedNode.id || desktopPreview.targetNodeId !== overData?.nodeId) {
+    if (desktopPreview.sourceNodeId !== draggedNode.id
+      || desktopPreview.targetNodeId !== (overData?.nodeId || null)) {
       return noOp('desktop-preview-target-mismatch');
     }
     if (latest.targetSurfaceKind !== desktopPreview.targetSurfaceKind
@@ -467,11 +501,41 @@ export const commitTaskDragObservation = async ({
       });
     }
     if (!dependencies.canManageTaskReference) return noOp('reference-permission-denied');
+    const state = useWbsStore.getState();
+    const stagedReference = state.stagedTrackingReferences.find(reference =>
+      reference.referenceId === observation.source.trackingReferenceId);
+    if (observation.targetKind === 'workbench-unplaced-lane') {
+      if (stagedReference) return noOp('reference-already-unplaced');
+      try {
+        await dependencies.stageTrackingReference(observation.source.trackingReferenceId);
+        return committed('reference-moved-to-unplaced');
+      } catch (error) {
+        console.error('[taskDrag] Failed to stage tracking placement.', error);
+        placementFailureToast(error, '搬移失敗，追蹤副本已保留在原位置。');
+        return failed('reference-staging-persistence-failed');
+      }
+    }
+    if (observation.targetKind === 'workbench-placed-lane' || observation.targetKind === 'board-root') {
+      if (!stagedReference) return noOp('invalid-placement-source');
+      if (!observation.targetBoardId || !observation.targetWorkspaceId) return noOp('placement-target-missing');
+      try {
+        await dependencies.placeStagedTrackingReference({
+          referenceId: observation.source.trackingReferenceId,
+          targetBoardId: observation.targetBoardId,
+          targetParentPlacementId: null,
+          position: 'append',
+        });
+        return committed('reference-placed-on-board');
+      } catch (error) {
+        console.error('[taskDrag] Failed to place staged tracking placement.', error);
+        placementFailureToast(error, '歸位失敗，追蹤副本仍保留在未歸位。');
+        return failed('reference-placement-persistence-failed');
+      }
+    }
     if (observation.targetKind !== 'task-position'
       || !observation.targetNodeId
       || !observation.targetPlacementId
       || !observation.dropPosition) return noOp('no-valid-reference-target');
-    const state = useWbsStore.getState();
     const targetNode = state.nodes[observation.targetNodeId];
     if (!targetNode || targetNode.isArchived) return noOp('target-missing');
     const targetReference = state.trackingReferences.find(reference =>
@@ -479,7 +543,10 @@ export const commitTaskDragObservation = async ({
     const appendChild = observation.childIntentPhase === 'armed'
       && observation.childTargetId === observation.targetNodeId;
     try {
-      await dependencies.moveTrackingReference({
+      const place = stagedReference
+        ? dependencies.placeStagedTrackingReference
+        : dependencies.moveTrackingReference;
+      await place({
         referenceId: observation.source.trackingReferenceId,
         targetBoardId: targetReference?.boardId || observation.targetBoardId || targetNode.boardId,
         targetParentPlacementId: appendChild
@@ -515,7 +582,7 @@ export const commitTaskDragObservation = async ({
     return await commitTaskSubtreeToUnplaced(draggedNode, state.nodes, dependencies, 'mobile');
   }
 
-  if (observation.targetKind === 'workbench-placed-lane') {
+  if (observation.targetKind === 'workbench-placed-lane' || observation.targetKind === 'board-root') {
     if (observation.source.kind !== 'workbench-unplaced-row') return noOp('invalid-placement-source');
     if (!observation.targetBoardId || !observation.targetWorkspaceId) return noOp('placement-target-missing');
     try {

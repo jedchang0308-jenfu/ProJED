@@ -1,5 +1,6 @@
 /* eslint-disable */
 async (page) => {
+  const appBaseUrl = await page.evaluate(() => window.location.origin);
   const diagnostics = [];
   page.on('console', (message) => diagnostics.push(`console:${message.type()}:${message.text()}`));
   page.on('pageerror', (error) => diagnostics.push(`pageerror:${error.message}`));
@@ -255,7 +256,7 @@ async (page) => {
 
   const openApp = async (viewport = { width: 1440, height: 900 }, lastView = 'board') => {
     await page.setViewportSize(viewport);
-    await page.goto('http://localhost:4000/', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${appBaseUrl}/`, { waitUntil: 'domcontentloaded' });
     await seed(lastView);
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('nav').waitFor({ state: 'visible', timeout: 15000 });
@@ -304,7 +305,11 @@ async (page) => {
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
     await page.mouse.move(start.x + 12, start.y + 3, { steps: 4 });
-    await page.mouse.move(end.x, end.y, { steps: 24 });
+    // Keep the pointer transition below DEV-068's 1s child-intent dwell;
+    // this audit is asserting the explicit row/card ordering surface, not
+    // the long-hover child placement contract.
+    await page.mouse.move(end.x, end.y, { steps: options.steps ?? 1 });
+    await page.waitForTimeout(options.settleMs ?? 140);
     await page.mouse.up();
     await page.waitForTimeout(350);
   };
@@ -605,10 +610,8 @@ async (page) => {
         columnA: await orderInColumn('dev046-col-a'),
         columnB: await orderInColumn('dev046-col-b'),
       };
-      const crossColumnDebug = await page.evaluate(() => (window.__projedDesktopTaskDragDebug || []).slice(-25));
       assert(crossColumnAfter.columnB.includes('dev046-card-b'), 'card drag should move the task across columns', {
         ...crossColumnAfter,
-        crossColumnDebug,
       });
 
       const columnBefore = await columnOrder();

@@ -117,6 +117,8 @@ async (page) => {
   assert(await tool.getAttribute('data-active') === 'false', 'relationship tool should finish after selecting the target');
 
   // Re-enter from the menu and prove Escape cancels the transient selection mode.
+  await page.keyboard.press('Escape');
+  await page.locator('[data-mindmap-note-relationship-style-drawer="true"]').waitFor({ state: 'hidden', timeout: 10000 });
   const secondAction = await openRelationshipAction(target);
   await secondAction.action.click();
   await secondAction.menu.waitFor({ state: 'hidden', timeout: 10000 });

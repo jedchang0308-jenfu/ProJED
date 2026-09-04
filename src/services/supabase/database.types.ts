@@ -27,7 +27,7 @@ export type DocumentSourceType =
   | 'manual';
 export type RagVisibility = 'tenant' | 'project' | 'private';
 export type RagSyncStatus = 'pending' | 'running' | 'synced' | 'failed' | 'deleted';
-export type KnowledgeRecordType = 'meeting' | 'work_log' | 'task_collection';
+export type KnowledgeRecordType = 'meeting' | 'work_log';
 export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
 export type CalendarSubscriptionDateType = 'start_date' | 'due_date';
@@ -273,11 +273,6 @@ export type KnowledgeRecordRow = {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
-  collection_operation_id: string | null;
-  collection_version: number | null;
-  collection_schema_version: number | null;
-  collection_snapshot_hash: string | null;
-  source_root_item_id: string | null;
 };
 
 export type RecordTaskLinkRow = {
@@ -603,50 +598,14 @@ export interface Database {
       };
       get_task_tracking_reference_capability_v1: { Args: Record<string, never>; Returns: Json };
       list_task_tracking_references_v1: { Args: { p_tenant_id: string }; Returns: Json };
+      list_task_tracking_reference_staging_v1: { Args: { p_tenant_id: string }; Returns: Json };
       get_board_task_projection_v1: { Args: { p_tenant_id: string; p_project_id: string }; Returns: Json };
       create_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
       move_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      stage_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
+      place_staged_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
       remove_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
       restore_task_tracking_reference_v1: { Args: Record<string, Json>; Returns: Json };
-      preview_task_collection_subtree: {
-        Args: {
-          p_operation_id: string;
-          p_tenant_id: string;
-          p_project_id: string;
-          p_root_item_id: string;
-        };
-        Returns: Json;
-      };
-      collect_task_subtree: {
-        Args: {
-          p_operation_id: string;
-          p_tenant_id: string;
-          p_project_id: string;
-          p_root_item_id: string;
-          p_preview_token: string;
-          p_annotation?: string | null;
-        };
-        Returns: Json;
-      };
-      list_task_collection_summaries: {
-        Args: {
-          p_tenant_id: string;
-          p_project_id: string;
-          p_search?: string | null;
-          p_cursor_occurred_at?: string | null;
-          p_cursor_id?: string | null;
-          p_limit?: number;
-        };
-        Returns: Array<{
-          record_id: string;
-          title: string;
-          collection_version: number;
-          occurred_at: string;
-          source_board_title: string | null;
-          task_count: number;
-          history_coverage: string;
-        }>;
-      };
     };
     Enums: {
       tenant_role: TenantRole;

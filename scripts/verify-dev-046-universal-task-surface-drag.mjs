@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const files = {
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   boardView: 'src/components/BoardView.tsx',
   wbsNodeItem: 'src/components/Wbs/WbsNodeItem.tsx',
@@ -56,42 +57,39 @@ assert(
 
 assert(
   'Kanban cards expose root task drag surface bindings',
-  source.kanbanCard.includes('const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode') &&
-    source.kanbanCard.includes('disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode') &&
-    source.kanbanCard.includes('useTaskGestureSurface') &&
-    source.kanbanCard.includes('{...dragSurfaceBindings}') &&
-    source.kanbanCard.includes('data-task-drag-surface="true"') &&
-    source.kanbanCard.includes('data-task-drag-surface-kind="kanban-card"') &&
-    source.kanbanCard.includes('data-mobile-drop-target={nodeId}') &&
-    source.kanbanCard.includes('selectAndOpenTaskDetails(nodeId)') &&
-    source.kanbanCard.includes('onContextMenu={(e) => {') &&
+  source.kanbanCard.includes('useTaskPlacementController') &&
+    source.kanbanCard.includes('const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode || taskGesture.isPlacementPending') &&
+    source.kanbanCard.includes('data-task-placement-pending') &&
+    (source.kanbanCard.includes('{...dragSurfaceBindings}') || source.kanbanCard.includes('...dragSurfaceBindings,')) &&
+    (source.kanbanCard.includes('data-task-drag-surface="true"') || source.kanbanCard.includes("'data-task-drag-surface': 'true'")) &&
+    (source.kanbanCard.includes('data-task-drag-surface-kind="kanban-card"') || source.kanbanCard.includes("'data-task-drag-surface-kind': 'kanban-card'")) &&
+    (source.kanbanCard.includes('data-mobile-drop-target={nodeId}') || source.kanbanCard.includes("'data-mobile-drop-target': nodeId")) &&
+    (source.kanbanCard.includes('selectAndOpenTaskDetails(nodeId)') || source.kanbanCard.includes("interactionBinding.dispatch('pointer.primary')")) &&
+    (source.kanbanCard.includes('onContextMenu={(e) => {') || source.kanbanCard.includes('onContextMenu: (e) => {')) &&
     !source.kanbanCard.includes('ignoreTaskDragHandle'),
 );
 
 assert(
   'Checklist rows expose root task drag surface bindings for all recursive depths',
-  source.kanbanChecklist.includes('const dragSurfaceBindings = taskGesture.mobileActionMode || isSelectingMode || isRecordCaptureMode') &&
-    source.kanbanChecklist.includes('disabled: !canMoveTask || isSelectingMode || isRecordCaptureMode || taskGesture.mobileActionMode') &&
-    source.kanbanChecklist.includes('useTaskGestureSurface') &&
-    source.kanbanChecklist.includes('{...dragSurfaceBindings}') &&
-    source.kanbanChecklist.includes('data-task-drag-surface="true"') &&
-    source.kanbanChecklist.includes('data-task-drag-surface-kind="checklist-row"') &&
-    source.kanbanChecklist.includes('data-mobile-drop-target={child.id}') &&
-    source.kanbanChecklist.includes('depth={depth + 1}') &&
-    source.kanbanChecklist.includes('selectAndOpenTaskDetails(child.id)') &&
+  source.kanbanChecklist.includes('TaskChecklistTree') &&
+    source.taskChecklistTree.includes('useTaskPlacementController') &&
+    source.taskChecklistTree.includes('data-task-drag-surface="true"') &&
+    source.taskChecklistTree.includes('data-task-drag-surface-kind="checklist-row"') &&
+    source.taskChecklistTree.includes('depth={depth + 1}') &&
+    source.taskChecklistTree.includes('selectAndOpenTaskDetails') &&
     !source.kanbanChecklist.includes('ignoreTaskDragHandle'),
 );
 
 assert(
   'Kanban list/header tasks expose a root header drag surface and mobile action rail path',
-  source.kanbanColumn.includes('const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode') &&
-    source.kanbanColumn.includes('disabled: !canMoveTask || isSelectingMode || taskGesture.mobileActionMode') &&
-    source.kanbanColumn.includes('useTaskGestureSurface') &&
-    source.kanbanColumn.includes('{...columnHeaderDragBindings}') &&
-    source.kanbanColumn.includes('{...taskGesture.handlers}') &&
-    source.kanbanColumn.includes('data-task-drag-surface="true"') &&
-    source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') &&
-    source.kanbanColumn.includes('data-mobile-drop-target={nodeId}'),
+    source.kanbanColumn.includes('const columnHeaderDragBindings = taskGesture.mobileActionMode || isSelectingMode') &&
+    source.kanbanColumn.includes('useTaskPlacementController') &&
+    source.kanbanColumn.includes('taskGesture.isPlacementPending') &&
+    (source.kanbanColumn.includes('{...columnHeaderDragBindings}') || source.kanbanColumn.includes('...columnHeaderDragBindings,')) &&
+    (source.kanbanColumn.includes('{...taskGesture.handlers}') || source.kanbanColumn.includes('...taskGesture.handlers,')) &&
+    (source.kanbanColumn.includes('data-task-drag-surface="true"') || source.kanbanColumn.includes("'data-task-drag-surface': 'true'")) &&
+    (source.kanbanColumn.includes('data-task-drag-surface-kind="kanban-column-header"') || source.kanbanColumn.includes("'data-task-drag-surface-kind': 'kanban-column-header'")) &&
+    (source.kanbanColumn.includes('data-mobile-drop-target={nodeId}') || source.kanbanColumn.includes("'data-mobile-drop-target': nodeId")),
 );
 
 assert(
@@ -109,13 +107,15 @@ assert(
 
 assert(
   'WBS list rows expose root task drag surface bindings for every hierarchy level',
-  source.wbsNodeItem.includes('const dragSurfaceBindings = mobileActionMode || isSelectingMode') &&
-    source.wbsNodeItem.includes('disabled: !canMoveTask || isSelectingMode || mobileActionMode') &&
+  source.wbsNodeItem.includes('useTaskPlacementController') &&
+    source.wbsNodeItem.includes('const dragSurfaceBindings = isSelectingMode || taskGesture.mobileActionMode || taskGesture.isPlacementPending') &&
     source.wbsNodeItem.includes('{...dragSurfaceBindings}') &&
     source.wbsNodeItem.includes('data-task-drag-surface="true"') &&
-    source.wbsNodeItem.includes('data-task-drag-surface-kind="wbs-list-row"') &&
-    source.wbsNodeItem.includes('data-mobile-drop-target={node.id}') &&
-    source.wbsNodeItem.includes('<WbsNodeItem key={child.id} nodeId={child.id} level={level + 1} ancestorIds={nextAncestorIds} />') &&
+  source.wbsNodeItem.includes('data-task-drag-surface-kind="wbs-list-row"') &&
+  source.wbsNodeItem.includes('data-mobile-drop-target={node.id}') &&
+    source.wbsNodeItem.includes('<TaskPlacementTree rows={childRenderRows}') &&
+    source.wbsNodeItem.includes('nodeId={row.task.id}') &&
+    source.wbsNodeItem.includes('level={level + 1}') &&
     source.wbsNodeItem.includes('if (isDragging || isSelectingMode || isTaskPrimaryActionTarget(event.target)) return;'),
 );
 

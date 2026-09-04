@@ -179,13 +179,14 @@ const checks = [
     ),
   },
   {
-    name: 'RecordSidebar implements project import as the first meeting workflow step',
+    name: 'RecordSidebar keeps the meeting workflow display separate from the import control',
     pass:
-      contents.recordSidebar.includes("stage: 'project_import'") &&
       contents.recordSidebar.includes('data-meeting-workflow-step={step.stage}') &&
-      contents.recordSidebar.includes('meetingWorkflowStepsWithImport') &&
-      contents.recordSidebar.includes('projectImportMeetingStep') &&
-      contents.recordSidebar.includes('onImportProjectChanges') &&
+      contents.recordSidebar.includes('meetingWorkflowStepsForDisplay') &&
+      !contents.recordSidebar.includes('projectImportMeetingStep') &&
+      contents.recordSidebar.includes('data-meeting-project-change-import-control') === false &&
+      contents.recordSidebar.includes('MeetingProjectChangeImportControl') &&
+      contents.recordSidebar.includes('onImport={() =>') &&
       contents.recordSidebar.includes('MeetingProjectChangeImportControl'),
   },
   {

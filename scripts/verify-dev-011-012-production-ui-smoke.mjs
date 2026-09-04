@@ -557,7 +557,7 @@ async (page) => {
       quality: element.getAttribute('data-meeting-synthesis-quality'),
     }));
     if (
-      !synthesisProof.text.includes('AI整理完成，請校稿後發布') ||
+      !synthesisProof.text.includes('AI整理完成，請確認後發布') ||
       synthesisProof.provider !== 'gemini' ||
       synthesisProof.contract !== 'meeting-synthesis-v2' ||
       !synthesisProof.functionVersion ||
@@ -583,8 +583,9 @@ async (page) => {
     }
 
     stage = 'save_review_draft';
-    const reviewStep = await waitStepEnabled('review');
-    await reviewStep.click();
+    const saveDraftButton = page.locator('[data-record-meeting-save-draft]');
+    await saveDraftButton.waitFor({ state: 'visible', timeout: 10000 });
+    await saveDraftButton.click();
     await page.waitForTimeout(1200);
     await page.waitForFunction(
       () => !document.querySelector('[data-meeting-workflow-step="published"]')?.hasAttribute('disabled'),

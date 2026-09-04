@@ -63,8 +63,7 @@ async (page) => {
   const editor = page.locator('[data-record-composer-shell] [contenteditable="true"]').last();
   await editor.fill('DEV-069 F5 後仍保留的會議速記');
   await page.waitForFunction(() => {
-    const status = document.querySelector('[data-meeting-draft-recovery-status]');
-    return Boolean(status && /本機已保存|本機部分保存/.test(status.textContent || ''));
+    return Object.keys(sessionStorage).some(key => key.startsWith('projed:meeting-draft-recovery:v1:'));
   }, null, { timeout: 5000 });
   const emergencyKeysBeforeReload = await page.evaluate(() =>
     Object.keys(sessionStorage).filter(key => key.startsWith('projed:meeting-draft-recovery:v1:')));
@@ -80,7 +79,7 @@ async (page) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.waitForTimeout(250);
   assert(await page.locator('[data-record-composer-shell]').isVisible(), 'meeting editor should remain available at 1024px');
-  assert(await page.locator('[data-meeting-draft-recovery-status]').isVisible(), 'desktop recovery status should be visible at 1024px');
+  assert(await page.getByText('本機已保存，等待雲端 checkpoint', { exact: true }).count() === 0, 'normal pending checkpoint status should remain quiet at 1024px');
   await page.screenshot({ path: `${screenshotBase}/browser-1024.png`, scale: 'css' });
   await visibleErrorSweep('desktop 1024');
 
@@ -99,5 +98,5 @@ async (page) => {
 
   assert(diagnostics.length === 0, 'browser console/page errors detected', { diagnostics });
   assert(httpFailures.length === 0, 'browser HTTP failures detected', { httpFailures });
-  console.log('DEV-069 browser verification passed: local recovery after reload, desktop 1440/1024 status, mobile 390 negative boundary and visible-error sweep.');
+  console.log('DEV-069 browser verification passed: local recovery after reload, desktop 1440/1024 recovery, mobile 390 negative boundary and visible-error sweep.');
 }

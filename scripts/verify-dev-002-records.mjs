@@ -91,7 +91,6 @@ const checks = [
       'openNewRecord',
       'enterTaskSelectionMode',
       'data-record-compact-controls',
-      'data-record-status-summary',
       'data-record-visibility-control',
       '紀錄分享範圍',
       '<option value="tenant">目前工作區</option>',
@@ -103,6 +102,7 @@ const checks = [
       'saveDraft',
       'saveDraft({ nodes, status })',
     ],
+    forbiddenSnippets: ['data-record-status-summary', '目前狀態'],
   },
   {
     path: 'src/components/BoardView.tsx',
@@ -126,10 +126,20 @@ const checks = [
   },
   {
     path: 'src/components/Wbs/KanbanChecklist.tsx',
-    label: 'record task picker checklist items',
+    label: 'record task picker checklist adapter',
     snippets: [
-      'isRecordSelectionMode',
-      'insertRecordTaskMention(child.id',
+      'isRecordCaptureMode',
+      'insertRecordTaskMention',
+      'onRecordCapture:',
+      '<TaskChecklistTree',
+    ],
+  },
+  {
+    path: 'src/components/Wbs/TaskChecklistTree.tsx',
+    label: 'record task picker checklist rows',
+    snippets: [
+      'isRecordCaptureMode',
+      'hostAdapter.onRecordCapture?.(child.id',
       'isRecordSelected',
       'border-primary bg-primary text-white',
     ],

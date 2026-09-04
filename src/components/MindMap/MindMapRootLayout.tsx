@@ -27,7 +27,7 @@ const MindMapRootLayout: React.FC<MindMapRootLayoutProps> = ({
 }) => (
   <>
     <div
-      className={`relative z-10 flex min-w-[var(--mindmap-root-side-min-width)] flex-col items-end gap-[var(--mindmap-root-side-gap)] rounded-lg border border-dashed p-[var(--mindmap-root-side-pad)] transition-colors ${rootSideDropTarget === 'left' ? 'border-blue-300 bg-blue-50/70' : 'border-transparent'}`}
+      className={`relative flex min-w-[var(--mindmap-root-side-min-width)] flex-col items-end gap-[var(--mindmap-root-side-gap)] rounded-lg border border-dashed p-[var(--mindmap-root-side-pad)] transition-colors ${rootSideDropTarget === 'left' ? 'border-blue-300 bg-blue-50/70' : 'border-transparent'}`}
       data-mindmap-side-drop-zone="left"
       data-mindmap-side-drop-active={rootSideDropTarget === 'left' ? 'true' : 'false'}
       onDragOver={(event) => onDragOverSide(event, 'left')}
@@ -37,7 +37,7 @@ const MindMapRootLayout: React.FC<MindMapRootLayoutProps> = ({
     </div>
 
     <div
-      className="relative z-20 flex min-h-[64px] max-w-[300px] items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center text-base font-bold text-blue-800 shadow-[0_14px_28px_rgba(99,102,241,0.12)] ring-4 ring-blue-100/70"
+      className="relative z-50 flex min-h-[64px] max-w-[300px] items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center text-base font-bold text-blue-800 shadow-[0_14px_28px_rgba(99,102,241,0.12)] ring-4 ring-blue-100/70"
       data-mindmap-center
       onDragOver={onDragOverCenter}
       onDrop={onDropOnCenter}
@@ -47,7 +47,7 @@ const MindMapRootLayout: React.FC<MindMapRootLayoutProps> = ({
     </div>
 
     <div
-      className={`relative z-10 flex min-w-[var(--mindmap-root-side-min-width)] flex-col items-start gap-[var(--mindmap-root-side-gap)] rounded-lg border border-dashed p-[var(--mindmap-root-side-pad)] transition-colors ${rootSideDropTarget === 'right' ? 'border-blue-300 bg-blue-50/70' : 'border-transparent'}`}
+      className={`relative flex min-w-[var(--mindmap-root-side-min-width)] flex-col items-start gap-[var(--mindmap-root-side-gap)] rounded-lg border border-dashed p-[var(--mindmap-root-side-pad)] transition-colors ${rootSideDropTarget === 'right' ? 'border-blue-300 bg-blue-50/70' : 'border-transparent'}`}
       data-mindmap-side-drop-zone="right"
       data-mindmap-side-drop-active={rootSideDropTarget === 'right' ? 'true' : 'false'}
       onDragOver={(event) => onDragOverSide(event, 'right')}

@@ -16,11 +16,14 @@
 
 本 DEV 讓階層落點符合一致心智模型：拖到任務本體代表與目標同階定位，拖到內容／追加區代表成為目標的子項。完成後，L2／L3+ 任務拖到 L1 列表標頭會升級為 L1，並顯示既有單一定位條；拖到列表內容區仍進入該列表。
 
+2026-09-03 相容性修正：當目前看板尚無任何 L1 時，不得因缺少 anchor 而停用 root drop。未歸位任務可直接拖入空看板，成為第一個 root，使用者不必先手動新增空列表。
+
 ## 2. Spec Impact
 
 - 對 DEV-054／055「`column-header` 對非 L1 來源仍追加為列表子項」與桌機 commit frozen baseline，分類為 `Intentional replacement`；本輪使用者明示需求是新決策來源。
 - 對 DEV-053 的 canonical resolver、at-most-once commit、cycle guard、Workbench placed-row no-drag，分類為 `Compatible exception`，其餘契約不變。
 - 對 DEV-058 的來源原地 zero-write、單一 fixed overlay marker 與正常 `KanbanInsertionMarker` 樣式，分類為 `No conflict`。
+- 對既有非空看板「以最後一個 L1 為 root-drop anchor」分類為 `Compatible exception`：僅在零 L1 時採 anchorless board-root intent；非空看板行為不變。
 - 不恢復 DEV-051 parent-lock，不執行 archived DEV-052。
 
 ## 3. UX 與行為契約
@@ -29,6 +32,7 @@
 
 - L2／L3+ 任務拖到任一 L1 列表標頭：成為該列表的 L1 同階項，插入目標列表之前。
 - 任務拖到看板尾端「新增列表」區：成為最後一個 L1 列表。
+- 看板沒有任何 L1 時，整個有內距的空白看板內容區都是合法 root drop；未歸位任務放開後成為第一個 root，`order = 0`，並依 DEV-086 只改 placement、保留原 `nodeType`。
 - 已是 L1 的列表仍可沿用既有列表排序，並可拖到尾端追加區。
 - 成為 L1 時 `parentId = null`、`nodeType = 'group'`；來源完整非封存子樹隨來源一起移動。
 
@@ -43,16 +47,19 @@
 - 桌機與手機都重用既有 `KanbanInsertionMarker`，畫面任一時刻最多一個 live target marker。
 - 列表標頭與尾端 L1 追加區都必須輸出明確 surface kind，preview 與 commit 共用 `resolveTaskDropIntent()`。
 - 定位條只以 fixed overlay 呈現，不得插入 normal flow、推開列表／任務或造成 board width 跳動。
-- 不新增常駐教學文字、拖曳把手或第二種定位視覺。
+- 空看板只在有效拖曳命中期間顯示低對比 surface feedback 與「放開以歸位」；離開或完成後立即清除。
+- 不新增常駐教學文字、拖曳把手或第二種定位視覺；既有「新增列表」按鈕保持原本 270px 視覺寬度，不可被撐成全畫布 CTA。
 
 ## 4. Implementation Contract
 
 - `TaskDropSurfaceKind` 新增 `root-drop`；desktop dnd type 使用 `wbs-root-drop`。
 - `resolveTaskDropIntent()` 對 `column-header` 統一產生與 target 同父層的 reorder intent；非 column source 轉為 `group`。
-- `root-drop` 以目前最後一個 L1 作 anchor，產生 `parentId: null`、append order、`displayPosition: append`；若 source 不是 L1，`nodeType` 轉為 `group`。
+- 非空看板的 `root-drop` 以目前最後一個 L1 作 anchor，產生 `parentId: null`、append order、`displayPosition: append`；若 source 不是 L1，`nodeType` 轉為 `group`。
+- 空看板的 `root-drop` 不建立假節點或 placeholder anchor；target 以 workspace／board ownership 表示，`nodeId = null`，intent 固定為 `parentId: null`、`order: 0`、`displayPosition: append`。從工作台未歸位歸位時保留來源 `nodeType`，preview 與 placement transaction 必須一致。
 - 看板尾端新增 child droppable component，包住既有「新增列表」按鈕；沒有 active drag 時 UI、tap 與 pan-pass-through 不變。
 - 桌機 `desktopTargetTypeToSurfaceKind()`、collision preference、preview geometry 與 commit revalidation需識別 `wbs-root-drop`。
 - 手機 exact innermost hit-test 由尾端 surface 的 `data-mobile-drop-target`／`data-task-id`／`data-task-drop-surface-kind="root-drop"` 進入同一 resolver；raw finger、retain、release freshness 與 action rail priority 不變。
+- 手機零 column 時以 `board-root` target kind 命中空看板 root surface，並重用同一垂直 `KanbanInsertionMarker` 與跨 ownership 子樹交易。
 
 ## 5. Scope
 
@@ -75,6 +82,7 @@
 - L2 卡片拖到另一 L1 標頭後：`parentId === null`、`nodeType === 'group'`，且排序位於 target 前。
 - L3+ 任務拖到 L1 標頭後得到相同根層結果，完整子樹不遺失。
 - 任務拖到尾端 L1 追加區後成為 active board 最後一個 root。
+- 未歸位任務拖到零 L1 看板的空白內容區後，完整子樹進入 active board，root 為 `parentId=null`、`order=0`；桌機與 390×844 touch 語意一致。
 - 任務拖到列表內容區仍是該列表的 L2 子項，不被誤升到 L1。
 - indicator 的 `target / position / surfaceKind` 與 release 後 parent/order/nodeType 一致；畫面最多一條 marker。
 - 原地 release、invalid descendant、permission denied 與 stale preview 都是 zero-write no-op。

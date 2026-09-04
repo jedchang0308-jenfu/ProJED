@@ -136,6 +136,19 @@ export const resolveDesktopL1IndicatorRect = ({
   viewportRect?: Pick<DOMRect, 'top' | 'bottom'> | null;
 }): TaskDragIndicatorRect | null => {
   const ordered = orderedColumns(columns);
+  if (ordered.length === 0 && rootDropRect) {
+    const rawTop = rootDropRect.top;
+    const rawBottom = rootDropRect.bottom;
+    const top = viewportRect ? Math.max(rawTop, viewportRect.top) : rawTop;
+    const bottom = viewportRect ? Math.min(rawBottom, viewportRect.bottom) : rawBottom;
+    if (bottom <= top) return null;
+    return {
+      left: rootDropRect.left,
+      top,
+      width: DESKTOP_L1_INSERTION_RAIL_WIDTH_PX,
+      height: bottom - top,
+    };
+  }
   const targetIndex = ordered.findIndex(column => column.id === targetId);
   if (targetIndex < 0) return null;
 

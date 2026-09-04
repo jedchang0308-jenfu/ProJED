@@ -437,6 +437,8 @@ const CalendarView = () => {
                                                     key={`seg-${seg.item.id}-${wIdx}-${sIdx}`}
                                                     data-calendar-task-segment="true"
                                                     data-task-id={seg.item.id}
+                                                    data-task-canonical-id={seg.item.id}
+                                                    data-task-placement-hover-surface="true"
                                                     data-calendar-placement-kind={seg.item.isTrackingReference ? 'tracking-reference' : 'primary'}
                                                     aria-label={seg.item.isTrackingReference ? `追蹤副本：${seg.item.title || '未命名任務'}` : seg.item.title || '未命名任務'}
                                                     onClick={() => handleItemClick(seg.item)}

@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, UsersRound, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -113,7 +113,7 @@ const RecordTextDateTimeInput: React.FC<{
 };
 
 const recordTypeLabel = (type: KnowledgeRecordType) =>
-  type === 'meeting' ? '會議紀錄' : type === 'task_collection' ? '典藏任務' : '個人工作紀錄';
+  type === 'meeting' ? '會議紀錄' : '個人工作紀錄';
 
 const statusLabel = (status: KnowledgeRecordStatus) =>
   status === 'published' ? '已發布' : status === 'archived' ? '已封存' : '草稿';
@@ -168,16 +168,7 @@ const getMeetingWorkflowArrowClipPath = (index: number, total: number) => {
   return `polygon(0 0, calc(100% - ${arrow}) 0, 100% 50%, calc(100% - ${arrow}) 100%, 0 100%, ${arrow} 50%)`;
 };
 
-type ProjectImportMeetingWorkflowStep = Omit<MeetingWorkflowStepAction, 'stage' | 'command'> & {
-  stage: 'project_import';
-  command: 'toggleProjectImport';
-  importStatus: ProjectChangeImportStatus;
-  importStepState: ProjectChangeImportStepState;
-  isExpanded: boolean;
-  eventCount: number;
-};
-
-type MeetingWorkflowArrowStepItem = MeetingWorkflowStepAction | ProjectImportMeetingWorkflowStep;
+type MeetingWorkflowArrowStepItem = MeetingWorkflowStepAction;
 
 const getMeetingWorkflowArrowClass = (step: MeetingWorkflowArrowStepItem) => {
   if (step.visualState === 'processing' || step.visualState === 'current') {
@@ -261,9 +252,6 @@ const withProjectChangeImportTimeout = async <T,>(
 };
 
 const getMeetingWorkflowStepTitle = (step: MeetingWorkflowArrowStepItem) => {
-  if (step.stage === 'project_import') {
-    return getProjectImportStepTitle(step.importStatus, step.importStepState, step.isExpanded, step.eventCount);
-  }
   const baseTitle = step.enabled
     ? `${step.outcomeLabel}。${step.statusLabel}`
     : step.disabledReason ?? step.statusLabel;
@@ -279,10 +267,8 @@ const MeetingWorkflowArrowStepper: React.FC<{
   onFocusContent: () => void;
   onRunAi: () => void;
   onPublish: () => void;
-  onImportProjectChanges: () => void;
-}> = ({ steps, onSaveDraft, onFocusContent, onRunAi, onPublish, onImportProjectChanges }) => {
+}> = ({ steps, onSaveDraft, onFocusContent, onRunAi, onPublish }) => {
   const handleStepClick = (step: MeetingWorkflowArrowStepItem) => {
-    if (step.command === 'toggleProjectImport') onImportProjectChanges();
     if (step.command === 'focusContent') onFocusContent();
     if (step.command === 'saveDraft') onSaveDraft();
     if (step.command === 'runAi') onRunAi();
@@ -745,26 +731,14 @@ const RecordSidebar: React.FC = () => {
         ? '本機已保存，雲端暫停 checkpoint'
         : meetingDraftRecovery.cloudStatus === 'saving'
           ? '本機已保存，雲端保存中…'
-          : meetingDraftRecovery.cloudStatus === 'saved'
-            ? '雲端已保存'
-            : String(meetingDraftRecovery.localStatus) === 'saving'
-              ? '本機保存中…'
-              : String(meetingDraftRecovery.localStatus) === 'degraded'
-                ? '本機部分保存，請保留此分頁'
-                : String(meetingDraftRecovery.localStatus) === 'error'
-                  ? '本機保存失敗，請勿關閉此分頁'
-                  : String(meetingDraftRecovery.localStatus) === 'saved'
-                    ? '本機已保存，等待雲端 checkpoint'
-                    : meetingActionState.isDirty
-                      ? '本機保存排程中…'
-                      : '等待輸入，尚未保存';
-  const shouldShowMeetingRecoveryStatus = !(
-    meetingDraftRecovery.cloudStatus === 'saved' &&
-    meetingDraftRecovery.localStatus === 'saved'
-  ) && !(
-    meetingDraftRecovery.cloudStatus === 'idle' &&
-    meetingDraftRecovery.localStatus === 'idle'
-  );
+          : String(meetingDraftRecovery.localStatus) === 'saving'
+            ? '本機保存中…'
+            : String(meetingDraftRecovery.localStatus) === 'degraded'
+              ? '本機部分保存，請保留此分頁'
+              : String(meetingDraftRecovery.localStatus) === 'error'
+                ? '本機保存失敗，請勿關閉此分頁'
+                : '';
+  const shouldShowMeetingRecoveryStatus = Boolean(meetingRecoveryStatus);
   const visibleRecords = isMeetingRecordUnavailable
     ? records.filter(record => record.type !== 'meeting')
     : records;
@@ -810,11 +784,6 @@ const RecordSidebar: React.FC = () => {
     ? '離開紀錄；離開不等於發布，若有未儲存變更會先詢問是否存草稿。'
     : '離開紀錄；若有未儲存變更會先詢問是否存草稿。';
   const sidebarRecordTitle = draft ? recordTypeLabel(draft.type) : '紀錄';
-  const meetingProjectImportVisualState = meetingProjectImportStatus === 'loading'
-    ? 'processing'
-    : meetingProjectImportStatus === 'complete'
-      ? 'complete'
-      : 'optional';
   const projectImportStepEnabled = canUseProjectChangeImport && !saving && !isSynthesizing;
   const projectImportStatusLabel = getProjectImportStepStatusLabel(
     projectChangeImport.status,
@@ -822,30 +791,7 @@ const RecordSidebar: React.FC = () => {
     isProjectImportExpanded,
     projectChangeImport.eventCount,
   );
-  const projectImportMeetingStep: ProjectImportMeetingWorkflowStep = {
-    stage: 'project_import',
-    label: '匯入',
-    actionLabel: '帶入上次會議後變更',
-    outcomeLabel: meetingProjectImportStatus === 'complete' ? '已完成' : '選用：帶入上次會議後變更',
-    statusLabel: meetingProjectImportStatus === 'complete' ? '完成' : meetingProjectImportStatus === 'loading' ? '處理中' : '選用',
-    command: 'toggleProjectImport',
-    visualState: meetingProjectImportVisualState,
-    tone: 'optional',
-    isOptional: true,
-    ariaDescription: '匯入專案變化是選用步驟。按下後直接帶入上次會議後變更。',
-    disabledReason: projectImportStepEnabled ? null : '已發布或系統處理中，不能調整專案變化匯入。',
-    enabled: projectImportStepEnabled,
-    isComplete: meetingProjectImportStatus === 'complete',
-    isRecommended: false,
-    importStatus: meetingProjectImportStatus === 'loading' ? 'loading' : meetingProjectImportStatus === 'complete' ? 'ready' : meetingProjectImportStatus,
-    importStepState: meetingProjectImportStatus === 'complete' ? 'inserted' : 'pending',
-    isExpanded: false,
-    eventCount: 0,
-  };
-  const meetingWorkflowStepsWithImport: MeetingWorkflowArrowStepItem[] = [
-    projectImportMeetingStep,
-    ...meetingWorkflowSteps,
-  ];
+  const meetingWorkflowStepsForDisplay: MeetingWorkflowArrowStepItem[] = meetingWorkflowSteps.filter(step => step.stage !== 'review');
   const projectImportWorkLogStep: WorkLogWorkflowStep = {
     id: 'project_import',
     label: '匯入',
@@ -990,7 +936,7 @@ const RecordSidebar: React.FC = () => {
       dismissedDraftId: draft.id ?? null,
       status: 'ready',
       stepState: 'inserted',
-      message: `已插入 ${state.eventCount} 筆專案變化整理，請繼續撰寫或校稿。`,
+      message: `已插入 ${state.eventCount} 筆專案變化整理，請繼續撰寫。`,
     }));
     setIsProjectImportExpanded(false);
   };
@@ -1179,23 +1125,12 @@ const RecordSidebar: React.FC = () => {
                   className="rounded-md border border-slate-200 bg-white p-2"
                 >
                   <MeetingWorkflowArrowStepper
-                    steps={meetingWorkflowStepsWithImport}
+                    steps={meetingWorkflowStepsForDisplay}
                     onSaveDraft={() => handleSave('draft')}
                     onFocusContent={requestContentFocus}
                     onRunAi={() => void handleSynthesizeMeetingDraft()}
                     onPublish={() => handleSave('published')}
-                    onImportProjectChanges={() => void importMeetingProjectChanges({ nodes })}
                   />
-                  <div className="mt-2">
-                    <MeetingProjectChangeImportControl
-                      status={meetingProjectImportStatus}
-                      message={meetingProjectImportMessage}
-                      disabled={!projectImportStepEnabled}
-                      onImport={() => void importMeetingProjectChanges({ nodes })}
-                      onCustomImport={(startedAt, endedAt) => void importMeetingProjectChanges({ mode: 'custom', startedAt, endedAt, nodes })}
-                    />
-                  </div>
-
                   {shouldShowMeetingRecoveryStatus ? (
                     <div
                       role="status"
@@ -1215,30 +1150,6 @@ const RecordSidebar: React.FC = () => {
                       <span className="truncate">{meetingRecoveryStatus}</span>
                     </div>
                   ) : null}
-                  <div data-record-meeting-actions className="mt-2 flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
-                    <button
-                      type="button"
-                      data-record-meeting-save-draft
-                      disabled={!meetingActionState.canSaveDraft || saving || isSynthesizing}
-                      onClick={() => handleSave('draft')}
-                      title={meetingActionState.saveDraftDisabledReason ?? '保存目前會議內容為草稿。'}
-                      className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                    >
-                      <Save size={13} />
-                      存草稿
-                    </button>
-                    <button
-                      type="button"
-                      data-record-meeting-publish
-                      disabled={!meetingActionState.canPublish || saving || isSynthesizing}
-                      onClick={() => handleSave('published')}
-                      title={meetingActionState.publishDisabledReason ?? '發布目前會議內容。'}
-                      className="inline-flex h-8 items-center gap-1 rounded-md bg-slate-900 px-2.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      <Send size={13} />
-                      {isPublished ? '已發布' : '發布'}
-                    </button>
-                  </div>
                 </div>
               ) : (
                 <WorkLogWorkflowCard
@@ -1280,15 +1191,12 @@ const RecordSidebar: React.FC = () => {
                     </div>
                     <label className="block text-xs font-medium text-slate-500">
                       參與人員
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-50 text-slate-400">
-                          <UsersRound size={15} />
-                        </span>
+                      <div className="mt-1">
                         <input
                           value={draft.participantsText || ''}
                           onChange={event => updateDraft({ participantsText: event.target.value })}
                           placeholder="例如：PM、RD、QA、供應商"
-                          className="h-9 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                          className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                         />
                       </div>
                     </label>
@@ -1330,22 +1238,35 @@ const RecordSidebar: React.FC = () => {
                   </>
                 )}
 
-                <label className={`flex flex-1 flex-col text-xs font-medium text-slate-500 ${isMeetingMode ? 'min-h-[220px]' : 'min-h-[150px]'}`}>
-                  內容
-                  <RecordContentEditor
-                    value={draft.content}
-                    nodes={nodes}
-                    cursorOffset={contentCursorOffset}
-                    onChange={content => updateDraft({ content })}
-                    onCursorOffsetChange={setContentCursorOffset}
-                    focusRequestId={contentFocusRequestId}
-                    focusPending={contentFocusPending}
-                    onFocusConsumed={consumeContentFocus}
-                    placeholder="記錄討論、決議、進度、風險、待追蹤事項..."
-                    editorClassName={isMeetingMode ? 'min-h-[220px] flex-1' : 'min-h-[150px] flex-1'}
-                    editorContainerClassName={isMeetingMode ? 'flex min-h-[220px] flex-1 flex-col' : 'flex min-h-[150px] flex-1 flex-col'}
-                  />
-                </label>
+                <div className={`flex flex-1 flex-col text-xs font-medium text-slate-500 ${isMeetingMode ? 'min-h-[220px]' : 'min-h-[150px]'}`}>
+                  <div data-record-content-header className="flex min-w-0 items-start justify-between gap-2">
+                    <span className="shrink-0">內容</span>
+                    {isMeetingMode ? (
+                      <MeetingProjectChangeImportControl
+                        status={meetingProjectImportStatus}
+                        message={meetingProjectImportMessage}
+                        disabled={!projectImportStepEnabled}
+                        onImport={() => void importMeetingProjectChanges({ nodes })}
+                        onCustomImport={(startedAt, endedAt) => void importMeetingProjectChanges({ mode: 'custom', startedAt, endedAt, nodes })}
+                      />
+                    ) : null}
+                  </div>
+                  <label className="flex min-h-0 flex-1 flex-col">
+                    <RecordContentEditor
+                      value={draft.content}
+                      nodes={nodes}
+                      cursorOffset={contentCursorOffset}
+                      onChange={content => updateDraft({ content })}
+                      onCursorOffsetChange={setContentCursorOffset}
+                      focusRequestId={contentFocusRequestId}
+                      focusPending={contentFocusPending}
+                      onFocusConsumed={consumeContentFocus}
+                      placeholder="記錄討論、決議、進度、風險、待追蹤事項..."
+                      editorClassName={isMeetingMode ? 'min-h-[220px] flex-1' : 'min-h-[150px] flex-1'}
+                      editorContainerClassName={isMeetingMode ? 'flex min-h-[220px] flex-1 flex-col' : 'flex min-h-[150px] flex-1 flex-col'}
+                    />
+                  </label>
+                </div>
               </div>
 
               {isMeetingMode && meetingSynthesisStatus !== 'idle' ? (
@@ -1375,8 +1296,8 @@ const RecordSidebar: React.FC = () => {
                         ? 'AI整理中'
                         : meetingSynthesisStatus === 'ready'
                           ? meetingSynthesisUsedRules
-                            ? '規則整理完成，請校稿後發布'
-                            : 'AI整理完成，請校稿後發布'
+                             ? '規則整理完成，請確認後發布'
+                             : 'AI整理完成，請確認後發布'
                         : meetingSynthesisStatus === 'error'
                           ? 'AI整理失敗，原草稿已保留'
                             : 'AI整理是建議動作，可跳過'}
@@ -1403,65 +1324,80 @@ const RecordSidebar: React.FC = () => {
               ) : null}
 
               <div data-record-compact-controls className="rounded-md border border-slate-200 bg-white">
-                <div className={`grid grid-cols-2 gap-px bg-slate-100 ${selectedLinks.length || !isMeetingMode ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-                  <div data-record-status-summary className={`min-w-0 bg-white ${isMeetingMode ? 'flex items-center gap-2 px-2 py-1' : 'px-2.5 py-2'}`}>
-                    <div className={`${isMeetingMode ? 'shrink-0' : ''} text-[10px] font-semibold ${isMeetingMode ? 'leading-3' : 'leading-4'} text-slate-400`}>目前狀態</div>
-                    <div className="truncate text-xs font-semibold text-slate-700">
-                      {isMeetingMode
-                        ? meetingActionState.isPublished ? '已發布' : meetingActionState.hasAiDraft ? '校稿中' : '草稿'
-                        : isPublished ? '已發布' : hasSavedDraftRecord && !draftIsDirty ? '已存草稿' : '撰寫中'}
-                    </div>
+                {isMeetingMode ? (
+                  <div data-record-meeting-actions className="flex items-center justify-between gap-2 px-2 py-1">
+                    <button
+                      type="button"
+                      data-record-meeting-save-draft
+                      disabled={!meetingActionState.canSaveDraft || saving || isSynthesizing}
+                      onClick={() => handleSave('draft')}
+                      title={meetingActionState.saveDraftDisabledReason ?? '保存目前會議內容為草稿。'}
+                      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                    >
+                      <Save size={13} />
+                      存草稿
+                    </button>
+                    <label data-record-visibility-control className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                      <span className="shrink-0 text-[10px] font-semibold leading-3 text-slate-400">分享範圍</span>
+                      <select
+                        value={draft.visibility}
+                        onChange={event => updateDraft({ visibility: event.target.value as KnowledgeRecordVisibility })}
+                        className="h-6 min-w-0 max-w-[150px] flex-1 rounded-md border border-slate-200 bg-white px-1 text-[11px] text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        aria-label="紀錄分享範圍"
+                      >
+                        <option value="private">私人</option>
+                        <option value="project">專案</option>
+                        <option value="tenant">目前工作區</option>
+                      </select>
+                    </label>
                   </div>
-                  <label data-record-visibility-control className={`min-w-0 bg-white ${isMeetingMode ? 'flex items-center gap-1.5 px-2 py-1' : 'px-2.5 py-2'}`}>
-                    <span className={`${isMeetingMode ? 'shrink-0' : 'block'} text-[10px] font-semibold ${isMeetingMode ? 'leading-3' : 'leading-4'} text-slate-400`}>{isMeetingMode ? '分享範圍' : '紀錄分享範圍'}</span>
-                    <select
-                      value={draft.visibility}
-                      onChange={event => updateDraft({ visibility: event.target.value as KnowledgeRecordVisibility })}
-                      className={`${isMeetingMode ? 'h-6 min-w-0 flex-1 px-1 text-[11px]' : 'mt-0.5 h-7 w-full px-1.5 text-xs'} rounded-md border border-slate-200 bg-white text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100`}
-                      aria-label="紀錄分享範圍"
-                    >
-                      <option value="private">私人</option>
-                      <option value="project">專案</option>
-                      <option value="tenant">目前工作區</option>
-                    </select>
-                  </label>
-                  {selectedLinks.length ? (
-                    <button
-                      type="button"
-                      data-record-composer-linked-tasks
-                      data-record-linked-tasks-toggle
-                      aria-expanded={isLinkedTasksOpen}
-                      onClick={() => setIsLinkedTasksOpen(value => !value)}
-                      className="col-span-2 flex min-w-0 items-center justify-between gap-2 bg-white px-2.5 py-2 text-left hover:bg-slate-50 sm:col-span-1"
-                    >
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        {isLinkedTasksOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                        <span className="truncate text-xs font-semibold text-slate-700">關聯任務</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5">
-                        <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
-                          {selectedLinks.length}
+                ) : (
+                  <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3">
+                    <label data-record-visibility-control className="min-w-0 bg-white px-2.5 py-2">
+                      <span className="block text-[10px] font-semibold leading-4 text-slate-400">紀錄分享範圍</span>
+                      <select
+                        value={draft.visibility}
+                        onChange={event => updateDraft({ visibility: event.target.value as KnowledgeRecordVisibility })}
+                        className="mt-0.5 h-7 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        aria-label="紀錄分享範圍"
+                      >
+                        <option value="private">私人</option>
+                        <option value="project">專案</option>
+                        <option value="tenant">目前工作區</option>
+                      </select>
+                    </label>
+                    {selectedLinks.length ? (
+                      <button
+                        type="button"
+                        data-record-composer-linked-tasks
+                        data-record-linked-tasks-toggle
+                        aria-expanded={isLinkedTasksOpen}
+                        onClick={() => setIsLinkedTasksOpen(value => !value)}
+                        className="col-span-2 flex min-w-0 items-center gap-2 bg-white px-2.5 py-2 text-left hover:bg-slate-50 sm:col-span-1"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          {isLinkedTasksOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                          <span className="truncate text-xs font-semibold text-slate-700">關聯任務</span>
                         </span>
-                        <span className="text-[11px] text-slate-400">已關聯</span>
-                      </span>
-                    </button>
-                  ) : !isMeetingMode ? (
-                    <button
-                      type="button"
-                      data-record-composer-linked-tasks
-                      data-record-linked-tasks-empty-action
-                      onMouseDown={event => event.preventDefault()}
-                      onClick={() => enterTaskSelectionMode()}
-                      className="col-span-2 inline-flex min-w-0 items-center justify-center gap-1.5 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:col-span-1"
-                      title="從看板選取任務並建立紀錄關聯"
-                      aria-label="選取任務"
-                    >
-                      <Plus size={13} />
-                      選取任務
-                    </button>
-                  ) : null}
-                </div>
-                {selectedLinks.length && isLinkedTasksOpen ? (
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        data-record-composer-linked-tasks
+                        data-record-linked-tasks-empty-action
+                        onMouseDown={event => event.preventDefault()}
+                        onClick={() => enterTaskSelectionMode()}
+                        className="col-span-2 inline-flex min-w-0 items-center justify-center gap-1.5 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:col-span-1"
+                        title="從看板選取任務並建立紀錄關聯"
+                        aria-label="選取任務"
+                      >
+                        <Plus size={13} />
+                        選取任務
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!isMeetingMode && selectedLinks.length && isLinkedTasksOpen ? (
                   <div data-record-linked-tasks-list className="border-t border-slate-100">
                     <div className="flex justify-end px-2 py-2">
                       <button

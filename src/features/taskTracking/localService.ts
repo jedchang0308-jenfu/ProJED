@@ -11,17 +11,23 @@ import {
 import type {
   CreateTrackingReferenceInput,
   MoveTrackingReferenceInput,
+  PlaceStagedTrackingReferenceInput,
+  StageTrackingReferenceInput,
+  StagedTaskTrackingReference,
   TaskTrackingReference,
   TrackingReferenceMutation,
   TrackingReferenceService,
 } from './types';
 
 export const TASK_TRACKING_REFERENCES_STORAGE_KEY = 'projed-local-test.taskTrackingReferences.v1';
+export const TASK_TRACKING_REFERENCE_STAGING_STORAGE_KEY = 'projed-local-test.taskTrackingReferenceStaging.v1';
 const STORAGE_KEY = TASK_TRACKING_REFERENCES_STORAGE_KEY;
+const STAGING_STORAGE_KEY = TASK_TRACKING_REFERENCE_STAGING_STORAGE_KEY;
 let memoryReferences: TaskTrackingReference[] = [];
+let memoryStagedReferences: StagedTaskTrackingReference[] = [];
 
 type LocalTrackingTestFault = {
-  operation?: 'create' | 'move' | 'remove' | 'restore';
+  operation?: 'create' | 'move' | 'stage' | 'place-staged' | 'remove' | 'restore';
   failNext?: boolean;
   message?: string;
 };
@@ -66,11 +72,31 @@ const write = (references: TaskTrackingReference[]) => {
   }
 };
 
-const operationResult = new Map<string, { fingerprint: string; result: TaskTrackingReference | null }>();
+const readStaged = (): StagedTaskTrackingReference[] => {
+  try {
+    if (typeof localStorage === 'undefined') return memoryStagedReferences;
+    const raw = localStorage.getItem(STAGING_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return memoryStagedReferences;
+  }
+};
+
+const writeStaged = (references: StagedTaskTrackingReference[]) => {
+  memoryStagedReferences = references;
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(STAGING_STORAGE_KEY, JSON.stringify(references));
+  } catch {
+    // Local-test persistence is best effort; the in-memory copy remains usable.
+  }
+};
+
+const operationResult = new Map<string, { fingerprint: string; result: TaskTrackingReference | StagedTaskTrackingReference | null }>();
 
 const operationFingerprint = (value: Record<string, unknown>) => JSON.stringify(value);
 
-const replayOperation = (operationId: string | undefined, fingerprint: string) => {
+const replayOperation = <T extends TaskTrackingReference | StagedTaskTrackingReference>(operationId: string | undefined, fingerprint: string) => {
   if (!operationId) return undefined;
   const existing = operationResult.get(operationId);
   if (!existing) return undefined;
@@ -78,11 +104,36 @@ const replayOperation = (operationId: string | undefined, fingerprint: string) =
     throw new TaskTrackingError('OPERATION_ID_CONFLICT', '相同 operationId 不可重用於不同內容。');
   }
   if (!existing.result) throw new TaskTrackingError('NOT_FOUND', '追蹤副本操作結果不存在。');
-  return existing.result;
+  return existing.result as T;
 };
 
-const rememberOperation = (operationId: string | undefined, fingerprint: string, result: TaskTrackingReference | null) => {
+const rememberOperation = (
+  operationId: string | undefined,
+  fingerprint: string,
+  result: TaskTrackingReference | StagedTaskTrackingReference | null,
+) => {
   if (operationId) operationResult.set(operationId, { fingerprint, result });
+};
+
+const getStoredReferenceSubtree = (
+  references: readonly TaskTrackingReference[],
+  rootPlacementId: string,
+  removed: boolean,
+) => {
+  const eligible = references.filter(reference => Boolean(reference.removedAt) === removed);
+  const byParent = new Map<string | null, TaskTrackingReference[]>();
+  eligible.forEach(reference => {
+    byParent.set(reference.parentPlacementId, [...(byParent.get(reference.parentPlacementId) ?? []), reference]);
+  });
+  const result: TaskTrackingReference[] = [];
+  const visit = (placementId: string) => {
+    const reference = eligible.find(item => item.id === placementId);
+    if (!reference) return;
+    result.push(reference);
+    (byParent.get(reference.id) ?? []).forEach(child => visit(child.id));
+  };
+  visit(rootPlacementId);
+  return result;
 };
 
 const parseSource = (sourcePlacementId: string) => {
@@ -150,6 +201,10 @@ export const createLocalTaskTrackingReferenceService = (
     return read().filter(reference => reference.workspaceId === workspaceId && !reference.removedAt);
   },
 
+  async listStagedByWorkspace(workspaceId) {
+    return readStaged().filter(reference => reference.workspaceId === workspaceId);
+  },
+
   async listCanonicalTasksByIds(workspaceId, taskIds) {
     const requested = new Set(taskIds);
     return getTasks().filter(task => task.workspaceId === workspaceId && requested.has(task.id));
@@ -159,7 +214,7 @@ export const createLocalTaskTrackingReferenceService = (
     consumeLocalTrackingTestFault('create');
     const operationId = input.operationId;
     const fingerprint = operationFingerprint({ action: 'create', workspaceId, sourcePlacementId: input.sourcePlacementId, expectedRevision: input.expectedRevision });
-    const replay = replayOperation(operationId, fingerprint);
+    const replay = replayOperation<TaskTrackingReference>(operationId, fingerprint);
     if (replay) return replay;
     const tasks = getTasks();
     const parsed = parseSource(input.sourcePlacementId);
@@ -206,7 +261,7 @@ export const createLocalTaskTrackingReferenceService = (
     consumeLocalTrackingTestFault('move');
     const operationId = input.operationId;
     const fingerprint = operationFingerprint({ action: 'move', workspaceId, sourcePlacementId: input.sourcePlacementId, expectedRevision: input.expectedRevision, targetBoardId: input.targetBoardId, targetParentPlacementId: input.targetParentPlacementId, anchorPlacementId: input.anchorPlacementId ?? null, position: input.position ?? 'append' });
-    const replay = replayOperation(operationId, fingerprint);
+    const replay = replayOperation<TaskTrackingReference>(operationId, fingerprint);
     if (replay) return replay;
     const references = read();
     const source = references.find(reference => reference.id === input.sourcePlacementId && !reference.removedAt);
@@ -308,6 +363,153 @@ export const createLocalTaskTrackingReferenceService = (
     return moved;
   },
 
+  async stage(workspaceId, input: StageTrackingReferenceInput) {
+    consumeLocalTrackingTestFault('stage');
+    const fingerprint = operationFingerprint({
+      action: 'stage',
+      workspaceId,
+      sourcePlacementId: input.sourcePlacementId,
+      expectedRevision: input.expectedRevision,
+    });
+    const replay = replayOperation<StagedTaskTrackingReference>(input.operationId, fingerprint);
+    if (replay) return replay;
+    const references = read();
+    const source = references.find(reference => reference.id === input.sourcePlacementId && !reference.removedAt);
+    if (!source || source.workspaceId !== workspaceId) {
+      throw new TaskTrackingError('NOT_FOUND', '找不到可移入未歸位的追蹤副本。');
+    }
+    if (input.expectedRevision !== undefined && input.expectedRevision !== source.revision) {
+      throw new TaskTrackingError('REVISION_CONFLICT', '追蹤副本已被其他人更新，請重新載入。');
+    }
+    if (readStaged().some(reference => reference.referenceId === source.id)) {
+      throw new TaskTrackingError('DUPLICATE_REFERENCE', '追蹤副本已在未歸位區。');
+    }
+    const subtree = getStoredReferenceSubtree(references, source.id, false);
+    const subtreeIds = new Set(subtree.map(reference => reference.id));
+    const now = Date.now();
+    const nextRevision = source.revision + 1;
+    const siblings = readStaged().filter(reference => reference.workspaceId === workspaceId);
+    const staged: StagedTaskTrackingReference = {
+      referenceId: source.id,
+      taskId: source.taskId,
+      workspaceId,
+      sourceBoardId: source.sourceBoardId,
+      originalBoardId: source.boardId,
+      originalParentPlacementId: source.parentPlacementId,
+      originalOrder: source.order,
+      order: siblings.length ? Math.max(...siblings.map(reference => reference.order)) + 1 : 0,
+      revision: nextRevision,
+      stagedAt: now,
+      updatedAt: now,
+    };
+    write(references.map(reference => subtreeIds.has(reference.id)
+      ? { ...reference, removedAt: now, revision: reference.revision + 1, updatedAt: now }
+      : reference));
+    writeStaged([...readStaged(), staged]);
+    rememberOperation(input.operationId, fingerprint, staged);
+    return staged;
+  },
+
+  async placeStaged(workspaceId, input: PlaceStagedTrackingReferenceInput) {
+    consumeLocalTrackingTestFault('place-staged');
+    const fingerprint = operationFingerprint({
+      action: 'place-staged',
+      workspaceId,
+      sourcePlacementId: input.sourcePlacementId,
+      expectedRevision: input.expectedRevision,
+      targetBoardId: input.targetBoardId,
+      targetParentPlacementId: input.targetParentPlacementId,
+      anchorPlacementId: input.anchorPlacementId ?? null,
+      position: input.position ?? 'append',
+    });
+    const replay = replayOperation<TaskTrackingReference>(input.operationId, fingerprint);
+    if (replay) return replay;
+    const stagedReferences = readStaged();
+    const staged = stagedReferences.find(reference => reference.referenceId === input.sourcePlacementId && reference.workspaceId === workspaceId);
+    const references = read();
+    const source = references.find(reference => reference.id === input.sourcePlacementId && reference.removedAt);
+    if (!staged || !source) throw new TaskTrackingError('NOT_FOUND', '找不到未歸位的追蹤副本。');
+    if (input.expectedRevision !== undefined && input.expectedRevision !== source.revision) {
+      throw new TaskTrackingError('REVISION_CONFLICT', '追蹤副本已被其他人更新，請重新載入。');
+    }
+    if (!input.targetBoardId.trim()) throw new TaskTrackingError('NOT_FOUND', '目標看板不存在。');
+    const tasks = getTasks();
+    const targetParent = resolveLocalPlacement(input.targetParentPlacementId, tasks, references);
+    if (input.targetParentPlacementId && (!targetParent || targetParent.removedAt)) {
+      throw new TaskTrackingError('INVALID_PARENT', '目標父層不存在或已不可用。');
+    }
+    if (targetParent && (targetParent.workspaceId !== workspaceId || targetParent.boardId !== input.targetBoardId)) {
+      throw new TaskTrackingError('INVALID_PARENT', '目標父層不屬於目標看板。');
+    }
+    const subtree = getStoredReferenceSubtree(references, source.id, true);
+    const subtreeIds = new Set(subtree.map(reference => reference.id));
+    if (input.targetParentPlacementId && subtreeIds.has(input.targetParentPlacementId)) {
+      throw new TaskTrackingError('CYCLE_DETECTED', '追蹤副本不能搬到自己的子樹下。');
+    }
+    const visitedParentPlacements = new Set<string>();
+    let ancestorPlacementId = targetParent?.id ?? null;
+    while (ancestorPlacementId) {
+      if (visitedParentPlacements.has(ancestorPlacementId)) {
+        throw new TaskTrackingError('CYCLE_DETECTED', '追蹤副本父層鏈形成循環。');
+      }
+      visitedParentPlacements.add(ancestorPlacementId);
+      const ancestor = resolveLocalPlacement(ancestorPlacementId, tasks, references);
+      if (!ancestor || ancestor.removedAt) throw new TaskTrackingError('INVALID_PARENT', '目標父層鏈不可用。');
+      if (ancestor.taskId === source.taskId) throw new TaskTrackingError('CYCLE_DETECTED', '追蹤副本不能放在自身 canonical 子孫下。');
+      ancestorPlacementId = ancestor.parentPlacementId;
+    }
+    const duplicate = activeTrackingReferences(references).some(reference =>
+      reference.taskId === source.taskId
+      && reference.boardId === input.targetBoardId
+      && reference.parentPlacementId === input.targetParentPlacementId);
+    if (duplicate) throw new TaskTrackingError('DUPLICATE_REFERENCE', '同一任務在相同位置已有追蹤副本。');
+    const position = input.position ?? 'append';
+    const anchor = resolveLocalPlacement(input.anchorPlacementId, tasks, references);
+    if ((position === 'before' || position === 'after')
+      && (!anchor || anchor.removedAt || anchor.workspaceId !== workspaceId || anchor.boardId !== input.targetBoardId
+        || anchor.parentPlacementId !== (input.targetParentPlacementId ?? null))) {
+      throw new TaskTrackingError('INVALID_PARENT', '排序錨點不存在或不屬於目標位置。');
+    }
+    if (anchor && subtreeIds.has(anchor.id)) throw new TaskTrackingError('CYCLE_DETECTED', '追蹤副本不能搬到自己的子樹下。');
+    let nextOrder = source.order;
+    if (position === 'before' && anchor) nextOrder = anchor.order - 0.0001;
+    if (position === 'after' && anchor) nextOrder = anchor.order + 0.0001;
+    if (position === 'append') {
+      const siblingOrders = [
+        ...tasks.filter(task => !task.isArchived && task.workspaceId === workspaceId && task.boardId === input.targetBoardId
+          && (task.parentId ? primaryPlacementId(task.parentId) : null) === (input.targetParentPlacementId ?? null)).map(task => task.order),
+        ...activeTrackingReferences(references).filter(reference => reference.workspaceId === workspaceId
+          && reference.boardId === input.targetBoardId
+          && reference.parentPlacementId === (input.targetParentPlacementId ?? null)).map(reference => reference.order),
+      ];
+      nextOrder = siblingOrders.length ? Math.max(...siblingOrders) + 1 : 0;
+    }
+    const now = Date.now();
+    const moved: TaskTrackingReference = {
+      ...source,
+      boardId: input.targetBoardId,
+      parentPlacementId: input.targetParentPlacementId,
+      order: nextOrder,
+      removedAt: undefined,
+      revision: source.revision + 1,
+      updatedAt: now,
+    };
+    write(references.map(reference => {
+      if (!subtreeIds.has(reference.id)) return reference;
+      if (reference.id === source.id) return moved;
+      return {
+        ...reference,
+        boardId: input.targetBoardId,
+        removedAt: undefined,
+        revision: reference.revision + 1,
+        updatedAt: now,
+      };
+    }));
+    writeStaged(stagedReferences.filter(reference => reference.referenceId !== staged.referenceId));
+    rememberOperation(input.operationId, fingerprint, moved);
+    return moved;
+  },
+
   async remove(workspaceId, input: TrackingReferenceMutation) {
     consumeLocalTrackingTestFault('remove');
     const fingerprint = operationFingerprint({ action: 'remove', workspaceId, sourcePlacementId: input.sourcePlacementId, expectedRevision: input.expectedRevision });
@@ -329,7 +531,7 @@ export const createLocalTaskTrackingReferenceService = (
   async restore(workspaceId, input: TrackingReferenceMutation) {
     consumeLocalTrackingTestFault('restore');
     const fingerprint = operationFingerprint({ action: 'restore', workspaceId, sourcePlacementId: input.sourcePlacementId, expectedRevision: input.expectedRevision });
-    const replay = replayOperation(input.operationId, fingerprint);
+    const replay = replayOperation<TaskTrackingReference>(input.operationId, fingerprint);
     if (replay) return replay;
     const references = read();
     const source = references.find(reference => reference.id === input.sourcePlacementId && reference.removedAt);
@@ -365,8 +567,13 @@ export const createLocalTaskTrackingReferenceService = (
 export const resetLocalTaskTrackingReferences = () => {
   operationResult.clear();
   write([]);
+  writeStaged([]);
 };
 
 export const readLocalTaskTrackingReferences = (): TaskTrackingReference[] => read();
 
 export const writeLocalTaskTrackingReferences = (references: TaskTrackingReference[]) => write(references);
+
+export const readLocalStagedTaskTrackingReferences = (): StagedTaskTrackingReference[] => readStaged();
+
+export const writeLocalStagedTaskTrackingReferences = (references: StagedTaskTrackingReference[]) => writeStaged(references);

@@ -5,6 +5,7 @@ const files = {
   board: 'src/components/BoardView.tsx',
   card: 'src/components/Wbs/KanbanCard.tsx',
   checklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  sharedChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   column: 'src/components/Wbs/KanbanColumn.tsx',
   preview: 'src/components/Wbs/taskDrag/desktopTaskDropPreview.ts',
   columnDropPolicy: 'src/components/Wbs/taskDrag/desktopColumnDropPolicy.ts',
@@ -29,6 +30,7 @@ const source = Object.fromEntries(Object.entries(files).map(([key, file]) => [
 const results = [];
 const check = (id, name, ok, details) => results.push({ id, name, ok: Boolean(ok), details });
 const hasAll = (value, needles) => needles.every((needle) => value.includes(needle));
+const checklistRendererSource = `${source.checklist}\n${source.sharedChecklistTree}`;
 
 Object.entries(files).forEach(([key, file]) => check('S00', `file exists:${key}`, existsSync(resolve(file)), file));
 
@@ -51,14 +53,15 @@ check('S02', 'desktop indicator exposes one canonical target descriptor', hasAll
 check('S03', 'desktop preview and commit reuse the canonical outcome resolver',
   source.preview.includes('resolveTaskDropOutcome({')
   && source.preview.includes('export const resolveDesktopTaskDropIntent')
-  && source.commit.includes('resolveDesktopTaskDropIntent({ activeData, targetData: overData')
+  && source.commit.includes('resolveDesktopTaskDropIntent({ activeData, targetData: latestTargetData')
   && source.commit.includes("if (latest.outcomeKind === 'origin')")
   && source.board.includes('resolveDesktopTaskDropPreview({'));
 
 check('S04', 'desktop source placeholders are neutral and cannot impersonate the live target',
-  source.card.includes('data-kanban-drag-source-placeholder-neutral="true"')
+  (source.card.includes('data-kanban-drag-source-placeholder-neutral="true"')
+    || source.card.includes('kanban-drag-origin-placeholder'))
   && source.column.includes('data-kanban-drag-source-placeholder-neutral="true"')
-  && !source.checklist.includes('showSourceInsertionMarker')
+  && !checklistRendererSource.includes('showSourceInsertionMarker')
   && !source.card.includes("import { KanbanInsertionMarker }")
   && !source.card.includes('<KanbanInsertionMarker')
   && !source.card.includes('showSourceInsertionMarker')
@@ -126,15 +129,17 @@ check('S12', 'desktop task drag indicators are fixed overlays and retired child 
   && !source.card.includes('data-kanban-insertion-marker="true"'));
 
 check('S13', 'desktop task drag freezes sortable displacement while keeping the approved overlay',
-  hasAll(source.card, [
+  hasAll(`${source.card}\n${checklistRendererSource}`, [
     'freezeDesktopTaskLayout',
     "['wbs-card', 'wbs-checklist'].includes(activeType || '')",
-    'transform: freezeDesktopTaskLayout ? undefined : CSS.Transform.toString(transform)',
+    'transform: freezeDesktopTaskLayout || !transform ? undefined',
+    'transition: freezeDesktopTaskLayout ? undefined',
   ])
-  && hasAll(source.checklist, [
+  && hasAll(checklistRendererSource, [
     'useDndContext',
     'freezeDesktopTaskLayout',
-    'transform: freezeDesktopTaskLayout ? undefined : CSS.Transform.toString(transform)',
+    'transform: freezeDesktopTaskLayout || !transform ? undefined',
+    'transition: freezeDesktopTaskLayout ? undefined',
   ])
   && hasAll(source.board, [
     'DESKTOP_INDICATOR_RECT_RETAIN_PX',

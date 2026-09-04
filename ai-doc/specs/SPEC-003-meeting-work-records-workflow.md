@@ -413,9 +413,3 @@ PM 建議先將第一個交付點定義為「紀錄 MVP」，避免一開始就�
 
 3. AI 是否可以直接修改任務  
    建議：不可以。AI 只能提出建議，使用者確認後才新增或更新任務。
-
-## DEV-093 record-family extension（2026-08-28）
-
-`SPEC-093` 新增不可變 `task_collection`，只延伸本文件的 KnowledgeRecord family，不改 meeting／work_log editor、draft、RAG 與 visibility 契約。`task_collection` 必須走 dedicated transaction service／read-only viewer，禁止 generic record upsert、checkpoint、delete 或 editor mutation；第一階段 `rag_enabled=false`。
-
-本文件 4.1 的歷史「全部紀錄」方向已由 DEV-016＋SPEC-093 intentional extension：現行紀錄庫不提供跨 family 混合清單，而以 `典藏任務`、`會議紀錄`、`個人工作紀錄` 互斥 sections 呈現。完整 schema、permission、version、provider、UI 與驗收 authority 以 `SPEC-093-task-collection-subtree-assets.md` 為準。

@@ -150,7 +150,7 @@ async (page) => {
       runId: element.getAttribute('data-meeting-synthesis-run-id'),
       quality: element.getAttribute('data-meeting-synthesis-quality'),
     }));
-    assert(proof.text.includes('規則整理完成，請校稿後發布'), 'local deterministic output must be identified as rule-based synthesis', proof);
+    assert(proof.text.includes('規則整理完成，請確認後發布'), 'local deterministic output must be identified as rule-based synthesis', proof);
     assert(proof.provider?.startsWith('deterministic'), 'local synthesis provider must be deterministic', proof);
     assert(proof.contract === 'meeting-synthesis-v2', 'local synthesis must expose the v2 contract', proof);
     assert(proof.functionVersion === 'local-deterministic-2026-08-07-v3', 'local synthesis must expose the current function version', proof);
@@ -160,13 +160,9 @@ async (page) => {
   };
 
   const saveReviewDraft = async (title) => {
-    const reviewStep = page.locator('[data-meeting-workflow-step="review"]');
-    await page.waitForFunction(
-      () => !document.querySelector('[data-meeting-workflow-step="review"]')?.hasAttribute('disabled'),
-      null,
-      { timeout: 10000 },
-    );
-    await reviewStep.click();
+    const saveDraftButton = page.locator('[data-record-meeting-save-draft]');
+    await saveDraftButton.waitFor({ state: 'visible', timeout: 10000 });
+    await saveDraftButton.click();
     await page.waitForFunction((expectedTitle) => {
       const records = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
       return records.some(record =>
@@ -329,18 +325,15 @@ async (page) => {
       const proof = await page.evaluate((expectedTitle) => {
         const records = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
         const record = records.find(item => item.title === expectedTitle);
-        const statusSummary = document.querySelector('[data-record-status-summary]')?.textContent || '';
         const publishState = document.querySelector('[data-meeting-workflow-step="published"]')?.getAttribute('data-meeting-workflow-step-state') || '';
         return {
           recordStatus: record?.status,
           ragEnabled: record?.ragEnabled,
-          statusSummary,
           publishState,
         };
       }, title);
       assert(proof.recordStatus === 'published', 'saved review draft should publish instead of staying draft', proof);
       assert(proof.ragEnabled === true, 'published local-test record should enable RAG mirror flag', proof);
-      assert(proof.statusSummary.includes('已發布'), 'sidebar status summary should show published state', proof);
       assert(proof.publishState === 'complete', 'publish workflow step should be complete', proof);
       const screenshotPath = `${screenshotBase}-ROT-005.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });

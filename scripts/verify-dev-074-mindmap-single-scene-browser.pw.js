@@ -54,6 +54,12 @@ async (page) => {
     'dev074-child-a': baseNode('dev074-child-a', 'DEV-074 Child A', 0, 'dev074-root-a'),
     'dev074-child-b': baseNode('dev074-child-b', 'DEV-074 Child B', 0, 'dev074-root-b'),
   };
+  const overflowRootCount = 64;
+  for (let index = 0; index < overflowRootCount; index += 1) {
+    const id = `dev074-overflow-root-${String(index + 1).padStart(2, '0')}`;
+    nodes[id] = baseNode(id, `DEV-074 Overflow Root ${index + 1}`, index + 2);
+  }
+  const expectedNodeCount = Object.keys(nodes).length;
   const relationship = {
     id: 'dev074-relationship',
     boardId: 'dev074-board',
@@ -69,7 +75,7 @@ async (page) => {
     await page.locator('[data-mindmap-view]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-mindmap-viewport="true"]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('[data-mindmap-scene="true"]').waitFor({ state: 'visible', timeout: 15000 });
-    await page.locator('[data-mindmap-node]').first().waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('[data-mindmap-node]').first().waitFor({ state: 'attached', timeout: 15000 });
     await page.waitForTimeout(250);
   };
 
@@ -110,7 +116,8 @@ async (page) => {
       await waitForMindMap();
       return;
     }
-    await page.goto('http://localhost:4000/?dev074Phase=after', { waitUntil: 'domcontentloaded' });
+    const runtimeOrigin = page.url().replace(/^(https?:\/\/[^/]+).*$/, '$1');
+    await page.goto(`${runtimeOrigin}/?dev074Phase=after`, { waitUntil: 'domcontentloaded' });
     await writeFixture();
     await page.reload({ waitUntil: 'networkidle' });
     if (await page.locator('nav').count() === 0) {
@@ -254,17 +261,46 @@ async (page) => {
 
   const readScrollReachability = async () => page.evaluate(() => {
     const viewport = document.querySelector('[data-mindmap-viewport="true"]');
-    if (!viewport) return { reachable: false, width: 0, height: 0, maxLeft: 0, maxTop: 0 };
+    if (!viewport) return {
+      reachable: false,
+      width: 0,
+      height: 0,
+      maxLeft: 0,
+      maxTop: 0,
+      topContentReachable: false,
+      bottomContentReachable: false,
+    };
     const width = viewport.scrollWidth;
     const height = viewport.scrollHeight;
     const maxLeft = Math.max(0, width - viewport.clientWidth);
     const maxTop = Math.max(0, height - viewport.clientHeight);
+    const contentElements = Array.from(document.querySelectorAll('[data-mindmap-node], [data-mindmap-center]'));
+    viewport.scrollTop = 0;
+    const viewportAtTop = viewport.getBoundingClientRect();
+    const minContentTop = Math.min(...contentElements.map(element => element.getBoundingClientRect().top));
+    const topContentReachable = minContentTop >= viewportAtTop.top - 1;
     viewport.scrollLeft = maxLeft;
     viewport.scrollTop = maxTop;
-    const reached = Math.abs(viewport.scrollLeft - maxLeft) <= 1 && Math.abs(viewport.scrollTop - maxTop) <= 1;
+    const viewportAtBottom = viewport.getBoundingClientRect();
+    const maxContentBottom = Math.max(...contentElements.map(element => element.getBoundingClientRect().bottom));
+    const bottomContentReachable = maxContentBottom <= viewportAtBottom.bottom + 1;
+    const reached = Math.abs(viewport.scrollLeft - maxLeft) <= 1
+      && Math.abs(viewport.scrollTop - maxTop) <= 1
+      && topContentReachable
+      && bottomContentReachable;
     viewport.scrollLeft = Math.round(maxLeft / 2);
     viewport.scrollTop = Math.round(maxTop / 2);
-    return { reachable: reached, width, height, maxLeft, maxTop };
+    return {
+      reachable: reached,
+      width,
+      height,
+      maxLeft,
+      maxTop,
+      topContentReachable,
+      bottomContentReachable,
+      minContentTopAtScrollStart: minContentTop - viewportAtTop.top,
+      maxContentBottomAtScrollEnd: maxContentBottom - viewportAtBottom.top,
+    };
   });
 
   const readHitTargetMinimums = async () => page.evaluate(() => {
@@ -310,13 +346,28 @@ async (page) => {
     await page.locator('[data-mindmap-zoom-reset]').click();
     await page.waitForTimeout(180);
     const before = await readGeometry();
-    assert(before.nodeCount === 4, 'fixture should render all mind map nodes', { viewport, before });
+    assert(before.nodeCount === expectedNodeCount, 'fixture should render all mind map nodes', { viewport, before, expectedNodeCount });
     assert(before.connectorCount >= 1, 'connector overlay should render in the single scene', { viewport, before });
     assert(before.relationshipCount === 1, 'relationship overlay should render in the single scene', { viewport, before });
     assert(before.scrollOwners === 1, 'mind map should have one scroll owner', { viewport, before });
     assert(before.sceneTransform.startsWith('matrix('), 'scene should use one matrix transform', { viewport, before });
     assert(before.connectorEndpointError < 14, 'connector endpoints should stay attached to node edges', { viewport, before });
     assert(before.relationshipEndpointError < 14, 'relationship endpoints should stay attached to node edges', { viewport, before });
+
+    await page.evaluate(({ left }) => {
+      const mindMapViewport = document.querySelector('[data-mindmap-viewport="true"]');
+      if (!mindMapViewport) return;
+      mindMapViewport.scrollLeft = left;
+      mindMapViewport.scrollTop = 0;
+    }, { left: before.scroll.left });
+    const topEdgeScreenshot = `output/playwright/dev-074-single-scene/${viewport.label}-top-edge.png`;
+    await page.screenshot({ path: topEdgeScreenshot });
+    await page.evaluate(({ left, top }) => {
+      const mindMapViewport = document.querySelector('[data-mindmap-viewport="true"]');
+      if (!mindMapViewport) return;
+      mindMapViewport.scrollLeft = left;
+      mindMapViewport.scrollTop = top;
+    }, { left: before.scroll.left, top: before.scroll.top });
 
     const zoomIn = page.locator('[data-mindmap-zoom-in]').first();
     await zoomIn.click();
@@ -350,7 +401,7 @@ async (page) => {
       assert(geometry.relationshipD === matrixBaseline.relationshipD, 'scale matrix must preserve relationship world paths', { viewport, scale, matrixBaseline, geometry });
       assert(geometry.recomputeCount === matrixBaseline.recomputeCount, 'scale matrix must not recompute geometry', { viewport, scale, matrixBaseline, geometry });
       assert(geometry.connectorEndpointError < 3 && geometry.relationshipEndpointError < 3, 'scale matrix endpoint drift must stay within 3px', { viewport, scale, geometry });
-      assert(scrollReachability.reachable, 'scale matrix scroll extent must reach the far edge', { viewport, scale, scrollReachability });
+      assert(scrollReachability.reachable, 'scale matrix scroll extent must contain and reach every visible node', { viewport, scale, scrollReachability });
       zoomCases.push({
         scale,
         maxHierarchyEndpointDriftPx: geometry.connectorEndpointError,
@@ -358,6 +409,10 @@ async (page) => {
         anchorDriftPx: null,
         recomputeDelta: geometry.recomputeCount - matrixBaseline.recomputeCount,
         scrollReachable: scrollReachability.reachable,
+        topContentReachable: scrollReachability.topContentReachable,
+        bottomContentReachable: scrollReachability.bottomContentReachable,
+        minContentTopAtScrollStart: scrollReachability.minContentTopAtScrollStart,
+        maxContentBottomAtScrollEnd: scrollReachability.maxContentBottomAtScrollEnd,
         minCurveHitThicknessPx: hitTargets.minCurveHitThicknessPx,
         minHandleWidthPx: hitTargets.minHandleWidthPx,
         minHandleHeightPx: hitTargets.minHandleHeightPx,
@@ -376,6 +431,7 @@ async (page) => {
       pageErrors: [...pageErrors],
       visibleErrors: await getVisibleErrors(),
       screenshot,
+      topEdgeScreenshot,
     });
   }
 
@@ -402,6 +458,7 @@ async (page) => {
     assertions: [
       'one-scroll-owner',
       'stage-sizer-and-scene-matrix',
+      'all-visible-content-contained-by-scroll-extent',
       'world-paths-stable-through-pure-zoom',
       'connector-and-relationship-endpoints-attached',
       'inverse-scaled-html-interaction-targets',

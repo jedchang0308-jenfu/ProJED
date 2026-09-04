@@ -5,6 +5,7 @@ interface MindMapCanvasShellProps {
   surfaceRef: React.RefObject<HTMLDivElement | null>;
   stageRef: React.RefObject<HTMLDivElement | null>;
   contentRef: React.RefObject<HTMLDivElement | null>;
+  marqueeOverlayRef: React.RefObject<HTMLDivElement | null>;
   zoomLevelText: string;
   mapContentStyle: React.CSSProperties;
   stageStyle: React.CSSProperties;
@@ -15,14 +16,18 @@ interface MindMapCanvasShellProps {
   emptyState: React.ReactNode;
   children: React.ReactNode;
   onMouseDown: React.MouseEventHandler<HTMLDivElement>;
-  onPointerDown: React.PointerEventHandler<HTMLDivElement>;
   onContentClick: React.MouseEventHandler<HTMLDivElement>;
+  onContentPointerDown: React.PointerEventHandler<HTMLDivElement>;
+  onContentPointerMove: React.PointerEventHandler<HTMLDivElement>;
+  onContentPointerUp: React.PointerEventHandler<HTMLDivElement>;
+  onContentPointerCancel: React.PointerEventHandler<HTMLDivElement>;
 }
 
 const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
   surfaceRef,
   stageRef,
   contentRef,
+  marqueeOverlayRef,
   zoomLevelText,
   mapContentStyle,
   stageStyle,
@@ -33,22 +38,22 @@ const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
   emptyState,
   children,
   onMouseDown,
-  onPointerDown,
   onContentClick,
+  onContentPointerDown,
+  onContentPointerMove,
+  onContentPointerUp,
+  onContentPointerCancel,
 }) => (
   <div
     ref={surfaceRef}
     className={`mobile-pan-surface min-h-0 flex-1 overflow-auto ${compactClassNames.canvas}`}
     onMouseDown={onMouseDown}
-    onPointerDown={onPointerDown}
     data-mobile-pan-surface="mindmap"
     data-mindmap-viewport="true"
     data-mindmap-scroll-owner="true"
     data-mindmap-zoom-level={zoomLevelText}
     data-mindmap-zoom-interaction="single-scene-rAF"
     data-mindmap-middle-pan="true"
-    data-mindmap-left-pan="true"
-    data-mindmap-left-pan-state="idle"
   >
     {hasContent ? (
       <div
@@ -63,6 +68,11 @@ const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
           className="mobile-pan-surface relative flex min-h-[220vh] min-w-[260vw] items-center justify-center gap-[var(--mindmap-root-gap)] px-[55vw] py-[45vh]"
           style={{ ...mapContentStyle, ...sceneStyle }}
           onClick={onContentClick}
+          onPointerDown={onContentPointerDown}
+          onPointerMove={onContentPointerMove}
+          onPointerUp={onContentPointerUp}
+          onPointerCancel={onContentPointerCancel}
+          onLostPointerCapture={onContentPointerCancel}
           data-mindmap-surface
           data-mindmap-scene="true"
           data-mindmap-coordinate-space="world"
@@ -78,6 +88,12 @@ const MindMapCanvasShell: React.FC<MindMapCanvasShellProps> = ({
     ) : (
       emptyState
     )}
+    <div
+      ref={marqueeOverlayRef}
+      aria-hidden="true"
+      className="pointer-events-none fixed z-[70] hidden border border-blue-500 bg-blue-400/15 shadow-[0_0_0_1px_rgba(59,130,246,0.12)]"
+      data-mindmap-marquee-overlay="true"
+    />
   </div>
 );
 

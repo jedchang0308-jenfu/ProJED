@@ -84,7 +84,9 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
                 void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
             }}
             data-task-id={item.id}
+            data-task-canonical-id={item.id}
             data-task-placement-id={placementId}
+            data-task-placement-hover-surface="true"
             data-task-drag-surface="true"
             data-task-drag-surface-kind="shared-sidebar-row"
             data-task-selected={selectedTaskId === item.id ? 'true' : undefined}

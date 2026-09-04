@@ -123,8 +123,18 @@ async (page) => {
     const count = await indicators.count();
     const debugTrace = count === 1 ? [] : await page.evaluate(() =>
       (window.__projedDesktopTaskDragDebug || []).slice(-20));
-    assert(count === 1, 'desktop drag must expose exactly one live target indicator', { count, debugTrace });
-    const indicator = indicators.first();
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[data-desktop-drop-indicator="true"]')).some((element) => {
+      const rect = element.getBoundingClientRect();
+      const marker = element.querySelector('[data-kanban-insertion-marker="true"]')?.getBoundingClientRect();
+      return (rect.width > 0 && rect.height > 0) || Boolean(marker && marker.width > 0 && marker.height > 0);
+    }), null, { timeout: 1200 }).catch(() => undefined);
+    const visibleIndex = await indicators.evaluateAll((items) => items.findIndex((element) => {
+      const rect = element.getBoundingClientRect();
+      const marker = element.querySelector('[data-kanban-insertion-marker="true"]')?.getBoundingClientRect();
+      return (rect.width > 0 && rect.height > 0) || Boolean(marker && marker.width > 0 && marker.height > 0);
+    }));
+    assert(count === 1 && visibleIndex >= 0, 'desktop drag must expose exactly one live target indicator', { count, visibleIndex, debugTrace });
+    const indicator = indicators.nth(visibleIndex);
     const state = await indicator.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const marker = element.querySelector('[data-kanban-insertion-marker="true"]');
@@ -308,8 +318,19 @@ async (page) => {
   const columns = () => page.locator('[data-kanban-column="true"]');
   const cardsInColumn = (index) => columns().nth(index).locator('.kanban-task-card[data-task-id]');
   const cardsWithChildren = () => page.locator('.kanban-task-card[data-task-id]:has(.kanban-checklist-item[data-task-id])');
-  const taskById = (id) => page.locator(`[data-task-id="${id}"]`).first();
-  const readChecklistRowLayout = async (card) => card.locator('.kanban-checklist-item[data-task-id]').evaluateAll((elements) =>
+  // Each card owns two different interaction surfaces: its direct primary
+  // body and the descendant L3+ checklist tree.  A broad card locator can
+  // resolve a nested child when the synthetic pointer lands in the expanded
+  // subtree, which makes the assertion disagree with the displayed source.
+  // Keep the adjacent regression focused on the surface named by each case.
+  const cardPrimary = (card) => card.locator(':scope > [data-task-card-primary="true"][data-task-surface-source="true"]');
+  const checklistRows = (card) => card.locator(
+    ':scope > [data-task-surface-subtree="true"] > .kanban-checklist-body > .kanban-checklist-root > [data-task-placement-tree="true"] > [data-task-surface-scope="true"] > .kanban-checklist-item[data-task-id]',
+  );
+  const taskSurfaceById = (id) => page.locator(
+    `.kanban-task-card[data-task-id="${id}"] > [data-task-card-primary="true"][data-task-surface-source="true"], [data-task-surface-scope="true"][data-task-id="${id}"] > .kanban-checklist-item[data-task-id]`,
+  ).first();
+  const readChecklistRowLayout = async (card) => checklistRows(card).evaluateAll((elements) =>
     elements.map((element) => {
       const rect = element.getBoundingClientRect();
       const parentStyle = element.parentElement ? getComputedStyle(element.parentElement) : null;
@@ -345,18 +366,25 @@ async (page) => {
     await openApp();
     const first = cardsInColumn(0).nth(0);
     const second = cardsInColumn(0).nth(1);
+    // Snapshot the IDs before starting the drag. The source card is rendered
+    // through DragOverlay while active, so live nth() locators can otherwise
+    // resolve the next card after the source temporarily leaves the list.
+    const firstId = await first.getAttribute('data-task-id');
+    const secondId = await second.getAttribute('data-task-id');
+    const firstCard = page.locator(`.kanban-task-card[data-task-id="${firstId}"]`).first();
+    const secondCard = page.locator(`.kanban-task-card[data-task-id="${secondId}"]`).first();
     const moveAfter = await dragAndCommit({
-      source: first,
-      target: second.locator(':scope > [data-task-surface-source="true"]'),
-      resolveTargetPoint: () => pointForCardBoundaryGap(second, 'after'),
+      source: cardPrimary(firstCard),
+      target: cardPrimary(secondCard),
+      resolveTargetPoint: () => pointForCardBoundaryGap(secondCard, 'after'),
       screenshotSuffix: 'B01-card-after',
     });
     const moveBeforeTarget = page.locator(
       `.kanban-task-card[data-task-id="${moveAfter.indicator.targetNodeId}"]`,
     ).first();
     const moveBefore = await dragAndCommit({
-      source: taskById(moveAfter.sourceId),
-      target: moveBeforeTarget.locator(':scope > [data-task-surface-source="true"]'),
+      source: taskSurfaceById(moveAfter.sourceId),
+      target: cardPrimary(moveBeforeTarget),
       resolveTargetPoint: () => pointForCardBoundaryGap(moveBeforeTarget, 'before'),
       screenshotSuffix: 'B01-card-before',
     });
@@ -368,8 +396,8 @@ async (page) => {
   await runCase('QA-055-B02', 'card cross-column move commits to the displayed column and order', async () => {
     await openApp();
     const result = await dragAndCommit({
-      source: cardsInColumn(0).nth(0),
-      target: cardsInColumn(1).nth(0).locator(':scope > [data-task-surface-source="true"]'),
+      source: cardPrimary(cardsInColumn(0).nth(0)),
+      target: cardPrimary(cardsInColumn(1).nth(0)),
       screenshotSuffix: 'B02-card-cross-column',
     });
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
@@ -379,7 +407,7 @@ async (page) => {
     await openApp();
     const targetColumn = columns().nth(1);
     const result = await dragAndCommit({
-      source: cardsInColumn(0).nth(0),
+      source: cardPrimary(cardsInColumn(0).nth(0)),
       target: targetColumn.locator('[data-task-drop-surface-kind="column-drop"]'),
       targetRatio: { x: 0.55, y: 0.98 },
       screenshotSuffix: 'B03-column-append',
@@ -392,9 +420,15 @@ async (page) => {
   await runCase('QA-055-B04', 'checklist rows reorder within one parent with one live indicator', async () => {
     await openApp();
     const card = cardsWithChildren().first();
-    const rows = card.locator('.kanban-checklist-item[data-task-id]');
+    const rows = checklistRows(card);
     assert(await rows.count() >= 2, 'fixture must expose two checklist rows in one card');
-    const result = await dragAndCommit({ source: rows.nth(0), target: rows.nth(1), screenshotSuffix: 'B04-checklist-same-parent' });
+    const sourceId = await rows.nth(0).getAttribute('data-task-id');
+    const targetId = await rows.nth(1).getAttribute('data-task-id');
+    const result = await dragAndCommit({
+      source: taskSurfaceById(sourceId),
+      target: taskSurfaceById(targetId),
+      screenshotSuffix: 'B04-checklist-same-parent',
+    });
     assert(result.indicator.surfaceKind === 'checklist-row', 'checklist row must own checklist reorder', result.indicator);
     return { indicator: result.indicator, screenshotPath: result.screenshotPath };
   });
@@ -404,8 +438,8 @@ async (page) => {
     const sourceCard = cardsWithChildren().nth(0);
     const targetCard = cardsWithChildren().nth(1);
     const result = await dragAndCommit({
-      source: sourceCard.locator('.kanban-checklist-item[data-task-id]').first(),
-      target: targetCard.locator(':scope > [data-task-surface-source="true"]'),
+      source: checklistRows(sourceCard).first(),
+      target: cardPrimary(targetCard),
       screenshotSuffix: 'B05-checklist-cross-parent',
     });
     assert(result.indicator.surfaceKind === 'kanban-card'
@@ -418,7 +452,7 @@ async (page) => {
     await openApp();
     const targetCard = cardsWithChildren().nth(1);
     const result = await dragAndCommit({
-      source: cardsInColumn(0).nth(0),
+      source: cardPrimary(cardsInColumn(0).nth(0)),
       target: targetCard.locator(':scope > [data-task-surface-subtree="true"]'),
       // Hit the subtree surface's own left rail instead of a nested child row.
       targetRatio: { x: 0.005, y: 0.5 },
@@ -434,11 +468,11 @@ async (page) => {
     await openApp();
     const sourceCard = cardsWithChildren().nth(0);
     const targetCard = cardsWithChildren().nth(1);
-    const source = sourceCard.locator('.kanban-checklist-item[data-task-id]').first();
-    const targetRow = targetCard.locator('.kanban-checklist-item[data-task-id]').first();
+    const source = checklistRows(sourceCard).first();
+    const targetRow = checklistRows(targetCard).first();
     const beforeNodes = await readNodes();
     const { sourceId, point: sourcePoint } = await beginMouseDrag(source);
-    const parentState = await moveDragTo(targetCard.locator(':scope > [data-task-surface-source="true"]'));
+    const parentState = await moveDragTo(cardPrimary(targetCard));
     const childState = await moveDragTo(targetRow);
     assert(parentState.indicator.targetNodeId !== childState.indicator.targetNodeId
       && childState.indicator.surfaceKind === 'checklist-row',
@@ -523,15 +557,19 @@ async (page) => {
 
   await runCase('QA-055-B08', '1024x768 same-column and cross-column drags stay unclipped', async () => {
     await openApp({ width: 1024, height: 768 });
+    const sameSourceId = await cardsInColumn(0).nth(0).getAttribute('data-task-id');
+    const sameTargetId = await cardsInColumn(0).nth(1).getAttribute('data-task-id');
+    const sameSource = page.locator(`.kanban-task-card[data-task-id="${sameSourceId}"]`).first();
+    const sameTarget = page.locator(`.kanban-task-card[data-task-id="${sameTargetId}"]`).first();
     const same = await dragAndCommit({
-      source: cardsInColumn(0).nth(0),
-      target: cardsInColumn(0).nth(1).locator(':scope > [data-task-surface-source="true"]'),
-      resolveTargetPoint: () => pointForCardBoundaryGap(cardsInColumn(0).nth(1), 'after'),
+      source: cardPrimary(sameSource),
+      target: cardPrimary(sameTarget),
+      resolveTargetPoint: () => pointForCardBoundaryGap(sameTarget, 'after'),
       screenshotSuffix: 'B08-1024-same-column',
     });
     const cross = await dragAndCommit({
-      source: taskById(same.sourceId),
-      target: cardsInColumn(1).nth(0).locator(':scope > [data-task-surface-source="true"]'),
+      source: taskSurfaceById(same.sourceId),
+      target: cardPrimary(cardsInColumn(1).nth(0)),
       screenshotSuffix: 'B08-1024-cross-column',
     });
     const sweep = await visibleErrorSweep('1024x768 desktop drag');
@@ -561,7 +599,7 @@ async (page) => {
     await openApp();
     const targets = [
       cardsInColumn(0).first(),
-      cardsWithChildren().first().locator('.kanban-checklist-item[data-task-id]').first(),
+      checklistRows(cardsWithChildren().first()).first(),
       columns().first().locator('[data-kanban-column-header="true"]'),
     ];
     const taskIds = [];
@@ -653,8 +691,8 @@ async (page) => {
 
   await runCase('QA-055-B13', 'one undo restores one cross-hierarchy move', async () => {
     await openApp();
-    const source = cardsWithChildren().nth(0).locator('.kanban-checklist-item[data-task-id]').first();
-    const target = cardsWithChildren().nth(1).locator(':scope > [data-task-surface-source="true"]');
+    const source = checklistRows(cardsWithChildren().nth(0)).first();
+    const target = cardPrimary(cardsWithChildren().nth(1));
     const beforeNodes = await readNodes();
     const result = await dragAndCommit({ source, target, screenshotSuffix: 'B13-before-undo' });
     await page.waitForFunction(() => !document.querySelector('#btn-undo')?.hasAttribute('disabled'), null, { timeout: 5000 });
@@ -679,12 +717,12 @@ async (page) => {
       const targetId = index % 2 === 0 ? rightTargetId : leftTargetId;
       const targetCard = page.locator(`.kanban-task-card[data-task-id="${targetId}"]`).first();
       const trace = await dragAndCommit({
-        source: taskById(firstCardId),
-        target: targetCard.locator(':scope > [data-task-surface-source="true"]'),
+        source: taskSurfaceById(firstCardId),
+        target: cardPrimary(targetCard),
       });
       traces.push({ index, kind: 'card', indicator: trace.indicator });
     }
-    const sourceChecklistId = await cardsWithChildren().nth(0).locator('.kanban-checklist-item[data-task-id]').first().getAttribute('data-task-id');
+    const sourceChecklistId = await checklistRows(cardsWithChildren().nth(0)).first().getAttribute('data-task-id');
     const targetCardIds = [
       await cardsWithChildren().nth(1).getAttribute('data-task-id'),
       await cardsWithChildren().nth(2).getAttribute('data-task-id'),
@@ -692,7 +730,7 @@ async (page) => {
     for (let index = 0; index < 5; index += 1) {
       const targetId = targetCardIds[index % 2];
       const targetCard = page.locator(`.kanban-task-card[data-task-id="${targetId}"]`).first();
-      const trace = await dragAndCommit({ source: taskById(sourceChecklistId), target: targetCard.locator(':scope > [data-task-surface-source="true"]') });
+      const trace = await dragAndCommit({ source: taskSurfaceById(sourceChecklistId), target: cardPrimary(targetCard) });
       traces.push({ index: index + 5, kind: 'checklist', indicator: trace.indicator });
     }
     const screenshotPath = `${screenshotBase}-B14-ten-mixed-drags.png`;
@@ -705,8 +743,8 @@ async (page) => {
     await openApp();
     const sourceCard = cardsWithChildren().nth(0);
     const targetCard = cardsWithChildren().nth(1);
-    const source = sourceCard.locator('.kanban-checklist-item[data-task-id]').first();
-    const targetRows = targetCard.locator('.kanban-checklist-item[data-task-id]');
+    const source = checklistRows(sourceCard).first();
+    const targetRows = checklistRows(targetCard);
     assert(await targetRows.count() >= 2, 'fixture must expose at least two L3+ rows in the target card');
     await targetCard.scrollIntoViewIfNeeded();
     const beforeLayout = await readChecklistRowLayout(targetCard);
@@ -777,11 +815,27 @@ async (page) => {
     const { sourceId } = await beginMouseDrag(
       source,
       { x: 0.55, y: 0.18 },
-      source.locator(':scope > [data-task-surface-source="true"]'),
+      cardPrimary(source),
     );
     const cards = column.locator(
-      '[data-task-drop-surface-kind="column-drop"] > [data-kanban-column-subtree-scope] > .kanban-task-card[data-task-id]',
+      '[data-task-drop-surface-kind="column-drop"] > [data-kanban-column-subtree-scope] > [data-task-placement-tree="true"] > .kanban-task-card[data-task-id]',
     );
+    // The canonical tail card can be below the 768px viewport.  Bring it
+    // into the scrollport before seeding the cached-tail indicator so the
+    // synthetic pointer remains a real in-viewport event.
+    await cards.last().scrollIntoViewIfNeeded();
+    await cards.last().evaluate((element) => {
+      let scrollParent = element.parentElement;
+      while (scrollParent && scrollParent.scrollHeight <= scrollParent.clientHeight) {
+        scrollParent = scrollParent.parentElement;
+      }
+      if (scrollParent) {
+        scrollParent.scrollTop = Math.min(
+          scrollParent.scrollHeight - scrollParent.clientHeight,
+          scrollParent.scrollTop + 140,
+        );
+      }
+    });
     const layout = await cards.evaluateAll((elements) => elements.map((element) => {
       const rect = element.getBoundingClientRect();
       return {
@@ -801,7 +855,10 @@ async (page) => {
     const x = Math.round((pair.upper.left + pair.upper.right) / 2);
     const staleSeedPoint = {
       x: Math.round((last.left + last.right) / 2),
-      y: Math.round(last.bottom - 2),
+      // Use the tail card's middle rather than its bottom edge.  The latter
+      // sits inside the browser auto-scroll band at 768px and can move the
+      // entire column while the cached indicator is being seeded.
+      y: Math.round(last.top + last.height / 2),
     };
     const gapPoint = {
       x,
@@ -847,10 +904,10 @@ async (page) => {
     const { sourceId: startedSourceId } = await beginMouseDrag(
       source,
       { x: 0.55, y: 0.5 },
-      source.locator(':scope > [data-task-surface-source="true"]'),
+      cardPrimary(source),
     );
     const targetSurface = page.locator(
-      `.kanban-task-card[data-task-id="${targetId}"] > [data-task-surface-source="true"]`,
+      `.kanban-task-card[data-task-id="${targetId}"] > [data-task-card-primary="true"][data-task-surface-source="true"]`,
     ).first();
     const targetPoint = await pointFor(targetSurface, 0.55, 0.5);
     await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 1 });

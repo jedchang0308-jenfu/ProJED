@@ -37,10 +37,9 @@ export const getMindMapStageStyle = (layout: MindMapSceneLayout): CSSProperties 
 });
 
 export const getMindMapSceneTransformStyle = (layout: MindMapSceneLayout): CSSProperties => ({
-  width: `${layout.sceneWidth}px`,
-  height: `${layout.sceneHeight}px`,
-  minWidth: 0,
-  minHeight: 0,
+  position: 'absolute',
+  left: 0,
+  top: 0,
   transformOrigin: '0 0',
   transform: `matrix(${layout.scale}, 0, 0, ${layout.scale}, ${layout.translateX}, ${layout.translateY})`,
 });

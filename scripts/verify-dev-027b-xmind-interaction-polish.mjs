@@ -76,7 +76,8 @@ assert(
     mindMapKeyboard.includes("event.key === 'ArrowRight'") &&
     mindMapView.includes('const element = nodeElementRegistryRef.current.get(nodeId);') &&
     mindMapView.includes('element.focus({ preventScroll: true });') &&
-    mindMapView.includes('if (selectionStore.getSelectedNodeId() !== nodeId) return;') &&
+    (mindMapView.includes('if (selectionStore.getSelectedNodeId() !== nodeId) return;') ||
+      mindMapView.includes('if (selectionStore.getPrimaryPlacementId() !== getPlacementIdForNodeId(nodeId)) return;')) &&
     mindMapView.includes('getMindMapKeyboardAction(event, {') &&
     !mindMapKeyboard.includes("type: 'rename-selected'") &&
     !mindMapKeyboard.includes('isMindMapPlainTextEditKey') &&

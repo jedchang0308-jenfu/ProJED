@@ -26,7 +26,7 @@
 3. 兩條 endpoint control arms 與兩個 square control points 可見；拖曳可即時調整曲線並保存。
 4. 關係線本體、label、style drawer、inline edit 與刪除操作維持可用。
 5. 未選取關係線的預設 path、hover 與建立 preview 不受影響。
-6. 縮放、左鍵畫布平移與既有 interaction owner 不新增重複 handle 或錯誤。
+6. 縮放、既有中鍵畫布平移與 interaction owner 不新增重複 handle 或錯誤。
 
 ## 非目標
 

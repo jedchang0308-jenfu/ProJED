@@ -30,6 +30,7 @@
 | 手機只搬 root 或定位線缺席 | mobile commit／presenter 未共用 subtree 與 marker contract | 子樹破裂或使用者無法判斷落點 | storage parent links、marker identity 與 drop cleanup | P0 | B11、B12 |
 | 循環資料卡死 | recursive projection 未防 visited | 面板無限遞迴／白屏 | pure helper／visited contract | P0 | S04 |
 | undo 只還原部分 | 每節點各自寫 history | 子樹回復成混合狀態 | batch owner static regression | P1 | R02 |
+| 零 L1 目的看板不能歸位 | root surface 依賴既有 anchor node | 跨看板流程卡在最後一步，需先建空列表 | empty-board desktop／mobile rendered drop＋storage snapshot | P0 | B14 |
 
 ## 測試案例
 
@@ -53,6 +54,7 @@
 | QA-086-B11 | 390×844 與 320×844 長按看板 parent，拖入未歸位 | target／surface=`workbench-unplaced-lane`；顯示共用 horizontal marker；root／child／grandchild 同批進未歸位且 depths=0／1／2；drop 後 marker／preview／action rail 清除，無水平溢出與可見錯誤 | PASS；CDP touch browser／兩組 preview＋result screenshot |
 | QA-086-B12 | 390×844 切至工作區 B／看板 B，長按未歸位 root 歸位 | 三節點皆進目的 workspace／board；parents=`null/root/child`；未歸位清空 | PASS；CDP touch browser／storage／restored screenshot |
 | QA-086-B13 | 檢查使用者排除邊界 | 手機不新增 subtree hover 等價效果；`list`／`gantt`／`calendar` 仍由既有 mobile board-only gate 管理 | PASS；SPEC／source contract |
+| QA-086-B14 | 未歸位 parent＋child 拖入零 L1 看板（1440×900 pointer、390×844 touch） | 空白內容區命中 root surface；單一 vertical marker；root=`parent null/order 0`、child parent link 保留；來源／transient UI 清空；CTA 270px；mobile overflow=0 | PASS；empty-board browser／storage／四張 screenshot |
 | QA-086-R01 | DEV-039 static＋browser | 既有 placement lanes 與已歸位唯讀不回歸 | PASS；31/31＋browser PASS |
 | QA-086-R02 | DEV-044 static | undo coverage 不回歸 | PASS；26/26 |
 | QA-086-R03 | DEV-053／065 static | task drag 手感與 subtree hover contract 不回歸 | PASS；30/30＋40 checks |
@@ -73,7 +75,8 @@
 - Mobile cleanup／RWD：兩種 viewport drop 後 transient marker／preview／action rail 均為 0，document overflow=0，未歸位列容器未因 marker 發生 layout shift；手機未新增 subtree hover，也未開放清單／甘特／日曆。
 - Screenshot：既有 desktop 五張，以及 `output/playwright/dev-086/unplaced-insertion-preview-mobile-390.png`、`unplaced-subtree-mobile-390.png`、`unplaced-insertion-preview-mobile-320.png`、`unplaced-subtree-mobile-320.png`、`restored-subtree-mobile-390.png`。
 - Browser page error=0；只觀察到既有 Calendar fallback warning，不列為本 DEV failure。
+- 2026-09-03 empty-board addendum：Desktop 與 Mobile 均 PASS；完整兩節點子樹歸位，root=`parentId null/order 0`、child→root、未歸位清空、transient count=0。空白 droppable 為 1056×840px、CTA 270px；mobile marker 在 viewport 內且 document overflow=0。證據位於 `output/playwright/empty-board-drop-*.png` 與 `output/playwright/empty-board-drop/result.json`。
 
 ## QA 結論
 
-AC-086-001～015 的必要本地證據齊全，判定 `QA PASS／QC PASS`。手機功能通過 CDP touch emulation；實機 iOS／Android與輔助科技仍未執行。若未來 production persistence、跨帳號權限或多人同步契約改動，必須另開 remote/release gate；不得以本地 fixture 冒稱 production 通過。
+AC-086-001～016 的必要本地證據齊全，判定 `QA PASS／QC PASS`。手機功能通過 CDP touch emulation；實機 iOS／Android與輔助科技仍未執行。若未來 production persistence、跨帳號權限或多人同步契約改動，必須另開 remote/release gate；不得以本地 fixture 冒稱 production 通過。

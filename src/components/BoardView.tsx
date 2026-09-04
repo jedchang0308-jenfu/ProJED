@@ -170,7 +170,14 @@ const BoardView = () => {
     const setDependencySelection = useBoardStore(s => s.setDependencySelection);
     const toggleStartDate = useBoardStore(s => s.toggleStartDate);
     const showStartDate = useBoardStore(s => s.showStartDate);
-    const { addDependency, dependencies, trackingReferences, moveTrackingReference } = useWbsStore();
+    const {
+        addDependency,
+        dependencies,
+        trackingReferences,
+        moveTrackingReference,
+        stageTrackingReference,
+        placeStagedTrackingReference,
+    } = useWbsStore();
     const isRecordTaskSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
     const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
     const { viewSize, requestViewSize, registerViewportAdapter } = useKanbanViewSize();
@@ -519,6 +526,8 @@ const BoardView = () => {
         commitTaskPlacementCommand: commitTaskPlacementCommandForMobileTaskDrag,
         archiveNode,
         moveTrackingReference,
+        stageTrackingReference,
+        placeStagedTrackingReference,
         recalculateAncestorStatus: recalculateAncestorStatusForMobileTaskDrag,
         onSessionBegin: () => {
             setActiveDrag(null);
@@ -674,6 +683,7 @@ const BoardView = () => {
                     (Boolean(targetData?.nodeId)
                         && ['wbs-column', 'wbs-column-drop', 'wbs-card', 'wbs-card-drop', 'wbs-checklist', 'wbs-checklist-drop', 'task-workbench-placed-task'].includes(targetData.type))
                     || targetData?.type === 'task-workbench-placed-board-lane'
+                    || targetData?.type === 'task-workbench-unplaced-lane'
                 );
             });
         }
@@ -911,6 +921,45 @@ const BoardView = () => {
             const rawDirectSurface = rawElement instanceof Element
                 ? rawElement.closest<HTMLElement>('[data-desktop-drop-surface="true"]')
                 : null;
+            // The fixed drag overlay and the nested scroll rail can make
+            // elementFromPoint return a non-surface node for the last few
+            // pixels of a column body.  Recover the owning column by its
+            // actual viewport rectangle before falling back to dnd-kit's
+            // translated active-rect collision (which may select the next
+            // horizontally adjacent column).
+            const pointColumnSurface = rawDirectSurface ? null : Array.from(
+                document.querySelectorAll<HTMLElement>(
+                    '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="column-drop"]',
+                ),
+            ).find((column) => {
+                const rect = column.getBoundingClientRect();
+                return exactPointer.x >= rect.left
+                    && exactPointer.x <= rect.right
+                    && exactPointer.y >= rect.top
+                    && exactPointer.y <= rect.bottom;
+            }) || null;
+            const checklistSurfaceAtPointer = Array.from(
+                document.querySelectorAll<HTMLElement>(
+                    '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="checklist-row"]',
+                ),
+            ).find((row) => {
+                const rect = row.getBoundingClientRect();
+                return exactPointer.x >= rect.left
+                    && exactPointer.x <= rect.right
+                    && exactPointer.y >= rect.top
+                    && exactPointer.y <= rect.bottom;
+            }) || null;
+            const cardSurfaceAtPointer = Array.from(
+                document.querySelectorAll<HTMLElement>(
+                    '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="kanban-card"]',
+                ),
+            ).find((card) => {
+                const rect = card.getBoundingClientRect();
+                return exactPointer.x >= rect.left
+                    && exactPointer.x <= rect.right
+                    && exactPointer.y >= rect.top
+                    && exactPointer.y <= rect.bottom;
+            }) || null;
             const exteriorColumnSurface = rawDirectSurface ? null : Array.from(
                 document.querySelectorAll<HTMLElement>(
                     '[data-desktop-drop-surface="true"][data-task-drop-surface-kind="column-drop"]',
@@ -923,9 +972,16 @@ const BoardView = () => {
                     columnLeft: rect.left,
                     columnRight: rect.right,
                     columnBottom: rect.bottom,
-                });
-            }) || null;
-            const directSurface = rawDirectSurface || exteriorColumnSurface;
+                    });
+                }) || null;
+            // A nested checklist row has priority even when elementFromPoint
+            // reports its enclosing column (e.g. the row's pointer-events
+            // state changes during a sortable placeholder render).
+            const directSurface = checklistSurfaceAtPointer
+                || cardSurfaceAtPointer
+                || rawDirectSurface
+                || pointColumnSurface
+                || exteriorColumnSurface;
 
             if (directSurface) {
                 if (directSurface.getAttribute('data-task-drop-surface-kind') === 'column-drop') {
@@ -933,11 +989,15 @@ const BoardView = () => {
                     const subtree = directSurface.querySelector<HTMLElement>(
                         ':scope > [data-kanban-column-subtree-scope]',
                     );
-                    const cardScopes = Array.from(subtree?.children || [])
-                        .filter((element): element is HTMLElement => (
-                            element instanceof HTMLElement
-                            && element.matches('[data-task-surface-scope="true"][data-task-id]')
-                        ));
+                    const cardScopes = Array.from(subtree?.querySelectorAll<HTMLElement>([
+                        // The root TaskPlacementTree is a structural wrapper
+                        // between the column subtree and its same-level card
+                        // surfaces. Keep the legacy direct-child shape as a
+                        // compatibility fallback, but do not descend into a
+                        // card's nested checklist tree.
+                        ':scope > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id]',
+                        ':scope > [data-task-surface-scope="true"][data-task-id]',
+                    ].join(', ')) || []);
                     const taskRects = cardScopes.map((scope) => {
                         const rect = scope.getBoundingClientRect();
                         return {
@@ -1163,11 +1223,18 @@ const BoardView = () => {
                     ? {
                         ...targetData,
                         orderingPosition: resolveDesktopTaskEdgePosition({
+                            // An expanded card has a large descendant scope,
+                            // but the pointer is still attached to its direct
+                            // title surface.  Resolve the edge from that
+                            // primary surface (with a slightly generous
+                            // leading half) so a title-center pointer selects
+                            // the nearby outer boundary rather than the
+                            // distant subtree tail.
                             pointerY: exactPointer.y,
-                            taskTop: orderingRect.top,
-                            taskBottom: orderingRect.bottom,
+                            taskTop: directRect.top,
+                            taskBottom: directRect.top + directRect.height * 1.5,
                         }),
-                    }
+                      }
                     : targetData;
                 const resolved = resolveDesktopTaskDropIntent({
                     activeData: args.active?.data.current,
@@ -1318,10 +1385,11 @@ const BoardView = () => {
             : (sourcePlacementScope?.hasAttribute('data-task-surface-source') ? sourcePlacementScope : null)
                 || sourceCandidates.find((element) => element.hasAttribute('data-task-surface-source'))
                 || sourceCandidates.find((element) => element.hasAttribute('data-task-drag-surface'));
-        const sourceScopeElement = sourceElement?.closest<HTMLElement>(
-            '[data-task-surface-scope="true"], [data-desktop-task-hover-scope="true"]',
-        ) || sourceElement;
-        const sourceRect = sourceScopeElement?.getBoundingClientRect();
+        // The draggable surface, rather than its enclosing frame, owns the
+        // source exclusion rectangle.  A checklist frame can contain an
+        // expanded descendant tree; using the frame's bounds would make
+        // every sibling row look like the source and block valid reorders.
+        const sourceRect = sourceElement?.getBoundingClientRect();
         desktopDragSourceRectRef.current = sourceRect
             ? { left: sourceRect.left, right: sourceRect.right, top: sourceRect.top, bottom: sourceRect.bottom }
             : null;
@@ -1426,25 +1494,61 @@ const BoardView = () => {
         const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(active.data.current?.type);
         const canUseChildIntent = active.data.current?.source !== 'task-workbench'
             && (sourceSurfaceKind === 'kanban-card' || sourceSurfaceKind === 'checklist-row');
+        let hasChildCandidate = false;
         // dnd-kit may emit collision changes without a corresponding onDragMove
         // callback (notably when the pointer settles after crossing nested
         // droppables). Feed both event streams into the one child-intent state
         // machine so the 1s dwell is reliable without a second implementation.
         if (pointer && canUseChildIntent) {
-            updateDesktopChildDropAtPoint(active.data.current, pointer);
+            hasChildCandidate = updateDesktopChildDropAtPoint(active.data.current, pointer);
             if ((desktopChildDropRef.current as DesktopTaskChildDropState | null)?.phase === 'armed') {
                 updateDesktopDropPreview(null);
                 return;
             }
         }
+        // Drag-over events can arrive after drag-move and otherwise resurrect
+        // a cached card-gap preview while the pointer is back over the source
+        // row.  Keep the source's explicit no-op/origin state authoritative
+        // across both event streams.
+        const sourceRect = desktopDragSourceRectRef.current;
+        const pointerInsideSource = Boolean(pointer && sourceRect
+            && pointer.x >= sourceRect.left
+            && pointer.x <= sourceRect.right
+            && pointer.y >= sourceRect.top
+            && pointer.y <= sourceRect.bottom);
+        if (pointerInsideSource) {
+            applyDesktopChildDrop(null);
+            desktopColumnGapTargetRef.current = null;
+            desktopL1DropTargetRef.current = null;
+            desktopL1OrderingTargetRef.current = null;
+            updateDesktopDropPreview(null);
+            setDesktopOriginIndicator(desktopDragOriginIndicatorRef.current);
+            recordDesktopTaskDragDebug({
+                type: 'drag-over:source-block',
+                pointer,
+                sourceRect,
+            });
+            return;
+        }
         const forcedL1Target = desktopL1DropTargetAtPointer(
             desktopL1DropTargetRef.current,
             pointer,
         );
-        const forcedGapTarget = desktopColumnGapTargetAtPointer(
+        // A direct checklist row owns the pointer while its child-intent
+        // candidate is pending.  Do not let a previously cached outer-card
+        // gap steal that pending row reorder.
+        const cachedGapTarget = desktopColumnGapTargetAtPointer(
             desktopColumnGapTargetRef.current,
             pointer,
         );
+        // A direct expanded-card title owns a short-lived ordering preview
+        // while DEV-068's child intent is still pending.  Keep that preview
+        // visible until the child dwell arms; checklist-row ordering gaps do
+        // not use this direct-ordering ownership and remain suppressed while
+        // their child candidate is pending.
+        const forcedGapTarget = cachedGapTarget?.ownership === 'direct-ordering'
+            ? cachedGapTarget
+            : hasChildCandidate ? null : cachedGapTarget;
         const preview = forcedL1Target?.preview
             || forcedGapTarget?.preview
             || (over ? buildDesktopDropPreview(active, over) : null);
@@ -1494,10 +1598,14 @@ const BoardView = () => {
             desktopL1DropTargetRef.current,
             pointer,
         );
-        const forcedGapTarget = desktopColumnGapTargetAtPointer(
+        const hasChildCandidate = updateDesktopChildDropAtPoint(event.active.data.current, pointer);
+        const cachedGapTarget = desktopColumnGapTargetAtPointer(
             desktopColumnGapTargetRef.current,
             pointer,
         );
+        const forcedGapTarget = cachedGapTarget?.ownership === 'direct-ordering'
+            ? cachedGapTarget
+            : hasChildCandidate ? null : cachedGapTarget;
         if (forcedGapTarget?.ownership === 'ordering-gap') {
             // A card-to-card gap owns same-level ordering before the enclosing
             // column's child zone. Keeping that ownership for the full gap also
@@ -1514,7 +1622,6 @@ const BoardView = () => {
             });
             return;
         }
-        const hasChildCandidate = updateDesktopChildDropAtPoint(event.active.data.current, pointer);
         if (hasChildCandidate && desktopChildDropRef.current?.phase === 'armed') return;
         const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(event.active.data.current?.type);
         const canUseChildDrop = Boolean(
@@ -1553,7 +1660,7 @@ const BoardView = () => {
         const displayedL1ReleaseIsValid = Boolean(
             displayedPreview?.indicatorAxis === 'vertical'
             && releasePointerCandidate
-            && over?.data.current?.nodeId === displayedPreview.targetNodeId
+            && (over?.data.current?.nodeId || null) === displayedPreview.targetNodeId
             && (active.data.current?.type === 'wbs-column'
                 ? boardRectForL1Release
                     && releasePointerCandidate.x >= boardRectForL1Release.left
@@ -1706,6 +1813,8 @@ const BoardView = () => {
                     archiveNode,
                     recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
                     moveTrackingReference,
+                    stageTrackingReference,
+                    placeStagedTrackingReference,
                 },
             });
             if (result.status === 'committed') {
@@ -1722,7 +1831,11 @@ const BoardView = () => {
         // A valid candidate does not own release until it has visibly armed;
         // preserve the existing same-level/lane action before the 1s dwell.
         // Invalid self/descendant/stale child zones remain blocked for safety.
-        if (releaseChildZone && !releaseChildTarget) {
+        const pendingChildCandidateMatchesRelease = Boolean(
+            displayedChildDrop?.phase === 'candidate'
+            && displayedChildDrop.target.targetNodeId === releaseChildZone?.targetNodeId
+        );
+        if (releaseChildZone && !releaseChildTarget && !pendingChildCandidateMatchesRelease) {
             recordDesktopTaskDragDebug({ type: 'drag-end:blocked-invalid-child-zone' });
             return;
         }
@@ -1784,6 +1897,8 @@ const BoardView = () => {
                 archiveNode,
                 recalculateAncestorStatus: recalculateAncestorStatusForDesktopTaskDrag,
                 moveTrackingReference,
+                stageTrackingReference,
+                placeStagedTrackingReference,
             },
         });
     };
@@ -1865,7 +1980,10 @@ const BoardView = () => {
                 className="flex-1 flex min-w-0 overflow-hidden bg-slate-100"
                 data-layout-region="board-shell"
             >
-                <TaskWorkbenchPanel canMoveTask={canMoveTask} />
+                <TaskWorkbenchPanel
+                    canMoveTask={canMoveTask}
+                    canManageTaskReference={canManageTaskReference}
+                />
                 <div
                     className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-100"
                     data-layout-region="board-workspace"
@@ -1949,16 +2067,23 @@ const BoardView = () => {
 
                         {/* 新增列表按鈕 */}
                         {!taskLoading && !taskLoadError && (filterProjection.matchedTaskIds.size > 0 || filterProjection.totalTaskCount === 0) ? <KanbanRootDropZone
+                            workspaceId={activeWorkspaceId || ''}
                             boardId={activeBoardId}
                             anchorNodeId={rootNodes[rootNodes.length - 1]?.id}
+                            isBoardEmpty={boardRootRows.length === 0}
                             canMoveTask={canMoveTask || canManageTaskReference}
+                            mobileDropActive={taskDragSession.state?.targetKind === 'board-root'
+                                && taskDragSession.state.targetBoardId === activeBoardId
+                                && taskDragSession.state.targetWorkspaceId === activeWorkspaceId}
                         >
                             <button
                                 type="button"
                                 onClick={handleAddColumn}
                                 disabled={!canCreateTask}
                                 title={canCreateTask ? '新增列表' : '目前沒有新增任務權限'}
-                                className="group flex w-full flex-col items-center justify-center gap-0.5 rounded-lg py-[8px] font-semibold text-slate-400 transition-all hover:bg-white/70 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                                className={`group flex w-full flex-col items-center justify-center gap-0.5 rounded-lg py-[8px] font-semibold text-slate-400 transition-all hover:bg-white/70 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-slate-400 ${
+                                    boardRootRows.length === 0 ? 'max-w-[270px]' : ''
+                                }`}
                                 data-mobile-pan-pass-through="true"
                                 data-kanban-add-column-button="true"
                                 data-kanban-add-column-visual="borderless"

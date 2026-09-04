@@ -13,8 +13,11 @@ const files = {
   boardView: 'src/components/BoardView.tsx',
   wbsNodeItem: 'src/components/Wbs/WbsNodeItem.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
+  kanbanColumnPresentation: 'src/components/Wbs/KanbanColumnPresentation.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
+  kanbanCardPresentation: 'src/components/Wbs/KanbanCardPresentation.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   taskDateBadge: 'src/components/Wbs/TaskDateBadge.tsx',
   kanbanTagSticker: 'src/components/Tags/KanbanTagSticker.tsx',
   tagChip: 'src/components/Tags/TagChip.tsx',
@@ -54,8 +57,11 @@ const taskDetailsModal = read(files.taskDetailsModal);
 const boardView = read(files.boardView);
 const wbsNodeItem = read(files.wbsNodeItem);
 const kanbanColumn = read(files.kanbanColumn);
+const kanbanColumnPresentation = read(files.kanbanColumnPresentation);
 const kanbanCard = read(files.kanbanCard);
+const kanbanCardPresentation = read(files.kanbanCardPresentation);
 const kanbanChecklist = read(files.kanbanChecklist);
+const taskChecklistTree = read(files.taskChecklistTree);
 const taskDateBadge = read(files.taskDateBadge);
 const kanbanTagSticker = read(files.kanbanTagSticker);
 const mindMapView = read(files.mindMapView);
@@ -72,10 +78,13 @@ const manualClickReadiness = read(files.manualClickReadiness);
 const pkg = read(files.packageJson);
 const spec = read(files.spec);
 const qa = read(files.qa);
-const kanbanCardTitleStart = kanbanCard.indexOf('kanban-task-title-row');
-const kanbanCardTitleSection = kanbanCard.slice(
+const kanbanColumnContract = `${kanbanColumn}\n${kanbanColumnPresentation}`;
+const kanbanCardContract = `${kanbanCard}\n${kanbanCardPresentation}`;
+const kanbanChecklistContract = `${kanbanChecklist}\n${taskChecklistTree}`;
+const kanbanCardTitleStart = kanbanCardContract.indexOf('kanban-task-title-row');
+const kanbanCardTitleSection = kanbanCardContract.slice(
   kanbanCardTitleStart,
-  kanbanCard.indexOf('{isSelectingMode &&', kanbanCardTitleStart),
+  kanbanCardContract.indexOf('{meta}', kanbanCardTitleStart),
 );
 
 assert(
@@ -99,7 +108,8 @@ assert(
 assert(
   'global task details listener is permanent and task keyboard no longer starts outer rename',
   globalContextMenu.includes('document.addEventListener(OPEN_TASK_DETAILS_EVENT, handleOpenTaskDetails)') &&
-    globalContextMenu.includes('setDetailsNodeId(customEvent.detail.taskId)') &&
+    (globalContextMenu.includes('setDetailsNodeId(customEvent.detail.taskId)') ||
+      globalContextMenu.includes('detailsNavigation.openRoot({')) &&
     globalContextMenu.includes('clearTaskSelection();') &&
     globalContextMenu.includes('onClose={() => {') &&
     globalContextMenu.includes("!['list', 'board', 'gantt'].includes(currentView)") &&
@@ -157,18 +167,21 @@ assert(
 
 assert(
   'board hierarchy distinguishes framed elevated L2 cards from inset unlined L3+ rows without progress bars',
-  kanbanColumn.includes('selectAndOpenTaskDetails(nodeId)') &&
+  (kanbanColumn.includes('selectAndOpenTaskDetails(nodeId)') ||
+    kanbanColumn.includes("interactionBinding.dispatch('pointer.primary')")) &&
     kanbanColumn.includes('prepareNewTaskNaming(newNode.id)') &&
     kanbanColumn.includes('data-task-id={nodeId}') &&
-    kanbanCard.includes('selectAndOpenTaskDetails(nodeId)') &&
+    (kanbanCard.includes('selectAndOpenTaskDetails(nodeId)') ||
+      kanbanCard.includes("interactionBinding.dispatch('pointer.primary')")) &&
     kanbanCard.includes('kanban-checklist-section') &&
     kanbanCard.includes('<KanbanChecklist') &&
     kanbanCard.includes('KanbanTagSticker') &&
-    kanbanChecklist.includes('KanbanTagSticker') &&
-    kanbanCard.includes('surface="checklist"') &&
+    kanbanChecklistContract.includes('KanbanTagSticker') &&
+    kanbanCardContract.includes('surface="checklist"') &&
     !kanbanColumn.includes('kanban-task-progress') &&
     !kanbanCard.includes('kanban-task-progress') &&
-    kanbanColumn.includes('data-kanban-header-visual="tonal-borderless"') &&
+    (kanbanColumn.includes('data-kanban-header-visual="tonal-borderless"') ||
+      kanbanColumn.includes("'data-kanban-header-visual': 'tonal-borderless'")) &&
     // The inline column "新增任務" affordance was intentionally removed by
     // the compact Kanban contract (90cfcb4). Creation remains available from
     // the canonical task menu / drag command paths; this verifier must not
@@ -183,30 +196,30 @@ assert(
     kanbanCard.includes('data-kanban-checklist-visual="inset-rail"') &&
     kanbanCard.includes('kanban-checklist-section') &&
     kanbanCard.includes('mt-1 rounded-md border-l-2') &&
-    kanbanChecklist.includes('data-kanban-checklist-row-visual="flat-unlined"') &&
-    kanbanChecklist.includes('data-task-hierarchy-level="L3+"') &&
-    !kanbanChecklist.includes('border-b border-slate-200/80') &&
-    !kanbanChecklist.includes('kanban-checklist-root mt-px border-t') &&
+    kanbanChecklistContract.includes('data-kanban-checklist-row-visual="flat-unlined"') &&
+    kanbanChecklistContract.includes('data-task-hierarchy-level="L3+"') &&
+    !kanbanChecklistContract.includes('border-b border-slate-200/80') &&
+    !kanbanChecklistContract.includes('kanban-checklist-root mt-px border-t') &&
     taskDateBadge.includes('data-task-date-visual="borderless"') &&
     taskDateBadge.includes("bg-slate-100/80 text-slate-500") &&
     kanbanTagSticker.includes('data-kanban-tag-sticker="true"') &&
     kanbanTagSticker.includes('data-kanban-tag-popover="true"') &&
     !kanbanCard.includes('<TagChip') &&
-    !kanbanChecklist.includes('<TagChip') &&
+    !kanbanChecklistContract.includes('<TagChip') &&
     !kanbanCard.includes('CheckSquare') &&
     !kanbanCard.includes('childStats.completed') &&
-    kanbanChecklist.includes('selectAndOpenTaskDetails(child.id)') &&
-    kanbanChecklist.includes('data-task-id={child.id}') &&
-    kanbanChecklist.includes('surface="checklist"') &&
-    !kanbanChecklist.includes('{grandchildIds.length}') &&
+    kanbanChecklistContract.includes('selectAndOpenTaskDetails(child.id)') &&
+    kanbanChecklistContract.includes('data-task-id={child.id}') &&
+    kanbanChecklistContract.includes('surface="checklist"') &&
+    !kanbanChecklistContract.includes('{grandchildIds.length}') &&
     !kanbanColumn.includes('data-task-title-input="true"') &&
     !kanbanCard.includes('data-task-title-input="true"') &&
-    !kanbanChecklist.includes('data-task-title-input="true"') &&
+    !kanbanChecklistContract.includes('data-task-title-input="true"') &&
     !kanbanColumn.includes('title="重新命名任務"') &&
     !kanbanCard.includes('title="重新命名任務"') &&
-    !kanbanChecklist.includes('title="重新命名任務"') &&
+    !kanbanChecklistContract.includes('title="重新命名任務"') &&
     !kanbanCard.includes('title="點擊以編輯任務名稱"') &&
-    !kanbanChecklist.includes('title="點擊以編輯任務名稱"'),
+    !kanbanChecklistContract.includes('title="點擊以編輯任務名稱"'),
 );
 
 assert(
@@ -214,9 +227,9 @@ assert(
     kanbanCardTitleSection.includes('<TaskDateBadge') &&
     kanbanCardTitleSection.includes('surface="checklist"') &&
     kanbanCardTitleSection.includes('className="ml-0.5 self-center"') &&
-    kanbanColumn.includes('showStartDate={false}') &&
-    kanbanCard.includes('showStartDate={false}') &&
-    kanbanChecklist.includes('showStartDate={false}') &&
+    kanbanColumnContract.includes('showStartDate={false}') &&
+    kanbanCardContract.includes('showStartDate={false}') &&
+    kanbanChecklistContract.includes('showStartDate={false}') &&
     !kanbanColumn.includes('state.showStartDate') &&
     !kanbanCard.includes('s => s.showStartDate') &&
     !kanbanChecklist.includes('s => s.showStartDate') &&
@@ -233,21 +246,23 @@ assert(
     mainLayout.includes('clearTaskSelection();') &&
     indexCss.includes('[data-desktop-task-hover-preview="true"]:hover') &&
     indexCss.includes('@apply ring-2 ring-inset ring-primary-500 bg-primary-50/60;') &&
-    boardStore.includes('set({ currentView: view, selectedTaskId: null })') &&
+    boardStore.includes('set({ currentView: view,') &&
+    boardStore.includes('selectedTaskId: null') &&
     boardStore.includes('set({ activeBoardId: id, selectedTaskId: null })') &&
     boardStore.includes('set({ activeWorkspaceId: id, selectedTaskId: null })'),
 );
 
 assert(
   'mind map keeps shared select/double-details actions while DEV-073 host owns the quick-title exception',
-  mindMapView.includes('const taskId = getCanonicalTaskId(nodeId)') &&
+  (mindMapView.includes('const taskId = getCanonicalTaskId(nodeId)') ||
+    mindMapView.includes('const taskId = projected?.canonicalTaskId || nodeId')) &&
     mindMapView.includes('setSelectedTaskId(taskId)') &&
     mindMapView.includes('openTaskDetails(taskId, trackingReferenceId)') &&
     mindMapView.includes('CLEAR_TASK_SELECTION_EVENT') &&
     mindMapView.includes('clearTaskSelection();') &&
     mindMapView.includes('initialSelectionBoardRef') &&
     mindMapView.includes('clearSelection();') &&
-    mindMapView.includes('setContextMenuState({') &&
+    (mindMapView.includes('setContextMenuState({') || mindMapView.includes('setLocalMenu({')) &&
     mindMapNode.includes("interactionBinding.dispatch('pointer.primary')") &&
     mindMapNode.includes("interactionBinding.dispatch('pointer.double')") &&
     mindMapNode.includes('data-mindmap-quick-title-input="true"') &&

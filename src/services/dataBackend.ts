@@ -21,10 +21,7 @@ import {
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
-  type TaskCollectionRecord,
 } from '../types';
-import { TaskCollectionError } from '../features/taskCollection/errors';
-import type { DeleteImpact, TaskCollectionPreview, TaskCollectionResult, TaskCollectionSummary } from '../features/taskCollection/types';
 import {
   boardService as firestoreBoardService,
   dependencyService as firestoreDependencyService,
@@ -45,7 +42,6 @@ import {
   supabaseTagService,
   supabaseWorkspaceService,
   supabaseBackupService,
-  supabaseTaskCollectionService,
 } from './supabase/projedService';
 import {
   localTestBoardService,
@@ -57,7 +53,6 @@ import {
   localTestEventLogService,
   localTestTagService,
   localTestWorkspaceService,
-  localTestTaskCollectionService,
 } from './localTestService';
 import { localTestBackupService } from './backup/localTestBackupService';
 import { BackupError, type BackupBackendAdapter } from '../features/backup/types';
@@ -82,8 +77,11 @@ export const isLocalTestBackend = dataBackend === 'local-test';
 const unsupportedTaskTrackingReferenceService: TrackingReferenceService = {
   getCapability: async () => ({ supported: false, reason: 'backend_unsupported' }),
   listByWorkspace: async () => [],
+  listStagedByWorkspace: async () => [],
   create: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
   move: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
+  stage: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本暫存。'); },
+  placeStaged: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本暫存。'); },
   remove: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
   restore: async () => { throw new TaskTrackingError('BACKEND_UNSUPPORTED', 'Firebase 不支援追蹤副本。'); },
 };
@@ -200,13 +198,6 @@ export const workspaceService = {
       : firestoreWorkspaceService.delete(workspaceId);
   },
 
-  previewDeleteImpact: (workspaceId: string): Promise<DeleteImpact> => (
-    isLocalTestBackend
-      ? localTestTaskCollectionService.previewWorkspaceDeleteImpact(workspaceId)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.previewWorkspaceDeleteImpact(workspaceId)
-        : Promise.resolve({ blocked: false, unknown: true, reasons: ['backend_unknown'], taskCollectionCount: 0 })
-  ).then(normalizeDeleteImpact),
 };
 
 export const boardService = {
@@ -248,14 +239,6 @@ export const boardService = {
       ? supabaseBoardService.delete(workspaceId, boardId)
       : firestoreBoardService.delete(workspaceId, boardId);
   },
-
-  previewDeleteImpact: (workspaceId: string, boardId: string): Promise<DeleteImpact> => (
-    isLocalTestBackend
-      ? localTestTaskCollectionService.previewDeleteImpact(workspaceId, boardId)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.previewDeleteImpact(workspaceId, boardId)
-        : Promise.resolve({ blocked: false, unknown: true, reasons: ['backend_unknown'], taskCollectionCount: 0 })
-  ).then(normalizeDeleteImpact),
 
   previewWorkspaceTransfer: (
     workspaceId: string,
@@ -585,79 +568,6 @@ export const recordService = {
       : isSupabaseBackend
       ? supabaseRecordService.delete(workspaceId, boardId, recordId)
       : firestoreRecordService.delete(workspaceId, boardId, recordId),
-};
-
-const unsupportedTaskCollection = <T,>(): Promise<T> => Promise.reject(new TaskCollectionError('BACKEND_UNSUPPORTED', '目前資料後端尚未提供典藏任務。'));
-
-// The URL override is intentionally limited to the local-test provider so the
-// browser verifier can exercise the Firebase-style unsupported capability
-// boundary without changing production provider configuration.
-const isLocalTaskCollectionUnsupported = () => (
-  isLocalTestBackend
-  && typeof window !== 'undefined'
-  && new URLSearchParams(window.location.search).get('qcTaskCollectionProvider') === 'unsupported'
-);
-
-const normalizeDeleteImpact = (impact: Partial<DeleteImpact> | null | undefined): DeleteImpact => {
-  const count = impact?.taskCollectionCount;
-  if (!Number.isSafeInteger(count) || (count as number) < 0) {
-    return { blocked: true, unknown: true, reasons: ['impact_invalid'], taskCollectionCount: 0 };
-  }
-  return {
-    blocked: Boolean(impact?.blocked),
-    unknown: Boolean(impact?.unknown),
-    reasons: Array.isArray(impact?.reasons) ? impact.reasons as string[] : [],
-    taskCollectionCount: count as number,
-  };
-};
-
-export const taskCollectionService = {
-  get supported() { return (isLocalTestBackend || isSupabaseBackend) && !isLocalTaskCollectionUnsupported(); },
-  preview: (workspaceId: string, boardId: string, rootItemId: string, operationId: string): Promise<TaskCollectionPreview> => (
-    isLocalTaskCollectionUnsupported()
-      ? unsupportedTaskCollection()
-      : isLocalTestBackend
-      ? localTestTaskCollectionService.preview(workspaceId, boardId, rootItemId, operationId)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.preview(workspaceId, boardId, rootItemId, operationId)
-        : unsupportedTaskCollection()
-  ),
-  collect: (workspaceId: string, boardId: string, rootItemId: string, operationId: string, previewToken: string, annotation?: string | null): Promise<TaskCollectionResult> => (
-    isLocalTaskCollectionUnsupported()
-      ? unsupportedTaskCollection()
-      : isLocalTestBackend
-      ? localTestTaskCollectionService.collect(workspaceId, boardId, rootItemId, operationId, previewToken, annotation)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.collect(workspaceId, boardId, rootItemId, operationId, previewToken, annotation)
-        : unsupportedTaskCollection()
-  ),
-  getOperationResult: (workspaceId: string, boardId: string, operationId: string): Promise<TaskCollectionRecord | null> => (
-    isLocalTaskCollectionUnsupported()
-      ? unsupportedTaskCollection()
-      : isLocalTestBackend
-      ? localTestTaskCollectionService.getOperationResult(workspaceId, boardId, operationId)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.getOperationResult(workspaceId, boardId, operationId)
-        : unsupportedTaskCollection()
-  ),
-  getById: (workspaceId: string, boardId: string, recordId: string): Promise<TaskCollectionRecord | null> => (
-    isLocalTaskCollectionUnsupported()
-      ? unsupportedTaskCollection()
-      : isLocalTestBackend
-      ? localTestTaskCollectionService.getById(workspaceId, boardId, recordId)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.getById(workspaceId, boardId, recordId)
-        : unsupportedTaskCollection()
-  ),
-  listSummaries: (workspaceId: string, boardId: string, search?: string): Promise<TaskCollectionSummary[]> => (
-    isLocalTaskCollectionUnsupported()
-      ? unsupportedTaskCollection()
-      : isLocalTestBackend
-      ? localTestTaskCollectionService.listSummaries(workspaceId, boardId, search)
-      : isSupabaseBackend
-        ? supabaseTaskCollectionService.listSummaries(workspaceId, boardId, search)
-        : unsupportedTaskCollection()
-  ),
 };
 
 export const eventLogService = {

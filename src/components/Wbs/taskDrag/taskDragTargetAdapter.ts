@@ -49,6 +49,7 @@ export const EDGE_SCROLL_MAX_STEP_PX = 3;
 export const TASK_DRAG_TARGET_PRIORITY = [
   'mobile-action',
   'task-position',
+  'board-root',
   'workbench-unplaced-lane',
   'workbench-placed-lane',
   'none',
@@ -142,8 +143,8 @@ const readSurfaceKind = (element: HTMLElement): TaskDropSurfaceKind | null => {
   return null;
 };
 
-const findMobileSourcePlaceholder = (nodeId: string, placementId?: string) =>
-  Array.from(document.querySelectorAll<HTMLElement>('[data-kanban-drag-source-placeholder="true"][data-task-id]'))
+const findMobileSourcePlaceholder = (nodeId: string, placementId?: string, scopeElement?: HTMLElement | null) =>
+  Array.from((scopeElement || document).querySelectorAll<HTMLElement>('[data-kanban-drag-source-placeholder="true"][data-task-id]'))
     .find((element) => {
       if (element.getAttribute('data-task-id') !== nodeId) return false;
       if (!placementId) return true;
@@ -171,10 +172,10 @@ const pointInsideTargetCore = (point: Point, rect: TaskDragTargetRect) => {
     && point.y <= rect.bottom - insetY;
 };
 
-const resolveMobileTaskSourceOriginFieldRect = (state: TaskDragSessionState) => {
+const resolveMobileTaskSourceOriginFieldRect = (state: TaskDragSessionState, scopeElement?: HTMLElement | null) => {
   const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
   if (!sourceSurfaceKind || sourceSurfaceKind === 'workbench-unplaced-row') return null;
-  const sourceElement = findMobileSourcePlaceholder(state.nodeId, state.source.placementId);
+  const sourceElement = findMobileSourcePlaceholder(state.nodeId, state.source.placementId, scopeElement);
   if (!sourceElement) return null;
   return resolveTaskOriginFieldRect({ sourceElement, sourceSurfaceKind });
 };
@@ -182,10 +183,11 @@ const resolveMobileTaskSourceOriginFieldRect = (state: TaskDragSessionState) => 
 export const resolveMobileTaskOriginFieldRect = (
   state: TaskDragSessionState,
   point: Point,
+  scopeElement?: HTMLElement | null,
 ) => {
-  const originFieldRect = resolveMobileTaskSourceOriginFieldRect(state);
+  const originFieldRect = resolveMobileTaskSourceOriginFieldRect(state, scopeElement);
   if (!originFieldRect) return null;
-  const sourceElement = findMobileSourcePlaceholder(state.nodeId, state.source.placementId);
+  const sourceElement = findMobileSourcePlaceholder(state.nodeId, state.source.placementId, scopeElement);
   if (!sourceElement) return null;
   const sourceRect = toTargetRect(sourceElement.getBoundingClientRect());
   if (!pointInsideRect(point, sourceRect)) return null;
@@ -368,7 +370,14 @@ const collectMobileL1Candidate = (
 
 const findDirectColumnTaskScopes = (columnDrop: HTMLElement) => (
   Array.from(columnDrop.querySelectorAll<HTMLElement>(
-    '[data-kanban-column-subtree-scope] > [data-task-surface-scope="true"][data-task-id]',
+    [
+      // KanbanColumn renders the root TaskPlacementTree between the column
+      // subtree scope and each task surface. Keep the legacy direct-child
+      // shape as a fallback for older hosts, but never descend into a card's
+      // nested checklist tree when collecting same-level column geometry.
+      '[data-kanban-column-subtree-scope] > [data-task-placement-tree="true"] > [data-task-surface-scope="true"][data-task-id]',
+      '[data-kanban-column-subtree-scope] > [data-task-surface-scope="true"][data-task-id]',
+    ].join(', '),
   )).filter(scope => scope.closest('[data-task-drop-surface-kind="column-drop"]') === columnDrop)
 );
 
@@ -581,13 +590,21 @@ export const resolveTaskDragObservation = ({
   point,
   state,
   canMoveTask,
+  canManageTaskReference = false,
+  scopeElement,
 }: {
   point: Point;
   state: TaskDragSessionState;
   canMoveTask: boolean;
+  canManageTaskReference?: boolean;
+  scopeElement?: HTMLElement | null;
 }): TaskDragObservation => {
   const observation = emptyObservation(state, point);
+  const canRepositionSource = state.source.trackingReferenceId
+    ? canManageTaskReference
+    : canMoveTask;
   const rawElement = document.elementFromPoint(point.x, point.y);
+  if (scopeElement && (!rawElement || !scopeElement.contains(rawElement))) return observation;
   const actionElement = rawElement instanceof Element
     ? rawElement.closest('[data-mobile-task-action]')
     : null;
@@ -603,7 +620,7 @@ export const resolveTaskDragObservation = ({
     return observation;
   }
 
-  const originFieldRect = resolveMobileTaskOriginFieldRect(state, point);
+  const originFieldRect = resolveMobileTaskOriginFieldRect(state, point, scopeElement);
   if (originFieldRect) {
     return {
       ...observation,
@@ -612,10 +629,39 @@ export const resolveTaskDragObservation = ({
   }
 
   const intentPoint = getTaskIntentPoint(point);
+  const emptyBoardRoot = rawElement instanceof Element
+    ? rawElement.closest('[data-kanban-empty-board-drop="true"]') as HTMLElement | null
+    : null;
+  if (emptyBoardRoot && state.source.kind === 'workbench-unplaced-row' && canRepositionSource) {
+    const boardId = emptyBoardRoot.getAttribute('data-board-id');
+    const workspaceId = emptyBoardRoot.getAttribute('data-workspace-id');
+    const rootRect = emptyBoardRoot.getBoundingClientRect();
+    const indicatorRect = resolveMobileL1IndicatorRect({
+      targetId: '',
+      orderingPosition: 'after',
+      columns: [],
+      rootDropRect: rootRect,
+      viewportRect: { top: 48, bottom: window.innerHeight - 8 },
+    });
+    if (boardId && workspaceId && indicatorRect) {
+      return {
+        ...observation,
+        targetKind: 'board-root',
+        targetBoardId: boardId,
+        targetWorkspaceId: workspaceId,
+        targetSurfaceKind: 'root-drop',
+        dropPosition: 'after',
+        indicatorRect,
+        indicatorAxis: 'vertical',
+        lockedTargetRect: toTargetRect(rootRect),
+        lastStableAt: observation.observedAt,
+      };
+    }
+  }
   const unplacedLane = rawElement instanceof Element
     ? rawElement.closest('[data-task-workbench-unplaced-lane="true"]') as HTMLElement | null
     : null;
-  if (unplacedLane && state.source.kind !== 'workbench-unplaced-row' && canMoveTask) {
+  if (unplacedLane && state.source.kind !== 'workbench-unplaced-row' && canRepositionSource) {
     const unplacedList = unplacedLane.querySelector<HTMLElement>('[data-task-workbench-unclassified-list="true"]');
     if (unplacedList) {
       const listRect = unplacedList.getBoundingClientRect();
@@ -642,7 +688,7 @@ export const resolveTaskDragObservation = ({
     }
   }
 
-  if (canMoveTask) {
+  if (canRepositionSource) {
     if (state.source.kind !== 'workbench-unplaced-row') {
       const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(state.source.kind);
       const nodesRecord = useWbsStore.getState().nodes;
@@ -650,6 +696,7 @@ export const resolveTaskDragObservation = ({
         point: intentPoint,
         inputMode: state.source.inputMode,
         nodesRecord,
+        scopeElement,
       });
       const childTarget = sourceSurfaceKind
         ? resolveTaskTitleChildDropTarget({
@@ -658,6 +705,7 @@ export const resolveTaskDragObservation = ({
           sourceNodeId: state.nodeId,
           sourceSurfaceKind,
           nodesRecord,
+          scopeElement,
         })
         : null;
       const childIntent = advanceTaskChildIntent({
@@ -717,7 +765,9 @@ export const resolveTaskDragObservation = ({
   const placedLane = placedLaneElement instanceof Element
     ? placedLaneElement.closest('[data-task-workbench-placed-board-lane="true"]') as HTMLElement | null
     : null;
-  if (placedLane && state.source.kind === 'workbench-unplaced-row' && canMoveTask) {
+  if (placedLane
+    && state.source.kind === 'workbench-unplaced-row'
+    && (state.source.trackingReferenceId ? canManageTaskReference : canMoveTask)) {
     return {
       ...observation,
       targetKind: 'workbench-placed-lane',
@@ -785,14 +835,14 @@ const scrollElementBy = (element: HTMLElement, deltaX: number, deltaY: number) =
   return beforeLeft !== element.scrollLeft || beforeTop !== element.scrollTop;
 };
 
-const findAutoScrollColumn = (point: Point) => {
+const findAutoScrollColumn = (point: Point, scopeElement?: HTMLElement | null) => {
   const element = document.elementFromPoint(point.x, point.y);
   const direct = element instanceof Element
     ? element.closest('[data-mobile-pan-surface="kanban-column"]') as HTMLElement | null
     : null;
   if (direct) return direct;
 
-  return (Array.from(document.querySelectorAll('[data-mobile-pan-surface="kanban-column"]')) as HTMLElement[])
+  return (Array.from((scopeElement || document).querySelectorAll('[data-mobile-pan-surface="kanban-column"]')) as HTMLElement[])
     .find((column) => {
       const rect = column.getBoundingClientRect();
       return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top - 80 && point.y <= rect.bottom + 80;
@@ -802,11 +852,16 @@ const findAutoScrollColumn = (point: Point) => {
 export const autoScrollTaskDragSurfaces = ({
   point,
   boardSurface,
+  scopeElement,
 }: {
   point: Point;
   boardSurface: HTMLElement | null;
+  scopeElement?: HTMLElement | null;
 }) => {
   const element = document.elementFromPoint(point.x, point.y);
+  if (scopeElement && (!element || !scopeElement.contains(element))) {
+    return { didScroll: false, boardScrollLeft: boardSurface?.scrollLeft ?? null, columnScrollTop: null };
+  }
   if (element instanceof Element && element.closest('[data-mobile-task-action-rail="true"]')) {
     return { didScroll: false, boardScrollLeft: boardSurface?.scrollLeft ?? null, columnScrollTop: null };
   }
@@ -820,7 +875,7 @@ export const autoScrollTaskDragSurfaces = ({
     if (deltaX) didScroll = scrollElementBy(boardSurface, deltaX, 0) || didScroll;
   }
 
-  const columnSurface = findAutoScrollColumn(point);
+  const columnSurface = findAutoScrollColumn(point, scopeElement);
   if (columnSurface) {
     const rect = columnSurface.getBoundingClientRect();
     const visibleTop = Math.max(0, rect.top);

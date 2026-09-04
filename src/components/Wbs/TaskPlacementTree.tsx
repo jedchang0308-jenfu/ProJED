@@ -21,22 +21,28 @@ export const buildTaskPlacementTreeRows = ({
   trackingReferences: readonly TaskTrackingReference[];
   tasksById: Readonly<Record<string, TaskNode>>;
   parentPlacementId: string | null;
-}): TaskPlacementTreeRow[] => [
-  ...primaryTasks.map(task => ({
-    task,
-    order: task.order,
-    placementId: primaryPlacementId(task.id),
-  })),
-  ...trackingReferences
-    .filter(reference => !reference.removedAt && reference.parentPlacementId === parentPlacementId)
-    .map(reference => ({
-      task: tasksById[reference.taskId],
-      reference,
-      order: reference.order,
-      placementId: reference.id,
-    }))
-    .filter((row): row is TaskPlacementTreeRow & { reference: TaskTrackingReference } => Boolean(row.task)),
-].sort((left, right) => left.order - right.order || left.placementId.localeCompare(right.placementId));
+}): TaskPlacementTreeRow[] => {
+  const rows = [
+    ...primaryTasks.map(task => ({
+      task,
+      order: task.order,
+      placementId: primaryPlacementId(task.id),
+    })),
+    ...trackingReferences
+      .filter(reference => !reference.removedAt && reference.parentPlacementId === parentPlacementId)
+      .map(reference => ({
+        task: tasksById[reference.taskId],
+        reference,
+        order: reference.order,
+        placementId: reference.id,
+      }))
+      .filter((row): row is TaskPlacementTreeRow & { reference: TaskTrackingReference } => Boolean(row.task)),
+  ]
+    .filter(row => !row.task.isArchived)
+    .filter((row, index, allRows) => allRows.findIndex(candidate => candidate.placementId === row.placementId) === index)
+    .sort((left, right) => left.order - right.order || left.placementId.localeCompare(right.placementId));
+  return rows;
+};
 
 export const TaskPlacementTree: React.FC<{
   rows: readonly TaskPlacementTreeRow[];

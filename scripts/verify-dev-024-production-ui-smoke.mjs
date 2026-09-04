@@ -532,7 +532,7 @@ async (page) => {
   const runAiSynthesis = async () => {
     const aiStep = await waitStepEnabled('ai_suggestion');
     await aiStep.click();
-    await page.locator('aside', { hasText: 'AI整理完成，請校稿後發布' }).waitFor({ state: 'visible', timeout: 90000 });
+    await page.locator('aside', { hasText: 'AI整理完成，請確認後發布' }).waitFor({ state: 'visible', timeout: 90000 });
     return getEditor().innerText();
   };
 
@@ -620,8 +620,9 @@ async (page) => {
     }
 
     stage = 'save_review_draft';
-    const reviewStep = await waitStepEnabled('review');
-    await reviewStep.click();
+    const saveDraftButton = page.locator('[data-record-meeting-save-draft]');
+    await saveDraftButton.waitFor({ state: 'visible', timeout: 10000 });
+    await saveDraftButton.click();
     await page.waitForTimeout(1200);
     await page.waitForFunction(
       () => !document.querySelector('[data-meeting-workflow-step="published"]')?.hasAttribute('disabled'),

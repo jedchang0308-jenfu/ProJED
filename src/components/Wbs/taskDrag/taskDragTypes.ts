@@ -14,6 +14,7 @@ export type MobileTaskDropPosition = 'before' | 'after';
 export type TaskDragIndicatorAxis = 'horizontal' | 'vertical';
 export type TaskDragTargetKind =
   | 'task-position'
+  | 'board-root'
   | 'workbench-unplaced-lane'
   | 'workbench-placed-lane'
   | 'mobile-action'

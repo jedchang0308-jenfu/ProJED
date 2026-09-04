@@ -1,8 +1,10 @@
 # QA-DEV-076：心智圖左鍵抓取畫布平移
 
-狀態：Executed / QA PASS / QC PASS / 未 Release
+狀態：Reverted / 歷史驗證紀錄 / 不再執行
 對應規格：`ai-doc/specs/SPEC-076-mindmap-left-mouse-canvas-pan.md`
 證據層級：local test runtime / desktop Chromium / 未 Release
+
+DEV-076 已依使用者 2026-09-03 指示撤回；以下內容僅保留原始驗證證據，不代表現行產品驗收。
 
 ## 1. 驗證範圍與環境
 
@@ -63,7 +65,7 @@ npm.cmd run build:test
 
 ## 6. 執行結果（2026-08-20）
 
-QC 結論：`PASS`。適用邊界為 local-test runtime、desktop Chromium 1440x900／1024x768 與 390x844 mobile negative boundary；未執行 deploy／production smoke。
+歷史 QC 結論（撤回前）：`PASS`。適用邊界為 local-test runtime、desktop Chromium 1440x900／1024x768 與 390x844 mobile negative boundary；未執行 deploy／production smoke；不代表現行產品驗收。
 
 - DEV-076 pure/static：12/12 PASS；6px threshold、兩軸 direct formula、blocked selectors、click suppression、cursor cleanup、SPEC-074 與 package wiring 均通過。
 - DEV-076 rendered browser：兩個桌機 viewport 均以 pointer `-120/-80` 得到 scroll `+120/+80`，誤差 0；`armed -> active -> idle`、grab/grabbing、selection preservation、2px blank click、pointercancel cleanup 均通過。

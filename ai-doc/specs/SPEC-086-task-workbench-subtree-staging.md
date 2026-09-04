@@ -28,7 +28,7 @@
 |---|---|---|
 | 看板 L1／L2／L3+ 任務 | 工作台未歸位區 | 桌機 pointer／手機長按 touch 皆允許；整棵 canonical、未封存子樹進入全域暫存 |
 | 工作台未歸位任務 | 工作台選定看板的已歸位投放區 | 允許；整棵子樹進入該看板，root 成為頂層任務 |
-| 工作台未歸位任務 | 當前看板的合法精確目標 | 允許；root 依 drop intent 定位，descendants 保留父子關係 |
+| 工作台未歸位任務 | 當前看板的合法精確目標（含零 L1 的空看板 root surface） | 允許；root 依 drop intent 定位，descendants 保留父子關係；空看板時成為 `parentId=null`、`order=0` 的第一個 root |
 | 工作台已歸位列 | 任意目的地 | 禁止；列維持唯讀且沒有 drag surface |
 | 看板任務 | 工作台已歸位清單內容列 | 禁止；只有明確投放區可接收 |
 
@@ -58,6 +58,7 @@
 - desktop hover／drag preview 用來源列框與完整 descendant subtree 框表示範圍，不顯示「含 N 個子任務」等文字；手機不提供 hover 或長按子樹框選等價效果。
 - 看板任務進入未歸位有效投放區時，在實際 append 邊界顯示一個 horizontal compact `KanbanInsertionMarker`；未歸位為空時顯示在第一個落點，已有任務時定位線中心貼齊最後一列底邊。
 - 手機 marker 由既有 `TaskDragPresenter` 呈現，使用 `workbench-unplaced-lane` target kind 與同一個 `KanbanInsertionMarker`；不得回到 lane highlight-only。
+- 目的看板零 L1 時，整個有內距的空白看板內容區必須可接收未歸位任務；Desktop 使用 anchorless `root-drop`，Mobile 使用 `board-root` target kind，共用垂直 `KanbanInsertionMarker`。提示只在有效命中期間顯示，既有「新增列表」按鈕不擴張成全畫布 CTA。
 - 定位線必須使用零高度 overlay anchor，不得推動任務列、空白狀態或捲動容器；離開投放區或完成 drop 後立即移除。空白提示可在有效命中期間隱藏，但幾何位置必須保留。
 - 共用 `data-task-surface-*`、`data-desktop-task-hover-scope`、checklist depth 與 `--task-hierarchy-indent` 展示契約；不直接掛載含看板 context、store mutation、selection 與 DnD owner 的 `KanbanChecklist` 元件。
 - 已歸位列維持現有排版與 `data-task-workbench-readonly-task-card="true"`，且不得具有 drag-surface attribute。
@@ -93,6 +94,7 @@
 - AC-086-013：拖入未歸位時直接呈現共用 horizontal compact `KanbanInsertionMarker`；empty／populated 兩種狀態都不造成 layout shift，populated marker 中心與最後一列底邊誤差 ≤1px，離開／重新進入／放開生命週期正確。
 - AC-086-014：390×844 與 320×844 touch emulation 均能完成看板 parent→未歸位；root／child／grandchild 同批移動、parent links 保留、定位線在 viewport 內，drop 後 transient marker／preview／action rail 清除且無可見錯誤或文件級水平溢出。
 - AC-086-015：手機不呈現 subtree hover scope；`list`／`gantt`／`calendar` 仍維持 mobile board-only gate，不列為本 addendum 缺陷。
+- AC-086-016：工作台未歸位 parent＋descendant 可在 Desktop 與 390×844 touch 直接拖入零 L1 看板；整棵子樹同批移動、root 成為第一個 board root、parent links 保留，drop 後來源與 transient UI 清空，且無 visible error、page error 或文件級水平溢出。
 
 ## 驗證命令
 
@@ -105,3 +107,4 @@
 - `npm.cmd run verify:dev-065-task-subtree-hover-preview`
 - `npm.cmd exec tsc -- --noEmit`
 - `npm.cmd run build:test`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-playwright-code.ps1 -SessionPrefix empty-board-drop -Filename scripts/verify-empty-board-unplaced-drop-browser.pw.js -OutputDirectory output/playwright/empty-board-drop -BaseUrl http://localhost:4000/ -ArtifactWindowKey __EMPTY_BOARD_DROP_ARTIFACT -ArtifactPath output/playwright/empty-board-drop/result.json`

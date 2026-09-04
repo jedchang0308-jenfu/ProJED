@@ -26,8 +26,8 @@ const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>>
   }),
   mindmap: Object.freeze({
     menu: Object.freeze({
-      include: ['task.open-details', 'task.create-relationship'] as const,
-      exclude: ['task.dependency-start', 'task.dependency-end'] as const,
+      include: ['task.open-details', 'task.create-relationship', 'task.copy', 'task.cut', 'task.paste-after'] as const,
+      exclude: ['task.duplicate', 'task.dependency-start', 'task.dependency-end'] as const,
     }),
     triggers: Object.freeze({
       'pointer.primary': 'task.select',

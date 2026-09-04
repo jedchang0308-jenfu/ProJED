@@ -5,6 +5,9 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.create-child', label: '新增子任務', icon: 'git-branch', section: 'create', kind: 'mutation', capability: 'create' },
   { id: 'task.create-relationship', label: '建立關聯線', icon: 'link-2', section: 'create', kind: 'transient', capability: 'edit' },
   { id: 'task.duplicate', label: '複製任務', icon: 'copy', section: 'create', kind: 'mutation', capability: 'create' },
+  { id: 'task.copy', label: '複製', icon: 'copy', section: 'clipboard', kind: 'mutation', defaultMenu: false },
+  { id: 'task.cut', label: '剪下', icon: 'scissors', section: 'clipboard', kind: 'mutation', capability: 'move', defaultMenu: false },
+  { id: 'task.paste-after', label: '貼在此任務之後', icon: 'clipboard-paste', section: 'clipboard', kind: 'mutation', defaultMenu: false },
   { id: 'task.create-tracking-reference', label: '建立追蹤副本', icon: 'link-2', section: 'create', kind: 'mutation', capability: 'tracking-reference' },
   { id: 'task.remove-tracking-reference', label: '移除此處追蹤', icon: 'unlink', section: 'danger', kind: 'danger', capability: 'tracking-reference' },
   { id: 'task.assign', label: '指派成員', icon: 'user-round', section: 'assignment', kind: 'mutation', capability: 'assign' },
@@ -13,7 +16,6 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.promote', label: '提升階層', icon: 'corner-left-up', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.demote', label: '降為子任務', icon: 'corner-right-down', section: 'hierarchy', kind: 'mutation', capability: 'move' },
   { id: 'task.archive', label: '封存任務', icon: 'archive', section: 'lifecycle', kind: 'mutation', capability: 'delete' },
-  { id: 'task.collect', label: '典藏任務', icon: 'archive-box', section: 'lifecycle', kind: 'mutation', capability: 'collect' },
   { id: 'task.select', label: '選取任務', icon: 'mouse-pointer-2', section: null, kind: 'selection' },
   { id: 'task.open-details', label: '開啟詳情', icon: 'panel-right', section: null, kind: 'navigation' },
   { id: 'task.open-details-for-naming', label: '開啟詳情並命名', icon: 'panel-right', section: null, kind: 'navigation' },
@@ -34,7 +36,7 @@ export const getTaskActionDefinition = (actionId: TaskActionId): TaskActionDefin
 );
 
 const menuActionIds = ACTION_CATALOG
-  .filter(action => action.section !== null)
+  .filter(action => action.section !== null && action.defaultMenu !== false)
   .map(action => action.id);
 
 export const getTaskMenuActionIds = (profiles: readonly TaskInteractionProfile[] = []): readonly TaskActionId[] => {
@@ -49,7 +51,9 @@ export const getTaskMenuActionIds = (profiles: readonly TaskInteractionProfile[]
     for (const actionId of profile.menu?.exclude || []) excluded.add(actionId);
   }
   return ACTION_CATALOG
-    .filter(action => (action.section !== null || explicitlyIncluded.has(action.id)) && included.has(action.id) && !excluded.has(action.id))
+    .filter(action => (
+      (action.section !== null && action.defaultMenu !== false) || explicitlyIncluded.has(action.id)
+    ) && included.has(action.id) && !excluded.has(action.id))
     .map(action => action.id);
 };
 

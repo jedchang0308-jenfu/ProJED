@@ -13,6 +13,20 @@
 - meeting 的「點匯入後展開日期、範圍、預覽、插入與跳過」互動已由 `SPEC-020` 的 DEV-094 addendum intentional replacement：meeting 改為 `帶入上次會議後變更` one-click，另以次要 `自訂日期` 按需揭露；不再走 preview／第二次 insert。
 - DEV-023 的既有 Browser QC PASS 是歷史實作證據，不代表 DEV-094 已實作或通過；current meeting acceptance 與 future verifier 以 `QA-DEV-094` 為準。
 
+## 2026-09-01 meeting workflow display addendum
+
+- `匯入` 不再重複呈現在會議 workflow step；改由流程列下方唯一的 `帶入上次會議後變更` 控制項提供。
+- `校稿` 不再於 UI 呈現；使用者直接在內容編輯器確認內容，並以內容區下方的 `存草稿` 保存草稿，發布仍由 `發布` step 執行。
+- 會議流程列的可見 step 改為 `速記 -> AI整理 -> 發布`。
+- 本 addendum 只取代本文件原先對會議流程可見 step 的數量與排列描述，不改 project import、內容保護、AI preserve 或 record persistence 契約。
+
+## 2026-09-01 meeting import two-layer disclosure addendum
+
+- 會議內容區第一層只保留單一 `匯入專案變化` 入口，維持目前 `內容` 標題右側的第一層排版。
+- 點擊入口後，以覆蓋式第二層提供 `帶入上次會議後變更` 與 `自訂日期`；兩者不再與第一層並列常駐。
+- 點擊 `自訂日期` 後，日期欄位與 `帶入` 動作仍在同一個覆蓋層內切換顯示，提供返回選項清單與關閉操作；不改匯入資料、去重、錯誤或保存契約。
+- 本 addendum 只取代 meeting import 的可見揭露方式，不改 workflow `速記 -> AI整理 -> 發布`、work-log 匯入流程或 record persistence 契約。
+
 ## 背景
 
 DEV-020 已完成紀錄功能重構，並把「先匯入專案變化」放在紀錄流程前方。使用者後續實測指出，獨立大型匯入卡片與下方「會議流程」形成上下分離，實際上同屬一段紀錄作業，卻被 UI 表達成兩個作業區。這會增加版面高度、降低流程連續性，也讓使用者誤以為匯入是紀錄流程外的前置功能。

@@ -239,14 +239,16 @@ export const resolveTaskTitleChildDropZone = ({
   point,
   inputMode,
   nodesRecord,
+  scopeElement,
 }: {
   point: Point;
   inputMode: TaskDragInputMode;
   nodesRecord: Record<string, TaskNode>;
+  scopeElement?: HTMLElement | null;
 }): TaskTitleChildDropZone | null => {
   if (typeof document === 'undefined') return null;
 
-  const matches = Array.from(document.querySelectorAll<HTMLElement>('[data-task-child-drop-target="true"]'))
+  const matches = Array.from((scopeElement || document).querySelectorAll<HTMLElement>('[data-task-child-drop-target="true"]'))
     .map((element) => {
       const targetNodeId = element.getAttribute('data-task-id');
       if (!targetNodeId) return null;
@@ -311,14 +313,16 @@ export const resolveTaskTitleChildDropTarget = ({
   sourceNodeId,
   sourceSurfaceKind,
   nodesRecord,
+  scopeElement,
 }: {
   point: Point;
   inputMode: TaskDragInputMode;
   sourceNodeId: string;
   sourceSurfaceKind: TaskDropSurfaceKind;
   nodesRecord: Record<string, TaskNode>;
+  scopeElement?: HTMLElement | null;
 }): TaskChildDropTarget | null => {
-  const zone = resolveTaskTitleChildDropZone({ point, inputMode, nodesRecord });
+  const zone = resolveTaskTitleChildDropZone({ point, inputMode, nodesRecord, scopeElement });
   if (!zone) return null;
   const targetNode = nodesRecord[zone.targetNodeId];
   if (!targetNode || targetNode.isArchived || zone.targetNodeId === sourceNodeId) return null;

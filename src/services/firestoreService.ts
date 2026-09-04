@@ -2,7 +2,6 @@ import { requireFirebaseDb } from './firebase';
 import {
   collection, doc, setDoc, updateDoc, deleteDoc, writeBatch, deleteField, getDoc, getDocs, runTransaction
 } from 'firebase/firestore';
-import { TaskCollectionError } from '../features/taskCollection/errors';
 import type { Workspace, Board, BoardMember, Dependency, EditableKnowledgeRecord, KnowledgeRecord, KnowledgeRecordInput, MeetingDraftCheckpointInput, MeetingDraftCheckpointResult, TaskNode, TaskTag, WorkspaceMember } from '../types';
 import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 
@@ -262,7 +261,9 @@ export const recordService = {
     const snapshot = await getDocs(collection(db, 'workspaces', wsId, 'boards', bId, 'records'));
     return snapshot.docs
       .map(docSnap => ({ ...(docSnap.data() as KnowledgeRecord), id: docSnap.id }))
-      .filter((record): record is EditableKnowledgeRecord => record.status !== 'archived' && record.type !== 'task_collection')
+      .filter((record): record is EditableKnowledgeRecord =>
+        record.status !== 'archived' && (record.type === 'meeting' || record.type === 'work_log')
+      )
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   },
 
@@ -272,9 +273,6 @@ export const recordService = {
   },
 
   upsert: async (wsId: string, bId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> => {
-    if ((input as unknown as { type?: string }).type === 'task_collection') {
-      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務不可透過一般紀錄編輯。');
-    }
     const db = requireFirebaseDb();
     const recordRef = input.id
       ? doc(db, 'workspaces', wsId, 'boards', bId, 'records', input.id)
@@ -282,7 +280,7 @@ export const recordService = {
     const now = Date.now();
     const previous = input.id ? await getDoc(recordRef) : null;
     const existing = previous?.exists() ? previous.data() as KnowledgeRecord : undefined;
-    const existingEditable = existing?.type === 'task_collection' ? undefined : existing;
+    const existingEditable = existing;
     const record: EditableKnowledgeRecord = {
       ...(existingEditable || {}),
       id: recordRef.id,
@@ -324,7 +322,7 @@ export const recordService = {
     await runTransaction(db, async transaction => {
       const previous = await transaction.get(recordRef);
       const existing = previous.exists() ? previous.data() as KnowledgeRecord : undefined;
-      const existingEditable = existing?.type === 'task_collection' ? undefined : existing;
+      const existingEditable = existing;
       const existingRecovery = existing?.metadata?.projedDraftRecovery;
       const existingSignature = existingRecovery && typeof existingRecovery === 'object' && !Array.isArray(existingRecovery)
         ? (existingRecovery as { localSignature?: unknown }).localSignature
@@ -372,12 +370,7 @@ export const recordService = {
 
   delete: async (wsId: string, bId: string, recordId: string): Promise<void> => {
     const db = requireFirebaseDb();
-    const targetRef = doc(db, 'workspaces', wsId, 'boards', bId, 'records', recordId);
-    const target = await getDoc(targetRef);
-    if (target.exists() && (target.data() as KnowledgeRecord).type === 'task_collection') {
-      throw new TaskCollectionError('SNAPSHOT_INVALID', '典藏任務為不可變資產，不能從一般紀錄刪除。');
-    }
-    await updateDoc(targetRef, {
+    await updateDoc(doc(db, 'workspaces', wsId, 'boards', bId, 'records', recordId), {
       status: 'archived',
       updatedAt: Date.now(),
     });

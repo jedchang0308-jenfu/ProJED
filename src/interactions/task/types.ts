@@ -31,7 +31,8 @@ export type TaskInteractionSurfaceId =
   | 'shared-task-sidebar.row'
   | 'calendar.segment'
   | 'task-workbench.placed-row'
-  | 'task-workbench.unplaced-row';
+  | 'task-workbench.unplaced-row'
+  | 'task-details.subtask-row';
 
 export type InteractionTrigger =
   | 'pointer.primary'
@@ -66,6 +67,9 @@ export type TaskActionId =
   | 'task.create-child'
   | 'task.create-relationship'
   | 'task.duplicate'
+  | 'task.copy'
+  | 'task.cut'
+  | 'task.paste-after'
   | 'task.create-tracking-reference'
   | 'task.remove-tracking-reference'
   | 'task.assign'
@@ -75,7 +79,6 @@ export type TaskActionId =
   | 'task.demote'
   | 'task.toggle-complete'
   | 'task.archive'
-  | 'task.collect'
   | 'mindmap.select-parent'
   | 'mindmap.select-first-child'
   | 'mindmap.select-previous'
@@ -115,7 +118,7 @@ export type TaskInteractionDispatchOutcome = {
   commandOutcome: TaskCommandOutcome | null;
 };
 
-export type TaskMenuSection = 'create' | 'assignment' | 'dependency' | 'hierarchy' | 'lifecycle' | 'danger';
+export type TaskMenuSection = 'create' | 'clipboard' | 'assignment' | 'dependency' | 'hierarchy' | 'lifecycle' | 'danger';
 
 export type TaskActionDefinition = {
   id: TaskActionId;
@@ -123,7 +126,9 @@ export type TaskActionDefinition = {
   icon: string;
   section: TaskMenuSection | null;
   kind: 'navigation' | 'selection' | 'presentation' | 'mutation' | 'transient' | 'danger';
-  capability?: 'create' | 'edit' | 'move' | 'delete' | 'collect' | 'assign' | 'dependency' | 'tracking-reference';
+  capability?: 'create' | 'edit' | 'move' | 'delete' | 'assign' | 'dependency' | 'tracking-reference';
+  /** Opt-in actions remain absent from every host menu unless a profile includes them explicitly. */
+  defaultMenu?: boolean;
 };
 
 export type TaskInteractionProfile = {

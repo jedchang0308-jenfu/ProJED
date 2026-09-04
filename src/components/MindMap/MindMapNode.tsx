@@ -1,10 +1,11 @@
 import React from 'react';
-import dayjs from 'dayjs';
-import { Calendar, Minus, Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import type { TaskNode } from '../../types';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { useTouchTapGuard } from '../../hooks/useTouchTapGuard';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
+import { TaskDateBadge } from '../Wbs/TaskDateBadge';
+import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 import {
   useMindMapNodeSelected,
   type MindMapSelectionStore,
@@ -29,7 +30,12 @@ interface MindMapNodeProps {
   expandedNodeIds: Set<string>;
   dropTarget: MindMapDropTarget | null;
   isRelationshipModeActive?: boolean;
+  isCutPending?: boolean;
   showStartDate: boolean;
+  dateLockStatus?: {
+    startLocked: boolean;
+    endLocked: boolean;
+  };
   canMoveTask: boolean;
   canManageTaskReference?: boolean;
   isTitleEditing?: boolean;
@@ -61,6 +67,7 @@ const getDropClasses = (target: MindMapDropTarget | null, nodeId: string) => {
 
 interface MindMapNodeSelectionSurfaceProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'aria-selected'> {
   nodeId: string;
+  placementId: string;
   selectionStore: MindMapSelectionStore;
   dev075ProbeEnabled: boolean;
   selectedClassName: string;
@@ -70,6 +77,7 @@ interface MindMapNodeSelectionSurfaceProps extends Omit<React.HTMLAttributes<HTM
 
 const MindMapNodeSelectionSurface: React.FC<MindMapNodeSelectionSurfaceProps> = ({
   nodeId,
+  placementId,
   selectionStore,
   dev075ProbeEnabled,
   selectedClassName,
@@ -79,7 +87,7 @@ const MindMapNodeSelectionSurface: React.FC<MindMapNodeSelectionSurfaceProps> = 
   children,
   ...elementProps
 }) => {
-  const isSelected = useMindMapNodeSelected(selectionStore, nodeId);
+  const isSelected = useMindMapNodeSelected(selectionStore, placementId);
   const elementRef = React.useRef<HTMLDivElement | null>(null);
   const renderCountRef = React.useRef(0);
   const handleElementRef = React.useCallback((element: HTMLDivElement | null) => {
@@ -120,7 +128,9 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   expandedNodeIds,
   dropTarget,
   isRelationshipModeActive = false,
+  isCutPending = false,
   showStartDate,
+  dateLockStatus = { startLocked: false, endLocked: false },
   canMoveTask,
   canManageTaskReference = false,
   isTitleEditing = false,
@@ -146,6 +156,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   const touchTapGuard = useTouchTapGuard();
   const isTrackingReference = Boolean(node.isTrackingReference && node.trackingReferenceId);
   const canonicalTaskId = node.canonicalTaskId || node.id;
+  const placementId = node.trackingReferenceId || `primary:${node.id}`;
   const isExpanded = expandedNodeIds.has(node.id);
   const hasChildren = childrenNodes.length > 0;
   const isLeft = direction === 'left';
@@ -154,6 +165,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   const titleInputRef = React.useRef<HTMLInputElement | null>(null);
   const nodeTitleRef = React.useRef(node.title || '');
   const titleEditActionHandledRef = React.useRef(false);
+  const secondaryPointerFocusRef = React.useRef(false);
   React.useEffect(() => {
     nodeTitleRef.current = node.title || '';
   }, [node.title]);
@@ -199,13 +211,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
       titleInputRef.current?.select();
     });
   }, [autoFocusTitleInput, isTitleEditing, node.id]);
-  const formatDate = (value?: string) => {
-    if (!value) return '';
-    const date = dayjs(value);
-    if (!date.isValid()) return value;
-    return date.year() === dayjs().year() ? date.format('MM/DD') : date.format('YY/MM/DD');
-  };
-
   return (
     <div
       className={`flex items-center gap-[var(--mindmap-node-gap)] ${isLeft ? 'flex-row-reverse text-right' : 'text-left'}`}
@@ -215,6 +220,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
       <div className={`relative flex items-center ${isLeft ? 'flex-row-reverse' : ''}`}>
         <MindMapNodeSelectionSurface
           nodeId={node.id}
+          placementId={placementId}
           selectionStore={selectionStore}
           dev075ProbeEnabled={dev075ProbeEnabled}
           selectedClassName="border-primary-500 ring-2 ring-primary-100"
@@ -224,8 +230,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           tabIndex={0}
           aria-expanded={hasChildren ? isExpanded : undefined}
           data-mindmap-node={node.id}
-          data-task-placement-id={node.trackingReferenceId || `primary:${node.id}`}
+          data-task-canonical-id={canonicalTaskId}
+          data-task-placement-id={placementId}
           data-mindmap-placement-kind={isTrackingReference ? 'tracking-reference' : 'primary'}
+          data-task-placement-hover-surface="true"
           aria-label={isTrackingReference ? `追蹤副本：${node.title || '未命名任務'}` : node.title || '未命名任務'}
           data-mindmap-node-title={node.title || '未命名任務'}
           data-mindmap-node-level={level}
@@ -233,8 +241,12 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           data-mindmap-parent-id={node.parentId || ''}
           data-mindmap-node-order={node.order}
           data-mindmap-inline-title-editing={isTitleEditing ? 'true' : 'false'}
+          data-mindmap-cut-pending={isCutPending ? 'true' : 'false'}
           draggable={(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer}
           {...touchTapGuard.handlers}
+          onMouseDown={(event) => {
+            if (event.button === 2) secondaryPointerFocusRef.current = true;
+          }}
           onClick={(event) => {
             event.stopPropagation();
             void interactionBinding.dispatch('pointer.primary');
@@ -265,8 +277,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             event.preventDefault();
             event.stopPropagation();
             onOpenContextMenu(node.id, node.title || '未命名任務', event);
+            secondaryPointerFocusRef.current = false;
           }}
           onFocus={() => {
+            if (secondaryPointerFocusRef.current) return;
             if (!isRelationshipModeActive) onSelect(node.id);
           }}
           onDragStart={(event) => {
@@ -283,10 +297,14 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           onDragOver={(event) => onDragOverNode(event, node.id)}
           onDrop={(event) => onDropOnNode(event, node.id)}
           data-touch-tap-guard="true"
-          className={`mobile-pan-item relative z-10 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isLeft ? 'flex-row-reverse' : ''} ${(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isTrackingReference ? 'border-2 border-dashed border-violet-300 bg-violet-50/40' : ''} ${getDropClasses(dropTarget, node.id)}`}
+          className={`mobile-pan-item relative z-50 flex min-h-[var(--mindmap-node-min-height)] max-w-[var(--mindmap-node-max-width)] items-center gap-[calc(var(--mindmap-node-gap)*0.3)] rounded-[var(--mindmap-node-radius)] border bg-white px-[var(--mindmap-node-pad-x)] py-[var(--mindmap-node-pad-y)] text-[length:var(--mindmap-node-font-size)] font-semibold text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.08)] outline-none transition-colors ${isLeft ? 'flex-row-reverse' : ''} ${(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isTrackingReference ? 'border-2 border-dashed border-violet-300 bg-violet-50/40' : ''} ${isCutPending ? 'opacity-45 saturate-50' : ''} ${getDropClasses(dropTarget, node.id)}`}
         >
           <span className={`flex min-w-0 flex-col ${isLeft ? 'items-end' : 'items-start'}`}>
-            <span className="relative inline-block max-w-full">
+            <span
+              className={`relative inline-block max-w-full ${taskStatusTitleClass[node.status]}`}
+              data-mindmap-node-title-text="true"
+              data-task-status={node.status}
+            >
               {isTitleEditing ? (
                 <>
                   <span
@@ -346,22 +364,23 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
             </span>
             {hasVisibleDates ? (
               <span
-                className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-[var(--mindmap-date-pad-x)] py-[var(--mindmap-date-pad-y)] text-[length:var(--mindmap-date-font-size)] font-semibold leading-none text-amber-700"
+                className="mt-1 inline-flex max-w-full"
                 title={`${showStartDate && node.startDate ? node.startDate : ''}${showStartDate && node.startDate && node.endDate ? ' ~ ' : ''}${node.endDate || ''}`}
                 data-mindmap-node-dates
                 data-start-date={showStartDate ? node.startDate || '' : ''}
                 data-end-date={node.endDate || ''}
               >
-                <Calendar size="var(--mindmap-date-icon-size)" className="shrink-0" />
-                <span className="truncate">
-                  {showStartDate && node.startDate ? (
-                    <>
-                      <span>{formatDate(node.startDate)}</span>
-                      {node.endDate ? <span className="px-0.5 text-amber-500">~</span> : null}
-                    </>
-                  ) : null}
-                  {node.endDate ? <span>{formatDate(node.endDate)}</span> : null}
-                </span>
+                <TaskDateBadge
+                  startDate={node.startDate}
+                  endDate={node.endDate}
+                  status={node.status}
+                  showStartDate={showStartDate}
+                  startLocked={dateLockStatus.startLocked}
+                  endLocked={dateLockStatus.endLocked}
+                  durationLocked={Boolean(node.isDurationLocked)}
+                  surface="checklist"
+                  className="max-w-full overflow-hidden whitespace-nowrap px-[var(--mindmap-date-pad-x)] py-[var(--mindmap-date-pad-y)] text-[length:var(--mindmap-date-font-size)]"
+                />
               </span>
             ) : null}
           </span>

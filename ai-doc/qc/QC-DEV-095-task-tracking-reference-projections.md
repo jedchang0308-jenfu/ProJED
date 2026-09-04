@@ -68,8 +68,7 @@ current interaction QC summary：`PASS=8 / FAIL=0 / NOT_RUN=0 / BLOCKED=0`。舊
 
 - I01～I12 已以 local-test cross-mode contract 12/12 通過；完整跨模式 rendered 深度走查仍未完成，目前 browser 只對核心 delivery path 與四模式 marker 做 rendered evidence。
 - Supabase TEST two-user RLS／PostgREST／Realtime、migration history reconciliation、remote readback、production deploy/release 尚未執行。
-- 既有 migration history mismatch：read-only reconciliation 顯示 local 51／remote 49、5 筆 local-only、3 筆 remote-only；未執行 repair／pull／push。此狀態與 DEV-093 共用工作樹，不能由本地 QC 自行修復。
-- 全域 `npm run lint` 仍有工作樹既有未追蹤 `scripts/verify-dev-093-debug-overflow.pw.js` 的 1 個 error；DEV-095 touched-file targeted ESLint 為 0 errors。
+- 當次 migration history mismatch與未追蹤debug script屬歷史工作樹狀態；收藏功能已由DEV-104移除，不能把舊狀態當作目前的release evidence。
 
 ## 6. QC 判定
 

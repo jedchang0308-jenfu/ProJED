@@ -157,7 +157,7 @@ const createDefaultDraft = (
   const end = now.endOf('day');
   const start = end.subtract(7, 'day');
   const title = type === 'meeting'
-    ? `會議紀錄 ${now.format('YYYY/MM/DD')}`
+    ? '會議紀錄'
     : `工作紀錄 ${now.format('YYYY/MM/DD')}`;
 
   return {

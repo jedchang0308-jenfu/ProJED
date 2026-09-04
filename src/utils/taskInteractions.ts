@@ -4,18 +4,35 @@ export const OPEN_TASK_DETAILS_EVENT = 'open-task-details';
 export const CLEAR_TASK_SELECTION_EVENT = 'clear-task-selection';
 export const START_MINDMAP_RELATIONSHIP_EVENT = 'start-mindmap-relationship';
 
-let taskDetailsReturnFocus: HTMLElement | null = null;
+type TaskDetailsReturnFocusBookmark = {
+  element: HTMLElement | null;
+  placementId: string | null;
+};
+
+let taskDetailsReturnFocus: TaskDetailsReturnFocusBookmark | null = null;
 
 export const rememberTaskDetailsReturnFocus = (element: HTMLElement | null) => {
-  taskDetailsReturnFocus = element;
+  taskDetailsReturnFocus = {
+    element,
+    placementId: element?.closest<HTMLElement>('[data-task-placement-id]')
+      ?.getAttribute('data-task-placement-id') || null,
+  };
 };
 
 export const restoreTaskDetailsReturnFocus = () => {
-  const target = taskDetailsReturnFocus;
+  const bookmark = taskDetailsReturnFocus;
   taskDetailsReturnFocus = null;
-  if (!target?.isConnected) return false;
-  target.focus({ preventScroll: true });
-  return document.activeElement === target;
+  if (!bookmark) return false;
+  const currentPlacement = bookmark.placementId
+    ? Array.from(document.querySelectorAll<HTMLElement>('[data-task-placement-id]'))
+      .find(element => element.getAttribute('data-task-placement-id') === bookmark.placementId) || null
+    : null;
+  const candidates = [bookmark.element?.isConnected ? bookmark.element : null, currentPlacement]
+    .filter((element, index, elements): element is HTMLElement => Boolean(element) && elements.indexOf(element) === index);
+  return candidates.some(element => {
+    element.focus({ preventScroll: true });
+    return document.activeElement === element;
+  });
 };
 
 export const isCoarsePointer = () => (

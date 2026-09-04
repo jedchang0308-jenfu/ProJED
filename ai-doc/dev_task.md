@@ -409,14 +409,14 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：不得改變 DEV-027B／070／071／073 的鍵盤、選取、快速命名與 interaction owner，或 DEV-074 的單一 Scene／geometry dirty 契約；任一行為差異、selection 雙 owner、geometry recompute、效能 gate 失敗或需改資料／權限時立即停止。
   - 證據：`SPEC-075`、`QA-DEV-075`（Executed / QA PASS / QC PASS）、`output/playwright/dev-075-mindmap-keyboard-performance/result.json`、immutable baseline、center bridge rendered evidence、50／200／500節點真實鍵盤效能、互動／幾何／viewport evidence與targeted regressions。
   - 計入交付：是（未 Release）
-- ✓ DEV-076 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 心智圖左鍵抓取畫布平移
-  - 摘要：讓桌機使用者可在心智圖空白畫布按住滑鼠左鍵直接平移，同時保護節點拖曳、關係線、快速命名、空白點擊與單一 Scene 幾何契約。
+- × DEV-076 [開發點] [跳過] [P1] [已撤回] 心智圖左鍵抓取畫布平移
+  - 摘要：依使用者指示放棄並復原心智圖左鍵抓取畫布平移；原始規格與驗證證據保留為歷史紀錄。
   - 來源 ID：`USER-20260820-MINDMAP-LEFT-MOUSE-CANVAS-PAN`
   - 父任務：DEV-027
-  - 下一步：若要正式交付，依既有 release gate 另行驗證；本輪不含 commit、push、deploy 或 release。
-  - 阻塞 / 恢復條件：若節點／control 起手也會 pan、拖曳後誤清 selection、純 pan dirty world geometry、touch／中鍵回歸或需要改資料／權限，立即停止並回 RD／PM。
-  - 證據：`SPEC-076`、`QA-DEV-076`（Executed / QA PASS / QC PASS）、`output/playwright/dev-076-mindmap-left-mouse-pan/result.json`、DEV-076 static 12/12、1440／1024 rendered mouse trace、390 boundary、DEV-027B browser、DEV-074／075／073／027B static、TypeScript、lint 與 `build:test`。
-  - 計入交付：是（未 Release）
+  - 下一步：無；若未來重新提出，需建立新的產品契約與驗證範圍。
+  - 阻塞 / 恢復條件：只有使用者重新明確提出心智圖左鍵平移需求時才重開，不得由既有歷史驗證自動恢復。
+  - 證據：歷史 `SPEC-076`、`QA-DEV-076` 與 `output/playwright/dev-076-mindmap-left-mouse-pan/result.json`。
+  - 計入交付：否
 - ✓ DEV-077 [開發點] [完成／契約誤讀已由 DEV-085 更正] [P2] [歷史實作；未 Release] 心智圖關係線多餘中央導引線清理
   - 摘要：2026-08-25 使用者澄清原附圖只要求刪除控制 UI 多畫的一條「搖桿 1 → 搖桿 2」中央線；控制臂與方形控制點不得移除。歷史 DEV-077 驗證只證明錯誤契約被實作，不再作為現行產品驗收。
   - 來源 ID：使用者附圖與「紅線的元素刪除」；2026-08-25 response annotation correction。
@@ -475,7 +475,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - ✓ DEV-084 [開發點] [完成] [P1] [RD Implemented / QA-QC PASS / 未 Release] 非主按鍵不得觸發主按鍵互動
   - 摘要：以共用 raw-input guard 修正中鍵／右鍵誤啟動 task drag、Gantt／panel resize、mindmap relationship primary action與 modal backdrop close，同時保留左鍵、鍵盤、觸控、右鍵 menu及心智圖中鍵 pan。
   - 來源 ID：`USER-20260822-NON-PRIMARY-POINTER-ISOLATION`
-  - 父任務：DEV-070；相容權威 DEV-028、DEV-053、DEV-076、DEV-077
+  - 父任務：DEV-070；相容權威 DEV-028、DEV-053、DEV-077
   - 下一步：保留 local-only evidence；若要進正式環境，另走 deployment/release gate；本輪不 release。
   - 阻塞 / 恢復條件：若 DEV-084 required static/rendered gate、non-primary isolation、合法 middle-pan/right-menu/left/keyboard 或 automated mobile boundary 回歸，回 RD 修正；physical iPhone Safari／Android Chrome 為 supplemental Not Run，不得冒稱真機通過。
   - 證據：`SPEC-084`（Implemented / QA-QC PASS）、`QA-DEV-084`（static 7/7、rendered 13/13、Calendar local fixture）、`output/playwright/dev-084-primary-pointer-isolation/result.json`、required DEV-028／029／046／053／054／070／076／077／DEV-017／resizable-navigation regressions、TypeScript／targeted ESLint／build:test／git diff --check。
@@ -536,54 +536,20 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-039` DEV-091 addendum、`QA-DEV-091`、`QC-DEV-091`；static 16 checks、DEV-039 31/31、desktop／390×844 rendered browser、TypeScript、ESLint與build:test全部PASS。
   - 計入交付：否
 - ✓ DEV-092 [開發點] [完成] [P2] [Local QA-QC PASS / 未 Release] 會議紀錄側欄資訊精簡
-  - 摘要：依瀏覽器留言移除裝飾性標題 icon、說明入口、會議流程標題與輔助說明、各階段 icon／副標題、AI badge與常駐成功 checkpoint 文案；新會議標題不自動附加時間，紀錄時間改為 24 小時制；會議標題與紀錄時間同列；收合控制改用全域工作台同款方向並移到右側抽屜最左側，會議空白關聯任務不再顯示選取 action。
+  - 摘要：依瀏覽器留言移除裝飾性標題 icon、說明入口、會議流程標題與輔助說明、各階段 icon／副標題、AI badge與常駐成功 checkpoint 文案；新會議標題固定為「會議紀錄」，紀錄時間改為 24 小時制；會議標題與紀錄時間同列；收合控制改用全域工作台同款方向並移到右側抽屜最左側，會議空白關聯任務不再顯示選取 action。
   - 來源 ID：`USER-20260827-RECORD-SIDEBAR-QUIETNESS`
   - 父任務：DEV-020
   - 證據：`SPEC-020` UI 精簡 addendum、`QA-DEV-092`、`QC-DEV-092`；static 43 checks、1440×900／390×844 rendered browser、內容區剩餘高度／最小高度與不重疊、收合／展開、表單同列與緊湊控制列、空白狀態檢查、TypeScript、ESLint與git diff --check PASS。
   - 計入交付：否
-- ◐ DEV-093 [交付點] [開發中] [P1] [RD Implementation In Progress / Human Confirmed / local static 48＋pure 22＋negative compile 2＋journal 7＋TypeScript＋isolated DB 25-check PASS＋local Supabase DB 25-check PASS / browser B00-B19 21/21 PASS / required regressions PASS / targeted Local QC fact PASS / 未 Release] 典藏任務與子任務資產化
-  - 摘要：新增 `task_collection` 不可變資產；以單一交易保存完整 canonical 子樹與可取得歷程、建立版本並封存來源 root；典藏任務、會議紀錄與個人工作紀錄在紀錄庫分區呈現。
-  - 來源 ID：`USER-20260828-TASK-COLLECTION-WITH-SUBTREE`、`USER-20260828-RECORDS-SEPARATE-SECTIONS`
-  - 父任務：DEV-002、DEV-007、DEV-008、DEV-088
-  - 下一步：依 deployment/release gate 授權對齊 remote/local migration history，補 Supabase TEST（含真實 response-lost／reload、RLS與 authenticated readback；read-only migration list 顯示 DEV-093 local `20260828090000` 尚未出現在 remote，remote history 另有本機缺少的既有 revisions；既有 local runtime 也尚未初始化 project schema），再交 remote readback／release QC；本輪已完成 product wiring、local-test 15／15、pure 22／22、negative compile 2／2、journal 7／7、static 48／TypeScript／build、全域 `npm run verify:source` fresh PASS、isolated PostgreSQL 25-check matrix、local Supabase disposable 25-check matrix、browser B00～B19 21/21 Records／collection evidence（最新 browser artifact `2026-08-29T18:27:38.123Z`；B02 深連結 focus、B08 response-lost retry/readback、B11 mobile deep-link／cold fallback、B14 tab／tabpanel ARIA＋reduced-motion、B16 五態 state trace、B18 非零歷程／關聯紀錄 counts、B19 五節點一般任務內容 parity／桌機與 390×844 mobile 唯讀 controls）與 fresh targeted Local QC fact report，且 required regressions 已全部 PASS，未執行 production migration、deploy 或 release。
-   - 阻塞 / 恢復條件：截至 2026-08-30T02:34:20+08:00，`db push --dry-run --linked` 仍因 `LegacyDbPushMissingLocalError` 被阻擋，read-only reconciliation 顯示 local 51／remote 49、5 筆 local-only、3 筆 remote-only；未執行 repair／pull／push。需依 deployment/release gate 取得授權、先完成 migration history 對齊與 backup／readback，才可進 Supabase TEST、remote readback 與 release QC。除此之外，本期 P0 產品決策已固定；只有需要 Firebase 支援、只收父任務、編輯／刪除典藏、跨 board 存續或 production release 時才回到新決策／gate。
-   - migration 對齊明細（read-only）：local-only=`20260825093621_dev_089_transactional_task_workbench_placement.sql`、`20260826083940_dev_089_scope_safe_task_placement_command.sql`、`20260826104321_dev_090_account_board_task_filter_preferences.sql`、`20260828090000_dev_093_task_collection_assets.sql`、`20260828100000_dev_095_task_tracking_references.sql`；remote-only=`20260825151331`、`20260826143006`、`20260826143014`。此為 release owner 的 reconciliation 輸入，未執行 repair／pull／push。
-  - Spec Impact：`Compatible record-family extension + DEV-016 Intentional extension`；不新增任務終點或覆寫 DEV-088，典藏交易成功後才沿用封存；紀錄庫保留條列但改為互斥分區。
-   - 差距分析：`SPEC-093 §9.3` 已逐欄對照一般任務詳情與典藏詳情，固定內容／富文字備註、日期／工期、狀態、主責／協作、標籤的閱讀 parity；共用 renderer／status／assignment／tag 元件，典藏內容保持 immutable read-only。
-   - 證據：`output/qa/dev-093/static-result.json`（static 48 checks，generated `2026-08-29T18:32:54.354Z`，含 Supabase／local response-lost／local verifier／dblink source guards）、`output/qa/dev-093/local-result.json`（local 15 checks，generated `2026-08-29T16:42:29.411Z`，含 viewer permission denial、response-lost operation readback）、`output/qa/dev-093/pure-result.json`（pure 22 checks，generated `2026-08-29T16:42:31.052Z`，含 cross-project scope fail-closed）、`output/qa/dev-093/negative-compile-result.json`（negative compile 2 checks，generated `2026-08-29T16:42:34.053Z`）、`output/qa/dev-093/journal-result.json`（journal 7 checks，generated `2026-08-29T16:42:31.787Z`；after_* recovery／partial-write rollback）、`output/qa/dev-093/db-isolated-result.json`（task-owned PostgreSQL 25-check matrix passed，generated `2026-08-29T15:55:43.9630649Z`，runtime cleanup complete，含 DB07 fault rollback／DB08 concurrency／DB16 cascade／DB17 SQL↔TypeScript parity）、`output/qa/dev-093/db-local-result.json`（task-owned local Supabase disposable 25-check matrix passed，generated `2026-08-29T16:29:53.9109700Z`，database DROP／54322 primary runtime preserved）、`output/playwright/dev-093/result.json`（browser B00～B19 21/21 PASS，latest generated `2026-08-29T18:27:38.123Z`；含 B02 deep-link focus／B08 retry／response-lost reload／B09 fail-closed／B11 deep-link／cold fallback／B12 overflow/full-menu／B14 ARIA＋reduced-motion／B16 五態 state trace／B18 非零歷程 counts／B19 五節點內容 parity、390×844 mobile parity、`parentTaskModalCount=0` 與 mutation actions=0）、`output/qa/dev-093/supabase-migration-list.json`（read-only DEV-093 local／remote migration preflight）、`output/qa/dev-093/supabase-migration-history-reconciliation.json`（local 51／remote 49；5 local-only／3 remote-only；未執行 repair／pull／push）、`output/qa/dev-093/supabase-local-schema-preflight.json`（local schema preflight，未執行 reset／migration）、`output/qa/dev-093/supabase-db-push-dry-run.json`（migration history mismatch；未執行 repair／pull／push）、`npx tsc --noEmit`、`npm run build:test`、fresh `npm run verify:source`（0 errors／52 warnings，最新 build artifact `20260829182820-a44fec` 為 DEV-083 pipeline artifact）、targeted ESLint 0 errors、same-operation／archived descendant／boundary dependency／private non-leak／impact／v2／source-delete readback；DEV-003／007／008／020／069／070／088 required regressions 全部 PASS，DEV-007 verifier 已依現行 SPEC-020 contract 更新；targeted Local QC fact report 已建立，`output/qa/dev-093/db-result.json` 仍明列 Supabase TEST NOT RUN，真實 Supabase response-lost＋reload、remote readback與 release 尚未完成。
-   - 前一輪證據摘要（2026-08-30）：static 45/45（15:52:51.590Z）、local 15/15（15:53:00.664Z）、pure 22/22（15:53:01.654Z）、journal 7/7（15:53:02.419Z）、negative compile 2/2（15:53:05.911Z）、isolated PostgreSQL 25/25（15:55:43.9630649Z；port 57751 released）與 browser B00～B19 21/21（15:48:38.491Z）均為前一輪 fresh evidence；remote read-only recheck（00:03:56+08:00）仍受 migration history mismatch 阻擋。
-   - 最新證據覆寫（2026-08-30T01:00:17+08:00）：static 48/48（`2026-08-29T17:00:08.588Z`）、local 15／pure 22／journal 7／negative compile 2（`2026-08-29T16:42:29.411Z`～`2026-08-29T16:42:34.053Z`）、local Supabase disposable DB 25/25（`2026-08-29T16:29:53.9109700Z`；database dropped、54322 primary runtime preserved）、browser B00～B19 21/21（`2026-08-29T16:53:34.653Z`）與 full `verify:source` PASS（最新 build artifact `20260829165737-05da90` 為 DEV-083 pipeline artifact）；清理失敗為 fail-closed，remote read-only mismatch（2026-08-30T00:43:24+08:00）與 Supabase TEST／release blocker 未變。
-   - 最新 browser 覆寫（2026-08-30T00:53:48+08:00）：B00～B19 21/21 PASS（`2026-08-29T16:53:34.653Z`）；B02 深連結標題 focus 由 `React.useLayoutEffect` 修正後通過，B19 一般任務內容 parity／唯讀 controls 持續通過，未改變 remote TEST／release boundary。
-   - 最新 parity 修正覆寫（2026-08-30T01:16:02+08:00）：發現並修正典藏工期日期差＋1 落差，改為與一般任務相同的 `endDate.diff(startDate, 'day')`；B19 補上 `4 天` assertion，fresh B00～B19 21/21 PASS（artifact `2026-08-29T17:16:02.860Z`）。
-   - 最新 browser parity 覆寫（2026-08-30T01:30:40+08:00）：在同一工期語意修正後，B19 再補主責／標籤可見 fallback text assertion；fresh B00～B19 21/21 PASS（artifact `2026-08-29T17:30:40.550Z`），`duration=true`、`assignmentText=true`、`tagText=true`、shared renderer=true、editable controls=0；task-owned browser runner 已清理。
-   - 最新 static／TypeScript 覆寫（2026-08-30T01:36:10+08:00）：`npm run verify:dev-093-task-collection` fresh 48/48 PASS（artifact `2026-08-29T17:36:10.632Z`），`npx tsc --noEmit` exit 0；未改變 remote TEST／release boundary。
-   - 最新 production-bound 覆寫（2026-08-30T01:37:23+08:00）：`npm run verify:production-bound-readiness -- --strict` 16/16 唯讀 checks PASS；未執行 deploy、migration、activation 或任何遠端 schema/data mutation。
-   - 最新 remote migration 覆寫（2026-08-30T01:39:06+08:00）：linked read-only list 仍為 local 51／remote 49，DEV-093 `20260828090000` local-only、3 筆 remote-only；dry-run `LegacyDbPushMissingLocalError`，三份 evidence artifacts 已更新，未執行 repair／pull／push。
-   - 最新 local Supabase DB 覆寫（2026-08-30T01:40:37+08:00）：fresh task-owned disposable matrix 25/25 PASS（artifact `2026-08-29T17:40:37.1028936Z`），database dropped=true／drop_exit=0，primary `54322` runtime preserved。
-   - 最新 parent modal／child parity 覆寫（2026-08-30T01:56:15+08:00）：B19 fresh B00～B19 21/21 PASS（artifact `2026-08-29T17:54:35.670Z`）；根任務與 `qc-card-1-child-1` 子任務均驗證備註／日期／工期／狀態／主責／協作／標籤、shared renderer、editable controls=0，並修正「查看典藏」後父 `TaskDetailsModal` 未關閉的遮罩攔截問題。
-   - 最新 source／artifact 覆寫（2026-08-30T01:55:30+08:00）：上述父 modal／子任務 parity 修正後 fresh `npm run verify:source` PASS（0 errors／52 warnings、tsc、build、required regressions）；`output/release/dev-083/20260829175530-335de3/manifest.json` exact integrity `ok=true`，仍為 DEV-083 pipeline artifact，未 deploy／release。
-   - 最新 static verifier 覆寫（2026-08-30T01:58:37+08:00）：`npm run verify:dev-093-task-collection` fresh 48/48 PASS（artifact `2026-08-29T17:58:37.200Z`）。
-   - 最新 all-node parity 覆寫（2026-08-30T02:03:37+08:00）：B19 fresh browser 21/21 PASS（artifact `2026-08-29T18:03:18.491Z`）；遍歷 5 個快照節點，所有節點 selectedNode identity 一致、shared renderer=true、editable controls=0，根／子任務欄位 parity 與父 modal 關閉流程均通過。
-    - 最新 source／artifact 覆寫（2026-08-30T02:05:18+08:00）：全 5 節點 verifier 修正後 fresh `npm run verify:source` PASS（0 errors／52 warnings、tsc、build、required regressions）；`output/release/dev-083/20260829180453-37385a/manifest.json` exact integrity `ok=true`，仍為 DEV-083 pipeline artifact，未 deploy／release。
-    - 最新 lifecycle／browser 覆寫（2026-08-30T02:11:44+08:00）：B19 fresh browser 21/21 PASS（artifact `2026-08-29T18:11:44.968Z`）；直接 readback `parentTaskModalCount=0`，並遍歷 5 個 snapshot nodes，selectedNode identity 一致、shared renderer=true、editable controls=0。
-    - 最新 source／artifact 覆寫（2026-08-30T02:12:49+08:00）：lifecycle assertion 後 fresh `npm run verify:source` PASS（0 errors／52 warnings、tsc、build、required regressions）；`output/release/dev-083/20260829181249-e9b9a6/manifest.json` exact integrity `ok=true`，仍為 DEV-083 pipeline artifact，未 deploy／release。
-    - 最新 static 覆寫（2026-08-30T02:16:20+08:00）：fresh `npm run verify:dev-093-task-collection` 48/48 PASS（artifact `2026-08-29T18:16:20.072Z`），未改變 remote TEST／release boundary。
-    - 最新 mutation-action／browser 覆寫（2026-08-30T02:21:35+08:00）：B19 fresh browser 21/21 PASS（artifact `2026-08-29T18:21:35.804Z`）；直接 readback `parentTaskModalCount=0`，5 個 snapshot nodes 均 selectedNode identity 一致、editable controls=0、mutationActions=0、shared renderer=true。
-    - 最新 source／artifact 覆寫（2026-08-30T02:22:26+08:00）：mutation-action assertion 後 fresh `npm run verify:source` PASS（0 errors／52 warnings、tsc、build、required regressions）；`output/release/dev-083/20260829182226-69a0ea/manifest.json` exact integrity `ok=true`，仍為 DEV-083 pipeline artifact，未 deploy／release。
-    - 最新 mobile parity／browser 覆寫（2026-08-30T02:27:38+08:00）：B19 fresh browser 21/21 PASS（artifact `2026-08-29T18:27:38.123Z`）；390×844 內容欄位可見，editable controls=0、mutationActions=0、shared renderer=true，並保留 5 節點與父 modal lifecycle readback。
-    - 最新 source／artifact 覆寫（2026-08-30T02:28:20+08:00）：mobile parity assertion 後 fresh `npm run verify:source` PASS（0 errors／52 warnings、tsc、build、required regressions）；`output/release/dev-083/20260829182820-a44fec/manifest.json` exact integrity `ok=true`，仍為 DEV-083 pipeline artifact，未 deploy／release。
-    - 最新 static 覆寫（2026-08-30T02:32:54+08:00）：fresh `npm run verify:dev-093-task-collection` 48/48 PASS（artifact `2026-08-29T18:32:54.354Z`），未改變 remote TEST／release boundary。
-    - 最新 remote read-only 覆寫（2026-08-30T02:34:20+08:00）：linked migration list 仍為 local 51／remote 49；DEV-093 `20260828090000` local-only、3 筆 remote-only，dry-run `LegacyDbPushMissingLocalError`；三份 evidence artifacts 已更新，未執行 repair／pull／push。
-    - 最新 remote read-only 覆寫（2026-08-30T02:43:12+08:00）：linked migration list 仍為 local 51／remote 49；DEV-093 `20260828090000` local-only、3 筆 remote-only，dry-run `LegacyDbPushMissingLocalError`；三份 evidence artifacts 已更新，未執行 repair／pull／push、migration 或資料變更。
-   - 最新 source／artifact 覆寫（2026-08-30T01:19:13+08:00）：工期 parity 修正後 fresh `npm run verify:source` PASS（0 errors／52 warnings、tsc、build、required regressions）；`output/release/dev-083/20260829171847-c661e0/manifest.json` exact integrity `ok=true`，仍為 DEV-083 pipeline artifact，未 deploy／release。
-   - 最新 production-bound 覆寫（2026-08-30T01:20:17+08:00）：strict read-only gate 16/16 PASS；未執行 remote migration、deploy、activation 或任何遠端 schema/data mutation，仍待 Supabase TEST／remote readback／release QC。
-   - 最新 remote migration 覆寫（2026-08-30T01:22:48+08:00）：linked read-only list 仍為 local 51／remote 49（DEV-093 `20260828090000` local-only、3 筆 remote-only），dry-run `LegacyDbPushMissingLocalError`；三份 Supabase evidence artifact 已更新，未執行 repair／pull／push。
-   - 最新部署前驗證覆寫（2026-08-30T01:07:54+08:00）：`npm run verify:production-bound-readiness -- --strict` 16/16 唯讀 checks PASS；未執行 deploy、migration、activation 或任何遠端 schema/data mutation，remote TEST／release boundary 未變。
-  - 計入交付：是（完整 QA／QC 未完成，對完成率貢獻仍為 0）
+- ⊘ DEV-093 [交付點] [已撤銷] [P1] [Removed by DEV-104 / Never Released] 收藏任務與子任務資產化
+  - 摘要：依使用者決策停止開發；產品程式、provider、權限、migration、驗證腳本與現行規格已由 DEV-104 移除。
+  - 資料邊界：`20260828090000` 未進入共享 local／remote migration history，因此不執行資料庫回滾或 migration repair。
+  - 證據：`SPEC-104`、`QA-DEV-104`、`QC-DEV-104`。
+  - 計入交付：否
 - ◐ DEV-094 [開發點] [開發中] [P1] [RD Implementation In Progress / Human Confirmed / static＋pure＋browser smoke PASS / QA・QC NOT RUN / 未 Release] 免匯入直接會議速記
   - 摘要：新會議直接聚焦內容；`速記` 只聚焦；`帶入上次會議後變更` 依上次已發布成功截止點
     至本次點擊時間一鍵加入 delta。首次回溯七天，另提供可覆寫下次截止點的低頻自訂日期；
-    面板底部另設 `存草稿`＋`發布` 操作列。
+    會議內容下方保留 `存草稿`；`發布` 只由會議 workflow 提供。
   - 來源 ID：`USER-20260828-MEETING-DIRECT-NOTE-WITHOUT-IMPORT`、response annotation 1。
   - 父任務：DEV-020；相容 DEV-018、DEV-019、DEV-023、DEV-069、DEV-092。
   - 下一步：補齊 QA-DEV-094 TC-094-001～020 與 ROT-094-001～008 的完整 evidence，再交獨立 QA/QC；不直接進 release。
@@ -617,7 +583,64 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 下一步：補DEV-054 iOS／Android實機，或確認不納入本次release；若需正式上線，另走deployment/release gate。
   - 證據：`ADR-047`、`SPEC-041` DEV-097 addendum、`QA-DEV-097`、`QC-DEV-097`；static 23/23、真實九-owner／dual-tab／flush-cancel-failure readback browser、real-SW A→B→C two-tab convergence、DEV-028／034／041／045／047／054／069／092／095／RAG regressions、TypeScript、32-file ESLint 0 errors、`build:test`與`git diff --check` PASS。
   - 計入交付：是（RD已實作且local automated QA／independent QC PASS；實機補充與release gate尚未完成，對完成率貢獻仍為0）
+- ◐ DEV-098 [交付點] [驗證中] [P1] [RD Implemented / Core Local QA-QC PASS / Adjacent Regression Audit PASS / Persistence Release Pending DEV-099 / 未 Release] 任務明細子任務管理區
+  - 摘要：在任務明細底部加入預設展開、可收合的子任務樹，與看板 L3+ 共用任務列、
+    interaction controller 與 placement commit；支援編輯入口、明細導航、右鍵及桌機／手機／鍵盤拖曳。
+  - 來源 ID：`USER-20260901-TASK-DETAIL-SUBTASK-SURFACE`
+  - 父任務：DEV-028、DEV-046、DEV-070；相容 DEV-053、DEV-089、DEV-095。
+  - 執行文件：`SPEC-098-task-detail-subtask-management.md`、`QA-DEV-098-task-detail-subtask-management.md`。
+  - 下一步：由 DEV-099 確認永久 saving exact trigger 並完成 QA-DEV-099 compatibility gate；其前既有 DEV-098 callback-only evidence 不作 persistence release authority。實機 supplemental與 release另走對應 gate。
+  - 證據：`SPEC-098`、`QA-DEV-098`、`QC-DEV-098`；`verify:dev-098-task-detail-subtasks` 22/22、pure P01～P10 10/10、DEV-098 browser B01～B16 16/16、diagnostics 0；獨立 QC-098-01～10 10/10；`npx tsc --noEmit`、`build:test`；DEV-046 static/browser 32/32＋5/5、DEV-053 31/31＋10/10、DEV-055 34/34＋18/18、DEV-095 4/4；完整 disposition 見 `output/qa/dev-098/adjacent-audit-final-20260902.json`，基線摘要見 `output/qa/dev-098/baseline-audit.json`，QC artifact 見 `output/qc/dev-098/task-detail-subtasks-qc-result.json`。
+  - 計入交付：是（local implementation、核心 QA/QC與指定相鄰 regression 已完成；DEV-099 persistence compatibility、實機 supplemental與 release gate 未完成，完成率仍依專案規則處理）
+- ◐ DEV-099 [交付點] [驗證中] [P1] [RD Contract Ready / Candidate + Clean Integration Implemented / Adjacent DEV-098 QC PASS / Incident Trigger Linkage Pending / Release Blocked] 任務儲存狀態收斂
+  - 摘要：針對production任務已保存但UI永久「儲存中」，先確認exact trigger，再使accepted persistence恰好一次結案；逾provider deadline只能進unknown＋canonical readback，不得假成功。
+  - 來源 ID：`CAPA-001`、`USER-20260902-PRODUCTION-TASK-SAVE-STUCK`。
+  - 父任務：CAPA-001；相容DEV-057、DEV-097、DEV-098。
+  - 下一步：補齊R01～R06 incident correlation、Firebase Level 3與release capsule；clean candidate隔離 Supabase TEST T00～T09及UI U01～U03已通過，production-base clean integrated branch目前為 `@60405c4`（behavior `@105fdbc`，verifier／QA metadata `@c3af71c`～`@c904435`，其後為 release adapter／hosted Level 3 workflow commits）的U01～U04亦已通過，且同一 clean integration 的 DEV-098 static 22/22、pure 10/10、browser B01～B16 16/16、independent QC 10/10 已完成；candidate-only U04因不含DEV-098 surface仍維持NOT RUN。待RD技術主管確認incident linkage與owner sign-off後再升級SPEC-099為`RD Implementation Ready`。
+  - 阻塞 / 恢復條件：事故實際命中missing、collection pending、provider lifecycle或其他分支尚未證實；clean integrated branch已完成同一工作樹回歸，但仍待owner sign-off、Firebase Level 3與release gate，不能部署或改DB；canonical root integration仍是supplemental，不能默認混入目前dirty DEV-098變更。
+  - Spec Impact：`Intentional replacement`；只取代SPEC-098 callback-only／禁止unknown-readback的persistence guard，其餘DEV-098契約不變。
+  - 證據：`ai-doc/reports/CAPA-20260902-task-save-stuck-and-retry-duplicate.md`、`ai-doc/reports/RD-TECH-LEAD-REVIEW-CAPA-001.md`、`ai-doc/qc/QC-DEV-099-task-persistence-convergence.md`、`output/qc/dev-099/candidate-qc-result.json`、`output/qc/dev-099/clean-integrated-result.json`、`output/qc/dev-099/root-integration-result.json`、`output/qa/dev-099/clean-integrated-current-head-60405c4-20260903.json`、`SPEC-099`、`QA-DEV-099`、`codex/capa-001-dev099@e00d9ac`、`codex/capa-001-dev099-integrated@60405c4`（initial `@d650098`／behavior `@105fdbc`／verifier `@88a550a`；保留前序 `@0de585e`／`@7ef9953`／`@6eabc3f`／`@d2df71e`／`@6c9710d`）；source/deterministic 11/11、P01–P12 12/12、1,000/1,000 seeded schedules、canonical root local-test browser 13/13、production-base clean integrated TEST UI U01～U04、隔離 Supabase TEST T00～T09 10/10、canonical root integration UI U01～U04 PASS、DEV-046／053／055／095 受影響 regression PASS（未使用 waiver）、provider attempt trace、TypeScript／targeted lint／test build與runtime cleanup evidence已建立；current-head deterministic/property/typecheck/build/lint與release-adapter self-check均已重跑並記錄；exact incident linkage、clean integrated owner sign-off、hosted Level 3 artifact、完整 release QA-QC exit與release仍未完成。
+  - 計入交付：是（candidate implementation與局部 evidence 已完成；incident linkage、完整QA/QC與release未完成，完成率不得視為CAPA closure）
+  - 整合補充：production-base clean integrated branch（初始 `@d650098`，behavior tree `@105fdbc`，verifier／QA metadata `@c3af71c`～`@c904435`，current HEAD `@60405c4`）已以同一 TEST fixture 重跑 U01～U04 並 PASS；同一 branch 的 DEV-098 B01～B16與獨立 QC 10/10亦 PASS；canonical root supplemental亦 PASS。後續 `@5bd5200`～`@60405c4`為 release adapter、browser smoke identity/diagnostic classification、Release Capsule、hosted Level 3 workflow與env authority修正，未改動 DEV-099 runtime source；current-head deterministic/property、TypeScript、build:test、targeted lint與release adapter self-check均 PASS，記錄於 `output/qa/dev-099/clean-integrated-current-head-60405c4-20260903.json`。既有 UI evidence仍 pin行為artifact `@105fdbc`，不視為 current-head release artifact；candidate-only 的 U04 source boundary仍維持 NOT RUN，待DEV-098 owner sign-off。
+  - 整合證據：`output/playwright/dev-099/result-supabase-test-ui-integrated.json`、`output/qa/dev-099/supabase-ui-integrated-cleanup-20260902.json`；4013 runtime已停止、port released、fixture residual=0。
+  - Canonical root fresh evidence：`output/playwright/dev-099/result-root-local-final.json`（local 13/13）、`output/playwright/dev-099/result-root-supabase-ui-final.json`（TEST UI U01～U04）、`output/qc/dev-099/root-integration-result.json`；clean integrated evidence：`output/playwright/dev-099/result-clean-integrated-final-20260903.json`、`output/qc/dev-099/clean-integrated-result.json`；adjacent DEV-098 evidence：`output/playwright/dev-098/result-clean-integrated-final-20260903.json`、`output/qa/dev-099/clean-integrated-dev098-static-20260903.json`、`output/qa/dev-099/clean-integrated-dev098-pure-20260903.json`、`output/qa/dev-099/clean-integrated-dev098-qc-20260903.json`；4010／4013／4014／4015與TEST fixture均已清理。
+  - Gate capability assessment：R01～R06已完成唯讀 correlation 但因無 operation ID／update audit維持NOT_PROVEN；current-HEAD Release Capsule可準備但clean branch缺`.env.production`且既有UI artifact仍pin behavior `@105fdbc`；Firebase Layer 3／4需DEV-099 adapter、current-HEAD artifact、authenticated disposable fixture／cleanup與rollback；owner sign-off／activation只能由責任人核准，canonical post-deploy smoke與T+7／T+30須待合法T0 release後執行。
+- ↷ DEV-100 [交付點] [待排] [P1] [Future Phase Captured / Lane 3 / Not Requested] 一般任務建立重試冪等
+  - 摘要：為一般任務create建立可證明的operation identity與冪等replay，避免使用者在狀態未知下合理重試時產生第二筆資料。
+  - 來源 ID：`CAPA-001`；使用者已確認第二筆「大陸PCT」是其重試產物。
+  - 下一步：重啟時先確認同一次操作的key lifetime、跨分頁與response-lost語意，再建立Lane 3 SPEC／QA與DB方案；不得以title／parent／時間窗猜測重複。
+  - 阻塞 / 恢復條件：需PM／使用者另行啟動實作，並核准schema／RPC／migration與TEST rehearsal邊界。
+  - 證據：CAPA §3.2 RC-04、§7.2；尚無implementation或QA evidence。
+  - 計入交付：是（future phase，完成率貢獻0）
+- ↷ DEV-101 [交付點] [待排] [P1] [Future Phase Captured / Lane 3 / Independent Closure] 任務排序整數契約
+  - 摘要：修正前端可產生fractional order、DB `bigint`拒絕`8.5`的已確認系統缺陷；與永久saving事故保持獨立因果與closure。
+  - 來源 ID：`CAPA-001`、production Postgres 2026-09-02 09:11:13 evidence。
+  - 下一步：重啟時盤點全部order writers並決定bigint-compatible integer canonical order或經核准的numeric migration；目前建議integer方案。
+  - 阻塞 / 恢復條件：需RD lead／DB owner完成資料契約決策與Lane 3 migration impact、backup／rollback review。
+  - 證據：CAPA §3.2 RC-03、§7.3；事故operation linkage未確認，尚無implementation或QA evidence。
+  - 計入交付：是（future phase，完成率貢獻0）
 
+- ☑ DEV-102 [交付點] [已實作] [P1] [Implemented / Local Automated QA-QC Passed / Tech Lead Reviewed R3 + UI Follow-up / Human Confirmed / Local-only / 未 Release] 心智圖矩形圈選、多選右鍵與剪貼操作
+  - 摘要：心智圖新增desktop矩形圈選與private multi-selection authority；以心智圖專屬右鍵presenter只顯示當下可執行動作，支援批次指派／封存，以及copy／cut共用in-app clipboard後於exact任務anchor貼在其後；不可用action不進入選單。
+  - 來源 ID：`USER-20260903-MINDMAP-MARQUEE-MULTISELECT-CLIPBOARD`。
+  - 父任務：DEV-027、DEV-028、DEV-070；相容DEV-013、DEV-048、DEV-074、DEV-075、DEV-079、DEV-084、DEV-088、DEV-095。
+  - Spec Impact：`Intentional replacement + compatible extension`；只取代DEV-075單選cardinality與心智圖immediate duplicate入口，保留其keyed store／效能authority；DEV-076左鍵抓圖平移維持放棄。
+  - 下一步：本機開發交付已結束；若要上線，另進release gate，補正式provider／權限／production-bound smoke後才可deploy。
+  - Release boundary：未執行commit、push、PR、deploy、production mutation、正式provider transaction或跨裝置驗證；維持未Release。
+  - 證據：SPEC-102、QA-DEV-102、QC-DEV-102、RD Tech Lead R1／R2／R3與`output/playwright/dev-102-mindmap-marquee-multiselect-clipboard/result.json`；local gates PASS。
+  - 計入交付：是（本機產品交付完成率100；release完成率0）
+
+- ⊘ DEV-103 [交付點] [已撤銷] [P1] [Removed by DEV-104 / Never Released] 工作區收藏任務系統看板
+  - 摘要：依使用者決策停止開發，未追蹤的系統看板實作、migration與驗證資產已刪除。
+  - 父任務：DEV-093（同時撤銷）。
+  - 計入交付：否
+
+- ✓ DEV-104 [開發點] [完成] [P1] [Implemented / Local QA-QC Passed / Never Released] 完整移除收藏任務功能
+  - 摘要：移除 DEV-093／DEV-103 的 UI、domain/store、權限與 action、Local Test／Firebase／Supabase 接線、migration 與專屬驗證資產；紀錄庫只保留會議紀錄與個人工作紀錄。
+  - Spec Impact：`Intentional replacement / feature retirement`。
+  - 資料邊界：共享 local／remote migration history 均未套用 DEV-093／103，不做遠端 DDL、資料刪除或 migration history repair。
+  - 證據：`SPEC-104`、`QA-DEV-104`、`QC-DEV-104`；TypeScript、build、static residual scan與實際瀏覽器回歸。
+  - 計入交付：否（退場工作，不新增產品能力）
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -1328,16 +1351,18 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - 若使用者希望方向鍵依畫面幾何選最近節點，而不是現行可見 DOM 順序，另立產品行為契約，不與 DEV-075 效能修正合併。
 
 
-## DEV-076：心智圖左鍵抓取畫布平移
+## DEV-076：心智圖左鍵抓取畫布平移（已撤回）
 
-- 文件成熟度：`RD Implementation Ready` → `Implemented / QA-QC PASS`
-- 狀態：完成 / Implemented / QA PASS / QC PASS / 未 Release
+- 文件成熟度：`RD Implementation Ready` → `Reverted / Historical`
+- 狀態：已撤回 / Abandoned by user / 歷史紀錄
 - 節點類型：開發點
 - 父交付點：DEV-027
-- 是否計入產品交付完成：是（未 Release）
+- 是否計入產品交付完成：否
 - 原始需求邊界：`USER-20260820-MINDMAP-LEFT-MOUSE-CANVAS-PAN`
 - 風險等級：Medium（心智圖主要 pointer owner、selection lifecycle 與 world geometry regression；不涉及資料模型或後端）
 - Spec Impact：`Intentional replacement / mindmap-only extension`
+
+本 DEV 已依使用者 2026-09-03 指示撤回；以下規格、QA/QC 與 evidence 只作歷史追蹤，不代表現行產品契約。
 
 ### Authoritative Package
 
@@ -1346,7 +1371,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - 座標與 viewport authority：SPEC-074；task interaction／quick-title authority：SPEC-070／071／073；mobile boundary：SPEC-029。
 - ADR：不新增。這是 mindmap-only、可逆且由既有 viewport scroll authority 承接的手勢擴充。
 
-### Current Execution Contract
+### Historical Contract (reverted)
 
 - **目的**：空白畫布左鍵拖曳超過 6px 後以 direct pan 公式更新 viewport 兩軸 scroll，呈現 grab／grabbing 回饋。
 - **Interaction Owner**：task node、center、toggle、relationship controls、semantic controls、native scrollbar、relationship/tool drag 狀態不得被 canvas pan 接管。
@@ -1356,7 +1381,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - **Stop Conditions**：第一個 owner、selection、geometry、data、touch/middle、cursor cleanup 或 visible error drift 即停止並回 RD。
 - **Release Boundary**：本輪只含 local code、test、evidence 與必要文件；不含 commit、push、PR、merge、deploy、production data 或 release。
 
-### Execution Result
+### Historical Execution Result (before reversal)
 
 - Spec Impact Preflight：使用者本輪指令明確擴充 SPEC-074 的既有 middle-pan baseline，分類為 `Intentional replacement / mindmap-only extension`；SPEC-074 已加入 DEV-076 left-pan 相容增補。
 - RD 已在 `mindMapPan.ts` 建立 6px pure threshold／direct scroll／blocked-target／scrollbar guard，在 `MindMapView` 以 refs + window lifecycle 接管 active-only pan／click suppression，CanvasShell／CSS 提供 telemetry 與 grab/grabbing；未改 scene matrix、資料或 permission。
@@ -1808,7 +1833,7 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - 文件成熟度：`RD Implemented / QA-QC PASS`
 - 狀態：已實作／QA PASS／QC PASS／未 Release
 - 節點類型：開發點
-- 父任務：DEV-027；更正 DEV-077；相容 DEV-027E、DEV-076、DEV-084
+  - 父任務：DEV-027；更正 DEV-077；相容 DEV-027E、DEV-084
 - 是否計入產品交付完成：是（local implementation + QA/QC；未 Release）
 - 原始需求邊界：`USER-20260825-MINDMAP-RELATIONSHIP-DIRECTION-JOYSTICKS`、response annotation correction 與 `USER-20260825-MINDMAP-RELATIONSHIP-ENDPOINT-OUTER-EDGE`。
 - Spec Impact：`Compatible correction / restore original relationship control intent`
@@ -2171,13 +2196,13 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 ### 任務目標與範圍
 
 - [x] 標題只保留紀錄文字，移除裝飾性 icon與 `紀錄功能說明` 按鈕／modal。
-- [x] 移除會議流程標題、輔助說明、各階段 icon／副標題、`AI選用` 與正常完成 checkpoint 常駐文案；新會議標題不自動附加時間，紀錄時間改為 24 小時制；保存失敗、衝突、暫停與保存中狀態仍可見。
+- [x] 移除會議流程標題、輔助說明、各階段 icon／副標題、`AI選用` 與正常完成 checkpoint 常駐文案；新會議標題固定為「會議紀錄」，紀錄時間改為 24 小時制；保存失敗、衝突、暫停與保存中狀態仍可見。
 - [x] 收合控制改用 `ChevronRight`，放在右側抽屜最左側、位於標題前；收合後以 `ChevronLeft` 展開。
-- [x] 會議模式標題與紀錄時間位於同一橫列；會議空白關聯任務不顯示 `0 / 未選取` 摘要或 `選取任務` action；個人工作紀錄入口與已有關聯任務管理維持。
+- [x] 會議模式標題與紀錄時間位於同一橫列；會議模式不顯示 `關聯任務` 管理入口、`0 / 未選取` 摘要或 `選取任務` action；個人工作紀錄入口與已有關聯任務管理維持。
 - [x] 會議流程階段按鈕高度縮為 `h-9`；可操作階段使用 pointer cursor／既有 hover 回饋（含目前階段），停用階段維持不可操作游標。
 - [x] 移除會議底部 `AI整理來源：任務變更` 摘要／展開列；任務變更仍保留給 AI整理流程使用。
-- [x] 會議模式狀態／分享範圍控制列改為單列緊湊版，使用可讀短標籤且約縮減 50% 高度；個人工作紀錄排列維持。
-- [x] drawer 內層改為縱向 flex 高度鏈，內容編輯器填滿流程／欄位／狀態／action 固定後的剩餘空間；會議至少 220px、工作紀錄至少 150px，窄版不足時捲動且不與控制列重疊。
+- [x] 會議模式將 `存草稿` 與分享範圍控制合併為單列緊湊版；個人工作紀錄排列維持。
+- [x] drawer 內層改為縱向 flex 高度鏈，內容編輯器填滿流程／欄位／action 固定後的剩餘空間；會議至少 220px、工作紀錄至少 150px，窄版不足時捲動且不與控制列重疊。
 
 ### 驗收與驗證結果
 
@@ -2203,210 +2228,20 @@ Done 已滿足 AC-084-001～012 的 owner/static/rendered 覆蓋：QA S01～S08�
 - 2026-08-27：依新增瀏覽器留言將會議模式狀態／分享範圍控制列改為單列緊湊版，約縮減 50% 高度。
 - 2026-08-27：依新增瀏覽器留言讓內容編輯器填滿側欄剩餘空間，並補上桌機／窄版最小高度與不重疊驗證。
 - 2026-08-27：依新增瀏覽器留言移除新會議標題時間片段，並將紀錄時間改為無上午／下午的 24 小時制輸入。
+- 2026-09-01：依最新瀏覽器留言移除新會議標題中的日期片段，標題預設固定為「會議紀錄」；紀錄日期與時間只在 `紀錄時間` 欄位呈現。
 - 2026-08-27：依新增瀏覽器留言移除會議流程各階段的 icon 與副標題，並保留五個主要階段操作。
+- 2026-09-01：依最新瀏覽器留言移除會議流程列重複的 `匯入` step 與 `校稿` step；匯入改由下方唯一控制項提供，內容直接確認並使用內容區下方 `存草稿` 保存。
 - 2026-08-27：依新增瀏覽器留言修正右側面板收合／展開箭頭方向、將會議標題與紀錄時間排在同一橫列，並移除空白狀態 `選取任務` action。
 - 2026-08-27：依新增瀏覽器留言將收合控制移到右側抽屜 header 最左側、位於紀錄標題前。
 
-## DEV-093：典藏任務與子任務資產化
+## DEV-093：收藏任務與子任務資產化（已撤銷）
 
-- 文件成熟度：`RD Implementation In Progress / Human Confirmed`
-- 狀態：RD Implementation In Progress／local static 45（generated `2026-08-28T15:00:59.515Z`）＋pure 22（`2026-08-28T15:14:00.723Z`）＋negative compile 2（`2026-08-28T15:14:23.211Z`）＋journal 7（`2026-08-28T15:14:07.467Z`）＋TypeScript＋build＋全域 `verify:source` PASS＋isolated DB 25-check PASS（`2026-08-28T15:14:47.7264271Z`）／browser B00-B19 21/21 PASS（latest generated `2026-08-29T15:48:38.491Z`）／required regressions PASS／targeted Local QC fact PASS／未 Release
-- 節點類型：交付點
-- 父交付點：DEV-002、DEV-007、DEV-008、DEV-088
-- 是否計入產品交付完成：是（尚未通過完整 QA／QC，對完成率貢獻仍為 0）
-- 原始需求邊界：`USER-20260828-TASK-COLLECTION-WITH-SUBTREE`、`USER-20260828-RECORDS-SEPARATE-SECTIONS`
-- 風險等級：High（forward-only schema、transaction RPC、RLS／role capability、不可變大快照、子樹與跨 domain local projection）
-- Spec Impact：`Compatible record-family extension + DEV-016 Intentional extension`；典藏不是新的任務狀態，也不取代 DEV-088 的完成／封存／永久刪除生命週期；紀錄庫保留條列呈現，但不再跨 record family 混合。
-- Authoritative SPEC：`ai-doc/specs/SPEC-093-task-collection-subtree-assets.md`
-- Authoritative QA：`ai-doc/qa/QA-DEV-093-task-collection-subtree-assets.md`（In Progress / static 45＋TypeScript＋local 15＋pure 22＋negative compile 2＋journal 7＋build＋isolated DB 25-check PASS / browser B00-B19 21/21 PASS / B11／B14／B16／B18／B19 supplemental readback / DEV-003／007／008／020／069／070／088 required regressions PASS / targeted Local QC fact PASS；L11 真實 Supabase response-lost、Supabase TEST、remote readback與 release 仍待）
-
-### 問題與使用者價值
-
-部分任務的內容、決策與演進歷程具有重複利用價值，但完成後繼續留在看板會增加操作雜訊；只封存任務雖能移出 active 看板，卻仍以待清理的回收桶物件呈現，且永久刪除後無法繼續作為案例資產使用。
-
-DEV-093 的目標是把「工作中的任務」轉成「可長期查閱的任務案例」：先保存一份與來源任務分離的可讀快照，確認保存成功後才把來源任務移出看板。使用者日後可從既有紀錄庫搜尋與閱讀典藏，不必讓原任務持續占用看板。
-
-### Human Decision Brief
-
-- [x] 使用者可見動作與資產類型名稱固定為「典藏任務」，不得以「封存」「案例快照」「工作紀錄」取代主名稱。
-- [x] 典藏父任務時必須能連同子任務一起保存；第一階段採一個根任務對應一筆典藏資產，子任務保留原階層，不拆成多筆紀錄。
-- [x] 典藏的產品目的為累積可再利用資產，同時讓來源工作不再出現在 active 看板。
-- [x] 典藏任務與會議紀錄不得混在同一清單；既有紀錄庫保留為單一頂層入口，頁內將「典藏任務」「會議紀錄」「個人工作紀錄」整理成三個同層分區。
-- 本期固定：為避免孤兒節點與額外範圍選擇，有子任務時收錄同看板完整 canonical descendant subtree；葉節點則只典藏自己。若未來要支援「只典藏父任務、子任務留在看板」，必須另定 reparent 規則，不併入本期。
-
-### 產品語意與主要流程
-
-1. 使用者從任務詳情 overflow 或支援完整 task action catalog 的任務選單選擇「典藏任務」。mobile compact action rail 維持 DEV-088 的四項，不增加第五個常駐動作。
-2. 系統以 cycle-safe canonical parent 關係解析來源根任務與全部同看板 descendants，顯示根任務名稱、總任務數與「典藏後會移出看板」的精簡確認；可提供一行「典藏說明（選填）」，不得要求使用者重填既有任務內容。
-3. 系統建立一筆 `record_type='task_collection'`、published、project-visible、immutable 的典藏資產。資產同時保存人類可讀 content 與 `task-collection-v1` structured snapshot；所有原始 task ID 只作追溯索引，不能成為日後閱讀的唯一來源。
-4. Supabase 在同一 transaction 內建立 asset／links、封存來源 root 並寫入 `task_collected` event；任一步失敗全部 rollback。descendants 仍由原 parent chain 隨 root 離開 active projection，避免逐節點封存造成還原語意破裂。
-5. backend durable success 後前端才收斂 `isArchived`，顯示低干擾回饋並提供「查看典藏」；不自動把使用者強制導離目前工作畫面。
-6. 在紀錄庫切換至獨立的「典藏任務」分區並開啟唯讀詳情。還原來源任務不刪除既有典藏；從回收桶永久刪除來源子樹時，典藏內容仍可閱讀。
-
-### 紀錄庫分區契約
-
-- 紀錄庫維持單一頂層頁面與單一頁首；頁內使用同層、可鍵盤操作的三個分區控制：`典藏任務`、`會議紀錄`、`個人工作紀錄`。不得把三類資料交錯顯示在同一預設清單，也不得為每一區複製頁首或建立框中框面板。
-- 從一般側欄進入時，支援 meeting 的桌機／筆電以 `會議紀錄` 為 cold default；mobile meeting unavailable 環境以 `個人工作紀錄` 為 cold default。從典藏成功回饋的「查看典藏」進入時，直接選取 `典藏任務` 並開啟剛建立的資產；本期不保存跨 session 最後分區。
-- 搜尋、排序、載入、空白、錯誤與筆數皆以目前分區為 scope；切換分區不得把前一區的查詢結果、空白訊息或 pending action 誤帶到新分區。
-- `典藏任務` 只顯示典藏資產，主要欄位為名稱、典藏時間、來源看板與收錄任務數；標題本身是詳情入口，不另增「查看」欄。其正常狀態不提供新增按鈕，典藏仍只能從 task context 發起。
-- 典藏詳情選取任一快照節點後，必須如一般任務詳情顯示內容／備註、日期、工期、狀態、主責／協作與標籤；優先共用 `TaskDetailNoteContent`、`TaskAssignmentPicker`、`TagChip` 與既有狀態樣式。快照內容保持唯讀，內容區不可出現可寫入 controls。
-- `會議紀錄` 只顯示 meeting records，並保留適用的「補一筆會後紀錄」入口；`個人工作紀錄` 只顯示 work logs。兩區既有編輯、草稿、發布與防呆流程不因 DEV-093 改變。
-- 桌機／筆電顯示三個可辨識文字分區。依 SPEC-069，coarse pointer 或 `<=640px` 不 render meeting records／meeting section，因此 320／390px 只顯示 `典藏任務` 與 `個人工作紀錄`；兩者仍為獨立 section，不降級成 icon-only，也不產生文件級或雙重水平 overflow。
-- 每區空白狀態只顯示該區事實。`典藏任務` 空白時不建立第二個「回看板典藏」CTA；沿用既有頁首返回看板即可。錯誤回饋靠近目前分區並保留可重試入口，不用全頁成功／說明面板。
-
-### 典藏快照方向
-
-每筆典藏以點擊當下為固定快照，至少包含：
-
-- 根任務與 ordered subtree 的標題、階層、狀態、日期、節點類型、負責人／協作者、標籤、描述與所有任務備註。
-- 子樹內 dependency，以及連向子樹外任務的方向、外部任務 ID／標題；不得把外部任務一起封存。
-- 可取得的 `ActivityEvent`，依時間排序並保留 event type、actor、時間與必要 before／after 摘要；舊資料若沒有完整事件，只能標示「無可用歷程」，不得推測或補造。
-- 與子樹任務直接關聯的紀錄索引與必要片段，使來源 task link 日後因永久刪除 cascade 消失時，典藏仍保有可讀脈絡。
-- 典藏者、典藏時間、來源 workspace／board／root task ID、快照 schema version、收錄 task IDs 與 optional 典藏說明。
-
-典藏是 immutable snapshot；來源任務還原後的新修改不回寫舊典藏。若允許重新典藏，必須產生明確版本或新資產，不得靜默覆蓋歷史快照。
-
-### Architecture Memory Capsule
-
-- 延伸既有 `KnowledgeRecord` 與 `RecordsView`，不新增另一套資產頁或把完整快照塞回 `TaskNode`。內部型別固定為 `task_collection`，使用者介面固定顯示「典藏任務」。現行 `RecordsView` 把非 meeting 一律標為個人工作紀錄；實作必須先依 record type 建立 exhaustive classifier，再交由各分區 renderer，不能只改顯示文案。
-- `content` 保存可搜尋、可閱讀的 deterministic canonical text；`metadata` 保存帶版本的 `task-collection-v1` structured snapshot；`record_task_links` 在來源存在時連結根任務與 descendants，但典藏閱讀不得依賴 links 存續。
-- 禁止把典藏偽裝成 `work_log + metadata.assetType`：現行 `work_log` 有工時欄位與個人工作紀錄語意，會讓篩選、時間驗證、RAG 與未來 migration 長期混淆。`SPEC-093` 已固定第三種 record type、forward-only migration、獨立 service 與第一階段 `rag_enabled=false`。
-- 現行 `KnowledgeRecord.boardId`／資料庫 `knowledge_records.project_id` 為 required 且 board delete cascade，因此本期最多保證「來源 task 永久刪除後，典藏仍存在」；不能宣稱來源 board 刪除後仍保存。
-- 寫入不再採兩個可分離請求；Supabase dedicated RPC 把 snapshot／links／archive／activity 放在同一 transaction，local-test 以 journal／rollback 模擬同一結果邊界。same `operationId` retry 只回既有結果；還原後新的 user-confirmed operation 建立下一 immutable version。
-- `task_collection` 不進 generic `recordService.upsert/checkpointDraft/delete`、RecordSidebar editor 或 RAG mirror；列表只取 summary，完整 snapshot 按需載入。
-
-### 初步範圍
-
-- 任務詳情與完整 task action menu 的「典藏任務」入口、精簡確認、成功／失敗回饋。
-- 同看板 root＋完整 descendant subtree 的穩定收集、結構／歷程／關聯快照與來源封存。
-- 紀錄庫的三個同層分區、各自的列表／搜尋／空白／錯誤狀態、典藏唯讀詳情與來源仍存在時的導回連結。
-- local-test 與 Supabase provider 的一致 atomicity、idempotency、version、permission／RLS、reload 與 failure recovery；Firebase／Firestore 第一版明確 `BACKEND_UNSUPPORTED` 且不顯示入口，不得以空歷程冒充支援。
-- DEV-088 完成／封存／還原／永久刪除、DEV-007 activity capture、DEV-008 任務歷史資訊與既有會議／工作紀錄的 targeted regression。
-
-### 初步範圍外
-
-- 讓典藏資產在來源 board 或 workspace 刪除後繼續存在、跨 workspace 搜尋或建立全公司案例庫。
-- 自動摘要、AI 評分、最佳實務推薦、模板化、相似案例比對或由 AI 自動決定哪些任務值得典藏。
-- 自動典藏規則、批次典藏多個不相鄰 root、定時保留政策或 production migration／deploy／release。
-- 「只典藏父任務、子任務留在看板」所需的 reparent／order／dependency 改寫。
-- 為典藏任務新增第二個頂層導航頁、自訂分區順序、跨分區混合的「全部」清單，或改造既有會議／工作紀錄 editor。
-- Firebase／Firestore provider、編輯／刪除典藏、RAG indexing 與 AI 摘要／推薦。
-
-### 驗收方向
-
-- 任務入口名稱、紀錄庫分類與資產標籤皆顯示「典藏任務」；不得與 DEV-088 的「封存任務」混稱。
-- 從側欄正常進入紀錄庫在支援 meeting 的 viewport 可看見三個同層分區；`典藏任務` 清單不出現 meeting／work_log，`會議紀錄` 不出現典藏／work_log，`個人工作紀錄` 不出現典藏／meeting。mobile 只依 SPEC-069 隱藏 meeting，不得以資料類型 badge 掩蓋混合清單。
-- 從典藏成功回饋點擊「查看典藏」會進入 `典藏任務` 分區並開啟正確資產；返回列表後仍停在典藏分區。一般側欄 cold entry 不因曾查看典藏而被永久改寫。
-- 三區搜尋與空白／載入／錯誤狀態互不污染；會議新增 action 只在 `會議紀錄` 分區出現，典藏空白狀態不顯示無法就地完成的新增 action。
-- leaf 產生一筆單節點典藏；三層以上 parent 產生一筆保留順序與 parent chain 的完整子樹典藏，數量與確認畫面一致。
-- transaction commit 前來源 root 與 active projection 完全不變；commit 成功後來源子樹從看板／清單／甘特／日曆／心智圖等 active views 消失並可由回收桶還原。
-- 還原來源後典藏仍存在；再度修改來源不改寫既有快照；永久刪除來源後典藏正文、結構與歷程仍可閱讀，失效 task link 不造成詳情崩潰。
-- 典藏詳情選取節點後顯示一般任務同等的內容／備註、日期、工期、狀態、主責／協作與標籤；內容區沿用共用 renderer／component 且維持唯讀，不出現可寫入 controls。
-- rollback failure、same-operation 重試、response lost readback、reload、無 activity、循環／缺 parent、跨 board dependency、已封存 descendant、長標題／長備註與大子樹均有明確結果，不得假成功或產生重複典藏。
-- desktop 1440／1024 與 mobile 390／320 viewport 無水平溢出、遮擋、不可辨識 icon-only action；鍵盤 focus、Escape、確認／取消與 screen reader 名稱可用。
-- 分區控制在 1440／1024／390／320 viewport 皆可辨識目前選取項，DOM 使用 tab／等價 selection semantics，鍵盤順序與視覺順序一致；窄版只顯示支援的兩區，且不因控制列產生雙重捲動或裁切主要內容。
-
-### RD Implementation Contract 已固定事項
-
-1. **Record type／immutability**：採 `task_collection` 第三型別；forward-only migration 新增 collection identity／version columns、shape constraints、partial unique／cursor／activity indexes。generic record upsert／editor／delete 不得建立或改寫典藏。
-2. **版本／idempotency**：同一 source storage identity 建立遞增 immutable versions；same `operationId` retry 去重，來源還原後新的 user confirmation 才建立下一版本。
-3. **權限**：新增 `collect_task`。owner／admin／PM／member default allow、viewer deny collect／allow read；既有 custom matrix 只有原含 `delete_task` 才 backfill，RPC 必須以 effective role capability 重驗。
-4. **歷程／隱私**：Supabase 依 subtree storage IDs 收錄目前可取得 events，固定排序與 `available_events/no_events`；local-test 可標 `retention_limited`。private records 不得嵌入 project-visible asset。
-5. **效能／讀取**：hard limits 固定 tasks 500、dependencies 1,000、activities 5,000、related records 200、snapshot 2 MiB、content 512 KiB；超限 fail closed。列表只讀 50 筆 summary cursor page，detail 才讀完整 snapshot。
-6. **Provider**：Supabase 與 local-test 必做；Firebase 第一版 explicit unsupported，不顯示 action且不得用空歷程或非原子寫入冒充成功。
-7. **RPC／hash／recovery**：preview/collect/list RPC signatures、snake_case wire shape、dedicated operation/detail/timeline read paths、metadata envelope、row null normalization、provider-neutral canonical JSON、source hash/token、operation conflict、stable subtree lock、timeout readback與 local prepared/committed journal均已固定。
-8. **UI／delete impact**：`useTaskCollectionStore` 是唯一 command/query owner；TaskDetails overflow與完整 menu共用入口；dialog五態的action／Escape／focus／announcement固定；generic record store editable-only；board/workspace delete impact signature、unknown fail-closed與awaited delete固定。
-9. **驗證追溯**：QA固定WP-093-A～E slice gates、AC-093-001～015對應case/evidence、canonical byte golden、data sanity、quietness、reduced-motion與QC handoff，不得以build或截圖跨層替代。
-
-### RD Work Packages
-
-- `WP-093-A Domain／Migration／RLS`：`types/index.ts`、Supabase generated types、implementation-time forward-only migration、role permission UI；交付 schema constraints／indexes、capability backfill、helper／RPC、RLS／grants與 SQL contract tests。
-- `WP-093-B Snapshot／Provider`：新增 `features/taskCollection/*` pure builder／canonical JSON／limits／hash／errors，更新 `dataBackend.ts`、Supabase、local-test 與 Firebase unsupported adapter；交付 preview／collect／operation readback／summary／detail、atomicity、idempotency、version與 fault recovery。
-- `WP-093-C Action／Store`：permission hook、Interaction Kernel types／catalog／guards／menu、GlobalContextMenu、TaskDetailsModal、WBS／record store；交付 `task.collect`、pending isolation、durable-success-only local mutation與 deep-link。
-- `WP-093-D Records UI`：RecordsView、TaskCollectionDetail、TaskRecordTimeline；交付互斥 sections、mobile supported sections、per-section state、summary search／pagination、read-only detail與 source-deleted state。
-- `WP-093-E Verification／Handoff`：建立 DEV-093 static、isolated PostgreSQL與真實browser verifier及 package scripts；依15項AC與slice gates交付result JSON、screenshots、canonical bytes/hash、DB/RLS/concurrency/EXPLAIN、focus/accessibility與temp runtime cleanup證據。
-
-RD sequencing 固定 A → B → C → D → E；A／B contract tests 未通過前不得把 action 接到 active task surface。P0/P1 Implementation Ready gap audit為0；完整逐檔 contract、typed API、RPC signatures、RLS、local journal、selectors、commands與 error matrix以 `SPEC-093`／`QA-DEV-093` 為準。
-
-### Future Phase Capsule
-
-- 目標：把典藏從 board-scoped 紀錄升級為 workspace-level 資產，使來源 board 刪除後仍存在並可跨看板搜尋。
-- Re-entry trigger：使用者明確要求 board deletion survival、跨看板案例庫或 workspace-level AI reuse。
-- 需要重新評估：`knowledge_records.project_id` nullable／on-delete policy、RLS、導覽與搜尋 scope、來源 provenance、board deletion confirmation、retention／export 與 migration backfill。
-- 本 Capsule 不授權本期預作 schema 或 UI，也不得把 board-scoped 成果宣稱為永久企業資產。
-
-### 執行邊界與下一步
-
-- 本輪已依 `SPEC-093` WP-093-A～E 完成產品 wiring、forward-only migration、Supabase／local-test adapter、immutable Records section、action／dialog／store與 verifier scripts；static 45（generated `2026-08-28T15:00:59.515Z`）、TypeScript、local 15（generated `2026-08-28T15:13:52.671Z`，含 viewer permission denial、response-lost operation readback）、pure 22（generated `2026-08-28T15:14:00.723Z`，含 cross-project scope fail-closed）、negative compile 2（generated `2026-08-28T15:14:23.211Z`）、journal 7（generated `2026-08-28T15:14:07.467Z`）、build、fresh `verify:source`、targeted ESLint、isolated PostgreSQL 25-check matrix（generated `2026-08-28T15:14:47.7264271Z`）與 browser B00～B19 21/21 cases（latest generated `2026-08-29T15:48:38.491Z`）已留下可追溯證據；B08 transient retry＋response-lost/reload、B09 permission/source/limit/provider fail-closed、B11 mobile deep-link／cold fallback、B12 320×844 overflow/full-menu、B14 tab／tabpanel ARIA＋reduced-motion、B16 五態 state trace、B18 非零歷程／關聯紀錄 counts與 B19 一般任務內容 parity／唯讀 controls 均已涵蓋。未執行 production migration、正式資料操作、commit、push、deploy 或 release。
-- 已使用 `supabase migration new dev_093_task_collection_assets` 取得 CLI timestamp 並保留唯一 migration；只讀 `supabase migration list` 顯示 DEV-093 local `20260828090000` 尚未出現在 remote，remote history 另有本機缺少的既有 revisions，未執行 push。2026-08-29T14:18:58.3105104Z 以 `migration list --linked --output-format json` 重讀仍為 local 51／remote 49（5 local-only、3 remote-only），`db push --linked --dry-run` 同時以 exit 1／`LegacyDbPushMissingLocalError` 阻擋；task-owned PostgreSQL 18 25-check matrix 已通過並完成 cleanup，包含 fault rollback、same-operation concurrency、board cascade與 SQL↔TypeScript canonical parity；required regression DEV-003／007／008／020／069／070／088 已全部 PASS，且 DEV-007 verifier 已依現行 SPEC-020 meeting activity／synthesis contract 更新並保留舊 source-marker 禁止檢查；fresh Local QC fact report與 re-audit delta 已建立。下一步為依 deployment/release gate 授權後補 Supabase TEST、remote readback，再由 release owner 執行最後 QC／release gate。
-- 最低證據：TypeScript exhaustive contract、pure traversal／row normalization／canonical byte與snapshot golden、local-test fault/readback matrix、isolated PostgreSQL fresh migration／constraint／RLS／idempotency／concurrency、1440／1024／390／320 真實 browser、focus／reduced-motion／data sanity、source delete／reload、board delete disclosure與 SPEC-003／006／007／008／019／069／088 regressions。
-- Stop condition：若 isolated DB／browser 證據無法證明單一 durable commit、private record 不外洩、backend capability 強制、source-delete 後獨立閱讀，或需求擴張到 Firebase、跨 board delete 存續、拆散來源子樹、編輯／刪除典藏、production release，停止並回到對應新規格／gate。
-
-### Spec Governance 結論
-
-- DEV-088／SPEC-088：`Compatible extension`。典藏 transaction 建立獨立資產並封存來源；不新增第四個任務終點，也不開放 active surface 永久刪除。
-- DEV-002／SPEC-003、DEV-006：`Compatible record-family extension`。沿用 KnowledgeRecord／紀錄庫責任，新增第三型別但以 dedicated immutable service 隔離，不偽裝成工作紀錄。
-- DEV-016 紀錄庫條列清單：`Intentional extension`。保留可掃描條列模式，但以三個同層分區取代跨 record family 的混合呈現；標題仍承擔詳情入口，不增加查看欄。
-- DEV-007／SPEC-007、DEV-008／SPEC-008：`Compatible consumer extension`。沿用活動與任務歷史來源，典藏則將其 materialize 為不依賴來源 task 存續的快照。
-- DEV-069／SPEC-069：`Compatible`。mobile 仍不 render meeting records；典藏與個人工作紀錄維持兩個獨立可用 section。
-- ADR：本期不建立。board-scoped ownership authority 不變；若進入 workspace-level／跨 board 存續 Future Phase 才新增 ADR。
-
-### 變更紀錄
-
-- 2026-08-28：依使用者決定名稱為「典藏任務」且需支援連同子任務典藏，建立 Brief Ready／Human Confirmed 開發文件；未進入 RD。
-- 2026-08-28：依 response annotation 確認典藏任務與會議紀錄需分區整理；補上紀錄庫三分區、deep-link、搜尋／狀態 scope、RWD／accessibility 與 DEV-016 相容性契約。
-- 2026-08-28：補齊 `SPEC-093`，固定 `task_collection`、immutable version、same-operation idempotency、`collect_task`、Supabase atomic RPC、RLS／grants、hard limits、provider support、mobile meeting compatibility、WP-093-A～D 與 QA/QC stop conditions；升級為 RD Contract Ready，仍未實作。
-- 2026-08-28：繼續升級為 `RD Implementation Ready`；補齊 RPC signatures、metadata/hash/token、operation conflict、stable lock、local journal、唯一 store owner、board/workspace delete impact、WP-093-E、`QA-DEV-093`、future verifier commands/evidence與 migration/release feasibility；P0/P1 readiness gap為0，產品仍未實作／未驗證／未 Release。
-- 2026-08-28：繼續補齊開發文件；固定row normalization、provider-neutral canonical JSON、operation/detail/timeline read paths、delete-impact signatures、dialog五態focus契約、WP slice gates與AC-093-001～015 evidence traceability。狀態仍為可執行／未實作／未驗證／未 Release。
-- 2026-08-28：修正canonical index治理：DEV-093由待排符號`○`改為可執行符號`☐`；本項是使用者可直接驗收的交付點，故計入交付，但未完成前對完成率貢獻為0。
-- 2026-08-28：依 `SPEC-093` 完成 WP-093-A～E 的產品實作與 verifier wiring：新增 `task_collection` immutable snapshot、Supabase transaction migration／RLS／capability、local journaled provider、典藏 action／dialog／pending projection、紀錄庫三分區 tab／唯讀詳情與 delete-impact disclosure；static 28 checks、local 7 checks、TypeScript、build:test、targeted ESLint與same-operation／boundary／archived-descendant驗證通過。DB因本機Docker daemon不可用、browser尚未啟動，維持 NOT RUN／未 Release。
-- 2026-08-28：補齊 `verify-dev-093-task-collection-db-isolated.ps1`、disposable schema bootstrap與matrix；static 更新為32 checks，isolated PostgreSQL 18 fresh migration、RPC/RLS/grants、capability backfill、subtree／boundary、same-operation、operation conflict、source changed、cycle guard、private non-leak、search EXPLAIN與runtime cleanup均通過。Supabase TEST、DB07～DB18完整矩陣與真實 browser仍待執行，未 Release。
-- 2026-08-28：完成 browser verifier 的 B00～B02 desktop/mobile delivery-path smoke；static 收斂為37 checks，驗證 Records 單一入口內三個同層分區、preview cancel 0 mutation、collect 後 root archive、典藏唯讀詳情四區塊與 H1 focus，產出 `output/playwright/dev-093/result.json`。shared worktree TypeScript gate 受 DEV-095 tracking files 阻擋；DB07～DB18、B03～B18、Supabase TEST、獨立 QA/QC與 release 仍未完成。
-- 2026-08-28：重新執行 shared worktree `npx tsc --noEmit` 與 `npm run build:test` 均 exit 0；前次 DEV-095 tracking files 型別阻塞已不再重現。DEV-093 仍待 DB07～DB18、B03～B18、Supabase TEST、獨立 QA/QC與 release。
-- 2026-08-28：補齊 static／local／isolated DB verifier 的共同 evidence envelope（devId、sourceRevision、environment、provider、command、runtime、cases、summary），保留原 checks 欄位相容；三份 artifact 重新產生並通過 envelope readback，isolated runtime cleanup 仍為 released=true／path_removed=true。
-- 2026-08-28：擴充 isolated PostgreSQL matrix 至 20 個通過 checks；補上 preview／collect snake_case wire、拒絕操作 rollback、different-operation archived-root、generic mutation denial、restore→v2 immutable、cursor／literal search、RAG isolation與 source hard-delete survival。DB07 injected fault、DB08 concurrency、DB16 delete-impact、DB17 SQL/TS canonical parity仍保留 NOT RUN。
-- 2026-08-28：static verifier 增加 snake_case／SQL canonical helper source checks，收斂為 40 checks；migration 新增 `private.canonical_json_v1` 與 CJK／emoji／escape golden vector，isolated matrix 收斂為 21 checks。DB17 完整 SQL/TS snapshot hash parity仍待跨 provider 驗證。
-- 2026-08-28：補齊 isolated DB07／DB08／DB16／DB17：以 disposable trigger fault guard 驗證 asset/link/archive/event 四階段 rollback、dblink 雙 session 驗證同 operation 一筆 asset／一筆 event 且 loser readback winner、board FK cascade／viewer denial，以及 SQL helper 與 TypeScript canonical byte＋SHA-256 parity；isolated artifact 更新為 25/25 PASS，browser B03～B18、Supabase TEST、獨立 QA/QC與 release 仍待執行。
-- 2026-08-28：browser verifier 擴充並完成 B00～B07、B10～B11、B13～B18 共 17 cases PASS（含 1024／390／320 viewport、搜尋空結果恢復、restore→v2、source-delete、board-delete disclosure、Escape/focus、single Records section與實際 pageerror/requestfailed/HTTP/alert sweep）；B08、B09、B12、既有 regressions、Supabase TEST與 release 仍待執行，`output/playwright/dev-093/result.json` 為 17/17 PASS。
-- 2026-08-28：補齊 B08 transient fault／same-operation retry、B09 permission／source hash／501-node limit／unsupported provider fail-closed，以及 B12 320×844 overflow/full-menu 與 compact rail 邊界；browser artifact 更新為 B00～B18 共 20/20 PASS。DEV-003／007／008／020／069／070／088 required regression 全部 PASS；DEV-007 verifier 已依現行 SPEC-020 meeting activity／synthesis contract 更新並保留舊 source-marker 禁止檢查；Supabase TEST、獨立 QA/QC與 release 仍待執行。
-- 2026-08-28：完成 Supabase 只讀 migration／local schema preflight；local `20260828090000` 尚未出現在 remote，既有 local runtime 未初始化 project schema，`db push --dry-run --linked` 因 `LegacyDbPushMissingLocalError` 被阻擋；未執行 repair／pull／push、migration 或資料變更，列為 deployment/release gate 前置阻塞。
-- 2026-08-28：依同一 working-tree boundary fresh rerun `npm run verify:dev-093-task-collection-browser`；browser B00～B18 20/20 PASS（artifact generated `2026-08-28T12:15:52.254Z`），runner exit 0、browser task-owned process 已自動清理；未改變 Supabase TEST／release gate 狀態。
-- 2026-08-28：依同一 working-tree boundary fresh rerun `npm run verify:dev-093-task-collection-db-isolated`；task-owned PostgreSQL 18 matrix 25/25 PASS（artifact generated `2026-08-28T12:17:05Z`），port `57355` released、temporary path removed；未觸碰 remote Supabase。
-- 2026-08-28：新增並 fresh rerun `npm run verify:dev-093-task-collection-pure`；pure snapshot／sanitizer／related-record／null mapping／exact 500／501 limit 與 provider source contract 共 21/21 PASS，artifact 為 `output/qa/dev-093/pure-result.json`；cross-project tree negative、negative compile、L11 真實 response-lost、Supabase TEST與 release 仍為未完成 gate。
-- 2026-08-28：新增並 fresh rerun `npm run verify:dev-093-task-collection-journal`；normal commit、五個 `after_*` recovery phase 與 injected localStorage partial-write rollback 共 7/7 PASS，artifact 為 `output/qa/dev-093/journal-result.json`；L11 真實 response-lost＋reload、negative compile、Supabase TEST與 release 仍為未完成 gate。
-- 2026-08-28：在 snapshot boundary 新增 workspace／board scope guard，fresh rerun `npm run verify:dev-093-task-collection-pure` 擴充為 22/22 PASS；cross-project tree negative 已由 `P02-cross-project-fail-closed` 覆蓋，並新增 negative compile 2/2 artifact `output/qa/dev-093/negative-compile-result.json`；L11 真實 response-lost＋reload、Supabase TEST與 release仍為未完成 gate。
-- 2026-08-28：fresh rerun `npm run verify:dev-093-task-collection-local` 擴充為 14/14 PASS，新增 viewer permission denial readback；`npm run verify:dev-093-task-collection-negative-compile` 2/2 PASS，negative compile artifact 已納入 QA／QC handoff。L11 真實 response-lost＋reload、Supabase TEST、remote readback與 release仍為未完成 gate。
-- 2026-08-28：補強 L11 response-lost recovery：Supabase `collect()` 在 RPC／detail response 遺失時先依 immutable `operationId` dedicated query 讀回，local-test 新增 committed-response-lost fault injection，fresh local verifier 更新為 15/15，browser B08 同步驗證 response-lost 後單一 asset 與 reload 仍為 1 筆；真實 Supabase TEST／remote readback／release 仍維持未完成 gate。
-- 2026-08-28：依最新 working-tree boundary 重跑 browser／local delivery-path；`output/playwright/dev-093/result.json` generated `2026-08-28T13:44:51.789Z`、B00～B18 20/20 PASS，`output/qa/dev-093/local-result.json` generated `2026-08-28T13:41:50.746Z`、15/15 PASS，task-owned browser runner 已清理；只同步證據時間，不改變 Supabase TEST／remote readback／release gate 狀態。
-- 2026-08-28：修正 migration snapshot CTE 將持久 `wbs_items.depth` 與 traversal `depth` 混用造成的 shadow compile error；read-only `supabase db diff --linked --schema private` exit 0 並成功套用 local migrations 至 `20260828100000`。fresh `db push --dry-run --linked` 仍因 remote/local history mismatch（`LegacyDbPushMissingLocalError`）exit 1，未執行任何遠端變更。
-- 2026-08-28：依上述 migration／isolated fixture 修正 fresh rerun `npm run verify:dev-093-task-collection-db-isolated`；25/25 PASS，artifact generated `2026-08-28T14:03:19.4509657Z`，task-owned port `55484` released、temporary path removed。
-- 2026-08-28：依 migration 修正後 fresh rerun local／browser delivery path；local artifact generated `2026-08-28T14:08:46.070Z` 為 15/15 PASS，browser artifact generated `2026-08-28T14:12:03.727Z` 為 B00～B18 20/20 PASS，browser task-owned runner 已清理；未改變 remote migration／Supabase TEST／release gate。
-- 2026-08-28：同一 working-tree boundary fresh rerun pure／journal／negative compile；pure 22/22（`2026-08-28T14:14:12.007Z`）、journal 7/7（`2026-08-28T14:14:11.606Z`）、negative compile 2/2（`2026-08-28T14:14:17.155Z`）均 PASS，未改變 remote gate。
-- 2026-08-28：補強 `RecordsView` 三區 tabpanel 的 `aria-labelledby` 關聯，並依同一 working-tree boundary fresh rerun static／browser；static 45/45（generated `2026-08-28T15:00:59.515Z`）與 browser B00～B18 20/20（generated `2026-08-28T14:56:16.366Z`）均 PASS。B11 mobile deep-link／cold sidebar fallback、B14 tab／tabpanel ARIA＋reduced-motion、B16 五態 state trace／live region／error annotation、B18 非零歷程與關聯紀錄 readback 已納入證據；實際 screen-reader tree／browser chrome 200% zoom仍為 supplemental，Supabase TEST／remote readback／release gate 未變更。
-- 2026-08-28：fresh read-only `npm.cmd exec --yes supabase@latest -- migration list --linked` 再次確認 remote/local history 未變更（local 51／remote 49；DEV-093 `20260828090000` 仍 local-only，並有 3 筆 remote-only revisions）；命令成功連線但未執行 migration、repair、pull、push 或任何 schema/data mutation，remote gate 仍待授權。
-- 2026-08-28：fresh rerun DEV-093 local 15/15（`2026-08-28T15:13:52.671Z`）、pure 22/22（`2026-08-28T15:14:00.723Z`）、journal 7/7（`2026-08-28T15:14:07.467Z`）、negative compile 2/2（`2026-08-28T15:14:23.211Z`）、isolated PostgreSQL 25/25（`2026-08-28T15:14:47.7264271Z`，port 49794 released／path removed）與 browser B00～B18 20/20（`2026-08-28T15:18:00.292Z`）均 PASS；browser task-owned process 已清理，未改變 Supabase TEST／remote readback／release gate。
-- 2026-08-28：fresh rerun required regression DEV-003、DEV-007、DEV-008、DEV-020、DEV-069、DEV-070、DEV-088 全部 PASS；DEV-007 仍依現行 SPEC-020 meeting activity／synthesis contract 驗證並保留舊 source-marker 禁止檢查，未改變 Supabase TEST／remote readback／release gate。
-- 2026-08-28：fresh read-only `npm.cmd exec --yes supabase@latest -- db push --linked --dry-run` 仍 exit 1，回報 `LegacyDbPushMissingLocalError`（remote migration versions not found locally）；未採用 CLI 建議的 repair／pull，未執行任何 remote mutation，維持 deployment/release gate 阻塞。
-- 2026-08-29：依使用者「繼續」重新執行 Supabase 唯讀 migration gate；`migration list --linked --output-format json`（`2026-08-29T14:18:58.3105104Z`）仍讀回 local 51／remote 49、5 筆 local-only（含 DEV-093 `20260828090000`）與 3 筆 remote-only；`db push --linked --dry-run` 同一時間以 exit 1／`LegacyDbPushMissingLocalError` 結束。已更新 `output/qa/dev-093/supabase-migration-list.json`、`supabase-migration-history-reconciliation.json`、`supabase-db-push-dry-run.json`；未執行 repair／pull／push、migration、reset 或資料變更，remote gate 仍需明確授權。
-- 2026-08-29：依使用者要求執行部署前驗證並建立 `ai-doc/release/PREDEPLOY-DEV-093-20260829.md`；sealed production artifact `20260829143505-9798dc` build／exact manifest verification／Layer 2 local artifact browser smoke PASS，production-bound readiness 16 項唯讀檢查 PASS，staging env／artifact secret checks PASS；但 dirty working tree、Lane 3 migration history mismatch、inactive candidate／authenticated smoke／activation decision未完成，判定 `NOT READY / 未 Release`，未執行 deploy 或任何遠端 mutation。
-- 2026-08-29：部署前全域 gate 首次因未追蹤 `scripts/verify-dev-093-debug-overflow.pw.js` 觸發 1 個 ESLint error（另 52 warnings）而阻擋；已補上既有 Playwright verifier 的 lint 邊界，fresh `npm run verify:source` 改為 PASS（0 errors／52 warnings；TypeScript、production build、Supabase static／migration aliases、calendar ICS、core static、P9 edge均通過）。`verify:dev-083-production-release-gate` 仍因 `--latest` lexicographic 選到 `production-backup-40fc817` 缺少標準 artifact 欄位而失敗；exact manifest驗證仍 PASS，未修改 release tooling，未執行 deploy。
-- 2026-08-29：依使用者「記錄庫裡的典藏任務必須要跟一般任務一樣看到內容」完成 UI 差距修正：`TaskCollectionDetail` 對快照節點提供選取式唯讀內容面板，呈現內容／備註、日期、工期、狀態、主責／協作與標籤，並共用 `TaskDetailNoteContent`、`TaskAssignmentPicker`、`TagChip` 與狀態樣式；新增 B19 parity／唯讀 browser case，fresh B00～B19 21/21 PASS（`2026-08-29T15:00:34.253Z`）。未改變 Supabase／release boundary。
-- 2026-08-29：目前工作樹 fresh `npm run verify:dev-093-task-collection-browser` 重新收斂 B00～B19 21/21 PASS（`2026-08-29T15:48:38.491Z`）；`npm run verify:source` 亦由 1 個 debug verifier lint error 修正為 0 errors／52 warnings，未改變產品契約或遠端 release boundary。
-- 2026-08-29：目前工作樹再 fresh rerun DEV-093 static 45/45（`2026-08-29T15:52:51.590Z`）、local 15/15（`2026-08-29T15:53:00.664Z`）、pure 22/22（`2026-08-29T15:53:01.654Z`）、journal 7/7（`2026-08-29T15:53:02.419Z`）與 negative compile 2/2（`2026-08-29T15:53:05.911Z`）均 PASS；browser B00～B19 21/21 artifact 維持 `2026-08-29T15:48:38.491Z`。未改變 Supabase TEST／remote readback／release boundary。
-- 2026-08-29：再執行 task-owned isolated PostgreSQL 18 matrix；DEV-093 25/25 checks PASS（`2026-08-29T15:55:43.9630649Z`），port `57751` released、temporary path removed，未觸及 remote Supabase；Supabase TEST／remote readback／release boundary 不變。
-- 2026-08-30：再次執行 linked Supabase 唯讀 migration list／`db push --linked --dry-run`（約 `2026-08-30T00:03:56+08:00`）；結果仍為 local 51／remote 49、DEV-093 `20260828090000` local-only、3 筆 remote-only，dry-run `LegacyDbPushMissingLocalError`；未執行 repair／pull／push、migration、reset 或資料變更。
-- 2026-08-30：完成文件追溯稽核，補齊 `QA-DEV-093` acceptance traceability 的 AC-093-016→B19 對應，明列一般任務內容／富文字備註／日期／工期／狀態／主責／協作／標籤 parity、共用元件與唯讀 controls；未改變產品或 remote boundary。
-- 2026-08-30：read-only probe 本機 Supabase `127.0.0.1:54322` 可連線，但 `supabase_migrations.schema_migrations` 僅 2 筆既有版本且未含 DEV-093；未執行 local reset／migration，維持 Supabase TEST NOT RUN 與既有 remote gate boundary。
-- 2026-08-30：新增並執行 `verify:dev-093-task-collection-db-local`；以既有 Supabase local container 的隨機 disposable database 完成 migration／RLS／RPC／rollback／concurrency／cascade／canonical parity 25/25 PASS（artifact `2026-08-29T16:22:33.8718094Z`），database 已 DROP、54322 primary runtime 保留；此為 local supplemental，不等同 remote Supabase TEST。
-- 2026-08-30：再次執行 `verify:dev-093-task-collection-db-local`；以既有 Supabase local container 的隨機 disposable database 完成 migration／RLS／RPC／rollback／concurrency／cascade／canonical parity 25/25 PASS（artifact `2026-08-29T16:29:53.9109700Z`），database 已 DROP、54322 primary runtime 保留；清理失敗為 fail-closed；此為 local supplemental，不等同 remote Supabase TEST。
-- 2026-08-30：共用 DB matrix 加入可選 local-Supabase dblink connection branch、local verifier／package command source guards 後，fresh `verify:dev-093-task-collection` 為 48/48 PASS（artifact `2026-08-29T16:30:29.774Z`）；isolated 預設 branch 維持不變。
-- 2026-08-30：新增 local-Supabase disposable DB verifier 後 fresh `npm run verify:source` PASS（lint 0 errors／52 warnings、tsc／build／auth／Supabase static／aliases／calendar／core／P9）；新產物 `20260829163107-50de37` 屬 DEV-083 pipeline artifact，未作 DEV-093 release candidate、未 deploy。
-- 2026-08-30：執行 `npm run verify:production-bound-readiness -- --strict`，16 項唯讀 production-bound checks 全部 PASS；未執行 deploy、migration、activation 或任何遠端 schema/data mutation，remote migration history／Supabase TEST blocker 未變。
-- 2026-08-30：再次唯讀重查 linked Supabase migration list／`db push --linked --dry-run`（2026-08-30T00:43:24+08:00）；local 51／remote 49、local-only 5（含 DEV-093 `20260828090000`）、remote-only 3，dry-run 仍為 `LegacyDbPushMissingLocalError`；未執行 repair／pull／push 或任何遠端 schema/data mutation。
-- 2026-08-30：browser B00～B19 首次重跑發現 B02 詳情標題 focus race；`TaskCollectionDetail` 改用 `React.useLayoutEffect` 後重新執行，B00～B19 21/21 PASS（artifact `2026-08-29T16:53:34.653Z`），B19 一般任務內容 parity／唯讀 controls 持續 PASS。
-- 2026-08-30：因 B02 focus 修正重新執行 `npm run verify:source`；lint 0 errors／52 warnings、tsc／build／auth／Supabase static／aliases／calendar／core／P9 全部 PASS，最新產物 `20260829165737-05da90` 為 DEV-083 pipeline artifact，未作 DEV-093 candidate、未 deploy。
-- 2026-08-30：對 exact manifest `20260829165737-05da90` 執行 `verify:production-artifact -- --manifest ...`，integrity／origin／secret scan `ok=true`；產物仍為 DEV-083 pipeline artifact，未作 DEV-093 candidate、未 deploy。
-
+- 文件成熟度：`Historical / Removed by DEV-104`
+- 狀態：已撤銷／未 Release
+- 使用者決策：2026-09-04 決定不再開發，並要求連同原始收藏／典藏能力全部移除。
+- 移除範圍：UI、domain/store、權限與 action、provider、migration、專屬 scripts／SPEC／QA／QC／predeploy。
+- 資料邊界：相關 migration 從未進入共享 local／remote history；不執行遠端 rollback、repair、reset或資料 mutation。
+- 現行 authority：`SPEC-104-task-collection-feature-removal.md`。
 ## DEV-094：免匯入直接會議速記
 
 - 文件成熟度：`RD Implementation In Progress / Human Confirmed / static＋pure＋browser smoke PASS / QA・QC NOT RUN / 未 Release`
@@ -2424,12 +2259,17 @@ RD sequencing 固定 A → B → C → D → E；A／B contract tests 未通過�
 
 2026-08-28 已完成 WP-094-A～E 的第一版產品 wiring：metadata／cutoff／stable-ID pure contract、exclusive activity boundary、focus token、meeting one-click／custom UI、原子內容＋metadata append、publish-only cutoff projection、local-test／Supabase adapter與 static／browser smoke verifier；尚未宣稱完整 QA/QC 或 release。
 
+2026-09-01 最新 UI refinement：meeting 匯入改為內容區第一層單一 `匯入專案變化` 入口，點擊後以覆蓋式第二層提供 `帶入上次會議後變更`／`自訂日期`；自訂日期表單在第二層內切換，第一層排版維持不變。
+同日補充：會議模式不再顯示 `關聯任務` 管理入口；個人工作紀錄的任務關聯操作維持。
+同日補充：移除會議與工作紀錄底部控制列的 `目前狀態／草稿` 摘要；會議模式將 `存草稿` 與分享範圍合併為同一列，流程與保存結果沿用既有 workflow／就地回饋。
+
 ### Human Confirmed 方案
 
 - 只有正常新建 meeting draft 時自動聚焦內容編輯器；existing／recovery／conflict／dialog 不得被搶焦點。
 - `速記` step 點擊只聚焦內容，不執行存草稿。
 - `匯入` 保留第一格並改用次要選用樣式；預設點擊直接匯入目前看板「上一筆已發布且成功匯入的截止時間（不含）→本次點擊時間（含）」；首次沒有前次截止點時，從本次會議記錄時間往前七天開始。預設路徑不顯示設定、預覽、確認或跳過面板，固定六天方案淘汰。
-- `存草稿` 成為面板底部獨立次要文字按鈕，與主要 `發布` 並列；保留空白草稿可存契約。
+- meeting import 的第一層只顯示 `匯入專案變化`；點擊後以不改變第一層排版的覆蓋式第二層呈現預設匯入與 `自訂日期`，自訂日期欄位在第二層內切換並可返回或關閉。
+- `存草稿` 移到會議內容編輯器下方成為獨立次要文字按鈕；`發布` 只保留 workflow 入口；保留空白草稿可存契約。
 - 加入完全不點匯入也能輸入、存草稿、AI整理及發布的回歸驗證。
 - 相同來源防重複；成功後只顯示 `已完成`，不顯示區間、筆數或匯入專用撤銷；無資料或失敗時不得改動草稿。既有編輯器通用 undo 能力不主動移除。
 - 匯入內容附加在現有內容最後方，完成後游標位於區塊後方；再次匯入只加入尚未匯入的新事件，不覆蓋或重複既有內容。
@@ -2447,14 +2287,14 @@ RD sequencing 固定 A → B → C → D → E；A／B contract tests 未通過�
 - Query API：`ActivityEventListQuery.startBoundary?: 'inclusive'|'exclusive'`，default inclusive；DEV-094 使用 exclusive，end維持 inclusive。local-test `>`、Supabase `.gt()`；Firebase activity仍 explicit empty，不得假成功。
 - Focus API：meeting workflow capture command 改 `focusContent`；store提供 ephemeral `contentFocusRequestId`，editor只在 token改變時 focus/select end。點 `速記` request count=0。
 - Recovery：draft save／checkpoint／F5可 round-trip batches但不生效；editor undo回到 `beforeContentSignature` 使 batch失效；AI成功才標 `ai_integrated`；publish failure／record undo／archive都不能作 baseline。
-- Scope：meeting composer初始焦點、`帶入上次會議後變更`、自訂日期、周會 cutoff、十二小時 soft window、末端附加／delta-only、防重複、bottom save/publish、免匯入回歸。
+- Scope：meeting composer初始焦點、`帶入上次會議後變更`、自訂日期、周會 cutoff、十二小時 soft window、末端附加／delta-only、防重複、content-below save／workflow publish、免匯入回歸。
 - Out of Scope：重做整條 workflow、移除 import step、增加新模式、改 work-log 匯入、改 project-change allowlist／AI output、擴張 Firebase activity、解禁手機會議、deploy／release。
 
 ### 逐檔影響與 work packages
 
 - `WP-094-A Pure contract`：`src/types/index.ts`、新增 `src/utils/meetingProjectChangeImport.ts`、`src/utils/projectChangeImport.ts`；完成 metadata parser、cutoff/window、stable-ID dedupe、undo reconciliation與 publish projection。
 - `WP-094-B Store／Focus`：`src/store/useRecordStore.ts`、`src/utils/meetingRecordWorkflow.ts`、`src/components/Records/RecordContentEditor.tsx`；完成 atomic apply、signature、AI integration、publish-only cutoff與 focus token。
-- `WP-094-C UI`：`src/components/Records/RecordSidebar.tsx`、新增 `MeetingProjectChangeImportControl.tsx`；完成 one-click／custom disclosure／secondary tone／`已完成`／bottom actions，隔離 work-log panel。
+- `WP-094-C UI`：`src/components/Records/RecordSidebar.tsx`、新增 `MeetingProjectChangeImportControl.tsx`；完成 two-layer one-click／custom disclosure／secondary tone／minimal feedback／bottom actions，隔離 work-log panel。
 - `WP-094-D Provider`：`src/services/localTestService.ts`、`src/services/supabase/projedService.ts` 與既有 adapter；只擴 exclusive start，不建 migration／RLS／grant。
 - `WP-094-E Verification`：新增 DEV-094 static/pure/browser verifier與 package commands，更新 DEV-020／023 過時的 meeting panel假設，執行 `QA-DEV-094` evidence gate。
 
@@ -2465,7 +2305,7 @@ Sequencing 固定 A→B→C→D→E；A 未通過不得接 active UI。P0產品�
 - 正常入口新建 meeting draft 後，不操作匯入即可直接輸入。
 - `速記` click 只移動焦點，不保存、不改狀態、不遺失內容。
 - idle `匯入` 是次要選用訊號；預設點擊後直接加入「同看板上次已發布成功截止點（不含）→本次點擊時間（含）」的事件，首次使用回溯七天，不出現設定／預覽／確認／跳過面板。
-- 預設一鍵控制顯示 `帶入上次會議後變更`；只有點擊次要 `自訂日期` 才按需出現日期範圍控制。
+- 第一層入口顯示 `匯入專案變化`；第二層預設動作文案為 `帶入上次會議後變更`，只有進入第二層後選擇 `自訂日期` 才按需出現日期範圍控制。
 - loading 不可重複觸發；相同來源防重複，成功只顯示 `已完成` 且不顯示區間、筆數或匯入專用撤銷；無資料或失敗時內容不變。
 - 匯入內容附加在末端並將游標放到區塊後方；再次點擊只加入新事件，不覆蓋人工文字或既有匯入區塊。
 - 會後十二小時內外皆可匯入 delta；不得因逾時封鎖、自動發布或縮短查詢區間。
@@ -3327,15 +3167,533 @@ frame、owner manifest缺漏、visible error／白畫面，或缺真實N→N+1�
   亦PASS；artifact hash、runtime cleanup與hardware discovery均留存於`QC-DEV-097`。因本機無`adb`、
   `idevice_id`或可操作Portable Device，iOS／Android實機補充標記`Not Verified`，未執行deploy／release。
 
-## PM Update 歷史歸檔
+## DEV-098：任務明細子任務管理區
 
-2026-07-17：DEV-052 已從 active 總任務清單移除；歷史 SPEC / QA 封存至
-`ai-doc/archived/SPEC-052-kanban-drag-subsystem-refactor.md` 與
-`ai-doc/archived/QA-DEV-052-kanban-drag-subsystem-refactor.md`。DEV-052 不得直接執行；
-未來若需要拖拉子系統重構，需另立以目前 `main` runtime 為基準的新 DEV。
+- 文件成熟度：`RD Implementation Ready / Human Confirmed / Tech Lead Reviewed → RD Implemented`
+- 狀態：`Implemented / Core Local QA-QC PASS / Adjacent Regression Audit PASS / Persistence Release Pending DEV-099 / 未 Release`
+- 節點類型：交付點
+- 父交付點：DEV-028、DEV-046、DEV-070；相容 DEV-053、DEV-089、DEV-095
+- 是否計入產品交付完成：是（核心 implementation、local automated QA、獨立 QC 與指定相鄰 regression 已完成；DEV-099 persistence compatibility、實機 supplemental 與 release gate 未完成，完成率仍依專案規則處理）
+- 原始需求邊界：`USER-20260901-TASK-DETAIL-SUBTASK-SURFACE`
+- 風險等級：Medium（新增可見入口、明細內導航、拖曳作用域、overlay／focus 與權限一致性）
+- Spec Impact：`Compatible extension / prior out-of-scope re-entry`。DEV-028／046／070 先前不改
+  `TaskDetailsModal` 內部資訊架構的限制只約束當時 DEV；本 DEV 明確重新進入該範圍，但不改
+  canonical task／placement、權限或 authoritative transaction 語意。
+- 執行規格：`ai-doc/specs/SPEC-098-task-detail-subtask-management.md`
+- QA 計畫：`ai-doc/qa/QA-DEV-098-task-detail-subtask-management.md`
+- QC 報告：`ai-doc/qc/QC-DEV-098-task-detail-subtask-management.md`
+- ADR：不需要；局部 drag host 是本 DEV 可逆 UI 架構決策，領域權威已在 SPEC-089／095。
 
-2026-07-15：歷史 `PM Update` 詳細段落已移至 `ai-doc/archived/dev_task_pm_updates_2026-07-15.md`。
+### 問題與使用者價值
 
-- Active `dev_task.md` 只保留 `## 總任務清單` 作為冷啟動與派工入口。
-- 需要特定 DEV 的歷史、release evidence 或詳細 PM 更新時，先用 DEV ID 搜尋 archive，再只讀命中的段落。
-- 不要從 `C:\VIBE CODING\ProJED` 外層遞迴讀取 sibling clone；active repo 固定為 `C:\VIBE CODING\ProJED\ProJED`。
+目前使用者在父任務明細中無法直接看見與操作其子任務，必須關閉明細、回到看板尋找對應
+L3+ 任務，再重新進入其他任務明細。此切換破壞父子脈絡，也讓同一批任務在看板與明細產生
+兩套操作位置。成功結果是在父任務明細內直接完成子任務瀏覽、建立、編輯入口、拖曳、明細
+切換與右鍵操作，同時維持看板既有資料、權限、交易、復原與互動語意。
+
+### Human Confirmed 決策與 Architecture Memory Capsule
+
+- 任務明細底部新增「子任務」區，預設展開並可收合；收合時仍保留標題與直屬子任務數量。
+- 子任務採看板 L3+ 的扁平階層列與遞迴樹，不複製另一份 task/date/tag/action JSX。
+- 看板與任務明細各自擁有局部 drag host；共用任務列、`useTaskPlacementController`、drop intent、
+  placement commit 與 failure／undo contract。不得為追求同一 runtime context 而把看板
+  `DndContext`、L1／欄位／工作台碰撞規則提升為全域 Provider。
+- 任務明細遮住看板期間，拖曳目標只包含目前明細的可見子樹與「目前任務直屬層」；不允許
+  拖向遮罩後方的看板、工作台或其他檢視。
+- 點開子任務使用同一個明細視窗切換，不疊第二個 modal；需保留返回父任務的可辨識路徑。
+- 父任務本機草稿必須先安全寫入；保存 pending或失敗時阻止切換，不能用導航掩蓋資料風險。
+- 右鍵選單位於明細 overlay 上層；Escape 關閉順序固定為右鍵／子層浮窗優先，最後才是明細。
+- 不新增第二層捲軸；子任務區跟隨明細主內容捲動。手機短滑維持捲動優先，長按才進入拖曳。
+
+RD 執行時不得把「明細也在拖曳範圍內」解讀成背景看板也可命中。可拖曳範圍精確固定為：
+
+```text
+TaskDetailsModal 內目前可見 placement subtree
++ current details root 的 append-child drop target
+- modal 外 Board／Workbench／other view targets
+```
+
+### RD 技術主管 Gate
+
+- 結論：`通過（文件修正後）`。本方案處理 private Board row、Board-only drag host與單 ID details host
+  的直接根因；沒有引入第二套 transaction或資料模型。
+- 最小實作：抽一份 neutral checklist row／tree；Details建立local drag host；將既有 close-save
+  continuation泛化為單一 typed transition；由小型 `useTaskDetailsNavigation` hook保存 stack。
+- 明確不做：global `DndContext`、通用 overlay manager、多 modal／breadcrumb framework、完整重構
+  `GlobalContextMenu`、或無 provider readback依據的 10 秒 save unknown狀態。
+- 有界技術債：`GlobalContextMenu` 暫留 details host。只有未來出現第二個非 menu details host時，
+  才另立 DEV／ADR拆為 details provider；不得在 DEV-098 預作框架。
+
+### 主要流程
+
+1. 使用者從既有任務入口開啟任務明細，向下即可看到預設展開的子任務區。
+2. 區內依 placement order 顯示直屬子任務並遞迴呈現更深層任務；收合只隱藏樹，不改資料。
+3. 點擊子任務前先完成目前明細草稿保存；成功後在同一 modal 切換至子任務，可返回父任務。
+4. 右鍵或鍵盤選單沿用同一 task action catalog 與 permission guard；編輯仍進入任務明細，
+   不新增 checklist row 行內改名。
+5. 拖曳可在可見子樹內同層排序、改掛為其他可見任務的下層，或拉回目前任務直屬層；
+   durable commit 成功才收斂畫面，失敗保留原位置並提供既有錯誤／復原回饋。
+6. 合法 primary placement沒有子任務時顯示最小空白狀態與唯一「新增子任務」入口，沿用既有
+   create-child command；tracking／readonly empty依 UI Entry Contract不顯示誤導 CTA。
+
+### Current Scope
+
+- [x] 明細底部的預設展開／可收合子任務區、直屬數量與最小空白狀態。
+- [x] 看板 L3+ 與明細共用 task row／recursive placement tree／interaction controller；只由 host
+      adapter 提供不同拖曳作用域與表面識別。
+- [x] 細滑鼠點擊／右鍵、鍵盤 Enter／Shift+F10、手機 tap／scroll／long-press 行為一致。
+- [x] 同層排序、可見子樹改掛、拉回目前任務直屬層，以及 primary／tracking placement 權限路由。
+- [x] 同 modal 子任務導航、父路徑返回、draft flush、pending／failure 阻擋與 focus restore。
+- [x] context menu／popover／modal 的 layer、outside click 與 Escape ownership。
+- [x] 正常、載入、空白、錯誤、唯讀、權限拒絕、窄版、長內容與鍵盤狀態。
+
+### Out of Scope
+
+- 將看板與明細合併為單一全域 `DndContext`，或搬入看板專屬 L1／欄位／工作台 collision 邏輯。
+- 從 modal 拖到被遮住的看板、跨檢視拖曳、工作台 staging 或新增跨看板導航。
+- 重做任務明細為 drawer／route、堆疊多個 modal，或重設看板 L3+ 視覺語言。
+- 在 checklist row 新增行內 title editor，或建立第二套右鍵、權限、gesture、transaction／undo 實作。
+- 修改 task／placement schema、API、migration、RLS／角色能力、canonical ownership 或追蹤副本物化規則。
+- 強化既有 task create 的 durable／rollback 語意；本 DEV 只共用現行 create-child command。
+- commit、merge、push、deploy、production smoke 或 release。
+
+### UI Entry Contract
+
+- 子任務區固定插入 `TaskDetailsModal` notes section之後、歷史資訊 trigger之前，使用既有 modal body
+  作唯一 vertical scroll owner。
+- 扁平 header只有 chevron、「子任務」、直屬 placement count與合法時的「新增子任務」；
+  展開後直接接共用 checklist tree，不新增 card shell、說明卡或內層 scrollbar。
+- `aria-expanded`、`aria-controls`、Enter／Space完整；entry首次 mount預設展開，同 entry可收合，
+  navigate／back／reopen後重新預設展開，不寫 localStorage或 provider。
+- primary empty且有create capability時只有一個 CTA；readonly只有中性空白文字。tracking root只投影
+  explicit tracking children，empty時不顯示會暗示不存在 atomic tracking-child create的 CTA。
+- 1440×900、1024×768、390×844、320×844不得有水平 overflow、menu／preview裁切或雙層縱向捲動。
+
+### Implementation Contract
+
+#### Shared surface
+
+- 從 `KanbanChecklist.tsx` 抽出 neutral `TaskChecklistTree`／row，Board與Details都直接使用；
+  task title／status／date／tag／action／gesture JSX只能存在一份。
+- 看板專屬 dependency selection、record capture與filter projection改由 Board host adapter提供；
+  Details adapter固定一般互動，不得 import `BoardView` context。
+- `useTaskPlacementController` 只新增可選 `origin`／`commandDependencies`，其他 surface預設行為不變。
+- `TaskInteractionSurfaceId` 新增 `task-details.subtask-row`；primary／tracking仍帶完整
+  `taskId + placementId + placementKind`。
+
+#### Local drag host
+
+- `TaskDetailsSubtaskDragHost` 擁有 local `DndContext`、`MobileTaskActionContext`、desktop preview與
+  `useTaskDragSession`。Board保留自己的 host，兩者不可巢狀或全域合併。
+- `useTaskDragSession` 將 `boardSurfaceRef` 泛化為 drag／scroll／target scope refs；Details target adapter
+  只接受 scope內 element，同 session mobile action rail是唯一例外。
+- before／after、append-child與root append都必須 normalize至既有 drop intent，再呼叫
+  `commitDesktopTaskDrag`／`commitTaskDragObservation`；Details不得自行改 `parentId`／`order`。
+- root task不是 drag source；self、descendant、primary-under-reference、archived、missing、cross-workspace、
+  scope外、permission-denied一律 no-op並清 transient。
+- mobile short-scroll維持 scroll優先；long-press才進 session。auto-scroll owner是 modal body；
+  presenter／rail layer必須高於 modal且低於 details-open context menu。
+
+#### Same-modal navigation／draft gate
+
+- `GlobalContextMenu` 透過 `useTaskDetailsNavigation` 把單一 `detailsNodeId` 改為 details entry stack，
+  保存 task／placement／tracking identity、`returnFocusPlacementId`與 optional title focus intent；不保存DOM element。
+- child click／Enter／menu open-details成功後 push；Back成功後 pop；Close清 stack與selection。
+  DOM中 `TaskDetailsModal`數量恆為 1。
+- `TaskDetailsModal` 將既有 `closeRequestedRef` 泛化為單一 `pendingTransitionRef`，共用 close、push、back、
+  create-and-navigate：取消title／notes debounce、收集draft與failed updates、等待目前task版本既有callbacks settle。
+- 只有 pending=0且failed=0且source task/version仍一致才執行一次 transition。save reject停留目前task、
+  保留draft／Retry並清該次transition。此callback-only流程是歷史implementation baseline；2026-09-02起，
+  accepted／not-accepted terminal、deadline／unknown與canonical readback改由DEV-099／SPEC-099權威管轄。
+- pending期間其他transition請求no-op；placement pending、target missing／forbidden也不得切換。
+- `taskDetailsHasLocalChanges` 在 transition pending／saving／failed期間保持 dirty，維持 DEV-097 safety。
+
+#### Context menu／Escape／focus
+
+- details-open時 global task menu backdrop／menu高於 modal與drag presenter；details關閉時保持既有層級。
+- Escape一次只處理一層：active drag → context menu／popover／nested dialog → modal。
+- context menu open、collapse、navigate、back、close前取消 local drag並清 preview、indicator、timer、body flag。
+- menu／Back後優先回觸發 row；row消失時回 section heading；Close仍回既有外部 details origin。
+
+### Repo／file impact
+
+Implemented new files：
+
+- `src/components/Wbs/TaskChecklistTree.tsx`
+- `src/components/Wbs/taskDrag/taskMoveUpdateNormalization.ts`
+- `src/components/TaskDetailsSubtaskSection.tsx`
+- `src/components/taskDetailsNavigation.ts`
+- `scripts/verify-dev-098-task-detail-subtasks.mjs`
+- `scripts/verify-dev-098-task-detail-subtasks-pure.ts`
+- `scripts/verify-dev-098-task-detail-subtasks-browser.pw.js`
+
+Implemented modified files：
+
+- `src/components/Wbs/KanbanChecklist.tsx`
+- `src/components/Wbs/TaskPlacementTree.tsx`
+- `src/components/Wbs/useTaskPlacementController.ts`
+- `src/components/Wbs/taskDrag/taskDragCommit.ts`
+- `src/components/Wbs/taskDrag/taskChildDropTarget.ts`
+- `src/components/Wbs/taskDrag/useTaskDragSession.ts`
+- `src/components/Wbs/taskDrag/taskDragTargetAdapter.ts`
+- `src/components/Wbs/taskDrag/TaskDragPresenter.tsx`
+- `src/components/TaskDetailsModal.tsx`
+- `src/components/GlobalContextMenu.tsx`
+- `src/interactions/task/types.ts`
+- `src/interactions/task/resolveTaskInteraction.ts`
+- `src/services/localTestService.ts`
+- `package.json`
+- `ai-doc/dev_task.md`、`ai-doc/documentation_map.md`、`ai-doc/specs/SPEC-098-task-detail-subtask-management.md`、
+  `ai-doc/qa/QA-DEV-098-task-detail-subtask-management.md`
+
+Schema、migration、provider／API、RLS、permission model、backup format與deployment environment均無變更。
+若 RD 判定必須修改其中任一項，立即停止並回 PM／技術主管做 scope expansion review。
+
+### Work Packages
+
+| WP | 內容 | Gate |
+|---|---|---|
+| WP-098-A | 抽 shared checklist row／tree、Board adapter、controller command dependencies | source duplication＋DEV-095 parity |
+| WP-098-B | focused navigation hook、單一 pending transition、push／back／close、focus | pure navigation＋save failure browser |
+| WP-098-C | local drag host、root target、scope filter、section UI、overlay／Escape與4 viewports | background rejection＋gesture／RWD evidence |
+| WP-098-D | verifier、targeted regression、artifacts與 QA handoff | S01～S08、P01～P10、B01～B16且no P0/P1 open |
+
+執行順序固定 A→B→C→D；A未證明 Board baseline不變前不得保留兩份 row，B未完成前不得啟用
+child navigation，C scope rejection未通過前不得開啟 drag。
+
+### Acceptance Criteria
+
+- `AC-098-001`：有／無子任務的明細都能辨識子任務區；首次開啟預設展開，切換可由 pointer
+  與鍵盤操作，收合不改任何任務資料。
+- `AC-098-002`：明細與看板 L3+ 的 primary／tracking 任務使用同一 task content、controller、
+  tree 與 action source；host 差異不得形成 duplicate renderer 或第二套 commit。
+- `AC-098-003`：桌面、手機與鍵盤可在明細可見子樹完成排序、改掛與回到直屬層；背景看板
+  不可命中。
+- `AC-098-004`：無效 self／descendant、唯讀或缺權限 drop 必須 fail closed，且不得產生重複、
+  遺失或循環。
+- `AC-098-005`：點開子任務不堆疊 modal；Back／Close stack與focus結果正確。
+- `AC-098-006`：父任務 title／notes 等本機草稿保存成功後才切換，
+  pending或failure時停留原任務並顯示可恢復狀態。
+- `AC-098-007`：右鍵選單完整可見於明細之上，outside click 與 Escape 只關閉最上層互動，
+  不得誤關明細或遺留 selected／focus／drag transient state。
+- `AC-098-008`：primary／tracking／viewer／derived／revoked actor使用相同 guard；tracking只顯示
+  explicit descendants且不越權。
+- `AC-098-009`：primary empty CTA與readonly／tracking empty狀態符合 UI Entry Contract。
+- `AC-098-010`：同一動作沿用 DEV-089 authoritative placement transaction 與既有 undo／failure
+  contract；provider fault 後來源位置與完整子樹仍可讀且不出現假成功。
+- `AC-098-011`：明細只有一個主要縱向捲動 owner；1440×900、1024×768、390×844、320×844
+  無水平 overflow、浮層裁切、重疊或手機短滑誤拖。
+- `AC-098-012`：從清單、看板、甘特、行事曆及心智圖既有明細入口進入時功能一致；
+  正常 fixture 不得出現 visible error、異常空資料或權限外 action。
+
+### Failure／Recovery Contract
+
+| Failure | 必要結果 |
+|---|---|
+| save pending／failed | current task、draft、stack不變；callback settle／Retry前不導航 |
+| target missing／forbidden | current entry不變，section近端顯示錯誤 |
+| placement pending | navigation暫停；source subtree仍可讀 |
+| invalid／scope外 drop | no-op、清 transient、無 success feedback |
+| placement persistence failure／unknown | 沿用 SPEC-089 source retention，parent／order不 optimistic |
+| create command未產生 target | 不 push；沿用既有 create-child error feedback，不另造第二個 shell |
+
+### Verification／Evidence Contract
+
+- Executed commands：`verify:dev-098-task-detail-subtasks`、
+  `verify:dev-098-task-detail-subtasks-pure`、`verify:dev-098-task-detail-subtasks-browser`、
+  `verify:dev-098-task-detail-subtasks-qc`、
+  `npx tsc --noEmit`、`npm run build:test`。
+- Artifacts：`output/qa/dev-098/result.json`、`output/playwright/dev-098/result.json`、
+  `output/playwright/dev-098/screenshots/`、`output/qc/dev-098/task-detail-subtasks-qc-result.json`、
+  `output/qa/dev-098/runtime-cleanup.json`、`output/qa/dev-098/runtime-cleanup-final-20260902.json`、
+  `output/qa/dev-098/adjacent-audit-final-20260902.json`。
+- 核心 gate為 S01～S08、P01～P10、B01～B16；詳見 `QA-DEV-098`。本輪 S00～S08 已 22/22 PASS，
+  pure P01～P10 已 10/10 PASS，browser B01～B16 已 16/16 PASS、diagnostics 0；完整 DEV-098 核心證據
+  已取代早期 targeted 5/5 紀錄。獨立 QC 已由獨立 read-only verifier 另行確認，不由 local automated evidence 推定。
+- 首要 regression：DEV-028、046、053、054、055、070、089、095、097；source assertion／build不得
+  取代 normal UI rendered evidence。
+- 暫時 server必須記錄 project／purpose／port／process tree／cleanup condition，完成前只停止 task-owned
+  runtime並確認 port released。
+
+### Stop Conditions
+
+- Details存在 duplicate row／action／commit，或為共用而提升 global Board `DndContext`。
+- modal可命中背景 surface，或 task／placement／tracking identity混用。
+- dirty／pending／failed／unknown仍可切換，或舊 callback污染新 entry。
+- context menu／drag presenter被遮、Escape一次關兩層、focus落 body。
+- tracking descendants／mutation越權，或 placement failure產生 ghost／duplicate／cycle／假成功。
+- 任一必要 viewport水平 overflow、雙層 scrollbar、short pan誤 drag。
+- P0／P1未關閉、必要 verifier／normal UI evidence／受影響 regression缺失。
+
+### RD Readiness Gate
+
+- 產品決策待確認：0。
+- 歷史Spec preflight：`Compatible extension / prior out-of-scope re-entry`；現行persistence amendment已由SPEC-099明示解決文件衝突，但implementation與evidence尚未完成。
+- Persistence amendment：SPEC-099對callback-only／禁止unknown-readback條款為明示`Intentional replacement`；
+  DEV-099 root-cause與compatibility gate尚未通過，故DEV-098不得視為persistence release-ready。
+- DEV-098原scope文件缺口：0；新增P1 persistence root-cause／evidence缺口轉由DEV-099阻擋，不能沿用本行宣稱release ready。
+- RD implementation：完成；shared surface、local drag scope、single-modal navigation、typed save continuation、
+  overlay ownership與verifiers已落地。
+- Local automated QA：DEV-098 核心 S00～S08 22/22、pure P01～P10 10/10、browser B01～B16 16/16、
+  diagnostics 0，並通過 TypeScript、build:test、DEV-002、DEV-028、DEV-054、DEV-070、DEV-089、DEV-095、
+  DEV-097；fresh affected-case regression audit 的 DEV-046 32/32＋5/5、DEV-053 31/31＋10/10、
+  DEV-055 34/34＋18/18、DEV-095 4/4 均 PASS，未使用 waiver。狀態為
+  `Core Local Automated QA PASS / Independent QC PASS / Adjacent Regression Audit PASS`；DEV-099 persistence、
+  實機 supplemental 與 release gate pending。
+
+### 變更紀錄
+
+- 2026-09-01：依使用者需求與 RD 技術主管 Gate 建立 DEV-098；固定「獨立 drag host、共用元件與
+  領域核心」、同 modal 導航、draft／overlay safety 與 modal 內可見子樹邊界。文件達
+  `Brief Ready / Human Confirmed`；未修改產品、SPEC、QA／QC、deploy 或 release。
+- 2026-09-01：依使用者指示升級至 `RD Implementation Ready / Human Confirmed`；新增 SPEC-098與
+  QA-DEV-098，固定 UI Entry、shared component、local DnD、navigation／save gate、overlay／permission、
+  repo impact、WP、AC、failure recovery、verifier／artifact與 stop conditions。產品仍未實作或驗證。
+- 2026-09-01：依 RD 技術主管 review完成優化並維持 `RD Implementation Ready`。移除無契約支撐的
+  save timeout／unknown狀態與獨立 layer module；navigation改為 focused hook＋單一 typed continuation，
+  entry只存placement ID；WP由6包縮為A～D，QA由原11／15／32案例收斂為8／10／16案例。
+- 2026-09-01：依 WP-098-A～D 完成 local implementation；抽出 Board／Details 共用 checklist tree，接入 Details
+  local drag scope、single-modal navigation stack、typed save continuation、overlay ownership與targeted verifiers。
+  Source gate 22/22、browser targeted 5/5、diagnostics 0，文件狀態更新為 `RD Implemented / Local Automated QA PASS (targeted)`；
+  獨立 QC、實機與 release 仍為後續 gate。
+- 2026-09-01：依 RD 技術主管 fresh regression audit 更新證據邊界：DEV-098 核心 S／P／B 改以 22/22、10/10、
+  16/16 為準；DEV-028／054／070／089／095／097通過，DEV-046-D02、DEV-053-B13/B14與 DEV-055 多個
+  desktop placement／menu／indicator案例失敗。文件改標 `Adjacent Regression Audit Blocked`，不把未歸因的
+  相鄰失敗算入 DEV-098 完成率或 release readiness。
+- 2026-09-01：DEV-095 source contract verifier 改以 shared `TaskChecklistTree` 為檢查對象，移除 Board adapter
+  的舊文字相容標記；避免 source gate 依賴註解而非實際共用實作。
+- 2026-09-01：在乾淨 baseline HEAD `13888b2` 的隔離 worktree 重跑相鄰 regression；DEV-046-D02、DEV-053-B14
+  與 DEV-055 所列失敗可重現，DEV-053-B13未重現但仍列 current-run instability。新增 `baseline-audit.json`，
+  將 pre-existing evidence 與 DEV-098 核心結果分離。
+- 2026-09-01：執行獨立 read-only QC；QC-098-01～10 10/10 PASS，補入 QC 報告與 machine-readable artifact。
+  DEV-098 核心 QC gate 已通過；相鄰 regression disposition、實機 supplemental 與 release 仍維持 pending。
+- 2026-09-02：以全新 task-owned Vite `127.0.0.1:4011` 強制重新 optimize dependencies 重跑 DEV-046／053／055，
+  重現 D02、B13/B14與 DEV-055 原列失敗並排除 504 blank-page runtime 假象；新增
+  `output/qa/dev-098/adjacent-audit-20260902.json`，port 4011 已確認釋放。
+- 2026-09-02：同一 fresh task-owned runtime 重跑 DEV-098 core browser B01～B16 16/16、diagnostics 0，
+  source gate 22/22、pure P01～P10 10/10、`npx tsc --noEmit`與獨立 QC-098-01～10 10/10 均通過；
+  對 DEV-046-D02 做最小資料集歸因檢查仍不足以支持安全的相鄰產品修正，未偽造 waiver，DEV-098 整體
+  regression gate 仍待相鄰 owner 修正或正式 waiver 後重跑。
+- 2026-09-02：完成相鄰 affected-case 修正與 fresh rerun：DEV-046 32/32＋5/5、DEV-053 31/31＋10/10、
+  DEV-055 34/34＋18/18、DEV-095 4/4 均 PASS；`npm run build:test`與 task-owned runtime cleanup
+  亦完成，port 4011 已確認釋放，未使用 waiver。DEV-099 persistence compatibility、實機 supplemental
+  與 release 仍未執行，故維持 `Not Released`。
+- 2026-09-02：依production永久saving CAPA與RD技術主管審查，新增DEV-099 authority；既有DEV-098核心
+  QA/QC保留為歷史surface／navigation baseline，但persistence release另受SPEC-099／QA-DEV-099阻擋。
+
+## DEV-099：任務儲存狀態收斂
+
+- 文件成熟度：`RD Contract Ready / Candidate + Clean Integration Implemented / Adjacent DEV-098 QC PASS / Incident Trigger Linkage NOT_PROVEN / Production Released / Effectiveness Follow-up Pending`
+  - 狀態：T+0 正式部署完成；release `20260902193607-61ff71` 以 source commit `0743ef1dd8f09beffbd58db3b930d8b1197fab52` 封存並部署至 Firebase Hosting `projed-cc78d.web.app`。Hosted Level 3 run `33674154248`、candidate acceptance、production-bound feature smoke、activation provenance、正式 URL browser smoke與OAuth safe-cancel均 PASS；feature smoke cleanup `residualRows=0`、tenant/user均已刪除。R01～R06 historical exact trigger仍為 `NOT_PROVEN`，CAPA effectiveness與T+7/T+30 follow-up尚未完成。
+- 節點類型：交付點
+- 來源：`CAPA-001`、`USER-20260902-PRODUCTION-TASK-SAVE-STUCK`
+- 父交付點：CAPA-001；相容DEV-057、DEV-097、DEV-098
+- 是否計入產品交付完成：是（T+0 production release已完成；CAPA effectiveness、R01～R06 incident linkage與T+7/T+30 follow-up仍待後續治理）
+- 風險等級：P1／Application persistence，預設Lane 2
+- Spec Impact：`Intentional replacement`；SPEC-099只取代SPEC-098 persistence guard的callback-only／禁止unknown-readback約束
+
+### 問題、事實與根因邊界
+
+Production任務「大陸PCT」在DB已readback保存後，UI仍超過5分鐘顯示「儲存中」。Production commit已確認
+Modal先增加pending，而Store可在missing node、collection pending、no-op分支不回terminal callback；這是已確認
+控制缺陷。但`persistTaskUpdates`會補新`updatedAt`，一般Modal保存通常不會命中no-op，且現有log沒有operation ID，
+所以本次事故exact trigger仍未確認。不得把source defect直接寫成已證實incident cause。
+
+### Current Phase Contract
+
+目前已完成WP-099-A source/deterministic harness、WP-099-B/C application implementation、隔離 Supabase TEST與clean integrated DEV-098 compatibility evidence；正式exit仍需：
+
+1. 以production commit `13888b27221b4bf9214a5f78e00651a38f32c83f`／忠實fixture記錄dispatch、Store branch、provider lifecycle、terminal與UI cleanup。
+2. 分別驗missing、collection pending、true no-op、stalled provider、response lost、task switch／unmount／stale callback。
+3. 找到可連續3次重現永久saving的最小序列；若無法重現，退回CAPA／SPEC更新RCA。
+4. 由RD技術主管確認incident linkage，並由DEV-098 owner接受同一 clean integrated artifact；之後才可將SPEC-099升級為`RD Implementation Ready`，建立 current-HEAD Release Capsule並進入Firebase Level 3、activation、production smoke與T+7/T+30 effectiveness gate。
+
+### Implementation Entry Contract（root cause確認後適用）
+
+- dispatch必須區分not accepted與accepted；not accepted不得增加pending。
+- accepted operation必須有stable identity、source task/version與exactly-one completion。
+- completion需涵蓋persisted／failed／unknown；所有結果經finally或等價不可漏cleanup。
+- provider deadline由實證契約固定，不硬編本文件；到期只能unknown＋canonical readback，不得false success。
+- close／push／back／create-and-navigate共用同一primitive；saving／failed／unknown期間保持dirty且不導航。
+- UI只使用標題列既有保存狀態位置，顯示最小文字與單一Retry／readback行動；不新增panel或card。
+
+### Source／Work Package Boundary
+
+| WP | 範圍 | Gate |
+|---|---|---|
+| WP-099-A | production-pinned reproduction與correlation harness | exact trigger confirmed，或正式否證後更新RCA |
+| WP-099-B | Store dispatch／terminal contract與owner cleanup | accepted operation exactly once；not-accepted pending=0 |
+| WP-099-C | unknown／readback、navigation與minimal UI | adversarial matrix；0 false success／draft loss |
+| WP-099-D | Supabase TEST、browser、DEV-097／098 regression與evidence | QA-DEV-099必要案例PASS，P0/P1=0 |
+| WP-099-E | release capsule、candidate、activation與effectiveness | T+0 release已完成；T+7、T+30 effectiveness follow-up pending |
+
+### T+0 Production Release Addendum（2026-09-03）
+
+DEV-099 已依 release gate 在 production-base clean release worktree 完成 current artifact 封存、Firebase candidate、candidate acceptance 與 live activation。正式 live release meta 已以 HTTP 200 回讀，確認 release `20260902193607-61ff71`、backend Supabase ref `knodlkxqpcqyrtgwpdst`、source commit `0743ef1`；activation evidence 的 artifact tree hash 為 `4c6ae0b95aac23e10db57ab012998f04872dd1650d2ddad52f5ecc3b3215c068`，verified entries=35。production-bound fixture smoke 的 save terminal convergence、canonical readback、close/reopen與reload persistence均 PASS，隔離資料 cleanup residual=0。
+
+本 addendum 將前述「release pending」更新為 T+0 `Production Released`；不把正式部署誤寫成 CAPA closed，也不把缺少 operation ID 的歷史 correlation 升格為 exact incident trigger。後續僅保留 R01～R06 linkage disposition與T+7/T+30 effectiveness follow-up。
+
+### T+0 Naming Release Addendum（2026-09-03）
+
+依使用者要求，產品與相關文件的任務名稱已統一為「收藏任務」，內部 `task_collection`／`collect_task` 識別不變。此次以已驗證 live source `0743ef1` 為基底建立乾淨 release branch，source commit `7e4aba851529f74790da20c1dc02cc1cbe9fd2d3`，release `20260903035254-d4cf46`；Hosted Level 3 run `33712826895` PASS，Firebase candidate、production-bound authenticated smoke、candidate acceptance與activation均 PASS。
+
+正式 URL `https://projed-cc78d.web.app` 已 HTTP 200 回讀 release metadata；35/35 artifact provenance通過，線上 bundle 舊詞命中 0、新詞命中 26，save／canonical readback／close-reopen／reload persistence PASS，fixture cleanup residual=0。完整 evidence：`output/release/dev-099/20260903035254-d4cf46/`、`output/qa/dev-099/level3-run-7e4aba/level3-evidence.json`。
+
+Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分支。目前dirty branch已包含DEV-098及
+相鄰檔案變更，不得默認作hotfix source；若要整合，必須明列差異並在hotfix與integration target各跑受影響Gate。
+預定影響點以`TaskDetailsModal.tsx`、`useWbsStore.ts`、必要persistence adapter、verifier與文件為限；RCA未完成前
+不得把預定檔案清單當成固定修法。
+
+### Acceptance／Evidence／Stop Conditions
+
+- Acceptance：見SPEC-099 AC-099-001～010；QA plan為QA-DEV-099。
+- 已建立候選evidence：`output/qa/dev-099/root-cause-result.json`（source/deterministic 11/11 partial）、`output/qa/dev-099/contract-result.json`、`output/qa/dev-099/property-result.json`（P01–P12 12/12、1,000/1,000 seeded schedules）、`output/playwright/dev-099/result-b07-stale.json`（B01～B11 fault/retry/readback／race、B07 delayed stale completion、B12 viewport共13/13）、`output/qc/dev-099/candidate-qc-result.json`（獨立 QC conditional PASS）以及三個viewport screenshots；candidate implementation最新 `@e00d9ac`，worktree clean。
+- Clean integrated evidence：`output/qc/dev-099/clean-integrated-result.json`、`output/qa/dev-099/clean-integrated-root-cause-20260903.json`（11/11）、`output/qa/dev-099/clean-integrated-property-current-20260903.json`（P01～P12、1,000/1,000）、`output/playwright/dev-099/result-clean-integrated-final-20260903.json`（U01～U04 PASS）；同一工作樹 DEV-098 adjacent evidence 為 `output/playwright/dev-098/result-clean-integrated-final-20260903.json`、`output/qa/dev-099/clean-integrated-dev098-static-20260903.json`（22/22）、`output/qa/dev-099/clean-integrated-dev098-pure-20260903.json`（10/10）、`output/qa/dev-099/clean-integrated-dev098-qc-20260903.json`（QC 10/10，browser B01～B16，diagnostics=0）。DEV-046／053／055／095 affected regression PASS，未使用 waiver；4010／4013／4014／4015與TEST fixture均已清理。
+- 隔離 Supabase TEST／UI evidence：`output/qa/dev-099/supabase-test-result.json` T00～T09 10/10 PASS；`output/playwright/dev-099/result-supabase-test-ui.json` U01～U03 PASS、U04 NOT RUN；`output/qa/dev-099/supabase-ui-cleanup-20260902.json` residual=0、4012 released。TEST RPC cleanup permission denied由service-role fallback處理，未接觸 production。
+- T+0 release evidence：`output/qa/dev-099/level3-run-0743ef1/level3-evidence.json`（hosted Level 3 PASS，run `33674154248`）、`output/release/dev-099/20260902193607-61ff71/manifest.json`、`prepare-evidence.json`、`candidate-evidence.json`、`feature-evidence.json`、`candidate-acceptance.json`與`activation-evidence.json`；production live `release-meta.json` HTTP 200 回讀同一 release/source，正式 artifact provenance 35/35、browser smoke PASS、OAuth status 302、credential rotation PASS。
+- Naming release evidence：`output/qa/dev-099/level3-run-7e4aba/level3-evidence.json`（hosted Level 3 PASS，run `33712826895`）、`output/release/dev-099/20260903035254-d4cf46/manifest.json`、`prepare-evidence.json`、`candidate-evidence.json`、`feature-evidence.json`、`candidate-acceptance.json`與`activation-evidence.json`；live bundle舊詞 0／新詞 26，production `release-meta.json`與35/35 artifact provenance均一致。
+- Stop：exact trigger未確認卻宣稱正式hotfix已修正、false success、draft loss、callbackless accepted path、dirty source
+  不可追溯、scope膨脹到DEV-100／101、或未授權DB／deploy／production mutation。
+
+### 變更紀錄
+
+- 2026-09-02：依CAPA與RD技術主管review建立；後續在production-base clean worktree完成candidate application implementation、source/deterministic 11/11、P01–P12 12/12、1,000/1,000 seeded local property、local-test B01–B05 fault/retry/readback與provider attempt trace、local browser evidence，並修正Enter＋blur autosave race；incident linkage、完整QA／QC、Supabase TEST與release仍未完成。
+- 2026-09-02：在 local-test candidate 補跑 B06～B09 race／owner-cleanup，連同 B01～B05、B12-390、B12-320 共 11/11 PASS；`output/playwright/dev-099/result.json` 已更新（generated `2026-09-02T13:00:34.265Z`），task-owned runtime 已於驗證後停止且 port released。這些是候選 fault-injection evidence，不解除 R01～R06 incident linkage、Supabase TEST、完整 QA/QC、clean hotfix與release gate。
+- 2026-09-02：在 local-test candidate 補跑 B06～B09 race／owner-cleanup，連同 B01～B05、B12-390、B12-320 共 11/11 PASS；`output/playwright/dev-099/result.json` 已更新（generated `2026-09-02T13:00:34.265Z`），task-owned runtime 已於驗證後停止且 port released。這些是候選 fault-injection evidence，不解除 R01～R06 incident linkage、Supabase TEST、完整 QA/QC、clean hotfix與release gate。
+- 2026-09-02：以候選 commit `6eabc3f` 補跑 B10 close-pending recovery；pending／failed時 Close 保留 modal／draft，Retry成功後才允許關閉；B01～B10、B12-390、B12-320 共 12/12 PASS，artifact generated `2026-09-02T13:21:33.141Z`，cleanup=`output/qa/dev-099/runtime-cleanup-b10-20260902.json`。這仍不解除 incident linkage、Supabase TEST、完整 QA/QC、clean hotfix與release gate。
+- 2026-09-02：以候選 commit `d2df71e` 補跑 B11 DEV-097 PWA reload-safety owner boundary；saving／failed／unknown 均維持 unsafe，persisted後才 safe；B01～B11、B12-390、B12-320 共 13/13 PASS，artifact generated `2026-09-02T13:34:18.937Z`，cleanup=`output/qa/dev-099/runtime-cleanup-execution-b11-20260902.json`。這仍不解除 incident linkage、Supabase TEST、完整 QA/QC、clean hotfix與release gate。
+- 2026-09-02：以候選 commit `6c9710d` 補跑 B07 delayed stale completion；第一筆 response 在 canonical commit 後延遲返回，最新值與 saved 狀態維持權威；B01～B11、B12-390、B12-320 共 13/13 PASS，artifact `output/playwright/dev-099/result-b11-stale.json` generated `2026-09-02T14:03:36.459Z`，cleanup=`output/qa/dev-099/runtime-cleanup-execution-b11-stale-fix-20260902.json`。這仍不解除 incident linkage、Supabase TEST、完整 QA/QC、clean hotfix與release gate。
+- 2026-09-02：在同一 clean candidate `@6c9710d` fresh rerun deterministic root-cause 與 property verifier；source 11/11、P01～P12 12/12、1,000/1,000 seeded schedules 均 PASS，`output/qa/dev-099/property-result.json` generated `2026-09-02T14:27:57.034Z`。此更新只刷新候選證據，不解除 incident linkage、Supabase TEST、真實 provider readback、back/navigation或 release gate。
+- 2026-09-02：以 production `activity_events`／`wbs_items` 做 incident-window 唯讀 correlation，確認兩筆同名任務建立相隔 48.566321 秒、同 parent/order，第一筆 `updated_at=09:13:43.906523` 對上既有 API 204；但無 operation ID／update audit，故 exact trigger 仍未證實。artifact=`output/qa/dev-099/production-incident-correlation-rerun-20260902.json`。
+- 2026-09-02：candidate 更新至 `@e00d9ac`，修正 canonical／realtime stale snapshot 暫時覆寫 accepted title 的 convergence race；隔離 Supabase TEST T00～T09 10/10 PASS，TEST UI U01～U03 PASS，U04 Back/navigation因 clean candidate不含DEV-098 surface為 `NOT_RUN`；cleanup residual=0、4012／4013 task-owned runtimes均停止並釋放 port。DEV-099仍為驗證中，未升級 `RD Implementation Ready`、未 release。
+- 2026-09-03：在 production-base clean integrated branch `@c904435`（behavior `@105fdbc`）完成 current-head deterministic 11/11、property P01～P12／1,000 seeded schedules、Supabase TEST UI U01～U04；同一工作樹的 DEV-098 B01～B16、static 22/22、pure 10/10與independent QC 10/10均 PASS，diagnostics=0，DEV-046／053／055／095 affected regression PASS且未使用 waiver。此補足整合回歸證據，不解除R01～R06 exact incident linkage、owner sign-off、Firebase Level 3或release gate；所有 task-owned runtime已停止、4010～4015 ports released。
+- 2026-09-03：重新以 production Supabase ref `knodlkxqpcqyrtgwpdst` 做事故窗唯讀 correlation；`activity_events=7`、`audit_logs=0`，兩筆「大陸PCT」同 parent／order且建立相隔 48.566321 秒，但 activity payload 無 operation ID，R01～R06 exact trigger 仍為 `NOT_PROVEN`。artifact=`output/qa/dev-099/production-incident-correlation-live-20260903.json`；未執行 production mutation、migration或release。
+
+## DEV-100：一般任務建立重試冪等
+
+- 文件成熟度：`Future Phase Captured / Brief Ready / Lane 3 / Not Requested`
+- 狀態：待排；未授權實作
+- 節點類型：交付點
+- 來源：`CAPA-001`；使用者確認第二筆「大陸PCT」為其重試產物
+- 是否計入產品交付完成：是（目前完成率貢獻0）
+
+### Future Phase Capsule
+
+- 問題：一般任務create缺少operation key／authoritative replay；使用者在UI狀態未知下合理重試，可建立第二筆。
+- 先決產品決策：定義「同一次建立操作」identity、key lifetime、reload／跨分頁／response-lost retry語意。
+- 建議方向：client持有stable operation key，DB unique或authoritative RPC回傳canonical row與replay結果；不得用title、parent或短時間窗猜測重複。
+- Acceptance方向：同key sequential、parallel、response-lost retry最終exactly one row；不同operation即使同名也可建立兩筆。
+- 風險／Lane：任何schema、unique、RPC或migration屬Lane 3，需Supabase TEST rehearsal、backup／rollback、RLS與release gate。
+- CAPA關係：完成此track才可關閉duplicate effectiveness；不阻塞DEV-099 application hotfix。
+- 重新進入：PM／使用者另行啟動後，建立獨立SPEC／QA；目前不得產生migration或預填PASS。
+
+## DEV-101：任務排序整數契約
+
+- 文件成熟度：`Future Phase Captured / Brief Ready / Lane 3 / Independent Closure`
+- 狀態：待排；未授權實作
+- 節點類型：交付點
+- 來源：`CAPA-001`、production Postgres `invalid input syntax for type bigint: "8.5"`
+- 是否計入產品交付完成：是（目前完成率貢獻0）
+
+### Future Phase Capsule
+
+- 問題：`wbs_items.sort_order`為bigint，但前端多個排序入口可產生fractional order；這是production已確認缺陷。
+- 因果邊界：錯誤時間與永久saving事件接近，但沒有operation correlation證明兩者相同；不得作為DEV-099 root cause。
+- 建議方向：維持bigint-compatible integer canonical order，由共用command／server依before／after／parent intent計算；非safe integer在boundary fail closed，不可silent round。
+- 替代方向：只有產品確定長期需要fractional ranking，且完成migration／index／RPC／backup效能盤點後，才評估numeric。
+- Acceptance方向：drag、insert、Mind Map、context menu、primary／tracking placement、Realtime與backup roundtrip均不讓decimal抵達bigint。
+- 風險／Lane：Lane 3；需writer inventory、ADR／SPEC、Supabase TEST migration rehearsal、rollback與獨立release evidence。
+- CAPA關係：獨立P1 closure，不阻塞主要永久saving＋重試重複CAPA關閉；未完成前不得宣稱order defect已關閉。
+- 重新進入：RD lead／DB owner核准資料契約後，建立獨立SPEC／QA；目前不得修改既有migration或production schema。
+
+## DEV-102：心智圖矩形圈選、多選右鍵與剪貼操作
+
+- 文件成熟度：`Implemented / Local Automated QA-QC Passed / Tech Lead Reviewed R3 + UI Follow-up / Human Confirmed / 未 Release`
+- 狀態：本機開發交付完成；未Release
+- 節點類型：交付點
+- 優先級／風險：P1／Medium-High
+- 父交付點：DEV-027、DEV-028、DEV-070
+- 相容交付點：DEV-013、DEV-048、DEV-074、DEV-075、DEV-079、DEV-084、DEV-088、DEV-095
+- 原始需求：`USER-20260903-MINDMAP-MARQUEE-MULTISELECT-CLIPBOARD`
+- 是否計入產品交付完成：是（本機產品交付完成率100；release完成率0）
+- Spec Impact：`Intentional replacement + compatible extension`。以`selectedPlacementIds + primaryPlacementId`取代DEV-075單一selection cardinality，明確區分visual placement與canonical task；保留private keyed store、單一Scene與interaction kernel。心智圖`複製`改為clipboard copy，其他模式immediate duplicate不變；DEV-076左鍵抓圖平移維持已放棄狀態。
+- 技術主管結論：R1、R2的文件條件均已解除；R3及2026-09-04 UI follow-up完成implementation review，判定`通過；Local Implementation Verified + UI Follow-up Verified，未授權Release`。審查紀錄見R1、R2、`ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R3.md`。
+
+### 交付目標
+
+- 空白畫布primary-left drag達6 CSS px後進入矩形圈選；node client-space中心點命中，支援50／100／200% zoom與scroll。
+- selection可包含多個visual placements，mutation前解析canonical IDs；copy／cut／archive把父子重疊正規化成top-most forest roots，assignment保留每個明確選取task。
+- 新增心智圖專屬context-menu presenter，但共用action catalog、permission guards、assignment normalization、archive lifecycle與store command，不fork業務邏輯。
+- multi menu可執行copy、cut、指派、封存；details、新增、relationship、升降階、tracking reference、收藏等不具批次語意的動作直接隱藏，不顯示不可點擊列或鎖定圖示。
+- copy／cut共用單一memory clipboard；在同看板任一有效exact anchor選擇`貼在此任務之後`，將forest roots連續插入為next siblings。copy可重複貼上；cut成功後清clipboard。
+- batch mutation全部preflight、await completion、零partial success、一筆undo；paste plan同時涵蓋node、所有被reindex siblings與root side overrides。cycle、stale、projection、permission、cross-board、side storage與provider failure fail closed；indeterminate在same-tab reload後仍維持target lock與readback。
+
+### RD Work Packages（已完成）
+
+1. ✅ `WP-102-A`：完成placement-typed selection store、pure marquee、overlay、pointer owner與transform cancel；200／500-node geometry保持穩定。
+2. ✅ `WP-102-B`：完成MindMapContextMenu、clipboard action opt-in、不可用action隱藏、compact high-contrast row與native focus；其他mode action語意未外洩。
+3. ✅ `WP-102-C`：完成shared clone plan、awaitable node batch／forest create、integer order、side readback、compensation與same-tab recovery descriptor。
+4. ✅ `WP-102-D`：完成tri-state assignment、batch archive、copy snapshot、cut fingerprint與paste-after orchestration。
+5. ✅ `WP-102-E`：完成DEV-102 pure/browser、四方向200／500-node performance、rendered／fault／viewport evidence及指定回歸。
+
+### 已知技術債
+
+- 現行provider沒有同看板forest／multi-node ACID transaction。DEV-102只能以awaitable batch、完整operation target lock、compensation、same-tab session recovery與canonical readback提供application convergence；網路分割時允許明確`indeterminate`，不得假稱atomic success。此機制不保證跨tab／tab-close exactly-once，也不自動重播未知operation。若indeterminate頻率／恢復時間超出owner門檻，或provider已有atomic batch API，必須另案移除此債。
+
+### 驗收與證據
+
+- Authoritative spec：`ai-doc/specs/SPEC-102-mindmap-marquee-multiselect-clipboard.md`。
+- QA plan：`ai-doc/qa/QA-DEV-102-mindmap-marquee-multiselect-clipboard.md`。
+- RD技術主管審查：R1 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102.md`；R2 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R2.md`；R3 `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R3.md`。
+- QC：`ai-doc/qc/QC-DEV-102-mindmap-marquee-multiselect-clipboard.md`。
+- Required evidence：DEV-102 static／pure與browser artifacts、copy／cut／assignment／archive／undo／redo before-after fingerprints、完整affected/reindexed IDs、root side reload/undo、session recovery、permission／fault injection、success-effect counts、integer order、selection notification、geometry/performance、viewport screenshots、visible-error、cleanup及指定回歸。
+- 已執行命令：`verify:dev-102-mindmap-marquee-multiselect-clipboard`、`verify:dev-102-mindmap-marquee-multiselect-clipboard-browser`、指定回歸、targeted ESLint、`tsc --noEmit`、`build:test`與`git diff --check`。
+- 目前結果：`Local Automated QA-QC PASS（DEV-102 UI slice）`。browser artifact `passed=true`，menu visibility／contrast／density、performance／failure recovery／viewport／error arrays／runtime cleanup全數過gate；current full `tsc --noEmit`另受工作樹既有非DEV-102錯誤阻斷，未commit、push、deploy、production mutation或release。
+
+### Stop Conditions
+
+- 需要schema／migration／RLS／RPC／provider transaction或production mutation。
+- 同看板paste只能產生fractional order，或必須無邊界地吞入DEV-101全域排序重構。
+- UI需直接N次fire-and-forget／public `updateNode`、無法補償node＋side／readback、無法列出全部reindexed siblings，或出現partial mutation／假成功。
+- `sessionStorage` recovery descriptor無法在第一筆mutation前write-readback，或hard reload後無法在readback前維持相同target lock。
+- 多選造成第二selection authority、整樹subscription／render、geometry recompute、pointer owner衝突或tracking projection結構寫入。
+- 任一既有回歸只能靠刪除expected、放寬assertion或覆寫dirty工作樹才能通過。
+
+## DEV-103：工作區收藏任務系統看板（已撤銷）
+
+- 文件成熟度：`Historical / Removed by DEV-104`
+- 狀態：已撤銷／未 Release
+- 使用者決策：系統看板方案與原始 DEV-093 能力一併停止。
+- 移除內容：workspace system row、view/context、L1／L2 collection projection、workspace query／RPC、DEV-103 migration與專屬驗證文件。
+- 現行 authority：`SPEC-104-task-collection-feature-removal.md`。
+
+## DEV-104：完整移除收藏任務功能
+
+- 文件成熟度：`RD Implementation Ready → Implemented / Local QA-QC Passed`
+- 狀態：完成／未 Release（退場變更）
+- 節點類型：開發點
+- 父任務：DEV-093、DEV-103（retirement）
+- 原始需求：`USER-20260904-REMOVE-TASK-COLLECTION-ALL`
+- Spec Impact：`Intentional replacement / feature retirement`
+- 是否計入產品交付完成：否（移除未 Release 功能，不新增產品能力）
+
+### 完成範圍
+
+- 移除所有收藏任務入口、對話框、詳情、系統看板與 sidebar／topbar context。
+- 移除 `task_collection` domain、store、pending／snapshot／journal／projection與 action／permission。
+- 移除 Local Test、Firebase、Supabase provider 接線、DB types與 DEV-093／103 migration files。
+- 移除 package commands、DEV-093／103 scripts與已失效的 SPEC／QA／QC／predeploy文件。
+- 紀錄庫只保留 meeting／work_log；Local Test 讀取時以 allowlist 清掉舊的不支援 record family。
+
+### 資料與 release 邊界
+
+- read-only preflight 已確認共享 local migration history未含 DEV-093／103；相關 schema／RPC未存在。
+- 未對共享 local、linked remote或production執行 migration、rollback、repair、reset、資料刪除、deploy或release。
+- Git 歷史仍可復原被刪除的程式與文件。
+
+### 驗收
+
+- `src`、`scripts`、`package.json`、`supabase` 無收藏功能識別與專屬檔案。
+- TypeScript、test build、受影響 DEV-095／099 regression與實際browser操作通過。
+- 工作區側欄、紀錄庫、一般任務明細與右鍵選單無收藏入口；一般看板、會議紀錄、個人工作紀錄可正常操作。
+- QA／QC authority：`QA-DEV-104-task-collection-feature-removal.md`、`QC-DEV-104-task-collection-feature-removal.md`。

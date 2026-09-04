@@ -13,6 +13,7 @@ const check = (id: string, evidence: string, assertion: () => void) => {
 const frame = read('src/components/Wbs/TaskSurfaceFrame.tsx');
 const controller = read('src/components/Wbs/useTaskPlacementController.ts');
 const tree = read('src/components/Wbs/TaskPlacementTree.tsx');
+const sharedChecklistTree = read('src/components/Wbs/TaskChecklistTree.tsx');
 const listItem = read('src/components/Wbs/WbsNodeItem.tsx');
 const card = read('src/components/Wbs/KanbanCard.tsx');
 const checklist = read('src/components/Wbs/KanbanChecklist.tsx');
@@ -27,12 +28,17 @@ const session = read('src/components/Wbs/taskDrag/useTaskDragSession.ts');
 
 check('S07-shared-pure-surface', 'List, Kanban and checklist accept a placement reference while sharing their primary renderer; only TaskSurfaceFrame owns the dashed branch.', () => {
   assert.equal(existsSync(resolve(root, 'src/components/Wbs/TrackingReferenceItem.tsx')), false);
-  for (const [name, source] of [['list', listItem], ['card', card], ['checklist', checklist], ['column', column]] as const) {
+  for (const [name, source] of [['list', listItem], ['card', card], ['column', column]] as const) {
     assert.match(source, /trackingReference\?: TaskTrackingReference/);
     assert.match(source, /useTaskPlacementController/);
     assert.match(source, /TaskSurfaceFrame/);
     assert.doesNotMatch(source, /TrackingReference(?:ListContent|CardContent|ChecklistContent|Subtree|Item)/, `${name} contains a reference-only renderer`);
   }
+  assert.match(checklist, /trackingReference\?: TaskTrackingReference/);
+  assert.match(checklist, /TaskChecklistTree/);
+  assert.match(sharedChecklistTree, /useTaskPlacementController/);
+  assert.match(sharedChecklistTree, /TaskSurfaceFrame/);
+  assert.doesNotMatch(sharedChecklistTree, /TrackingReference(?:ListContent|CardContent|ChecklistContent|Subtree|Item)/, 'shared checklist contains a reference-only renderer');
   assert.match(frame, /borderStyle:\s*'dashed'/);
   assert.match(frame, /borderWidth:\s*2/);
   assert.match(frame, /追蹤副本/);
@@ -69,11 +75,13 @@ check('S10-shared-recursive-placement-tree', 'Primary and tracking descendants m
   assert.match(tree, /trackingReferences/);
   assert.match(tree, /primaryPlacementId/);
   assert.match(tree, /SortableContext items=\{rows\.map\(row => row\.placementId\)\}/);
-  for (const [name, source] of [['list', read('src/components/Wbs/WbsListView.tsx')], ['list item', listItem], ['checklist', checklist], ['column', column]] as const) {
+  for (const [name, source] of [['list', read('src/components/Wbs/WbsListView.tsx')], ['list item', listItem], ['column', column]] as const) {
     assert.match(source, /TaskPlacementTree/, `${name} does not use TaskPlacementTree`);
   }
+  assert.match(checklist, /TaskChecklistTree/);
+  assert.match(sharedChecklistTree, /TaskPlacementTree/);
   assert.match(listItem, /<WbsNodeItem[\s\S]*trackingReference=\{row\.reference\}/);
-  assert.match(checklist, /<ChecklistItem[\s\S]*trackingReference=\{row\.reference\}/);
+  assert.match(sharedChecklistTree, /<TaskChecklistRow[\s\S]*trackingReference=\{row\.reference\}/);
   assert.match(column, /<KanbanCard[\s\S]*trackingReference=\{row\.reference\}/);
 });
 

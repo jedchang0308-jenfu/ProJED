@@ -10,6 +10,7 @@ import {
   worldToClient,
   type MindMapViewportSnapshot,
 } from '../src/components/MindMap/mindMapCoordinateSystem';
+import { getMindMapSceneTransformStyle } from '../src/components/MindMap/mindMapLayoutStyle';
 
 const root = resolve('.');
 const outputRoot = resolve(root, 'output/playwright/dev-074-single-scene');
@@ -88,6 +89,15 @@ const runPureCoordinateCases = () => {
   const highZoom = deriveMindMapSceneLayout({ width: 4000, height: 2600 }, { width: 1440, height: 900 }, 2);
   near(highZoom.translateX, 0);
   near(highZoom.translateY, 0);
+
+  const sceneStyle = getMindMapSceneTransformStyle(highZoom);
+  assert.equal(sceneStyle.position, 'absolute');
+  assert.equal(sceneStyle.left, 0);
+  assert.equal(sceneStyle.top, 0);
+  assert.equal(sceneStyle.width, undefined);
+  assert.equal(sceneStyle.height, undefined);
+  assert.equal(sceneStyle.minWidth, undefined);
+  assert.equal(sceneStyle.minHeight, undefined);
 };
 
 const runStaticAuthorityCases = () => {

@@ -272,7 +272,7 @@ Mode-specific layout eligibility 不得反向改寫 filter truth：Calendar grid
 |---|---|---|
 | Task loading | WBS load in progress | 沿用模式 loading；不得先宣稱空資料 |
 | Task load failed | WBS `error` | 顯示可見錯誤與既有 retry/reload path；不得用 preference fallback 掩蓋 |
-| True empty | `totalTaskCount = 0` | 顯示「此看板尚無任務」；有 create 權限時可保留既有新增 CTA |
+| True empty | `totalTaskCount = 0` | 保持畫面留白；有 create 權限時保留新增 CTA |
 | Filtered zero | `totalTaskCount > 0 && matchedTaskIds.size = 0` | 顯示「沒有符合目前篩選的任務」＋單一「清除篩選」；不得顯示尚無任務 |
 | Results | `matchedTaskIds.size > 0` | 依 mode 呈現 matched + 必要 context ancestors |
 | Preference sync failed | task data 正常、preference remote 失敗 | 照 cache/default 顯示資料並出現非阻斷 warning；不得變成空白或假成功 |

@@ -204,12 +204,12 @@ export const getMeetingRecordActionState = ({
             ? `AI整理失敗，原草稿已保留：${meetingSynthesisError || '請重試。'}`
             : !hasContent
               ? '目前是速記階段，先輸入會議內容或從任務詳情加入補記。'
-              : '目前可直接發布編輯器內容，也可先用 AI整理成校稿。';
+              : '目前可直接發布編輯器內容，也可先用 AI整理成待確認草稿。';
 
   const nextActionMessage = isPublished
     ? '下一步：可離開會議模式，或到紀錄庫查閱。'
     : hasAiDraft
-      ? '下一步：人工校稿後按「發布」。'
+      ? '下一步：確認內容後按「發布」。'
       : !hasContent
         ? '下一步：輸入會議內容；有內容後即可發布。'
         : '下一步：直接發布，或先按「AI整理」。';

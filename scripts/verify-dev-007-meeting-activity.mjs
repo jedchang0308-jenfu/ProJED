@@ -57,7 +57,7 @@ const checks = [
     label: 'meeting activity sidebar evidence',
     snippets: [
       'meetingActivityCount: meetingActivities.length',
-      'meetingWorkflowStepsWithImport',
+      'meetingWorkflowStepsForDisplay',
       'data-meeting-workflow-card="compact"',
       'data-meeting-synthesis-status={meetingSynthesisStatus}',
       'data-meeting-synthesis-contract={meetingSynthesisTrace?.contractVersion}',

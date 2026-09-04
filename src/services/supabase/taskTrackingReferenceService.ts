@@ -5,6 +5,9 @@ import { TaskTrackingError } from '../../features/taskTracking/errors';
 import type {
   CreateTrackingReferenceInput,
   MoveTrackingReferenceInput,
+  PlaceStagedTrackingReferenceInput,
+  StageTrackingReferenceInput,
+  StagedTaskTrackingReference,
   TaskTrackingReference,
   TrackingReferenceMutation,
   TrackingReferenceService,
@@ -37,6 +40,38 @@ const readReference = (value: unknown, ids: { workspaceId?: string; boardId?: st
     createdAt: item.created_at ? new Date(String(item.created_at)).getTime() : Date.now(),
     updatedAt: item.updated_at ? new Date(String(item.updated_at)).getTime() : Date.now(),
     removedAt: item.removed_at ? new Date(String(item.removed_at)).getTime() : undefined,
+  };
+};
+
+const readStagedReference = (
+  value: unknown,
+  ids: { workspaceId?: string; originalBoardId?: string; sourceBoardId?: string; taskId?: string } = {},
+): StagedTaskTrackingReference => {
+  const container = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const staging = container.staging && typeof container.staging === 'object'
+    ? container.staging as Record<string, unknown>
+    : container;
+  const reference = container.reference && typeof container.reference === 'object'
+    ? container.reference as Record<string, unknown>
+    : {};
+  const referenceId = staging.reference_root_placement_id ?? reference.id;
+  const taskId = ids.taskId ?? reference.task_id;
+  const originalBoardId = ids.originalBoardId ?? staging.original_project_id ?? reference.project_id;
+  if (typeof referenceId !== 'string' || typeof taskId !== 'string' || typeof originalBoardId !== 'string') {
+    throw new TaskTrackingError('SCHEMA_NOT_READY', '追蹤副本暫存 schema 尚未就緒。');
+  }
+  return {
+    referenceId,
+    taskId,
+    workspaceId: ids.workspaceId ?? String(staging.tenant_id ?? reference.tenant_id ?? ''),
+    sourceBoardId: ids.sourceBoardId,
+    originalBoardId,
+    originalParentPlacementId: staging.original_parent_placement_id ? String(staging.original_parent_placement_id) : null,
+    originalOrder: Number(staging.original_sort_order ?? reference.sort_order ?? 0),
+    order: Number(staging.sort_order ?? 0),
+    revision: Number(reference.revision ?? 1),
+    stagedAt: staging.staged_at ? new Date(String(staging.staged_at)).getTime() : Date.now(),
+    updatedAt: staging.updated_at ? new Date(String(staging.updated_at)).getTime() : Date.now(),
   };
 };
 
@@ -84,6 +119,36 @@ export const supabaseTaskTrackingReferenceService: TrackingReferenceService = {
       const taskId = value && typeof value === 'object' && 'task_id' in value ? String((value as { task_id?: unknown }).task_id) : undefined;
       const task = taskId ? taskIds.get(taskId) : undefined;
       return readReference(value, { workspaceId, taskId: task?.id ?? taskId, sourceBoardId: task?.projectId ? String(boardIds.get(String(task.projectId)) ?? task.projectId) : undefined, boardId: row.project_id ? String(boardIds.get(String(row.project_id)) ?? row.project_id) : undefined });
+    });
+  },
+
+  async listStagedByWorkspace(workspaceId) {
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const data: unknown = await invoke('list_task_tracking_reference_staging_v1', { p_tenant_id: tenantId });
+    if (!Array.isArray(data)) return [];
+    const [{ data: projects }, { data: tasks }] = await Promise.all([
+      supabase.from('projects').select('id,legacy_board_id').eq('tenant_id', tenantId),
+      supabase.from('wbs_items').select('id,legacy_node_id,project_id').eq('tenant_id', tenantId),
+    ]);
+    const boardIds = new Map((projects ?? []).map(project => [project.id, project.legacy_board_id || project.id]));
+    const taskIds = new Map((tasks ?? []).map(task => [task.id, { id: task.legacy_node_id || task.id, projectId: task.project_id }]));
+    return data.map(value => {
+      const container = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+      const staging = container.staging && typeof container.staging === 'object'
+        ? container.staging as Record<string, unknown>
+        : {};
+      const reference = container.reference && typeof container.reference === 'object'
+        ? container.reference as Record<string, unknown>
+        : {};
+      const taskDbId = reference.task_id ? String(reference.task_id) : undefined;
+      const task = taskDbId ? taskIds.get(taskDbId) : undefined;
+      const originalProjectId = staging.original_project_id ? String(staging.original_project_id) : undefined;
+      return readStagedReference(value, {
+        workspaceId,
+        taskId: task?.id ?? taskDbId,
+        sourceBoardId: task?.projectId ? String(boardIds.get(String(task.projectId)) ?? task.projectId) : undefined,
+        originalBoardId: originalProjectId ? String(boardIds.get(originalProjectId) ?? originalProjectId) : undefined,
+      });
     });
   },
 
@@ -161,6 +226,44 @@ export const supabaseTaskTrackingReferenceService: TrackingReferenceService = {
       p_tenant_id: tenantId,
     });
     return readReference(data);
+  },
+
+  async stage(workspaceId, input: StageTrackingReferenceInput) {
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const currentReferences = await this.listByWorkspace(workspaceId);
+    const source = currentReferences.find(reference => reference.id === input.sourcePlacementId);
+    const expectedSubtreeIds = getReferenceSubtree(currentReferences, input.sourcePlacementId).map(reference => reference.id);
+    const data = await invoke('stage_task_tracking_reference_v1', {
+      p_operation_id: input.operationId ?? crypto.randomUUID(),
+      p_reference_root_placement_id: input.sourcePlacementId,
+      p_expected_subtree_ids: expectedSubtreeIds.length ? expectedSubtreeIds : [input.sourcePlacementId],
+      p_expected_revision: input.expectedRevision ?? source?.revision ?? 1,
+      p_client_platform: input.clientPlatform ?? 'web',
+      p_tenant_id: tenantId,
+    });
+    return readStagedReference(data, {
+      workspaceId,
+      taskId: source?.taskId,
+      sourceBoardId: source?.sourceBoardId,
+      originalBoardId: source?.boardId,
+    });
+  },
+
+  async placeStaged(workspaceId, input: PlaceStagedTrackingReferenceInput) {
+    const tenantId = await resolveWorkspaceId(workspaceId);
+    const targetProjectId = await resolveProjectId(tenantId, input.targetBoardId);
+    const data = await invoke('place_staged_task_tracking_reference_v1', {
+      p_operation_id: input.operationId ?? crypto.randomUUID(),
+      p_reference_root_placement_id: input.sourcePlacementId,
+      p_expected_revision: input.expectedRevision ?? 1,
+      p_target_project_id: targetProjectId,
+      p_target_parent_placement_id: input.targetParentPlacementId,
+      p_anchor_placement_id: input.anchorPlacementId ?? null,
+      p_position: input.position ?? 'append',
+      p_client_platform: input.clientPlatform ?? 'web',
+      p_tenant_id: tenantId,
+    });
+    return readReference(data, { workspaceId, boardId: input.targetBoardId });
   },
 
   async remove(workspaceId, input: TrackingReferenceMutation) {

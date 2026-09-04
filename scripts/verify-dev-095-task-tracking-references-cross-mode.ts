@@ -126,11 +126,10 @@ const main = async () => {
     assert.equal(buildCollapsedProjectionTasks(archived, references, 'cross-mode-target').length, 1);
   });
 
-  check('I07-permanent-delete-cleanup', '永久刪除 canonical archived subtree 會以 taskId 清除 tracking placement，典藏資產仍走既有 task-collection flow。', () => {
+  check('I07-permanent-delete-cleanup', '永久刪除 canonical archived subtree 會以 taskId 清除 tracking placement。', () => {
     const source = read('src/store/useWbsStore.ts');
     assert.match(source, /trackingReferences: latest\.trackingReferences\.filter\(reference => !nodeIds\.has\(reference\.taskId\)\)/);
     assert.match(source, /persistRemoveTaskWorkbenchUnplacedTask/);
-    assert.match(source, /applyCollectedTaskRoot/);
   });
 
   check('I08-dependency-record-integrity', 'placement projection 不會變更 dependency 或 record-link identity；reference nested placement 不建立新 dependency。', () => {

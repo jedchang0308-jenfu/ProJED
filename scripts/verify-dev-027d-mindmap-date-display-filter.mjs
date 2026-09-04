@@ -40,13 +40,17 @@ assert(
 );
 
 assert(
-  'MindMapNode renders filter-controlled compact date metadata',
-  mindMapNode.includes("import dayjs from 'dayjs';") &&
-    mindMapNode.includes('Calendar, Minus, Plus') &&
+  'MindMapNode reuses shared Kanban date and status presentation',
+  mindMapNode.includes("import { TaskDateBadge } from '../Wbs/TaskDateBadge';") &&
+    mindMapNode.includes("import { taskStatusTitleClass } from '../ui/taskStatusStyles';") &&
     mindMapNode.includes('showStartDate: boolean') &&
     mindMapNode.includes('const hasVisibleDates = (showStartDate && node.startDate) || node.endDate;') &&
-    mindMapNode.includes("date.format('MM/DD')") &&
-    mindMapNode.includes("date.format('YY/MM/DD')") &&
+    mindMapNode.includes('taskStatusTitleClass[node.status]') &&
+    mindMapNode.includes('<TaskDateBadge') &&
+    mindMapNode.includes('surface="checklist"') &&
+    mindMapNode.includes('startLocked={dateLockStatus.startLocked}') &&
+    mindMapNode.includes('endLocked={dateLockStatus.endLocked}') &&
+    !mindMapNode.includes('border-amber-200 bg-amber-50') &&
     mindMapNode.includes('data-mindmap-node-dates') &&
     mindMapNode.includes('data-start-date={showStartDate ? node.startDate ||') &&
     mindMapNode.includes('data-end-date={node.endDate ||'),
@@ -55,6 +59,7 @@ assert(
 assert(
   'MindMapView passes start-date visibility into every recursive node',
   mindMapView.includes('showStartDate={showStartDate}') &&
+    mindMapView.includes('dateLockStatus={getNodeLockStatus(node.canonicalTaskId || node.id, dependencies)}') &&
     mindMapView.includes('const showStartDate = useBoardStore') &&
     mindMapView.includes('renderChild={renderNode}'),
 );
@@ -66,13 +71,16 @@ assert(
 );
 
 assert(
-  'Browser verifier covers date badge, start date toggle, due filter, status filter, and assignee filter',
+  'Browser verifier covers shared date/status visuals, start date toggle, and task filters',
   browserVerifier.includes('date badge should expose start and end date metadata') &&
+    browserVerifier.includes('Mind Map should render the shared Kanban date badge') &&
+    browserVerifier.includes('task titles should reuse shared status colors') &&
     browserVerifier.includes('showStartDate=false should hide the start date') &&
     browserVerifier.includes('dueWithinDays=7 should keep near due node visible') &&
     browserVerifier.includes('status filter should hide todo and keep completed') &&
     browserVerifier.includes('assignee filter should hide nodes assigned to other people') &&
-    browserVerifier.includes('date badge should stay inside the branch node bounds'),
+    browserVerifier.includes('date badge should stay inside the branch node bounds') &&
+    browserVerifier.includes('shared date badge should remain contained without page overflow at 768px'),
 );
 
 const failed = results.filter(result => !result.ok);

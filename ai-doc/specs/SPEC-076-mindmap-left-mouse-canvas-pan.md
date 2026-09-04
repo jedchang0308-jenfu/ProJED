@@ -1,11 +1,13 @@
 # SPEC-076：心智圖左鍵抓取畫布平移
 
 日期：2026-08-20
-狀態：Implemented / QA-QC PASS / 未 Release
+狀態：Reverted / Abandoned by user / 歷史紀錄
 父層 DEV：DEV-027
 原始需求：`USER-20260820-MINDMAP-LEFT-MOUSE-CANVAS-PAN`
 風險：Medium
 Spec Impact：`Intentional replacement / mindmap-only extension`
+
+本文件保留原始規格與驗證證據；依使用者 2026-09-03 指示，DEV-076 已撤回，現行產品不再包含心智圖左鍵抓取平移。
 
 ## 1. 目的與成功結果
 

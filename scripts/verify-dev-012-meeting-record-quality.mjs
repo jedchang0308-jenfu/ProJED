@@ -302,7 +302,7 @@ assert('client rejects missing trace metadata', serviceSource.includes("'SYNTHES
 assert('client executes local quality validation', serviceSource.includes('validateMeetingSynthesisOutput(input, normalizedResponse)'));
 
 const sidebarSource = readFileSync('src/components/Records/RecordSidebar.tsx', 'utf8');
-assert('UI distinguishes deterministic rule output', sidebarSource.includes('規則整理完成，請校稿後發布'));
+assert('UI distinguishes deterministic rule output', sidebarSource.includes('規則整理完成，請確認後發布'));
 assert('UI exposes synthesis run trace for QC', sidebarSource.includes('data-meeting-synthesis-run-id'));
 assert('UI exposes contract and quality result for QC', sidebarSource.includes('data-meeting-synthesis-contract') && sidebarSource.includes('data-meeting-synthesis-quality'));
 

@@ -18,7 +18,7 @@ type DesktopDragData = Record<string, any>;
 
 export interface DesktopTaskDropPreview {
   sourceNodeId: string;
-  targetNodeId: string;
+  targetNodeId: string | null;
   targetDndId: string;
   targetSurfaceKind: TaskDropSurfaceKind;
   outcomeKind: Exclude<TaskDropOutcome['kind'], 'invalid'>;
@@ -58,9 +58,30 @@ export const resolveDesktopTaskDropIntent = ({
 }) => {
   const sourceSurfaceKind = taskDragSourceKindToSurfaceKind(activeData?.type);
   const targetSurfaceKind = desktopTargetTypeToSurfaceKind(targetData?.type);
-  if (!sourceSurfaceKind || !targetSurfaceKind || !activeData?.nodeId || !targetData?.nodeId) {
+  if (!sourceSurfaceKind || !targetSurfaceKind || !activeData?.nodeId) {
     return null;
   }
+
+  if (targetSurfaceKind === 'root-drop' && !targetData?.nodeId) {
+    const draggedNode = nodesRecord[activeData.nodeId];
+    if (!draggedNode || draggedNode.isArchived || !targetData?.boardId || !targetData?.workspaceId) {
+      return null;
+    }
+    return {
+      intent: {
+        parentId: null,
+        order: 0,
+        nodeType: activeData?.source === 'task-workbench'
+          ? (draggedNode.nodeType || 'task')
+          : (sourceSurfaceKind === 'column-header' ? draggedNode.nodeType : 'group'),
+        displayPosition: 'append' as const,
+      },
+      outcomeKind: 'move' as const,
+      sourceSurfaceKind,
+      targetSurfaceKind,
+    };
+  }
+  if (!targetData?.nodeId) return null;
 
   const outcome = resolveTaskDropOutcome({
     source: { nodeId: activeData.nodeId, surfaceKind: sourceSurfaceKind },
@@ -245,7 +266,7 @@ export const resolveDesktopTaskDropPreview = ({
   if (!resolved) return null;
   const indicatorRect = getIndicatorRect({
     targetElement,
-    targetNodeId: targetData.nodeId,
+    targetNodeId: targetData.nodeId || '',
     targetSurfaceKind: resolved.targetSurfaceKind,
     displayPosition: resolved.intent.displayPosition,
   });
@@ -253,7 +274,7 @@ export const resolveDesktopTaskDropPreview = ({
 
   return {
     sourceNodeId: activeData.nodeId,
-    targetNodeId: targetData.nodeId,
+    targetNodeId: targetData.nodeId || null,
     targetDndId,
     targetSurfaceKind: resolved.targetSurfaceKind,
     outcomeKind: resolved.outcomeKind,

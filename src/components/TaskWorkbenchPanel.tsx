@@ -138,12 +138,13 @@ const WorkbenchUnclassifiedSection: React.FC<{
   tasks: TaskNode[];
   canCreateTask: boolean;
   canMoveTask: boolean;
+  canManageTaskReference: boolean;
   onCreateTask: () => void;
   style?: React.CSSProperties;
-}> = ({ tasks, canCreateTask, canMoveTask, onCreateTask, style }) => {
+}> = ({ tasks, canCreateTask, canMoveTask, canManageTaskReference, onCreateTask, style }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'task-workbench-unplaced-lane',
-    disabled: !canMoveTask,
+    disabled: !canMoveTask && !canManageTaskReference,
     data: {
       type: 'task-workbench-unplaced-lane',
       placement: 'unplaced',
@@ -187,7 +188,11 @@ const WorkbenchUnclassifiedSection: React.FC<{
       </div>
 
       <div className="space-y-px" data-task-workbench-unclassified-list="true">
-        <WorkbenchUnplacedHierarchy tasks={tasks} canMoveTask={canMoveTask} />
+        <WorkbenchUnplacedHierarchy
+          tasks={tasks}
+          canMoveTask={canMoveTask}
+          canManageTaskReference={canManageTaskReference}
+        />
         {isOver ? (
           <div
             className="pointer-events-none relative z-30 h-0"
@@ -215,6 +220,7 @@ const WorkbenchUnclassifiedSection: React.FC<{
 type WorkbenchDragCardProps = {
   task: TaskNode;
   canMoveTask: boolean;
+  canManageTaskReference: boolean;
   placement: 'unplaced' | 'placed';
   surface?: 'unplaced-lane' | 'all-tasks';
   hierarchyDepth?: number;
@@ -247,11 +253,12 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   touchGestureEnabled,
   isPlacementPending = false,
 }) => {
+  const canonicalTaskId = task.canonicalTaskId || task.id;
   const isUnplacedLaneRow = placement === 'unplaced' && surface === 'unplaced-lane';
   const isAllTasksCard = surface === 'all-tasks';
   const depth = Math.max(0, Math.min(hierarchyDepth, 6));
   const interactionBinding = useTaskInteractionBinding({
-    taskId: task.id,
+    taskId: canonicalTaskId,
     title: task.title,
     trackingReferenceId: task.trackingReferenceId,
     surfaceId: placement === 'unplaced' ? 'task-workbench.unplaced-row' : 'task-workbench.placed-row',
@@ -266,8 +273,10 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
   const dependencies = useWbsStore(s => s.dependencies);
   const nodes = useWbsStore(s => s.nodes);
   const getNodeLockStatus = useWbsStore(s => s.getNodeLockStatus);
-  const lockStatus = getNodeLockStatus(task.id, dependencies);
-  const taskLocation = isUnplacedLaneRow ? '未歸位' : formatTaskLocation(task, nodes);
+  const lockStatus = getNodeLockStatus(canonicalTaskId, dependencies);
+  const taskLocation = isUnplacedLaneRow
+    ? (task.isTrackingReference ? '未歸位（追蹤副本）' : '未歸位')
+    : formatTaskLocation(task, nodes);
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -302,6 +311,9 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       aria-label={task.isTrackingReference ? `追蹤副本：${task.title || '未命名任務'}` : task.title || '未命名任務'}
       style={style}
       data-task-workbench-task-card="true"
+      data-task-canonical-id={canonicalTaskId}
+      data-task-placement-id={task.trackingReferenceId || undefined}
+      data-task-placement-hover-surface="true"
       data-task-workbench-tracking-reference={task.isTrackingReference ? 'true' : undefined}
       data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}
       data-task-drag-surface={canUseDragSurface ? 'true' : undefined}
@@ -319,8 +331,8 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-desktop-task-hover-preview={!isDragging ? 'true' : undefined}
       data-touch-tap-guard="true"
       data-task-touch-gesture-surface={touchGestureEnabled ? 'true' : undefined}
-      data-task-id={task.id}
-      data-mobile-drop-target={task.id}
+      data-task-id={canonicalTaskId}
+      data-mobile-drop-target={canonicalTaskId}
       data-task-drop-surface-kind={canUseDragSurface ? 'workbench-unplaced-row' : undefined}
       data-task-placement-pending={isPlacementPending ? 'true' : undefined}
     >
@@ -385,11 +397,19 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
 const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
   task,
   canMoveTask,
+  canManageTaskReference,
   surface = 'unplaced-lane',
   hierarchyDepth = 0,
 }) => {
+  const canonicalTaskId = task.canonicalTaskId || task.id;
+  const canDragTask = task.isTrackingReference ? canManageTaskReference : canMoveTask;
   const taskGesture = useTaskGestureSurface({
-    task,
+    task: {
+      ...task,
+      id: canonicalTaskId,
+      placementId: task.trackingReferenceId,
+      placementKind: task.isTrackingReference ? 'tracking_reference' : 'primary',
+    },
     sourceKind: 'workbench-unplaced-row',
     mobileActionEnabled: true,
     onNonMobileLongPress: (event) => {
@@ -399,31 +419,35 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
     },
   });
   const interactionBinding = useTaskInteractionBinding({
-    taskId: task.id,
+    taskId: canonicalTaskId,
     title: task.title,
+    trackingReferenceId: task.trackingReferenceId,
     surfaceId: 'task-workbench.unplaced-row',
     origin: 'task-workbench',
     nodeRole: 'unplaced',
   });
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `task-workbench-${surface}-${task.id}`,
-    disabled: !canMoveTask || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
+    id: `task-workbench-${surface}-${task.trackingReferenceId || task.id}`,
+    disabled: !canDragTask || taskGesture.mobileActionMode || taskGesture.isPlacementPending,
     data: {
       type: 'wbs-card',
       source: 'task-workbench',
       placement: 'unplaced',
-      nodeId: task.id,
+      nodeId: canonicalTaskId,
+      placementId: task.trackingReferenceId,
+      trackingReference: task.trackingReferenceId ? { id: task.trackingReferenceId, staged: true } : undefined,
       sourceWorkspaceId: task.workspaceId,
       sourceBoardId: task.boardId,
       title: task.title,
     },
   });
-  const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode && !taskGesture.isPlacementPending;
+  const canUseDragSurface = canDragTask && !taskGesture.mobileActionMode && !taskGesture.isPlacementPending;
 
   return (
     <WorkbenchTaskRow
       task={task}
       canMoveTask={canMoveTask}
+      canManageTaskReference={canManageTaskReference}
       placement="unplaced"
       surface={surface}
       hierarchyDepth={hierarchyDepth}
@@ -441,6 +465,7 @@ const WorkbenchUnplacedDragCard: React.FC<WorkbenchDragCardProps> = ({
 const WorkbenchPlacedReadOnlyCard: React.FC<WorkbenchDragCardProps> = ({
   task,
   canMoveTask,
+  canManageTaskReference,
   surface = 'all-tasks',
   hierarchyDepth = 0,
 }) => {
@@ -464,6 +489,7 @@ const WorkbenchPlacedReadOnlyCard: React.FC<WorkbenchDragCardProps> = ({
     <WorkbenchTaskRow
       task={task}
       canMoveTask={canMoveTask}
+      canManageTaskReference={canManageTaskReference}
       placement="placed"
       surface={surface}
       hierarchyDepth={hierarchyDepth}
@@ -486,6 +512,7 @@ const WorkbenchDragCard: React.FC<WorkbenchDragCardProps> = (props) => (
 type WorkbenchUnplacedHierarchyProps = {
   tasks: TaskNode[];
   canMoveTask: boolean;
+  canManageTaskReference: boolean;
 };
 
 type WorkbenchUnplacedHierarchyProjection = {
@@ -531,10 +558,11 @@ const projectWorkbenchUnplacedHierarchy = (tasks: TaskNode[]): WorkbenchUnplaced
 const WorkbenchUnplacedHierarchyBranch: React.FC<{
   task: TaskNode;
   canMoveTask: boolean;
+  canManageTaskReference: boolean;
   childrenByParentId: Map<string, TaskNode[]>;
   depth: number;
   ancestorIds: Set<string>;
-}> = ({ task, canMoveTask, childrenByParentId, depth, ancestorIds }) => {
+}> = ({ task, canMoveTask, canManageTaskReference, childrenByParentId, depth, ancestorIds }) => {
   if (ancestorIds.has(task.id)) return null;
   const children = childrenByParentId.get(task.id) || [];
   const hasDescendants = children.length > 0;
@@ -553,6 +581,7 @@ const WorkbenchUnplacedHierarchyBranch: React.FC<{
       <WorkbenchDragCard
         task={task}
         canMoveTask={canMoveTask}
+        canManageTaskReference={canManageTaskReference}
         placement="unplaced"
         hierarchyDepth={depth}
       />
@@ -567,6 +596,7 @@ const WorkbenchUnplacedHierarchyBranch: React.FC<{
               key={child.id}
               task={child}
               canMoveTask={canMoveTask}
+              canManageTaskReference={canManageTaskReference}
               childrenByParentId={childrenByParentId}
               depth={Math.min(depth + 1, 6)}
               ancestorIds={nextAncestorIds}
@@ -578,7 +608,11 @@ const WorkbenchUnplacedHierarchyBranch: React.FC<{
   );
 };
 
-const WorkbenchUnplacedHierarchy: React.FC<WorkbenchUnplacedHierarchyProps> = ({ tasks, canMoveTask }) => {
+const WorkbenchUnplacedHierarchy: React.FC<WorkbenchUnplacedHierarchyProps> = ({
+  tasks,
+  canMoveTask,
+  canManageTaskReference,
+}) => {
   const projection = React.useMemo(() => projectWorkbenchUnplacedHierarchy(tasks), [tasks]);
 
   return (
@@ -588,6 +622,7 @@ const WorkbenchUnplacedHierarchy: React.FC<WorkbenchUnplacedHierarchyProps> = ({
           key={root.id}
           task={root}
           canMoveTask={canMoveTask}
+          canManageTaskReference={canManageTaskReference}
           childrenByParentId={projection.childrenByParentId}
           depth={0}
           ancestorIds={new Set()}
@@ -673,7 +708,10 @@ const WorkbenchFilterControls: React.FC<{
   );
 };
 
-const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask = false }) => {
+const TaskWorkbenchPanel: React.FC<{
+  canMoveTask?: boolean;
+  canManageTaskReference?: boolean;
+}> = ({ canMoveTask = false, canManageTaskReference = false }) => {
   const accountId = useAuthStore(state => state.user?.uid ?? null);
   const { canCreateTask } = useBoardPermissions();
   const { previewedPanel } = usePanelPreview();
@@ -696,6 +734,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
   const activeWorkspaceId = useBoardStore(state => state.activeWorkspaceId);
   const nodes = useWbsStore(state => state.nodes);
   const trackingReferences = useWbsStore(state => state.trackingReferences);
+  const stagedTrackingReferences = useWbsStore(state => state.stagedTrackingReferences);
   const setNodes = useWbsStore(state => state.setNodes);
   const hydrateUnplacedTasks = useWbsStore(state => state.hydrateUnplacedTasks);
   const addNode = useWbsStore(state => state.addNode);
@@ -965,12 +1004,29 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
     return loadedPlacedTasks.filter(task => matchedTaskIds.has(task.id));
   }, [filterProjectionByBoardId, loadedPlacedTasks]);
 
-  const unplacedTasks = React.useMemo(() => sortTasks(Object.values(nodes)
-    .filter((task): task is TaskNode => (
-      Boolean(task) &&
-      !task.isArchived &&
-      isTaskWorkbenchUnplacedTask(task)
-    ))), [nodes]);
+  const unplacedTasks = React.useMemo(() => {
+    const canonicalUnplaced = Object.values(nodes).filter((task): task is TaskNode => (
+      Boolean(task)
+      && !task.isArchived
+      && isTaskWorkbenchUnplacedTask(task)
+    ));
+    const stagedReferenceRows = stagedTrackingReferences.flatMap((staged) => {
+      const canonical = nodes[staged.taskId];
+      if (!canonical || canonical.isArchived) return [];
+      return [{
+        ...canonical,
+        id: staged.referenceId,
+        canonicalTaskId: canonical.id,
+        boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID,
+        parentId: null,
+        order: staged.order,
+        isTrackingReference: true,
+        trackingReferenceId: staged.referenceId,
+        trackingReferenceParentPlacementId: null,
+      } satisfies TaskNode];
+    });
+    return sortTasks([...canonicalUnplaced, ...stagedReferenceRows]);
+  }, [nodes, stagedTrackingReferences]);
 
   const sortedPlacedTasks = React.useMemo(
     () => sortTasksByDueDate(visiblePlacedTasks),
@@ -1027,7 +1083,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
 
   const { setNodeRef: setPlacedBoardLaneRef, isOver: isPlacedBoardLaneOver } = useDroppable({
     id: `task-workbench-placed-board-lane-${selectedBoardId || 'none'}`,
-    disabled: !canMoveTask || !selectedBoardOption,
+    disabled: (!canMoveTask && !canManageTaskReference) || !selectedBoardOption,
     data: {
       type: 'task-workbench-placed-board-lane',
       placement: 'placed',
@@ -1268,6 +1324,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
             tasks={unplacedTasks}
             canCreateTask={canCreateTask}
             canMoveTask={canMoveTask}
+            canManageTaskReference={canManageTaskReference}
             onCreateTask={handleCreateUnplacedTask}
             style={{ flexBasis: `calc(${unplacedRatio * 100}% - 6px)` }}
           />
@@ -1325,6 +1382,7 @@ const TaskWorkbenchPanel: React.FC<{ canMoveTask?: boolean }> = ({ canMoveTask =
                   key={`all-${task.id}`}
                   task={task}
                   canMoveTask={canMoveTask}
+                  canManageTaskReference={canManageTaskReference}
                   placement="placed"
                   surface="all-tasks"
                   hierarchyDepth={getTaskHierarchyDepth(task, nodes)}

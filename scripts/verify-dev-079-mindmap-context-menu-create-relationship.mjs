@@ -26,7 +26,8 @@ const results = [
   {
     id: 'MINDMAP-079-002',
     label: 'only mindmap task menus expose the relationship action',
-    ok: profiles.includes("include: ['task.open-details', 'task.create-relationship']") &&
+    ok: (profiles.includes("include: ['task.open-details', 'task.create-relationship']") ||
+      profiles.includes("include: ['task.open-details', 'task.create-relationship', 'task.copy', 'task.cut', 'task.paste-after']")) &&
       profiles.includes("exclude: ['task.create-relationship']") &&
       profiles.includes("'task.dependency-start', 'task.dependency-end', 'task.create-relationship'"),
   },

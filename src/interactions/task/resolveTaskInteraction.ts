@@ -92,5 +92,12 @@ export const resolveTaskMenu = (context: InteractionContext): readonly TaskActio
   if (context.transientOwners.length > 0 || context.blockers.length > 0) return [];
   if (hasExclusiveTransientConflict(context.transientOwners)) return [];
   const layers = getInteractionProfileLayers(context.location, context.nodeRole);
-  return getTaskMenuActionIds(layers.map(layer => layer.profile));
+  const actionIds = getTaskMenuActionIds(layers.map(layer => layer.profile));
+  // A task-details child row is already inside the details host, so expose the
+  // navigation action in its contextual menu without changing Board's compact
+  // menu contract.
+  if (context.surfaceId === 'task-details.subtask-row' && !actionIds.includes('task.open-details')) {
+    return ['task.open-details', ...actionIds];
+  }
+  return actionIds;
 };

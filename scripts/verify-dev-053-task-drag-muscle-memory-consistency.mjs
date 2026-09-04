@@ -13,6 +13,7 @@ const files = {
   dragSensors: 'src/hooks/useDragSensors.ts',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   workbench: 'src/components/TaskWorkbenchPanel.tsx',
   packageJson: 'package.json',
@@ -66,10 +67,13 @@ assert(
 
 assert(
   'card, checklist, column header, and workbench use the shared gesture surface',
-  [source.kanbanCard, source.kanbanChecklist, source.kanbanColumn, source.workbench]
-    .every((value) => value.includes('useTaskGestureSurface')) &&
+  source.kanbanCard.includes('useTaskPlacementController') &&
+    source.kanbanChecklist.includes('TaskChecklistTree') &&
+    source.taskChecklistTree.includes('useTaskPlacementController') &&
+    source.kanbanColumn.includes('useTaskPlacementController') &&
+    source.workbench.includes('useTaskGestureSurface') &&
     source.kanbanCard.includes("sourceKind: 'kanban-card'") &&
-    source.kanbanChecklist.includes("sourceKind: 'checklist-row'") &&
+    source.taskChecklistTree.includes("sourceKind: 'checklist-row'") &&
     source.kanbanColumn.includes("sourceKind: 'column-header'") &&
     source.workbench.includes("sourceKind: 'workbench-unplaced-row'"),
 );

@@ -6,6 +6,9 @@ import {
   type TaskDropDescriptor,
 } from '../src/components/Wbs/taskDrag/taskDropIntent';
 import {
+  resolveDesktopTaskDropIntent,
+} from '../src/components/Wbs/taskDrag/desktopTaskDropPreview';
+import {
   DESKTOP_L1_MIDPOINT_HYSTERESIS_PX,
   resolveDesktopL1IndicatorRect,
   resolveDesktopL1OrderingTarget,
@@ -38,6 +41,13 @@ const nodes: Record<string, TaskNode> = {
   cardB: node({ id: 'cardB', parentId: 'rootB', order: 0, nodeType: 'task' }),
   childA: node({ id: 'childA', parentId: 'cardA', order: 0, nodeType: 'task' }),
   grandchildA: node({ id: 'grandchildA', parentId: 'childA', order: 0, nodeType: 'task' }),
+  unplaced: node({
+    id: 'unplaced',
+    boardId: '__task_workbench_unplaced__',
+    parentId: null,
+    order: 0,
+    nodeType: 'task',
+  }),
 };
 
 const resolve = (source: TaskDropDescriptor, target: TaskDropDescriptor) =>
@@ -74,6 +84,28 @@ assert.deepEqual(cardToRootEnd, {
   order: 2,
   nodeType: 'group',
   displayPosition: 'append',
+});
+
+const unplacedToEmptyBoard = resolveDesktopTaskDropIntent({
+  activeData: { type: 'wbs-card', source: 'task-workbench', nodeId: 'unplaced' },
+  targetData: {
+    type: 'wbs-root-drop',
+    nodeId: null,
+    workspaceId: 'workspace-empty',
+    boardId: 'board-empty',
+  },
+  nodesRecord: nodes,
+});
+assert.deepEqual(unplacedToEmptyBoard, {
+  intent: {
+    parentId: null,
+    order: 0,
+    nodeType: 'task',
+    displayPosition: 'append',
+  },
+  outcomeKind: 'move',
+  sourceSurfaceKind: 'kanban-card',
+  targetSurfaceKind: 'root-drop',
 });
 
 const cardToColumnBody = resolve(
@@ -140,6 +172,20 @@ assert.deepEqual(afterRootA, {
   height: 600,
 });
 
+const emptyBoardIndicator = resolveDesktopL1IndicatorRect({
+  targetId: '',
+  orderingPosition: 'after',
+  columns: [],
+  rootDropRect: { left: 12, right: 612, top: 20, bottom: 620 },
+  viewportRect: { top: 48, bottom: 600 },
+});
+assert.deepEqual(emptyBoardIndicator, {
+  left: 12,
+  top: 48,
+  width: 6,
+  height: 552,
+});
+
 const mobileRootBBefore = resolveMobileL1OrderingTarget({
   pointerX: 350,
   columns: l1Columns,
@@ -184,10 +230,14 @@ const source = {
 
 assert.match(source.board, /<KanbanRootDropZone/);
 assert.match(source.rootZone, /type: 'wbs-root-drop'/);
-assert.match(source.rootZone, /data-task-drop-surface-kind=\{anchorNodeId \? 'root-drop'/);
+assert.match(source.rootZone, /disabled: !canMoveTask/);
+assert.match(source.rootZone, /data-task-drop-surface-kind="root-drop"/);
+assert.match(source.rootZone, /data-kanban-empty-board-drop=\{isBoardEmpty \? 'true'/);
 assert.match(source.intent, /if \(targetType === 'wbs-root-drop'\) return 'root-drop'/);
 assert.match(source.commit, /normalizeTaskMoveUpdates\(draggedNode\.id, intent, state\.nodes\)/);
+assert.match(source.commit, /placed-on-empty-board/);
 assert.match(source.mobile, /data-task-drop-node-id/);
+assert.match(source.mobile, /targetKind: 'board-root'/);
 assert.match(source.presenter, /data-mobile-drop-surface-kind=\{state\.targetSurfaceKind/);
 assert.match(source.presenter, /data-mobile-drop-axis=\{state\.dropIndicatorAxis/);
 assert.match(source.board, /resolveDesktopL1OrderingTarget/);
@@ -204,7 +254,15 @@ assert.match(source.qa, /QA-067-011/);
 
 console.log(JSON.stringify({
   ok: true,
-  cases: 31,
-  intents: { cardToHeader, childToHeader, cardToRootEnd, cardToColumnBody, rootReorder, explicitRootBefore },
-  l1Geometry: { rootBBefore, afterRootA, beforeRootB, mobileRootBBefore },
+  cases: 35,
+  intents: {
+    cardToHeader,
+    childToHeader,
+    cardToRootEnd,
+    unplacedToEmptyBoard,
+    cardToColumnBody,
+    rootReorder,
+    explicitRootBefore,
+  },
+  l1Geometry: { rootBBefore, afterRootA, beforeRootB, emptyBoardIndicator, mobileRootBBefore },
 }, null, 2));

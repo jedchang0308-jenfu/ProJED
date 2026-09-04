@@ -15,8 +15,8 @@ export type TagColor = 'green' | 'yellow' | 'orange' | 'red' | 'purple' | 'blue'
 export type CollaborationRole = 'owner' | 'admin' | 'project_manager' | 'member' | 'viewer';
 export type MembershipStatus = 'active' | 'invited' | 'suspended';
 export type BoardInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
-export type KnowledgeRecordType = 'meeting' | 'work_log' | 'task_collection';
-export type EditableKnowledgeRecordType = 'meeting' | 'work_log';
+export type KnowledgeRecordType = 'meeting' | 'work_log';
+export type EditableKnowledgeRecordType = KnowledgeRecordType;
 export type KnowledgeRecordStatus = 'draft' | 'published' | 'archived';
 export type KnowledgeRecordVisibility = 'private' | 'project' | 'tenant';
 export type RecordTaskLinkRole = 'main' | 'related' | 'decision' | 'blocker' | 'follow_up';
@@ -39,7 +39,6 @@ export type PermissionCapability =
   | 'move_task'
   | 'delete_task'
   | 'manage_task_reference'
-  | 'collect_task'
   | 'assign_task'
   | 'create_dependency'
   | 'delete_dependency'
@@ -86,7 +85,6 @@ export const BOARD_ROLE_CAPABILITIES = {
     'move_task',
     'delete_task',
     'manage_task_reference',
-    'collect_task',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -105,7 +103,6 @@ export const BOARD_ROLE_CAPABILITIES = {
     'move_task',
     'delete_task',
     'manage_task_reference',
-    'collect_task',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -124,7 +121,6 @@ export const BOARD_ROLE_CAPABILITIES = {
     'move_task',
     'delete_task',
     'manage_task_reference',
-    'collect_task',
     'assign_task',
     'create_dependency',
     'delete_dependency',
@@ -138,7 +134,6 @@ export const BOARD_ROLE_CAPABILITIES = {
     'move_task',
     'delete_task',
     'manage_task_reference',
-    'collect_task',
     'assign_task',
     'create_dependency',
     'read_activity',
@@ -376,25 +371,9 @@ export interface KnowledgeRecordBase {
 
 export interface EditableKnowledgeRecord extends KnowledgeRecordBase {
   type: EditableKnowledgeRecordType;
-  collectionOperationId?: never;
-  collectionVersion?: never;
-  collectionSchemaVersion?: never;
-  collectionSnapshotHash?: never;
-  sourceRootItemId?: never;
-  sourceRootStorageId?: never;
 }
 
-export interface TaskCollectionRecord extends KnowledgeRecordBase {
-  type: 'task_collection';
-  collectionOperationId: string;
-  collectionVersion: number;
-  collectionSchemaVersion: number;
-  collectionSnapshotHash: string;
-  sourceRootItemId: string;
-  sourceRootStorageId: string;
-}
-
-export type KnowledgeRecord = EditableKnowledgeRecord | TaskCollectionRecord;
+export type KnowledgeRecord = EditableKnowledgeRecord;
 
 export interface KnowledgeRecordInput {
   id?: string;

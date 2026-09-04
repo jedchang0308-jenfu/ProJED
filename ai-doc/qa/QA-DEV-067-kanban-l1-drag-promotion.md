@@ -22,6 +22,7 @@
 | 手機 marker 跳動或提交舊 target | root target 未進既有 stability/release gate | 真機誤放 | raw point、indicator、release trace | P0 | QA-067-006／007 |
 | 子樹遺失或 cycle | root promotion 更新子節點或繞過 guard | 資料階層損壞 | 前後 descendant id 集合 | P0 | QA-067-002／008 |
 | 定位條推開列表 | inline marker 或 dropzone 改變 flex geometry | 看板跳動 | drag 前後 column rect／scrollWidth | P1 | QA-067-009 |
+| 空看板無法接收未歸位任務 | root drop 被 `anchorNodeId` 缺席停用 | 使用者必須先建立無意義空列表 | 零 column fixture 的 desktop pointer／mobile touch drop | P0 | QA-067-012 |
 
 ## 測試案例
 
@@ -38,10 +39,11 @@
 | QA-067-009 | 三 viewport 拖曳中量測 | column rect／board scrollWidth 無跳動，無 overflow／重疊／裁切 | geometry、screenshots |
 | QA-067-010 | click、right-click、blank pan、action rail、placed row、undo | 既有流程不回歸 | targeted regressions |
 | QA-067-011 | Visible Error Sweep | 無可見 alert、HTTP 4xx/5xx、Not Found、API route error；console 無非預期 error | DOM／console |
+| QA-067-012 | 未歸位 parent＋child 拖入零 L1 看板（Desktop 1440×900、Mobile 390×844） | 空白內容區可接收；單一 vertical marker；root=`parent null/order 0`、child parent link 保留；來源與 transient UI 清空；CTA 維持 270px；mobile overflow=0 | `verify-empty-board-unplaced-drop-browser.pw.js`、DOM、localStorage、四張 screenshot |
 
 ## 通過標準
 
-- QA-067-001～011 必要案例全部通過；任何 wrong parent/order/nodeType、雙 marker、子樹遺失或可見 runtime error 即失敗。
+- QA-067-001～012 必要案例全部通過；任何 wrong parent/order/nodeType、雙 marker、子樹遺失或可見 runtime error 即失敗。
 - Desktop 與 mobile 都必須有真實 rendered interaction 證據；只有 lint、TypeScript 或 build 不足以判定通過。
 - Physical iOS／Android 手感未執行時可列 supplemental，但 390x844 synthetic touch 的功能、geometry 與 release revalidation 必須通過。
 
@@ -54,6 +56,15 @@
 - TypeScript、targeted ESLint（0 error；`BoardView.tsx` 2 個既存 warning）與 `build:test` PASS。
 - Browser route：`http://127.0.0.1:4173/?qcReset=1&qcSize=72`；console 0 error，未發現 network failure、可見錯誤或頁面水平 overflow。
 - Physical iOS／Android 手感未執行，保留為 supplemental，不阻擋本機 QC PASS。
+
+## 相容性修正執行結果（2026-09-03）
+
+- QA-067-012 PASS：1440×900 desktop pointer 與 390×844 CDP touch 均完成未歸位 parent＋child → 零 L1 看板。
+- 空看板 droppable 實測為 1056×840px（看板內容區保留既有 12／10px 內距），新增列表按鈕維持 270px；拖曳中只有一條 vertical marker 與暫時提示，drop 後 transient count=0。
+- Desktop／mobile 皆得到 root `parentId=null`、`order=0`，child→root link 保留，未歸位來源清空；mobile document overflow=0，visible error=0，page error=0。
+- Targeted resolver／source contract 35 cases PASS；DEV-053 31/31、DEV-086 subtree、DEV-089 transaction 28/28 與 randomized scope isolation 1000 iterations PASS。
+- TypeScript、targeted ESLint（0 error；`BoardView.tsx` 2 個既存 warning）與 `build:test` PASS。
+- 證據：`output/playwright/empty-board-drop-desktop-preview.png`、`empty-board-drop-desktop-result.png`、`empty-board-drop-mobile-preview.png`、`empty-board-drop-mobile-result.png`、`output/playwright/empty-board-drop/result.json`。
 
 ## QC 執行指令
 

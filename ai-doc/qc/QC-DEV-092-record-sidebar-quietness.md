@@ -11,9 +11,9 @@
 | 項目 | 實際結果 |
 |---|---|
 | Header 精簡 | 標題無裝飾 icon；無 `紀錄功能說明` button／modal；ChevronRight 收合控制位於右側抽屜最左側、ChevronLeft 展開，與離開控制分離 |
-| Workflow | `會議流程` 標題與輔助說明、各階段 icon／副標題、`AI選用`、`AI整理來源：任務變更` 摘要列不存在；五個主要階段操作仍在；階段按鈕採緊湊高度，可操作階段使用 pointer cursor／hover、停用階段使用不可操作游標；新會議標題不含時間，紀錄時間為 `YYYY/MM/DD HH:mm` 且無上午／下午；idle／saved success recovery banner 不存在 |
+| Workflow | `會議流程` 標題與輔助說明、各階段 icon／副標題、`AI選用`、`AI整理來源：任務變更` 摘要列不存在；三個主要階段操作仍在；階段按鈕採緊湊高度，可操作階段使用 pointer cursor／hover、停用階段使用不可操作游標；新會議標題固定為 `會議紀錄`，紀錄時間為 `YYYY/MM/DD HH:mm` 且無上午／下午；idle／saved success recovery banner 不存在 |
 | 關聯任務 | 會議空白摘要 `關聯任務 0 未選取` 與空白狀態 `選取任務` action 不存在；個人工作紀錄入口與已有關聯任務管理維持 |
-| 表單版面 | 會議 `標題` 與 `紀錄時間` 位於同一橫列，24 小時文字格式維持；內容編輯器填滿其他固定區塊後的剩餘高度並保留最小可用高度，狀態／分享範圍控制列改為單列緊湊版，使用可讀短標籤且較原排列約縮減 50% 高度 |
+| 表單版面 | 會議 `標題` 與 `紀錄時間` 位於同一橫列，24 小時文字格式維持；內容編輯器填滿其他固定區塊後的剩餘高度並保留最小可用高度，`存草稿`／分享範圍控制列改為同一列緊湊版 |
 | 互動 | desktop／窄版收合→展開成功，收合後 `ChevronLeft` 展開控制可用 |
 | RWD／錯誤 | 390×844 bottom sheet 無水平溢出；visible alert、HTTP error、console error、page error 均為 0 |
 

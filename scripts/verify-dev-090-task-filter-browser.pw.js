@@ -243,8 +243,14 @@ async (page) => {
     step = 'B10-true-empty';
     await selectBoard('DEV-090 真空看板');
     const trueEmpty = page.locator('[data-task-filter-result-state="true-empty"]');
-    await trueEmpty.waitFor({ state: 'visible', timeout: 10000 });
+    assert(await trueEmpty.count() === 0, 'true empty should not render a redundant empty-state container');
     assert(await page.locator('[data-task-filter-result-state="filtered-zero"]').count() === 0, 'true empty must not render filtered-zero');
+    assert(await page.locator('[data-kanban-add-column-button="true"]').count() === 1, 'true empty should keep the add-list entry');
+    const boardCanvas = page.locator('[data-layout-region="board-canvas"]');
+    const boardCanvasBox = await boardCanvas.boundingBox();
+    const boardCanvasPaddingLeft = await boardCanvas.evaluate(element => Number.parseFloat(getComputedStyle(element).paddingLeft) || 0);
+    const addListBox = await page.locator('[data-kanban-add-column-button="true"]').boundingBox();
+    assert(boardCanvasBox && addListBox && addListBox.x <= boardCanvasBox.x + boardCanvasPaddingLeft + 1, 'true empty add-list entry should align to the left content edge of the board canvas', { boardCanvasBox, boardCanvasPaddingLeft, addListBox });
     await page.screenshot({ path: 'output/playwright/dev-090/true-empty.png', fullPage: false });
 
     step = 'B09-filtered-zero-reset';
