@@ -1,5 +1,24 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-04（DEV-105 會議任務討論時間預約 Brief Ready）
+
+Spec Impact：`Intentional scope extension`。使用者明確把會議模式從純看板／速記延伸為「主持人可為任務設定單一預約數字」；此決策只局部解除 SPEC-005「不做逐項時間控管」的非範圍，不建立完整議程、計時、總額、投票或多人預約。SPEC-007 的原生任務操作與 SPEC-070 的共用 task action／Guard／Command 契約維持。
+
+| 文件／程式權威 | 狀態 | DEV-105 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `Brief Ready / Human Confirmed` | DEV-105 的 canonical 需求、角色矩陣、UX、初步資料邊界、驗收方向與 re-entry gate。 |
+| `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` | Existing baseline / 局部非範圍由 DEV-105 擴充 | 看板仍是會議主畫面；只新增主持人右鍵設定與任務數字，不恢復完整會議操作列。 |
+| `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Compatible | 卡片主要點擊、拖曳、編輯與右鍵開啟行為不得被預約功能劫持。 |
+| `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md` | Compatible architecture authority | 新右鍵能力必須走集中 action catalog、profile、permission Guard 與 Command，不在 presenter 直接 mutation。 |
+
+Human Decision：第一版僅主持人可設定；每個會議／任務一個數字；入口只在右鍵選單，點擊後直接輸入；有值才顯示；卡片只顯示純數字且順序為「任務名稱 → 截止日 → `[數字]` → 展開按鈕」。明確排除多人預約、未預約提示、單位、總額、計時與完整議程管理。
+
+Execution boundary：本輪只更新 canonical `dev_task.md` 與 `documentation_map.md`，成熟度停在 `Brief Ready`；沒有建立 SPEC／ADR／QA／QC、修改產品程式、測試、schema、migration、provider、Git index、deploy 或 release artifact。
+
+Re-entry：使用者要求交 RD 評估時，升級同一 DEV 到 `RD Contract Ready` 並固定主持人身分、active meeting identity、provider persistence、數值限制與 task surface matrix；要求開始實作時再補到 `RD Implementation Ready`。
+
+使用思考習慣：#最小介面、#使用者視角、#可驗證性
+
 ## Documentation Map Update - 2026-09-04（DEV-104 完整移除收藏任務功能）
 
 Spec Impact：`Intentional replacement / feature retirement`。使用者撤銷 DEV-093 與 DEV-103；目前產品不再提供收藏任務資產、收藏任務看板、收藏動作或相應permission／provider／migration。

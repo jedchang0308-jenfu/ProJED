@@ -641,6 +641,15 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 資料邊界：共享 local／remote migration history 均未套用 DEV-093／103，不做遠端 DDL、資料刪除或 migration history repair。
   - 證據：`SPEC-104`、`QA-DEV-104`、`QC-DEV-104`；TypeScript、build、static residual scan與實際瀏覽器回歸。
   - 計入交付：否（退場工作，不新增產品能力）
+- ○ DEV-105 [交付點] [待排] [P1] [Brief Ready / Human Confirmed] 會議任務討論時間預約
+  - 摘要：主持人在會議模式從任務右鍵選單填入單一預約數字；有值時在任務截止日後、展開按鈕前顯示純數字標記，沒有值時不顯示。
+  - 來源 ID：`USER-20260904-MEETING-TASK-RESERVATION-NUMBER`
+  - 父任務：DEV-005
+  - 相容任務：DEV-007、DEV-070
+  - 下一步：使用者要求開始實作時，將同一 DEV 補到 `RD Contract Ready`，確認主持人身分來源、會議範圍資料生命週期與持久化邊界後交 RD 評估。
+  - 阻塞 / 恢復條件：目前無 Brief blocker；未達 `RD Contract Ready` 前不得直接修改產品程式或資料結構。
+  - 證據：本文件 `DEV-105` 詳細段落；使用者於 2026-09-04 確認 UI、權限與排除範圍。
+  - 計入交付：是（Brief 階段，完成率貢獻 0）
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -3697,3 +3706,105 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 - TypeScript、test build、受影響 DEV-095／099 regression與實際browser操作通過。
 - 工作區側欄、紀錄庫、一般任務明細與右鍵選單無收藏入口；一般看板、會議紀錄、個人工作紀錄可正常操作。
 - QA／QC authority：`QA-DEV-104-task-collection-feature-removal.md`、`QC-DEV-104-task-collection-feature-removal.md`。
+
+## DEV-105：會議任務討論時間預約
+
+- 文件成熟度：`Brief Ready / Human Confirmed`
+- 狀態：待排
+- 節點類型：交付點
+- 父交付點：DEV-005
+- 相關契約：DEV-007、DEV-070
+- 是否計入產品交付完成：是（尚未實作，完成率貢獻 0）
+- 原始需求邊界：`USER-20260904-MEETING-TASK-RESERVATION-NUMBER`
+- 風險等級：Medium（新增會議模式右鍵入口、主持人限定寫入、會議與任務關聯資料、任務卡可見狀態）
+- Spec Impact：`Intentional scope extension`；使用者明確解除 SPEC-005「不做逐項時間控管」中與本功能衝突的局部非範圍，但仍不建立完整議程主持、計時、總額或投票系統。SPEC-007 的原生任務操作與 SPEC-070 的共用 Semantic Action／Guard／Command 邊界維持有效。
+
+### 問題與使用者價值
+
+- 會議主持人目前需在系統外收集各議題預約數字，任務卡本身無法顯示該議題已安排的值。
+- 成功結果是主持人可在不中斷會議看板工作的情況下，直接從任務右鍵填值；所有觀看同一會議任務的人可從任務列辨識已預約數字。
+- 任務名稱維持主要視覺焦點；預約值只在存在時占用最小空間，不替未預約任務建立提示、占位或額外列。
+
+### Human Decision Brief（2026-09-04）
+
+- 第一版由會議主持人統一預約；不開放其他參與者新增或修改。
+- 一個會議中的一個任務只保留一個預約數字；不支援多人預約、合計或人員明細。
+- 預約入口只放在任務右鍵選單；點擊「預約時間」後直接進入數字輸入。
+- 任務有預約值時才顯示；沒有值時完全不顯示未預約狀態或空白占位。
+- 卡片顯示純數字，例如 `[15]`；不顯示時鐘、單位或額外說明。
+- 卡片資訊順序固定為「任務名稱 → 截止日 → `[預約數字]` → 下層任務展開按鈕」。無截止日或無下層任務時，缺少的既有元素自然省略，預約數字仍維持在標題後方的 metadata 區域。
+- 已拒絕：參與者自行預約、多人預約、未預約提示、分鐘文案、總時數、卡片左側時間籤與完整會議時間管理。
+
+### 主要流程
+
+1. 主持人進入會議模式，在任務上開啟既有右鍵選單。
+2. 選單顯示「預約時間」；點擊後在同一選單範圍直接顯示並聚焦數字輸入，不另開 Modal 或新面板。
+3. 已有值時輸入框預選既有數字；主持人輸入正整數後以 `Enter` 儲存，或以 `Escape` 放棄修改。
+4. 儲存成功後選單關閉，任務卡在截止日後、展開按鈕前顯示純數字標記。
+5. 主持人清空既有值並儲存時取消預約；標記隨即消失。
+
+### 角色與狀態矩陣
+
+| 角色／狀態 | 右鍵「預約時間」 | 已預約數字 | 寫入能力 |
+|---|---|---|---|
+| 會議模式／主持人 | 顯示 | 有值才顯示 | 可新增、修改、清除 |
+| 會議模式／非主持人 | 不顯示 | 有值才顯示 | 無 |
+| 非會議模式／任何角色 | 不顯示 | 不顯示 | 無 |
+
+### 第一版範圍
+
+- 在會議模式的既有任務右鍵選單加入主持人限定的「預約時間」。
+- 以同一選單中的最小 inline editor 接受數字輸入；不建立獨立 Modal、Drawer 或常駐工具列。
+- 在會議看板可見的任務表面呈現單一純數字標記，且同一 canonical task 的投影不得出現互斥值。
+- 預約資料邏輯上屬於「本次會議 × canonical task」；不得把跨會議會變動的值誤當成永久 TaskNode 屬性。
+- 保留既有任務卡主要點擊、拖曳、右鍵開啟、截止日、標籤與下層任務展開行為。
+
+### 非範圍
+
+- 參與者自助預約、多人預約、預約者姓名、多人加總與明細。
+- 未預約提示、空值 badge、主持人待排清單或自動提醒。
+- 單位顯示、開始／結束時刻、倒數計時、超時提示、總時數、會議預算或自動議程排序。
+- 完整議程管理、投票、跨 board 會議或新的會議操作列。
+- 非會議模式的預約顯示與編輯。
+
+### Architecture Memory Capsule
+
+- Logical identity：每筆值由 active meeting identity 與 canonical task identity 唯一定位；tracking placement 只投影同一值，不建立第二份預約資料。
+- Write owner：產品契約是「主持人唯一可寫」；主持人實際身分來源、Guard 與 provider 權限檢查點在升級 `RD Contract Ready` 時依現行 record／board role authority 固定。
+- Presentation owner：新增動作需沿用 DEV-070 的 task action catalog、profile、permission guard 與 command 邊界；右鍵 presenter 不得直接自行寫資料。
+- Display owner：沿用現有 task title row／metadata 結構；純數字是唯一常駐訊號，不再疊加 icon、單位、色條或整卡背景。
+
+### 驗收方向
+
+- [ ] 從正常會議入口進入後，主持人右鍵任務可找到「預約時間」，非主持人與非會議模式看不到該動作。
+- [ ] 點擊動作即出現已聚焦的數字輸入；已有值時可直接覆寫，`Enter` 儲存、`Escape` 取消，清空後儲存可移除。
+- [ ] 任務只有在存在預約值時顯示純數字；不顯示時鐘、單位、預約者、未預約提示或占位。
+- [ ] 顯示順序為「任務名稱 → 截止日 → `[數字]` → 展開按鈕」，且不增加任務卡高度或建立新資訊列。
+- [ ] 正常卡片點擊、拖曳、右鍵、日期、標籤與下層任務展開行為沒有退化。
+- [ ] 儲存、取消、清除、重新載入與同一 canonical task 投影的結果一致；失敗時不得顯示未持久化的成功值。
+- [ ] 1440×900、1024×768 與 390×844 的實際畫面沒有水平 overflow、重疊、按鈕擠壓或必要標題異常截斷。
+- [ ] 所有控制具有可存取名稱、鍵盤焦點與清楚的失敗狀態；不能只靠顏色判斷是否有預約。
+
+### 驗證與證據方向
+
+- UI Entry：以會議建立者／主持人從正常會議入口開啟看板，再從任務右鍵進入 inline editor；不得只用 direct component harness 證明入口存在。
+- Happy path：新增、覆寫與清除預約值，驗證卡片顯示、持久化 readback 與重新載入一致。
+- Fail-seeking：以非主持人開啟相同任務，確認 action 不進入 DOM 且 mutation 被 Guard 拒絕；另模擬保存失敗，確認卡片不出現假成功值。
+- UI evidence：最終 frozen candidate 需記錄 source revision、角色、route、viewport、操作步驟、右鍵輸入狀態、保存後卡片截圖、visible-error sweep 與 overflow 量測。
+- Engineering evidence：至少包含 action/profile/permission pure 或 integration test、meeting/task identity persistence test、TypeScript、targeted lint、test build 與受影響 task-menu／meeting-mode regression。
+
+### 待 RD Contract Ready 固定的工程決策
+
+- 主持人的權威身分來源與 meeting draft 尚未持久化時的識別生命週期。
+- 預約值的正整數範圍、空值清除契約、並行寫入與失敗恢復方式。
+- 現有 Local Test、Firebase、Supabase 各 provider 的最小持久化／讀取邊界，以及是否需要 migration。
+- L2 卡片、L3+ checklist、tracking projection 與其他 task surface 的精確顯示／編輯矩陣。
+
+### Execution Boundary
+
+- 本輪只完成 `Brief Ready` 文件與 canonical map／DEV 登錄；不修改產品程式、測試、schema、migration、provider、Git index或 release artifacts。
+- 使用者提出「交 RD 評估」時升級同一 DEV 到 `RD Contract Ready`；提出「開始開發」或「完成 dev_task」時，先補齊 Medium lane 的 `RD Implementation Ready`、最小 QA 與 targeted QC 契約再實作。
+
+### 變更紀錄
+
+- 2026-09-04：依使用者確認建立 Brief；固定主持人單一輸入、右鍵 inline editor、有值才顯示純數字及卡片 metadata 順序。
