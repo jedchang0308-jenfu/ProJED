@@ -621,6 +621,7 @@ const RecordSidebar: React.FC = () => {
   const meetingOverflowRef = React.useRef<HTMLDivElement | null>(null);
   const meetingOverflowButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const [isMeetingOverflowOpen, setIsMeetingOverflowOpen] = React.useState(false);
+  const [meetingSaveFeedback, setMeetingSaveFeedback] = React.useState<'saving' | 'saved' | 'error' | null>(null);
   const records = useRecordStore(state => state.records);
   const draft = useRecordStore(state => state.draft);
   const loading = useRecordStore(state => state.loading);
@@ -720,6 +721,12 @@ const RecordSidebar: React.FC = () => {
   }, [isMeetingOverflowOpen]);
 
   React.useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  React.useEffect(() => {
+    if (!meetingSaveFeedback || meetingSaveFeedback === 'saving') return undefined;
+    const timeoutId = window.setTimeout(() => setMeetingSaveFeedback(null), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [meetingSaveFeedback]);
 
   React.useEffect(() => {
     setProjectChangeImport(createInitialProjectChangeImportState());
@@ -845,6 +852,13 @@ const RecordSidebar: React.FC = () => {
 
   const handleSave = async (status: KnowledgeRecordStatus) => {
     await saveDraft({ nodes, status });
+  };
+
+  const handleMeetingSaveDraft = async () => {
+    setIsMeetingOverflowOpen(false);
+    setMeetingSaveFeedback('saving');
+    const saved = await saveDraft({ nodes, status: 'draft' });
+    setMeetingSaveFeedback(saved ? 'saved' : 'error');
   };
 
   const handleSynthesizeMeetingDraft = async () => {
@@ -1154,6 +1168,19 @@ const RecordSidebar: React.FC = () => {
                   <button
                     type="button"
                     role="menuitem"
+                    data-meeting-draft-save
+                    disabled={!canSave || saving || isSynthesizing || isPublished}
+                    onClick={() => void handleMeetingSaveDraft()}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={isPublished ? '已發布的會議紀錄不可再存成草稿' : canSave ? '保存目前會議內容為草稿，不會發布' : '請先輸入標題'}
+                  >
+                    {meetingSaveFeedback === 'saving' ? <Loader2 size={13} className="animate-spin" /> : meetingSaveFeedback === 'saved' ? <CheckCircle2 size={13} className="text-emerald-600" /> : <Save size={13} />}
+                    {meetingSaveFeedback === 'saving' ? '保存中…' : meetingSaveFeedback === 'saved' ? '已存草稿' : '存草稿'}
+                  </button>
+                  <div className="my-1 border-t border-slate-100" />
+                  <button
+                    type="button"
+                    role="menuitem"
                     data-meeting-draft-discard
                     disabled={!canDiscardMeetingDraft}
                     onClick={() => {
@@ -1181,6 +1208,17 @@ const RecordSidebar: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {isLiveMeeting && meetingSaveFeedback ? (
+        <div
+          role="status"
+          data-meeting-save-feedback
+          className={`pointer-events-none absolute right-3 top-12 z-40 flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] shadow-sm ${meetingSaveFeedback === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+        >
+          {meetingSaveFeedback === 'saving' ? <Loader2 size={11} className="animate-spin" /> : meetingSaveFeedback === 'saved' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+          {meetingSaveFeedback === 'saving' ? '保存中…' : meetingSaveFeedback === 'saved' ? '已保存草稿' : '保存失敗，請重試'}
+        </div>
+      ) : null}
 
       <div ref={composerScrollRef} data-record-composer-scroll-owner className="flex min-h-0 flex-1 flex-col overflow-auto">
         <section data-record-composer-variant={composerVariant} className="flex min-h-0 flex-1 flex-col border-b border-slate-100 p-3">

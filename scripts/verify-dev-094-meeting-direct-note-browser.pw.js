@@ -21,6 +21,17 @@ async (page) => {
   }
   await editor.fill('DEV-094 direct note smoke');
   if (await page.locator('[data-record-meeting-save-draft]').count() !== 0) throw new Error('meeting draft/share footer controls should not render');
+  const shellBeforeSaveMenu = await page.locator('[data-record-composer-shell]').boundingBox();
+  await page.locator('[data-meeting-draft-overflow]').click();
+  const saveMenu = page.locator('[data-meeting-draft-overflow-menu]');
+  await saveMenu.waitFor({ state: 'visible', timeout: 1000 });
+  if (await saveMenu.locator('[data-meeting-draft-save]').count() !== 1) throw new Error('meeting overflow should expose one compact save-draft action');
+  const shellAfterSaveMenu = await page.locator('[data-record-composer-shell]').boundingBox();
+  if (!shellBeforeSaveMenu || !shellAfterSaveMenu || Math.abs(shellBeforeSaveMenu.width - shellAfterSaveMenu.width) > 1 || Math.abs(shellBeforeSaveMenu.height - shellAfterSaveMenu.height) > 1) {
+    throw new Error(`meeting save menu changed composer layout: ${JSON.stringify({ shellBeforeSaveMenu, shellAfterSaveMenu })}`);
+  }
+  await page.keyboard.press('Escape');
+  await saveMenu.waitFor({ state: 'hidden', timeout: 1000 });
   if (await page.locator('[data-record-status-summary]').count() !== 0) throw new Error('meeting composer should not render a redundant status summary');
   if (await page.locator('[data-project-change-import-panel]').count()) throw new Error('meeting default import must not render the work-log settings panel');
   const importTrigger = page.locator('[data-meeting-import-trigger]');
