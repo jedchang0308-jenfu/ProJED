@@ -1,13 +1,12 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, MoreHorizontal, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, LogOut, MoreHorizontal, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
 import { useMemberStore } from '../../store/useMemberStore';
 import { useTagStore } from '../../store/useTagStore';
 import { useWbsStore } from '../../store/useWbsStore';
-import { useMeetingModeExitGuard } from '../../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
 import { useMeetingDraftDiscard } from '../../hooks/useMeetingDraftDiscard';
 import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
@@ -607,7 +606,6 @@ const RecordSidebar: React.FC = () => {
   const tags = useTagStore(state => state.tags);
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
   const guardRecordDraft = useRecordDraftGuard();
-  const requestExitMeetingMode = useMeetingModeExitGuard();
   const { canDiscard: canDiscardMeetingDraft, discard: discardMeetingDraft } = useMeetingDraftDiscard();
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const [sidebarWidth, setSidebarWidth] = React.useState(readRecordSidebarWidth);
@@ -814,10 +812,6 @@ const RecordSidebar: React.FC = () => {
         : '發布會議紀錄';
   const canUseProjectChangeImport = Boolean(draft && !isPublished && (isLiveMeeting || isWorkLog));
   const shouldShowProjectChangeImport = Boolean(canUseProjectChangeImport && isProjectImportExpanded);
-  const exitRecordButtonLabel = '離開紀錄';
-  const exitRecordButtonTitle = isLiveMeeting
-    ? '離開紀錄；離開不等於發布，未儲存變更會先自動保護內容。'
-    : '離開紀錄；若有未儲存變更會先詢問是否存草稿。';
   const sidebarRecordTitle = draft ? recordTypeLabel(draft.type) : '紀錄';
   const projectImportStepEnabled = canUseProjectChangeImport && !saving && !isSynthesizing;
   const contentMinHeightClass = draft?.type === 'meeting' ? 'min-h-[220px]' : 'min-h-[150px]';
@@ -859,6 +853,25 @@ const RecordSidebar: React.FC = () => {
     setMeetingSaveFeedback('saving');
     const saved = await saveDraft({ nodes, status: 'draft' });
     setMeetingSaveFeedback(saved ? 'saved' : 'error');
+  };
+
+  const handleMeetingSaveAndExit = async () => {
+    setIsMeetingOverflowOpen(false);
+    if (isPublished) {
+      setMeetingSaveFeedback(null);
+      closePanel();
+      return;
+    }
+
+    setMeetingSaveFeedback('saving');
+    const saved = await saveDraft({ nodes, status: 'draft' });
+    if (!saved) {
+      setMeetingSaveFeedback('error');
+      return;
+    }
+
+    setMeetingSaveFeedback(null);
+    closePanel();
   };
 
   const handleSynthesizeMeetingDraft = async () => {
@@ -1172,10 +1185,22 @@ const RecordSidebar: React.FC = () => {
                     disabled={!canSave || saving || isSynthesizing || isPublished}
                     onClick={() => void handleMeetingSaveDraft()}
                     className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    title={isPublished ? '已發布的會議紀錄不可再存成草稿' : canSave ? '保存目前會議內容為草稿，不會發布' : '請先輸入標題'}
+                    title={isPublished ? '已發布的會議紀錄不可再存成草稿' : canSave ? '儲存目前會議內容為草稿，不會發布' : '請先輸入標題'}
                   >
                     {meetingSaveFeedback === 'saving' ? <Loader2 size={13} className="animate-spin" /> : meetingSaveFeedback === 'saved' ? <CheckCircle2 size={13} className="text-emerald-600" /> : <Save size={13} />}
-                    {meetingSaveFeedback === 'saving' ? '保存中…' : meetingSaveFeedback === 'saved' ? '已存草稿' : '存草稿'}
+                    {meetingSaveFeedback === 'saving' ? '儲存中…' : meetingSaveFeedback === 'saved' ? '已儲存草稿' : '儲存草稿'}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-meeting-draft-save-and-exit
+                    disabled={saving || isSynthesizing || (!isPublished && !canSave)}
+                    onClick={() => void handleMeetingSaveAndExit()}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={isPublished ? '會議紀錄已發布；離開會議面板' : canSave ? '儲存目前會議內容為草稿，成功後離開' : '請先輸入標題'}
+                  >
+                    <LogOut size={13} />
+                    儲存並離開
                   </button>
                   <div className="my-1 border-t border-slate-100" />
                   <button
@@ -1187,25 +1212,27 @@ const RecordSidebar: React.FC = () => {
                       handleMeetingDiscard();
                     }}
                     className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    title={canDiscardMeetingDraft ? '捨棄尚未正式保存的會議內容' : '目前沒有可捨棄的會議內容'}
+                    title={canDiscardMeetingDraft ? '刪除尚未正式儲存的會議內容並離開' : '目前沒有可刪除的會議內容'}
                   >
                     <Trash2 size={13} />
-                    捨棄本次會議
+                    刪除並離開
                   </button>
                 </div>
               ) : null}
             </div>
           ) : null}
-          <button
-            type="button"
-            data-record-composer-close
-            onClick={isLiveMeeting ? () => void requestExitMeetingMode() : handleGuardedClosePanel}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-            title={exitRecordButtonTitle}
-            aria-label={exitRecordButtonLabel}
-          >
-            <X size={16} />
-          </button>
+          {!isLiveMeeting ? (
+            <button
+              type="button"
+              data-record-composer-close
+              onClick={handleGuardedClosePanel}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+              title="離開紀錄；若有未儲存變更會先詢問是否存草稿。"
+              aria-label="離開紀錄"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1216,7 +1243,7 @@ const RecordSidebar: React.FC = () => {
           className={`pointer-events-none absolute right-3 top-12 z-40 flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] shadow-sm ${meetingSaveFeedback === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
         >
           {meetingSaveFeedback === 'saving' ? <Loader2 size={11} className="animate-spin" /> : meetingSaveFeedback === 'saved' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
-          {meetingSaveFeedback === 'saving' ? '保存中…' : meetingSaveFeedback === 'saved' ? '已保存草稿' : '保存失敗，請重試'}
+          {meetingSaveFeedback === 'saving' ? '儲存中…' : meetingSaveFeedback === 'saved' ? '已儲存草稿' : '儲存失敗，請重試'}
         </div>
       ) : null}
 

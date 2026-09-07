@@ -66,18 +66,19 @@ Phase 0 要證明的不是「永遠不會遺失任何一個字」，而是：
 | TC-106-001 | 讀v1 snapshot，再寫v2；request success後延遲transaction complete | v1可讀且不回寫／刪除；DB version/store/session prefix不變；complete前saving，complete後才local_committed | normalized snapshot、event order |
 | TC-106-002 | 同scope快速排入S1/S2/S3，控制舊completion與一次abort | single in-flight + latest pending；S2可coalesce；最終只恢復S3；abort不更新成功狀態 | queue trace、storage readback |
 | TC-106-003 | IDB fail/session success，再令兩者皆失敗 | 前者session_only、後者error；兩者均不得顯示durable或允許安靜離開 | durability transition |
-| TC-106-004 | 逐一由X、離開模式、切view、開新／舊record離開C狀態 | 每條路徑先force-flush目前signature；ack後才navigation；snapshot保留，無implicit clear | action matrix、storage readback |
+| TC-106-004 | 逐一由離開模式、切view、開新／舊record離開C狀態 | 每條路徑先force-flush目前signature；ack後才navigation；snapshot保留，無implicit clear | action matrix、storage readback |
 | TC-106-005 | 在force-flush注入fail與2,000ms timeout | 原navigation不執行、輸入不reset；只顯示重試保護／存草稿後離開／繼續編輯；無discard／直接離開 | UI state、focus、event order |
 | TC-106-006 | in-flight put期間執行explicit discard；涵蓋取消、success、IDB delete fail、另一scope存在 | 取消0 delta；success以terminal barrier清目前scope後才離開；fail保留session與畫面；其他scope不變；舊put不復活 | queue trace、storage diff |
 | TC-106-007 | canonical save／publish／archive分別success、provider fail、cleanup fail後重新restore | canonical success才更新baseline；provider fail保留輸入/recovery；cleanup fail不否定canonical success，restore忽略相同或較舊snapshot | canonical/readback diff |
 | TC-106-008 | 在Supabase、Firestore、local-test fixture執行autosave、restore、close、discard；同時掛side-effect spies | remote recovery read/write count=0；AI/task-link/undo/document/RAG/event delta=0；不出現cloud confirmed訊號 | network與side-effect JSON |
+| TC-106-009 | live meeting 開啟 `會議操作`，驗證三個選項、canonical save success／failure、已發布狀態與標題列 | 選項依序為 `儲存草稿`、`儲存並離開`、`刪除並離開`；無 X；編輯中的 save-and-exit 只在成功後關閉，失敗保留內容；已發布可直接離開且不降回 draft；menu overlay 不改變 composer 寬高 | source assertion、1440×900 browser、storage readback、geometry |
 
 ## 6. Rendered Browser／QC Cases
 
 | ID | Viewport／流程 | Expected |
 |---|---|---|
-| ROT-106-001 | 1440×900；正常入口開會、輸入、等待autosave、點X、重開 | 離開不詢問discard；同draft完整復原；保存訊號與signature一致 |
-| ROT-106-002 | 1024×768；尚未debounce即依序測X、離開模式、切view、開新／舊record | 每個入口自動flush後才離開；無重複dialog、遮擋或焦點遺失 |
+| ROT-106-001 | 1440×900；正常入口開會、輸入、以其他一般導覽離開再重開 | 離開不詢問discard；同draft完整復原；保存訊號與signature一致 |
+| ROT-106-002 | 1024×768；尚未debounce即依序測離開模式、切view、開新／舊record | 每個入口自動flush後才離開；無重複dialog、遮擋或焦點遺失 |
 | ROT-106-003 | 1024×768；explicit discard取消／失敗／成功 | discard獨立且有confirm；鍵盤Esc/Tab/Enter與focus return正確 |
 | ROT-106-004 | 390×844；由正常入口嘗試meeting並監看network/errors | 維持meeting-negative；remote recovery request=0；visible/console/page error=0 |
 | ROT-106-005／006 | 1024×768；IDB open failure與force-flush timeout | failure dialog只有三個恢復型action；2,000ms timeout不導航、不 reset，輸入與 focus 可保留 |
@@ -86,6 +87,7 @@ Phase 0 要證明的不是「永遠不會遺失任何一個字」，而是：
 | ROT-106-010 | 1024×768；explicit discard 取消與 IDB abort，鍵盤／focus | 取消與清理失敗均保留內容；Escape／Enter 可操作，焦點回到會議操作入口；fail-closed 狀態可見 |
 | ROT-106-011 | 1024×768；紀錄庫開啟既有紀錄，再由正常入口新增會議紀錄 | 開舊紀錄前先保留原 meeting recovery；關閉後可從正常入口開新 meeting，不誤清 recovery |
 | ROT-106-012 | 1024×768；注入 provider checkpoint、正式紀錄 upsert/delete、event log、record store actions 與 Undo push 失敗 | autosave／close／discard 不觸發注入服務；本機 recovery 與 side-effect storage 維持隔離 |
+| ROT-106-013 | 1440×900；打開 live meeting overflow，量測開啟前後 composer；分別在編輯中與已發布狀態執行 `儲存並離開` | 三個名稱與順序正確、X 不存在、浮層不改變寬高；正式草稿寫入成功後 composer 才關閉；已發布時 exit 可用且 record 維持 published | screenshot、DOM count、bounding box、local-test record readback |
 
 Browser case必須使用真實 `page.reload()` 驗復原；不可只重新mount component或直接讀service結果。
 
@@ -143,11 +145,13 @@ Phase 0 exit：TC-106-001～008與ROT-106-001、ROT-106-001-reload、ROT-106-002
 - 2026-09-04：建立DEV-106初版QA plan，曾同時涵蓋local durability、provider CAS、cloud recovery、end meeting與待整理。
 - 2026-09-04：依RD技術主管審查收斂為Phase 0 local safety executable plan；刪除未必要的cloud CAS／remote-only restore／tombstone cases，改以全provider 0 remote request、自動force-flush、terminal discard與誠實RPO為gate。
 - 2026-09-04：完成 Phase 0 QA gate；browser 14/14 PASS，ROT-106-008 驗證 canonical cleanup abort／retry、ROT-106-009 驗證四個 provider adapter checkpoint 0 次呼叫、ROT-106-010 驗證 explicit discard 取消／IDB abort focus、ROT-106-011 驗證紀錄庫開舊／正常入口開新、ROT-106-012 驗證 provider／正式紀錄／event／record store action／Undo push failure isolation；side-effect provenance 封關，Phase 1 readiness與正式 release仍待後續 gate。
+- 2026-09-08：新增 UI 結果命名 addendum（TC-106-009／ROT-106-013）；驗證 live meeting 無 X、三個 outcome label、save-success-before-close 與 overlay 不占版面。既有一般導覽 force-flush 與 discard fail-closed 仍為回歸邊界。
 
 ## 12. 本次候選執行紀錄
 
 - Static contract：`npm run verify:dev-106-meeting-local-safety` PASS，34/34 assertions；涵蓋 v1/v2 normalize、transaction `oncomplete`、per-scope latest queue、terminal clear barrier、delete-abort 後保留 session、force-flush wiring、紀錄庫／設定／看板切換守門、meeting cloud checkpoint kill switch 與 recovery hook 無正式／side-effect service import。artifact：`output/qa/dev-106-meeting-local-safety/result.json`。
 - Browser candidate：`npm run verify:dev-106-meeting-local-safety-browser` PASS，14/14 cases；包含 runtime harness（transaction acknowledgement、S1/S2/S3 coalesce、clear barrier、IDB open failure、save/delete abort、session fallback、兩端失敗）、ROT-106-001 快速關閉、ROT-106-001-reload 真實 F5 復原、ROT-106-005 failure dialog、ROT-106-006 2,000ms force-flush timeout、ROT-106-002 1024px 紀錄庫／設定／系統頁返回、ROT-106-011 開舊／開新入口、ROT-106-007 canonical cleanup、ROT-106-008 canonical cleanup abort／retry readback、ROT-106-009 四個 provider adapter checkpoint spy、ROT-106-012 provider／正式紀錄／event／record store action／Undo push failure injection isolation、ROT-106-010 discard 取消／abort focus、ROT-106-003 explicit discard、ROT-106-004 390px negative。artifact：`output/playwright/dev-106-meeting-local-safety/result.json`；diagnostics、HTTP failures、remote recovery requests 均為 0，side-effect storage delta 為空。
+- 2026-09-08 UI addendum candidate：`npm run verify:dev-094-meeting-direct-note-browser` PASS；1440×900 實際選單 exact labels／順序、live meeting 無 X、menu 前後 composer geometry 不變、canonical record readback 後才 close，且已發布紀錄可離開並維持 `published`；同時保留 390×844 meeting-negative。可見本機頁面另於 1536×639 驗證三個選項、無 X、無水平溢出、無 visible alert，開關選單前後 sidebar 皆為 440×599.2。artifact：`output/playwright/dev-094/result.json`、`output/playwright/dev-094/meeting-actions-1440x900.png`。
 - Regression：DEV-069 static/browser、DEV-010、DEV-020 static/browser、DEV-094 static/pure/browser、DEV-105 static/browser 均 PASS；DEV-020 browser verifier 已改為驗證個人紀錄功能的明確 unavailable contract，並保留 meeting workflow／exit assertions。
 - Build gate：`npx tsc --noEmit`、`npm run lint`（0 errors，既有 warnings）、`npm run build:test`、`git diff --check` PASS。
 - Gate disposition：TC／ROT 已完成 Phase 0 需求覆蓋；ROT-106-011 補足紀錄庫開舊／正常入口開新，ROT-106-010 補足 discard failure focus／keyboard，ROT-106-008 補足 cleanup retry readback，ROT-106-012 補足 provider／正式紀錄／event／store action／Undo push failure isolation。Phase 0 QA PASS；Phase 1 readiness與正式 release 仍維持獨立 gate。

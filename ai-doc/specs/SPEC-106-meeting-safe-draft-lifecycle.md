@@ -26,8 +26,8 @@
 Phase 0 只承諾以下結果：
 
 - 編輯中自動建立本機 recovery，不要求使用者按「存草稿」。
-- app 內一般離開前自動嘗試把目前 signature 強制落盤；成功後才離開。
-- 只有獨立且二次確認的 `捨棄本次會議` 會放棄未保存內容。
+- app 內一般導覽離開前自動嘗試把目前 signature 強制落盤；成功後才離開。
+- 會議面板內的主動離開只由明確的 `儲存並離開` 或二次確認的 `刪除並離開` 觸發。
 - 所有 meeting cloud checkpoint 在 Phase 0 停用，避免沿用未完成驗證的遠端寫入與隱私假設。
 - 瀏覽器／OS 在 transaction commit 前突然終止時，仍可能遺失最後尚未提交的尾段；不得宣稱零資料遺失。
 
@@ -35,11 +35,11 @@ Phase 0 只承諾以下結果：
 
 ## 2. 不變條件
 
-1. `離開` 只改變畫面位置，不等於儲存、發布、封存或刪除。
+1. 一般導覽離開只改變畫面位置，不等於儲存、發布、封存或刪除；`儲存並離開` 是使用者明確選擇的複合操作。
 2. 草稿 recovery 由系統自動建立；`存草稿` 是把內容寫入 canonical record 的次要操作，不是資料存活的必要步驟。
 3. `發布` 只改變正式狀態與可見性，不得兼作編輯中內容的唯一救援機制。
 4. 一般關閉 dialog 不得提供 `不儲存離開`、`直接離開` 或任何隱含清除 recovery 的 action。
-5. `捨棄本次會議` 必須是獨立 overflow danger action，經確認後只影響目前 scope。
+5. `刪除並離開` 必須是獨立 overflow danger action，經確認後只清除目前 scope 尚未正式儲存的內容；既有 canonical baseline 保留。
 6. recovery、restore、close、discard 不觸發 AI、task-link、undo、document/version/chunk/embedding、RAG 或 event log。
 7. Phase 0 只保證目前 tab runtime 的寫入順序；同一草稿多 tab／跨裝置同時編輯不在本期保證範圍，文件與UI不得宣稱已支援。
 8. 手機／coarse-pointer 的 meeting-negative boundary 維持 DEV-069／DEV-094 現況。
@@ -66,7 +66,7 @@ Phase 0 只承諾以下結果：
 
 ### 4.2 App 內一般離開
 
-適用於 RecordSidebar X、離開 meeting mode、切換 view、切換看板、開新紀錄、開啟另一筆紀錄。
+適用於離開 meeting mode、切換 view、切換看板、開新紀錄、開啟另一筆紀錄。RecordSidebar 在 live meeting 不顯示語意不明的 X；面板內主動離開改由 4.3 的明確結果操作負責。
 
 | 當下狀態 | 系統行為 |
 |---|---|
@@ -77,12 +77,13 @@ Phase 0 只承諾以下結果：
 
 一般離開不先詢問使用者是否要保存。只有自動保護失敗時才顯示恢復型 dialog，且不得放入 discard action。
 
-### 4.3 明確捨棄
+### 4.3 會議面板明確結果操作
 
-- 入口：meeting overflow／次要功能區的 `捨棄本次會議`。
-- 確認文案必須說明：將放棄目前尚未正式保存的內容；若已有 canonical baseline，該 baseline 保留。
-- 取消時不改變 storage、store、route 或 meeting mode。
-- 確認時執行同 scope terminal clear barrier；成功後才 reset／離開。
+- live meeting 標題列只保留收合與 `會議操作` overflow，不顯示另一個 X；overflow 第一層固定依序顯示 `儲存草稿`、`儲存並離開`、`刪除並離開`。
+- `儲存草稿`：沿用 canonical draft save；成功後停留在會議面板，失敗保留內容與面板。
+- `儲存並離開`：編輯中先等待 canonical draft save 成功才關閉面板；失敗不得 close/reset，並顯示可重試錯誤。若紀錄已發布，直接關閉面板且不得降回 draft。
+- `刪除並離開`：沿用 explicit discard。確認文案必須說明只刪除目前尚未正式儲存的內容；若已有 canonical baseline，該 baseline 保留。
+- discard 取消時不改變 storage、store、route 或 meeting mode；確認時執行同 scope terminal clear barrier，成功後才 reset／離開。
 - IDB delete 失敗時保留 session copy與目前畫面，不顯示成功；不得改用 archive、hard delete 或清除其他 scope。
 - Phase 0 cloud recovery 已停用，因此 discard 不做任何 remote mutation。
 
@@ -182,10 +183,10 @@ type MeetingDraftDurability =
 | `src/utils/meetingRecordWorkflow.ts` | 保留 DEV-105 變更；加入 pure close/discard decision 與 signature helper | 不直接存取 DOM、store、IndexedDB、provider |
 | `src/services/meetingDraftRecoveryService.ts` | transaction-complete helper、per-scope latest queue、v1 read/v2 write、terminal clear barrier | 不升 IDB version、不把 session success 當 durable |
 | `src/hooks/useMeetingDraftRecovery.ts` | debounce、forceFlush、generation、beforeunload、準確 durability state | 不呼叫 remote checkpoint、不呼叫完整 `saveDraft()` 代替 autosave |
-| `src/hooks/useMeetingDraftDiscard.ts`（new） | 集中 explicit discard confirm、scope terminal clear與fail-closed feedback | 不複製 storage 邏輯、不加入一般 close discard |
+| `src/hooks/useMeetingDraftDiscard.ts`（new） | 集中 `刪除並離開` confirm、scope terminal clear與fail-closed feedback | 不複製 storage 邏輯、不加入一般 close discard |
 | `src/hooks/useMeetingModeExitGuard.ts`、`src/hooks/useRecordDraftGuard.ts` | meeting 分支接入 safety actions；work_log 舊行為不變 | meeting 不得顯示 `直接離開／不儲存，繼續` |
 | `src/store/useRecordStore.ts` | 移除 closePanel/openNewRecord/openExistingRecord 的 implicit recovery clear；canonical success才請求cleanup | 不覆蓋使用者既有 DEV-105 dirty hunk |
-| `src/components/Records/RecordSidebar.tsx` | overflow discard、confirm、focus return、失敗 feedback、meeting safe-close wiring | 不把 danger action做成主 CTA、不 hard delete |
+| `src/components/Records/RecordSidebar.tsx` | overflow 三個明確結果操作、移除 live meeting X、focus return與失敗 feedback | 不增加固定版面高度、不把 danger action做成主 CTA、不 hard delete canonical baseline |
 | `src/components/MainLayout.tsx`、`src/components/Sidebar.tsx`、`src/components/Records/RecordsView.tsx`、`src/components/SettingsView.tsx` | 所有既有 view／board return 與切換入口接入 shared draft guard | 不新增 Phase 1 待整理 UI 或改變非 meeting navigation semantics |
 | `src/services/dataBackend.ts`、`src/services/supabase/projedService.ts`、`src/services/firestoreService.ts`、`src/services/localTestService.ts` | decommission meeting recovery checkpoint surface，或明確回 unsupported 且 0 request | 不改 schema／migration／RLS／rules，不保留可誤呼叫的 unsafe path |
 | `scripts/verify-dev-106-meeting-local-safety.ts`（new） | pure/service/queue/storage/cloud-zero verifier | source scan 不得單獨算行為 PASS |
@@ -210,8 +211,10 @@ type MeetingDraftDurability =
 - [x] request success 後、transaction complete 前仍顯示 saving；abort 不產生假成功。
 - [x] 快速 S1/S2/S3、out-of-order completion、clear race 最終只可恢復合約允許的最新內容。
 - [x] v1 snapshot 可讀、v2 可寫，DB version／store／session prefix 不變。
-- [x] X、離開模式、切 view、開新／舊 record 都先自動 force-flush；成功才離開，失敗／timeout 保留輸入與畫面。
-- [x] 一般 close 沒有 discard／不儲存 action；explicit discard 取消、成功、IDB failure 均符合 fail-closed。
+- [x] 離開模式、切 view、開新／舊 record 都先自動 force-flush；成功才離開，失敗／timeout 保留輸入與畫面。
+- [x] live meeting 不顯示 X；overflow 只以 `儲存草稿`、`儲存並離開`、`刪除並離開` 表達結果，且不改變 composer 幾何。
+- [x] `儲存並離開` 在編輯中只於 canonical save 成功後 close；save failure 保留輸入與畫面；已發布時可直接離開且不降回 draft。
+- [x] 一般導覽 close 沒有 discard／不儲存 action；explicit discard 取消、成功、IDB failure 均符合 fail-closed。
 - [x] autosave、restore、close、discard 在 Supabase、Firestore、local-test fixture 的 remote recovery read/write count 都是 0。
 - [x] recovery side-effect 的 AI、task links、undo、documents、RAG、event delta 都是 0；ROT-106-012 以 provider checkpoint、正式紀錄、event log、record store actions、Undo push failure injection 與 side-effect storage delta 證明不會進入正式副作用路徑。
 - [x] 1440×900、1024×768 正常與失敗流程可操作；390×844 保持 meeting-negative，無 visible/console/page error。
@@ -282,3 +285,4 @@ Phase 1 不得開工，直到以下問題有欄位級契約與 failure tests：
 - 2026-09-04：初版 Phase 0 升級為 RD Implementation Ready，曾同時納入 provider CAS、owner-private overlay、Firestore降級與remote-only restore；產品／QA／QC未執行。
 - 2026-09-04：依 RD技術主管審查移除 Phase 0 cloud/CAS/tombstone/remote-only restore過度設計；Phase 0 收斂為 local safety slice，改採 app內離開自動 force-flush、明確本機 discard與全 provider 0 remote recovery request。Phase 1保留Contract Ready，future cloud改要求獨立 authority與ADR。
 - 2026-09-04：完成 Phase 0 local implementation、deterministic failure harness、2,000ms force-flush timeout、canonical cleanup abort／retry readback、四個 provider adapter checkpoint spy、開新／開舊入口、discard 取消／abort focus、provider／正式紀錄／event failure isolation、store action／Undo push failure injection evidence；DEV-106 browser 14/14、static、既有 DEV-010／020／069／094／105 回歸與 type/lint/build 全數 PASS，Phase 0 QA/QC gate 封關；Phase 1 readiness與正式 release仍未完成。
+- 2026-09-08：依使用者決策做 UI 意圖性替換；live meeting 移除語意不明的 X，既有 overflow 收斂為 `儲存草稿`、`儲存並離開`、`刪除並離開`。前兩者明示 canonical save 是否伴隨離開；danger action 只更名並保留 local discard／canonical baseline 不 hard delete 的安全邊界。

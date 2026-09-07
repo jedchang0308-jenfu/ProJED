@@ -29,6 +29,7 @@
 | `npm run lint` | PASS，0 errors；保留既有 warnings |
 | `npm run build:test` | PASS |
 | `git diff --check` | PASS（僅 CRLF warning） |
+| 2026-09-08 UI addendum | PASS：live meeting 的 `會議操作` 依序為 `儲存草稿`／`儲存並離開`／`刪除並離開`，標題列無 X；1440×900 browser 證明 menu 不改 composer geometry、canonical save 成功後才 close、已發布紀錄可離開且維持 `published`；1536×639 目前本機頁面證明 sidebar 開關前後皆為 440×599.2、無水平溢出與 visible alert。artifact：`output/playwright/dev-094/result.json`、`output/playwright/dev-094/meeting-actions-1440x900.png` |
 
 ## Gate disposition
 
@@ -36,6 +37,7 @@
 - ROT-106-002～004 已有 1024px records／settings／system-return、failure dialog、discard、390px negative evidence；ROT-106-010 已補足 failure dialog 的鍵盤／focus，ROT-106-011 補足開舊／開新 rendered entry。
 - 全 provider 已由 static kill switch、四個 adapter-level spy、failure injection與瀏覽器 remote recovery request=0 證明 recovery 不呼叫 cloud checkpoint；Phase 0不宣稱已具備雲端 cleanup，雲端能力維持 future capsule。
 - Phase 1 readiness gaps（canonical atomicity／compensation、same-ID idempotency、legacy mapping、projection race）仍存在。
+- 2026-09-08 UI addendum 通過 targeted static、browser、TypeScript、lint 與完整 `verify:source`；屬入口與文案的意圖性替換，不改 local discard、canonical baseline、provider 或發布語意。
 
 ## 風險與 release boundary
 

@@ -69,7 +69,7 @@ Spec Impact：`Intentional replacement / Phase 0 QA-QC passed`。原Phase 0把�
 | `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md`、DEV-094 | Existing workflow / DEV-106 target amendment | 匯入、速記焦點、AI明確觸發、task links與publish-only cutoff保留；meeting改為end後needs_review再發布，work_log不變。 |
 | Supabase／Firestore／Local Test record adapters | Existing implementation / Phase 0 cloud kill switch | 三個provider的meeting recovery read/write一律為0；舊checkpoint surface移除或明確unsupported。若要求cloud recovery或remote變更，停止並進ADR／provider安全gate。 |
 
-已確認方向：一般離開不顯示「不儲存離開」，且在未commit時先自動force-flush；獨立`捨棄本次會議`只清目前scope的local/session recovery，canonical baseline保留。Phase 0不做任何remote recovery mutation。Phase 1的`結束會議`、needs_review與發布順序保留為方向，但原子性／冪等契約補足前不得實作。心跳偵測、草稿收件匣、智慧收尾、多版本與跨裝置續編保留為 future capsules，不因本次 local slice 自動開工。
+已確認方向：一般導覽離開不顯示「不儲存離開」，且在未commit時先自動force-flush。2026-09-08 的 UI 意圖性替換移除 live meeting 標題列 X，既有 overflow 固定為 `儲存草稿`、`儲存並離開`、`刪除並離開`；最後一項只清目前scope的local/session recovery，canonical baseline保留。Phase 0不做任何remote recovery mutation。Phase 1的`結束會議`、needs_review與發布順序保留為方向，但原子性／冪等契約補足前不得實作。心跳偵測、草稿收件匣、智慧收尾、多版本與跨裝置續編保留為 future capsules，不因本次 local slice 自動開工。
 
 Human re-entry：Phase 0不含cloud recovery、30天retention、永久刪除、archived restore UI、跨裝置merge、revision history、錄音／逐字稿與手機會議；任一remote recovery要求都必須重新進入ADR／provider／隱私風險gate。
 

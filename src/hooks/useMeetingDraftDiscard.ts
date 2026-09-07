@@ -32,13 +32,13 @@ export const useMeetingDraftDiscard = () => {
   const discard = React.useCallback(async () => {
     if (!canDiscard || !userId || !activeWorkspaceId || !activeBoardId || draft?.type !== 'meeting' || !draft.id) return false;
     const choice = await showActionDialog({
-      title: '捨棄本次會議？',
-      message: '這會放棄尚未正式保存的會議內容；若已有正式草稿，該草稿會保留。',
+      title: '刪除未儲存內容並離開？',
+      message: '這會刪除本次尚未正式儲存的會議內容；若已有草稿，已儲存的版本仍會保留。',
       actions: [
         {
           id: 'discard',
-          label: '捨棄本次會議',
-          description: '清除目前裝置上的未完成內容，且無法由本機復原。',
+          label: '刪除並離開',
+          description: '清除目前裝置上的未儲存內容，且無法由本機復原。',
           variant: 'danger',
         },
         { id: 'cancel', label: '取消', variant: 'secondary' },

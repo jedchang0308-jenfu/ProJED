@@ -3843,6 +3843,7 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 - 範圍：本機 recovery、transaction commit truth、離開前 force-flush、明確 discard 與 provider 0 recovery request；Phase 1 cloud／跨裝置／待整理維持 future capsule。
 - 證據：`ai-doc/specs/SPEC-106-meeting-safe-draft-lifecycle.md`、`ai-doc/qa/QA-DEV-106-meeting-safe-draft-lifecycle.md`、`ai-doc/qc/QC-DEV-106-meeting-safe-draft-lifecycle.md`；static PASS、browser 14/14 PASS。
 - Release boundary：未 commit、未 push、未 deploy；正式 release 仍需獨立 release gate。
+- 2026-09-08 UI addendum：live meeting 移除語意不明的 X；`會議操作` 收斂為 `儲存草稿`、`儲存並離開`、`刪除並離開`。編輯中的 save-and-exit 必須 canonical save 成功才 close，失敗留在原畫面；已發布時直接離開且不降回 draft；danger action 維持只清未儲存 local recovery、保留既有 canonical baseline。DEV-094 browser PASS（選單 exact labels／無 X／geometry／canonical save before close）、DEV-094／106 static、TypeScript、targeted lint、完整 `verify:source` 與目前本機可見畫面 QC PASS；Local-only / NOT RELEASED。
 
 ## DEV-107：會議草稿側欄模式與排版收斂
 

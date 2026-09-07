@@ -26,6 +26,12 @@ async (page) => {
   const saveMenu = page.locator('[data-meeting-draft-overflow-menu]');
   await saveMenu.waitFor({ state: 'visible', timeout: 1000 });
   if (await saveMenu.locator('[data-meeting-draft-save]').count() !== 1) throw new Error('meeting overflow should expose one compact save-draft action');
+  if (await saveMenu.locator('[data-meeting-draft-save-and-exit]').count() !== 1) throw new Error('meeting overflow should expose one explicit save-and-exit action');
+  if (await saveMenu.locator('[data-meeting-draft-discard]').count() !== 1) throw new Error('meeting overflow should expose one explicit delete-and-exit action');
+  const meetingMenuLabels = (await saveMenu.getByRole('menuitem').allTextContents()).map(label => label.trim());
+  if (meetingMenuLabels.join('|') !== '儲存草稿|儲存並離開|刪除並離開') throw new Error(`meeting actions should use explicit outcome labels: ${JSON.stringify(meetingMenuLabels)}`);
+  if (await page.locator('[data-record-composer-close]').count() !== 0) throw new Error('live meeting should not expose a separate ambiguous close action');
+  await page.screenshot({ path: 'output/playwright/dev-094/meeting-actions-1440x900.png', fullPage: true });
   const shellAfterSaveMenu = await page.locator('[data-record-composer-shell]').boundingBox();
   if (!shellBeforeSaveMenu || !shellAfterSaveMenu || Math.abs(shellBeforeSaveMenu.width - shellAfterSaveMenu.width) > 1 || Math.abs(shellBeforeSaveMenu.height - shellAfterSaveMenu.height) > 1) {
     throw new Error(`meeting save menu changed composer layout: ${JSON.stringify({ shellBeforeSaveMenu, shellAfterSaveMenu })}`);
@@ -83,6 +89,27 @@ async (page) => {
     throw new Error(`DEV-094 meeting UI contract failed: ${JSON.stringify(evidence)}`);
   }
   await page.screenshot({ path: 'output/playwright/dev-094/desktop-no-import.png', fullPage: true });
+  await page.locator('[data-meeting-draft-overflow]').click();
+  await page.locator('[data-meeting-draft-save-and-exit]').click();
+  await page.locator('[data-record-composer-shell]').waitFor({ state: 'hidden', timeout: 10000 });
+  const savedMeetingRecords = await page.evaluate(() => localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
+  if (!savedMeetingRecords.includes('DEV-094 direct note smoke')) throw new Error('save-and-exit closed without persisting the meeting draft');
+  await page.locator('button', { hasText: '新增會議記錄' }).first().click();
+  const publishedEditor = page.locator('[data-record-content-editor]');
+  await publishedEditor.waitFor({ state: 'visible', timeout: 10000 });
+  await publishedEditor.fill('DEV-094 published exit smoke');
+  await page.locator('[data-meeting-workflow-step="published"]').click();
+  await page.locator('[data-meeting-draft-overflow]').click();
+  const publishedExit = page.locator('[data-meeting-draft-save-and-exit]');
+  await publishedExit.waitFor({ state: 'visible', timeout: 5000 });
+  if (await publishedExit.isDisabled()) throw new Error('published meeting should retain a safe exit path after the header close action is removed');
+  await publishedExit.click();
+  await page.locator('[data-record-composer-shell]').waitFor({ state: 'hidden', timeout: 10000 });
+  const publishedMeetingRecord = await page.evaluate(() => {
+    const records = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
+    return records.find(record => record.content === 'DEV-094 published exit smoke') || null;
+  });
+  if (publishedMeetingRecord?.status !== 'published') throw new Error(`published exit must not downgrade the record: ${JSON.stringify(publishedMeetingRecord)}`);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(100);
   const mobileNegative = await page.evaluate(() => ({

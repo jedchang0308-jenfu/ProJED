@@ -404,7 +404,7 @@ async (page) => {
     await page.locator('[data-meeting-draft-overflow-menu] [data-meeting-draft-discard]').click();
     const discardDialog = page.locator('[data-global-dialog="true"]');
     await discardDialog.waitFor({ state: 'visible', timeout: 5000 });
-    await discardDialog.locator('[data-global-dialog-decision="true"]', { hasText: '捨棄本次會議' }).click();
+    await discardDialog.locator('[data-global-dialog-decision="true"]', { hasText: '刪除並離開' }).click();
     await page.locator('[data-record-composer-shell]').waitFor({ state: 'hidden', timeout: 5000 });
     return { labels: normalizedLabels, cancelledWithContent: true };
   });
@@ -734,7 +734,7 @@ async (page) => {
       await page.locator('[data-meeting-draft-overflow-menu] [data-meeting-draft-discard]').click();
       const dialog = page.locator('[data-global-dialog="true"]');
       await dialog.waitFor({ state: 'visible', timeout: 5000 });
-      await dialog.locator('[data-global-dialog-decision="true"]', { hasText: '捨棄本次會議' }).click();
+      await dialog.locator('[data-global-dialog-decision="true"]', { hasText: '刪除並離開' }).click();
       await page.locator('[data-record-composer-shell]').waitFor({ state: 'hidden', timeout: 5000 });
       const sideEffectsAfter = await sideEffectStorage();
       const calls = await page.evaluate(() => ({
@@ -851,7 +851,7 @@ async (page) => {
     await menu.locator('[data-meeting-draft-discard]').click();
     const dialog = page.locator('[data-global-dialog="true"]');
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
-    await dialog.locator('[data-global-dialog-decision="true"]', { hasText: '捨棄本次會議' }).click();
+    await dialog.locator('[data-global-dialog-decision="true"]', { hasText: '刪除並離開' }).click();
     await page.locator('[data-record-composer-shell]').waitFor({ state: 'hidden', timeout: 5000 });
     const storage = await recoveryStorage();
     assert(storage.sessionKeys.length === 0 && storage.indexedDbScopes.length === 0, 'discard left recovery data behind', storage);

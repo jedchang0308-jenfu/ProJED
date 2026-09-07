@@ -58,6 +58,7 @@ const mainLayout = read('src/components/MainLayout.tsx');
 const recordsView = read('src/components/Records/RecordsView.tsx');
 const settingsView = read('src/components/SettingsView.tsx');
 const browserVerifier = read('scripts/verify-dev-106-meeting-local-safety-browser.pw.js');
+const meetingSaveAndExitHandler = sidebar.slice(sidebar.indexOf('const handleMeetingSaveAndExit'), sidebar.indexOf('const handleSynthesizeMeetingDraft'));
 
 assert('transaction completion is the persistence acknowledgement', recoveryService.includes('transaction.oncomplete = () => settle(requestFailed ? null : requestResult)'));
 assert('request success does not close or resolve early', !recoveryService.includes('request.onsuccess = () => {\n        database.close();\n        resolve(request.result ?? null);'));
@@ -82,12 +83,14 @@ assert('board switching transitions are guarded', workspaceSidebar.includes('voi
 assert('system-page return transition is guarded', mainLayout.includes('void guardRecordDraft(() => setView(nextView)') && mainLayout.includes('返回看板會離開目前紀錄'));
 assert('records page return transition is guarded', recordsView.includes('void guardRecordDraft(() => setView(') && recordsView.includes('返回看板會離開目前紀錄'));
 assert('settings page return transition is guarded', settingsView.includes('useRecordDraftGuard') && settingsView.includes('void guardRecordDraft(() => setView('));
-assert('explicit discard is isolated', discardHook.includes('捨棄本次會議') && discardHook.includes('clearMeetingDraftSnapshot') && discardHook.includes('resetMeetingDraftRecoveryState'));
+assert('explicit delete-and-exit keeps discard isolation', discardHook.includes('刪除並離開') && discardHook.includes('clearMeetingDraftSnapshot') && discardHook.includes('resetMeetingDraftRecoveryState'));
 assert('discard is an overflow action', sidebar.includes('data-meeting-draft-overflow') && sidebar.includes('data-meeting-draft-discard'));
+assert('save-and-exit waits for canonical save and fails closed', sidebar.includes('data-meeting-draft-save-and-exit') && meetingSaveAndExitHandler.includes('if (isPublished)') && meetingSaveAndExitHandler.includes("await saveDraft({ nodes, status: 'draft' })") && meetingSaveAndExitHandler.includes('if (!saved)') && meetingSaveAndExitHandler.indexOf('if (!saved)') < meetingSaveAndExitHandler.lastIndexOf('closePanel()'));
+assert('live meeting removes the ambiguous generic close action', sidebar.includes('{!isLiveMeeting ? (') && sidebar.includes('data-record-composer-close'));
 assert('discard cancel or failure restores operation focus', sidebar.includes('meetingOverflowButtonRef') && sidebar.includes('requestAnimationFrame(() => meetingOverflowButtonRef.current?.focus())'));
 assert('normal local status is intentionally quiet while warning status remains polite', !sidebar.includes('已保存在此裝置') && sidebar.includes('aria-live="polite"'));
 assert('browser verifier covers entry matrix, cleanup retry and provider/action failure isolation', browserVerifier.includes("runCase('ROT-106-011'") && browserVerifier.includes('cleanupRetried: true') && browserVerifier.includes("runCase('ROT-106-010'") && browserVerifier.includes("runCase('ROT-106-012'") && browserVerifier.includes('recordActionNames') && browserVerifier.includes('originalUndoPush') && browserVerifier.includes('__DEV106_FAILURE_INJECTION_SPY__'));
-assert('meeting close copy promises automatic local protection', sidebar.includes('離開不等於發布，未儲存變更會先自動保護內容。'));
+assert('meeting menu names state save and exit outcomes explicitly', sidebar.includes('儲存草稿') && sidebar.includes('儲存並離開') && sidebar.includes('刪除並離開'));
 assert('spec and QA define the local safety slice', read('ai-doc/specs/SPEC-106-meeting-safe-draft-lifecycle.md').includes('Local Safety Slice') && read('ai-doc/qa/QA-DEV-106-meeting-safe-draft-lifecycle.md').includes('TC-106-008'));
 
 const artifact = {
