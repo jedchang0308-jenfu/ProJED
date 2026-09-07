@@ -20,8 +20,7 @@ async (page) => {
     throw new Error(`速記 shortcut must only focus content: ${JSON.stringify({ initialFocused, focusAfterShortcut, writes: recordsBeforeFocus !== recordsAfterFocus })}`);
   }
   await editor.fill('DEV-094 direct note smoke');
-  await page.locator('[data-record-meeting-save-draft]').click();
-  await page.waitForTimeout(150);
+  if (await page.locator('[data-record-meeting-save-draft]').count() !== 0) throw new Error('meeting draft/share footer controls should not render');
   if (await page.locator('[data-record-status-summary]').count() !== 0) throw new Error('meeting composer should not render a redundant status summary');
   if (await page.locator('[data-project-change-import-panel]').count()) throw new Error('meeting default import must not render the work-log settings panel');
   const importTrigger = page.locator('[data-meeting-import-trigger]');
@@ -65,15 +64,11 @@ async (page) => {
   importMenuClosed: !document.querySelector('[data-meeting-import-menu]'),
   actions: Boolean(document.querySelector('[data-record-meeting-actions]')),
   publishAction: Boolean(document.querySelector('[data-record-meeting-publish]')),
-  actionPlacement: (() => {
-    const editor = document.querySelector('[data-record-content-editor]')?.getBoundingClientRect();
-    const actions = document.querySelector('[data-record-meeting-actions]')?.getBoundingClientRect();
-    return editor && actions ? { editorBottom: editor.bottom, actionsTop: actions.top } : null;
-  })(),
+  actionPlacement: null,
   horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
   visibleAlerts: document.querySelectorAll('[role="alert"]').length,
   }));
-  if (!evidence.workflow || !evidence.editor || !evidence.importControl || evidence.importTriggerLabel !== '匯入專案變化' || !evidence.importMenuClosed || !evidence.actions || evidence.publishAction || !evidence.actionPlacement || evidence.actionPlacement.actionsTop < evidence.actionPlacement.editorBottom - 1 || evidence.horizontalOverflow) {
+  if (!evidence.workflow || !evidence.editor || !evidence.importControl || evidence.importTriggerLabel !== '匯入專案變化' || !evidence.importMenuClosed || evidence.actions || evidence.publishAction || evidence.actionPlacement !== null || evidence.horizontalOverflow) {
     throw new Error(`DEV-094 meeting UI contract failed: ${JSON.stringify(evidence)}`);
   }
   await page.screenshot({ path: 'output/playwright/dev-094/desktop-no-import.png', fullPage: true });

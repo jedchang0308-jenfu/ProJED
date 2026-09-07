@@ -619,11 +619,11 @@ async (page) => {
       }, null, 2);
     }
 
-    stage = 'save_review_draft';
-    const saveDraftButton = page.locator('[data-record-meeting-save-draft]');
-    await saveDraftButton.waitFor({ state: 'visible', timeout: 10000 });
-    await saveDraftButton.click();
-    await page.waitForTimeout(1200);
+    stage = 'meeting_footer_controls_removed';
+    if (await page.locator('[data-record-meeting-save-draft]').count() !== 0) {
+      throw new Error('meeting draft/share footer controls should not render');
+    }
+    await page.waitForTimeout(150);
     await page.waitForFunction(
       () => !document.querySelector('[data-meeting-workflow-step="published"]')?.hasAttribute('disabled'),
       null,

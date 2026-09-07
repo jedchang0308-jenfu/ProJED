@@ -23,7 +23,7 @@ const checks = [
   ['focus token and no-save shortcut', files.workflow.includes("command: 'focusContent'") && files.store.includes('requestContentFocus') && files.store.includes('consumeContentFocus')],
   ['editor focus request', files.editor.includes('EditorFocusRequestPlugin') && files.editor.includes('data-record-content-editor')],
   ['meeting two-layer import control', files.importControl.includes('匯入專案變化') && files.importControl.includes('data-meeting-import-trigger') && files.importControl.includes('data-meeting-import-menu') && files.importControl.includes('帶入上次會議後變更') && files.importControl.includes('自訂日期') && files.sidebar.includes('MeetingProjectChangeImportControl')],
-  ['meeting draft action placement', files.sidebar.includes('data-record-meeting-actions') && files.sidebar.includes('data-record-meeting-save-draft') && !files.sidebar.includes('data-record-meeting-publish')],
+  ['meeting draft footer controls are removed', !files.sidebar.includes('data-record-meeting-actions') && !files.sidebar.includes('data-record-meeting-save-draft') && files.sidebar.includes('data-meeting-workflow-step={step.stage}')],
   ['work-log import remains separate', files.sidebar.includes('projectChangeImportPanel') && files.sidebar.includes('WorkLogWorkflowCard')],
   ['publish-only cutoff projection', files.store.includes('projectMeetingProjectChangeImportMetadata') && files.store.includes("wantsPublish ? 'published' : 'draft'" )],
   ['tracked pure verifier', read('scripts/verify-dev-094-meeting-direct-note.pure.ts').includes('resolveMeetingProjectChangeImportCutoff') && read('scripts/verify-dev-094-meeting-direct-note.pure.ts').includes('missing stable event ID')],

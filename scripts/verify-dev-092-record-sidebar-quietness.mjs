@@ -21,11 +21,9 @@ const required = [
   'data-record-meeting-meta-grid',
   'data-record-content-header',
   "meetingWorkflowSteps.filter(step => step.stage !== 'review')",
-  'data-record-meeting-actions className="flex items-center justify-between gap-2 px-2 py-1"',
+  'data-record-compact-controls className="rounded-md border border-slate-200 bg-white"',
   'selectedLinks.length ? (',
-  '!isMeetingMode && selectedLinks.length && isLinkedTasksOpen',
-  'h-6 min-w-0 max-w-[150px] flex-1',
-  "<span className=\"shrink-0 text-[10px] font-semibold leading-3 text-slate-400\">分享範圍</span>",
+  'selectedLinks.length && isLinkedTasksOpen',
   'flex h-9 min-w-0 flex-1',
   'cursor-pointer',
   'hover:bg-emerald-800',
@@ -61,6 +59,9 @@ const forbidden = [
   'getMeetingWorkflowStepHint',
   'data-record-status-summary',
   '目前狀態',
+  'data-record-meeting-actions',
+  'data-record-meeting-save-draft',
+  'text-slate-400">分享範圍</span>',
 ];
 
 const failures = [];

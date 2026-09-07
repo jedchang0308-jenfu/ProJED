@@ -109,28 +109,9 @@ async (page) => {
     const compactControls = page.locator('[data-record-compact-controls]');
     const compactControlsHeight = await compactControls.boundingBox().then(box => box?.height ?? 0);
     compactControlHeights.push({ label, height: compactControlsHeight });
-    assert(compactControlsHeight <= 44, `${label}: meeting visibility control should use the compact layout`, { compactControlsHeight });
-    assert(await compactControls.getByText('分享範圍', { exact: true }).count() === 1, `${label}: compact meeting visibility label should remain discoverable`);
-    const meetingActionLayout = await page.evaluate(() => {
-      const row = document.querySelector('[data-record-meeting-actions]');
-      const save = document.querySelector('[data-record-meeting-save-draft]');
-      const visibility = document.querySelector('[data-record-visibility-control]');
-      if (!row || !save || !visibility) return null;
-      const rowRect = row.getBoundingClientRect();
-      const saveRect = save.getBoundingClientRect();
-      const visibilityRect = visibility.getBoundingClientRect();
-      return {
-        display: getComputedStyle(row).display,
-        rowTop: rowRect.top,
-        saveTop: saveRect.top,
-        saveBottom: saveRect.bottom,
-        visibilityTop: visibilityRect.top,
-        visibilityBottom: visibilityRect.bottom,
-        saveRight: saveRect.right,
-        visibilityLeft: visibilityRect.left,
-      };
-    });
-    assert(meetingActionLayout?.display === 'flex' && meetingActionLayout.saveTop < meetingActionLayout.visibilityBottom && meetingActionLayout.visibilityTop < meetingActionLayout.saveBottom && meetingActionLayout.saveRight <= meetingActionLayout.visibilityLeft + 1, `${label}: save and visibility controls should share one horizontal row`, meetingActionLayout);
+    assert(await compactControls.count() === 0, `${label}: meeting mode should remove the draft/share footer container`);
+    assert(await page.locator('[data-record-meeting-actions]').count() === 0, `${label}: meeting draft footer actions should be removed`);
+    assert(await page.locator('[data-record-meeting-save-draft]').count() === 0, `${label}: meeting footer save button should be removed`);
     const meetingMetaGrid = page.locator('[data-record-meeting-meta-grid]');
     assert(await meetingMetaGrid.count() === 1, `${label}: meeting title and time should share one metadata row`);
     const meetingMetaGeometry = await meetingMetaGrid.locator(':scope > label').evaluateAll(nodes => nodes.map(node => {
@@ -142,11 +123,9 @@ async (page) => {
     const contentLayout = await page.evaluate(() => {
       const editor = document.querySelector('[contenteditable="true"]');
       const contentLabel = editor?.closest('label');
-      const controls = document.querySelector('[data-record-compact-controls]');
-      if (!editor || !contentLabel || !controls) return null;
+      if (!editor || !contentLabel) return null;
       const editorRect = editor.getBoundingClientRect();
       const contentLabelRect = contentLabel.getBoundingClientRect();
-      const controlsRect = controls.getBoundingClientRect();
       const editorStyle = getComputedStyle(editor);
       return {
         editorHeight: editorRect.height,
@@ -155,11 +134,9 @@ async (page) => {
         editorFlex: editorStyle.flex,
         contentLabelHeight: contentLabelRect.height,
         contentLabelFlex: getComputedStyle(contentLabel).flex,
-        controlsTop: controlsRect.top,
       };
     });
     assert(contentLayout && contentLayout.editorHeight + 1 >= contentLayout.editorMinHeight, `${label}: content editor should retain its minimum usable height`, contentLayout);
-    assert(contentLayout && contentLayout.editorBottom <= contentLayout.controlsTop + 1, `${label}: content editor should end before the fixed bottom controls`, contentLayout);
     assert(contentLayout && contentLayout.editorFlex.startsWith('1 ') && contentLayout.contentLabelFlex.startsWith('1 '), `${label}: content editor should flex-fill the remaining composer space`, contentLayout);
     assert(await page.locator('[data-record-help-dialog]').count() === 0, `${label}: help modal should be removed`);
     assert(await collapse.count() === 1 && await collapse.getAttribute('aria-label') === '收合會議速記面板', `${label}: collapse control should use the shared accessible name`);
