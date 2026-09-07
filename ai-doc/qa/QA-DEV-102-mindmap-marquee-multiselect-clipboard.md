@@ -302,7 +302,7 @@ Latency由capture-phase pointer event的`performance.now()`到MutationObserver�
 
 - V01：1440×900、1024×768的marquee、menu與submenus均在viewport內；必要時flip／clamp，不遮住整個selection。
 - V02：single ring、multi rings、preview與cut signal層級清楚；沒有持續toolbar、helper banner或多餘框中框。
-- V03：可見action label不截斷；menu維持compact width／row height、可垂直scroll且focus item保持可見。
+- V03：可見action label不截斷；menu採看板同款標準 width／row height、可垂直scroll且focus item保持可見。
 - V04：390×844、320×568維持既有fallback，不出現desktop marquee overlay、水平overflow或無法關閉menu。
 - AX01：context popup、button list、checkbox/mixed、selection summary與可見action有正確role／name／state；不可用action不出現在DOM；不得以不完整`role="menu"`冒充ARIA menu pattern。
 - AX02：cut狀態與error不只靠顏色；forced-colors／reduced-motion下仍可辨識。
@@ -419,7 +419,7 @@ type Dev102Evidence = {
 ```
 
 - static verifier在browser前可允許artifact不存在；browser後再跑必須驗schema、required case IDs、threshold、error arrays、cleanup與`passed=true`。
-- screenshot至少包含：single selection、multi marquee、compact multi-action menu、copy paste result與root side、cut visual、hard-reload recovery lock、batch assignment mixed、archive confirm、1024 viewport、390 boundary。
+- screenshot至少包含：single selection、multi marquee、看板同款 multi-action menu、copy paste result與root side、cut visual、hard-reload recovery lock、batch assignment mixed、archive confirm、1024 viewport、390 boundary。
 - artifact與screenshots必須來自同一source revision；舊artifact不得冒充current-head結果。
 
 ## 12. 執行順序與 Runtime Lifecycle
@@ -457,12 +457,12 @@ type Dev102Evidence = {
 | Batch | PASS | assignment applied=2、archive applied=2 |
 | Zoom | PASS | 0.5／1／2皆選取2 nodes |
 | Failure／recovery | PASS | forest create compensated、partial batch compensated、timeout indeterminate、reload readback rejected-before-state、descriptor cleared |
-| Performance | PASS | 200 nodes preview／commit p95=10.7／11.2ms；500 nodes=6.8／9.2ms；long tasks=0、rect drift=0、path stable |
+| Performance | PASS | 200 nodes preview／commit p95=9.5／12.5ms；500 nodes=6.9／7.8ms；long tasks=0、rect drift=0、path stable |
 | Mobile boundary | PASS | 390×844與320×568均不顯示mindmap／marquee，document width等於viewport |
-| Menu UI follow-up | PASS | 不可用action DOM=0、disabled rows=0、可見action=4；width=252px、font=13px、row=32px、opacity=1、`contrastPass=true` |
+| Menu UI follow-up | PASS | 不可用action DOM=0、disabled rows=0、可見action=4；Kanban density、width=220px、font=14px、row=36px、opacity=1、`contrastPass=true` |
 | Error arrays | PASS | console、page、failed request皆0 |
 
-四方向performance各尺寸共80正式樣本＋20 warmup；browser screenshots共8張，包含圈選、多選compact清單、copy、cut、laptop、hard-reload recovery、390與320邊界。rendered evidence已目視複核；新版menu不可用action不進DOM、disabled rows=0、字級≤13.5px、列高≤34px、opacity≥0.99、computed color `oklch(0.372 0.044 257.287)`通過`contrastPass=true`，並以menu width≤260px作為視覺 gate。
+四方向performance各尺寸共80正式樣本＋20 warmup；browser screenshots共8張，包含圈選、看板同款多選清單、copy、cut、laptop、hard-reload recovery、390與320邊界。rendered evidence已目視複核；新版menu不可用action不進DOM、disabled rows=0、字級14px、列高36px、opacity≥0.99、computed color `oklch(0.372 0.044 257.287)`通過`contrastPass=true`，並以Kanban width=220px作為視覺 gate。
 
 ### 14.3 Regression／engineering evidence
 

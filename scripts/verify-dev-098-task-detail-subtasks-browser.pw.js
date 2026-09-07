@@ -229,11 +229,14 @@ async (page) => {
     const modalZ = await details().evaluate(element => Number.parseInt(getComputedStyle(element).zIndex || '0', 10));
     if (!(z > modalZ)) throw new Error('context menu z-index is below modal');
     const openDetailsAction = menu.locator('[data-task-action-id="task.open-details"]');
-    if (await openDetailsAction.count() !== 1) throw new Error('context menu missing open-details action');
-    await openDetailsAction.click();
-    await page.waitForTimeout(120);
-    if (await details().count() !== 1 || await details().getAttribute('data-task-id') !== 'dev098-child') throw new Error('right-click open-details did not use modal navigation');
-    return { menuZ: z, modalZ };
+    if (await openDetailsAction.count() !== 0) throw new Error('task-details subtask menu should not expose open-details');
+    const toggleCompleteAction = menu.locator('[data-task-action-id="task.toggle-complete"]');
+    if (await toggleCompleteAction.count() !== 1) throw new Error('task-details subtask menu missing status action');
+    if ((await toggleCompleteAction.innerText()).trim() !== '狀態改完成') throw new Error('status action label mismatch');
+    if (await menu.locator('button').first().getAttribute('data-task-action-id') !== 'task.toggle-complete') throw new Error('status action is not first');
+    await toggleCompleteAction.click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}')['dev098-child']?.status === 'completed');
+    return { menuZ: z, modalZ, openDetailsRemoved: true, statusActionFirst: true, statusUpdated: true };
   });
 
   await run('B08-escape-outside-layer-ownership', async () => {
@@ -245,11 +248,13 @@ async (page) => {
     await page.locator('[data-global-context-menu="true"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.keyboard.press('Escape');
     if (await page.locator('[data-global-context-menu="true"]').count() !== 0 || await details().count() !== 1) throw new Error('Escape closed the wrong layer');
+    if (await row.getAttribute('data-task-selected') === 'true') throw new Error('dismissed menu left the child row selected');
     await row.click({ button: 'right', position: { x: 28, y: 10 } });
     await page.waitForTimeout(820);
     await page.mouse.click(6, 6);
     await page.waitForTimeout(100);
     if (await page.locator('[data-global-context-menu="true"]').count() !== 0 || await details().count() !== 1) throw new Error('outside click did not preserve modal');
+    if (await row.getAttribute('data-task-selected') === 'true') throw new Error('outside dismissal left the child row selected');
     return { escapeClosedMenuOnly: true, outsideClickPreservedModal: true };
   });
 

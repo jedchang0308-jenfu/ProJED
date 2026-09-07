@@ -4,6 +4,7 @@ import useDialogStore from '../store/useDialogStore';
 import useRecordStore from '../store/useRecordStore';
 import { useWbsStore } from '../store/useWbsStore';
 import { getMeetingRecordActionState } from '../utils/meetingRecordWorkflow';
+import { forceFlushMeetingDraft } from './useMeetingDraftRecovery';
 
 export const useMeetingModeExitGuard = () => {
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
@@ -18,7 +19,6 @@ export const useMeetingModeExitGuard = () => {
   const lastSaveFeedback = useRecordStore(state => state.lastSaveFeedback);
   const saveDraft = useRecordStore(state => state.saveDraft);
   const closePanel = useRecordStore(state => state.closePanel);
-  const requestMeetingDraftRecoveryClear = useRecordStore(state => state.requestMeetingDraftRecoveryClear);
   const showActionDialog = useDialogStore(state => state.showActionDialog);
 
   const actionState = getMeetingRecordActionState({
@@ -37,26 +37,30 @@ export const useMeetingModeExitGuard = () => {
     if (!isMeetingMode) return;
 
     if (!actionState.isDirty) {
-      requestMeetingDraftRecoveryClear();
+      closePanel();
+      return;
+    }
+
+    if (await forceFlushMeetingDraft()) {
       closePanel();
       return;
     }
 
     const choice = await showActionDialog({
-      title: '離開會議模式？',
-      message: actionState.exitWarning ?? '目前會議草稿有未儲存變更。',
+      title: '尚未完成本機保存',
+      message: '目前內容尚未完成裝置保存，請先重試保護或存成草稿。',
       actions: [
         {
-          id: 'save_and_exit',
-          label: '存草稿後離開',
-          description: '保存目前編輯器內容為草稿，不會發布。',
+          id: 'retry_flush',
+          label: '重試保護',
+          description: '完成本機保存後離開，不會發布。',
           variant: 'primary',
         },
         {
-          id: 'exit_without_saving',
-          label: '直接離開',
-          description: '關閉會議速記，不保存新變更。',
-          variant: 'danger',
+          id: 'save_and_exit',
+          label: '存草稿後離開',
+          description: '以正式草稿保存目前內容後離開。',
+          variant: 'secondary',
         },
         {
           id: 'cancel',
@@ -66,18 +70,14 @@ export const useMeetingModeExitGuard = () => {
       ],
     });
 
-    if (choice === 'save_and_exit') {
-      const saved = await saveDraft({ nodes });
-      if (saved) {
-        requestMeetingDraftRecoveryClear();
-        closePanel();
-      }
+    if (choice === 'retry_flush') {
+      if (await forceFlushMeetingDraft()) closePanel();
       return;
     }
 
-    if (choice === 'exit_without_saving') {
-      requestMeetingDraftRecoveryClear();
-      closePanel();
+    if (choice === 'save_and_exit') {
+      const saved = await saveDraft({ nodes });
+      if (saved) closePanel();
     }
-  }, [actionState.exitWarning, actionState.isDirty, closePanel, isMeetingMode, nodes, requestMeetingDraftRecoveryClear, saveDraft, showActionDialog]);
+  }, [actionState.isDirty, closePanel, isMeetingMode, nodes, saveDraft, showActionDialog]);
 };

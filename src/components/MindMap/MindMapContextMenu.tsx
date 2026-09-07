@@ -23,8 +23,8 @@ interface MindMapContextMenuProps {
   onToggleAssignment?: () => void;
 }
 
-const MENU_WIDTH = 252;
-const MENU_ESTIMATED_HEIGHT = 420;
+const MENU_WIDTH = 220;
+const MENU_ESTIMATED_HEIGHT = 520;
 const VIEWPORT_GAP = 8;
 
 export const MindMapContextMenu: React.FC<MindMapContextMenuProps> = ({
@@ -96,16 +96,16 @@ export const MindMapContextMenu: React.FC<MindMapContextMenuProps> = ({
     <div
       ref={rootRef}
       aria-label={selectionCount > 1 ? `已選取 ${selectionCount} 個任務的操作清單` : '任務操作清單'}
-      className="fixed z-[100] max-h-[calc(100vh-16px)] w-[252px] overflow-y-auto rounded-lg border border-slate-300 bg-white py-1 text-[13px] text-slate-800 shadow-xl ring-1 ring-slate-900/5"
+      className="fixed z-[10029] flex max-h-[calc(100vh-16px)] w-[220px] flex-col overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
       style={{ left: position.left, top: position.top }}
       data-mindmap-context-menu="true"
-      data-mindmap-context-menu-density="compact"
+      data-mindmap-context-menu-density="kanban"
       data-global-context-menu="true"
       data-global-context-menu-kind="task"
       data-mindmap-context-anchor-placement-id={state.anchorPlacementId}
     >
-      <div className="border-b border-slate-200 px-2.5 py-1.5">
-        <div className="font-semibold leading-5 text-slate-800">
+      <div className="mb-1 border-b border-gray-100 px-3 py-2 dark:border-gray-700/50">
+        <div className="truncate text-sm font-bold text-gray-800 dark:text-gray-100">
           {selectionCount > 1 ? `已選取 ${selectionCount} 個任務` : '已選取 1 個任務'}
         </div>
       </div>
@@ -115,7 +115,6 @@ export const MindMapContextMenu: React.FC<MindMapContextMenuProps> = ({
         disabledReasons={disabledReasons}
         onAction={onAction}
         hideDisabled={hideDisabled}
-        compact
         assignmentOpen={assignmentOpen}
         assignmentSummary={assignmentSummary}
         assignmentContent={assignmentContent}

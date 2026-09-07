@@ -6,6 +6,190 @@
 節點類型：交付點  
 是否計入產品交付完成：是
 
+## DEV-107 Corrective Contract Amendment（2026-09-07）
+
+- 文件成熟度：`Implemented / Targeted QA-QC PASS / Local-only / NOT RELEASED`。
+- 決策來源：`USER-20260907-MEETING-DRAFT-SIDEBAR-LAYOUT-HEALTH-CHECK`；使用者提供的
+  `1902x960` 實際畫面顯示既有會議草稿同時套用「個人流程」，且內容 editor、placeholder、
+  `最近紀錄`與紀錄卡片發生可見重疊。
+- Spec Impact：`Compatible corrective addendum`。本 addendum 落實既有「紀錄類型」與「是否正在
+  開會」分層，並恢復本文件既有無重疊契約；不改會議／工作紀錄資料型別、保存、AI、匯入、
+  權限、RAG 或 DEV-106 本機安全草稿語意。
+- Evidence correction：DEV-092 的歷史 PASS 只覆蓋正常新建 live meeting draft；未覆蓋
+  `openExistingRecord(meeting)` 後 `isMeetingMode=false` 的紀錄庫續寫路徑，因此該舊 evidence
+  不得用來判定 DEV-107 通過。
+- Authority：本節是 RecordSidebar composer variant、editing/list surface 與 scroll ownership 的
+  現行 authority；DEV-019 的類型／會議模式分層、DEV-094 的會議輸入／匯入，以及 DEV-106 的
+  local recovery／離開保護仍各自為其責任範圍 authority。
+
+### DEV-107 implementation evidence（2026-09-07）
+
+- `RecordSidebar` 已以 `getRecordComposerVariant` 統一分流；existing meeting record 維持
+  `isMeetingMode=false` 並呈現 `meeting-record`，不再誤進個人流程。
+- 有 draft 時 recent section 不進 DOM；drawer 承接唯一垂直捲動；`RecordContentEditor` 移除
+  `resize-y`，meeting／work-log minimum 分別由 record type 決定。
+- DEV-107 source verifier 20/20、browser 5/5（1902／1440／1024、live meeting、390 negative）與
+  DEV-020／092／094／106 targeted regression均PASS；證據見
+  `ai-doc/qc/QC-DEV-107-record-sidebar-draft-layout.md`及`output/playwright/dev-107-record-sidebar-layout/result.json`。
+- 本 addendum 仍為 local-only；完整 release candidate 需重跑 QA-DEV-107 全部 matrix 及獨立 release gate。
+
+### 問題與使用者價值
+
+現行 `RecordSidebar` 的標題與 meeting metadata 依 `draft.type` 判斷，但 workflow、內容最小高度、
+底部控制與 `最近紀錄` 又分別依 `isMeetingMode` 判斷。紀錄庫開啟既有 meeting record 時，store
+正確地保持 `isMeetingMode=false`，UI 卻因此落入 work-log workflow 分支，形成「會議紀錄標題 +
+個人流程」的混合狀態。外層 flex item 同時允許 shrink，editor 又具最小高度及無上限 `resize-y`，
+其可見邊界最後溢出到 `最近紀錄`。
+
+成功結果是：使用者無論在 live meeting、會後新增、紀錄庫續寫或個人工作紀錄，都只看到與
+目前紀錄及 session context 一致的單一編輯表面；editor、操作列與歷史清單不重疊，保存、發布、
+離開與 recovery 行為完全維持既有契約。
+
+### UX Intent
+
+- 任務／結果：已登入桌機／筆電使用者可從正常紀錄入口續寫會議草稿，且能清楚辨識正在編輯的
+  紀錄種類、可用動作與內容邊界。
+- 主物件／主焦點：有 draft 時只以目前 draft editor 為主物件；沒有 draft 時才以最近紀錄清單
+  為主物件。
+- 預設刪除：meeting record 不顯示 `個人流程／個人紀錄`；有 draft 時不顯示側欄內重複的
+  `最近紀錄`；移除原生垂直 resize handle，不新增說明卡、警告牆或第二個 scroll surface。
+- 保留舉證：meeting metadata、內容、分享範圍、存草稿與發布必須保留，否則使用者無法辨識、
+  保存或正式提交目前紀錄；live meeting workflow 只在真正 `isMeetingMode=true` 時保留。
+- 非語言修復：以單一 composer variant、正常文流、間距與唯一 scroll owner 表達層級，不以
+  `z-index`、裁切或新增 helper 文案遮掩結構問題。
+- 風險與驗證：須保護 DEV-094 focus／import、DEV-106 recovery／close guard、work-log 流程、
+  鍵盤焦點、長內容、1024／1440／1902 viewport 與 390 mobile-negative boundary。
+
+使用思考習慣：#系統描繪、#可驗證性、#當責
+
+### UI Entry Contract 與模式矩陣
+
+| Variant | Target actor / 正常入口 | Source state | 主要物件／目標 | Scope／安全策略 | 可見 workflow／CTA | 審核責任 |
+|---|---|---|---|---|---|---|
+| `live-meeting` | 已登入桌機／筆電使用者由既有 `新增會議記錄`／開始會議入口進入 | `draft.type=meeting` 且 `isMeetingMode=true` | 目前 live meeting draft | 沿用 DEV-094／106；不得改 recovery、離開或 capture session | 既有 meeting workflow；既有 meeting save／share／publish 責任 | RD 保持行為；QA/QC 驗證 UI、保存與離開回歸 |
+| `meeting-record` | 使用者由紀錄庫列表開啟既有 meeting record，或由既有會後新增入口進入 | `draft.type=meeting` 且 `isMeetingMode=false` | 會後會議紀錄 editor | 不啟動 live meeting、task capture 或 session lifecycle | 不顯示 work-log workflow；沿用 non-live meeting metadata、分享、存草稿與發布 | RD 不得以切回 meeting mode 修補；QC 驗證零混合標籤 |
+| `work-log` | 使用者由既有個人工作紀錄入口進入 | `draft.type=work_log` 且 `isMeetingMode=false` | 個人工作紀錄 editor | work-log guard、task links與保存行為不變 | 既有 work-log workflow／CTA | DEV-020／092 regression authority |
+| `empty` | 開啟紀錄面板但未建立／選取 draft | `draft=null` 且 `isMeetingMode=false` | 類型入口與最近紀錄 | 不預造 draft、不啟動 recovery | 無 editor workflow；可顯示最近紀錄 | QC 驗證清單仍可開啟正確紀錄 |
+| `invalid` | 非正常入口；只作 fail-seeking | `isMeetingMode=true` 但 draft 非 meeting／不存在 | 無合法 composer | fail closed；不得顯示 meeting-only mutation control | 不得誤裝成任一正常 variant | verifier 必須使此狀態失敗，不新增常駐 UI |
+
+### RD Implementation Contract
+
+#### 1. 單一 composer variant authority
+
+- `RecordSidebar` 必須在 render 前由 `draft?.type` 與 `isMeetingMode` 一次推導
+  `live-meeting | meeting-record | work-log | empty | invalid`；後續 workflow、record-specific metadata、
+  editor minimum height、compact controls、actions、project-change control與 recent list 不得再各自重做
+  互相矛盾的 boolean 判斷。
+- `openExistingRecord(meeting)` 保持 `isMeetingMode=false`；這是「未進入 live meeting session」的正確
+  狀態，不是 store bug。不得以改成 `true` 修復畫面，避免誤啟 task capture、meeting recovery scope
+  或 live-session exit semantics。
+- `live-meeting` 才能顯示 live meeting workflow；`work-log` 才能顯示 `WorkLogWorkflowCard`；
+  `meeting-record` 不顯示 `個人流程／個人紀錄`，也不得建立一張新的說明卡代替。
+- `meeting-record` 沿用既有非 live 路徑的存草稿／發布能力與 meeting metadata；若保留 project-change
+  import，只能沿用 meeting contract，不得誤用 work-log import UI。不得在本 DEV 擴寫新的 AI、匯入、
+  lifecycle 或 publishing capability。
+
+#### 2. Editing surface 與 recent list 互斥
+
+- `draft != null` 時，側欄只渲染 composer，不渲染 `最近紀錄` section；主頁既有紀錄表仍保留，
+  不改資料查閱入口。
+- `draft == null` 且不在 meeting mode 時，才可渲染 `最近紀錄`；列表 item、狀態、visibility 與
+  `handleGuardedOpenExistingRecord` 行為維持。
+- 不得用 opacity、pointer-events、負 margin、absolute positioning 或 z-index 讓兩個表面表面上分離；
+  不需要的 sibling 必須不在 DOM。
+
+#### 3. Layout、scroll 與 editor geometry
+
+- RecordSidebar drawer body 是唯一垂直 scroll owner。Active composer 必須以正常 document flow
+  排列 header、workflow、metadata、content editor、狀態與 actions，且不得 shrink 到小於其內部
+  minimum content size。
+- meeting editor minimum height 依 `draft.type=meeting` 固定至少 `220px`；work-log 至少 `150px`，
+  不得再由 `isMeetingMode` 決定 meeting record 的最小高度。
+- `RecordContentEditor` 移除 `resize-y`／原生 resize handle。若 content 超過 viewport，由 drawer
+  scroll 承接；不得新增 editor + drawer 雙重垂直捲動，也不得以 `overflow-hidden` 截斷內容。
+- 幾何 invariant：`editor.bottom <= followingAction.top + 1px`；任何兩個相鄰主要區塊的可見矩形
+  不得相交；drawer／document 的 `scrollWidth <= clientWidth + 1px`。
+- placeholder 必須完全位於 editor rect 內；`內容` label、placeholder、action row與 recent list
+  heading 不得共享同一垂直座標帶。
+
+#### 4. State、錯誤與恢復
+
+- 本 DEV 不改 draft signature、save/publish transaction、canonical baseline、IndexedDB/sessionStorage、
+  force-flush、discard、AI、RAG、event或 provider request contract。
+- 保存中、錯誤、衝突與 recovery 狀態仍靠近受影響 composer 顯示；不得因隱藏 recent list 而
+  移除 actionable failure、清空使用者輸入或變更 focus return。
+- layout 修復失敗不得以 reload、重建 draft 或切換 `isMeetingMode` 作補償；原 draft object、content、
+  cursor／selection與 task links 必須保留。
+
+### Actual Repo / File Impact
+
+| 檔案／模組 | RD 必做 | 明確不做 |
+|---|---|---|
+| `src/components/Records/RecordSidebar.tsx` | 建立單一 variant、修正 workflow／actions／recent list條件、以 record type決定 editor minimum、收斂 active composer flex／scroll | 不改 save、publish、AI、provider 或 recovery transaction |
+| `src/components/Records/RecordContentEditor.tsx` | 移除無上限垂直 resize，讓 drawer 承接長內容捲動；保留 Lexical value／history／focus／mention contract | 不改 serializer、mention token、clipboard、undo／redo或資料格式 |
+| `src/store/useRecordStore.ts` | 預期零產品修改；只作 characterization／regression source | 不把 existing meeting record 設為 live meeting mode，不改 state schema |
+| `scripts/verify-dev-107-record-sidebar-layout.mjs` | 新增 source／contract verifier，檢查 variant authority、互斥 render、無 `resize-y` 與禁止 quick-fix | 不以字串存在取代 browser geometry證據 |
+| `scripts/verify-dev-107-record-sidebar-layout-browser.pw.js` | 由正常入口覆蓋模式矩陣、幾何、scroll、鍵盤、visible error與截圖 | 不用 direct DOM seed 產生案例預期完成結果 |
+| `package.json` | 加入 DEV-107 static／browser verifier commands | 不改 runtime、dependency或 build pipeline |
+| `ai-doc/dev_task.md`、本 SPEC、`QA-DEV-107`、`documentation_map.md` | 維持狀態、契約與 evidence 索引一致 | 實作前不得預填 PASS；目前 local evidence 不等於 release artifact |
+
+### Work Packages 與順序
+
+1. `WP-107-A Characterization`：以使用者畫面相同路徑建立 failing browser case，證明
+   `meeting-record` 被誤判為 work-log 且 editor／recent list rect 相交。
+2. `WP-107-B Variant`：建立單一 composer variant，先修正 workflow／CTA identity；若需要修改
+   `useRecordStore` 才能成立，立即停止回 PM。
+3. `WP-107-C Surface`：draft 與 recent list 互斥，active composer改為不可 shrink 的正常文流。
+4. `WP-107-D Editor`：移除 `resize-y` 與不必要的 editor scroll ownership，固定 meeting／work-log
+   minimum height responsibility。
+5. `WP-107-E Regression`：完成 DEV-107 static／browser、DEV-020／092／094／106 targeted suites、
+   TypeScript、targeted ESLint、`build:test`與 diff check；freeze candidate 後再交 QC 收最終畫面。
+
+WP 必須依序執行；首個資料安全、mode、focus、save/publish或 viewport regression 失敗時停止，不跨包
+宣稱完成。
+
+### Acceptance Criteria
+
+- [ ] 正常紀錄庫入口開啟既有 meeting draft 後，header 顯示會議紀錄，DOM 與畫面均不存在
+  `個人流程／個人紀錄`或 `data-record-workflow-kind=work-log`。
+- [ ] `openExistingRecord(meeting)` 仍保持 non-live context，不啟動 meeting-only task capture、
+  recovery session 或 exit action。
+- [ ] 任一 `draft != null` 狀態下 `最近紀錄` section count 為 `0`；回到 `empty` 狀態才恢復清單，
+  且 item可由正常點擊與鍵盤開啟。
+- [ ] meeting editor computed minimum height至少 `220px`，work-log至少 `150px`；computed `resize=none`。
+- [ ] 1902x960、1440x900、1024x768 的 empty、short、long、published與save-error案例均無重疊、
+  裁切、水平 overflow或雙重垂直 scroll；390x844維持meeting UI不存在的負向契約。
+- [ ] geometry evidence滿足 editor／action／section矩形不相交，placeholder位於editor內，
+  drawer／document `scrollWidth <= clientWidth + 1px`。
+- [ ] 存草稿、發布、關閉、開新／開舊、F5 recovery、force-flush fail／timeout、discard與AI explicit
+  action均維持 DEV-094／106 現行結果，任何失敗保留原輸入。
+- [ ] 鍵盤焦點順序與視覺順序一致；existing／recovery不搶焦點；主要control具accessible name與
+  可見 focus；visible alert／HTTP 4xx/5xx／console／page error sweep為0（錯誤案例預期訊號除外）。
+
+### QA／QC Gate、Evidence 與 Stop Conditions
+
+- QA authority：`ai-doc/qa/QA-DEV-107-record-sidebar-draft-layout.md`；目前狀態為
+  `QA Executed / Targeted PASS / NOT RELEASED`，完整 release matrix 仍待 frozen candidate。
+- 必要 evidence layer：source verifier、實際 browser正常入口、computed geometry／scroll、模式矩陣、
+  鍵盤操作、代表資料、viewport screenshot、visible／console／page error sweep，以及相同 source
+  revision／dirty boundary。
+- DEV-092 舊 screenshot／PASS 只作未變更 live-meeting baseline，不得代替 exact existing-meeting
+  failure path；使用者提供畫面是 defect intake evidence，不是修復後 PASS evidence。
+- QC 在 candidate freeze 後執行且不修改產品；若失敗回送 RD，重驗受影響案例與相鄰回歸。
+- Stop：需要改 store schema／provider／remote data，必須把 existing meeting 設成 live meeting，
+  必須用裁切／z-index／固定超大高度掩蓋，或無法維持 DEV-094／106 save／focus／recovery invariant時，
+  立即停止並回 PM；不得自行擴張 scope。
+- ADR：不需要。這是局部、可逆且已由既有 SPEC-019／020 分層原則覆蓋的 corrective implementation。
+- Migration／API／權限／release impact：無。未要求 commit、push、deploy 或 release。
+
+## DEV-106 Target Contract Amendment（2026-09-04）
+
+- Spec Impact：`Intentional meeting-flow replacement / Phase 0 implemented and QA-QC passed`。會議安全離開以SPEC-106 Phase 0為authority；結束、待整理與發布順序仍是Phase 1 Contract Ready方向。本文件其餘個人工作紀錄、匯入、AI明確觸發、task links與發布RAG契約不變。
+- 會議一般關閉／切換不再提供 `不儲存，繼續` 或 `直接離開`；最新內容未durable時先自動force-flush，成功才離開，失敗／timeout則留在原畫面。破壞性意圖移到獨立 `捨棄本次會議`。
+- meeting mode主要收尾action改為 `結束會議`；成功建立 canonical draft並退出meeting mode至同側欄 `needs_review`，之後才可發布。手動 `存草稿` 暫留次要action且不代表會議已結束。
+- Phase 0對所有provider停用meeting cloud recovery；明確discard只在本機以terminal clear barrier清目前scope，canonical baseline保留。Future cloud recovery另立ADR與owner-private資料authority。
+- 產品已依 DEV-106 Phase 0完成本機安全草稿、離開保護與QA-QC；下方舊三選一流程仍屬歷史 baseline，不能作為新候選的acceptance。Phase 1結束／待整理尚未實作。
+
 ## 背景
 
 目前紀錄功能已具備會議紀錄、個人工作紀錄、任務關聯、AI整理與會議模式，但經實際 UX 操作健檢後，仍存在核心流程問題：
@@ -543,6 +727,12 @@ RD sequencing 固定 A → B → C → D → E；A 的 parser／boundary／publi
 
 ## 未儲存保護
 
+DEV-106 target分流：
+
+- `type='meeting'`：依SPEC-106 safe-close契約；一般離開不清資料、不顯示 `不儲存，繼續`，未commit時先自動force-flush，只有失敗／timeout才阻擋；明確discard是獨立次要action。
+- `type='work_log'`：本節既有三選一契約維持不變。
+- 在DEV-106尚未實作前，下面內容仍描述目前產品行為；新候選驗收不得以此覆蓋上述target分流。
+
 以下操作若目前 draft 有未儲存變更，必須出現三選一 action dialog：
 
 - 關閉紀錄面板。
@@ -564,6 +754,9 @@ RD sequencing 固定 A → B → C → D → E；A 的 parser／boundary／publi
 - `取消` 保持目前畫面與內容。
 
 ## 狀態與 action 原則
+
+- DEV-106 target meeting action順序：`存草稿（次要） -> 結束會議（recording主要） -> AI整理（明確觸發） -> 發布（needs_review主要） -> 封存`；meeting不得從recording直接發布。
+- `work_log` 的既有 `存草稿／發布／封存` 規則不變。
 
 - 紀錄類型一旦建立草稿，不在同一筆草稿上切換。
 - 不再提供一般紀錄 `狀態` select。
@@ -712,3 +905,5 @@ npm.cmd run build
 - 2026-08-27：依新增瀏覽器留言將收合控制移到右側抽屜 header 最左側、位於紀錄標題前。
 - 2026-08-28：依使用者附圖與 response annotation 1，建立 DEV-094 `Brief Ready / Human Confirmed` addendum；固定免匯入直接速記、速記只聚焦、pending 匯入降為選用樣式、獨立存草稿與免匯入回歸方向，尚未實作或驗證。
 - 2026-08-28：依使用者要求升級 DEV-094 為 `RD Implementation Ready`；固定 metadata v1、publish-only cutoff、exclusive/inclusive query、stable event ID、undo／AI／F5 recovery、focus token、WP-094-A～E與 `QA-DEV-094`，產品與驗證仍未執行。
+- 2026-09-07：依使用者提供的既有會議草稿破版畫面建立 DEV-107 corrective addendum；固定 composer variant、draft／recent-list互斥、單一drawer scroll owner、無原生editor resize、逐檔work package與exact browser evidence，成熟度為`RD Implementation Ready / QA Plan Ready / NOT IMPLEMENTED`。
+- 2026-09-07：DEV-107 local corrective slice完成；source 20/20、browser 5/5及DEV-020／092／094／106 targeted regression通過，更新為`Implemented / Targeted QA-QC PASS / Local-only / NOT RELEASED`；完整 release matrix仍待 frozen candidate。

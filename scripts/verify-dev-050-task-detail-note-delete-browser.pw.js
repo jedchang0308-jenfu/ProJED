@@ -129,7 +129,7 @@ async (page) => {
   await page.waitForFunction(() => {
     const storedNodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
     const notes = storedNodes['dev050-task']?.detailNotes || [];
-    return notes.length === 1 && notes[0]?.title === '備註 1' && notes[0]?.content === '';
+    return notes.length === 1 && notes[0]?.title === '任務說明' && notes[0]?.content === '';
   }, null, { timeout: 10000 });
 
   const result = await page.evaluate(() => {
@@ -137,6 +137,7 @@ async (page) => {
     const noteCards = Array.from(modal?.querySelectorAll('[data-task-detail-note-card="true"]') || []);
     const deleteButtons = Array.from(modal?.querySelectorAll('[data-task-detail-note-delete="true"]') || []);
     const titleInputs = Array.from(modal?.querySelectorAll('[data-task-detail-note-title-input="true"]') || []);
+    const titleLabels = Array.from(modal?.querySelectorAll('[data-task-detail-note-title="true"]') || []);
     const contentInputs = Array.from(modal?.querySelectorAll('[data-task-detail-note-content-input="true"]') || []);
     const visibleAlerts = Array.from(document.querySelectorAll('.inline-error,[role="alert"]'))
       .filter((element) => {
@@ -150,6 +151,7 @@ async (page) => {
       noteCardCount: noteCards.length,
       deleteButtonCount: deleteButtons.length,
       titleValues: titleInputs.map((element) => element.value),
+      titleLabels: titleLabels.map((element) => (element.textContent || '').trim()),
       contentValues: contentInputs.map((element) => (
         element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
           ? element.value
@@ -163,7 +165,8 @@ async (page) => {
 
   assert(result.noteCardCount === 1, 'last note deletion should leave one blank note card visible', result);
   assert(result.deleteButtonCount === 1, 'remaining blank note card should still have a delete affordance', result);
-  assert(result.titleValues[0] === '備註 1' && result.contentValues[0] === '', 'remaining note should be blank after deleting the last note', result);
+  assert(result.titleValues[0] === '任務說明' || result.titleLabels[0] === '任務說明', 'remaining note should use the fixed task description title after deleting the last note', result);
+  assert(result.contentValues[0] === '', 'remaining note should be blank after deleting the last note', result);
   assert(result.deleteButtonTitles[0] === '刪除此備註欄', 'delete affordance should be discoverable by title', result);
   assert(result.visibleAlerts.length === 0, 'note delete flow should not show runtime alerts', result);
 

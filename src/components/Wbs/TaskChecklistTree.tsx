@@ -14,6 +14,7 @@ import { KanbanTagSticker } from '../Tags/KanbanTagSticker';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { isTaskPrimaryActionTarget } from '../../utils/taskInteractions';
 import { TaskDateBadge } from './TaskDateBadge';
+import { MeetingTaskReservationMark } from './MeetingTaskReservationMark';
 import {
   TASK_CHILD_DROP_HIGHLIGHT_EVENT,
   type TaskChildDropSuccessDetail,
@@ -41,6 +42,7 @@ export type TaskChecklistHostAdapter = {
   commandDependencies?: TaskCommandDependencies;
   showTags?: boolean;
   selectedTaskId?: string | null;
+  meetingReservationValues?: Readonly<Record<string, number>> | null;
 };
 
 export type TaskChecklistTreeProps = {
@@ -382,6 +384,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
             surface="checklist"
             className="ml-0.5"
           />
+          <MeetingTaskReservationMark value={hostAdapter.meetingReservationValues?.[childId]} className="self-center" />
           </>
         )}
       </div>

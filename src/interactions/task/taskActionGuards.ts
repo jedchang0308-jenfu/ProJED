@@ -10,6 +10,7 @@ export type TaskActionGuardInput = {
   canAssignTask?: boolean;
   canCreateDependency?: boolean;
   canManageTaskReference?: boolean;
+  canEditMeetingReservation?: boolean;
 };
 
 export type TaskActionGuardResult = {
@@ -29,6 +30,7 @@ export const guardTaskAction = (actionId: TaskActionId, input: TaskActionGuardIn
     case 'assign': return { allowed: Boolean(input.canAssignTask), reason: input.canAssignTask ? undefined : 'permission-assign' };
     case 'dependency': return { allowed: Boolean(input.canCreateDependency), reason: input.canCreateDependency ? undefined : 'permission-dependency' };
     case 'tracking-reference': return { allowed: Boolean(input.canManageTaskReference), reason: input.canManageTaskReference ? undefined : 'permission-tracking-reference' };
+    case 'meeting-reservation': return { allowed: Boolean(input.canEditMeetingReservation), reason: input.canEditMeetingReservation ? undefined : 'permission-meeting-reservation' };
     default: return { allowed: true };
   }
 };

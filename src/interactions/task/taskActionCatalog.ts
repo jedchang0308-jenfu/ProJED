@@ -10,6 +10,7 @@ const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
   { id: 'task.paste-after', label: '貼在此任務之後', icon: 'clipboard-paste', section: 'clipboard', kind: 'mutation', defaultMenu: false },
   { id: 'task.create-tracking-reference', label: '建立追蹤副本', icon: 'link-2', section: 'create', kind: 'mutation', capability: 'tracking-reference' },
   { id: 'task.remove-tracking-reference', label: '移除此處追蹤', icon: 'unlink', section: 'danger', kind: 'danger', capability: 'tracking-reference' },
+  { id: 'task.edit-meeting-reservation', label: '預約時間', icon: 'clock-3', section: 'planning', kind: 'mutation', capability: 'meeting-reservation', defaultMenu: false },
   { id: 'task.assign', label: '指派成員', icon: 'user-round', section: 'assignment', kind: 'mutation', capability: 'assign' },
   { id: 'task.dependency-start', label: '建立開始依賴', icon: 'arrow-right-left', section: 'dependency', kind: 'transient', capability: 'dependency' },
   { id: 'task.dependency-end', label: '建立結束依賴', icon: 'arrow-right-left', section: 'dependency', kind: 'transient', capability: 'dependency' },

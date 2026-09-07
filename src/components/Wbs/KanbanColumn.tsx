@@ -18,6 +18,8 @@ import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
 import { useTaskPlacementController } from './useTaskPlacementController';
 import { KANBAN_COLUMN_FRAME_CLASS, KanbanColumnPresentation } from './KanbanColumnPresentation';
+import useRecordStore from '../../store/useRecordStore';
+import { getMeetingTaskReservationValue } from '../../utils/meetingTaskReservation';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -34,6 +36,12 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
   const getNodeLockStatus = useWbsStore((state) => state.getNodeLockStatus);
   const lockStatus = getNodeLockStatus(nodeId, wbsDependencies);
   const selectedTaskId = useBoardStore((state) => state.selectedTaskId);
+  const meetingReservationValue = useRecordStore((state) => {
+    const draft = state.draft;
+    return state.isMeetingMode && draft?.type === 'meeting' && draft.status === 'draft'
+      ? getMeetingTaskReservationValue(draft.metadata, nodeId)
+      : null;
+  });
   // 看板依賴選取 Context
   const kanbanDepCtx = React.useContext(KanbanDependencyContext);
   const dependencySelection = kanbanDepCtx?.dependencySelection || null;
@@ -194,6 +202,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
         isDurationLocked={Boolean(node.isDurationLocked)}
         startLocked={lockStatus.startLocked}
         endLocked={lockStatus.endLocked}
+        meetingReservationValue={meetingReservationValue}
         placeholder={isColumnPlaceholder}
         showDate={!isSelectingMode}
         headerProps={{

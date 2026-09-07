@@ -1,6 +1,7 @@
 import React from 'react';
 import type { TaskStatus } from '../../types';
 import { TaskDateBadge } from './TaskDateBadge';
+import { MeetingTaskReservationMark } from './MeetingTaskReservationMark';
 
 export const KANBAN_COLUMN_FRAME_CLASS = 'relative flex max-h-full w-[270px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-strong bg-surface-panel shadow-[0_4px_12px_rgba(15,23,42,0.05)] transition-all';
 
@@ -17,6 +18,7 @@ type KanbanColumnPresentationProps = {
   titleProps?: React.HTMLAttributes<HTMLHeadingElement>;
   titleTextProps?: React.HTMLAttributes<HTMLSpanElement>;
   titleTrailing?: React.ReactNode;
+  meetingReservationValue?: number | null;
   headerMeta?: React.ReactNode;
   showDate?: boolean;
   placeholder?: boolean;
@@ -39,6 +41,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
   titleProps,
   titleTextProps,
   titleTrailing,
+  meetingReservationValue,
   headerMeta,
   showDate = true,
   placeholder = false,
@@ -98,6 +101,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
                 className="ml-0.5"
               />
             ) : null}
+            <MeetingTaskReservationMark value={meetingReservationValue} className="self-center" />
           </div>
           {headerMeta}
         </>
@@ -114,4 +118,3 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
     </div>
   </>
 );
-

@@ -2,6 +2,7 @@ import React from 'react';
 import type { TaskStatus } from '../../types';
 import { taskStatusTitleClass } from '../ui/taskStatusStyles';
 import { TaskDateBadge } from './TaskDateBadge';
+import { MeetingTaskReservationMark } from './MeetingTaskReservationMark';
 
 export const KANBAN_CARD_FRAME_CLASS = 'kanban-task-card relative mb-[6px] rounded-lg border border-slate-300 bg-surface-task shadow-[0_2px_7px_rgba(15,23,42,0.14)] transition-shadow';
 
@@ -27,6 +28,8 @@ type KanbanCardPresentationProps = {
   showDate?: boolean;
   showTags?: boolean;
   titleTrailing?: React.ReactNode;
+  rowTrailing?: React.ReactNode;
+  meetingReservationValue?: number | null;
   tags?: React.ReactNode;
   meta?: React.ReactNode;
 };
@@ -43,6 +46,8 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
   showDate = true,
   showTags = true,
   titleTrailing,
+  rowTrailing,
+  meetingReservationValue,
   tags,
   meta,
 }) => {
@@ -86,6 +91,8 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
             className="ml-0.5 self-center"
           />
         ) : null}
+        <MeetingTaskReservationMark value={meetingReservationValue} className="self-center" />
+        {rowTrailing}
       </Row>
       {meta}
     </Body>

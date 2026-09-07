@@ -316,8 +316,8 @@ async (page) => {
   assert(hiddenUnsupportedActionCount === 0, 'multi unsupported action must be hidden');
   const visibleDisabledActionCount = await menu.locator('button[aria-disabled="true"]').count();
   assert(visibleDisabledActionCount === 0, 'mindmap menu must not render disabled action rows');
-  const compactMenu = await menu.getAttribute('data-mindmap-context-menu-density');
-  assert(compactMenu === 'compact', 'mindmap menu must use compact density');
+  const menuDensity = await menu.getAttribute('data-mindmap-context-menu-density');
+  assert(menuDensity === 'kanban', 'mindmap menu must use Kanban-equivalent density');
   const visibleActionCount = await menu.locator('[data-task-action-id]').count();
   assert(visibleActionCount > 0, 'mindmap menu must retain at least one executable action');
   const menuMetrics = await menu.evaluate(element => {
@@ -345,9 +345,9 @@ async (page) => {
       backgroundColor: menuStyle.backgroundColor,
     };
   });
-  assert(menuMetrics.width <= 260, 'mindmap menu must stay compact in width', menuMetrics);
-  assert(menuMetrics.fontSize <= 13.5, 'mindmap menu action text must use compact type', menuMetrics);
-  assert(menuMetrics.rowHeight <= 34, 'mindmap menu action rows must stay compact', menuMetrics);
+  assert(menuMetrics.width === 220, 'mindmap menu must match Kanban width', menuMetrics);
+  assert(menuMetrics.fontSize === 14, 'mindmap menu action text must match Kanban type', menuMetrics);
+  assert(menuMetrics.rowHeight === 36, 'mindmap menu action rows must match Kanban height', menuMetrics);
   assert(menuMetrics.opacity >= 0.99, 'visible mindmap actions must not be faded', menuMetrics);
   assert(menuMetrics.contrastPass, 'mindmap menu text must keep strong contrast', menuMetrics);
   await page.screenshot({ path: `${outputRoot}/02-multi-locked-menu.png` });
@@ -572,7 +572,7 @@ async (page) => {
     fixtureId: 'dev-102-v1',
     passed: true,
     selection: { initialMarqueeIds: marqueeIds, laptopSelection },
-    menu: { multiSummary: 2, hiddenUnsupportedActionCount, visibleDisabledActionCount, visibleActionCount, compactMenu, menuMetrics },
+    menu: { multiSummary: 2, hiddenUnsupportedActionCount, visibleDisabledActionCount, visibleActionCount, menuDensity, menuMetrics },
     clipboard: { initialCount, afterCopyCount, copiedRootTitles, cutVisualCount },
     batchActions: { assignmentAppliedCount, archiveAppliedCount },
     zoomMatrix,

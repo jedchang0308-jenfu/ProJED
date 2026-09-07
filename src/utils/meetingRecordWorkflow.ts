@@ -5,6 +5,7 @@ import type {
   RecordTaskLinkRole,
 } from '../types';
 import { getMeetingProjectChangeImportMetadataForSignature } from './meetingProjectChangeImport';
+import { getMeetingTaskReservationsForSignature } from './meetingTaskReservation';
 
 export type MeetingSynthesisWorkflowStatus = 'idle' | 'synthesizing' | 'ready' | 'error';
 
@@ -113,6 +114,7 @@ export const getRecordDraftSignature = (draft: MeetingRecordDraftLike | null) =>
     startedAt: draft.startedAt ?? null,
     endedAt: draft.endedAt ?? null,
     recordedBy: draft.recordedBy ?? null,
+    meetingTaskReservations: getMeetingTaskReservationsForSignature(draft.metadata),
     meetingProjectChangeImport: getMeetingProjectChangeImportMetadataForSignature(draft.metadata),
     taskLinks: normalizeTaskLinks(draft),
   });
@@ -217,10 +219,10 @@ export const getMeetingRecordActionState = ({
   const activityRisk = hasUnresolvedActivities
     ? `已偵測 ${meetingActivityCount} 筆任務變更。直接發布只保存目前編輯器內容；若要整理任務變更，請先按 AI整理或手動寫入內容。`
     : null;
-  const dirtyRisk = isDirty && !isPublished ? '有未儲存變更，離開會議模式前會詢問是否存草稿。' : null;
+  const dirtyRisk = isDirty && !isPublished ? '有未儲存變更，離開前會先自動保護內容。' : null;
   const riskMessage = activityRisk || dirtyRisk;
   const exitWarning = isDirty
-    ? '目前會議草稿有未儲存變更。你可以先存草稿後離開，或直接離開但不保存新變更。'
+    ? '目前會議草稿有未儲存變更；離開前系統會先自動保護內容，若保護失敗會留在畫面上。'
     : null;
 
   return {

@@ -7,6 +7,11 @@ import type {
   TaskHostMode,
 } from './types';
 
+/** Opt-in action used by the task-details subtask context menu. */
+export const TASK_DETAILS_TASK_MENU_PROFILE: TaskInteractionProfile = Object.freeze({
+  menu: Object.freeze({ include: ['task.toggle-complete'] as const }),
+});
+
 const TASK_DEFAULT_PROFILE: TaskInteractionProfile = Object.freeze({
   triggers: Object.freeze({
     'pointer.primary': 'task.open-details',
@@ -55,6 +60,11 @@ const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>>
       'gesture.tap': 'task.open-details',
     }),
   }),
+});
+
+/** Opt-in menu overlay used only by the active meeting Board task surfaces. */
+export const MEETING_TASK_MENU_PROFILE: TaskInteractionProfile = Object.freeze({
+  menu: Object.freeze({ include: ['task.edit-meeting-reservation'] as const }),
 });
 
 const ORIGIN_PROFILES: Readonly<Record<TaskInteractionLocation['origin'], TaskInteractionProfile>> = Object.freeze({

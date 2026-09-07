@@ -7,6 +7,14 @@
 - 承接：SPEC-003、SPEC-010、DEV-002、DEV-005、DEV-010、DEV-020
 - 決策日期：2026-08-17
 
+## DEV-106 Target Contract Amendment（2026-09-04）
+
+- Spec Impact：`Intentional replacement / Phase 0 implementation ready but not implemented`。DEV-106目標契約改由`SPEC-106-meeting-safe-draft-lifecycle.md` authoritative管理；Phase 0已收斂為Local Safety Slice，Phase 1仍為Contract Ready。本文件仍是DEV-069 implemented baseline，不能證明新流程已落地。
+- 被取代的 target clauses：§6.4一般「直接離開／不儲存」清理，以及meeting cloud checkpoint進入下一候選的假設。Phase 0所有provider recovery read/write均停用；meeting mode直接發布與未區分待整理的UI方向留Phase 1處理。
+- 繼續沿用：stable draft ID、500ms local debounce、7天local TTL、本機scope isolation、single-flight基礎、publish-only RAG與390×844 meeting-negative boundary。20s／180s／20 attempts per hour／512KiB只保留為DEV-069歷史cloud baseline，不是DEV-106 Phase 0 runtime行為。
+- Phase 0新增安全邊界：IndexedDB transaction `oncomplete`才算durable、per-scope latest queue、app內離開自動force-flush、一般離開保留recovery、explicit local discard與0 remote request。
+- 下一候選必須先依SPEC-106 WP-106-L0-A～E實作／驗證；現有provider smoke不得獨立核准舊離開或cloud checkpoint語意release。未來cloud recovery需獨立owner-private authority、ADR與provider privacy gate。
+
 ## 1. 問題、目標與成功定義
 
 現行會議草稿只在 `useRecordStore` 記憶體內；應用程式內的 dirty guard 能攔截部分導覽，卻無法覆蓋 F5。另一方面，現有 `recordService.upsert()` 是完整保存流程：Supabase 會重建 `record_task_links`、執行 RAG 同步判斷並重讀完整紀錄，Firestore 會先讀後寫完整 document。這條路徑不可被高頻自動保存重用。
@@ -162,6 +170,8 @@ export type CloudDraftCheckpointStatus =
 
 ### 6.4 清理時機
 
+> Target amendment：本節的「直接離開／不儲存」與開啟其他紀錄時清除 recovery，只描述目前 DEV-069 implemented baseline；DEV-106候選依 SPEC-106保留 recovery，一般離開不得清理。只有發布成功、明確 `捨棄本次會議` 或既有 archive action可依新契約清理。
+
 下列 terminal action 成功後清除該 snapshot：
 
 - 發布成功。
@@ -237,6 +247,8 @@ checkpointDraft(
 ```
 
 ### Supabase
+
+> Target amendment：`status='draft'`不是足夠的concurrency guard。DEV-106 Phase 0候選必須以opaque expected provider revision、status、scope與recovery revision做單一conditional mutation／transaction CAS；Supabase使用raw `updated_at`加recovery revision，不能用client read-then-write。若實作證明現有adapter無法安全達成，依SPEC-106 stop condition回到migration／RPC評估。
 
 - 實作於 `supabaseRecordService.checkpointDraft()`，沿用既有 `knowledge_records`、authenticated client、RLS 與 grants。
 - 新 record 使用 stable UUID `insert(...).select('id').single()`；已知 remote draft 使用 `update(...).eq('id', id).eq('status', 'draft').select('id').maybeSingle()`。兩者都是單一 HTTP request；no-row / duplicate / permission 轉成 typed conflict。

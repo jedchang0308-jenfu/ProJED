@@ -119,8 +119,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }, []);
 
   const returnToBoard = useCallback(() => {
-    setView(activeWorkspace && activeBoard ? 'board' : 'home');
-  }, [activeBoard, activeWorkspace, setView]);
+    const nextView = activeWorkspace && activeBoard ? 'board' : 'home';
+    void guardRecordDraft(() => setView(nextView), {
+      title: '返回看板？',
+      message: '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  }, [activeBoard, activeWorkspace, guardRecordDraft, setView]);
 
   const handleToggleMobileTaskWorkbench = useCallback(() => {
     if (isMobileBoardOnly) setSidebarOpen(false);

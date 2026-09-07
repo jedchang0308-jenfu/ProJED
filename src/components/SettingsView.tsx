@@ -9,6 +9,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
+import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import AccountProfileSettings from './AccountProfileSettings';
 import BackupSettings from './BackupSettings';
 import { BoardMembersPanel } from './BoardMembersPanel';
@@ -48,7 +49,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'backup' }
     return workspace?.boards.find((board) => board.id === state.activeBoardId);
   });
   const setView = useBoardStore((state) => state.setView);
-  const returnToBoard = () => setView(activeWorkspace && activeBoard ? 'board' : 'home');
+  const guardRecordDraft = useRecordDraftGuard();
+  const returnToBoard = () => {
+    void guardRecordDraft(() => setView(activeWorkspace && activeBoard ? 'board' : 'home'), {
+      title: '返回看板？',
+      message: '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  };
 
   return (
     <div className="h-full overflow-auto bg-slate-50" data-settings-view="true">

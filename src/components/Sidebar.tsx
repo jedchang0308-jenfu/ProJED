@@ -4,6 +4,7 @@ import { ChevronLeft, LogOut, X } from 'lucide-react';
 import useBoardStore from '../store/useBoardStore';
 import useAuthStore from '../store/useAuthStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { useRecordDraftGuard } from '../hooks/useRecordDraftGuard';
 import { toast } from '../store/useToastStore';
 import { markLeftPanelClosed, markLeftPanelOpened } from '../utils/leftPanelEscapeStack';
 import {
@@ -80,29 +81,33 @@ const Sidebar = () => {
   const isSettingsScopeView = SETTINGS_SCOPE_VIEWS.includes(currentView);
   const isRecordsView = currentView === 'records';
   const { canCreateBoard, canEditBoardSettings } = useBoardPermissions();
-
-  const returnToBoard = React.useCallback(() => {
-    setView(activeBoardId ? 'board' : 'home');
-    if (isNarrowViewport) setSidebarOpen(false);
-  }, [activeBoardId, isNarrowViewport, setSidebarOpen, setView]);
+  const guardRecordDraft = useRecordDraftGuard();
 
   const handleOpenRecords = React.useCallback(() => {
-    if (isRecordsView) {
-      returnToBoard();
-      return;
-    }
-    setView('records');
-    if (isNarrowViewport) setSidebarOpen(false);
-  }, [isNarrowViewport, isRecordsView, returnToBoard, setSidebarOpen, setView]);
+    const nextView = isRecordsView ? (activeBoardId ? 'board' : 'home') : 'records';
+    void guardRecordDraft(() => {
+      setView(nextView);
+      if (isNarrowViewport) setSidebarOpen(false);
+    }, {
+      title: isRecordsView ? '返回看板？' : '開啟紀錄庫？',
+      message: isRecordsView
+        ? '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。'
+        : '開啟紀錄庫會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  }, [activeBoardId, guardRecordDraft, isNarrowViewport, isRecordsView, setSidebarOpen, setView]);
 
   const handleOpenSettings = React.useCallback(() => {
-    if (isSettingsScopeView) {
-      returnToBoard();
-      return;
-    }
-    setView('settings');
-    if (isNarrowViewport) setSidebarOpen(false);
-  }, [isNarrowViewport, isSettingsScopeView, returnToBoard, setSidebarOpen, setView]);
+    const nextView = isSettingsScopeView ? (activeBoardId ? 'board' : 'home') : 'settings';
+    void guardRecordDraft(() => {
+      setView(nextView);
+      if (isNarrowViewport) setSidebarOpen(false);
+    }, {
+      title: isSettingsScopeView ? '返回看板？' : '開啟設定？',
+      message: isSettingsScopeView
+        ? '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。'
+        : '開啟設定會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  }, [activeBoardId, guardRecordDraft, isNarrowViewport, isSettingsScopeView, setSidebarOpen, setView]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -481,8 +486,18 @@ const Sidebar = () => {
                     ? '點擊回到看板'
                     : undefined;
                   const handleBoardClick = () => {
-                    switchBoard(ws.id, board.id);
-                    if (isNarrowViewport) setSidebarOpen(false);
+                    const switchToBoard = () => {
+                      switchBoard(ws.id, board.id);
+                      if (isNarrowViewport) setSidebarOpen(false);
+                    };
+                    if (isCurrentBoard && isMainBoardActive) {
+                      switchToBoard();
+                      return;
+                    }
+                    void guardRecordDraft(switchToBoard, {
+                      title: isCurrentBoard ? '返回看板？' : '切換看板？',
+                      message: '切換看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+                    });
                   };
 
                   return (

@@ -219,8 +219,9 @@ const RecordContentEditor: React.FC<RecordContentEditorProps> = ({
       <RichTextPlugin
         contentEditable={(
           <ContentEditable
-            className={`${editorClassName || 'min-h-[150px]'} w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100`}
+            className={`${editorClassName || 'min-h-[150px]'} w-full resize-none overflow-visible whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100`}
             data-record-content-editor="true"
+            data-record-content-editor-scroll-owner="record-sidebar"
             aria-placeholder={placeholder || ''}
             placeholder={<span />}
           />

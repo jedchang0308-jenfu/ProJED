@@ -1730,58 +1730,6 @@ const knowledgeRecordToInsert = async (
   };
 };
 
-const checkpointRecordToInsert = (
-  tenantId: string,
-  projectId: string,
-  input: MeetingDraftCheckpointInput,
-): KnowledgeRecordInsert => {
-  const userId = isUuid(input.ownerUserId) ? input.ownerUserId : null;
-  return stripUndefinedForJson({
-    id: input.record.id,
-    tenant_id: tenantId,
-    project_id: projectId,
-    record_type: 'meeting',
-    title: input.record.title,
-    content: input.record.content,
-    participants_text: input.record.participantsText ?? null,
-    occurred_at: toIso(input.record.occurredAt),
-    started_at: toIso(input.record.startedAt),
-    ended_at: toIso(input.record.endedAt),
-    recorded_by: isUuid(input.record.recordedBy) ? input.record.recordedBy : userId,
-    status: 'draft',
-    visibility: input.record.visibility,
-    rag_enabled: false,
-    metadata: {
-      ...(input.record.metadata ?? {}),
-      projedDraftRecovery: {
-        schemaVersion: 1,
-        ownerUserId: input.ownerUserId,
-        workspaceId: input.workspaceId,
-        boardId: input.boardId,
-        localSignature: input.localSignature,
-        remoteSignature: input.remoteSignature,
-        meetingActivities: input.meetingActivities,
-        appendedMeetingActivityIds: input.appendedMeetingActivityIds,
-        checkpointedAt: Date.now(),
-      },
-    },
-    updated_by: userId,
-    created_by: userId,
-  }) as KnowledgeRecordInsert;
-};
-
-const toCheckpointError = (error: unknown): MeetingDraftCheckpointError => {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
-  if (code === '23505' || /duplicate|unique/i.test(message)) {
-    return new MeetingDraftCheckpointError('conflict', '雲端已有同一筆草稿，請稍候重新載入後再試。');
-  }
-  if (/JWT|auth|permission|row-level security|not authenticated/i.test(message)) {
-    return new MeetingDraftCheckpointError('unauthorized', '登入狀態已失效，草稿仍保留在本機。');
-  }
-  return new MeetingDraftCheckpointError('transient', '雲端暫時無法保存，草稿仍保留在本機。');
-};
-
 export const supabaseRecordService = {
   listByProject: async (workspaceId: string, boardId: string): Promise<EditableKnowledgeRecord[]> => {
     requireSupabase();
@@ -1800,7 +1748,12 @@ export const supabaseRecordService = {
       .map(row => mapKnowledgeRecord(row, workspaceId, boardId));
   },
 
-  listByNode: async (workspaceId: string, boardId: string, nodeId: string): Promise<EditableKnowledgeRecord[]> => {
+  listByNode: async (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    options: { includeArchived?: boolean } = {},
+  ): Promise<EditableKnowledgeRecord[]> => {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
@@ -1815,7 +1768,7 @@ export const supabaseRecordService = {
     assertNoError(error);
     return ((data ?? []) as unknown as Array<{ record?: KnowledgeRecordWithLinks | null }>)
       .map(row => row.record)
-      .filter((record): record is KnowledgeRecordWithLinks => Boolean(record && record.status !== 'archived'))
+      .filter((record): record is KnowledgeRecordWithLinks => Boolean(record && (options.includeArchived || record.status !== 'archived')))
       .map(record => mapKnowledgeRecord(record, workspaceId, boardId))
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   },
@@ -1923,45 +1876,8 @@ export const supabaseRecordService = {
     return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) as EditableKnowledgeRecord;
   },
 
-  checkpointDraft: async (workspaceId: string, boardId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
-    requireSupabase();
-    if (!input.record.id || !isUuid(input.record.id)) {
-      throw new MeetingDraftCheckpointError('transient', '會議草稿缺少可同步的固定識別碼。');
-    }
-    const tenantId = await resolveWorkspaceId(workspaceId);
-    const projectId = await resolveProjectId(tenantId, boardId);
-    const payload = checkpointRecordToInsert(tenantId, projectId, input);
-    try {
-      if (input.remoteSignature) {
-        const { data, error } = await supabase
-          .from('knowledge_records')
-          .update(payload)
-          .eq('tenant_id', tenantId)
-          .eq('project_id', projectId)
-          .eq('id', input.record.id)
-          .eq('status', 'draft')
-          .select('id')
-          .maybeSingle();
-        if (error) throw error;
-        if (!data?.id) throw new MeetingDraftCheckpointError('conflict', '雲端紀錄已變更，請選擇保留本機內容或使用雲端版本。');
-      } else {
-        const { data, error } = await supabase
-          .from('knowledge_records')
-          .insert(payload)
-          .select('id')
-          .single();
-        if (error) throw error;
-        if (!data?.id) throw new MeetingDraftCheckpointError('transient', '雲端沒有回傳草稿識別碼。');
-      }
-    } catch (error) {
-      if (error instanceof MeetingDraftCheckpointError) throw error;
-      throw toCheckpointError(error);
-    }
-    return {
-      recordId: input.record.id,
-      confirmedAt: Date.now(),
-      remoteSignature: input.localSignature,
-    };
+  checkpointDraft: async (_workspaceId: string, _boardId: string, _input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {
+    throw new MeetingDraftCheckpointError('transient', '會議雲端 checkpoint 已停用；請使用本機 recovery。');
   },
 
   delete: async (workspaceId: string, boardId: string, recordId: string): Promise<void> => {

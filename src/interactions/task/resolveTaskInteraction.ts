@@ -87,17 +87,17 @@ export const resolveTaskInteraction = (
   return { actionId: binding, sourceLayer: getSourceLayer(layers, trigger) };
 };
 
-export const resolveTaskMenu = (context: InteractionContext): readonly TaskActionId[] => {
+export const resolveTaskMenu = (
+  context: InteractionContext,
+  overlays: readonly TaskInteractionProfile[] = [],
+): readonly TaskActionId[] => {
   if (!KNOWN_HOST_MODES.has(context.location.hostMode) || !KNOWN_ORIGINS.has(context.location.origin)) return [];
   if (context.transientOwners.length > 0 || context.blockers.length > 0) return [];
   if (hasExclusiveTransientConflict(context.transientOwners)) return [];
   const layers = getInteractionProfileLayers(context.location, context.nodeRole);
-  const actionIds = getTaskMenuActionIds(layers.map(layer => layer.profile));
-  // A task-details child row is already inside the details host, so expose the
-  // navigation action in its contextual menu without changing Board's compact
-  // menu contract.
-  if (context.surfaceId === 'task-details.subtask-row' && !actionIds.includes('task.open-details')) {
-    return ['task.open-details', ...actionIds];
-  }
+  const actionIds = getTaskMenuActionIds([
+    ...layers.map(layer => layer.profile),
+    ...overlays,
+  ]);
   return actionIds;
 };

@@ -79,7 +79,7 @@ ADR not needed。此變更不改schema、provider API、角色來源或跨模式
 
 - Desktop mind map 空白畫布左鍵矩形圈選與即時命中預覽。
 - 多選 selection lifecycle、primary node、visual placement 到 canonical task 去重。
-- 心智圖專屬右鍵 presenter、可執行 action matrix、compact visual hierarchy與 execution-time guard。
+- 心智圖專屬右鍵 presenter、可執行 action matrix、看板同款標準 visual hierarchy與 execution-time guard。
 - 單一 in-app clipboard slot：copy snapshot、cut live roots、paste-after exact anchor。
 - 多任務主責／協作 aggregate tri-state 與批次封存。
 - 一次 command／一次 undo、preflight、失敗補償、stale cut detection。
@@ -162,7 +162,7 @@ tracking projection 可以出現在selection，但v1只要多選集合命中proj
 
 - 新增 `MindMapContextMenu`作為心智圖專屬shell，只負責selection summary、`anchorPlacementId`、focus、position與assignment submenu；menu state由`MindMapView`私有持有，不寫入只容納單一canonical node的`BoardContextMenuState`。
 - 心智圖開menu前關閉既有global context menu；MindMap node不再呼叫`setContextMenuState`開task menu。`GlobalContextMenu`與其他模式維持原行為。
-- action ID、label、icon、capability與row renderer仍由interaction layer共用。擴充`TaskActionMenu`接受`hideDisabled`與`compact`模式；心智圖隱藏`enabled=false`的列，其他模式維持既有disabled呈現與`aria-disabled`契約；不得在`MindMapContextMenu`再維護第二份label／icon map。
+- action ID、label、icon、capability與row renderer仍由interaction layer共用。`MindMapContextMenu`採用與`GlobalContextMenu`／看板相同的標準 menu shell、header與row renderer；心智圖另以`hideDisabled`隱藏`enabled=false`的列，其他模式維持既有disabled呈現與`aria-disabled`契約；不得在`MindMapContextMenu`再維護第二份label／icon map。
 - 新`task.copy`、`task.cut`、`task.paste-after`在catalog標記`defaultMenu:false`（或等價explicit opt-in），只有mindmap profile明確include；心智圖 profile同時exclude`task.duplicate`。不得靠逐一修改所有其他host profile的exclude清單防漏。
 - 心智圖對`enabled=false`的action不 mount、不顯示lock icon、不建立不可點擊列；清單只留下可執行按鈕，鍵盤 focus 只在可見按鈕間移動。執行入口仍需重新跑當下guard，不能只信menu開啟時結果；GlobalContextMenu的既有disabled／`aria-disabled`行為不變。
 
@@ -361,7 +361,7 @@ provider目前沒有同看板forest／multi-node ACID transaction，因此applic
 - 多選時 Arrow key：先收斂到 primary並 focus，不在同一 key event再導航。
 - 多選時 Enter／Tab：只收斂到 primary，不在同一 event開明細或建立任務。
 - 多選時 Delete／Backspace：走同一 batch archive確認；不得只封存 primary。
-- menu 開啟時沿用既有native button Tab／Shift+Tab順序、Escape與outside click；popup以summary命名並把可執行actions呈現為緊湊按鈕清單，不可用action不 mount。現行shared menu沒有roving focus，除非另案完整實作ARIA menu pattern，DEV-102不得套`role="menu"`後缺少其鍵盤契約，也不得把Arrow／Home／End或Shift+F10寫成既有能力或驗收前提。
+- menu 開啟時沿用既有native button Tab／Shift+Tab順序、Escape與outside click；popup以summary命名並以看板同款標準按鈕列呈現可執行actions，不可用action不 mount。現行shared menu沒有roving focus，除非另案完整實作ARIA menu pattern，DEV-102不得套`role="menu"`後缺少其鍵盤契約，也不得把Arrow／Home／End或Shift+F10寫成既有能力或驗收前提。
 - menu關閉後focus回有效的exact `anchorPlacementId`；anchor已失效時回primary，兩者都不存在才回mindmap view owner，不得落到`body`。
 - marquee overlay使用 `pointer-events:none`；不得擋住 node focus／contextmenu。
 - selected ring、preview ring與 cut signal不可只靠顏色區分；cut node提供可存取狀態文字但避免對每個 descendant重複播報。
@@ -384,7 +384,7 @@ provider目前沒有同看板forest／multi-node ACID transaction，因此applic
 |---|---|---|
 | `src/components/MindMap/mindMapSelectionStore.ts` | 擴充 set＋primary＋preview＋keyed diagnostics | 維持唯一 private owner；不持久化 |
 | `src/components/MindMap/mindMapMarquee.ts`（新增） | threshold、rect normalize、center hit test、gesture reducer | pure；不讀 React/store/provider |
-| `src/components/MindMap/MindMapContextMenu.tsx`（新增） | 心智圖local menu shell、selection summary、anchor、compact density、focus | 不使用BoardContextMenuState；row renderer共用 |
+| `src/components/MindMap/MindMapContextMenu.tsx`（新增） | 心智圖local menu shell、selection summary、anchor、看板同款標準 density、focus | 不使用BoardContextMenuState；row renderer共用 |
 | `src/components/MindMap/MindMapBatchAssignmentPicker.tsx`（新增） | aggregate tri-state adapter | 角色 normalization走 shared helper |
 | `src/components/MindMap/mindMapClipboardStore.ts`（新增） | view-session one-slot copy/cut state、structure fingerprint、cut subscriptions | memory-only；mode／board cleanup |
 | `src/components/MindMap/mindMapBatchCommands.ts`（新增） | placement resolver、canonical/forest normalization、paste／assign／archive plans、完整affected/reindex/side patches與recovery descriptor | persistence委派shared primitive；不自造第二引擎 |
@@ -396,7 +396,7 @@ provider目前沒有同看板forest／multi-node ACID transaction，因此applic
 | `src/interactions/task/taskActionCatalog.ts` | copy／cut／paste-after opt-in metadata | `defaultMenu:false`；`task.duplicate`保留給其他模式 |
 | `src/interactions/task/taskActionGuards.ts` | 共用 current-state permission result與reason | cardinality policy由mindmap profile提供 |
 | `src/interactions/task/profiles.ts` | mindmap single/multi action profile | 不改 board/list/calendar profiles |
-| `src/interactions/task/TaskActionMenu.tsx` | 共用row支援`hideDisabled`／`compact`與既有aria-disabled執行阻擋 | 只由MindMapContextMenu啟用hide；GlobalContextMenu現有行為不變；不複製label／icon |
+| `src/interactions/task/TaskActionMenu.tsx` | 共用row支援`hideDisabled`與既有aria-disabled執行阻擋；既有compact opt-in維持相容 | MindMapContextMenu使用預設標準row並啟用hide；GlobalContextMenu現有行為不變；不複製label／icon |
 | `src/store/useWbsStore.ts` | 新增awaitable shared `commitNodeBatch` outcome、無副作用persist/apply path、target pending、commit後effects與grouped undo；duplicate改走clone plan | 不改schema；不得fire-and-forget、逐筆activity或假成功 |
 | `scripts/verify-dev-102-mindmap-marquee-multiselect-clipboard.ts`（新增） | source／pure／contract verifier | static不取代browser |
 | `scripts/verify-dev-102-mindmap-marquee-multiselect-clipboard-browser.pw.js`（新增） | fixture、UI、perf、permission、failure、evidence | local-test only |
@@ -410,7 +410,7 @@ provider目前沒有同看板forest／multi-node ACID transaction，因此applic
 | WP | 輸出 | Exit Gate | 回復邊界 |
 |---|---|---|---|
 | WP-102-A | placement-typed selection store、pure marquee、overlay、gesture arbitration | selection／preview／cancel、transform-cancel、single-node drag collapse與browser PASS；無雙owner或identity混用 | 回復到DEV-075單選store |
-| WP-102-B | local mindmap menu、opt-in action/profile、hide-unavailable compact row、native Tab/focus | 單／多選矩陣、不可用action隱藏、action不外洩、permission、a11y PASS；不引入虛構roving行為，其他mode不變 | 移除mindmap shell/profile增量 |
+| WP-102-B | local mindmap menu、opt-in action/profile、hide-unavailable row、看板同款標準樣式、native Tab/focus | 單／多選矩陣、不可用action隱藏、action不外洩、permission、a11y PASS；不引入虛構roving行為，其他mode不變 | 移除mindmap shell/profile增量 |
 | WP-102-C | shared clone plan、awaitable node batch outcome、integer sibling/side plan、success-effect isolation、same-tab recovery descriptor | existing duplicate parity、完整affected permission、provider/side completion、effects、undo failure、reload recovery與integer order PASS | primitive未被D使用前可整片回復 |
 | WP-102-D | aggregate assignment／archive、clipboard copy/cut、forest paste orchestration | tri-state、repeat copy、cut move、side reload、cycle/stale/failure/undo/order PASS | 保留A-C，移除DEV-102 actions／clipboard |
 | WP-102-E | QA/QC、回歸、文件收斂 | QA-DEV-102全部P0/P1與DEV-013／027B／028／048／070／074／075／079／084／088／095回歸 PASS | 第一個Fail回對應WP；不得放寬expected |
@@ -423,7 +423,7 @@ RD 必須依 A→B→C→D→E 執行。可在 A/B、C、D 各自形成可回復
 - AC-102-002：plain marquee取代 selection；preview／commit／cancel、blank click、board switch、Escape與scene-transform cancel lifecycle符合第6、11節。
 - AC-102-003：selection store仍是唯一 authority；symmetric-difference keyed notify成立，MindMapView render與geometry recompute delta為0。
 - AC-102-004：右鍵 selected node保持多選並以該node為anchor；右鍵 unselected node收斂單選；blank不開 task menu。
-- AC-102-005：menu顯示`已選取 N 個任務`；`enabled=false`的action不出現在心智圖DOM，清單只保留可執行action且文字、對比、列高符合compact UI gate；execution-time guard仍阻止狀態競速下的mutation。
+- AC-102-005：menu顯示`已選取 N 個任務`；`enabled=false`的action不出現在心智圖DOM，清單只保留可執行action，且外框、header、action row採看板同款標準樣式（220px寬、14px字級、36px列高）；execution-time guard仍阻止狀態競速下的mutation。
 - AC-102-006：mindmap`複製`只寫clipboard、不立即新增；clipboard actions以opt-in只出現在mindmap，其他模式不外洩且`複製任務`仍立即duplicate。
 - AC-102-007：父與後代同時選取時，copy／cut／archive只處理top-most forest root一次；assignment仍作用於每個明確選取 canonical task。
 - AC-102-008：existing immediate duplicate與copy paste共用唯一clone plan；copy可重複執行，每次新IDs、roots連續插在exact anchor後、子樹／允許欄位／internal dependencies正確；top-level side與reload後版面一致。
@@ -467,4 +467,4 @@ RD 必須依 A→B→C→D→E 執行。可在 A/B、C、D 各自形成可回復
 - 2026-09-03：RD技術主管審查後改用`primaryPlacementId／anchorPlacementId`、clipboard action explicit opt-in、共用clone plan、awaitable typed batch outcome與structure-only cut fingerprint；移除強制獨立overlay component，揭露application saga的indeterminate技術債。
 - 2026-09-03：RD技術主管第二輪補入side override transaction、完整reindex/permission集合、sessionStorage reload recovery descriptor、commit後單次effects與undo reject contract；移除不存在的menu roving baseline，補明multi node drag與scene-transform cancel。
 - 2026-09-03：完成WP-102-A～E、local automated QA／QC與RD技術主管R3；補入真實UI fault seams、same-tab recovery、四方向200／500-node performance、390／320邊界及受影響回歸，狀態更新為Implemented／未Release。
-- 2026-09-04：依使用者回饋修正心智圖右鍵清單視覺契約：不可用action直接隱藏；移除常駐鎖定說明；心智圖專屬選單採252px、13px文字與32px列高，補入對比／密度／DOM visibility browser gate；其他模式不變。
+- 2026-09-04：依使用者回饋修正心智圖右鍵清單視覺契約：不可用action直接隱藏；移除常駐鎖定說明；心智圖右鍵清單改採看板同款標準 shell、header與row（220px、14px、36px），補入看板樣式／對比／DOM visibility browser gate；其他模式不變。

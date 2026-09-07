@@ -11,6 +11,7 @@ import type { TaskNode } from '../../types';
 import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import type { TaskFilterResultProjection } from '../../features/taskFilters';
 import { TaskChecklistTree } from './TaskChecklistTree';
+import { getMeetingTaskReservations } from '../../utils/meetingTaskReservation';
 
 interface KanbanChecklistProps {
   parentId: string;
@@ -28,7 +29,14 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = (props) => {
   const dependencyContext = React.useContext(KanbanDependencyContext);
   const dependencySelection = dependencyContext?.dependencySelection || null;
   const isRecordCaptureMode = useRecordStore(state => state.isTaskSelectionMode);
+  const isMeetingMode = useRecordStore(state => state.isMeetingMode);
   const recordDraft = useRecordStore(state => state.draft);
+  const meetingReservationValues = React.useMemo(
+    () => isMeetingMode && recordDraft?.type === 'meeting' && recordDraft.status === 'draft'
+      ? getMeetingTaskReservations(recordDraft.metadata)?.values || null
+      : null,
+    [isMeetingMode, recordDraft],
+  );
   const insertRecordTaskMention = useRecordStore(state => state.insertTaskMentionAtCursor);
   const showTags = useBoardStore(state => state.showTags);
   const selectedTaskId = useBoardStore(state => state.selectedTaskId);
@@ -48,7 +56,8 @@ export const KanbanChecklist: React.FC<KanbanChecklistProps> = (props) => {
     onRecordCapture: (taskId: string, title: string) => insertRecordTaskMention(taskId, title),
     showTags,
     selectedTaskId,
-  }), [dependencyContext, dependencySelection, insertRecordTaskMention, isRecordCaptureMode, recordDraft, selectedTaskId, showTags]);
+    meetingReservationValues,
+  }), [dependencyContext, dependencySelection, insertRecordTaskMention, isMeetingMode, isRecordCaptureMode, meetingReservationValues, recordDraft, selectedTaskId, showTags]);
 
   return <TaskChecklistTree {...props} hostAdapter={hostAdapter} />;
 };

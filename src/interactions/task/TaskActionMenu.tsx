@@ -1,10 +1,12 @@
 import React from 'react';
 import {
   Archive,
+  Check,
   ClipboardPaste,
   Copy,
   CornerLeftUp,
   CornerRightDown,
+  Clock3,
   GitBranch,
   Link2,
   LockKeyhole,
@@ -28,9 +30,13 @@ type TaskActionMenuProps = {
   assignmentSummary?: React.ReactNode;
   assignmentContent?: React.ReactNode;
   onToggleAssignment?: () => void;
+  inlineActionId?: TaskActionId | null;
+  inlineActionContent?: React.ReactNode;
+  actionLabelOverrides?: Partial<Record<TaskActionId, string>>;
 };
 
 const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
+  'task.toggle-complete': <Check size={14} className="flex-shrink-0 text-emerald-500" />,
   'task.open-details': <PanelRight size={14} className="flex-shrink-0 text-indigo-500" />,
   'task.create-sibling': <Plus size={14} className="flex-shrink-0 text-sky-500" />,
   'task.create-child': <CornerRightDown size={14} className="flex-shrink-0 text-blue-500" />,
@@ -41,6 +47,7 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
   'task.paste-after': <ClipboardPaste size={14} className="flex-shrink-0 text-slate-500" />,
   'task.create-tracking-reference': <Link2 size={14} className="flex-shrink-0 text-violet-500" />,
   'task.remove-tracking-reference': <Unlink size={14} className="flex-shrink-0 text-rose-500" />,
+  'task.edit-meeting-reservation': <Clock3 size={14} className="flex-shrink-0 text-indigo-500" />,
   'task.assign': <UserRound size={14} className="flex-shrink-0 text-blue-500" />,
   'task.dependency-start': <GitBranch size={14} className="flex-shrink-0 text-amber-500" />,
   'task.dependency-end': <GitBranch size={14} className="flex-shrink-0 text-purple-500" />,
@@ -51,6 +58,7 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
 
 const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.open-details': '開啟明細',
+  'task.toggle-complete': '狀態改完成',
   'task.create-sibling': '新增並列任務',
   'task.create-child': '新增子任務',
   'task.create-relationship': '建立關聯線',
@@ -74,11 +82,12 @@ const TITLES: Partial<Record<TaskActionId, string>> = {
   'task.create-relationship': '以目前任務為起點選擇目標',
 };
 
-const SECTION_ORDER = ['create', 'clipboard', 'assignment', 'tracking-reference', 'dependency', 'hierarchy', 'lifecycle', 'danger'] as const;
+const SECTION_ORDER = ['create', 'clipboard', 'assignment', 'planning', 'tracking-reference', 'dependency', 'hierarchy', 'lifecycle', 'danger'] as const;
 
-const actionLabel = (actionId: TaskActionId) => (
-  LABELS[actionId] || getTaskActionDefinition(actionId)?.label || actionId
-);
+const actionLabel = (
+  actionId: TaskActionId,
+  overrides: Partial<Record<TaskActionId, string>> = {},
+) => overrides[actionId] || LABELS[actionId] || getTaskActionDefinition(actionId)?.label || actionId;
 
 export const TaskActionMenu = ({
   actionIds,
@@ -91,6 +100,9 @@ export const TaskActionMenu = ({
   assignmentSummary,
   assignmentContent,
   onToggleAssignment,
+  inlineActionId = null,
+  inlineActionContent,
+  actionLabelOverrides = {},
 }: TaskActionMenuProps) => {
   const actionsBySection = new Map<string, TaskActionId[]>();
   for (const section of SECTION_ORDER) actionsBySection.set(section, []);
@@ -117,6 +129,13 @@ export const TaskActionMenu = ({
   const renderAction = (actionId: TaskActionId) => {
     const actionEnabled = enabled[actionId] !== false;
     const disabledReason = actionEnabled ? undefined : disabledReasons[actionId] || '目前無法使用此功能';
+    if (actionId === inlineActionId && inlineActionContent) {
+      return (
+        <div key={actionId} data-task-action-inline-editor="true">
+          {inlineActionContent}
+        </div>
+      );
+    }
     if (actionId === 'task.assign') {
       return (
         <React.Fragment key={actionId}>
@@ -132,7 +151,7 @@ export const TaskActionMenu = ({
           >
             {ICONS[actionId]}
             <span className="min-w-0 flex-1">
-              <span className="block">{actionLabel(actionId)}</span>
+              <span className="block">{actionLabel(actionId, actionLabelOverrides)}</span>
               {assignmentSummary ? <span className={`block truncate text-gray-500 ${compact ? 'text-[10px] leading-4' : 'text-[11px]'}`}>{assignmentSummary}</span> : null}
               {disabledReason ? <span className={`block text-amber-700 ${compact ? 'text-[10px] leading-4' : 'text-[11px]'}`}>{disabledReason}</span> : null}
             </span>
@@ -161,7 +180,7 @@ export const TaskActionMenu = ({
       >
         {ICONS[actionId]}
         <span className="min-w-0 flex-1">
-          <span className="block">{actionLabel(actionId)}</span>
+          <span className="block">{actionLabel(actionId, actionLabelOverrides)}</span>
           {disabledReason ? <span className="block text-[11px] text-amber-700">{disabledReason}</span> : null}
         </span>
         {!actionEnabled ? <LockKeyhole size={12} aria-hidden="true" className="flex-shrink-0 text-amber-600" /> : null}

@@ -405,21 +405,31 @@ export type MeetingTaskActivity = Required<Omit<MeetingTaskActivityInput, 'paylo
 };
 
 export interface MeetingDraftRecoverySnapshot {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   scopeKey: string;
   ownerUserId: string;
   workspaceId: string;
   boardId: string;
   draftId: string;
   savedAt: number;
+  writeSequence?: number;
   localSignature: string;
-  remoteSignature: string | null;
-  baselineSignature: string | null;
+  /** @deprecated v1 only; never written by the v2 writer. */
+  remoteSignature?: string | null;
+  /** @deprecated v1 only; normalized in memory to canonicalBaselineSignature. */
+  baselineSignature?: string | null;
+  canonicalBaselineSignature?: string | null;
   contentCursorOffset: number | null;
   draft: KnowledgeRecordInput;
   meetingActivities: MeetingTaskActivity[];
   appendedMeetingActivityIds: string[];
 }
+
+export type MeetingDraftRecoverySnapshotV2 = MeetingDraftRecoverySnapshot & {
+  schemaVersion: 2;
+  writeSequence: number;
+  canonicalBaselineSignature: string | null;
+};
 
 export type MeetingDraftRecoveryLocalStatus = 'idle' | 'saving' | 'saved' | 'degraded' | 'error';
 export type MeetingDraftRecoveryCloudStatus = 'idle' | 'scheduled' | 'saving' | 'saved' | 'paused' | 'conflict' | 'error';

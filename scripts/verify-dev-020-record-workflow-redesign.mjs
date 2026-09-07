@@ -34,7 +34,9 @@ const checks = [
     label: 'sidebar records library entry',
     snippets: [
       'data-sidebar-records-button="true"',
-      "setView('records')",
+      'const nextView = isRecordsView',
+      'setView(nextView)',
+      'void guardRecordDraft',
       'isRecordsView',
       '紀錄庫',
       '設定',
@@ -188,12 +190,13 @@ const checks = [
   },
   {
     path: 'src/components/Records/RecordsView.tsx',
-    label: 'records library guarded actions',
+    label: 'records library guarded existing-record flow',
     snippets: [
       'useRecordDraftGuard',
-      'handleNewMeetingRecord',
       'handleOpenRecord',
-      '補一筆會後紀錄',
+      'recordGroups',
+      'data-record-section',
+      'data-record-section-tab',
     ],
     forbiddenSnippets: [
       "onClick={() => handleNewRecord('work_log')}",

@@ -267,7 +267,7 @@ async (page) => {
       const notesSection = card.closest('[data-task-detail-notes-section="true"]');
       const notesGrid = card.closest('[data-task-detail-notes-grid="true"]');
       const header = card.querySelector('[data-task-detail-note-header="true"]');
-      const titleInput = card.querySelector('[data-task-detail-note-title-input="true"]');
+      const titleControl = card.querySelector('[data-task-detail-note-title-input="true"], [data-task-detail-note-title="true"]');
       const addButton = card.querySelector('[data-task-detail-note-add="true"]');
       const deleteButton = card.querySelector('[data-task-detail-note-delete="true"]');
       const toRect = (element) => {
@@ -276,7 +276,7 @@ async (page) => {
       };
       return {
         header: toRect(header),
-        titleInput: toRect(titleInput),
+        titleControl: toRect(titleControl),
         addButton: toRect(addButton),
         deleteButton: toRect(deleteButton),
         sectionDirectAddButtonCount: notesSection
@@ -294,7 +294,7 @@ async (page) => {
       noteActionMetrics,
     );
     assert(
-      Math.abs(noteActionMetrics.addButton.top - noteActionMetrics.titleInput.top) <= 1 &&
+      Math.abs(noteActionMetrics.addButton.top - noteActionMetrics.titleControl.top) <= 1 &&
         Math.abs(noteActionMetrics.addButton.top - noteActionMetrics.deleteButton.top) <= 1,
       'add-note action should share the note title row instead of occupying a standalone row',
       noteActionMetrics,

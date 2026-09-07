@@ -38,7 +38,12 @@ const RecordsView: React.FC = () => {
     { key: 'meeting', label: '會議紀錄', records: visibleRecords.filter(record => record.type === 'meeting') },
     { key: 'work_log', label: '個人工作紀錄', records: visibleRecords.filter(record => record.type === 'work_log') },
   ], [visibleRecords]);
-  const returnToBoard = () => setView(activeWorkspaceId && activeBoardId ? 'board' : 'home');
+  const returnToBoard = () => {
+    void guardRecordDraft(() => setView(activeWorkspaceId && activeBoardId ? 'board' : 'home'), {
+      title: '返回看板？',
+      message: '返回看板會離開目前紀錄；若尚未完成本機保存，請先決定是否存草稿。',
+    });
+  };
   const sections = [
     ...(!isMeetingRecordUnavailable ? [{ key: 'meeting' as const, label: '會議紀錄' }] : []),
     { key: 'work_log' as const, label: '個人工作紀錄' },

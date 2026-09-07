@@ -72,6 +72,7 @@ export type TaskActionId =
   | 'task.paste-after'
   | 'task.create-tracking-reference'
   | 'task.remove-tracking-reference'
+  | 'task.edit-meeting-reservation'
   | 'task.assign'
   | 'task.dependency-start'
   | 'task.dependency-end'
@@ -118,7 +119,7 @@ export type TaskInteractionDispatchOutcome = {
   commandOutcome: TaskCommandOutcome | null;
 };
 
-export type TaskMenuSection = 'create' | 'clipboard' | 'assignment' | 'dependency' | 'hierarchy' | 'lifecycle' | 'danger';
+export type TaskMenuSection = 'create' | 'clipboard' | 'assignment' | 'planning' | 'dependency' | 'hierarchy' | 'lifecycle' | 'danger';
 
 export type TaskActionDefinition = {
   id: TaskActionId;
@@ -126,7 +127,7 @@ export type TaskActionDefinition = {
   icon: string;
   section: TaskMenuSection | null;
   kind: 'navigation' | 'selection' | 'presentation' | 'mutation' | 'transient' | 'danger';
-  capability?: 'create' | 'edit' | 'move' | 'delete' | 'assign' | 'dependency' | 'tracking-reference';
+  capability?: 'create' | 'edit' | 'move' | 'delete' | 'assign' | 'dependency' | 'tracking-reference' | 'meeting-reservation';
   /** Opt-in actions remain absent from every host menu unless a profile includes them explicitly. */
   defaultMenu?: boolean;
 };

@@ -67,6 +67,7 @@ interface TaskDetailNoteEditorProps {
   canEdit: boolean;
   note: TaskDetailNote;
   noteIndex: number;
+  titleEditable?: boolean;
   onAdd: () => void;
   onDelete: () => void;
   onSave: () => void;
@@ -451,6 +452,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   canEdit,
   note,
   noteIndex,
+  titleEditable = true,
   onAdd,
   onDelete,
   onSave,
@@ -471,15 +473,24 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     <LexicalComposer initialConfig={initialConfig}>
       <div className="relative min-w-0" data-task-detail-note-card="true" data-task-note-editor-loaded="true">
         <div className="relative mb-1 flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap" data-task-detail-note-header="true">
-          <input
-            type="text"
-            value={note.title}
-            onChange={event => onUpdate({ title: event.target.value })}
-            disabled={!canEdit}
-            className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold text-slate-800 outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400"
-            placeholder="備註標題"
-            data-task-detail-note-title-input="true"
-          />
+          {titleEditable ? (
+            <input
+              type="text"
+              value={note.title}
+              onChange={event => onUpdate({ title: event.target.value })}
+              disabled={!canEdit}
+              className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold text-slate-800 outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400"
+              placeholder="備註"
+              data-task-detail-note-title-input="true"
+            />
+          ) : (
+            <span
+              className="flex h-7 min-w-0 flex-1 items-center px-0 text-sm font-semibold text-slate-800"
+              data-task-detail-note-title="true"
+            >
+              {note.title || '任務說明'}
+            </span>
+          )}
           <NoteToolbarPlugin canEdit={canEdit} noteTitle={note.title} onSave={onSave} />
           {noteIndex === 0 ? (
             <button
@@ -512,9 +523,9 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
               <ContentEditable
                 className={[
                   'min-h-[96px] w-full overflow-auto whitespace-pre-wrap rounded-md border border-slate-200/70',
-                  'bg-slate-50/70 px-2 py-1.5 text-sm leading-6 text-slate-700 outline-none transition',
-                  'hover:border-slate-300/70 hover:bg-slate-50 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100',
-                  'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:bg-slate-100 aria-disabled:text-slate-400',
+                  'bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-700 outline-none transition',
+                  'hover:border-slate-300/70 focus:border-blue-300 focus:ring-2 focus:ring-blue-100',
+                  'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
                 aria-label={'備註內容：' + (note.title || '未命名備註')}
                 aria-placeholder="輸入備註內容"

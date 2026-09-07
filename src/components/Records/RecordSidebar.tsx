@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Loader2, MoreHorizontal, PenLine, Plus, Save, Send, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import useBoardStore from '../../store/useBoardStore';
 import useRecordStore from '../../store/useRecordStore';
@@ -9,10 +9,12 @@ import { useTagStore } from '../../store/useTagStore';
 import { useWbsStore } from '../../store/useWbsStore';
 import { useMeetingModeExitGuard } from '../../hooks/useMeetingModeExitGuard';
 import { useRecordDraftGuard } from '../../hooks/useRecordDraftGuard';
+import { useMeetingDraftDiscard } from '../../hooks/useMeetingDraftDiscard';
 import { useMeetingRecordAvailability } from '../../utils/meetingRecordAvailability';
 import { eventLogService } from '../../services/dataBackend';
 import { synthesizeMeetingRecord } from '../../services/meetingSynthesisService';
 import { getMeetingRecordActionState, getMeetingWorkflowStepActions, getRecordDraftSignature, type MeetingWorkflowStepAction } from '../../utils/meetingRecordWorkflow';
+import { getRecordComposerVariant } from '../../utils/recordComposerVariant';
 import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
@@ -606,6 +608,7 @@ const RecordSidebar: React.FC = () => {
   const { activeWorkspaceId, activeBoardId } = useBoardStore();
   const guardRecordDraft = useRecordDraftGuard();
   const requestExitMeetingMode = useMeetingModeExitGuard();
+  const { canDiscard: canDiscardMeetingDraft, discard: discardMeetingDraft } = useMeetingDraftDiscard();
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const [sidebarWidth, setSidebarWidth] = React.useState(readRecordSidebarWidth);
   const [isResizing, setIsResizing] = React.useState(false);
@@ -614,6 +617,10 @@ const RecordSidebar: React.FC = () => {
   const [projectChangeImport, setProjectChangeImport] = React.useState(createInitialProjectChangeImportState);
   const sidebarWidthRef = React.useRef(sidebarWidth);
   const resizeCleanupRef = React.useRef<(() => void) | null>(null);
+  const composerScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const meetingOverflowRef = React.useRef<HTMLDivElement | null>(null);
+  const meetingOverflowButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const [isMeetingOverflowOpen, setIsMeetingOverflowOpen] = React.useState(false);
   const records = useRecordStore(state => state.records);
   const draft = useRecordStore(state => state.draft);
   const loading = useRecordStore(state => state.loading);
@@ -695,19 +702,40 @@ const RecordSidebar: React.FC = () => {
     return () => window.removeEventListener('resize', handleViewportResize);
   }, []);
 
+  React.useEffect(() => {
+    if (!isMeetingOverflowOpen) return undefined;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && meetingOverflowRef.current?.contains(event.target)) return;
+      setIsMeetingOverflowOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMeetingOverflowOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMeetingOverflowOpen]);
+
   React.useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   React.useEffect(() => {
     setProjectChangeImport(createInitialProjectChangeImportState());
     setIsProjectImportExpanded(false);
     setIsLinkedTasksOpen(false);
+    window.requestAnimationFrame(() => composerScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' }));
   }, [draft?.id]);
 
   if (!isPanelOpen || (isMeetingMode && isMeetingRecordUnavailable)) return null;
 
+  const composerVariant = getRecordComposerVariant(draft, isMeetingMode);
+  const isLiveMeeting = composerVariant === 'live-meeting';
+  const isWorkLog = composerVariant === 'work-log';
   const selectedLinks = draft?.taskLinks || [];
   const isSynthesizing = meetingSynthesisStatus === 'synthesizing';
-  const isMeetingDraft = Boolean(isMeetingMode && draft?.type === 'meeting');
+  const isMeetingDraft = isLiveMeeting;
   const draftIsDirty = Boolean(draft && getRecordDraftSignature(draft) !== draftBaselineSignature);
   const meetingActionState = getMeetingRecordActionState({
     draft,
@@ -735,7 +763,7 @@ const RecordSidebar: React.FC = () => {
             ? '本機保存中…'
             : String(meetingDraftRecovery.localStatus) === 'degraded'
               ? '本機部分保存，請保留此分頁'
-              : String(meetingDraftRecovery.localStatus) === 'error'
+            : String(meetingDraftRecovery.localStatus) === 'error'
                 ? '本機保存失敗，請勿關閉此分頁'
                 : '';
   const shouldShowMeetingRecoveryStatus = Boolean(meetingRecoveryStatus);
@@ -777,14 +805,15 @@ const RecordSidebar: React.FC = () => {
       : draft?.type === 'work_log'
         ? '發布工作紀錄'
         : '發布會議紀錄';
-  const canUseProjectChangeImport = Boolean(draft && !isPublished);
+  const canUseProjectChangeImport = Boolean(draft && !isPublished && (isLiveMeeting || isWorkLog));
   const shouldShowProjectChangeImport = Boolean(canUseProjectChangeImport && isProjectImportExpanded);
   const exitRecordButtonLabel = '離開紀錄';
-  const exitRecordButtonTitle = isMeetingMode
-    ? '離開紀錄；離開不等於發布，若有未儲存變更會先詢問是否存草稿。'
+  const exitRecordButtonTitle = isLiveMeeting
+    ? '離開紀錄；離開不等於發布，未儲存變更會先自動保護內容。'
     : '離開紀錄；若有未儲存變更會先詢問是否存草稿。';
   const sidebarRecordTitle = draft ? recordTypeLabel(draft.type) : '紀錄';
   const projectImportStepEnabled = canUseProjectChangeImport && !saving && !isSynthesizing;
+  const contentMinHeightClass = draft?.type === 'meeting' ? 'min-h-[220px]' : 'min-h-[150px]';
   const projectImportStatusLabel = getProjectImportStepStatusLabel(
     projectChangeImport.status,
     projectChangeImport.stepState,
@@ -840,6 +869,14 @@ const RecordSidebar: React.FC = () => {
     void guardRecordDraft(() => openExistingRecord(record), {
       title: '開啟另一筆紀錄？',
       message: '開啟另一筆紀錄會替換目前編輯中的草稿；若目前紀錄尚未儲存，請先決定是否存草稿。',
+    });
+  };
+
+  const handleMeetingDiscard = () => {
+    setIsMeetingOverflowOpen(false);
+    void discardMeetingDraft().then(discarded => {
+      if (discarded) return;
+      window.requestAnimationFrame(() => meetingOverflowButtonRef.current?.focus());
     });
   };
 
@@ -1084,19 +1121,58 @@ const RecordSidebar: React.FC = () => {
             onClick={togglePanelCollapsed}
             data-record-sidebar-collapse-toggle
             data-record-sidebar-collapse-direction="right"
-            aria-label={isMeetingMode ? '收合會議速記面板' : '收合紀錄面板'}
+            aria-label={isLiveMeeting ? '收合會議速記面板' : '收合紀錄面板'}
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-            title={isMeetingMode ? '收合會議速記面板' : '收合紀錄面板'}
+            title={isLiveMeeting ? '收合會議速記面板' : '收合紀錄面板'}
           >
             <ChevronRight size={16} />
           </button>
           <span data-record-sidebar-title className="truncate text-sm font-semibold text-slate-800">{sidebarRecordTitle}</span>
         </div>
         <div className="ml-auto flex items-center gap-1">
+          {isLiveMeeting ? (
+            <div ref={meetingOverflowRef} className="relative">
+              <button
+                type="button"
+                data-meeting-draft-overflow
+                ref={meetingOverflowButtonRef}
+                aria-haspopup="menu"
+                aria-expanded={isMeetingOverflowOpen}
+                aria-label="會議操作"
+                title="會議操作"
+                onClick={() => setIsMeetingOverflowOpen(value => !value)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+              {isMeetingOverflowOpen ? (
+                <div
+                  role="menu"
+                  data-meeting-draft-overflow-menu
+                  className="absolute right-0 top-full z-30 mt-1 min-w-44 rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-meeting-draft-discard
+                    disabled={!canDiscardMeetingDraft}
+                    onClick={() => {
+                      handleMeetingDiscard();
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={canDiscardMeetingDraft ? '捨棄尚未正式保存的會議內容' : '目前沒有可捨棄的會議內容'}
+                  >
+                    <Trash2 size={13} />
+                    捨棄本次會議
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <button
             type="button"
             data-record-composer-close
-            onClick={isMeetingMode ? () => void requestExitMeetingMode() : handleGuardedClosePanel}
+            onClick={isLiveMeeting ? () => void requestExitMeetingMode() : handleGuardedClosePanel}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
             title={exitRecordButtonTitle}
             aria-label={exitRecordButtonLabel}
@@ -1106,23 +1182,23 @@ const RecordSidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-        <section className="flex min-h-0 flex-1 flex-col border-b border-slate-100 p-3">
+      <div ref={composerScrollRef} data-record-composer-scroll-owner className="flex min-h-0 flex-1 flex-col overflow-auto">
+        <section data-record-composer-variant={composerVariant} className="flex min-h-0 flex-1 flex-col border-b border-slate-100 p-3">
           {draft ? (
             <div className="flex min-h-0 flex-1 flex-col space-y-3">
               <RecordContextSummary
                 draft={draft}
-                typeState={isMeetingMode ? 'meeting-mode-locked' : 'draft-type-locked'}
+                typeState={isLiveMeeting ? 'meeting-mode-locked' : 'draft-type-locked'}
               />
 
-              {isMeetingMode ? (
+              {isLiveMeeting ? (
                 <div
                   data-record-composer-workflow
                   data-record-composer-actions
                   data-record-workflow-kind="meeting"
                   data-meeting-workflow-card="compact"
                   data-project-change-import-expanded={isProjectImportExpanded ? 'true' : 'false'}
-                  className="rounded-md border border-slate-200 bg-white p-2"
+                  className="min-w-0"
                 >
                   <MeetingWorkflowArrowStepper
                     steps={meetingWorkflowStepsForDisplay}
@@ -1151,7 +1227,7 @@ const RecordSidebar: React.FC = () => {
                     </div>
                   ) : null}
                 </div>
-              ) : (
+              ) : isWorkLog ? (
                 <WorkLogWorkflowCard
                   projectImportStep={projectImportWorkLogStep}
                   projectImportPanel={projectChangeImportPanel}
@@ -1165,7 +1241,7 @@ const RecordSidebar: React.FC = () => {
                   onSaveDraft={() => handleSave('draft')}
                   onPublish={() => handleSave('published')}
                 />
-              )}
+              ) : null}
 
               <div data-record-composer-meta className="flex flex-1 flex-col space-y-3">
                 {draft.type === 'meeting' ? (
@@ -1238,10 +1314,10 @@ const RecordSidebar: React.FC = () => {
                   </>
                 )}
 
-                <div className={`flex flex-1 flex-col text-xs font-medium text-slate-500 ${isMeetingMode ? 'min-h-[220px]' : 'min-h-[150px]'}`}>
+                <div className={`flex flex-1 flex-col text-xs font-medium text-slate-500 ${contentMinHeightClass}`}>
                   <div data-record-content-header className="flex min-w-0 items-start justify-between gap-2">
                     <span className="shrink-0">內容</span>
-                    {isMeetingMode ? (
+                    {isLiveMeeting ? (
                       <MeetingProjectChangeImportControl
                         status={meetingProjectImportStatus}
                         message={meetingProjectImportMessage}
@@ -1262,14 +1338,14 @@ const RecordSidebar: React.FC = () => {
                       focusPending={contentFocusPending}
                       onFocusConsumed={consumeContentFocus}
                       placeholder="記錄討論、決議、進度、風險、待追蹤事項..."
-                      editorClassName={isMeetingMode ? 'min-h-[220px] flex-1' : 'min-h-[150px] flex-1'}
-                      editorContainerClassName={isMeetingMode ? 'flex min-h-[220px] flex-1 flex-col' : 'flex min-h-[150px] flex-1 flex-col'}
+                      editorClassName={`${contentMinHeightClass} flex-1`}
+                      editorContainerClassName={`flex ${contentMinHeightClass} flex-1 flex-col`}
                     />
                   </label>
                 </div>
               </div>
 
-              {isMeetingMode && meetingSynthesisStatus !== 'idle' ? (
+              {isLiveMeeting && meetingSynthesisStatus !== 'idle' ? (
                 <div
                   data-meeting-synthesis-status={meetingSynthesisStatus}
                   data-meeting-synthesis-provider={meetingSynthesisProvider ?? undefined}
@@ -1323,9 +1399,12 @@ const RecordSidebar: React.FC = () => {
                 </div>
               ) : null}
 
-              <div data-record-compact-controls className="rounded-md border border-slate-200 bg-white">
+              <div
+                data-record-compact-controls
+                className={isMeetingMode ? '' : 'rounded-md border border-slate-200 bg-white'}
+              >
                 {isMeetingMode ? (
-                  <div data-record-meeting-actions className="flex items-center justify-between gap-2 px-2 py-1">
+                  <div data-record-meeting-actions className="flex items-center justify-between gap-2 py-1">
                     <button
                       type="button"
                       data-record-meeting-save-draft
@@ -1495,8 +1574,8 @@ const RecordSidebar: React.FC = () => {
           )}
         </section>
 
-        {!isMeetingMode ? (
-          <section className="p-3">
+        {composerVariant === 'empty' ? (
+          <section data-record-recent-records className="p-3">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-xs font-semibold text-slate-600">最近紀錄</h3>
               {loading ? <span className="text-[11px] text-slate-400">載入中</span> : null}

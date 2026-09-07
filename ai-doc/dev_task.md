@@ -650,6 +650,27 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 阻塞 / 恢復條件：目前無 Brief blocker；未達 `RD Contract Ready` 前不得直接修改產品程式或資料結構。
   - 證據：本文件 `DEV-105` 詳細段落；使用者於 2026-09-04 確認 UI、權限與排除範圍。
   - 計入交付：是（Brief 階段，完成率貢獻 0）
+
+- ✓ DEV-106 [交付點] [完成] [P1] [Phase 0 Implemented / QA-QC PASS / Phase 1 Contract Ready / NOT RELEASED] 會議安全草稿、結束與待整理生命週期
+  - 摘要：本機 recovery、transaction commit truth、離開前 force-flush、明確 discard 與 provider 0 recovery request；Phase 1 cloud／跨裝置／待整理維持 future capsule。
+  - 證據：`SPEC-106`、`QA-DEV-106`、`QC-DEV-106`；static PASS、browser 14/14 PASS。
+  - 計入交付：否（正式 release 另需 release gate）
+
+- ✓ DEV-107 [開發點] [完成] [P1] [Implemented / Targeted QA-QC PASS / Local-only / NOT RELEASED] 會議草稿側欄模式與排版收斂
+  - 摘要：以單一 composer variant 修正既有 meeting record 誤顯示個人流程、draft/recent 重疊、editor resize 與 drawer scroll responsibility。
+  - 父任務：DEV-020；corrective follow-up DEV-092；相容 DEV-019、DEV-094、DEV-106。
+  - 證據：DEV-107 static 20/20、browser 5/5；DEV-020／092／094／106 targeted regression、TypeScript、targeted ESLint、build:test、diff check PASS；詳見 `QC-DEV-107-record-sidebar-draft-layout.md`。
+  - 計入交付：否（Local-only；release candidate 需另走完整 QA matrix 與 release gate）
+
+- ✓ DEV-108 [交付點] [完成] [P1] [Implemented / QA-QC PASS / Local-only / NOT RELEASED] 任務明細會議補記持續呈現
+  - 摘要：任務明細的人工會議補記加入後立即顯示，會議結束後仍以緊湊純文字列表留在第一層；預設顯示最新三筆並可原地展開。
+  - 來源 ID：`USER-20260907-TASK-DETAIL-MEETING-NOTE-PERSISTENT-LIST`
+  - 父任務：DEV-009；相容 DEV-008、DEV-066、DEV-106。
+  - 下一步：若納入 release candidate，依 `QA-DEV-108` 重跑完整 matrix 並交 release gate；目前不自動 deploy。
+  - 阻塞 / 恢復條件：Local-only 已通過；若 release 前發現 provider/RLS、正式資料或權限變更需求，停止並回 PM 升級風險。
+  - 證據：`SPEC-108`、`QA-DEV-108`、`RD-TECH-LEAD-REVIEW-DEV-108`、`QC-DEV-108`；static 14/14、browser B01～B09、DEV-008／009／024／066／105／106／107 targeted regression、TypeScript、targeted ESLint、build:test、`git diff --check` PASS。
+  - 計入交付：是（Local implementation 完成；正式 release 另需 gate）
+
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -926,7 +947,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 - 桌機／筆電會議紀錄的標題、內容、與會者、task links、會議活動 buffer 與必要草稿識別資訊。
 - 本機即時快照、F5 復原、過期清理、登出清理與 terminal action 清理；meeting mode 持續期間即使雲端已確認仍保留最新本機快照。
 - 輕量雲端 checkpoint，只儲存最新草稿，不建立每次輸入版本歷史。
-- 保存狀態的桌機 UI：「已保存在此裝置」、「已備份至雲端 HH:mm」、「雲端備份失敗，本機內容仍安全」。
+- 保存狀態的桌機 UI 只在需要使用者注意時顯示：「已備份至雲端 HH:mm」、「雲端備份失敗，本機內容仍安全」；正常本機保存不另佔用畫面列。
 - 離線期間合併成單一最新快照，重新連線時最多補送一份。
 - 維持 draft 不產生 RAG document version、chunk、sync job 或 embedding；發布時才依 content hash 進入現有 RAG 流程。
 
@@ -940,7 +961,7 @@ Rework 4 的真正需求不是新增手機編輯能力模組，而是移除裝�
 
 ### Frozen Implementation Contract
 
-- 本機層：500ms debounce 同步產生 sessionStorage emergency copy 與 IndexedDB v1 durable snapshot；TTL 7 天，以 user/workspace/board/draft 分區。latest IndexedDB 成功才顯示「已保存在此裝置」；只有 sessionStorage 成功顯示 degraded；兩者失敗才顯示高風險警告。
+- 本機層：500ms debounce 同步產生 sessionStorage emergency copy 與 IndexedDB v1 durable snapshot；TTL 7 天，以 user/workspace/board/draft 分區。latest IndexedDB 成功後保持內部 committed state，但正常本機保存不顯示狀態列；只有 degraded、error、conflict 等需要注意的狀態才顯示提示。
 - F5 restore：auth 與 scope ready、record load settle 後取兩種媒介較新有效值；離線仍恢復。remote published 或 remote newer+different 時不得覆寫，提供「本機另存新草稿／使用雲端／稍後決定」，不做 merge。
 - 雲端層：首個 checkpoint 需 idle 20 秒；持續輸入最晚 5 分鐘；任兩次 attempt 至少 180 秒；rolling 60 分鐘最多 20 attempts；單次 payload <=512KiB；single-flight、latest-only、3m/5m/15m/30m backoff。
 - 同瀏覽器多 tab 以 Web Locks、localStorage lease/ledger 協調；跨裝置全域 20/h 硬限流不在本版承諾範圍，若需要則 re-entry server quota 設計。
@@ -3731,7 +3752,7 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 - 一個會議中的一個任務只保留一個預約數字；不支援多人預約、合計或人員明細。
 - 預約入口只放在任務右鍵選單；點擊「預約時間」後直接進入數字輸入。
 - 任務有預約值時才顯示；沒有值時完全不顯示未預約狀態或空白占位。
-- 卡片顯示純數字，例如 `[15]`；不顯示時鐘、單位或額外說明。
+- 卡片顯示單一無框亮黃色底黑字時間膠囊 token 與純數字，例如 `15`；不顯示圖示、單位或額外說明。
 - 卡片資訊順序固定為「任務名稱 → 截止日 → `[預約數字]` → 下層任務展開按鈕」。無截止日或無下層任務時，缺少的既有元素自然省略，預約數字仍維持在標題後方的 metadata 區域。
 - 已拒絕：參與者自行預約、多人預約、未預約提示、分鐘文案、總時數、卡片左側時間籤與完整會議時間管理。
 
@@ -3772,13 +3793,13 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 - Logical identity：每筆值由 active meeting identity 與 canonical task identity 唯一定位；tracking placement 只投影同一值，不建立第二份預約資料。
 - Write owner：產品契約是「主持人唯一可寫」；主持人實際身分來源、Guard 與 provider 權限檢查點在升級 `RD Contract Ready` 時依現行 record／board role authority 固定。
 - Presentation owner：新增動作需沿用 DEV-070 的 task action catalog、profile、permission guard 與 command 邊界；右鍵 presenter 不得直接自行寫資料。
-- Display owner：沿用現有 task title row／metadata 結構；純數字是唯一常駐訊號，不再疊加 icon、單位、色條或整卡背景。
+- Display：新增共用 `MeetingTaskReservationMark` 集中純數字的單一無框亮黃色底黑字時間膠囊 token、semibold、tabular numbers 與空值 DOM=0 規則；不渲染圖示。L1、L2 與 L3+ presenter 都在 date 後使用；L2 另以 `rowTrailing` 把 toggle 固定在 mark 後。
 
 ### 驗收方向
 
 - [ ] 從正常會議入口進入後，主持人右鍵任務可找到「預約時間」，非主持人與非會議模式看不到該動作。
 - [ ] 點擊動作即出現已聚焦的數字輸入；已有值時可直接覆寫，`Enter` 儲存、`Escape` 取消，清空後儲存可移除。
-- [ ] 任務只有在存在預約值時顯示純數字；不顯示時鐘、單位、預約者、未預約提示或占位。
+- [ ] 任務只有在存在預約值時顯示純數字時間膠囊 token；不顯示圖示、`[]`、單位、預約者、未預約提示或占位。
 - [ ] 顯示順序為「任務名稱 → 截止日 → `[數字]` → 展開按鈕」，且不增加任務卡高度或建立新資訊列。
 - [ ] 正常卡片點擊、拖曳、右鍵、日期、標籤與下層任務展開行為沒有退化。
 - [ ] 儲存、取消、清除、重新載入與同一 canonical task 投影的結果一致；失敗時不得顯示未持久化的成功值。
@@ -3808,3 +3829,238 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 ### 變更紀錄
 
 - 2026-09-04：依使用者確認建立 Brief；固定主持人單一輸入、右鍵 inline editor、有值才顯示純數字及卡片 metadata 順序。
+- 2026-09-04：依瀏覽器回饋將 Clock3 與預約數字整合為單一時間膠囊 token，採無框芥末黃底白字，保留 `1..999` 範圍並避免 Unicode 圓圈數字相容性問題。
+- 2026-09-07：依附圖取樣將預約 token 背景調整為亮黃色 `#f6cd03`，改用黑字與無框樣式。
+- 2026-09-07：依瀏覽器回饋移除預約 token 內的 Clock3 圖示，保留純數字顯示與既有資料／權限邏輯。
+- 2026-09-07：依瀏覽器回饋移除任務右鍵清單上方的目前任務名稱標題列；右鍵操作項目、預約入口與資料生命週期不變。
+- 2026-09-07：依瀏覽器回饋移除會議紀錄區的正常本機保存成功提示「已保存在此裝置」；保存與失敗保護邏輯不變，僅保留需注意的 degraded/error/conflict 提示。
+
+## DEV-106：會議安全草稿、結束與待整理生命週期
+
+- 文件成熟度：`Phase 0 Implemented / QA-QC PASS / Phase 1 RD Contract Ready / NOT RELEASED`
+- 狀態：完成（Phase 0 local safety slice）
+- 節點類型：交付點；父交付點：DEV-020
+- 範圍：本機 recovery、transaction commit truth、離開前 force-flush、明確 discard 與 provider 0 recovery request；Phase 1 cloud／跨裝置／待整理維持 future capsule。
+- 證據：`ai-doc/specs/SPEC-106-meeting-safe-draft-lifecycle.md`、`ai-doc/qa/QA-DEV-106-meeting-safe-draft-lifecycle.md`、`ai-doc/qc/QC-DEV-106-meeting-safe-draft-lifecycle.md`；static PASS、browser 14/14 PASS。
+- Release boundary：未 commit、未 push、未 deploy；正式 release 仍需獨立 release gate。
+
+## DEV-107：會議草稿側欄模式與排版收斂
+
+- 文件成熟度：`Implemented / Targeted QA-QC PASS / Local-only / NOT RELEASED`
+- 狀態：完成（local corrective slice）
+- 節點類型：開發點；父交付點：DEV-020；corrective follow-up DEV-092；相容 DEV-019、DEV-094、DEV-106。
+- 原始需求邊界：`USER-20260907-MEETING-DRAFT-SIDEBAR-LAYOUT-HEALTH-CHECK`。
+- 修復結果：以單一 `live-meeting | meeting-record | work-log | empty | invalid` variant 收斂 sidebar；既有 meeting record 維持 `isMeetingMode=false`，不再顯示個人流程／work-log workflow；有 draft 時移除 recent section；drawer 為唯一垂直 scroll owner；editor `resize=none`，meeting minimum 220px、work-log 150px；會議流程的外層卡片視覺容器移除，保留步驟操作與語意標記。
+- 產品檔案：`src/components/Records/RecordSidebar.tsx`、`src/components/Records/RecordContentEditor.tsx`、`src/utils/recordComposerVariant.ts`；新增 DEV-107 static/browser verifier 與 package scripts。無 store schema、provider、API、權限、migration 或 recovery contract 變更。
+- 驗證：DEV-107 static 20/20、browser 5/5（1902／1440／1024、live meeting、390 mobile-negative）；DEV-020／092／094／106 targeted regression PASS；TypeScript、targeted ESLint、build:test、`git diff --check` PASS。詳見 `ai-doc/qc/QC-DEV-107-record-sidebar-draft-layout.md` 與 `output/playwright/dev-107-record-sidebar-layout/result.json`。
+- Release boundary：Local-only；未 commit、未 push、未 deploy、未 release。若進 release candidate，須依 `QA-DEV-107` 重跑完整 matrix 與 release gate。
+
+## DEV-108：任務明細會議補記持續呈現
+
+- 文件成熟度：`Implemented / QA-QC PASS / Local-only / NOT RELEASED`
+- 狀態：完成（local implementation；release 尚未啟動）
+- 節點類型：交付點
+- 父交付點：DEV-009；相容 DEV-008、DEV-066、DEV-106
+- 是否計入產品交付完成：是（Prepared 階段完成率貢獻 0）
+- 原始需求邊界：`USER-20260907-TASK-DETAIL-MEETING-NOTE-PERSISTENT-LIST`
+- 風險等級：Medium（改變使用者可見入口、跨會議狀態的資料投影與失敗恢復）
+- Spec Impact：`Intentional partial replacement / implemented`。`SPEC-108` 已成為本 DEV 的 authoritative
+  current state，取代 SPEC-009「補記後只以清空輸入框及右側 meeting draft 作為成功回饋」與「非 meeting mode
+  不顯示補記區」的局部契約；其餘 append、task mention、空白 no-op、快捷鍵及 TaskNode 資料邊界維持。
+
+### 問題與使用者價值
+
+目前在任務明細按「加入紀錄」後，文字只 append 到當次 meeting draft，任務明細立即清空輸入框，
+卻不在相同畫面顯示剛加入的內容。使用者會把正常清空誤認為資料消失；會議模式結束後，整個
+「本次會議」區塊也因 `isMeetingMode` 條件消失，必須改走歷史資訊或完整會議紀錄才能找回。
+
+本 DEV 要讓人工補記在送出後立即成為任務明細第一層的可見內容，且會議結束、重新開啟任務或
+切換模式後仍可閱讀。列表以純文字、少容器及低干擾方式呈現，降低確認成本而不擠壓任務說明、
+一般備註與子任務。
+
+### Human Decision Brief
+
+- `1A`：列表只顯示從此任務明細按「加入」建立的人工補記；不混入 AI 整理、一般任務變更或
+  其他僅因 task link 關聯的會議片段。
+- `2A`：原始會議紀錄是唯一資料來源。原紀錄修改時列表同步更新；封存後仍顯示；永久刪除後
+  才從任務明細移除。不得複製到 `TaskNode.detailNotes` 建立第二份權威資料。
+- `3A`：第一層預設顯示最新三筆，依提交時間正序排列，使最新一筆靠近輸入區；畫面只顯示月／日，
+  不顯示幾點幾分；超過三筆時用
+  「其餘 N 筆」在原位置展開全部，不跳頁、不開 Modal、Drawer 或第二層面板。
+- 會議模式只控制新增輸入區；只要任務仍有人工補記，「會議紀錄」列表在會議結束後必須持續存在。
+- 已確認版面順序：任務基本資料 → 任務說明 → 會議紀錄 → 其他備註 → 子任務。
+- 已拒絕：顯示所有關聯會議片段、把內容複製進任務備註、永遠展開全部、只留最新一筆、
+  以完整卡片／藍色區塊／成功提示／額外歷史面板呈現。
+
+### UX Intent
+
+- 使用者／結果：會議中的任務編輯者送出補記後，能在原任務明細立即確認內容；會議結束後仍能
+  從同一任務第一層閱讀。
+- 主物件／主焦點：該任務的人工會議補記文字；會議中唯一主要動作為「加入」。
+- 預設刪除：外層卡片、藍色背景、每筆紀錄框線、裝飾 icon、badge、常駐成功訊息、操作教學與搜尋列。
+- 保留舉證：日期（日）用於區分多次會議脈絡；「會議紀錄」標籤用於區分任務說明與一般備註；
+  「其餘 N 筆」避免歷史累積壓縮主要任務內容。
+- 非語言修復：以固定順序、鄰近、留白、低對比日期與單一分隔線建立層級；新增成功以文字列出現
+  並清空輸入框表示，不建立 toast 或成功面板。
+- Viewport 假設：歷史列表跟隨任務明細支援的所有 viewport；新增輸入仍沿用既有手機版
+  meeting-mode unavailable 邊界，除非後續另案變更。
+
+### 第一層版面草稿
+
+```text
+任務說明                                      A  ＋
+確認供應商交期，預計 9/8 回覆。
+
+會議紀錄
+09/07　確認供應商明日回覆
+09/07　RD 補充測試條件與驗證方式
+09/07　決議先完成測試，再確認交期
+其餘 2 筆
+────────────────────────────────
+輸入本次會議內容                              加入
+
+備註                                          A  ＋
+輸入備註內容……
+```
+
+### 主要流程與狀態
+
+| 狀態 | 會議紀錄列表 | 新增輸入區 | 預期行為 |
+|---|---|---|---|
+| 會議中、無紀錄 | 不顯示空白列 | 顯示 | 可輸入並加入；不顯示空白說明卡 |
+| 會議中、有紀錄 | 顯示最新三筆或已展開列表 | 顯示 | 成功後新文字立即出現在列表，再清空輸入 |
+| 非會議、有紀錄 | 持續顯示 | 隱藏 | 關閉／重開任務、切換模式或重載後仍可閱讀 |
+| 非會議、無紀錄 | 整區不顯示 | 隱藏 | 不保留空標題、空框或 helper |
+| 原紀錄封存 | 持續顯示 | 依 meeting mode | 不因封存而遺失任務脈絡 |
+| 原紀錄永久刪除 | 移除相應補記 | 依 meeting mode | 不保留無來源副本 |
+| 寫入失敗 | 不新增假成功列 | 保留原輸入 | 就地顯示最短錯誤與可重試狀態 |
+
+### Current Scope
+
+- 任務明細第一層新增「會議紀錄」純文字列表，位置固定在「任務說明」之後、其他備註之前。
+- 只投影由任務明細快速補記入口建立、且屬於目前 task ID 的人工內容。
+- 顯示最小資訊：`MM/DD` 與使用者原文；不顯示幾點幾分，也不重複任務名稱、meeting title、task tag 或來源類型。
+- 會議中保留單一輸入入口與「加入」動作；成功時先讓新列可見，再清空輸入。
+- 預設最新三筆，原地展開／收合全部；新加入內容必須落在預設可見的三筆內。
+- 原始 meeting record 維持唯一資料來源，active draft、已儲存草稿、待整理、已發布及封存狀態皆由
+  同一投影規則處理，永久刪除才移除。
+- 不使用卡片包卡片；列表列無獨立框線，區段最多保留一條低對比分隔線，輸入控制只保留必要
+  邊界與 focus 樣式。
+
+### Out of Scope
+
+- 不顯示 AI 整理、系統活動、任務變更或所有 task-linked record 片段。
+- 不把人工補記複製到 `TaskNode.description`、`TaskNode.detailNotes` 或建立第二份可獨立編輯副本。
+- 不在列表直接編輯、刪除、重新排序或搜尋補記；內容生命週期跟隨原始會議紀錄。
+- 不新增完整時間軸、卡片、來源 badge、參與者、附件、留言、反應或通知。
+- 不改變既有會議主持人、任務編輯權限、AI 整理、發布、封存或永久刪除流程。
+- 不新增 database schema／migration；使用既有 `KnowledgeRecord.metadata` versioned namespace 與
+  task-scoped provider read option，詳細資料契約見 `SPEC-108`。
+- 不包含 commit、push、PR、deploy、production migration 或 release 驗證。
+
+### 驗收方向
+
+- [ ] 從正常看板入口進入會議模式並開啟任務明細，可看到既有人工補記與單一新增入口。
+- [ ] 輸入非空白內容並按「加入」後，相同文字與日期（日）立即出現在第一層列表；確認可見後才清空輸入。
+- [ ] 關閉並重新開啟任務、結束會議、切換模式及重新載入後，既有列表仍存在；非會議模式不顯示輸入區。
+- [ ] 列表只包含由任務明細加入的人工補記，不混入 AI 整理、系統活動或其他 task-linked 內容。
+- [ ] 原始會議紀錄修改後列表同步；封存仍顯示；永久刪除後相應項目移除。
+- [ ] 一至三筆全部顯示；第四筆起預設只顯示最新三筆，「其餘 N 筆」可在原位置展開及收合全部。
+- [ ] 列表沒有外層卡片、每筆框線、裝飾 icon、badge、搜尋列或常駐成功提示；文字層級仍可辨識。
+- [ ] 空白內容不新增；寫入失敗保留輸入，重試不產生重複項目或先清空造成資料遺失。
+- [ ] 1440×900、1024×768 與 390×844 的任務明細無水平 overflow、重疊、按鈕擠壓或不可讀截斷；
+  390×844 只驗證歷史列表，仍不得出現既有 mobile meeting composer。
+- [ ] 鍵盤焦點順序與視覺順序一致，`Ctrl／Cmd + Enter` 行為維持，展開控制具 accessible name 與狀態。
+
+### RD Implementation Contract
+
+- Authoritative spec：`ai-doc/specs/SPEC-108-task-detail-meeting-note-persistent-list.md`。
+- QA plan：`ai-doc/qa/QA-DEV-108-task-detail-meeting-note-persistent-list.md`。
+- 資料：同一 `KnowledgeRecord` 的 `metadata.meetingTaskQuickNotes.v1` 是 task-detail list 的 canonical
+  representation；正文是 DEV-009／task knowledge／AI workflow 的 compatibility projection。這是同 record
+  內受控雙表示，Store append／reconcile 必須原子更新並驗證 invariant；不得寫入 `TaskNode`，legacy 正文
+  不得猜測回填。
+- Identity：提交前固定 `submissionId + occurredAt`；projection key 為 `record.id:entry.id`。active draft
+  與 loaded record 同 id 時 draft 覆蓋，避免 save／publish／exit transition 出現 0 或 2 筆。
+- 生命週期：新增 `recordService.listByNode(..., { includeArchived: true })` 的 task-only read；全域
+  `listByProject` 仍排除 archived。Archive 保留、source hard delete 後 reload 移除。
+- 修改同步：anchor 為 `lineIndex + sourceToken`；原行、唯一 exact candidate、唯一 sourceToken 依序匹配。
+  修改冒號後文字更新同 id；刪行、破壞 task/time token 或多候選歧義時 detach 並保留正文。人工或 AI
+  新增相似列不得自動建立 provenance。
+- UI：在第一個「任務說明」後插入 `TaskMeetingQuickNoteSection`；預設 latest 3、原地展開、純文字、
+  無卡片／icon／badge／搜尋／成功提示。meeting mode 只控制 composer。
+- 失敗：denied 不清空輸入；local recovery 或 remote save 失敗保留已進 draft 的 entry；load failure
+  不得顯示假空白，保留 active draft 並提供最短就地重試。
+- Success boundary：「加入」成功只代表同一筆資料已進 current in-memory draft，不代表 remote save；
+  durability 沿用 DEV-106 recovery 與既有 save feedback。
+
+### RD 實作批次與依賴
+
+1. **Batch A — Data kernel**：新增 `meetingTaskQuickNotes.ts`，完成 v1 parser、append、reconcile、projection、
+   deterministic sort/dedupe；擴充三 provider `listByNode` 的 `includeArchived` option。此批完成前不得接 UI。
+2. **Batch B — Store transaction**：升級 `appendTaskDiscussionToMeetingDraft` 顯式結果與單次 state commit；
+   串接 human content update reconcile、DEV-024 synthesis merge 後 anchor rebase／invariant fail-safe 與
+   DEV-106 signature/recovery。
+3. **Batch C — First-layer UI**：新增 task-scoped hook 與 compact section，在 `TaskDetailsModal` 正確位置
+   替換舊藍色「本次會議」區；完成 loading/error/retry、latest-3、a11y、viewport。
+4. **Batch D — Verification**：新增 DEV-108 static/browser verifier 與 package scripts，執行 QA-DEV-108
+   matrix、DEV-008／009／024／066／106 targeted regression、TypeScript、targeted ESLint、build:test、
+   diff check；建立 QC 文件前不得宣稱 PASS。
+
+Batch B 依賴 A；C 依賴 A/B；D 可先建立 fixture，但 browser PASS 依賴 A/B/C。每批只修改 SPEC-108
+列出的檔案；發現 DB／RLS／permission boundary 需擴張時停止，不得順手加入。
+
+### 實作檔案
+
+- 新增：`src/utils/meetingTaskQuickNotes.ts`、`src/hooks/useTaskMeetingQuickNotes.ts`、
+  `src/components/TaskNotes/TaskMeetingQuickNoteSection.tsx`、DEV-108 static/browser verifier。
+- 修改：`meetingTaskDiscussion.ts`、`useRecordStore.ts`、`TaskDetailsModal.tsx`、`dataBackend.ts`、
+  Firestore／local-test／Supabase record services、`package.json`。
+- 不修改：TaskNode schema、database migrations、permission matrix、`TaskRecordTimeline`、
+  `taskKnowledgeSnippets`、production config 或 release workflow。
+
+### Verification Contract
+
+- Deterministic：metadata validation、submission idempotency、正文修改／刪除 reconcile、manual/AI negative、
+  active/saved dedupe、total order、latest-3、三 provider archived option、failure/recovery。
+- Browser：正常入口加入、快捷鍵、跨 meeting exit／reopen／reload、edit sync、archive persist、source absence、
+  load/save/recovery failure、1440×900、1024×768、390×844、200% zoom、keyboard/a11y 與 Quietness Audit。
+- Evidence：`output/playwright/dev-108-task-meeting-note-persistent-list/` JSON、四張以上代表性截圖、
+  provider readback、console/page/request errors、rendered key count 與實際執行命令。
+- Gate：所有 P0/P1 與 regression PASS 才可進 QC；舊 DEV-009 evidence 不得外推。
+
+### Stop Conditions
+
+- 無法穩定區分「任務明細人工補記」與 AI 整理／一般任務活動時停止，不得用文字正規表示式冒充資料契約。
+- 若方案需要把補記複製進 `detailNotes` 或建立第二個可獨立修改的來源，停止並回 PM 重新確認 `2A`。
+- 若 active draft 與 persisted record 在會議結束時會重複顯示、短暫消失或改變時間順序，停止實作並補身份契約。
+- 若需新增 provider schema、migration、權限或遠端資料變更，升級規格與風險 lane 後再執行。
+- 若精簡版面隱藏寫入錯誤、移除鍵盤 focus 或造成窄版 overflow，視為未通過，不得以 build／unit test 取代 UI evidence。
+
+### 文件與執行邊界
+
+- 本輪完成 `RD Implementation Ready`、authoritative SPEC、QA plan 與 map 收斂；未修改產品程式、
+  runtime、測試實作、schema、migration、Git index 或 release artifact。
+- Readiness：使用者決策、資料形狀、provider query、store transaction、UI placement、failure/recovery、
+  test fixture、evidence path 與 stop conditions 已固化；目前無 P0/P1 open question。
+- ADR not needed：採既有 metadata JSON、內部可逆 query option 與 UI；不改外部 API、主資料、權限或 schema。
+- 下一步可直接由 RD 依 Batch A→D 實作；本狀態不等於 `RD Implemented`、QA PASS、QC PASS 或 release。
+
+### 技術主管審查結論
+
+- 結論：`通過（文件修正後）`；無 P0/P1 readiness blocker。
+- 原 P1：metadata／正文雙表示權威不清、`HH:mm + occurrence` anchor 可能錯配。
+- 已修正：明定 canonical metadata／compatibility projection、aggregate invariant、`lineIndex + sourceToken`
+  fail-closed reconcile、AI merge 後 anchor rebase、成功／durability 分層與受控技術債。
+- 完整紀錄：`ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-108.md`。
+
+### 變更紀錄
+
+- 2026-09-07：完成 RD 技術主管審查並修正；結論為文件可實作。將雙表示改為明確 canonical／projection，
+  anchor 改為 `lineIndex + sourceToken`，加入 invariant、fail-closed、durability 邊界與技術債移除條件。
+- 2026-09-07：依使用者要求升級為 `RD Implementation Ready`；新增 SPEC-108／QA-DEV-108，固化
+  metadata v1、正文 reconcile、archived task read、active draft identity、四批實作與證據 gate。
+- 2026-09-07：依使用者引導決策 `1A／2A／3A` 建立 Brief；確認只顯示人工快速補記、
+  原會議紀錄為唯一來源、封存保留／永久刪除移除，以及最新三筆＋原地展開的第一層緊湊版面。
+
+使用思考習慣：#效用理論、#系統描繪、#可驗證性

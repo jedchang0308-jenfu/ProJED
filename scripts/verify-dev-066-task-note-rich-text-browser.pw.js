@@ -185,7 +185,7 @@ async (page) => {
   await firstEditor.press('End');
   await firstEditor.type('持續編輯');
   assert(await firstToolbar.isVisible(), 'toolbar remains open while editing note content');
-  await firstCard.locator('[data-task-detail-note-title-input="true"]').click();
+  await firstCard.locator('[data-task-detail-note-header="true"]').click();
   assert(await firstToolbar.isVisible(), 'toolbar remains open after clicking outside the editor and toolbar');
   await page.keyboard.press('Escape');
   assert(await firstToolbar.isVisible(), 'Escape does not close a persistent toolbar');

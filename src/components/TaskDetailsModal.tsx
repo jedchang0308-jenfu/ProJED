@@ -1,6 +1,6 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, ArrowLeft, BookOpenText, CheckCircle2, LoaderCircle, Lock, MessageSquareText, Send, Unlock, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, BookOpenText, CheckCircle2, LoaderCircle, Lock, Unlock, X } from 'lucide-react';
 import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
@@ -34,6 +34,9 @@ import {
 } from './taskDetailsModalSizing';
 import { TaskDetailsSubtaskSection } from './TaskDetailsSubtaskSection';
 import { resolveTaskDetailsPersistenceDecision, TASK_DETAILS_NAVIGATE_EVENT } from './taskDetailsNavigation';
+import { useTaskMeetingQuickNotes } from '../hooks/useTaskMeetingQuickNotes';
+import TaskMeetingQuickNoteSection from './TaskNotes/TaskMeetingQuickNoteSection';
+import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -52,8 +55,8 @@ const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = MANUAL_TASK_
 }));
 
 const createNote = (index: number): TaskDetailNote => ({
-  id: `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-  title: `備註 ${index}`,
+  id: index === 1 ? 'note_default' : `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+  title: index === 1 ? '任務說明' : '備註',
   content: '',
 });
 
@@ -100,7 +103,7 @@ const readSavedSize = () => {
 const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
   node?.detailNotes?.length
     ? node.detailNotes
-    : [{ id: 'note_default', title: '備註', content: node?.description || '' }]
+    : [{ id: 'note_default', title: '任務說明', content: node?.description || '' }]
 );
 
 const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) => (
@@ -199,9 +202,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const [titleValue, setTitleValue] = React.useState('');
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
+  const [meetingDiscussionError, setMeetingDiscussionError] = React.useState<string | null>(null);
   const [isTaskKnowledgeOpen, setIsTaskKnowledgeOpen] = React.useState(false);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
+  const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
+  const meetingQuickNotes = useTaskMeetingQuickNotes(nodeId);
   const skipNextNotesSave = React.useRef(true);
   const skipNextTitleBlurSave = React.useRef(false);
   const [saveState, setSaveState] = React.useState<TaskDetailsSaveState>('idle');
@@ -687,7 +693,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     setNotes(
       currentNodeDetailNotes?.length
         ? currentNodeDetailNotes
-        : [{ id: 'note_default', title: '備註', content: currentNodeDescription }]
+        : [{ id: 'note_default', title: '任務說明', content: currentNodeDescription }]
     );
     skipNextNotesSave.current = true;
   }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
@@ -979,8 +985,28 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   const handleAppendMeetingDiscussion = () => {
     if (!canEditTask) return;
-    const didAppend = appendTaskDiscussionToMeetingDraft(node.id, node.title || node.id, meetingDiscussion);
-    if (didAppend) setMeetingDiscussion('');
+    const submissionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `quick_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const result = appendTaskDiscussionToMeetingDraft({
+      taskId: node.id,
+      taskTitle: node.title || node.id,
+      text: meetingDiscussion,
+      submissionId,
+      occurredAt: Date.now(),
+    });
+    if (result.status === 'appended' || result.status === 'noop') {
+      setMeetingDiscussion('');
+      setMeetingDiscussionError(null);
+      return;
+    }
+    const messages: Record<typeof result.reason, string> = {
+      'not-meeting': '目前不在會議模式。',
+      'invalid-input': '請輸入補記內容。',
+      'invalid-metadata': '補記資料無法辨識，請先儲存或復原草稿。',
+      'invalid-task': '目前任務無法加入補記。',
+    };
+    setMeetingDiscussionError(messages[result.reason]);
   };
 
   const { startLocked, endLocked } = getNodeLockStatus(node.id, dependencies);
@@ -1393,41 +1419,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
             </div>
           </section>
 
-          {isMeetingMode ? (
-            <section className="border-b border-slate-100 py-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <MessageSquareText size={16} className="text-blue-500" />
-                <span>本次會議</span>
-              </div>
-              <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
-                <textarea
-                  value={meetingDiscussion}
-                  onChange={(event) => setMeetingDiscussion(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                      event.preventDefault();
-                      handleAppendMeetingDiscussion();
-                    }
-                  }}
-                  disabled={!canEditTask}
-                  className="min-h-[88px] w-full resize-y rounded-md border border-blue-100 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
-                  placeholder="輸入此任務剛剛討論的內容"
-                />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleAppendMeetingDiscussion}
-                    disabled={!canEditTask || !meetingDiscussion.trim()}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    <Send size={13} />
-                    加入紀錄
-                  </button>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           <section className="pt-2" data-task-detail-notes-section="true">
             <div className="grid gap-2" data-task-detail-notes-grid="true">
               {notes.map((note, noteIndex) => (
@@ -1436,6 +1427,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   canEdit={canEditTask}
                   note={note}
                   noteIndex={noteIndex}
+                  titleEditable={noteIndex > 0 || note.id !== 'note_default'}
                   onAdd={addNote}
                   onDelete={() => deleteNote(note.id)}
                   onSave={handleSaveDetails}
@@ -1444,6 +1436,24 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               ))}
             </div>
           </section>
+
+          <TaskMeetingQuickNoteSection
+            taskId={node.id}
+            taskTitle={node.title || node.id}
+            isMeetingMode={isMeetingMode && !isMeetingRecordUnavailable}
+            canEdit={canEditTask && !meetingQuickNotes.composerBlocked}
+            entries={meetingQuickNotes.entries}
+            loading={meetingQuickNotes.loading}
+            error={meetingQuickNotes.error}
+            discussion={meetingDiscussion}
+            appendError={meetingDiscussionError}
+            onDiscussionChange={(value) => {
+              setMeetingDiscussion(value);
+              if (meetingDiscussionError) setMeetingDiscussionError(null);
+            }}
+            onAppend={handleAppendMeetingDiscussion}
+            onRetry={() => { void meetingQuickNotes.refresh(); }}
+          />
 
           <TaskDetailsSubtaskSection
             node={node}

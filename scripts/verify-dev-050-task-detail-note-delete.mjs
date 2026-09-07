@@ -26,6 +26,7 @@ const checks = [
     pass: noteUiSource.includes('data-task-detail-note-card="true"') &&
       noteUiSource.includes('data-task-detail-note-delete="true"') &&
       noteUiSource.includes('data-task-detail-note-title-input="true"') &&
+      noteUiSource.includes('data-task-detail-note-title="true"') &&
       noteUiSource.includes('data-task-detail-note-content-input="true"'),
   },
   {

@@ -11,7 +11,7 @@ const required = [
   'data-record-sidebar-collapse-toggle',
   'data-record-sidebar-collapse-direction="right"',
   'data-record-sidebar-expand-direction="left"',
-  'aria-label={isMeetingMode ? \'收合會議速記面板\' : \'收合紀錄面板\'}',
+  'aria-label={isLiveMeeting ? \'收合會議速記面板\' : \'收合紀錄面板\'}',
   '<ChevronRight size={16} />',
   '<ChevronLeft size={17} />',
   'shouldShowMeetingRecoveryStatus',
@@ -31,11 +31,13 @@ const required = [
   'hover:bg-emerald-800',
   'className="truncate text-[10px] font-semibold leading-3"',
   'className="flex min-h-0 flex-1 flex-col overflow-auto"',
-  '<section className="flex min-h-0 flex-1 flex-col border-b border-slate-100 p-3">',
+  'data-record-composer-scroll-owner',
+  'data-record-recent-records',
   '<div className="flex min-h-0 flex-1 flex-col space-y-3">',
   'data-record-composer-meta className="flex flex-1 flex-col space-y-3"',
-  "${isMeetingMode ? 'min-h-[220px]' : 'min-h-[150px]'}",
-  'editorContainerClassName={isMeetingMode ?',
+  "const contentMinHeightClass = draft?.type === 'meeting' ? 'min-h-[220px]' : 'min-h-[150px]'",
+  'editorContainerClassName={`flex ${contentMinHeightClass}',
+  'data-record-composer-variant={composerVariant}',
 ];
 
 const forbidden = [

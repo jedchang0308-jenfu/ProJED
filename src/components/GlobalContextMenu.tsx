@@ -30,6 +30,15 @@ import type { InteractionContext } from '../interactions/task/types';
 import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
 import { getReferenceSubtree, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
 import { requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDetailsNavigation';
+import useRecordStore from '../store/useRecordStore';
+import {
+  getMeetingTaskReservationValue,
+  parseMeetingTaskReservationInput,
+} from '../utils/meetingTaskReservation';
+import {
+  MEETING_TASK_MENU_PROFILE,
+  TASK_DETAILS_TASK_MENU_PROFILE,
+} from '../interactions/task/profiles';
 
 export const GlobalContextMenu: React.FC = () => {
   const contextMenuState = useBoardStore((state) => state.contextMenuState);
@@ -75,6 +84,9 @@ export const GlobalContextMenu: React.FC = () => {
   const canCreateDependency = currentNode ? taskPlacementPermissions.canCreateDependency : boardCanCreateDependency;
   const canManageTaskReference = currentNode ? taskPlacementPermissions.canManageTaskReference : boardCanManageTaskReference;
   const currentUserId = useAuthStore((state) => state.user?.uid);
+  const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
+  const meetingDraft = useRecordStore((state) => state.draft);
+  const setMeetingTaskReservation = useRecordStore((state) => state.setMeetingTaskReservation);
   const workspaceMembers = useMemberStore((state) => state.workspaceMembers);
   const currentBoardAccess = useMemberStore((state) => state.currentBoardAccess);
   const boardMembers = useMemberStore((state) => state.boardMembers);
@@ -85,6 +97,10 @@ export const GlobalContextMenu: React.FC = () => {
   const [transferBoardTarget, setTransferBoardTarget] = useState(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
+  const [reservationEditorKey, setReservationEditorKey] = useState<string | null>(null);
+  const [reservationInput, setReservationInput] = useState('');
+  const [reservationError, setReservationError] = useState<string | null>(null);
+  const reservationInputRef = useRef<HTMLInputElement | null>(null);
   const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12, maxHeight: 320 });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const openedAtRef = useRef(0);
@@ -94,6 +110,30 @@ export const GlobalContextMenu: React.FC = () => {
   const VIEWPORT_PADDING = 12;
   const menuKind = contextMenuState?.kind || 'task';
   const isTaskMenu = menuKind === 'task';
+  const meetingReservationSurfaceIds = ['board.column-header', 'board.card', 'board.checklist-row'];
+  const reservationContextKey = contextMenuState?.kind === 'task'
+    ? `${contextMenuState.nodeId}:${contextMenuState.surfaceId || ''}:${contextMenuState.interactionId || ''}`
+    : null;
+  const isActiveMeetingDraft = Boolean(
+    isMeetingMode
+    && meetingDraft?.type === 'meeting'
+    && meetingDraft.status === 'draft',
+  );
+  const isMeetingReservationSurface = Boolean(
+    contextMenuState?.kind === 'task'
+    && meetingReservationSurfaceIds.includes(contextMenuState.surfaceId || ''),
+  );
+  const canEditMeetingReservation = Boolean(
+    isActiveMeetingDraft
+    && isMeetingReservationSurface
+    && currentUserId
+    && meetingDraft?.recordedBy === currentUserId
+    && currentNode
+    && !currentNode.isArchived
+    && currentNode.boardId === activeBoardId,
+  );
+  const currentReservationValue = getMeetingTaskReservationValue(meetingDraft?.metadata, currentNode?.id || '');
+  const isReservationEditorOpen = Boolean(reservationEditorKey && reservationEditorKey === reservationContextKey);
   const taskMenuInteractionContext: InteractionContext | null = isTaskMenu && contextMenuState?.kind === 'task'
     ? {
       interactionId: contextMenuState.interactionId || 'legacy-context-menu',
@@ -106,7 +146,15 @@ export const GlobalContextMenu: React.FC = () => {
     }
     : null;
   const candidateTaskMenuActionIds = taskMenuInteractionContext
-    ? resolveTaskMenu(taskMenuInteractionContext).filter(actionId =>
+    ? resolveTaskMenu(
+      taskMenuInteractionContext,
+      [
+        ...(taskMenuInteractionContext.surfaceId === 'task-details.subtask-row'
+          ? [TASK_DETAILS_TASK_MENU_PROFILE]
+          : []),
+        ...(canEditMeetingReservation ? [MEETING_TASK_MENU_PROFILE] : []),
+      ],
+    ).filter(actionId =>
       (actionId !== 'task.create-tracking-reference' || (!currentTrackingReference && trackingReferenceCapability.supported))
         && (actionId !== 'task.remove-tracking-reference' || Boolean(currentTrackingReference && trackingReferenceCapability.supported))
     )
@@ -120,6 +168,7 @@ export const GlobalContextMenu: React.FC = () => {
     canAssignTask,
     canCreateDependency,
     canManageTaskReference: canManageTaskReference && trackingReferenceCapability.supported,
+    canEditMeetingReservation,
   });
   const resolvedTaskMenuActionIds = candidateTaskMenuActionIds.filter(actionId => candidateTaskActionEnabled[actionId]);
   const isDependencySupportedView = resolvedTaskMenuActionIds.includes('task.dependency-start')
@@ -195,10 +244,127 @@ export const GlobalContextMenu: React.FC = () => {
   };
 
   const closeContextMenu = (options: { preserveTaskSelection?: boolean } = {}) => {
-    const wasTaskMenu = useBoardStore.getState().contextMenuState?.kind === 'task';
+    const currentContextMenuState = useBoardStore.getState().contextMenuState;
+    const wasTaskMenu = currentContextMenuState?.kind === 'task';
     setContextMenuState(null);
-    if (wasTaskMenu && !options.preserveTaskSelection) clearTaskSelection();
+    if (!wasTaskMenu) return;
+
+    // A browser contextmenu keeps focus on the source row. Remove that
+    // transient focus ring when the menu closes; keyboard focus is restored by
+    // the existing task-details return-focus flow when navigation needs it.
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement.closest('[data-task-surface-source="true"]')) {
+      activeElement.blur();
+    }
+
+    if (!options.preserveTaskSelection) {
+      clearTaskSelection();
+      return;
+    }
+
+    // Opening a menu inside Task Details temporarily selects the child row so
+    // its hover/target state remains visible. Once dismissed, restore the
+    // task represented by the modal instead of leaving the child highlighted.
+    if (detailsNodeId) setSelectedTaskId(detailsNodeId);
   };
+
+  useEffect(() => {
+    if (!contextMenuState?.isOpen || contextMenuState.kind !== 'task') {
+      setReservationEditorKey(null);
+      setReservationError(null);
+    }
+  }, [contextMenuState?.isOpen, contextMenuState?.kind, contextMenuState?.nodeId, contextMenuState?.surfaceId, contextMenuState?.interactionId]);
+
+  useEffect(() => {
+    if (!isReservationEditorOpen) return undefined;
+    setReservationInput(currentReservationValue === null ? '' : String(currentReservationValue));
+    setReservationError(null);
+    const focusInput = () => {
+      reservationInputRef.current?.focus();
+      reservationInputRef.current?.select();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      const frameId = requestAnimationFrame(focusInput);
+      return () => cancelAnimationFrame(frameId);
+    }
+    focusInput();
+    return undefined;
+  }, [currentReservationValue, isReservationEditorOpen, reservationContextKey]);
+
+  const cancelReservationEditor = () => {
+    setReservationEditorKey(null);
+    setReservationError(null);
+    closeContextMenu({ preserveTaskSelection: true });
+  };
+
+  const commitReservation = () => {
+    if (!canEditMeetingReservation || !currentNode || !currentUserId || !activeBoardId) return;
+    const parsed = parseMeetingTaskReservationInput(reservationInput);
+    if (parsed.status === 'invalid') {
+      setReservationError(parsed.message);
+      return;
+    }
+    try {
+      const result = setMeetingTaskReservation({
+        taskId: currentNode.id,
+        value: parsed.status === 'clear' ? null : parsed.value,
+        currentUserId,
+        activeBoardId,
+        taskExists: Boolean(currentNode),
+        taskArchived: Boolean(currentNode.isArchived),
+        taskBoardId: currentNode.boardId,
+      });
+      if (result === 'denied') {
+        setReservationError('目前無法更新預約時間');
+        return;
+      }
+      closeContextMenu({ preserveTaskSelection: true });
+    } catch (error) {
+      console.error('[GlobalContextMenu] meeting reservation failed:', error);
+      setReservationError('目前無法更新預約時間');
+    }
+  };
+
+  const meetingReservationEditor = isReservationEditorOpen ? (
+    <div className="px-2.5 py-1.5" data-meeting-reservation-editor="true">
+      <input
+        ref={reservationInputRef}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={3}
+        value={reservationInput}
+        onChange={(event) => {
+          setReservationInput(event.target.value);
+          setReservationError(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelReservationEditor();
+            return;
+          }
+          if (event.key === 'Enter') {
+            if (event.nativeEvent.isComposing || event.isComposing || event.keyCode === 229) return;
+            event.preventDefault();
+            event.stopPropagation();
+            commitReservation();
+          }
+        }}
+        aria-label="預約時間"
+        aria-invalid={reservationError ? 'true' : 'false'}
+        aria-describedby={reservationError ? 'meeting-reservation-error' : undefined}
+        className="w-full rounded border border-indigo-300 bg-white px-2 py-1 text-sm text-slate-800 outline-none ring-indigo-200 focus:ring-2"
+        data-meeting-reservation-input="true"
+      />
+      {reservationError ? (
+        <p id="meeting-reservation-error" role="alert" className="mt-1 text-[11px] leading-4 text-rose-600">
+          {reservationError}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
 
   useEffect(() => {
     const handleOpenTaskDetails = (event: Event) => {
@@ -301,7 +467,7 @@ export const GlobalContextMenu: React.FC = () => {
       window.removeEventListener('resize', updateMenuPosition);
       window.visualViewport?.removeEventListener('resize', updateMenuPosition);
     };
-  }, [MENU_WIDTH, VIEWPORT_PADDING, contextMenuState?.isOpen, contextMenuState?.nodeId, contextMenuState?.x, contextMenuState?.y, isDependencySupportedView]);
+  }, [MENU_WIDTH, VIEWPORT_PADDING, contextMenuState?.isOpen, contextMenuState?.nodeId, contextMenuState?.x, contextMenuState?.y, isDependencySupportedView, isReservationEditorOpen, reservationError]);
 
   const closeFromOutsideEvent = (event: React.PointerEvent | React.MouseEvent) => {
     const elapsed = performance.now() - openedAtRef.current;
@@ -598,6 +764,13 @@ export const GlobalContextMenu: React.FC = () => {
           : null);
         selectAndOpenTaskDetails(contextMenuState.nodeId, contextMenuState.trackingReferenceId);
         return closeContextMenu({ preserveTaskSelection: true });
+      case 'task.toggle-complete':
+        if (contextMenuState?.kind !== 'task' || !currentNode || !canEditTask) return;
+        updateNode(currentNode.id, {
+          status: currentNode.status === 'completed' ? 'todo' : 'completed',
+          updatedAt: Date.now(),
+        });
+        return closeContextMenu({ preserveTaskSelection: true });
       case 'task.create-sibling': return handleAddSibling();
       case 'task.create-child': return handleAddChild();
       case 'task.create-relationship': {
@@ -608,6 +781,11 @@ export const GlobalContextMenu: React.FC = () => {
       case 'task.duplicate': return handleDuplicate();
       case 'task.create-tracking-reference': return handleCreateTrackingReference();
       case 'task.remove-tracking-reference': return handleRemoveTrackingReference();
+      case 'task.edit-meeting-reservation':
+        if (!canEditMeetingReservation || !reservationContextKey) return;
+        setReservationEditorKey(reservationContextKey);
+        setReservationError(null);
+        return;
       case 'task.dependency-start': return enterDependencyMode('start');
       case 'task.dependency-end': return enterDependencyMode('end');
       case 'task.promote': return handleMoveUp();
@@ -727,15 +905,17 @@ export const GlobalContextMenu: React.FC = () => {
             className="fixed z-[10029] flex w-[220px] flex-col overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-800"
             style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: menuPosition.maxHeight }}
           >
-            <div className="mb-1 border-b border-gray-100 px-3 py-2 dark:border-gray-700/50">
-              <p
-                className="truncate text-sm font-bold text-gray-800 dark:text-gray-100"
-                title={contextMenuState.title}
-                data-context-menu-current-task-title="true"
-              >
-                {contextMenuState.title}
-              </p>
-            </div>
+            {menuKind !== 'task' ? (
+              <div className="mb-1 border-b border-gray-100 px-3 py-2 dark:border-gray-700/50">
+                <p
+                  className="truncate text-sm font-bold text-gray-800 dark:text-gray-100"
+                  title={contextMenuState.title}
+                  data-context-menu-current-task-title="true"
+                >
+                  {contextMenuState.title}
+                </p>
+              </div>
+            ) : null}
 
             {menuKind === 'sidebar' ? (
               <button
@@ -846,6 +1026,11 @@ export const GlobalContextMenu: React.FC = () => {
                     })}
                   />
                 ) : null}
+                actionLabelOverrides={{
+                  'task.toggle-complete': currentNode?.status === 'completed' ? '取消完成' : '狀態改完成',
+                }}
+                inlineActionId={isReservationEditorOpen ? 'task.edit-meeting-reservation' : null}
+                inlineActionContent={meetingReservationEditor}
               />
             )}
           </div>

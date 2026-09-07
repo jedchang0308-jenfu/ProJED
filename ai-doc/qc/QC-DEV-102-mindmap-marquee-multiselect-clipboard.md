@@ -22,11 +22,11 @@
 | 父子正規化 | copy／cut／archive使用top-most forest roots；assignment保留明確選取tasks | PASS |
 | Failure compensation | partial create與partial assignment均回復before-state | PASS |
 | Indeterminate recovery | timeout先鎖定，hard reload canonical readback後descriptor清除 | PASS |
-| Geometry／performance | 200／500 nodes四方向各20正式樣本；drift 0、path stable、p95低於gate | PASS |
-| Menu UI follow-up | 不可用action DOM=0、disabled rows=0、可見action=4；252px寬、13px字、32px列、opacity 1、computed `oklch(0.372 0.044 257.287)`且`contrastPass=true` | PASS |
+| Geometry／performance | 200／500 nodes四方向各20正式樣本；preview／commit p95分別為9.5／12.5ms與6.9／7.8ms；drift 0、path stable、p95低於gate | PASS |
+| Menu UI follow-up | 不可用action DOM=0、disabled rows=0、可見action=4；Kanban density、220px寬、14px字、36px列、opacity 1、computed `oklch(0.372 0.044 257.287)`且`contrastPass=true` | PASS |
 | Error channels | consoleErrors、pageErrors、failedRequests皆為空陣列 | PASS |
 | Narrow viewport | 390與320不顯示mindmap/marquee；document width等於viewport | PASS |
-| Visual review | 圈選框、compact高對比menu、recovery banner、390／320 screenshots已目視複核 | PASS |
+| Visual review | 圈選框、看板同款高對比menu、recovery banner、390／320 screenshots已目視複核 | PASS |
 
 ## 3. 工程與回歸核對
 

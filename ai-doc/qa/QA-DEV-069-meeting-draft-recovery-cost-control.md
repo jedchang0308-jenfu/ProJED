@@ -6,6 +6,13 @@
 - QC 狀態：Local Browser QC PASS；Supabase／Firestore provider gate pending
 - 風險：Medium
 
+## DEV-106 Target Compatibility Note（2026-09-04）
+
+- 本文件的既有PASS只證明DEV-069 implemented baseline；DEV-106的目標驗證改由`QA-DEV-106-meeting-safe-draft-lifecycle.md`管理，狀態為`Phase 0 Executable Plan Ready (Local Safety Slice) / Phase 1 Pending Readiness / NOT RUN`。
+- QA-069-006中「直接離開／放棄後開新紀錄即清除」不得重用為DEV-106 PASS；新候選必須改驗一般離開保留 recovery，以及獨立明確discard的分支／失敗順序。
+- 其餘timing、budget、F5、RAG/task-link delta與390 mobile-negative案例，只在source/artifact、provider、fixture與驗證層級相同時可重用。
+- QA-069的Supabase／Firestore／local-test checkpoint案例只描述DEV-069舊baseline；DEV-106 Phase 0驗收改為三個provider的meeting recovery remote read/write全部為0，不能把舊request budget或provider smoke當新候選PASS。
+
 ## 1. 驗證策略
 
 本計畫分四層：純函式／儲存契約、provider request-count、真實 F5 browser flow、rendered UI/手機負向回歸。QA 設計測試與證據格式；QC 必須以實際程式、網路紀錄、IndexedDB/sessionStorage 與真實 rendered 畫面判定，不可只看 RD 自述或 source scan。

@@ -30,6 +30,7 @@ import { primaryPlacementId } from '../../features/taskTracking/model';
 import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { useTaskPlacementController } from './useTaskPlacementController';
 import { KANBAN_CARD_FRAME_CLASS, KanbanCardPresentation } from './KanbanCardPresentation';
+import { getMeetingTaskReservationValue } from '../../utils/meetingTaskReservation';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -61,6 +62,12 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
   const isSelectingMode = !!dependencySelection;
   const isRecordSelectionMode = useRecordStore(s => s.isTaskSelectionMode);
   const recordDraft = useRecordStore(s => s.draft);
+  const meetingReservationValue = useRecordStore(s => {
+    const draft = s.draft;
+    return s.isMeetingMode && draft?.type === 'meeting' && draft.status === 'draft'
+      ? getMeetingTaskReservationValue(draft.metadata, nodeId)
+      : null;
+  });
   const insertRecordTaskMention = useRecordStore(s => s.insertTaskMentionAtCursor);
   const isRecordCaptureMode = isRecordSelectionMode;
   const isRecordSelected = recordDraft?.taskLinks.some(link => link.nodeId === nodeId) ?? false;
@@ -336,7 +343,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                     {isRecordSelected ? <Check size={11} /> : null}
                   </span>
                 ) : null}
-                {showChecklistSurface ? (
+              </>
+            )}
+            meetingReservationValue={meetingReservationValue}
+            rowTrailing={showChecklistSurface ? (
+              <>
                   <button
                     type="button"
                     onPointerDown={(e) => e.stopPropagation()}
@@ -358,9 +369,8 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
                       className={`transition-transform duration-150 ${isChecklistExpanded ? 'rotate-90' : ''}`}
                     />
                   </button>
-                ) : null}
               </>
-            )}
+            ) : null}
             meta={isSelectingMode ? (
               <div onPointerDown={(e) => e.stopPropagation()} className="kanban-task-meta mt-px flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
                 <button

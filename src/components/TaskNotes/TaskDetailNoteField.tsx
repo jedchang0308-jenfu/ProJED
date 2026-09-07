@@ -12,6 +12,7 @@ interface TaskDetailNoteFieldProps {
   canEdit: boolean;
   note: TaskDetailNote;
   noteIndex: number;
+  titleEditable?: boolean;
   onAdd: () => void;
   onDelete: () => void;
   onSave: () => void;
@@ -91,7 +92,7 @@ export const TaskDetailNoteContent: React.FC<{ note: TaskDetailNote }> = ({ note
 };
 
 const EditorLoadingFallback: React.FC<{ note: TaskDetailNote }> = ({ note }) => (
-  <div className="min-h-[96px] rounded-md border border-slate-200/70 bg-slate-50/70 px-2 py-1.5">
+  <div className="min-h-[96px] px-0 py-1.5">
     <TaskDetailNoteContent note={note} />
   </div>
 );

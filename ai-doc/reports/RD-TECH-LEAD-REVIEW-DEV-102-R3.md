@@ -82,7 +82,7 @@ ADR 維持不需要：本次沒有 schema／migration／RLS／RPC、全域 selec
 | Engineering | PARTIAL（外部阻斷） | targeted ESLint 0 errors、`build:test`、`git diff --check`；current full `tsc --noEmit`被既有MainLayout／TaskDetailsModal／localTestService錯誤阻斷，不在DEV-102 UI touched scope |
 | Runtime cleanup | PASS | task-owned 4000 process tree已停止，port listener=0；臨時4001亦已停止 |
 
-Screenshots：`01-marquee-active-1440.png`、`02-multi-locked-menu.png`（目前內容為compact menu）、`03-copy-paste-result.png`、`04-cut-paste-result.png`、`05-laptop-marquee.png`、`06-hard-reload-recovery-lock.png`、`07-mobile-boundary-390.png`、`08-mobile-boundary-320.png`。
+Screenshots：`01-marquee-active-1440.png`、`02-multi-locked-menu.png`（目前內容為Kanban-equivalent standard menu）、`03-copy-paste-result.png`、`04-cut-paste-result.png`、`05-laptop-marquee.png`、`06-hard-reload-recovery-lock.png`、`07-mobile-boundary-390.png`、`08-mobile-boundary-320.png`。
 
 ## 5. 最終 Gate
 
@@ -94,4 +94,4 @@ DEV-102 本機開發交付通過，可把 dev_task 標為已實作、Local Autom
 
 使用者針對實際右鍵清單提出低對比、資訊過密與不可用項目干擾的修正要求。本 addendum 取代 R3 原先「locked row 可見且可 focus」的 MindMapContextMenu 呈現契約，但只適用心智圖專屬 presenter；GlobalContextMenu、Board／List／Gantt／Calendar 既有 disabled／`aria-disabled` 行為不變。
 
-修正後的 UI contract 為：`enabled=false` action 不進入心智圖 DOM、Tab 順序或 lock icon；選單只呈現可執行 action。選單寬度上限為 260px、action 字級不超過 13.5px、列高不超過 34px、可見內容不以 opacity 淡化，並由 browser verifier 量測文字對比與密度。最新 browser artifact 已驗證不可用action DOM=0、disabled rows=0、compact menu及4個可執行action，console／page／request errors為空。
+修正後的 UI contract 為：`enabled=false` action 不進入心智圖 DOM、Tab 順序或 lock icon；選單只呈現可執行 action，並沿用看板的標準 shell、header與row。Browser verifier需確認density=`kanban`、寬度220px、action字級14px、列高36px、可見內容不以opacity淡化與文字對比通過；最新artifact已驗證不可用action DOM=0、disabled rows=0、4個可執行action，console／page／request errors為空。

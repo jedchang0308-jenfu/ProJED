@@ -15,13 +15,12 @@ import {
   type Dependency,
   type EditableKnowledgeRecord,
   type KnowledgeRecordInput,
-  type MeetingDraftCheckpointInput,
-  type MeetingDraftCheckpointResult,
   type TaskNode,
   type TaskTag,
   type Workspace,
   type WorkspaceMember,
 } from '../types';
+import { MeetingDraftCheckpointError } from './meetingDraftRecoveryService';
 import {
   boardService as firestoreBoardService,
   dependencyService as firestoreDependencyService,
@@ -541,12 +540,17 @@ export const recordService = {
       ? supabaseRecordService.listByProject(workspaceId, boardId)
       : firestoreRecordService.listByProject(workspaceId, boardId)),
 
-  listByNode: (workspaceId: string, boardId: string, nodeId: string): Promise<EditableKnowledgeRecord[]> =>
+  listByNode: (
+    workspaceId: string,
+    boardId: string,
+    nodeId: string,
+    options: { includeArchived?: boolean } = {},
+  ): Promise<EditableKnowledgeRecord[]> =>
     (isLocalTestBackend
-      ? localTestRecordService.listByNode(workspaceId, boardId, nodeId)
+      ? localTestRecordService.listByNode(workspaceId, boardId, nodeId, options)
       : isSupabaseBackend
-      ? supabaseRecordService.listByNode(workspaceId, boardId, nodeId)
-      : firestoreRecordService.listByNode(workspaceId, boardId, nodeId)),
+      ? supabaseRecordService.listByNode(workspaceId, boardId, nodeId, options)
+      : firestoreRecordService.listByNode(workspaceId, boardId, nodeId, options)),
 
   upsert: (workspaceId: string, boardId: string, input: KnowledgeRecordInput): Promise<EditableKnowledgeRecord> =>
     isLocalTestBackend
@@ -555,12 +559,12 @@ export const recordService = {
       ? supabaseRecordService.upsert(workspaceId, boardId, input)
       : firestoreRecordService.upsert(workspaceId, boardId, input),
 
-  checkpointDraft: (workspaceId: string, boardId: string, input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> =>
-    isLocalTestBackend
-      ? localTestRecordService.checkpointDraft(workspaceId, boardId, input)
-      : isSupabaseBackend
-      ? supabaseRecordService.checkpointDraft(workspaceId, boardId, input)
-      : firestoreRecordService.checkpointDraft(workspaceId, boardId, input),
+  checkpointDraft: async () => {
+    throw new MeetingDraftCheckpointError(
+      'transient',
+      '會議自動雲端 checkpoint 已停用；內容仍由本機 recovery 保護。',
+    );
+  },
 
   delete: (workspaceId: string, boardId: string, recordId: string): Promise<void> =>
     isLocalTestBackend

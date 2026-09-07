@@ -1,23 +1,115 @@
 # ProJED Documentation Map
 
-## Documentation Map Update - 2026-09-04（DEV-105 會議任務討論時間預約 Brief Ready）
+## Documentation Map Update - 2026-09-07（DEV-108 Implemented / QA-QC PASS / Local-only / NOT RELEASED）
 
-Spec Impact：`Intentional scope extension`。使用者明確把會議模式從純看板／速記延伸為「主持人可為任務設定單一預約數字」；此決策只局部解除 SPEC-005「不做逐項時間控管」的非範圍，不建立完整議程、計時、總額、投票或多人預約。SPEC-007 的原生任務操作與 SPEC-070 的共用 task action／Guard／Command 契約維持。
+Spec Impact：`Intentional partial replacement / current implementation unchanged`。使用者確認任務明細的
+人工會議補記在加入後須立即出現在第一層，會議結束後仍持續存在；列表只收任務明細人工補記，
+原始 meeting record 維持唯一資料來源，預設顯示最新三筆並以「其餘 N 筆」原地展開；列表採日粒度 `MM/DD`，不顯示時分。DEV-108
+已固化 metadata v1 provenance、正文 reconcile、含封存 task read、active draft identity 與 QA evidence；
+技術主管並將 metadata／正文關係修正為 canonical／compatibility projection，anchor 收斂為
+`lineIndex + sourceToken` fail-closed，避免同分鐘多候選錯配；
+已完成本機實作與 QA/QC；正式 provider、production 與 release gate 仍未執行。
+
+| 文件／程式權威 | 狀態 | DEV-108 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `Implemented / QA-QC PASS / Local-only / NOT RELEASED` | DEV-108 canonical task、`1A／2A／3A`、Batch A→D、檔案責任、實作證據、受控技術債、stop 與 release boundary。 |
+| `ai-doc/specs/SPEC-108-task-detail-meeting-note-persistent-list.md` | `Implemented / QA-QC PASS / Local-only / NOT RELEASED` | canonical metadata／content projection、anchor invariant、includeArchived read、active draft projection、compact UI、failure/recovery 與 AC。 |
+| `ai-doc/qa/QA-DEV-108-task-detail-meeting-note-persistent-list.md` | `Executed / PASS / Local-only / NOT RELEASED` | deterministic + browser evidence、anchor ambiguity、fixtures、viewports、evidence schema 與 Pass/Fail gate。 |
+| `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-108.md` | `Reviewed / Conditions Resolved / Pass` | 五項關鍵發現、根因鏈、canonical/projection 修正、最小架構、技術債與開工 gate。 |
+| `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Current implemented baseline / partial amendment registered | 保留 meeting draft append、task mention、空白 no-op 與快捷鍵；SPEC-108 完成後只取代成功回饋及非會議不可見的局部契約。 |
+| `src/components/TaskDetailsModal.tsx` | Implemented / compact persistent section | 會議紀錄列表持續顯示；meeting mode 只控制新增入口，390px／coarse pointer 保留歷史但隱藏 composer。 |
+| `src/store/useRecordStore.ts`、`src/utils/meetingTaskQuickNotes.ts` | Implemented / canonical contract | 單次 state commit 同步正文、metadata provenance、taskLinks，並於人工 content update reconcile。 |
+| `src/services/dataBackend.ts`、三 provider record services | Implemented / Local-only | `listByNode(..., { includeArchived: true })` 已落地；全域 `listByProject` 行為不變，無 schema migration。 |
+| `src/components/Records/TaskRecordTimeline.tsx`、`src/utils/taskKnowledgeSnippets.ts` | Existing history capability reference / not target UI | 可參考 task-linked record 投影，但 DEV-108 不得直接顯示所有關聯片段或沿用卡片式歷史資訊 UI。 |
+| DEV-008、DEV-066、DEV-106 | Required compatibility inputs | 任務知識、備註編輯與會議安全草稿生命週期不得退化；mobile meeting composer 的既有 unavailable 邊界保留。 |
+
+Human Decision：`1A` 只顯示任務明細人工補記；`2A` 原會議紀錄為唯一來源，修改同步、封存保留、
+永久刪除移除；`3A` 最新三筆＋原地展開全部。會議模式只控制新增入口，不控制歷史列表可見性。
+
+Execution boundary：本輪已完成產品程式、static/browser verifier 與 targeted QA/QC；未修改 DB/schema/migration、
+Git index、deploy 或 release artifact。RD 技術主管已完成文件審查；目前為 Local-only / NOT RELEASED，
+正式 provider、production 與 release gate 仍需另行授權並依 QA matrix 重跑。
+
+使用思考習慣：#效用理論、#系統描繪、#可驗證性
+
+## Documentation Map Update - 2026-09-07（DEV-107 Implemented / Targeted QA-QC PASS / NOT RELEASED）
+
+Spec Impact：`Compatible corrective addendum`。DEV-107 修正既有會議草稿從紀錄庫開啟時，側欄同時以 `draft.type` 顯示會議標題、卻以 `isMeetingMode=false` 顯示個人流程與最近紀錄，造成同一畫面有兩套模式權威、編輯器與紀錄卡片互相擠壓。DEV-092 的歷史 PASS 只覆蓋「新建即時會議」，未覆蓋「一般紀錄模式開啟既有會議草稿」，因此保留其歷史結論但不得直接作為本缺陷的通過證據。
+
+| 文件／程式權威 | 狀態 | DEV-107 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `Implemented / Targeted QA-QC PASS / Local-only / NOT RELEASED` | DEV-107 canonical 任務入口、修復檔案、驗收結果、Git boundary 與 release stop conditions。 |
+| `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md` | `Target Authority / DEV-107 Implemented / Targeted QA-QC PASS` | 單一 composer variant、編輯與最近紀錄互斥、唯一垂直捲動邊界、失敗恢復及 viewport 契約。 |
+| `ai-doc/qa/QA-DEV-107-record-sidebar-draft-layout.md` | `QA Executed / Targeted PASS / NOT RELEASED` | FMEA、TC-107-001～010、ROT-107-001～004、靜態／瀏覽器 evidence；完整 release matrix 仍待 frozen candidate。 |
+| `ai-doc/qc/QC-DEV-107-record-sidebar-draft-layout.md` | `QC PASS（Local corrective slice）/ NOT RELEASED` | 20/20 source、5/5 browser、DEV-020／092／094／106 regression、TypeScript／lint／build／diff evidence。 |
+| `src/components/Records/RecordSidebar.tsx`、`src/components/Records/RecordContentEditor.tsx` | Current implementation baseline / 本文件輪未修改 | 後續 RD 依 variant authority 收斂條件渲染、flex／overflow 與 editor geometry；不得建立第二套狀態。 |
+| `src/store/useRecordStore.ts` | Expected no-change boundary | `openExistingRecord` 維持 `isMeetingMode=false`；既有會議紀錄不是即時開會狀態，不得為排版修復改寫 domain semantics。 |
+| DEV-092 QA／QC | Historical baseline only | 可重用新建即時會議回歸，但沒有既有 non-live meeting draft 的正向案例。 |
+| DEV-094、DEV-106 QA／QC | Required regression authorities | 驗證 record workflow 與草稿防遺失生命週期未被破壞；不得把本次 UI 修正擴張成 persistence redesign。 |
+
+RD handoff：先建立 `live-meeting | meeting-record | work-log | empty | invalid` 的唯一 variant projector，再依 variant 統一標題、流程、editor、recent list 與 min-height。只要存在可編輯 draft 就不渲染最近紀錄；側欄本體是唯一垂直捲動 owner，內容編輯器不得以原生 `resize-y` 破壞幾何。既有會議草稿仍是 post-meeting record，不得強制切回 `isMeetingMode=true`。
+
+Execution boundary：本輪只升級開發文件與 QA 計畫，沒有修改產品程式、測試程式、schema、API、provider、權限、migration、Git index、deploy 或 release artifact。QA／QC 尚未執行，不能宣告修復完成。ADR not needed；若後續實作需要改動 record domain semantics、持久化協定或 provider schema，立即停止並回 PM／RD 重新分案。
+
+使用思考習慣：#系統描繪、#可驗證性、#當責
+
+## Documentation Map Update - 2026-09-04（DEV-106 RD技術主管審查／Phase 0 QA-QC PASS）
+
+Spec Impact：`Intentional replacement / Phase 0 QA-QC passed`。原Phase 0把本機防遺失與cloud CAS／privacy／remote restore綁在一起，經RD技術主管審查判定不通過；修正後只以transaction truth、離開前自動force-flush、一般離開保留recovery、explicit local discard與全provider 0 remote recovery request切斷核心因果鏈。Phase 0已完成 implementation、34/34 static assertions、deterministic runtime、14/14 browser、回歸與完整 side-effect failure-injection evidence（含canonical cleanup abort／retry readback、四個 provider adapter checkpoint spy、開新／開舊入口、discard 取消／abort focus、provider／正式紀錄／event／record store action／Undo push isolation）；Phase 1仍為Contract Ready，安全雲端復原改列需ADR的future capsule。
+
+| 文件／權威 | 狀態 | DEV-106 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `Phase 0 Implemented / QA-QC PASS / Phase 1 Contract Ready / NOT RELEASED` | Canonical任務入口、current-phase handoff、phase matrix、RD順序與stop boundary。 |
+| `ai-doc/specs/SPEC-106-meeting-safe-draft-lifecycle.md` | `Target Authority / Phase 0 QA-QC PASS / Phase 1 RD Contract Ready / NOT RELEASED` | Phase 0固定WP-106-L0-A～E、IDB v1/v2 compatibility、transaction truth、latest queue、2秒force-flush、local terminal discard、0 remote request、side-effect isolation與exact verifier；Phase 1保留end-meeting／待整理方向與readiness gaps。 |
+| `ai-doc/qa/QA-DEV-106-meeting-safe-draft-lifecycle.md` | `Phase 0 QA PASS (14/14 browser cases) / Phase 1 QA Pending Readiness / NOT RELEASED` | FMEA、TC-106-001～008、ROT-106-001～012、provider network count=0、adapter／store action／Undo spy、failure isolation與evidence provenance；Phase 0 QA gate 已封關。 |
+| `ai-doc/qc/QC-DEV-106-meeting-safe-draft-lifecycle.md` | `Phase 0 QC PASS / Phase 1 Readiness Pending / NOT RELEASED` | Static／runtime／browser／regression evidence與 side-effect provenance；正式 release 仍需獨立 gate。 |
+| `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-106.md` | `Reviewed / Conditional Pass after correction` | 五項關鍵發現、最短因果鏈、最小架構、Phase 1 readiness blocker與future cloud技術債。 |
+| `ai-doc/specs/SPEC-069-meeting-draft-recovery-cost-control.md` | Current implemented baseline / Target partially superseded | 保留stable ID、本機snapshot、timing與手機negative boundary；舊一般離開清理及cloud checkpoint不得進DEV-106 Phase 0候選。 |
+| `ai-doc/qa/QA-DEV-069-meeting-draft-recovery-cost-control.md`、`ai-doc/qc/QC-DEV-069-meeting-draft-recovery-cost-control.md` | Historical/local baseline / Provider Smoke Pending / 未 Release | F5、timing/budget、desktop render與mobile negative可條件式重用；QA-069-006舊direct-leave expected不可作DEV-106 PASS。 |
+| `ai-doc/specs/SPEC-020-record-workflow-redesign-with-project-change-import.md`、DEV-094 | Existing workflow / DEV-106 target amendment | 匯入、速記焦點、AI明確觸發、task links與publish-only cutoff保留；meeting改為end後needs_review再發布，work_log不變。 |
+| Supabase／Firestore／Local Test record adapters | Existing implementation / Phase 0 cloud kill switch | 三個provider的meeting recovery read/write一律為0；舊checkpoint surface移除或明確unsupported。若要求cloud recovery或remote變更，停止並進ADR／provider安全gate。 |
+
+已確認方向：一般離開不顯示「不儲存離開」，且在未commit時先自動force-flush；獨立`捨棄本次會議`只清目前scope的local/session recovery，canonical baseline保留。Phase 0不做任何remote recovery mutation。Phase 1的`結束會議`、needs_review與發布順序保留為方向，但原子性／冪等契約補足前不得實作。心跳偵測、草稿收件匣、智慧收尾、多版本與跨裝置續編保留為 future capsules，不因本次 local slice 自動開工。
+
+Human re-entry：Phase 0不含cloud recovery、30天retention、永久刪除、archived restore UI、跨裝置merge、revision history、錄音／逐字稿與手機會議；任一remote recovery要求都必須重新進入ADR／provider／隱私風險gate。
+
+Execution boundary：本輪已依WP-106-L0-A～E完成 Phase 0 local safety slice implementation、deterministic failure harness、14/14 browser evidence、完整 side-effect failure injection 與既有回歸；未修改 remote schema／migration／rules、正式資料、Git index、deploy或release artifact。Phase 0 QA/QC gate 已封關；Phase 1 readiness、future cloud與智慧收尾維持獨立 capsule。
+
+使用思考習慣：#問對問題、#多層次分析、#可驗證性
+
+## Documentation Map Update - 2026-09-04（DEV-105 Implemented / QA-QC PASS / 未 Release）
+
+Spec Impact：`Intentional scope extension + Human-approved surface replacement`。使用者明確把會議模式從純看板／速記延伸為「主持人可為任務設定單一預約數字」，並以完整L1／L2／L3+取代前一版L2-only收斂，讓所有Board task surface使用同一規則；此決策只局部解除SPEC-005「不做逐項時間控管」的非範圍，不建立完整議程、計時、總額、投票或多人預約。SPEC-007的原生任務操作與SPEC-070的共用task action／Guard／Command契約維持。
 
 | 文件／程式權威 | 狀態 | DEV-105 關聯與邊界 |
 |---|---|---|
-| `ai-doc/dev_task.md` | `Brief Ready / Human Confirmed` | DEV-105 的 canonical 需求、角色矩陣、UX、初步資料邊界、驗收方向與 re-entry gate。 |
+| `ai-doc/dev_task.md` | `Implemented / QA PASS / QC PASS / Release Not Requested` | DEV-105 canonical實作狀態、Human Decision、WP-105-A→E、acceptance、technical debt與release boundary。 |
+| `ai-doc/specs/SPEC-105-meeting-task-reservation-number.md` | `Implemented / QA PASS / QC PASS / Release Not Requested` | 主持人／meeting／canonical task identity、metadata v1、`1..999`、menu overlay／Guard、inline editor、L1／L2／L3+ layout與failure contract。 |
+| `ai-doc/qa/QA-DEV-105-meeting-task-reservation-number.md` | `QA PASS / 10 TC + 5 ROT PASS` | Medium lane FMEA、TC-105-01～10、ROT-105-01～05、viewport、provider boundary、regression與evidence contract。 |
+| `ai-doc/qc/QC-DEV-105-meeting-task-reservation-number.md` | `Local QC PASS / Evidence Verified / 未 Release` | source、deterministic／browser JSON、viewport screenshots、回歸與禁止外推邊界。 |
+| `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-105.md` | `Reviewed / Conditions Resolved` | 五項核心發現、最短因果鏈、必要修正、最小架構、隔離技術債與開工gate結論。 |
 | `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` | Existing baseline / 局部非範圍由 DEV-105 擴充 | 看板仍是會議主畫面；只新增主持人右鍵設定與任務數字，不恢復完整會議操作列。 |
 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Compatible | 卡片主要點擊、拖曳、編輯與右鍵開啟行為不得被預約功能劫持。 |
+| `ai-doc/specs/SPEC-069-meeting-draft-recovery-cost-control.md` | Compatible persistence authority | 預約namespace必須進draft signature並沿用local recovery／cloud checkpoint；390 mobile維持meeting不存在。 |
 | `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md` | Compatible architecture authority | 新右鍵能力必須走集中 action catalog、profile、permission Guard 與 Command，不在 presenter 直接 mutation。 |
+| `src/utils/meetingTaskReservation.ts` | Implemented | pure parse／normalize／metadata projection／stable signature；未建立TaskNode欄位或新feature subsystem。 |
+| `src/components/Wbs/MeetingTaskReservationMark.tsx` | Implemented shared component | 集中三階共用的`[number]`、style、aria與empty DOM contract。 |
+| `src/store/useRecordStore.ts`、`src/utils/meetingRecordWorkflow.ts` | Implemented | host recheck、set／clear／noop與dirty/recovery signature。 |
+| task interaction catalog／profile／resolver／Guard、`GlobalContextMenu`、`TaskActionMenu` | Implemented | 同一meeting menu profile overlay套用`board.column-header`／`board.card`／`board.checklist-row`；Guard與store提交時重查。 |
+| `KanbanColumn*`、`KanbanCard*`、`KanbanChecklist.tsx`、`TaskChecklistTree.tsx` | Implemented | Board L1／L2／L3+都在date後使用shared mark；L2為title → date → `[number]` → toggle；tracking使用canonical task ID。 |
+| `App.tsx`、interaction scope／binding、Task Details adapter、其他mode presenter、provider schema／service | Explicit no-change boundary | 首版不得為此功能擴大workflow context、非Board surface或資料層。 |
 
-Human Decision：第一版僅主持人可設定；每個會議／任務一個數字；入口只在右鍵選單，點擊後直接輸入；有值才顯示；卡片只顯示純數字且順序為「任務名稱 → 截止日 → `[數字]` → 展開按鈕」。明確排除多人預約、未預約提示、單位、總額、計時與完整議程管理。
+Human Decision：第一版僅主持人可設定；每個會議／任務一個數字；完整L1／L2／L3+都由右鍵選單直接輸入且有值才顯示。各階mark位於截止日後；L2精確順序為「任務名稱 → 截止日 → `[數字]` → 展開按鈕」。明確排除多人預約、未預約提示、單位、總額、計時與完整議程管理。
 
-Execution boundary：本輪只更新 canonical `dev_task.md` 與 `documentation_map.md`，成熟度停在 `Brief Ready`；沒有建立 SPEC／ADR／QA／QC、修改產品程式、測試、schema、migration、provider、Git index、deploy 或 release artifact。
+RD contract：active meeting identity=`draft.id`；host=`draft.recordedBy === currentUserId`；value=`1..999`或empty clear；canonical shape=`metadata.meetingTaskReservations` with `schemaVersion: 1`。顯示限會議L1／L2／L3+ primary與同task tracking projection；Details與其他模式為negative，窄螢幕沿用SPEC-069的meeting-negative boundary。沿用現有record metadata與draft recovery，ADR／migration均不需要。
 
-Re-entry：使用者要求交 RD 評估時，升級同一 DEV 到 `RD Contract Ready` 並固定主持人身分、active meeting identity、provider persistence、數值限制與 task surface matrix；要求開始實作時再補到 `RD Implementation Ready`。
+Execution boundary：WP-105-A→E已完成；QA／QC與targeted regressions均PASS。沒有修改TaskNode、provider schema、migration、Git index、deploy或release artifact；正式provider L3、server field ACL與release仍未執行，`Release Not Requested`。
 
-使用思考習慣：#最小介面、#使用者視角、#可驗證性
+Technical debt：現行provider只有record-level write policy，官方產品路徑以action visibility、execution Guard與store owner recheck實現host-only；不得宣稱server field ACL。Realtime／shared active meeting／server-authoritative host／security audit任一進入範圍時另案移除。
+
+Re-entry：若需要Task Details、多人預約、單位、總額、timer、跨board、Realtime共編、server-enforced field ACL、非Board surface或變更`1..999`範圍，先回Human／PM更新SPEC，不得順手擴張。
+
+使用思考習慣：#問對問題、#多層次分析、#可驗證性
 
 ## Documentation Map Update - 2026-09-04（DEV-104 完整移除收藏任務功能）
 
@@ -43,20 +135,20 @@ Spec Impact：`Intentional replacement + compatible extension`。DEV-102以`sele
 | 文件／程式權威 | 狀態 | DEV-102 關聯與邊界 |
 |---|---|---|
 | `ai-doc/dev_task.md` | DEV-102已實作 / 本機交付100 / Release 0 | 總表與詳細交付入口；WP-102-A→E、驗證結果、技術債與release boundary已收斂。 |
-| `ai-doc/specs/SPEC-102-mindmap-marquee-multiselect-clipboard.md` | Implemented / Local QA-QC Passed / Tech Lead Reviewed R3 + UI Follow-up | placement selection、心智圖專屬compact menu、不可用action DOM hiding、shared clone plan、node／reindex／side transaction、recovery與clipboard/batch action的authoritative source。 |
-| `ai-doc/qa/QA-DEV-102-mindmap-marquee-multiselect-clipboard.md` | Executed / Local Automated QA PASS / UI Follow-up Covered | 記錄pure、browser、不可用action visibility、對比／密度、fault injection、performance、viewport、error arrays、regression與engineering evidence。 |
-| `ai-doc/qc/QC-DEV-102-mindmap-marquee-multiselect-clipboard.md` | Local QC PASS / Evidence Verified / UI Follow-up Covered | 交叉核對source、result JSON、compact rendered menu、screenshots與實際命令；限制外推至production／release。 |
+| `ai-doc/specs/SPEC-102-mindmap-marquee-multiselect-clipboard.md` | Implemented / Local QA-QC Passed / Tech Lead Reviewed R3 + UI Follow-up | placement selection、心智圖專屬Kanban-equivalent menu、不可用action DOM hiding、shared clone plan、node／reindex／side transaction、recovery與clipboard/batch action的authoritative source。 |
+| `ai-doc/qa/QA-DEV-102-mindmap-marquee-multiselect-clipboard.md` | Executed / Local Automated QA PASS / UI Follow-up Covered | 記錄pure、browser、不可用action visibility、Kanban樣式／對比、fault injection、performance、viewport、error arrays、regression與engineering evidence。 |
+| `ai-doc/qc/QC-DEV-102-mindmap-marquee-multiselect-clipboard.md` | Local QC PASS / Evidence Verified / UI Follow-up Covered | 交叉核對source、result JSON、Kanban-equivalent rendered menu、screenshots與實際命令；限制外推至production／release。 |
 | `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102.md` | Reviewed / Conditions Resolved | 五項核心發現、最短因果鏈、必要修正、已知技術債與review gate結論。 |
 | `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R2.md` | Reviewed R2 / Conditions Resolved | 第二輪五項發現：side/reindex交易、reload recovery、success-effect／undo邊界、真實keyboard baseline與gesture lifecycle。 |
-| `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R3.md` | Reviewed R3 + UI Follow-up / Implementation Approved | 實作整合缺陷、不可用action隱藏、compact／contrast gate、performance／recovery／regression evidence與release boundary。 |
+| `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-102-R3.md` | Reviewed R3 + UI Follow-up / Implementation Approved | 實作整合缺陷、不可用action隱藏、Kanban-equivalent／contrast gate、performance／recovery／regression evidence與release boundary。 |
 | `ai-doc/specs/SPEC-075-mindmap-keyboard-navigation-performance.md` | 既有Implemented authority；cardinality局部被取代 | private selection store、keyed notification、latest focus與render isolation仍有效；single selected ID改為set＋primary。 |
 | `ai-doc/specs/SPEC-076-mindmap-left-mouse-canvas-pan.md` | 已放棄／回復 | 不恢復blank left-drag pan；中鍵與既有非衝突pan入口保留。 |
 | `ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md`、`SPEC-074-mindmap-single-scene-coordinate-system.md` | Compatible | menu／pointer／keyboard owner與單一Scene不變；marquee只用client-space transient overlay。 |
 | `ai-doc/specs/SPEC-013-task-tree-duplicate-context-menu.md`、`SPEC-048-task-multi-person-assignment.md`、`SPEC-088-task-lifecycle-complete-archive-delete.md` | Compatible | 共用subtree field projection、role normalization與archive lifecycle；DEV-102只增加clipboard時點與atomic multi-target adapter。 |
 | `src/components/MindMap/mindMapSelectionStore.ts`、`MindMapView.tsx`、`MindMapNode.tsx` | Implemented authority | 單一selection owner、registry、marquee／keyboard wiring與keyed visual state；沒有第二套state或整樹subscription。 |
-| `src/components/MindMap/MindMapContextMenu.tsx`、`src/interactions/task/TaskActionMenu.tsx`、`mindMapClipboard.ts`、`src/features/taskClonePlan.ts`、`src/store/useWbsStore.ts` | Implemented authority | local compact presenter、mindmap-only `hideDisabled`／shared action／clone rules、clipboard與same-board transactional commands；其他模式不變。 |
+| `src/components/MindMap/MindMapContextMenu.tsx`、`src/interactions/task/TaskActionMenu.tsx`、`mindMapClipboard.ts`、`src/features/taskClonePlan.ts`、`src/store/useWbsStore.ts` | Implemented authority | local Kanban-equivalent presenter、mindmap-only `hideDisabled`／shared action／clone rules、clipboard與same-board transactional commands；其他模式不變。 |
 
-Execution boundary：DEV-102產品code、verifier、local-test runtime、compact rendered evidence、QA／QC與R3 UI follow-up已完成；本輪task-owned 4000 runtime已停止並確認port released。沒有執行commit、push、PR、deploy、production mutation、正式provider驗證或release。工作樹原先已有大量其他DEV未提交修改，DEV-102以增量patch完成，未覆寫或整理相鄰變更。
+Execution boundary：DEV-102產品code、verifier、Kanban-equivalent rendered evidence、QA／QC與R3 UI follow-up已完成；本輪task-owned 4000 runtime已停止並確認port released。沒有執行commit、push、PR、deploy、production mutation、正式provider驗證或release。工作樹原先已有大量其他DEV未提交修改，DEV-102以增量patch完成，未覆寫或整理相鄰變更。
 
 ADR not needed：既有SPEC-070／074／075已提供interaction、scene與selection authority；DEV-102不改schema、provider API、角色來源或跨模式資料flow。若實作需要DB transaction／migration、全域selection owner、fractional order或無readback的partial provider writes，依SPEC-102 stop condition回PM／RD，不得靜默擴張。
 
@@ -1390,6 +1482,7 @@ DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延�
 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Implemented | DEV-007 | 會議中保留原生看板編輯，並將任務變更納入會議紀錄。 |
 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 | 任務詳情中的會議細節快速查找；承接 DEV-002 / DEV-007 的 task knowledge UX refinement。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 | 會議模式下任務詳情內快速補記；承接 DEV-005 / DEV-007 / DEV-008 的 meeting workflow UX refinement。 |
+| `ai-doc/specs/SPEC-108-task-detail-meeting-note-persistent-list.md` | Implemented / QA-QC PASS / Local-only / NOT RELEASED | DEV-108 | 任務明細人工會議補記持續列表、canonical metadata／content projection、anchor invariant、封存讀取與 active draft identity。 |
 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通設計；承接 DEV-005 / DEV-006 / DEV-007 / DEV-009 的 meeting workflow UX refinement。 |
 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-011 | AI 任務導向會議紀錄統整工作流；承接 DEV-007 / DEV-008 / DEV-009 / DEV-010 的 meeting record synthesis refinement；hotfix `7704e2f` 已部署，production fixture smoke 與 DB proof 通過。 |
 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-012 | AI 會議紀錄自然語言品質提升；承接 DEV-011 / DEV-008 的 meeting record synthesis quality refinement；hotfix `7704e2f` 已部署，production fixture smoke 與 DB proof 通過。 |
@@ -1636,6 +1729,7 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/qa/QA-DEV-007-meeting-activity-capture.md` | Done / Static QC Covered | DEV-007 | 會議中看板原生編輯與任務變更自動納入紀錄的驗證計畫。 |
 | `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | Done / Static QC Covered | DEV-008 | 任務會議細節快速查找驗證計畫，包含任務片段抽取、搜尋、fallback 與原始紀錄追溯。 |
 | `ai-doc/qa/QA-DEV-009-meeting-task-detail-quick-note.md` | Passed by QC | DEV-009 | 會議模式任務詳情內快速補記驗證計畫，包含 meeting draft append、task tag 與資料邊界。 |
+| `ai-doc/qa/QA-DEV-108-task-detail-meeting-note-persistent-list.md` | Executed / PASS / Local-only / NOT RELEASED | DEV-108 | 驗證人工 provenance、anchor ambiguity、跨模式持續、edit/archive/delete lifecycle、latest-3 compact UI、failure recovery、a11y 與三 viewport。 |
 | `ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通 UX 驗證計畫，包含 disabled reason、tooltip/focus、離開保護與桌機/筆電 viewport。 |
 | `ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-011 | AI 任務導向會議紀錄統整 UX 驗證計畫，包含實際輸入、AI 失敗保留草稿、校稿發布、桌機/筆電 viewport、readiness gate、guarded executor self-check、hotfix `7704e2f` 與 production fixture smoke / DB proof。 |
 | `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-012 | AI 會議紀錄自然語言品質驗證計畫，包含 golden samples、實際輸入、模型不可用、任務知識查找相容性、readiness gate、guarded executor self-check、hotfix `7704e2f` 與 production fixture smoke / DB proof。 |

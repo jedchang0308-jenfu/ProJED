@@ -44,8 +44,9 @@ const checks = [
     path: 'src/components/Wbs/KanbanChecklist.tsx',
     label: 'kanban checklist native meeting behavior',
     snippets: [
-      'const isRecordCaptureMode = isRecordSelectionMode;',
-      'insertRecordTaskMention(child.id, child.title || child.id)',
+      'const isRecordCaptureMode = useRecordStore(state => state.isTaskSelectionMode);',
+      'onRecordCapture: (taskId: string, title: string) => insertRecordTaskMention(taskId, title),',
+      '<TaskChecklistTree {...props} hostAdapter={hostAdapter} />',
     ],
     forbiddenSnippets: [
       'isMeetingMode && meetingTaskCaptureEnabled',
