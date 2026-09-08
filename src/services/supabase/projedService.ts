@@ -25,6 +25,7 @@ import type {
   MeetingDraftCheckpointResult,
   PermissionCapability,
   RecordTaskLink,
+  RecordTaskLinkRole,
   TagColor,
   TaskNode,
   TaskTag,
@@ -49,6 +50,10 @@ import {
   type BackupImportCounts,
   type BackupImportPlan,
 } from '../../features/backup/types';
+import {
+  assertRecordTaskLinkSet,
+  RecordTaskLinkResolutionError,
+} from '../recordTaskLinkContract';
 
 type WbsItemInsert = Partial<WbsItemRow>;
 type BoardInviteInsert = Partial<BoardInviteRow>;
@@ -58,7 +63,8 @@ type KnowledgeRecordInsert = Partial<KnowledgeRecordRow>;
 type RecordTaskLinkInsert = Partial<RecordTaskLinkRow>;
 type ResolvedRecordTaskLink = {
   nodeId: string;
-  insert: RecordTaskLinkInsert;
+  role: RecordTaskLinkRole;
+  itemId: string;
 };
 type WbsDependencyWithNodes = WbsDependencyRow & {
   from_item?: Pick<WbsItemRow, 'id' | 'legacy_node_id'> | null;
@@ -1777,6 +1783,28 @@ export const supabaseRecordService = {
     requireSupabase();
     const tenantId = await resolveWorkspaceId(workspaceId);
     const projectId = await resolveProjectId(tenantId, boardId);
+
+    const uniqueLinks = input.taskLinks.filter((link, index, links) =>
+      links.findIndex(item => item.nodeId === link.nodeId && item.role === link.role) === index
+    );
+    const resolutionResults = await Promise.all(uniqueLinks.map(async link => {
+      try {
+        const itemId = await resolveRecordTaskLinkItemId(tenantId, projectId, link.nodeId);
+        return { nodeId: link.nodeId, role: link.role, itemId };
+      } catch (error) {
+        console.warn('[supabaseRecordService] Record task link preflight failed:', link.nodeId, error);
+        return { nodeId: link.nodeId, role: link.role, itemId: null };
+      }
+    }));
+    const unresolvedNodeIds = Array.from(new Set(
+      resolutionResults
+        .filter(link => !link.itemId)
+        .map(link => link.nodeId),
+    ));
+    if (unresolvedNodeIds.length > 0) {
+      throw new RecordTaskLinkResolutionError(unresolvedNodeIds);
+    }
+
     const insert = await knowledgeRecordToInsert(tenantId, projectId, input);
     const { data: saved, error: saveError } = await supabase
       .from('knowledge_records')
@@ -1794,32 +1822,16 @@ export const supabaseRecordService = {
       .eq('record_id', saved.id);
     assertNoError(deleteLinksError);
 
-    const uniqueLinks = input.taskLinks.filter((link, index, links) =>
-      links.findIndex(item => item.nodeId === link.nodeId && item.role === link.role) === index
+    const resolvedLinkResults = resolutionResults.filter(
+      (link): link is ResolvedRecordTaskLink => Boolean(link.itemId),
     );
-    const resolvedLinkResults = (await Promise.all(uniqueLinks.map(async (link): Promise<ResolvedRecordTaskLink | null> => {
-      try {
-        const itemId = await resolveRecordTaskLinkItemId(tenantId, projectId, link.nodeId);
-        if (!itemId) {
-          console.warn('[supabaseRecordService] Skipping unresolved record task link:', link.nodeId);
-          return null;
-        }
-        return {
-          nodeId: link.nodeId,
-          insert: {
-            tenant_id: tenantId,
-            project_id: projectId,
-            record_id: saved.id,
-            item_id: itemId,
-            role: link.role,
-          },
-        };
-      } catch (error) {
-        console.warn('[supabaseRecordService] Skipping record task link after resolution failure:', link.nodeId, error);
-        return null;
-      }
-    }))).filter((link): link is ResolvedRecordTaskLink => Boolean(link));
-    const resolvedLinks = resolvedLinkResults.map(link => link.insert);
+    const resolvedLinks: RecordTaskLinkInsert[] = resolvedLinkResults.map(link => ({
+      tenant_id: tenantId,
+      project_id: projectId,
+      record_id: saved.id,
+      item_id: link.itemId,
+      role: link.role,
+    }));
     const resolvedLinkedTaskIds = resolvedLinkResults.map(link => link.nodeId);
 
     if (resolvedLinks.length > 0) {
@@ -1873,7 +1885,9 @@ export const supabaseRecordService = {
       .single();
     assertNoError(reloadError);
     if (!reloaded) throw new Error('Supabase did not return the saved knowledge record.');
-    return mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) as EditableKnowledgeRecord;
+    const mapped = mapKnowledgeRecord(reloaded as unknown as KnowledgeRecordWithLinks, workspaceId, boardId) as EditableKnowledgeRecord;
+    assertRecordTaskLinkSet(uniqueLinks, mapped.taskLinks);
+    return mapped;
   },
 
   checkpointDraft: async (_workspaceId: string, _boardId: string, _input: MeetingDraftCheckpointInput): Promise<MeetingDraftCheckpointResult> => {

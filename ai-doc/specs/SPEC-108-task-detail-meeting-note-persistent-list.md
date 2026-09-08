@@ -11,6 +11,11 @@
   與右側 draft 確認」及「非 meeting mode 完全不顯示補記內容」兩項局部契約，其餘 append、task mention、
   空白 no-op、快捷鍵及 `TaskNode.detailNotes` 資料邊界維持。
 
+2026-09-08 DEV-110 corrective amendment：本規格的provenance、projection、archive、latest-3、recovery與UI
+版面仍有效；task-scoped loader不再以active board＋裸taskId推定ownership。account-unplaced、tracking
+reference source-board read、same-board append、generic error與unresolved task-link save語意改以
+`SPEC-110-unplaced-task-meeting-record-boundary.md`為authority。此修訂尚未實作，不回寫DEV-108歷史PASS。
+
 ## 1. 使用者決策與目標
 
 - `1A`：第一層列表只顯示從任務明細「加入」建立的人工補記；不得以 task link 或自由文字推測來源，

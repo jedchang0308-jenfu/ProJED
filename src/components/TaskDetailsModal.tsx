@@ -205,9 +205,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const [meetingDiscussionError, setMeetingDiscussionError] = React.useState<string | null>(null);
   const [isTaskKnowledgeOpen, setIsTaskKnowledgeOpen] = React.useState(false);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
+  const activeMeetingBoardId = useBoardStore((state) => state.activeBoardId);
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
   const appendTaskDiscussionToMeetingDraft = useRecordStore((state) => state.appendTaskDiscussionToMeetingDraft);
-  const meetingQuickNotes = useTaskMeetingQuickNotes(nodeId);
+  const meetingQuickNotes = useTaskMeetingQuickNotes(node, activeMeetingBoardId);
   const skipNextNotesSave = React.useRef(true);
   const skipNextTitleBlurSave = React.useRef(false);
   const [saveState, setSaveState] = React.useState<TaskDetailsSaveState>('idle');
@@ -646,6 +647,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     pendingTransitionRef.current = null;
     setIsClosePending(false);
     setSaveState('idle');
+    setMeetingDiscussion('');
+    setMeetingDiscussionError(null);
     if (titleAutosaveTimerRef.current !== null) {
       window.clearTimeout(titleAutosaveTimerRef.current);
       titleAutosaveTimerRef.current = null;
@@ -985,12 +988,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   const handleAppendMeetingDiscussion = () => {
     if (!canEditTask) return;
+    if (!meetingQuickNotes.composerAvailable) {
+      setMeetingDiscussionError(meetingQuickNotes.availabilityMessage || '目前任務無法載入會議紀錄。');
+      return;
+    }
     const submissionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : `quick_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const result = appendTaskDiscussionToMeetingDraft({
       taskId: node.id,
       taskTitle: node.title || node.id,
+      taskBoardId: node.boardId,
       text: meetingDiscussion,
       submissionId,
       occurredAt: Date.now(),
@@ -1005,6 +1013,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       'invalid-input': '請輸入補記內容。',
       'invalid-metadata': '補記資料無法辨識，請先儲存或復原草稿。',
       'invalid-task': '目前任務無法加入補記。',
+      'unsupported-task-owner': '請先將任務放入目前會議的看板，再新增會議紀錄。',
+      'meeting-board-mismatch': '此任務屬於其他看板；請在原看板的會議中新增紀錄。',
     };
     setMeetingDiscussionError(messages[result.reason]);
   };
@@ -1441,6 +1451,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
             taskId={node.id}
             taskTitle={node.title || node.id}
             isMeetingMode={isMeetingMode && !isMeetingRecordUnavailable}
+            composerAvailable={isMeetingMode && !isMeetingRecordUnavailable && meetingQuickNotes.composerAvailable}
+            availabilityMessage={isMeetingMode && !isMeetingRecordUnavailable
+              ? meetingQuickNotes.availabilityMessage
+              : null}
             canEdit={canEditTask && !meetingQuickNotes.composerBlocked}
             entries={meetingQuickNotes.entries}
             loading={meetingQuickNotes.loading}

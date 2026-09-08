@@ -1,5 +1,33 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-08（DEV-110 Local Candidate Implemented / CAPA Not Registered）
+
+Spec Impact：`Intentional narrow exception + corrective amendment`。Production畫面證實account-unplaced task
+被DEV-108 task-scoped loader當成active-board `wbs_items`查詢；同一裸ID/active-board假設也可能誤處理跨板
+tracking reference。DEV-110以canonical node ownership分開read/append能力，並把Supabase unresolved
+task-link由silent skip改成mutation前reject；不建立unplaced record schema。
+
+| 文件／程式權威 | 狀態 | DEV-110關聯與邊界 |
+|---|---|---|
+| `ai-doc/reports/CAPA-DRAFT-20260908-unplaced-task-meeting-record-boundary.md` | `RD Implementation In Progress / Not Registered / Local Static+Browser Candidate PASS` | Facts、root cause、CA/PA、local evidence、effectiveness與production audit/release邊界；未占用CAPA-002。 |
+| `ai-doc/dev_task.md` | `DEV-110 執行中 / 開發點 / 不計入交付 / Static+Browser Candidate PASS` | Canonical index、工作包、AC、stop、evidence與QA下一步。 |
+| `ai-doc/specs/SPEC-110-unplaced-task-meeting-record-boundary.md` | `Target Authority / Local Candidate Implemented / Browser B01-B04 PASS / QA-QC NOT RUN` | ownership capability、source-board read、same-board append、stale guard、link preflight/exact-set、UI matrix與file responsibility。 |
+| `ai-doc/qa/QA-DEV-110-unplaced-task-meeting-record-boundary.md` | `QA Plan Ready / Execution NOT STARTED` | FMEA、B01～B07、Supabase TEST T01～T06、visible-error、viewport、regression與cleanup gate。 |
+| `SPEC-039` | Targeted narrow exception registered | unplaced task detail/task fields維持；project-scoped meeting record須先歸位，prefix不得作capability判定。 |
+| `SPEC-108` | Corrective amendment registered / Historical PASS preserved | provenance/list/archive/recovery維持；loader scope、unsupported與save integrity改由SPEC-110治理。 |
+| `SPEC-095` | No conflict / compatibility authority | tracking placement ID不成為record identity；source canonical board決定read，target meeting不可跨project append。 |
+| `src/hooks/useTaskMeetingQuickNotes.ts`、`TaskDetailsModal.tsx`、`TaskMeetingQuickNoteSection.tsx`、record providers | Local candidate implemented / QA pending | canonical capability、generation guard、UI boundary、store exact-set與Supabase preflight已修改；尚未代表release完成。 |
+
+RD handoff：WP-110-A～C已完成，WP-110-D static與browser candidate B01～B04 PASS；下一步由QA依計畫執行Supabase TEST與指定
+回歸。P0/P1 engineering blocker=0；ADR不需要。若preflight後failure injection證實不可補償partial state，
+停止release並啟動SPEC-110 transactional RPC capsule。
+
+Execution boundary：本次完成文件成熟度、DEV登錄、active spec convergence、local product candidate、static與browser candidate
+gate；未修改schema/migration、正式資料，也未執行Supabase TEST、commit、push、deploy或release。後續QA
+execution與正式CAPA登錄、production audit／repair、release仍需分開授權。
+
+使用思考習慣：#第一性原理、#效用理論、#多層次分析、#可驗證性
+
 ## Documentation Map Update - 2026-09-08（DEV-109 Implemented Candidate / Tech Lead Reviewed / QA Pending）
 
 Spec Impact：`Implementation needs correction + intentional live-capture refinement`。既有 DEV-007 已定義會議功能開啟後
@@ -1527,6 +1555,7 @@ DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延�
 | `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 | 任務詳情中的會議細節快速查找；承接 DEV-002 / DEV-007 的 task knowledge UX refinement。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 | 會議模式下任務詳情內快速補記；承接 DEV-005 / DEV-007 / DEV-008 的 meeting workflow UX refinement。 |
 | `ai-doc/specs/SPEC-108-task-detail-meeting-note-persistent-list.md` | Implemented / QA-QC PASS / Local-only / NOT RELEASED | DEV-108 | 任務明細人工會議補記持續列表、canonical metadata／content projection、anchor invariant、封存讀取與 active draft identity。 |
+| `ai-doc/specs/SPEC-110-unplaced-task-meeting-record-boundary.md` | Local Candidate Implemented / QA-QC NOT RUN / NOT RELEASED | DEV-110 | 修正unplaced／tracking ownership、canonical source-board read、same-board append、stale response、raw error與unresolved task-link silent success。 |
 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通設計；承接 DEV-005 / DEV-006 / DEV-007 / DEV-009 的 meeting workflow UX refinement。 |
 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-011 | AI 任務導向會議紀錄統整工作流；承接 DEV-007 / DEV-008 / DEV-009 / DEV-010 的 meeting record synthesis refinement；hotfix `7704e2f` 已部署，production fixture smoke 與 DB proof 通過。 |
 | `ai-doc/specs/SPEC-012-ai-meeting-record-natural-language-quality.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-012 | AI 會議紀錄自然語言品質提升；承接 DEV-011 / DEV-008 的 meeting record synthesis quality refinement；hotfix `7704e2f` 已部署，production fixture smoke 與 DB proof 通過。 |
@@ -1774,6 +1803,7 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | Done / Static QC Covered | DEV-008 | 任務會議細節快速查找驗證計畫，包含任務片段抽取、搜尋、fallback 與原始紀錄追溯。 |
 | `ai-doc/qa/QA-DEV-009-meeting-task-detail-quick-note.md` | Passed by QC | DEV-009 | 會議模式任務詳情內快速補記驗證計畫，包含 meeting draft append、task tag 與資料邊界。 |
 | `ai-doc/qa/QA-DEV-108-task-detail-meeting-note-persistent-list.md` | Executed / PASS / Local-only / NOT RELEASED | DEV-108 | 驗證人工 provenance、anchor ambiguity、跨模式持續、edit/archive/delete lifecycle、latest-3 compact UI、failure recovery、a11y 與三 viewport。 |
+| `ai-doc/qa/QA-DEV-110-unplaced-task-meeting-record-boundary.md` | QA Plan Ready / Execution NOT STARTED / NOT RELEASED | DEV-110 | 驗證ownership/capability、network absence、source-board reference、link preflight/readback、visible-error與DEV-108回歸。 |
 | `ai-doc/qa/QA-DEV-010-meeting-record-action-feedback.md` | Implemented | DEV-010 | 會議紀錄操作按鈕狀態溝通 UX 驗證計畫，包含 disabled reason、tooltip/focus、離開保護與桌機/筆電 viewport。 |
 | `ai-doc/qa/QA-DEV-011-ai-meeting-record-synthesis.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-011 | AI 任務導向會議紀錄統整 UX 驗證計畫，包含實際輸入、AI 失敗保留草稿、校稿發布、桌機/筆電 viewport、readiness gate、guarded executor self-check、hotfix `7704e2f` 與 production fixture smoke / DB proof。 |
 | `ai-doc/qa/QA-DEV-012-ai-meeting-record-natural-language-quality.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-012 | AI 會議紀錄自然語言品質驗證計畫，包含 golden samples、實際輸入、模型不可用、任務知識查找相容性、readiness gate、guarded executor self-check、hotfix `7704e2f` 與 production fixture smoke / DB proof。 |

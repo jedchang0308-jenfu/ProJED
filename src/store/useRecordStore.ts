@@ -31,6 +31,8 @@ import { mergeHumanDraftWithAiSynthesis } from '../utils/humanDraftSynthesisMerg
 import { useMemberStore } from './useMemberStore';
 import { useTagStore } from './useTagStore';
 import { summarizeTaskActivity } from '../utils/meetingActivitySummary';
+import { TASK_WORKBENCH_UNPLACED_BOARD_ID } from '../features/taskWorkbench/placementModel';
+import { assertRecordTaskLinkSet } from '../services/recordTaskLinkContract';
 import {
   createMeetingLiveAggregateValue,
   formatMeetingLiveAggregateLine,
@@ -103,9 +105,28 @@ type MeetingLiveMutationInput = {
 type AppendMeetingTaskQuickNoteResult =
   | { status: 'appended'; entryId: string }
   | { status: 'noop'; entryId: string }
-  | { status: 'denied'; reason: 'not-meeting' | 'invalid-input' | 'invalid-metadata' | 'invalid-task' };
+  | {
+      status: 'denied';
+      reason:
+        | 'not-meeting'
+        | 'invalid-input'
+        | 'invalid-metadata'
+        | 'invalid-task'
+        | 'unsupported-task-owner'
+        | 'meeting-board-mismatch';
+    };
 
 const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
+
+const upsertRecordWithIntegrity = async (
+  workspaceId: string,
+  boardId: string,
+  input: KnowledgeRecordInput,
+) => {
+  const saved = await recordService.upsert(workspaceId, boardId, input);
+  assertRecordTaskLinkSet(input.taskLinks, saved.taskLinks);
+  return saved;
+};
 
 interface RecordStoreState {
   records: EditableKnowledgeRecord[];
@@ -166,6 +187,7 @@ interface RecordStoreActions {
   appendTaskDiscussionToMeetingDraft: (input: {
     taskId: string;
     taskTitle: string;
+    taskBoardId: string;
     text: string;
     submissionId: string;
     occurredAt: number;
@@ -929,7 +951,15 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   appendTaskDiscussionToMeetingDraft: (input) => {
     const state = get();
     if (!state.isMeetingMode || state.draft?.type !== 'meeting') return { status: 'denied', reason: 'not-meeting' };
-    if (!input.taskId.trim() || !input.taskTitle.trim()) return { status: 'denied', reason: 'invalid-task' };
+    if (!input.taskId.trim() || !input.taskTitle.trim() || !input.taskBoardId.trim()) {
+      return { status: 'denied', reason: 'invalid-task' };
+    }
+    if (input.taskBoardId === TASK_WORKBENCH_UNPLACED_BOARD_ID) {
+      return { status: 'denied', reason: 'unsupported-task-owner' };
+    }
+    if (!activeBoardIdForMeeting() || input.taskBoardId !== activeBoardIdForMeeting()) {
+      return { status: 'denied', reason: 'meeting-board-mismatch' };
+    }
     if (!input.submissionId.trim() || !Number.isFinite(input.occurredAt) || !input.text.trim()) {
       return { status: 'denied', reason: 'invalid-input' };
     }
@@ -1331,7 +1361,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
 
     set({ saving: true, error: null });
     try {
-      const saved = await recordService.upsert(activeWorkspaceId, activeBoardId, payload);
+      const saved = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, payload);
       const savedInput = toRecordInput(saved);
       set(state => ({
         saving: false,
@@ -1356,7 +1386,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       const applyRecordInput = async (input: KnowledgeRecordInput) => {
         set({ saving: true, error: null });
         try {
-          const restored = await recordService.upsert(activeWorkspaceId, activeBoardId, input);
+          const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, input);
           const restoredDraft = toDraftFromRecordInput(input, restored);
           set(state => ({
             saving: false,
@@ -1447,7 +1477,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           undo: async () => {
             set({ saving: true, error: null });
             try {
-              const restored = await recordService.upsert(activeWorkspaceId, activeBoardId, restoreInput);
+              const restored = await upsertRecordWithIntegrity(activeWorkspaceId, activeBoardId, restoreInput);
               const restoredDraft = toDraftFromRecordInput(restoreInput, restored);
               set(state => ({
                 saving: false,

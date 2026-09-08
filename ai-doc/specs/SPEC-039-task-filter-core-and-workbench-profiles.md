@@ -4,6 +4,13 @@
 關聯開發點：DEV-027D 心智圖日期顯示與既有過濾器串接、DEV-028 四模式任務操作契約、DEV-036 Trello-like Workspace Governance
 狀態：Phase 1/1A Implemented + Local Automated QC Passed / Phase 1B Implemented + Local Automated QC Passed / Phase 1C Implemented + Local Automated QC Passed / Phase 2 Cross-Board Source Slice Implemented + Local Automated QC Passed / Phase 2A Drag Trigger Parity Implemented + Local Automated QC Passed / Phase 2B Production Migration and Deploy Complete / Authenticated Smoke Pending / DEV-090 Implemented + Local Automated QA-QC Passed / DEV-091 Implemented + Local Automated QA-QC Passed / Release Gate Required
 
+2026-09-08 DEV-110 meeting-record boundary addendum：`Intentional narrow exception / RD Implementation Ready`。
+「未歸位與已歸位功能等價」不再被解讀為可忽略資料ownership/FK；account-unplaced task仍可開詳情與
+編輯既有task欄位，但project-scoped meeting record須先將任務放入目前會議的看板。未歸位狀態不得查
+`wbs_items/record_task_links`或新增task-linked補記；歸位後以新的canonical `boardId`恢復能力，不得因保留
+`task_workbench_unplaced_*` legacy ID而誤擋。完整read/append/UI/provider契約以SPEC-110為authority；本
+addendum不新增unplaced record schema、不改placement transaction、filter、drag或account persistence。
+
 2026-08-27 DEV-091 lane-height preference addendum：使用者要求在 `未歸位` 與 `已歸位` 的 Y 軸版面之間增加可上下調整的分隔線，並把個人配置記錄在登入帳號。本 addendum 是 `Compatible extension`：兩個 lane 的 placement、獨立捲動、sticky header、未歸位可拖與已歸位唯讀契約不變；只新增 18%～82% 的比例式 layout preference、pointer／鍵盤 separator 與既有 `profiles.ui_preferences.layout` 帳號持久化路徑。2026-08-27 已完成本地 RD 與自動化／rendered QA-QC；未 deploy 或 release。
 2026-08-26 DEV-090 default-show-all and account-board preference addendum：使用者確認「系統預設全部顯示，不得預設過濾任何任務；過濾喜好記錄在個人帳號上」。本 addendum 刻意取代既有 `completed: false` 預設、僅以 uid 區隔的瀏覽器本機看板篩選，以及清單／心智圖逐層直接套 predicate 的行為。目標狀態是：新帳號與未設定過的看板 active filter count 為 0；所有狀態、負責人、標籤與日期條件皆不限制；使用者主動調整後才以「帳號 × 看板」保存；同一看板的看板、清單、心智圖、甘特與行事曆共用 canonical matched identities，階層模式可額外顯示 context-only ancestors。2026-08-26 已完成 RD 實作與本地自動化 QA-QC：專用 preference table migration、v4 cache／migration、獨立 filter store、version-safe repository、五模式 canonical projection、互斥可見狀態與 failure recovery 均有 source/model、實體 PostgreSQL RLS、正常 UI browser、viewport 與 regression 證據。狀態為 `Implemented / Local Automated QA-QC Passed / Release Gate Required`；未套用遠端 migration、未修改正式資料、未 deploy 或 release。
 2026-08-07 account-scoped filter memory addendum：使用者要求過濾器狀態改為每個登入帳號各自記憶。本 addendum 覆寫本文中「工作台篩選只存在當次元件 state、不得保存」的舊決策，但不引入 profile、儲存按鈕、另存、複製或團隊共用設定。看板與工作台的狀態篩選、到期／逾期、負責人/協作、標籤、關鍵字、顯示設定及工作台選定看板，均以登入帳號 uid 作為 localStorage scope；既有未分帳號 key 只在首次登入時遷移給當前帳號，遷移後刪除共用 key。行事曆訂閱篩選仍由 Supabase `owner_user_id` 與 RLS 隔離，不改其資料模型。

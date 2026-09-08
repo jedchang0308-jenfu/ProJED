@@ -6,6 +6,8 @@ interface TaskMeetingQuickNoteSectionProps {
   taskId: string;
   taskTitle: string;
   isMeetingMode: boolean;
+  composerAvailable: boolean;
+  availabilityMessage: string | null;
   canEdit: boolean;
   entries: MeetingTaskQuickNoteProjection[];
   loading: boolean;
@@ -21,6 +23,8 @@ const TaskMeetingQuickNoteSection: React.FC<TaskMeetingQuickNoteSectionProps> = 
   taskId,
   taskTitle,
   isMeetingMode,
+  composerAvailable,
+  availabilityMessage,
   canEdit,
   entries,
   loading,
@@ -83,7 +87,13 @@ const TaskMeetingQuickNoteSection: React.FC<TaskMeetingQuickNoteSectionProps> = 
         </div>
       ) : null}
 
-      {isMeetingMode ? (
+      {!error && isMeetingMode && availabilityMessage ? (
+        <p className="mt-1 text-xs text-slate-500" data-task-meeting-quick-notes-availability="true">
+          {availabilityMessage}
+        </p>
+      ) : null}
+
+      {isMeetingMode && composerAvailable ? (
         <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-end" data-task-meeting-quick-notes-composer="true">
           <textarea
             value={discussion}

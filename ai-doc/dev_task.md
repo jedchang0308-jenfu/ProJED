@@ -681,6 +681,15 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-109`、`QA-DEV-109`、`RD-TECH-LEAD-REVIEW-DEV-109`、SPEC-007／011／012／020／069／106 定向修訂；deterministic verifier、TypeScript、targeted ESLint、build:test 與 DEV-109 browser B01～B04 artifact 已通過。
   - 計入交付：否（DEV-007 corrective 開發點）
 
+- ◐ DEV-110 [開發點] [執行中] [P1] [RD Implementation In Progress / Static+Browser Candidate PASS / QA-QC NOT RUN / NOT RELEASED] 未歸位任務會議紀錄邊界修正
+  - 摘要：阻止account-unplaced與跨板tracking reference誤入project-scoped會議紀錄讀寫，並將Supabase unresolved task link由silent skip改為mutation前拒絕。
+  - 來源 ID：`CAPA-DRAFT-20260908-unplaced-task-meeting-record-boundary`、`USER-20260908-CAPA-RD-IMPLEMENTATION-READY`。
+  - 父任務：DEV-108；相容DEV-009、DEV-039、DEV-095。
+  - 下一步：RD local candidate已完成WP-110-A→C、WP-110-D static gate與browser B01～B04；交QA-DEV-110執行Supabase TEST／B05～B07／指定回歸，release另走gate。
+  - 阻塞 / 恢復條件：無P0/P1工程阻塞；若需unplaced record schema、跨project link、transactional RPC、production mutation或migration apply，停止並回PM。
+  - 證據：`SPEC-110`、`QA-DEV-110`、CAPA draft；DEV-110 static 18/18、browser B01～B04、DEV-108 static 14/14、TypeScript、lint、build:test、`git diff --check` PASS；Supabase TEST／QA-QC尚未執行。
+  - 計入交付：否（DEV-108 corrective開發點；文件ready不算產品完成）
+
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -4322,3 +4331,99 @@ D 的 preserve gate 未過不得覆蓋草稿。RD 只可在 E 後交 QA/QC，不
 - 2026-09-07：依正式環境空白內容與 `QUALITY_GATE_FAILED` 建立 Brief；固定「變更證據不得被 AI 失敗阻斷」。
 
 使用思考習慣：#問對問題、#系統描繪、#可驗證性
+
+## DEV-110：未歸位任務會議紀錄邊界修正
+
+- 文件成熟度：`RD Implementation In Progress / Local Candidate Implemented / NOT RELEASED`
+- 狀態：RD本機候選已完成；等待QA/QC
+- 節點類型：開發點
+- 父交付點：DEV-108；相容DEV-009、DEV-039、DEV-095
+- 是否計入產品交付完成：否（corrective開發點；文件ready貢獻0）
+- 原始需求邊界：Production截圖顯示未歸位任務的會議紀錄區出現
+  `Supabase WBS item not found for legacy node id`；使用者於2026-09-08要求CAPA升級到RD可實作。
+- 風險等級：Medium（使用者可見錯誤、跨ownership/provider、record task-link完整性）
+- Authoritative spec：`ai-doc/specs/SPEC-110-unplaced-task-meeting-record-boundary.md`
+- QA authority：`ai-doc/qa/QA-DEV-110-unplaced-task-meeting-record-boundary.md`
+- CAPA source：`ai-doc/reports/CAPA-DRAFT-20260908-unplaced-task-meeting-record-boundary.md`（未正式編號）
+
+### 問題與產品決策
+
+同一個`TaskDetailsModal`會接收板內canonical task、tracking reference對應的canonical task與account-owned
+unplaced task。DEV-108 hook目前只收裸`taskId`，並固定搭配active board呼叫板內`listByNode`；因此U1不在
+`wbs_items`時必然not found，跨板reference也可能以target board查source task。Supabase write另會把無法解析
+的requested task link靜默略過，讓record body成功與task traceability分離。
+
+本期採current-phase最小例外：未歸位任務必須先進入目前會議的看板才能使用project-scoped會議紀錄；
+tracking reference讀取使用canonical source board，只有source board meeting可append。這是對SPEC-039功能等價
+的窄幅例外，不建立unplaced record schema，也不把placement identity寫成record task identity。
+
+### Current scope／不變量
+
+- capability以canonical `TaskNode.boardId`判定；不得依`task_workbench_unplaced_*` prefix判定，因任務歸位後
+  可保留該legacy ID。
+- unplaced：read/refresh零provider call；非meeting無空section，meeting只顯示單一歸位提示，無composer/retry。
+- tracking reference：歷史查詢固定`node.workspaceId/node.boardId/node.id`；target board不是record owner。
+- cross-board meeting append由UI隱藏與store denied雙層阻擋；不得改draft content/metadata/taskLinks。
+- Supabase upsert在任何mutation前resolve全部requested links；任一unresolved即typed fail，record/body/舊links
+  維持pre-call狀態。reload link exact set不等不得回傳成功。
+- provider exception映射generic Traditional Chinese；Supabase/table/legacy ID/SQL/RLS不得出現在可見UI。
+- DEV-108的metadata/projection、latest-3、archive、active draft、recovery、a11y與版面契約不變。
+
+### RD執行計畫
+
+- [x] WP-110-A：新增pure capability resolver；補unplaced、歸位後legacy prefix、same/cross-board reference與
+  identity incomplete決策；store append增加task board defense。
+- [x] WP-110-B：hook改用canonical scope並加入request generation；TaskDetailsModal/section落實unsupported、
+  loading、error與composer矩陣，task切換清除前一task暫存輸入/error。
+- [x] WP-110-C：新增record task-link typed contract；Supabase resolve-all preflight前移、移除silent skip、
+  save reload exact-set gate；Firestore/local-test維持相同success invariant。
+- [~] WP-110-D：建立DEV-110 deterministic/browser/Supabase TEST assets；目前 deterministic/static、browser B01～B04、
+  DEV-108 static、TypeScript、lint、build:test與diff check已PASS，Supabase TEST、B05～B07及DEV-039／095 targeted
+  regressions待QA執行。
+
+實作依賴：A → B；A/C可平行；D可先建fixture但PASS依賴A～C。RD不得把舊DEV-108 local PASS重用為
+DEV-110結果，也不得在本DEV內啟動deploy。
+
+### 驗收標準
+
+- [ ] 非meeting開unplaced detail沒有meeting section、query、error、retry或composer。
+- [ ] meeting開unplaced detail只有「請先將任務放入目前會議的看板，再新增會議紀錄。」且direct store
+  append仍denied、draft fingerprint不變。
+- [ ] unplaced經正式placement進板後，即使ID prefix不變也恢復query/append能力。
+- [ ] tracking reference以canonical source identity載入；cross-board只讀source history且不可append target record。
+- [ ] A→unplaced→B快速切換沒有stale records/error/loading。
+- [ ] transient/RLS failure只顯示generic錯誤與有效retry；可見technical error sweep=0。
+- [ ] Supabase partial/all unresolved link皆在mutation前fail且existing body/metadata/status/links逐欄不變；
+  0 unresolved可進入save並須通過reload exact-set。
+- [ ] resolved save的requested/persisted `(nodeId,role)` exact set相等；不得silent partial success。
+- [ ] QA-DEV-110 B01～B07、T01～T06、指定回歸、三viewport與cleanup全部PASS。
+
+### Failure／recovery／stop
+
+- Load失敗保留active draft/input；retry僅對supported canonical scope有效，scope改變後舊response失效。
+- Preflight失敗沿用既有save failure/recovery並保留draft，不更新成功baseline。
+- 若preflight後fault injection證實cross-table partial state，DEV-110停止進release並啟動SPEC-110 transactional
+  RPC Future Phase Capsule；不得降低驗收。
+- 若產品改為讓unplaced直接擁有records、需跨project links、RLS放寬、production data repair或migration apply，
+  停止並回PM取得新決策／授權。
+
+### Spec governance／release boundary
+
+- Conflict：`Intentional narrow exception` to SPEC-039；`Corrective amendment` to SPEC-108；與SPEC-095 canonical
+  task/placement identity一致，無unresolved conflict。
+- ADR：不需要；目前為局部可逆guard/adapter。若啟動transactional RPC，再重新判斷。
+- Deferred：unplaced專屬record ownership不在本期；transaction RPC已有re-entry capsule，無P0/P1 RD blocker。
+- Release impact：會改frontend bundle與Supabase client write行為，但不改schema/migration。完成local QA/QC後仍需
+  獨立deployment gate、exact artifact、production-bound smoke與post-deploy verification。
+- 未授權：正式CAPA編號、production query/mutation、commit、push、deploy、activation或release。
+
+### 變更紀錄
+
+- 2026-09-08：依使用者要求將未編號CAPA升級為RD Implementation Ready；登錄DEV-110、SPEC-110與
+  QA-DEV-110，固定ownership/read/append、unresolved-link preflight、UI狀態、工作包、驗收與停止條件。
+- 2026-09-08：完成DEV-110 local candidate implementation；新增canonical capability／generation guard、UI
+  unsupported boundary、store append defense、record task-link exact-set contract與Supabase resolve-all preflight；
+  DEV-110 static 18/18、browser B01～B04、DEV-108 static 14/14、TypeScript、lint、build:test與diff check PASS，
+  QA/QC與release未執行。
+
+使用思考習慣：#第一性原理、#效用理論、#多層次分析、#可驗證性
