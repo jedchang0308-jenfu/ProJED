@@ -81,6 +81,7 @@ const hook = readFileSync('src/hooks/useTaskMeetingQuickNotes.ts', 'utf8');
 const section = readFileSync('src/components/TaskNotes/TaskMeetingQuickNoteSection.tsx', 'utf8');
 const store = readFileSync('src/store/useRecordStore.ts', 'utf8');
 const backend = readFileSync('src/services/supabase/projedService.ts', 'utf8');
+const archiveReadbackMigration = readFileSync('supabase/migrations/20260908050000_dev_110_record_archive_readback.sql', 'utf8');
 assert('task detail passes canonical node and active meeting board', modal.includes('useTaskMeetingQuickNotes(node, activeMeetingBoardId)'));
 assert('loader uses canonical source scope and generation guard', hook.includes('readCapability.workspaceId') && hook.includes('loadGenerationRef') && hook.includes('includeArchived: true'));
 assert('unavailable capability removes composer and retry path is reserved for load errors', section.includes('isMeetingMode && composerAvailable') && section.includes('{!error && isMeetingMode && availabilityMessage'));
@@ -88,6 +89,9 @@ assert('store blocks unplaced and cross-board append', store.includes('TASK_WORK
 assert('Supabase resolves all task links before record mutation', backend.indexOf('const resolutionResults =') < backend.indexOf('const insert = await knowledgeRecordToInsert'));
 assert('Supabase no longer silently skips unresolved links', backend.includes('RecordTaskLinkResolutionError') && !backend.includes('Skipping unresolved record task link'));
 assert('store verifies returned task-link exact set', store.includes('assertRecordTaskLinkSet(input.taskLinks, saved.taskLinks)'));
+assert('archived records and task links remain readable to authorized history readers', archiveReadbackMigration.includes('record owners and board readers read records')
+  && archiveReadbackMigration.includes('authorized users read record task links')
+  && !archiveReadbackMigration.includes('kr.status <> \'archived\''));
 
 const artifact = {
   devId: 'DEV-110',
@@ -103,6 +107,8 @@ const artifact = {
 const artifactPath = resolve('output/playwright/dev-110-unplaced-task-meeting-record-boundary/static-result.json');
 mkdirSync(resolve('output/playwright/dev-110-unplaced-task-meeting-record-boundary'), { recursive: true });
 writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+mkdirSync(resolve('output/qa/dev-110'), { recursive: true });
+writeFileSync(resolve('output/qa/dev-110/static-result.json'), `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
 
 if (failures.length > 0) {
   console.error('DEV-110 static verification failed:');

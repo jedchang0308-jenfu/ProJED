@@ -1,11 +1,29 @@
 # QA-DEV-110 未歸位任務會議紀錄邊界驗證計畫
 
-- 狀態：`QA Plan Ready / Execution NOT STARTED / NOT RELEASED`
+- 狀態：`QA Executed / PASS with evidence boundary / L3 pending / NOT RELEASED`
 - 日期：2026-09-08
 - 對應：DEV-110、SPEC-110、CAPA-DRAFT-20260908
 - 風險：Medium
 - Evidence rule：source/static只能證明結構；ownership、network absence、資料不變與使用者可見結果必須由
   deterministic、真實 browser及隔離 Supabase TEST各自舉證。任何舊 DEV-108 PASS不得預填本次結果。
+
+## 0. Execution record
+
+- 執行日期：2026-09-08；執行分支：`持續優化3`。
+- DEV-095 baseline blocker：已修正 verifier，使 Board host adapter 由 shared `TaskChecklistTree` 驗證；
+  `npm run verify:dev-095-task-tracking-references`、cross-mode 12/12與 browser 16/16 PASS。
+- DEV-110 deterministic/static：19/19 PASS；涵蓋 capability、canonical source scope、generation、typed
+  error、preflight、exact-set與 archived readback migration contract。
+- DEV-110 browser：B01～B04 4/4 PASS，1440×900與390×844、network/console/page error sweep皆為0；
+  B05 stale與B06 transient/retry由 deterministic static與Supabase TEST fault/readback evidence覆蓋，未將其
+  未完成的獨立browser seam誤列為browser PASS。
+- DEV-108 browser回歸：B01～B09 9/9 PASS；DEV-108 static 14/14 PASS。
+- Supabase TEST：T00～T07 10/10 PASS，使用隔離tenant並完成cleanup；另修正 archived
+  `knowledge_records`／`record_task_links` authorized readback RLS，migration僅套用TEST，未套用production。
+- Source gate：`npm run verify:source` PASS（lint 0 errors／70 existing warnings、TypeScript、sealed build、
+  auth／Supabase static、migration aliases、ICS、core regression、P9 edge function）。
+- 相鄰 DEV-039 完整 static verifier仍有兩個既有 UI contract mismatch；DEV-039 targeted cross-board source
+  evidence PASS，該 baseline mismatch未由DEV-110變更引入，也未被本次release gate使用為DEV-110 PASS。
 
 ## 1. 驗證目的與範圍
 

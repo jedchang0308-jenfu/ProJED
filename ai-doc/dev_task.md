@@ -681,13 +681,15 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-109`、`QA-DEV-109`、`RD-TECH-LEAD-REVIEW-DEV-109`、SPEC-007／011／012／020／069／106 定向修訂；deterministic verifier、TypeScript、targeted ESLint、build:test 與 DEV-109 browser B01～B04 artifact 已通過。
   - 計入交付：否（DEV-007 corrective 開發點）
 
-- ◐ DEV-110 [開發點] [執行中] [P1] [RD Implementation In Progress / Static+Browser Candidate PASS / QA-QC NOT RUN / NOT RELEASED] 未歸位任務會議紀錄邊界修正
+- ◐ DEV-110 [開發點] [驗證中] [P1] [RD Implementation Complete / QA PASS with evidence boundary / L3 Pending / NOT RELEASED] 未歸位任務會議紀錄邊界修正
   - 摘要：阻止account-unplaced與跨板tracking reference誤入project-scoped會議紀錄讀寫，並將Supabase unresolved task link由silent skip改為mutation前拒絕。
   - 來源 ID：`CAPA-DRAFT-20260908-unplaced-task-meeting-record-boundary`、`USER-20260908-CAPA-RD-IMPLEMENTATION-READY`。
   - 父任務：DEV-108；相容DEV-009、DEV-039、DEV-095。
-  - 下一步：RD local candidate已完成WP-110-A→C、WP-110-D static gate與browser B01～B04；交QA-DEV-110執行Supabase TEST／B05～B07／指定回歸，release另走gate。
+  - 下一步：完成L3 preview同版證據與production-bound candidate；不得啟動正式流量。
   - 阻塞 / 恢復條件：無P0/P1工程阻塞；若需unplaced record schema、跨project link、transactional RPC、production mutation或migration apply，停止並回PM。
-  - 證據：`SPEC-110`、`QA-DEV-110`、CAPA draft；DEV-110 static 18/18、browser B01～B04、DEV-108 static 14/14、TypeScript、lint、build:test、`git diff --check` PASS；Supabase TEST／QA-QC尚未執行。
+  - 證據：`SPEC-110`、`QA-DEV-110`、`QC-DEV-110`、CAPA draft；DEV-110 static 19/19、browser B01～B04、
+    DEV-108 static 14/14＋browser B01～B09、DEV-095 source/cross-mode/browser、Supabase TEST T00～T07 10/10、
+    TypeScript、`verify:source`與`git diff --check` PASS；B05/B06保留deterministic／TEST evidence boundary。
   - 計入交付：否（DEV-108 corrective開發點；文件ready不算產品完成）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容

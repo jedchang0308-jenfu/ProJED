@@ -265,18 +265,27 @@ assert.match(placementControllerSource, /useSortable/);
 const placementTreeSource = readFileSync(resolve(process.cwd(), 'src/components/Wbs/TaskPlacementTree.tsx'), 'utf8');
 assert.match(placementTreeSource, /primaryTasks/);
 assert.match(placementTreeSource, /trackingReferences/);
+const checklistTreeSource = readFileSync(resolve(process.cwd(), 'src/components/Wbs/TaskChecklistTree.tsx'), 'utf8');
+assert.match(checklistTreeSource, /useTaskPlacementController/);
+assert.match(checklistTreeSource, /TaskSurfaceFrame/);
 for (const relativePath of [
   'src/components/Wbs/WbsNodeItem.tsx',
   'src/components/Wbs/KanbanCard.tsx',
-  'src/components/Wbs/KanbanChecklist.tsx',
   'src/components/Wbs/KanbanColumn.tsx',
 ]) {
   const source = readFileSync(resolve(process.cwd(), relativePath), 'utf8');
   assert.match(source, /useTaskPlacementController/, `${relativePath} must use the shared placement interaction controller`);
   assert.match(source, /TaskSurfaceFrame/, `${relativePath} must use the shared primary/reference frame`);
 }
-for (const relativePath of ['src/components/Wbs/WbsListView.tsx', 'src/components/Wbs/KanbanChecklist.tsx', 'src/components/Wbs/KanbanColumn.tsx']) {
-  assert.match(readFileSync(resolve(process.cwd(), relativePath), 'utf8'), /TaskPlacementTree/, `${relativePath} must use the shared recursive placement tree`);
+const kanbanChecklistSource = readFileSync(resolve(process.cwd(), 'src/components/Wbs/KanbanChecklist.tsx'), 'utf8');
+assert.match(kanbanChecklistSource, /TaskChecklistTree/, 'KanbanChecklist must delegate rows to the shared checklist tree');
+assert.match(kanbanChecklistSource, /hostAdapter/, 'KanbanChecklist must inject the board host adapter');
+for (const [relativePath, expectedTree] of [
+  ['src/components/Wbs/WbsListView.tsx', /TaskPlacementTree/],
+  ['src/components/Wbs/KanbanChecklist.tsx', /TaskChecklistTree/],
+  ['src/components/Wbs/KanbanColumn.tsx', /TaskPlacementTree/],
+]) {
+  assert.match(readFileSync(resolve(process.cwd(), relativePath), 'utf8'), expectedTree, `${relativePath} must use the shared recursive placement tree`);
 }
 const backupPackageSource = readFileSync(resolve(process.cwd(), 'src/features/backup/package.ts'), 'utf8');
 assert.match(backupPackageSource, /OUT_OF_PACKAGE_REFERENCE[\s\S]*canonical 來源看板備份/);
