@@ -202,14 +202,16 @@ export const useMeetingDraftRecovery = ({
       currentSignatureRef.current = normalized.localSignature;
       localCommittedSignatureRef.current = source === 'indexeddb' ? normalized.localSignature : null;
       changedAtRef.current = source === 'indexeddb' ? null : Date.now();
-      useRecordStore.getState().restoreMeetingDraftSnapshot(normalized);
-      if (source === 'session') {
-        useRecordStore.getState().setMeetingDraftRecovery({
-          localStatus: 'degraded',
-          localSavedAt: null,
-          message: '內容暫存在此分頁，正在重新保存到裝置。',
-        });
-      }
+      // Do not enter meeting mode during app startup. A local recovery
+      // snapshot is an explicit user choice, not an implicit navigation.
+      // Keep the snapshot in memory so the recovery notice can offer a
+      // deliberate "恢復" action without discarding the user's content.
+      useRecordStore.getState().setMeetingDraftRecovery({
+        localStatus: source === 'session' ? 'degraded' : 'saved',
+        localSavedAt: source === 'indexeddb' ? normalized.savedAt : null,
+        message: source === 'session' ? '內容暫存在此分頁，請確認後恢復。' : null,
+        pendingSnapshot: normalized,
+      });
       setVersion(value => value + 1);
     });
     return () => {

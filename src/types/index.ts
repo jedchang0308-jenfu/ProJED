@@ -442,6 +442,11 @@ export interface MeetingDraftRecoveryState {
   message: string | null;
   restoredAt: number | null;
   conflictSnapshot: MeetingDraftRecoverySnapshot | null;
+  /**
+   * A recoverable local meeting draft discovered at app startup. It must not
+   * open meeting mode by itself; the user explicitly chooses when to restore.
+   */
+  pendingSnapshot: MeetingDraftRecoverySnapshot | null;
 }
 
 export interface MeetingDraftCheckpointInput {

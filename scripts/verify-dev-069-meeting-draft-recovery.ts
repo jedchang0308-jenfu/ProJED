@@ -80,6 +80,7 @@ assert('spec documents mobile meeting boundary', readFileSync('ai-doc/specs/SPEC
 assert('local recovery uses IndexedDB and emergency sessionStorage', readFileSync('src/services/meetingDraftRecoveryService.ts', 'utf8').includes('indexedDB') && readFileSync('src/services/meetingDraftRecoveryService.ts', 'utf8').includes('sessionStorage'));
 assert('checkpoint adapter does not call formal upsert', !readFileSync('src/services/supabase/projedService.ts', 'utf8').includes('checkpointDraft: async') || readFileSync('src/services/supabase/projedService.ts', 'utf8').includes(".from('knowledge_records')"));
 assert('desktop exposes one polite recovery status', readFileSync('src/components/Records/RecordSidebar.tsx', 'utf8').includes('data-meeting-draft-recovery-status') && readFileSync('src/components/Records/RecordSidebar.tsx', 'utf8').includes('aria-live="polite"'));
+assert('startup recovery is explicit', readFileSync('src/hooks/useMeetingDraftRecovery.ts', 'utf8').includes('pendingSnapshot') && readFileSync('src/components/Records/MeetingDraftRecoveryNotice.tsx', 'utf8').includes('data-meeting-draft-recovery-restore'));
 
 if (failures.length > 0) {
   console.error('DEV-069 meeting draft recovery verification failed:');

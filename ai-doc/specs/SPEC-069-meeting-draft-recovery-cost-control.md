@@ -7,6 +7,13 @@
 - 承接：SPEC-003、SPEC-010、DEV-002、DEV-005、DEV-010、DEV-020
 - 決策日期：2026-08-17
 
+## Startup Restore Behavior Amendment（2026-09-08）
+
+- `useMeetingDraftRecovery` 在進站、登入或重新整理後不得自動呼叫 `restoreMeetingDraftSnapshot`，不得因本機 snapshot 直接開啟右側會議紀錄面板或切換 `isMeetingMode`。
+- 讀到有效的 IndexedDB／sessionStorage snapshot 時，只放入暫存的 `pendingSnapshot`，由輕量提示提供「恢復」；使用者明確操作後才恢復草稿、會議 buffer 與游標。
+- 使用者關閉提示時保留本機 snapshot，不刪除內容；下次進站仍可再次明確恢復。此修正不變更 snapshot schema、scope、TTL、保存成本或手機版 meeting boundary。
+- 此行為取代本文件原先「F5 後直接恢復 panel／meeting mode」的啟動描述；「恢復資料能力」仍保留，但啟動導航必須由使用者決定。
+
 ## DEV-109 Local Snapshot No-change Boundary（2026-09-08）
 
 - Spec Impact：`No schema change / regression authority / Implemented Candidate / QA-QC Pending / NOT RELEASED`。

@@ -42,6 +42,7 @@ import { TaskInteractionScope } from './interactions/task/TaskInteractionScope';
 import { KanbanViewSizeProvider } from './features/kanbanViewSize/KanbanViewSizeProvider';
 import { createBoardAssigneeFilterOptions } from './features/taskFilters';
 import { PwaReloadSafetyBridge, PwaReloadSafetyOwners } from './components/PwaReloadSafetyBridge';
+import MeetingDraftRecoveryNotice from './components/Records/MeetingDraftRecoveryNotice';
 
 const BoardView = lazy(() => import('./components/BoardView'));
 const GanttView = lazy(() => import('./components/GanttView'));
@@ -371,6 +372,7 @@ function App() {
       </AuthGate>
       <AppUpdatePrompt />
       <AppInstallAssistant />
+      <MeetingDraftRecoveryNotice />
       <ToastContainer />
     </PwaReloadSafetyBridge>
   );

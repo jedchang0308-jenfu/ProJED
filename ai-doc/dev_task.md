@@ -353,6 +353,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：歷史基線與 QC 證據保留。2026-08-25 Rework 15：rendered `DEV068-DESK-DEPTH-LINE` 證實 L2／L3／L4+ marker 與最終同層 title anchor 差≤1px。Rework 16：failure-first 精準重現 standard marker 停在 primary bottom；修正後 desktop centerY=`274.09375px`、mobile centerY=`254.09375px`，均等於完整 scope bottom；static 76/76、DEV-055 static 29/29、desktop/mobile targeted browser 各 2/2、TypeScript、`build:test` PASS。完整矩陣的已知 L1 source placeholder 高度差與 physical iPhone／Android gate 仍維持開放；未部署、未 release。
   - 計入交付：是
 - ◐ DEV-069 [交付點] [RD Implemented / Local QA-QC PASS / Provider Smoke Pending / 未 Release] [P1] 會議草稿 F5 復原與低成本雲端備份
+  - 2026-09-08 corrective amendment：修正啟動時自動進入會議紀錄的行為；有效 local snapshot 僅顯示恢復提示，使用者明確按「恢復」後才進入 meeting mode，關閉提示不刪除草稿。沿用既有 snapshot schema、scope、TTL 與保存契約。
   - 摘要：桌機／筆電會議紀錄採本機即時復原與低頻雲端 checkpoint，避免 F5 丟失並限制寫入、重試與 RAG 成本；手機版不開放會議紀錄功能。
   - 來源 ID：`USER-20260817-MEETING-DRAFT-RECOVERY-COST-CONTROL`
   - 父任務：DEV-002、DEV-005、DEV-010、DEV-020

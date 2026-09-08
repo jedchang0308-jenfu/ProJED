@@ -674,6 +674,15 @@ Spec Impact：`Intentional replacement / mindmap connector control placement`。
 | `src/components/MindMap/MindMapNode.tsx`、`src/components/MindMap/mindMapGeometry.ts` | Implemented / Local Browser PASS | DEV-027B | 將 toggle 移出任務欄，讓 bracket trunk 以父子水平間距中點對齊控制項，並以關係線感應區控制預設隱藏／hover 顯示。 |
 | `scripts/verify-dev-073-task-title-edit-defaults.mjs`、`scripts/verify-dev-073-task-title-edit-defaults-browser.pw.js` | Executed / PASS | DEV-027B / DEV-073 | 驗證 toggle 不在 node bar 內、預設 opacity 隱藏、關係線 hover 顯示、關係線中點幾何、收合／展開可逆、既有 quick-title 與明細入口不回歸。 |
 
+## Documentation Map Update - 2026-09-08（會議草稿啟動復原改為明確操作）
+
+Spec Impact：`Intentional refinement / local recovery contract preserved`。有效 meeting snapshot 仍由 IndexedDB／sessionStorage 保護，但登入、進站與 F5 不再直接開啟 meeting panel；產品先維持看板，透過輕量提示等待使用者明確恢復。schema、scope、TTL、provider request policy 與手機 negative boundary 不變。
+
+| 文件 / 程式 | 狀態 | 關聯 DEV | 說明 |
+|---|---|---|---|
+| `src/hooks/useMeetingDraftRecovery.ts`、`src/components/Records/MeetingDraftRecoveryNotice.tsx` | Implemented / Local targeted QA PASS / NOT RELEASED | DEV-069 corrective amendment | startup 僅建立 `pendingSnapshot`；「恢復」才呼叫 `restoreMeetingDraftSnapshot`，dismiss 保留本機資料。 |
+| `ai-doc/specs/SPEC-069-meeting-draft-recovery-cost-control.md`、`ai-doc/qa/QA-DEV-069-meeting-draft-recovery-cost-control.md` | Amendment recorded / Local browser regression PASS | DEV-069 | 固化啟動不自動導航與明確恢復驗收。 |
+
 ## Documentation Map Update - 2026-08-17（會議草稿 F5 復原與低成本雲端備份）
 
 Spec Impact：`DEV-069` 已完成 RD 實作與 local-test／browser QA-QC，狀態為 Provider Smoke Pending / 未 Release。承接 `SPEC-003` 「輸入時自動儲存 draft」的未完成契約，並以 sessionStorage + IndexedDB 本機復原、低頻 provider-neutral checkpoint 與發布時 RAG 分層控制伺服器成本。`SPEC-069` 已固化 20s idle、180s 最小 attempt 間隔、20 attempts/hour/browser-account、512KiB payload、single-flight、provider request 上限、restore/conflict 與失敗降級。手機版不開放會議紀錄，390x844 只做功能不存在的負向驗證；`SPEC-005` 早期 Mobile 右側欄設想不得作為 DEV-069 驗收依據。

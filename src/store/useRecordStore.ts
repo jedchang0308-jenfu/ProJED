@@ -349,6 +349,7 @@ const initialMeetingDraftRecoveryState: MeetingDraftRecoveryState = {
   message: null,
   restoredAt: null,
   conflictSnapshot: null,
+  pendingSnapshot: null,
 };
 
 type MeetingSynthesisTraceMetadata = ReturnType<typeof createMeetingSynthesisTraceMetadata>;
@@ -1512,6 +1513,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       localSavedAt: snapshot.savedAt,
       cloudSavedAt: null,
       restoredAt: Date.now(),
+      pendingSnapshot: null,
     },
     meetingProjectImportStatus: 'idle',
     meetingProjectImportMessage: null,

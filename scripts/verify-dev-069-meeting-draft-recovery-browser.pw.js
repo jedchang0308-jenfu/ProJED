@@ -71,6 +71,9 @@ async (page) => {
   await visibleErrorSweep('desktop before reload');
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-meeting-draft-recovery-prompt]').waitFor({ state: 'visible', timeout: 15000 });
+  assert(!(await page.locator('[data-record-composer-shell]').isVisible()), 'startup must not open meeting mode automatically');
+  await page.locator('[data-meeting-draft-recovery-restore]').click();
   await page.locator('[data-record-composer-shell]').waitFor({ state: 'visible', timeout: 15000 });
   await page.getByText('DEV-069 F5 後仍保留的會議速記').waitFor({ state: 'visible', timeout: 5000 });
   await page.screenshot({ path: `${screenshotBase}/browser-1440-after-reload.png`, scale: 'css' });

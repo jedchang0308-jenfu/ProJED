@@ -12,6 +12,7 @@
 - QA-069-006中「直接離開／放棄後開新紀錄即清除」不得重用為DEV-106 PASS；新候選必須改驗一般離開保留 recovery，以及獨立明確discard的分支／失敗順序。
 - 其餘timing、budget、F5、RAG/task-link delta與390 mobile-negative案例，只在source/artifact、provider、fixture與驗證層級相同時可重用。
 - QA-069的Supabase／Firestore／local-test checkpoint案例只描述DEV-069舊baseline；DEV-106 Phase 0驗收改為三個provider的meeting recovery remote read/write全部為0，不能把舊request budget或provider smoke當新候選PASS。
+- 2026-09-08 startup behavior amendment：F5 後先驗證看板維持開啟、會議面板與 editor 不自動出現，且可透過 recovery notice 的明確「恢復」操作回到同一份內容；dismiss 不得刪除 local snapshot。
 
 ## 1. 驗證策略
 
