@@ -5,6 +5,15 @@
 建立日期：2026-06-07  
 承接：DEV-011 / DEV-008
 
+## DEV-109 Live Source Clarification（2026-09-08）
+
+- Spec Impact：`Compatible clarification / Implemented Candidate / QA-QC Pending / NOT RELEASED`；詳細契約見 `SPEC-109`。
+- 「不能把 task status／description／detail notes 既有快照寫入會議紀錄」維持不變；允許的只有 capture boundary 後、
+  persistence-confirmed 的 before→latest 差異，不是目前靜態值或完整內容快照。
+- 同 segment、同 task、同 field 的中間值與 net no-op 必須在投影至 `draft.content` 前移除，Edge 與 deterministic fallback
+  也不得重新產生。`task_moved`／純排序仍排除。
+- AI 只整理目前 raw content 與 legacy activities，不另送 DEV-109 aggregate；不查過去專案變更、不暗中匯入。quality gate 失敗時 working content byte-for-byte 保留。
+
 ## 背景
 
 DEV-011 已將會議紀錄從逐筆 activity 流水帳改為 AI 發布前統整草稿，但目前輸出仍偏向固定欄位填空：`結論`、`決議`、`待辦`、`阻塞`、`狀態變更摘要`。這種格式可驗證，但不像人類整理的會議紀要，使用者讀起來仍像機械式摘要。

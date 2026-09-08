@@ -527,6 +527,96 @@ export interface TaskDetailNoteRichContent {
   editorState: SerializedEditorState;
 }
 
+/** Volatile meeting capture contract. These values must never be persisted in a draft snapshot. */
+export type MeetingLiveFieldKey =
+  | 'created'
+  | 'title'
+  | 'description'
+  | `detailNote:${string}`
+  | 'status'
+  | 'dates'
+  | 'assignees'
+  | 'collaborators'
+  | 'tags'
+  | 'archived';
+
+export type MeetingLiveDates = {
+  startDate: string | null;
+  endDate: string | null;
+  isDurationLocked: boolean;
+};
+
+export type MeetingLiveCreatedValue = {
+  title: string;
+  status: TaskStatus;
+  dates: MeetingLiveDates;
+  assigneeIds: string[];
+  collaboratorIds: string[];
+  tagIds: string[];
+  isArchived: boolean;
+};
+
+export type MeetingLiveTextFragment = {
+  text: string;
+  originalLength: number;
+  truncated: boolean;
+  fingerprint: `sha256:${string}`;
+};
+
+export type MeetingLiveContentValue = {
+  kind: 'content_delta';
+  baselineHash: `sha256:${string}`;
+  latestHash: `sha256:${string}`;
+  addedFragments: MeetingLiveTextFragment[];
+  removedFragments: MeetingLiveTextFragment[];
+};
+
+export type MeetingLiveAggregateValue =
+  | { kind: 'scalar'; baseline: string | boolean | null; latest: string | boolean | null }
+  | { kind: 'id_list'; baseline: string[]; latest: string[] }
+  | { kind: 'dates'; baseline: MeetingLiveDates; latest: MeetingLiveDates }
+  | { kind: 'created'; latest: MeetingLiveCreatedValue }
+  | MeetingLiveContentValue;
+
+export type MeetingLiveProjectionAnchor = {
+  lineIndex: number;
+  exactText: string;
+  fingerprint: `sha256:${string}`;
+  generation: number;
+};
+
+export type MeetingLiveFieldAggregate = {
+  key: string;
+  segmentId: string;
+  nodeId: string;
+  fieldKey: MeetingLiveFieldKey;
+  taskTitle: string;
+  value: MeetingLiveAggregateValue;
+  firstConfirmedAt: number;
+  lastConfirmedAt: number;
+  lastCommitSequence: number;
+  appliedMutationIds: string[];
+  projection: MeetingLiveProjectionAnchor | null;
+};
+
+export type MeetingLiveCaptureSegment = {
+  id: string;
+  draftId: string;
+  boardId: string;
+  startedAt: number;
+  closedAt: number | null;
+  nextDispatchSequence: number;
+};
+
+export type MeetingLiveCaptureRuntime = {
+  segment: MeetingLiveCaptureSegment;
+  aggregates: Map<string, MeetingLiveFieldAggregate>;
+  plaintextBaselines: Map<string, string>;
+  appliedMutationIds: Set<string>;
+  pendingMutationIds: Set<string>;
+  nextCommitSequence: number;
+};
+
 export interface TaskTag {
   id: string;
   workspaceId: string;

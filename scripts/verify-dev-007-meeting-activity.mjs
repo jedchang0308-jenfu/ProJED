@@ -20,9 +20,15 @@ const checks = [
   },
   {
     path: 'src/store/useWbsStore.ts',
-    label: 'wbs update meeting activity bridge',
+    label: 'wbs persistence-confirmed meeting capture bridge',
     snippets: [
       "import useRecordStore from './useRecordStore'",
+      'const commitMeetingTaskMutation = (',
+      'useRecordStore.getState().commitMeetingTaskMutation({',
+      'await commitMeetingTaskMutation(oldNode, newNode',
+      'await commitMeetingTaskMutation(null, node',
+    ],
+    forbiddenSnippets: [
       'recordMeetingTaskActivity(newNode, event.eventType, event.payload)',
       "recordMeetingTaskActivity(normalizedNode, 'task_created'",
       "recordMeetingTaskActivity(afterNode, 'task_status_changed'",

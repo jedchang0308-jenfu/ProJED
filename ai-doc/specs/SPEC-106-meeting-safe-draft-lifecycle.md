@@ -9,6 +9,15 @@
 - 決策日期：2026-09-04
 - Spec Impact：`Intentional replacement / Phase 0 QA-QC passed`。本文件是 DEV-106 的目標契約；Phase 0 已在 working tree 落地並完成 static、deterministic runtime、rendered browser、回歸與 side-effect failure-injection gate。Phase 1／Cloud Recovery 維持未實作，正式 release 仍需另走 release gate。
 
+## DEV-109 Active Capture Recovery No-change Boundary（2026-09-08）
+
+- Spec Impact：`No schema change / regression authority / Implemented Candidate / QA-QC Pending / NOT RELEASED`。DEV-106 的 transaction truth、
+  force-flush、terminal clear、side-effect isolation 與 0 remote recovery request 全部維持。
+- DEV-109 不增加 snapshot 欄位或 remote payload。已投影的 live line 由既有 `draft.content` 與 transaction truth 保護；
+  segment、plaintext baseline、aggregate、ticket、mutation id 與 anchor 只存在目前 tab runtime。
+- F5／crash restore 保留正文並建立新 segment；使用者主動離開後再開同樣建立新 segment。不得續接、推測或 backfill
+  reload 前的 volatile state，也不得讓 DEV-109 改變現行 signature／IDB 契約。
+
 ## 1. 真正問題與最短因果鏈
 
 使用者在會議中應專注於討論，不應靠記得按「存草稿」或「發布」維持資料存活。

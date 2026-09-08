@@ -5,6 +5,14 @@
 建立日期：2026-06-07  
 承接：DEV-005 / DEV-007 / DEV-008 / DEV-009 / DEV-010
 
+## DEV-109 Live Source Clarification（2026-09-08）
+
+- Spec Impact：`Compatible clarification / Implemented Candidate / QA-QC Pending / NOT RELEASED`；詳細契約見 `SPEC-109`。
+- DEV-109 的 AI source 只來自目前 `draft.content` 已投影且已確認保存成功的 live evidence；aggregate 只存在目前分頁 runtime，
+  不另寫 `meetingActivities` 或新增 Edge event。不得為補資料查詢 provider history，也不得自動執行 `匯入專案變化`。
+- DEV-109 的可見 working content 在 AI 前已存在；AI 失敗必須保留原稿，不得讓 task evidence 因 quality gate 失敗而消失。
+- 歷史專案變化只沿用 DEV-020／094 的 explicit import。此修訂不改 AI contract v2、provider/model、發布或 task mutation 權限。
+
 ## 背景
 
 目前會議草稿仍偏向「逐筆 append 的流水帳」。這讓會議後查找任務結論時，使用者需要從時間序列中自行整理結論、決議、待辦與阻塞。真正需求不是更快記逐字稿，而是把會議資料轉成可決策、可追蹤的任務紀錄。

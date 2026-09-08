@@ -32,6 +32,15 @@ import { useMemberStore } from './useMemberStore';
 import { useTagStore } from './useTagStore';
 import { summarizeTaskActivity } from '../utils/meetingActivitySummary';
 import {
+  createMeetingLiveAggregateValue,
+  formatMeetingLiveAggregateLine,
+  getMeetingLiveContentBaseline,
+  getMeetingLiveFieldChanges,
+  isMeetingLiveAggregateNoop,
+  isMeetingLiveContentField,
+  meetingLiveFingerprint,
+} from '../utils/meetingLiveTaskChanges';
+import {
   createMeetingActivityQuery,
   createMeetingProjectChangeImportBatch,
   listMeetingProjectChangeDelta,
@@ -53,6 +62,8 @@ import type {
   MeetingDraftRecoveryState,
   MeetingTaskActivity,
   MeetingTaskActivityInput,
+  MeetingLiveCaptureRuntime,
+  MeetingLiveFieldAggregate,
   RecordTaskLinkRole,
   TaskNode,
   ViewMode,
@@ -81,6 +92,14 @@ type RecordSaveFeedback = {
   savedAt: number;
 } | null;
 
+type MeetingLiveMutationInput = {
+  mutationId: string;
+  segmentId?: string;
+  beforeNode: TaskNode | null;
+  afterNode: TaskNode;
+  changedKeys?: Array<keyof TaskNode>;
+};
+
 type AppendMeetingTaskQuickNoteResult =
   | { status: 'appended'; entryId: string }
   | { status: 'noop'; entryId: string }
@@ -105,6 +124,7 @@ interface RecordStoreState {
   draftBaselineSignature: string | null;
   meetingActivities: MeetingTaskActivity[];
   appendedMeetingActivityIds: string[];
+  meetingLiveCaptureRuntime: MeetingLiveCaptureRuntime | null;
   meetingSynthesisStatus: MeetingSynthesisStatus;
   meetingSynthesisError: string | null;
   meetingSynthesisWarnings: string[];
@@ -150,6 +170,7 @@ interface RecordStoreActions {
     submissionId: string;
     occurredAt: number;
   }) => AppendMeetingTaskQuickNoteResult;
+  commitMeetingTaskMutation: (input: MeetingLiveMutationInput) => Promise<'committed' | 'ignored' | 'failed'>;
   recordMeetingTaskActivity: (activity: MeetingTaskActivityInput) => void;
   synthesizeMeetingDraft: (nodes?: Record<string, TaskNode>) => Promise<boolean>;
   enterTaskSelectionMode: (options?: TaskSelectionModeOptions) => void;
@@ -274,6 +295,50 @@ const resetMeetingSynthesisState = {
   meetingSynthesisError: null,
   meetingSynthesisWarnings: [],
   meetingSynthesisProvider: null,
+};
+
+const createMeetingLiveRuntime = (draftId: string, boardId: string): MeetingLiveCaptureRuntime => ({
+  segment: {
+    id: createId(),
+    draftId,
+    boardId,
+    startedAt: Date.now(),
+    closedAt: null,
+    nextDispatchSequence: 1,
+  },
+  aggregates: new Map(),
+  plaintextBaselines: new Map(),
+  appliedMutationIds: new Set(),
+  pendingMutationIds: new Set(),
+  nextCommitSequence: 1,
+});
+
+const meetingLiveCommitQueues = new Map<string, Promise<'committed' | 'ignored' | 'failed'>>();
+
+const getLineCandidates = (content: string, exactText: string) => content.split('\n')
+  .map((line, index) => line === exactText ? index : -1)
+  .filter(index => index >= 0);
+
+const rebaseMeetingLiveProjectionAnchors = (
+  runtime: MeetingLiveCaptureRuntime | null,
+  content: string,
+): MeetingLiveCaptureRuntime | null => {
+  if (!runtime) return null;
+  const nextAggregates = new Map<string, MeetingLiveFieldAggregate>();
+  runtime.aggregates.forEach((aggregate, key) => {
+    if (!aggregate.projection) {
+      nextAggregates.set(key, aggregate);
+      return;
+    }
+    const candidates = getLineCandidates(content, aggregate.projection.exactText);
+    nextAggregates.set(key, {
+      ...aggregate,
+      projection: candidates.length === 1
+        ? { ...aggregate.projection, lineIndex: candidates[0] }
+        : null,
+    });
+  });
+  return { ...runtime, aggregates: nextAggregates };
 };
 
 const initialMeetingDraftRecoveryState: MeetingDraftRecoveryState = {
@@ -451,6 +516,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   draftBaselineSignature: null,
   meetingActivities: [],
   appendedMeetingActivityIds: [],
+  meetingLiveCaptureRuntime: null,
   meetingSynthesisStatus: 'idle',
   meetingSynthesisError: null,
   meetingSynthesisWarnings: [],
@@ -491,6 +557,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     draftBaselineSignature: null,
     meetingActivities: [],
     appendedMeetingActivityIds: [],
+    meetingLiveCaptureRuntime: null,
     ...resetMeetingSynthesisState,
     lastSaveFeedback: null,
     meetingDraftRecoveryClearToken: state.meetingDraftRecoveryClearToken,
@@ -518,6 +585,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
+      meetingLiveCaptureRuntime: null,
       ...resetMeetingSynthesisState,
       lastSaveFeedback: null,
       error: null,
@@ -562,6 +630,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       draftBaselineSignature: getRecordDraftSignature(draft),
       meetingActivities: [],
       appendedMeetingActivityIds: [],
+      meetingLiveCaptureRuntime: null,
       ...resetMeetingSynthesisState,
       lastSaveFeedback: null,
       error: null,
@@ -609,6 +678,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
           : getRecordDraftSignature(draft),
         meetingActivities: state.draft === draft ? state.meetingActivities : [],
         appendedMeetingActivityIds: state.draft === draft ? state.appendedMeetingActivityIds : [],
+        meetingLiveCaptureRuntime: createMeetingLiveRuntime(draft.id ?? createId(), activeBoardId),
         ...(isExistingMeetingDraft ? {} : resetMeetingSynthesisState),
         lastSaveFeedback: null,
         error: null,
@@ -625,6 +695,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
   exitMeetingMode: () => set({
     isMeetingMode: false,
     meetingTaskCaptureEnabled: false,
+    meetingLiveCaptureRuntime: null,
     isTaskSelectionMode: false,
     returnViewAfterSelection: null,
   }),
@@ -891,6 +962,189 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     return { status: 'appended', entryId: appended.entry.id };
   },
 
+  commitMeetingTaskMutation: async (input) => {
+    const initial = get();
+    const runtime = initial.meetingLiveCaptureRuntime;
+    if (!initial.isMeetingMode || initial.draft?.type !== 'meeting' || !runtime) return 'ignored';
+    if (input.segmentId && input.segmentId !== runtime.segment.id) return 'ignored';
+    // A meeting segment is board-scoped.  A late persistence callback from a
+    // different board (or the unplaced workbench) must never leak into this
+    // meeting's live evidence.
+    if (runtime.segment.boardId && input.afterNode.boardId !== runtime.segment.boardId) return 'ignored';
+    const runCommit = async (): Promise<'committed' | 'ignored' | 'failed'> => {
+      const current = get();
+      if (
+        !current.isMeetingMode
+        || current.draft?.type !== 'meeting'
+        || current.draft.id !== initial.draft?.id
+        || current.meetingLiveCaptureRuntime !== runtime
+      ) return 'ignored';
+      if (runtime.appliedMutationIds.has(input.mutationId) || runtime.pendingMutationIds.has(input.mutationId)) return 'ignored';
+
+      runtime.pendingMutationIds.add(input.mutationId);
+      try {
+      const changes = getMeetingLiveFieldChanges(input.beforeNode, input.afterNode, input.changedKeys ?? []);
+      if (changes.length === 0) {
+        runtime.pendingMutationIds.delete(input.mutationId);
+        runtime.appliedMutationIds.add(input.mutationId);
+        return 'ignored';
+      }
+
+      const prepared = await Promise.all(changes.map(async change => {
+        const aggregateKey = `${input.afterNode.id}:${change.fieldKey}`;
+        const existing = runtime.aggregates.get(aggregateKey);
+        const isContent = isMeetingLiveContentField(change.fieldKey);
+        const baselineText = isContent
+          ? runtime.plaintextBaselines.get(aggregateKey) ?? getMeetingLiveContentBaseline(change)
+          : undefined;
+        if (isContent && !runtime.plaintextBaselines.has(aggregateKey)) {
+          runtime.plaintextBaselines.set(aggregateKey, baselineText ?? '');
+        }
+
+        let value = await createMeetingLiveAggregateValue(
+          change,
+          baselineText,
+        );
+        if (existing && existing.value.kind !== 'created' && value.kind !== 'created') {
+          if (value.kind === 'content_delta' && existing.value.kind === 'content_delta') {
+            value = await createMeetingLiveAggregateValue({
+              ...change,
+              before: existing.value.baselineHash,
+              beforeText: baselineText,
+            }, baselineText);
+          } else if (value.kind !== 'content_delta' && existing.value.kind !== 'content_delta') {
+            value = await createMeetingLiveAggregateValue({
+              ...change,
+              before: existing.value.baseline,
+            });
+          }
+        }
+        return { aggregateKey, change, value, existing };
+      }));
+
+      const latest = get();
+      if (latest.meetingLiveCaptureRuntime !== runtime || latest.draft?.id !== initial.draft?.id || !latest.isMeetingMode) {
+        runtime.pendingMutationIds.delete(input.mutationId);
+        return 'ignored';
+      }
+
+      const nextAggregates = new Map(runtime.aggregates);
+      const affectedKeys = new Set<string>();
+      prepared.forEach(({ aggregateKey, change, value, existing }) => {
+        affectedKeys.add(aggregateKey);
+        const nextAggregate: MeetingLiveFieldAggregate = {
+          key: aggregateKey,
+          segmentId: runtime.segment.id,
+          nodeId: input.afterNode.id,
+          fieldKey: change.fieldKey,
+          taskTitle: input.afterNode.title || input.afterNode.id,
+          value,
+          firstConfirmedAt: existing?.firstConfirmedAt ?? Date.now(),
+          lastConfirmedAt: Date.now(),
+          lastCommitSequence: runtime.nextCommitSequence,
+          appliedMutationIds: Array.from(new Set([...(existing?.appliedMutationIds ?? []), input.mutationId])),
+          projection: existing?.projection ?? null,
+        };
+        if (isMeetingLiveAggregateNoop(nextAggregate)) {
+          nextAggregates.delete(aggregateKey);
+          runtime.plaintextBaselines.delete(aggregateKey);
+        } else {
+          nextAggregates.set(aggregateKey, nextAggregate);
+        }
+      });
+
+      if (changes.some(change => change.fieldKey === 'title')) {
+        nextAggregates.forEach((aggregate, key) => {
+          if (aggregate.nodeId === input.afterNode.id) {
+            affectedKeys.add(key);
+            nextAggregates.set(key, { ...aggregate, taskTitle: input.afterNode.title || input.afterNode.id });
+          }
+        });
+      }
+
+      const previousAggregates = runtime.aggregates;
+      const lines = (latest.draft?.content ?? '').split('\n');
+      const locateAnchor = (anchor: MeetingLiveFieldAggregate['projection']) => {
+        if (!anchor) return [];
+        if (lines[anchor.lineIndex] === anchor.exactText) return [anchor.lineIndex];
+        return getLineCandidates(lines.join('\n'), anchor.exactText);
+      };
+      const removeLineFor = (aggregate: MeetingLiveFieldAggregate) => {
+        const candidates = locateAnchor(aggregate.projection);
+        if (candidates.length === 1) lines.splice(candidates[0], 1);
+      };
+      const appendLineFor = async (aggregate: MeetingLiveFieldAggregate) => {
+        const line = formatMeetingLiveAggregateLine(aggregate);
+        if (lines.length === 1 && !lines[0]) lines[0] = line;
+        else lines.push(line);
+        return {
+          ...aggregate,
+          projection: {
+            lineIndex: lines.length - 1,
+            exactText: line,
+            fingerprint: await meetingLiveFingerprint(line),
+            generation: (aggregate.projection?.generation ?? 0) + 1,
+          },
+        };
+      };
+      const replaceLineFor = async (aggregate: MeetingLiveFieldAggregate, previous: MeetingLiveFieldAggregate | undefined) => {
+        const line = formatMeetingLiveAggregateLine(aggregate);
+        const candidates = locateAnchor(previous?.projection ?? aggregate.projection);
+        if (candidates.length === 1) {
+          lines[candidates[0]] = line;
+          return {
+            ...aggregate,
+            projection: {
+              lineIndex: candidates[0],
+              exactText: line,
+              fingerprint: await meetingLiveFingerprint(line),
+              generation: previous?.projection?.generation ?? 0,
+            },
+          };
+        }
+        return appendLineFor(aggregate);
+      };
+
+      for (const [key, previous] of previousAggregates) {
+        if (!affectedKeys.has(key) || nextAggregates.has(key)) continue;
+        removeLineFor(previous);
+      }
+      for (const key of affectedKeys) {
+        const next = nextAggregates.get(key);
+        if (!next) continue;
+        const previous = previousAggregates.get(key);
+        nextAggregates.set(key, await replaceLineFor(next, previous));
+      }
+
+      runtime.nextCommitSequence += 1;
+      runtime.pendingMutationIds.delete(input.mutationId);
+      runtime.appliedMutationIds.add(input.mutationId);
+      const nextDraft = syncDraftContentLinks(latest.draft!, lines.join('\n'));
+      set({
+        draft: nextDraft,
+        meetingLiveCaptureRuntime: { ...runtime, aggregates: nextAggregates },
+        ...resetMeetingSynthesisState,
+        lastSaveFeedback: null,
+      });
+      return 'committed';
+      } catch (error) {
+        runtime.pendingMutationIds.delete(input.mutationId);
+        set({ error: error instanceof Error ? error.message : '會中變更暫時無法更新，請重試。' });
+        return 'failed';
+      }
+    };
+
+    const segmentId = runtime.segment.id;
+    const previousQueue = meetingLiveCommitQueues.get(segmentId) ?? Promise.resolve<'ignored'>('ignored');
+    const queued = previousQueue.then(runCommit, runCommit);
+    meetingLiveCommitQueues.set(segmentId, queued);
+    try {
+      return await queued;
+    } finally {
+      if (meetingLiveCommitQueues.get(segmentId) === queued) meetingLiveCommitQueues.delete(segmentId);
+    }
+  },
+
   recordMeetingTaskActivity: (activity) => set(state => {
     if (!state.isMeetingMode || state.draft?.type !== 'meeting') return {};
     const nextActivity = createMeetingActivity(activity);
@@ -967,10 +1221,12 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       const aiIntegratedDraft = activeBoardId && nextDraft.type === 'meeting'
         ? { ...nextDraft, metadata: markMeetingProjectChangeImportAiIntegrated(nextDraft.metadata, activeBoardId) }
         : nextDraft;
+      const nextLiveRuntime = rebaseMeetingLiveProjectionAnchors(get().meetingLiveCaptureRuntime, mergedContent);
 
       set({
         saving: false,
         draft: aiIntegratedDraft,
+        meetingLiveCaptureRuntime: nextLiveRuntime,
         contentCursorOffset: mergedContent.length,
         meetingSynthesisStatus: 'ready',
         meetingSynthesisError: null,
@@ -1245,6 +1501,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
     draftBaselineSignature: snapshot.canonicalBaselineSignature ?? snapshot.baselineSignature ?? getRecordDraftSignature(snapshot.draft),
     meetingActivities: snapshot.meetingActivities,
     appendedMeetingActivityIds: snapshot.appendedMeetingActivityIds,
+    meetingLiveCaptureRuntime: createMeetingLiveRuntime(snapshot.draft.id ?? createId(), activeBoardIdForMeeting() ?? ''),
     ...resetMeetingSynthesisState,
     lastSaveFeedback: null,
     error: null,

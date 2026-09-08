@@ -534,18 +534,20 @@ const logTaskActivity = (
   });
 };
 
-const recordMeetingTaskActivity = (
-  node: TaskNode,
-  eventType: ActivityEventType,
-  payload: Record<string, unknown>
-) => {
-  useRecordStore.getState().recordMeetingTaskActivity({
-    eventType,
-    nodeId: node.id,
-    title: node.title || node.id,
-    payload,
-  });
-};
+const commitMeetingTaskMutation = (
+  beforeNode: TaskNode | null,
+  afterNode: TaskNode,
+  changedKeys: Array<keyof TaskNode>,
+  mutationId: string,
+) => useRecordStore.getState().commitMeetingTaskMutation({
+  mutationId,
+  beforeNode,
+  afterNode,
+  changedKeys,
+}).catch(error => {
+  console.error('[meetingLiveCapture] Failed to commit confirmed task mutation:', error);
+  return 'failed' as const;
+});
 
 const logDependencyActivity = (
   boardNode: TaskNode | undefined,
@@ -1244,20 +1246,20 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     // 同步寫入資料來源；未歸位任務是工作台本機位置，不寫入假看板路徑。
     if (isUnplacedTask) {
-        void persistTaskWorkbenchUnplacedTask(normalizedNode, useAuthStore.getState().user?.uid);
+        void persistTaskWorkbenchUnplacedTask(normalizedNode, useAuthStore.getState().user?.uid)
+          .then(() => commitMeetingTaskMutation(null, normalizedNode, ['title'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`));
     } else if (normalizedNode.workspaceId && normalizedNode.boardId) {
         const workspaceId = normalizedNode.workspaceId;
         const boardId = normalizedNode.boardId;
-        void persistTaskCreationBeforeActivity(
-          () => nodeService.create(workspaceId, boardId, normalizedNode),
-          () => logTaskActivity(normalizedNode, 'task_created', creationActivityPayload),
-        ).catch(error => {
+         void persistTaskCreationBeforeActivity(
+           () => nodeService.create(workspaceId, boardId, normalizedNode),
+           async () => {
+             logTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
+             await commitMeetingTaskMutation(null, normalizedNode, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `task-create-${normalizedNode.id}-${Date.now().toString(36)}`);
+           },
+         ).catch(error => {
           console.error('[wbsStore] Failed to persist created task before activity logging:', error);
         });
-    }
-
-    if (!isUnplacedTask) {
-      recordMeetingTaskActivity(normalizedNode, 'task_created', creationActivityPayload);
     }
 
     // 紀錄上一步
@@ -1440,12 +1442,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     if (!options?.skipPersistence) {
       const persistence = persistNodeTransition(id, oldNode, newNode, normalizedUpdates);
       completion = persistence.then(
-        () => {
+        async () => {
           try {
             options?.onPersistSuccess?.();
           } catch (callbackError) {
             console.error('[WbsStore] Persist success callback failed:', callbackError);
           }
+          await commitMeetingTaskMutation(oldNode, newNode, Object.keys(normalizedUpdates) as Array<keyof TaskNode>, operationId);
           return 'persisted' as const;
         },
         (error) => {
@@ -1473,7 +1476,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
 
     if (!options?.skipActivity && !newIsUnplaced) buildTaskUpdateActivities(oldNode, newNode, normalizedUpdates).forEach(event => {
         logTaskActivity(newNode, event.eventType, event.payload);
-        recordMeetingTaskActivity(newNode, event.eventType, event.payload);
     });
 
     if (normalizedUpdates.isArchived === true && oldNode.isArchived !== true) {
@@ -1548,11 +1550,12 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       });
       void (async () => {
         for (const [id, updates] of persistenceEntries) {
-          const oldNode = beforeNodes[id];
-          const newNode = afterNodes[id];
-          if (!oldNode || !newNode) continue;
-          await persistNodeTransition(id, oldNode, newNode, updates);
-        }
+           const oldNode = beforeNodes[id];
+           const newNode = afterNodes[id];
+           if (!oldNode || !newNode) continue;
+           await persistNodeTransition(id, oldNode, newNode, updates);
+           await commitMeetingTaskMutation(oldNode, newNode, Object.keys(updates) as Array<keyof TaskNode>, `${createUpdateNodeOperationId()}:${id}`);
+         }
       })().catch(error => {
         console.error('[WbsStore] Failed to persist ordered task batch:', error);
       });
@@ -1706,21 +1709,21 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       set({ nodes: nextNodes });
       get()._buildIndices(nextNodes);
     };
-    const finalizeCommitted = () => {
+    const finalizeCommitted = async () => {
       applyCommittedPatches(afterPatches);
       const committedNodes = get().nodes;
-      affectedTaskIds.forEach(id => {
+      for (const id of affectedTaskIds) {
         const beforeNode = beforeNodes[id];
         const afterNode = committedNodes[id];
-        if (!beforeNode || !afterNode) return;
+        if (!beforeNode || !afterNode) continue;
         buildTaskUpdateActivities(beforeNode, afterNode, afterPatches[id]).forEach(event => {
           logTaskActivity(afterNode, event.eventType, event.payload);
-          recordMeetingTaskActivity(afterNode, event.eventType, event.payload);
         });
+        await commitMeetingTaskMutation(beforeNode, afterNode, Object.keys(afterPatches[id]) as Array<keyof TaskNode>, `${operationId}:${id}`);
         if (afterPatches[id].isArchived === true && beforeNode.isArchived !== true) {
           deleteCalendarEventBestEffort(id);
         }
-      });
+      }
       clearNodeBatchRecovery(descriptor.boardId, descriptor.operationId);
       options.presentation?.onCommitted?.();
       if (!useUndoStore.getState().isApplying) {
@@ -1769,7 +1772,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
         const remoteNodes = await readRemoteNodes();
         const convergence = getBatchConvergence(remoteNodes, descriptor);
         if (convergence === 'after') {
-          finalizeCommitted();
+           await finalizeCommitted();
           return { status: 'committed', operationId, affectedTaskIds };
         }
         if (convergence === 'before') {
@@ -1823,7 +1826,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       try {
         const remoteNodes = await readRemoteNodes();
         if (getBatchConvergence(remoteNodes, descriptor) === 'after') {
-          finalizeCommitted();
+           await finalizeCommitted();
           return { status: 'committed', operationId, affectedTaskIds };
         }
       } catch {
@@ -1833,7 +1836,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       return { status: 'indeterminate', operationId, affectedTaskIds, error: '批次儲存逾時，結果尚待確認。' };
     }
 
-    finalizeCommitted();
+    await finalizeCommitted();
     return { status: 'committed', operationId, affectedTaskIds };
   },
 
@@ -1844,12 +1847,14 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
     const createdTaskIds = plannedNodes.map(node => node.id);
     const beforePatches: BatchNodeUpdates = {};
     const afterPatches: BatchNodeUpdates = {};
+    const beforeNodes: Record<string, TaskNode> = {};
     Object.entries(input.existingUpdatesById || {}).forEach(([id, requestedUpdates]) => {
       const existing = get().nodes[id];
       if (!existing) return;
       const normalized = normalizeTaskAssignmentUpdates(existing, normalizeTaskStatusUpdates(requestedUpdates));
       const patch = buildChangedNodePatch(existing, normalized);
       if (!patch) return;
+      beforeNodes[id] = existing;
       beforePatches[id] = patch.before;
       afterPatches[id] = patch.after;
     });
@@ -1977,20 +1982,24 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       });
       get()._buildIndices(nextNodes);
     };
-    const finalizeCommitted = () => {
+    const finalizeCommitted = async () => {
       applyCreatedState();
       clearNodeBatchRecovery(firstNode.boardId, operationId);
       input.presentation?.onCommitted?.();
-      plannedNodes.forEach(node => {
+      for (const node of plannedNodes) {
         logTaskActivity(node, 'task_created', {
           source: 'mindmap_clipboard',
           after: { parentId: node.parentId, order: node.order },
         });
-        recordMeetingTaskActivity(node, 'task_created', {
-          source: 'mindmap_clipboard',
-          after: { parentId: node.parentId, order: node.order },
-        });
-      });
+        await commitMeetingTaskMutation(null, node, ['title', 'status', 'description', 'detailNotes', 'startDate', 'endDate', 'isDurationLocked', 'assigneeIds', 'assigneeId', 'collaboratorIds', 'tagIds', 'isArchived'], `${operationId}:${node.id}`);
+      }
+      for (const id of Object.keys(afterPatches)) {
+        const beforeNode = beforeNodes[id];
+        const afterNode = get().nodes[id];
+        if (beforeNode && afterNode) {
+          await commitMeetingTaskMutation(beforeNode, afterNode, Object.keys(afterPatches[id]) as Array<keyof TaskNode>, `${operationId}:${id}`);
+        }
+      }
       if (!useUndoStore.getState().isApplying) {
         const label = input.label || '貼上任務';
         useUndoStore.getState().pushUndo({
@@ -2047,7 +2056,7 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
           return { status: 'indeterminate', operationId, affectedTaskIds, error: '貼上逾時，結果尚待確認。' };
         }
       }
-      finalizeCommitted();
+      await finalizeCommitted();
       return { status: 'committed', operationId, affectedTaskIds };
     } catch (error) {
       try {
@@ -2176,13 +2185,13 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       }
 
       const committedNodes = get().nodes;
-      command.expectedSubtreeIds.forEach(id => {
+      for (const id of command.expectedSubtreeIds) {
         const oldNode = beforeNodes[id];
         const newNode = committedNodes[id];
         const canonical = canonicalById.get(id);
-        if (!oldNode || !newNode || !canonical) return;
+        if (!oldNode || !newNode || !canonical) continue;
         const patch = buildChangedNodePatch(oldNode, canonical);
-        if (!patch) return;
+        if (!patch) continue;
         buildTaskUpdateActivities(oldNode, newNode, patch.after).forEach(event => {
           if (!result.activityLoggedRemotely) {
             logTaskActivity(isTaskWorkbenchUnplacedTask(newNode) ? oldNode : newNode, event.eventType, {
@@ -2192,9 +2201,9 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
               target: command.destination.ownership,
             });
           }
-          recordMeetingTaskActivity(newNode, event.eventType, event.payload);
         });
-      });
+        await commitMeetingTaskMutation(oldNode, newNode, Object.keys(patch.after) as Array<keyof TaskNode>, `${command.operationId}:${id}`);
+      }
 
       if (!wasApplying) {
         const reverseTemplate: MoveTaskSubtreeCommand = {
@@ -2656,7 +2665,18 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
       }
       for (const [key, batch] of Object.entries(groups)) {
           const [wsId, bId] = key.split('|');
-          nodeService.batchUpdate(wsId, bId, batch).catch(console.error);
+          const batchMutationId = `dependency-schedule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+          nodeService.batchUpdate(wsId, bId, batch)
+            .then(async () => {
+              for (const { id, data } of batch) {
+                const beforeNode = state.nodes[id];
+                const afterNode = nextNodes[id];
+                if (beforeNode && afterNode) {
+                  await commitMeetingTaskMutation(beforeNode, afterNode, Object.keys(data) as Array<keyof TaskNode>, `${batchMutationId}:${id}`);
+                }
+              }
+            })
+            .catch(error => console.error('[WbsStore] Failed to persist dependency schedule:', error));
       }
 
       for (const { id, data } of updates) {
@@ -2677,7 +2697,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   },
               };
               logTaskActivity(afterNode, 'task_dates_changed', activityPayload);
-              recordMeetingTaskActivity(afterNode, 'task_dates_changed', activityPayload);
           }
 
           if ('status' in data) {
@@ -2687,7 +2706,6 @@ export const useWbsStore = create<WbsStore>((set, get) => ({
                   after: { status: afterNode.status },
               };
               logTaskActivity(afterNode, 'task_status_changed', activityPayload);
-              recordMeetingTaskActivity(afterNode, 'task_status_changed', activityPayload);
           }
       }
   },

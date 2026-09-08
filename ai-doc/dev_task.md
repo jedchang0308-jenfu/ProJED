@@ -671,6 +671,15 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 證據：`SPEC-108`、`QA-DEV-108`、`RD-TECH-LEAD-REVIEW-DEV-108`、`QC-DEV-108`；static 14/14、browser B01～B09、DEV-008／009／024／066／105／106／107 targeted regression、TypeScript、targeted ESLint、build:test、`git diff --check` PASS。
   - 計入交付：是（Local implementation 完成；正式 release 另需 gate）
 
+- ◐ DEV-109 [開發點] [開發中] [P1] [Implemented Candidate / QA-QC Pending / NOT RELEASED] 會議期間看板變更即時記錄與 AI 整理修復
+  - 摘要：會議功能開啟後，有意義的看板變更須即時成為目前會議紀錄內容；AI 只重新整理既有會議內容，不回溯匯入過去專案變更。
+  - 來源 ID：`USER-20260907-MEETING-PROJECT-CHANGE-IMPORT-QUALITY-GATE-GAP`、`USER-20260908-LIVE-MEETING-CHANGE-CAPTURE-AI-ORGANIZE-ONLY`
+  - 父任務：DEV-007；相容 DEV-011、DEV-012、DEV-020、DEV-021、DEV-022、DEV-024、DEV-094。
+  - 下一步：QA 依 `QA-DEV-109` 執行完整 deterministic、browser、failure injection 與 targeted regression gate；正式 release 另走 deployment gate。
+  - 阻塞 / 恢復條件：無 P0/P1 產品決策或工程契約阻塞；candidate implementation 與 smoke 已完成，但尚未標 QA PASS 或 release ready。
+  - 證據：`SPEC-109`、`QA-DEV-109`、`RD-TECH-LEAD-REVIEW-DEV-109`、SPEC-007／011／012／020／069／106 定向修訂；deterministic verifier、TypeScript、targeted ESLint、build:test 與 DEV-109 browser B01～B04 artifact 已通過。
+  - 計入交付：否（DEV-007 corrective 開發點）
+
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -4065,3 +4074,250 @@ Batch B 依賴 A；C 依賴 A/B；D 可先建立 fixture，但 browser PASS 依�
   原會議紀錄為唯一來源、封存保留／永久刪除移除，以及最新三筆＋原地展開的第一層緊湊版面。
 
 使用思考習慣：#效用理論、#系統描繪、#可驗證性
+
+## DEV-109：會議期間看板變更即時記錄與 AI 整理修復
+
+- 文件成熟度：`Implemented / Candidate Verification In Progress / QA-QC Pending / NOT RELEASED`
+- 狀態：開發完成，候選驗證中；尚未進入正式 release
+- 節點類型：開發點
+- 父交付點：DEV-007；相容 DEV-011、DEV-012、DEV-020、DEV-021、DEV-022、DEV-024、DEV-066、DEV-094、DEV-106、DEV-108
+- 是否計入產品交付完成：否（修正既有交付點，不新增獨立產品能力）
+- 原始需求邊界：`USER-20260907-MEETING-PROJECT-CHANGE-IMPORT-QUALITY-GATE-GAP`、`USER-20260908-LIVE-MEETING-CHANGE-CAPTURE-AI-ORGANIZE-ONLY`
+- 風險等級：Medium（使用者可見流程，跨 task mutation、meeting session activity、draft content 與 AI synthesis）
+
+### 問題與使用者價值
+
+使用者在會議中調整專案內容後，預期變更可成為會議紀錄草稿的一部分；正式環境目前卻顯示
+`AI整理失敗，原草稿已保留` 與 `AI synthesis output did not pass the meeting record quality gate`，內容編輯器仍為空白。
+
+真正問題不是 AI 沒有回溯匯入，而是既有 live meeting capture 沒有完整落實：部分內容修改沒有 meeting activity，
+且已捕捉的 activity 只留在記憶體 buffer，沒有立即成為使用者可見的目前會議紀錄內容。使用者因此必須按 `AI整理`
+才可能看見變更；一旦 AI 品質閘門失敗，editor 就像完全沒有記錄。
+
+成功結果是：開啟會議功能的當下建立 capture boundary，之後有意義的看板變更在任務儲存成功時即時進入目前會議草稿；
+`AI整理` 只重新組織這些既有內容與人工速記，不查詢或匯入會議開始前的專案變更。
+
+### 已確認事實與根因鏈
+
+1. `startMeetingRecord` 將 `isMeetingMode` 設為 `true` 並建立或沿用 meeting draft；這是既有 live capture 的啟停邊界。
+2. `useWbsStore` 在看板 mutation 後呼叫 `recordMeetingTaskActivity`；record store 只在 live meeting 接受並寫入 `meetingActivities`。
+3. 現行 `recordMeetingTaskActivity` 只追加 memory buffer，不更新 `draft.content`，所以使用者無法即時看到已捕捉內容。
+4. `buildTaskUpdateActivities` 尚未涵蓋任務名稱、任務說明及備註內容修改，造成這些儲存級變更完全沒有 live source。
+5. `synthesizeMeetingDraft` 使用目前草稿與目前 session 的 `meetingActivities`；不查詢 provider history 是正確責任邊界，不是缺陷。
+6. `SPEC-007` 已定義會議開始後收集任務變更；DEV-011／012 只要求 AI 將來源整理成自然語言、避免發布逐筆流水帳。
+7. `匯入專案變化` 是 DEV-020／094 的獨立明確操作，用於使用者主動選擇的過去區間，不得暗中併入 `AI整理`。
+8. AI quality gate 失敗會保留原草稿；但若 live evidence 從未投影到原草稿，正確的 fail-closed 行為仍會呈現不合理空白。
+
+### Spec Impact Preflight
+
+- `SPEC-007`：`Implementation needs correction + intentional refinement`。保留會議開始後自動捕捉；補足內容欄位並把 activity 即時投影成可見 working content，但不得恢復無限逐筆流水帳。
+- `SPEC-011／012`：`Compatible clarification`。AI source 仍限目前草稿、人工補記與會中實際變更；AI 只重新整理，不做歷史查詢或即時 AI 生成。
+- `SPEC-020／094`：`No-change boundary`。過去專案變更仍只能由使用者明確操作 `匯入專案變化`；其日期、cutoff、protected batch 與 provider query 不納入本 DEV 主流程。
+- `SPEC-012`：仍禁止把任務靜態狀態或未變更快照當會議內容；只允許 capture boundary 後實際發生且可追溯的差異。
+- `SPEC-021／022／024`：保留單一紀錄、人工內容與明確匯入內容的 preserve guard；AI 失敗不得移除 live working content。
+- `SPEC-109`：`Target authority / RD Implementation Ready`。固定 save-level ticket、segment／aggregate、內容最小化、
+  working projection、recovery、AI source、failure 與 work package。
+- `QA-DEV-109`：`QA Plan Ready / Execution Pending`。固定 deterministic、真實 browser、failure injection、privacy 與回歸 gate。
+- `SPEC-069／106`：`No-change recovery boundary`。Snapshot v2、signature、IDB version／store／scope／TTL 全部不變；
+  既有 `draft.content` 仍會被本機 snapshot 保存。F5／crash recovery 只恢復已可見正文，重新開啟後建立新 segment，
+  不續接 reload 前的暫態 baseline、ticket 或 aggregate。
+- ADR：不需要。沿用既有 task mutation、meeting draft、local recovery 與 synthesis authority；若後續需擴張長期保留、
+  跨工作區可見性、provider schema、remote recovery 或權限，再停止並重新判斷。
+
+### Human Decision Brief
+
+- 2026-09-08 決策 1：第一版有意義變更 allowlist 為任務名稱、任務說明、備註、狀態、日期、主責／協作、標籤、建立與封存。
+- 決策 1 邊界：只在完成儲存後建立事件；排除逐鍵輸入、純排序、純拖曳及不改變任務語意的版面操作。
+- 2026-09-08 決策 2：任務名稱保存前後值；任務說明與備註保存實際改動的正規化純文字片段及不可逆的前後內容雜湊，不保存整份舊稿。
+- 決策 2 修正邊界：上述資料只作目前 meeting session evidence 與 draft 去重；provider activity history 不是 live meeting 紀錄的權威來源，不新增長期內容事件保存。
+- 2026-09-08 決策 3：開啟會議功能後才開始捕捉看板變更，並在任務儲存成功時即時寫入目前會議紀錄內容；會議開始前的變更不自動帶入。
+- 決策 3 AI 邊界：`AI整理` 只重新整理目前會議紀錄內容與本次 meeting activity，不觸發過去專案變更查詢；歷史匯入維持獨立明確操作。
+- 2026-09-08 決策 4：同一 meeting session 內，同一任務同一欄位的反覆修改，在可見 working content 中只合併為「會議開始值 → 最新值」，不顯示中間過程。
+- 決策 4 淨值邊界：若最新值回到會議開始值，該欄位視為 net no-op，從 working content 與 AI source 移除；底層只保留去重與 reconcile 所需的 event identity，不在正文呈現。
+- 2026-09-08 決策 5：離開會議模式即關閉目前 capture segment；重新開啟同一草稿時保留既有內容，但從重新開啟時間建立新的 segment 與欄位基準。
+- 決策 5 中斷邊界：會議關閉期間的看板變更不補抓、不回溯，亦不得由 `AI整理` 帶入；不同 segment 的既有正文不得因新 segment 啟動而被清除。
+- Rejected：完整任務快照、逐鍵記錄、內容 before／after 全文雙份保存、另建永久 audit archive、將所有拖曳／排序流水帳當會議內容。
+- Allowed engineering assumptions：差異演算法、正規化與雜湊格式由 RD 依現有 TypeScript／provider 慣例決定，但必須 deterministic、不可由雜湊還原內容且可跨重試去重。
+- Human decision gate：產品語意、資料邊界與主要驗收已完成；repo 級工程契約已由 `SPEC-109` 固定，不再需要使用者補工程選項。
+
+### 目標流程
+
+```text
+開啟會議功能
+  → 建立新的 capture segment 與 boundary
+  → 使用者在看板完成一次有意義變更儲存
+  → 建立資料最小化的 session activity
+  → 即時更新目前 draft 的可見 working content
+  → 使用者可繼續速記或按 AI整理
+      ├─ AI 成功：重整目前 draft 與本次 activities，保留人工內容與 task links
+      └─ AI 失敗：原 working content 原樣保留，可重試
+
+離開會議功能
+  → 關閉目前 capture segment
+  → 會外看板變更不記錄、不補抓
+  → 重開同一草稿時保留既有內容，另建新 segment 後繼續即時記錄
+
+過去專案變更
+  → 只有使用者明確操作「匯入專案變化」時才依既有 DEV-020／094 流程處理
+```
+
+### Current Scope
+
+- 修復既有 meeting-mode live capture，不建立新的歷史匯入或 provider readback 路徑。
+- 將 capture boundary 後的看板變更在儲存成功時即時正規化、去重並更新目前 draft working content。
+- AI quality gate、timeout 或模型錯誤不得撤銷已存在於草稿的 live change evidence。
+- 第一版 allowlist 固定為任務名稱、任務說明、備註、狀態、日期、主責／協作、標籤、建立與封存；一律在完成儲存後建立事件。
+- 名稱保留前後值；說明／備註只使用實際變動的純文字片段與前後雜湊，不保存完整舊稿或新增永久 event payload。
+- 以 `meeting draft + capture segment + task + field` 作為可見合併鍵；同 segment 後續儲存只更新最新值，不追加中間版本，回到該 segment 開始值時移除該欄位的淨變更。
+- 離開會議模式即停止接受新 activity；重開同一草稿時保留舊 segment 正文，建立新 segment、時間邊界與欄位基準後再接受新變更。
+- 保留同一事件只呈現一次、同一會議一份主紀錄與 task links 可追溯；歷史匯入 cutoff 契約維持獨立且不變。
+- `AI整理` 只重整目前內容，不查詢 provider activity history，也不自動觸發 `匯入專案變化`。
+
+### Out of Scope
+
+- 不把任務目前完整 description／detail notes 快照直接灌入會議紀錄。
+- 不記錄每次鍵盤輸入、游標移動、純排序、純拖曳或低價值版面操作。
+- 不在會議正文或 AI 輸出保留同欄位的中間修改流水帳；使用者自行輸入的人工速記不受此限制。
+- 不保存任務說明／備註的完整舊稿，不新增永久 audit archive 或擴張既有資料可見性／保存期限。
+- 不讓 `AI整理` 回溯、補抓或自動匯入會議開始前的專案變更。
+- 不捕捉、查詢或推測兩個 capture segment 之間的會外看板變更，也不跨 segment 改寫既有事件的起始基準。
+- 不修改 `匯入專案變化` 的日期、cutoff、provider query、protected batch 或發布基準。
+- 不把 `AI整理` 變成發布前必經條件；使用者仍可直接手寫、存草稿或依既有流程發布目前內容。
+- 不建立逐字稿、錄音、跨看板匯入、完整 audit viewer、版本差異瀏覽器或新的會議流程面板。
+- 原文件升級階段不修改 schema、migration、provider、Edge Function、產品程式、測試、Git index 或 release artifact；目前
+  implementation 已依 `SPEC-109` 落在既有 TypeScript store／utility 路徑，仍未進行 schema、migration 或正式 release 變更。
+
+### UX Intent 與 UI Entry
+
+- Target actor：已進入會議模式、可編輯目前看板與會議草稿的使用者。
+- 正常入口：使用者由既有入口開啟會議功能即開始 capture；看板任務儲存是即時記錄觸發點，右側 `AI整理` 只整理目前內容。
+- 主物件仍是會議內容 editor；不得新增常駐摘要卡、事件計數面板或第二套結果容器。
+- 正常成功以 editor 內出現內容為主要回饋；一般成功提示維持最小且短暫。
+- AI 降級時使用「AI整理失敗，原內容已保留」的等效短訊息並保留重試；即時 working content 不得消失。
+- `匯入專案變化` 維持既有獨立入口，不因點擊 AI 而改變狀態、日期或 cutoff。
+
+### RD Engineering Contract
+
+- Authoritative spec：`ai-doc/specs/SPEC-109-meeting-live-task-change-capture.md`。
+- QA authority：`ai-doc/qa/QA-DEV-109-meeting-live-task-change-capture.md`。
+- Capture truth：WBS mutation 前建立 immutable ticket，只有 provider ack 或 canonical readback 確認後才 commit；
+  `mutationId` 跨 completion／readback／retry 穩定且 exactly-once。
+- Segment truth：每次 `startMeetingRecord` 都新建 segment；主動離開、F5、crash 或頁面重載都終止原 segment。
+  recovery 只保留既有 `draft.content`，不得續接 reload 前的暫態 baseline、ticket 或 aggregate。
+- Aggregate truth：key 為 `draftId + segmentId + nodeId + fieldKey`；baseline 固定、latest 依 confirmed commit sequence 更新，
+  hash 回到 baseline 即移除 net no-op。
+- Content privacy：title 保存完整前後值；為正確計算「segment 起始值 → 最新值」，description／note 的完整純文字 baseline
+  只允許存在目前分頁的 volatile runtime。每次 confirmed commit 由 baseline 與 latest 重新計算 deterministic bounded diff
+  與 SHA-256；完整 baseline／latest 不得進 draft、metadata、recovery、provider payload、log 或 telemetry，segment 關閉／reload／logout 即釋放。
+- Note alias：`detailNotes` 為 UI canonical；同 mutation 同時更新 `description` 時抑制 compatibility duplicate。Note 依 id 比對，純重排 no-op。
+- Projection：在既有 editor 直接顯示 `- 會中變更｜@[任務](task:id)：欄位 before→after`；無常駐容器。
+  以 `lineIndex + exactText` reconcile；人工修改／刪除後 preserve + detach，後續另開 projection generation。
+- Recovery：不新增 recovery schema 或 signature 欄位；沿用 DEV-106 對 `draft.content` 的既有 round-trip。remote recovery request 維持 0。
+- AI：權威輸入是目前 editor raw content；DEV-109 新 capture 不另寫 `meetingActivities`，避免同一證據出現第二份來源。
+  每條 active system projection 在合併結果中恰好一次，且不得呼叫 history/import。AI 成功時同步 rebase
+  `meetingSynthesis.sourceContent`／`outputContent`；若人工編輯使 trace 無法唯一 reconcile，保留正文、清除 stale trace 並 detach projection。
+  任何 quality/provider/merge/reconcile failure 都 byte-preserve 原稿與 evidence。
+- Historical import：DEV-109 不新增 live-only event type，也不得重用 `PROJECT_CHANGE` 表示 live capture；DEV-020／094
+  provider query、cutoff、protected batch 與 publish baseline 維持原樣。
+
+### Data／API 與 failure boundary
+
+- 新增集中型別：`MeetingLiveCaptureTicket`、`MeetingLiveCaptureSegment`、`MeetingLiveFieldAggregate`、
+  `MeetingLiveContentValue`、`MeetingLiveProjectionAnchor`、`MeetingLiveCaptureRuntime`；禁止 UI/store/service 重複定義。
+- 新增 pure owner `src/utils/meetingLiveTaskChanges.ts`，負責 allowlist、normalization、SHA-256、bounded diff、net-change aggregate、
+  projection 與 anchor reconcile；不得存取 provider／DOM／Zustand。差異演算法屬內部實作，但 golden vectors、fragment 上限與 deterministic output 必須固定。
+- `useWbsStore.updateNode` 回傳／重試路徑必須攜帶 stable capture context；TaskDetails 不得因既有 `skipActivity` 漏掉後續
+  confirmed live capture。Create、batch、forest、dependency schedule 與含 allowlist delta 的複合 placement 路徑各自在 persistence terminal success 後 commit；純 placement／drag 為 0 ticket。
+- `useWbsStore` 對 allowlist mutation 不得再雙寫 record store legacy `meetingActivities`；provider audit/activity log 可維持獨立路徑，
+  但其 success／failure 都不是 DEV-109 capture truth。
+- 如果 task persistence 失敗／unknown，不顯示 live line；如果 task 已保存但 hash／projection 失敗，不回滾 task，保留 draft，
+  於 editor 附近顯示最短可重試錯誤。
+- late completion 若 segment closed、draft／board 不符，直接丟棄；不得寫入下一 segment。
+- link removal 只能經既有 content sync，且無 manual／legacy／quick-note／import／其他 aggregate 引用時才可移除。
+- reload／recovery 後僅以已恢復正文為權威並建立新 segment；不得從歷史任務資料推測 reload 前 aggregate。
+  AI failure 保留 content、metadata、taskLinks 與目前 runtime aggregate／projection signature。
+
+### Work Packages／依賴順序
+
+1. `WP-109-A Pure contract`：型別、normalization、SHA-256、bounded diff、net no-op、projection reconcile 與 volatile-runtime privacy guard。
+2. `WP-109-B Persistence truth`：update/create/batch/forest/placement/dependency 的 confirmed commit；TaskDetails stable retry identity。
+3. `WP-109-C Draft projection/lifecycle`：record store segment、volatile aggregate、editor line、task links、reload 新 segment 與 late-close isolation；DEV-106 recovery schema 不變。
+4. `WP-109-D AI source/preserve`：raw-content source、system-line exact-once、meetingSynthesis trace rebase、repeat synthesis、human/import/quick-note preserve 與 failure rollback；不新增 live event type。
+5. `WP-109-E Candidate verification`：static、browser、failure injection、targeted regression、type/lint/build、evidence freeze。
+
+順序固定 A→B→C→D→E。A 的 privacy/diff vectors 未過不得進 B；B 的 persistence truth 未過不得在 C 顯示成功；
+D 的 preserve gate 未過不得覆蓋草稿。RD 只可在 E 後交 QA/QC，不能自封 PASS。
+
+### File Ownership
+
+| 檔案 | RD 責任 |
+|---|---|
+| `src/types/index.ts` | live runtime 集中型別；不新增 recovery／provider schema。 |
+| `src/utils/meetingLiveTaskChanges.ts`（new） | pure capture、privacy、aggregation、projection 與 reconcile authority。 |
+| `src/store/useWbsStore.ts` | persistence-confirmed ticket lifecycle；activity log 與 live capture 解耦。 |
+| `src/components/TaskDetailsModal.tsx` | 保存／readback／retry 穩定 capture identity；不直接寫 draft。 |
+| `src/store/useRecordStore.ts` | segment、aggregate、projection、task links、AI transaction。 |
+| `src/hooks/useMeetingDraftRecovery.ts`、`src/services/meetingDraftRecoveryService.ts` | 預期 0 修改；以 regression 證明既有 content round-trip、signature、IDB 與 0 remote request 均未變。 |
+| `src/utils/meetingRecordSynthesis.ts`、`src/utils/humanDraftSynthesisMerge.ts` | raw-content exact-once、trace rebase、preserve/reconcile。 |
+| `supabase/functions/synthesize_meeting_record/index.ts` | 不新增 live event；僅在既有 contract 內強化 system-line preserve／dedupe，且不讀 project history。 |
+| `scripts/verify-dev-109-*.ts/js`、`package.json` | deterministic／browser gate 與 scripts。 |
+
+### 驗收方向
+
+- [ ] 開啟會議功能後修改 allowlist 欄位並完成儲存，不需按 `AI整理`，變更即時出現在目前會議草稿內容。
+- [ ] 任務名稱事件可辨識前後值；任務說明／備註事件只含實際差異純文字片段與前後雜湊，無完整舊稿或未變更快照。
+- [ ] 逐鍵輸入、取消編輯、純排序與純拖曳不更新會議內容；完成儲存恰好產生一筆可去重 evidence。
+- [ ] 同一任務同一欄位連續儲存三次時，working content 只有一條「會議開始值 → 最新值」，中間值不出現在正文或 AI 整理結果。
+- [ ] 同一欄位最後改回會議開始值時，該欄位淨變更自動從 working content 與 AI source 移除；若任務已無其他 evidence，對應 task link 亦不殘留。
+- [ ] 離開會議模式後修改看板，再重開同一草稿：舊內容仍存在、會外修改未出現，且重開後完成的新儲存以新 segment 基準即時加入。
+- [ ] 同一任務同一欄位跨兩個 segment 修改時，各 segment 的已確認正文可追溯且互不覆蓋；`AI整理` 不得推測或補齊中斷區間。
+- [ ] 會議開始前完成的變更不會因 `AI整理` 出現在草稿；只有明確操作 `匯入專案變化` 才可帶入過去變更。
+- [ ] 模擬 `QUALITY_GATE_FAILED`、timeout 與 Edge error，既有人工內容及 live working content byte-for-byte 保留。
+- [ ] 成功 AI 整理後只有一份 `1／2／3` 主結構，protected evidence、task mentions、taskLinks 與人工內容均未遺失。
+- [ ] 空白、loading、complete、empty、AI-degraded 與 hard-error 可從原操作附近辨識，沒有新增框中框或常駐技術錯誤文字。
+- [ ] 1440×900 與 1024×768 正常入口無 overflow、重疊或按鈕擠壓；手機版既有 unavailable 邊界不變。
+
+### Implementation Readiness／風險
+
+- Human confirmed：有意義欄位、save-level 邊界、內容差異最小化、live capture 時點、同欄位淨變更合併、重入新 segment 與 AI-only-reorganize 責任已固定。
+- Tech Lead reviewed：已移除 recovery schema、live-only Edge event 與 symbolic diff composition 等非必要設計；權威資料收斂為既有 `draft.content`，另以單一分頁 volatile runtime 維持 segment baseline／aggregate。
+- Implemented：WP-109-A～C 及現有 AI raw-content 邊界已落實於 `src/types/index.ts`、
+  `src/utils/meetingLiveTaskChanges.ts`、`src/store/useWbsStore.ts` 與 `src/store/useRecordStore.ts`；
+  新增 deterministic verifier，並完成 TypeScript、targeted ESLint、test build 與瀏覽器冒煙驗證。
+- Pending：完整 QA-DEV-109 failure matrix、相依回歸與獨立 QC 尚未完成；目前不可宣稱 QA PASS 或 release ready。
+- 相依：DEV-012 contract v2 quality gate、DEV-020／094 import metadata 與 cutoff、DEV-021／022／024 preserve guards、
+  DEV-066 rich note projection、DEV-106 recovery、DEV-108 quick-note provenance。
+- Stop：若需改變既有 retention／權限、將完整敏感文字長期寫入新遠端欄位、執行 migration 或正式資料修補，停止並升級風險。
+
+### Evidence Direction
+
+- Deterministic：meeting start boundary、allowlist、save-level dedupe、內容 diff／hash、同欄位淨值聚合、net no-op 移除、working-content reconcile、AI failure preserve、retry idempotency。
+- Integration：start meeting → task mutation save → segment activity → visible draft content → stop → off-meeting mutation → reopen same draft/new segment → save → AI reorganize；不依賴 provider history readback。
+- Browser：正常入口開始會議，驗證變更即時可見、停止後不捕捉、重開保留舊內容、AI 前後內容、AI-degraded、重試，以及 AI 不帶入會前或中斷期間變更。
+- Production regression fixture：凍結 candidate 後以可清理 fixture 重現 `QUALITY_GATE_FAILED`；通過條件是 editor 仍保有專案變更。
+
+### Execution Boundary
+
+- 本輪已完成 RD 依 WP-109-A→D 的產品實作與候選驗證：不新增 schema、migration、provider、Edge Function 或 recovery schema。
+- 下一步是 QA/QC 依 `QA-DEV-109` 執行完整 failure／回歸矩陣；正式 release 仍須另走 deployment gate。
+
+### 變更紀錄
+
+- 2026-09-08：完成 RD 技術主管審查並有條件通過文件。移除多重 truth source、recovery schema 擴張、
+  live-only Edge event 與 symbolic diff composition；改以 `draft.content` 為唯一持久化 live evidence，完整內容 baseline
+  只存在目前分頁 volatile runtime，reload 後保留正文並新建 segment。詳見 `RD-TECH-LEAD-REVIEW-DEV-109`。
+- 2026-09-08：依使用者「確認」升級為 `RD Implementation Ready`；新增 SPEC-109／QA-DEV-109，固定 save-level
+  ticket、segment/aggregate、bounded content diff + SHA-256、純文字 projection、existing-content recovery boundary、
+  AI-only-reorganize、failure matrix、WP-109-A→E 與證據 gate；產品與 QA/QC 尚未執行。
+- 2026-09-08：使用者修正核心流程：會議功能開啟後即時捕捉並寫入目前紀錄；AI 只整理本次內容，不匯入過去變更。同步移除 provider history／AI hydrate 的錯誤方案。
+- 2026-09-08：依使用者「確認」固定決策 5；重開同一草稿建立新 capture segment，保留舊內容但不補抓會議關閉期間的看板變更，完成 Brief 產品決策 gate。
+- 2026-09-08：依使用者「同意」固定決策 4；同一任務同一欄位只呈現會議開始值至最新值，回到開始值即移除淨變更，AI 不得保留中間版本。
+- 2026-09-08：完成 DEV-109 candidate implementation。新增集中型別、純函式 allowlist／bounded diff／SHA-256／net no-op，
+  將 WBS create／update／batch／forest／placement／dependency 的 confirmed persistence 接到 meeting draft projection，
+  並建立 `verify:dev-109-meeting-live-task-change-capture`；TypeScript、targeted ESLint、build:test、deterministic verifier
+  與 localhost browser smoke 通過，完整 QA/QC 與 release 尚未執行。
+- 2026-09-08：依使用者第二次「照建議」確認內容最小化；經決策 3 校正後只作 session／draft evidence，不新增長期 provider content payload。
+- 2026-09-08：依使用者第一次「照建議」固定第一版 allowlist 與 save-level 邊界；排除逐鍵輸入、純排序與純拖曳。
+- 2026-09-07：依正式環境空白內容與 `QUALITY_GATE_FAILED` 建立 Brief；固定「變更證據不得被 AI 失敗阻斷」。
+
+使用思考習慣：#問對問題、#系統描繪、#可驗證性

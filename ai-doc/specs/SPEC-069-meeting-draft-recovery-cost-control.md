@@ -7,6 +7,14 @@
 - 承接：SPEC-003、SPEC-010、DEV-002、DEV-005、DEV-010、DEV-020
 - 決策日期：2026-08-17
 
+## DEV-109 Local Snapshot No-change Boundary（2026-09-08）
+
+- Spec Impact：`No schema change / regression authority / Implemented Candidate / QA-QC Pending / NOT RELEASED`。
+- DEV-109 不恢復本文件的 cloud checkpoint；所有 provider recovery read/write 仍依 SPEC-106 為 0。
+- `MeetingDraftRecoverySnapshotV2`、signature、IndexedDB database version／store／scope／TTL 全部不變。DEV-109 的可見 line
+  已屬 `draft.content`，自然由既有 snapshot 保護；segment、plaintext baseline、aggregate、ticket、mutation id 與 anchor 不序列化。
+- 復原正文後建立新 capture segment；不得續接、推測或從 provider history 補回 reload 前的 volatile state。
+
 ## DEV-106 Target Contract Amendment（2026-09-04）
 
 - Spec Impact：`Intentional replacement / Phase 0 implementation ready but not implemented`。DEV-106目標契約改由`SPEC-106-meeting-safe-draft-lifecycle.md` authoritative管理；Phase 0已收斂為Local Safety Slice，Phase 1仍為Contract Ready。本文件仍是DEV-069 implemented baseline，不能證明新流程已落地。

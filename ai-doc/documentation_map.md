@@ -1,5 +1,40 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-08（DEV-109 Implemented Candidate / Tech Lead Reviewed / QA Pending）
+
+Spec Impact：`Implementation needs correction + intentional live-capture refinement`。既有 DEV-007 已定義會議功能開啟後
+捕捉看板變更；現行 `meetingActivities` 只留在 memory buffer，任務名稱／說明／備註又沒有對應事件，因此變更未即時成為
+可見會議內容。DEV-109 修復 live capture 與 draft 投影；`AI整理` 只重整目前會議內容，不回溯或自動匯入過去專案變更。
+
+| 文件／程式權威 | 狀態 | DEV-109 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `Implemented / Candidate Verification In Progress / QA-QC Pending / NOT RELEASED` | Canonical 問題、human decisions、RD contract、WP-109-A→E、檔案責任、stop 與 release boundary。 |
+| `ai-doc/specs/SPEC-109-meeting-live-task-change-capture.md` | `Target Authority / Implemented Candidate / QA Pending` | Save-level ticket、volatile segment/aggregate、內容最小化、純文字 projection、existing-content recovery boundary、AI source、failure 與 AC。 |
+| `ai-doc/qa/QA-DEV-109-meeting-live-task-change-capture.md` | `QA Plan Ready / Candidate Smoke Evidence Captured / Full Execution Pending` | Deterministic、真實 browser、failure injection、volatile-data privacy、network-zero-history、viewport與回歸 gate。 |
+| `ai-doc/reports/RD-TECH-LEAD-REVIEW-DEV-109.md` | `Reviewed / Conditional Pass / Conditions Incorporated` | 五項關鍵發現、最短根因鏈、單一持久化 truth、volatile runtime、AI trace rebase 與施工驗證 gate。 |
+| `SPEC-007` | Targeted amendment registered | 保留原生看板操作；由 SPEC-109 取代 memory-only／save-time raw append，補足內容欄位與即時 net projection。 |
+| `SPEC-011／012` | Compatible clarification registered | AI 只整理目前 raw content 與 legacy activities，不另送 DEV-109 aggregate、不查 provider history；靜態 task snapshot 仍禁止。 |
+| `SPEC-020`、DEV-094 | Import boundary unchanged / amendment registered | 過去變更仍由使用者明確操作 `匯入專案變化`；日期、cutoff、provider query 與 protected batch 不變。 |
+| `SPEC-021／022／024` | Required regression authority | 單一紀錄、明確匯入內容與人工草稿保護不得退化。 |
+| `SPEC-069／106` | No-change recovery amendment registered | Snapshot v2、signature、IDB version/store/scope/TTL 不變；只 round-trip 既有 content，reload 後 live runtime 為空並建立新 segment，provider recovery request仍為0。 |
+| `src/store/useRecordStore.ts`、`src/store/useWbsStore.ts` | Candidate implementation / QA Pending | confirmed persistence 後投影至既有 draft content；volatile runtime 不進 recovery，完整 QA/QC 尚未完成。 |
+
+Human decisions（2026-09-08）：第一版 allowlist 為任務名稱、任務說明、備註、狀態、日期、主責／協作、標籤、建立與封存；
+只在完成儲存後記錄，排除逐鍵輸入、純排序與純拖曳。名稱保存前後值；說明／備註只使用實際差異純文字片段與前後雜湊。
+開啟會議功能後才開始捕捉並即時寫入目前紀錄；AI 只重新整理這些內容，不自動帶入會前變更。資料最小化只服務
+session／draft evidence，不新增長期 provider content payload。同一任務同一欄位反覆修改時，只保留「會議開始值 → 最新值」；
+回到開始值即視為 net no-op，從 working content 與 AI source 移除，中間值不呈現。離開會議模式即關閉目前 segment；
+重開同一草稿保留舊內容並建立新 segment，會外變更不補抓，也不由 AI 帶入。
+
+RD handoff：技術主管已把多重 truth source、recovery schema 擴張、live-only Edge event 與 symbolic diff composition 移除。
+WP-109-A～D 已完成 candidate implementation，並完成 deterministic、TypeScript、targeted lint、build 與 localhost browser smoke；
+仍依 `SPEC-109` 執行 WP-109-E failure／回歸驗證。`QA-DEV-109` 是唯一 DEV-109 QA authority；candidate smoke 不等於 QA PASS。
+
+Execution boundary：文件升級與 product implementation 已分階段完成；未修改 schema、migration、provider、Edge Function 或 recovery
+schema，尚未執行 Git commit、deploy 或 release artifact。完整 QA/QC 仍是下一個 gate。
+
+使用思考習慣：#問對問題、#系統描繪、#可驗證性
+
 ## Documentation Map Update - 2026-09-07（DEV-108 Implemented / QA-QC PASS / Local-only / NOT RELEASED）
 
 Spec Impact：`Intentional partial replacement / current implementation unchanged`。使用者確認任務明細的

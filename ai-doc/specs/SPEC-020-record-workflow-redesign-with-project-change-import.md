@@ -6,6 +6,16 @@
 節點類型：交付點  
 是否計入產品交付完成：是
 
+## DEV-109 Live Capture Boundary Amendment（2026-09-08）
+
+- Spec Impact：`Compatible import boundary + intentional live-capture refinement / Implemented Candidate / QA-QC Pending / NOT RELEASED`。
+- `匯入專案變化` 的日期、cutoff、provider query、protected batch、undo 與 publish-only baseline 全部不變；只有使用者明確操作
+  匯入，才可帶入會議開始前或會議關閉期間的歷史變更。
+- Live meeting capture 改由 `SPEC-109` 管理：會議開啟後，persistence-confirmed allowlist 變更立即進目前 draft；
+  `AI整理` 不得呼叫本規格的 project-change query／import action。
+- 下方 workflow matrix 中「不得改 capture session」是 DEV-107 排版修正的當時邊界；DEV-109 只定向修復 capture semantics，
+  仍不得藉此改 RecordSidebar variant、匯入流程、recovery remote policy 或發布生命週期。
+
 ## DEV-107 Corrective Contract Amendment（2026-09-07）
 
 - 文件成熟度：`Implemented / Targeted QA-QC PASS / Local-only / NOT RELEASED`。
@@ -66,7 +76,7 @@
 
 | Variant | Target actor / 正常入口 | Source state | 主要物件／目標 | Scope／安全策略 | 可見 workflow／CTA | 審核責任 |
 |---|---|---|---|---|---|---|
-| `live-meeting` | 已登入桌機／筆電使用者由既有 `新增會議記錄`／開始會議入口進入 | `draft.type=meeting` 且 `isMeetingMode=true` | 目前 live meeting draft | 沿用 DEV-094／106；不得改 recovery、離開或 capture session | 既有 meeting workflow；既有 meeting save／share／publish 責任 | RD 保持行為；QA/QC 驗證 UI、保存與離開回歸 |
+| `live-meeting` | 已登入桌機／筆電使用者由既有 `新增會議記錄`／開始會議入口進入 | `draft.type=meeting` 且 `isMeetingMode=true` | 目前 live meeting draft | 匯入沿用 DEV-094、recovery／離開沿用 DEV-106；live capture semantics 由 SPEC-109 定向修復 | 既有 meeting workflow；既有 meeting save／share／publish 責任 | RD 只依各 authority 修改責任範圍；QA/QC 驗證 UI、保存、capture 與離開回歸 |
 | `meeting-record` | 使用者由紀錄庫列表開啟既有 meeting record，或由既有會後新增入口進入 | `draft.type=meeting` 且 `isMeetingMode=false` | 會後會議紀錄 editor | 不啟動 live meeting、task capture 或 session lifecycle | 不顯示 work-log workflow；沿用 non-live meeting metadata、分享、存草稿與發布 | RD 不得以切回 meeting mode 修補；QC 驗證零混合標籤 |
 | `work-log` | 使用者由既有個人工作紀錄入口進入 | `draft.type=work_log` 且 `isMeetingMode=false` | 個人工作紀錄 editor | work-log guard、task links與保存行為不變 | 既有 work-log workflow／CTA | DEV-020／092 regression authority |
 | `empty` | 開啟紀錄面板但未建立／選取 draft | `draft=null` 且 `isMeetingMode=false` | 類型入口與最近紀錄 | 不預造 draft、不啟動 recovery | 無 editor workflow；可顯示最近紀錄 | QC 驗證清單仍可開啟正確紀錄 |
