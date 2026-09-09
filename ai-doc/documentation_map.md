@@ -16,7 +16,7 @@ Spec Impact：`Intentional replacement`。使用者明確要求刪除任務明�
 | `src/utils/taskKnowledgeSnippets.ts`、record services | `Retained / no data change` | 片段解析與紀錄資料契約不因 UI 退場而刪除。 |
 
 風險 lane：Medium；本輪需 static、TypeScript、build、DEV-108 browser 與空白任務明細 browser evidence。
-未執行 commit、push、deploy、production data mutation 或 release。
+Pre-deploy handoff：本輪已完成整合提交與 clean artifact 驗證；未 push、deploy、production data mutation 或 release。
 
 使用思考習慣：#刪除優先、#系統描繪、#可驗證性
 
@@ -44,7 +44,7 @@ QA 與 QC 均 PASS。這是停止新污染的 local candidate，不代表既有�
 | `TaskInteractionScope.tsx`／DEV-070 | `Adjacent debt / out of direct correction` | new-mode registration 要明確聲明 creation adapter；unknown→list fail-closed migration 不在本 CAPA 順手改。 |
 
 Execution boundary：本輪完成 DEV-115 local implementation、static／browser targeted QA、targeted QC 與文件 convergence；
-未修改既有任務資料、schema、migration、權限，也未 commit、push、deploy 或 release。permission-denied、390×844、
+未修改既有任務資料、schema、migration、權限；整合提交已完成，未 push、deploy 或 release。permission-denied、390×844、
 歷史 dry-run 與 CAPA effectiveness 仍由各自 gate 管理。
 
 Tech Lead optimization：架構選擇不變；文件已移除重複的 per-entry 完整 browser lifecycle、暫時雙軌工作包與
@@ -92,7 +92,7 @@ Spec Impact：`Intentional replacement`。任務說明仍沿用既有 Lexical ri
 | `ai-doc/qc/QC-DEV-113-task-note-autosize-board-width.md` | `Local targeted QC PASS / NOT RELEASED` | 36px→84px→36px auto-size、156px 內容縮至 60px 的捲軸、底邊三點拖曳、808×698 畫面與 release 邊界。 |
 | `src/components/TaskNotes/TaskDetailNoteEditor.tsx` | `Implemented / Verified` | board-scoped height preference、full-width bottom-edge resize、未手動時 auto-size、手動縮小時 overflow scroll。 |
 
-Execution boundary：本輪完成 local implementation、static／rendered QC 與文件 convergence；未 commit、push、deploy 或 release。
+Execution boundary：本輪完成 local implementation、static／rendered QC 與文件 convergence；整合提交已完成，未 push、deploy 或 release。
 
 使用思考習慣：#使用者視角、#最小介面、#可驗證性
 
