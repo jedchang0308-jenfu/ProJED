@@ -11,6 +11,7 @@ import { getX, getDateFromX, GANTT_COLOR_MAP, BAR_HEIGHT } from './utils';
 import { COMPACT_DIMENSIONS } from '../ui/compactTokens';
 import { useTaskInteractionBinding } from '../../interactions/task/useTaskInteractionBinding';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface TaskItem {
     id: string;
@@ -382,7 +383,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
             return (
                 <span
-                    className={`task-title-text absolute whitespace-nowrap text-[11px] font-medium pointer-events-none select-none px-2 transition-transform duration-75
+                    className={`task-title-text absolute inline-flex items-center gap-[2px] whitespace-nowrap text-[11px] font-medium pointer-events-none select-none px-2 transition-transform duration-75
                         ${item.type === 'list'
                             ? 'text-white drop-shadow-sm'
                             : item.type === 'card'
@@ -392,6 +393,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     style={textStyles}
                 >
                     <span>{item.title}</span>
+                    <TaskDescriptionIndicator description={item.description} />
                 </span>
             );
         } else {
@@ -401,7 +403,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
 
             return (
                 <div
-                    className={`task-title-text absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} text-[12px] font-medium whitespace-nowrap pointer-events-none select-none
+                    className={`task-title-text absolute ${isBarOnLeft ? 'left-full ml-3' : 'right-full mr-3'} inline-flex items-center gap-[2px] text-[12px] font-medium whitespace-nowrap pointer-events-none select-none
                         ${item.type === 'list'
                             ? `${GANTT_COLOR_MAP[status]?.list.match(/bg-status-\w+/)?.[0].replace('bg-', 'text-') || 'text-status-todo'} brightness-75`
                             : item.type === 'card'
@@ -410,6 +412,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
                     `}
                 >
                     <span>{item.title} {isInfiniteFallback && "(尚未設定日期)"}</span>
+                    <TaskDescriptionIndicator description={item.description} />
                 </div>
             );
         }
@@ -421,6 +424,7 @@ const GanttTaskBar: React.FC<GanttTaskBarProps> = ({
             data-task-canonical-id={item.id}
             data-task-placement-hover-surface="true"
             data-gantt-task-bar="true"
+            data-task-description-hover-trigger={item.description?.trim() ? 'true' : undefined}
             data-gantt-placement-kind={item.isTrackingReference ? 'tracking-reference' : 'primary'}
             aria-label={item.isTrackingReference ? `追蹤副本：${item.title || '未命名任務'}` : item.title || '未命名任務'}
             {...touchTapGuard.handlers}

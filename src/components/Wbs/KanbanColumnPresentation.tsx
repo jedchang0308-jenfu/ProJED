@@ -17,6 +17,7 @@ type KanbanColumnPresentationProps = {
   headerClassName?: string;
   titleProps?: React.HTMLAttributes<HTMLHeadingElement>;
   titleTextProps?: React.HTMLAttributes<HTMLSpanElement>;
+  titleIndicator?: React.ReactNode;
   titleTrailing?: React.ReactNode;
   meetingReservationValue?: number | null;
   headerMeta?: React.ReactNode;
@@ -40,6 +41,7 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
   headerClassName = '',
   titleProps,
   titleTextProps,
+  titleIndicator,
   titleTrailing,
   meetingReservationValue,
   headerMeta,
@@ -81,11 +83,12 @@ export const KanbanColumnPresentation: React.FC<KanbanColumnPresentationProps> =
           <div className="flex min-w-0 items-center gap-1.5">
             <h3
               {...titleProps}
-              className="task-title-text relative min-w-0 flex-1 text-sm font-semibold text-slate-800"
+              className="task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] text-sm font-semibold text-slate-800"
             >
-              <span {...titleTextProps} className="inline-block max-w-full truncate align-top">
+              <span {...titleTextProps} className="min-w-0 truncate">
                 {title || '未命名任務'}
               </span>
+              {titleIndicator}
             </h3>
             {titleTrailing}
             {showDate ? (

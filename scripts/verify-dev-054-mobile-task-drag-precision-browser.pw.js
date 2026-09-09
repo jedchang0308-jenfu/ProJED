@@ -237,6 +237,15 @@ async (page) => {
     const held = await startHeldTouch(card.locator(':scope > [data-task-surface-source="true"]'));
     const rail = page.locator('[data-mobile-task-action-rail="true"]').first();
     await rail.waitFor({ state: 'visible', timeout: 5000 });
+    const actionLabels = await page.locator('[data-mobile-task-action]').evaluateAll((items) => (
+      Object.fromEntries(items.map((item) => [
+        item.getAttribute('data-mobile-task-action'),
+        item.getAttribute('data-mobile-task-action-label'),
+      ]))
+    ));
+    assert(actionLabels['add-sibling'] === '新增並列任務'
+      && actionLabels['add-child'] === '新增子任務',
+    'mobile action rail create labels must match the desktop task menu', actionLabels);
     await held.end();
     await page.waitForFunction(() => document.querySelector('[data-mobile-task-action-rail="true"]')?.getAttribute('data-mobile-task-action-rail-mode') === 'armed');
     assert(await page.locator('[data-mobile-drag-preview="true"]').count() === 0, 'armed rail must not leave a finger-following preview');
@@ -251,7 +260,7 @@ async (page) => {
     assert(completions.length === 1, 'action rail click must terminate the session exactly once', { nodeId, completions });
     const screenshotPath = `${screenshotBase}-B02-armed-action-touch.png`;
     await page.screenshot({ path: screenshotPath, fullPage: false });
-    return { nodeId, beforeStatus: before.status, afterStatus: after.status, completions: completions.length, screenshotPath };
+    return { nodeId, beforeStatus: before.status, afterStatus: after.status, completions: completions.length, actionLabels, screenshotPath };
   });
 
   await runCase('QA-054-R03', 'non-center raw finger point selects the explicit same-parent boundary while preview remains finger-coupled', async () => {
@@ -570,7 +579,8 @@ async (page) => {
         const originField = document.querySelector('[data-mobile-origin-field="true"]')?.getBoundingClientRect();
         return {
           rail: { left: rail.left, right: rail.right, top: rail.top, bottom: rail.bottom },
-          preview: { left: preview.left, right: preview.right, top: preview.top, bottom: preview.bottom },
+          preview: { left: preview.left, right: preview.right, top: preview.top, bottom: preview.bottom, width: preview.width, height: preview.height },
+          previewScale: Number(document.querySelector('[data-mobile-drag-preview="true"]')?.getAttribute('data-mobile-preview-scale') || 1),
           originField: originField
             ? { left: originField.left, right: originField.right, top: originField.top, bottom: originField.bottom }
             : null,
@@ -579,6 +589,10 @@ async (page) => {
       });
       assert(geometry.rail.left >= -1 && geometry.rail.right <= viewport.width + 1, 'action rail must fit the viewport', { viewport, geometry });
       assert(geometry.preview.left >= -1 && geometry.preview.right <= viewport.width + 1, 'preview must fit the viewport', { viewport, geometry });
+      assert(geometry.previewScale === 0.5
+        && Math.abs(geometry.preview.width - 120) <= 1
+        && Math.abs(geometry.preview.height - 20) <= 1,
+      'mobile drag preview should render at the approved half-scale size', { viewport, geometry });
       assert(geometry.originField
         && geometry.originField.left >= -1
         && geometry.originField.right <= viewport.width + 1,

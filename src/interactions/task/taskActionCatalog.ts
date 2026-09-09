@@ -1,7 +1,7 @@
 import type { TaskActionDefinition, TaskActionId, TaskInteractionProfile } from './types';
 
 const ACTION_CATALOG: readonly TaskActionDefinition[] = Object.freeze([
-  { id: 'task.create-sibling', label: '新增同階任務', icon: 'plus', section: 'create', kind: 'mutation', capability: 'create' },
+  { id: 'task.create-sibling', label: '新增並列任務', icon: 'plus', section: 'create', kind: 'mutation', capability: 'create' },
   { id: 'task.create-child', label: '新增子任務', icon: 'git-branch', section: 'create', kind: 'mutation', capability: 'create' },
   { id: 'task.create-relationship', label: '建立關聯線', icon: 'link-2', section: 'create', kind: 'transient', capability: 'edit' },
   { id: 'task.duplicate', label: '複製任務', icon: 'copy', section: 'create', kind: 'mutation', capability: 'create' },

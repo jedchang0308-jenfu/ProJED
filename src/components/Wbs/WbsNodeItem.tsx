@@ -21,6 +21,7 @@ import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
 import { useTaskPlacementController } from './useTaskPlacementController';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface WbsNodeItemProps {
   nodeId: string;
@@ -360,10 +361,12 @@ export const WbsNodeItem: React.FC<WbsNodeItemProps> = ({ nodeId, level = 0, anc
           ) : null}
 
           <span
-            className={`task-title-text relative flex-1 min-w-0 px-1 text-sm ${level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`}
+            className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] px-1 text-sm ${level === 0 ? 'font-semibold' : 'font-medium'} ${taskStatusTitleClass[node.status]}`}
             aria-label={node.title || '未命名任務'}
+            data-task-id={node.id}
           >
-            <span className="block truncate">{node.title || '未命名任務'}</span>
+            <span className="min-w-0 truncate">{node.title || '未命名任務'}</span>
+            <TaskDescriptionIndicator description={node.description} />
           </span>
 
           <div className="flex items-center gap-1 flex-shrink-0 w-24">

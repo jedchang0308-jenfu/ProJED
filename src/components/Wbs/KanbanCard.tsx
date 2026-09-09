@@ -31,6 +31,7 @@ import { TaskSurfaceFrame } from './TaskSurfaceFrame';
 import { useTaskPlacementController } from './useTaskPlacementController';
 import { KANBAN_CARD_FRAME_CLASS, KanbanCardPresentation } from './KanbanCardPresentation';
 import { getMeetingTaskReservationValue } from '../../utils/meetingTaskReservation';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface KanbanCardProps {
   nodeId: string;       // Level 2 TaskNode 的 ID
@@ -330,6 +331,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ nodeId, columnId, previe
             showDate={!isSelectingMode}
             showTags={showTags}
             tags={showTags && nodeTags.length > 0 ? <KanbanTagSticker tags={nodeTags} /> : null}
+            titleIndicator={<TaskDescriptionIndicator description={node.description} />}
             titleTrailing={(
               <>
                 {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}

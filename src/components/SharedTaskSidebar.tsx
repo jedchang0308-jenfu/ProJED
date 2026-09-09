@@ -12,6 +12,7 @@ import type { TaskNode } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 import { primaryPlacementId } from '../features/taskTracking/model';
+import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 
 type SharedTaskSidebarSurface = 'gantt' | 'calendar';
 
@@ -84,6 +85,7 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
                 void interactionBinding.openMenu({ x: e.clientX, y: e.clientY });
             }}
             data-task-id={item.id}
+            data-task-description-hover-trigger={item.description?.trim() ? 'true' : undefined}
             data-task-canonical-id={item.id}
             data-task-placement-id={placementId}
             data-task-placement-hover-surface="true"
@@ -121,8 +123,9 @@ const SortableSidebarRow = ({ item, onClick, rowHeight, surface, onAddChild, onT
             ) : (
                 <div className="flex-shrink-0 w-[18px]" />
             )}
-            <span className={`task-title-text relative min-w-0 flex-1 ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
-                <span className="block truncate">{item.title}</span>
+            <span className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] ${level === 0 ? 'text-[13px]' : level === 1 ? 'text-[11px]' : 'text-[10px]'}`}>
+                <span className="min-w-0 truncate">{item.title}</span>
+                <TaskDescriptionIndicator description={item.description} />
             </span>
             {onAddChild && !isTrackingReference && (
                 <button

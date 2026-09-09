@@ -62,6 +62,7 @@ import { buildHierarchicalTaskItems } from '../utils/taskHierarchy';
 import { projectTaskFilterResults } from '../features/taskFilters';
 import { TaskFilterResultState } from './ui/TaskFilterResultState';
 import { buildCollapsedProjectionTasks, buildProjectionParentIndex } from '../features/taskTracking/model';
+import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 
 // ──────────────────────────────────────────────────────────
 // 核心算法：將任務清單轉換為「按週分割的線段」
@@ -439,6 +440,7 @@ const CalendarView = () => {
                                                     data-task-id={seg.item.id}
                                                     data-task-canonical-id={seg.item.id}
                                                     data-task-placement-hover-surface="true"
+                                                    data-task-description-hover-trigger={seg.item.description?.trim() ? 'true' : undefined}
                                                     data-calendar-placement-kind={seg.item.isTrackingReference ? 'tracking-reference' : 'primary'}
                                                     aria-label={seg.item.isTrackingReference ? `追蹤副本：${seg.item.title || '未命名任務'}` : seg.item.title || '未命名任務'}
                                                     onClick={() => handleItemClick(seg.item)}
@@ -474,17 +476,17 @@ const CalendarView = () => {
                                                         ${horizontalPadding}
                                                         shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-white/70 hover:brightness-95 transition-all
                                                     `}
-                                                    title={`${seg.item.title}${seg.item.startDate ? ` (${seg.item.startDate}` : ''}${seg.item.endDate ? ` ~ ${seg.item.endDate})` : ')'}`}
                                                 >
                                                     {/* 只在起始段或單日顯示圓點 + 文字 */}
                                                     {(seg.isTaskStart || seg.isSingleDay) && (
                                                         <>
                                                             <div className={`flex-shrink-0 w-1.5 h-1.5 rounded-full mr-1 ${styles.dot}`} />
-                                                            <span className="task-title-text text-[11px] font-medium truncate leading-none">
+                                                            <span className="task-title-text min-w-0 truncate text-[11px] font-medium leading-none">
                                                                 {seg.item.title}
                                                             </span>
                                                         </>
                                                     )}
+                                                    <TaskDescriptionIndicator description={seg.item.description} className="ml-[2px]" />
                                                 </div>
                                             );
                                         })}

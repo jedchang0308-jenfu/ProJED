@@ -1,5 +1,61 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-09（DEV-113 任務說明尺寸行為 Local QA-QC PASS / NOT RELEASED）
+
+Spec Impact：`Compatible refinement`。任務說明仍沿用既有 Lexical rich content 與 plain-text projection；本次只調整
+編輯器的預設高度、內容自動增高與看板範圍的瀏覽器端寬度偏好，不新增任務資料欄位、schema、migration 或權限。
+
+| 文件／程式權威 | 狀態 | DEV-113 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `DEV-113 Completed / Local QA-QC PASS / NOT RELEASED` | Canonical scope、驗收、local-only preference 與 release boundary。 |
+| `ai-doc/specs/SPEC-113-task-note-autosize-board-width.md` | `Target Authority / In sync` | 單行預設、scrollHeight 自動增高、原生水平 resize、board scope 與優先序。 |
+| `ai-doc/qa/QA-DEV-113-task-note-autosize-board-width.md` | `Executed / PASS` | B01～B08 驗證矩陣與工程 gate。 |
+| `ai-doc/qc/QC-DEV-113-task-note-autosize-board-width.md` | `Local targeted QC PASS / NOT RELEASED` | 36px→84px→36px rendered geometry、資料還原、回歸與 release 邊界。 |
+| `src/components/TaskNotes/TaskDetailNoteEditor.tsx` | `Implemented / Verified` | board-scoped width preference、native resize、height auto-size。 |
+
+Execution boundary：本輪完成 local implementation、static／rendered QC 與文件 convergence；未 commit、push、deploy 或 release。
+
+使用思考習慣：#使用者視角、#最小介面、#可驗證性
+
+## Documentation Map Update - 2026-09-09（DEV-112 任務詳情基本資料列對齊 Local QA-QC PASS / NOT RELEASED）
+
+Spec Impact：`Compatible refinement`。依使用者對任務詳情基本資料區的實畫面回饋，桌機版統一狀態、日期、
+主責／協作的標籤與控制項基線，並以精確日期子格線取代既有 overflow 接合；欄位、資料、儲存、權限、
+TaskDetailsModal 入口、標籤第二列與低於 1024px 的響應式契約不變。
+
+| 文件／程式權威 | 狀態 | DEV-112 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `DEV-112 Completed / Local QA-QC PASS / NOT RELEASED` | Canonical scope、驗收、既有 mobile gate 限制與 release boundary。 |
+| `ai-doc/specs/SPEC-112-task-details-metadata-alignment.md` | `Target Authority / In sync` | 桌機三欄格線、標籤／控制基線、日期精確軌道與 out-of-scope。 |
+| `ai-doc/qa/QA-DEV-112-task-details-metadata-alignment.md` | `Executed / PASS with stated legacy-gate limit` | 靜態、rendered geometry、DEV-028 regression、工程 gate 與舊 mobile fixture timeout。 |
+| `ai-doc/qc/QC-DEV-112-task-details-metadata-alignment.md` | `Local targeted QC PASS / NOT RELEASED` | 1298×698 實畫面量測、visible error、DEV-028 browser 與證據邊界。 |
+| `src/components/TaskDetailsModal.tsx` | `Implemented / Verified` | 88px／384px／flex 三欄、12px gutter、128／32／128／96px 日期控制軌道。 |
+| `scripts/verify-dev-028-cross-mode-task-interactions-browser.pw.js` | `Regression strengthened / PASS` | 新增 label baseline 與日期控制無重疊的 rendered assertions。 |
+
+---
+
+## Documentation Map Update - 2026-09-09（DEV-111 微型任務說明標示 Local QA-QC PASS / NOT RELEASED）
+
+Spec Impact：`Intentional replacement`（僅替換 DEV-111 先前 no-icon 限制）。依使用者明確選擇，有非空任務說明的
+任務在各閱讀模式標題旁顯示 9px `AlignLeft` 微型圖示／11px 固定槽位；它無背景、外框、文字、pointer 或 focus
+ownership。既有說明仍由桌面 hover 完整 canonical task surface 1 秒後顯示；不新增 OKR／方向欄位，不改 editor、
+資料、權限、interaction command 或拖曳 ownership。
+
+| 文件／程式權威 | 狀態 | DEV-111 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md` | `DEV-111 Completed / Local QA-QC PASS / NOT RELEASED` | Canonical scope、驗收、相鄰限制與 release boundary。 |
+| `ai-doc/specs/SPEC-111-task-description-hover-card.md` | `Target Authority / In sync` | 微型標示、五模式入口、藍框 surface ownership、1000ms dwell、plain text、portal、dismissal、a11y 與 no-data-change contract。 |
+| `ai-doc/qa/QA-DEV-111-task-description-hover-card.md` | `Executed / PASS` | FMEA、fixture v3、34-case browser、38-case static、regression 與 runtime lifecycle。 |
+| `ai-doc/qc/QC-DEV-111-task-description-hover-card.md` | `Local targeted QC PASS / NOT RELEASED` | 五模式與390px實畫面、9／11px量測、timing、geometry、content、dismissal、a11y、visible／console error。 |
+| `src/components/TaskDescriptionIndicator.tsx`、`TaskDescriptionHoverCard.tsx`、五模式 task surfaces | `Implemented / Verified` | 共用非空標示契約＋MainLayout 單例 delegated listener；看板／清單直接解析既有 `data-task-surface-source`，其他模式沿用完整 task surface trigger。 |
+| `SPEC-066` | No conflict / reused authority | `description` 仍是第一則備註 plain-text compatibility projection；canonical rich content 不變。 |
+| `SPEC-065`、`SPEC-028`、`SPEC-070` | Compatible / targeted regression | subtree frame、click/details/selection/drag ownership 不變；DEV-065 legacy gate 漂移如 QC 限制。 |
+
+Execution boundary：本輪完成 local implementation、static/browser QA-QC 與文件 convergence；未改 schema、migration、
+provider、權限或 persisted data，也未 commit、push、deploy 或 release。ADR not needed；無 P0/P1 blocker。
+
+使用思考習慣：#使用者視角、#溝通設計、#可驗證性
+
 ## Documentation Map Update - 2026-09-08（DEV-110 Local Candidate Implemented / CAPA Not Registered）
 
 Spec Impact：`Intentional narrow exception + corrective amendment`。Production畫面證實account-unplaced task

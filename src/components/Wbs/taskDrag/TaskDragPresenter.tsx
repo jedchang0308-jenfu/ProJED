@@ -5,15 +5,21 @@ import { MOBILE_PREVIEW_FINGER_CLEARANCE_PX } from './taskDragTargetAdapter';
 import { taskDragSourceKindToSurfaceKind } from './taskDropIntent';
 import { TaskOriginTitleField } from './TaskOriginTitleField';
 import { TaskChildDropPreview } from './TaskChildDropPreview';
+import { getTaskActionDefinition } from '../../../interactions/task/taskActionCatalog';
 import {
   resolvePointerUpperRightOverlayPosition,
+  TASK_DRAG_OVERLAY_SCALE,
   TASK_DRAG_OVERLAY_POINTER_GAP_PX,
 } from './taskDragOverlayPosition';
 
+const MOBILE_PREVIEW_WIDTH_PX = 240;
 const MOBILE_PREVIEW_HEIGHT_PX = 40;
 const MOBILE_PREVIEW_SAFE_TOP_PX = 48;
 const MOBILE_PREVIEW_SAFE_BOTTOM_PX = 8;
 const MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX = 16;
+const mobileActionLabel = (actionId: 'task.create-sibling' | 'task.create-child', fallback: string) => (
+  getTaskActionDefinition(actionId)?.label || fallback
+);
 
 const mobileActionItems: Array<{
   key: MobileTaskAction;
@@ -31,14 +37,14 @@ const mobileActionItems: Array<{
   },
   {
     key: 'add-sibling',
-    label: '新增並列任務',
+    label: mobileActionLabel('task.create-sibling', '新增並列任務'),
     permission: 'create',
     activeClassName: 'bg-sky-500 text-white',
     idleClassName: 'bg-sky-50 text-sky-700 hover:bg-sky-100',
   },
   {
     key: 'add-child',
-    label: '新增子任務',
+    label: mobileActionLabel('task.create-child', '新增子任務'),
     permission: 'create',
     activeClassName: 'bg-indigo-500 text-white',
     idleClassName: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
@@ -73,22 +79,24 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
 
   const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
-  const previewWidth = Math.min(240, Math.max(0, viewportWidth - 16));
+  const previewWidth = Math.min(MOBILE_PREVIEW_WIDTH_PX, Math.max(0, viewportWidth - 16));
+  const previewVisualWidth = previewWidth * TASK_DRAG_OVERLAY_SCALE;
+  const previewVisualHeight = MOBILE_PREVIEW_HEIGHT_PX * TASK_DRAG_OVERLAY_SCALE;
   const previewHorizontalPosition = resolvePointerUpperRightOverlayPosition({
     pointer: { x: state.pointerX, y: state.pointerY },
-    overlay: { width: previewWidth, height: MOBILE_PREVIEW_HEIGHT_PX },
+    overlay: { width: previewVisualWidth, height: previewVisualHeight },
     viewport: { left: 0, top: 0, width: viewportWidth, height: viewportHeight },
   });
   const previewMaxTop = Math.max(
     MOBILE_PREVIEW_SAFE_TOP_PX,
-    viewportHeight - MOBILE_PREVIEW_HEIGHT_PX - MOBILE_PREVIEW_SAFE_BOTTOM_PX,
+    viewportHeight - previewVisualHeight - MOBILE_PREVIEW_SAFE_BOTTOM_PX,
   );
   const previewFingerClearance = state.childIntentPhase === 'none'
     ? MOBILE_PREVIEW_FINGER_CLEARANCE_PX
     : MOBILE_CHILD_PREVIEW_FINGER_CLEARANCE_PX;
   const fingerPreviewTop = state.pointerY
     - previewFingerClearance
-    - MOBILE_PREVIEW_HEIGHT_PX;
+    - previewVisualHeight;
   const previewTop = Math.min(
     previewMaxTop,
     Math.max(MOBILE_PREVIEW_SAFE_TOP_PX, fingerPreviewTop),
@@ -106,7 +114,13 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
       {state.phase === 'dragging' ? (
         <div
           className="pointer-events-none fixed flex h-10 w-[240px] max-w-[calc(100vw-1rem)] items-center rounded-md border border-primary/25 bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-2 ring-primary/15"
-          style={{ left: previewHorizontalPosition.left, top: previewTop, zIndex: overlayBaseZIndex }}
+          style={{
+            left: previewHorizontalPosition.left,
+            top: previewTop,
+            transform: `scale(${TASK_DRAG_OVERLAY_SCALE})`,
+            transformOrigin: 'top left',
+            zIndex: overlayBaseZIndex,
+          }}
           data-mobile-drag-preview="true"
           data-task-id={state.nodeId}
           data-task-drag-session-id={state.sessionId}
@@ -115,6 +129,7 @@ export const TaskDragPresenter: React.FC<TaskDragPresenterProps> = ({
           data-mobile-preview-edge-placement={previewHorizontalPosition.placement}
           data-mobile-preview-pointer-gap={TASK_DRAG_OVERLAY_POINTER_GAP_PX}
           data-mobile-preview-finger-clearance={previewFingerClearance}
+          data-mobile-preview-scale={TASK_DRAG_OVERLAY_SCALE}
         >
           <div className="truncate">{state.title || '未命名任務'}</div>
         </div>

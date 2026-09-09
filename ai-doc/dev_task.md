@@ -692,6 +692,35 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
     TypeScript、`verify:source`與`git diff --check` PASS；B05/B06保留deterministic／TEST evidence boundary。
   - 計入交付：否（DEV-108 corrective開發點；文件ready不算產品完成）
 
+- ✓ DEV-111 [交付點] [完成] [P2] [Local QA-QC PASS / NOT RELEASED] 任務說明跨閱讀模式懸浮視窗
+  - 摘要：沿用既有任務說明；桌面滑鼠停留任務 1 秒後，在看板、清單、心智圖、甘特圖與行事曆顯示
+    同一款 viewport-bounded 純文字懸浮視窗；非空任務另以 9px 圖示／11px 槽位提示內容存在，看板與清單
+    仍直接引用選取預覽藍框 surface 作啟動範圍。
+  - 來源 ID：`USER-20260908-TASK-DESCRIPTION-HOVER-CARD-ALL-READING-MODES`。
+  - 相容任務：DEV-028、DEV-065、DEV-066、DEV-070。
+  - 下一步：若納入正式版本，另走 release gate；目前不自動 deploy。
+  - 證據：`SPEC-111`、`QA-DEV-111`、`QC-DEV-111`；static 38/38、browser 34/34、DEV-028
+    static/browser、DEV-066、TypeScript、targeted ESLint、test build、diff check PASS。
+  - 計入交付：是（Local implementation 完成；正式 release 另需 gate）
+
+- ✓ DEV-112 [開發點] [完成] [P2] [Local QA-QC PASS / NOT RELEASED] 任務詳情基本資料列對齊
+  - 摘要：整理任務詳情的狀態、日期與主責／協作區；三個標籤與控制項共用基線，日期箭頭左右留白對稱，日期與工期不再靠 grid overflow 接合。
+  - 來源 ID：`USER-20260909-TASK-DETAIL-METADATA-ALIGNMENT`。
+  - 父任務：DEV-028；相容 DEV-031、DEV-066、DEV-098。
+  - 下一步：若納入正式版本，另走 release gate；目前不自動 deploy。
+  - 證據：`SPEC-112`、`QA-DEV-112`、`QC-DEV-112`；DEV-112 static 10/10、DEV-028 static 48/48＋browser PASS、TypeScript、targeted ESLint、test build、1298×698 in-app browser geometry／visible-error QC PASS。
+  - 限制：舊 `verify-task-details-mobile-meta-layout-browser.pw.js` 在進入 metadata 驗證前等待既有 `data-task-record-timeline-actions` fixture timeout；不改寫成通過，也不歸因於本次桌機 class-only 修正。
+  - 計入交付：是（Local desktop layout refinement 完成；正式 release 另需 gate）
+
+- ✓ DEV-113 [開發點] [完成] [P2] [Local QA-QC PASS / NOT RELEASED] 任務說明單行預設與看板寬度偏好
+  - 摘要：任務說明編輯器預設只占一行，內容增加時自動增高完整顯示；使用者可用原生水平 resize 調整寬度，並以看板範圍保存介面偏好。
+  - 來源 ID：`USER-20260909-TASK-NOTE-COMPACT-AUTOSIZE-WIDTH-PREFERENCE`。
+  - 父任務：DEV-066；相容 DEV-028、DEV-111。
+  - 下一步：若納入正式版本，另走 release gate；目前不自動 deploy。
+  - 證據：`SPEC-113`、`QA-DEV-113`、`QC-DEV-113`；static 12/12、in-app browser 36px→84px→36px geometry、TypeScript、targeted ESLint、test build 與既有回歸。
+  - 限制：寬度偏好目前是 browser localStorage 的 board-scoped UI preference，不是後端跨使用者共享設定。
+  - 計入交付：是（Local implementation 完成；正式 release 另需 gate）
+
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
 - 文件成熟度：Rework 4 `Implemented / Local Simulated QC PASS / Physical Device Pending`；Rework 1～3 為歷史 `Implemented / QC PASS`
@@ -4429,3 +4458,57 @@ DEV-110結果，也不得在本DEV內啟動deploy。
   QA/QC與release未執行。
 
 使用思考習慣：#第一性原理、#效用理論、#多層次分析、#可驗證性
+
+## DEV-111：任務說明跨閱讀模式懸浮視窗
+
+- 開發文件成熟度：`RD Implementation Ready / Implemented / Local QA-QC PASS`
+- 狀態：完成（Local-only / NOT RELEASED）
+- 節點類型：交付點
+- 父交付點：無；相容 DEV-028、DEV-065、DEV-066、DEV-070
+- 是否計入產品交付完成：是（本機功能完成；release 另行計算）
+- 原始需求邊界：使用者要求只增加一個功能，直接用現有「任務說明」自由文字，在所有閱讀模式中
+  滑鼠靜置 1 秒後顯示懸浮說明視窗。
+- 風險等級：Medium（跨五個閱讀模式的使用者可見互動）
+- Authoritative spec：`ai-doc/specs/SPEC-111-task-description-hover-card.md`
+- QA／QC：`ai-doc/qa/QA-DEV-111-task-description-hover-card.md`、
+  `ai-doc/qc/QC-DEV-111-task-description-hover-card.md`
+
+### 任務目標與範圍
+
+- [x] 不新增欄位，唯讀使用 `TaskNode.description` 的最新非空 plain-text projection。
+- [x] 看板 L1/L2/L3+ 與清單直接使用選取預覽藍框 task surface；心智圖、甘特條／側欄、行事曆區段／
+  側欄使用各自完整 task surface。
+- [x] 1000ms dwell、stale timer cancellation、hoverable、Escape／scroll／pointer／drag dismissal。
+- [x] body portal、viewport clamp、長內容內捲、純文字與換行、tooltip a11y 關聯。
+- [x] 空白、touch/coarse pointer、mindmap quick-title editing 不啟動。
+- [x] 非空任務在看板三層、清單、心智圖、甘特圖、行事曆與共用側欄顯示 9px 圖示／11px 固定槽位；
+  空白任務不顯示、不占位，圖示不承接 pointer、focus 或可存取名稱。
+- [x] 不改 click、details、selection、context menu、drag、TaskNode、provider、schema、權限或 persistence。
+
+### 驗收與結果
+
+- [x] Static 38/38；browser 34/34，五模式 rendered／indicator screenshot、L1/L2/L3+／清單 title 外藍框內點位、
+  9／11px、空白不渲染、390px、timing、content、geometry、dismissal、a11y 與 visible／console error 全部 PASS。
+- [x] DEV-028 static 48/48＋browser PASS；DEV-066 targeted PASS；TypeScript、test build、targeted
+  ESLint 0 error、`git diff --check` PASS。
+- [x] DEV-065 前段 hover geometry／source handoff／native title browser cases PASS；其未修改的 stale static literal
+  與 DragOverlay summary gate 失敗保留為相鄰限制，不擴張本 DEV。
+
+### Spec governance／release boundary
+
+- Spec Impact：`Intentional replacement`（只替換本 DEV 先前 no-icon 限制）；SPEC-066 plain projection、
+  SPEC-065 subtree hover、SPEC-028／070 interaction command 契約均不被取代。
+- ADR：不需要；局部可逆且無資料／權限／跨模組狀態決策。
+- Deferred Scope：結構化 OKR 欄位、階層繼承、必填規則、mobile touch 替代入口與可編輯 hover 均未要求。
+- Release：不改 build/runtime/schema/migration；本輪未 commit、push、deploy 或 release。
+
+### 變更紀錄
+
+- 2026-09-08：依使用者 annotation 收斂為單一 hover 功能；完成規格、跨模式 trigger、集中式 portal、
+  static/browser verifier、targeted regression 與 Local QA-QC。
+- 2026-09-09：依使用者回饋將看板／清單啟動範圍改為直接引用既有選取預覽藍框 surface，移除四處
+  title-only trigger；新增 L1／L2／L3+／清單範圍 browser gate 並完成 Local QA-QC。
+- 2026-09-09：依使用者選定方案，在非空任務標題旁加入共用 9px `AlignLeft` 圖示與 11px 固定槽位；
+  圖示無背景／外框／文字且不攔截互動，完成五模式、共用側欄、空白與 390px Local QA-QC。
+
+使用思考習慣：#使用者視角、#溝通設計、#可驗證性

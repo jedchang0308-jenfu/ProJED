@@ -20,6 +20,7 @@ import { useTaskPlacementController } from './useTaskPlacementController';
 import { KANBAN_COLUMN_FRAME_CLASS, KanbanColumnPresentation } from './KanbanColumnPresentation';
 import useRecordStore from '../../store/useRecordStore';
 import { getMeetingTaskReservationValue } from '../../utils/meetingTaskReservation';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface KanbanColumnProps {
   nodeId: string;
@@ -247,6 +248,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({ nodeId, previewNodes
           'data-task-id': nodeId,
         } as React.HTMLAttributes<HTMLHeadingElement>}
         titleTextProps={{ 'data-task-id': nodeId } as React.HTMLAttributes<HTMLSpanElement>}
+        titleIndicator={<TaskDescriptionIndicator description={node.description} />}
         titleTrailing={taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}
         headerMeta={isSelectingMode ? (
           <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">

@@ -10,6 +10,7 @@ const TaskDetailNoteEditor = React.lazy(() => import('./TaskDetailNoteEditor'));
 
 interface TaskDetailNoteFieldProps {
   canEdit: boolean;
+  boardId: string;
   note: TaskDetailNote;
   noteIndex: number;
   titleEditable?: boolean;
@@ -92,7 +93,7 @@ export const TaskDetailNoteContent: React.FC<{ note: TaskDetailNote }> = ({ note
 };
 
 const EditorLoadingFallback: React.FC<{ note: TaskDetailNote }> = ({ note }) => (
-  <div className="min-h-[96px] px-0 py-1.5">
+  <div className="min-h-9 px-0 py-1.5">
     <TaskDetailNoteContent note={note} />
   </div>
 );

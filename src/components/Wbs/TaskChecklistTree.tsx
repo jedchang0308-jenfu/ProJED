@@ -28,6 +28,7 @@ import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTr
 import { useTaskPlacementController } from './useTaskPlacementController';
 import type { TaskCommandDependencies } from '../../interactions/task/taskCommandExecutor';
 import type { TaskInteractionSurfaceId } from '../../interactions/task/types';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 export type TaskChecklistInteractionMode = 'default' | 'dependency-selection' | 'record-capture';
 
@@ -301,7 +302,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
         data-task-child-drop-committed={isRecentlyChildDropped ? 'true' : undefined}
       >
         <span
-          className={`task-title-text relative min-w-0 flex-1 rounded-sm pr-2 text-xs font-medium leading-tight transition-[color,background-color,box-shadow] ${
+          className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] rounded-sm pr-2 text-xs font-medium leading-tight transition-[color,background-color,box-shadow] ${
             isRecentlyChildDropped ? 'bg-primary/10 ring-2 ring-primary/40' : ''
           } ${taskStatusTitleClass[status]}`}
           aria-label={child.title || '未命名任務'}
@@ -316,11 +317,12 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
           }}
         >
           <span
-            className="inline-block max-w-full truncate align-top"
+            className="min-w-0 truncate"
             data-task-id={childId}
           >
             {child.title || '未命名任務'}
           </span>
+          <TaskDescriptionIndicator description={child.description} />
         </span>
 
         {taskGesture.isPlacementPending ? <TaskPlacementPendingIndicator /> : null}

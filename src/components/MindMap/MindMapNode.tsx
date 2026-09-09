@@ -10,6 +10,7 @@ import {
   useMindMapNodeSelected,
   type MindMapSelectionStore,
 } from './mindMapSelectionStore';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 export type MindMapDirection = 'left' | 'right';
 export type MindMapDropMode = 'before' | 'after' | 'child';
@@ -230,6 +231,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           tabIndex={0}
           aria-expanded={hasChildren ? isExpanded : undefined}
           data-mindmap-node={node.id}
+          data-task-id={canonicalTaskId}
           data-task-canonical-id={canonicalTaskId}
           data-task-placement-id={placementId}
           data-mindmap-placement-kind={isTrackingReference ? 'tracking-reference' : 'primary'}
@@ -241,6 +243,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           data-mindmap-parent-id={node.parentId || ''}
           data-mindmap-node-order={node.order}
           data-mindmap-inline-title-editing={isTitleEditing ? 'true' : 'false'}
+          data-task-description-hover-trigger={!isTitleEditing && node.description?.trim() ? 'true' : undefined}
           data-mindmap-cut-pending={isCutPending ? 'true' : 'false'}
           draggable={(isTrackingReference ? canManageTaskReference : canMoveTask) && !isCoarsePointer}
           {...touchTapGuard.handlers}
@@ -357,8 +360,11 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                   />
                 </>
               ) : (
-                <span className="block truncate" title={node.title || '未命名任務'}>
-                  {node.title || '未命名任務'}
+                <span className="flex max-w-full items-center gap-[2px]">
+                  <span className="min-w-0 truncate" title={node.title || '未命名任務'}>
+                    {node.title || '未命名任務'}
+                  </span>
+                  <TaskDescriptionIndicator description={node.description} />
                 </span>
               )}
             </span>

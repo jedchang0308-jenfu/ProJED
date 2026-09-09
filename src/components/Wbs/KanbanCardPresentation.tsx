@@ -27,6 +27,7 @@ type KanbanCardPresentationProps = {
   titleClassName?: string;
   showDate?: boolean;
   showTags?: boolean;
+  titleIndicator?: React.ReactNode;
   titleTrailing?: React.ReactNode;
   rowTrailing?: React.ReactNode;
   meetingReservationValue?: number | null;
@@ -45,6 +46,7 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
   titleClassName = '',
   showDate = true,
   showTags = true,
+  titleIndicator,
   titleTrailing,
   rowTrailing,
   meetingReservationValue,
@@ -66,14 +68,15 @@ export const KanbanCardPresentation: React.FC<KanbanCardPresentationProps> = ({
         <Content className="kanban-task-title-content flex min-w-0 flex-1 items-center gap-1">
           <Title
             {...titleProps}
-            className={`task-title-text relative min-w-0 flex-1 pr-2 text-sm font-medium leading-tight transition-colors ${model.status ? taskStatusTitleClass[model.status] : ''} ${titleClassName}`}
+            className={`task-title-text relative flex min-w-0 flex-1 items-center gap-[2px] pr-2 text-sm font-medium leading-tight transition-colors ${model.status ? taskStatusTitleClass[model.status] : ''} ${titleClassName}`}
           >
             <TitleText
               {...titleTextProps}
-              className="inline-block max-w-full truncate align-top"
+              className="min-w-0 truncate"
             >
               {model.title || '未命名任務'}
             </TitleText>
+            {titleIndicator}
           </Title>
           {showTags ? tags : null}
           {titleTrailing}

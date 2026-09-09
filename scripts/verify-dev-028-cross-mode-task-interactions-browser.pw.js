@@ -135,6 +135,7 @@ async (page) => {
           });
           const rect = element?.getBoundingClientRect();
           const controlRect = element?.querySelector('[data-task-details-meta-control-row="true"]')?.getBoundingClientRect();
+          const labelRect = element?.querySelector('[data-task-details-meta-label-text="true"]')?.getBoundingClientRect();
           return rect
             ? {
               name,
@@ -142,11 +143,18 @@ async (page) => {
               bottom: controlRect?.bottom ?? rect.bottom,
               left: rect.left,
               right: rect.right,
+              labelTop: labelRect?.top ?? null,
+              labelBottom: labelRect?.bottom ?? null,
             }
             : null;
         }).filter(Boolean);
         const dateRange = grid.querySelector('[data-task-details-schedule-controls="true"]');
         const dateRangeRect = dateRange?.getBoundingClientRect();
+        const dateLabelRect = dateRange
+          ? Array.from(dateRange.children)
+            .find((element) => element.matches('[data-task-details-meta-label-text="true"]'))
+            ?.getBoundingClientRect()
+          : null;
         const dateRangeBaseline = dateRange?.querySelector('[data-task-details-meta-field="start"]');
         const dateRangeBaselineControl = dateRangeBaseline?.querySelector('[data-task-details-meta-control-row="true"]');
         const dateRangeBaselineRect = dateRangeBaselineControl?.getBoundingClientRect() || dateRangeBaseline?.getBoundingClientRect();
@@ -161,8 +169,10 @@ async (page) => {
         const durationInputAppearance = durationInput
           ? getComputedStyle(durationInput).appearance
           : '';
+        const startDateInput = dateRange?.querySelector('[data-task-details-meta-field="start"] input[type="date"]');
         const endDateInput = dateRange?.querySelector('[data-task-details-meta-field="end"] input[type="date"]');
         const durationGroup = dateRange?.querySelector('[data-task-details-duration-inline="true"]');
+        const startDateRect = startDateInput?.getBoundingClientRect();
         const endDateRect = endDateInput?.getBoundingClientRect();
         const durationGroupRect = durationGroup?.getBoundingClientRect();
         const arrow = dateRange?.querySelector('[data-task-details-date-range-arrow="true"]');
@@ -191,6 +201,9 @@ async (page) => {
           dateRangeBaseline: dateRangeBaselineRect
             ? { top: dateRangeBaselineRect.top, bottom: dateRangeBaselineRect.bottom, left: dateRangeBaselineRect.left, right: dateRangeBaselineRect.right }
             : null,
+          dateLabel: dateLabelRect
+            ? { top: dateLabelRect.top, bottom: dateLabelRect.bottom }
+            : null,
           dateInputWidths,
           durationInputWidth,
           durationInputAppearance,
@@ -198,6 +211,14 @@ async (page) => {
             endDateRect
             && durationGroupRect
             && Math.abs(endDateRect.right - durationGroupRect.left) <= 1,
+          ),
+          dateControlsPreciselySpaced: Boolean(
+            startDateRect
+            && arrowRect
+            && endDateRect
+            && arrowRect.width >= 24
+            && Math.abs(startDateRect.right - arrowRect.left) <= 1
+            && Math.abs(arrowRect.right - endDateRect.left) <= 1,
           ),
           tags: tagsRect
             ? { top: tagsRect.top, bottom: tagsRect.bottom, left: tagsRect.left, right: tagsRect.right }
@@ -213,12 +234,27 @@ async (page) => {
       const fieldsWithDateRange = [...metaGeometry.fields, metaGeometry.dateRangeBaseline].filter(Boolean);
       const fieldTops = fieldsWithDateRange.map(field => field.top);
       const fieldBottoms = fieldsWithDateRange.map(field => field.bottom);
+      const labelTops = [
+        ...metaGeometry.fields.map(field => field.labelTop),
+        metaGeometry.dateLabel?.top,
+      ].filter(value => typeof value === 'number');
+      const labelBottoms = [
+        ...metaGeometry.fields.map(field => field.labelBottom),
+        metaGeometry.dateLabel?.bottom,
+      ].filter(value => typeof value === 'number');
       assert(
         metaGeometry.fields.length === 2
           && metaGeometry.dateRange
           && metaGeometry.dateRangeBaseline
           && metaGeometry.tags,
         'desktop task metadata should separate the tag row from the first-row controls',
+        metaGeometry,
+      );
+      assert(
+        labelTops.length === 3
+          && Math.max(...labelTops) - Math.min(...labelTops) <= 1
+          && Math.max(...labelBottoms) - Math.min(...labelBottoms) <= 1,
+        'desktop task metadata labels should share one visual baseline',
         metaGeometry,
       );
       assert(
@@ -244,6 +280,7 @@ async (page) => {
           && metaGeometry.durationInputWidth >= 64
           && metaGeometry.durationInputAppearance === 'textfield'
           && metaGeometry.dateDurationJoined
+          && metaGeometry.dateControlsPreciselySpaced
           && metaGeometry.arrowVisible
           && metaGeometry.visibleDateLabelCount === 0
           && metaGeometry.tags.top >= Math.max(...fieldBottoms)

@@ -59,8 +59,6 @@ const ICONS: Partial<Record<TaskActionId, React.ReactNode>> = {
 const LABELS: Partial<Record<TaskActionId, string>> = {
   'task.open-details': '開啟明細',
   'task.toggle-complete': '狀態改完成',
-  'task.create-sibling': '新增並列任務',
-  'task.create-child': '新增子任務',
   'task.create-relationship': '建立關聯線',
   'task.duplicate': '複製任務',
   'task.copy': '複製',

@@ -65,6 +65,7 @@ import {
 
 interface TaskDetailNoteEditorProps {
   canEdit: boolean;
+  boardId: string;
   note: TaskDetailNote;
   noteIndex: number;
   titleEditable?: boolean;
@@ -73,6 +74,44 @@ interface TaskDetailNoteEditorProps {
   onSave: () => void;
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
 }
+
+const TASK_NOTE_EDITOR_WIDTHS_KEY = 'projed.taskDetailNote.widths.v1';
+const TASK_NOTE_EDITOR_MIN_WIDTH = 240;
+const TASK_NOTE_EDITOR_MAX_WIDTH = 1600;
+const TASK_NOTE_EDITOR_MIN_HEIGHT = 36;
+
+const clampTaskNoteEditorWidth = (value: number) => Math.min(
+  TASK_NOTE_EDITOR_MAX_WIDTH,
+  Math.max(TASK_NOTE_EDITOR_MIN_WIDTH, Math.round(value)),
+);
+
+const readTaskNoteEditorWidth = (boardId: string): number | null => {
+  if (!boardId || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_WIDTHS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const value = Number(parsed[boardId]);
+    return Number.isFinite(value) ? clampTaskNoteEditorWidth(value) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeTaskNoteEditorWidth = (boardId: string, width: number) => {
+  if (!boardId || typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_WIDTHS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const widths = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+    widths[boardId] = clampTaskNoteEditorWidth(width);
+    window.localStorage.setItem(TASK_NOTE_EDITOR_WIDTHS_KEY, JSON.stringify(widths));
+  } catch {
+    // Layout preferences are best-effort and must not block editing.
+  }
+};
 
 const editorTheme = {
   heading: {
@@ -450,6 +489,7 @@ const NoteChangePlugin: React.FC<{
 
 const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   canEdit,
+  boardId,
   note,
   noteIndex,
   titleEditable = true,
@@ -458,6 +498,64 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   onSave,
   onUpdate,
 }) => {
+  const contentEditableRef = React.useRef<HTMLDivElement | null>(null);
+  const resizeFrameRef = React.useRef<number | null>(null);
+  const isUserResizingRef = React.useRef(false);
+  const pendingWidthRef = React.useRef<number | null>(null);
+  const [savedWidth, setSavedWidth] = React.useState<number | null>(() => readTaskNoteEditorWidth(boardId));
+
+  const autoSizeContent = React.useCallback(() => {
+    if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
+    resizeFrameRef.current = window.requestAnimationFrame(() => {
+      resizeFrameRef.current = null;
+      const element = contentEditableRef.current;
+      if (!element) return;
+      element.style.height = 'auto';
+      element.style.height = `${Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.scrollHeight))}px`;
+    });
+  }, []);
+
+  React.useLayoutEffect(() => {
+    setSavedWidth(readTaskNoteEditorWidth(boardId));
+    autoSizeContent();
+  }, [autoSizeContent, boardId]);
+
+  React.useLayoutEffect(() => {
+    autoSizeContent();
+  }, [autoSizeContent, note.content, note.richContent]);
+
+  React.useEffect(() => {
+    const element = contentEditableRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(() => {
+      if (!isUserResizingRef.current) return;
+      const width = Math.round(element.getBoundingClientRect().width);
+      if (width < TASK_NOTE_EDITOR_MIN_WIDTH) return;
+      pendingWidthRef.current = width;
+      setSavedWidth(width);
+    });
+    observer.observe(element);
+
+    const finishResize = () => {
+      if (!isUserResizingRef.current) return;
+      isUserResizingRef.current = false;
+      if (pendingWidthRef.current !== null) {
+        writeTaskNoteEditorWidth(boardId, pendingWidthRef.current);
+        pendingWidthRef.current = null;
+      }
+    };
+
+    window.addEventListener('pointerup', finishResize, true);
+    window.addEventListener('pointercancel', finishResize, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('pointerup', finishResize, true);
+      window.removeEventListener('pointercancel', finishResize, true);
+      if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
+    };
+  }, [boardId]);
+
   const [initialConfig] = React.useState(() => ({
     namespace: 'ProJEDTaskDetailNote-' + note.id,
     editable: canEdit,
@@ -521,15 +619,23 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
           <RichTextPlugin
             contentEditable={(
               <ContentEditable
+                ref={contentEditableRef}
                 className={[
-                  'min-h-[96px] w-full overflow-auto whitespace-pre-wrap rounded-md border border-slate-200/70',
+                  'min-h-[36px] min-w-[240px] max-w-full resize-x overflow-x-hidden overflow-y-hidden whitespace-pre-wrap rounded-md border border-slate-200/70',
                   'bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-700 outline-none transition',
                   'hover:border-slate-300/70 focus:border-blue-300 focus:ring-2 focus:ring-blue-100',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
+                style={savedWidth ? { width: `${savedWidth}px` } : undefined}
                 aria-label={'備註內容：' + (note.title || '未命名備註')}
                 aria-placeholder="輸入備註內容"
                 placeholder={<span />}
+                onPointerDown={event => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  if (event.clientX >= rect.right - 16 && event.clientY >= rect.bottom - 16) {
+                    isUserResizingRef.current = true;
+                  }
+                }}
                 data-task-detail-note-content-input="true"
               />
             )}

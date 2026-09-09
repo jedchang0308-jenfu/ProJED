@@ -1,7 +1,8 @@
 export const TASK_DRAG_OVERLAY_POINTER_GAP_PX = 16;
 export const TASK_DRAG_OVERLAY_VIEWPORT_MARGIN_PX = 8;
 export const DESKTOP_TASK_DRAG_OVERLAY_POINTER_GAP_PX = 0;
-export const DESKTOP_TASK_DRAG_OVERLAY_SCALE = 0.5;
+export const TASK_DRAG_OVERLAY_SCALE = 0.5;
+export const DESKTOP_TASK_DRAG_OVERLAY_SCALE = TASK_DRAG_OVERLAY_SCALE;
 
 interface OverlayPositionInput {
   pointer: { x: number; y: number };

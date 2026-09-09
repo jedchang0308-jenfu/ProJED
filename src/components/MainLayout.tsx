@@ -45,6 +45,7 @@ import {
 import { useWbsStore } from '../store/useWbsStore';
 import { useTaskFilterStore } from '../store/useTaskFilterStore';
 import { clearTaskSelection } from '../utils/taskInteractions';
+import TaskDescriptionHoverCard from './TaskDescriptionHoverCard';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -504,6 +505,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       </div>
 
         <GlobalContextMenu />
+        <TaskDescriptionHoverCard />
       </div>
     </PanelPreviewProvider>
   );

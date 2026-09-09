@@ -143,6 +143,14 @@ check('preview remains finger-coupled and preserves z-order',
   && source.presenter.includes('z-[90]')
   && source.presenter.includes('z-[95]'));
 
+check('mobile preview uses the same half-scale visual treatment as desktop', hasAll(source.presenter, [
+  'TASK_DRAG_OVERLAY_SCALE',
+  'data-mobile-preview-scale={TASK_DRAG_OVERLAY_SCALE}',
+  'transform: `scale(${TASK_DRAG_OVERLAY_SCALE})`',
+  'previewVisualWidth',
+  'previewVisualHeight',
+]));
+
 check('mobile source placeholders do not impersonate the live drop indicator',
   source.card.includes('data-kanban-drag-source-placeholder={isDragPlaceholder')
   && source.card.includes('kanban-drag-origin-placeholder')

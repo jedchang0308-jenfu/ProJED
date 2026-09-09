@@ -1200,7 +1200,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
         <div ref={bodyRef} className="flex-1 overflow-auto px-4 py-4" data-task-details-scroll-surface="true">
           <section className="pb-2" data-task-details-meta-section="true">
             <div
-              className="grid gap-y-3 lg:grid-cols-[5.5rem_23.5rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
+              className="grid gap-y-3 lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
               data-task-details-meta-grid="true"
             >
               <div
@@ -1208,7 +1208,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 data-task-details-mobile-meta="true"
               >
                 <div
-                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_23.5rem_minmax(0,1fr)] lg:items-end lg:gap-x-2 lg:gap-y-2"
+                  className="space-y-1.5 bg-white px-2 py-2 md:grid md:grid-cols-[8.5rem_minmax(0,1fr)] md:items-start md:gap-x-3 md:gap-y-2 md:space-y-0 md:bg-transparent md:px-0 md:py-0 lg:grid lg:grid-cols-[5.5rem_24rem_minmax(0,1fr)] lg:items-end lg:gap-x-3 lg:gap-y-2"
                   data-task-details-mobile-meta-controls="true"
                 >
               <div
@@ -1217,7 +1217,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 data-task-details-schedule-row="true"
               >
                 <div
-                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)_auto] items-end gap-2 lg:col-start-2 lg:row-start-1"
+                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)_auto] items-end gap-2 lg:col-start-2 lg:row-start-1 lg:grid-cols-[8rem_2rem_8rem_auto] lg:gap-x-0 lg:gap-y-1"
                   data-task-details-schedule-controls="true"
                   data-task-details-mobile-schedule-controls="true"
                 >
@@ -1267,7 +1267,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                     </label>
 
                     <span
-                      className="col-start-2 flex h-8 w-4 shrink-0 items-center justify-center text-sm font-semibold text-slate-300"
+                      className="col-start-2 flex h-8 w-full shrink-0 items-center justify-center text-sm font-semibold text-slate-300"
                       aria-hidden="true"
                       data-task-details-date-range-arrow="true"
                     >
@@ -1435,6 +1435,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 <TaskDetailNoteField
                   key={note.id}
                   canEdit={canEditTask}
+                  boardId={node.boardId}
                   note={note}
                   noteIndex={noteIndex}
                   titleEditable={noteIndex > 0 || note.id !== 'note_default'}
