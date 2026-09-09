@@ -1,6 +1,7 @@
 import type { InboxItem, TaskNode } from '../../types';
 import { isSupabaseBackend } from '../../services/dataBackend';
 import { supabaseTaskWorkbenchUnplacedService } from '../../services/supabase/taskWorkbenchUnplacedService';
+import { createBlankTaskNode } from '../taskCreation/createBlankTaskNode';
 import {
   normalizeTaskWorkbenchUnplacedTask,
   TASK_WORKBENCH_UNPLACED_BOARD_ID,
@@ -188,19 +189,13 @@ export const createNewUnplacedTaskNode = (
   workspaceId: string,
   order: number,
 ): TaskNode => {
-  const now = Date.now();
-  const trimmedTitle = title.trim() || '新任務';
-  return normalizeTaskWorkbenchUnplacedTask({
+  return normalizeTaskWorkbenchUnplacedTask(createBlankTaskNode({
     id: createTaskWorkbenchUnplacedTaskId(),
     workspaceId,
     boardId: TASK_WORKBENCH_UNPLACED_BOARD_ID,
     parentId: null,
-    title: trimmedTitle,
-    description: trimmedTitle,
-    status: 'todo',
+    title,
     nodeType: 'task',
     order,
-    createdAt: now,
-    updatedAt: now,
-  });
+  }));
 };

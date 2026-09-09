@@ -40,7 +40,9 @@ assert('S04-local-scope', source.detailsSection.includes('<DndContext')
   && source.detailsSection.includes('targetScopeRef: dragScopeRef')
   && source.detailsSection.includes('ref={dragScopeRef}')
   && source.dragSession.includes('scopeElement: dependenciesRef.current.targetScopeRef?.current')
-  && source.dragTarget.includes('scopeElement && (!rawElement'));
+  && source.dragTarget.includes('scopeElement && (!rawElement')
+  && !source.detailsSection.includes('拖曳到此處新增為直屬子任務')
+  && source.detailsSection.includes('className={`mt-1 h-1'));
 assert('S05-single-modal-stack', source.navigation.includes('TaskDetailsNavigationEntry')
   && source.detailsHost.includes('useTaskDetailsNavigation')
   && source.detailsHost.split('<TaskDetailsModal').length - 1 === 1
@@ -48,11 +50,18 @@ assert('S05-single-modal-stack', source.navigation.includes('TaskDetailsNavigati
 assert('S06-typed-transition', source.detailsModal.includes('type TaskDetailsTransition')
   && source.detailsModal.includes('pendingTransitionRef')
   && source.detailsModal.includes('runTransition')
+  && source.detailsModal.includes('data-task-details-parent="true"')
+  && source.detailsModal.includes('data-task-details-parent-link="true"')
+  && source.detailsModal.includes('data-task-details-parent-id={ancestor.id}')
+  && source.detailsModal.includes('回到上一階任務')
+  && source.detailsModal.includes('parentTaskId')
+  && source.detailsModal.includes('trackingReferences')
   && !source.detailsModal.includes('TASK_DETAILS_SAVE_TIMEOUT_MS')
   && !source.detailsModal.includes('outcome-unknown'));
 assert('S07-overlay-ownership', source.detailsSection.includes('overlayBaseZIndex={10020}')
   && source.presenter.includes('overlayBaseZIndex')
-  && source.detailsModal.includes('data-task-details-back="true"'));
+  && source.detailsModal.includes('data-task-details-parent="true"')
+  && !source.detailsModal.includes('data-task-details-back="true"'));
 assert('S08-no-schema-boundary', !source.detailsSection.includes('migration')
   && !source.detailsSection.includes('create table')
   && source.spec.includes('RD Implementation Ready')

@@ -77,7 +77,7 @@ add(
     'record_task_links',
     'data-sidebar-records-button',
     'data-task-details-modal',
-    '歷史資訊',
+    'task_details_history_removed',
   ]),
 );
 

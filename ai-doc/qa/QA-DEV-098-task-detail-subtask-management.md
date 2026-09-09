@@ -12,7 +12,7 @@
 transaction；同時證明 Details 擁有獨立 drag scope、同 modal 導覽不遺失草稿、overlay／Escape／focus
 不互相踩踏，且 primary／tracking／角色權限語意不被改寫。
 
-Drag scope 定義：明細內子任務 row／recursive tree 與目前任務直屬 root drop zone 在 scope 內；modal
+Drag scope 定義：明細內子任務 row／recursive tree 與目前任務直屬的無框線 root drop target 在 scope 內；modal
 外框、metadata、遮罩後方 Board／Workbench 與其他 view 均不得命中。這個邊界不妨礙 row／tree 共用，
 因為共用的是 neutral renderer 與既有 placement contract，DnD host 仍由各 surface 各自持有。
 
@@ -75,7 +75,7 @@ DEV-098 核心 QA exit 必須是 S01～S08、P01～P10、B01～B16 全部 PASS�
 | S03 | Details沒有 `parentId`／`order` direct mutation或第二個 commit；desktop／mobile都到既有 `taskDragCommit` authority。 |
 | S04 | Details擁有local `DndContext`／mobile session；generic scope ref拒絕 modal外 target，Board caller保留原 scope。 |
 | S05 | `useTaskDetailsNavigation`只有一個 stack owner；DOM中只 render一個 `TaskDetailsModal`，entry不保存 `HTMLElement`。 |
-| S06 | close／push／back／create共用同一 pending transition與 persistence primitive；歷史DEV-098 verifier只證明callback-only baseline。整合DEV-099後，必須改驗accepted／not-accepted terminal settlement與unknown owner，且不可存在callbackless accepted path。 |
+| S06 | close／push／back／create與父任務導覽共用同一 pending transition與 persistence primitive；歷史DEV-098 verifier只證明callback-only baseline。整合DEV-099後，必須改驗accepted／not-accepted terminal settlement與unknown owner，且不可存在callbackless accepted path。 |
 | S07 | details-open menu與drag presenter高於 modal；Escape／outside-click owner是明確 state，不以不完整 DOM selector猜測。 |
 | S08 | 無 schema／migration／provider／RLS改動；DEV-098 verifier與 package scripts存在，planned file impact未越界。 |
 
@@ -100,10 +100,10 @@ DEV-098 核心 QA exit 必須是 S01～S08、P01～P10、B01～B16 全部 PASS�
 |---|---|---|
 | B01 | Board與Details開同一 L3+ fixture | row文字、date／tag、右鍵 action、primary／tracking frame一致；source evidence指向同一 component。 |
 | B02 | P0、empty primary、empty tracking、viewer | section位於notes後／history前、首次展開、count正確；primary只有一個合法CTA，tracking／viewer無誤導mutation。 |
-| B03 | child pointer／Enter開啟，再Back／Close | 同一 modal push／pop；Back回觸發 row，Close回外部 origin；modal數量恆為1。 |
+| B03 | child pointer／Enter開啟；直接開啟或切換子任務回父／breadcrumb／Close | 同一 modal navigation；標題列只顯示「回到上一階任務」按鈕、不顯示 Back，完整階層路徑的祖先任務均為可點擊入口，直接開啟或切換的子任務可回父，Close回外部 origin；modal數量恆為1。 |
 | B04 | 修改title／notes後立即開child，save success延遲 | 保存完成前不切換；成功後切換一次，父任務重開值正確。 |
 | B05 | 修改後開child，save reject | 停留父任務、draft仍在、顯示Retry；不得切換、清空或宣稱成功。 |
-| B06 | save pending期間快速要求P1／P2／Back | 只保留第一個合法 pending transition，其餘no-op；無 stale entry或callback污染。 |
+| B06 | save pending期間快速要求P1／P2／上一階任務 | 只保留第一個合法 pending transition，其餘no-op；無 stale entry或callback污染。 |
 | B07 | child右鍵／Shift+F10與各合法action | 使用同一catalog與guard；menu完整顯示在modal上方，action後modal依既有契約保留。 |
 | B08 | active drag→menu→modal依序按Escape／outside click | 一次只關一層；preview、selection、focus與body flag清乾淨。 |
 | B09 | desktop pointer同層排序、append-child、root append | indicator與commit正確；before／after parent+order符合readback。 |
@@ -111,7 +111,7 @@ DEV-098 核心 QA exit 必須是 S01～S08、P01～P10、B01～B16 全部 PASS�
 | B11 | placement provider reject／outcome unknown | source subtree仍在原位；近端錯誤可恢復；details navigation不掩蓋pending transaction。 |
 | B12 | KeyboardSensor Space／方向鍵／Escape／提交 | 只走可見合法target；live-region有結果；Escape只取消drag。 |
 | B13 | 390px短tap、短滑、長按、edge auto-scroll | tap開details、短滑只捲modal、長按才drag；背景Board不捲動。 |
-| B14 | 320px long-press、cancel／touchcancel、collapse／Back中止 | preview／rail不裁切；所有transient、timer與body flag清除。 |
+| B14 | 320px long-press、cancel／touchcancel、collapse／上一階任務中止 | preview／rail不裁切；所有transient、timer與body flag清除。 |
 | B15 | tracking actor matrix＋開啟後revoke capability | explicit children可見、canonical-only descendant不可見；越權CTA／drag／menu action為0。 |
 | B16 | 4 viewports＋5種entry的layout／error sweep | 單一主縱向scroll、水平overflow=0、無nested card shell；正常fixture console／pageerror／visible error=0。 |
 
@@ -268,6 +268,14 @@ Runtime 證據：`output/qa/dev-098/runtime-cleanup-final-20260902.json` 記錄�
   不將未歸因的相鄰失敗誤算為 DEV-098 PASS。
 - 2026-09-01：補明 drag scope與共用邊界：只有 modal 內子任務 host／root drop zone可命中；modal 外框、
   metadata與背景 view拒絕，row／tree仍由 shared neutral renderer提供。
+- 2026-09-09：依使用者畫面回饋收斂子任務區 UI：移除額外 card／panel 視覺容器與 root drop helper 文字／虛線，
+  保留無框線直屬 drop target；新增 browser 檢查確認無 helper row／rounded border 殘留。
+- 2026-09-09：依使用者回饋新增 B03 直接開啟子任務的「回到上一階任務」按鈕案例；以 844×698 截圖與
+  單一 modal／save guard 行為確認 canonical parent 導覽。
+- 2026-09-10：依使用者回饋收斂 B03 標題列導覽：移除「返回上一個任務詳情」，只保留「回到上一階任務」；
+  browser readback 增加 legacy button count=0。
+- 2026-09-10：依使用者回饋擴充 B03，驗證標題下方完整階層路徑的 canonical 祖先任務連結可導覽，
+  並維持單一 modal 與 save guard。
 - 2026-09-01：以乾淨 baseline HEAD `13888b2` 隔離重跑相鄰失敗；DEV-046-D02、DEV-053-B14與 DEV-055
   失敗可重現，DEV-053-B13未重現但仍保留 current-run instability。新增 `baseline-audit.json`，將
   pre-existing evidence與 DEV-098 本身結果分開，避免錯誤歸因或假性 regression PASS。

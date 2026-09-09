@@ -12,27 +12,36 @@ const editor = readFileSync('src/components/TaskNotes/TaskDetailNoteEditor.tsx',
 const field = readFileSync('src/components/TaskNotes/TaskDetailNoteField.tsx', 'utf8');
 const detailsModal = readFileSync('src/components/TaskDetailsModal.tsx', 'utf8');
 
-assert('note editor receives board scope for layout preference persistence', editor.includes('boardId: string'));
+assert('note editor receives board scope for height preference persistence', editor.includes('boardId: string'));
 assert('task note field forwards board scope to the lazy editor', field.includes('<TaskDetailNoteEditor {...props} />'));
 assert('task details modal supplies the active board id', detailsModal.includes('boardId={node.boardId}'));
-assert('layout preference uses a versioned board-scoped storage key', editor.includes("projed.taskDetailNote.widths.v1"));
-assert('stored widths are clamped to a safe range', editor.includes('TASK_NOTE_EDITOR_MIN_WIDTH = 240')
-  && editor.includes('TASK_NOTE_EDITOR_MAX_WIDTH = 1600')
-  && editor.includes('clampTaskNoteEditorWidth'));
+assert('height preference uses a versioned board-scoped storage key', editor.includes("projed.taskDetailNote.heights.v1"));
+assert('stored heights are clamped to a safe range', editor.includes('TASK_NOTE_EDITOR_MIN_HEIGHT = 36')
+  && editor.includes('TASK_NOTE_EDITOR_MAX_HEIGHT = 960')
+  && editor.includes('clampTaskNoteEditorHeight'));
 assert('empty editor defaults to one compact line', editor.includes("TASK_NOTE_EDITOR_MIN_HEIGHT = 36")
-  && editor.includes("'min-h-[36px]"));
+  && editor.includes('min-h-[36px]'));
 assert('content changes auto-size height from scrollHeight', editor.includes("element.style.height = 'auto'")
   && editor.includes('element.scrollHeight')
   && editor.includes('autoSizeContent'));
-assert('saved width is applied without replacing content sizing', editor.includes('style={savedWidth ? { width: `${savedWidth}px` } : undefined}')
-  && editor.includes('element.style.height'));
-assert('native horizontal resize remains available to the user', editor.includes('resize-x')
-  && editor.includes('isUserResizingRef'));
-assert('resize completion writes the board-scoped preference', editor.includes('writeTaskNoteEditorWidth(boardId, pendingWidthRef.current)')
-  && editor.includes("window.localStorage.setItem(TASK_NOTE_EDITOR_WIDTHS_KEY"));
-assert('resize observer updates the in-memory width before persistence', editor.includes('new ResizeObserver')
-  && editor.includes('setSavedWidth(width)'));
-assert('editor suppresses horizontal overflow while allowing content to grow vertically', editor.includes('overflow-x-hidden overflow-y-hidden'));
+assert('manual height can be smaller than content and expose vertical scrolling', editor.includes('preferredHeightRef.current === null')
+  && editor.includes('overflow-y-auto')
+  && editor.includes('scrollbar-thin')
+  && !editor.includes('Math.max(intrinsicHeightRef.current, clampTaskNoteEditorHeight(height))'));
+assert('editor width stays attached to its container and native resizing is disabled', editor.includes('w-full max-w-full resize-none')
+  && !editor.includes('resize-x'));
+assert('full bottom edge owns the vertical resize interaction', editor.includes('data-task-note-resize-handle="bottom-edge"')
+  && editor.includes('data-task-note-resize-axis="vertical"')
+  && editor.includes('absolute inset-x-0 -bottom-1'));
+assert('pointer movement changes only editor height', editor.includes('startHeight + event.clientY - start.startY')
+  && !editor.includes('event.clientX >= rect.right'));
+assert('resize completion writes the board-scoped height preference', editor.includes('writeTaskNoteEditorHeight(boardId, pendingHeightRef.current)')
+  && editor.includes("window.localStorage.setItem(TASK_NOTE_EDITOR_HEIGHTS_KEY"));
+assert('bottom edge exposes keyboard separator semantics', editor.includes('role="separator"')
+  && editor.includes('aria-orientation="horizontal"')
+  && editor.includes("event.key === 'ArrowUp'")
+  && editor.includes("event.key === 'ArrowDown'"));
+assert('editor suppresses horizontal overflow and enables vertical overflow when manually compacted', editor.includes('overflow-x-hidden overflow-y-auto'));
 
 const artifact = {
   devId: 'DEV-113',

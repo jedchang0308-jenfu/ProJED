@@ -246,7 +246,7 @@ const runSelfCheck = () => {
   );
 
   add(
-    'executor covers meeting mode, AI整理, publish, record persistence, record links, and task knowledge UI',
+    'executor covers meeting mode, AI整理, publish, record persistence, record links, and retired task-history UI absence',
     includesAll(scriptSource, [
       '[data-record-composer-shell]',
       '[data-meeting-workflow-step="ai_suggestion"]',
@@ -254,7 +254,7 @@ const runSelfCheck = () => {
       'knowledge_records',
       'record_task_links',
       'data-task-details-modal',
-      '歷史資訊',
+      'task_details_history_removed',
     ]),
   );
 
@@ -624,7 +624,7 @@ async (page) => {
       await page.locator('.record-list-row', { hasText: payload.uniqueNeedle }).waitFor({ state: 'visible', timeout: 15000 });
     }
 
-    stage = 'task_knowledge_ui';
+    stage = 'task_details_history_removed';
     await page.goto(payload.productionUrl, { waitUntil: 'domcontentloaded' });
     await page.evaluate(({ key, session, workspaceId, boardId }) => {
       localStorage.setItem(key, JSON.stringify(session));
@@ -643,11 +643,16 @@ async (page) => {
     await page.locator('[data-mobile-pan-surface="board"]').waitFor({ state: 'visible', timeout: 20000 });
     await page.locator('[data-task-id="' + payload.taskA.uiId + '"]').first().click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'visible', timeout: 15000 });
-    const taskDetailsText = await page.locator('[data-task-details-modal="true"]').innerText({ timeout: 15000 });
-    if (!taskDetailsText.includes('歷史資訊') || !taskDetailsText.includes(payload.uniqueNeedle)) {
+    const taskDetailsModal = page.locator('[data-task-details-modal="true"]');
+    const taskDetailsText = await taskDetailsModal.innerText({ timeout: 15000 });
+    const retiredTaskHistoryUiCount = await taskDetailsModal
+      .locator('[data-task-knowledge-trigger], [data-task-knowledge-toggle], [data-task-knowledge-panel]')
+      .count();
+    if (retiredTaskHistoryUiCount > 0 || taskDetailsText.includes('歷史資訊')) {
       return JSON.stringify({
         ok: false,
-        stage: 'task_knowledge_ui_missing',
+        stage: 'task_details_history_still_visible',
+        retiredTaskHistoryUiCount,
         taskDetailsText: taskDetailsText.slice(0, 1800),
       }, null, 2);
     }

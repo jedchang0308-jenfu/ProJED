@@ -8,7 +8,9 @@ const files = {
   dragSensors: 'src/hooks/useDragSensors.ts',
   mainLayout: 'src/components/MainLayout.tsx',
   kanbanCard: 'src/components/Wbs/KanbanCard.tsx',
+  kanbanCardPresentation: 'src/components/Wbs/KanbanCardPresentation.tsx',
   kanbanChecklist: 'src/components/Wbs/KanbanChecklist.tsx',
+  taskChecklistTree: 'src/components/Wbs/TaskChecklistTree.tsx',
   boardView: 'src/components/BoardView.tsx',
   taskDragCommit: 'src/components/Wbs/taskDrag/taskDragCommit.ts',
   wbsStore: 'src/store/useWbsStore.ts',
@@ -103,13 +105,25 @@ assert(
 
 assert(
   'Task Workbench keeps unplaced rows draggable while placed rows are read-only list entries',
-  source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
+    source.taskWorkbench.includes('const renderWorkbenchTaskRow = ({') &&
     source.taskWorkbench.includes('const WorkbenchUnplacedDragCard') &&
     source.taskWorkbench.includes('const WorkbenchPlacedReadOnlyCard') &&
     source.taskWorkbench.includes('const { attributes, listeners, setNodeRef, isDragging } = useDraggable({') &&
-    source.taskWorkbench.includes('disabled: !canMoveTask || taskGesture.mobileActionMode') &&
-    source.taskWorkbench.includes('const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode') &&
-    source.taskWorkbench.includes('ref={canUseDragSurface ? setNodeRef : undefined}') &&
+    (
+      (
+        source.taskWorkbench.includes('disabled: !canMoveTask || taskGesture.mobileActionMode') &&
+        source.taskWorkbench.includes('const canUseDragSurface = canMoveTask && !taskGesture.mobileActionMode')
+      ) ||
+      (
+        source.taskWorkbench.includes('const canDragTask = task.isTrackingReference ? canManageTaskReference : canMoveTask;') &&
+        source.taskWorkbench.includes('disabled: !canDragTask || taskGesture.mobileActionMode || taskGesture.isPlacementPending') &&
+        source.taskWorkbench.includes('const canUseDragSurface = canDragTask && !taskGesture.mobileActionMode && !taskGesture.isPlacementPending')
+      )
+    ) &&
+    (
+      source.taskWorkbench.includes('ref={canUseDragSurface ? setNodeRef : undefined}') ||
+      source.taskWorkbench.includes('if (canUseDragSurface) setNodeRef?.(element);')
+    ) &&
     source.taskWorkbench.includes("data-task-workbench-drag-surface={canUseDragSurface ? 'task-row-root' : undefined}") &&
     source.taskWorkbench.includes('{...gestureHandlers}') &&
     source.taskWorkbench.includes('mobileActionEnabled: false') &&
@@ -147,8 +161,18 @@ assert(
     source.taskDateBadge.includes("surface === 'kanban-card'") &&
     source.taskDateBadge.includes("surface === 'checklist'") &&
     source.taskDateBadge.includes("data-task-date-surface=\"workbench\"") &&
-    source.kanbanCard.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
-    source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+    (
+      (
+        source.kanbanCard.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+        source.kanbanChecklist.includes("import { TaskDateBadge } from './TaskDateBadge'")
+      ) ||
+      (
+        source.kanbanCard.includes('KanbanCardPresentation') &&
+        source.kanbanCardPresentation.includes("import { TaskDateBadge } from './TaskDateBadge'") &&
+        source.kanbanChecklist.includes('TaskChecklistTree') &&
+        source.taskChecklistTree.includes("import { TaskDateBadge } from './TaskDateBadge'")
+      )
+    ) &&
     source.taskWorkbench.includes("import { TaskDateBadge } from './Wbs/TaskDateBadge'") &&
     source.taskWorkbench.includes('const renderWorkbenchTaskContent = ({') &&
     source.taskWorkbench.includes('renderWorkbenchTaskContent({') &&

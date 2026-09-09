@@ -16,6 +16,10 @@
 reference source-board read、same-board append、generic error與unresolved task-link save語意改以
 `SPEC-110-unplaced-task-meeting-record-boundary.md`為authority。此修訂尚未實作，不回寫DEV-108歷史PASS。
 
+2026-09-10 DEV-008 UI retirement amendment：使用者要求移除任務明細的完整「歷史資訊」入口與面板；
+本規格的第一層人工會議補記列表與 composer 不變。`TaskRecordTimeline` 已移除，
+`taskKnowledgeSnippets` 僅保留相容解析能力，不再是任務明細 UI。
+
 ## 1. 使用者決策與目標
 
 - `1A`：第一層列表只顯示從任務明細「加入」建立的人工補記；不得以 task link 或自由文字推測來源，
@@ -36,7 +40,7 @@ reference source-board read、same-board append、generic error與unresolved tas
 `任務基本資料 → 任務說明 → 會議紀錄 → 其他備註 → 子任務`
 
 `TaskDetailsModal` 必須在第一個 `TaskDetailNoteField`（預設「任務說明」）之後插入會議紀錄區；不得把
-區段放回所有備註之前，也不得藏在 `TaskRecordTimeline` 或「查看歷史資訊」之後。
+區段放回所有備註之前，也不得重新藏入已退場的「歷史資訊」第二層入口。
 
 ### 2.2 最小畫面
 
@@ -216,7 +220,7 @@ recordService.listByNode(workspaceId, boardId, nodeId, options?): Promise<Editab
 - `getRecordDraftSignature` 已包含整份 metadata，DEV-106 local snapshot 也保存 clean metadata；新增 namespace
   必須納入 dirty／recovery signature，不另建 recovery storage。
 - Metadata provider passthrough 已存在；實作需補三 provider round-trip 測試，證明 upsert/reload 不遺失 namespace。
-- 不修改 `TaskRecordTimeline`／`taskKnowledgeSnippets` 的全量歷史能力；兩者不是本列表資料源。
+- `TaskRecordTimeline` 已依 2026-09-10 使用者決策移除；`taskKnowledgeSnippets` 保留且不是本列表資料源。
 
 ## 6. 實作檔案與責任
 
@@ -251,6 +255,7 @@ recovery，必須停止並回 PM 升級風險；不得在 DEV-108 scope 內順�
 - [ ] archived meeting record 仍顯示；source hard delete 後成功 reload 不再顯示。
 - [ ] 一至三筆全顯示；四筆以上預設為最新三筆且正序；「其餘 N 筆」可原地展開／收合全部。
 - [ ] 畫面順序正確，沒有卡片、每列框、icon、badge、搜尋、空狀態或常駐成功提示。
+- [ ] 任務明細不再顯示 `data-task-knowledge-*`、歷史資訊搜尋／空狀態或補會後／工作紀錄動作。
 - [ ] denied／invalid metadata／load failure／save failure 不假成功；原輸入或已進 draft 的內容可恢復，重試不重複。
 - [ ] DEV-008 task knowledge、DEV-009 append/token、DEV-024 synthesis、DEV-066 notes 與 DEV-106 recovery 不退化。
 - [ ] 1440×900、1024×768、390×844 通過；390 只驗證持續列表，不開放既有 mobile meeting composer。

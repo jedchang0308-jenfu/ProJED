@@ -291,6 +291,7 @@ const TaskChecklistRow: React.FC<TaskChecklistRowProps> = ({
         data-task-drag-surface="true"
         data-task-drag-surface-kind="checklist-row"
         data-task-surface-source="true"
+        data-task-description-hover-trigger={hostAdapter.surfaceId === 'task-details.subtask-row' && child.description?.trim() ? 'true' : undefined}
         data-kanban-drag-source-placeholder={isDragPlaceholder ? 'true' : undefined}
         data-desktop-task-hover-preview={!isDragPlaceholder && !isSelectingMode && !isRecordCaptureMode ? 'true' : undefined}
         data-task-selected={selectedTaskId === child.id ? 'true' : undefined}

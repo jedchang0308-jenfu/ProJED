@@ -324,12 +324,15 @@ RecordSidebar 只設一個 quiet、`aria-live="polite"` 的保存狀態位置，
 
 ## 11. 手機不可用邊界
 
-新增 `useMeetingRecordAvailability()`，authoritative 判定沿用現況：`unavailable = coarse pointer || viewport <= 640px`。MainLayout、Sidebar、RecordsView、RecordSidebar、TaskRecordTimeline、`open-knowledge-record` event 與 restore hook 必須共用該結果。
+2026-09-10 修訂：`TaskRecordTimeline` 已依使用者決策從任務明細退場；以下 unavailable contract
+只剩 `RecordsView`、全域入口、sidebar、event 與 recovery consumers。此修訂不刪除紀錄資料。
+
+新增 `useMeetingRecordAvailability()`，authoritative 判定沿用現況：`unavailable = coarse pointer || viewport <= 640px`。MainLayout、Sidebar、RecordsView、RecordSidebar、`open-knowledge-record` event 與 restore hook 必須共用該結果。
 
 手機／unavailable 狀態：
 
 - 不 render「新增會議記錄／補一筆會後紀錄」入口。
-- RecordsView 與 TaskRecordTimeline 不 render meeting record row；`open-knowledge-record` 指向 meeting 時 no-op，不影響非 meeting work log。
+- RecordsView 不 render meeting record row；`open-knowledge-record` 指向 meeting 時 no-op，不影響非 meeting work log。
 - 不允許 `startMeetingRecord()`、`openNewRecord('meeting')`、meeting `openExistingRecord()` 或 restore 開啟編輯器。
 - 不 render meeting RecordSidebar、local/cloud 保存狀態或 restore/conflict UI。
 - 不執行 meeting local snapshot 或 cloud checkpoint。
@@ -362,7 +365,7 @@ RecordSidebar 只設一個 quiet、`aria-live="polite"` 的保存狀態位置，
 - `src/components/Sidebar.tsx`
 - `src/components/Records/RecordsView.tsx`
 - `src/components/Records/RecordSidebar.tsx`
-- `src/components/Records/TaskRecordTimeline.tsx`
+- `src/components/Records/TaskRecordTimeline.tsx`（2026-09-10 任務明細歷史資訊 UI 退場時移除）
 - `src/hooks/useRecordDraftGuard.ts`
 - `src/hooks/useMeetingModeExitGuard.ts`
 - `src/utils/meetingRecordWorkflow.ts`

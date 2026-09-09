@@ -118,6 +118,12 @@ async (page) => {
     assert(await modal.locator('[data-task-meeting-quick-notes-composer]').count() === 0, 'composer is only available in meeting mode');
     return { oldComposer: 0 };
   });
+  await runCase('B04a', 'retired inline history controls and panel are absent', async () => {
+    const retiredSelectors = await modal.locator('[data-task-knowledge-trigger], [data-task-knowledge-toggle], [data-task-knowledge-panel]').count();
+    const retiredText = await modal.getByText(/^(查看歷史資訊|收合歷史資訊|歷史資訊)$/).count();
+    assert(retiredSelectors === 0 && retiredText === 0, 'task detail should not retain the retired inline history surface', { retiredSelectors, retiredText });
+    return { retiredSelectors, retiredText };
+  });
   await modal.getByRole('button', { name: '關閉任務詳情' }).click();
   await modal.waitFor({ state: 'hidden', timeout: 10000 });
 

@@ -71,6 +71,11 @@ export class TaskMentionNode extends DecoratorNode<null> {
     span.setAttribute('data-record-task-mention', 'true');
     span.dataset.nodeId = this.__nodeId;
     span.dataset.title = this.__title;
+    if (this.__nodeId) {
+      span.setAttribute('data-task-description-hover-trigger', 'true');
+      span.dataset.taskId = this.__nodeId;
+    }
+    span.setAttribute('aria-label', this.__title);
     span.className = [
       'mx-0.5',
       'inline-flex',
@@ -90,7 +95,6 @@ export class TaskMentionNode extends DecoratorNode<null> {
       'text-blue-700',
       'shadow-sm',
     ].join(' ');
-    span.title = this.__title;
     span.textContent = this.__title;
     return span;
   }
@@ -99,7 +103,14 @@ export class TaskMentionNode extends DecoratorNode<null> {
     if (prevNode.__nodeId !== this.__nodeId || prevNode.__title !== this.__title) {
       dom.dataset.nodeId = this.__nodeId;
       dom.dataset.title = this.__title;
-      dom.title = this.__title;
+      if (this.__nodeId) {
+        dom.setAttribute('data-task-description-hover-trigger', 'true');
+        dom.dataset.taskId = this.__nodeId;
+      } else {
+        dom.removeAttribute('data-task-description-hover-trigger');
+        delete dom.dataset.taskId;
+      }
+      dom.setAttribute('aria-label', this.__title);
       dom.textContent = this.__title;
     }
     return false;

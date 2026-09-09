@@ -28,6 +28,7 @@ import {
   type DesktopTaskDropPreview,
 } from './desktopTaskDropPreview';
 import { primaryPlacementId } from '../../../features/taskTracking/model';
+import { createBlankTaskNode } from '../../../features/taskCreation/createBlankTaskNode';
 export { buildTaskSubtreePlacementUpdates } from './taskSubtreePlacement';
 
 export { buildTaskParentIndex, getTaskAppendOrder, isValidTaskDropIntent } from './taskDropIntent';
@@ -432,18 +433,14 @@ export const commitTaskDragAction = async ({
     if (!dependencies.canCreateTask) return noOp('create-permission-denied');
     const parentNode = node.parentId ? state.nodes[node.parentId] : null;
     reopenCompletedTaskForInsert(parentNode, dependencies);
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: createTaskNodeId(),
       workspaceId: node.workspaceId || dependencies.activeWorkspaceId || '',
       boardId: node.boardId || dependencies.activeBoardId || '',
       parentId: node.parentId || null,
-      title: '新任務',
-      status: 'todo',
       nodeType: node.parentId ? 'task' : (node.nodeType || 'task'),
       order: getSiblingInsertOrderAfter(node, state.nodes),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    });
     dependencies.addNode(newNode);
     prepareNewTaskNaming(newNode.id);
     return committed('sibling-created');
@@ -452,18 +449,14 @@ export const commitTaskDragAction = async ({
   if (action === 'add-child') {
     if (!dependencies.canCreateTask) return noOp('create-permission-denied');
     reopenCompletedTaskForInsert(node, dependencies);
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: createTaskNodeId(),
       workspaceId: node.workspaceId || dependencies.activeWorkspaceId || '',
       boardId: node.boardId || dependencies.activeBoardId || '',
       parentId: node.id,
-      title: '新任務',
-      status: 'todo',
       nodeType: 'task',
       order: getTaskAppendOrder(node.id, undefined, state.nodes),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    });
     dependencies.addNode(newNode);
     prepareNewTaskNaming(newNode.id);
     return committed('child-created');

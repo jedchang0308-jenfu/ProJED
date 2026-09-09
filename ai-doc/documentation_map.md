@@ -1,17 +1,96 @@
 # ProJED Documentation Map
 
+## Documentation Map Update - 2026-09-10（DEV-008 任務明細歷史資訊 UI 退場 / Local-only / NOT RELEASED）
+
+Spec Impact：`Intentional replacement`。使用者明確要求刪除任務明細內「查看／收合歷史資訊」按鈕、
+展開面板、標題、搜尋、空狀態與「補會後紀錄／補工作紀錄」動作。`TaskRecordTimeline` 元件同步移除；
+`KnowledgeRecord`、task links、紀錄庫、DEV-108 會議補記列表與 `taskKnowledgeSnippets` 解析能力保留，
+不刪除、不遷移任何既有紀錄資料。
+
+| 文件／程式權威 | 狀態 | 現行邊界 |
+|---|---|---|
+| `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | `Task Details UI Retired / Utility Retained` | 現行退場契約與歷史 DEV-008 需求分層保存。 |
+| `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | `Retirement QA Executed / Targeted QC PASS` | 靜態移除、真實畫面、DEV-108 與窄版回歸 gate。 |
+| `src/components/TaskDetailsModal.tsx` | `Inline history UI removed` | 無 `TaskRecordTimeline` import、state、trigger 或 panel；任務說明、會議補記、子任務保留。 |
+| `src/components/Records/TaskRecordTimeline.tsx` | `Removed` | 不保留未使用的第二套任務明細歷史表面。 |
+| `src/utils/taskKnowledgeSnippets.ts`、record services | `Retained / no data change` | 片段解析與紀錄資料契約不因 UI 退場而刪除。 |
+
+風險 lane：Medium；本輪需 static、TypeScript、build、DEV-108 browser 與空白任務明細 browser evidence。
+未執行 commit、push、deploy、production data mutation 或 release。
+
+使用思考習慣：#刪除優先、#系統描繪、#可驗證性
+
+## Documentation Map Update - 2026-09-10（CAPA-002 / DEV-115 Implemented / Targeted QA-QC PASS / NOT RELEASED）
+
+Root cause 已確認：工作台空白新增的專用 factory 把預設名稱 `新任務` 同時寫入 optional
+`description`；其他十個空白 constructor 沒有此 assignment。各入口共用的是 `addNode` 之後的 naming／detail
+流程，不是 `TaskNode` payload，所以「相同新增元件」只成立於後段互動。CAPA-002 採 shared blank-task domain
+factory 作為長期 PA，不把不同閱讀模式 UI 合併成 mega component。
+
+DEV-115 已完成 local implementation：`createBlankTaskNode()` 取代 7 檔 11 點 blank payload construction；targeted static／browser
+QA 與 QC 均 PASS。這是停止新污染的 local candidate，不代表既有歷史資料已清理或正式版本已 release。
+
+| 文件／程式權威 | 狀態 | CAPA-002／DEV-115 關聯與邊界 |
+|---|---|---|
+| `ai-doc/reports/CAPA-Register.md` | `CAPA-002 issued / next CAPA-003` | 使用者明確要求制定 CAPA；發號前已核對 Register、專案全文與 Git 歷史。 |
+| `ai-doc/reports/CAPA-20260909-blank-task-description-prefill.md` | `Open / CA-01～02 + PA-01～03 Implemented / DEV-115 targeted PASS / Effectiveness Pending` | Facts、11-point inventory、多層根因、CA／PA、traceability、實作 evidence、歷史資料限制與結案 gate。 |
+| `ai-doc/decisions/ADR-048-blank-task-creation-contract.md` | `Accepted / Architecture Confirmed / Tech Lead Optimized / DEV-115 Implemented / NOT RELEASED` | shared blank-task factory 決策不變；11 點遷移與實作證據已回寫，release／effectiveness 仍分流。 |
+| `ai-doc/specs/SPEC-115-blank-task-creation-contract.md` | `Implemented / QA PASS / Targeted QC PASS / NOT RELEASED` | 實作權威：factory API、7 檔 11 點、protected zones、三個原子工作包、分層 evidence 與未完成 gate。 |
+| `ai-doc/qa/QA-DEV-115-blank-task-creation-contract.md` | `Executed / DEV-115 targeted PASS / NOT RELEASED` | static 17/17、browser B01～B09、相容 regression 與 engineering gates；permission／mobile gate 明確保留。 |
+| `ai-doc/qc/QC-DEV-115-blank-task-creation-contract.md` | `Targeted QC PASS / NOT RELEASED` | 獨立核對 B01 persisted readback、11-point manifest、非工作台 adapter、source mapping 與 artifact identity。 |
+| `ai-doc/dev_task.md#dev-115空白任務建立契約與任務說明污染修正` | `RD Implementation Complete / Targeted QA-QC PASS / NOT RELEASED` | 三個工作包完成；歷史 dry-run、正式 release 與 CAPA effectiveness 不在本地完成宣告內。 |
+| `src/features/taskCreation/createBlankTaskNode.ts` | `Implemented / Verified` | blank content authority；`description?: never`，output 不建立 own description。 |
+| 7 個 blank constructor files | `Migrated 11/11 / Verified` | 只統一 blank defaults，不移轉 placement、permission、post-create 或 source-derived content ownership。 |
+| `TaskInteractionScope.tsx`／DEV-070 | `Adjacent debt / out of direct correction` | new-mode registration 要明確聲明 creation adapter；unknown→list fail-closed migration 不在本 CAPA 順手改。 |
+
+Execution boundary：本輪完成 DEV-115 local implementation、static／browser targeted QA、targeted QC 與文件 convergence；
+未修改既有任務資料、schema、migration、權限，也未 commit、push、deploy 或 release。permission-denied、390×844、
+歷史 dry-run 與 CAPA effectiveness 仍由各自 gate 管理。
+
+Tech Lead optimization：架構選擇不變；文件已移除重複的 per-entry 完整 browser lifecycle、暫時雙軌工作包與
+DEV-115 對歷史 dry-run 的不必要依賴。Spec impact：`No product-contract conflict / execution contract refinement`。
+
+使用思考習慣：#多層次分析、#效用理論、#可驗證性
+
+## Documentation Map Update - 2026-09-10（DEV-114 Task Details surfaces amendment / compatible regression PASS / NOT RELEASED）
+
+Spec Impact：`Intentional replacement + compatible extension`。DEV-114 以 SPEC-114 有意取代 DEV-111 的五模式／
+TaskDetails／工作台 scope 限制，保留其 1000ms、fine pointer、plain text、單例 overlay、dismissal 與歷史 Local
+QA-QC 證據；新增全位置入口與重複名稱／位置 native tooltip 清理。Tech Lead 已補齊候選 identity、control ownership、
+canonical preview ID、直接回歸與可重現 baseline；DEV-114 candidate、相容 regression、專用 QA/QC 與工程 gates 已完成。
+2026-09-10 amendment 將 Task Details ancestor breadcrumb 納入 hover，Task Details checklist rows 補 scoped metadata，
+並將 tooltip layer 提升至 `z-[10050]` 以跨越 `z-[10000]` modal；current task title、touch／control exclusions 維持。
+
+| 文件／程式權威 | 狀態 | DEV-114 關聯與邊界 |
+|---|---|---|
+| `ai-doc/dev_task.md#dev-114任務說明全介面覆蓋與重複名稱懸浮清理` | `RD Implementation Complete / Tech Lead PASS / QA-QC PASS / NOT RELEASED` | Canonical 19 套用＋7 排除矩陣、五項技術審查結論、Task Details amendment、AC、evidence 與 stop conditions。 |
+| `ai-doc/specs/SPEC-114-task-description-global-surfaces.md` | `Target Authority / Implementation Complete / Tech Lead PASS / compatible regression PASS` | `trigger＋taskId＋sourceKind` 候選快照、雙來源 resolver、精準 control boundary、canonical preview ID 與 candidate hash。 |
+| `ai-doc/qa/QA-DEV-114-task-description-global-surfaces.md` | `Executed / DEV-114 + compatible regression PASS / NOT RELEASED` | 12 fixture、六欄 FMEA、UI Entry Contract、DEV-114 static 29／browser 27 cases（含 B02a）、1440／1024／390 evidence 與 release boundary。 |
+| `ai-doc/qc/QC-DEV-114-task-description-global-surfaces.md` | `DEV-114 + compatible regression PASS / NOT RELEASED` | DEV-114 證據索引、runtime ownership、相容 static／browser gate 結果與 release boundary。 |
+| `ai-doc/specs/SPEC-111-task-description-hover-card.md` | `Implemented baseline / DEV-114 amendment registered` | 歷史 PASS 不回寫；既有核心 behavior 保留，後續 scope 由 SPEC-114 取代。 |
+| 工作台、回收桶、紀錄 link／mention、RAG task citation | `Implemented / DEV-114 browser PASS` | 以 canonical task ID 查目前 WBS store；回收桶／紀錄只在 identity zone 觸發，controls 排除；missing source no-op。 |
+| 行事曆訂閱預覽 | `Implemented / DEV-114 browser PASS` | 唯一允許 inline content；hover 用 `event.node.id`，既有 preview/storage identity 不變。 |
+| `MainLayout`、indicator、TaskDetailsSubtaskSection、RAG contract/store、backend/schema | `Protected no-change` | 不新增 controller、RAG payload、provider、schema、migration、權限或同期 DEV-098 檔案變更；TaskChecklistTree 僅有 scoped metadata extension。 |
+
+Source boundary：`1b6450355ed81180c5abd419ac756564cff1b3c0`（`持續優化3`）＋ SPEC-114 review／candidate hashes；
+TaskDetailsModal 的名稱 title 清理＋breadcrumb metadata amendment 已記錄，TaskDetailsSubtaskSection protected hash 維持一致。Execution boundary：
+WP-114-A→F、DEV-114 static／browser（含 1024×768、Task Details modal layering）、compatible static／browser、engineering gates 與文件收斂已完成；
+正式版本仍保留 deployment/release gate 邊界。
+
+使用思考習慣：#系統描繪、#差距分析、#可驗證性
+
 ## Documentation Map Update - 2026-09-09（DEV-113 任務說明尺寸行為 Local QA-QC PASS / NOT RELEASED）
 
-Spec Impact：`Compatible refinement`。任務說明仍沿用既有 Lexical rich content 與 plain-text projection；本次只調整
-編輯器的預設高度、內容自動增高與看板範圍的瀏覽器端寬度偏好，不新增任務資料欄位、schema、migration 或權限。
+Spec Impact：`Intentional replacement`。任務說明仍沿用既有 Lexical rich content 與 plain-text projection；依使用者
+2026-09-09 畫面回饋，以「全寬＋底部整條框線縱向 resize」取代原生右下角水平 resize 與寬度偏好，不新增任務資料欄位、schema、migration 或權限。
 
 | 文件／程式權威 | 狀態 | DEV-113 關聯與邊界 |
 |---|---|---|
 | `ai-doc/dev_task.md` | `DEV-113 Completed / Local QA-QC PASS / NOT RELEASED` | Canonical scope、驗收、local-only preference 與 release boundary。 |
-| `ai-doc/specs/SPEC-113-task-note-autosize-board-width.md` | `Target Authority / In sync` | 單行預設、scrollHeight 自動增高、原生水平 resize、board scope 與優先序。 |
+| `ai-doc/specs/SPEC-113-task-note-autosize-board-width.md` | `Target Authority / In sync` | 單行預設、scrollHeight 自動增高、全寬底邊縱向 resize、board scope 與優先序。 |
 | `ai-doc/qa/QA-DEV-113-task-note-autosize-board-width.md` | `Executed / PASS` | B01～B08 驗證矩陣與工程 gate。 |
-| `ai-doc/qc/QC-DEV-113-task-note-autosize-board-width.md` | `Local targeted QC PASS / NOT RELEASED` | 36px→84px→36px rendered geometry、資料還原、回歸與 release 邊界。 |
-| `src/components/TaskNotes/TaskDetailNoteEditor.tsx` | `Implemented / Verified` | board-scoped width preference、native resize、height auto-size。 |
+| `ai-doc/qc/QC-DEV-113-task-note-autosize-board-width.md` | `Local targeted QC PASS / NOT RELEASED` | 36px→84px→36px auto-size、156px 內容縮至 60px 的捲軸、底邊三點拖曳、808×698 畫面與 release 邊界。 |
+| `src/components/TaskNotes/TaskDetailNoteEditor.tsx` | `Implemented / Verified` | board-scoped height preference、full-width bottom-edge resize、未手動時 auto-size、手動縮小時 overflow scroll。 |
 
 Execution boundary：本輪完成 local implementation、static／rendered QC 與文件 convergence；未 commit、push、deploy 或 release。
 
@@ -65,7 +144,7 @@ task-link由silent skip改成mutation前reject；不建立unplaced record schema
 
 | 文件／程式權威 | 狀態 | DEV-110關聯與邊界 |
 |---|---|---|
-| `ai-doc/reports/CAPA-DRAFT-20260908-unplaced-task-meeting-record-boundary.md` | `RD Implementation In Progress / Not Registered / Local Static+Browser Candidate PASS` | Facts、root cause、CA/PA、local evidence、effectiveness與production audit/release邊界；未占用CAPA-002。 |
+| `ai-doc/reports/CAPA-DRAFT-20260908-unplaced-task-meeting-record-boundary.md` | `RD Implementation In Progress / Not Registered / Local Static+Browser Candidate PASS` | Facts、root cause、CA/PA、local evidence、effectiveness與production audit/release邊界；仍未占用正式號碼，CAPA-002 已於 2026-09-09 核發給另一案。 |
 | `ai-doc/dev_task.md` | `DEV-110 執行中 / 開發點 / 不計入交付 / Static+Browser Candidate PASS` | Canonical index、工作包、AC、stop、evidence與QA下一步。 |
 | `ai-doc/specs/SPEC-110-unplaced-task-meeting-record-boundary.md` | `Target Authority / Local Candidate Implemented / Browser B01-B04 PASS / QA-QC NOT RUN` | ownership capability、source-board read、same-board append、stale guard、link preflight/exact-set、UI matrix與file responsibility。 |
 | `ai-doc/qa/QA-DEV-110-unplaced-task-meeting-record-boundary.md` | `QA Plan Ready / Execution NOT STARTED` | FMEA、B01～B07、Supabase TEST T01～T06、visible-error、viewport、regression與cleanup gate。 |
@@ -139,8 +218,8 @@ Spec Impact：`Intentional partial replacement / current implementation unchange
 | `src/components/TaskDetailsModal.tsx` | Implemented / compact persistent section | 會議紀錄列表持續顯示；meeting mode 只控制新增入口，390px／coarse pointer 保留歷史但隱藏 composer。 |
 | `src/store/useRecordStore.ts`、`src/utils/meetingTaskQuickNotes.ts` | Implemented / canonical contract | 單次 state commit 同步正文、metadata provenance、taskLinks，並於人工 content update reconcile。 |
 | `src/services/dataBackend.ts`、三 provider record services | Implemented / Local-only | `listByNode(..., { includeArchived: true })` 已落地；全域 `listByProject` 行為不變，無 schema migration。 |
-| `src/components/Records/TaskRecordTimeline.tsx`、`src/utils/taskKnowledgeSnippets.ts` | Existing history capability reference / not target UI | 可參考 task-linked record 投影，但 DEV-108 不得直接顯示所有關聯片段或沿用卡片式歷史資訊 UI。 |
-| DEV-008、DEV-066、DEV-106 | Required compatibility inputs | 任務知識、備註編輯與會議安全草稿生命週期不得退化；mobile meeting composer 的既有 unavailable 邊界保留。 |
+| `src/utils/taskKnowledgeSnippets.ts` | Retained compatibility utility / not target UI | `TaskRecordTimeline` 已退場；DEV-108 不直接解析全量關聯片段。 |
+| DEV-008 retained utilities、DEV-066、DEV-106 | Required compatibility inputs | 片段解析、備註編輯與會議安全草稿生命週期不得退化；mobile meeting composer 的既有 unavailable 邊界保留。 |
 
 Human Decision：`1A` 只顯示任務明細人工補記；`2A` 原會議紀錄為唯一來源，修改同步、封存保留、
 永久刪除移除；`3A` 最新三筆＋原地展開全部。會議模式只控制新增入口，不控制歷史列表可見性。
@@ -1608,7 +1687,7 @@ DEV-024 將 DEV-021 / DEV-022 的保護範圍，從 project change evidence 延�
 | `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` | Implemented | DEV-005 | 會議看板主畫面紀錄工作流；承接 DEV-002 / DEV-003 的 UX refinement。 |
 | `ai-doc/specs/SPEC-006-gmail-like-record-editor.md` | Implemented | DEV-006 | Gmail-like 會議紀錄輸入器穩定化；承接 DEV-003 / DEV-005 的 editor UX refinement。 |
 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Implemented | DEV-007 | 會議中保留原生看板編輯，並將任務變更納入會議紀錄。 |
-| `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 | 任務詳情中的會議細節快速查找；承接 DEV-002 / DEV-007 的 task knowledge UX refinement。 |
+| `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Task Details UI Retired / Utility Retained / NOT RELEASED | DEV-008 | 任務明細歷史資訊 UI 已退場；紀錄資料與片段解析相容能力保留。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 | 會議模式下任務詳情內快速補記；承接 DEV-005 / DEV-007 / DEV-008 的 meeting workflow UX refinement。 |
 | `ai-doc/specs/SPEC-108-task-detail-meeting-note-persistent-list.md` | Implemented / QA-QC PASS / Local-only / NOT RELEASED | DEV-108 | 任務明細人工會議補記持續列表、canonical metadata／content projection、anchor invariant、封存讀取與 active draft identity。 |
 | `ai-doc/specs/SPEC-110-unplaced-task-meeting-record-boundary.md` | Local Candidate Implemented / QA PASS with evidence boundary / L3 Pending / NOT RELEASED | DEV-110 | 修正unplaced／tracking ownership、canonical source-board read、same-board append、stale response、raw error與unresolved task-link silent success。 |
@@ -1720,11 +1799,10 @@ DEV-007 的產品邊界：
 - 多人即時協作 event stream。
 - AI 決議抽取。
 
-DEV-008 的產品邊界：
+DEV-008 的歷史產品邊界（2026-09-10 任務明細 UI 已退場）：
 
-- 任務詳情頁提供任務知識入口。
-- 已關聯紀錄優先顯示目前任務的會議或工作紀錄片段。
-- 任務內搜尋涵蓋任務備註、關聯紀錄片段與會議中任務變更。
+- 任務詳情頁不再提供任務知識入口、搜尋或關聯紀錄片段。
+- `KnowledgeRecord`、task link、紀錄庫與片段解析 utility 維持；此段只保留歷史交付脈絡。
 - 點擊片段可回到原始紀錄。
 
 不包含：
@@ -1820,7 +1898,7 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/specs/SPEC-005-meeting-board-primary-workflow.md` | Implemented | DEV-005 / DEV-002 follow-up / DEV-003 follow-up | 定義會議中以議題看板為主畫面、右側紀錄欄為輔助速記與任務連結的工作流。 |
 | `ai-doc/specs/SPEC-006-gmail-like-record-editor.md` | Implemented | DEV-006 / DEV-003 follow-up / DEV-005 follow-up | 定義 Gmail-like 會議紀錄輸入器與 task chip copy/cut/paste/move 行為。 |
 | `ai-doc/specs/SPEC-007-meeting-board-native-edit-activity-capture.md` | Implemented | DEV-007 / DEV-005 follow-up / DEV-006 follow-up | 定義會議中保留原生看板編輯，並把任務變更納入會議紀錄。 |
-| `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Implemented | DEV-008 / DEV-002 follow-up / DEV-007 follow-up | 定義任務詳情中的任務知識查找、片段抽取與任務內搜尋。 |
+| `ai-doc/specs/SPEC-008-task-meeting-detail-lookup.md` | Task Details UI Retired / Utility Retained | DEV-008 / DEV-002 follow-up / DEV-007 follow-up | 任務明細入口已退場；片段抽取與紀錄資料相容能力保留。 |
 | `ai-doc/specs/SPEC-009-meeting-task-detail-quick-note.md` | Implemented | DEV-009 / DEV-005 follow-up / DEV-008 follow-up | 定義會議模式任務詳情內快速補記與 meeting draft append 行為。 |
 | `ai-doc/specs/SPEC-010-meeting-record-action-feedback.md` | Implemented | DEV-010 / DEV-005 follow-up / DEV-009 follow-up | 定義會議紀錄操作按鈕狀態、阻塞原因提示、草稿/發布條件拆分與離開保護。 |
 | `ai-doc/specs/SPEC-011-ai-meeting-record-synthesis.md` | Done / Production Release Deployed / Production UI Smoke Passed | DEV-011 / DEV-007 follow-up / DEV-008 follow-up / DEV-009 follow-up | 定義 AI 任務導向會議紀錄統整、發布前校稿流程、後端模型執行與不改任務邊界；hotfix `7704e2f` 上線後 production fixture smoke 通過。 |
@@ -1856,7 +1934,7 @@ DEV-002 已完成，未建立獨立 `QA-DEV-002` / `QC-DEV-002` 檔案；不得�
 | `ai-doc/qa/QA-DEV-003-record-content-inline-task-tags-ux-validation.md` | Done / Static QC Covered | DEV-003 | 使用者視角 UX 驗證計畫，聚焦看板直接選任務、內容游標 inline tag、右側欄收合、重複 tag 與唯一關聯摘要。 |
 | `ai-doc/qa/QA-DEV-006-gmail-like-record-editor.md` | Done / Browser Input QC Passed | DEV-006 | Gmail-like 實際輸入驗證計畫，包含多行、undo/redo、IME、task chip copy/cut/paste/move 與桌機/筆電 viewport。 |
 | `ai-doc/qa/QA-DEV-007-meeting-activity-capture.md` | Done / Static QC Covered | DEV-007 | 會議中看板原生編輯與任務變更自動納入紀錄的驗證計畫。 |
-| `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | Done / Static QC Covered | DEV-008 | 任務會議細節快速查找驗證計畫，包含任務片段抽取、搜尋、fallback 與原始紀錄追溯。 |
+| `ai-doc/qa/QA-DEV-008-task-meeting-detail-lookup.md` | Retirement QA Executed / Targeted QC Pending | DEV-008 | 驗證任務明細歷史資訊 UI 完整退場、片段 utility 保留與 DEV-108／viewport 回歸。 |
 | `ai-doc/qa/QA-DEV-009-meeting-task-detail-quick-note.md` | Passed by QC | DEV-009 | 會議模式任務詳情內快速補記驗證計畫，包含 meeting draft append、task tag 與資料邊界。 |
 | `ai-doc/qa/QA-DEV-108-task-detail-meeting-note-persistent-list.md` | Executed / PASS / Local-only / NOT RELEASED | DEV-108 | 驗證人工 provenance、anchor ambiguity、跨模式持續、edit/archive/delete lifecycle、latest-3 compact UI、failure recovery、a11y 與三 viewport。 |
 | `ai-doc/qa/QA-DEV-110-unplaced-task-meeting-record-boundary.md` | QA Executed / PASS with evidence boundary / L3 Pending / NOT RELEASED | DEV-110 | 驗證ownership/capability、network absence、source-board reference、link preflight/readback、visible-error與DEV-108回歸；B05/B06保留deterministic／TEST evidence boundary。 |

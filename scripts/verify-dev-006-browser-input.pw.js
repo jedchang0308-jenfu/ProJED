@@ -10,7 +10,7 @@ async (page) => {
 
   const readEditor = async () =>
     page.evaluate(() => {
-      const editor = document.querySelector('div[contenteditable="true"]');
+      const editor = document.querySelector('[data-record-content-editor="true"]');
       return {
         text: editor?.innerText ?? '',
         textContent: editor?.textContent ?? '',
@@ -25,14 +25,14 @@ async (page) => {
     });
 
   const focusEditor = async () => {
-    const editor = page.locator('div[contenteditable="true"]');
+    const editor = page.locator('[data-record-content-editor="true"]');
     await expectCount(editor, 1, 'record content editor');
     await editor.click();
   };
 
   const placeEditorCaret = async (position) => {
     await page.evaluate((nextPosition) => {
-      const editor = document.querySelector('div[contenteditable="true"]');
+      const editor = document.querySelector('[data-record-content-editor="true"]');
       const selection = window.getSelection();
       const range = document.createRange();
       editor.focus();
@@ -86,14 +86,40 @@ async (page) => {
     await page.locator('button', { hasText: /新增會議記錄|會議紀錄/ }).waitFor({ state: 'visible', timeout: 10000 });
   }
 
-  if (!(await page.locator('div[contenteditable="true"]').count())) {
-    const meetingButton = page.locator('button', { hasText: /新增會議記錄|會議紀錄/ });
-    assert((await meetingButton.count()) >= 1, 'meeting entry button missing');
-    await meetingButton.first().click();
+  if (!(await page.locator('[data-record-content-editor="true"]').count())) {
+    await page.evaluate(() => {
+      const workspaceId = localStorage.getItem('projed-last-ws') || 'local-test-workspace';
+      const boardId = localStorage.getItem('projed-last-board') || 'local-test-mobile-ui-board';
+      const account = JSON.parse(localStorage.getItem('projed-local-test.session') || '{}');
+      const existing = JSON.parse(localStorage.getItem('projed-local-test.knowledgeRecords') || '[]');
+      const fixture = {
+        id: 'dev006-editor-input-fixture', workspaceId, boardId, type: 'work_log',
+        title: 'DEV-006 編輯器輸入驗證', content: '', status: 'draft', visibility: 'private',
+        recordedBy: account.uid || 'local-test-user', createdBy: account.uid || 'local-test-user',
+        updatedBy: account.uid || 'local-test-user', createdAt: Date.now(), updatedAt: Date.now(),
+        startedAt: Date.now(), endedAt: Date.now(), ragEnabled: false, taskLinks: [],
+      };
+      localStorage.setItem('projed-local-test.knowledgeRecords', JSON.stringify([
+        fixture,
+        ...existing.filter((record) => record.id !== fixture.id),
+      ]));
+      localStorage.setItem('projed-last-view', 'records');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    const recordsButton = page.locator('[data-sidebar-records-button="true"]').first();
+    const sidebarToggle = page.locator('[data-main-sidebar-toggle="true"]').first();
+    if (await sidebarToggle.count()) await sidebarToggle.click();
+    if (await recordsButton.count() && await page.locator('[data-records-active-section]').count() === 0) await recordsButton.click();
+    await page.locator('[data-records-active-section]').waitFor({ state: 'visible', timeout: 10000 });
+    const workLogTab = page.locator('[data-record-section-tab="work_log"]').first();
+    if (await workLogTab.count()) await workLogTab.click();
+    const row = page.locator('[data-record-section="work_log"] .record-list-row').filter({ hasText: 'DEV-006 編輯器輸入驗證' }).first();
+    await row.waitFor({ state: 'visible', timeout: 10000 });
+    await row.click();
   }
 
-  await page.locator('div[contenteditable="true"]').waitFor({ state: 'visible', timeout: 10000 });
-  await expectCount(page.locator('div[contenteditable="true"]'), 1, 'record content editor');
+  await page.locator('[data-record-content-editor="true"]').waitFor({ state: 'visible', timeout: 10000 });
+  await expectCount(page.locator('[data-record-content-editor="true"]'), 1, 'record content editor');
 
   await focusEditor();
   await page.keyboard.press('Control+A');
@@ -138,12 +164,25 @@ async (page) => {
   const insertTaskButton = page.locator('button', { hasText: /插入任務|選取任務/ }).first();
   assert((await insertTaskButton.count()) === 1, 'meeting insert/select task button missing');
   await insertTaskButton.click();
-  const firstTask = page.locator('text=品質驗證測試任務 1').first();
-  assert((await firstTask.count()) >= 1, 'first kanban task missing');
+  const firstTask = page.locator('[data-task-surface-source="true"][data-task-id]')
+    .filter({ hasText: '品質驗證測試任務 1' })
+    .first();
+  await firstTask.waitFor({ state: 'visible', timeout: 10000 });
+  assert((await page.locator('[data-task-record-capture-checkbox="true"]').count()) >= 1, 'record task-selection mode did not open');
   await firstTask.click();
-  await page.waitForTimeout(300);
+  const expandRecordSidebar = page.locator('[data-record-sidebar-expand-toggle="true"]').first();
+  if (await expandRecordSidebar.count()) await expandRecordSidebar.click();
+  await page.waitForTimeout(1000);
   state = await readEditor();
-  assert(state.chipCount === 1, 'clicking a task after entering insert-task mode should insert one task chip', state);
+  const selectionEvidence = await page.evaluate(() => ({
+    captureMode: document.querySelectorAll('[data-task-record-capture-checkbox="true"]').length,
+    taskCandidates: Array.from(document.querySelectorAll('[data-task-surface-source="true"][data-task-id]'))
+      .filter((element) => element.textContent?.includes('品質驗證測試任務 1'))
+      .slice(0, 4)
+      .map((element) => ({ id: element.getAttribute('data-task-id'), className: element.className, text: element.textContent })),
+    draftText: document.querySelector('[data-record-content-editor="true"]')?.textContent,
+  }));
+  assert(state.chipCount === 1, 'clicking a task after entering insert-task mode should insert one task chip', { ...state, selectionEvidence });
 
   const copiedText = await page.evaluate(async () => {
     const chip = document.querySelector('[data-record-task-mention="true"]');

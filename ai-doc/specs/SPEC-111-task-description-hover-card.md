@@ -7,6 +7,10 @@
 - QC：`ai-doc/qc/QC-DEV-111-task-description-hover-card.md`
 - 風險：Medium（跨五個閱讀模式的使用者可見互動）
 
+> 2026-09-09 scope amendment：DEV-111 的已實作行為與 Local QA-QC PASS 證據保持歷史有效；後續全介面入口、
+> TaskDetails／工作台範圍調整、訂閱預覽 inline content resolver 與重複名稱 native tooltip 清理由
+> `SPEC-114-task-description-global-surfaces.md` 有意取代。本文件不因此宣告 DEV-114 已實作或已驗證。
+
 ## 目的與使用者決策
 
 使用者希望先以一個最小功能讓團隊在閱讀任務時快速理解任務目的與大方向，不新增 OKR 欄位或固定格式。

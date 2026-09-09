@@ -20,6 +20,8 @@
   不命中遮罩後方的看板、工作台或其他檢視。
 - 點開子任務仍使用同一個 `TaskDetailsModal`，不疊第二個 modal；目前任務草稿 durable save
   成功後才允許切換。
+- 從看板等入口直接開啟有父任務的明細時，標題列提供「回到上一階任務」按鈕；沿用同一個
+  modal navigation stack 與 save guard，不另開第二個視窗。
 - pointer、keyboard、context menu、touch scroll、long-press drag、權限、tracking placement、
   pending、failure 與 focus restore 的可見結果可由 QA／QC 重現。
 
@@ -117,7 +119,7 @@ global task menu。`TaskDragPresenter` 預設 z-index 80～95，也會被 modal 
 GlobalContextMenu（唯一 details host／navigation owner）
 ├─ useTaskDetailsNavigation（stack／單一 transition ownership）
 └─ TaskDetailsModal（單一 modal、draft leave guard、單一 scroll owner）
-   └─ TaskDetailsSubtaskSection（collapse／count／empty／root drop entry）
+   └─ TaskDetailsSubtaskSection（collapse／count／empty／unstyled root drop target）
       └─ TaskDetailsSubtaskDragHost（local DndContext＋mobile session）
          └─ TaskChecklistTree（與 KanbanChecklist 共用）
             ├─ TaskSurfaceFrame
@@ -297,6 +299,10 @@ Nested confirm/dialog             existing topmost contract
 - tracking placement：文案為「此處尚無追蹤子任務」，不提供會暗示 atomic tracking-child 建立的空白 CTA；
   既有 task action catalog 仍按 placement capability 顯示合法 action。
 - loading／pending 只在 section 行內顯示最小狀態；不得用全 modal spinner 擋住已載入的父任務內容。
+- 直接開啟或切換到的子任務若可解析父 placement，標題列只顯示可聚焦的「回到上一階任務」按鈕；
+  不顯示另一個 navigation stack Back 控制，避免重複導覽入口。
+- 標題下方的完整階層路徑中，每個祖先任務名稱都是可聚焦的文字連結入口；點擊後沿用同一
+  modal navigation stack 與 save guard 切換到該任務，當前任務標題不重複渲染為連結。
 - 320px 下 title、count與 CTA 可換行或縮寫，但不得水平捲動或遮住 touch target。
 
 Collapse lifecycle 固定為 component-local state，entry 首次 mount 為 `true`；同 entry 操作可收合，
@@ -353,7 +359,7 @@ failure語意維持既有 baseline，不在 DEV-098 假裝升級為 durable crea
 | `src/components/Wbs/TaskChecklistTree.tsx` | 從 `KanbanChecklist` 抽出的 neutral row＋recursive tree；task content只此一份。 |
 | `src/components/Wbs/TaskPlacementTree.tsx` | placement row 建構統一排除 archived／missing 與 duplicate placement，保持 stable order。 |
 | `src/components/Wbs/taskDrag/taskMoveUpdateNormalization.ts` | 將 local-test move update normalization 抽成 pure helper；durable commit authority不變。 |
-| `src/components/TaskDetailsSubtaskSection.tsx` | section header、count、collapse、empty、local drag host與root drop UI。 |
+| `src/components/TaskDetailsSubtaskSection.tsx` | flat section header、count、collapse、empty、local drag host與unstyled root drop target。 |
 | `src/components/taskDetailsNavigation.ts` | details stack與單一 typed transition ownership；不建立通用 modal framework。 |
 | `scripts/verify-dev-098-task-detail-subtasks.mjs` | static／source contract verifier。 |
 | `scripts/verify-dev-098-task-detail-subtasks-browser.pw.js` | normal UI browser、gesture、permission、failure與viewport verifier。 |
@@ -399,7 +405,8 @@ failure語意維持既有 baseline，不在 DEV-098 假裝升級為 durable crea
   root append；背景 Board／Workbench 永遠不是 target。
 - `AC-098-004`：self、descendant、primary-under-reference、missing、archived、scope外與 permission-denied
   drop fail closed，無 duplicate、loss、cycle、假成功或殘留 indicator。
-- `AC-098-005`：child pointer／Enter／menu open-details使用同一 modal push；Back回上一 entry，Close清空 stack；
+- `AC-098-005`：child pointer／Enter／menu open-details使用同一 modal push；標題列提供唯一的「回到上一階任務」
+  入口，完整階層路徑的每個祖先任務亦可點擊進入；不顯示 Back 按鈕，Close清空 stack；
   任一時刻 DOM 中 `TaskDetailsModal` 數量恆為 1。
 - `AC-098-006`：title／notes dirty、save pending、save failure與 placement pending時不切換；
   success後才更換 task identity，舊 callback不得污染新 entry；persistence terminal／unknown語意須另通過
@@ -538,3 +545,9 @@ navigation stack adapter → 保留已抽出的 neutral shared row給 Board使�
   DEV-055 34/34＋18/18、DEV-095 4/4 均 PASS；pointer-derived edge、surface ownership、mixed-drag
   commit revalidation與 transient indicator settle納入實作與證據。相鄰 regression改標 PASS，未使用 waiver；
   DEV-099 persistence、實機 supplemental與 release仍維持未執行／Not Released。
+- 2026-09-09：依使用者回饋補上直接開啟子任務時的「回到上一階任務」標題列按鈕；父 placement 解析
+  同時支援 canonical 與 tracking reference，沿用單一 modal navigation stack 與 save guard。
+- 2026-09-10：依使用者回饋移除標題列「返回上一個任務詳情」按鈕；所有可解析父 placement 的情境只保留
+  「回到上一階任務」入口，並維持單一 modal 與 save guard。
+- 2026-09-10：依使用者回饋將標題下方完整階層路徑的祖先任務名稱改為可聚焦連結入口；沿用單一
+  modal navigation stack、save guard 與窄版不水平溢位契約。

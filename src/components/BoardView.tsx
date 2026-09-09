@@ -37,6 +37,7 @@ import { commitDesktopTaskDrag } from './Wbs/taskDrag/taskDragCommit';
 import type { TaskNode } from '../types';
 import type { TaskTrackingReference } from '../features/taskTracking/types';
 import { buildTaskFilterNodesWithTrackingReferences, primaryPlacementId } from '../features/taskTracking/model';
+import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import {
     desktopTaskDropPreviewMatches,
@@ -1911,18 +1912,14 @@ const BoardView = () => {
             .getRootNodesForBoard(activeBoardId)
             .filter(node => !node.isArchived)
             .reduce((maxOrder, node) => Math.max(maxOrder, node.order), -1) + 1;
-        const newNode: TaskNode = {
+        const newNode = createBlankTaskNode({
             id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
             workspaceId: activeWorkspaceId || '',
             boardId: activeBoardId,
             parentId: null,
-            title: '新任務',
-            status: 'todo',
             nodeType: 'group',
             order: nextOrder,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-        };
+        });
 
         addNode(newNode);
         prepareNewTaskNaming(newNode.id);

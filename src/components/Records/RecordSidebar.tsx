@@ -17,6 +17,7 @@ import { getRecordComposerVariant } from '../../utils/recordComposerVariant';
 import { PROJECT_CHANGE_EVENT_TYPES, createProjectChangeSynthesisInput, wrapProjectChangeImportContent, type ProjectChangeScope } from '../../utils/projectChangeImport';
 import { cn } from '../../utils/cn';
 import RecordContentEditor from './RecordContentEditor';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 import MeetingProjectChangeImportControl from './MeetingProjectChangeImportControl';
 import type { EditableKnowledgeRecord, EditableKnowledgeRecordType, KnowledgeRecordStatus, KnowledgeRecordType, KnowledgeRecordVisibility, RecordTaskLinkRole } from '../../types';
 import { isPrimaryPointerActivation } from '../../interactions/pointerActivation';
@@ -1528,8 +1529,13 @@ const RecordSidebar: React.FC = () => {
                         {selectedLinks.map(link => (
                           <div key={`${link.nodeId}-${link.role}`} className="mb-2 flex items-center gap-2 rounded-md bg-slate-50 p-2">
                             <FileText size={13} className="shrink-0 text-slate-400" />
-                            <span className="min-w-0 flex-1 truncate text-xs text-slate-700" title={nodes[link.nodeId]?.title || link.nodeId}>
-                              {nodes[link.nodeId]?.title || link.nodeId}
+                            <span
+                              className="flex min-w-0 flex-1 items-center gap-1 truncate text-xs text-slate-700"
+                              data-task-description-hover-trigger="true"
+                              data-task-id={link.nodeId}
+                            >
+                              <span className="truncate">{nodes[link.nodeId]?.title || link.nodeId}</span>
+                              <TaskDescriptionIndicator description={nodes[link.nodeId]?.description} />
                             </span>
                             <select
                               value={link.role}

@@ -55,6 +55,7 @@ import {
 import { usePanelPreview } from './panelPreviewContext';
 import { CLOSE_PANEL_EVENT, OPEN_PANEL_EVENT, TOGGLE_PANEL_EVENT } from './taskWorkbenchPanelCommands';
 import { TaskDateBadge } from './Wbs/TaskDateBadge';
+import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 import { KanbanInsertionMarker } from './Wbs/KanbanInsertionMarker';
 import { isMobileTaskActionMode } from './Wbs/mobileTaskActionContext';
 import { useTaskGestureSurface } from './Wbs/taskDrag/useTaskGestureSurface';
@@ -328,6 +329,7 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
       data-task-workbench-hierarchy-row="true"
       data-task-workbench-hierarchy-depth={depth}
       data-task-surface-source={unplacedLane ? 'true' : undefined}
+      data-task-description-hover-trigger="true"
       data-desktop-task-hover-preview={!isDragging ? 'true' : undefined}
       data-touch-tap-guard="true"
       data-task-touch-gesture-surface={touchGestureEnabled ? 'true' : undefined}
@@ -348,12 +350,12 @@ const WorkbenchTaskRow: React.FC<WorkbenchTaskRowProps> = ({
     <div className={`flex min-w-0 flex-1 items-center ${isUnplacedLaneRow ? 'gap-1' : 'gap-3'}`} data-task-workbench-task-content="true">
       <div
         className={titleClassName}
-        title={taskLocation}
         data-task-workbench-task-title="true"
         data-task-workbench-task-location={taskLocation}
       >
         {task.title || '未命名任務'}
       </div>
+      <TaskDescriptionIndicator description={task.description} />
       <TaskDateBadge
         startDate={task.startDate}
         endDate={task.endDate}

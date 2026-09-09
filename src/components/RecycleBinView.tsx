@@ -5,6 +5,7 @@ import useBoardStore from '../store/useBoardStore';
 import { useWbsStore } from '../store/useWbsStore';
 import useDialogStore from '../store/useDialogStore';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
+import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 import dayjs from 'dayjs';
 import { toast } from '../store/useToastStore';
 
@@ -158,8 +159,15 @@ const RecycleBinView = () => {
                                             </div>
                                         </div>
 
-                                        <div className="min-w-0 pr-2 sm:pr-4" title={item.title}>
-                                            <div className="truncate text-sm font-bold text-slate-700">{item.title || '(未命名)'}</div>
+                                        <div
+                                            className="min-w-0 pr-2 sm:pr-4"
+                                            data-task-description-hover-trigger="true"
+                                            data-task-id={item.id}
+                                        >
+                                            <div className="flex min-w-0 items-center gap-1 truncate text-sm font-bold text-slate-700">
+                                                <span className="truncate">{item.title || '(未命名)'}</span>
+                                                <TaskDescriptionIndicator description={item.description} />
+                                            </div>
                                             <div className="mt-0.5 text-[11px] font-medium text-slate-400 sm:hidden">
                                                 {item.updatedAt ? dayjs(item.updatedAt).format('YYYY-MM-DD HH:mm') : '封存時間未知'}
                                             </div>
@@ -167,7 +175,14 @@ const RecycleBinView = () => {
 
                                         <div className="hidden text-xs text-slate-500 truncate pr-4 sm:flex items-center gap-1.5">
                                             <span className="text-slate-400">所在於:</span>
-                                            <span className="font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{item.parentId ? nodes[item.parentId]?.title || '(已知父節點)' : board.title}</span>
+                                            <span
+                                                className="flex min-w-0 items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600"
+                                                data-task-description-hover-trigger={item.parentId && nodes[item.parentId] ? 'true' : undefined}
+                                                data-task-id={item.parentId && nodes[item.parentId] ? item.parentId : undefined}
+                                            >
+                                                <span className="truncate">{item.parentId ? nodes[item.parentId]?.title || '(已知父節點)' : board.title}</span>
+                                                {item.parentId && nodes[item.parentId] ? <TaskDescriptionIndicator description={nodes[item.parentId]?.description} /> : null}
+                                            </span>
                                         </div>
 
                                         <div className="hidden w-32 text-right text-xs text-slate-400 font-medium whitespace-nowrap font-mono sm:block">

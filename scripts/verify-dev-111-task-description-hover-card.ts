@@ -25,7 +25,8 @@ const sourceBySurface = {
 assert('hover card is mounted once from MainLayout', mainLayout.includes('<TaskDescriptionHoverCard />'));
 assert('hover delay is exactly one second', hoverCard.includes('TASK_DESCRIPTION_HOVER_DELAY_MS = 1000'));
 assert('description reads the existing TaskNode projection', hoverCard.includes('.nodes[taskId]?.description?.trim()'));
-assert('empty descriptions do not open a card', hoverCard.includes('if (!taskId || !description)'));
+assert('empty descriptions do not open a card', hoverCard.includes('if (!taskId || !description)')
+  || hoverCard.includes('if (!candidate?.description)'));
 assert('fine-pointer media gate protects touch surfaces', hoverCard.includes("matchMedia('(hover: hover) and (pointer: fine)')"));
 assert('portal avoids clipping by reading-mode containers', hoverCard.includes('createPortal(') && hoverCard.includes('document.body'));
 assert('card is a semantic tooltip with stable DOM evidence', hoverCard.includes('role="tooltip"') && hoverCard.includes('data-task-description-hover-card="true"'));
@@ -58,8 +59,11 @@ Object.entries(sourceBySurface).forEach(([surface, source]) => {
 });
 
 ['boardColumn', 'boardCard', 'boardChecklist', 'list'].forEach((surface) => {
+  const source = sourceBySurface[surface as keyof typeof sourceBySurface];
+  const allowsTaskDetailsScopedTrigger = surface === 'boardChecklist'
+    && source.includes("hostAdapter.surfaceId === 'task-details.subtask-row'");
   assert(`${surface} does not duplicate a title-only description trigger`,
-    !sourceBySurface[surface as keyof typeof sourceBySurface].includes('data-task-description-hover-trigger'));
+    !source.includes('data-task-description-hover-trigger') || allowsTaskDetailsScopedTrigger);
 });
 
 assert('calendar task segment no longer competes with a native title tooltip',

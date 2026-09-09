@@ -21,6 +21,7 @@ import { useTagStore } from '../store/useTagStore';
 import type { TaskNode } from '../types';
 import TaskConditionFilterControls, { type TaskConditionAssigneeOption } from './ui/TaskConditionFilterControls';
 import { taskFilterFieldClass } from './ui/taskConditionFilterStyles';
+import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
 
 export type CalendarSubscriptionBuilderBoard = {
   id: string;
@@ -708,9 +709,15 @@ const CalendarSubscriptionBuilderPreview: React.FC<Props> = ({
                       data-preview-event-board-id={event.board.storageId ?? event.board.id}
                       data-preview-event-date={event.date}
                       data-preview-event-date-type={event.dateType}
+                      data-task-description-hover-trigger="true"
+                      data-task-id={event.node.id}
+                      data-task-description-hover-content={event.node.description || ''}
                     >
                       <div className="min-w-0">
-                        <div className="break-words font-bold leading-5 text-slate-800 sm:truncate">{event.node.title}</div>
+                        <div className="flex min-w-0 items-center gap-1 break-words font-bold leading-5 text-slate-800 sm:truncate">
+                          <span className="truncate">{event.node.title}</span>
+                          <TaskDescriptionIndicator description={event.node.description} />
+                        </div>
                       </div>
                     </div>
                   ))}

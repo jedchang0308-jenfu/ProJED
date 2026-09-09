@@ -75,39 +75,39 @@ interface TaskDetailNoteEditorProps {
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
 }
 
-const TASK_NOTE_EDITOR_WIDTHS_KEY = 'projed.taskDetailNote.widths.v1';
-const TASK_NOTE_EDITOR_MIN_WIDTH = 240;
-const TASK_NOTE_EDITOR_MAX_WIDTH = 1600;
+const TASK_NOTE_EDITOR_HEIGHTS_KEY = 'projed.taskDetailNote.heights.v1';
 const TASK_NOTE_EDITOR_MIN_HEIGHT = 36;
+const TASK_NOTE_EDITOR_MAX_HEIGHT = 960;
+const TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP = 12;
 
-const clampTaskNoteEditorWidth = (value: number) => Math.min(
-  TASK_NOTE_EDITOR_MAX_WIDTH,
-  Math.max(TASK_NOTE_EDITOR_MIN_WIDTH, Math.round(value)),
+const clampTaskNoteEditorHeight = (value: number) => Math.min(
+  TASK_NOTE_EDITOR_MAX_HEIGHT,
+  Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.round(value)),
 );
 
-const readTaskNoteEditorWidth = (boardId: string): number | null => {
+const readTaskNoteEditorHeight = (boardId: string): number | null => {
   if (!boardId || typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_WIDTHS_KEY);
+    const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_HEIGHTS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const value = Number(parsed[boardId]);
-    return Number.isFinite(value) ? clampTaskNoteEditorWidth(value) : null;
+    return Number.isFinite(value) ? clampTaskNoteEditorHeight(value) : null;
   } catch {
     return null;
   }
 };
 
-const writeTaskNoteEditorWidth = (boardId: string, width: number) => {
+const writeTaskNoteEditorHeight = (boardId: string, height: number) => {
   if (!boardId || typeof window === 'undefined') return;
   try {
-    const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_WIDTHS_KEY);
+    const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_HEIGHTS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    const widths = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    const heights = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {};
-    widths[boardId] = clampTaskNoteEditorWidth(width);
-    window.localStorage.setItem(TASK_NOTE_EDITOR_WIDTHS_KEY, JSON.stringify(widths));
+    heights[boardId] = clampTaskNoteEditorHeight(height);
+    window.localStorage.setItem(TASK_NOTE_EDITOR_HEIGHTS_KEY, JSON.stringify(heights));
   } catch {
     // Layout preferences are best-effort and must not block editing.
   }
@@ -500,9 +500,11 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
 }) => {
   const contentEditableRef = React.useRef<HTMLDivElement | null>(null);
   const resizeFrameRef = React.useRef<number | null>(null);
-  const isUserResizingRef = React.useRef(false);
-  const pendingWidthRef = React.useRef<number | null>(null);
-  const [savedWidth, setSavedWidth] = React.useState<number | null>(() => readTaskNoteEditorWidth(boardId));
+  const preferredHeightRef = React.useRef<number | null>(readTaskNoteEditorHeight(boardId));
+  const intrinsicHeightRef = React.useRef(TASK_NOTE_EDITOR_MIN_HEIGHT);
+  const resizeStartRef = React.useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
+  const pendingHeightRef = React.useRef<number | null>(null);
+  const [editorHeight, setEditorHeight] = React.useState(TASK_NOTE_EDITOR_MIN_HEIGHT);
 
   const autoSizeContent = React.useCallback(() => {
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
@@ -511,12 +513,18 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
       const element = contentEditableRef.current;
       if (!element) return;
       element.style.height = 'auto';
-      element.style.height = `${Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.scrollHeight))}px`;
+      const intrinsicHeight = Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.ceil(element.scrollHeight));
+      intrinsicHeightRef.current = intrinsicHeight;
+      const nextHeight = preferredHeightRef.current === null
+        ? intrinsicHeight
+        : clampTaskNoteEditorHeight(preferredHeightRef.current);
+      element.style.height = `${nextHeight}px`;
+      setEditorHeight(nextHeight);
     });
   }, []);
 
   React.useLayoutEffect(() => {
-    setSavedWidth(readTaskNoteEditorWidth(boardId));
+    preferredHeightRef.current = readTaskNoteEditorHeight(boardId);
     autoSizeContent();
   }, [autoSizeContent, boardId]);
 
@@ -524,37 +532,66 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     autoSizeContent();
   }, [autoSizeContent, note.content, note.richContent]);
 
-  React.useEffect(() => {
+  React.useEffect(() => () => {
+    if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
+  }, []);
+
+  const applyPreferredHeight = React.useCallback((height: number, persist = false) => {
+    const nextHeight = clampTaskNoteEditorHeight(height);
+    preferredHeightRef.current = nextHeight;
+    pendingHeightRef.current = persist ? null : nextHeight;
     const element = contentEditableRef.current;
-    if (!element || typeof ResizeObserver === 'undefined') return undefined;
-
-    const observer = new ResizeObserver(() => {
-      if (!isUserResizingRef.current) return;
-      const width = Math.round(element.getBoundingClientRect().width);
-      if (width < TASK_NOTE_EDITOR_MIN_WIDTH) return;
-      pendingWidthRef.current = width;
-      setSavedWidth(width);
-    });
-    observer.observe(element);
-
-    const finishResize = () => {
-      if (!isUserResizingRef.current) return;
-      isUserResizingRef.current = false;
-      if (pendingWidthRef.current !== null) {
-        writeTaskNoteEditorWidth(boardId, pendingWidthRef.current);
-        pendingWidthRef.current = null;
-      }
-    };
-
-    window.addEventListener('pointerup', finishResize, true);
-    window.addEventListener('pointercancel', finishResize, true);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('pointerup', finishResize, true);
-      window.removeEventListener('pointercancel', finishResize, true);
-      if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
-    };
+    if (element) element.style.height = `${nextHeight}px`;
+    setEditorHeight(nextHeight);
+    if (persist) writeTaskNoteEditorHeight(boardId, nextHeight);
   }, [boardId]);
+
+  const finishPointerResize = React.useCallback(() => {
+    if (!resizeStartRef.current) return;
+    resizeStartRef.current = null;
+    if (pendingHeightRef.current !== null) {
+      writeTaskNoteEditorHeight(boardId, pendingHeightRef.current);
+      pendingHeightRef.current = null;
+    }
+  }, [boardId]);
+
+  const handleResizePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canEdit || event.button !== 0) return;
+    const element = contentEditableRef.current;
+    if (!element) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.focus({ preventScroll: true });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeStartRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight: element.getBoundingClientRect().height,
+    };
+  }, [canEdit]);
+
+  const handleResizePointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const start = resizeStartRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    applyPreferredHeight(start.startHeight + event.clientY - start.startY);
+  }, [applyPreferredHeight]);
+
+  const handleResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    let delta = 0;
+    if (event.key === 'ArrowUp') delta = -TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP;
+    if (event.key === 'ArrowDown') delta = TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP;
+    if (event.key === 'PageUp') delta = -TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP * 4;
+    if (event.key === 'PageDown') delta = TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP * 4;
+    if (event.key === 'Home') {
+      event.preventDefault();
+      applyPreferredHeight(intrinsicHeightRef.current, true);
+      return;
+    }
+    if (!delta) return;
+    event.preventDefault();
+    applyPreferredHeight(editorHeight + delta, true);
+  }, [applyPreferredHeight, editorHeight]);
 
   const [initialConfig] = React.useState(() => ({
     namespace: 'ProJEDTaskDetailNote-' + note.id,
@@ -615,27 +652,20 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             <Trash2 size={14} />
           </button>
         </div>
-        <div className="relative">
+        <div className="relative min-w-0" data-task-note-resize-frame="true">
           <RichTextPlugin
             contentEditable={(
               <ContentEditable
                 ref={contentEditableRef}
                 className={[
-                  'min-h-[36px] min-w-[240px] max-w-full resize-x overflow-x-hidden overflow-y-hidden whitespace-pre-wrap rounded-md border border-slate-200/70',
+                  'scrollbar-thin min-h-[36px] w-full max-w-full resize-none overflow-x-hidden overflow-y-auto whitespace-pre-wrap rounded-md border border-slate-200/70',
                   'bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-700 outline-none transition',
                   'hover:border-slate-300/70 focus:border-blue-300 focus:ring-2 focus:ring-blue-100',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
-                style={savedWidth ? { width: `${savedWidth}px` } : undefined}
                 aria-label={'備註內容：' + (note.title || '未命名備註')}
                 aria-placeholder="輸入備註內容"
                 placeholder={<span />}
-                onPointerDown={event => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  if (event.clientX >= rect.right - 16 && event.clientY >= rect.bottom - 16) {
-                    isUserResizingRef.current = true;
-                  }
-                }}
                 data-task-detail-note-content-input="true"
               />
             )}
@@ -646,6 +676,31 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             )}
             ErrorBoundary={LexicalErrorBoundary}
           />
+          {canEdit ? (
+            <div
+              role="separator"
+              tabIndex={0}
+              aria-label={'調整備註高度：' + (note.title || '未命名備註')}
+              aria-orientation="horizontal"
+              aria-valuemin={TASK_NOTE_EDITOR_MIN_HEIGHT}
+              aria-valuemax={Math.max(TASK_NOTE_EDITOR_MAX_HEIGHT, editorHeight)}
+              aria-valuenow={editorHeight}
+              onPointerDown={handleResizePointerDown}
+              onPointerMove={handleResizePointerMove}
+              onPointerUp={finishPointerResize}
+              onPointerCancel={finishPointerResize}
+              onLostPointerCapture={finishPointerResize}
+              onKeyDown={handleResizeKeyDown}
+              className="group absolute inset-x-0 -bottom-1 z-10 h-2 cursor-row-resize touch-none rounded-b-md focus:outline-none"
+              data-task-note-resize-handle="bottom-edge"
+              data-task-note-resize-axis="vertical"
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-[3px] h-[2px] rounded-full bg-transparent transition-colors group-hover:bg-blue-300 group-focus-visible:bg-blue-400 group-active:bg-blue-500"
+              />
+            </div>
+          ) : null}
         </div>
         <HistoryPlugin />
         <ListPlugin />

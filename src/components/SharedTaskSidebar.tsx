@@ -8,11 +8,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDragSensors } from '../hooks/useDragSensors';
 import { useBoardPermissions } from '../hooks/useBoardPermissions';
 import { COMPACT_DIMENSIONS } from './ui/compactTokens';
-import type { TaskNode } from '../types';
 import { prepareNewTaskNaming } from '../utils/taskInteractions';
 import { useTaskInteractionBinding } from '../interactions/task/useTaskInteractionBinding';
 import { primaryPlacementId } from '../features/taskTracking/model';
 import { TaskDescriptionIndicator } from './TaskDescriptionIndicator';
+import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
 
 type SharedTaskSidebarSurface = 'gantt' | 'calendar';
 
@@ -242,18 +242,14 @@ const SharedTaskSidebar = ({
     const handleAddList = () => {
         if (!canCreateTask) return;
         if (activeWorkspaceId && activeBoardId) {
-            const newNode: TaskNode = {
+            const newNode = createBlankTaskNode({
                 id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
                 workspaceId: activeWorkspaceId,
                 boardId: activeBoardId,
                 parentId: null,
-                title: '新任務',
-                status: 'todo',
                 nodeType: 'group',
                 order: flattenedItems.length,
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-            };
+            });
             addNode(newNode);
             prepareNewTaskNaming(newNode.id);
         }
@@ -262,18 +258,14 @@ const SharedTaskSidebar = ({
     const handleAddChild = (item: any) => {
         if (!canCreateTask) return;
         if (activeWorkspaceId && activeBoardId) {
-            const newNode: TaskNode = {
+            const newNode = createBlankTaskNode({
                 id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
                 workspaceId: activeWorkspaceId,
                 boardId: activeBoardId,
                 parentId: item.id,
-                title: '新任務',
-                status: 'todo',
                 nodeType: 'task',
                 order: 999, // default to end
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-            };
+            });
             if (collapsedIds.has(item.id)) toggleCollapse(item.id);
             addNode(newNode);
             prepareNewTaskNaming(newNode.id);

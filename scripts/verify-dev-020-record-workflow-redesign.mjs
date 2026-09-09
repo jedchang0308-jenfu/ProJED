@@ -208,15 +208,18 @@ const checks = [
     ],
   },
   {
-    path: 'src/components/Records/TaskRecordTimeline.tsx',
-    label: 'task knowledge guarded actions',
+    path: 'src/components/TaskDetailsModal.tsx',
+    label: 'retired inline task-history surface',
     snippets: [
-      'useRecordDraftGuard',
-      'handleNewRecord',
-      'handleOpenRecord',
+      'TaskMeetingQuickNoteSection',
+      'TaskDetailsSubtaskSection',
+    ],
+    forbiddenSnippets: [
+      'TaskRecordTimeline',
+      'data-task-knowledge-toggle',
+      'data-task-knowledge-panel',
       '補會後紀錄',
       '補工作紀錄',
-      '自動關聯目前任務',
     ],
   },
   {

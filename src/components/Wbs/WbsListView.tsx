@@ -19,6 +19,7 @@ import { prepareNewTaskNaming } from '../../utils/taskInteractions';
 import type { TaskTrackingReference } from '../../features/taskTracking/types';
 import { buildTaskFilterNodesWithTrackingReferences, primaryPlacementId } from '../../features/taskTracking/model';
 import { buildTaskPlacementTreeRows, TaskPlacementTree } from './TaskPlacementTree';
+import { createBlankTaskNode } from '../../features/taskCreation/createBlankTaskNode';
 
 interface WbsListViewProps {
   boardId: string;
@@ -220,18 +221,14 @@ export const WbsListView: React.FC<WbsListViewProps> = ({ boardId }) => {
 
   const handleCreateRootNode = () => {
     if (!canCreateTask) return;
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5),
       workspaceId: activeWorkspaceId || '', 
       boardId: boardId,
       parentId: null, // 頂層節點沒有 parentId
-      title: '新任務',
-      status: 'todo',
       nodeType: 'group', // 預設頂層可能為群組，若不要也可以設定為 task
       order: rootNodes.length,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
+    });
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
   };

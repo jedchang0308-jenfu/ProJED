@@ -87,22 +87,30 @@ check('QC-098-03-authoritative-placement-and-scope', 'Details uses a local DndCo
   assert.match(source.dragCommit, /commitTaskPlacementCommand/);
 });
 
-check('QC-098-04-details-scope-excludes-modal-shell', 'Only the subtask host and root drop zone are inside the drag scope; metadata/background are outside', () => {
+check('QC-098-04-details-scope-excludes-modal-shell', 'Only the subtask host and unstyled root drop target are inside the drag scope; metadata/background are outside', () => {
   const metaIndex = source.detailsModal.indexOf('data-task-details-meta-section');
   const sectionIndex = source.detailsModal.indexOf('<TaskDetailsSubtaskSection');
   assert.ok(metaIndex >= 0 && sectionIndex > metaIndex);
   assert.match(source.detailsSection, /data-task-details-root-drop-zone/);
+  assert.doesNotMatch(source.detailsSection, /拖曳到此處新增為直屬子任務/);
+  assert.match(source.detailsSection, /className=\{`mt-1 h-1/);
   assert.match(source.detailsSection, /ref=\{dragScopeRef\}/);
   assert.match(source.detailsModal, /data-task-details-scroll-surface/);
   assert.doesNotMatch(source.detailsModal, /data-task-details-meta-section[^]*data-task-details-subtask-drag-scope/);
 });
 
-check('QC-098-05-single-modal-navigation-and-save-gate', 'Child open/back and save rejection preserve one modal and one typed transition owner', () => {
-  const b03 = browserCases.get('B03-single-modal-push-back');
+check('QC-098-05-single-modal-navigation-and-save-gate', 'Child open/parent/breadcrumb navigation and save rejection preserve one modal and one typed transition owner', () => {
+  const b03 = browserCases.get('B03-single-modal-parent-navigation');
   const b05 = browserCases.get('B05-save-reject-retry-blocks-navigation');
   const b06 = browserCases.get('B06-rapid-navigation-single-modal');
   assert.equal(b03?.status, 'PASS');
   assert.equal(b03.actual.modalCount, 1);
+  assert.equal(b03.actual.parentNavigation, true);
+  assert.equal(b03.actual.parentTaskId, 'dev098-parent');
+  assert.equal(b03.actual.breadcrumbNavigation, true);
+  assert.equal(b03.actual.breadcrumbTargetTaskId, 'dev098-parent');
+  assert.deepEqual(b03.actual.breadcrumbLinkIds, ['dev098-column', 'dev098-parent']);
+  assert.equal(b03.actual.backButtonHidden, true);
   assert.equal(b05?.status, 'PASS');
   assert.equal(b05.actual.stayedOnFailure, true);
   assert.equal(b05.actual.retryRecovered, true);

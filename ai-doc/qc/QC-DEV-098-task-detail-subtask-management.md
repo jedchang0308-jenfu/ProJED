@@ -13,7 +13,7 @@ QC 以 `npm run verify:dev-098-task-detail-subtasks-qc` 執行，直接讀取 DE
 本次 QC 覆蓋：
 
 - shared `TaskChecklistTree` 與 Board adapter／Details host 邊界；
-- Details local `DndContext`、`targetScopeRef`、root drop 與既有 authoritative placement commit；
+- Details local `DndContext`、`targetScopeRef`、無框線 root drop target 與既有 authoritative placement commit；
 - modal 單例 navigation、save failure gate、context menu／Escape layer ownership；
 - desktop／keyboard／mobile drag、invalid descendant drop、permission guard、source retention 與四個 viewport layout；
 - clean baseline 結果與 runtime／remote release boundary。
@@ -26,7 +26,7 @@ QC 不把 local-test／loopback 證據當成 remote provider、schema／migratio
 |---|---|---|
 | Core evidence envelope | PASS，static 22/22、pure 10/10、browser 16/16、diagnostics 0 | `output/qa/dev-098/result.json`、`output/qa/dev-098/pure-result.json`、`output/playwright/dev-098/result.json` |
 | Shared renderer boundary | PASS，Board／Details 均使用 `TaskChecklistTree`；host-specific dependency／record state 留在 adapter | `QC-098-02`、source readback |
-| Details drag scope | PASS，local DnD、scope filter、root drop 與 authoritative commit 均存在；modal shell／metadata／背景 view 不在 drop scope | `QC-098-03`、`QC-098-04` |
+| Details drag scope | PASS，local DnD、scope filter、無框線 root drop target 與 authoritative commit 均存在；modal shell／metadata／背景 view 不在 drop scope | `QC-098-03`、`QC-098-04` |
 | Navigation／save／overlay | PASS，單一 modal、push／back、reject stay／retry、menu z-index、Escape／outside click | `QC-098-05`、`QC-098-06` |
 | Mobile／permission／layout | PASS，390／320 gesture、readonly／tracking guard、1440／1024／390／320 無水平 overflow | `QC-098-07` |
 | Failure recovery | PASS，tracking placement failure 保留來源位置與 identity | `QC-098-08` |
@@ -39,8 +39,8 @@ QC 不把 local-test／loopback 證據當成 remote provider、schema／migratio
 ## 3. 反向檢查結論
 
 - Details 與 Board 共用 neutral row／tree、interaction controller 與 placement contract；未將 Board `DndContext` 提升為全域 runtime。
-- Details 的 drag scope 只包住 modal 內子任務 host 與 root drop zone；modal 外框、標題／日期／notes metadata、backdrop 後方 Board／Workbench 不會成為 drop target。
-- 子任務開啟、Back、Close 與 save rejection 均維持單一 modal 與 typed transition owner；沒有以 timeout 推導 save unknown。
+- Details 的 drag scope 只包住 modal 內子任務 host 與無框線 root drop target；modal 外框、標題／日期／notes metadata、backdrop 後方 Board／Workbench 不會成為 drop target。
+- 子任務開啟、直接回父、Close 與 save rejection 均維持單一 modal 與 typed transition owner；標題列不顯示 Back，沒有以 timeout 推導 save unknown。
 - invalid self／descendant、readonly／tracking permission、short-scroll 與 placement failure 均 fail closed 或保留 source；沒有 ghost／duplicate／cycle／假成功證據。
 - clean baseline audit 保留原始 pre-existing facts；本輪 affected cases 已完成修正後重跑並通過，沒有以 baseline 取代現行 regression evidence。
 
@@ -74,3 +74,9 @@ DEV-098 核心 local implementation 的獨立 read-only QC 可接受，`QC-098-0
   證據：`output/playwright/dev-098/result-clean-integrated-final-20260903.json`、
   `output/qa/dev-099/clean-integrated-dev098-qc-20260903.json`；4015已釋放。此不取代本 QC 的
   working-tree source boundary，也不解除 DEV-099 persistence與release gate。
+- 2026-09-09：QC B03 增加 844×698 直接開啟子任務回父按鈕 readback；確認 parent navigation、單一 modal
+  與 save guard 行為仍符合 S06／AC-098-005。
+- 2026-09-10：QC B03 readback 確認標題列不再渲染「返回上一個任務詳情」，只保留「回到上一階任務」
+  入口；browser 16/16、diagnostics 0 與 QC 10/10 維持通過。
+- 2026-09-10：QC B03 readback 增加完整階層路徑祖先連結驗證，確認 canonical ancestor links 可導覽、
+  單一 modal 與 save guard 契約不變。

@@ -1,17 +1,17 @@
 import React from 'react';
 import dayjs from 'dayjs';
-import { AlertCircle, ArrowLeft, BookOpenText, CheckCircle2, LoaderCircle, Lock, Unlock, X } from 'lucide-react';
+import { AlertCircle, ArrowUp, CheckCircle2, LoaderCircle, Lock, Unlock, X } from 'lucide-react';
 import { useWbsStore, type UpdateNodeDispatchResult } from '../store/useWbsStore';
 import { useMemberStore } from '../store/useMemberStore';
 import useRecordStore from '../store/useRecordStore';
 import { TagPicker } from './Tags/TagPicker';
-import TaskRecordTimeline from './Records/TaskRecordTimeline';
 import type { TaskDetailNote, TaskNode, TaskStatus } from '../types';
 import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
 import useBoardStore from '../store/useBoardStore';
 import TaskAssignmentPicker from './TaskAssignmentPicker';
 import { MANUAL_TASK_STATUSES, normalizeManualTaskStatus, TASK_STATUS_LABELS } from '../utils/taskStatus';
 import { buildAncestorPath } from '../utils/taskHierarchy';
+import { primaryPlacementId } from '../features/taskTracking/model';
 import { getTaskStatusFieldClass } from './ui/taskStatusStyles';
 import TaskDetailNoteField from './TaskNotes/TaskDetailNoteField';
 import { areTaskNoteRichContentsEqual } from '../utils/taskNoteRichContent';
@@ -165,13 +165,13 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   nodeId,
   trackingReferenceId,
   onClose,
-  canGoBack = false,
   onBack,
   onNavigateToTask,
   onCreateChild,
 }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
   const nodes = useWbsStore((state) => state.nodes);
+  const trackingReferences = useWbsStore((state) => state.trackingReferences);
   const updateNode = useWbsStore((state) => state.updateNode);
   const dependencies = useWbsStore((state) => state.dependencies);
   const trackingReference = useWbsStore((state) => trackingReferenceId
@@ -203,7 +203,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const [notes, setNotes] = React.useState<TaskDetailNote[]>([]);
   const [meetingDiscussion, setMeetingDiscussion] = React.useState('');
   const [meetingDiscussionError, setMeetingDiscussionError] = React.useState<string | null>(null);
-  const [isTaskKnowledgeOpen, setIsTaskKnowledgeOpen] = React.useState(false);
   const isMeetingMode = useRecordStore((state) => state.isMeetingMode);
   const activeMeetingBoardId = useBoardStore((state) => state.activeBoardId);
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
@@ -702,10 +701,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
 
   React.useEffect(() => {
-    setIsTaskKnowledgeOpen(false);
-  }, [currentNodeId]);
-
-  React.useEffect(() => {
     if (!node || !canEditTask) return;
     if (pendingTitleEditNodeId !== node.id) return;
 
@@ -787,6 +782,32 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   }, [canEditTask, notes, node, persistTaskUpdates]);
 
   const ancestorPath = buildAncestorPath(node, nodes);
+
+  const parentPlacementId = trackingReference?.parentPlacementId || null;
+  const parentTrackingReference = parentPlacementId && !parentPlacementId.startsWith('primary:')
+    ? trackingReferences.find(reference => reference.id === parentPlacementId && !reference.removedAt) || null
+    : null;
+  const parentTaskId = trackingReference
+    ? parentPlacementId?.startsWith('primary:')
+      ? parentPlacementId.slice('primary:'.length)
+      : parentTrackingReference?.taskId
+    : node?.parentId;
+  const parentTask = parentTaskId ? nodes[parentTaskId] : undefined;
+  const canNavigateToParent = Boolean(
+    onNavigateToTask
+    && parentTask
+    && !parentTask.isArchived
+    && parentTask.id !== node?.id,
+  );
+  const navigateToParent = React.useCallback(() => {
+    if (!canNavigateToParent || !parentTask || !node) return;
+    requestTransition({
+      kind: 'navigate',
+      taskId: parentTask.id,
+      trackingReferenceId: parentTrackingReference?.id,
+      placementId: trackingReference?.id || primaryPlacementId(node.id),
+    });
+  }, [canNavigateToParent, node, parentTask, parentTrackingReference?.id, requestTransition, trackingReference?.id]);
 
   if (!node) return null;
 
@@ -1081,17 +1102,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
           className="flex items-start gap-2 px-5 py-3"
           data-task-details-header="true"
         >
-          {canGoBack ? (
+          {canNavigateToParent ? (
             <button
               type="button"
-              onClick={() => requestTransition({ kind: 'back' })}
+              onClick={navigateToParent}
               disabled={isClosePending}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
-              aria-label="返回上一個任務詳情"
-              title="返回上一個任務詳情"
-              data-task-details-back="true"
+              aria-label="回到上一階任務"
+              title="回到上一階任務"
+              data-task-details-parent="true"
             >
-              <ArrowLeft size={18} aria-hidden="true" />
+              <ArrowUp size={18} aria-hidden="true" />
             </button>
           ) : null}
           <div className="min-w-0 flex-1">
@@ -1107,10 +1128,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   data-task-details-title-input="true"
                   aria-label="編輯任務名稱"
                   className="h-9 w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 hover:bg-slate-50/80 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  title={node.title}
                 />
               ) : (
-                <p className="truncate text-sm font-semibold text-slate-900" title={node.title}>
+                <p className="truncate text-sm font-semibold text-slate-900">
                   {node.title}
                 </p>
               )}
@@ -1122,13 +1142,24 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 >
                   {ancestorPath.map((ancestor, index) => (
                     <React.Fragment key={ancestor.id}>
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => requestTransition({
+                          kind: 'navigate',
+                          taskId: ancestor.id,
+                          placementId: trackingReference?.id || (node ? primaryPlacementId(node.id) : undefined),
+                        })}
+                        disabled={isClosePending}
                         data-task-details-parent-name="true"
-                        className="min-w-0 max-w-[min(11rem,30vw)] truncate text-slate-600"
-                        title={ancestor.title || '未命名任務'}
+                        data-task-details-parent-link="true"
+                        data-task-details-parent-id={ancestor.id}
+                        data-task-id={ancestor.id}
+                        data-task-description-hover-trigger={ancestor.description?.trim() ? 'true' : undefined}
+                        aria-label={`開啟上層任務：${ancestor.title || '未命名任務'}`}
+                        className="min-w-0 max-w-[min(11rem,30vw)] truncate text-left text-blue-700 underline decoration-blue-200 underline-offset-2 transition-colors hover:text-blue-800 hover:decoration-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-1 disabled:cursor-wait disabled:opacity-60"
                       >
                         {ancestor.title || '未命名任務'}
-                      </span>
+                      </button>
                       {index < ancestorPath.length - 1 && (
                         <span className="shrink-0 text-slate-300" aria-hidden="true">
                           /
@@ -1484,24 +1515,6 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
             })}
           />
 
-          <div className="flex justify-end pt-2" data-task-knowledge-trigger="true">
-            <button
-              type="button"
-              onClick={() => setIsTaskKnowledgeOpen((current) => !current)}
-              aria-expanded={isTaskKnowledgeOpen}
-              aria-controls="task-knowledge-panel"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              data-task-knowledge-toggle="true"
-            >
-              <BookOpenText size={14} />
-              <span>{isTaskKnowledgeOpen ? '收合歷史資訊' : '查看歷史資訊'}</span>
-            </button>
-          </div>
-          {isTaskKnowledgeOpen ? (
-            <div id="task-knowledge-panel" data-task-knowledge-panel="true">
-              <TaskRecordTimeline nodeId={node.id} />
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

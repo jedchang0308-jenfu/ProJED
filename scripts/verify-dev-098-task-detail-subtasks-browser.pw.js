@@ -141,7 +141,7 @@ async (page) => {
     if (await section.locator('[data-task-details-subtask-empty="true"]').count()) throw new Error('non-empty parent rendered empty state');
     return { expanded: await section.locator('[data-task-details-subtask-toggle="true"]').getAttribute('aria-expanded'), count };
   });
-  await run('B03-single-modal-push-back', async () => {
+  await run('B03-single-modal-parent-navigation', async () => {
     await close().catch(() => {});
     await seed();
     const modal = await openPlacement('primary:dev098-parent');
@@ -151,13 +151,35 @@ async (page) => {
     if (await details().count() !== 1) throw new Error('navigation created a second modal');
     if (await details().getAttribute('data-task-id') !== 'dev098-child') throw new Error('child navigation did not push');
     if (await details().locator('[data-task-details-title-input="true"]').count() !== 1) throw new Error('child details title editor missing');
-    await details().getByRole('button', { name: '返回上一個任務詳情' }).click();
+    if (await details().getByRole('button', { name: '返回上一個任務詳情' }).count() !== 0) throw new Error('legacy details back button is still visible');
+    await details().getByRole('button', { name: '回到上一階任務' }).click();
     await page.waitForTimeout(120);
     if (await details().getAttribute('data-task-id') !== 'dev098-parent') throw new Error('Back did not restore parent');
+
+    await close();
+    await seed({ viewport: { width: 844, height: 698 } });
+    const directChild = await openPlacement('primary:dev098-child');
+    const parentButton = directChild.locator('[data-task-details-parent="true"]');
+    if (await parentButton.count() !== 1) throw new Error('direct child parent navigation button missing');
+    const breadcrumbLinks = directChild.locator('[data-task-details-parent-link="true"]');
+    const breadcrumbLinkIds = await breadcrumbLinks.evaluateAll(elements => elements.map(element => element.getAttribute('data-task-details-parent-id')));
+    if (breadcrumbLinkIds.length !== 2 || !breadcrumbLinkIds.includes('dev098-column') || !breadcrumbLinkIds.includes('dev098-parent')) {
+      throw new Error('ancestor breadcrumb links missing: ' + JSON.stringify(breadcrumbLinkIds));
+    }
+    await page.screenshot({ path: outputDir + '/B03-parent-navigation-844x698.png', fullPage: true });
+    await directChild.locator('[data-task-details-parent-link="true"][data-task-details-parent-id="dev098-parent"]').click();
+    await page.waitForFunction(() => document.querySelector('[data-task-details-modal="true"]')?.getAttribute('data-task-id') === 'dev098-parent');
+    if (await details().count() !== 1) throw new Error('parent navigation created a second modal');
     return {
       modalCount: await details().count(),
       taskId: await details().getAttribute('data-task-id'),
       titleInputAvailable: true,
+      parentNavigation: true,
+      parentTaskId: 'dev098-parent',
+      breadcrumbNavigation: true,
+      breadcrumbTargetTaskId: await details().getAttribute('data-task-id'),
+      breadcrumbLinkIds,
+      backButtonHidden: true,
     };
   });
 
@@ -211,7 +233,7 @@ async (page) => {
     const modal = await openPlacement('primary:dev098-parent');
     const child = modalPlacement('primary:dev098-child').locator('[data-task-surface-source="true"]').first();
     await child.click();
-    await modal.locator('[data-task-details-back="true"]').click().catch(() => {});
+    await modal.locator('[data-task-details-parent="true"]').click().catch(() => {});
     await page.waitForTimeout(260);
     if (await details().count() !== 1) throw new Error('rapid child/back created duplicate modal');
     return { modalCount: await details().count(), taskId: await details().getAttribute('data-task-id') };
@@ -331,11 +353,15 @@ async (page) => {
     await seed({ viewport: { width: 390, height: 844 } });
     const modal = await openPlacement('primary:dev098-parent');
     if (await modal.locator('[data-task-details-scroll-surface="true"]').count() !== 1) throw new Error('details scroll surface missing');
-    if (await modal.locator('[data-task-details-root-drop-zone="true"]').count() !== 1) throw new Error('local drop scope missing');
+    const rootDrop = modal.locator('[data-task-details-root-drop-zone="true"]');
+    if (await rootDrop.count() !== 1) throw new Error('local drop scope missing');
+    if (await modal.getByText('拖曳到此處新增為直屬子任務', { exact: true }).count() !== 0) throw new Error('root drop helper row was not removed');
+    const rootDropClass = await rootDrop.getAttribute('class');
+    if (rootDropClass?.includes('border') || rootDropClass?.includes('rounded')) throw new Error('root drop target still renders a container');
     await modal.locator('[data-task-details-subtask-toggle="true"]').click();
     if (await modal.locator('[data-task-details-subtask-panel="true"]').count() !== 0) throw new Error('collapse did not hide panel');
     await modal.locator('[data-task-details-subtask-toggle="true"]').click();
-    return { viewport: [390, 844], collapsedAndExpanded: true };
+    return { viewport: [390, 844], collapsedAndExpanded: true, rootDropHelperRemoved: true, rootDropContainerRemoved: true };
   });
 
   await run('B14-mobile-320-short-scroll-guard', async () => {

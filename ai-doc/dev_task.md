@@ -41,10 +41,10 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 摘要：會議模式保留完整看板編輯與有語意活動捕捉；逐筆 append 與純位置活動已由 DEV-011/012 現行契約取代。
   - 證據：`SPEC-007`、`verify:dev-007-meeting-activity`
   - 計入交付：是
-- ✓ DEV-008 [交付點] [完成] [P2] [已交付] 任務會議細節快速查找
-  - 摘要：讓任務可快速查找會議知識與細節。
-  - 證據：`SPEC-008`、`verify:dev-008-task-knowledge`
-  - 計入交付：是
+- ✓ DEV-008 [交付點] [完成／UI 後續退場] [P2] [Local-only / NOT RELEASED] 任務會議細節快速查找
+  - 摘要：歷史曾交付任務明細知識查找；2026-09-10 依使用者決策移除整個歷史資訊入口與面板，僅保留紀錄資料及片段解析相容能力。
+  - 證據：`SPEC-008`、`QA-DEV-008`、`verify:dev-008-task-knowledge`、DEV-108 browser regression
+  - 計入交付：是（歷史交付事實保留；現行任務明細 UI 已退場）
 - ✓ DEV-009 [交付點] [完成] [P2] [已交付] 任務詳情會議快速補記
   - 摘要：提供任務詳情內的快速會議補記流程。
   - 證據：`SPEC-009`、`QA/QC-DEV-009`
@@ -666,7 +666,7 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
 - ✓ DEV-108 [交付點] [完成] [P1] [Implemented / QA-QC PASS / Local-only / NOT RELEASED] 任務明細會議補記持續呈現
   - 摘要：任務明細的人工會議補記加入後立即顯示，會議結束後仍以緊湊純文字列表留在第一層；預設顯示最新三筆並可原地展開。
   - 來源 ID：`USER-20260907-TASK-DETAIL-MEETING-NOTE-PERSISTENT-LIST`
-  - 父任務：DEV-009；相容 DEV-008、DEV-066、DEV-106。
+  - 父任務：DEV-009；相容 DEV-008 保留的片段解析、DEV-066、DEV-106。
   - 下一步：若納入 release candidate，依 `QA-DEV-108` 重跑完整 matrix 並交 release gate；目前不自動 deploy。
   - 阻塞 / 恢復條件：Local-only 已通過；若 release 前發現 provider/RLS、正式資料或權限變更需求，停止並回 PM 升級風險。
   - 證據：`SPEC-108`、`QA-DEV-108`、`RD-TECH-LEAD-REVIEW-DEV-108`、`QC-DEV-108`；static 14/14、browser B01～B09、DEV-008／009／024／066／105／106／107 targeted regression、TypeScript、targeted ESLint、build:test、`git diff --check` PASS。
@@ -712,14 +712,43 @@ SPEC / QA / QC / release 文件，以及 `ai-doc/archived/dev_task_pm_updates_20
   - 限制：舊 `verify-task-details-mobile-meta-layout-browser.pw.js` 在進入 metadata 驗證前等待既有 `data-task-record-timeline-actions` fixture timeout；不改寫成通過，也不歸因於本次桌機 class-only 修正。
   - 計入交付：是（Local desktop layout refinement 完成；正式 release 另需 gate）
 
-- ✓ DEV-113 [開發點] [完成] [P2] [Local QA-QC PASS / NOT RELEASED] 任務說明單行預設與看板寬度偏好
-  - 摘要：任務說明編輯器預設只占一行，內容增加時自動增高完整顯示；使用者可用原生水平 resize 調整寬度，並以看板範圍保存介面偏好。
-  - 來源 ID：`USER-20260909-TASK-NOTE-COMPACT-AUTOSIZE-WIDTH-PREFERENCE`。
+- ✓ DEV-113 [開發點] [完成] [P2] [Local QA-QC PASS / NOT RELEASED] 任務說明單行預設與底邊縱向尺寸
+  - 摘要：任務說明編輯器預設只占一行，內容增加時自動增高完整顯示；依使用者畫面回饋移除橫向 resize，改為拖曳底部整條框線調整高度，並以看板範圍保存高度偏好。
+  - 來源 ID：`USER-20260909-TASK-NOTE-COMPACT-AUTOSIZE-WIDTH-PREFERENCE`、`USER-20260909-TASK-NOTE-VERTICAL-BOTTOM-EDGE-RESIZE`。
   - 父任務：DEV-066；相容 DEV-028、DEV-111。
   - 下一步：若納入正式版本，另走 release gate；目前不自動 deploy。
-  - 證據：`SPEC-113`、`QA-DEV-113`、`QC-DEV-113`；static 12/12、in-app browser 36px→84px→36px geometry、TypeScript、targeted ESLint、test build 與既有回歸。
-  - 限制：寬度偏好目前是 browser localStorage 的 board-scoped UI preference，不是後端跨使用者共享設定。
+  - 證據：`SPEC-113`、`QA-DEV-113`、`QC-DEV-113`；static 14/14、browser 13/13、156px 內容縮至 60px 並產生捲軸、中央／左端／右端底邊拖曳、鍵盤調整、808×698 畫面、DEV-028 static 48/48＋browser、TypeScript、targeted ESLint 與 test build PASS。
+  - 限制：高度偏好目前是 browser localStorage 的 board-scoped UI preference，不是後端跨使用者共享設定。
   - 計入交付：是（Local implementation 完成；正式 release 另需 gate）
+
+- ✓ DEV-114 [交付點] [完成] [P2] [RD Implementation Complete / Tech Lead Review PASS / QA-QC PASS / NOT RELEASED] 任務說明全介面覆蓋與重複名稱懸浮清理
+  - 摘要：把桌面任務說明懸浮視窗延伸至所有持久任務呈現，保留觸控不啟動，並移除只重複顯示
+    畫面既有任務名稱／位置的原生 tooltip；操作型 tooltip 與明確點擊 popover 維持不變。
+    本次 amendment 另納入 Task Details 的 ancestor breadcrumb 與子任務列，並修正 modal layer 下卡片不可見問題。
+  - 來源 ID：`USER-20260909-TASK-DESCRIPTION-GLOBAL-SURFACE-COVERAGE-AND-NAME-TOOLTIP-REMOVAL`。
+  - 相容任務：DEV-004／006／020、DEV-028、DEV-039、DEV-045、DEV-065、DEV-066、DEV-070、DEV-088、
+    DEV-098、DEV-107、DEV-111。
+  - 下一步：DEV-114 candidate 與相容 regression gate 已完成；若要納入正式版本再走 deployment/release gate。
+  - 阻塞 / 恢復條件：DEV-114 開發本身無 P0／P1 blocker；若 canonical task ID、controller／mention／RAG contract 漂移，或需修改
+    protected structure／data contract，立即停止並回報 PM。正式 release 另依 release gate 判定。
+  - 權威文件：`ai-doc/specs/SPEC-114-task-description-global-surfaces.md`、
+    `ai-doc/qa/QA-DEV-114-task-description-global-surfaces.md`。
+  - 證據：本文件 `DEV-114` 詳細段落、SPEC-114、QA-DEV-114、QC-DEV-114；DEV-114 static 29/29、browser B01～B26＋B02a 27/27（含
+    1440×900／1024×768／390×844）、0 browser/page/HTTP error、TypeScript、targeted ESLint（0 error）與 test build PASS；
+    DEV-111／028／039／098／045／088／006／107／002 相容 static／browser gates PASS。
+  - 計入交付：是（Local implementation 與相容 regression 完成；正式 release 另走 deployment/release gate）
+
+- ☑ DEV-115 [交付點] [完成] [P1] [CAPA-002 / RD Implementation Complete / Targeted QA-QC PASS / NOT RELEASED] 空白任務建立契約與任務說明污染修正
+  - 摘要：修正工作台空白新增把「新任務」寫入任務說明，並以共用 domain factory 統一 11 個空白建立點；
+    capture／clone／import 維持來源語意分流，不合併成大型 UI 元件。
+  - 來源 ID：`CAPA-002`、`USER-20260909-BLANK-TASK-DESCRIPTION-PREFILL-CAPA`。
+  - 下一步：若要納入正式版本，執行 deployment/release gate；並於 release 後依 CAPA-002 完成 permission／mobile smoke、
+    歷史資料 dry-run 與 effectiveness E-02／E-03。
+  - 阻塞 / 恢復條件：若 shared factory 必須接管 placement、permission、UI navigation、capture／clone／import
+    content，立即停止並回規劃模型；歷史資料 provenance 不阻擋本 DEV，任何清理仍不得執行。
+  - 證據：CAPA-002、ADR-048、SPEC-115、QA-DEV-115、QC-DEV-115；static 17/17、browser B01～B09、相容 regression、
+    TypeScript、targeted ESLint、test build 與 diff gate PASS；permission／mobile／production evidence 與 effectiveness 仍待 gate。
+  - 計入交付：是（Local implementation 與 targeted QA-QC 完成；正式 release 另走 deployment/release gate）
 
 ## DEV-066：任務備註語意富文字與 AI 可讀內容
 
@@ -3281,6 +3310,8 @@ L3+ 任務，再重新進入其他任務明細。此切換破壞父子脈絡，�
 - 任務明細遮住看板期間，拖曳目標只包含目前明細的可見子樹與「目前任務直屬層」；不允許
   拖向遮罩後方的看板、工作台或其他檢視。
 - 點開子任務使用同一個明細視窗切換，不疊第二個 modal；需保留返回父任務的可辨識路徑。
+- 從看板等入口直接開啟有父任務的明細時，標題列提供「回到上一階任務」按鈕，沿用同一 modal
+  navigation stack 與 save guard。
 - 父任務本機草稿必須先安全寫入；保存 pending或失敗時阻止切換，不能用導航掩蓋資料風險。
 - 右鍵選單位於明細 overlay 上層；Escape 關閉順序固定為右鍵／子層浮窗優先，最後才是明細。
 - 不新增第二層捲軸；子任務區跟隨明細主內容捲動。手機短滑維持捲動優先，長按才進入拖曳。
@@ -3343,6 +3374,12 @@ TaskDetailsModal 內目前可見 placement subtree
   作唯一 vertical scroll owner。
 - 扁平 header只有 chevron、「子任務」、直屬 placement count與合法時的「新增子任務」；
   展開後直接接共用 checklist tree，不新增 card shell、說明卡或內層 scrollbar。
+- 目前任務直屬層仍保留可拖放語意，但移除「拖曳到此處新增為直屬子任務」文字、虛線與額外容器，
+  不再佔用一整列版面；拖曳提示只在實際 hover 時顯示最小化底線。
+- 直接開啟或切換到的子任務若存在可讀父 placement，標題列只顯示可聚焦的「回到上一階任務」按鈕；
+  不顯示 navigation stack Back 控制。
+- 標題下方完整階層路徑的每個祖先任務名稱均為可聚焦文字連結入口；點擊後沿用同一 modal
+  navigation stack 與 save guard 導覽到該任務，當前任務標題維持非連結。
 - `aria-expanded`、`aria-controls`、Enter／Space完整；entry首次 mount預設展開，同 entry可收合，
   navigate／back／reopen後重新預設展開，不寫 localStorage或 provider。
 - primary empty且有create capability時只有一個 CTA；readonly只有中性空白文字。tracking root只投影
@@ -3451,7 +3488,8 @@ child navigation，C scope rejection未通過前不得開啟 drag。
   不可命中。
 - `AC-098-004`：無效 self／descendant、唯讀或缺權限 drop 必須 fail closed，且不得產生重複、
   遺失或循環。
-- `AC-098-005`：點開子任務不堆疊 modal；Back／Close stack與focus結果正確。
+- `AC-098-005`：點開子任務不堆疊 modal；直接開啟或切換到的子任務可由標題列唯一按鈕回父任務，不顯示
+  Back 按鈕；Close stack 與 focus 結果正確。
 - `AC-098-006`：父任務 title／notes 等本機草稿保存成功後才切換，
   pending或failure時停留原任務並顯示可恢復狀態。
 - `AC-098-007`：右鍵選單完整可見於明細之上，outside click 與 Escape 只關閉最上層互動，
@@ -3560,6 +3598,12 @@ child navigation，C scope rejection未通過前不得開啟 drag。
   與 release 仍未執行，故維持 `Not Released`。
 - 2026-09-02：依production永久saving CAPA與RD技術主管審查，新增DEV-099 authority；既有DEV-098核心
   QA/QC保留為歷史surface／navigation baseline，但persistence release另受SPEC-099／QA-DEV-099阻擋。
+- 2026-09-09：依使用者回饋補上直接開啟子任務時的「回到上一階任務」標題列按鈕；支援 canonical／tracking
+  parent placement，沿用單一 modal navigation stack 與 save guard，並納入 B03 844×698 evidence。
+- 2026-09-10：依使用者回饋移除標題列「返回上一個任務詳情」按鈕；所有可解析父 placement 的情境只保留
+  「回到上一階任務」入口，B03 同步驗證舊按鈕不存在。
+- 2026-09-10：依使用者回饋將完整階層路徑的祖先任務名稱改為可聚焦連結入口；B03 同步驗證
+  canonical 祖先連結與單一 modal 導覽。
 
 ## DEV-099：任務儲存狀態收斂
 
@@ -3911,7 +3955,7 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 - 文件成熟度：`Implemented / QA-QC PASS / Local-only / NOT RELEASED`
 - 狀態：完成（local implementation；release 尚未啟動）
 - 節點類型：交付點
-- 父交付點：DEV-009；相容 DEV-008、DEV-066、DEV-106
+- 父交付點：DEV-009；相容 DEV-008 保留的片段解析、DEV-066、DEV-106
 - 是否計入產品交付完成：是（Prepared 階段完成率貢獻 0）
 - 原始需求邊界：`USER-20260907-TASK-DETAIL-MEETING-NOTE-PERSISTENT-LIST`
 - 風險等級：Medium（改變使用者可見入口、跨會議狀態的資料投影與失敗恢復）
@@ -3923,7 +3967,7 @@ Hotfix必須從production base `13888b2`建立乾淨worktree／等價隔離分�
 
 目前在任務明細按「加入紀錄」後，文字只 append 到當次 meeting draft，任務明細立即清空輸入框，
 卻不在相同畫面顯示剛加入的內容。使用者會把正常清空誤認為資料消失；會議模式結束後，整個
-「本次會議」區塊也因 `isMeetingMode` 條件消失，必須改走歷史資訊或完整會議紀錄才能找回。
+「本次會議」區塊也因 `isMeetingMode` 條件消失，必須改走紀錄庫的完整會議紀錄才能找回。
 
 本 DEV 要讓人工補記在送出後立即成為任務明細第一層的可見內容，且會議結束、重新開啟任務或
 切換模式後仍可閱讀。列表以純文字、少容器及低干擾方式呈現，降低確認成本而不擠壓任務說明、
@@ -4067,8 +4111,8 @@ Batch B 依賴 A；C 依賴 A/B；D 可先建立 fixture，但 browser PASS 依�
   `src/components/TaskNotes/TaskMeetingQuickNoteSection.tsx`、DEV-108 static/browser verifier。
 - 修改：`meetingTaskDiscussion.ts`、`useRecordStore.ts`、`TaskDetailsModal.tsx`、`dataBackend.ts`、
   Firestore／local-test／Supabase record services、`package.json`。
-- 不修改：TaskNode schema、database migrations、permission matrix、`TaskRecordTimeline`、
-  `taskKnowledgeSnippets`、production config 或 release workflow。
+- 不修改：TaskNode schema、database migrations、permission matrix、`taskKnowledgeSnippets`、production config
+  或 release workflow。`TaskRecordTimeline` 已於 2026-09-10 依使用者決策移除。
 
 ### Verification Contract
 
@@ -4512,3 +4556,349 @@ DEV-110結果，也不得在本DEV內啟動deploy。
   圖示無背景／外框／文字且不攔截互動，完成五模式、共用側欄、空白與 390px Local QA-QC。
 
 使用思考習慣：#使用者視角、#溝通設計、#可驗證性
+
+## DEV-114：任務說明全介面覆蓋與重複名稱懸浮清理
+
+- 開發文件成熟度：`RD Implementation Complete / RD Tech Lead Review PASS`
+- 架構定案：`已定案（2026-09-09 技術主管複核）`
+- 狀態：`Local implementation complete / DEV-114 + compatible regression QA-QC PASS / NOT RELEASED`
+- 節點類型：交付點
+- 父交付點：無；延伸 DEV-111，相容 DEV-004／006／020、DEV-028、DEV-039、DEV-045、DEV-065、DEV-066、
+  DEV-070、DEV-088、DEV-098、DEV-107
+- 是否計入產品交付完成：是（Local implementation 與相容 regression 完成；正式 release 另需 gate）
+  - Source revision：`1b6450355ed81180c5abd419ac756564cff1b3c0`（`持續優化3`）＋ SPEC-114
+    `Architecture Review Baseline`；candidate implementation 與 Task Details surfaces amendment 已完成，候選 hash 已更新
+- Authoritative Spec：`ai-doc/specs/SPEC-114-task-description-global-surfaces.md`
+- QA Plan：`ai-doc/qa/QA-DEV-114-task-description-global-surfaces.md`（Executed / DEV-114 + compatible regression PASS）
+- 原始需求邊界：使用者要求把任務說明懸浮視窗套用至先前盤點的所有持久任務位置，觸控裝置維持
+  不套用；另移除懸浮時只重複顯示任務名稱或位置的原生 tooltip，並重整完整位置表。
+- 風險等級：Medium（跨多個使用者可見表面、hover ownership 與既有點擊／拖曳互動）
+
+### RD Tech Lead Review 結論
+
+- 結論：`PASS / 可進 RD 實作`；無未決 blocker。核心方向正確：以既有單例 controller 擴充 presentation metadata，
+  不建立 service、schema、第二份說明資料或第二套 overlay。
+- 核心理由：真正風險不是卡片樣式，而是 `task identity → content source → dwell candidate → trigger ownership → evidence`
+  是否同一條鏈。文件已把這五段收斂為可驗收契約。
+- 已修正的五項高價值缺口：
+  1. pending timer 原可能捕捉舊 task ID；改為比對 `trigger＋taskId＋sourceKind` 的不可漂移候選快照。
+  2. 回收桶與紀錄整列含 button／select；改為只讓任務 identity zone 觸發，控制項不排程或保留說明卡。
+  3. 訂閱 preview 同時有 app ID 與 provider storage ID；hover 固定用 `event.node.id`，既有 preview identity 不變。
+  4. 原回歸只覆蓋共用 controller；補上 Workbench、subscription、recycle、record／mention 的直接 module gates 與正常入口。
+  5. working tree 不是可重現 revision；SPEC 已記錄兩個相鄰未提交檔案 SHA-256，漂移時必須重審。
+- 最小修正原則：不新增中央 exclude 機制、不擴 RAG payload、不 hover-time fetch；若精準 trigger zone 無法成立，
+  才停止並回 PM，而不是先加抽象層。
+
+### 問題與使用者價值
+
+DEV-111 已完成看板、清單、心智圖、甘特圖與行事曆的共同任務說明懸浮視窗，但工作台、回收桶、
+紀錄任務引用、AI 任務引用與行事曆訂閱預覽等持久任務呈現尚未完整套用。部分位置另有瀏覽器原生
+`title`，懸浮時只重複畫面已看得到的任務名稱或位置，形成第二個無必要的浮層與內容競爭。
+
+完成後，桌面使用者在任何已納入的持久任務呈現上，都以同一個 1 秒任務說明懸浮視窗取得內容；
+不再看到只重複任務名稱／位置的原生 tooltip。手機與觸控流程、操作控制提示及點擊式 popover 不變。
+
+### Human Decision Brief
+
+- 已確認：所有持久、可辨識且代表單一任務的閱讀位置都納入；既有五模式入口繼續保留。
+- 已確認：任務詳情的子任務列與上層任務路徑／麵包屑納入；目前任務標題仍不納入說明 hover。
+- 已確認：mobile／touch／coarse pointer 維持不啟動，不新增長按或點擊替代入口。
+- 已確認：只重複任務名稱或位置的原生 tooltip 移除；有操作語意的 control tooltip 保留。
+- 已確認：說明卡不顯示任務名稱、欄位標籤、教學或第二個標題，只顯示非空任務說明。
+
+### UX Intent
+
+- 任務／結果：在不同功能區掃描任務時，可按需閱讀同一份任務說明，不被重複名稱浮層干擾。
+- 主物件／主焦點：游標目前停留的單一持久任務呈現。
+- 預設刪除：任務名稱／位置原生 tooltip、說明卡內的任務名稱、欄位標籤、helper 與第二套 hover card。
+- 保留舉證：非空說明的 9px 微型圖示用於辨識可讀內容；無文字操作控制的 tooltip 用於命名控制。
+- 非語言修復：沿用完整 task surface、既有 9px 圖示與單一集中式 overlay，不新增文字入口或容器。
+- 風險與驗證：長標題／長說明、truncate、inline mention、跨看板引用、viewport 邊界、drag／click ownership、
+  鍵盤與 accessible name、390px touch 排除及 visible error sweep。
+
+### 套用位置矩陣
+
+| 區域 | 任務位置 | 任務說明 hover | 現況／本期處置 | 名稱／位置原生 tooltip |
+|---|---|---|---|---|
+| 看板 | L1 欄標題 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 看板 | L2 任務卡 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 看板 | L3+ 子任務列 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 清單 | 所有層級任務列 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 心智圖 | 任務節點 | 套用 | DEV-111 已有；保留並回歸 | 移除節點名稱 `title` |
+| 甘特圖 | 任務條 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 甘特圖 | 共用任務側欄列 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 行事曆 | 任務日期區段 | 套用 | DEV-111 已有；保留並回歸 | DEV-111 已移除名稱 `title` |
+| 行事曆 | 共用任務側欄列 | 套用 | DEV-111 已有；保留並回歸 | 無需新增 |
+| 任務詳情 | 子任務列 | 套用 | 共用任務列已可觸發；本期正式納入與回歸 | 無需新增 |
+| 任務詳情 | 上層任務路徑／麵包屑 | 套用 | 各 ancestor button 以 canonical task ID 接入共用 hover；卡片層級高於 modal | 移除祖先名稱 `title` |
+| 全域任務平台 | 未歸位任務列 | 套用 | 既有 surface 僅部分接通；補齊內容、標示與驗證 | 移除任務位置 `title` |
+| 全域任務平台 | 已歸位／全部任務列 | 套用 | 補共同 trigger、非空標示與驗證 | 移除任務位置 `title` |
+| 回收桶 | 已封存任務名稱／識別區 | 套用 | 補共同 trigger、非空標示與驗證；操作欄不納入 | 移除任務名稱 `title` |
+| 回收桶 | 原始位置中的父任務名稱 | 套用 | 以父任務 identity 讀取父任務說明 | 目前無原生名稱 tooltip |
+| 紀錄編輯 | 已連結任務 icon＋名稱識別區 | 套用 | 補共同 trigger、非空標示與驗證；role select／action 不納入 | 移除任務名稱 `title` |
+| 紀錄內容 | 行內任務 mention | 套用 | 以 mention node identity 讀取說明，不改序列化資料 | 移除 DOM `title`，保留資料欄位 |
+| AI 助理 | `wbs_items` 任務引用卡 | 套用 | 只套用任務型引用；補 canonical 任務說明解析 | 目前無原生名稱 tooltip |
+| 行事曆訂閱 | 任務事件預覽列 | 套用 | 使用預覽已載入的任務 identity／說明 | 目前無原生名稱 tooltip |
+
+### 明確不套用位置
+
+| 位置／情境 | 任務說明 hover | 處置理由 |
+|---|---|---|
+| 任務詳情目前任務標題 | 不套用 | 同一畫面已直接提供任務說明；移除 editable／readonly 名稱 `title` |
+| mobile／touch／coarse pointer | 不套用 | 維持既有決策，不新增長按或點擊行為 |
+| 尚未轉成正式任務的快速收件內容 | 不套用 | 尚無 canonical task identity／description |
+| 拖曳預覽、插入預覽與選取藍框 | 不套用 | 暫態互動回饋，不是持久閱讀位置 |
+| 右鍵選單、確認視窗、toast | 不套用 | 操作／結果訊息，不是任務閱讀位置 |
+| 任務數量、一般文字、紀錄歷史純文字片段 | 不套用 | 不代表可解析的單一 canonical 任務 |
+| AI 助理的專案、紀錄與文件引用卡 | 不套用 | 不是任務型 `wbs_items` 引用 |
+
+### 既有懸浮／浮層盤點與處置
+
+| 類型 | 是否存在 | 本期處置 |
+|---|---|---|
+| 集中式任務說明 hover card | 是 | 作為唯一自動任務內容浮層；擴充入口，不複製元件 |
+| 任務名稱／位置原生 `title` tooltip | 是 | 依上表移除；說明卡內也不得重複名稱 |
+| 操作控制 tooltip | 是 | 保留，例如新增、收合、還原、刪除、鎖定、resize 與重試 |
+| 點擊／focus 後開啟的 popover | 是 | 保留，例如標籤與篩選器；不視為任務說明 hover |
+| 選取、drop 與 drag preview | 是 | 保留既有視覺回饋；不成為說明 hover 入口 |
+
+### 架構定案
+
+- [x] 沿用 DEV-111 的單一 `TaskDescriptionHoverCard` controller、1000ms dwell、plain-text、portal、viewport
+  clamp、dismissal 與 `aria-describedby`，不得建立第二套 overlay 或每列 timer。
+- [x] 一般入口只傳 `data-task-id`，於排程前及 1000ms 到時後從最新 WBS store 解析 description。
+- [x] pending 候選固定記錄 `trigger＋taskId＋sourceKind`；到時後從同一 trigger 重解，DOM row reuse、ID／來源改變、
+  attribute 移除或內容變空都取消，不得顯示 stale card。
+- [x] 唯一例外為行事曆訂閱預覽：可使用已載入 event node 的
+  `data-task-description-hover-content` 純文字快照；該值即使為空也優先，不 fallback store。
+- [x] 訂閱 hover 的 `data-task-id` 固定使用 `event.node.id`，不得取代或重用既有可能含 storage ID 的
+  `data-preview-event-task-id`；SPEC-045 preview／feed identity 不變。
+- [x] RAG task citation、mention 或 link 的 source ID 不在目前 store 時安靜 no-op；不得 fetch、用 title 冒充、
+  顯示 stale description 或擴充 RAG contract。
+- [x] 穩定標題槽位沿用共用 9px／11px 非互動 indicator；inline mention 不新增 indicator，避免文流與序列化漂移。
+- [x] 移除指定 DOM `title`，保留 `aria-label`、role、focus、序列化 `data-title`、資料 prop 與操作型 tooltip。
+- [x] 回收桶只在任務名稱／父任務 identity zone 觸發；紀錄 link 只在 icon＋名稱 identity zone 觸發。restore、
+  delete、role select 與 action controls 不得啟動或保留說明卡。
+- [x] 無 schema、migration、API、provider、permission、transaction、RAG payload 或 persisted state 變更；ADR 不需要。
+
+### 工作包與實作順序
+
+1. `WP-114-A Controller`：中央雙來源 resolver、兩次重讀、stale guard、static verifier 骨架。
+2. `WP-114-B Store-backed surfaces`：工作台、回收桶／紀錄精準 identity zones、mention、RAG task citation 與 native title 清理。
+3. `WP-114-C Subscription snapshot`：行事曆訂閱預覽的唯一 inline-content path 與 indicator。
+4. `WP-114-D Explicit exclusions`：TaskDetails／MindMap title 清理、current-title 排除與 action tooltip 守門。
+5. `WP-114-E Task Details surfaces`：接入 ancestor breadcrumb／scoped checklist metadata，並以高於 modal 的 layer
+   完成可見性證據。
+6. `WP-114-F Verification`：凍結 candidate，執行 DEV-114、DEV-111、DEV-028、DEV-098 gates 與文件收斂。
+
+A 必須先於 B／C；B、C 可分開實作；D 完成後才可 candidate freeze；E 期間不得持續改功能碼後仍宣告 PASS。
+
+### File Surface
+
+- 必改：`TaskDescriptionHoverCard.tsx`、`TaskWorkbenchPanel.tsx`、`RecycleBinView.tsx`、
+  `Records/RecordSidebar.tsx`、`Records/TaskMentionNode.ts`、`Rag/CitationCard.tsx`、
+  `CalendarSubscriptionBuilderPreview.tsx`、`TaskDetailsModal.tsx`、`MindMap/MindMapNode.tsx`、`package.json`。
+- 實作期新增：`scripts/verify-dev-114-task-description-global-surfaces.ts`、
+  `scripts/verify-dev-114-task-description-global-surfaces-browser.pw.js`。
+- Protected no-change：`MainLayout.tsx`、`TaskDescriptionIndicator.tsx`、`TaskDetailsSubtaskSection.tsx`；
+  `Wbs/TaskChecklistTree.tsx` 僅允許 Task Details scoped metadata extension；`services/rag/ragContract.ts`、`store/useRagStore.ts`、backend／schema／migration／
+  permissions，以及 DEV-111 歷史 QA/QC 結果。
+
+### Acceptance Contract
+
+- [x] 19 個「套用」位置在 fine pointer 持續停留同一任務 1000ms 後，只顯示該任務非空說明。
+- [x] 說明卡沒有任務名稱、「任務說明」標籤、helper、placeholder 或第二套自動 tooltip。
+- [x] 一般入口使用最新 store description；訂閱預覽使用最新 inline snapshot，且 inline 值優先。
+- [x] 空白、缺來源、stale identity、DOM row reuse 或 source-kind 改變時不顯示 card／indicator，也不 fallback 名稱或其他任務內容。
+- [x] 訂閱 hover 使用 canonical `event.node.id`，既有 preview event ID、filter、payload 與 ICS feed 行為不變。
+- [x] 穩定標題槽位顯示共用 indicator；inline mention 不新增 indicator。
+- [x] 指定名稱／位置 native `title` 已移除；操作 tooltip、popover、accessible name、focus 與序列化仍有效。
+- [x] 回收桶／紀錄 action controls 不會啟動或保留說明卡；其 action tooltip、keyboard 與 click 行為仍有效。
+- [x] 任務詳情目前標題、mobile／touch 及其他排除位置不啟動說明 hover；ancestor breadcrumb 與子任務列可觸發。
+- [x] Escape、leave、scroll、resize、blur、visibility、pointer down、drag start 後沒有 stale card。
+- [x] click、double-click、details、selection、context menu、drag、restore／delete、citation navigation、mention
+  serialization 與既有五模式無回歸。
+- [x] 1440×900、1024×768、390×844 實瀏覽器證據通過；無 overflow、visible error、console/page error、
+  載入失敗、錯誤空態或非預期 4xx／5xx。
+- [x] static/browser DEV-114、DEV-111、DEV-028、DEV-039 placement lanes、DEV-045 builder、DEV-088 lifecycle、
+  DEV-098、DEV-006 editor、DEV-107 layout，以及 DEV-002 static、ESLint、TypeScript、build 與 diff check 通過。
+
+### Entry、Evidence 與停止條件
+
+- Entry：RD 先把 HEAD／working tree 與本 source revision 對照；目標檔或 identity contract 漂移須記錄並重新審查。
+- Drift review：架構定案期間 `TaskDetailsModal.tsx` 新增同期「回到上一階任務」控制；判定與本期相容，其
+  操作型 `title`／`aria-label`／navigation 必須保留，不得納入名稱 tooltip 清理。
+- Reproducible baseline：review 前 `TaskDetailsModal.tsx` SHA-256=`6338E9D6E24265307FF7BE8D25501FE39025A5DEAB023594A19F4F6F69CC0406`；
+  amendment candidate SHA-256=`517071B7C143555DBD59129349FE63641F23264A40966F769BE8A4D187088151`（名稱 title 清理＋breadcrumb metadata）；
+  TaskChecklistTree candidate SHA-256=`883A848ECCACE32B6032D7A68696909E7EE9B4565722B29DAFB1825439FCFDCA`；protected `TaskDetailsSubtaskSection.tsx`
+  SHA-256=`87C33BDE68D565B3E3E7B6E8FED4DA8E22785DB2A909ACE548F786EBC105E4D5`。
+- Evidence：`QA-DEV-114`；browser artifacts 固定在
+  `output/playwright/dev-114-task-description-global-surfaces/`，記錄 route、viewport、fixture 與 timing。
+- Runtime：沿用固定 `npm run dev:local`／`http://localhost:4000`；若需新啟動，必須記錄 PID tree／port／cleanup，
+  完成後只停止本任務擁有的 runtime 並確認 port 釋放。
+- Stop：無 canonical task ID、需新增 fetch／API／schema／權限、需修改 protected zone、accessible name 會遺失、
+  direct module regression 無法歸因，或出現錯任務／跨 workspace／資料寫入風險時立即停下回報 PM。
+- Model discretion：可微調 helper 名稱、attribute 落點與 fixture 組織；不得新增標籤、第二 overlay、mobile gesture、
+  fallback 文案、RAG payload、hover-time fetch 或跨板權限。
+
+### 限制、依賴與 Release Boundary
+
+- 跨看板 AI citation 若未載入目前 store，本期明確不顯示；若未來要求完整支援，另建 DEV 處理 citation scope、
+  data contract 與 reindex，不在本期隱性擴張。
+- Spec Impact：`Intentional replacement + compatible extension`；SPEC-111 已加入 DEV-114 amendment，歷史 PASS 不回寫。
+- `RD Implementation Complete／架構已定案` 代表本地 candidate 已完成並通過 DEV-114 與 compatible regression；仍不代表
+  commit、push、deploy 或 release。若要納入正式版本，另走 deployment/release gate。
+
+### 變更紀錄
+
+- 2026-09-09：依使用者逐項 annotation 與補充要求建立 Brief；固定全位置矩陣、mobile／touch 排除、
+  任務詳情標題／麵包屑排除，以及重複任務名稱／位置 native tooltip 清理範圍。
+- 2026-09-09：一次升級至 `RD Implementation Ready／架構已定案`；完成雙來源 resolver、缺資料策略、indicator
+  決策、file/no-change boundary、工作包、QA Plan、evidence 與 stop conditions。產品實作仍未開始。
+- 2026-09-09：RD Tech Lead Review PASS；以最小修正補齊 candidate identity guard、精準 trigger ownership、
+  canonical preview ID、直接模組回歸與 working-tree hash baseline。架構維持單例且無過度設計。
+- 2026-09-09：完成 WP-114-A→E；DEV-114 static 27/27、browser B01～B26 26/26（含 1440×900／1024×768／390×844）、
+  compatible static／browser、工程 gates PASS。DEV-111 verifier 已相容新 `HoverCandidate` resolver；DEV-039／DEV-002 verifier
+  已同步目前已定案契約。本 DEV 標記完成，正式版本仍維持 NOT RELEASED，等待 deployment/release gate。
+- 2026-09-10：依瀏覽器 annotation 將 Task Details ancestor breadcrumb 納入，並為 scoped checklist rows 補 canonical
+  `taskId`／trigger metadata；將共用卡提升至 `z-[10050]`，修正 modal layer 下卡片不可見。DEV-114 static 29/29、
+  browser 27/27（B01～B26＋B02a）PASS；Task Details screenshot、mobile/coarse no-op 與既有 control 邊界同步驗證。
+
+使用思考習慣：#系統描繪、#差距分析、#可驗證性
+
+## DEV-115：空白任務建立契約與任務說明污染修正
+
+- 狀態：`RD Implementation Complete / Tech Lead Optimized / Targeted QA-QC PASS / NOT RELEASED`
+- 開發文件成熟度：`RD Implementation Ready`
+- 架構定案：`已定案（2026-09-09 Architecture Closure Review）`
+- 架構決策：`ADR-048 Accepted / Architecture Confirmed`
+- 節點類型：交付點
+- 父交付點：無
+- 是否計入產品交付完成：是（Local implementation 與 targeted QA-QC 完成；正式 release 另走 deployment/release gate）
+- 原始需求邊界：使用者回報部分新增入口把「新任務」預填進任務說明，要求查明範圍，並要求從
+  長期多閱讀模式成長角度審視共用元件；2026-09-09 明確要求制定 CAPA。
+- Authoritative CAPA：`ai-doc/reports/CAPA-20260909-blank-task-description-prefill.md`
+- Architecture Memory Source：`ai-doc/decisions/ADR-048-blank-task-creation-contract.md`
+- Authoritative SPEC：`ai-doc/specs/SPEC-115-blank-task-creation-contract.md`
+- QA authority：`ai-doc/qa/QA-DEV-115-blank-task-creation-contract.md`
+- Source revision：branch `持續優化3`、HEAD `1b6450355ed81180c5abd419ac756564cff1b3c0` + SPEC-115
+  working-tree SHA-256 manifest；hash drift 先分 `unrelated`／`contract`，不得為符合 hash 回復 user-owned change
+- 相容基線：DEV-039、DEV-070、DEV-111、DEV-114、ADR-043、ADR-046
+- 風險等級：Medium（跨模式 task creation payload 與持久內容；無 schema／migration／permission 變更）
+
+### 任務目標
+
+停止工作台新任務把顯示預設名稱保存為任務說明，並建立可供未來閱讀模式重用的空白任務 domain
+creation contract。完成後所有現有空白建立點都產生 absent description；有來源內容的 capture／clone／import
+則保留各自語意與資料，不因共用化而遺失。
+
+### 開發範圍
+
+- [x] WP-115-1 Guard + factory：分類 source drift，建立 11-entry known manifest、repo heuristic、failing guard
+  與 `createBlankTaskNode()` pure contract。
+- [x] WP-115-2 Atomic migration：同一 candidate 遷移 7 檔 11 點；保留各模式 ID、parent、order、permission、
+  nodeType、addNode 與 post-create ownership，source-derived flows 不接 blank factory。
+- [x] WP-115-3 Verification + convergence：凍結 candidate，依 QA-DEV-115 執行 layered QA、targeted independent
+  QC 與文件回寫；只有經 release gate 才可部署。
+
+### 明確排除
+
+- 不把各模式新增按鈕、版面、placement/order、permission 或 navigation 合併成 mega React component。
+- 不把 capture、clone、import、backup restore 接到 blank factory；來源內容不得為了共用率被清空。
+- 不把 modal／hover 改成忽略「新任務」字串，也不自動刪除既有相同 description。
+- 不在本 DEV 順手改 schema、migration、RLS、provider 或 DEV-070 全部 interaction migration。
+
+### 驗收標準
+
+- [x] 工作台空白新增的 title 是「新任務」，description absent；detail、關閉重開與 reload 後都空白。
+- [x] rename title 不會同步 description；空白說明沒有 indicator，fine pointer 停留 1000ms 不開 hover。
+- [x] 11 個已知 construction points 全數使用 shared factory；repo heuristic 沒有未分類 blank candidate。
+- [x] 快速收件 note、clone、import 與 backup round-trip 保留既有 description 語意。
+- [x] 11 點 adapter mapping 與 task placement、permission、undo、activity、naming、details navigation、
+  post-create profile 無回歸。
+- [ ] 工作台跑完整 store/reload/rename/hover；其他模式跑風險導向代表 UI。1440×900 已通過；390×844 與
+  permission-denied fixture 保留 release/QC gate；本期不改 layout，只有實際觸及 markup/layout 才重開 1024×768 Gate。
+- [x] TypeScript、targeted lint、test build、DEV-039、DEV-111、DEV-114 targeted regression PASS。
+
+### RD 執行計畫
+
+1. 重算 baseline 並分類 drift；建立 failing guard、known manifest／repo heuristic 與純 factory。
+2. 在同一 candidate 原子遷移 11 點；不得只修工作台後保留雙軌並宣稱完成。
+3. 凍結 candidate，依 QA-DEV-115 分層驗證與 targeted QC 後回寫文件。歷史 dry-run 留在 CAPA-002，
+   production mutation 或 release 需另外授權與 gate。
+
+### 架構定案交接
+
+- [x] 真正共用單元是 blank task domain factory，不是新增任務 UI 元件。
+- [x] factory 擁有 canonical blank defaults；surface 擁有 ID、scope、parent、order、nodeType 與互動。
+- [x] `addNode()` 繼續擁有 persistence／undo／activity；`task.post-create` 繼續擁有 naming/navigation policy。
+- [x] taskWorkbench 保留 unplaced normalization、專用 ID 與遠端同步。
+- [x] capture／clone／import 是不同 creation kind，禁止隱性 fallback 到 blank contract。
+- [x] new-mode registration 必須聲明 creation adapter；TaskInteractionScope fail-closed debt 留在 DEV-070 相容邊界。
+- [x] 已對 actual repo、schema、store、interaction、TaskDetails 與 hover 完成 Architecture Closure Review；P0／P1
+  unresolved architecture blocker=0。
+- [x] 已固定 factory API、7 檔 11 點責任、protected zones、work packages、QA evidence、實作裁量與 stop conditions。
+- [x] RD 進場時重算 SPEC-115 baseline hashes 並分類；只有 constructor／creation-kind／ownership 的 contract drift
+  才停止重審，unrelated drift 不得被回復或誤當 blocker。
+
+實作模型可自行決定測試 helper、局部命名與 import cleanup；不得改 factory path/purpose、`description?: never`、
+11 點範圍、mode-owned placement/permission/post-create、source-derived creation、schema/provider/interaction 或歷史資料。
+
+### 驗證計畫與結果
+
+- [x] Pure：blank factory output 沒有 own `description` property，輸入型別不接受 description。
+- [x] Source/adapter：11 個 known manifest entries 全數 import shared factory；repo heuristic 無未分類候選；
+  caller-owned mapping 未漂移。
+- [x] Browser：工作台完成 create→detail→close/reopen→reload→rename→hover；其他模式依 QA-DEV-115 做
+  代表性 adapter smoke，不重複完整生命週期。
+- [x] Source-derived：quick-capture 有 note／無 note、clone、import 與 backup regression PASS。
+- [x] Independent QC：核對 store、persisted readback、可見 UI、console/page error 與 artifact identity。
+- [ ] Effectiveness（CAPA-002／release lane）：release smoke 與 T+7 read-only audit；不阻擋 DEV-115 local done，
+  任何歷史修復另立 capsule。
+
+### 實作證據（2026-09-10）
+
+- `src/features/taskCreation/createBlankTaskNode.ts`：blank payload 的唯一 domain factory；`description?: never`，output
+  不建立 own `description`。
+- 7 檔 11 點 constructor migration：`placement` 1、`BoardView` 1、`WbsListView` 1、`SharedTaskSidebar` 2、
+  `GlobalContextMenu` 3、`taskDragCommit` 2、`MindMap` 1。
+- Static：`npm run verify:dev-115-blank-task-creation` PASS 17/17。
+- Browser：`output/playwright/dev-115-blank-task-creation/result.json` PASS B01～B09；B01 包含 store／reload／rename／hover
+  negative，B02～B06 覆蓋 Board、context、Gantt、Calendar、MindMap；B07～B09 error sweep=0。
+- Compatible／engineering：DEV-039 33/33、DEV-111 38/38、DEV-114 27/27、DEV-028 48/48、DEV-098 10/10、DEV-013 PASS、
+  DEV-047 30/30；TypeScript、targeted ESLint、`build:test`、`git diff --check` PASS。
+- Runtime reused：localhost:4000 matching listener PID 28532／wrapper PID 3264；未停止非本任務 runtime。
+- 未宣稱：permission-denied、390×844、production smoke、historical dry-run 與 CAPA E-02／E-03，均保留各自 gate。
+
+### Stop Conditions
+
+- factory 需要知道 React state、DOM、current view、permission、remote provider 或 navigation。
+- 既有特殊 ID／placement／nodeType 行為無法保持，或要修改 schema／權限才能完成。
+- capture／clone／import regression 出現內容遺失，或測試只能檢查 placeholder 而無 store/readback。
+- source 差異改變 constructor count、creation-kind 或 ownership；單純 hash 不同但 contract 未漂移不構成停止條件。
+
+### 相關文件
+
+- CAPA：`ai-doc/reports/CAPA-20260909-blank-task-description-prefill.md`
+- Register：`ai-doc/reports/CAPA-Register.md`
+- Architecture：`ai-doc/decisions/ADR-048-blank-task-creation-contract.md`
+- Implementation SPEC：`ai-doc/specs/SPEC-115-blank-task-creation-contract.md`
+- QA plan：`ai-doc/qa/QA-DEV-115-blank-task-creation-contract.md`
+- 互動／identity：`ai-doc/decisions/ADR-043-cross-mode-interaction-policy-kernel.md`、
+  `ai-doc/decisions/ADR-046-task-identity-and-placement-projection.md`
+- 相容規格：`ai-doc/specs/SPEC-070-cross-mode-interaction-policy-kernel.md`、
+  `ai-doc/specs/SPEC-111-task-description-hover-card.md`、`ai-doc/specs/SPEC-114-task-description-global-surfaces.md`
+
+### 變更紀錄
+
+- 2026-09-09：依 CAPA-002 建立 DEV-115；完成 RD Contract Ready、ADR-048、11-point scope、
+  AC、工作包、QA/QC 與 stop conditions。產品程式尚未修改。
+- 2026-09-09：完成 SPEC-115、QA-DEV-115、source/hash baseline 與 Architecture Closure Review；升級為
+  `RD Implementation Ready / 架構已定案 / 可執行`。產品程式與 QA/QC 尚未開始。
+- 2026-09-09：RD Tech Lead 優化：五個工作包收斂為三個；11 點 source/adapter 全覆蓋、browser 風險抽樣；
+  hash 採語意 drift 分類；歷史資料 dry-run 移回 CAPA-002。架構與產品 scope 不變。
+- 2026-09-10：完成 DEV-115 WP-115-1～3；新增 shared blank-task factory、遷移 7 檔 11 點、完成 static／browser
+  verifier 與 targeted QA/QC。狀態更新為 `RD Implementation Complete / Targeted QA-QC PASS / NOT RELEASED`；
+  permission／mobile／release／effectiveness gate 保留。
+
+使用思考習慣：#系統描繪、#效用理論、#可驗證性

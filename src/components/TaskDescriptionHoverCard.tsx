@@ -15,8 +15,18 @@ const CARD_GAP_PX = 8;
 
 type HoverCardState = {
   taskId: string;
+  sourceKind: HoverSourceKind;
   description: string;
   anchorRect: DOMRect;
+};
+
+type HoverSourceKind = 'store' | 'inline';
+
+type HoverCandidate = {
+  trigger: HTMLElement;
+  taskId: string;
+  sourceKind: HoverSourceKind;
+  description: string;
 };
 
 type HoverCardPosition = {
@@ -29,6 +39,27 @@ const getTrigger = (target: EventTarget | null) => (
     ? target.closest<HTMLElement>(TASK_DESCRIPTION_HOVER_TRIGGER)
     : null
 );
+
+const resolveHoverCandidate = (trigger: HTMLElement): HoverCandidate | null => {
+  const taskId = trigger.getAttribute('data-task-id')?.trim() || '';
+  if (!taskId) return null;
+
+  if (trigger.hasAttribute('data-task-description-hover-content')) {
+    return {
+      trigger,
+      taskId,
+      sourceKind: 'inline',
+      description: trigger.getAttribute('data-task-description-hover-content')?.trim() || '',
+    };
+  }
+
+  return {
+    trigger,
+    taskId,
+    sourceKind: 'store',
+    description: useWbsStore.getState().nodes[taskId]?.description?.trim() || '',
+  };
+};
 
 const updateTooltipRelationship = (trigger: HTMLElement, shouldLink: boolean) => {
   const describedBy = (trigger.getAttribute('aria-describedby') || '')
@@ -46,7 +77,7 @@ const TaskDescriptionHoverCard: React.FC = () => {
   const [position, setPosition] = React.useState<HoverCardPosition | null>(null);
   const cardElementRef = React.useRef<HTMLDivElement | null>(null);
   const openTriggerRef = React.useRef<HTMLElement | null>(null);
-  const pendingTriggerRef = React.useRef<HTMLElement | null>(null);
+  const pendingCandidateRef = React.useRef<HoverCandidate | null>(null);
   const openTimerRef = React.useRef<number | null>(null);
   const closeTimerRef = React.useRef<number | null>(null);
   const pointerHeldRef = React.useRef(false);
@@ -55,7 +86,7 @@ const TaskDescriptionHoverCard: React.FC = () => {
   const clearOpenTimer = React.useCallback(() => {
     if (openTimerRef.current !== null) window.clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
-    pendingTriggerRef.current = null;
+    pendingCandidateRef.current = null;
   }, []);
 
   const clearCloseTimer = React.useCallback(() => {
@@ -84,37 +115,47 @@ const TaskDescriptionHoverCard: React.FC = () => {
     if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     if (trigger.closest('[data-mindmap-inline-title-editing="true"]')) return;
 
-    const taskId = trigger.getAttribute('data-task-id') || '';
-    const description = useWbsStore.getState().nodes[taskId]?.description?.trim();
-    if (!taskId || !description) {
+    const candidate = resolveHoverCandidate(trigger);
+    if (!candidate?.description) {
       closeCard();
       return;
     }
 
     if (openTriggerRef.current === trigger) return;
-    if (pendingTriggerRef.current === trigger) return;
+    if (pendingCandidateRef.current?.trigger === trigger) return;
 
     clearOpenTimer();
     if (openTriggerRef.current) updateTooltipRelationship(openTriggerRef.current, false);
     openTriggerRef.current = null;
     setCard(null);
     setPosition(null);
-    pendingTriggerRef.current = trigger;
+    pendingCandidateRef.current = candidate;
 
     openTimerRef.current = window.setTimeout(() => {
       openTimerRef.current = null;
-      pendingTriggerRef.current = null;
-      if (!trigger.isConnected || !trigger.matches(':hover') || pointerHeldRef.current || dragActiveRef.current) return;
+      if (!trigger.isConnected || !trigger.matches(':hover') || pointerHeldRef.current || dragActiveRef.current) {
+        pendingCandidateRef.current = null;
+        return;
+      }
 
-      const latestDescription = useWbsStore.getState().nodes[taskId]?.description?.trim();
-      if (!latestDescription) return;
+      const latestCandidate = resolveHoverCandidate(trigger);
+      if (!latestCandidate
+        || latestCandidate.trigger !== candidate.trigger
+        || latestCandidate.taskId !== candidate.taskId
+        || latestCandidate.sourceKind !== candidate.sourceKind
+        || !latestCandidate.description) {
+        pendingCandidateRef.current = null;
+        return;
+      }
 
+      pendingCandidateRef.current = null;
       openTriggerRef.current = trigger;
       updateTooltipRelationship(trigger, true);
       setPosition(null);
       setCard({
-        taskId,
-        description: latestDescription,
+        taskId: latestCandidate.taskId,
+        sourceKind: latestCandidate.sourceKind,
+        description: latestCandidate.description,
         anchorRect: trigger.getBoundingClientRect(),
       });
     }, TASK_DESCRIPTION_HOVER_DELAY_MS);
@@ -151,7 +192,7 @@ const TaskDescriptionHoverCard: React.FC = () => {
       const nextTrigger = getTrigger(event.target);
       if (previousTrigger === nextTrigger) return;
 
-      if (previousTrigger === pendingTriggerRef.current || previousTrigger === openTriggerRef.current) {
+      if (previousTrigger === pendingCandidateRef.current?.trigger || previousTrigger === openTriggerRef.current) {
         scheduleClose();
       }
       if (nextTrigger) scheduleOpen(nextTrigger);
@@ -159,7 +200,7 @@ const TaskDescriptionHoverCard: React.FC = () => {
     const handlePointerOut = (event: PointerEvent) => {
       if (event.relatedTarget !== null) return;
       const trigger = getTrigger(event.target);
-      if (trigger === pendingTriggerRef.current || trigger === openTriggerRef.current) scheduleClose();
+      if (trigger === pendingCandidateRef.current?.trigger || trigger === openTriggerRef.current) scheduleClose();
     };
     const handlePointerDown = (event: PointerEvent) => {
       pointerHeldRef.current = true;
@@ -227,6 +268,43 @@ const TaskDescriptionHoverCard: React.FC = () => {
     };
   }, [clearCloseTimer, closeCard, scheduleClose, scheduleOpen]);
 
+  React.useEffect(() => {
+    const trigger = openTriggerRef.current;
+    if (!card || !trigger) return undefined;
+
+    const closeIfInvalidCandidate = () => {
+      if (!trigger.isConnected) {
+        closeCard();
+        return;
+      }
+      const latestCandidate = resolveHoverCandidate(trigger);
+      if (!latestCandidate
+        || latestCandidate.taskId !== card.taskId
+        || latestCandidate.sourceKind !== card.sourceKind
+        || !latestCandidate.description) {
+        closeCard();
+      }
+    };
+    const observer = new MutationObserver(closeIfInvalidCandidate);
+    observer.observe(trigger, {
+      attributes: true,
+      attributeFilter: [
+        'data-task-id',
+        'data-task-description-hover-content',
+        'data-task-description-hover-trigger',
+        'data-task-surface-source',
+      ],
+    });
+    const connectivityObserver = new MutationObserver(() => {
+      if (!trigger.isConnected) closeCard();
+    });
+    if (document.body) connectivityObserver.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      connectivityObserver.disconnect();
+    };
+  }, [card, closeCard]);
+
   if (!card) return null;
 
   return createPortal(
@@ -238,7 +316,7 @@ const TaskDescriptionHoverCard: React.FC = () => {
       data-task-id={card.taskId}
       onPointerEnter={clearCloseTimer}
       onPointerLeave={scheduleClose}
-      className="fixed z-[100] overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-900 px-3 py-2.5 text-sm leading-5 text-white shadow-xl"
+      className="fixed z-[10050] overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-900 px-3 py-2.5 text-sm leading-5 text-white shadow-xl"
       style={{
         left: position?.left ?? card.anchorRect.left,
         top: position?.top ?? card.anchorRect.bottom + CARD_GAP_PX,

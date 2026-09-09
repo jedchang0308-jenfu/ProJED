@@ -361,7 +361,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                 </>
               ) : (
                 <span className="flex max-w-full items-center gap-[2px]">
-                  <span className="min-w-0 truncate" title={node.title || '未命名任務'}>
+                  <span className="min-w-0 truncate">
                     {node.title || '未命名任務'}
                   </span>
                   <TaskDescriptionIndicator description={node.description} />

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
@@ -139,18 +139,22 @@ assertEqual('numbered tree child snippet count', numberedChildSnippets.length, 1
 assert('numbered tree child snippet keeps child detail', numberedChildSnippets[0]?.text.includes('QA 明天以前補失敗回傳測試'));
 assert('numbered tree child snippet excludes sibling detail', !numberedChildSnippets[0]?.text.includes('兄弟任務只確認排程'));
 
-const timelineSource = readFileSync('src/components/Records/TaskRecordTimeline.tsx', 'utf8');
-const requiredTimelineSnippets = [
-  '歷史資訊',
-  'extractTaskRecordSnippets(record.content, nodeId)',
-  '搜尋此任務的會議細節、變更或備註',
-  '片段',
-  '關聯紀錄',
+const taskDetailsSource = readFileSync('src/components/TaskDetailsModal.tsx', 'utf8');
+const retiredTaskDetailUiSnippets = [
+  'TaskRecordTimeline',
+  'data-task-knowledge-trigger',
+  'data-task-knowledge-toggle',
+  'data-task-knowledge-panel',
+  '查看歷史資訊',
+  '收合歷史資訊',
 ];
-for (const snippet of requiredTimelineSnippets) {
-  assert(`TaskRecordTimeline missing snippet: ${snippet}`, timelineSource.includes(snippet));
+for (const snippet of retiredTaskDetailUiSnippets) {
+  assert(`TaskDetailsModal should not retain retired task knowledge UI: ${snippet}`, !taskDetailsSource.includes(snippet));
 }
-assert('TaskRecordTimeline should not render the removed record/snippet count badge', !timelineSource.includes('紀錄 /') && !timelineSource.includes('snippetCount'));
+assert(
+  'retired TaskRecordTimeline component should be removed',
+  !existsSync('src/components/Records/TaskRecordTimeline.tsx'),
+);
 
 if (failures.length > 0) {
   console.error('DEV-008 task knowledge verification failed.');
@@ -158,4 +162,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('DEV-008 task knowledge verification passed: task-scoped synthesized snippets, fallback, search, and UI hooks checked.');
+console.log('DEV-008 task knowledge verification passed: task-scoped extraction utilities remain valid and the retired task-details history UI is absent.');

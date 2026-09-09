@@ -7,8 +7,9 @@
 - 事件環境：Production 使用者畫面 `https://projed-cc78d.web.app`
 - 主要關聯：DEV-110、SPEC-110、QA-DEV-110、DEV-108、SPEC-108、DEV-039、DEV-095
 - CAPA ID：未編號。本輪只要求制定措施，未授權正式登錄或占用編號。
-- Register evidence：`ai-doc/reports/CAPA-Register.md` 於 2026-09-08 顯示下一個可核發號碼為
-  `CAPA-002`；本草稿未寫入 Register，因此 `CAPA-002` 尚未分配給本案。
+- Register evidence：本草稿建立時 `CAPA-002` 尚未核發；2026-09-09 Register 已將 `CAPA-002`
+  核發給「空白新增任務誤填說明與建立契約分歧」。本草稿仍未登錄、不占用任何正式號碼；若日後獲得
+  正式登錄授權，必須重讀 Register 並取得當時下一個可用號碼。
 - 執行邊界：使用者於2026-09-08授權把CAPA文件升級到RD可實作並登錄DEV-110；本輪完成 local working-tree
   candidate implementation、deterministic/static gate與受控 localhost browser candidate smoke，但不執行 Supabase TEST、正式資料查詢／修復、
   migration apply、commit、push、deploy、activation或release。
@@ -293,7 +294,7 @@ artifact與宣告commit不一致，立即判定 ineffective並重啟CAPA。
 
 ## 11. 待人類決策
 
-1. 是否將本草稿正式登錄為下一個CAPA；未決前不得引用 `CAPA-002` 指稱本案。
+1. 是否將本草稿正式登錄為下一個可用 CAPA；未決前不得引用 `CAPA-002` 或預留其他號碼指稱本案。
 2. 是否授權production唯讀impact audit；目前local RD/QA不依賴此項。
 3. 是否在impact audit證明需要且可唯一對應後，另行核准production資料修復；預設不修改正式資料。
 4. 是否啟動release；local QA/QC PASS仍不等於deploy授權。

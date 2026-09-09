@@ -1,12 +1,18 @@
 import React from 'react';
 import { BookOpenText, FileText, KanbanSquare, Target } from 'lucide-react';
 import type { RagCitation } from '../../services/rag/ragContract';
+import { useWbsStore } from '../../store/useWbsStore';
+import { TaskDescriptionIndicator } from '../TaskDescriptionIndicator';
 
 interface CitationCardProps {
   citation: RagCitation;
 }
 
 const CitationCard: React.FC<CitationCardProps> = ({ citation }) => {
+  const taskNode = useWbsStore(state => citation.sourceTable === 'wbs_items'
+    ? state.nodes[citation.sourceId]
+    : undefined);
+  const isTaskCitation = citation.sourceTable === 'wbs_items';
   const getIcon = () => {
     switch (citation.sourceTable) {
       case 'wbs_items':
@@ -50,14 +56,20 @@ const CitationCard: React.FC<CitationCardProps> = ({ citation }) => {
       onClick={handleClick}
       className="group flex w-full items-start gap-2 rounded-md border border-slate-200 bg-white p-2 text-left shadow-sm transition-colors hover:border-blue-300 hover:bg-slate-50"
       type="button"
+      data-rag-citation-card="true"
+      data-rag-source-table={citation.sourceTable}
+      data-rag-source-id={citation.sourceId}
+      data-task-description-hover-trigger={taskNode ? 'true' : undefined}
+      data-task-id={taskNode ? citation.sourceId : undefined}
     >
       <div className="mt-0.5 shrink-0">{getIcon()}</div>
       <div className="min-w-0 flex-1">
         <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
           {getLabel()}
         </div>
-        <div className="truncate text-sm font-medium text-slate-700 transition-colors group-hover:text-blue-600">
+        <div className="flex min-w-0 items-center gap-1 truncate text-sm font-medium text-slate-700 transition-colors group-hover:text-blue-600">
           {citation.title || '未命名來源'}
+          {isTaskCitation ? <TaskDescriptionIndicator description={taskNode?.description} /> : null}
         </div>
       </div>
     </button>

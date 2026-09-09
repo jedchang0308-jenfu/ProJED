@@ -30,6 +30,7 @@ import type { InteractionContext } from '../interactions/task/types';
 import { useTaskPlacementPermissions } from '../hooks/useTaskPlacementPermissions';
 import { getReferenceSubtree, PRIMARY_PLACEMENT_PREFIX, primaryPlacementId } from '../features/taskTracking/model';
 import { requestTaskDetailsNavigation, useTaskDetailsNavigation } from './taskDetailsNavigation';
+import { createBlankTaskNode } from '../features/taskCreation/createBlankTaskNode';
 import useRecordStore from '../store/useRecordStore';
 import {
   getMeetingTaskReservationValue,
@@ -492,18 +493,14 @@ export const GlobalContextMenu: React.FC = () => {
     reopenCompletedTaskForInsert(node);
 
     const childrenIds = state.parentNodesIndex[contextMenuState.nodeId] || [];
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       workspaceId: node.workspaceId,
       boardId: node.boardId,
       parentId: node.id,
-      title: '新任務',
-      status: 'todo',
       nodeType: 'task',
       order: childrenIds.length,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    });
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
@@ -530,18 +527,14 @@ export const GlobalContextMenu: React.FC = () => {
     const nextSibling = currentIndex >= 0 ? siblings[currentIndex + 1] : null;
     const order = nextSibling ? (node.order + nextSibling.order) / 2 : node.order + 1;
 
-    const newNode: TaskNode = {
+    const newNode = createBlankTaskNode({
       id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       workspaceId: node.workspaceId,
       boardId: node.boardId,
       parentId: node.parentId || null,
-      title: '新任務',
-      status: 'todo',
-      nodeType: node.parentId ? 'task' : node.nodeType,
+      nodeType: node.parentId ? 'task' : (node.nodeType || 'task'),
       order,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    });
 
     addNode(newNode);
     prepareNewTaskNaming(newNode.id);
@@ -1079,18 +1072,14 @@ export const GlobalContextMenu: React.FC = () => {
             if (!parentNode) return;
             reopenCompletedTaskForInsert(parentNode);
             const childrenIds = state.parentNodesIndex[parentId] || [];
-            const newNode: TaskNode = {
+            const newNode = createBlankTaskNode({
               id: `node_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
               workspaceId: parentNode.workspaceId,
               boardId: parentNode.boardId,
               parentId,
-              title: '新任務',
-              status: 'todo',
               nodeType: 'task',
               order: childrenIds.length,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            };
+            });
             addNode(newNode);
             useBoardStore.getState().setPendingTitleEditNodeId(newNode.id);
             detailsNavigation.push({

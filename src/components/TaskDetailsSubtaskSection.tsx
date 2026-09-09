@@ -245,7 +245,7 @@ const TaskDetailsSubtaskDragHost: React.FC<TaskDetailsSubtaskDragHostProps> = ({
       >
         <div
           ref={dragScopeRef}
-          className="rounded-md"
+          className="min-w-0"
           data-task-details-subtask-drag-scope="true"
         >
           <TaskChecklistTree
@@ -255,14 +255,12 @@ const TaskDetailsSubtaskDragHost: React.FC<TaskDetailsSubtaskDragHostProps> = ({
           />
           <div
             ref={setRootDropNodeRef}
-            className={`mt-1 flex min-h-6 items-center justify-center rounded border border-dashed px-2 text-[10px] text-slate-400 transition-colors ${isRootDropOver ? 'border-blue-300 bg-blue-50/70 text-blue-700' : 'border-slate-200 bg-white/70'}`}
+            className={`mt-1 h-1 transition-colors ${isRootDropOver ? 'bg-blue-200/70' : 'bg-transparent'}`}
             data-task-details-root-drop-zone="true"
             data-task-drop-surface-kind="checklist-drop"
             data-task-drop-node-id={rootTask.id}
             data-task-placement-id={rootPlacementId}
-          >
-            拖曳到此處新增為直屬子任務
-          </div>
+          />
           <TaskDragPresenter
             state={dragSession.state}
             canEditTask={dragSession.state?.source.canEditCanonicalTask ?? permissions.canEditTask}
@@ -336,7 +334,7 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
   }, [childIds, node.boardId, nodes, rootPlacementId, trackingReference, trackingReferences]);
 
   return (
-    <section className="mt-4 border-t border-slate-100 pt-3" data-task-details-subtasks="true">
+    <section className="mt-4" data-task-details-subtasks="true">
       <div className="flex min-h-9 items-center justify-between gap-2">
         <button
           type="button"
@@ -365,7 +363,7 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
         ) : null}
       </div>
       {isExpanded ? (
-        <div id="task-details-subtask-panel" className="mt-1 rounded-md bg-slate-50/45 px-1 py-1" data-task-details-subtask-panel="true">
+        <div id="task-details-subtask-panel" className="mt-1 min-w-0" data-task-details-subtask-panel="true">
           {childCount > 0 ? (
             <TaskDetailsSubtaskDragHost
               rootTask={node}
@@ -374,7 +372,7 @@ export const TaskDetailsSubtaskSection: React.FC<TaskDetailsSubtaskSectionProps>
               onOpenDetails={onOpenDetails}
             />
           ) : (
-            <div className="flex min-h-12 items-center justify-center rounded-md border border-dashed border-slate-200 bg-white px-3 text-xs text-slate-400" data-task-details-subtask-empty="true">
+            <div className="flex min-h-12 items-center justify-center px-3 py-3 text-xs text-slate-400" data-task-details-subtask-empty="true">
               尚無子任務
             </div>
           )}
