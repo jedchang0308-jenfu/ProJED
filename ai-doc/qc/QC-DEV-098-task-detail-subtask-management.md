@@ -52,7 +52,7 @@ QC 不把 local-test／loopback 證據當成 remote provider、schema／migratio
 
 ## 5. QC 判定
 
-DEV-098 核心 local implementation 的獨立 read-only QC 可接受，`QC-098-01～10` 全數通過；`AC-098-012` 的相鄰 regression disposition 已完成，但 DEV-099 persistence、實機與 release gate 尚未完成，因此仍不得標記為 Release Ready。
+DEV-098 核心 local implementation 的獨立 read-only QC 可接受，`QC-098-01～10` 全數通過；`AC-098-012` 的相鄰 regression disposition 已完成，但任務儲存可靠性重開發、實機與 release gate 尚未完成，因此仍不得標記為 Release Ready。
 
 目前狀態：`RD Implemented / Core Local Automated QA PASS / Independent QC PASS / Adjacent Regression Audit PASS / 未 Release`。
 
@@ -68,12 +68,8 @@ DEV-098 核心 local implementation 的獨立 read-only QC 可接受，`QC-098-0
   並執行獨立 QC-098-01～10 10/10；相鄰 DEV-046／053／055／095 affected cases 修正後全數通過。
 - `adjacent-audit-followup-20260902.json` 保留歷史 follow-up；現行 QC 只採用 final artifact，不把 historical
   failure 或 clean-baseline result 誤算為現行 blocker。
-- 2026-09-03 clean integration supplemental：production-base `codex/capa-001-dev099-integrated@c904435`
-  以 task-owned runtime 4015 重跑 B01～B16 16/16、diagnostics=0；static 22/22、pure 10/10與本文件
-  QC-098-01～10 10/10均通過，DEV-046／053／055／095 affected regression亦 PASS且未使用 waiver。
-  證據：`output/playwright/dev-098/result-clean-integrated-final-20260903.json`、
-  `output/qa/dev-099/clean-integrated-dev098-qc-20260903.json`；4015已釋放。此不取代本 QC 的
-  working-tree source boundary，也不解除 DEV-099 persistence與release gate。
+- 2026-09-10：依使用者決策移除舊 persistence clean-integration supplemental；本 QC 只保留
+  DEV-098 working-tree 的 surface／navigation 證據，不作 persistence 或 release authority。
 - 2026-09-09：QC B03 增加 844×698 直接開啟子任務回父按鈕 readback；確認 parent navigation、單一 modal
   與 save guard 行為仍符合 S06／AC-098-005。
 - 2026-09-10：QC B03 readback 確認標題列不再渲染「返回上一個任務詳情」，只保留「回到上一階任務」

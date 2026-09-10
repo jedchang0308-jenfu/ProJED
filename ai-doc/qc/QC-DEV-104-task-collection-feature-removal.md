@@ -12,7 +12,7 @@
 - `src`、`scripts`、`supabase`與`package.json`的feature identifier residual scan為0 matches。
 - 收藏專屬UI、domain、provider、permission、action、migration、verification command與active文件已退場。
 - 一般看板、任務詳情、任務右鍵選單、工作區側欄與紀錄庫已以實際browser delivery path檢查。
-- TypeScript、test build、DEV-002、DEV-016、DEV-094、DEV-095與DEV-099目標回歸均通過。
+- TypeScript、test build、DEV-002、DEV-016、DEV-094與DEV-095目標回歸均通過；任務儲存可靠性回歸須於重新開發時重建。
 - Browser console在控制重跑後為0 error；測試browser與task-owned runtime皆已清理，port 4000已釋放。
 
 ## QC證據定位

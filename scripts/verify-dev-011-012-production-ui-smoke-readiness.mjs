@@ -131,8 +131,6 @@ add(
   includesAll(contents.qa011, [
     'verify:dev-011-012-production-ui-smoke-readiness',
     'Done / Production Release Deployed / Production UI Smoke Passed',
-    'codex/dev011012-rag-order-hotfix',
-    '7704e2f',
     'assets/index-BkwGqGCZ.js',
     'published_record_found=true',
   ]),
@@ -145,8 +143,6 @@ add(
     'Reopened / Contract v2 Local QA + Browser QC Passed / Production v2 Effectiveness Pending',
     'meeting-synthesis-v2',
     'Production v2 Stop-Ship Gate',
-    'codex/dev011012-rag-order-hotfix',
-    '7704e2f',
     'published_record_found=true',
   ]),
 );
@@ -160,8 +156,6 @@ add(
     'verify:dev-011-012-production-ui-smoke-readiness',
     'verify:dev-011-012-production-ui-smoke',
     'Hotfix release',
-    'codex/dev011012-rag-order-hotfix',
-    '7704e2f',
     'assets/index-BkwGqGCZ.js',
     'Production UI smoke guarded executor actual fixture：Pass',
     'DB proof：Pass',

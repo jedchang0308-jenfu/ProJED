@@ -157,7 +157,7 @@ DEV-055 完成前必跑：
 - Evidence base：`output/playwright/dev-055-desktop-drag-1784299443605-*`。
 - Latest current-state revalidation：2026-07-17 於 T01-T08 使用者驗收失敗回送 RD 後再跑 DEV-055 static 27/27、DEV-055 browser B01-B16 16/16、DEV-046 static/browser、DEV-053 static/browser、DEV-054 static/browser、`npx.cmd tsc --noEmit`、`npm.cmd run build`，均 Pass；最新 DEV-055 evidence base：`output/playwright/dev-055-desktop-drag-1784301885366-*`。
 - User revalidation：2026-07-17 使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做。
-- Release gate：2026-07-17 使用者要求部署正式環境；release branch `codex/dev055-production-release-20260717-234436`、artifact commit `e07ba4b`。Level 2 local production artifact smoke Pass；Level 3 Firebase preview `https://projed-cc78d--level3-smoke-o1na5wft.web.app` Pass；Level 4 production `https://projed-cc78d.web.app` Pass。正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 artifact 一致。
+- Release gate：2026-07-17 使用者要求部署正式環境；release branch `歷史 DEV-055 release`、artifact commit `歷史 DEV-055 artifact`。Level 2 local production artifact smoke Pass；Level 3 Firebase preview `https://projed-cc78d--level3-smoke-o1na5wft.web.app` Pass；Level 4 production `https://projed-cc78d.web.app` Pass。正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 artifact 一致。
 - QC report：`ai-doc/qc/QC-DEV-055-desktop-task-drag-target-clarity.md`。
 - Completion gate：RD Rework 1 後的 T01-T08 共 38 次使用者真實桌機操作與新版桌機手感主觀確認已通過；本 QA 宣告 DEV-055 completion gate 通過。
 

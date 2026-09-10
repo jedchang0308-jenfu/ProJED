@@ -45,7 +45,7 @@ Browser screenshots:
 
 | Gate | Result | Evidence |
 |---|---|---|
-| Release boundary | Pass | Branch `持續優化1`; release commit `b78540e`; Firebase Hosting project `projed-cc78d`; rollback target is previous Firebase Hosting release in project console. |
+| Release boundary | Pass | Branch `歷史開發來源`; release commit `歷史 release artifact`; Firebase Hosting project `projed-cc78d`; rollback target is previous Firebase Hosting release in project console. |
 | Build | Pass | `npm.cmd run build`; generated `dist/assets/index-BU14rK7W.js` and `dist/assets/index-CYqvildz.css`; non-blocking Browserslist/caniuse-lite warning only. |
 | Pre-deploy preview smoke | Pass | `http://127.0.0.1:4174/` loaded the expected JS/CSS, root was non-empty, service worker ready, no critical console/pageerror/failed request. |
 | Deploy | Pass | `node_modules\.bin\firebase.cmd deploy --only hosting --project projed-cc78d --non-interactive`; 32 files found in `dist`, 17 new uploads, version finalized and released. |

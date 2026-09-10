@@ -2,9 +2,9 @@
 
 - 關聯 DEV：DEV-098
 - 文件成熟度：`RD Implementation Ready / Human Confirmed / Tech Lead Reviewed → RD Implemented`
-- 實作狀態：`Implemented / DEV-098 Core Local Automated QA PASS / Independent QC PASS / Adjacent Regression Audit PASS / Persistence Release Blocked by DEV-099 / Not Released`
+- 實作狀態：`Implemented / DEV-098 Core Local Automated QA PASS / Independent QC PASS / Adjacent Regression Audit PASS / Persistence Re-development Gate Pending / Not Released`
 - 風險等級：Medium
-- Spec Impact：`Compatible extension / persistence guard intentionally replaced by SPEC-099`
+- Spec Impact：`Compatible extension / persistence re-development gate pending`
 - 日期：2026-09-01
 
 ## 1. 目標與成功定義
@@ -35,11 +35,11 @@
 | `SPEC-089` | primary placement durable move 仍由 authoritative placement transaction 收斂；不得 optimistic 假成功或另寫 local reorder。 |
 | `SPEC-095` | 保留 `taskId + placementId + placementKind`、primary／tracking shared surface、explicit tracking subtree、permission-preserving action parity。 |
 | `SPEC-041` DEV-097 addendum／`ADR-047` | `TaskDetailsModal` 的 dirty／safe owner 與 reload safety 不得因節點切換失真。 |
-| `SPEC-099`／`CAPA-001` | 2026-09-02 production事件後，persistence dispatch、terminal outcome、bounded unknown與canonical readback改由 SPEC-099管轄；本SPEC保留navigation owner與draft safety，不再禁止unknown/readback。 |
+| `DEV-099` 最小重開發 capsule | 舊 persistence 實作與規格已放棄；本 SPEC 保留 navigation owner 與 draft safety，新的 dispatch、terminal outcome、bounded unknown 與 canonical readback 必須重新定案。 |
 
 原DEV-098實作preflight為 `Compatible extension / prior out-of-scope re-entry`。2026-09-02事件形成一個
 明示的 `Intentional replacement`：只取代本SPEC的callback-only persistence convergence約束；其餘surface、
-drag、navigation、permission與overlay契約不變。DEV-099根因尚未確認，因此DEV-098不得獨立進release。
+drag、navigation、permission 與 overlay 契約不變。任務儲存可靠性尚未重新開發，因此 DEV-098 不得獨立進 release。
 `SPEC-098` 只成為「任務明細內子任務 surface、局部 drag host、同 modal 導覽與 overlay ownership」
 的權威；其餘 identity、permission、transaction、gesture 與 lifecycle 仍由上表既有規格管轄。
 
@@ -251,20 +251,20 @@ cancel title/notes debounce
 → collect current title + notes draft + failed updates
 → queue missing durable writes
 → keep exactly one typed transition for current task/version
-→ SPEC-099 persistence primitive settles accepted operations
+→ future persistence contract settles accepted operations
 → if persisted AND source task/version still current, execute transition once
 ```
 
-- 2026-09-02以前的 callback-only流程是DEV-098歷史實作baseline，不再是release authority；現行persistence authority為SPEC-099。
-- durable success只能來自provider terminal completion或SPEC-099定義的authoritative canonical readback；不得把optimistic store value當成功。
+- 2026-09-02 以前的 callback-only 流程是 DEV-098 歷史實作 baseline，不再是 release authority；新的 persistence authority 尚待重新建立。
+- durable success 只能來自重新定案的 provider terminal completion 或 authoritative canonical readback；不得把 optimistic store value 當成功。
 - save failure停留目前 task、保留 draft與 Retry、清除該次 transition；使用者重試成功後重新發出導航。
-- accepted operation在provider deadline前維持saving／dirty與disabled transition；到期後依SPEC-099進入
+- accepted operation 在 provider deadline 前維持 saving／dirty 與 disabled transition；到期後必須依新契約進入
   `unknown`與canonical readback，仍不得推導成功。這是對原「不新增timeout／unknown／readback」條款的
   明示 `Intentional replacement`，不是對DEV-098其他行為的全面改寫。
 - navigation guard 與 close guard共用同一 persistence primitive，不得形成兩套 pending／failed refs。
 - `taskDetailsHasLocalChanges` 必須在 transition pending／saving／failed時維持 dirty，符合 DEV-097
   在 `SPEC-041` addendum／`ADR-047` 固定的 safety owner。
-- `taskDetailsHasLocalChanges` 在unknown時亦須維持dirty；DEV-099未通過前，不得把既有callback-only流程視為release-ready。
+- `taskDetailsHasLocalChanges` 在 unknown 時亦須維持 dirty；重開發 Gate 未通過前，不得把既有 callback-only 流程視為 release-ready。
 - placement transaction pending 時也禁止切換，避免 source row unmount 使使用者誤認已成功。
 
 ### 7.7 Overlay、Escape 與 focus ownership
@@ -343,7 +343,7 @@ failure語意維持既有 baseline，不在 DEV-098 假裝升級為 durable crea
 - Schema：無。
 - Migration：無。
 - Provider／API：DEV-098原實作無新contract，只重用既有node create、placement commit、tracking move與callbacks；
-  persistence convergence整合後改依SPEC-099 accepted／terminal／unknown-readback契約，此項仍為NOT IMPLEMENTED。
+  persistence convergence 必須於重開發時重新定義 accepted／terminal／unknown-readback 契約；此項仍為 NOT IMPLEMENTED。
 - RLS／角色 capability：無新增；沿用 `useTaskPlacementPermissions`、source canonical capability與
   `canManageTaskReference`。
 - Backup／Realtime：無格式變更；成功後由既有 store／provider readback收斂。
@@ -410,7 +410,7 @@ failure語意維持既有 baseline，不在 DEV-098 假裝升級為 durable crea
   任一時刻 DOM 中 `TaskDetailsModal` 數量恆為 1。
 - `AC-098-006`：title／notes dirty、save pending、save failure與 placement pending時不切換；
   success後才更換 task identity，舊 callback不得污染新 entry；persistence terminal／unknown語意須另通過
-  `SPEC-099／QA-DEV-099`，既有DEV-098 PASS不覆蓋該新增Gate。
+  DEV-099 重開發 Gate，既有 DEV-098 PASS 不覆蓋該新增 Gate。
 - `AC-098-007`：context menu完整顯示在 modal之上；Escape依 drag → menu／nested overlay → modal一次關一層，
   outside click與focus restore不遺留 selection／body focus。
 - `AC-098-008`：primary、tracking、owner/editor/viewer及 capability revoke皆由既有 permission guard決定；
@@ -481,9 +481,9 @@ viewport、input modality、before／after parent+order、save／commit outcome�
 regression audit均 PASS；仍不能把 local evidence 擴大宣稱為 remote／實機或 release readiness。實機與
 release gate 仍依 QA-DEV-098 handoff 執行。
 
-2026-09-02 CAPA amendment：上述DEV-098 evidence是子任務surface與歷史callback-only navigation baseline，
-不證明SPEC-099的root-cause、terminal、deadline／unknown或canonical readback契約。DEV-098預定整合任何
-persistence修正時，必須依QA-DEV-099重跑相容案例，未通過前維持 `Persistence Release Blocked`。
+2026-09-10 清理決策：上述 DEV-098 evidence 只證明子任務 surface 與歷史 callback-only navigation baseline。
+舊 persistence 實作、規格與驗證資料已放棄；任何新修正都必須從目前程式重建契約與相容案例，
+未通過前維持 `Persistence Release Blocked`。
 
 ## 16. Stop conditions
 
@@ -499,7 +499,7 @@ persistence修正時，必須依QA-DEV-099重跑相容案例，未通過前維�
 - 任一必要 viewport有水平 overflow、雙層縱向 scrollbar或 short pan誤 drag。
 - planned verifier尚不存在、只做 source assertion／build、沒有 normal UI rendered evidence，卻宣稱 PASS。
 - 有 P0／P1 未關閉，或受影響 regression未重跑。
-- DEV-099根因未確認、QA-DEV-099未通過，卻準備將DEV-098整合候選標為release-ready。
+- 任務儲存可靠性重開發與 QA/QC 未完成，卻準備將 DEV-098 標為 release-ready。
 
 ## 17. Rollback boundary
 
@@ -538,13 +538,12 @@ navigation stack adapter → 保留已抽出的 neutral shared row給 Board使�
   之後並重跑受影響案例；B10 在 1440x900／1024x768 PASS，DEV-095 parity B17～B24 8/8 PASS，且
   DEV-055 static verifier 改讀 `TaskChecklistTree` shared renderer 後 34/34 PASS。剩餘 placement／indicator／
   fixture-gap findings 仍開放，未使用 waiver，不改變未 Release 邊界。
-- 2026-09-02：依正式環境永久saving事件與CAPA技術主管審查，將persistence convergence權威移至
-  SPEC-099。此為對§7.6 callback-only／禁止unknown-readback條款的明示 `Intentional replacement`；
-  DEV-098既有surface／navigation證據保留為歷史baseline，但增加 `Persistence Release Blocked by DEV-099`。
+- 2026-09-10：依使用者清理決策，舊 persistence convergence 實作、規格及證據全部放棄。
+  DEV-098 既有 surface／navigation 證據只保留為歷史 baseline，新增 `Persistence Re-development Gate Pending`。
 - 2026-09-02：完成相鄰 affected-case 修正與 fresh rerun：DEV-046 32/32＋5/5、DEV-053 31/31＋10/10、
   DEV-055 34/34＋18/18、DEV-095 4/4 均 PASS；pointer-derived edge、surface ownership、mixed-drag
   commit revalidation與 transient indicator settle納入實作與證據。相鄰 regression改標 PASS，未使用 waiver；
-  DEV-099 persistence、實機 supplemental與 release仍維持未執行／Not Released。
+  任務儲存可靠性重開發、實機 supplemental 與 release 仍維持未執行／Not Released。
 - 2026-09-09：依使用者回饋補上直接開啟子任務時的「回到上一階任務」標題列按鈕；父 placement 解析
   同時支援 canonical 與 tracking reference，沿用單一 modal navigation stack 與 save guard。
 - 2026-09-10：依使用者回饋移除標題列「返回上一個任務詳情」按鈕；所有可解析父 placement 的情境只保留

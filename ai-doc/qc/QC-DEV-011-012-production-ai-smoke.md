@@ -55,7 +55,7 @@
 
 Firebase Hosting 已完成正式部署，Supabase Edge Function `synthesize_meeting_record` 已更新到 version 2 並維持 `verify_jwt=true`。正式 Edge Function 使用一次性 Supabase Auth smoke user 取得 user JWT 後呼叫成功，回傳 `200`，實際模型為 `gemini-3.5-flash`，輸出保留 task tag、使用 numbered heading、沒有 Markdown heading 或「會中變更」等系統語。
 
-完整前端 UI smoke 已於 2026-07-09 依使用者授權改用 production fixture path 執行。第一次實跑揭露正式環境 first-publish 時 `rag_sync_jobs` RLS 要求 record -> document back-reference 先建立；已以 hotfix branch `codex/dev011012-rag-order-hotfix` commit `7704e2f` 修正 `syncRecordRagDocument` write ordering，並透過 deployment-release-gate 部署到 Firebase Hosting。
+完整前端 UI smoke 已於 2026-07-09 依使用者授權改用 production fixture path 執行。第一次實跑揭露正式環境 first-publish 時 `rag_sync_jobs` RLS 要求 record -> document back-reference 先建立；已以 hotfix branch `歷史 RAG release` commit `目前分支既有 RAG 修正` 修正 `syncRecordRagDocument` write ordering，並透過 deployment-release-gate 部署到 Firebase Hosting。
 
 部署後正式站載入 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css`，post-deploy browser smoke 通過。重跑 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1 npm.cmd run verify:dev-011-012-production-ui-smoke -- --run-production-fixture` 已通過：正式前端完成 meeting mode、AI整理、校稿發布、紀錄庫與任務知識 UI；DB 查證 `published_record_found=true`、`record_task_links=2`、`rag_enabled=true`、`source_document_present=true`；fixture cleanup 回報 `tenantDeleted=true`、`userDeleted=true`。
 
@@ -80,7 +80,7 @@ npx.cmd tsc --noEmit
 - Anonymous Edge Function smoke：Pass，未帶 JWT 呼叫 `synthesize_meeting_record` 回 `401`，確認 endpoint 存在且仍要求授權。
 - Authenticated Edge Function smoke：Pass，使用一次性 Supabase Auth user 呼叫成功，回 `200`。
 - Smoke user cleanup：Pass，測試 user 已刪除。
-- Hotfix release：Pass，branch `codex/dev011012-rag-order-hotfix` commit `7704e2f` 已 push 並部署；正式 artifact 為 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css`。
+- Hotfix release：Pass，branch `歷史 RAG release` commit `目前分支既有 RAG 修正` 已 push 並部署；正式 artifact 為 `assets/index-BkwGqGCZ.js` / `assets/index-BrAYM5iH.css`。
 - Post-deploy browser smoke：Pass，`https://projed-cc78d.web.app/` root non-empty、login page visible、無 critical console / pageerror / failed request。
 - Production UI smoke readiness gate：Pass，read-only self-check；確認可重用的 authenticated session injection + cleanup pattern、local AI整理 browser ROT coverage，以及 production fixture executor 防呆。
 - Production UI smoke guarded executor self-check：Pass，`mutates_database=false`；確認 executor 預設不登入、不建立 production 資料、不呼叫 AI，且完整 fixture path 必須同時使用 `--run-production-fixture` 與 `DEV011012_ALLOW_PRODUCTION_FIXTURE=1`，並包含 cleanup、紀錄庫、任務知識與 `knowledge_records` / `record_task_links` 查證。

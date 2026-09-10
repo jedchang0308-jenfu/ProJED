@@ -251,7 +251,7 @@ RD 必須停止並回報，不得硬做完：
 
 ## 10. 變更紀錄
 
-- 2026-07-17：依使用者正式部署指令，從 clean release worktree branch `codex/dev055-production-release-20260717-234436` artifact commit `e07ba4b` 發布 Firebase Hosting production。Level 2 local artifact smoke、Level 3 Firebase preview `level3-smoke`、Level 4 production `https://projed-cc78d.web.app` 均通過；正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
+- 2026-07-17：依使用者正式部署指令，從 clean release worktree branch `歷史 DEV-055 release` artifact commit `歷史 DEV-055 artifact` 發布 Firebase Hosting production。Level 2 local artifact smoke、Level 3 Firebase preview `level3-smoke`、Level 4 production `https://projed-cc78d.web.app` 均通過；正式站載入 `assets/index-DpRjvQu-.js` / `assets/index-B8eLAVHK.css`，線上 hash 與本機 production artifact 一致。
 - 2026-07-17：使用者回報 RD Rework 1 後 T01-T08 測試通過，確認同格不飄、L3+ 不被定位線推開、桌機手感沒有被重做；DEV-055 completion gate 通過。
 - 2026-07-17：RD Rework 1 完成。修正使用者 T01-T08 回報的兩項失敗：同一格定位線漂移、L3+ 任務被定位線推開。實作改為 overlay-only checklist append dropzone、桌機 task drag sortable displacement freeze、fixed overlay indicator rect micro-retain。DEV-055 static 27/27、browser B01-B16 16/16 通過；B15 證明 L3+ row top/bottom delta = 0、parentTransform = `none`、同格 indicator rect delta = 0。DEV-046/053/054 static/browser、TypeScript 與 build 亦通過。
 - 2026-07-17：第一次 Slice A / B 自動化通過（已被後續 T01-T08 Attempt 1 失敗與 RD Rework 1 supersede）：DEV-055 static 25/25、browser 15/15、DEV-046/053/054 指定回歸、TypeScript 與 build 通過。當時 T01-T08 共 38 次使用者真實桌機操作與新版手感主觀確認仍為完成門檻。

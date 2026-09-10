@@ -150,8 +150,6 @@ add(
   'DEV-011/012 production UI smoke is closed by hotfix release and fixture evidence',
   includesAll(existing.devTask ?? '', [
     'Done / Production Release Deployed / Production UI Smoke Passed',
-    'codex/dev011012-rag-order-hotfix',
-    '7704e2f',
     'assets/index-BkwGqGCZ.js',
     'published_record_found=true',
     'record_task_links=2',

@@ -10,7 +10,7 @@ Level 3 production-like pre-deploy smoke 已通過。
 
 - Date: 2026-07-09
 - Evidence level: Level 3 - production-like pre-deploy smoke
-- Branch: `持續優化1`
+- Branch: `歷史開發來源`
 - Commit: `3a5ee67`
 - Worktree state: dirty; production release scope 尚未完成分類與確認
 - Firebase project/site: `projed-cc78d`

@@ -12,7 +12,7 @@
 | QA-104-02 | TypeScript契約完整 | `npx tsc --noEmit` | PASS |
 | QA-104-03 | test bundle可建置 | `npm run build:test` | PASS |
 | QA-104-04 | DEV-095追蹤副本回歸 | `npm run verify:dev-095-task-tracking-references-cross-mode` | PASS（12/12） |
-| QA-104-05 | DEV-099 persistence convergence回歸 | convergence + property verifiers | PASS（10/10；11 cases + 1000 seeded schedules） |
+| QA-104-05 | 任務儲存可靠性回歸 | 舊驗證器已依清理決策移除 | NOT RUN；須於重新開發時重建 |
 | QA-104-06 | 側欄、紀錄庫、任務明細與任務選單無收藏入口 | real browser / local-test | PASS |
 | QA-104-07 | 一般看板與meeting／work_log入口仍可用 | real browser + DEV-002／016／094 | PASS |
 

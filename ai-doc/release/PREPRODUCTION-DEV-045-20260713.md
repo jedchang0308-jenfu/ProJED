@@ -4,11 +4,11 @@
 
 ## Source boundary
 
-- Branch：`持續優化2`
+- Branch：`歷史開發來源`
 - Starting commit：`437c4cc`
 - Release-candidate source commit：`2635de9`
 - Production deployment source commit：`43313b3`
-- Upstream：`origin/持續優化2`
+- Upstream：`origin/歷史開發來源`
 - Starting worktree：clean
 - Firebase preview target：`projed-cc78d / level3-smoke`
 - Supabase TEST：`fhisnnufoeulxqrchldf`
@@ -16,9 +16,9 @@
 
 ## Completed evidence
 
-- Release commit：`d69899c`，已推送至`origin/持續優化2`；worktree於QC開始前為clean。
+- Release commit：`歷史 release artifact`，已推送至`origin/歷史開發來源`；worktree於QC開始前為clean。
 - `npm run verify:source`通過；lint為0 error / 63既有warning，production build、production auth 5/5、migration provenance 65/65、ICS與核心gate全數通過。
-- Staging artifact由`d69899c`產生，入口為`assets/index-Bp02B5N8.js`與`assets/index-CLsSmPB5.css`；28個artifact檔案未命中test email/password。
+- Staging artifact由`歷史 release artifact`產生，入口為`assets/index-Bp02B5N8.js`與`assets/index-CLsSmPB5.css`；28個artifact檔案未命中test email/password。
 - Staging env resolves to ProJED-TEST，OAuth mode，無test email/password，auto-login disabled。
 - Production migration forensic：12個remote-only statements已下載；source補回後production remote-only為0。
 - Production dry-run：16個local-only已分類為11個history-only repair與5個真實pending migration；未執行production repair/push。
@@ -72,7 +72,7 @@
 ## Production lifecycle hotfix - 2026-07-13
 
 - Incident：正式站「我的工作行事曆」停用時回傳`new row violates row-level security policy for table "calendar_subscriptions"`。唯讀診斷確認該列為active v1，且immutable filter snapshot因目前權限範圍改變而不再通過`calendar_subscription_filter_allowed`；原UPDATE policy會在只改`is_active`時重新驗證整份filter，因而誤擋生命週期操作。
-- Fix source：commit `87d6493b350d8f63668bb0cbbd6d4e273d38be06`已推送至`origin/持續優化2`。新增authenticated-only的`set_calendar_subscription_active`與`rotate_calendar_subscription_token` RPC；兩者均為`SECURITY DEFINER`、`search_path=""`、以`auth.uid()`綁定owner，anon無execute。新增／編輯filter仍走原RLS validator，未放寬policy。
+- Fix source：commit `歷史修正來源`已推送至`origin/歷史開發來源`。新增authenticated-only的`set_calendar_subscription_active`與`rotate_calendar_subscription_token` RPC；兩者均為`SECURITY DEFINER`、`search_path=""`、以`auth.uid()`綁定owner，anon無execute。新增／編輯filter仍走原RLS validator，未放寬policy。
 - Local gate：`verify:source`通過；lint 0 error / 63既有warning；lifecycle static 9/9、DEV-037 20/20、local DB transaction smoke 34/34且rollback、TypeScript、production build與local DB lint全數通過。
 - TEST gate：ProJED-TEST為`ACTIVE_HEALTHY`；dry-run只列`20260713133307_calendar_subscription_lifecycle_rpc.sql`，套用後remote up to date。函式contract、security advisor與invalid legacy filter owner/outsider smoke通過，fixture residual為0。
 - Firebase preview：`https://projed-cc78d--level3-smoke-o1na5wft.web.app/`載入`index-smXV8xdX.js`，SHA-256 `6259CE08983506510E8C48A390FF2250A2C3E2657EC7830807F06FB3C500BA22`。公開HTTPS / service worker / console / request smoke通過；authenticated fixture完成啟用、停用、再啟用，browser error為0，exact-name cleanup後residual為0。

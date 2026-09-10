@@ -4,12 +4,12 @@
 
 Firebase Hosting live deploy 已完成，Level 4 post-deploy production smoke 已通過。
 
-此 release 是依使用者授權，從目前分支 `持續優化1` 的 local dirty worktree 直接 build/deploy。所有目前分支修改被視為本次 release scope；但此狀態尚未 commit/push 固化，後續應補齊 source-control provenance。
+此 release 是依使用者授權，從目前分支 `歷史開發來源` 的 local dirty worktree 直接 build/deploy。所有目前分支修改被視為本次 release scope；但此狀態尚未 commit/push 固化，後續應補齊 source-control provenance。
 
 ## Release Scope
 
 - Release path: current branch direct deploy
-- Branch: `持續優化1`
+- Branch: `歷史開發來源`
 - Commit before deploy: `3a5ee67`
 - Upstream: none shown by `git branch -vv`
 - Worktree state: dirty

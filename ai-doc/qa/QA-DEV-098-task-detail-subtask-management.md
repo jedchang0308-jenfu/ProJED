@@ -2,7 +2,7 @@
 
 - 關聯 DEV：DEV-098
 - 依據 SPEC：`ai-doc/specs/SPEC-098-task-detail-subtask-management.md`
-- 文件狀態：`QA Executed / DEV-098 Core PASS / Independent QC PASS / Adjacent Regression Audit PASS / Persistence Release Regression Pending DEV-099`
+- 文件狀態：`QA Executed / DEV-098 Core PASS / Independent QC PASS / Adjacent Regression Audit PASS / Persistence Re-development Gate Pending`
 - 風險等級：Medium
 - 日期：2026-09-01
 
@@ -75,7 +75,7 @@ DEV-098 核心 QA exit 必須是 S01～S08、P01～P10、B01～B16 全部 PASS�
 | S03 | Details沒有 `parentId`／`order` direct mutation或第二個 commit；desktop／mobile都到既有 `taskDragCommit` authority。 |
 | S04 | Details擁有local `DndContext`／mobile session；generic scope ref拒絕 modal外 target，Board caller保留原 scope。 |
 | S05 | `useTaskDetailsNavigation`只有一個 stack owner；DOM中只 render一個 `TaskDetailsModal`，entry不保存 `HTMLElement`。 |
-| S06 | close／push／back／create與父任務導覽共用同一 pending transition與 persistence primitive；歷史DEV-098 verifier只證明callback-only baseline。整合DEV-099後，必須改驗accepted／not-accepted terminal settlement與unknown owner，且不可存在callbackless accepted path。 |
+| S06 | close／push／back／create與父任務導覽共用同一 pending transition與 persistence primitive；歷史 DEV-098 verifier 只證明 callback-only baseline。任務儲存可靠性重新開發後，必須另驗 terminal settlement 與 unknown owner。 |
 | S07 | details-open menu與drag presenter高於 modal；Escape／outside-click owner是明確 state，不以不完整 DOM selector猜測。 |
 | S08 | 無 schema／migration／provider／RLS改動；DEV-098 verifier與 package scripts存在，planned file impact未越界。 |
 
@@ -138,17 +138,11 @@ npm run build:test
 若變更未觸及某既有 verifier的適用面，QA可在 result JSON以 reason標為 `NOT_APPLICABLE`；它不算 PASS，
 也不影響 DEV-098 自身 S／P／B 分母。
 
-### 8.1 DEV-099 persistence compatibility gate（新增／尚未執行）
+### 8.1 任務儲存可靠性重開發 Gate（尚未執行）
 
-2026-09-02 production事件後，DEV-098既有S／P／B結果只保留為子任務surface與callback-only navigation
-歷史baseline；不得用來宣稱SPEC-099 persistence contract已通過。任何DEV-099整合候選必須另外執行：
-
-- QA-DEV-099 R01～R06 root-cause gate；
-- accepted／not-accepted terminal contract與deadline／unknown／readback cases；
-- 本文件P08～P09、B04～B06在同一候選上的相容性重跑；
-- DEV-097 task-details dirty／reload-safety regression。
-
-上述新增Gate不回頭改寫歷史22/22、10/10、16/16分母，也不預填PASS；目前狀態為 `NOT RUN`。
+DEV-098 既有 S／P／B 結果只保留為子任務 surface 與 callback-only navigation 歷史 baseline。
+未來必須依 DEV-099 最小 capsule 從目前程式重新建立 persistence contract 與 QA/QC；舊候選、
+舊驗證器及舊證據全部不具權威性。目前狀態為 `NOT RUN`。
 
 ### 8.2 Fresh regression audit（Tech Lead review）
 
@@ -167,7 +161,7 @@ DEV-046／053 靜態 verifier 已由舊 private-row 命名對齊目前 `TaskPlac
 indicator settle。完整摘要見 `output/qa/dev-098/adjacent-audit-final-20260902.json`。
 
 歷史 clean baseline 仍保留於 `output/qa/dev-098/baseline-audit.json`，只用來說明原始 finding 的
-pre-existing disposition，不覆寫本輪修正後 PASS。DEV-099 persistence compatibility、實機 supplemental、
+pre-existing disposition，不覆寫本輪修正後 PASS。任務儲存可靠性重開發、實機 supplemental、
 deployment 與 release 仍未執行，故本 DEV 維持 Not Released。
 
 ## 9. Executed commands與 artifacts
@@ -232,14 +226,14 @@ Runtime 證據：`output/qa/dev-098/runtime-cleanup-final-20260902.json` 記錄�
 - 正常fixture console error、pageerror、visible product error為0；預期 fault必須由case ID與error code區分。
 - QA exit：`DEV-098 Core Local Automated QA PASS / Independent QC PASS / Adjacent Regression Audit PASS`。
   獨立 QC 已 read back core artifacts、source boundary、runtime cleanup 與 final adjacent disposition；無 waiver。
-- Persistence release gate：`Pending DEV-099 / NOT RUN`；既有QA/QC不證明永久saving根因或新terminal契約。
+- Persistence release gate：`Re-development Pending / NOT RUN`；既有 QA/QC 不證明任務儲存可靠性。
 - commit、merge、push、deploy與release不在本計畫授權內。
 
 ## 12. Stop conditions
 
 - Details存在duplicate row／action／commit，或為共用而提升global Board `DndContext`。
 - dirty／saving／failed仍可切換 task，或舊callback可更新新 entry。
-- unknown仍可切換task、accepted operation可無terminal結案，或DEV-099 compatibility gate未跑卻宣稱release ready。
+- unknown 仍可切換 task、accepted operation 可無 terminal 結案，或重開發 Gate 未跑卻宣稱 release ready。
 - background surface可命中、placement failure後source消失或出現duplicate／cycle／success。
 - tracking descendants、menu action或drag capability越權。
 - overlay被裁切、Escape一次關兩層、focus落body、touchcancel留下transient。
@@ -294,9 +288,9 @@ Runtime 證據：`output/qa/dev-098/runtime-cleanup-final-20260902.json` 記錄�
   QA-055-B10（PASS）、DEV-095 B17～B24（8/8 PASS）與 DEV-055 static（34/34 PASS）；完整 DEV-055
   browser 仍為 9/18 PASS、9/18 FAIL，剩餘 placement／indicator／fixture-gap findings 仍待相鄰 owner
   修正或正式 waiver，不改變 DEV-098 未 Release 邊界。
-- 2026-09-02：依CAPA技術主管審查加入DEV-099 persistence compatibility gate；S06不再以「沒有timeout／unknown」
-  作現行release acceptance。歷史DEV-098核心PASS保留，但SPEC-099 root-cause／terminal／readback與P08～P09、
-  B04～B06整合重跑均為NOT RUN，故加註 `Persistence Release Regression Pending DEV-099`。
+- 2026-09-10：依使用者清理決策，舊 persistence compatibility gate、候選與證據全部放棄；S06 不再以
+  「沒有 timeout／unknown」作現行 release acceptance。歷史 DEV-098 核心 PASS 只保留 surface／navigation，
+  重開發與相容案例均為 NOT RUN。
 - 2026-09-02：完成相鄰 affected-case 修正與 fresh rerun：DEV-046 static/browser 32/32＋5/5、DEV-053
   31/31＋10/10、DEV-055 34/34＋18/18、DEV-095 4/4 均 PASS；未使用 waiver。TypeScript、build:test、
   DEV-098 QC-098-01～10（10/10）亦通過；task-owned port 4011 已停止並確認釋放。

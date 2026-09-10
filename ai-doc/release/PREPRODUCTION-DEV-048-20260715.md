@@ -4,7 +4,7 @@
 
 ## Scope
 
-- Branch：`持續優化1`
+- Branch：`歷史開發來源`
 - Source commit：`53b964b49abdec36565e0a8513e9379415989ba4`
 - Feature：多位主責、多位協作；主責與協作互斥；不新增「最終負責人」
 - PR：[GitHub PR #4](https://github.com/jedchang0308-jenfu/ProJED/pull/4)
