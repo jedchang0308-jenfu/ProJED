@@ -5452,7 +5452,7 @@ current view、task／record request count、三種 mutation count、console／p
 
 ### Architecture Closure Review（2026-09-10）
 
-- Source baseline：branch `持續優化3`、HEAD `fea16712f2ff4093984f06336da2e045a8d9f696`；review 對象包含
+- Source baseline：branch `持續優化3`、HEAD `a7510fcbb1f8793fe8ea3cb2a37a7b07f4371286`；review 對象包含
   當前 working tree，並非假設 clean HEAD。
 - Repo evidence：`ViewMode`／App／MainLayout／Sidebar／persistence 有多個明確 view allowlist；DEV-070 kernel
   有 typed host/profile/surface；task filter 與 hierarchy 已有 pure projection；App 目前只做一次 board-level record

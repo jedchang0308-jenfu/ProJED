@@ -74,7 +74,7 @@ Execution boundary：DEV-116 已達 `RD Implementation Ready / 架構已定案 /
 provider、Git index 或 release 狀態。手機、tracking parity、live meeting continuity 與新的任務導向完整
 task-linked records 聚合畫面維持 `Future Phase Captured / Not Requested`。
 
-Architecture Closure Review：branch `持續優化3`、HEAD `fea16712f2ff4093984f06336da2e045a8d9f696`，
+Architecture Closure Review：branch `持續優化3`、HEAD `a7510fcbb1f8793fe8ea3cb2a37a7b07f4371286`，
 並以當前 dirty tree 為review基線；MainLayout、Sidebar、TaskDetails、RecordStore、package與DEV-117 artifacts有
 user-owned重疊，RD必須逐檔小patch保留。R2已收斂policy ownership、record-list state、sparse input與風險式
 regression集合；P0／P1 unresolved architecture blockers=0，QA/QC仍未執行。

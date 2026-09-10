@@ -4,7 +4,7 @@
 - 日期：2026-09-10
 - 對應：DEV-116、SPEC-116
 - 風險：Medium；P0為資料所有權／scope／錯誤偽空／N+1／meeting state，P1為互動／a11y／viewport／mobile。
-- Source baseline：branch `持續優化3`、HEAD `fea16712f2ff4093984f06336da2e045a8d9f696`＋執行時frozen candidate dirty boundary。
+- Source baseline：branch `持續優化3`、HEAD `a7510fcbb1f8793fe8ea3cb2a37a7b07f4371286`＋執行時frozen candidate dirty boundary。
 
 ## 1. 驗證目標
 

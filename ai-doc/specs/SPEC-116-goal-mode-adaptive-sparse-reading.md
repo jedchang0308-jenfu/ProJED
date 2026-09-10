@@ -446,7 +446,7 @@ state probe、screenshots、error arrays、server PID／port／cleanup。QC在fr
 
 ## 16. Architecture Closure Review
 
-- Source revision：branch `持續優化3`，HEAD `fea16712f2ff4093984f06336da2e045a8d9f696`；review包含當前dirty tree。
+- Source revision：branch `持續優化3`，HEAD `a7510fcbb1f8793fe8ea3cb2a37a7b07f4371286`；review包含當前dirty tree。
 - Dirty overlap：MainLayout、Sidebar、TaskDetails、RecordStore、package與DEV-117文件／verifier已有user-owned變更；
   實作前逐檔`git diff`，禁止整檔restore。
 - Architecture decisions：authority、dependency direction、pure I/O、record race、view state、interaction、meeting
