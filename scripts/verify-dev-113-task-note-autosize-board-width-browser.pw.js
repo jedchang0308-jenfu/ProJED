@@ -46,7 +46,16 @@ async (page) => {
     'dev113-task': {
       id: 'dev113-task', workspaceId: workspace.id, boardId: 'dev113-board', parentId: 'dev113-root',
       title: '任務說明尺寸測試', status: 'todo', nodeType: 'task', order: 0,
-      detailNotes: [{ id: 'note_default', title: '任務說明', content: '' }], description: '',
+      detailNotes: [
+        { id: 'note_default', title: '任務目的', content: '' },
+        { id: 'note_secondary', title: '備註', content: '' },
+      ], description: '',
+      createdAt: 1704067200000, updatedAt: 1704067200000,
+    },
+    'dev113-task-other': {
+      id: 'dev113-task-other', workspaceId: workspace.id, boardId: 'dev113-board', parentId: 'dev113-root',
+      title: '另一個任務', status: 'todo', nodeType: 'task', order: 1,
+      detailNotes: [{ id: 'note_default', title: '任務目的', content: '' }], description: '',
       createdAt: 1704067200000, updatedAt: 1704067200000,
     },
   };
@@ -62,8 +71,8 @@ async (page) => {
       overflowY: getComputedStyle(element).overflowY,
     };
   });
-  const openModal = async () => {
-    await page.evaluate(() => document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId: 'dev113-task' } })));
+  const openModal = async (taskId = 'dev113-task') => {
+    await page.evaluate(id => document.dispatchEvent(new CustomEvent('open-task-details', { detail: { taskId: id } })), taskId);
     const modal = page.locator('[data-task-details-modal="true"]');
     await modal.waitFor({ state: 'visible', timeout: 10000 });
     const editor = modal.locator('[data-task-detail-note-content-input="true"]').first();
@@ -179,12 +188,23 @@ async (page) => {
     afterRightEdgeResize, afterKeyboardResize,
   });
 
-  const storedHeight = await page.evaluate(() => {
-    const map = JSON.parse(localStorage.getItem('projed.taskDetailNote.heights.v1') || '{}');
-    return Number(map['dev113-board']);
+  const storedPreference = await page.evaluate(() => {
+    const map = JSON.parse(localStorage.getItem('projed.taskDetailNote.heights.v2') || '{}');
+    const scopeKey = ['local-test-user', 'dev113-task', 'note_default'].map(encodeURIComponent).join(':');
+    return { storedHeight: Number(map[scopeKey]), scopeKey, storedKeys: Object.keys(map) };
   });
-  record('B05-height-persisted-by-board', Number.isFinite(storedHeight)
-    && Math.abs(storedHeight - afterKeyboardResize.height) <= 2, { storedHeight, afterKeyboardResize });
+  const { storedHeight } = storedPreference;
+  record('B05-height-persisted-by-account-task-note', Number.isFinite(storedHeight)
+    && Math.abs(storedHeight - afterKeyboardResize.height) <= 2
+    && storedPreference.storedKeys.length === 1
+    && storedPreference.storedKeys[0] === storedPreference.scopeKey,
+  { storedPreference, afterKeyboardResize });
+
+  const secondaryEditor = modal.locator('[data-task-detail-note-content-input="true"]').nth(1);
+  const secondaryGeometry = await geometry(secondaryEditor);
+  record('B05-other-note-keeps-independent-height', secondaryGeometry.height <= 40
+    && Math.abs(secondaryGeometry.height - storedHeight) > 2,
+  { secondaryGeometry, storedHeight });
 
   await editor.click();
   await page.keyboard.type('內容變更後仍完整顯示');
@@ -198,7 +218,7 @@ async (page) => {
   const reopened = await openModal();
   await page.waitForTimeout(300);
   const reopenedGeometry = await geometry(reopened.editor);
-  record('B05-reopen-restores-board-height', Math.abs(reopenedGeometry.height - storedHeight) <= 2, { reopenedGeometry, storedHeight });
+  record('B05-reopen-restores-task-note-height', Math.abs(reopenedGeometry.height - storedHeight) <= 2, { reopenedGeometry, storedHeight });
 
   result.screenshots.compact = 'output/playwright/dev-113-task-note-autosize-board-width/compact.png';
   await page.screenshot({ path: result.screenshots.compact, fullPage: false });
@@ -214,9 +234,20 @@ async (page) => {
   { comparisonGeometry, comparisonHandle, comparisonDocumentWidth });
   result.screenshots.bottomEdge = 'output/playwright/dev-113-task-note-autosize-board-width/bottom-edge-hover-808x698.png';
   await page.screenshot({ path: result.screenshots.bottomEdge, fullPage: false });
+  await reopened.modal.locator('button[aria-label="關閉任務詳情"]').click();
+  await reopened.modal.waitFor({ state: 'hidden', timeout: 10000 });
+  const otherTask = await openModal('dev113-task-other');
+  await page.waitForTimeout(300);
+  const otherTaskGeometry = await geometry(otherTask.editor);
+  record('B05-other-task-keeps-independent-height', otherTaskGeometry.height <= 40
+    && Math.abs(otherTaskGeometry.height - storedHeight) > 2,
+  { otherTaskGeometry, storedHeight });
   result.status = failures.length === 0 && result.browserErrors.length === 0 ? 'PASS' : 'FAIL';
   result.failures = failures;
-  await page.evaluate(() => localStorage.removeItem('projed.taskDetailNote.heights.v1'));
+  await page.evaluate(() => {
+    localStorage.removeItem('projed.taskDetailNote.heights.v1');
+    localStorage.removeItem('projed.taskDetailNote.heights.v2');
+  });
   await page.evaluate(value => { window.__DEV113_ARTIFACT = value; }, result);
   if (failures.length > 0 || result.browserErrors.length > 0) {
     throw new Error(`DEV-113 browser verification failed: ${JSON.stringify({ failures, browserErrors: result.browserErrors })}`);

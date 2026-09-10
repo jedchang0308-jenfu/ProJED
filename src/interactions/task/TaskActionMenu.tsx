@@ -80,7 +80,7 @@ const TITLES: Partial<Record<TaskActionId, string>> = {
   'task.create-relationship': '以目前任務為起點選擇目標',
 };
 
-const SECTION_ORDER = ['create', 'clipboard', 'assignment', 'planning', 'tracking-reference', 'dependency', 'hierarchy', 'lifecycle', 'danger'] as const;
+const SECTION_ORDER = ['create', 'clipboard', 'assignment', 'planning', 'dependency', 'hierarchy', 'lifecycle', 'danger'] as const;
 
 const actionLabel = (
   actionId: TaskActionId,
@@ -120,8 +120,7 @@ export const TaskActionMenu = ({
       navigationActions.push(action.id);
       continue;
     }
-    const section = action.id === 'task.create-tracking-reference' ? 'tracking-reference' : action.section;
-    actionsBySection.get(section)?.push(action.id);
+    actionsBySection.get(action.section)?.push(action.id);
   }
 
   const renderAction = (actionId: TaskActionId) => {

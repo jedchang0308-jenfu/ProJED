@@ -459,7 +459,7 @@ body[data-kanban-mouse-pan-active="true"] * {
   }
 
   .app-board-title {
-    padding: 0 4px !important;
+    padding: 0 !important;
     font-size: 12px !important;
     line-height: 1.25 !important;
   }

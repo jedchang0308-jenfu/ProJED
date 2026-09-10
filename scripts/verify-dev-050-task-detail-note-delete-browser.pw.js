@@ -129,7 +129,7 @@ async (page) => {
   await page.waitForFunction(() => {
     const storedNodes = JSON.parse(localStorage.getItem('projed-local-test.nodes') || '{}');
     const notes = storedNodes['dev050-task']?.detailNotes || [];
-    return notes.length === 1 && notes[0]?.title === '任務說明' && notes[0]?.content === '';
+    return notes.length === 1 && notes[0]?.title === '任務目的' && notes[0]?.content === '';
   }, null, { timeout: 10000 });
 
   const result = await page.evaluate(() => {
@@ -165,7 +165,7 @@ async (page) => {
 
   assert(result.noteCardCount === 1, 'last note deletion should leave one blank note card visible', result);
   assert(result.deleteButtonCount === 1, 'remaining blank note card should still have a delete affordance', result);
-  assert(result.titleValues[0] === '任務說明' || result.titleLabels[0] === '任務說明', 'remaining note should use the fixed task description title after deleting the last note', result);
+  assert(result.titleValues[0] === '任務目的' || result.titleLabels[0] === '任務目的', 'remaining note should use the fixed task purpose title after deleting the last note', result);
   assert(result.contentValues[0] === '', 'remaining note should be blank after deleting the last note', result);
   assert(result.deleteButtonTitles[0] === '刪除此備註欄', 'delete affordance should be discoverable by title', result);
   assert(result.visibleAlerts.length === 0, 'note delete flow should not show runtime alerts', result);

@@ -1,5 +1,13 @@
 # SPEC-106：會議安全草稿、結束與待整理生命週期
 
+## DEV-117 Same-board View Continuity Amendment（2026-09-10）
+
+- Board／List／Mindmap／Gantt／Calendar 之間的同 active board view switch 不再屬於「離開紀錄」，
+  不呼叫 force-flush、save、close、exit 或 recovery clear；由 `SPEC-117`／`ADR-049` 管理。
+- 本文件既有「切 view」離開敘述只保留為 DEV-106 當時的歷史驗證基線。真正 meeting exit、record replacement、
+  board／workspace switch 與 system-page navigation 仍由本文件的 local safety contract 管理。
+- local durability、explicit discard、mobile meeting-negative、provider 0 remote recovery request 與 Phase 1 邊界不變。
+
 - 關聯 DEV：DEV-106
 - 文件成熟度：`Phase 0 QA/QC PASS / Phase 1 RD Contract Ready / Cloud Recovery Future Capsule / NOT RELEASED`
 - 風險 lane：Phase 0 Medium；remote schema／RLS／Firestore rules、跨裝置、部署或 release 另行升級

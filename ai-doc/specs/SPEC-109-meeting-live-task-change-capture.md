@@ -1,5 +1,14 @@
 # SPEC-109 會議期間看板變更即時記錄與 AI 整理修復
 
+## DEV-117 Same-board View Segment Continuity Amendment（2026-09-10）
+
+- 同一 active workspace／board 的 Board／List／Mindmap／Gantt／Calendar view switch 不 close、recreate
+  或 rebase live capture segment；draft ID、segment ID、startedAt 與 aggregates 持續。
+- §4.2 中「切換 view／board」一併 close segment 的舊敘述，由 `SPEC-117`／`ADR-049` 意圖性取代為：
+  continuity view switch 不是 lifecycle transition；真正 exit、record replacement、board／workspace switch
+  才依 DEV-106 關閉 segment。
+- capture allowlist、persistence-confirmed truth、exactly-once、data minimization、AI source authority 與 mobile boundary 不變。
+
 - 狀態：`Target Authority / Implemented Candidate / QA Pending / NOT RELEASED`
 - 日期：2026-09-08
 - 對應 DEV：DEV-109

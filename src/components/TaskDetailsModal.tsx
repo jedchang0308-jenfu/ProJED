@@ -37,6 +37,7 @@ import { resolveTaskDetailsPersistenceDecision, TASK_DETAILS_NAVIGATE_EVENT } fr
 import { useTaskMeetingQuickNotes } from '../hooks/useTaskMeetingQuickNotes';
 import TaskMeetingQuickNoteSection from './TaskNotes/TaskMeetingQuickNoteSection';
 import { useMeetingRecordAvailability } from '../utils/meetingRecordAvailability';
+import useAuthStore from '../store/useAuthStore';
 
 interface TaskDetailsModalProps {
   nodeId: string;
@@ -56,7 +57,7 @@ const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = MANUAL_TASK_
 
 const createNote = (index: number): TaskDetailNote => ({
   id: index === 1 ? 'note_default' : `note_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-  title: index === 1 ? '任務說明' : '備註',
+  title: index === 1 ? '任務目的' : '備註',
   content: '',
 });
 
@@ -100,10 +101,14 @@ const readSavedSize = () => {
   }
 };
 
+const normalizeTaskDetailNotes = (notes: TaskDetailNote[]): TaskDetailNote[] => notes.map(note => (
+  note.id === 'note_default' ? { ...note, title: '任務目的' } : note
+));
+
 const getDisplayedDetailNotes = (node: TaskNode | undefined): TaskDetailNote[] => (
   node?.detailNotes?.length
-    ? node.detailNotes
-    : [{ id: 'note_default', title: '任務說明', content: node?.description || '' }]
+    ? normalizeTaskDetailNotes(node.detailNotes)
+    : [{ id: 'note_default', title: '任務目的', content: node?.description || '' }]
 );
 
 const areDetailNotesEqual = (left: TaskDetailNote[], right: TaskDetailNote[]) => (
@@ -170,6 +175,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   onCreateChild,
 }) => {
   const node = useWbsStore((state) => state.nodes[nodeId]);
+  const currentAccountId = useAuthStore((state) => state.user?.uid ?? null);
   const nodes = useWbsStore((state) => state.nodes);
   const trackingReferences = useWbsStore((state) => state.trackingReferences);
   const updateNode = useWbsStore((state) => state.updateNode);
@@ -694,8 +700,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     if (!currentNodeId) return;
     setNotes(
       currentNodeDetailNotes?.length
-        ? currentNodeDetailNotes
-        : [{ id: 'note_default', title: '任務說明', content: currentNodeDescription }]
+        ? normalizeTaskDetailNotes(currentNodeDetailNotes)
+        : [{ id: 'note_default', title: '任務目的', content: currentNodeDescription }]
     );
     skipNextNotesSave.current = true;
   }, [currentNodeDescription, currentNodeDetailNotes, currentNodeId]);
@@ -1466,9 +1472,10 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 <TaskDetailNoteField
                   key={note.id}
                   canEdit={canEditTask}
-                  boardId={node.boardId}
+                  accountId={currentAccountId}
+                  taskId={node.id}
+                  isDescription={note.id === 'note_default'}
                   note={note}
-                  noteIndex={noteIndex}
                   titleEditable={noteIndex > 0 || note.id !== 'note_default'}
                   onAdd={addNote}
                   onDelete={() => deleteNote(note.id)}

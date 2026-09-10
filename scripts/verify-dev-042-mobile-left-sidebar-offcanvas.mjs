@@ -102,6 +102,7 @@ assert(
 assert(
   'desktop TaskWorkbench opens from top navigation without a collapsed rail',
   source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('data-task-workbench-nav-label="all"') &&
     source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
     source.mainLayout.includes('if (isMobileBoardOnly) setSidebarOpen(false);') &&
     !source.mainLayout.includes('sm:hidden"\n            title="開啟全域任務平台"') &&
@@ -121,10 +122,17 @@ assert(
 assert(
   'MainLayout exposes accessible toggle and measurable main surface',
   source.mainLayout.includes('data-main-sidebar-toggle="true"') &&
+    source.mainLayout.includes('data-board-switcher="true"') &&
+    source.mainLayout.indexOf('data-board-switcher="true"') < source.mainLayout.indexOf('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('data-topbar-board-title="true"') &&
+    source.mainLayout.includes('aria-expanded={isSidebarOpen}') &&
+    source.mainLayout.includes('aria-controls="workspace-board-sidebar"') &&
+    source.sidebar.includes('id="workspace-board-sidebar"') &&
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
+    source.mainLayout.includes('data-task-workbench-nav-label="all"') &&
     source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
     source.taskWorkbench.includes('TOGGLE_PANEL_EVENT') &&
-    source.mainLayout.includes('aria-label={isSidebarOpen ?') &&
+    source.mainLayout.includes('aria-label={activeBoard') &&
     source.mainLayout.includes('data-app-main="true"'),
 );
 

@@ -46,7 +46,7 @@ const HOST_MODE_PROFILES: Readonly<Record<TaskHostMode, TaskInteractionProfile>>
     }),
   }),
   board: Object.freeze({
-    menu: Object.freeze({ include: ['task.dependency-start', 'task.dependency-end'] as const, exclude: ['task.create-relationship'] as const }),
+    menu: Object.freeze({ include: ['task.create-tracking-reference', 'task.dependency-start', 'task.dependency-end'] as const, exclude: ['task.create-relationship'] as const }),
     triggers: Object.freeze({ 'keyboard.enter': 'task.open-details' }),
   }),
   gantt: Object.freeze({

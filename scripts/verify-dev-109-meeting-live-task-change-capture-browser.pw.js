@@ -20,7 +20,7 @@ async (page) => {
   const node = {
     id: 'dev109-browser-task', workspaceId: workspace.id, boardId: workspace.boards[0].id, parentId: null,
     title: 'DEV-109 測試任務', status: 'todo', nodeType: 'task', order: 0, description: '',
-    detailNotes: [{ id: 'note_default', title: '任務說明', content: '' }], createdAt: 1704067200000, updatedAt: 1704067200000,
+    detailNotes: [{ id: 'note_default', title: '任務目的', content: '' }], createdAt: 1704067200000, updatedAt: 1704067200000,
   };
   const seed = async () => {
     await page.setViewportSize({ width: 1440, height: 900 });

@@ -380,6 +380,7 @@ const Sidebar = () => {
 
   return (
     <aside
+      id="workspace-board-sidebar"
       className={`relative z-10 h-full flex-shrink-0 overflow-hidden bg-slate-50 shadow-[1px_0_0_rgba(15,23,42,0.03)] ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'}`}
      style={{ width: sidebarWidthStyle }}
       data-sidebar-panel="expanded"

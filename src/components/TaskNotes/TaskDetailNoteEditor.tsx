@@ -65,9 +65,10 @@ import {
 
 interface TaskDetailNoteEditorProps {
   canEdit: boolean;
-  boardId: string;
+  accountId: string | null;
+  taskId: string;
+  isDescription: boolean;
   note: TaskDetailNote;
-  noteIndex: number;
   titleEditable?: boolean;
   onAdd: () => void;
   onDelete: () => void;
@@ -75,38 +76,48 @@ interface TaskDetailNoteEditorProps {
   onUpdate: (updates: Partial<TaskDetailNote>) => void;
 }
 
-const TASK_NOTE_EDITOR_HEIGHTS_KEY = 'projed.taskDetailNote.heights.v1';
+const TASK_NOTE_EDITOR_HEIGHTS_KEY = 'projed.taskDetailNote.heights.v2';
 const TASK_NOTE_EDITOR_MIN_HEIGHT = 36;
 const TASK_NOTE_EDITOR_MAX_HEIGHT = 960;
 const TASK_NOTE_EDITOR_KEYBOARD_RESIZE_STEP = 12;
+const TASK_DESCRIPTION_PLACEHOLDER = '說明任務的目的、要解決的問題、要達成的目標。';
 
 const clampTaskNoteEditorHeight = (value: number) => Math.min(
   TASK_NOTE_EDITOR_MAX_HEIGHT,
   Math.max(TASK_NOTE_EDITOR_MIN_HEIGHT, Math.round(value)),
 );
 
-const readTaskNoteEditorHeight = (boardId: string): number | null => {
-  if (!boardId || typeof window === 'undefined') return null;
+const getTaskNoteEditorHeightScopeKey = (
+  accountId: string | null,
+  taskId: string,
+  noteId: string,
+): string | null => {
+  if (!accountId || !taskId || !noteId) return null;
+  return [accountId, taskId, noteId].map(encodeURIComponent).join(':');
+};
+
+const readTaskNoteEditorHeight = (scopeKey: string | null): number | null => {
+  if (!scopeKey || typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_HEIGHTS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const value = Number(parsed[boardId]);
+    const value = Number(parsed[scopeKey]);
     return Number.isFinite(value) ? clampTaskNoteEditorHeight(value) : null;
   } catch {
     return null;
   }
 };
 
-const writeTaskNoteEditorHeight = (boardId: string, height: number) => {
-  if (!boardId || typeof window === 'undefined') return;
+const writeTaskNoteEditorHeight = (scopeKey: string | null, height: number) => {
+  if (!scopeKey || typeof window === 'undefined') return;
   try {
     const raw = window.localStorage.getItem(TASK_NOTE_EDITOR_HEIGHTS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     const heights = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {};
-    heights[boardId] = clampTaskNoteEditorHeight(height);
+    heights[scopeKey] = clampTaskNoteEditorHeight(height);
     window.localStorage.setItem(TASK_NOTE_EDITOR_HEIGHTS_KEY, JSON.stringify(heights));
   } catch {
     // Layout preferences are best-effort and must not block editing.
@@ -489,9 +500,10 @@ const NoteChangePlugin: React.FC<{
 
 const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   canEdit,
-  boardId,
+  accountId,
+  taskId,
+  isDescription,
   note,
-  noteIndex,
   titleEditable = true,
   onAdd,
   onDelete,
@@ -500,11 +512,17 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
 }) => {
   const contentEditableRef = React.useRef<HTMLDivElement | null>(null);
   const resizeFrameRef = React.useRef<number | null>(null);
-  const preferredHeightRef = React.useRef<number | null>(readTaskNoteEditorHeight(boardId));
+  const heightPreferenceScopeKey = React.useMemo(
+    () => getTaskNoteEditorHeightScopeKey(accountId, taskId, note.id),
+    [accountId, note.id, taskId],
+  );
+  const preferredHeightRef = React.useRef<number | null>(readTaskNoteEditorHeight(heightPreferenceScopeKey));
   const intrinsicHeightRef = React.useRef(TASK_NOTE_EDITOR_MIN_HEIGHT);
   const resizeStartRef = React.useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const pendingHeightRef = React.useRef<number | null>(null);
   const [editorHeight, setEditorHeight] = React.useState(TASK_NOTE_EDITOR_MIN_HEIGHT);
+  const notePlaceholder = isDescription ? TASK_DESCRIPTION_PLACEHOLDER : '輸入備註內容';
+  const noteLabel = note.id === 'note_default' ? '任務目的' : (note.title || '備註');
 
   const autoSizeContent = React.useCallback(() => {
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
@@ -524,9 +542,9 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
   }, []);
 
   React.useLayoutEffect(() => {
-    preferredHeightRef.current = readTaskNoteEditorHeight(boardId);
+    preferredHeightRef.current = readTaskNoteEditorHeight(heightPreferenceScopeKey);
     autoSizeContent();
-  }, [autoSizeContent, boardId]);
+  }, [autoSizeContent, heightPreferenceScopeKey]);
 
   React.useLayoutEffect(() => {
     autoSizeContent();
@@ -543,17 +561,17 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
     const element = contentEditableRef.current;
     if (element) element.style.height = `${nextHeight}px`;
     setEditorHeight(nextHeight);
-    if (persist) writeTaskNoteEditorHeight(boardId, nextHeight);
-  }, [boardId]);
+    if (persist) writeTaskNoteEditorHeight(heightPreferenceScopeKey, nextHeight);
+  }, [heightPreferenceScopeKey]);
 
   const finishPointerResize = React.useCallback(() => {
     if (!resizeStartRef.current) return;
     resizeStartRef.current = null;
     if (pendingHeightRef.current !== null) {
-      writeTaskNoteEditorHeight(boardId, pendingHeightRef.current);
+      writeTaskNoteEditorHeight(heightPreferenceScopeKey, pendingHeightRef.current);
       pendingHeightRef.current = null;
     }
-  }, [boardId]);
+  }, [heightPreferenceScopeKey]);
 
   const handleResizePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!canEdit || event.button !== 0) return;
@@ -614,20 +632,20 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
               value={note.title}
               onChange={event => onUpdate({ title: event.target.value })}
               disabled={!canEdit}
-              className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold text-slate-800 outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400"
+              className="h-9 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm font-semibold text-slate-800 outline-none transition hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:text-slate-400 md:h-7"
               placeholder="備註"
               data-task-detail-note-title-input="true"
             />
           ) : (
             <span
-              className="flex h-7 min-w-0 flex-1 items-center px-0 text-sm font-semibold text-slate-800"
+              className="flex h-9 min-w-0 flex-1 items-center px-0 text-sm font-semibold text-slate-800 md:h-7"
               data-task-detail-note-title="true"
             >
-              {note.title || '任務說明'}
+              {noteLabel}
             </span>
           )}
-          <NoteToolbarPlugin canEdit={canEdit} noteTitle={note.title} onSave={onSave} />
-          {noteIndex === 0 ? (
+          <NoteToolbarPlugin canEdit={canEdit} noteTitle={noteLabel} onSave={onSave} />
+          {!isDescription ? (
             <button
               type="button"
               onClick={onAdd}
@@ -646,7 +664,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             disabled={!canEdit}
             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-40"
             title="刪除此備註欄"
-            aria-label={'刪除備註欄：' + (note.title || '未命名備註')}
+            aria-label={'刪除備註欄：' + noteLabel}
             data-task-detail-note-delete="true"
           >
             <Trash2 size={14} />
@@ -663,15 +681,18 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
                   'hover:border-slate-300/70 focus:border-blue-300 focus:ring-2 focus:ring-blue-100',
                   'aria-disabled:cursor-default aria-disabled:border-slate-200/50 aria-disabled:text-slate-400',
                 ].join(' ')}
-                aria-label={'備註內容：' + (note.title || '未命名備註')}
-                aria-placeholder="輸入備註內容"
+                aria-label={'備註內容：' + noteLabel}
+                aria-placeholder={notePlaceholder}
                 placeholder={<span />}
                 data-task-detail-note-content-input="true"
               />
             )}
             placeholder={(
-              <div className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-400">
-                輸入備註內容
+              <div
+                className="pointer-events-none absolute left-2 top-1.5 text-sm leading-6 text-slate-400"
+                data-task-detail-note-placeholder="true"
+              >
+                {notePlaceholder}
               </div>
             )}
             ErrorBoundary={LexicalErrorBoundary}
@@ -680,7 +701,7 @@ const TaskDetailNoteEditor: React.FC<TaskDetailNoteEditorProps> = ({
             <div
               role="separator"
               tabIndex={0}
-              aria-label={'調整備註高度：' + (note.title || '未命名備註')}
+                aria-label={'調整備註高度：' + noteLabel}
               aria-orientation="horizontal"
               aria-valuemin={TASK_NOTE_EDITOR_MIN_HEIGHT}
               aria-valuemax={Math.max(TASK_NOTE_EDITOR_MAX_HEIGHT, editorHeight)}

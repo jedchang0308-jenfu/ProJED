@@ -2,8 +2,25 @@
 
 關聯 DEV：DEV-042
 關聯 SPEC：`ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態：2026-08-24 Shared Inline Layout Rework Width Alignment Local QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed；舊 Off-Canvas 證據保留為歷史版本
+狀態：2026-09-10 Topbar Board Switcher Addendum Local QA-QC Passed / Production Not Deployed；2026-08-24 Shared Inline Layout Rework Width Alignment Local QA Passed / Production Not Deployed / Physical Phone Supplemental Not Executed；舊 Off-Canvas 證據保留為歷史版本
 建立日期：2026-07-05
+
+## 2026-09-10 Topbar 看板切換器增補 QA（目前凍結範圍）
+
+驗證範圍：只驗證 topbar Sidebar 入口與目前看板名稱的整合、相對順序、既有改名安全、共用 Sidebar toggle、窄版密度與可存取狀態；Sidebar IA、資料層、權限與全域任務平台內容不變。
+
+| ID | Viewport／操作 | 通過標準 | Evidence layer |
+|---|---|---|---|
+| QA-042-B14 | 1440x900，檢查看板切換器與任務平台 | 單一 switcher 包含 menu icon 與完整目前看板名稱，幾何位置在顯示 `All` 的任務平台入口左側 | Rendered UI + geometry + screenshot |
+| QA-042-B15 | 點擊 switcher 文字區兩次 | 第一次開啟既有 Sidebar、第二次收合；`aria-expanded` 與畫面一致，無第二份 picker | Browser interaction + DOM state |
+| QA-042-B16 | 390x844，長看板名稱、切換 Sidebar／工作台 | 名稱安全截斷，`All` 入口無重疊／水平 overflow；兩面板維持互斥 | Rendered UI + geometry + screenshot |
+| QA-042-B17 | switcher focus 後按 F2，並執行 visible error sweep | 無改名 input；無 `.inline-error`、`[role=alert]`、4xx/5xx 或 route error | Browser interaction + visible error sweep |
+
+Fail-seeking：若文字仍是獨立不可點標題、switcher 排在任務平台右側、點名稱觸發改名、`aria-expanded` 不同步、390px 出現水平 overflow／重疊，判定 Fail 並回送 RD。
+
+執行結果：QA-042-B14～B17 均由更新後 DEV-042／DEV-030 browser flow 覆蓋並通過；390／320／1440 截圖、DOM state、geometry、鍵盤 Enter／Space、F2 負向改名與 visible-error sweep 皆有證據。DEV-031 額外全頁 browser gate 停在既有任務備註列 3px 對齊門檻，未命中本增補範圍。
+
+使用思考習慣：#使用者視角、#差距分析、#可驗證性
 
 ## 驗證目標
 

@@ -12,10 +12,15 @@ const editor = readFileSync('src/components/TaskNotes/TaskDetailNoteEditor.tsx',
 const field = readFileSync('src/components/TaskNotes/TaskDetailNoteField.tsx', 'utf8');
 const detailsModal = readFileSync('src/components/TaskDetailsModal.tsx', 'utf8');
 
-assert('note editor receives board scope for height preference persistence', editor.includes('boardId: string'));
-assert('task note field forwards board scope to the lazy editor', field.includes('<TaskDetailNoteEditor {...props} />'));
-assert('task details modal supplies the active board id', detailsModal.includes('boardId={node.boardId}'));
-assert('height preference uses a versioned board-scoped storage key', editor.includes("projed.taskDetailNote.heights.v1"));
+assert('note editor receives account and task scope for height preference persistence', editor.includes('accountId: string | null')
+  && editor.includes('taskId: string'));
+assert('task note field forwards scoped props to the lazy editor', field.includes('<TaskDetailNoteEditor {...props} />'));
+assert('task details modal supplies the active account and task ids', detailsModal.includes('accountId={currentAccountId}')
+  && detailsModal.includes('taskId={node.id}'));
+assert('height preference uses a new task-scoped storage key', editor.includes("projed.taskDetailNote.heights.v2")
+  && !editor.includes("projed.taskDetailNote.heights.v1"));
+assert('height scope separates account, task, and note identities', editor.includes('getTaskNoteEditorHeightScopeKey')
+  && editor.includes('[accountId, taskId, noteId].map(encodeURIComponent)'));
 assert('stored heights are clamped to a safe range', editor.includes('TASK_NOTE_EDITOR_MIN_HEIGHT = 36')
   && editor.includes('TASK_NOTE_EDITOR_MAX_HEIGHT = 960')
   && editor.includes('clampTaskNoteEditorHeight'));
@@ -35,7 +40,7 @@ assert('full bottom edge owns the vertical resize interaction', editor.includes(
   && editor.includes('absolute inset-x-0 -bottom-1'));
 assert('pointer movement changes only editor height', editor.includes('startHeight + event.clientY - start.startY')
   && !editor.includes('event.clientX >= rect.right'));
-assert('resize completion writes the board-scoped height preference', editor.includes('writeTaskNoteEditorHeight(boardId, pendingHeightRef.current)')
+assert('resize completion writes the account-task-note scoped height preference', editor.includes('writeTaskNoteEditorHeight(heightPreferenceScopeKey, pendingHeightRef.current)')
   && editor.includes("window.localStorage.setItem(TASK_NOTE_EDITOR_HEIGHTS_KEY"));
 assert('bottom edge exposes keyboard separator semantics', editor.includes('role="separator"')
   && editor.includes('aria-orientation="horizontal"')

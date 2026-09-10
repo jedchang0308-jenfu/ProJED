@@ -160,6 +160,12 @@ async (page) => {
     assert(taskCount > 0, `DEV-070 ${viewport.name} data sanity failed`, { taskCount });
     const expectedModeCount = viewport.name === 'mobile' ? 0 : 1;
     assert(modeCount === expectedModeCount, `DEV-070 ${viewport.name} mode switcher contract failed`, { modeCount, expectedModeCount });
+    if (modeCount === 1) {
+      const modeTrigger = page.locator('[data-mode-switcher-trigger="true"]');
+      const modeTriggerLabel = modeTrigger.locator('[data-mode-switcher-label="view"]');
+      assert(await modeTriggerLabel.count() === 1 && (await modeTriggerLabel.innerText()).trim() === '視角', `DEV-070 ${viewport.name} mode switcher should expose the 視角 label`, { labelText: await modeTriggerLabel.textContent() });
+      assert(await modeTrigger.locator('svg').count() === 0, `DEV-070 ${viewport.name} mode switcher trigger should not render directional arrow icons`);
+    }
 
     const modeEvidence = [];
     const menuEvidence = [];

@@ -10,9 +10,10 @@ const TaskDetailNoteEditor = React.lazy(() => import('./TaskDetailNoteEditor'));
 
 interface TaskDetailNoteFieldProps {
   canEdit: boolean;
-  boardId: string;
+  accountId: string | null;
+  taskId: string;
+  isDescription: boolean;
   note: TaskDetailNote;
-  noteIndex: number;
   titleEditable?: boolean;
   onAdd: () => void;
   onDelete: () => void;

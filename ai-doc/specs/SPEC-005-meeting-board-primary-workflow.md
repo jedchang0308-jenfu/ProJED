@@ -1,5 +1,11 @@
 # SPEC-005：會議看板主畫面紀錄工作流
 
+> **DEV-117 current contract amendment（2026-09-10）**：本文件中「會議主畫面固定 active board 的
+> `board` view」與開始會議強制切 Board 的要求，已由 `SPEC-117`／`ADR-049` 意圖性取代。
+> 現行契約允許同一 active workspace／board 的 Board、List、Mindmap、Gantt、Calendar 五種 projection
+> 在同一 live meeting session 中切換；Board 仍可作常用議題視角，但不再是 runtime lock。
+> 本文件的右側速記、task tag、紀錄庫定位與既有歷史完成事實不變。
+
 狀態：Implemented
 Owner：PM
 建立日期：2026-06-05

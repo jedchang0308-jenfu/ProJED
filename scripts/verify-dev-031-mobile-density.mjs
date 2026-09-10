@@ -7,6 +7,7 @@ const files = {
   mainLayout: 'src/components/MainLayout.tsx',
   kanbanColumn: 'src/components/Wbs/KanbanColumn.tsx',
   taskDetailsModal: 'src/components/TaskDetailsModal.tsx',
+  taskDetailNoteEditor: 'src/components/TaskNotes/TaskDetailNoteEditor.tsx',
   tagPicker: 'src/components/Tags/TagPicker.tsx',
   browserVerifier: 'scripts/verify-dev-031-mobile-density-browser.pw.js',
   packageJson: 'package.json',
@@ -54,8 +55,12 @@ assert(
     source.mainLayout.includes('data-mobile-task-workbench-nav-entry="true"') &&
     source.mainLayout.includes('handleToggleMobileTaskWorkbench') &&
     source.mainLayout.includes('toggleTaskWorkbenchPanel') &&
-    source.mainLayout.includes('ClipboardList') &&
-    source.mainLayout.includes('whitespace-nowrap rounded') &&
+    source.mainLayout.includes('data-task-workbench-nav-label="all"') &&
+    source.mainLayout.includes('All') &&
+    !source.mainLayout.includes('ClipboardList') &&
+    source.mainLayout.includes('data-board-switcher="true"') &&
+    source.mainLayout.includes('max-w-[48vw]') &&
+    source.mainLayout.includes('truncate text-xs font-bold') &&
     !source.mainLayout.includes('cursor-text truncate') &&
     source.mainLayout.includes('data-board-share-open') &&
     source.mainLayout.includes('btn-outline hidden h-7') &&
@@ -109,10 +114,14 @@ assert(
   'task details add-note action shares the note header row',
   source.taskDetailsModal.includes('data-task-detail-notes-section="true"') &&
     source.taskDetailsModal.includes('data-task-detail-notes-grid="true"') &&
-    source.taskDetailsModal.includes('data-task-detail-note-header="true"') &&
-    source.taskDetailsModal.includes('data-task-detail-note-add="true"') &&
-    source.taskDetailsModal.includes('aria-label="新增備註欄"') &&
-    source.taskDetailsModal.includes('noteIndex === 0') &&
+    source.taskDetailNoteEditor.includes('data-task-detail-note-header="true"') &&
+    source.taskDetailNoteEditor.includes('data-task-detail-note-add="true"') &&
+    source.taskDetailNoteEditor.includes('aria-label="新增備註欄"') &&
+    source.taskDetailNoteEditor.includes('onClick={onAdd}') &&
+    source.taskDetailNoteEditor.includes('{!isDescription ? (') &&
+    source.taskDetailNoteEditor.includes('說明任務的目的、要解決的問題、要達成的目標。') &&
+    source.taskDetailNoteEditor.includes('輸入備註內容') &&
+    !source.taskDetailNoteEditor.includes('noteIndex === 0') &&
     !source.taskDetailsModal.includes('className="mb-3 flex justify-end"'),
 );
 

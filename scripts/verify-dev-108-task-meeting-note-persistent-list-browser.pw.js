@@ -20,7 +20,7 @@ async (page) => {
   };
   const node = {
     id: 'dev108-task', workspaceId: workspace.id, boardId: 'dev108-board', parentId: null, title: 'DEV-108 任務',
-    status: 'todo', nodeType: 'task', order: 0, detailNotes: [{ id: 'note_default', title: '任務說明', content: '' }], description: '',
+    status: 'todo', nodeType: 'task', order: 0, detailNotes: [{ id: 'note_default', title: '任務目的', content: '' }], description: '',
     createdAt: 1704067200000, updatedAt: 1704067200000,
   };
   const makeRecord = (id, status, lines, baseTime) => {

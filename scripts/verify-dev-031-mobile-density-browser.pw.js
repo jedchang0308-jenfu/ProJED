@@ -63,6 +63,10 @@ async (page) => {
       startDate: '2026-07-10',
       endDate: '2026-07-14',
       isDurationLocked: false,
+      detailNotes: [
+        { id: 'note_default', title: '任務目的', content: '' },
+        { id: 'note_default_secondary', title: '備註', content: '' },
+      ],
       createdAt: 1704067200000,
       updatedAt: 1704067200000,
     },
@@ -153,6 +157,7 @@ async (page) => {
     const brandNodeCount = await page.locator('[data-mobile-hidden-brand="true"]').count();
     const visibleShareButtons = await visibleCount('[data-board-share-open]');
     const visibleTaskWorkbenchEntries = await visibleCount('[data-mobile-task-workbench-nav-entry="true"]');
+    const visibleTaskWorkbenchLabels = await visibleCount('[data-task-workbench-nav-label="all"]');
     assert(
       brandNodeCount === 0,
       `${label} should remove redundant brand copy from the main nav`,
@@ -163,6 +168,11 @@ async (page) => {
       visibleTaskWorkbenchEntries === 1,
       `${label} should expose mobile task workbench entry in the main nav`,
       { visibleTaskWorkbenchEntries },
+    );
+    assert(
+      visibleTaskWorkbenchLabels === 1,
+      `${label} should expose the All label for the global task platform entry`,
+      { visibleTaskWorkbenchLabels },
     );
   };
 
@@ -287,27 +297,54 @@ async (page) => {
           : -1,
       };
     });
-    assert(noteActionMetrics.addButton, 'task details should expose the add-note action', noteActionMetrics);
+    assert(!noteActionMetrics.addButton, 'task purpose should not expose a duplicate add-note action', noteActionMetrics);
+    const noteCardWithAddAction = modal.locator('[data-task-detail-note-card="true"]').nth(1);
+    await noteCardWithAddAction.scrollIntoViewIfNeeded();
+    const addNoteActionMetrics = await noteCardWithAddAction.evaluate((card) => {
+      const titleControl = card.querySelector('[data-task-detail-note-title-input="true"], [data-task-detail-note-title="true"]');
+      const addButton = card.querySelector('[data-task-detail-note-add="true"]');
+      const deleteButton = card.querySelector('[data-task-detail-note-delete="true"]');
+      const toRect = (element) => {
+        const rect = element?.getBoundingClientRect();
+        return rect ? { top: rect.top, left: rect.left, right: rect.right, width: rect.width, height: rect.height } : null;
+      };
+      return {
+        titleControl: toRect(titleControl),
+        addButton: toRect(addButton),
+        deleteButton: toRect(deleteButton),
+      };
+    });
+    assert(addNoteActionMetrics.addButton, 'additional note fields should expose the add-note action', addNoteActionMetrics);
     assert(
-      noteActionMetrics.addButton.width <= 34 && noteActionMetrics.addButton.height <= 34,
+      addNoteActionMetrics.addButton.width <= 34 && addNoteActionMetrics.addButton.height <= 34,
       'add-note action should use a compact icon button on mobile',
-      noteActionMetrics,
+      addNoteActionMetrics,
     );
     assert(
-      Math.abs(noteActionMetrics.addButton.top - noteActionMetrics.titleControl.top) <= 1 &&
-        Math.abs(noteActionMetrics.addButton.top - noteActionMetrics.deleteButton.top) <= 1,
+      Math.abs(addNoteActionMetrics.addButton.top - addNoteActionMetrics.titleControl.top) <= 1 &&
+        Math.abs(addNoteActionMetrics.addButton.top - addNoteActionMetrics.deleteButton.top) <= 1,
       'add-note action should share the note title row instead of occupying a standalone row',
-      noteActionMetrics,
+      addNoteActionMetrics,
     );
     assert(
       noteActionMetrics.sectionDirectAddButtonCount === 0 && noteActionMetrics.gridDirectAddButtonCount === 0,
       'notes section should not render a standalone add-note toolbar row',
       noteActionMetrics,
     );
+    const descriptionPlaceholder = await firstNoteCard.locator('[data-task-detail-note-placeholder="true"]').innerText();
+    const firstNoteTitle = await firstNoteCard.locator('[data-task-detail-note-title="true"], [data-task-detail-note-title-input="true"]').first().evaluate((element) => (
+      element instanceof HTMLInputElement ? element.value : (element.textContent || '').trim()
+    ));
+    assert(firstNoteTitle === '任務目的', 'the fixed first note should be labeled as task purpose', { firstNoteTitle });
+    assert(
+      descriptionPlaceholder.trim() === '說明任務的目的、要解決的問題、要達成的目標。',
+      'task description should expose the purpose-and-goal placeholder',
+      { descriptionPlaceholder },
+    );
     await page.screenshot({ path: 'output/playwright/dev-031-task-details-mobile-note-actions.png', fullPage: true });
 
     const noteCountBeforeAdd = await modal.locator('[data-task-detail-note-card="true"]').count();
-    await modal.locator('[data-task-detail-note-add="true"]').click();
+    await noteCardWithAddAction.locator('[data-task-detail-note-add="true"]').click();
     await page.waitForFunction((expectedCount) => (
       document.querySelectorAll('[data-task-details-modal="true"] [data-task-detail-note-card="true"]').length === expectedCount
     ), noteCountBeforeAdd + 1, { timeout: 10000 });
@@ -316,6 +353,25 @@ async (page) => {
       noteCountBeforeAdd,
       noteCountAfterAdd,
     });
+    const addActionCountAfterAdd = await modal.locator('[data-task-detail-note-card="true"] [data-task-detail-note-add="true"]').count();
+    assert(addActionCountAfterAdd === noteCountAfterAdd - 1, 'task purpose should remain the only note card without an add-note action', {
+      addActionCountAfterAdd,
+      noteCountAfterAdd,
+    });
+    const notePlaceholdersAfterAdd = await modal.locator('[data-task-detail-note-placeholder="true"]').allInnerTexts();
+    const noteTitlesAfterAdd = await modal.locator('[data-task-detail-note-card="true"]').evaluateAll(cards => cards.map(card => {
+      const titleControl = card.querySelector('[data-task-detail-note-title="true"], [data-task-detail-note-title-input="true"]');
+      return titleControl instanceof HTMLInputElement ? titleControl.value : (titleControl?.textContent || '').trim();
+    }));
+    assert(noteTitlesAfterAdd[0] === '任務目的' && noteTitlesAfterAdd.slice(1).every(title => title === '備註'), 'new note fields should use the purpose and note labels', {
+      noteTitlesAfterAdd,
+    });
+    assert(
+      notePlaceholdersAfterAdd[0]?.trim() === '說明任務的目的、要解決的問題、要達成的目標。' &&
+        notePlaceholdersAfterAdd.slice(1).every(text => text.trim() === '輸入備註內容'),
+      'additional note fields should retain the generic note placeholder',
+      { notePlaceholdersAfterAdd },
+    );
     await page.locator('[data-task-details-modal="true"] button[aria-label="關閉任務詳情"]').click();
     await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 10000 });
 

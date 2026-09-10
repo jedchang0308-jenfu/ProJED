@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { topbarClassNames } from './compactTokens';
 
@@ -112,9 +112,7 @@ export function ModeSwitcher<T extends string>({
           isOpen && 'border-primary/35 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15',
         )}
       >
-        {activeOption?.icon}
-        <span className="hidden lg:inline">{activeModeLabel}</span>
-        <ChevronDown size={12} className={cn('transition-transform duration-150', isOpen && 'rotate-180')} />
+        <span data-mode-switcher-label="view">視角</span>
       </button>
 
       {isOpen && menuPosition ? createPortal(

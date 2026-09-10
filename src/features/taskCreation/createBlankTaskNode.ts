@@ -1,4 +1,4 @@
-import type { TaskNode } from '../../types';
+import type { TaskDetailNote, TaskNode } from '../../types';
 
 export interface CreateBlankTaskNodeInput {
   id: string;
@@ -11,6 +11,11 @@ export interface CreateBlankTaskNodeInput {
   now?: number;
   description?: never;
 }
+
+const createDefaultTaskDetailNotes = (): TaskDetailNote[] => [
+  { id: 'note_default', title: '任務目的', content: '' },
+  { id: 'note_default_secondary', title: '備註', content: '' },
+];
 
 /**
  * Build the canonical content for a task created without a source document.
@@ -25,15 +30,20 @@ export const createBlankTaskNode = ({
   nodeType,
   title,
   now = Date.now(),
-}: CreateBlankTaskNodeInput): TaskNode => ({
-  id,
-  workspaceId,
-  boardId,
-  parentId,
-  title: title?.trim() || '新任務',
-  status: 'todo',
-  nodeType,
-  order,
-  createdAt: now,
-  updatedAt: now,
-});
+}: CreateBlankTaskNodeInput): TaskNode => {
+  const detailNotes = nodeType === 'task' ? createDefaultTaskDetailNotes() : undefined;
+
+  return {
+    id,
+    workspaceId,
+    boardId,
+    parentId,
+    title: title?.trim() || '新任務',
+    status: 'todo',
+    nodeType,
+    order,
+    createdAt: now,
+    updatedAt: now,
+    ...(detailNotes ? { detailNotes } : {}),
+  };
+};

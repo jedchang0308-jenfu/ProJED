@@ -3,8 +3,34 @@
 關聯 DEV: DEV-042
 關聯 SPEC: `ai-doc/specs/SPEC-042-mobile-left-sidebar-offcanvas-collapse.md`
 關聯 QA: `ai-doc/qa/QA-DEV-042-mobile-left-sidebar-offcanvas-collapse.md`
-狀態: 2026-08-24 Shared Inline Layout Rework Width Alignment Local QC Passed / Production Not Deployed / Physical Phone Supplemental Not Executed；2026-07-06 Off-Canvas Production Evidence 僅為歷史版本
+狀態: 2026-09-10 Topbar Board Switcher Addendum Local QC Passed / Production Not Deployed；2026-08-24 Shared Inline Layout Rework Width Alignment Local QC Passed / Production Not Deployed / Physical Phone Supplemental Not Executed；2026-07-06 Off-Canvas Production Evidence 僅為歷史版本
 建立日期: 2026-07-05
+
+## 2026-09-10 Topbar 看板切換器增補 QC（目前權威入口證據）
+
+- 判定：Local QC Passed；未部署 production。
+- 1440x900：單一看板切換器整合 menu icon 與完整 active board 名稱，幾何位置位於全域任務平台左側。
+- 全域任務平台入口改以 `All` 文字標籤呈現；既有 toggle、ARIA name 與互斥 inline panel 行為維持。
+- 390x844／320x844：長名稱安全截斷，兩個入口無重疊、無文件水平 overflow；Sidebar／TaskWorkbench 仍為既有共用 inline 元件與窄版互斥狀態。
+- 點擊文字區、Enter、Space 都能切換同一 Sidebar，`aria-expanded` 與畫面一致；F2 不產生改名 input，DEV-030 安全契約保留。
+- Visible error sweep：Pass；沒有 `.inline-error`、`[role=alert]`、HTTP 4xx/5xx 或 route error。
+
+| Gate | Result | Evidence |
+|---|---|---|
+| `verify:dev-042-mobile-left-sidebar-offcanvas` | Pass, 22/22 | 單一 switcher、相對順序、selector、ARIA 與共用 Sidebar contract |
+| `verify:dev-042-mobile-left-sidebar-offcanvas-browser` | Pass, 8/8 | 390／320／1440 geometry、互斥切換、overflow、visible-error 與 screenshots |
+| `verify:dev-030-sidebar-rename-contract` | Pass, 11/11 | topbar 不提供 metadata edit，Sidebar F2／右鍵改名保留 |
+| `verify:dev-030-sidebar-rename-contract-browser` | Pass | 文字點擊、Enter／Space、F2 負向改名與既有 rename path |
+| TypeScript / targeted ESLint / `build:test` / `git diff --check` | Pass | ESLint 0 errors／1 `MainLayout` 既存 effect warning；build 僅 chunk／caniuse 時效 warning |
+
+Rendered evidence：
+
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1789012056598-mobile-inline-panel-switch.png`
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1789012056598-mobile-320-inline.png`
+- `output/playwright/dev-042-mobile-left-sidebar-offcanvas-1789012056598-desktop-sidebar-inline.png`
+- `output/playwright/dev030-sidebar-rename-topbar-board-switcher.png`
+
+額外回歸觀察：`verify:dev-031-mobile-density-browser` 停在既有 Task Details 備註列 top 差 3px（title `305px`、actions `302px`）；不涉及 topbar source 或本次入口畫面，未納入本增補 Pass 證據，也未在本次順手修改產品。
 
 ## 驗證結論
 

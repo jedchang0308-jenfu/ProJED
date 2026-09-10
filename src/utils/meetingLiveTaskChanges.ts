@@ -49,7 +49,7 @@ const plainNote = (note: TaskDetailNote | undefined, fallback = '') => {
 const noteTextById = (node: TaskNode): Map<string, string> => {
   const notes = node.detailNotes?.length
     ? node.detailNotes
-    : [{ id: 'note_default', title: '任務說明', content: node.description || '' }];
+    : [{ id: 'note_default', title: '任務目的', content: node.description || '' }];
   return new Map(notes.map(note => [note.id, plainNote(note, note.id === 'note_default' ? node.description || '' : '')]));
 };
 
@@ -220,7 +220,7 @@ const formatValue = (fieldKey: MeetingLiveFieldKey, value: unknown): string => {
 
 const fieldLabel = (fieldKey: MeetingLiveFieldKey) => {
   if (fieldKey === 'title') return '名稱';
-  if (fieldKey === 'description') return '任務說明';
+  if (fieldKey === 'description') return '任務目的';
   if (fieldKey.startsWith('detailNote:')) return '備註';
   if (fieldKey === 'status') return '狀態';
   if (fieldKey === 'dates') return '日期';

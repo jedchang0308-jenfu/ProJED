@@ -1,9 +1,38 @@
 # SPEC-042: 手機與桌機共用左側 Inline 面板排列
 
 關聯 DEV：DEV-042
-狀態：2026-08-24 Shared Inline Layout Rework Width Alignment Local Verification Passed / Production Not Deployed；2026-07-06 Off-Canvas 版本為歷史已發布證據
+狀態：2026-09-10 Topbar Board Switcher Addendum Local QA-QC Passed / Production Not Deployed；2026-08-24 Shared Inline Layout Rework Width Alignment Local Verification Passed / Production Not Deployed；2026-07-06 Off-Canvas 版本為歷史已發布證據
 建立日期：2026-07-05
 任務類型：UI/UX RWD regression / mobile layout contract
+
+## 2026-09-10 Topbar 看板切換器整合增補（目前權威入口契約）
+
+決策來源：使用者要求把 topbar 的 Sidebar 選單按鈕與目前看板名稱整合成單一元件，並放在「全域任務平台」入口左側，讓看板選擇入口可直接由目前看板名稱辨識。
+
+Spec Impact：`Intentional replacement / compatible with DEV-030 rename safety`。DEV-030 禁止從 topbar 看板名稱直接改名的資料安全契約保留；本增補只讓名稱區成為 Sidebar 開關，不提供 metadata 編輯或寫入。
+
+行為契約：
+
+- topbar 使用單一 `board switcher` 同時呈現選單 icon 與目前看板名稱；無 active board 時顯示「選擇看板」。
+- 整個 switcher（包含文字區）都開啟／收合既有 `Sidebar`，不得另建 dropdown、第二份 workspace tree 或 board picker state。
+- switcher 必須位於 `data-mobile-task-workbench-nav-entry="true"` 左側；全域任務平台維持獨立按鈕與既有 toggle 行為，入口以 `All` 文字標籤辨識。
+- 保留 `data-main-sidebar-toggle="true"`、`data-topbar-board-title="true"` 等既有 selector 相容性，並新增單一元件 selector。
+- switcher 提供 `aria-expanded`、`aria-controls` 與包含目前看板名稱的 accessible name；Sidebar 提供對應 id。
+- Sidebar 開啟時用同一個 switcher 的狀態樣式回饋，不新增常駐說明、badge 或第二個 topbar 標題。
+- 窄版允許看板名稱以 ellipsis 截斷，但 switcher 與全域任務平台不得重疊、被擠出 viewport 或造成水平 overflow；桌機正常名稱維持完整呈現。
+
+驗收：
+
+- `1440x900`：看板切換器在全域任務平台左側；目前看板名稱完整可見；點擊 icon 或文字區都能切換同一個 Sidebar。
+- `390x844`：看板切換器仍在全域任務平台左側，長名稱可安全截斷；兩個入口各自可辨識且無重疊／水平 overflow。
+- 全域任務平台入口顯示 `All`，不依賴僅憑圖形辨識；點擊區與既有 toggle 行為不變。
+- 點擊看板名稱、雙擊或按 `F2` 均不得出現工作區／看板改名輸入框。
+- 鍵盤可聚焦 switcher 並以 Enter／Space 切換；`aria-expanded` 與 Sidebar 顯示狀態一致。
+- 窄版從 switcher 開啟 Sidebar，再開啟全域任務平台時，沿用既有互斥 inline panel 行為。
+
+Out of scope：Sidebar IA、workspace／board 資料模型、改名權限、全域任務平台資料與 filter、production deploy。
+
+本機證據：DEV-042 static `22/22`、browser `8/8`、DEV-030 static `11/11` 與 browser、TypeScript、targeted ESLint（0 errors／1 既存 warning）、`build:test`、`git diff --check` 及 390／320／1440 rendered screenshots 通過。DEV-031 額外全頁 browser gate 的既有備註列 3px 對齊門檻未通過，與本次 topbar source／畫面無關，不以本增補掩蓋。
 
 ## Human Decision Brief（2026-07 歷史決策，已由下方 Inline 契約取代）
 

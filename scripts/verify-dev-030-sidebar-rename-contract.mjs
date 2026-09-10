@@ -52,10 +52,13 @@ assert(
 );
 
 assert(
-  'active board topbar title is display-only and cannot open direct rename',
+  'active board topbar title is a non-editing Sidebar switcher',
   !read(files.mainLayout).includes('contentEditable') &&
     !read(files.mainLayout).includes('updateBoardTitle') &&
-    read(files.mainLayout).includes('className="app-board-title'),
+    read(files.mainLayout).includes('data-board-switcher="true"') &&
+    read(files.mainLayout).includes('data-topbar-board-title="true"') &&
+    read(files.mainLayout).includes('onClick={handleToggleWorkspaceSidebar}') &&
+    read(files.mainLayout).includes('aria-expanded={isSidebarOpen}'),
 );
 
 assert(

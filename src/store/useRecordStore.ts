@@ -116,6 +116,16 @@ type AppendMeetingTaskQuickNoteResult =
         | 'meeting-board-mismatch';
     };
 
+const MEETING_CONTINUITY_VIEWS = new Set<ViewMode>([
+  'board',
+  'list',
+  'mindmap',
+  'gantt',
+  'calendar',
+]);
+
+const isMeetingContinuityView = (view: ViewMode) => MEETING_CONTINUITY_VIEWS.has(view);
+
 const activeBoardIdForMeeting = () => useBoardStore.getState().activeBoardId;
 
 const upsertRecordWithIntegrity = async (
@@ -678,7 +688,7 @@ const useRecordStore = create<RecordStoreState & RecordStoreActions>((set, get) 
       return;
     }
 
-    if (currentView !== 'board') setView('board');
+    if (!isMeetingContinuityView(currentView)) setView('board');
 
     const userId = useAuthStore.getState().user?.uid ?? null;
     set(state => {

@@ -60,6 +60,17 @@ async (page) => {
       await page.locator('[data-task-details-modal="true"]').waitFor({ state: 'hidden', timeout: 5000 });
     }
   };
+  const readDetailNoteContract = async (details) => details.locator('[data-task-detail-note-card="true"]').evaluateAll(cards => cards.map(card => {
+    const titleControl = card.querySelector('[data-task-detail-note-title-input="true"], [data-task-detail-note-title="true"]');
+    const contentControl = card.querySelector('[data-task-detail-note-content-input="true"]');
+    const title = titleControl instanceof HTMLInputElement
+      ? titleControl.value
+      : (titleControl?.textContent || '').trim();
+    const content = contentControl instanceof HTMLInputElement || contentControl instanceof HTMLTextAreaElement
+      ? contentControl.value
+      : (contentControl?.textContent || '').trim();
+    return { title, content };
+  }));
   const switchView = async (view, readySelector) => {
     await page.evaluate(nextView => localStorage.setItem('projed-last-view', nextView), view);
     await page.reload({ waitUntil: 'networkidle' });
@@ -109,12 +120,18 @@ async (page) => {
     const workbenchNote = workbenchDetails.locator('[data-task-detail-note-content-input="true"]').first();
     await workbenchNote.waitFor({ state: 'visible', timeout: 15000 });
     const workbenchNoteText = await workbenchNote.textContent();
+    const workbenchNoteContract = await readDetailNoteContract(workbenchDetails);
     const afterWorkbench = await readNodes();
     const workbenchCreated = Object.values(afterWorkbench).find(node => !beforeWorkbench[node.id]
       && node.boardId === '__task_workbench_unplaced__' && node.title === '新任務');
     record('B01-workbench-blank-description', Boolean(workbenchCreated)
       && !Object.prototype.hasOwnProperty.call(workbenchCreated, 'description')
-      && (workbenchNoteText || '') === '', { workbenchCreated, noteValue: workbenchNoteText });
+      && (workbenchNoteText || '') === ''
+      && workbenchNoteContract.length === 2
+      && workbenchNoteContract[0]?.title === '任務目的'
+      && workbenchNoteContract[0]?.content === ''
+      && workbenchNoteContract[1]?.title === '備註'
+      && workbenchNoteContract[1]?.content === '', { workbenchCreated, noteValue: workbenchNoteText, noteContract: workbenchNoteContract });
     const workbenchTitleInput = workbenchDetails.locator('[data-task-details-title-input="true"]');
     await workbenchTitleInput.fill('DEV115 已重新命名');
     await workbenchDetails.getByRole('button', { name: '關閉任務詳情' }).click({ force: true });
@@ -131,8 +148,13 @@ async (page) => {
       const reopenedWorkbenchNote = reopenedWorkbenchDetails.locator('[data-task-detail-note-content-input="true"]').first();
       await reopenedWorkbenchNote.waitFor({ state: 'visible', timeout: 15000 });
       reopenedWorkbenchNoteText = await reopenedWorkbenchNote.textContent();
-      record('B01-workbench-close-reopen-blank-description', (reopenedWorkbenchNoteText || '') === '', {
+      const reopenedWorkbenchNoteContract = await readDetailNoteContract(reopenedWorkbenchDetails);
+      record('B01-workbench-close-reopen-blank-description', (reopenedWorkbenchNoteText || '') === ''
+        && reopenedWorkbenchNoteContract.length === 2
+        && reopenedWorkbenchNoteContract[0]?.title === '任務目的'
+        && reopenedWorkbenchNoteContract[1]?.title === '備註', {
         noteValue: reopenedWorkbenchNoteText,
+        noteContract: reopenedWorkbenchNoteContract,
       });
       await reopenedWorkbenchDetails.getByRole('button', { name: '關閉任務詳情' }).click({ force: true });
       await reopenedWorkbenchDetails.waitFor({ state: 'hidden', timeout: 5000 });

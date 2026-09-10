@@ -29,6 +29,13 @@ assert('factory keeps blank task status and placement fields', blank.status === 
 assert('factory uses one deterministic creation timestamp', blank.createdAt === 1704067200000 && blank.updatedAt === 1704067200000);
 assert('blank factory never creates a description field', !Object.prototype.hasOwnProperty.call(blank, 'description')
   && !JSON.stringify(blank).includes('description'));
+assert('blank task factory creates the default task purpose note', blank.detailNotes?.[0]?.id === 'note_default'
+  && blank.detailNotes[0].title === '任務目的'
+  && blank.detailNotes[0].content === '');
+assert('blank task factory creates a default secondary note', blank.detailNotes?.[1]?.id === 'note_default_secondary'
+  && blank.detailNotes[1].title === '備註'
+  && blank.detailNotes[1].content === '');
+assert('blank task factory creates exactly two default notes', blank.detailNotes?.length === 2);
 
 const titled = createBlankTaskNode({
   id: 'dev115-titled',
@@ -43,7 +50,8 @@ const titled = createBlankTaskNode({
 assert('factory trims explicit titles without adding description', titled.title === '自訂任務'
   && titled.parentId === 'dev115-parent'
   && titled.nodeType === 'group'
-  && !Object.prototype.hasOwnProperty.call(titled, 'description'));
+  && !Object.prototype.hasOwnProperty.call(titled, 'description')
+  && !Object.prototype.hasOwnProperty.call(titled, 'detailNotes'));
 
 const runtimeInput = {
   id: 'dev115-runtime-extra',
@@ -79,6 +87,9 @@ assert('manual unplaced task no longer mirrors title into description', !placeme
 const factory = read('src/features/taskCreation/createBlankTaskNode.ts');
 assert('factory contract rejects description input at type level', factory.includes('description?: never'));
 assert('factory owns only blank-task content, not placement side effects', factory.includes('Placement, permissions, identity and post-create effects stay with the caller.'));
+assert('factory contract names the default purpose and note fields', factory.includes("title: '任務目的'")
+  && factory.includes("title: '備註'")
+  && factory.includes("id: 'note_default_secondary'"));
 
 const artifact = {
   devId: 'DEV-115',

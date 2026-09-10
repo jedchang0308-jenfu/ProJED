@@ -3,7 +3,6 @@ import {
   BookOpenText,
   CalendarDays,
   ChevronRight,
-  ClipboardList,
   Columns,
   LineChart,
   ListChecks,
@@ -80,7 +79,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { isMeetingRecordUnavailable } = useMeetingRecordAvailability();
 
   const isNonMeetingRecordOpen = isRecordOpen && !isMeetingMode;
-  const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode || isMeetingMode);
+  const isSelectingMode = Boolean(dependencySelection || isTaskSelectionMode);
   const meetingRecordReserveClass =
     isMeetingMode && isRecordOpen
       ? isRecordPanelCollapsed
@@ -255,15 +254,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             onFocus={() => handlePanelPreview('workspace-sidebar')}
             onBlur={() => setPreviewedPanel(null)}
             className={cn(
-              topbarClassNames.iconButton,
-              'mr-1 sm:mr-2',
+              topbarClassNames.textButton,
+              'app-board-switcher min-w-0 max-w-[48vw] justify-start gap-1.5 px-2 sm:max-w-none',
+              isSidebarOpen && 'border-primary-300 bg-primary-50 text-primary-700',
               previewedPanel === 'workspace-sidebar' && 'z-50 border-primary-500 bg-primary-100 text-primary-800 ring-2 ring-primary-300 shadow-[0_0_0_4px_rgba(99,102,241,0.28)]',
             )}
-            title={isSidebarOpen ? '收合側欄' : '展開側欄'}
-            aria-label={isSidebarOpen ? '收合工作區選單' : '展開工作區選單'}
+            title={activeWorkspace && activeBoard
+              ? `${isSidebarOpen ? '收合' : '展開'}工作區與看板：${activeWorkspace.title} / ${activeBoard.title}`
+              : `${isSidebarOpen ? '收合' : '展開'}工作區與看板`}
+            aria-label={activeBoard
+              ? `${isSidebarOpen ? '收合' : '展開'}工作區與看板，目前看板：${activeBoard.title}`
+              : `${isSidebarOpen ? '收合' : '展開'}工作區與看板，選擇看板`}
+            aria-expanded={isSidebarOpen}
+            aria-controls="workspace-board-sidebar"
             data-main-sidebar-toggle="true"
+            data-board-switcher="true"
           >
-            <Menu size={18} />
+            <Menu size={18} className="shrink-0" aria-hidden="true" />
+            <span
+              data-topbar-board-title="true"
+              className="app-board-title min-w-0 truncate text-xs font-bold text-slate-800 sm:overflow-visible sm:text-clip sm:text-sm"
+            >
+              {activeBoard?.title || '選擇看板'}
+            </span>
           </button>
           <button
             type="button"
@@ -281,7 +294,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             aria-label="開啟或收合全域任務平台"
             data-mobile-task-workbench-nav-entry="true"
           >
-            <ClipboardList size={17} />
+            <span
+              aria-hidden="true"
+              className="text-[11px] font-black leading-none tracking-tight"
+              data-task-workbench-nav-label="all"
+            >
+              All
+            </span>
           </button>
 
           <div
@@ -310,11 +329,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             {isBoardWorkspaceView && activeWorkspace && activeBoard ? (
               <>
-                <h1
-                  title={`目前位置：${activeWorkspace.title} / ${activeBoard.title}`}
-                  data-topbar-board-title="true"
-                  className="app-board-title min-w-[1.5rem] shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-bold text-slate-800 sm:px-2 sm:text-sm"
-                >
+                <h1 className="sr-only" data-topbar-board-heading="true">
                   {activeBoard.title}
                 </h1>
 
@@ -328,7 +343,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       options={modeSwitcherOptions}
                       onChange={handleModeChange}
                       disabled={isSelectingMode}
-                      disabledTitle={isMeetingMode ? '紀錄中先離開紀錄再切換檢視' : '選取模式中無法切換檢視'}
+                      disabledTitle="選取模式中無法切換檢視"
                     />
                   ) : null}
 
@@ -438,7 +453,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 topbarClassNames.textButton,
                 'hover:border-emerald-400 hover:text-emerald-600',
               )}
-              title="新增會議記錄，切到看板並開啟右側紀錄欄"
+              title="新增會議記錄，開啟右側紀錄欄"
             >
               <span className="hidden lg:inline">新增會議記錄</span>
             </button>

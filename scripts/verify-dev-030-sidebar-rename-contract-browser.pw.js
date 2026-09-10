@@ -77,16 +77,29 @@ async (page) => {
   try {
     await openApp();
 
-    step = 'topbar-board-title-no-rename';
-    const topbarBoardTitle = page.locator('h1.app-board-title').first();
+    step = 'topbar-board-switcher-no-rename';
+    const topbarBoardSwitcher = page.locator('[data-board-switcher="true"]').first();
+    const topbarBoardTitle = topbarBoardSwitcher.locator('[data-topbar-board-title="true"]');
+    await topbarBoardSwitcher.waitFor({ state: 'visible', timeout: 10000 });
     await topbarBoardTitle.waitFor({ state: 'visible', timeout: 10000 });
     await assert(topbarBoardTitle.getAttribute('contenteditable') !== 'true', `${step} should render a display-only title`);
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'true', `${step} should start with the Sidebar open`);
     await topbarBoardTitle.click();
-    await topbarBoardTitle.dblclick();
-    await topbarBoardTitle.focus();
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'hidden', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'false', `${step} title click should close the Sidebar`);
+    await topbarBoardTitle.click();
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'true', `${step} title click should reopen the Sidebar`);
+    await topbarBoardSwitcher.focus();
     await page.keyboard.press('F2');
     await page.waitForTimeout(150);
-    await page.screenshot({ path: 'output/playwright/dev030-sidebar-rename-topbar-display-only.png' });
+    await page.keyboard.press('Space');
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'hidden', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'false', `${step} Space should close the Sidebar`);
+    await page.keyboard.press('Enter');
+    await page.locator('[data-sidebar-panel="expanded"]').waitFor({ state: 'visible', timeout: 10000 });
+    assert(await topbarBoardSwitcher.getAttribute('aria-expanded') === 'true', `${step} Enter should reopen the Sidebar`);
+    await page.screenshot({ path: 'output/playwright/dev030-sidebar-rename-topbar-board-switcher.png' });
     await assertNoRenameInputs(step);
 
     step = 'workspace-click-no-rename';
