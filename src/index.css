@@ -834,16 +834,77 @@ body[data-kanban-mouse-pan-active="true"] * {
 
   [data-task-details-modal="true"] {
     align-items: stretch !important;
-    padding: 8px !important;
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      max(8px, env(safe-area-inset-right, 0px))
+      max(8px, env(safe-area-inset-bottom, 0px))
+      max(8px, env(safe-area-inset-left, 0px)) !important;
   }
 
   [data-task-details-dialog="true"] {
-    width: calc(100vw - 16px) !important;
+    width: calc(100vw - max(8px, env(safe-area-inset-left, 0px)) - max(8px, env(safe-area-inset-right, 0px))) !important;
     min-width: 0 !important;
-    max-width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - max(8px, env(safe-area-inset-left, 0px)) - max(8px, env(safe-area-inset-right, 0px))) !important;
     min-height: 0 !important;
-    max-height: calc(100vh - 16px) !important;
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top, 0px)) - max(8px, env(safe-area-inset-bottom, 0px))) !important;
     resize: none !important;
+  }
+
+  [data-task-details-header="true"] {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    column-gap: 8px !important;
+    row-gap: 4px !important;
+    align-items: flex-start !important;
+    padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
+    padding-right: max(20px, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: 16px !important;
+    padding-left: max(20px, env(safe-area-inset-left, 0px)) !important;
+  }
+
+  [data-task-details-header="true"] > [data-task-details-parent="true"] {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  [data-task-details-header="true"] > .min-w-0.flex-1 {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+  }
+
+  [data-task-details-header="true"] > .group {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+  }
+
+  [data-task-details-header="true"] > [data-task-details-save-status] {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    justify-self: start !important;
+    overflow: hidden !important;
+  }
+
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) > .min-w-0.flex-1,
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) > [data-task-details-save-status] {
+    grid-column: 1 !important;
+  }
+
+  [data-task-details-header="true"]:not(:has(> [data-task-details-parent="true"])) > .group {
+    grid-column: 2 !important;
+  }
+
+  /* idle 沒有回饋文字，不應在手機標題列保留空白 120px 佔位。 */
+  [data-task-details-header="true"] [data-task-details-save-status="idle"] {
+    display: none !important;
   }
 
   [data-task-details-meta-section="true"] {
